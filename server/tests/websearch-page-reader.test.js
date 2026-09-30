@@ -67,7 +67,22 @@ describe('page reader alongside web search', () => {
     assert.deepEqual(ids(offered), []);
   });
 
-  it('is not offered when native search handles the request', async () => {
+  it('is offered alone next to native search on Anthropic and OpenAI Responses', async () => {
+    const app = webApp({ websearch: { ...webApp().websearch, useNativeSearch: true } });
+    for (const modelProvider of ['anthropic', 'openai-responses']) {
+      const offered = await getToolsForApp(app, 'en', { modelProvider });
+      assert.deepEqual(ids(offered), [WEB_CONTENT_EXTRACTOR_TOOL_ID], modelProvider);
+    }
+  });
+
+  it('is not offered next to Google native search, which drops function tools', async () => {
+    const app = webApp({ websearch: { ...webApp().websearch, useNativeSearch: true } });
+    const offered = await getToolsForApp(app, 'en', { modelProvider: 'google' });
+    assert.deepEqual(ids(offered), []);
+  });
+
+  it('is not offered next to native search when the reader is disabled', async () => {
+    tools = [qwant];
     const app = webApp({ websearch: { ...webApp().websearch, useNativeSearch: true } });
     const offered = await getToolsForApp(app, 'en', { modelProvider: 'anthropic' });
     assert.deepEqual(ids(offered), []);
@@ -101,8 +116,12 @@ describe('default webContentExtractor definition', () => {
     assert.equal(typeof extractorModule[reader.method], 'function');
   });
 
-  it('asks only for a url and a length, never for ignoreSSL', () => {
-    assert.deepEqual(Object.keys(reader.parameters.properties).sort(), ['maxLength', 'url']);
+  it('asks only for a url, a length and an offset, never for ignoreSSL', () => {
+    assert.deepEqual(Object.keys(reader.parameters.properties).sort(), [
+      'maxLength',
+      'offset',
+      'url'
+    ]);
     assert.deepEqual(reader.parameters.required, ['url']);
   });
 

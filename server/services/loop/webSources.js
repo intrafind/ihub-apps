@@ -31,6 +31,8 @@ import { isCitationProducingTool } from './toolClassify.js';
 /** Most sources one tool call reports; a search is capped at 20 results. */
 export const MAX_WEB_SOURCES = 25;
 const MAX_TITLE_CHARS = 300;
+/** Longest snippet kept for a source card. */
+const MAX_SNIPPET_CHARS = 400;
 
 function httpUrl(value) {
   if (typeof value !== 'string' || value.length > 2048) return null;
@@ -62,6 +64,41 @@ function titleOf(item) {
   return typeof title === 'string' && title.trim() ? title.trim().slice(0, MAX_TITLE_CHARS) : null;
 }
 
+/**
+ * Text without markup. Search engines mark the matched terms with HTML
+ * (`<strong>`), and a source card shows text: everything from a `<` to the
+ * next `>` is dropped, and neither bracket is ever kept, so a broken or nested
+ * tag cannot leave markup behind.
+ * @param {string} text
+ * @returns {string}
+ */
+function stripTags(text) {
+  let out = '';
+  let inTag = false;
+  for (const char of text) {
+    if (char === '<') inTag = true;
+    else if (char === '>') inTag = false;
+    else if (!inTag) out += char;
+  }
+  return out;
+}
+
+function snippetOf(item) {
+  const text = [item.description, item.snippet, item.excerpt].find(
+    value => typeof value === 'string' && value.trim()
+  );
+  if (!text) return null;
+  const plain = stripTags(text).replace(/\s+/g, ' ').trim();
+  return plain ? plain.slice(0, MAX_SNIPPET_CHARS) : null;
+}
+
+function dateOf(item) {
+  const value = item.publishedDate ?? item.published_date ?? item.date;
+  if (typeof value !== 'string' || value.length > 64) return null;
+  const time = Date.parse(value);
+  return Number.isNaN(time) ? null : new Date(time).toISOString();
+}
+
 function documentIdOf(item) {
   const id = item.documentId ?? item.id;
   if (typeof id === 'number') return String(id);
@@ -88,9 +125,13 @@ function parse(result) {
 /**
  * @param {string} toolId - The tool that produced the result
  * @param {unknown} result - The tool's raw result (object, array or JSON text)
- * @returns {Array<{url?: string, documentId?: string, title?: string, read?: boolean, readFailed?: boolean}>}
+ * @returns {Array<{url?: string, documentId?: string, title?: string, snippet?: string,
+ *   publishedDate?: string, favicon?: string, read?: boolean, readFailed?: boolean,
+ *   wordCount?: number, truncated?: boolean}>}
  *   Sources in result order, deduplicated by URL (iFinder: by document id);
- *   empty for any other tool.
+ *   empty for any other tool. Web sources carry what the chat's source cards
+ *   show — the result's snippet, date and favicon — and a page read carries
+ *   how many words were read and whether the page was cut.
  */
 export function extractWebSources(toolId, result) {
   const iFinder = isIFinderTool(toolId);
@@ -115,6 +156,14 @@ export function extractWebSources(toolId, result) {
     }
     const title = titleOf(item);
     if (title && !entry.title) entry.title = title;
+    if (!iFinder) {
+      const snippet = snippetOf(item);
+      if (snippet && !entry.snippet) entry.snippet = snippet;
+      const date = dateOf(item);
+      if (date && !entry.publishedDate) entry.publishedDate = date;
+      const favicon = httpUrl(item.favicon);
+      if (favicon && !entry.favicon) entry.favicon = favicon;
+    }
     if (read === true) {
       entry.read = true;
       delete entry.readFailed;
@@ -139,8 +188,18 @@ export function extractWebSources(toolId, result) {
     addAll(parsed.sources);
     // Pages the search went on to fetch: whether each one could be read.
     addAll(parsed.extractedContent, item => item?.contentExtracted === true);
-    // A single fetched page.
-    if (typeof parsed.url === 'string' && typeof parsed.content === 'string') add(parsed, true);
+    // A single fetched page: what the page reader read of it.
+    if (typeof parsed.url === 'string' && typeof parsed.content === 'string') {
+      add(parsed, true);
+      const entry = byKey.get(linkOf(parsed));
+      if (entry) {
+        if (Number.isInteger(parsed.wordCount) && parsed.wordCount >= 0) {
+          entry.wordCount = parsed.wordCount;
+        }
+        // Either more to read at `nextOffset`, or more than the reader keeps.
+        if (parsed.truncated === true || parsed.incomplete === true) entry.truncated = true;
+      }
+    }
   }
   return [...byKey.values()];
 }

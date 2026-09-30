@@ -132,6 +132,31 @@ function WebSearchSection({ app, onChange }) {
                 </div>
               )}
 
+              {/* Max page reads per answer (page reader cap) */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  {t('admin.apps.edit.websearchMaxPageReads', 'Max Page Reads per Answer')}
+                </label>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                  {t(
+                    'admin.apps.edit.websearchMaxPageReadsDesc',
+                    'Caps how many pages the model may open with the page reader for one answer. Pages the search itself fetches for its excerpts do not count. 1–50, default 5.'
+                  )}
+                </p>
+                <input
+                  type="number"
+                  min="1"
+                  max="50"
+                  value={app.websearch?.maxPageReads ?? 5}
+                  onChange={e =>
+                    handleWebSearchChange({
+                      maxPageReads: Math.min(50, Math.max(1, parseInt(e.target.value) || 5))
+                    })
+                  }
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                />
+              </div>
+
               {/* Max Results */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">

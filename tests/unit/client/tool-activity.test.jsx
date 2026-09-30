@@ -465,3 +465,64 @@ describe('ToolActivity', () => {
     expect(container).toBeEmptyDOMElement();
   });
 });
+
+describe('page reader rows (issue #2520)', () => {
+  const readStarted = (seq, callId, url) =>
+    env(seq, 'tool/started', {
+      step: 1,
+      callId,
+      toolId: 'webContentExtractor',
+      name: 'webContentExtractor',
+      args: { url },
+      execution: 'server'
+    });
+
+  test('show the title, the site, the words read and a truncated hint', () => {
+    const run = runFrom([
+      started,
+      readStarted(2, 'r1', 'https://docs.example.com/guide'),
+      env(3, 'tool/completed', {
+        step: 1,
+        callId: 'r1',
+        toolId: 'webContentExtractor',
+        name: 'webContentExtractor',
+        resultPreview: '…',
+        webSources: [
+          {
+            url: 'https://docs.example.com/guide',
+            title: 'The guide',
+            read: true,
+            wordCount: 812,
+            truncated: true
+          }
+        ]
+      }),
+      ended(4)
+    ]);
+    render(<ToolActivity activity={buildToolActivity(run)} loading />);
+    expect(screen.getByText('The guide')).toBeInTheDocument();
+    expect(screen.getByText('docs.example.com')).toBeInTheDocument();
+    expect(screen.getByText('toolActivity.wordsRead:812')).toBeInTheDocument();
+    expect(screen.getByText('truncated')).toBeInTheDocument();
+  });
+
+  test('say when the per-turn page read cap refused a read', () => {
+    const run = runFrom([
+      started,
+      readStarted(2, 'r1', 'https://docs.example.com/more'),
+      env(3, 'tool/completed', {
+        step: 1,
+        callId: 'r1',
+        toolId: 'webContentExtractor',
+        name: 'webContentExtractor',
+        resultPreview: { limitReached: true, code: 'PAGE_READ_LIMIT_REACHED', maxPageReads: 5 }
+      }),
+      ended(4)
+    ]);
+    const activity = buildToolActivity(run);
+    expect(activity.items[0].limitReached).toBe(true);
+    render(<ToolActivity activity={activity} loading />);
+    expect(screen.getByText('Not read')).toBeInTheDocument();
+    expect(screen.getByText(/Page read limit reached for this answer/)).toBeInTheDocument();
+  });
+});

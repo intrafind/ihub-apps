@@ -171,7 +171,9 @@ const OPTIONAL_MESSAGE_FIELDS = [
   'scheduledTaskProposals',
   // What the run did before it answered — searches, tool calls, workflow steps
   // (see services/chat/runActivity.js).
-  'activity'
+  'activity',
+  // Web search queries and sources behind an assistant answer (shared/webCitations.js).
+  'webSearch'
 ];
 
 /** Variables kept per message, and the longest value kept. */

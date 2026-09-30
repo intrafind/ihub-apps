@@ -8,7 +8,6 @@ import { debugLog } from '../../../utils/debugLog';
 const STORED_ACTIVITY_FIELDS = [
   'toolActivity',
   'searchSummary',
-  'groundingSources',
   'activeSkills',
   'answerSource',
   'workflowSteps',
@@ -21,7 +20,7 @@ const STORED_ACTIVITY_FIELDS = [
  *
  * Shape on the wire (`GET /api/chats/:chatId` → `messages[]`):
  * `{ id, role, content, ts, runId, clientMessageId?, usage?, finishReason?,
- * error?, attachments?, artifacts?, mcpApps?, citations?, activity? }`.
+ * error?, attachments?, artifacts?, mcpApps?, citations?, webSearch?, activity? }`.
  *
  * The stored id is adopted as the message id and kept a second time on
  * `serverId`: `replaceFromMessageId` addresses the server's history by that
@@ -76,6 +75,18 @@ export function transformStoredMessage(msg) {
   // Confirmation cards for scheduled tasks a scheduling tool proposed.
   if (Array.isArray(msg.scheduledTaskProposals) && msg.scheduledTaskProposals.length > 0) {
     message.scheduledTaskProposals = msg.scheduledTaskProposals;
+  }
+  // The web searches and sources behind the answer, so the sources view and
+  // the inline citations come back (the citation markers are in the content).
+  if (msg.webSearch && typeof msg.webSearch === 'object') {
+    const queries = Array.isArray(msg.webSearch.queries) ? msg.webSearch.queries : [];
+    const sources = Array.isArray(msg.webSearch.sources) ? msg.webSearch.sources : [];
+    if (queries.length > 0 || sources.length > 0) {
+      message.webSearch = { queries, sources };
+      // A web answer is not "based on AI knowledge" when it is reopened. The
+      // stored activity below names every source the answer drew on.
+      message.answerSource = { sources: ['websearch'], type: 'mixed' };
+    }
   }
   // What the run did before it answered — searches, documents, tool calls,
   // workflow steps and the answer's source — in the fields a live turn fills

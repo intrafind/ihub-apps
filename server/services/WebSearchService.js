@@ -160,6 +160,52 @@ export function resolveBraveSearchParams(language) {
   return params;
 }
 
+/** `freshness` values the search tools accept, mapped onto Brave's codes. */
+export const BRAVE_FRESHNESS = Object.freeze({ day: 'pd', week: 'pw', month: 'pm', year: 'py' });
+
+/**
+ * A Brave date (`page_age`, e.g. `2024-01-05T12:00:00`) as ISO 8601. Brave
+ * sends it without a zone; it is UTC.
+ * @param {unknown} value
+ * @returns {string|undefined}
+ */
+function braveDate(value) {
+  if (typeof value !== 'string' || !value.trim()) return undefined;
+  const text = /[zZ]|[+-]\d{2}:?\d{2}$/.test(value) ? value : `${value}Z`;
+  const date = new Date(text);
+  return Number.isNaN(date.getTime()) ? undefined : date.toISOString();
+}
+
+/**
+ * One Brave web result in the shape every provider returns, plus what Brave
+ * adds for the chat's source cards: the page's date (`page_age`, and Brave's
+ * own `age` label), extra snippets (plans that include them) and the site's
+ * favicon (Brave-proxied).
+ * @param {Object} item - `web.results[]` entry
+ * @returns {Object|null}
+ */
+export function parseBraveWebResult(item) {
+  if (!item || typeof item.url !== 'string') return null;
+  const result = {
+    title: item.title,
+    url: item.url,
+    description: item.description,
+    language: item.language
+  };
+  const publishedDate = braveDate(item.page_age);
+  if (publishedDate) result.publishedDate = publishedDate;
+  if (typeof item.age === 'string' && item.age.trim()) result.age = item.age.trim();
+  if (Array.isArray(item.extra_snippets)) {
+    const snippets = item.extra_snippets.filter(s => typeof s === 'string' && s.trim());
+    if (snippets.length) result.snippets = snippets.slice(0, 5);
+  }
+  const favicon = item.meta_url?.favicon || item.profile?.img;
+  if (typeof favicon === 'string' && /^https?:\/\//i.test(favicon)) result.favicon = favicon;
+  const hostname = item.meta_url?.hostname;
+  if (typeof hostname === 'string' && hostname) result.hostname = hostname;
+  return result;
+}
+
 /**
  * Brave Search Provider
  */
@@ -196,6 +242,11 @@ class BraveSearchProvider extends SearchProvider {
     return Boolean(this.getApiKey());
   }
 
+  /** Brave's `freshness` parameter (`pd` / `pw` / `pm` / `py`). */
+  supportsFreshness() {
+    return true;
+  }
+
   /**
    * @param {string} query - The search query
    * @param {Object} [options]
@@ -206,7 +257,7 @@ class BraveSearchProvider extends SearchProvider {
    * @returns {Promise<{results: Array<Object>}>}
    */
   async search(query, options = {}) {
-    const { chatId, language, skipCache = false } = options;
+    const { chatId, language, freshness, skipCache = false } = options;
     const apiKey = this.getApiKey();
 
     if (!apiKey) {
@@ -233,10 +284,15 @@ class BraveSearchProvider extends SearchProvider {
     // in when the caller had none to give (a workflow or agent run).
     const searchLanguage = this.languageResolver(language);
     let braveParams = resolveBraveSearchParams(searchLanguage);
+    // Not part of `braveParams`: the language-refusal retry below drops those,
+    // and a search asked for this week must stay a search for this week.
+    const freshnessParam = BRAVE_FRESHNESS[freshness]
+      ? { freshness: BRAVE_FRESHNESS[freshness] }
+      : {};
 
     // Language participates in the key: without it the first caller's language
     // would be served to every later caller asking in another one.
-    let cacheKey = makeSearchCacheKey('brave', query, braveParams);
+    let cacheKey = makeSearchCacheKey('brave', query, { ...braveParams, ...freshnessParam });
     if (!skipCache) {
       const cached = getCachedSearch(cacheKey);
       if (cached) {
@@ -255,7 +311,7 @@ class BraveSearchProvider extends SearchProvider {
 
     while (true) {
       try {
-        const params = new URLSearchParams({ q: query, ...braveParams });
+        const params = new URLSearchParams({ q: query, ...braveParams, ...freshnessParam });
         res = await this.fetchImpl(`${endpoint}?${params.toString()}`, {
           headers: {
             'X-Subscription-Token': apiKey,
@@ -318,7 +374,7 @@ class BraveSearchProvider extends SearchProvider {
         braveParams = {};
         // The key has to describe what was really requested, or an untargeted
         // result would be served to later callers under a targeted key.
-        cacheKey = makeSearchCacheKey('brave', query, braveParams);
+        cacheKey = makeSearchCacheKey('brave', query, { ...braveParams, ...freshnessParam });
         continue;
       }
 
@@ -367,12 +423,8 @@ class BraveSearchProvider extends SearchProvider {
 
     if (data.web && Array.isArray(data.web.results)) {
       for (const item of data.web.results) {
-        results.push({
-          title: item.title,
-          url: item.url,
-          description: item.description,
-          language: item.language
-        });
+        const result = parseBraveWebResult(item);
+        if (result) results.push(result);
       }
     }
 

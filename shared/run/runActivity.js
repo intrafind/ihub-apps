@@ -2,8 +2,8 @@
  * What a run did before it answered — its provenance — in the message fields
  * the chat renders beside the answer.
  *
- *   buildRunActivity(run, childRuns) → { toolActivity, searchSummary, groundingSources,
- *     activeSkills, answerSource, workflowSteps, workflowResult, outputFormat } | null
+ *   buildRunActivity(run, childRuns) → { toolActivity, searchSummary, activeSkills,
+ *     answerSource, workflowSteps, workflowResult, outputFormat } | null
  *
  * One projection for two moments. While a turn streams, the client projects
  * its live run state with these builders (`runToMessage.js`). When the turn
@@ -12,13 +12,15 @@
  * reopened a week later shows the searches, tool calls and workflow steps the
  * user watched live — rendered by the same components, from the same shapes.
  *
+ * The web sources behind the answer are not part of it: they are stored as
+ * the message's `webSearch` (`shared/webCitations.js`).
+ *
  * Pure and dependency-free apart from its siblings, so both sides import it.
  *
  * @module shared/run/runActivity
  */
 import { isRunFinished } from './runReducer.js';
 import { buildToolActivity } from './toolActivity.js';
-import { extractGroundingSources } from './groundingSources.js';
 
 /** progress/node status → chat step status (WorkflowStepIndicator vocabulary). */
 const NODE_STATUS_TO_STEP_STATUS = Object.freeze({ failed: 'error' });
@@ -85,21 +87,6 @@ export function workflowResultOf(run) {
 }
 
 /**
- * Sources behind a grounded answer (provider-run web search). A completed
- * step carries the server-merged metadata of that step; while streaming, the
- * progress frames merged by the reducer stand in.
- *
- * @param {Object} run - RunState
- * @returns {Array<Object>}
- */
-export function groundingSourcesOf(run) {
-  const stepGrounding = Object.values(run?.steps || {})
-    .map(step => step.groundingMetadata)
-    .filter(Boolean);
-  return extractGroundingSources(stepGrounding.length ? stepGrounding : run?.grounding);
-}
-
-/**
  * The knowledge the answer drew on, for the answer badge ("Based on web
  * search", "… iFinder"). Only once the run is over: the list grows while it runs.
  *
@@ -133,8 +120,6 @@ export function buildRunActivity(run, childRuns = []) {
   // finished run, and meaningless once stored.
   if (toolActivity) activity.toolActivity = { items: toolActivity.items, reading: null };
   if (run.searchSummary) activity.searchSummary = { ...run.searchSummary, searching: false };
-  const groundingSources = groundingSourcesOf(run);
-  if (groundingSources.length) activity.groundingSources = groundingSources;
   if (run.skills?.length) activity.activeSkills = run.skills;
   const answerSource = answerSourceOf(run);
   if (answerSource) activity.answerSource = answerSource;

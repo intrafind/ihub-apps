@@ -55,6 +55,24 @@
           "en": "Language or locale for the search results, e.g. 'en', 'de' or 'de-CH' (default: English/US)",
           "de": "Sprache oder Gebietsschema für die Suchergebnisse, z. B. 'en', 'de' oder 'de-CH' (Standard: Englisch/US)"
         }
+      },
+      "freshness": {
+        "type": "string",
+        "enum": ["day", "week", "month", "year"],
+        "description": {
+          "en": "Only return results from the last day, week, month or year. Use it when the question is about recent events or the user asks for current information.",
+          "de": "Nur Ergebnisse aus dem letzten Tag, der letzten Woche, dem letzten Monat oder Jahr zurückgeben. Verwenden, wenn es um aktuelle Ereignisse geht oder der Benutzer nach aktuellen Informationen fragt."
+        }
+      },
+      "includeDomains": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": {
+          "en": "Only return results from these domains, e.g. ['example.com']. Maximum 10. Use it when the user names a site or domain.",
+          "de": "Nur Ergebnisse von diesen Domains zurückgeben, z. B. ['example.com']. Maximal 10. Verwenden, wenn der Benutzer eine Website oder Domain nennt."
+        }
       }
     },
     "required": ["query"]

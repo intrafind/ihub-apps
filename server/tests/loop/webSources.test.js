@@ -16,9 +16,89 @@ test('extractWebSources: search results become sources, in order', () => {
     ]
   });
   assert.deepEqual(sources, [
-    { url: 'https://example.com/a', title: 'Example' },
+    { url: 'https://example.com/a', title: 'Example', snippet: 'x' },
     { url: 'https://other.org/', title: 'Other' }
   ]);
+});
+
+test('extractWebSources: web sources carry what a source card shows', () => {
+  const sources = extractWebSources('braveSearch', {
+    results: [
+      {
+        title: 'Example',
+        url: 'https://example.com/a',
+        description: 'The <strong>matched</strong>   terms',
+        publishedDate: '2026-09-01T10:00:00Z',
+        favicon: 'https://imgs.search.brave.com/icon.png'
+      },
+      { title: 'Bad favicon', url: 'https://other.org/', favicon: 'javascript:alert(1)' }
+    ]
+  });
+  assert.deepEqual(sources, [
+    {
+      url: 'https://example.com/a',
+      title: 'Example',
+      snippet: 'The matched terms',
+      publishedDate: '2026-09-01T10:00:00.000Z',
+      favicon: 'https://imgs.search.brave.com/icon.png'
+    },
+    { url: 'https://other.org/', title: 'Bad favicon' }
+  ]);
+});
+
+test('extractWebSources: a snippet keeps no markup, not even from broken tags', () => {
+  const [source] = extractWebSources('braveSearch', {
+    results: [
+      {
+        title: 'T',
+        url: 'https://example.com/',
+        description: 'Hello <<script>script>alert(1)</script> <b>world</b> <img src=x'
+      }
+    ]
+  });
+  assert.doesNotMatch(source.snippet, /[<>]/);
+  assert.match(source.snippet, /world/);
+});
+
+test('extractWebSources: a page read reports words read and truncation', () => {
+  const [source] = extractWebSources('webContentExtractor', {
+    url: 'https://example.com/long',
+    title: 'Long page',
+    content: 'Some words here',
+    wordCount: 3,
+    truncated: true,
+    nextOffset: 15
+  });
+  assert.deepEqual(source, {
+    url: 'https://example.com/long',
+    title: 'Long page',
+    read: true,
+    wordCount: 3,
+    truncated: true
+  });
+  // The new fields survive the wire contract instead of being stripped.
+  const sse = toolCompletedData.parse({
+    step: 1,
+    callId: 'c',
+    toolId: 'webContentExtractor',
+    name: 'webContentExtractor',
+    resultPreview: '…',
+    webSources: [source]
+  });
+  assert.deepEqual(sse.webSources, [source]);
+});
+
+test('extractWebSources: a page longer than the reader keeps is shown as truncated', () => {
+  const [source] = extractWebSources('webContentExtractor', {
+    url: 'https://example.com/huge',
+    title: 'Huge page',
+    content: 'The last window',
+    wordCount: 3,
+    truncated: false,
+    nextOffset: null,
+    incomplete: true
+  });
+  assert.equal(source.truncated, true);
 });
 
 test('extractWebSources: extracted pages are marked read or failed', () => {

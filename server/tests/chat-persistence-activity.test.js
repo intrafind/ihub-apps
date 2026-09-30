@@ -369,7 +369,7 @@ describe('the stored form of the activity', () => {
     assert.equal(stored.workflowSteps.at(-1).nodeName, 'Step 249');
   });
 
-  it('stays under its size when what is left is long queries and cited passages', () => {
+  it('stays under its size when what is left is long queries and errors', () => {
     const long = 'z'.repeat(5000);
     const items = Array.from({ length: MAX_STORED_TOOL_ITEMS }, (_, i) => ({
       id: `c${i}`,
@@ -383,23 +383,19 @@ describe('the stored form of the activity', () => {
       details: [],
       sources: []
     }));
-    const groundingSources = Array.from({ length: 50 }, (_, i) => ({
-      url: `https://example.org/${i}`,
-      title: 'Page',
-      citedText: long
-    }));
     const stored = boundStoredActivity({
       toolActivity: { items },
-      groundingSources,
+      searchSummary: { queries: Array.from({ length: 50 }, () => long), totalHits: 3 },
       workflowResult: { status: 'completed', executionId: 'wf-1', workflowName: 'Review' }
     });
 
     assert.ok(Buffer.byteLength(JSON.stringify(stored)) <= 256 * 1024);
-    // Every call is still there, and every page, only with less text.
+    // Every call is still there, only with less text.
     assert.equal(stored.toolActivity.items.length, MAX_STORED_TOOL_ITEMS);
     assert.ok(stored.toolActivity.items[0].query.length <= 201);
-    assert.equal(stored.groundingSources.length, 50);
-    assert.equal(stored.groundingSources[0].citedText, undefined);
+    assert.ok(stored.toolActivity.items[0].error.length <= 201);
+    assert.equal(stored.searchSummary.queries.length, 5);
+    assert.equal(stored.searchSummary.totalHits, 3);
     assert.equal(stored.workflowResult.executionId, 'wf-1');
   });
 

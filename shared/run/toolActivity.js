@@ -13,7 +13,7 @@
  *    skill activation are left out: each has its own UI.
  *  - provider-run web search (Google Search grounding, Anthropic web search):
  *    the queries the provider reports on the grounding metadata
- *    (`webSearchQueries`). Its sources are listed by `GroundingSources`.
+ *    (`webSearchQueries`). Its sources are listed by `WebSearchSources`.
  *  - `fetch.*` progress frames: the page a search is reading right now.
  *
  * Each item also lists what the call asked for (`details`, see
@@ -238,6 +238,8 @@ export function buildToolActivity(run) {
       details: toolDetails(tool.args, shownArgs(tool.args, { query, url, documentId })),
       sources: Array.isArray(tool.webSources) ? tool.webSources : [],
       error: tool.error?.message || null,
+      // A page read the per-turn cap (`websearch.maxPageReads`) refused.
+      limitReached: kind === 'fetch' && tool.result?.limitReached === true,
       durationMs: tool.durationMs ?? null
     });
   }

@@ -341,9 +341,9 @@ function jsonBytes(value) {
  * The activity as it is stored with an answer: known fields only, each list
  * and string bounded, and the whole under {@link MAX_STORED_ACTIVITY_BYTES}.
  * Past that, the full text of long arguments goes first, then the sources of
- * each call, then the argument lists, then the length of queries, errors and
- * cited passages — the calls themselves stay. An activity still over keeps
- * only its answer source and workflow result.
+ * each call, then the argument lists, then the length of queries and errors —
+ * the calls themselves stay. An activity still over keeps only its answer
+ * source and workflow result.
  *
  * @param {unknown} activity - see `shared/run/runActivity.buildRunActivity`
  * @returns {Object|null}
@@ -369,12 +369,6 @@ export function boundStoredActivity(activity) {
       rounds: Number.isInteger(summary.rounds) ? summary.rounds : 0,
       searching: false
     };
-  }
-  if (Array.isArray(activity.groundingSources) && activity.groundingSources.length > 0) {
-    out.groundingSources = activity.groundingSources
-      .slice(0, MAX_STORED_LIST)
-      .map(boundSource)
-      .filter(Boolean);
   }
   if (Array.isArray(activity.activeSkills) && activity.activeSkills.length > 0) {
     out.activeSkills = activity.activeSkills.slice(0, MAX_STORED_LIST).map(skill => ({
@@ -421,8 +415,8 @@ export function boundStoredActivity(activity) {
   if (jsonBytes(out) > MAX_STORED_ACTIVITY_BYTES && out.workflowSteps) {
     out.workflowSteps = out.workflowSteps.slice(-20);
   }
-  // Still over: what is left is the long text the trims above keep — queries,
-  // cited passages, error messages. Shorten it; the calls and their order stay.
+  // Still over: what is left is the long text the trims above keep — queries
+  // and error messages. Shorten it; the calls and their order stay.
   if (jsonBytes(out) > MAX_STORED_ACTIVITY_BYTES) {
     if (out.toolActivity) {
       out.toolActivity.items = out.toolActivity.items.map(item =>
@@ -433,9 +427,6 @@ export function boundStoredActivity(activity) {
           error: text(item.error, SHORT_TEXT_CHARS)
         })
       );
-    }
-    if (out.groundingSources) {
-      out.groundingSources = out.groundingSources.map(({ citedText: _cited, ...source }) => source);
     }
     if (out.searchSummary) {
       out.searchSummary.queries = strings(out.searchSummary.queries, 5, SHORT_TEXT_CHARS);
