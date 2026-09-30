@@ -780,6 +780,9 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
       ? !compareFormSent
       : sentInChatId !== chatId && !messages.some(m => m.role === 'user'));
   const showVariablesPanel = app?.variables?.length > 0 && !startFormActive;
+  // Whether the user may pick the model: in the composer, or on the start form.
+  const modelSelectionAllowed =
+    app?.disallowModelSelection !== true && app?.settings?.model?.enabled !== false;
 
   // What an MCP App view in this chat may do in the composer: post a follow-up
   // message (`ui/message`) the way a starter prompt with autoSend does.
@@ -2582,11 +2585,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
         selectedModel={selectedModel}
         onModelChange={setSelectedModel}
         currentLanguage={currentLanguage}
-        showModelSelector={
-          !compareModeActive &&
-          app?.disallowModelSelection !== true &&
-          app?.settings?.model?.enabled !== false
-        }
+        showModelSelector={!compareModeActive && modelSelectionAllowed}
         // AI disclaimer shares the tight line below the input with the
         // ephemeral toggle; shown after the first submitted message.
         disclaimer={messages.length > 0 ? <AIDisclaimerBanner /> : null}
@@ -2630,6 +2629,12 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
             errorMessage={
               messages.filter(m => m.role === 'system' && m.error).at(-1)?.content || null
             }
+            // The first message picks its model here, as the composer would;
+            // a comparison has a picker per panel instead.
+            models={compareModeActive ? null : models}
+            selectedModel={selectedModel}
+            onModelChange={setSelectedModel}
+            showModelSelector={modelSelectionAllowed}
             currentLanguage={currentLanguage}
           />
         </div>

@@ -67,3 +67,19 @@ morning digests and weekly reports are waiting when they come in.
 Adding, changing or removing a workflow's schedule trigger now takes effect as soon as the
 workflow is saved. Before, schedules were read once at server start and edits needed a restart.
 Schedule triggers now run on the same scheduler as scheduled tasks.
+
+## Start Forms: Message Field and Model Selection
+
+The form an app can start its chats with now takes the user's own text and lets them choose the
+model, two things only the chat input offered before. Apps like the Translator, whose prompt works
+on the user's text, can now be used with a form even when uploads are off.
+
+- **Message field:** every start form has one: the chat input's text, on the form. It fills the
+  prompt's `{{content}}` (the text to translate, for example), or follows the filled-in prompt
+  when the template has no `{{content}}`. It is optional and shows the app's message placeholder.
+  Before, the field only appeared when the chat was opened with text.
+- **Model selection:** when the app lets users pick the model, the model selector sits next to the
+  send button, so the first message already goes to the chosen model. The selected model's hint
+  is shown on the form, and an **Important Notice** has to be acknowledged before sending, as in
+  the chat input. In compare mode each panel keeps its own model picker.
+- Works in the web app, the Outlook add-in and the browser extension.

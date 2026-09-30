@@ -3,12 +3,13 @@ import { getLocalizedContent } from '../../../utils/localizeContent';
 /**
  * Form-based start (issue #2581).
  *
- * An app with `startForm.enabled` opens a new chat with its variables — and a
- * drop zone when uploads are on — as a form instead of the composer. Submitting
- * renders the app's `prompt` with the answers once, here on the client, and
- * sends the result as the first user message. The chat then continues without
- * the template: follow-up messages go out as typed, as in an app without a
- * `prompt`, so the template is never rendered into the conversation again.
+ * An app with `startForm.enabled` opens a new chat with its variables, a
+ * message field — the composer's text — and a drop zone when uploads are on, as
+ * a form instead of the composer. Submitting renders the app's `prompt` with
+ * the answers once, here on the client, and sends the result as the first user
+ * message. The chat then continues without the template: follow-up messages
+ * go out as typed, as in an app without a `prompt`, so the template is never
+ * rendered into the conversation again.
  */
 
 // Same placeholder syntax the server fills (PromptService.replaceTemplateVar).
@@ -89,10 +90,10 @@ export function getMissingRequiredVariables(app, values) {
  * The first message of a form-started chat.
  *
  * The app's `prompt` in `language`, with every `{{variable}}` filled from
- * `values` and `{{content}}` from `content` — text the chat was opened with
- * (`?prefill=`), usually none; a template without `{{content}}` gets it
- * appended, as the server does. Uploaded files are not part of it: the server
- * wraps them around the text as it does for any message. Other placeholders,
+ * `values` and `{{content}}` from `content` — the form's message field, which
+ * text the chat was opened with (`?prefill=`) prefills; a template without
+ * `{{content}}` gets it appended, as the server does. Uploaded files are not
+ * part of it: the server wraps them around the text as it does for any message. Other placeholders,
  * such as `{{user_name}}` or `{{date}}`, are left for the server, which fills
  * global prompt variables in a message sent without a template. One pass, so a
  * `{{…}}` typed into an answer is never expanded.

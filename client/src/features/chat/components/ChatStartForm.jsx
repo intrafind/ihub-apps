@@ -4,6 +4,8 @@ import DOMPurify from 'dompurify';
 import { marked } from 'marked';
 import Icon from '../../../shared/components/Icon';
 import InputVariables from './InputVariables';
+import ModelSelector from './ModelSelector';
+import ModelHintBanner from './ModelHintBanner';
 import UnifiedUploader from '../../upload/components/UnifiedUploader';
 import AttachedFilesList from '../../upload/components/AttachedFilesList';
 import { getLocalizedContent } from '../../../utils/localizeContent';
@@ -11,16 +13,19 @@ import { getMissingRequiredVariables } from '../utils/startForm';
 
 /**
  * The form a new chat of an app with `startForm.enabled` opens with (issue
- * #2581): the app's variables, a drop zone when uploads are on, and a send
- * button. The chat composer takes over once it is sent.
+ * #2581): the app's variables, the message the chat input would take, a drop
+ * zone when uploads are on, and a send button — with the model selector next
+ * to it when the app lets users pick the model (issue #2629). The chat
+ * composer takes over once it is sent.
  *
  * @param {Object} props
  * @param {Object} props.app - App config
  * @param {Array<Object>} props.localizedVariables - `app.variables` with localized labels
  * @param {Object} props.variables - Variable name → entered value
  * @param {Function} props.onVariablesChange - Receives the new variables object
- * @param {string} [props.message=''] - Text the chat was opened with (`?prefill=`),
- *   sent as the template's `{{content}}`; its field only shows when there is some
+ * @param {string} [props.message=''] - The message field, the chat input's text:
+ *   sent as the template's `{{content}}`; prefilled when the chat was opened
+ *   with text (`?prefill=`)
  * @param {Function} [props.onMessageChange] - Receives the edited text
  * @param {Object} props.uploadConfig - From `useFileUploadHandler().createUploadConfig`
  * @param {Object|Array|null} props.selectedFile - Attached file(s)
@@ -31,6 +36,12 @@ import { getMissingRequiredVariables } from '../utils/startForm';
  * @param {Object|string|null} [props.welcomeMessage] - The app greeting (`{ title, subtitle }`
  *   or a plain title)
  * @param {string|null} [props.errorMessage] - Shown above the send button
+ * @param {Array<Object>} [props.models] - The models to pick from; without them
+ *   neither the selector nor the model's hint shows
+ * @param {string|null} [props.selectedModel]
+ * @param {Function} [props.onModelChange] - Receives the picked model id
+ * @param {boolean} [props.showModelSelector=false] - Whether the app lets users
+ *   pick the model; the selected model's hint shows either way
  * @param {string} props.currentLanguage
  */
 function ChatStartForm({
@@ -48,14 +59,24 @@ function ChatStartForm({
   isProcessing = false,
   welcomeMessage = null,
   errorMessage = null,
+  models = null,
+  selectedModel = null,
+  onModelChange = null,
+  showModelSelector = false,
   currentLanguage
 }) {
   const { t } = useTranslation();
   const openDialogRef = useRef(null);
   const [missing, setMissing] = useState([]);
-  // Stays once shown, so clearing the prefilled text does not remove its field.
-  const [messageEdited, setMessageEdited] = useState(false);
-  const showMessage = Boolean(message) || messageEdited;
+  // The model whose alert hint was acknowledged: picking another one asks again.
+  const [acknowledgedModel, setAcknowledgedModel] = useState(null);
+
+  const selectedModelData = models?.find(m => m.id === selectedModel) || null;
+  const modelHint = selectedModelData?.hint || null;
+  // As in the chat input, an alert has to be acknowledged before sending.
+  const isAlert = modelHint?.level === 'alert';
+  const alertAcknowledged = isAlert && acknowledgedModel === selectedModel;
+  const alertPending = isAlert && !alertAcknowledged;
 
   const files = useMemo(
     () => (!selectedFile ? [] : Array.isArray(selectedFile) ? selectedFile : [selectedFile]),
@@ -82,7 +103,7 @@ function ChatStartForm({
 
   const handleSubmit = e => {
     e.preventDefault();
-    if (isProcessing || !canSubmit) return;
+    if (isProcessing || !canSubmit || alertPending) return;
     // The inputs carry `required`, but a value of only spaces passes the
     // browser's own check.
     const missingNow = getMissingRequiredVariables(app, variables);
@@ -95,6 +116,10 @@ function ChatStartForm({
     const updated = files.filter((_, i) => i !== index);
     onFileSelect(updated.length === 0 ? null : updated.length === 1 ? updated[0] : updated);
   };
+
+  const messagePlaceholder =
+    getLocalizedContent(app?.messagePlaceholder, currentLanguage) ||
+    t('pages.appChat.messagePlaceholder', 'Type your message here...');
 
   const missingLabels = localizedVariables
     .filter(v => missing.includes(v.name))
@@ -130,26 +155,25 @@ function ChatStartForm({
         localizedVariables={localizedVariables}
       />
 
-      {showMessage && (
-        <div className="flex flex-col">
-          <label
-            htmlFor="start-form-message"
-            className="mb-1 text-sm font-medium text-gray-700 dark:text-gray-300"
-          >
-            {t('pages.appChat.startForm.message', 'Message')}
-          </label>
-          <textarea
-            id="start-form-message"
-            value={message}
-            onChange={e => {
-              setMessageEdited(true);
-              onMessageChange?.(e.target.value);
-            }}
-            rows={3}
-            className="p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-sm focus:ring-indigo-500 focus:border-indigo-500"
-          />
-        </div>
-      )}
+      {/* The chat input's text: what an app such as a translator works on, or
+          what the user adds to the variables. */}
+      <div className="flex flex-col">
+        <label
+          htmlFor="start-form-message"
+          className="mb-1 text-sm font-medium text-gray-700 dark:text-gray-300"
+        >
+          {t('pages.appChat.startForm.message', 'Message')}
+        </label>
+        <textarea
+          id="start-form-message"
+          value={message}
+          onChange={e => onMessageChange?.(e.target.value)}
+          placeholder={messagePlaceholder}
+          rows={4}
+          disabled={isProcessing}
+          className="p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-sm focus:ring-indigo-500 focus:border-indigo-500"
+        />
+      </div>
 
       {uploadEnabled && (
         <div className="flex flex-col gap-2">
@@ -193,10 +217,29 @@ function ChatStartForm({
         </p>
       )}
 
-      <div className="flex justify-end">
+      {modelHint && !alertAcknowledged && (
+        <ModelHintBanner
+          key={selectedModel} // A new model shows its hint afresh
+          hint={modelHint}
+          currentLanguage={currentLanguage}
+          onAcknowledge={() => setAcknowledgedModel(selectedModel)}
+        />
+      )}
+
+      <div className="flex items-center justify-end gap-2">
+        {showModelSelector && models?.length > 0 && onModelChange && (
+          <ModelSelector
+            app={app}
+            models={models}
+            selectedModel={selectedModel}
+            onModelChange={onModelChange}
+            currentLanguage={currentLanguage}
+            disabled={isProcessing}
+          />
+        )}
         <button
           type="submit"
-          disabled={isProcessing || !canSubmit}
+          disabled={isProcessing || !canSubmit || alertPending}
           className="px-5 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {submitLabel}
