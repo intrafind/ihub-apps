@@ -953,11 +953,18 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
   }, [serverBackedChat, app, chatId, messages.length, loadServerMessages, finishHydration]);
 
   // A scheduled run that was waiting on this chat's approval finished on the
-  // server: its answer is in the store, not on screen, so read it back.
+  // server: its answer is in the store, not on screen, so read it back — unless
+  // the user moved to another chat meanwhile, whose transcript this is not.
+  const currentChatIdRef = useRef(chatId);
+  useEffect(() => {
+    currentChatIdRef.current = chatId;
+  }, [chatId]);
   const reloadScheduledRunChat = useCallback(async () => {
     if (!chatId) return;
+    const requestedChatId = chatId;
     try {
-      const result = await fetchChat(chatId);
+      const result = await fetchChat(requestedChatId);
+      if (currentChatIdRef.current !== requestedChatId) return;
       loadServerMessages(Array.isArray(result?.messages) ? result.messages : []);
       invalidateChatsCache();
     } catch (err) {

@@ -1,8 +1,8 @@
-import { act, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { MemoryRouter } from 'react-router-dom';
 import ScheduledRunBanner from '../../../client/src/features/tasks/components/ScheduledRunBanner';
-import { fetchScheduledTaskRun } from '../../../client/src/api';
+import { answerScheduledTaskApproval, fetchScheduledTaskRun } from '../../../client/src/api';
 
 /**
  * The banner of a scheduled run's chat follows a run that is still going. The
@@ -59,6 +59,7 @@ describe('ScheduledRunBanner', () => {
   beforeEach(() => {
     jest.useFakeTimers();
     fetchScheduledTaskRun.mockReset();
+    answerScheduledTaskApproval.mockReset();
   });
 
   afterEach(() => {
@@ -93,6 +94,27 @@ describe('ScheduledRunBanner', () => {
     });
     expect(onRunChanged).toHaveBeenCalledTimes(1);
     expect(fetchScheduledTaskRun).toHaveBeenCalledTimes(3);
+  });
+
+  it('tells the chat when an approved run it opened on is already over at the next read', async () => {
+    fetchScheduledTaskRun
+      .mockResolvedValueOnce({
+        ...run('awaiting_approval'),
+        approval: { toolId: 'dangerous', interactionId: 'i1' }
+      })
+      .mockResolvedValue(run('succeeded'));
+    answerScheduledTaskApproval.mockResolvedValue({});
+    const onRunChanged = jest.fn();
+    renderBanner(onRunChanged);
+    await flush();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Approve' }));
+    });
+    await flush();
+    await flush();
+    expect(answerScheduledTaskApproval).toHaveBeenCalled();
+    expect(onRunChanged).toHaveBeenCalledTimes(1);
   });
 
   it('leaves the chat alone for a run that had already finished when it opened', async () => {

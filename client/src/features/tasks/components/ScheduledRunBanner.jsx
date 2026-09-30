@@ -83,7 +83,18 @@ export default function ScheduledRunBanner({ origin, onRunChanged }) {
           {run && <RunStatusBadge status={run.status} />}
         </div>
         {run?.status === 'awaiting_approval' && (
-          <ApprovalControls taskId={origin.taskId} run={run} compact onAnswered={load} />
+          <ApprovalControls
+            taskId={origin.taskId}
+            run={run}
+            compact
+            onAnswered={decision => {
+              // An approval continues the run, and a short one may already be
+              // over by the time `load` reads it: follow it from here, so its
+              // end reaches the chat even if queued/running is never seen.
+              if (decision === 'approve') followedRef.current = true;
+              load();
+            }}
+          />
         )}
         {run?.status === 'failed' && run.reason?.message && (
           <p className="text-red-700 dark:text-red-300">{reasonText(t, run.reason)}</p>
