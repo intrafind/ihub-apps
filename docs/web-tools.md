@@ -276,14 +276,24 @@ When web search or other external sources are used, an **Answer Source Badge** a
 
 | Badge | Color | Description |
 |-------|-------|-------------|
-| LLM Only | Gray | Response generated purely from the model's knowledge |
+| AI knowledge | Gray | Response generated purely from the model's knowledge |
 | Web Search | Green | Response includes information from web search results |
+| iFinder | Emerald | Response uses documents found by an iFinder search tool |
 | Sources | Purple | Response uses configured knowledge base sources |
 | iAssistant | Indigo | Response includes information from iFinder iAssistant |
 | Grounding | Teal | Response uses Google Search grounding (Gemini) |
+| Email | Amber | Response is based on the open or added email or meeting (Outlook add-in) |
+| Uploaded file | Orange | Response is based on an uploaded file or image |
+| Audio recording | Violet | Response is based on an audio recording or its transcript |
 | Mixed | Blue | Response combines multiple information sources |
 
 When multiple sources are used, a tooltip lists all contributing sources.
+
+The server decides the badge: it names the sources when the turn ends
+(`run/ended.knowledgeSources`, see [SSE v2](sse-v2.md#a-chat-turn-on-the-wire)), and a
+transcription session names its own. The browser only displays that list. An
+answer without one — a failed or interrupted turn, a notice, an answer stored
+before the server kept its sources — shows no badge.
 
 ## Search Provider Configuration
 

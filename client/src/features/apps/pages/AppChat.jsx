@@ -161,12 +161,6 @@ const renderStartupState = (
   return <NoMessagesView />;
 };
 
-// A transcript is built from the user's own audio, not from the model's
-// knowledge. Transcription turns never pass through the server's chat run (which
-// is what reports `answerSource` for other answers), so without this the badge
-// under the transcript falls back to "Based on AI knowledge".
-const TRANSCRIPT_ANSWER_SOURCE = { sources: ['audio'], type: 'mixed' };
-
 // The query string an embedded chat reads: none. Module-level, so its identity
 // is stable across renders like the router's own.
 const NO_SEARCH_PARAMS = new URLSearchParams();
@@ -1906,6 +1900,10 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
           // Latest streamed text (declared out here so the catch block can keep
           // the partial transcript on cancellation).
           let lastText = '';
+          // What the transcript is based on, as the transcription server named
+          // it when the session opened — a transcription turn is not a chat run,
+          // so no `run/ended` reports it. Kept for a partial transcript too.
+          let answerSource = null;
 
           try {
             const audioBuffer = source.audioBuffer
@@ -1932,6 +1930,9 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
             const transcript = await transcribeAudioBuffer(audioBuffer, {
               modelId,
               signal: abortController.signal,
+              onSources: sources => {
+                answerSource = sources.length > 0 ? { sources, type: 'mixed' } : null;
+              },
               onDelta: streaming
                 ? text => {
                     lastText = text;
@@ -1943,7 +1944,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
               assistantId,
               transcript || t('transcription.empty', '_(No speech detected)_'),
               false,
-              { answerSource: TRANSCRIPT_ANSWER_SOURCE }
+              answerSource ? { answerSource } : {}
             );
             if (transcript) transcribed = true;
           } catch (err) {
@@ -1962,9 +1963,12 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
                       'Transcription was interrupted — the transcript may be incomplete.'
                     );
               // Still the audio's text, just incomplete — keep the source badge.
-              updateAssistantMessage(assistantId, `${lastText.trim()}\n\n_${notice}_`, false, {
-                answerSource: TRANSCRIPT_ANSWER_SOURCE
-              });
+              updateAssistantMessage(
+                assistantId,
+                `${lastText.trim()}\n\n_${notice}_`,
+                false,
+                answerSource ? { answerSource } : {}
+              );
             } else {
               updateAssistantMessage(assistantId, getTranscriptionErrorMessage(err, t), false, {
                 isError: true

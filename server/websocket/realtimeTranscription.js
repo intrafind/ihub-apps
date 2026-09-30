@@ -39,7 +39,8 @@
  * Browser <-> iHub protocol (iHub-defined, we own both ends):
  *   client -> server: JSON `{type:'start', modelId?, lang?}`, then binary PCM16
  *                     frames, then JSON `{type:'stop'}`
- *   server -> client: JSON `{type:'ready'}` once the backend is initialized,
+ *   server -> client: JSON `{type:'ready', knowledgeSources:['audio']}` once
+ *                     the backend is initialized,
  *                     `{type:'delta', text}` (streaming), `{type:'final', text}`
  *                     per completed segment, `{type:'done'}` once the transcript
  *                     is complete after `stop`, `{type:'error', message}`
@@ -58,6 +59,12 @@ import {
 import { buildApiPath } from '../utils/basePath.js';
 import { getTranscriptionProvider } from '../transcription/index.js';
 import vllmRealtimeProvider from '../transcription/vllmRealtimeProvider.js';
+
+// What a session produces is text transcribed from the user's audio: `ready`
+// says so, like `run/ended.knowledgeSources` does for a chat turn, so a
+// transcript shown as a chat answer is badged by what the server reported —
+// including a partial one, whose session never reaches `done`.
+const READY_FRAME = Object.freeze({ type: 'ready', knowledgeSources: ['audio'] });
 
 // Close cleanly if the browser stops sending audio and no transcription is
 // flowing. Keeps orphaned upstream sockets from lingering.
@@ -674,7 +681,7 @@ export function bridgeConnection(clientWs, user, limiter, options = {}) {
       model: cfg.model,
       trigger
     });
-    sendJson(clientWs, { type: 'ready' });
+    sendJson(clientWs, READY_FRAME);
     // Flush any audio captured during the handshake.
     for (const chunk of pending) {
       sendJson(upstream, provider.audioFrame(chunk.toString('base64'), cfg));
@@ -951,7 +958,7 @@ export function bridgeConnection(clientWs, user, limiter, options = {}) {
       // audio is held here until `stop`. Audio captured while resolving moves
       // into the batch buffer so nothing is lost.
       upstreamReady = true;
-      sendJson(clientWs, { type: 'ready' });
+      sendJson(clientWs, READY_FRAME);
       for (const chunk of pending) bufferBatchAudio(chunk);
       pending.length = 0;
       pendingBytes = 0;

@@ -715,7 +715,7 @@ stored answer now carries the same thing as `activity`:
   toolActivity: { items: [{ kind: 'search', scope: 'web', query, status, sources, details, durationMs, … }] },
   searchSummary: { queries, totalHits, rounds, applications, sources },  // iAssistant
   activeSkills: [{ name, description }],
-  answerSource: { sources: ['websearch', 'ifinder'] },                    // the badge
+  answerSource: { sources: ['websearch', 'ifinder'] },                    // the badge (`['llm']`: the model's own knowledge)
   workflowSteps: [{ nodeName, nodeType, status }],
   workflowResult: { status, executionId, workflowName },
   outputFormat: 'markdown'
@@ -747,8 +747,10 @@ therefore shows what the live one showed, in the same components.
   ledger run (`refs.chatId`, `refs.appId`), so **My Executions** and the
   execution page link back to the chat.
 
-Answers stored before this existed have no `activity` and show what they
-always showed.
+The badge is what the server named on `run/ended` (see
+[SSE v2](sse-v2.md#a-chat-turn-on-the-wire)), never inferred in the browser from
+the rest of the message: answers stored before this existed have no `activity`
+and show no badge, because nothing recorded what they were based on.
 
 **Chat with Results** on a finished execution creates a stored chat the same
 way (`POST /api/workflows/executions/:executionId/chat/:appId`): the execution's

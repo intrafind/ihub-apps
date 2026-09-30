@@ -374,6 +374,8 @@ describe('bridgeConnection state machine (fake sockets)', () => {
     expect(upstream.framesOfType('input_audio_buffer.commit')).toHaveLength(1);
     expect(upstream.framesOfType('input_audio_buffer.append')).toHaveLength(1);
     expect(client.framesOfType('ready')).toHaveLength(1);
+    // The server names what the transcript is based on; the chat badge reads it.
+    expect(client.framesOfType('ready')[0]).toEqual({ type: 'ready', knowledgeSources: ['audio'] });
 
     client.emit('message', JSON.stringify({ type: 'stop' }), false);
     await jest.advanceTimersByTimeAsync(0);
@@ -575,6 +577,7 @@ describe('bridgeConnection — batch providers', () => {
       await start(client);
       // No handshake to wait for: the client is cleared immediately.
       expect(client.framesOfType('ready')).toHaveLength(1);
+      expect(client.framesOfType('ready')[0].knowledgeSources).toEqual(['audio']);
       expect(createUpstream).not.toHaveBeenCalled();
 
       client.emit('message', Buffer.from([1, 2, 3, 4]), true);

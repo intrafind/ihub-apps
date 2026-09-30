@@ -1,16 +1,21 @@
 # Fixes — Unreleased
 
-## Audio Answers No Longer Say "Based on AI Knowledge"
+## The Answer Badge Says "Based on AI Knowledge" Only When It Is
 
 A transcript of a recording or an uploaded audio or video file was labelled "Based on AI knowledge"
-— although the text comes straight from the user's own audio. The badge under the answer now reads
-"Based on audio recording".
+— although the text comes straight from the user's own audio — and so was anything else the chat
+could not place: a question the assistant asked back, a notice, an answer whose run was cut off.
+The server now names what every answer is based on, and the badge shows exactly that. A transcript
+reads "Based on audio recording".
 
 - Applies to transcripts from the transcription model (upload, video and microphone recording),
   including a partial transcript kept after a cancelled or interrupted run.
 - Also applies when audio is sent directly to a chat model that accepts it, such as the
   **Audio Transcription** app.
-- A failed transcription still shows the error message without a badge.
+- An answer stopped with **Stop** keeps the badge of what it had used until then.
+- Questions the assistant asks back, notices, failed answers and answers whose run was interrupted
+  show no badge. A failed transcription still shows the error message without a badge.
+- Answers stored before this release show no badge: nothing recorded what they were based on.
 
 ## Admins' Own Chats Clear Their "New" Badge When Opened
 

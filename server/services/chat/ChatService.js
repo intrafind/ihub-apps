@@ -27,7 +27,11 @@ import { OPTIONAL_COUNTERS } from '../loop/llmUsage.js';
 import runLogSingleton, { newRunId, isValidRunId } from '../loop/RunLog.js';
 import interactionServiceSingleton from '../loop/InteractionService.js';
 import { RunStreamEmitter, bindStreamRun, unbindStreamRun } from '../loop/RunStream.js';
-import { RUN_LOG_EVENTS, SSE_V2_EVENTS } from '../../../shared/runEvents.js';
+import {
+  MODEL_KNOWLEDGE_SOURCE,
+  RUN_LOG_EVENTS,
+  SSE_V2_EVENTS
+} from '../../../shared/runEvents.js';
 import {
   imageLiftSeam,
   knowledgeSourceSeam,
@@ -272,11 +276,16 @@ class ChatService {
   /**
    * The knowledge sources to report on a terminal answer (`run/ended`), and
    * clear the per-chat bookkeeping so nothing leaks into the next turn.
+   *
+   * A model's answer that drew on nothing else is named as the model's own
+   * knowledge, so the client never has to infer it from a missing list. A
+   * passthrough answer is the tool's output, not the model's (`byModel: false`),
+   * and is named by the sources it used alone.
    */
-  resolveAnswerSources(chatId, loopSources = []) {
+  resolveAnswerSources(chatId, loopSources = [], { byModel = true } = {}) {
     const sources = this.getKnowledgeSources(chatId, loopSources);
     this.resetKnowledgeSources(chatId);
-    return sources;
+    return sources.length > 0 || !byModel ? sources : [MODEL_KNOWLEDGE_SOURCE];
   }
 
   // ── ledger ─────────────────────────────────────────────────────────────
@@ -326,12 +335,15 @@ class ChatService {
     }
   }
 
-  _endLedgerRun(runId, { status, finishReason, usage, error, startedAt }) {
+  _endLedgerRun(runId, { status, finishReason, usage, error, knowledgeSources, startedAt }) {
     try {
       this.runLog.endRun(runId, {
         status,
         finishReason: finishReason ?? null,
         usage: wireUsage(usage),
+        // What `run/ended` reported, so a replay of the ledger badges the
+        // answer the same way the live stream did.
+        ...(Array.isArray(knowledgeSources) ? { knowledgeSources } : {}),
         ...(error
           ? {
               error: {
@@ -740,6 +752,7 @@ class ChatService {
         finishReason: outcome.finishReason,
         usage: outcome.usage,
         error: outcome.error || (outcome.errorInfo ? outcome.errorInfo : undefined),
+        knowledgeSources: outcome.knowledgeSources,
         startedAt
       });
       // The single choke point: every terminal shape `_finishTurn` produces —
@@ -845,8 +858,10 @@ class ChatService {
       mcpAuthRequired: mcpAuthPrompts,
       scheduledTaskProposals,
       // The web sources behind the answer and the passages they back.
-      webSearch: webSearchLog ? buildWebSearch(webSearchLog) : null,
-      knowledgeSources: this.getKnowledgeSources(chatId, loopSources)
+      webSearch: webSearchLog ? buildWebSearch(webSearchLog) : null
+      // `knowledgeSources` is set by the branches that name the answer's
+      // sources on `run/ended` — the ledger records the summary's list, so it
+      // must be exactly what the stream reported.
     };
     const translate = async (key, params) => {
       if (typeof getLocalizedError !== 'function') return null;
@@ -858,6 +873,10 @@ class ChatService {
     };
     const endRun = data =>
       stream.emit(SSE_V2_EVENTS.RUN_ENDED, { ...(usage ? { usage } : {}), ...data });
+    // Whether the turn wrote any answer — text or a picture — the user sees.
+    const producedOutput = channel
+      ? channel.state.answerOutput
+      : content.length > 0 || (result.images?.length ?? 0) > 0;
 
     if (result.status === 'aborted') {
       // Stop button, client disconnect or a superseding turn: no error bubble.
@@ -868,8 +887,23 @@ class ChatService {
         request: takePendingCall(),
         outcome: 'aborted'
       });
-      endRun({ status: 'aborted', finishReason: 'connection_closed' });
-      return { ...summary, status: 'aborted', finishReason: 'connection_closed' };
+      // A stopped turn keeps what it had already written, and that answer is
+      // based on what the turn used until then. One that wrote nothing has no
+      // answer to name a source for.
+      const knowledgeSources = producedOutput
+        ? this.resolveAnswerSources(chatId, loopSources)
+        : undefined;
+      endRun({
+        status: 'aborted',
+        finishReason: 'connection_closed',
+        ...(knowledgeSources ? { knowledgeSources } : {})
+      });
+      return {
+        ...summary,
+        status: 'aborted',
+        finishReason: 'connection_closed',
+        ...(knowledgeSources ? { knowledgeSources } : {})
+      };
     }
 
     if (result.status === 'error') {
@@ -1031,7 +1065,7 @@ class ChatService {
           toolName
         })
       );
-      const knowledgeSources = this.resolveAnswerSources(chatId, loopSources);
+      const knowledgeSources = this.resolveAnswerSources(chatId, loopSources, { byModel: false });
       endRun({
         status: 'completed',
         finishReason: 'tool_passthrough_complete',
@@ -1050,9 +1084,6 @@ class ChatService {
     // Degenerate completion: a failure finish reason (e.g. Gemini's
     // MALFORMED_FUNCTION_CALL) with no answer output would reach the client as
     // a clean end with an empty bubble — surface an error instead.
-    const producedOutput = channel
-      ? channel.state.answerOutput
-      : content.length > 0 || (result.images?.length ?? 0) > 0;
     if (!producedOutput && isFailureFinishReason(result.finishReason)) {
       const message =
         (await translate('malformedModelResponse')) ||

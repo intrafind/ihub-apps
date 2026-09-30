@@ -83,9 +83,6 @@ export function transformStoredMessage(msg) {
     const sources = Array.isArray(msg.webSearch.sources) ? msg.webSearch.sources : [];
     if (queries.length > 0 || sources.length > 0) {
       message.webSearch = { queries, sources };
-      // A web answer is not "based on AI knowledge" when it is reopened. The
-      // stored activity below names every source the answer drew on.
-      message.answerSource = { sources: ['websearch'], type: 'mixed' };
     }
   }
   // What the run did before it answered — searches, documents, tool calls,

@@ -29,6 +29,14 @@ export const RUN_STATUSES = Object.freeze([
   'budget_exhausted'
 ]);
 
+/**
+ * The knowledge source of an answer that drew on nothing but the model itself
+ * ("Based on AI knowledge"). A chat turn names it in `run/ended.knowledgeSources`
+ * like any other source, so the answer badge only ever shows what the server
+ * reported: a turn that reported no sources gets no badge.
+ */
+export const MODEL_KNOWLEDGE_SOURCE = 'llm';
+
 /** RunLog (ledger) event types — one append-only JSONL stream per run. */
 export const RUN_LOG_EVENTS = Object.freeze({
   RUN_START: 'run/start',
