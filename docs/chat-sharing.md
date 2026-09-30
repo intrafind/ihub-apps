@@ -76,10 +76,13 @@ A stored message holds what the transcript holds: the text, the failure that
 cut an answer short, the attachment descriptors, the artifact descriptors, and
 what the answer did (see
 [What a turn did](chat-persistence.md#what-a-turn-did)). A share carries that
-activity without the document hits of the owner's searches, for the reason
-below: a document search keeps its query and loses what it found, and the
-iAssistant search summary keeps its queries and counts and loses the
-application and source names of its hits.
+activity without anything a call found or read with the owner's permissions,
+for the reason below. Only the public web searches and page reads keep their
+hits, arguments and errors; every other call — iFinder and configured sources,
+MCP and intranet tools, metadata lookups — keeps its name, query and status.
+The iAssistant search summary keeps its queries and counts and loses the
+application and source names of its hits, and a workflow result loses the link
+to an execution a viewer cannot open.
 
 The documents listed under an answer are stored, so the owner's reopened chat
 shows them again, but a share leaves them out. They are every document the

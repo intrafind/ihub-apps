@@ -106,6 +106,8 @@ export function transformStoredMessage(msg) {
     if (typeof msg.error.message === 'string' && msg.error.message) {
       message.errorMessage = msg.error.message;
     }
+    // Stored reasons are English; a known code lets the bubble translate it.
+    if (typeof msg.error.code === 'string') message.errorCode = msg.error.code;
   }
 
   return message;

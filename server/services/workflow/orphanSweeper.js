@@ -38,7 +38,14 @@ const ORPHAN_STATUSES = new Set(['running', 'pending']);
  * are excluded, as they always have been: they are not listed in the UI and
  * marking one failed on its own would contradict its parent.
  */
-const ORPHAN_ID_PREFIX = 'wf-exec-';
+const ORPHAN_ID_PREFIXES = Object.freeze([
+  'wf-exec-',
+  // Workflows started by `@workflow` in a chat run under the chat's run id.
+  // Nothing resumes them — the chat bridge that delivered their answer died
+  // with the process — so one left running is as orphaned as any other, and
+  // its chat is closed out when it is next read (`chat/chatRecovery.js`).
+  'workflow-'
+]);
 
 /**
  * Scan the stored workflow states and mark stuck `running`/`pending`
@@ -79,12 +86,17 @@ export async function sweepOrphanedExecutions({
   const store = repository || resolveWorkflowStateRepository(stateDir);
   // Metadata only: the guard below rejects most candidates without ever
   // needing the state, and a state can carry a whole workflow definition.
-  const { items, truncated } = await store.listSummaries({ prefix: ORPHAN_ID_PREFIX });
-  if (truncated) {
-    logger.warn('Orphan sweep stopped scanning at the cap', {
-      component: 'OrphanSweeper',
-      scanned: items.length
-    });
+  const items = [];
+  for (const prefix of ORPHAN_ID_PREFIXES) {
+    const page = await store.listSummaries({ prefix });
+    if (page.truncated) {
+      logger.warn('Orphan sweep stopped scanning at the cap', {
+        component: 'OrphanSweeper',
+        prefix,
+        scanned: page.items.length
+      });
+    }
+    items.push(...page.items);
   }
 
   let scanned = 0;

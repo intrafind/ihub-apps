@@ -98,6 +98,9 @@ function WorkflowStepIndicator({ steps = [], currentStep, result, loading }) {
   if (result) {
     const isFailed = result.status === 'failed';
     const isCancelled = result.status === 'cancelled';
+    // A workflow stopped at a human checkpoint while this chat's connection to
+    // it was lost: it is continued from its execution page.
+    const isPaused = result.status === 'paused';
 
     // Determine icon, color, and message based on status
     let iconName = 'cog';
@@ -112,6 +115,10 @@ function WorkflowStepIndicator({ steps = [], currentStep, result, loading }) {
       iconName = 'x-circle';
       iconColor = 'text-orange-500';
       statusText = t('workflow.cancelled', 'Cancelled');
+    } else if (isPaused) {
+      iconName = 'hand-raised';
+      iconColor = 'text-amber-500';
+      statusText = t('workflow.waitingForInput', 'Waiting for your input');
     }
 
     return (

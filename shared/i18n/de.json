@@ -443,6 +443,7 @@
     "appNotFound": "Anwendung nicht gefunden",
     "missingRequiredFields": "Erforderliche Felder fehlen:",
     "streamingError": "Ein Fehler ist beim Streaming aufgetreten",
+    "runInterrupted": "Diese Antwort wurde unterbrochen: Der Server wurde angehalten, während sie erstellt wurde.",
     "failedToGenerateResponse": "Fehler beim Generieren der Antwort. Bitte versuchen Sie es erneut oder wählen Sie ein anderes Modell.",
     "sessionExpired": "Ihre Sitzung ist abgelaufen. Bitte melden Sie sich erneut an, um fortzufahren.",
     "sessionExpiredReconnecting": "Sitzung abgelaufen. Verbindung zum Authentifizierungsanbieter wird wiederhergestellt...",
@@ -3805,7 +3806,8 @@
     "generated": "Generiert",
     "failed": "Fehlgeschlagen",
     "cancelled": "Abgebrochen",
-    "viewExecution": "Ausführungsdetails anzeigen"
+    "viewExecution": "Ausführungsdetails anzeigen",
+    "waitingForInput": "Wartet auf Ihre Eingabe"
   },
   "workflows": {
     "title": "Workflows",

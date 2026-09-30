@@ -258,8 +258,8 @@ export default async function workflowRunner(params = {}) {
     modelId,
     passthrough,
     runId: chatRunId,
-    appId: launchAppId,
     appConfig: _appConfig,
+    _chatStored,
     _chatHistory,
     _fileData,
     language = 'en',
@@ -300,11 +300,15 @@ export default async function workflowRunner(params = {}) {
   }
 
   // The chat the run belongs to, so its ledger run, "My Executions" and the
-  // execution page can lead back to it.
-  const appId = launchAppId || _appConfig?.id;
-  if (chatId) {
+  // execution page can lead back to it — only a stored chat, which is the only
+  // kind there is to go back to. Both come from the server (`appConfig` and
+  // `_chatStored` are set after the model's arguments), never from arguments.
+  delete initialData._chatId;
+  delete initialData._appId;
+  const appId = typeof _appConfig?.id === 'string' && _appConfig.id ? _appConfig.id : null;
+  if (chatId && _chatStored === true) {
     initialData._chatId = chatId;
-    if (typeof appId === 'string' && appId) initialData._appId = appId;
+    if (appId) initialData._appId = appId;
   }
 
   // Map the chat-message `input` to the workflow's first non-file/image
@@ -410,7 +414,9 @@ export default async function workflowRunner(params = {}) {
       status: 'running',
       startedAt: new Date().toISOString(),
       source: 'chat',
-      ...(chatId ? { chatId, appId: initialData._appId || null } : {})
+      ...(initialData._chatId
+        ? { chatId: initialData._chatId, appId: initialData._appId || null }
+        : {})
     });
   } catch (error) {
     logger.warn('Failed to register execution', {

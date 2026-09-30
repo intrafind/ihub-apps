@@ -432,6 +432,25 @@ describe('orphan sweep through the repository', () => {
     });
   });
 
+  it('also sweeps a workflow a chat started, but not one paused for input', async () => {
+    // `@workflow` runs carry the chat's run id and are never resumed, so one
+    // left running died with the process. A paused one can still be answered.
+    await withRepository(async ({ repository }) => {
+      await repository.write('workflow-chat-1', state('workflow-chat-1'), { ownerId: OWNER });
+      await repository.write(
+        'workflow-chat-paused',
+        state('workflow-chat-paused', { status: WorkflowStatus.PAUSED }),
+        { ownerId: OWNER }
+      );
+
+      const result = await sweepOrphanedExecutions({ requireSchedulerOwner: false, repository });
+
+      assert.equal(result.marked, 1);
+      assert.equal((await repository.read('workflow-chat-1')).status, 'failed');
+      assert.equal((await repository.read('workflow-chat-paused')).status, WorkflowStatus.PAUSED);
+    });
+  });
+
   it('leaves a run that is live in this process alone', async () => {
     await withRepository(async ({ repository }) => {
       await repository.write('wf-exec-live', state('wf-exec-live'), { ownerId: OWNER });

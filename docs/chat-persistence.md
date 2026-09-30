@@ -728,9 +728,10 @@ therefore shows what the live one showed, in the same components.
 - **Bounded** before it is stored (`boundStoredActivity`): 100 calls, 50 sources
   per call, 200 workflow steps (the last ones), 2000 characters per value and
   256 KiB in all, past which the full text of long arguments goes first.
-- **Shared chats** carry it without the documents the owner's searches found —
-  the reason a share drops `citations` — so a document search keeps its query
-  and loses its hits (`shareableActivity`).
+- **Shared chats** carry it without anything a call found or read with the
+  owner's permissions — the reason a share drops `citations`. Only public web
+  searches and page reads keep their hits; every other call keeps its name,
+  query and status (`shareableActivity`).
 - **The workflow result links its execution.** A finished workflow in the chat
   links to `/workflows/executions/:id`, which keeps every step and its output.
   In the other direction, a chat-launched execution records its chat on its
@@ -787,10 +788,18 @@ that is what you want.
   the error `RUN_INTERRUPTED` and whatever the run's ledger still knows of what
   it did — the tool calls and what they found; the live-only frames such as
   workflow steps are not in the ledger — appends the missing `run/end` to the
-  ledger, and releases the chat. A run counts as dead only when no worker holds
-  it: its ledger run is neither open nor recently ended on this worker nor owned
-  by another, no request, durable turn or bridged workflow is in flight for the
-  chat, and it claimed the chat more than two minutes ago.
+  ledger, and releases the chat. An `@workflow` turn is closed by what its
+  execution says: one paused at a human checkpoint is still continued from its
+  execution page, so the chat says it is waiting for input and its run stays
+  open; a completed one's answer is delivered from the execution; a cancelled
+  one is stored as stopped. Chat-launched executions left running are marked
+  failed by the boot-time orphan sweep, as they are never resumed. A run counts
+  as dead only when no worker holds it: its ledger run is neither open nor
+  recently ended on this worker nor owned by another, no request, durable turn
+  or bridged workflow is in flight for the chat, and it claimed the chat more
+  than two minutes ago. The liveness signals are those of one host: two
+  installations sharing one store are not supported (see the filesystem
+  provider below), and recovery would treat the other host's live runs as dead.
 - **One in-flight turn per chat, still.** Starting a turn on a chat that is
   already producing aborts the first one. Two tabs on the same chat cannot
   corrupt the stored transcript, but they can cut each other off. The aborted

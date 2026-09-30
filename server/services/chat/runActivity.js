@@ -422,14 +422,32 @@ export function boundStoredActivity(activity) {
 }
 
 /**
+ * Tools whose hits are public pages: what they found is on the open web, not
+ * behind the owner's permissions. Provider-run web search (`native`) is too.
+ */
+const PUBLIC_WEB_TOOLS = new Set([
+  'bravesearch',
+  'qwantsearch',
+  'staansearch',
+  'websearch',
+  'webcontentextractor'
+]);
+
+function isPublicWebItem(item) {
+  return item?.native === true || PUBLIC_WEB_TOOLS.has(String(item?.toolId || '').toLowerCase());
+}
+
+/**
  * The activity as a share carries it. What the turn did stays — which tools
- * it called, what it searched for, the public pages it read, the workflow
- * steps — but not what the owner's document searches found: those hits were
- * retrieved with the owner's iFinder permissions, which is also why a share
- * drops `citations` (see `ChatShareRepository.MESSAGE_FIELDS_DROPPED`). So a
- * document-scoped call keeps its query and loses its hits and the document it
- * read, and the iAssistant summary keeps its queries and counts and loses the
- * application and source names of its hits.
+ * it called, what it searched for, whether each call succeeded, the public
+ * pages it read, the workflow steps — but nothing a call found or read with
+ * the owner's permissions: iFinder and configured sources, MCP and intranet
+ * tools, metadata lookups. That is also why a share drops `citations` (see
+ * `ChatShareRepository.MESSAGE_FIELDS_DROPPED`). Only the public web tools
+ * keep their hits, arguments and errors; every other call keeps its name,
+ * query and status. The iAssistant summary keeps its queries and counts and
+ * loses the application and source names of its hits, and the workflow
+ * result loses the link to an execution a viewer cannot open.
  *
  * @param {Object|null} activity - stored activity
  * @returns {Object|null}
@@ -440,15 +458,32 @@ export function shareableActivity(activity) {
   if (Array.isArray(activity.toolActivity?.items)) {
     out.toolActivity = {
       ...activity.toolActivity,
-      items: activity.toolActivity.items.map(item => {
-        if (item?.scope !== 'documents') return item;
-        const { sources: _hits, title: _title, url: _url, documentId: _doc, ...rest } = item;
-        return { ...rest, sources: [] };
-      })
+      items: activity.toolActivity.items.map(item =>
+        isPublicWebItem(item)
+          ? item
+          : compact({
+              id: item?.id,
+              kind: item?.kind,
+              toolId: item?.toolId,
+              name: item?.name,
+              status: item?.status,
+              scope: item?.scope,
+              query: item?.query,
+              queries: item?.queries,
+              details: [],
+              sources: [],
+              error: null,
+              durationMs: item?.durationMs ?? null
+            })
+      )
     };
   }
   if (activity.searchSummary) {
     out.searchSummary = { ...activity.searchSummary, applications: [], sources: [] };
+  }
+  if (activity.workflowResult) {
+    const { executionId: _execution, ...result } = activity.workflowResult;
+    out.workflowResult = result;
   }
   return out;
 }

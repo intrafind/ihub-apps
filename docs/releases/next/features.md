@@ -103,6 +103,7 @@ knowledge".
 - A finished workflow in the chat links to its execution (**View execution details**), where every
   step and result is kept. **My Executions** and the execution page link back to the chat a run
   was started from.
-- Shared chats show the activity without the documents the owner's searches found, the same way
-  they leave out the owner's document list.
+- Shared chats show the activity without what the owner's own searches found — iFinder, sources,
+  MCP and intranet tools — the same way they leave out the owner's document list. Public web
+  searches keep their pages.
 - Applies to answers stored from this release on (requires **Durable Chats**).

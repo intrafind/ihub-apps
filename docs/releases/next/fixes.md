@@ -50,6 +50,12 @@ chat is listed or opened, it is now closed with an answer that says it was inter
 with the searches and tool calls the run had made up to then. The run's audit ledger records the
 interruption too.
 
+- A workflow started with `@workflow` is closed by what its execution says: one waiting at a human
+  checkpoint shows **Waiting for your input** with a link to continue it on its execution page; a
+  finished one delivers its answer to the chat.
+- Workflows started from a chat that were running at the restart are marked failed in
+  **My Executions** instead of staying "running".
+
 ## Chat with Results Works With Durable Chats
 
 **Chat with Results** on a workflow execution opened an empty chat when **Durable Chats** is on:

@@ -525,7 +525,12 @@ function ChatMessage({
       contentToRender = `${storedContent}${cancelledNote}`;
     } else if (message.fromServer && isError && !storedContent) {
       contentToRender =
-        message.errorMessage || t('error.streamingError', 'An error occurred during streaming');
+        message.errorCode === 'RUN_INTERRUPTED'
+          ? t(
+              'error.runInterrupted',
+              'This answer was interrupted: the server stopped while it was being produced.'
+            )
+          : message.errorMessage || t('error.streamingError', 'An error occurred during streaming');
     }
 
     // For HTML content, check if it contains image tags or file indicators and render them properly

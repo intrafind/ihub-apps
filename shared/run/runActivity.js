@@ -143,18 +143,21 @@ export function buildRunActivity(run, childRuns = []) {
   for (const workflowRun of [run, ...(childRuns || [])]) {
     const result = workflowResultOf(workflowRun);
     const own = buildWorkflowSteps(workflowRun);
-    steps = [...steps, ...(result ? settleWorkflowSteps(own, result.status) : own)];
+    // Each workflow settles its own steps. One that never reported a result
+    // (the run was stopped or failed around it) did not leave a step running,
+    // whatever another workflow of the same turn reported.
+    steps = [
+      ...steps,
+      ...(result
+        ? settleWorkflowSteps(own, result.status)
+        : own.map(s => (s.status === 'running' ? { ...s, status: 'stopped' } : s)))
+    ];
     if (result) {
       activity.workflowResult = result;
       if (!activity.outputFormat) {
         activity.outputFormat = workflowRun.meta.extra.workflow.outputFormat || 'markdown';
       }
     }
-  }
-  // A workflow that never reported a result (the run was stopped or failed
-  // around it) did not leave a step running.
-  if (!activity.workflowResult) {
-    steps = steps.map(s => (s.status === 'running' ? { ...s, status: 'stopped' } : s));
   }
   if (steps.length) activity.workflowSteps = steps;
 

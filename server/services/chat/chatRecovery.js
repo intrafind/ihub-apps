@@ -30,6 +30,8 @@ import { hasRemote } from '../../clusterBus.js';
 import { hasActiveChatRequest, isChatDurable } from '../../sse.js';
 import { activeWorkflowExecutions } from '../../tools/workflowRunner.js';
 import { getExecutionRegistry } from '../workflow/ExecutionRegistry.js';
+import { getWorkflowEngine } from '../workflow/WorkflowEngine.js';
+import { executionHandoff } from '../workflow/executionChat.js';
 import { settleAssistantTurn } from './chatMaterializer.js';
 import { rebuildRunActivity } from './runActivity.js';
 import logger from '../../utils/logger.js';
@@ -60,8 +62,14 @@ const settling = new Map();
 export function isChatRunAlive(chat, { runLog = defaultRunLog, now = Date.now() } = {}) {
   const runId = chat?.activeRunId;
   if (!runId) return false;
-  const claimed = Date.parse(chat.runClaimedAt || chat.lastMessageAt || '');
-  if (!Number.isFinite(claimed) || now - claimed < INTERRUPTED_RUN_GRACE_MS) return true;
+  // The later of the two: `runClaimedAt` is only written by the Responses API
+  // and never cleared, so on a chat that API once used it can be far older
+  // than the turn now running, which the UI claims by appending its question.
+  const claimed = Math.max(
+    Date.parse(chat.runClaimedAt || '') || 0,
+    Date.parse(chat.lastMessageAt || '') || 0
+  );
+  if (!claimed || now - claimed < INTERRUPTED_RUN_GRACE_MS) return true;
   // Known to this worker's ledger — running, or ended within the last minute
   // (the ledger keeps a finished run that long). The second case matters: a
   // run's answer is stored just *after* its ledger ends, and the client reloads
@@ -76,20 +84,124 @@ export function isChatRunAlive(chat, { runLog = defaultRunLog, now = Date.now() 
 }
 
 /**
- * What the reopened answer of an interrupted workflow run should say about the
- * workflow: its name, and the execution to open for its current state.
+ * The workflow execution behind a chat run, for an `@workflow` turn (whose run
+ * id is the execution id), or null for an ordinary turn.
  */
-async function interruptedWorkflow(runId) {
+async function executionOf(runId) {
   try {
-    const execution = await getExecutionRegistry().get(runId);
-    if (!execution) return null;
-    return {
-      status: 'failed',
-      executionId: runId,
-      workflowName: execution.workflowName
-    };
+    return (await getExecutionRegistry().get(runId)) || null;
   } catch {
     return null;
+  }
+}
+
+/** The answer a completed execution gave, read from its state. */
+async function executionAnswer(runId) {
+  try {
+    const state = await getWorkflowEngine().getState(runId);
+    return state ? executionHandoff(state) : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * How a dead run is closed: the answer to store, and whether the run ends on
+ * the ledger. An ordinary turn was interrupted. An `@workflow` turn is closed
+ * by what its execution says it is — the execution outlives the chat bridge
+ * that died with the process:
+ *
+ * - paused at a human checkpoint: still resumable from its execution page, so
+ *   the chat says so and its run stays open;
+ * - completed: its answer is delivered from the execution;
+ * - cancelled: stored as a stopped turn;
+ * - anything else: interrupted, and an execution left running is marked
+ *   failed so "My Executions" stops listing it as running.
+ *
+ * @returns {Promise<{summary: Object, endRun: Object|null}>}
+ */
+async function closingTurn(runId, runLog) {
+  const activity = (await rebuildRunActivity(runLog, runId)) || {};
+  const interrupted = {
+    status: 'error',
+    finishReason: 'error',
+    error: { code: RUN_INTERRUPTED, message: INTERRUPTED_MESSAGE }
+  };
+  const execution = await executionOf(runId);
+  if (!execution) {
+    return {
+      summary: {
+        status: 'error',
+        content: '',
+        finishReason: 'error',
+        errorInfo: interrupted.error,
+        activity
+      },
+      endRun: interrupted
+    };
+  }
+
+  const result = status => ({
+    status,
+    executionId: runId,
+    workflowName: execution.workflowName
+  });
+  switch (execution.status) {
+    case 'paused':
+      return {
+        summary: {
+          status: 'success',
+          content: '',
+          finishReason: 'paused',
+          activity: { ...activity, workflowResult: result('paused') }
+        },
+        endRun: null
+      };
+    case 'completed':
+    case 'approved': {
+      const handoff = await executionAnswer(runId);
+      return {
+        summary: {
+          status: 'success',
+          content: handoff?.outputText || '',
+          finishReason: 'stop',
+          activity: {
+            ...activity,
+            workflowResult: result('completed'),
+            ...(handoff?.outputFormat ? { outputFormat: handoff.outputFormat } : {})
+          }
+        },
+        endRun: { status: 'completed', finishReason: 'stop' }
+      };
+    }
+    case 'cancelled':
+      return {
+        summary: {
+          status: 'aborted',
+          content: '',
+          finishReason: 'cancelled',
+          activity: { ...activity, workflowResult: result('cancelled') }
+        },
+        endRun: { status: 'aborted', finishReason: 'cancelled' }
+      };
+    default:
+      if (execution.status === 'running' || execution.status === 'pending') {
+        try {
+          getExecutionRegistry().updateStatus(runId, 'failed', { reason: 'server_restart' });
+        } catch {
+          /* the registry may not hold it; the ledger end below still records it */
+        }
+      }
+      return {
+        summary: {
+          status: 'error',
+          content: '',
+          finishReason: 'error',
+          errorInfo: interrupted.error,
+          activity: { ...activity, workflowResult: result('failed') }
+        },
+        endRun: interrupted
+      };
   }
 }
 
@@ -100,23 +212,17 @@ async function settle(chat, { repository, runLog }) {
   // The answer may be stored already — the process died between the append
   // and the release. Then only the release is missing.
   const { messages } = await repository.getMessages(chatId);
-  const answered = messages.some(m => m.role === 'assistant' && m.runId === runId);
+  const answer = messages.find(m => m.role === 'assistant' && m.runId === runId);
 
-  if (!answered) {
-    const activity = (await rebuildRunActivity(runLog, runId)) || {};
-    const workflowResult = await interruptedWorkflow(runId);
-    if (workflowResult) activity.workflowResult = workflowResult;
+  let endRun;
+  if (!answer) {
+    const closing = await closingTurn(runId, runLog);
+    endRun = closing.endRun;
     const settled = await settleAssistantTurn({
       repository,
       chatId,
       runId,
-      summary: {
-        status: 'error',
-        content: '',
-        finishReason: 'error',
-        errorInfo: { code: RUN_INTERRUPTED, message: INTERRUPTED_MESSAGE },
-        activity: Object.keys(activity).length > 0 ? activity : null
-      },
+      summary: closing.summary,
       // Nobody watched it end; the history marks it until it is opened.
       clientConnected: false,
       // Another worker may be settling the same chat: the check above is not
@@ -131,26 +237,27 @@ async function settle(chat, { repository, runLog }) {
     // several workers settling it, one releases it and ends the run.
     const { released } = await repository.releaseRun(chatId, runId, {
       activeRunId: null,
-      status: 'active',
+      status: answer.error && answer.error.code !== 'ABORTED' ? 'error' : 'active',
       hasUnseenActivity: true
     });
     if (!released) return repository.getChat(chatId);
+    // The run answered; only its end was not recorded.
+    endRun = answer.error
+      ? {
+          status: answer.error.code === 'ABORTED' ? 'aborted' : 'error',
+          finishReason: answer.finishReason ?? 'error',
+          error: { code: String(answer.error.code), message: String(answer.error.message || '') }
+        }
+      : { status: 'completed', finishReason: answer.finishReason ?? 'stop' };
   }
 
-  // The ledger is the audit record of the run: it should end, and say why.
+  // The ledger is the audit record of the run: it should end, and say how.
   try {
-    if (!(await runLog.hasEnded(runId))) {
+    if (endRun && !(await runLog.hasEnded(runId))) {
       const start = await runLog.readStart(runId);
-      await runLog.appendRecovered(
-        runId,
-        RUN_LOG_EVENTS.RUN_END,
-        {
-          status: 'error',
-          finishReason: 'error',
-          error: { code: RUN_INTERRUPTED, message: INTERRUPTED_MESSAGE }
-        },
-        { kind: start?.data?.kind || 'chat' }
-      );
+      await runLog.appendRecovered(runId, RUN_LOG_EVENTS.RUN_END, endRun, {
+        kind: start?.data?.kind || 'chat'
+      });
     }
   } catch (error) {
     logger.warn('Interrupted run not ended on the ledger', {

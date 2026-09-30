@@ -1079,7 +1079,9 @@ export default function registerWorkflowRoutes(app, deps = {}) {
         );
         if (!chatApp) return sendNotFound(res, 'App');
 
+        // An ephemeral app is one whose chats are never stored.
         if (
+          chatApp.ephemeral === true ||
           !isChatPersistenceActive({
             features: configCache.getFeatures(),
             platformConfig: configCache.getPlatform(),

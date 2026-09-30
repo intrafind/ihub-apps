@@ -371,9 +371,10 @@ function WorkflowExecutionPage() {
       'Here are the results from the workflow "{{name}}":',
       { name: workflowName }
     );
-    if (chatPersistence) {
+    if (chatPersistence && app?.ephemeral !== true) {
       // A stored chat reads its transcript from the server, never from this
-      // tab — the seeded copy below would be lost on the way.
+      // tab — the seeded copy below would be lost on the way, so there is no
+      // falling back to it.
       try {
         const response = await apiClient.post(
           `/workflows/executions/${executionId}/chat/${encodeURIComponent(app.id)}`,
@@ -383,17 +384,12 @@ function WorkflowExecutionPage() {
         invalidateChatsCache();
         navigate(`/apps/${app.id}/c/${response.data.chatId}`);
         return;
-      } catch (error) {
-        if (error?.response?.data?.code !== 'CHAT_PERSISTENCE_OFF') {
-          setShowAppSelection(false);
-          setChatWithResultsError(
-            t(
-              'workflows.chatWithResults.failed',
-              'The chat could not be started. Please try again.'
-            )
-          );
-          return;
-        }
+      } catch {
+        setShowAppSelection(false);
+        setChatWithResultsError(
+          t('workflows.chatWithResults.failed', 'The chat could not be started. Please try again.')
+        );
+        return;
       }
     }
 
@@ -773,7 +769,7 @@ function WorkflowExecutionPage() {
             {/* A run started by `@workflow` in a chat leads back to that chat. */}
             {typeof state.data?._chatId === 'string' && typeof state.data?._appId === 'string' && (
               <Link
-                to={`/apps/${state.data._appId}/c/${state.data._chatId}`}
+                to={`/apps/${encodeURIComponent(state.data._appId)}/c/${encodeURIComponent(state.data._chatId)}`}
                 className="px-4 py-2 text-gray-600 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors flex items-center gap-2 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
               >
                 <Icon name="chat-bubble-left-right" className="w-4 h-4" aria-hidden="true" />

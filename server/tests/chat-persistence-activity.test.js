@@ -37,6 +37,7 @@ import {
 } from '../services/chat/chatRecovery.js';
 import { snapshotMessage } from '../services/chat/ChatShareRepository.js';
 import { mentionAccess } from '../services/workflow/workflowAccess.js';
+import { getExecutionRegistry } from '../services/workflow/ExecutionRegistry.js';
 import { RunStreamEmitter } from '../services/loop/RunStream.js';
 import { RUN_LOG_EVENTS, SSE_V2_EVENTS } from '../../shared/runEvents.js';
 
@@ -249,6 +250,41 @@ describe('recording what a turn did', () => {
     assert.equal(activity.workflowResult.status, 'failed');
   });
 
+  it('settles the steps of each workflow of a turn on their own', () => {
+    recordRunActivity(RUN_ID);
+    const chat = emitter();
+    chat.emit(SSE_V2_EVENTS.RUN_STARTED, { kind: 'chat', refs: {} });
+    for (const [childId, reports] of [
+      ['workflow-a', true],
+      ['workflow-b', false]
+    ]) {
+      const child = emitter(childId);
+      child.emit(SSE_V2_EVENTS.RUN_STARTED, { kind: 'workflow', parentRunId: RUN_ID, refs: {} });
+      child.emit(SSE_V2_EVENTS.PROGRESS_NODE, {
+        executionId: childId,
+        nodeId: `${childId}-n`,
+        nodeName: `Step of ${childId}`,
+        status: 'running',
+        progress: {}
+      });
+      if (reports) {
+        child.emit(SSE_V2_EVENTS.META, {
+          executionId: childId,
+          extra: { workflow: { status: 'completed', workflowName: 'A' } }
+        });
+      }
+    }
+    chat.emit(SSE_V2_EVENTS.RUN_ENDED, { status: 'completed', finishReason: 'stop' });
+
+    assert.deepEqual(
+      takeRunActivity(RUN_ID).workflowSteps.map(s => [s.nodeName, s.status]),
+      [
+        ['Step of workflow-a', 'completed'],
+        ['Step of workflow-b', 'stopped']
+      ]
+    );
+  });
+
   it('marks a call the run never saw finish as stopped', () => {
     recordRunActivity(RUN_ID);
     const stream = emitter();
@@ -345,6 +381,7 @@ describe('what a share carries of the activity', () => {
           id: 'w',
           kind: 'search',
           scope: 'web',
+          toolId: 'braveSearch',
           query: 'public',
           sources: [{ url: 'https://example.org' }]
         },
@@ -382,6 +419,57 @@ describe('what a share carries of the activity', () => {
     assert.equal(shared.searchSummary.totalHits, 12);
     assert.deepEqual(shared.searchSummary.applications, []);
     assert.deepEqual(shared.searchSummary.sources, []);
+  });
+
+  it('drops what any non-web tool found, whatever its kind or scope', () => {
+    // An iFinder metadata lookup is a plain tool call, an MCP search is
+    // classed as a web search — both ran with the owner's permissions.
+    const shared = shareableActivity({
+      toolActivity: {
+        items: [
+          {
+            id: 'm',
+            kind: 'tool',
+            scope: null,
+            toolId: 'iFinder_getMetadata',
+            name: 'iFinder_getMetadata',
+            status: 'completed',
+            details: [{ name: 'documentId', values: [{ text: 'secret-doc-1' }], more: 0 }],
+            sources: [{ documentId: 'secret-doc-1', title: 'M&A plan 2027 (confidential)' }]
+          },
+          {
+            id: 'c',
+            kind: 'search',
+            scope: 'web',
+            toolId: 'mcp_confluence_search',
+            name: 'Confluence',
+            status: 'error',
+            query: 'merger',
+            error: 'Space HR-Confidential is not readable',
+            sources: [{ url: 'https://intranet/wiki/merger' }]
+          },
+          {
+            id: 'n',
+            kind: 'search',
+            native: true,
+            scope: 'web',
+            toolId: 'webSearch',
+            queries: ['wind'],
+            sources: []
+          }
+        ]
+      },
+      workflowResult: { status: 'completed', executionId: 'wf-1', workflowName: 'Review' }
+    });
+    const [meta, confluence, native] = shared.toolActivity.items;
+    assert.deepEqual(meta.sources, []);
+    assert.deepEqual(meta.details, []);
+    assert.equal(meta.status, 'completed');
+    assert.deepEqual(confluence.sources, []);
+    assert.equal(confluence.error, undefined);
+    assert.equal(confluence.query, 'merger');
+    assert.deepEqual(native.queries, ['wind']);
+    assert.deepEqual(shared.workflowResult, { status: 'completed', workflowName: 'Review' });
   });
 
   it('is applied to the snapshot of a shared message', () => {
@@ -699,6 +787,93 @@ describe('a chat whose run died with its process', () => {
         [RUN_LOG_EVENTS.RUN_END]
       );
     });
+  });
+
+  describe('an @workflow run is closed by what its execution says', () => {
+    /** Store a running @mention turn whose execution the registry reports as `status`. */
+    async function workflowChat(repository, runId, status) {
+      await materializeUserTurn({
+        repository,
+        chatId: CHAT_ID,
+        ownerId: 'user-1',
+        identityMode: 'default',
+        appId: 'chat',
+        runId,
+        content: '@review q'
+      });
+      await repository.updateChat(CHAT_ID, { lastMessageAt: longAgo });
+      getExecutionRegistry().register(runId, {
+        userId: 'user-1',
+        workflowId: 'review',
+        workflowName: { en: 'Review' },
+        status,
+        source: 'chat'
+      });
+      return repository.getChat(CHAT_ID);
+    }
+
+    it('says a paused workflow is waiting for input and keeps its run open', async () => {
+      await withRepository(async repository => {
+        const runId = 'workflow-paused-1';
+        const chat = await workflowChat(repository, runId, 'paused');
+        const runLog = fakeRunLog();
+
+        const settled = await settleInterruptedChat(chat, { repository, runLog });
+
+        assert.equal(settled.activeRunId, null);
+        assert.equal(settled.status, 'active');
+        const answer = (await repository.getMessages(CHAT_ID)).messages[1];
+        assert.equal(answer.error, undefined);
+        assert.deepEqual(answer.activity.workflowResult, {
+          status: 'paused',
+          executionId: runId,
+          workflowName: { en: 'Review' }
+        });
+        // Still answerable from its execution page: its run must not end.
+        assert.deepEqual(runLog.appended, []);
+      });
+    });
+
+    it('marks a workflow left running as failed, and interrupted', async () => {
+      await withRepository(async repository => {
+        const runId = 'workflow-running-1';
+        const chat = await workflowChat(repository, runId, 'running');
+        const runLog = fakeRunLog();
+
+        await settleInterruptedChat(chat, { repository, runLog });
+
+        const answer = (await repository.getMessages(CHAT_ID)).messages[1];
+        assert.equal(answer.error.code, RUN_INTERRUPTED);
+        assert.equal(answer.activity.workflowResult.status, 'failed');
+        assert.equal((await getExecutionRegistry().get(runId)).status, 'failed');
+        assert.deepEqual(
+          runLog.appended.map(e => [e.type, e.data.error.code]),
+          [[RUN_LOG_EVENTS.RUN_END, RUN_INTERRUPTED]]
+        );
+      });
+    });
+
+    it('stores a cancelled workflow as a stopped turn', async () => {
+      await withRepository(async repository => {
+        const runId = 'workflow-cancelled-1';
+        const chat = await workflowChat(repository, runId, 'cancelled');
+        await settleInterruptedChat(chat, { repository, runLog: fakeRunLog({ ended: true }) });
+        const answer = (await repository.getMessages(CHAT_ID)).messages[1];
+        assert.equal(answer.error.code, 'ABORTED');
+        assert.equal(answer.activity.workflowResult.status, 'cancelled');
+      });
+    });
+  });
+
+  it('counts the grace period from the latest claim, not a stale Responses API one', () => {
+    const chat = {
+      id: CHAT_ID,
+      activeRunId: RUN_ID,
+      status: 'running',
+      runClaimedAt: longAgo,
+      lastMessageAt: new Date().toISOString()
+    };
+    assert.equal(isChatRunAlive(chat, { runLog: fakeRunLog() }), true);
   });
 
   it('leaves a live run alone', async () => {

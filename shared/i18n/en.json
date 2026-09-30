@@ -3320,6 +3320,7 @@
     "appNotFound": "Application not found",
     "missingRequiredFields": "Missing required fields:",
     "streamingError": "An error occurred during streaming",
+    "runInterrupted": "This answer was interrupted: the server stopped while it was being produced.",
     "failedToGenerateResponse": "Failed to generate response. Please try again or select a different model.",
     "sessionExpired": "Your session has expired. Please log in again to continue.",
     "sessionExpiredReconnecting": "Session expired. Reconnecting to authentication provider...",
@@ -3840,7 +3841,8 @@
     "generated": "Generated",
     "failed": "Failed",
     "cancelled": "Cancelled",
-    "viewExecution": "View execution details"
+    "viewExecution": "View execution details",
+    "waitingForInput": "Waiting for your input"
   },
   "workflows": {
     "title": "Workflows",
