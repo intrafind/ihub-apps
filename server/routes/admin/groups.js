@@ -73,7 +73,8 @@ function normalizeGroupPermissions(incoming = {}, existing = {}, adminAccess = u
       adminAccess !== undefined
         ? adminAccess
         : Boolean(incoming.adminAccess ?? existing.adminAccess),
-    contentAdmin: Boolean(incoming.contentAdmin ?? existing.contentAdmin)
+    contentAdmin: Boolean(incoming.contentAdmin ?? existing.contentAdmin),
+    scheduledTasks: Boolean(incoming.scheduledTasks ?? existing.scheduledTasks)
   };
 }
 
@@ -133,6 +134,10 @@ function normalizeGroupPermissions(incoming = {}, existing = {}, adminAccess = u
  *           type: boolean
  *           description: Whether the group can administer content without full admin access
  *           example: false
+ *         scheduledTasks:
+ *           type: boolean
+ *           description: Whether members may create and run scheduled tasks
+ *           example: true
  *
  *     UserGroup:
  *       type: object

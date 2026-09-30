@@ -58,6 +58,10 @@ export function transformStoredMessage(msg) {
   if (Array.isArray(msg.mcpAuthRequired) && msg.mcpAuthRequired.length > 0) {
     message.mcpAuthRequired = msg.mcpAuthRequired;
   }
+  // Confirmation cards for scheduled tasks a scheduling tool proposed.
+  if (Array.isArray(msg.scheduledTaskProposals) && msg.scheduledTaskProposals.length > 0) {
+    message.scheduledTaskProposals = msg.scheduledTaskProposals;
+  }
   // The web searches and sources behind the answer, so the sources view and
   // the inline citations come back (the citation markers are in the content).
   if (msg.webSearch && typeof msg.webSearch === 'object') {
@@ -733,7 +737,13 @@ function useChatMessages(chatId = 'default', { ephemeral = false, serverBacked =
       // Strip UI-specific properties that the API doesn't need. MCP App views
       // carry their full tool payload and must not ride along with history.
       return messagesForApi.map(msg => {
-        const { rawContent, mcpApps: _mcpApps, mcpAuthRequired: _mcpAuthRequired, ...apiMsg } = msg;
+        const {
+          rawContent,
+          mcpApps: _mcpApps,
+          mcpAuthRequired: _mcpAuthRequired,
+          scheduledTaskProposals: _scheduledTaskProposals,
+          ...apiMsg
+        } = msg;
         const content = rawContent !== undefined ? rawContent : apiMsg.content;
         return { ...apiMsg, content };
       });

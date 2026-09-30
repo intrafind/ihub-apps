@@ -1,4 +1,5 @@
 import {
+  CalendarDaysIcon,
   HomeIcon,
   CpuChipIcon,
   BoltIcon,
@@ -298,6 +299,13 @@ export function getAdminNavSections({ t, showAdminPage, featureFlags }) {
           href: '/admin/chat-history',
           icon: ChatBubbleLeftRightIcon,
           visible: showAdminPage('chatHistory')
+        },
+        {
+          key: 'scheduled-tasks',
+          label: t('admin.nav.scheduledTasks', 'Scheduled Tasks'),
+          href: '/admin/scheduled-tasks',
+          icon: CalendarDaysIcon,
+          visible: ff('scheduledTasks', false)
         },
         {
           key: 'audit-log',

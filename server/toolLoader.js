@@ -13,6 +13,7 @@ import { isBraveSearchConfigured } from './services/search/braveApiKey.js';
 import { isStaanSearchConfigured } from './services/search/staanApiKey.js';
 import logger from './utils/logger.js';
 import { getLocalizedString } from './utils/localize.js';
+import { filterSchedulingTools } from './services/scheduler/tasks/toolGate.js';
 
 /**
  * Build JSON Schema parameters from a workflow's start node inputVariables
@@ -746,7 +747,10 @@ export async function getToolsForApp(app, language = null, context = {}) {
     });
   }
 
-  return appTools;
+  // The scheduling tools are listed by the apps that offer them, but only
+  // reach a user who may use scheduled tasks — and a scheduled run never gets
+  // the ones that would let a task create, delete or start tasks.
+  return filterSchedulingTools(appTools, context.user);
 }
 
 /**

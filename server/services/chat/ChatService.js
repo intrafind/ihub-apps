@@ -52,6 +52,7 @@ import {
   chatPassthroughOptions
 } from './chatSeams.js';
 import { describeChatError } from './chatErrors.js';
+import { appendSchedulingContextNote } from '../scheduler/tasks/schedulingContext.js';
 import * as defaultTelemetry from './chatTelemetry.js';
 import modelDiscoveryService from '../ModelDiscoveryService.js';
 
@@ -279,7 +280,7 @@ class ChatService {
 
   // ── ledger ─────────────────────────────────────────────────────────────
 
-  async _startLedgerRun({ runId, kind, user, refs, model, language, parentRunId }) {
+  async _startLedgerRun({ runId, kind, user, refs, model, language, parentRunId, trigger }) {
     try {
       await this.runLog.startRun({
         runId,
@@ -288,7 +289,8 @@ class ChatService {
         refs,
         model: model?.id,
         language,
-        ...(parentRunId ? { parentRunId } : {})
+        ...(parentRunId ? { parentRunId } : {}),
+        ...(trigger ? { trigger } : {})
       });
     } catch (err) {
       logger.warn('Run ledger start failed', { component: COMPONENT, runId, error: err.message });
@@ -392,6 +394,15 @@ class ChatService {
    *   An invalid answer is retried inside the run (`maxRetries`, default 1); one that never
    *   becomes valid ends the turn as an error (`OUTPUT_VALIDATION_FAILED`). A valid answer's
    *   content is the validated JSON, and the summary carries `structuredOutput`.
+   * @param {Array<Object>} [params.extraSeams] - Further loop seams, run after the tool
+   *   projection and before the question and passthrough seams (a scheduled run's approval
+   *   gate).
+   * @param {{type: string, source?: string}} [params.trigger] - What started the turn, as the
+   *   run ledger records it (default: a user).
+   * @param {number} [params.maxWallClockMs] - Tighter wall-clock ceiling for a durable turn
+   *   than {@link DURABLE_TURN_WALL_CLOCK_MS}.
+   * @param {string} [params.clientTimezone] - The user's IANA timezone, handed to the tools
+   *   (the scheduling tools read it) and to the scheduling note in the system prompt.
    * @returns {Promise<Object>} `{ runId, status, content, finishReason, usage, messages, knowledgeSources,
    *   pendingInteraction?, toolName?, error?, errorInfo?, structuredOutput? }`
    */
@@ -410,7 +421,11 @@ class ChatService {
     persistence = null,
     emitter = null,
     headless = !streaming,
-    structuredOutput = null
+    structuredOutput = null,
+    extraSeams = [],
+    trigger = null,
+    maxWallClockMs = null,
+    clientTimezone = null
   }) {
     const {
       app,
@@ -467,7 +482,11 @@ class ChatService {
       hasUserFileData: !!userFileData
     });
 
-    await this._startLedgerRun({ runId, kind: 'chat', user, refs, model, language });
+    await this._startLedgerRun({ runId, kind: 'chat', user, refs, model, language, trigger });
+
+    // Scheduling tools resolve "tomorrow at nine" against the user's clock, so
+    // the model has to be told what that clock says.
+    appendSchedulingContextNote(llmMessages, loopTools, { timezone: clientTimezone });
 
     // A durable turn records the human half twice: on the ledger, so the run
     // can be replayed as a conversation, and in the chat store, which is what
@@ -519,6 +538,9 @@ class ChatService {
     // Per-user OAuth MCP servers the turn's tools asked the user to connect,
     // stored with the answer so the Connect card survives the sign-in redirect.
     const mcpAuthPrompts = [];
+    // Scheduled-task proposals the scheduling tools made, stored with the
+    // answer so the confirmation card is still there when the chat reopens.
+    const scheduledTaskProposals = [];
     // The turn's web search — tool calls with their sources, and the provider's
     // grounding per step — stored with the answer so reopening the chat shows
     // the same sources and citations (shared/webCitations.js).
@@ -550,8 +572,10 @@ class ChatService {
         logInteraction: this.logInteraction,
         mcpAppViews,
         mcpAuthPrompts,
+        scheduledTaskProposals,
         webSearchLog
       }),
+      ...(Array.isArray(extraSeams) ? extraSeams.filter(Boolean) : []),
       questionSeam(
         chatQuestionOptions({
           chatId,
@@ -596,7 +620,14 @@ class ChatService {
           budgets: {
             maxToolRounds: CHAT_MAX_TOOL_ROUNDS,
             // Only for a turn that can outlive its client; see the constant.
-            ...(persist ? { maxWallClockMs: DURABLE_TURN_WALL_CLOCK_MS } : {})
+            ...(persist
+              ? {
+                  maxWallClockMs:
+                    Number.isFinite(maxWallClockMs) && maxWallClockMs > 0
+                      ? Math.min(maxWallClockMs, DURABLE_TURN_WALL_CLOCK_MS)
+                      : DURABLE_TURN_WALL_CLOCK_MS
+                }
+              : {})
           },
           // Chat tools have side effects and the client renders tool frames in
           // order — run one call at a time.
@@ -625,7 +656,17 @@ class ChatService {
           pageReads.admit(toolId) ||
           this.runTool(
             toolId,
-            { language, ...args, chatId, user, appConfig: app },
+            {
+              language,
+              ...args,
+              chatId,
+              user,
+              appConfig: app,
+              // The user's timezone, for the scheduling tools' defaults. Only
+              // when known: a value the model put in `args` could only pick a
+              // default timezone, which the schedule itself can name anyway.
+              ...(clientTimezone ? { clientTimezone } : {})
+            },
             {
               signal,
               onMcpAppResult: result => {
@@ -648,6 +689,7 @@ class ChatService {
         channel,
         mcpAppViews,
         mcpAuthPrompts,
+        scheduledTaskProposals,
         webSearchLog,
         takePendingCall: () => turnSeam.takePendingCall(),
         structured: outputSeam
@@ -755,6 +797,7 @@ class ChatService {
     channel,
     mcpAppViews = [],
     mcpAuthPrompts = [],
+    scheduledTaskProposals = [],
     webSearchLog = null,
     takePendingCall = () => null,
     structured = null
@@ -781,6 +824,7 @@ class ChatService {
       // tool documents), which the Documents panel draws again on reopen.
       citations: mergeCitations(result.citations),
       mcpAuthRequired: mcpAuthPrompts,
+      scheduledTaskProposals,
       // The web sources behind the answer and the passages they back.
       webSearch: webSearchLog ? buildWebSearch(webSearchLog) : null,
       knowledgeSources: this.getKnowledgeSources(chatId, loopSources)

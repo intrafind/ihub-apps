@@ -41,6 +41,7 @@ import { chatRetentionSettings, isChatPersistenceConfigured } from './chatPersis
 import { isStorageReady } from '../../storage/bootstrap.js';
 import { getWorkflowStateRepository } from '../workflow/WorkflowStateRepository.js';
 import { deleteChatWithCascade } from './chatDeletion.js';
+import { SCHEDULED_TASK_ORIGIN } from '../scheduler/tasks/taskPolicy.js';
 
 const COMPONENT = 'ChatRetention';
 
@@ -176,6 +177,10 @@ async function overflowingForOwner(documents, ownerId, maxChatsPerUser, pageSize
       ...(cursor ? { cursor } : {})
     });
     for (const doc of page.items) {
+      // A scheduled task's run chats have their own cap (the task keeps its
+      // newest `scheduledTasks.maxRunChatsPerTask`), so a task that runs every
+      // quarter hour cannot push its owner's own conversations out of here.
+      if (doc.data?.origin?.createdVia === SCHEDULED_TASK_ORIGIN) continue;
       // `ownerId` included because `overflowingChats` groups on it — an entry
       // without one is a chat it cannot attribute to a quota, and would skip.
       // No need to exclude what the age rule already took: that ran first and

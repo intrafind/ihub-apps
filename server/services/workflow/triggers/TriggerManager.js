@@ -1,16 +1,21 @@
 /**
  * TriggerManager
  *
- * Central registry that owns all active workflow triggers (schedules and webhooks).
- * It connects triggers to the WorkflowEngine so that fired triggers automatically
- * start a new workflow execution.
+ * Central registry for workflow triggers. It connects triggers to the
+ * WorkflowEngine so that fired triggers start a new workflow execution.
+ *
+ * Schedule triggers are not timers here any more: the unified scheduler
+ * (`services/scheduler/`) reads them from the workflow configuration on every
+ * tick and calls {@link TriggerManager#fireTrigger} when one is due — the same
+ * scheduler that runs users' scheduled tasks. So a saved workflow's schedule
+ * applies without a restart. This class keeps the webhook lookup table and the
+ * firing logic.
  *
  * Uses a singleton pattern via getTriggerManager() / resetTriggerManager().
  *
  * @module services/workflow/triggers/TriggerManager
  */
 
-import { ScheduleTrigger } from './ScheduleTrigger.js';
 import { WebhookTrigger } from './WebhookTrigger.js';
 import {
   startSchedulerLockHeartbeat,
@@ -74,7 +79,7 @@ function webhookKey(workflowId, triggerId) {
 
 export class TriggerManager {
   constructor() {
-    /** @type {Map<string, Array<ScheduleTrigger|WebhookTrigger>>} workflowId -> trigger instances */
+    /** @type {Map<string, Array<WebhookTrigger>>} workflowId -> webhook trigger instances */
     this.triggers = new Map();
     /** @type {Map<string, {trigger: WebhookTrigger, workflowId: string, triggerId: string}>} `${workflowId}:${triggerId}` -> ref */
     this.webhookTriggers = new Map();
@@ -82,6 +87,8 @@ export class TriggerManager {
     this.engine = null;
     /** @type {Function|null} Async function that returns workflow definitions */
     this.workflowLoader = null;
+    /** @type {{activeTriggers: () => Object[]}|null} The scheduler's workflow trigger source. */
+    this.scheduleSource = null;
   }
 
   /**
@@ -108,8 +115,10 @@ export class TriggerManager {
   }
 
   /**
-   * Registers all triggers defined in a workflow's `triggers` array.
-   * Any previously registered triggers for the same workflow are stopped first.
+   * Registers the webhook triggers defined in a workflow's `triggers` array.
+   * Any previously registered triggers for the same workflow are dropped first.
+   * Schedule triggers are picked up by the scheduler from the workflow
+   * configuration and need no registration.
    *
    * @param {Object} workflow - Workflow definition with an optional `triggers` array
    * @param {string} workflow.id - Unique workflow identifier
@@ -126,12 +135,7 @@ export class TriggerManager {
 
     for (const triggerConfig of workflow.triggers) {
       try {
-        if (triggerConfig.type === 'schedule') {
-          const trigger = new ScheduleTrigger(triggerConfig, () => {
-            this.fireTrigger(workflow.id, triggerConfig);
-          });
-          instances.push(trigger);
-        } else if (triggerConfig.type === 'webhook') {
+        if (triggerConfig.type === 'webhook') {
           const trigger = new WebhookTrigger(triggerConfig);
           instances.push(trigger);
           this.webhookTriggers.set(webhookKey(workflow.id, triggerConfig.id), {
@@ -218,10 +222,11 @@ export class TriggerManager {
       return;
     }
 
-    // Schedule triggers fire on every instance's cron clock; only the lock
-    // owner should actually start the run, so N instances don't N-times-fire
-    // the same scheduled workflow. Manual / webhook triggers are user- or
-    // HTTP-initiated and always fire.
+    // Only the scheduler-lock owner ticks the scheduler, so a schedule trigger
+    // arrives here on one process. The guard stays as a backstop: a schedule
+    // fire on a process that lost the lock mid-tick must not start a second
+    // run. Manual / webhook triggers are user- or HTTP-initiated and always
+    // fire.
     if (trigger.type === 'schedule' && !isSchedulerOwner()) {
       logger.debug({
         component: 'TriggerManager',
@@ -291,15 +296,33 @@ export class TriggerManager {
     const result = [];
     for (const [workflowId, instances] of this.triggers) {
       for (const instance of instances) {
-        result.push({
-          workflowId,
-          type: instance instanceof ScheduleTrigger ? 'schedule' : 'webhook',
-          config: instance.config,
-          nextRun: instance.getNextRun?.() || null
-        });
+        result.push({ workflowId, type: 'webhook', config: instance.config, nextRun: null });
       }
     }
-    return result;
+    return [...this.scheduleTriggers(), ...result];
+  }
+
+  /**
+   * The schedule triggers the scheduler knows, with their next run.
+   *
+   * @returns {Object[]}
+   */
+  scheduleTriggers() {
+    try {
+      return this.scheduleSource?.activeTriggers() || [];
+    } catch {
+      return [];
+    }
+  }
+
+  /**
+   * Connect the scheduler source that fires schedule triggers, so the
+   * trigger listing can report them.
+   *
+   * @param {{activeTriggers: () => Object[]}} source
+   */
+  setScheduleSource(source) {
+    this.scheduleSource = source;
   }
 }
 

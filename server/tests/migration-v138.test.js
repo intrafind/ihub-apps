@@ -1,17 +1,12 @@
 #!/usr/bin/env node
 
 /**
- * Migration V138 specs — new web tool parameters reach upgrades.
+ * Migration V138 specs — seeding `platform.scheduledTasks` and the
+ * `scheduledTasks` group permission.
  *
- * `webContentExtractor` gained `offset`, `braveSearch` and `qwantSearch` gained
- * `freshness` and `includeDomains`, `staanSearch` gained `freshness`.
- * `copyDefaultConfiguration()` only backfills whole files, so an install that
- * already has these tool files needs this migration, or the model never learns
- * the options exist.
- *
- * What has to be right: a property is added only when absent, everything an
- * admin changed is kept, a definition pointed at another script is left alone,
- * and both layouts (one file per tool, legacy `config/tools.json`) are handled.
+ * Defaults land where they are missing; every value an admin already set is
+ * left exactly as it is, custom groups are not granted anything, and
+ * `features.json` is never written.
  */
 import fs from 'node:fs/promises';
 import os from 'node:os';
@@ -24,12 +19,12 @@ import {
   precondition,
   version,
   description,
-  NEW_PARAMETERS
-} from '../migrations/V138__web_tools_filters_and_page_offset.js';
+  SCHEDULED_TASK_DEFAULTS
+} from '../migrations/V138__scheduled_tasks_defaults.js';
+import { setDefault } from '../migrations/utils.js';
 
 let baseDir;
 
-/** A migration context over a scratch contents directory. */
 function makeCtx(dir) {
   const logs = [];
   return {
@@ -39,166 +34,106 @@ function makeCtx(dir) {
         .stat(path.join(dir, rel))
         .then(() => true)
         .catch(() => false),
-    readJson: async rel =>
-      fs
-        .readFile(path.join(dir, rel), 'utf8')
-        .then(JSON.parse)
-        .catch(() => null),
+    readJson: async rel => JSON.parse(await fs.readFile(path.join(dir, rel), 'utf8')),
     writeJson: async (rel, data) => {
       await fs.mkdir(path.dirname(path.join(dir, rel)), { recursive: true });
       await fs.writeFile(path.join(dir, rel), JSON.stringify(data, null, 2), 'utf8');
     },
+    setDefault,
     log: m => logs.push(['info', m]),
     warn: m => logs.push(['warn', m])
   };
 }
 
-function legacyTool(id, extraProperties = {}) {
-  return {
-    id,
-    name: { en: `${id} (admin wording)` },
-    script: `${id}.js`,
-    parameters: {
-      type: 'object',
-      properties: {
-        query: { type: 'string', description: { en: 'The search query' } },
-        ...extraProperties
-      },
-      required: ['query']
-    }
-  };
+async function seed({ platform = null, groups = null } = {}) {
+  const dir = await fs.mkdtemp(path.join(baseDir, 'v138-'));
+  await fs.mkdir(path.join(dir, 'config'), { recursive: true });
+  if (platform !== null) {
+    await fs.writeFile(path.join(dir, 'config/platform.json'), JSON.stringify(platform), 'utf8');
+  }
+  if (groups !== null) {
+    await fs.writeFile(path.join(dir, 'config/groups.json'), JSON.stringify(groups), 'utf8');
+  }
+  return { dir, ctx: makeCtx(dir) };
 }
 
-async function seed(dir, rel, data) {
-  await fs.mkdir(path.dirname(path.join(dir, rel)), { recursive: true });
-  await fs.writeFile(path.join(dir, rel), JSON.stringify(data, null, 2), 'utf8');
-}
+const read = async (dir, rel) => JSON.parse(await fs.readFile(path.join(dir, rel), 'utf8'));
 
-async function scratch(name) {
-  return fs.mkdtemp(path.join(baseDir, `${name}-`));
-}
+before(async () => {
+  baseDir = await fs.mkdtemp(path.join(os.tmpdir(), 'ihub-migration-v138-'));
+});
 
-async function readDefault(id) {
-  return JSON.parse(
-    await fs.readFile(new URL(`../defaults/tools/${id}.json`, import.meta.url), 'utf8')
-  );
-}
+after(async () => {
+  await fs.rm(baseDir, { recursive: true, force: true });
+});
 
-describe('V138 — web tool filters and page reader offset', () => {
-  before(async () => {
-    baseDir = await fs.mkdtemp(path.join(os.tmpdir(), 'ihub-v138-'));
-  });
-  after(async () => {
-    await fs.rm(baseDir, { recursive: true, force: true });
-  });
-
-  it('declares its version and description', () => {
+describe('V138 identity', () => {
+  it('is numbered and described as its file name says', () => {
     assert.equal(version, '138');
-    assert.equal(description, 'web_tools_filters_and_page_offset');
+    assert.equal(description, 'scheduled_tasks_defaults');
   });
 
-  it('skips an install that has none of the tool files', async () => {
-    assert.equal(await precondition(makeCtx(await scratch('none'))), false);
+  it('runs when either file exists', async () => {
+    assert.equal(await precondition((await seed()).ctx), false);
+    assert.equal(await precondition((await seed({ platform: {} })).ctx), true);
+    assert.equal(await precondition((await seed({ groups: { groups: {} } })).ctx), true);
+  });
+});
+
+describe('V138 platform.scheduledTasks', () => {
+  it('seeds every default into an empty platform config', async () => {
+    const { dir, ctx } = await seed({ platform: {} });
+    await up(ctx);
+    const platform = await read(dir, 'config/platform.json');
+    assert.deepEqual(platform.scheduledTasks, { ...SCHEDULED_TASK_DEFAULTS });
   });
 
-  it('adds the new parameters to each tool file, leaving the rest alone', async () => {
-    const dir = await scratch('files');
-    await seed(dir, 'tools/braveSearch.json', legacyTool('braveSearch'));
-    await seed(dir, 'tools/qwantSearch.json', legacyTool('qwantSearch'));
-    await seed(
-      dir,
-      'tools/staanSearch.json',
-      legacyTool('staanSearch', { includeDomains: { type: 'array', items: { type: 'string' } } })
-    );
-    await seed(dir, 'tools/webContentExtractor.json', {
-      ...legacyTool('webContentExtractor'),
-      method: 'extractForTool'
+  it('keeps values an admin already set', async () => {
+    const { dir, ctx } = await seed({
+      platform: { scheduledTasks: { maxTasksPerUser: 3, enabled: false } }
     });
-    const ctx = makeCtx(dir);
-    assert.equal(await precondition(ctx), true);
     await up(ctx);
-
-    const brave = await ctx.readJson('tools/braveSearch.json');
-    assert.deepEqual(brave.parameters.properties.freshness.enum, ['day', 'week', 'month', 'year']);
-    assert.equal(brave.parameters.properties.includeDomains.type, 'array');
-    assert.equal(brave.name.en, 'braveSearch (admin wording)');
-    assert.deepEqual(brave.parameters.required, ['query']);
-
-    const qwant = await ctx.readJson('tools/qwantSearch.json');
-    assert.ok(qwant.parameters.properties.freshness);
-    assert.ok(qwant.parameters.properties.includeDomains);
-
-    const staan = await ctx.readJson('tools/staanSearch.json');
-    assert.ok(staan.parameters.properties.freshness);
-    // Staan's own includeDomains is kept as it was.
-    assert.deepEqual(staan.parameters.properties.includeDomains, {
-      type: 'array',
-      items: { type: 'string' }
-    });
-
-    const reader = await ctx.readJson('tools/webContentExtractor.json');
-    assert.equal(reader.parameters.properties.offset.type, 'integer');
-    assert.equal(reader.parameters.properties.offset.minimum, 0);
-    assert.equal(reader.method, 'extractForTool');
+    const { scheduledTasks } = await read(dir, 'config/platform.json');
+    assert.equal(scheduledTasks.maxTasksPerUser, 3);
+    assert.equal(scheduledTasks.enabled, false);
+    assert.equal(scheduledTasks.minIntervalMinutes, 15);
   });
+});
 
-  it('never overwrites a parameter an admin already customised', async () => {
-    const dir = await scratch('custom');
-    await seed(
-      dir,
-      'tools/braveSearch.json',
-      legacyTool('braveSearch', { freshness: { type: 'string', description: { en: 'Ours' } } })
-    );
-    const ctx = makeCtx(dir);
-    await up(ctx);
-    const tool = await ctx.readJson('tools/braveSearch.json');
-    assert.deepEqual(tool.parameters.properties.freshness, {
-      type: 'string',
-      description: { en: 'Ours' }
-    });
-    assert.ok(tool.parameters.properties.includeDomains);
-  });
-
-  it('leaves a definition pointed at another script alone', async () => {
-    const dir = await scratch('other-script');
-    const custom = { ...legacyTool('braveSearch'), script: 'myBrave.js' };
-    await seed(dir, 'tools/braveSearch.json', custom);
-    const ctx = makeCtx(dir);
-    await up(ctx);
-    assert.deepEqual(await ctx.readJson('tools/braveSearch.json'), custom);
-  });
-
-  it('updates the legacy config/tools.json array', async () => {
-    const dir = await scratch('legacy');
-    await seed(dir, 'config/tools.json', [
-      legacyTool('qwantSearch'),
-      { ...legacyTool('webContentExtractor') },
-      { id: 'unrelated', parameters: { properties: {} } }
-    ]);
-    const ctx = makeCtx(dir);
-    await up(ctx);
-    const tools = await ctx.readJson('config/tools.json');
-    assert.ok(tools[0].parameters.properties.freshness);
-    assert.ok(tools[1].parameters.properties.offset);
-    assert.deepEqual(tools[2], { id: 'unrelated', parameters: { properties: {} } });
-  });
-
-  it('is idempotent', async () => {
-    const dir = await scratch('idempotent');
-    await seed(dir, 'tools/qwantSearch.json', legacyTool('qwantSearch'));
-    const ctx = makeCtx(dir);
-    await up(ctx);
-    const once = await ctx.readJson('tools/qwantSearch.json');
-    await up(ctx);
-    assert.deepEqual(await ctx.readJson('tools/qwantSearch.json'), once);
-  });
-
-  it('writes the parameters exactly as the shipped defaults declare them', async () => {
-    for (const [id, additions] of Object.entries(NEW_PARAMETERS)) {
-      const shipped = await readDefault(id);
-      for (const [name, schema] of Object.entries(additions)) {
-        assert.deepEqual(shipped.parameters.properties[name], schema, `${id}.${name}`);
-      }
+describe('V138 group permission', () => {
+  const builtIn = () => ({
+    groups: {
+      admins: { id: 'admins', permissions: { adminAccess: true } },
+      users: { id: 'users', permissions: {} },
+      authenticated: { id: 'authenticated', permissions: {} },
+      anonymous: { id: 'anonymous', permissions: {} },
+      marketing: { id: 'marketing', permissions: { apps: ['*'] } }
     }
+  });
+
+  it('grants the built-in signed-in groups, denies anonymous, leaves custom groups alone', async () => {
+    const { dir, ctx } = await seed({ groups: builtIn() });
+    await up(ctx);
+    const { groups } = await read(dir, 'config/groups.json');
+    assert.equal(groups.admins.permissions.scheduledTasks, true);
+    assert.equal(groups.users.permissions.scheduledTasks, true);
+    assert.equal(groups.authenticated.permissions.scheduledTasks, true);
+    assert.equal(groups.anonymous.permissions.scheduledTasks, false);
+    assert.equal(groups.marketing.permissions.scheduledTasks, undefined);
+  });
+
+  it('never overwrites a value an admin set', async () => {
+    const groups = builtIn();
+    groups.groups.authenticated.permissions.scheduledTasks = false;
+    const { dir, ctx } = await seed({ groups });
+    await up(ctx);
+    const stored = await read(dir, 'config/groups.json');
+    assert.equal(stored.groups.authenticated.permissions.scheduledTasks, false);
+  });
+
+  it('never writes features.json', async () => {
+    const { dir, ctx } = await seed({ platform: {}, groups: builtIn() });
+    await up(ctx);
+    await assert.rejects(fs.stat(path.join(dir, 'config/features.json')));
   });
 });

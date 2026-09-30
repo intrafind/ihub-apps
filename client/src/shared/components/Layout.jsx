@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { getLocalizedContent } from '../../utils/localizeContent';
 import DisclaimerPopup from './DisclaimerPopup';
 import SmartSearch from './SmartSearch';
+import ScheduledTaskNotifier from '../../features/tasks/components/ScheduledTaskNotifier';
 import { updateSettingsFromUrl, saveIntegrationSettings } from '../../utils/integrationSettings';
 import Icon from './Icon';
 import UserAuthMenu from '../../features/auth/components/UserAuthMenu';
@@ -73,7 +74,8 @@ function Layout() {
       pathnameEquals(location.pathname, '/') ||
       pathnameEquals(location.pathname, '/apps') ||
       pathnameEquals(location.pathname, '/apps/') ||
-      pathnameStartsWith(location.pathname, '/chats'),
+      pathnameStartsWith(location.pathname, '/chats') ||
+      pathnameStartsWith(location.pathname, '/tasks'),
     [isAppPage, location.pathname]
   );
 
@@ -188,6 +190,9 @@ function Layout() {
 
       {/* Global smart search overlay — not shown on admin routes (admin has its own Cmd+K) */}
       {!isAdminRoute && <SmartSearch />}
+
+      {/* Scheduled runs that finished while the user was away */}
+      {showSidebar && <ScheduledTaskNotifier />}
 
       {/* Sidebar layout (non-admin, non-embedded pages) */}
       {showSidebar ? (

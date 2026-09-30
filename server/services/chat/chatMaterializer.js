@@ -16,6 +16,7 @@
  */
 import { boundStoredViews } from '../mcp/mcpApps.js';
 import { boundStoredCitations } from './chatCitations.js';
+import { boundStoredProposals } from '../scheduler/tasks/proposals.js';
 import { insertSupportMarkers, storedWebSearch } from '../../../shared/webCitations.js';
 
 /** Connect cards kept per stored answer. */
@@ -438,6 +439,10 @@ export async function materializeAssistantTurn({
     const mcpAuthRequired = pausedWithoutAnswer
       ? []
       : boundStoredAuthPrompts(summary?.mcpAuthRequired);
+    // Confirmation cards for scheduled tasks the scheduling tools proposed.
+    const scheduledTaskProposals = pausedWithoutAnswer
+      ? []
+      : boundStoredProposals(summary?.scheduledTaskProposals);
     // The web sources behind the answer, so the reopened chat shows the same
     // sources view and inline citations. Google's grounding supports are
     // turned into citation markers in the stored text (the live chat places
@@ -470,6 +475,7 @@ export async function materializeAssistantTurn({
             ...(mcpApps.length > 0 ? { mcpApps } : {}),
             ...(citations ? { citations } : {}),
             ...(mcpAuthRequired.length > 0 ? { mcpAuthRequired } : {}),
+            ...(scheduledTaskProposals.length > 0 ? { scheduledTaskProposals } : {}),
             ...(webSearch ? { webSearch } : {})
           },
           // The end of the transcript for an ordinary turn, and the position

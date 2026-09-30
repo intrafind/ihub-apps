@@ -30,13 +30,18 @@ import UserAuthMenu from '../../features/auth/components/UserAuthMenu';
 import LanguageSelector from './LanguageSelector';
 import DarkModeToggle from './DarkModeToggle';
 import { buildAssetUrl } from '../../utils/runtimeBasePath';
+import {
+  useCanCreateScheduledTasks,
+  useScheduledTaskNotifications,
+  useScheduledTasksAvailable
+} from '../../features/tasks/hooks/useScheduledTasks';
 
 const SIDEBAR_COLLAPSED_KEY = 'ihub_sidebar_collapsed';
 const FAVORITE_APPS_KEY = 'ihub_favorite_apps';
 
 // Navigation entries are real links (open-in-new-tab, middle click, history)
 // like the header links they replace; external targets open in a new tab.
-function NavItem({ icon, label, to, external = false, onClick, active }) {
+function NavItem({ icon, label, to, external = false, onClick, active, badge = null }) {
   const className = `flex items-center gap-3 w-full px-3 py-2 rounded-lg text-sm font-medium transition-colors text-left ${
     active
       ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300'
@@ -51,7 +56,12 @@ function NavItem({ icon, label, to, external = false, onClick, active }) {
           active ? 'text-indigo-600 dark:text-indigo-400' : 'text-gray-500 dark:text-gray-400'
         }
       />
-      {label}
+      <span className="flex-1 min-w-0 truncate">{label}</span>
+      {badge ? (
+        <span className="ml-auto text-xs rounded-full bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 px-2 py-0.5">
+          {badge}
+        </span>
+      ) : null}
     </>
   );
   if (external) {
@@ -124,6 +134,12 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose = () => {
   // own chats — is the gate for every part of the history UI; the hook is inert
   // and issues no request when it is off.
   const chatsEnabled = useChatPersistence();
+  // Scheduled tasks: shown to users who may create them; the badge counts
+  // runs that finished while they were away.
+  const tasksAvailable = useScheduledTasksAvailable();
+  const canCreateTasks = useCanCreateScheduledTasks();
+  const tasksEnabled = tasksAvailable && canCreateTasks;
+  const { count: unseenTaskRuns } = useScheduledTaskNotifications();
   const { chats, loading: chatsLoading, error: chatsError, hasMore: hasMoreChats } = useChats();
   // Render exactly one sidebar variant instead of mounting both and hiding one with CSS.
   const isDesktop = useMediaQuery('(min-width: 768px)');
@@ -470,6 +486,12 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose = () => {
 
   const isOnPrompts = location.pathname.startsWith('/prompts');
   const isOnChats = location.pathname.startsWith('/chats');
+  const isOnTasks = location.pathname.startsWith('/tasks');
+  const tasksLabel = t('sidebar.tasks', 'Scheduled tasks');
+  const unseenTasksLabel =
+    unseenTaskRuns > 0
+      ? t('sidebar.unseenBadge', '{{count}} new', { count: unseenTaskRuns })
+      : null;
   const isOnApps = location.pathname === '/apps';
 
   const linkIconFor = url => {
@@ -592,6 +614,24 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose = () => {
           >
             <Icon name="clock" size="md" />
             {unseenChatCount > 0 && (
+              <span
+                className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-indigo-500 ring-2 ring-white dark:ring-gray-900"
+                aria-hidden="true"
+              />
+            )}
+          </Link>
+        )}
+
+        {tasksEnabled && (
+          <Link
+            to="/tasks"
+            title={tasksLabel}
+            aria-label={unseenTasksLabel ? `${tasksLabel} (${unseenTasksLabel})` : tasksLabel}
+            aria-current={isOnTasks ? 'page' : undefined}
+            className={`relative ${railItemClass(isOnTasks)}`}
+          >
+            <Icon name="calendar" size="md" />
+            {unseenTaskRuns > 0 && (
               <span
                 className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-indigo-500 ring-2 ring-white dark:ring-gray-900"
                 aria-hidden="true"
@@ -772,6 +812,16 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose = () => {
             onClick={onMobileClose}
             active={isOnApps}
           />
+          {tasksEnabled && (
+            <NavItem
+              icon="calendar"
+              label={tasksLabel}
+              to="/tasks"
+              onClick={onMobileClose}
+              active={isOnTasks}
+              badge={unseenTasksLabel}
+            />
+          )}
           {configuredLinks.map(link => {
             const label = getLocalizedContent(link.name, currentLanguage) || link.url;
             const isExternal = /^https?:\/\//.test(link.url) || link.url.startsWith('mailto:');

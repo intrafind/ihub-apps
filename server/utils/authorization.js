@@ -67,7 +67,8 @@ export function resolveGroupInheritance(groupsConfig) {
         skills: new Set(),
         tools: new Set(),
         adminAccess: false,
-        contentAdmin: false
+        contentAdmin: false,
+        scheduledTasks: false
       };
 
       // Merge from parent groups first (in order)
@@ -113,6 +114,11 @@ export function resolveGroupInheritance(groupsConfig) {
         if (parentPerms.contentAdmin === true) {
           mergedPermissions.contentAdmin = true;
         }
+
+        // Scheduled tasks: if any parent may create them, inherit it
+        if (parentPerms.scheduledTasks === true) {
+          mergedPermissions.scheduledTasks = true;
+        }
       }
 
       // Merge own permissions on top (overrides parents)
@@ -141,6 +147,9 @@ export function resolveGroupInheritance(groupsConfig) {
       if (ownPerms.contentAdmin === true) {
         mergedPermissions.contentAdmin = true;
       }
+      if (ownPerms.scheduledTasks === true) {
+        mergedPermissions.scheduledTasks = true;
+      }
 
       // Update the group with resolved permissions
       groups[groupId] = {
@@ -153,7 +162,8 @@ export function resolveGroupInheritance(groupsConfig) {
           skills: Array.from(mergedPermissions.skills),
           tools: Array.from(mergedPermissions.tools),
           adminAccess: mergedPermissions.adminAccess,
-          contentAdmin: mergedPermissions.contentAdmin
+          contentAdmin: mergedPermissions.contentAdmin,
+          scheduledTasks: mergedPermissions.scheduledTasks
         }
       };
 
@@ -248,6 +258,7 @@ export function loadGroupPermissions() {
       tools: group.permissions?.tools || [],
       adminAccess: group.permissions?.adminAccess || false,
       contentAdmin: group.permissions?.contentAdmin || false,
+      scheduledTasks: group.permissions?.scheduledTasks === true,
       description: group.description || ''
     };
   }
@@ -361,7 +372,8 @@ export function getPermissionsForUser(userGroups, groupPermissions = null) {
     skills: new Set(),
     tools: new Set(),
     adminAccess: false,
-    contentAdmin: false
+    contentAdmin: false,
+    scheduledTasks: false
   };
 
   if (!Array.isArray(userGroups)) {
@@ -427,6 +439,11 @@ export function getPermissionsForUser(userGroups, groupPermissions = null) {
     // Content admin access
     if (groupPerms.contentAdmin) {
       permissions.contentAdmin = true;
+    }
+
+    // May create and run scheduled tasks
+    if (groupPerms.scheduledTasks === true) {
+      permissions.scheduledTasks = true;
     }
   }
 
@@ -671,7 +688,8 @@ export function enhanceUserWithPermissions(user, authConfig, platform) {
       models: new Set(user.allowedModels || []),
       workflows: new Set(), // OAuth clients don't have workflow permissions
       skills: new Set(), // OAuth clients don't have skill permissions
-      adminAccess: false // OAuth clients never have admin access
+      adminAccess: false, // OAuth clients never have admin access
+      scheduledTasks: false // nor may they plant recurring work
     };
   } else {
     user.permissions = getPermissionsForUser(user.groups);
@@ -687,6 +705,9 @@ export function enhanceUserWithPermissions(user, authConfig, platform) {
       user.permissions = applyOAuthClientFilter(user.permissions, user);
       // OAuth-delegated tokens must never grant admin access regardless of the user's groups
       user.permissions.adminAccess = false;
+      // Nor create scheduled tasks: a leaked token must not be able to plant
+      // work that keeps running as the user after the token is revoked.
+      user.permissions.scheduledTasks = false;
     }
   }
 

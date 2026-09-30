@@ -1351,6 +1351,12 @@
                       "checkpointId": {
                         "type": "string"
                       },
+                      "scheduledTaskId": {
+                        "type": "string"
+                      },
+                      "scheduledRunId": {
+                        "type": "string"
+                      },
                       "principalId": {
                         "type": "string"
                       },
@@ -2221,6 +2227,12 @@
             "type": "string"
           },
           "checkpointId": {
+            "type": "string"
+          },
+          "scheduledTaskId": {
+            "type": "string"
+          },
+          "scheduledRunId": {
             "type": "string"
           },
           "principalId": {
@@ -3158,6 +3170,12 @@
                 "type": "string"
               },
               "checkpointId": {
+                "type": "string"
+              },
+              "scheduledTaskId": {
+                "type": "string"
+              },
+              "scheduledRunId": {
                 "type": "string"
               },
               "principalId": {
@@ -4341,6 +4359,37 @@
                 },
                 "required": ["serverId", "serverName", "connectUrl"],
                 "additionalProperties": false
+              },
+              "scheduledTaskProposal": {
+                "type": "object",
+                "properties": {
+                  "proposalId": {
+                    "type": "string"
+                  },
+                  "action": {
+                    "type": "string",
+                    "enum": ["create", "update", "delete"]
+                  },
+                  "taskId": {
+                    "type": "string"
+                  },
+                  "draft": {
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string"
+                    },
+                    "additionalProperties": {}
+                  },
+                  "summary": {
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string"
+                    },
+                    "additionalProperties": {}
+                  }
+                },
+                "required": ["proposalId", "action"],
+                "additionalProperties": false
               }
             },
             "required": ["step", "callId", "toolId", "name", "resultPreview"],
@@ -4603,6 +4652,12 @@
                         "type": "string"
                       },
                       "checkpointId": {
+                        "type": "string"
+                      },
+                      "scheduledTaskId": {
+                        "type": "string"
+                      },
+                      "scheduledRunId": {
                         "type": "string"
                       },
                       "principalId": {
