@@ -32,6 +32,7 @@ class FakeWebSocket {
   constructor(url) {
     this.url = url;
     this.readyState = FakeWebSocket.CONNECTING;
+    this.bufferedAmount = 0;
     this.sent = [];
     FakeWebSocket.instances.push(this);
   }
@@ -187,6 +188,33 @@ test('a connection dropped after stop is interrupted, not a finished transcript'
     code: 'interrupted',
     partialText: 'The first half'
   });
+});
+
+test('a clean close with an error code after stop is interrupted too', async () => {
+  const { session, ws } = await start();
+  ws.receive({ type: 'ready' });
+  ws.receive({ type: 'final', text: 'Part of it' });
+  const stopped = session.stop();
+  ws.readyState = FakeWebSocket.CLOSED;
+  ws.onclose({ wasClean: true, code: 1011 });
+  await expect(stopped).rejects.toMatchObject({ code: 'interrupted', partialText: 'Part of it' });
+});
+
+test('a server that stops reading fails the session instead of buffering the recording', async () => {
+  const onError = jest.fn();
+  const { ws } = await start({ onError });
+  ws.receive({ type: 'ready' });
+  ws.receive({ type: 'delta', text: 'So far' });
+  speak();
+  expect(ws.binary()).toHaveLength(1);
+
+  // The server paused the socket: the browser's send queue keeps growing.
+  ws.bufferedAmount = 9 * 1024 * 1024;
+  speak();
+  expect(ws.binary()).toHaveLength(1);
+  expect(onError).toHaveBeenCalledTimes(1);
+  expect(onError.mock.calls[0][0]).toMatchObject({ code: 'server-busy', partialText: 'So far' });
+  expect(track.stop).toHaveBeenCalled();
 });
 
 test('a refusal while the microphone is set up rejects the start, not onError', async () => {

@@ -2626,7 +2626,12 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
           : undefined,
       onFileSelect: fileUploadHandler.handleFileSelect,
       uploadConfig: fileUploadHandler.createUploadConfig(app, currentModel),
-      allowEmptySubmit: app?.allowEmptyContent || fileUploadHandler.selectedFile !== null,
+      // While recording, Send stops the recording and sends it — with or
+      // without anything typed.
+      allowEmptySubmit:
+        app?.allowEmptyContent ||
+        fileUploadHandler.selectedFile !== null ||
+        isRecordingTranscription,
       inputRef,
       formRef,
       selectedFile: fileUploadHandler.selectedFile,

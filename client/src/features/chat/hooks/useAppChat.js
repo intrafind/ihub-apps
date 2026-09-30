@@ -597,8 +597,10 @@ function useAppChat({
           imageData: apiMessage.imageData,
           fileData: apiMessage.fileData,
           audioData: apiMessage.audioData,
-          // The text holds the transcript of uploaded audio: kept on the
-          // message so the history keeps saying so on later turns.
+          // The text holds the transcript of uploaded audio. Kept on the
+          // message, so a chat whose history is posted from the browser keeps
+          // saying so on later turns. A stored chat's history is rebuilt from
+          // role and content only — for this flag as for uploaded files.
           ...(apiMessage.audioTranscript ? { audioTranscript: true } : {})
         });
         addAssistantMessage(exchangeId);

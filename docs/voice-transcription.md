@@ -93,6 +93,7 @@ A transcription session pins a GPU-backed upstream socket, so the bridge is deli
 | Frame size cap              | 256 KB    | `maxPayload` on the WebSocket server; oversized frames terminate the connection.               |
 | Connection caps             | 50 total / 3 per user | Enforced **before** the handshake completes; excess upgrades get HTTP 429. Anonymous users are capped per client IP (first `X-Forwarded-For` hop behind a proxy), not as one shared bucket. |
 | Upstream backpressure       | 4 MB high water | If iHub→vLLM is the slow hop, the client socket is paused (real TCP flow control) until the upstream send buffer drains below 1 MB — per-connection memory stays bounded instead of buffering a whole file. |
+| Browser send queue (live recording) | 8 MB | While the server holds the client socket paused, a recording's audio queues in the browser. Past ~4 minutes of queued audio the recording stops with a "service is busy" error and the text transcribed so far goes into the input field, instead of buffering the rest of the recording in the tab. |
 
 Everything on the relay path is asynchronous and O(one frame): per-frame work is a ≤256 KB base64 encode and a JSON stringify. The Node.js event loop is never blocked by file-sized work.
 

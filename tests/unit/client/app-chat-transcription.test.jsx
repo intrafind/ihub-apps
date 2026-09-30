@@ -649,7 +649,11 @@ describe('a recording becomes the user message', () => {
   test('sending while recording stops the recording and sends it', async () => {
     const sessions = fakeLiveSessions();
     renderApp();
+    await screen.findAllByTestId('composer');
+    expect(mockComposer.props.allowEmptySubmit).toBe(false);
     await clickRecord();
+    // Send is enabled with nothing typed: it stops and sends the recording.
+    expect(mockComposer.props.allowEmptySubmit).toBe(true);
     await send();
     expect(sessions[0].stop).toHaveBeenCalledTimes(1);
     await sessions[0].finish('Spoken');

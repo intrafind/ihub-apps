@@ -87,6 +87,12 @@ test('a connection dropped after stop is interrupted, not complete', async () =>
   await expect(running).rejects.toMatchObject({ code: 'interrupted' });
 });
 
+test('a clean close with an error code after stop is interrupted too', async () => {
+  const { running, ws } = await streamed();
+  ws.finish({ wasClean: true, code: 1011 });
+  await expect(running).rejects.toMatchObject({ code: 'interrupted' });
+});
+
 test('`done` completes the transcript whatever follows', async () => {
   const { running, ws } = await streamed();
   ws.receive({ type: 'done' });

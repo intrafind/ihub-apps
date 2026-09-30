@@ -4,7 +4,8 @@ import {
   createPcmCapturePipeline,
   createTranscriptAssembler,
   downsample,
-  floatTo16BitPCM
+  floatTo16BitPCM,
+  isCompletionClose
 } from './realtimeTranscriptionCore';
 
 // Wait this long for the upstream to become ready (the first session after a
@@ -13,6 +14,11 @@ const READY_TIMEOUT_MS = 30_000;
 // Bound on audio held before `ready` — ~30 s of 16 kHz PCM16, which covers the
 // ready timeout above.
 const MAX_PENDING_BYTES = 1024 * 1024;
+// Bound on audio queued in the browser while the server is not reading it (it
+// pauses the socket when the transcription upstream falls behind) — ~4 minutes
+// of 16 kHz PCM16. Past it the session fails instead of buffering a long
+// recording in the tab.
+const MAX_BUFFERED_BYTES = 8 * 1024 * 1024;
 
 // After `stop`, the transcript normally completes within the server's settle
 // window; a batch model transcribes the whole recording first. Generous last
@@ -162,6 +168,10 @@ export async function startLiveTranscription({
     const samples = inputRate === TARGET_SAMPLE_RATE ? float32 : downsample(float32, inputRate);
     const pcm16 = floatTo16BitPCM(samples);
     if (ready && ws.readyState === WebSocket.OPEN) {
+      if (ws.bufferedAmount > MAX_BUFFERED_BYTES) {
+        fail('server-busy', 'The transcription service is not keeping up with the recording');
+        return;
+      }
       ws.send(pcm16.buffer);
     } else if (pendingBytes + pcm16.byteLength <= MAX_PENDING_BYTES) {
       pending.push(pcm16.buffer);
@@ -227,12 +237,13 @@ export async function startLiveTranscription({
           return;
         }
         if (settled) return;
-        // Completion is only trusted after `stop` was sent, and only on a clean
-        // close: the server ends a finished session with `done`, or by closing
-        // itself when the upstream closed normally. A dropped connection (a
-        // proxy timeout, the network) closes uncleanly and truncates the
-        // transcript — which must not be sent as if it were complete.
-        if (stopSent && evt?.wasClean) finish();
+        // Completion is only trusted after `stop` was sent, and only on the
+        // server's own completion close: it ends a finished session with
+        // `done`, or by closing itself (no status code) when the upstream
+        // closed normally. A dropped connection (a proxy timeout, the network)
+        // or a close with an error code truncates the transcript — which must
+        // not be sent as if it were complete.
+        if (stopSent && isCompletionClose(evt)) finish();
         else fail('interrupted', 'Transcription connection closed before completion');
       };
       ws.onmessage = evt => {
