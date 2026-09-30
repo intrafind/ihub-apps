@@ -672,6 +672,35 @@ describe('a chat whose run died with its process', () => {
     });
   });
 
+  it('still ends the run on the ledger when its answer cannot be written', async () => {
+    await withRepository(async repository => {
+      await materializeUserTurn({
+        repository,
+        chatId: CHAT_ID,
+        ownerId: 'user-1',
+        identityMode: 'default',
+        appId: 'chat',
+        runId: RUN_ID,
+        content: 'q'
+      });
+      await repository.updateChat(CHAT_ID, { lastMessageAt: longAgo });
+      const chat = await repository.getChat(CHAT_ID);
+      const failing = Object.create(repository);
+      failing.appendMessage = () => Promise.reject(new Error('disk full'));
+      const runLog = fakeRunLog({ events: LEDGER });
+
+      const settled = await settleInterruptedChat(chat, { repository: failing, runLog });
+
+      // The chat is released either way, so nothing would settle it again:
+      // the ledger has to be closed now.
+      assert.equal(settled.activeRunId, null);
+      assert.deepEqual(
+        runLog.appended.map(e => e.type),
+        [RUN_LOG_EVENTS.RUN_END]
+      );
+    });
+  });
+
   it('leaves a live run alone', async () => {
     const chat = { id: CHAT_ID, activeRunId: RUN_ID, status: 'running', lastMessageAt: longAgo };
     const repository = {

@@ -30,7 +30,7 @@ import { hasRemote } from '../../clusterBus.js';
 import { hasActiveChatRequest, isChatDurable } from '../../sse.js';
 import { activeWorkflowExecutions } from '../../tools/workflowRunner.js';
 import { getExecutionRegistry } from '../workflow/ExecutionRegistry.js';
-import { materializeAssistantTurn } from './chatMaterializer.js';
+import { settleAssistantTurn } from './chatMaterializer.js';
 import { rebuildRunActivity } from './runActivity.js';
 import logger from '../../utils/logger.js';
 
@@ -106,7 +106,7 @@ async function settle(chat, { repository, runLog }) {
     const activity = (await rebuildRunActivity(runLog, runId)) || {};
     const workflowResult = await interruptedWorkflow(runId);
     if (workflowResult) activity.workflowResult = workflowResult;
-    const stored = await materializeAssistantTurn({
+    const settled = await settleAssistantTurn({
       repository,
       chatId,
       runId,
@@ -120,11 +120,12 @@ async function settle(chat, { repository, runLog }) {
       // Nobody watched it end; the history marks it until it is opened.
       clientConnected: false,
       // Another worker may be settling the same chat: the check above is not
-      // atomic, this one is, and only the writer that stored the answer goes
-      // on to end the run on the ledger.
+      // atomic, this one is. The worker that released the chat goes on to end
+      // the run on the ledger — also when its answer could not be written,
+      // since a released chat is never settled again.
       onlyIfUnanswered: true
     });
-    if (!stored) return repository.getChat(chatId);
+    if (settled.skipped || !settled.released) return repository.getChat(chatId);
   } else {
     // Conditional on the run still holding the chat, under the chat lock: of
     // several workers settling it, one releases it and ends the run.

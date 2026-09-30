@@ -380,7 +380,21 @@ export async function materializeUserTurn({
  *   itself and may race another one (`chatRecovery.js`)
  * @returns {Promise<Object|null>} the stored message, or null when nothing was written
  */
-export async function materializeAssistantTurn({
+export async function materializeAssistantTurn(params) {
+  return (await settleAssistantTurn(params)).message;
+}
+
+/**
+ * {@link materializeAssistantTurn}, reporting what happened rather than only
+ * the stored message — for a caller that has to tell "somebody else answered
+ * this run" from "the answer could not be written" (`chatRecovery.js`).
+ *
+ * @param {Object} params - see {@link materializeAssistantTurn}
+ * @returns {Promise<{message: Object|null, skipped: boolean, released: boolean}>}
+ *   `skipped` when `onlyIfUnanswered` found the run answered; `released` when
+ *   this call released the chat from the run
+ */
+export async function settleAssistantTurn({
   repository,
   chatId,
   runId,
@@ -389,7 +403,8 @@ export async function materializeAssistantTurn({
   message = null,
   onlyIfUnanswered = false
 }) {
-  if (!repository) return null;
+  const outcome = { message: null, skipped: false, released: false };
+  if (!repository) return outcome;
   const status = summary?.status;
   const content = typeof summary?.content === 'string' ? summary.content : '';
   const error = messageError(summary);
@@ -493,7 +508,10 @@ export async function materializeAssistantTurn({
           { insertAfterRunId: runId, unlessAnswered: onlyIfUnanswered }
         );
         // Somebody else answered the run first; theirs is the answer.
-        if (appended?.skipped) appended = null;
+        if (appended?.skipped) {
+          outcome.skipped = true;
+          appended = null;
+        }
       } catch (appendError) {
         logger.error('Chat answer not stored; releasing the run anyway', {
           component: COMPONENT,
@@ -504,22 +522,24 @@ export async function materializeAssistantTurn({
       }
     }
 
-    const { chat } = await repository.releaseRun(chatId, runId, {
+    const { chat, released } = await repository.releaseRun(chatId, runId, {
       activeRunId: null,
       status: status === 'error' ? 'error' : 'active',
       // Nobody was watching when the answer landed, so the history list marks
       // the chat until it is opened.
       hasUnseenActivity: !clientConnected
     });
+    outcome.released = released === true;
     if (!chat) {
       logger.error('Chat assistant turn not materialized: no chat document', {
         component: COMPONENT,
         chatId,
         runId
       });
-      return null;
+      return outcome;
     }
-    return appended?.message ?? null;
+    outcome.message = appended?.message ?? null;
+    return outcome;
   } catch (err) {
     logger.error('Chat assistant turn not materialized', {
       component: COMPONENT,
@@ -527,6 +547,6 @@ export async function materializeAssistantTurn({
       runId,
       error: err.message
     });
-    return null;
+    return outcome;
   }
 }
