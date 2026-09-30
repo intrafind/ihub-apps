@@ -784,8 +784,10 @@ function ChatMessage({
             : 'w-full'
         }
       >
-        {/* Unified workflow step progress indicator */}
-        {!isUser && message.workflowSteps?.length > 0 && (
+        {/* Unified workflow step progress indicator. A result alone is enough:
+            a workflow interrupted before it reported a step still names itself
+            and links its execution. */}
+        {!isUser && (message.workflowSteps?.length > 0 || message.workflowResult) && (
           <WorkflowStepIndicator
             steps={message.workflowSteps}
             currentStep={message.workflowStep}

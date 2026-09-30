@@ -193,3 +193,22 @@ describe('a finished workflow in the chat', () => {
     );
   });
 });
+
+describe('an interrupted workflow in the chat', () => {
+  test('still names the workflow and links its execution without any step', () => {
+    render(
+      <MemoryRouter>
+        <WorkflowStepIndicator
+          steps={[]}
+          result={{ status: 'failed', executionId: 'wf-2', workflowName: 'Review' }}
+          loading={false}
+        />
+      </MemoryRouter>
+    );
+    expect(screen.getByText('Review')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'View execution details' })).toHaveAttribute(
+      'href',
+      '/workflows/executions/wf-2'
+    );
+  });
+});
