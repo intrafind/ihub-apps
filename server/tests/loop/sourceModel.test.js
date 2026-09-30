@@ -114,6 +114,51 @@ test('mergeSource: a success wins over a failed read; public if any sighting was
   assert.deepEqual(mergeSource(read, failed).read, { ok: true, words: 5, truncated: true });
 });
 
+test('mergeSource: a public sighting never makes public what a private one reported', () => {
+  const found = normalizeSource({
+    provider: 'crm',
+    url: 'https://acme.example/',
+    title: 'ACME — key account',
+    snippet: 'Deal size 5M, renewal at risk',
+    passages: [{ text: 'internal note' }],
+    private: true
+  });
+  const searched = normalizeSource({
+    provider: 'web',
+    url: 'https://acme.example',
+    title: 'ACME Corp',
+    snippet: 'We build anvils.',
+    private: false
+  });
+  const read = normalizeSource({
+    provider: 'web',
+    url: 'https://acme.example/',
+    title: 'ACME (read)',
+    read: { ok: true, words: 900 },
+    cited: true,
+    private: true
+  });
+  for (const merged of [
+    mergeSource(found, searched),
+    mergeSource(searched, found),
+    mergeSource(mergeSource(found, searched), read),
+    mergeSource(mergeSource(read, found), searched)
+  ]) {
+    assert.equal(merged.private, false);
+    assert.equal(merged.provider, 'web');
+    assert.equal(merged.title, 'ACME Corp');
+    assert.equal(merged.snippet, 'We build anvils.');
+    assert.equal(merged.passages, undefined);
+  }
+  // What the private sightings did with it still counts: read and cited.
+  const all = mergeSource(mergeSource(found, searched), read);
+  assert.deepEqual(all.read, { ok: true, words: 900 });
+  assert.equal(all.cited, true);
+  // Two private sightings still add up, for the owner's own view.
+  assert.deepEqual(mergeSource(found, read).passages, [{ text: 'internal note' }]);
+  assert.equal(mergeSource(found, read).title, 'ACME — key account');
+});
+
 test('mergeSources: frames only add, in order; an empty frame returns the set unchanged', () => {
   const one = mergeSources(emptySourceSet(), {
     items: [{ url: 'https://a.example/' }, { url: 'https://b.example/' }],

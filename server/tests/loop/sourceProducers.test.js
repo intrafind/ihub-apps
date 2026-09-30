@@ -156,6 +156,20 @@ test('web: MCP search tools named after an engine are read from JSON text', () =
   );
 });
 
+test('web: only the platform’s own web search makes its hits public', () => {
+  const hits = { results: [{ title: 'Intranet page', url: 'https://wiki.corp.example/x' }] };
+  const privacyOf = (toolId, toolDef) =>
+    extractToolSources({ toolId, toolDef: toolDef ?? { id: toolId }, result: hits }).items[0]
+      .private;
+  assert.equal(privacyOf('braveSearch'), false);
+  assert.equal(privacyOf('webSearch'), false);
+  // Named after an engine, but it may search anything: listed, not shareable.
+  assert.equal(privacyOf('mcp_brave_search', { _mcp: { serverId: 'brave' } }), true);
+  assert.equal(privacyOf('braveSearch', { id: 'braveSearch', _mcp: { serverId: 'x' } }), true);
+  assert.equal(privacyOf('intranet_web_search'), true);
+  assert.equal(privacyOf('tavily_search'), true);
+});
+
 // ── a tool's own report ────────────────────────────────────────────────────
 
 test('envelope: any tool reports what it found as `sources`, private unless it says otherwise', () => {

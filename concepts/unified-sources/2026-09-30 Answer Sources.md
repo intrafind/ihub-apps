@@ -69,8 +69,16 @@ share filter.
   goes through the host, which is required in the Outlook task pane. There is no second "open"
   button.
 - **No heuristic for "search-like" tools** other than web search engines (by name, including MCP
-  search tools named after an engine). Other tools report sources through the envelope or a
-  declaration.
+  search tools named after an engine, for their result shape). Other tools report sources through
+  the envelope or a declaration.
+- **A name never makes results public.** Only the platform's own web search tools (Brave, Qwant,
+  Staan, `webSearch`) and provider-run search report public hits. A tool that is only named after
+  an engine may search an intranet, so its hits stay private; a custom tool's declaration can say
+  `"public": true`.
+- **A public sighting never declassifies a private one** (from the PR review). A source merged from a
+  public and a private sighting is public but shows only what the public one reported. From the
+  private one it takes only whether the source was read and cited, so a private tool's excerpt for
+  a URL cannot reach a share through a web search that returned the same URL.
 
 ## Result
 

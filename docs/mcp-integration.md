@@ -358,7 +358,10 @@ tool definition and forwards to `McpClientManager.callTool`, which:
 has those listed in the answer's **Sources** panel, as sources of the provider
 `mcp:<serverId>` — an http(s) `uri` opens in the browser, any other one only
 identifies the source. They are private (never in a shared chat) unless a
-source says `"private": false`. See [Answer Sources](answer-sources.md).
+source says `"private": false`. A tool named after a web search engine
+(`brave_search`) has its hits read like a web search's, and they stay private
+as well: only the platform's own web search is known to search the open web.
+See [Answer Sources](answer-sources.md).
 
 ### MCP Apps — interactive views
 

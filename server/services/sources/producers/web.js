@@ -12,10 +12,14 @@
  *   - a single fetched page `{ url, title?, content, wordCount?, truncated?, incomplete? }`
  *     (`webContentExtractor`)
  *
- * What a search returned is public — it is on the open web. What the page
- * reader read is private unless a search returned it too: hosts on the SSL
- * whitelist bypass the reader's private-address guard, so a page it read may
- * be an intranet one.
+ * What the platform's own web search returned is public — it is on the open
+ * web. Another tool named after a search engine (an MCP server, a custom tool)
+ * may search anything, intranet included: its hits are listed the same way but
+ * stay private, unless its definition declares them public (`"sources": {
+ * …, "public": true }`, `producers/declared.js`). What the page reader read is
+ * private unless a public search returned it too: hosts on the SSL whitelist
+ * bypass the reader's private-address guard, so a page it read may be an
+ * intranet one.
  *
  * @module services/sources/producers/web
  */
@@ -50,6 +54,18 @@ export function isWebSearchTool(toolId) {
   return !isOtherTool(toolId) && WEB_SEARCH_TOOL.test(String(toolId || ''));
 }
 
+/**
+ * The platform's own web search tools (`server/defaults/tools/*Search.json`)
+ * and the generic `webSearch` id: the only tools whose hits are known to come
+ * from the open web.
+ */
+const BUILT_IN_WEB_SEARCH = new Set(['bravesearch', 'qwantsearch', 'staansearch', 'websearch']);
+
+/** Whether the call is one of the platform's own web search tools, not a namesake. */
+function isBuiltInWebSearch(toolId, toolDef) {
+  return !toolDef?._mcp && BUILT_IN_WEB_SEARCH.has(String(toolId || '').toLowerCase());
+}
+
 /** Whether the tool is the page reader, which reads one page rather than searching. */
 function isPageReader(toolId) {
   return String(toolId || '').toLowerCase() === PAGE_READER_TOOL_ID;
@@ -72,7 +88,7 @@ function queryOf(args) {
   return typeof query === 'string' && query.trim() ? query : null;
 }
 
-/** One web search hit as a public page source. */
+/** One web search hit as a page source. */
 function asSource(item, fields = {}) {
   return {
     provider: 'web',
@@ -84,7 +100,6 @@ function asSource(item, fields = {}) {
     ),
     publishedDate: item.publishedDate ?? item.published_date ?? item.date,
     favicon: item.favicon,
-    private: false,
     ...fields
   };
 }
@@ -98,12 +113,13 @@ export const webSourceProducer = {
   },
 
   /**
-   * @param {{toolId: string, args?: Object, result: unknown, failed?: boolean}} call -
+   * @param {{toolId: string, toolDef?: Object, args?: Object, result: unknown, failed?: boolean}} call -
    *   `result` parsed from JSON text already
    * @returns {{items: Array, queries: string[]}}
    */
-  fromToolResult({ toolId, args, result, failed }) {
+  fromToolResult({ toolId, toolDef, args, result, failed }) {
     const reader = isPageReader(toolId);
+    const hitPrivacy = { private: !isBuiltInWebSearch(toolId, toolDef) };
     const queries = reader ? [] : [queryOf(args)].filter(Boolean);
     if (failed || !result || typeof result !== 'object' || result.error) {
       // A page read that failed is still a page the turn tried.
@@ -121,7 +137,9 @@ export const webSourceProducer = {
     const addAll = (list, fields) => {
       if (!Array.isArray(list)) return;
       for (const item of list) {
-        if (item && typeof item === 'object') items.push(asSource(item, fields?.(item)));
+        if (item && typeof item === 'object') {
+          items.push(asSource(item, { ...hitPrivacy, ...fields?.(item) }));
+        }
       }
     };
 
@@ -147,7 +165,7 @@ export const webSourceProducer = {
               // Either more to read at `nextOffset`, or more than the reader keeps.
               truncated: result.truncated === true || result.incomplete === true
             },
-            private: reader
+            private: reader || hitPrivacy.private
           })
         );
       }

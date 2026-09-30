@@ -256,15 +256,22 @@ function mergeRead(a, b) {
 /**
  * Two sightings of the same source as one: the first keeps its values, the
  * later one fills in what it lacks. A read that succeeded wins over one that
- * failed, a citation sticks, passages and markers add up. A source is private
- * only while every sighting was: a page a public web search returned stays
- * public when the page reader later read it too.
+ * failed, a citation sticks, passages and markers add up.
+ *
+ * A source is private only while every sighting was: a page a public web
+ * search returned stays public when the page reader later read it too. But a
+ * public sighting never makes public what a private one reported — a private
+ * tool's title, excerpt or passages for a URL must not reach a share because a
+ * web search also returned that URL. So when the two differ, the source shows
+ * what the public sighting reported, and takes from the private one only
+ * whether it was read, cited and marked.
  *
  * @param {Source} known
  * @param {Source} seen - same `id`
  * @returns {Source}
  */
 export function mergeSource(known, seen) {
+  if ((known.private === true) !== (seen.private === true)) return mergeAcrossPrivacy(known, seen);
   const merged = { ...seen, ...known };
   for (const [key, value] of Object.entries(known)) {
     if (value === undefined || value === null || value === '') merged[key] = seen[key];
@@ -278,5 +285,25 @@ export function mergeSource(known, seen) {
   if (read) merged.read = read;
   if (known.cited || seen.cited) merged.cited = true;
   merged.private = known.private === true && seen.private === true;
+  return merged;
+}
+
+/**
+ * A public and a private sighting as one public source that shows only what
+ * the public one reported; the private one adds whether it was read, cited
+ * and marked, never its title, excerpt or passages.
+ *
+ * @param {Source} known
+ * @param {Source} seen
+ * @returns {Source}
+ */
+function mergeAcrossPrivacy(known, seen) {
+  const [publicOne, privateOne] = known.private === true ? [seen, known] : [known, seen];
+  const merged = { ...publicOne, private: false };
+  const markers = markersOf([...(known.markers || []), ...(seen.markers || [])]);
+  if (markers.length) merged.markers = markers;
+  const read = mergeRead(publicOne.read, privateOne.read);
+  if (read) merged.read = read;
+  if (privateOne.cited) merged.cited = true;
   return merged;
 }

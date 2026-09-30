@@ -201,11 +201,16 @@ serves would offer actions that cannot work. A source with a `ref` is always pri
 
 | Source | Private |
 |---|---|
-| Web search results (Brave, Staan, Qwant, provider-run search) | no |
+| Web search results of the platform's own search (Brave, Staan, Qwant, provider-run search) | no |
+| Hits of an MCP or custom tool named after a search engine | yes; a custom tool's `sources` declaration can say `"public": true` |
 | A page only the page reader read | yes (the reader can reach intranet hosts on the SSL whitelist) |
 | iFinder and iAssistant documents | yes |
 | MCP, envelope and declared sources | yes, unless a source (or the declaration) says otherwise |
 | Anything with a `ref` | always |
 
 A source that several producers found is public if any of them found it publicly. For example, a
-page a web search returned stays public after the page reader reads it.
+page a web search returned stays public after the page reader reads it. A public sighting never
+makes public what a private one reported, though: the source then shows only what the public
+sighting said about it (title, excerpt, passages), and takes from the private one only whether it
+was read and cited. A private tool's excerpt for a URL cannot reach a share because a web search
+returned the same URL.

@@ -97,7 +97,9 @@ their own permissions — titles, file names, locations and passages — and the
 answer text is what the owner chose to share, not the list of hits behind it.
 A viewer, and on a public link anyone with the link, would otherwise see
 documents iFinder may not let them see. The same goes for a page only the
-page reader read: it can reach intranet hosts on the SSL whitelist. Answers
+page reader read: it can reach intranet hosts on the SSL whitelist. A page
+that both a web search and a private tool returned is shared with only what
+the web search said about it. Answers
 stored before the sources contract kept their documents in `citations`,
 which a share never carries either.
 
