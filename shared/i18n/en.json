@@ -5685,7 +5685,7 @@
       "tooltip": "You are interacting with an AI system"
     },
     "categories": {
-      "complaints": "complaint",
+      "complaints": "complaint-related",
       "finance": "financial",
       "health": "health",
       "legal": "legal",

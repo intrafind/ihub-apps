@@ -1026,7 +1026,12 @@ function ChatMessage({
             {aiChipEnabled && (
               <AIProvenanceChip
                 provenance={message.provenance || null}
-                fallbackModelId={modelId || null}
+                // Only a model recorded with this answer, never the current selection.
+                fallbackModelId={
+                  message.modelId ||
+                  (typeof message.model === 'string' ? message.model : message.model?.id) ||
+                  null
+                }
                 models={models}
               />
             )}

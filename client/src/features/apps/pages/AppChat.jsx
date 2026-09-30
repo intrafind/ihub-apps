@@ -2574,10 +2574,14 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
   // stored chat is still loading (it would flash and vanish) and never once a
   // message exists; the persistent badge and the message chips take over then.
   // AIInteractionNotice itself checks the platform and app switches.
-  const renderInteractionNotice = (className = '') =>
-    messages.length === 0 && !hydrating && !chatModeResolving ? (
-      <AIInteractionNotice app={app} className={className} />
-    ) : null;
+  // A new comparison has its own start form: it shows the notice until the
+  // comparison is sent, whatever the regular transcript holds.
+  const renderInteractionNotice = (className = '') => {
+    const beforeFirstMessage = compareModeActive
+      ? !compareFormSent
+      : messages.length === 0 && !hydrating && !chatModeResolving;
+    return beforeFirstMessage ? <AIInteractionNotice app={app} className={className} /> : null;
+  };
 
   // The start form, for a new chat — or, below the compare panels' model
   // pickers, for a new comparison, which it is then sent to as a whole.
