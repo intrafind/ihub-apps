@@ -622,12 +622,14 @@ function VariablesTabContent() {
     try {
       setSaving(true);
       setError(null);
-      const updatedConfig = { ...platformConfig, globalPromptVariables };
+      // Only this section: the server keeps every section a save omits, while
+      // echoing back the whole config read here would overwrite what the read
+      // left out (the proxy JWT providers' `jwkUrl`, for one).
       await makeAdminApiCall('/admin/configs/platform', {
-        method: 'PUT',
-        body: updatedConfig
+        method: 'POST',
+        body: { globalPromptVariables }
       });
-      setPlatformConfig(updatedConfig);
+      setPlatformConfig(previous => ({ ...previous, globalPromptVariables }));
       setHasChanges(false);
     } catch (err) {
       console.error('Error saving platform config:', err);

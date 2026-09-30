@@ -338,7 +338,12 @@ export default function registerAdminConfigRoutes(app) {
         iAssistant: newConfig.iAssistant || existingConfig.iAssistant,
         telemetry:
           newConfig.telemetry !== undefined ? newConfig.telemetry : existingConfig.telemetry,
-        speech: newConfig.speech !== undefined ? newConfig.speech : existingConfig.speech
+        speech: newConfig.speech !== undefined ? newConfig.speech : existingConfig.speech,
+        // Admin → Prompts → Variables (global context and custom variables).
+        globalPromptVariables:
+          newConfig.globalPromptVariables !== undefined
+            ? newConfig.globalPromptVariables
+            : existingConfig.globalPromptVariables
       };
 
       // Restore secrets that were redacted in the client
