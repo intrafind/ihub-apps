@@ -76,12 +76,19 @@ function safeFromCodePoint(n) {
   }
 }
 
+/**
+ * The text of an HTML fragment. The result is drawn as PDF text, never
+ * interpreted as markup; tags are removed until none are left (a single pass
+ * would leave `<scr<b>ipt>` behind as `<script>`), then entities are decoded.
+ */
 function stripTags(html) {
-  return decodeEntities(
-    String(html)
-      .replace(/<br\s*\/?>/gi, '\n')
-      .replace(/<[^>]*>/g, '')
-  );
+  let text = String(html).replace(/<br\s*\/?>/gi, '\n');
+  let previous;
+  do {
+    previous = text;
+    text = text.replace(/<[^<>]*>/g, '');
+  } while (text !== previous);
+  return decodeEntities(text.replace(/[<>]/g, ''));
 }
 
 const INLINE_HTML_TAGS = {

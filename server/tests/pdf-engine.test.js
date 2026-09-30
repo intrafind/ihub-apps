@@ -158,6 +158,30 @@ describe('layout block sanitiser', () => {
     assert.match(svgImageCallback('/etc/hosts'), /^data:image\/png/);
   });
 
+  it('parses SVG as XML and refuses markup that is not a well-formed <svg>', () => {
+    assert.equal(sanitizeSvg('<svg><script>alert(1)</script\t\n bar></svg>'), null);
+    assert.equal(sanitizeSvg('<html><svg/></html>'), null);
+    assert.equal(sanitizeSvg('not markup'), null);
+    const svg = sanitizeSvg(
+      '<svg xmlns="http://www.w3.org/2000/svg"><!-- note --><rect onclick="x" onload="y" width="1"/>' +
+        '<a href="javascript:alert(1)"><text>bad</text></a><a href="https://example.com"><text>ok</text></a>' +
+        '<style>@import url(https://example.com/x.css); .a{fill:red}</style></svg>'
+    );
+    assert.doesNotMatch(svg, /onclick|onload|javascript|note|@import/);
+    assert.match(svg, /href="https:\/\/example.com"/);
+    assert.match(svg, /\.a\{fill:red\}/);
+    const c = ctx();
+    assert.deepEqual(sanitizeBlocks([{ svg: '<svg><g></svg>' }], c), []);
+    assert.ok(c.warnings.some(w => w.includes('not well-formed')));
+  });
+
+  it('strips nested tags from raw HTML until none are left', () => {
+    const content = markdownToContent('<div><scr<b>ipt>alert(1)</scr</b>ipt></div>', ctx());
+    const text = collectText(content).join('');
+    assert.doesNotMatch(text, /[<>]/);
+    assert.match(text, /alert\(1\)/);
+  });
+
   it('keeps only known content keys and valid values', () => {
     const c = ctx();
     const content = sanitizeBlocks(

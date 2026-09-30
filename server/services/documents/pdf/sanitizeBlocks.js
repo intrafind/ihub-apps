@@ -219,7 +219,12 @@ function sanitizeSvgNode(source, ctx) {
     warn(ctx, 'Skipped an SVG larger than 500 KB.');
     return null;
   }
-  const node = { svg: sanitizeSvg(source.svg) };
+  const markup = sanitizeSvg(source.svg);
+  if (!markup) {
+    warn(ctx, 'Skipped an SVG that is not well-formed XML with an <svg> root.');
+    return null;
+  }
+  const node = { svg: markup };
   const width = num(1, 5000)(source.width);
   const height = num(1, 5000)(source.height);
   if (width !== undefined) node.width = width;

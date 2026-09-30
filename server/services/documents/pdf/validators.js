@@ -1,3 +1,7 @@
+import xmldoc from 'xmldoc';
+
+const { XmlDocument } = xmldoc;
+
 /**
  * Validation shared by the Markdown converter and the layout-block sanitiser.
  *
@@ -152,28 +156,89 @@ export function safeLink(url) {
   return trimmed;
 }
 
+/** SVG elements that are dropped with everything inside them. */
+const SVG_DROPPED_ELEMENTS = new Set([
+  'script',
+  'foreignobject',
+  'iframe',
+  'object',
+  'embed',
+  'audio',
+  'video',
+  'handler',
+  'listener'
+]);
+
+function hrefOf(element) {
+  return element.attr?.href ?? element.attr?.['xlink:href'];
+}
+
+function cleanSvgElement(element) {
+  for (const name of Object.keys(element.attr || {})) {
+    // Event handlers never run in a PDF; they are dropped rather than kept
+    // as inert text.
+    if (/^on/i.test(name)) delete element.attr[name];
+  }
+  const tag = String(element.name || '')
+    .replace(/^svg:/i, '')
+    .toLowerCase();
+  if (tag === 'a' && hrefOf(element) !== undefined && !safeLink(String(hrefOf(element)))) {
+    delete element.attr.href;
+    delete element.attr['xlink:href'];
+  }
+  element.children = (element.children || []).filter(child => {
+    if (child.type === 'comment') return false;
+    if (child.type !== 'element') return true;
+    const name = String(child.name || '')
+      .replace(/^svg:/i, '')
+      .toLowerCase();
+    if (SVG_DROPPED_ELEMENTS.has(name)) return false;
+    const href = hrefOf(child);
+    if ((name === 'image' || name === 'feimage') && !checkImageDataUri(href).ok) return false;
+    if (name === 'use' && href !== undefined && !String(href).trim().startsWith('#')) return false;
+    if (name === 'style') {
+      for (const node of child.children || []) {
+        if (node.type === 'text') node.text = String(node.text).replace(/@import[^;]*;?/gi, '');
+        if (node.type === 'cdata') node.cdata = String(node.cdata).replace(/@import[^;]*;?/gi, '');
+      }
+    }
+    cleanSvgElement(child);
+    return true;
+  });
+}
+
 /**
  * Remove what an SVG could use to reach outside the document.
+ *
+ * The markup is parsed as XML (strictly — malformed markup is refused, not
+ * guessed at) and rebuilt without scripts, foreign content, event handlers,
+ * comments, `<image>`s that are not inline PNG/JPEG, `<use>` of anything but
+ * a local `#id`, and `@import` in styles.
  *
  * svg-to-pdfkit opens `<image href>` targets with pdfkit, which reads local
  * files for anything that is not a `data:` URI. The renderer also replaces
  * its image callback, so this is the first of two layers.
  *
  * @param {string} svg
- * @returns {string}
+ * @returns {string|null} The cleaned markup, or null for markup that is not
+ *   a well-formed `<svg>` document.
  */
 export function sanitizeSvg(svg) {
-  return String(svg)
-    .replace(/<script[\s\S]*?<\/script\s*>/gi, '')
-    .replace(/<script[^>]*\/>/gi, '')
-    .replace(/<foreignObject[\s\S]*?<\/foreignObject\s*>/gi, '')
-    .replace(/<(image|feImage)\b[^>]*>(?:[\s\S]*?<\/\1\s*>)?/gi, tag =>
-      /(?:xlink:)?href\s*=\s*["']\s*data:image\/(png|jpe?g);/i.test(tag) ? tag : ''
-    )
-    .replace(/<use\b[^>]*>/gi, tag =>
-      /(?:xlink:)?href\s*=\s*["']\s*#/i.test(tag) || !/href\s*=/i.test(tag) ? tag : ''
-    )
-    .replace(/@import[^;]*;?/gi, '');
+  let document;
+  try {
+    document = new XmlDocument(String(svg));
+  } catch {
+    return null;
+  }
+  if (
+    String(document.name || '')
+      .replace(/^svg:/i, '')
+      .toLowerCase() !== 'svg'
+  ) {
+    return null;
+  }
+  cleanSvgElement(document);
+  return document.toString({ compressed: true, preserveWhitespace: true });
 }
 
 /**

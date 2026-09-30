@@ -1,4 +1,4 @@
-import { promises as fs, existsSync } from 'fs';
+import { promises as fs, existsSync, readdirSync } from 'fs';
 import path from 'path';
 import matter from 'gray-matter';
 import { getRootDir } from '../pathUtils.js';
@@ -36,8 +36,34 @@ export function getSystemSkillsDirectory() {
  * @returns {boolean}
  */
 export function isSystemSkill(skillName) {
-  if (!validateSkillName(skillName).valid) return false;
-  return existsSync(path.join(getSystemSkillsDirectory(), skillName, SKILL_FILE));
+  return typeof skillName === 'string' && systemSkillNames().has(skillName);
+}
+
+const systemSkillNamesByDir = new Map();
+
+/**
+ * Names of the shipped system skills: the directories under the system
+ * skills directory that hold a SKILL.md. They only change with a deployment,
+ * so the listing is read once per process.
+ *
+ * @returns {Set<string>}
+ */
+function systemSkillNames() {
+  const dir = getSystemSkillsDirectory();
+  if (!systemSkillNamesByDir.has(dir)) {
+    let names = [];
+    try {
+      names = readdirSync(dir, { withFileTypes: true })
+        .filter(entry => entry.isDirectory() && !entry.isSymbolicLink())
+        .map(entry => entry.name)
+        .filter(name => validateSkillName(name).valid)
+        .filter(name => existsSync(path.join(dir, name, SKILL_FILE)));
+    } catch {
+      // No system skills directory (a stripped-down build): no system skills.
+    }
+    systemSkillNamesByDir.set(dir, new Set(names));
+  }
+  return systemSkillNamesByDir.get(dir);
 }
 
 /**
