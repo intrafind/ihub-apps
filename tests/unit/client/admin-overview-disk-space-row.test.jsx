@@ -37,6 +37,12 @@ jest.mock('../../../client/src/shared/contexts/AuthContext', () => ({
   __esModule: true,
   useAuth: () => ({ user: { isAdmin: true, permissions: { adminAccess: true } } })
 }));
+// The EU AI Act compliance banner lazy-loads its admin panel; it has its own
+// tests (eu-ai-act-page-shell.test.jsx) and is not what this file checks.
+jest.mock('../../../client/src/features/admin/components/euAiAct/ComplianceBanner', () => ({
+  __esModule: true,
+  default: () => null
+}));
 let mockPlatformConfig;
 jest.mock('../../../client/src/shared/contexts/PlatformConfigContext', () => ({
   __esModule: true,
