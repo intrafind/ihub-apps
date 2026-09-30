@@ -1005,8 +1005,14 @@ export default function registerDataRoutes(app) {
         // not a secret and lets the client fall back to a platform default.
         // keyConfigured tells the client whether to fetch a token at all: without
         // a key (on-prem container, air-gapped) it connects to the host directly.
+        // defaultService / transcription.defaultModelId are the platform-wide
+        // voice defaults apps fall back to when they pick none of their own.
         speech: platform.speech
           ? {
+              defaultService: platform.speech.defaultService,
+              transcription: platform.speech.transcription
+                ? { defaultModelId: platform.speech.transcription.defaultModelId }
+                : undefined,
               realtime: platform.speech.realtime
                 ? { enabled: platform.speech.realtime.enabled }
                 : undefined,

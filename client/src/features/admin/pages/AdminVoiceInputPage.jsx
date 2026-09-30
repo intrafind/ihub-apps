@@ -2,43 +2,98 @@ import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { makeAdminApiCall } from '../../../api/adminApi';
+import { fetchTranscriptionModels } from '../../../api/endpoints/models';
+import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
+import { getLocalizedContent } from '../../../utils/localizeContent';
+import {
+  SPEECH_SERVICES,
+  getSpeechServiceLabel,
+  isSpeechServiceEnabled
+} from '../../voice/utils/speechService';
+import VoiceInputTestPanel from '../components/voice/VoiceInputTestPanel';
 
 const DEFAULT_SPEECH = {
+  defaultService: 'browser',
+  transcription: { defaultModelId: '' },
   realtime: { enabled: false, url: 'ws://localhost:8080/v1/realtime', model: '', apiKey: '' },
   azure: { enabled: false, host: '', region: '', subscriptionKey: '' }
 };
 
+const toFormSpeech = (speech = {}) => ({
+  defaultService: speech.defaultService || DEFAULT_SPEECH.defaultService,
+  transcription: { ...DEFAULT_SPEECH.transcription, ...(speech.transcription || {}) },
+  realtime: { ...DEFAULT_SPEECH.realtime, ...(speech.realtime || {}) },
+  azure: { ...DEFAULT_SPEECH.azure, ...(speech.azure || {}) }
+});
+
 /**
- * Admin page for configuring voice-input / speech-to-text backends stored in
- * platform.json under `speech`:
+ * The saved config in the shape GET /api/configs/platform gives the client, so
+ * the test panel builds recognizers exactly like a chat does. A set key reads
+ * back as ***REDACTED***, which is enough to know one is configured.
+ */
+const toPublicSpeech = speech => ({
+  defaultService: speech.defaultService,
+  transcription: { defaultModelId: speech.transcription.defaultModelId },
+  realtime: { enabled: !!speech.realtime.enabled },
+  azure: {
+    enabled: !!speech.azure.enabled,
+    host: speech.azure.host,
+    region: speech.azure.region,
+    keyConfigured: !!speech.azure.subscriptionKey
+  }
+});
+
+/**
+ * Admin page for voice input / speech-to-text, stored in platform.json under
+ * `speech`:
+ *   - Defaults — the dictation service and transcription model apps use unless
+ *     they pick their own.
  *   - vLLM Realtime (server-proxied, e.g. Voxtral) — fully managed here.
  *   - Azure Speech — host/region plus the subscription key, which is stored
  *     encrypted server-side and brokered to the browser as a short-lived token.
+ *   - Test panel — microphone, live dictation and record → transcribe checks.
  */
 function AdminVoiceInputPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const { refreshConfig } = usePlatformConfig();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
   const [config, setConfig] = useState(DEFAULT_SPEECH);
+  const [savedConfig, setSavedConfig] = useState(DEFAULT_SPEECH);
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState(null);
+  const [azureTesting, setAzureTesting] = useState(false);
+  const [azureTestResult, setAzureTestResult] = useState(null);
+  const [transcriptionModels, setTranscriptionModels] = useState(null);
 
   useEffect(() => {
     loadConfig();
     // eslint-disable-next-line @eslint-react/exhaustive-deps
   }, []);
 
+  useEffect(() => {
+    let active = true;
+    fetchTranscriptionModels()
+      .then(list => active && setTranscriptionModels(Array.isArray(list) ? list : []))
+      .catch(() => active && setTranscriptionModels([]));
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  // Read platform.speech into the form and the saved snapshot.
+  const fetchSpeech = async () => {
+    const response = await makeAdminApiCall('/admin/configs/platform', { method: 'GET' });
+    const speech = toFormSpeech((response.data || {}).speech);
+    setConfig(speech);
+    setSavedConfig(speech);
+  };
+
   const loadConfig = async () => {
     try {
       setLoading(true);
-      const response = await makeAdminApiCall('/admin/configs/platform', { method: 'GET' });
-      const platform = response.data || {};
-      const speech = platform.speech || {};
-      setConfig({
-        realtime: { ...DEFAULT_SPEECH.realtime, ...(speech.realtime || {}) },
-        azure: { ...DEFAULT_SPEECH.azure, ...(speech.azure || {}) }
-      });
+      await fetchSpeech();
       setMessage('');
     } catch (error) {
       setMessage({
@@ -59,16 +114,22 @@ function AdminVoiceInputPage() {
       const platform = response.data || {};
       platform.speech = {
         ...(platform.speech || {}),
+        defaultService: config.defaultService,
+        transcription: { ...(platform.speech?.transcription || {}), ...config.transcription },
         realtime: config.realtime,
         azure: config.azure
       };
       await makeAdminApiCall('/admin/configs/platform', { method: 'POST', body: platform });
+      // Re-read so the keys show their redacted state again. Not loadConfig():
+      // it blanks the page while loading and clears the message, so the
+      // success notice never showed and the test panel lost its state.
+      await fetchSpeech();
+      // Chats and the app editor see the new defaults without a page reload.
+      refreshConfig();
       setMessage({
         type: 'success',
         text: t('admin.voiceInput.saveSuccess', 'Voice input settings saved.')
       });
-      // Reload so the API key shows its redacted state again.
-      await loadConfig();
     } catch (error) {
       setMessage({
         type: 'error',
@@ -100,12 +161,34 @@ function AdminVoiceInputPage() {
     }
   };
 
+  const handleTestAzure = async () => {
+    try {
+      setAzureTesting(true);
+      setAzureTestResult(null);
+      const response = await makeAdminApiCall('/admin/voice/azure/test', {
+        method: 'POST',
+        body: {
+          region: config.azure.region,
+          host: config.azure.host,
+          subscriptionKey: config.azure.subscriptionKey
+        }
+      });
+      setAzureTestResult(response.data || { ok: false, message: 'No response' });
+    } catch (error) {
+      setAzureTestResult({ ok: false, message: error.message || 'Test request failed' });
+    } finally {
+      setAzureTesting(false);
+    }
+  };
+
   const setRealtime = (field, value) => {
     setTestResult(null);
     setConfig(prev => ({ ...prev, realtime: { ...prev.realtime, [field]: value } }));
   };
-  const setAzure = (field, value) =>
+  const setAzure = (field, value) => {
+    setAzureTestResult(null);
     setConfig(prev => ({ ...prev, azure: { ...prev.azure, [field]: value } }));
+  };
 
   if (loading) {
     return (
@@ -122,6 +205,25 @@ function AdminVoiceInputPage() {
   const inputClass =
     'mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm';
   const labelClass = 'block text-sm font-medium text-gray-700 dark:text-gray-300';
+  const dirty = JSON.stringify(config) !== JSON.stringify(savedConfig);
+  const defaultServiceEnabled = isSpeechServiceEnabled(config.defaultService, config);
+  const defaultModelId = config.transcription.defaultModelId;
+  const defaultModelMissing =
+    !!defaultModelId &&
+    Array.isArray(transcriptionModels) &&
+    !transcriptionModels.some(m => m.id === defaultModelId);
+
+  const renderTestResult = result =>
+    result && (
+      <span
+        className={`text-sm flex items-center gap-1 ${
+          result.ok ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
+        }`}
+      >
+        <Icon name={result.ok ? 'check-circle' : 'clearCircle'} className="w-4 h-4 shrink-0" />
+        {result.message}
+      </span>
+    );
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-6">
@@ -137,7 +239,7 @@ function AdminVoiceInputPage() {
               <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
                 {t(
                   'admin.voiceInput.description',
-                  'Configure the speech-to-text backends available to apps. Enable a backend here, then select it per app under the app editor’s Speech Recognition Service.'
+                  'Configure the speech-to-text backends and the defaults apps use. Apps follow the defaults unless they select a service or model of their own in the app editor.'
                 )}
               </p>
             </div>
@@ -156,6 +258,93 @@ function AdminVoiceInputPage() {
           </div>
         )}
 
+        {/* Platform-wide defaults */}
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6 space-y-4">
+          <div>
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+              {t('admin.voiceInput.defaults.title', 'Defaults')}
+            </h2>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+              {t(
+                'admin.voiceInput.defaults.description',
+                'Used by every app that has no voice setting of its own (Speech Recognition Service "Platform default", no transcription model). Apps that select a service or model keep their choice.'
+              )}
+            </p>
+          </div>
+
+          <div>
+            <label className={labelClass} htmlFor="default-service">
+              {t('admin.voiceInput.defaults.service', 'Dictation service (microphone button)')}
+            </label>
+            <select
+              id="default-service"
+              value={config.defaultService}
+              onChange={e => setConfig(prev => ({ ...prev, defaultService: e.target.value }))}
+              className={inputClass}
+            >
+              {SPEECH_SERVICES.map(value => (
+                <option key={value} value={value}>
+                  {getSpeechServiceLabel(value, t)}
+                  {!isSpeechServiceEnabled(value, config)
+                    ? ` (${t('admin.voiceInput.notEnabled', 'not enabled')})`
+                    : ''}
+                </option>
+              ))}
+            </select>
+            {!defaultServiceEnabled && (
+              <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
+                {t(
+                  'admin.voiceInput.defaults.serviceNotEnabled',
+                  '{{service}} is not enabled below. Until it is, apps that follow the platform default use the browser.',
+                  { service: getSpeechServiceLabel(config.defaultService, t) }
+                )}
+              </p>
+            )}
+          </div>
+
+          <div>
+            <label className={labelClass} htmlFor="default-transcription-model">
+              {t('admin.voiceInput.defaults.transcriptionModel', 'Transcription model (recording)')}
+            </label>
+            <select
+              id="default-transcription-model"
+              value={defaultModelId}
+              onChange={e =>
+                setConfig(prev => ({
+                  ...prev,
+                  transcription: { ...prev.transcription, defaultModelId: e.target.value }
+                }))
+              }
+              className={inputClass}
+            >
+              <option value="">{t('admin.voiceInput.defaults.noModel', 'None')}</option>
+              {defaultModelMissing && <option value={defaultModelId}>{defaultModelId}</option>}
+              {(transcriptionModels || []).map(m => (
+                <option key={m.id} value={m.id}>
+                  {getLocalizedContent(m.name, i18n.language) || m.id}
+                </option>
+              ))}
+            </select>
+            <p
+              className={`mt-1 text-xs ${
+                defaultModelMissing
+                  ? 'text-amber-600 dark:text-amber-400'
+                  : 'text-gray-500 dark:text-gray-400'
+              }`}
+            >
+              {defaultModelMissing
+                ? t(
+                    'admin.voiceInput.defaults.modelUnavailable',
+                    'This model is disabled or no longer exists, so recording fails in apps that rely on the default.'
+                  )
+                : t(
+                    'admin.voiceInput.defaults.transcriptionModelHint',
+                    'Used to transcribe recordings and audio/video uploads in apps that enable transcription without choosing a model.'
+                  )}
+            </p>
+          </div>
+        </div>
+
         {/* vLLM Realtime */}
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6 space-y-4">
           <div>
@@ -165,7 +354,7 @@ function AdminVoiceInputPage() {
             <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
               {t(
                 'admin.voiceInput.realtime.description',
-                'Streams microphone audio through the iHub server to a vLLM realtime endpoint (e.g. Voxtral). The URL and API key stay on the server. Select "vLLM Realtime" as an app’s Speech Recognition Service to use it.'
+                'Streams microphone audio through the iHub server to a vLLM realtime endpoint (e.g. Voxtral). The URL and API key stay on the server. Make it the default above, or select "vLLM Realtime" as an app’s Speech Recognition Service.'
               )}
             </p>
           </div>
@@ -240,21 +429,7 @@ function AdminVoiceInputPage() {
                 ? t('admin.voiceInput.realtime.testing', 'Testing…')
                 : t('admin.voiceInput.realtime.test', 'Test connection')}
             </button>
-            {testResult && (
-              <span
-                className={`text-sm flex items-center gap-1 ${
-                  testResult.ok
-                    ? 'text-green-600 dark:text-green-400'
-                    : 'text-red-600 dark:text-red-400'
-                }`}
-              >
-                <Icon
-                  name={testResult.ok ? 'check-circle' : 'clearCircle'}
-                  className="w-4 h-4 shrink-0"
-                />
-                {testResult.message}
-              </span>
-            )}
+            {renderTestResult(testResult)}
           </div>
           <p className="text-xs text-gray-500 dark:text-gray-400">
             {t(
@@ -339,6 +514,26 @@ function AdminVoiceInputPage() {
               )}
             </p>
           </div>
+
+          <div className="flex items-center gap-3 pt-2 border-t border-gray-100 dark:border-gray-700">
+            <button
+              type="button"
+              onClick={handleTestAzure}
+              disabled={azureTesting}
+              className="inline-flex items-center px-3 py-2 rounded-md border border-indigo-600 text-indigo-600 dark:text-indigo-400 dark:border-indigo-400 text-sm font-medium hover:bg-indigo-50 dark:hover:bg-indigo-900/20 disabled:opacity-50"
+            >
+              {azureTesting
+                ? t('admin.voiceInput.realtime.testing', 'Testing…')
+                : t('admin.voiceInput.realtime.test', 'Test connection')}
+            </button>
+            {renderTestResult(azureTestResult)}
+          </div>
+          <p className="text-xs text-gray-500 dark:text-gray-400">
+            {t(
+              'admin.voiceInput.azure.testHint',
+              'Checks the key and region from the iHub server by requesting a token, using the values above. Speech recognition itself runs in the browser: use the live dictation test below.'
+            )}
+          </p>
         </div>
 
         <div className="flex justify-end">
@@ -351,6 +546,14 @@ function AdminVoiceInputPage() {
             {saving ? t('common.saving', 'Saving...') : t('common.save', 'Save')}
           </button>
         </div>
+
+        <VoiceInputTestPanel
+          speech={toPublicSpeech(savedConfig)}
+          models={transcriptionModels}
+          dirty={dirty}
+          t={t}
+          language={i18n.language}
+        />
       </div>
     </div>
   );

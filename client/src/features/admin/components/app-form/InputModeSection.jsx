@@ -1,9 +1,16 @@
 import parseNumberOrUndefined from '../../utils/parseNumberOrUndefined';
+import { usePlatformConfig } from '../../../../shared/contexts/PlatformConfigContext';
+import {
+  getPlatformDefaultService,
+  getSpeechServiceLabel
+} from '../../../voice/utils/speechService';
 
 function InputModeSection({ app, onChange, t }) {
+  const { platformConfig } = usePlatformConfig();
   const handleInputChange = (field, value) => {
     onChange({ ...app, [field]: value });
   };
+  const speechService = app.settings?.speechRecognition?.service || 'default';
 
   return (
     <div className="bg-white dark:bg-gray-800 shadow-sm px-4 py-5 sm:rounded-lg sm:p-6">
@@ -129,7 +136,7 @@ function InputModeSection({ app, onChange, t }) {
                 {t('admin.apps.edit.speechRecognitionService', 'Speech Recognition Service')}
               </label>
               <select
-                value={app.settings?.speechRecognition?.service || 'default'}
+                value={speechService}
                 onChange={e =>
                   handleInputChange('settings', {
                     ...app.settings,
@@ -142,7 +149,15 @@ function InputModeSection({ app, onChange, t }) {
                 className="mt-1 block w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
               >
                 <option value="default">
-                  {t('admin.apps.edit.defaultService', 'Default (Browser)')}
+                  {t('admin.apps.edit.platformDefaultService', 'Platform default ({{service}})', {
+                    service: getSpeechServiceLabel(
+                      getPlatformDefaultService(platformConfig?.speech),
+                      t
+                    )
+                  })}
+                </option>
+                <option value="browser">
+                  {t('admin.apps.edit.browserService', 'Browser (Web Speech API)')}
                 </option>
                 <option value="azure">{t('admin.apps.edit.azureService', 'Azure Speech')}</option>
                 <option value="vllm-realtime">
@@ -152,7 +167,15 @@ function InputModeSection({ app, onChange, t }) {
                   {t('admin.apps.edit.customService', 'Custom Service')}
                 </option>
               </select>
-              {app.settings?.speechRecognition?.service === 'vllm-realtime' && (
+              {speechService === 'default' && (
+                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  {t(
+                    'admin.apps.edit.platformDefaultServiceHint',
+                    'Follows the default set under Admin → Voice Input, including later changes.'
+                  )}
+                </p>
+              )}
+              {speechService === 'vllm-realtime' && (
                 <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                   {t(
                     'admin.apps.edit.vllmRealtimeHint',

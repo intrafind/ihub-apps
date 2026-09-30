@@ -128,8 +128,10 @@ const settingsSchema = z
       .optional(),
     speechRecognition: z
       .object({
+        // 'default' follows the platform default (platform.speech.defaultService);
+        // 'browser' pins the browser Web Speech API.
         service: z
-          .enum(['default', 'azure', 'custom', 'vllm-realtime'])
+          .enum(['default', 'browser', 'azure', 'custom', 'vllm-realtime'])
           .optional()
           .prefault('default'),
         host: z.string().url().optional()

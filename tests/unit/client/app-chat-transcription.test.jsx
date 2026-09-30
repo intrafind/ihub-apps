@@ -207,6 +207,18 @@ jest.mock('../../../client/src/features/upload/utils/fileProcessing', () => ({
   processDocumentFile: jest.fn(),
   decodeAudioFileToBuffer: jest.fn()
 }));
+// Admin → Voice Input can set a platform-wide default transcription model.
+const mockPlatform = { config: null };
+jest.mock('../../../client/src/shared/contexts/PlatformConfigContext', () => ({
+  ...jest.requireActual('../../../client/src/shared/contexts/PlatformConfigContext'),
+  __esModule: true,
+  usePlatformConfig: () => ({
+    platformConfig: mockPlatform.config,
+    isLoading: false,
+    error: null,
+    refreshConfig: () => {}
+  })
+}));
 jest.mock('../../../client/src/utils/transcribeAudioBuffer', () => ({
   __esModule: true,
   transcribeAudioBuffer: jest.fn()
@@ -298,12 +310,12 @@ const TRANSCRIPTION_APP = {
 
 const AUDIO = { type: 'audio', fileName: 'memo.mp3', base64: 'AAAA' };
 
-function renderApp() {
+function renderApp(app = TRANSCRIPTION_APP) {
   window.history.replaceState({}, '', '/apps/acme');
   return render(
     <MemoryRouter initialEntries={['/apps/acme']}>
       <Routes>
-        <Route path="/apps/:appId" element={<AppChat preloadedApp={TRANSCRIPTION_APP} />} />
+        <Route path="/apps/:appId" element={<AppChat preloadedApp={app} />} />
       </Routes>
     </MemoryRouter>
   );
@@ -327,6 +339,7 @@ beforeEach(() => {
   mockUploadHandler.selectedFile = null;
   mockCapability.persistence = true;
   mockCapability.resolving = false;
+  mockPlatform.config = null;
   jest.clearAllMocks();
   sessionStorage.clear();
   decodeAudioFileToBuffer.mockResolvedValue({ duration: 3 });
@@ -379,5 +392,29 @@ describe('transcribing audio into the chat', () => {
     const [turn] = assistantTurns();
     expect(turn.isError).toBe(true);
     expect(turn.answerSource).toBeUndefined();
+  });
+});
+
+describe('which transcription model is used', () => {
+  const PLATFORM_DEFAULT = { speech: { transcription: { defaultModelId: 'platform-voxtral' } } };
+
+  test('an app without a model of its own uses the platform default', async () => {
+    mockPlatform.config = PLATFORM_DEFAULT;
+    transcribeAudioBuffer.mockResolvedValue('hello');
+    renderApp({ ...TRANSCRIPTION_APP, transcription: { enabled: true, streaming: true } });
+    await sendAudio();
+
+    await waitFor(() => expect(transcribeAudioBuffer).toHaveBeenCalled());
+    expect(transcribeAudioBuffer.mock.calls[0][1].modelId).toBe('platform-voxtral');
+  });
+
+  test("the app's own model wins over the platform default", async () => {
+    mockPlatform.config = PLATFORM_DEFAULT;
+    transcribeAudioBuffer.mockResolvedValue('hello');
+    renderApp();
+    await sendAudio();
+
+    await waitFor(() => expect(transcribeAudioBuffer).toHaveBeenCalled());
+    expect(transcribeAudioBuffer.mock.calls[0][1].modelId).toBe('voxtral');
   });
 });

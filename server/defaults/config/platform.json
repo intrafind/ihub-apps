@@ -1,5 +1,9 @@
 {
   "speech": {
+    "defaultService": "browser",
+    "transcription": {
+      "defaultModelId": ""
+    },
     "realtime": {
       "enabled": false,
       "url": "ws://localhost:8080/v1/realtime",

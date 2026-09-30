@@ -72,6 +72,11 @@ export function PlatformConfigProvider({ children }) {
         // history UI on it, so it has to survive this hand-assembled object.
         chats: platformCfg.chats,
 
+        // Voice input: backend switches, the Azure host / keyConfigured flag and
+        // the platform-wide defaults (dictation service, transcription model)
+        // that apps fall back to. Dropping it here silently broke all of them.
+        speech: platformCfg.speech,
+
         // Platform features and settings
         features: platformCfg.features,
         // Build a boolean lookup map from the resolved features array

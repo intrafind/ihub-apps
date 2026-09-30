@@ -12,6 +12,9 @@ class AzureSpeechRecognition {
   // Fetch a token from the iHub server; false means keyless (on-prem container).
   useServerToken = true;
   interimResults = false;
+  // Results are emitted as { text, isFinal }, not as browser SpeechRecognition
+  // events; useVoiceRecognition parses them accordingly.
+  usesTextEventShape = true;
 
   constructor() {}
 
@@ -46,12 +49,14 @@ class AzureSpeechRecognition {
     this.recognition.recognizeOnceAsync(result => {
       switch (result.reason) {
         case speechSdk.ResultReason.RecognizedSpeech:
-          this.#triggerOnResult(result);
+          this.#triggerOnResult({ text: result.text, isFinal: true });
           this.#triggerOnEnd();
           break;
         case speechSdk.ResultReason.NoMatch:
           this.#triggerOnError({ error: 'no-speech' });
-
+          // Like the browser API: an error ends the session, so listeners
+          // leave the listening state.
+          this.#triggerOnEnd();
           break;
         case speechSdk.ResultReason.Canceled:
           const cancellation = speechSdk.CancellationDetails.fromResult(result);
@@ -72,6 +77,7 @@ class AzureSpeechRecognition {
                 this.#triggerOnError({ error: '' });
             }
           }
+          this.#triggerOnEnd();
           break;
       }
       this.recognition.close();
