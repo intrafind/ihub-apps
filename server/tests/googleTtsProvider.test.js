@@ -18,7 +18,8 @@ import googleTts, {
   listVoices,
   resolveUpstream,
   streamUrl,
-  synthesize
+  synthesize,
+  voiceConfigFor
 } from '../tts/googleTtsProvider.js';
 
 const model = {
@@ -106,9 +107,15 @@ describe('endpoint and request', () => {
       contents: [{ role: 'user', parts: [{ text: 'Hello' }] }],
       generationConfig: {
         responseModalities: ['AUDIO'],
-        speechConfig: { voiceConfig: { voice: 'Charon' } }
+        speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Charon' } } }
       }
     });
+  });
+
+  test('a prebuilt voice goes in prebuiltVoiceConfig, any other id in voice', () => {
+    expect(voiceConfigFor('kore')).toEqual({ prebuiltVoiceConfig: { voiceName: 'Kore' } });
+    expect(voiceConfigFor('')).toEqual({ prebuiltVoiceConfig: { voiceName: 'Kore' } });
+    expect(voiceConfigFor('voice_abc123')).toEqual({ voice: 'voice_abc123' });
   });
 
   test('lists the prebuilt voices', async () => {

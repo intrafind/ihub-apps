@@ -59,9 +59,10 @@ the app's configuration.
 The Gemini TTS models have 30 prebuilt voices, such as `Kore` (the default),
 `Puck`, `Charon`, `Leda` or `Zephyr`; the model editor suggests all of them.
 **Every voice speaks every language** — Gemini detects the language from the
-text, across more than 100 languages — so one voice usually suffices. Gemini
-has no voices of your own to create, so the voice manager below is
-Mistral-only.
+text, across more than 100 languages — so one voice usually suffices. The
+**Voice** field also takes the id of a voice from Google's voice library or of
+a voice you designed with Google (`voice_…`); iHub does not list or create
+those, so the voice manager below is Mistral-only.
 
 ### Languages and accents (Voxtral)
 

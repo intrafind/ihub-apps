@@ -6,7 +6,12 @@
  *
  *   { contents: [{ role: 'user', parts: [{ text }] }],
  *     generationConfig: { responseModalities: ['AUDIO'],
- *                         speechConfig: { voiceConfig: { voice } } } }
+ *                         speechConfig: { voiceConfig: … } } }
+ *
+ * `voiceConfig` is a union (see `voiceConfigFor`): a prebuilt voice goes in
+ * `prebuiltVoiceConfig.voiceName`, which every Gemini TTS model accepts; any
+ * other id (a voice-library or custom voice, `voice_…`) in `voice`, which the
+ * 3.8 models added.
  *
  * answers with Server-Sent Events, each a `GenerateContentResponse` whose
  * `candidates[0].content.parts[].inlineData.data` holds base64 audio. Streamed
@@ -118,13 +123,27 @@ export function resolveUpstream(model, { language } = {}) {
   };
 }
 
+/**
+ * The `voiceConfig` for a voice id: `prebuiltVoiceConfig.voiceName` for a
+ * prebuilt voice, `voice` for any other id (voice library, designed or
+ * replicated voices).
+ *
+ * @param {string} [voice]
+ * @returns {Object}
+ */
+export function voiceConfigFor(voice) {
+  const id = voice || DEFAULT_VOICE;
+  const prebuilt = PREBUILT_VOICES.find(name => name.toLowerCase() === id.toLowerCase());
+  return prebuilt ? { prebuiltVoiceConfig: { voiceName: prebuilt } } : { voice: id };
+}
+
 /** The request body for one piece of text. */
 export function buildRequest(text, voice) {
   return {
     contents: [{ role: 'user', parts: [{ text }] }],
     generationConfig: {
       responseModalities: ['AUDIO'],
-      speechConfig: { voiceConfig: { voice: voice || DEFAULT_VOICE } }
+      speechConfig: { voiceConfig: voiceConfigFor(voice) }
     }
   };
 }
@@ -303,8 +322,9 @@ export async function synthesize({ cfg, text, signal, onAudio }) {
 }
 
 /**
- * The prebuilt voices. Gemini TTS has no voices of an account's own, so there
- * is nothing to create or delete.
+ * The prebuilt voices. Voice-library and custom voices are managed in Google's
+ * own tools; their ids can be set on the model, but are not listed, created or
+ * deleted here.
  *
  * @returns {Promise<Array<{ id, slug, name, languages, gender, type }>>}
  */
