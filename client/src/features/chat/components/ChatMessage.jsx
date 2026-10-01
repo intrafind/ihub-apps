@@ -1200,167 +1200,170 @@ function ChatMessage({
         </div>
       )}
 
-      {/* Combined action icons and feedback buttons in a single row */}
-      <div className="mt-1 px-1">
-        <div
-          className={`flex items-center ${compact ? 'gap-1 flex-wrap' : 'gap-3'} text-xs transition-opacity duration-200 ${
-            showActions ? 'opacity-100' : 'opacity-0'
-          } ${isUser ? 'text-gray-500' : 'text-gray-500'}`}
-        >
-          {/* Standard actions first */}
-          <div className="relative inline-flex items-center" ref={copyMenuRef}>
-            <button
-              onClick={() => handleCopy('text')}
-              className="flex items-center gap-1 hover:text-gray-700 transition-colors duration-150"
-              title={t('pages.appChat.copyToClipboard')}
-            >
-              {copied ? <Icon name="check" size="sm" /> : <Icon name="copy" size="sm" />}
-            </button>
-            <button
-              onClick={() => setShowCopyMenu(!showCopyMenu)}
-              className="ml-1 hover:text-gray-700"
-              title={t('canvas.export.copyOptions', 'Copy Options')}
-            >
-              <Icon name="chevron-down" size="sm" />
-            </button>
-            {showCopyMenu && (
-              /*
+      {/* Combined action icons and feedback buttons in a single row. None on a
+          transcript still being recorded: it is not a sent message yet. */}
+      {!message.isLiveTranscript && (
+        <div className="mt-1 px-1">
+          <div
+            className={`flex items-center ${compact ? 'gap-1 flex-wrap' : 'gap-3'} text-xs transition-opacity duration-200 ${
+              showActions ? 'opacity-100' : 'opacity-0'
+            } ${isUser ? 'text-gray-500' : 'text-gray-500'}`}
+          >
+            {/* Standard actions first */}
+            <div className="relative inline-flex items-center" ref={copyMenuRef}>
+              <button
+                onClick={() => handleCopy('text')}
+                className="flex items-center gap-1 hover:text-gray-700 transition-colors duration-150"
+                title={t('pages.appChat.copyToClipboard')}
+              >
+                {copied ? <Icon name="check" size="sm" /> : <Icon name="copy" size="sm" />}
+              </button>
+              <button
+                onClick={() => setShowCopyMenu(!showCopyMenu)}
+                className="ml-1 hover:text-gray-700"
+                title={t('canvas.export.copyOptions', 'Copy Options')}
+              >
+                <Icon name="chevron-down" size="sm" />
+              </button>
+              {showCopyMenu && (
+                /*
                 Anchor the menu on the side that has room. Assistant rows are
                 left-aligned, so the copy button sits at the pane's left edge and a
                 right-anchored menu would grow leftward out of the pane (clipped in
                 the narrow Outlook task pane, issue #2592). User rows are
                 right-aligned, so there the menu must open leftward instead.
               */
-              <div
-                className={`absolute ${isUser ? 'right-0' : 'left-0'} mt-1 w-40 max-w-[calc(100vw-2rem)] bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-sm shadow-sm z-50 text-gray-700 dark:text-gray-200`}
+                <div
+                  className={`absolute ${isUser ? 'right-0' : 'left-0'} mt-1 w-40 max-w-[calc(100vw-2rem)] bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-sm shadow-sm z-50 text-gray-700 dark:text-gray-200`}
+                >
+                  <button
+                    onClick={() => handleCopy('text')}
+                    className="block px-3 py-1 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 w-full text-left whitespace-nowrap"
+                  >
+                    {t('canvas.export.copyText', 'as Text')}
+                  </button>
+                  <button
+                    onClick={() => handleCopy('markdown')}
+                    className="block px-3 py-1 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 w-full text-left whitespace-nowrap"
+                  >
+                    {t('canvas.export.copyMarkdown', 'as Markdown')}
+                  </button>
+                  <button
+                    onClick={() => handleCopy('html')}
+                    className="block px-3 py-1 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 w-full text-left whitespace-nowrap"
+                  >
+                    {t('canvas.export.copyHTML', 'as HTML')}
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Download button - opens export dialog */}
+            <button
+              onClick={handleDownload}
+              className="flex items-center gap-1 hover:text-gray-700 transition-colors duration-150"
+              title={t('chatMessage.downloadMessage', 'Download message')}
+            >
+              <Icon name="download" size="sm" />
+            </button>
+
+            {/* Open in Canvas button for assistant messages */}
+            {!isUser && !isError && canvasEnabled && onOpenInCanvas && (
+              <button
+                onClick={() => onOpenInCanvas(message.content)}
+                className="flex items-center gap-1 hover:text-blue-600 transition-colors duration-150"
+                title={t('chatMessage.openInCanvas', 'Open in Canvas')}
               >
+                <Icon name="document-text" size="sm" />
+              </button>
+            )}
+
+            {!isUser && !isError && onInsert && insertAction?.variant !== 'primary' && (
+              <button
+                onClick={() => onInsert(message.content)}
+                className="flex items-center gap-1 hover:text-blue-600 transition-colors duration-150"
+                title={t('canvas.insertIntoDocument', 'Insert into document')}
+              >
+                <Icon name="arrow-right" size="sm" />
+              </button>
+            )}
+
+            {isUser && editable && (
+              <>
                 <button
-                  onClick={() => handleCopy('text')}
-                  className="block px-3 py-1 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 w-full text-left whitespace-nowrap"
+                  onClick={handleEdit}
+                  className="flex items-center gap-1 hover:text-gray-700 transition-colors duration-150"
+                  title={t('chatMessage.editMessage', 'Edit message')}
                 >
-                  {t('canvas.export.copyText', 'as Text')}
+                  <Icon name="edit" size="sm" />
                 </button>
+
                 <button
-                  onClick={() => handleCopy('markdown')}
-                  className="block px-3 py-1 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 w-full text-left whitespace-nowrap"
+                  onClick={handleResend}
+                  className="flex items-center gap-1 hover:text-gray-700 transition-colors duration-150"
+                  title={t('chatMessage.resendMessage', 'Resend message')}
                 >
-                  {t('canvas.export.copyMarkdown', 'as Markdown')}
+                  <Icon name="refresh" size="sm" />
                 </button>
+
                 <button
-                  onClick={() => handleCopy('html')}
-                  className="block px-3 py-1 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 w-full text-left whitespace-nowrap"
+                  onClick={handleCopyLink}
+                  className="flex items-center gap-1 hover:text-blue-600 transition-colors duration-150"
+                  title={t('chatMessage.copyLink', 'Copy link')}
                 >
-                  {t('canvas.export.copyHTML', 'as HTML')}
+                  {linkCopied ? <Icon name="check" size="sm" /> : <Icon name="link" size="sm" />}
                 </button>
-              </div>
+
+                <ScheduleThisAction
+                  content={
+                    typeof message.rawContent === 'string' ? message.rawContent : message.content
+                  }
+                  appId={appId}
+                  enabledTools={scheduleEnabledTools}
+                />
+              </>
+            )}
+
+            {isUser && !readOnly && onSaveAsPrompt && (
+              <button
+                onClick={() => onSaveAsPrompt(getEditableContent())}
+                className="flex items-center gap-1 hover:text-indigo-600 transition-colors duration-150"
+                title={t('chatMessage.saveAsPrompt', 'Save as prompt')}
+                aria-label={t('chatMessage.saveAsPrompt', 'Save as prompt')}
+              >
+                <Icon name="document-plus" size="sm" />
+              </button>
+            )}
+
+            {!readOnly && (
+              <button
+                onClick={handleDelete}
+                className="flex items-center gap-1 hover:text-red-500 transition-colors duration-150"
+                title={t('chatMessage.deleteMessage', 'Delete message')}
+              >
+                <Icon name="trash" size="sm" />
+              </button>
+            )}
+
+            {/* Add star rating for AI responses only */}
+            {feedbackEnabled && !readOnly && !isUser && !isError && !message.loading && (
+              <>
+                {!compact && <div className="mx-2 h-4 border-l border-gray-300"></div>}
+                <div className="flex items-center gap-2">
+                  <StarRating
+                    rating={activeFeedback}
+                    onRatingChange={handleStarRatingClick}
+                    allowHalfStars={true}
+                    size="w-4 h-4"
+                    showTooltip={true}
+                    className="shrink-0"
+                  />
+                </div>
+              </>
             )}
           </div>
-
-          {/* Download button - opens export dialog */}
-          <button
-            onClick={handleDownload}
-            className="flex items-center gap-1 hover:text-gray-700 transition-colors duration-150"
-            title={t('chatMessage.downloadMessage', 'Download message')}
-          >
-            <Icon name="download" size="sm" />
-          </button>
-
-          {/* Open in Canvas button for assistant messages */}
-          {!isUser && !isError && canvasEnabled && onOpenInCanvas && (
-            <button
-              onClick={() => onOpenInCanvas(message.content)}
-              className="flex items-center gap-1 hover:text-blue-600 transition-colors duration-150"
-              title={t('chatMessage.openInCanvas', 'Open in Canvas')}
-            >
-              <Icon name="document-text" size="sm" />
-            </button>
-          )}
-
-          {!isUser && !isError && onInsert && insertAction?.variant !== 'primary' && (
-            <button
-              onClick={() => onInsert(message.content)}
-              className="flex items-center gap-1 hover:text-blue-600 transition-colors duration-150"
-              title={t('canvas.insertIntoDocument', 'Insert into document')}
-            >
-              <Icon name="arrow-right" size="sm" />
-            </button>
-          )}
-
-          {isUser && editable && (
-            <>
-              <button
-                onClick={handleEdit}
-                className="flex items-center gap-1 hover:text-gray-700 transition-colors duration-150"
-                title={t('chatMessage.editMessage', 'Edit message')}
-              >
-                <Icon name="edit" size="sm" />
-              </button>
-
-              <button
-                onClick={handleResend}
-                className="flex items-center gap-1 hover:text-gray-700 transition-colors duration-150"
-                title={t('chatMessage.resendMessage', 'Resend message')}
-              >
-                <Icon name="refresh" size="sm" />
-              </button>
-
-              <button
-                onClick={handleCopyLink}
-                className="flex items-center gap-1 hover:text-blue-600 transition-colors duration-150"
-                title={t('chatMessage.copyLink', 'Copy link')}
-              >
-                {linkCopied ? <Icon name="check" size="sm" /> : <Icon name="link" size="sm" />}
-              </button>
-
-              <ScheduleThisAction
-                content={
-                  typeof message.rawContent === 'string' ? message.rawContent : message.content
-                }
-                appId={appId}
-                enabledTools={scheduleEnabledTools}
-              />
-            </>
-          )}
-
-          {isUser && !readOnly && onSaveAsPrompt && (
-            <button
-              onClick={() => onSaveAsPrompt(getEditableContent())}
-              className="flex items-center gap-1 hover:text-indigo-600 transition-colors duration-150"
-              title={t('chatMessage.saveAsPrompt', 'Save as prompt')}
-              aria-label={t('chatMessage.saveAsPrompt', 'Save as prompt')}
-            >
-              <Icon name="document-plus" size="sm" />
-            </button>
-          )}
-
-          {!readOnly && (
-            <button
-              onClick={handleDelete}
-              className="flex items-center gap-1 hover:text-red-500 transition-colors duration-150"
-              title={t('chatMessage.deleteMessage', 'Delete message')}
-            >
-              <Icon name="trash" size="sm" />
-            </button>
-          )}
-
-          {/* Add star rating for AI responses only */}
-          {feedbackEnabled && !readOnly && !isUser && !isError && !message.loading && (
-            <>
-              {!compact && <div className="mx-2 h-4 border-l border-gray-300"></div>}
-              <div className="flex items-center gap-2">
-                <StarRating
-                  rating={activeFeedback}
-                  onRatingChange={handleStarRatingClick}
-                  allowHalfStars={true}
-                  size="w-4 h-4"
-                  showTooltip={true}
-                  className="shrink-0"
-                />
-              </div>
-            </>
-          )}
         </div>
-      </div>
+      )}
 
       {/* Feedback form modal */}
       {feedbackEnabled && showFeedbackForm && (

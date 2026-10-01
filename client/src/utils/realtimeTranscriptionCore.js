@@ -237,3 +237,14 @@ export async function resampleTo16kMono(audioBuffer) {
   const rendered = await offline.startRendering();
   return rendered.getChannelData(0).slice();
 }
+
+/**
+ * The close that ends a finished session: a completed close handshake with a
+ * normal (1000) or no status code (1005, what the server's plain `close()`
+ * sends). Anything else — no handshake (1006), or a policy / internal error
+ * code — means the transcript may be cut off.
+ * @param {CloseEvent} [evt]
+ * @returns {boolean}
+ */
+export const isCompletionClose = evt =>
+  evt?.wasClean === true && (evt.code === 1000 || evt.code === 1005);
