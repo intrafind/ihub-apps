@@ -18,6 +18,17 @@ import { saveSnapshot } from '../../services/ChangeHistoryService.js';
 import llmClient, { isLLMError, LLM_ERROR_CODES } from '../../services/loop/LLMClient.js';
 import { getTtsProvider, isTtsModel } from '../../tts/index.js';
 import { TTS_LANGUAGES } from '../../tts/language.js';
+import { llmErrorToHttpStatus, isMissingApiKeyError } from '../../services/loop/llmHttpErrors.js';
+import {
+  discoverModels,
+  comparableUrl,
+  ModelDiscoveryError
+} from '../../services/ModelEndpointDiscovery.js';
+import {
+  BUILT_IN_LLM_PROVIDERS,
+  getProviderApiType,
+  resolveProviderApiKey
+} from '../../services/llmProviders.js';
 
 /** Largest voice sample accepted (Mistral needs seconds, not minutes, of audio). */
 const MAX_VOICE_SAMPLE_BYTES = 10 * 1024 * 1024;
@@ -62,17 +73,6 @@ function sendVoicesError(res, error, action) {
   const message = error.name === 'TtsUpstreamError' ? error.message : `Could not ${action}`;
   return res.status(502).json({ error: message, code: 'upstream-error' });
 }
-import { llmErrorToHttpStatus, isMissingApiKeyError } from '../../services/loop/llmHttpErrors.js';
-import {
-  discoverModels,
-  comparableUrl,
-  ModelDiscoveryError
-} from '../../services/ModelEndpointDiscovery.js';
-import {
-  BUILT_IN_LLM_PROVIDERS,
-  getProviderApiType,
-  resolveProviderApiKey
-} from '../../services/llmProviders.js';
 
 /**
  * The file a model id lives in.

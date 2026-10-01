@@ -31,8 +31,8 @@ provider.
 
 1. **The model type is `tts`, configured like transcription.** It is a first-class model file, so
    it gets the same key handling (model key → `mistral` provider key → `MISTRAL_API_KEY`),
-   permissions, enable/disable and admin test. The voice is `tts.voice` on the model. One model
-   per voice keeps the configuration flat; a per-language voice map is a follow-up.
+   permissions, enable/disable and admin test. The voice is `tts.voice` on the model, with an
+   optional voice per language in `tts.voices` (decision 9).
 2. **Server proxy, never browser → provider.** `POST /api/voice/speech` resolves the model,
    checks permissions, strips Markdown and streams. The key and URL stay on the server.
 3. **Canonical wire format: 16-bit PCM, chunked HTTP.** The server converts Mistral's float32

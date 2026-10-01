@@ -61,11 +61,4 @@ export const audioBufferToWav = audioBuffer => {
   return new Blob([buffer], { type: 'audio/wav' });
 };
 
-/**
- * Write string to DataView
- * @param {DataView} view - The DataView to write to
- * @param {number} offset - Offset position
- * @param {string} string - String to write
- */
-
 export default audioBufferToWav;
