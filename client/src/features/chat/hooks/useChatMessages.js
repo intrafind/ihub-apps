@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { debugLog } from '../../../utils/debugLog';
 import { generatedFilesFromArtifacts } from '../../../../../shared/generatedFiles.js';
+import { storedSourceSet } from '../../../../../shared/sources/index.js';
 
 /**
  * The provenance fields a stored answer's `activity` restores onto the message
@@ -39,7 +40,7 @@ function withoutGeneratedFileData(msg) {
  *
  * Shape on the wire (`GET /api/chats/:chatId` → `messages[]`):
  * `{ id, role, content, ts, runId, clientMessageId?, usage?, finishReason?,
- * error?, attachments?, artifacts?, mcpApps?, citations?, webSearch?, activity? }`.
+ * error?, attachments?, artifacts?, mcpApps?, sources?, activity? }`.
  *
  * The stored id is adopted as the message id and kept a second time on
  * `serverId`: `replaceFromMessageId` addresses the server's history by that
@@ -79,15 +80,6 @@ export function transformStoredMessage(msg) {
   }
   // Interactive MCP App views of the answer, redrawn from their stored data.
   if (Array.isArray(msg.mcpApps) && msg.mcpApps.length > 0) message.mcpApps = msg.mcpApps;
-  // The documents behind the answer — an iAssistant answer's citations or the
-  // ones its iFinder tool calls found — so the Documents panel comes back.
-  if (msg.citations && typeof msg.citations === 'object') {
-    const references = Array.isArray(msg.citations.references) ? msg.citations.references : [];
-    const resultItems = Array.isArray(msg.citations.resultItems) ? msg.citations.resultItems : [];
-    if (references.length > 0 || resultItems.length > 0) {
-      message.citations = { references, resultItems };
-    }
-  }
   // Connect cards for MCP servers with per-user sign-in.
   if (Array.isArray(msg.mcpAuthRequired) && msg.mcpAuthRequired.length > 0) {
     message.mcpAuthRequired = msg.mcpAuthRequired;
@@ -96,18 +88,11 @@ export function transformStoredMessage(msg) {
   if (Array.isArray(msg.scheduledTaskProposals) && msg.scheduledTaskProposals.length > 0) {
     message.scheduledTaskProposals = msg.scheduledTaskProposals;
   }
-  // The web searches and sources behind the answer, so the sources view and
-  // the inline citations come back (the citation markers are in the content).
-  if (msg.webSearch && typeof msg.webSearch === 'object') {
-    const queries = Array.isArray(msg.webSearch.queries) ? msg.webSearch.queries : [];
-    const sources = Array.isArray(msg.webSearch.sources) ? msg.webSearch.sources : [];
-    if (queries.length > 0 || sources.length > 0) {
-      message.webSearch = { queries, sources };
-      // A web answer is not "based on AI knowledge" when it is reopened. The
-      // stored activity below names every source the answer drew on.
-      message.answerSource = { sources: ['websearch'], type: 'mixed' };
-    }
-  }
+  // Everything the answer found, so the sources panel and the inline
+  // citations come back (the citation markers are in the content). The badge
+  // is the stored activity's below, never inferred from what was found.
+  const sources = storedSourceSet(msg.sources);
+  if (sources) message.sources = sources;
   // What the run did before it answered — searches, documents, tool calls,
   // workflow steps and the answer's source — in the fields a live turn fills
   // from its stream (`shared/run/runActivity.js` builds both), so the reopened
@@ -166,13 +151,10 @@ function transformConversationMessage(msg) {
     fromServer: true
   };
 
-  // Map citations
-  if (msg.references || msg.result_items) {
-    message.citations = {
-      references: msg.references || [],
-      resultItems: msg.result_items || []
-    };
-  }
+  // The answer's documents, as sources (the server converts them, see
+  // `services/sources/producers/ifinder.withConversationSources`).
+  const sources = storedSourceSet(msg.sources);
+  if (sources) message.sources = sources;
 
   if (msg.type === 'ERROR') {
     message.error = true;
@@ -402,8 +384,9 @@ function useChatMessages(chatId = 'default', { ephemeral = false, serverBacked =
       return;
     }
     try {
-      // Filter out greeting messages for persistence
-      const persistableMessages = messages.filter(msg => !msg.isGreeting);
+      // Filter out greeting messages and a transcript still being recorded
+      // (it becomes a real message only when it is sent) for persistence
+      const persistableMessages = messages.filter(msg => !msg.isGreeting && !msg.isLiveTranscript);
 
       // Strip image data to avoid sessionStorage quota issues
       // Images can be very large (base64 encoded) and exceed the ~5-10MB quota
@@ -453,7 +436,7 @@ function useChatMessages(chatId = 'default', { ephemeral = false, serverBacked =
         );
         try {
           const textOnlyMessages = messages
-            .filter(msg => !msg.isGreeting)
+            .filter(msg => !msg.isGreeting && !msg.isLiveTranscript)
             .map(msg => {
               const { images: _images, ...rest } = withoutGeneratedFileData(msg);
               return rest;
@@ -676,6 +659,16 @@ function useChatMessages(chatId = 'default', { ephemeral = false, serverBacked =
   }, []); // No dependency on messages anymore
 
   /**
+   * Remove one message, leaving the ones after it in place. Unlike
+   * `deleteMessage` this reads the latest state, so it also removes a message
+   * added in the same tick.
+   * @param {string} messageId - The ID of the message to remove
+   */
+  const removeMessage = useCallback(messageId => {
+    setMessages(prev => prev.filter(message => message.id !== messageId));
+  }, []);
+
+  /**
    * Edit a message's content
    * @param {string} messageId - The ID of the message to edit
    * @param {string} newContent - The new content for the message
@@ -779,9 +772,13 @@ function useChatMessages(chatId = 'default', { ephemeral = false, serverBacked =
       // an app with `sendChatHistory: false` gets only the new message there
       // too. Every other mode keeps posting its whole array.
       // Using messagesRef instead of messages dependency
-      // Filter out greeting messages for API requests
+      // Filter out greeting messages for API requests, and the live transcript
+      // bubble: it is replaced by the message it turns into, but the ref can
+      // still hold it for a render after the swap.
       let messagesForApi =
-        includeFull && !serverBacked ? messagesRef.current.filter(msg => !msg.isGreeting) : [];
+        includeFull && !serverBacked
+          ? messagesRef.current.filter(msg => !msg.isGreeting && !msg.isLiveTranscript)
+          : [];
 
       if (additionalMessage) {
         messagesForApi = [...messagesForApi, additionalMessage];
@@ -805,30 +802,6 @@ function useChatMessages(chatId = 'default', { ephemeral = false, serverBacked =
     [serverBacked]
   ); // No dependency on messages anymore
 
-  /**
-   * Merge citation data into a message in a race-safe way.
-   * Uses functional updater so concurrent references/resultItems events
-   * don't overwrite each other.
-   * @param {string} messageId - The ID of the message to update
-   * @param {Object} newCitations - { references?, resultItems? }
-   */
-  const mergeCitations = useCallback((messageId, newCitations) => {
-    setMessages(prev =>
-      prev.map(msg => {
-        if (msg.id !== messageId) return msg;
-        const existing = msg.citations || {};
-        return {
-          ...msg,
-          citations: {
-            references: newCitations.references || existing.references || [],
-            resultItems: newCitations.resultItems || existing.resultItems || []
-          },
-          _timestamp: Date.now()
-        };
-      })
-    );
-  }, []);
-
   return {
     messages,
     messagesRef,
@@ -841,12 +814,12 @@ function useChatMessages(chatId = 'default', { ephemeral = false, serverBacked =
     appendWorkflowStep,
     setMessageError,
     deleteMessage,
+    removeMessage,
     editMessage,
     addSystemMessage,
     clearMessages,
     getMessagesForApi,
-    loadServerMessages,
-    mergeCitations
+    loadServerMessages
   };
 }
 

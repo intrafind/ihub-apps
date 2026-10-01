@@ -16,7 +16,7 @@
 
 import { saveAs } from 'file-saver';
 import { renderMarkdown } from '../../config/marked.config';
-import { exportPdfOnServer } from '../../api/endpoints/documents';
+import { exportPdfOnServer } from '../../api/endpoints/exports';
 
 function baseNameWithoutMd(name) {
   if (typeof name !== 'string') return 'document';

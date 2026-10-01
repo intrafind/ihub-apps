@@ -64,10 +64,33 @@ const searchStarted = (seq, callId = 'c1', query = 'berlin weather') =>
     execution: 'server'
   });
 
+/** What the search found, as the server reports it (`sources/added`, shared/sources). */
 const webSources = [
-  { url: 'https://weather.example/berlin', title: 'Berlin weather', read: true },
-  { url: 'https://news.example/', title: 'News', readFailed: true },
-  { url: 'https://other.example/' }
+  {
+    id: 'url:weather.example/berlin',
+    provider: 'web',
+    kind: 'page',
+    url: 'https://weather.example/berlin',
+    title: 'Berlin weather',
+    read: { ok: true },
+    private: false
+  },
+  {
+    id: 'url:news.example',
+    provider: 'web',
+    kind: 'page',
+    url: 'https://news.example/',
+    title: 'News',
+    read: { ok: false },
+    private: false
+  },
+  {
+    id: 'url:other.example',
+    provider: 'web',
+    kind: 'page',
+    url: 'https://other.example/',
+    private: false
+  }
 ];
 
 const searchCompleted = (seq, callId = 'c1') =>
@@ -77,8 +100,16 @@ const searchCompleted = (seq, callId = 'c1') =>
     toolId: 'braveSearch',
     name: 'braveSearch',
     resultPreview: '{"query":"berlin weather"…[truncated]',
-    durationMs: 800,
-    webSources
+    durationMs: 800
+  });
+
+const searchFound = (seq, callId = 'c1') =>
+  env(seq, 'sources/added', {
+    step: 1,
+    callId,
+    toolId: 'braveSearch',
+    items: webSources,
+    queries: ['berlin weather']
   });
 
 describe('toolKind', () => {
@@ -191,7 +222,7 @@ describe('buildToolActivity', () => {
   });
 
   test('a completed search carries the sources the server reported', () => {
-    const run = runFrom([started, searchStarted(2), searchCompleted(3), ended(4)]);
+    const run = runFrom([started, searchStarted(2), searchCompleted(3), searchFound(4), ended(5)]);
     const activity = buildToolActivity(run);
     expect(activity.reading).toBeNull();
     expect(activity.items[0]).toMatchObject({
@@ -275,7 +306,9 @@ describe('buildToolActivity', () => {
 
 describe('ToolActivity', () => {
   const finished = () =>
-    buildToolActivity(runFrom([started, searchStarted(2), searchCompleted(3), ended(4)]));
+    buildToolActivity(
+      runFrom([started, searchStarted(2), searchCompleted(3), searchFound(4), ended(5)])
+    );
 
   test('is open while the answer streams', () => {
     const running = buildToolActivity(runFrom([started, searchStarted(2)]));
@@ -327,10 +360,25 @@ describe('ToolActivity', () => {
           callId: 'c1',
           toolId,
           name: toolId,
-          durationMs: 300,
-          webSources: [{ url: 'https://ifinder.example/doc/1', title: 'Contract A' }]
+          durationMs: 300
         }),
-        ended(4)
+        env(4, 'sources/added', {
+          step: 1,
+          callId: 'c1',
+          toolId,
+          items: [
+            {
+              id: 'ifinder:doc-1',
+              provider: 'ifinder',
+              kind: 'document',
+              url: 'https://ifinder.example/doc/1',
+              title: 'Contract A',
+              ref: { id: 'doc-1' },
+              private: true
+            }
+          ]
+        }),
+        ended(5)
       ])
     );
     expect(activity.items[0]).toMatchObject({ kind: 'search', scope: 'documents' });
@@ -346,9 +394,16 @@ describe('ToolActivity', () => {
   test('an iFinder_getContent call says which document it read', () => {
     const tool = (seq, type, callId, toolId, data) =>
       env(seq, type, { step: 1, callId, toolId, name: toolId, ...data });
+    const docSource = id => ({
+      id: `ifinder:${id}`,
+      provider: 'ifinder',
+      kind: 'document',
+      ref: { id },
+      private: true
+    });
     const doc = {
+      ...docSource('doc-1'),
       url: 'https://ifinder.example/doc/1',
-      documentId: 'doc-1',
       title: 'Contract A'
     };
     const activity = buildToolActivity(
@@ -358,26 +413,26 @@ describe('ToolActivity', () => {
           args: { query: 'supplier contracts' },
           execution: 'server'
         }),
-        tool(3, 'tool/completed', 'c1', 'iFinder_search', {
-          durationMs: 300,
-          webSources: [doc, { documentId: 'doc-2', title: 'Contract B' }]
+        tool(3, 'tool/completed', 'c1', 'iFinder_search', { durationMs: 300 }),
+        tool(4, 'sources/added', 'c1', 'iFinder_search', {
+          items: [doc, { ...docSource('doc-2'), title: 'Contract B' }]
         }),
-        tool(4, 'tool/started', 'c2', 'iFinder_getContent', {
+        tool(5, 'tool/started', 'c2', 'iFinder_getContent', {
           args: { documentId: 'doc-1' },
           execution: 'server'
         }),
+        tool(6, 'tool/completed', 'c2', 'iFinder_getContent', { durationMs: 200 }),
         // The content result has no browser link of its own.
-        tool(5, 'tool/completed', 'c2', 'iFinder_getContent', {
-          durationMs: 200,
-          webSources: [{ documentId: 'doc-1', title: 'Contract A', read: true }]
+        tool(7, 'sources/added', 'c2', 'iFinder_getContent', {
+          items: [{ ...docSource('doc-1'), title: 'Contract A', read: { ok: true } }]
         }),
-        ended(6)
+        ended(8)
       ])
     );
     const [search, read] = activity.items;
     expect(read).toMatchObject({ kind: 'fetch', scope: 'documents', documentId: 'doc-1' });
     // The hit that found the document is marked read.
-    expect(search.sources[0]).toMatchObject({ documentId: 'doc-1', read: true });
+    expect(search.sources[0]).toMatchObject({ ref: { id: 'doc-1' }, read: { ok: true } });
     expect(search.sources[1].read).toBeUndefined();
 
     render(<ToolActivity activity={activity} loading={false} />);
@@ -486,18 +541,25 @@ describe('page reader rows (issue #2520)', () => {
         callId: 'r1',
         toolId: 'webContentExtractor',
         name: 'webContentExtractor',
-        resultPreview: '…',
-        webSources: [
+        resultPreview: '…'
+      }),
+      env(4, 'sources/added', {
+        step: 1,
+        callId: 'r1',
+        toolId: 'webContentExtractor',
+        items: [
           {
+            id: 'url:docs.example.com/guide',
+            provider: 'web',
+            kind: 'page',
             url: 'https://docs.example.com/guide',
             title: 'The guide',
-            read: true,
-            wordCount: 812,
-            truncated: true
+            read: { ok: true, words: 812, truncated: true },
+            private: true
           }
         ]
       }),
-      ended(4)
+      ended(5)
     ]);
     render(<ToolActivity activity={buildToolActivity(run)} loading />);
     expect(screen.getByText('The guide')).toBeInTheDocument();

@@ -28,7 +28,8 @@ Each model is defined with the following properties:
 | `name`                         | Object  | -        | **Required.** Localized display name (e.g., `{"en": "GPT-4"}`) shown in the user interface    |
 | `description`                  | Object  | -        | **Required.** Localized short description (e.g., `{"en": "..."}`) of the model's capabilities |
 | `provider`                     | String  | -        | **Required.** Provider identifier. See [Providers](#providers) for valid values                |
-| `modelType`                    | String  | `chat`   | `chat` (routed through the LLM adapter pipeline) or `transcription` (speech-to-text, routed through the transcription provider registry). See [Transcription Models](#transcription-models) |
+| `providerId`                   | String  | -        | Provider entry (Admin → Providers) the model takes its API key from, when it is not the one named after `provider`. Set for models of a [custom LLM provider](#custom-llm-providers); `provider` is then kept equal to that provider's API type |
+| `modelType`                    | String  | `chat`   | `chat` (routed through the LLM adapter pipeline), `transcription` (speech-to-text, routed through the transcription provider registry) or `tts` (text-to-speech for read aloud). See [Transcription Models](#transcription-models) and [Text-to-Speech Models](#text-to-speech-models) |
 | `url`                          | String  | -        | API endpoint URL for the model. Supports environment variable references like `${MY_URL}`. Transcription models use a `ws://` / `wss://` realtime URL |
 | `contextWindow`                | Number  | -        | Total input+output token capacity of the model's context window (nullable). Used for fitting documents and showing the user how much capacity is left |
 | `maxOutputTokens`              | Number  | -        | Maximum tokens the model may generate in a response, sent to the provider as `max_tokens` / `maxOutputTokens` (nullable). Defaults to 16384 at runtime if unset (never more than half the context window). Reasoning models spend their thinking tokens from this limit, so keep it well above the longest answer you expect |
@@ -146,6 +147,68 @@ The system currently supports the following providers:
    - Bedrock service limits are enforced by the server-side adapter before each request: max 5 documents per request and a strict filename character allowlist (alphanumerics, single spaces, `-`, `()`, `[]`)
    - See [AWS Bedrock](#aws-bedrock) below for full setup instructions
 
+### Custom LLM Providers
+
+A gateway that serves many models behind one API key — T-Systems AI Foundation Services (LLM Hub),
+a company LLM proxy, a shared vLLM server — is set up as its own provider under **Admin →
+Providers → Create New Provider** (category **LLM Providers**):
+
+| Field | Description |
+| ----- | ----------- |
+| Name, ID, Description | Plain text. The ID cannot be changed later, and cannot be the name of an API type (`openai`, `openai-responses`, …) |
+| API type | The API the endpoint speaks: `openai` (OpenAI-compatible — LLM Hub, LM Studio, …), `local` (vLLM, through the vLLM adapter), `mistral`, `openai-responses`, `anthropic` or `google` |
+| Base URL | Optional. The API base, used to list the provider's models when importing |
+| API key | Stored encrypted on the provider and used by all of its models |
+
+Models link to the provider with `providerId`; their `provider` is the provider's API type. The
+model editor lists custom providers under **Provider**, and changing a provider's API type moves
+all of its models with it. The provider page lists its linked models, and a provider that still
+has models cannot be deleted.
+
+```json
+{
+  "id": "llmhub-gpt-oss-120b",
+  "modelId": "gpt-oss-120b",
+  "url": "https://llm-server.llmhub.t-systems.net/v2/chat/completions",
+  "provider": "openai",
+  "providerId": "llmhub"
+}
+```
+
+The API key of a linked model is looked up in this order: the model's own `apiKey`, the
+provider's stored key, the `<MODEL_ID>_API_KEY` environment variable, then the provider's
+variable — `LLMHUB_API_KEY` for a provider with ID `llmhub`. A linked model never falls back to the
+variable of its API type, so an LLM Hub model speaking the OpenAI API is never sent
+`OPENAI_API_KEY`.
+
+### Importing Models from an Endpoint
+
+**Admin → Models → Import from URL** reads the model list of an endpoint and creates the models
+you pick, so they need not be typed in one by one.
+
+1. Choose the provider the models belong to, or **+ New provider** to create one with a name, ID,
+   API type and API key. The key is stored on the provider, not on the models. Opening **Import
+   models** on a provider's page preselects it and uses its stored key and base URL.
+2. Enter the endpoint URL: the API base (`https://llm-server.llmhub.t-systems.net/v2`), its
+   `/models` listing, or a chat completions URL. A bare host is read as `<host>/v1`. Leave the API
+   key empty for endpoints without authentication, such as a local vLLM server.
+3. **Load models** calls `GET <base>/models` and lists what it returns. The endpoint's own
+   metadata is used where it reports it: display name, context window and output limit (vLLM
+   `max_model_len`, LLM Hub `meta_data`, Mistral `max_context_length`, Google token limits),
+   image input, tool support and end-of-life date. Embedding, audio, image and moderation models
+   are marked and not selected by **Select all**. Models already configured for the same endpoint
+   show as **Already added**.
+4. Adjust the iHub model IDs if needed (an ID prefix applies to all of them), and **Import**.
+
+Supported listings: OpenAI and every OpenAI-compatible server (vLLM, LM Studio, Ollama, LLM Hub,
+OpenRouter, Together, Groq), Mistral, Anthropic and Google. The call goes through the platform's
+proxy and SSL settings; it does not follow redirects, so a key is never sent to a host other than
+the one entered. The import fills in only what the endpoint reports — check tool support and test
+each model before enabling it for users.
+
+The import uses `POST /api/admin/models/_discover`, which returns the normalized list without
+storing anything, and then the regular `POST /api/admin/providers` and `POST /api/admin/models`.
+
 ### AWS Bedrock
 
 #### Authentication
@@ -201,7 +264,7 @@ Example configurations for the most common Bedrock models live in `examples/mode
 
 ### Transcription Models
 
-Models with `modelType: "transcription"` are **speech-to-text** models, not chat models. They convert a complete audio buffer — from an uploaded audio file, an uploaded video (audio track extracted client-side), or a browser recording — into text that is rendered as an assistant chat answer. See [Realtime Voice & Transcription](voice-transcription.md) for the full deployment guide (vLLM setup, reverse proxy, limits, security) and [Audio File Support](audio-file-support.md) for how apps use them.
+Models with `modelType: "transcription"` are **speech-to-text** models, not chat models. They convert a complete audio buffer — from an uploaded audio file, an uploaded video (audio track extracted client-side), or a browser recording — into text that becomes the user's message, which the selected chat model then answers. See [Realtime Voice & Transcription](voice-transcription.md) for the full deployment guide (vLLM setup, reverse proxy, limits, security) and [Audio File Support](audio-file-support.md) for how apps use them.
 
 Transcription models are **not** routed through the LLM adapter pipeline. They use a parallel transcription provider registry (`server/transcription/`) and are streamed over the same authenticated realtime WebSocket (`/api/voice/realtime`) that dictation uses.
 
@@ -271,6 +334,38 @@ under `platform.speech.realtime`:
 | `maxBufferedAudioBytesTotal` | 268435456 (256 MB) | Across the whole process. Exceeding it fails the session with `server-busy`. |
 
 Raise `maxBufferedAudioBytes` for hour-long recordings (one hour of 16 kHz PCM16 is ≈115 MB) and size `maxBufferedAudioBytesTotal` against the memory the instance can spare — `maxConnections` × `maxBufferedAudioBytes` is the theoretical worst case.
+
+### Text-to-Speech Models
+
+Models with `modelType: "tts"` read chat messages aloud: they power the play
+button on every message (see [Read Aloud (Text-to-Speech)](text-to-speech.md)).
+Like transcription models, they are not chat models. They run through the TTS
+provider registry (`server/tts/`) behind `POST /api/voice/speech`. They never
+appear in the chat model selector, and they can never be the default chat
+model. `GET /api/models?type=tts` lists the ones a user may use, without `url`
+or `apiKey`.
+
+The only provider so far is `mistral` (Voxtral TTS). The voice is set with
+`tts.voice`:
+
+```json
+{
+  "id": "voxtral-mini-tts",
+  "modelId": "voxtral-mini-tts-latest",
+  "name": { "en": "Voxtral TTS (Read aloud)" },
+  "description": { "en": "Mistral's Voxtral text-to-speech model." },
+  "url": "https://api.mistral.ai/v1/audio/speech",
+  "provider": "mistral",
+  "modelType": "tts",
+  "tts": { "voice": "en_paul_neutral" },
+  "enabled": false
+}
+```
+
+The model ships disabled. Enable it, give it a Mistral API key (or use the
+`mistral` provider key or `MISTRAL_API_KEY`), and choose it under
+**Admin → Voice Input → Read aloud**. **Admin → Models → Test** speaks a short
+sentence and reports how much audio came back.
 
 ### Image Generation Defaults
 

@@ -159,7 +159,7 @@ export function appendWebSearchResearchGuidance(llmMessages, app, websearchEnabl
 /**
  * How to cite with script-backed search. The chat turns Markdown links to the
  * turn's sources into numbered citation badges and lists the sources beside
- * the answer (`shared/webCitations.js`), so it needs every claim linked to the
+ * the answer (`shared/sources/citations.js`), so it needs every claim linked to the
  * page it came from — and only to pages the turn actually returned. Native
  * search needs no such instruction for its own results: Anthropic and Google
  * report their citations themselves, and OpenAI links its sources in the text
@@ -251,7 +251,9 @@ export function appendWebSearchSourceGuidance(llmMessages, app, websearchEnabled
  * @returns {Array} Filtered models that match app requirements
  */
 export function filterModelsForApp(models, app) {
-  let availableModels = models;
+  // Only chat models answer a prompt; transcription and text-to-speech models
+  // share the models list but are served by their own routes.
+  let availableModels = models.filter(model => (model.modelType || 'chat') === 'chat');
 
   // Filter by allowedModels if specified
   if (app?.allowedModels && app.allowedModels.length > 0) {

@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { fetchIFinderDocument } from '../../../api/endpoints/documents';
-import { filenameFromContentDisposition, saveBlobAs } from '../../../utils/externalNavigation';
+import { fetchSourceContent } from '../../../api/endpoints/sources';
+import { saveBlobAs } from '../../../utils/externalNavigation';
+import { resolveSourceFilename } from '../../chat/sources/sourceActions';
 import PdfPassageViewer from './PdfPassageViewer';
 
 const MIN_SCALE = 0.5;
@@ -9,19 +10,18 @@ const MAX_SCALE = 3;
 const SCALE_STEP = 0.2;
 
 /**
- * In-app PDF preview for an iFinder document, with the passages that the
- * search backend returned highlighted in the document text.
+ * In-app PDF preview of a source, with the passages its producer returned
+ * highlighted in the document text.
  *
- * The PDF comes from the existing `integrations/ifinder/document` proxy with
- * `convertToPdf=true`, i.e. the same generated PDF the "Preview" action used to
- * open in a browser tab. Fetching it as an ArrayBuffer (instead of handing the
- * URL to pdf.js) keeps the request on the app's authenticated `apiClient` path,
- * which also carries the Bearer token the Outlook task pane and the extension
- * side panel sign requests with.
+ * The PDF is the provider's PDF rendition (`GET /api/sources/:provider/content
+ * ?format=pdf`, `routes/sources.js`). Fetching it as an ArrayBuffer (instead
+ * of handing the URL to pdf.js) keeps the request on the app's authenticated
+ * `apiClient` path, which also carries the Bearer token the Outlook task pane
+ * and the extension side panel sign requests with.
  *
  * @param {Object} props
- * @param {string} props.documentId iFinder document id from the ACCESS link.
- * @param {string} [props.searchProfile]
+ * @param {{provider: string, ref: {id: string, scope?: string}, fileName?: string}} props.source -
+ *   the source to preview (`shared/sources/source.js`)
  * @param {string} [props.title] document title for the header.
  * @param {string[]} props.passages passage texts to highlight. Expected to be
  *   pre-filtered to passages that actually carry text, so `initialPassageIndex`
@@ -30,14 +30,7 @@ const SCALE_STEP = 0.2;
  *   or `-1`/undefined to highlight all of them.
  * @param {Function} props.onClose
  */
-function DocumentPreviewModal({
-  documentId,
-  searchProfile,
-  title,
-  passages = [],
-  initialPassageIndex = -1,
-  onClose
-}) {
+function DocumentPreviewModal({ source, title, passages = [], initialPassageIndex = -1, onClose }) {
   const { t } = useTranslation();
   const [data, setData] = useState(null);
   const [loadError, setLoadError] = useState(null);
@@ -59,10 +52,9 @@ function DocumentPreviewModal({
     setData(null);
     setLoadError(null);
 
-    fetchIFinderDocument({
-      documentId,
-      searchProfile,
-      convertToPdf: true,
+    fetchSourceContent({
+      source,
+      format: 'pdf',
       responseType: 'arraybuffer',
       signal: controller.signal
     })
@@ -79,7 +71,7 @@ function DocumentPreviewModal({
       cancelled = true;
       controller.abort();
     };
-  }, [documentId, searchProfile]);
+  }, [source]);
 
   // Close on Escape, navigate matches with Enter / Shift+Enter.
   useEffect(() => {
@@ -125,24 +117,20 @@ function DocumentPreviewModal({
     setDownloading(true);
     setDownloadError(null);
     try {
-      const response = await fetchIFinderDocument({ documentId, searchProfile });
-      const filename =
-        filenameFromContentDisposition(response.headers?.['content-disposition']) ||
-        title ||
-        documentId;
-      if (!saveBlobAs(response.data, filename)) {
+      const response = await fetchSourceContent({ source });
+      if (!saveBlobAs(response.data, resolveSourceFilename(source, response))) {
         setDownloadError(
-          t('citations.downloadFailed', 'The document could not be downloaded. Please try again.')
+          t('sources.downloadFailed', 'The document could not be downloaded. Please try again.')
         );
       }
     } catch {
       setDownloadError(
-        t('citations.downloadFailed', 'The document could not be downloaded. Please try again.')
+        t('sources.downloadFailed', 'The document could not be downloaded. Please try again.')
       );
     } finally {
       setDownloading(false);
     }
-  }, [documentId, searchProfile, title, t]);
+  }, [source, t]);
 
   const { loading, numPages, totalMatches, currentMatch } = viewerState;
   const passageCount = passages.length;
@@ -261,8 +249,8 @@ function DocumentPreviewModal({
             onClick={handleDownload}
             disabled={downloading}
             className="p-1.5 rounded-sm hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 disabled:opacity-50"
-            title={t('citations.download', 'Download')}
-            aria-label={t('citations.download', 'Download')}
+            title={t('sources.download', 'Download')}
+            aria-label={t('sources.download', 'Download')}
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path

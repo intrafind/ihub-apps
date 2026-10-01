@@ -16,7 +16,63 @@ import {
 import { logAudit } from '../../services/AuditLogService.js';
 import { saveSnapshot } from '../../services/ChangeHistoryService.js';
 import llmClient, { isLLMError, LLM_ERROR_CODES } from '../../services/loop/LLMClient.js';
+import { getTtsProvider, isTtsModel } from '../../tts/index.js';
+import { TTS_LANGUAGES } from '../../tts/language.js';
 import { llmErrorToHttpStatus, isMissingApiKeyError } from '../../services/loop/llmHttpErrors.js';
+import {
+  discoverModels,
+  comparableUrl,
+  ModelDiscoveryError
+} from '../../services/ModelEndpointDiscovery.js';
+import {
+  BUILT_IN_LLM_PROVIDERS,
+  getProviderApiType,
+  resolveProviderApiKey
+} from '../../services/llmProviders.js';
+
+/** Largest voice sample accepted (Mistral needs seconds, not minutes, of audio). */
+const MAX_VOICE_SAMPLE_BYTES = 10 * 1024 * 1024;
+/** Audio file types a voice sample may have. */
+const VOICE_SAMPLE_EXTENSIONS = ['wav', 'mp3', 'm4a', 'ogg', 'oga', 'opus', 'flac', 'webm'];
+
+/**
+ * The TTS model and its provider for a voices request, or an error response.
+ * Disabled models are allowed, so voices can be set up before enabling.
+ */
+function resolveVoicesModel(req, res) {
+  const { modelId } = req.params;
+  if (!validateIdForPath(modelId, 'model', res)) return null;
+  const { data: models } = configCache.getModels(true);
+  const model = models.find(m => m.id === modelId);
+  if (!model) {
+    sendNotFound(res, 'Model');
+    return null;
+  }
+  if (!isTtsModel(model)) {
+    res.status(400).json({ error: 'Not a text-to-speech model', code: 'not-tts-model' });
+    return null;
+  }
+  const provider = getTtsProvider(model.provider);
+  if (!provider?.listVoices) {
+    res.status(501).json({
+      error: `Provider "${model.provider}" does not manage voices`,
+      code: 'voices-unsupported'
+    });
+    return null;
+  }
+  return { model, provider, cfg: provider.resolveUpstream(model) };
+}
+
+/** Upstream failures carry a safe message; anything else stays in the log. */
+function sendVoicesError(res, error, action) {
+  logger.error(`Text-to-speech voices: ${action} failed`, {
+    component: 'ModelsRoutes',
+    upstreamStatus: error.status,
+    error: error.message
+  });
+  const message = error.name === 'TtsUpstreamError' ? error.message : `Could not ${action}`;
+  return res.status(502).json({ error: message, code: 'upstream-error' });
+}
 
 /**
  * The file a model id lives in.
@@ -162,6 +218,45 @@ function describeModelTestFailure(err) {
 
 export { describeModelTestFailure };
 
+/**
+ * Bring a model's link to a provider entry in line with that entry, in place:
+ * the model's `provider` becomes the entry's API type, and a link to a built-in
+ * entry (`providerId: "openai"`) is dropped, since the model reaches it through
+ * its API type anyway. A link to a custom entry is always kept. A model
+ * therefore cannot claim one API type while its provider declares another.
+ *
+ * @param {Object} model - Model config from the request body
+ * @returns {string|null} Error message for a link that cannot be honoured
+ */
+function applyProviderLink(model) {
+  if (model.providerId === undefined || model.providerId === null || model.providerId === '') {
+    delete model.providerId;
+    return null;
+  }
+  if (typeof model.providerId !== 'string') {
+    return 'Invalid providerId';
+  }
+  const { data: providers = [] } = configCache.getProviders(true);
+  const apiType = getProviderApiType(providers.find(p => p.id === model.providerId));
+  if (!apiType) {
+    return `Provider "${model.providerId}" does not exist or is not an LLM provider`;
+  }
+  model.provider = apiType;
+  if (BUILT_IN_LLM_PROVIDERS.includes(model.providerId)) {
+    delete model.providerId;
+  }
+  return null;
+}
+
+export { applyProviderLink };
+
+/**
+ * Only a chat model can be the default (see `modelsLoader.js`): a TTS or
+ * transcription model never takes the flag, nor the flag from the chat model
+ * it would replace.
+ */
+const isChatModel = model => (model.modelType || 'chat') === 'chat';
+
 export default function registerAdminModelsRoutes(app) {
   /**
    * @swagger
@@ -223,6 +318,131 @@ export default function registerAdminModelsRoutes(app) {
     }
   });
 
+  /**
+   * @swagger
+   * /admin/models/_discover:
+   *   post:
+   *     summary: List the models an endpoint offers (Admin)
+   *     description: |
+   *       Calls the `/models` listing behind a URL — OpenAI, Mistral, vLLM,
+   *       LM Studio, T-Systems LLM Hub and other OpenAI-compatible servers,
+   *       Anthropic or Google — and returns its entries normalized, so the
+   *       admin can pick models to import. Nothing is stored. The URL may be
+   *       the listing itself, the API base (`…/v1`) or an inference URL.
+   *
+   *       With `providerId`, the call uses that provider's API type, stored
+   *       API key (or its environment variable) and, when `url` is empty, its
+   *       `baseUrl` — the key never has to leave the server. Without it,
+   *       `apiType` and an optional `apiKey` describe a provider that does
+   *       not exist yet.
+   *
+   *       A failure on the endpoint's side answers 502 (never 401, which would
+   *       end the admin session) with `{ error, details, messageKey }`.
+   *     tags:
+   *       - Admin - Models
+   *     security:
+   *       - bearerAuth: []
+   *       - sessionAuth: []
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             properties:
+   *               url:
+   *                 type: string
+   *                 example: https://llm-server.llmhub.t-systems.net/v2
+   *               providerId:
+   *                 type: string
+   *                 description: Existing LLM provider whose API type and key are used
+   *               apiType:
+   *                 type: string
+   *                 enum: [openai, openai-responses, mistral, local, anthropic, google]
+   *                 default: openai
+   *               apiKey:
+   *                 type: string
+   *                 description: Optional. Sent only to this endpoint, never stored by this call.
+   *     responses:
+   *       200:
+   *         description: Normalized model list
+   *       400:
+   *         description: Invalid URL, provider or API type
+   *       502:
+   *         description: The endpoint could not be reached or rejected the request
+   */
+  app.post(buildServerPath('/api/admin/models/_discover'), adminAuth, async (req, res) => {
+    const { url, providerId, apiType = 'openai', apiKey } = req.body || {};
+    if (url !== undefined && url !== null && typeof url !== 'string') {
+      return sendBadRequest(res, 'Invalid URL');
+    }
+    if (apiKey !== undefined && apiKey !== null && typeof apiKey !== 'string') {
+      return sendBadRequest(res, 'Invalid API key');
+    }
+
+    let discoveryUrl = (url || '').trim();
+    let discoveryApiType = apiType;
+    let discoveryKey = (apiKey || '').trim();
+
+    try {
+      if (providerId !== undefined && providerId !== null && providerId !== '') {
+        if (!validateIdForPath(providerId, 'provider', res)) {
+          return;
+        }
+        const { data: providers = [] } = configCache.getProviders(true);
+        const providerEntry = providers.find(p => p.id === providerId);
+        if (!providerEntry) {
+          return sendNotFound(res, 'Provider');
+        }
+        discoveryApiType = getProviderApiType(providerEntry);
+        if (!discoveryApiType) {
+          return sendBadRequest(res, `Provider "${providerId}" is not an LLM provider`);
+        }
+        if (!discoveryUrl) discoveryUrl = providerEntry.baseUrl || '';
+        if (!discoveryKey) discoveryKey = resolveProviderApiKey(providerEntry) || '';
+      } else if (typeof apiType !== 'string') {
+        return sendBadRequest(res, 'Invalid API type');
+      }
+
+      if (!discoveryUrl) {
+        return sendBadRequest(res, 'URL is required');
+      }
+
+      const result = await discoverModels({
+        url: discoveryUrl,
+        provider: discoveryApiType,
+        apiKey: discoveryKey
+      });
+
+      // Flag listed models an existing config already points at (same remote
+      // model id on the same endpoint), so the admin does not import twice.
+      const { data: configured = [] } = configCache.getModels(true);
+      const existing = new Map();
+      for (const model of configured) {
+        existing.set(`${model.modelId}\n${comparableUrl(model.url)}`, model.id);
+      }
+      res.json({
+        apiType: result.provider,
+        modelsUrl: result.modelsUrl,
+        baseUrl: result.baseUrl,
+        models: result.models.map(model => ({
+          ...model,
+          existingModelId: existing.get(`${model.id}\n${comparableUrl(model.url)}`) || null
+        }))
+      });
+    } catch (error) {
+      if (error instanceof ModelDiscoveryError) {
+        return res.status(error.status).json({
+          error: error.message,
+          details: error.details,
+          messageKey: error.messageKey,
+          upstreamStatus: error.upstreamStatus
+        });
+      }
+      return sendInternalError(res, error, 'discover models');
+    }
+  });
+
   app.get(buildServerPath('/api/admin/models/:modelId'), adminAuth, async (req, res) => {
     try {
       const { modelId } = req.params;
@@ -279,6 +499,10 @@ export default function registerAdminModelsRoutes(app) {
       if (updatedModel.id !== modelId) {
         return sendBadRequest(res, 'Model ID cannot be changed');
       }
+      const providerLinkError = applyProviderLink(updatedModel);
+      if (providerLinkError) {
+        return sendBadRequest(res, providerLinkError);
+      }
 
       // Handle API key encryption
       if (updatedModel.apiKey) {
@@ -310,6 +534,7 @@ export default function registerAdminModelsRoutes(app) {
       delete updatedModel.apiKeySet;
       delete updatedModel.apiKeyMasked;
 
+      if (!isChatModel(updatedModel)) updatedModel.default = false;
       if (updatedModel.default === true) {
         const modelsResponse = configCache.getModels(true);
         const allModels = modelsResponse.data || modelsResponse;
@@ -365,6 +590,10 @@ export default function registerAdminModelsRoutes(app) {
       if (!validateIdForPath(newModel.id, 'model', res)) {
         return;
       }
+      const providerLinkError = applyProviderLink(newModel);
+      if (providerLinkError) {
+        return sendBadRequest(res, providerLinkError);
+      }
 
       // Handle API key encryption
       if (newModel.apiKey && newModel.apiKey !== '••••••••') {
@@ -389,6 +618,7 @@ export default function registerAdminModelsRoutes(app) {
       if ((await configStore.readJson(newModelPath)) !== null) {
         return sendErrorResponse(res, 409, 'Model with this ID already exists');
       }
+      if (!isChatModel(newModel)) newModel.default = false;
       if (newModel.default === true) {
         const modelsResponse = configCache.getModels(true);
         const allModels = modelsResponse.data || modelsResponse;
@@ -431,7 +661,9 @@ export default function registerAdminModelsRoutes(app) {
       const newEnabledState = !model.enabled;
       model.enabled = newEnabledState;
       if (!newEnabledState && model.default === true) {
-        const enabledModels = models.filter(m => m.id !== modelId && m.enabled === true);
+        const enabledModels = models.filter(
+          m => m.id !== modelId && m.enabled === true && isChatModel(m)
+        );
         if (enabledModels.length > 0) {
           enabledModels[0].default = true;
           await configStore.writeJson(await modelPath(enabledModels[0].id), enabledModels[0]);
@@ -485,7 +717,7 @@ export default function registerAdminModelsRoutes(app) {
       }
 
       // ensure at least one enabled model has default=true
-      const enabledModels = models.filter(m => m.enabled);
+      const enabledModels = models.filter(m => m.enabled && isChatModel(m));
       if (enabledModels.length > 0 && !enabledModels.some(m => m.default)) {
         enabledModels[0].default = true;
         await configStore.writeJson(await modelPath(enabledModels[0].id), enabledModels[0]);
@@ -524,7 +756,9 @@ export default function registerAdminModelsRoutes(app) {
         return sendNotFound(res, 'Model');
       }
       if (model.default === true) {
-        const otherModels = models.filter(m => m.id !== modelId && m.enabled === true);
+        const otherModels = models.filter(
+          m => m.id !== modelId && m.enabled === true && isChatModel(m)
+        );
         if (otherModels.length > 0) {
           otherModels[0].default = true;
           await configStore.writeJson(await modelPath(otherModels[0].id), otherModels[0]);
@@ -567,6 +801,169 @@ export default function registerAdminModelsRoutes(app) {
    * `LLMError` code and a body of `{ error, details, code }` — `error` is the
    * short headline, `details` the remediation text shown by the admin UI.
    */
+  /**
+   * Synthesize one short sentence with a TTS model and report how much audio
+   * came back. Same response shape as a chat model test; `response` names the
+   * audio length and voice instead of an answer.
+   */
+  async function testTtsModel(model, res) {
+    const safeModel = { ...model };
+    delete safeModel.apiKey;
+    const provider = getTtsProvider(model.provider);
+    if (!provider) {
+      return res.status(400).json({
+        error: `Unsupported text-to-speech provider: ${model.provider}`,
+        code: 'unsupported-provider'
+      });
+    }
+    const cfg = provider.resolveUpstream(model);
+    let bytes = 0;
+    try {
+      await provider.synthesize({
+        cfg,
+        text: 'This is a test of the text to speech model.',
+        signal: AbortSignal.timeout(MODEL_TEST_TIMEOUT_MS),
+        onAudio: pcm => {
+          bytes += pcm.length;
+        }
+      });
+    } catch (error) {
+      logger.error('Text-to-speech model test failed', {
+        component: 'ModelsRoutes',
+        modelId: model.id,
+        provider: model.provider,
+        upstreamStatus: error.status,
+        error: error.message
+      });
+      const message = error.name === 'TtsUpstreamError' ? error.message : 'Text-to-speech failed';
+      return res.status(502).json({ error: message, details: message, code: 'upstream-error' });
+    }
+    if (bytes === 0) {
+      return res.status(502).json({
+        error: 'No audio was returned',
+        details: 'The text-to-speech model answered without any audio.',
+        code: 'no-audio'
+      });
+    }
+    const seconds = bytes / 2 / provider.sampleRate;
+    return res.json({
+      success: true,
+      message: 'Model test successful',
+      messageKey: 'testSuccessful',
+      response: `Generated ${seconds.toFixed(1)} s of speech (voice: ${cfg.voice})`,
+      model: safeModel
+    });
+  }
+
+  /**
+   * GET /api/admin/models/:modelId/tts/voices — the voices a TTS model can
+   * use: the provider's presets and the account's custom voices.
+   */
+  app.get(buildServerPath('/api/admin/models/:modelId/tts/voices'), adminAuth, async (req, res) => {
+    const resolved = resolveVoicesModel(req, res);
+    if (!resolved) return undefined;
+    try {
+      const voices = await resolved.provider.listVoices(resolved.cfg);
+      return res.json({ voices });
+    } catch (error) {
+      return sendVoicesError(res, error, 'list voices');
+    }
+  });
+
+  /**
+   * POST /api/admin/models/:modelId/tts/voices — create a custom voice from
+   * one recording of the speaker: `{ name, audio (base64), filename?,
+   * languages?, gender? }`. Answers with the new voice; its `id` goes into the
+   * model's voice settings.
+   */
+  app.post(
+    buildServerPath('/api/admin/models/:modelId/tts/voices'),
+    adminAuth,
+    async (req, res) => {
+      const resolved = resolveVoicesModel(req, res);
+      if (!resolved) return undefined;
+      const { name, audio, filename, languages, gender } = req.body || {};
+
+      const voiceName = typeof name === 'string' ? name.trim() : '';
+      if (!voiceName || voiceName.length > 100) {
+        return res
+          .status(400)
+          .json({ error: 'name is required (at most 100 characters)', code: 'invalid-name' });
+      }
+      if (typeof audio !== 'string' || !audio) {
+        return res.status(400).json({ error: 'audio is required', code: 'invalid-audio' });
+      }
+      const sample = Buffer.from(audio, 'base64');
+      if (!sample.length) {
+        return res.status(400).json({ error: 'audio is not valid base64', code: 'invalid-audio' });
+      }
+      if (sample.length > MAX_VOICE_SAMPLE_BYTES) {
+        return res
+          .status(413)
+          .json({ error: 'The voice sample is too large', code: 'audio-too-large' });
+      }
+      const safeName =
+        typeof filename === 'string' ? filename.replace(/[^\w.-]/g, '_').slice(-100) : '';
+      const extension = safeName.includes('.') ? safeName.split('.').pop().toLowerCase() : 'wav';
+      if (!VOICE_SAMPLE_EXTENSIONS.includes(extension)) {
+        return res
+          .status(400)
+          .json({ error: 'Unsupported audio file type', code: 'invalid-audio' });
+      }
+      const voiceLanguages = Array.isArray(languages)
+        ? [...new Set(languages.filter(l => TTS_LANGUAGES.includes(l)))]
+        : [];
+      const voiceGender = gender === 'male' || gender === 'female' ? gender : undefined;
+
+      try {
+        const voice = await resolved.provider.createVoice(resolved.cfg, {
+          name: voiceName,
+          audio: sample,
+          filename: safeName.includes('.') ? safeName : `sample.${extension}`,
+          languages: voiceLanguages,
+          gender: voiceGender
+        });
+        await logAudit({
+          req,
+          action: 'create',
+          resource: 'tts-voice',
+          resourceId: voice.id,
+          summary: `Created text-to-speech voice "${voiceName}" for model ${resolved.model.id}`
+        });
+        return res.json({ voice });
+      } catch (error) {
+        return sendVoicesError(res, error, 'create the voice');
+      }
+    }
+  );
+
+  /** DELETE /api/admin/models/:modelId/tts/voices/:voiceId — delete a custom voice. */
+  app.delete(
+    buildServerPath('/api/admin/models/:modelId/tts/voices/:voiceId'),
+    adminAuth,
+    async (req, res) => {
+      const resolved = resolveVoicesModel(req, res);
+      if (!resolved) return undefined;
+      const { voiceId } = req.params;
+      if (!/^[\w-]{1,100}$/.test(voiceId)) {
+        return res.status(400).json({ error: 'Invalid voice id', code: 'invalid-voice' });
+      }
+      try {
+        await resolved.provider.deleteVoice(resolved.cfg, voiceId);
+        await logAudit({
+          req,
+          action: 'delete',
+          resource: 'tts-voice',
+          resourceId: voiceId,
+          summary: `Deleted text-to-speech voice ${voiceId} of model ${resolved.model.id}`
+        });
+        return res.json({ deleted: voiceId });
+      } catch (error) {
+        return sendVoicesError(res, error, 'delete the voice');
+      }
+    }
+  );
+
   app.post(buildServerPath('/api/admin/models/:modelId/test'), adminAuth, async (req, res) => {
     try {
       const { modelId } = req.params;
@@ -580,6 +977,11 @@ export default function registerAdminModelsRoutes(app) {
       const model = models.find(m => m.id === modelId);
       if (!model) {
         return sendNotFound(res, 'Model');
+      }
+
+      // A text-to-speech model is tested by speaking a short sentence.
+      if (isTtsModel(model)) {
+        return testTtsModel(model, res);
       }
 
       try {

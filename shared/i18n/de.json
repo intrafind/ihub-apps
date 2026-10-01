@@ -508,44 +508,6 @@
     "thinkingLevelMedium": "Mittel",
     "thinkingLevelHigh": "Hoch"
   },
-  "citations": {
-    "preview": "Vorschau (PDF)",
-    "download": "Herunterladen",
-    "openInApp": "In App öffnen",
-    "details": "Details",
-    "fileType": "Dateityp",
-    "fileSize": "Dateigröße",
-    "author": "Autor",
-    "source": "Quelle",
-    "modified": "Geändert",
-    "indexed": "Indiziert",
-    "language": "Sprache",
-    "documentDetails": "Dokumentdetails",
-    "loading": "Wird geladen...",
-    "breadcrumbs": "Pfad",
-    "documents": "Dokumente",
-    "untitledDocument": "Dokument",
-    "referenced": "Referenziert",
-    "mentioned": "Erwähnt",
-    "showMoreDocuments_one": "{{count}} weiteres Dokument anzeigen",
-    "showMoreDocuments_other": "{{count}} weitere Dokumente anzeigen",
-    "showFewerDocuments": "Weniger Dokumente anzeigen",
-    "passages": "{{count}} Passage",
-    "passages_plural": "{{count}} Passagen",
-    "openExternal": "Im Browser öffnen",
-    "showInDocument": "Diese Textstelle im Dokument anzeigen",
-    "openExternalBlocked": "Das Dokument konnte nicht geöffnet werden – dieses Fenster hat es blockiert. Öffnen Sie es stattdessen über iHub im Browser.",
-    "openExternalUnavailable": "Für dieses Dokument gibt es keinen Link zum Öffnen.",
-    "downloadFailed": "Das Dokument konnte nicht heruntergeladen werden. Bitte erneut versuchen.",
-    "downloadUnavailable": "Dieses Dokument kann hier nicht heruntergeladen werden.",
-    "documentActionFailed": "Diese Aktion konnte nicht ausgeführt werden.",
-    "attachToMail": "An E-Mail anhängen",
-    "attachedToMail": "Als {{filename}} an Ihre E-Mail angehängt.",
-    "attachNeedsDraft": "Öffnen Sie zuerst eine neue E-Mail oder eine Antwort und hängen Sie das Dokument dort an.",
-    "attachTooLarge": "Dieses Dokument ist zu groß zum Anhängen. Laden Sie es stattdessen herunter.",
-    "attachUnavailable": "Dieses Dokument kann von hier aus nicht angehängt werden.",
-    "attachFailed": "Das Dokument konnte nicht an Ihre E-Mail angehängt werden."
-  },
   "chatMessage": {
     "user": "Du",
     "assistant": "Assistent",
@@ -599,7 +561,13 @@
       "expired": "Diese Datei ist nicht mehr verfügbar",
       "failed": "Download fehlgeschlagen. Bitte versuchen Sie es erneut.",
       "notKept": "Diese Datei wurde nicht mit dem Chat gespeichert"
-    }
+    },
+    "readAloud": "Vorlesen",
+    "readAloudLoading": "Audio wird geladen… Klicken zum Abbrechen",
+    "readAloudPause": "Pausieren",
+    "readAloudResume": "Fortsetzen",
+    "readAloudStop": "Vorlesen beenden",
+    "readAloudError": "Vorlesen fehlgeschlagen: {{error}}"
   },
   "errors": {
     "componentError": "Komponenten-Fehler",
@@ -991,7 +959,7 @@
         },
         "recording": {
           "title": "Aufnahme (aufnehmen → transkribieren)",
-          "description": "Nehmen Sie einen kurzen Clip auf (bis zu {{seconds}} Sekunden) und lassen Sie ihn von einem Transkriptionsmodell transkribieren – genau wie mit der Aufnahme-Schaltfläche im Chat.",
+          "description": "Nehmen Sie einen kurzen Clip auf (bis zu {{seconds}} Sekunden) und lassen Sie ihn über dieselbe Verbindung wie im Chat von einem Transkriptionsmodell transkribieren – mit der Dauer bis zum Transkript.",
           "model": "Transkriptionsmodell",
           "platformDefault": "Plattform-Standard",
           "start": "Aufnahme starten",
@@ -1002,6 +970,20 @@
           "noText": "Das Modell hat keinen Text geliefert. Prüfen Sie mit dem Mikrofon-Check, ob das Mikrofon Ton aufnimmt.",
           "empty": "Es wurde nichts aufgenommen."
         }
+      },
+      "tts": {
+        "title": "Vorlesen (Sprachausgabe)",
+        "description": "Fügt jeder Chat-Nachricht eine Wiedergabe-Schaltfläche hinzu. Die Nachricht wird vom unten gewählten Sprachausgabemodell gesprochen, und das Audio wird gestreamt, während es erzeugt wird. Nutzer sehen die Schaltfläche nur, wenn ihre Gruppen das Modell verwenden dürfen; eine App schaltet sie mit features.textToSpeech: false ab.",
+        "enabled": "Vorlese-Schaltfläche an Chat-Nachrichten anzeigen",
+        "model": "Sprachausgabemodell",
+        "modelDisabled": "deaktiviert",
+        "modelMissing": "Dieses Modell existiert nicht mehr, daher wird keine Vorlese-Schaltfläche angezeigt.",
+        "modelDisabledHint": "Dieses Modell ist deaktiviert, daher wird keine Vorlese-Schaltfläche angezeigt. Aktivieren Sie es unter Admin → Modelle und hinterlegen Sie einen API-Schlüssel.",
+        "noModelHint": "Wählen Sie ein Modell, sonst wird keine Vorlese-Schaltfläche angezeigt.",
+        "modelHint": "Modelle vom Typ „Sprachausgabe (TTS)“ aus Admin → Modelle. Die Stimme wird am Modell eingestellt.",
+        "test": "Test",
+        "testHint": "Spricht den Text mit dem gewählten Modell, so wie eine Chat-Nachricht vorgelesen wird. Funktioniert schon vor dem Speichern, das Modell muss aber aktiviert sein.",
+        "sampleText": "Hallo! So klingen Antworten, wenn sie vorgelesen werden."
       }
     },
     "agents": {
@@ -1079,7 +1061,8 @@
         "info": {
           "title": "Über Anbieter-API-Schlüssel",
           "description": "API-Schlüssel, die hier konfiguriert werden, werden als Fallback für alle Modelle dieses Anbieters verwendet, die keinen eigenen API-Schlüssel konfiguriert haben. Wenn Sie dieses Feld leer lassen, verwendet das System stattdessen die Umgebungsvariable."
-        }
+        },
+        "subtitle": "Diesen Anbieter und seinen API-Schlüssel konfigurieren"
       },
       "create": {
         "title": "Neuen Anbieter erstellen",
@@ -1095,7 +1078,10 @@
         "enabled": "Anbieter aktiviert",
         "cancel": "Abbrechen",
         "save": "Anbieter erstellen",
-        "saving": "Wird erstellt..."
+        "saving": "Wird erstellt...",
+        "llmHelp": "Ein LLM-Anbieter hält einen API-Schlüssel für alle seine Modelle. Verknüpfen Sie Modelle im Modell-Editor mit ihm oder importieren Sie sie von seinem Endpunkt.",
+        "nameRequired": "Der Name des Anbieters ist erforderlich",
+        "subtitle": "Legen Sie einen LLM-Anbieter für einen eigenen Endpunkt, einen Websuche-Anbieter oder einen allgemeinen API-Schlüssel an"
       },
       "info": {
         "title": "API-Schlüssel-Priorität",
@@ -1132,6 +1118,36 @@
         "testFailed": "Test fehlgeschlagen",
         "hideResults": "Ergebnisse ausblenden",
         "showResults": "Ergebnisse anzeigen"
+      },
+      "deleteConfirm": "Anbieter „{{name}}“ löschen?",
+      "fields": {
+        "name": "Name",
+        "id": "ID",
+        "description": "Beschreibung",
+        "apiType": "API-Typ",
+        "baseUrl": "Basis-URL"
+      },
+      "hints": {
+        "apiType": "Welche API der Endpunkt spricht. Gateways wie T-Systems LLM Hub sind OpenAI-kompatibel; für einen selbst betriebenen vLLM-Server vLLM wählen.",
+        "apiTypeBuiltIn": "Integrierte Anbieter sprechen immer ihre eigene API.",
+        "baseUrl": "Optional. Die API-Basis, von der beim Import die Modelle des Anbieters gelesen werden."
+      },
+      "apiTypes": {
+        "openai": "OpenAI-kompatibel (OpenAI, LLM Hub, LM Studio, …)",
+        "local": "vLLM / selbst betrieben (local)",
+        "mistral": "Mistral",
+        "openai-responses": "OpenAI Responses API",
+        "anthropic": "Anthropic",
+        "google": "Google Gemini",
+        "bedrock": "AWS Bedrock"
+      },
+      "linkedModels": {
+        "title": "Verknüpfte Modelle",
+        "description": "Diese Modelle verwenden den API-Schlüssel dieses Anbieters, sofern sie keinen eigenen haben.",
+        "import": "Modelle importieren",
+        "none": "Mit diesem Anbieter sind keine Modelle verknüpft.",
+        "count": "{{count}} verknüpft, {{enabled}} aktiv",
+        "more": "+{{count}} weitere"
       }
     },
     "models": {
@@ -1250,7 +1266,11 @@
         "thinkingLevelLow": "Niedrig",
         "thinkingLevelMedium": "Mittel",
         "thinkingLevelHigh": "Hoch",
-        "thinkingThoughts": "Reasoning anzeigen"
+        "thinkingThoughts": "Reasoning anzeigen",
+        "ttsVoice": "Stimme",
+        "ttsVoices": "Stimmen pro Sprache",
+        "ttsVoiceLanguage": "Sprache",
+        "customProviders": "Eigene Anbieter"
       },
       "hints": {
         "modelId": "Eindeutige Kennung für das Modell (kann nach der Erstellung nicht geändert werden)",
@@ -1262,7 +1282,7 @@
         "supportsAudio": "Aktivieren, wenn dieses Modell Audioeingaben verarbeiten kann",
         "supportsImageGeneration": "Aktivieren, wenn dieses Modell Bilder erzeugen kann (z.B. Gemini Bildmodelle)",
         "maxReferenceImages": "Maximale Anzahl von Referenzbildern (1-14)",
-        "modelType": "Chat-Modelle beantworten Prompts. Transkriptionsmodelle wandeln Audio über einen Echtzeit-Endpunkt (z. B. Voxtral) in Text um.",
+        "modelType": "Chat-Modelle beantworten Prompts. Transkriptionsmodelle wandeln Audio über einen Echtzeit-Endpunkt (z. B. Voxtral) in Text um. Sprachausgabemodelle lesen Chat-Nachrichten vor (z. B. Voxtral TTS).",
         "realtimeUrl": "WebSocket-URL des vLLM-Echtzeit-Endpunkts. Sie bleibt serverseitig und erreicht niemals den Browser.",
         "nativeWebSearch": "Apps mit Websuche verwenden auf diesem Modell die integrierte Suche des Anbieters. Für Modelle oder Gateways ohne Unterstützung ausschalten; sie greifen dann auf Brave Search zurück.",
         "promptCachingOpenAI": "Sendet einen Cache-Schlüssel, damit Anfragen mit gleichem Prompt-Anfang den Cache von OpenAI wiederverwenden. Für api.openai.com standardmäßig an; für OpenAI-kompatible Server ausschalten, die unbekannte Parameter ablehnen.",
@@ -1272,7 +1292,12 @@
         "thinkingEnabled": "Das Modell vor der Antwort nachdenken lassen. Das Reasoning wird getrennt von der Antwort zurückgegeben; ohne diese Option schreibt ein Reasoning-Modell seine Gedanken stattdessen in den Antworttext.",
         "thinkingLevel": "Wird als reasoning_effort (OpenAI, vLLM) bzw. thinkingLevel (Gemini) gesendet. Server ohne Unterstützung ignorieren den Wert — beim Provider-Standard belassen, sofern das Modell diese Stufen nicht dokumentiert.",
         "thinkingThoughts": "Das Reasoning Nutzern hinter dem Umschalter „Denkprozess anzeigen“ zugänglich machen. Zum Verbergen deaktivieren.",
-        "maxOutputTokens": "Leer bedeutet der Standardwert ({{value}}), nicht unbegrenzt. Reasoning-Modelle verbrauchen ihre Denk-Tokens aus diesem Limit – halten Sie es deutlich über der längsten erwarteten Antwort."
+        "maxOutputTokens": "Leer bedeutet der Standardwert ({{value}}), nicht unbegrenzt. Reasoning-Modelle verbrauchen ihre Denk-Tokens aus diesem Limit – halten Sie es deutlich über der längsten erwarteten Antwort.",
+        "ttsUrl": "Sprach-Endpunkt des Anbieters. Er bleibt auf dem Server und erreicht nie den Browser.",
+        "ttsVoice": "Stimmen-ID des Anbieters: eine Mistral-Vorlage wie en_paul_neutral, gb_jane_neutral oder fr_marie_neutral oder die ID einer in Ihrem Mistral-Konto gespeicherten Stimme. Leer verwendet en_paul_neutral.",
+        "ttsVoices": "Eine Nachricht in einer dieser Sprachen wird mit der zugeordneten Stimme gelesen; alle anderen Sprachen verwenden die Stimme oben. Die Sprache wird an der Nachricht selbst erkannt.",
+        "ttsVoicesAfterSave": "Speichern Sie das Modell einmal, um hier die Stimmen des Anbieters anzuzeigen und eigene Stimmen anzulegen.",
+        "linkedProvider": "Verwendet den API-Schlüssel des Anbieters „{{provider}}“ und dessen API-Typ ({{apiType}})."
       },
       "placeholders": {
         "maxOutputTokens": "Standard: {{value}}",
@@ -1281,7 +1306,8 @@
         "apiUrl": "https://api.anbieter.com/v1/chat/completions",
         "apiKey": "API-Schlüssel eingeben (optional - verwendet Umgebungsvariable, wenn nicht gesetzt)",
         "apiKeySet": "API-Schlüssel ist gesetzt (leer lassen, um aktuellen zu behalten)",
-        "realtimeUrl": "ws://host:8080/v1/realtime"
+        "realtimeUrl": "ws://host:8080/v1/realtime",
+        "ttsVoiceId": "Stimmen-ID"
       },
       "sections": {
         "imageGeneration": "Bilderzeugungseinstellungen",
@@ -1295,12 +1321,114 @@
       },
       "modelType": {
         "chat": "Chat",
-        "transcription": "Transkription"
+        "transcription": "Transkription",
+        "tts": "Sprachausgabe (TTS)"
       },
       "imageQuality": {
         "low": "Niedrig (1K)",
         "medium": "Mittel (2K)",
         "high": "Hoch (4K)"
+      },
+      "ttsVoices": {
+        "addLanguage": "+ Stimme für eine Sprache hinzufügen",
+        "removeLanguage": "Entfernen",
+        "title": "Verfügbare Stimmen",
+        "load": "Stimmen anzeigen",
+        "reload": "Neu laden",
+        "loadError": "Stimmen konnten nicht geladen werden",
+        "custom": "Eigene Stimmen",
+        "noCustom": "Noch keine eigenen Stimmen. Legen Sie unten eine an.",
+        "presets": "Vorlage-Stimmen ({{count}})",
+        "useDefault": "Als Stimme verwenden",
+        "useFor": "Für {{language}} verwenden",
+        "deleteConfirm": "Die Stimme „{{name}}“ im Anbieterkonto löschen? Modelle, die sie verwenden, können dann nicht mehr mit ihr sprechen.",
+        "deleteError": "Die Stimme konnte nicht gelöscht werden",
+        "createTitle": "Eigene Stimme anlegen",
+        "createHint": "Nehmen Sie 10–30 Sekunden einer Person auf, die natürlich spricht, ohne Musik oder Hintergrundgeräusche, oder laden Sie eine solche Aufnahme hoch. Die Stimme wird sofort im Anbieterkonto angelegt; sie liest jede Sprache, mit dem Akzent der Aufnahme.",
+        "name": "Name",
+        "namePlaceholder": "z. B. Anna (Deutsch)",
+        "gender": "Geschlecht (optional)",
+        "female": "Weiblich",
+        "male": "Männlich",
+        "languages": "Sprache der Aufnahme",
+        "record": "Mit Mikrofon aufnehmen",
+        "stopRecording": "Aufnahme beenden ({{seconds}} s)",
+        "upload": "Audiodatei hochladen",
+        "recorded": "Aufnahme",
+        "emptyRecording": "Es wurde nichts aufgenommen.",
+        "fileTooLarge": "Die Datei ist größer als 10 MB.",
+        "fileUnreadable": "Diese Datei konnte nicht als Audio gelesen werden.",
+        "tooShort": "Die Aufnahme ist kürzer als {{seconds}} Sekunden; nehmen Sie etwas mehr auf.",
+        "consent": "Die Person in dieser Aufnahme ist damit einverstanden, dass ihre Stimme nachgebildet und zum Vorlesen von Antworten verwendet wird.",
+        "create": "Stimme anlegen",
+        "creating": "Wird angelegt…",
+        "createError": "Die Stimme konnte nicht angelegt werden",
+        "created": "Stimme „{{name}}“ angelegt ({{id}}). Verwenden Sie sie unten und speichern Sie dann das Modell."
+      },
+      "import": {
+        "button": "Von URL importieren",
+        "title": "Modelle von URL importieren",
+        "subtitle": "Liest die Modellliste eines OpenAI-kompatiblen, vLLM-, Mistral-, Anthropic- oder Google-Endpunkts und legt die ausgewählten Modelle an.",
+        "provider": "Anbieter",
+        "newProvider": "+ Neuer Anbieter",
+        "providerHint": "Der Anbieter hält den API-Schlüssel für alle importierten Modelle. Legen Sie für einen neuen Endpunkt, z. B. T-Systems LLM Hub, einen neuen an.",
+        "usesProviderKey": "Der beim Anbieter gespeicherte API-Schlüssel wird verwendet.",
+        "noProviderKey": "Beim Anbieter ist kein API-Schlüssel gespeichert: Seine Umgebungsvariable wird verwendet, falls gesetzt, sonst wird der Endpunkt ohne Schlüssel aufgerufen.",
+        "url": "Endpunkt-URL",
+        "urlHint": "Die API-Basis (…/v1), ihre /models-Liste oder eine Chat-Completions-URL. iHub liest die Modellliste von /models.",
+        "apiKey": "API-Schlüssel",
+        "apiKeyHint": "Optional. Wird verschlüsselt beim neuen Anbieter gespeichert, nicht bei den Modellen. Für Endpunkte ohne Authentifizierung, z. B. einen lokalen vLLM-Server, leer lassen.",
+        "loadModels": "Modelle laden",
+        "loading": "Modelle werden geladen…",
+        "found": "{{count}} Modelle unter {{url}}",
+        "changeConnection": "Endpunkt ändern",
+        "idPrefix": "ID-Präfix",
+        "enableModels": "Importierte Modelle aktivieren",
+        "noModels": "Der Endpunkt listet keine Modelle.",
+        "selectAll": "Alle Chat-Modelle auswählen",
+        "model": "Modell",
+        "context": "Kontext",
+        "targetId": "iHub-Modell-ID",
+        "targetIdFor": "iHub-Modell-ID für {{name}}",
+        "vision": "Bilder",
+        "alreadyAdded": "Bereits angelegt als {{id}}",
+        "endOfLife": "Abkündigung: {{date}}",
+        "importCount": "{{count}} Modelle importieren",
+        "importing": "Wird importiert…",
+        "doneSummary": "{{ok}} von {{total}} Modellen in {{provider}} importiert.",
+        "providerCreated": "Der Anbieter „{{provider}}“ wurde angelegt und hält den API-Schlüssel. Sie verwalten ihn unter Anbieter.",
+        "testHint": "Prüfen Sie jedes Modell mit „Testen“ in der Modellliste und ergänzen Sie Angaben, die der Endpunkt nicht liefert, etwa die Tool-Unterstützung.",
+        "types": {
+          "embedding": "Embedding",
+          "rerank": "Reranker",
+          "audio": "Audio",
+          "image": "Bild",
+          "moderation": "Moderation",
+          "other": "Kein Chat-Modell"
+        },
+        "errors": {
+          "idInvalid": "Nur Kleinbuchstaben, Ziffern, Punkte, Binde- und Unterstriche verwenden.",
+          "idExists": "Ein Modell mit dieser ID existiert bereits.",
+          "idDuplicate": "Zwei ausgewählte Modelle würden diese ID erhalten.",
+          "providerIdInvalid": "Nur Kleinbuchstaben, Ziffern, Punkte, Binde- und Unterstriche verwenden.",
+          "providerIdExists": "Ein Anbieter mit dieser ID existiert bereits. Wählen Sie ihn oben aus oder vergeben Sie eine andere ID.",
+          "providerCreateFailed": "Der Anbieter konnte nicht angelegt werden: {{error}}",
+          "invalidUrl": "Geben Sie eine gültige http://- oder https://-URL ein",
+          "credentialsInUrl": "Entfernen Sie die Zugangsdaten aus der URL und tragen Sie den Schlüssel im Feld API-Schlüssel ein",
+          "unsupportedProvider": "Der Modellimport unterstützt diesen API-Typ nicht",
+          "apiKeyRequired": "Der Endpunkt erfordert einen API-Schlüssel",
+          "authenticationFailed": "Der Endpunkt hat den API-Schlüssel abgelehnt",
+          "accessDenied": "Zugriff durch den Endpunkt verweigert",
+          "notFound": "Unter dieser URL gibt es keine Modellliste",
+          "redirected": "Der Endpunkt hat die Anfrage umgeleitet",
+          "upstreamError": "Der Endpunkt hat mit einem Fehler geantwortet",
+          "invalidResponse": "Der Endpunkt hat keine Modellliste geliefert",
+          "timeout": "Der Endpunkt hat nicht rechtzeitig geantwortet",
+          "connectionRefused": "Verbindung abgelehnt",
+          "hostNotFound": "Host nicht gefunden",
+          "networkError": "Netzwerkfehler",
+          "providerIdReserved": "Diese ID ist der Name eines API-Typs. Wählen Sie eine andere ID."
+        }
       }
     },
     "chat": {
@@ -2919,7 +3047,7 @@
         "iassistantSystemPromptPreamble": "System-Prompt-Präambel",
         "iassistantSystemPromptPreambleDesc": "Die Prompt-Präambel, die im Response-State-System-Prompt verwendet wird. Ideal zum Ändern der Identität des iAssistant. Unterstützt Prompt-Variablen wie {{user_name}}, {{user_email}}, {{date}} sowie eigene globale Variablen. Mit Vorsicht verwenden.",
         "transcription": "Transkription",
-        "transcriptionDesc": "Hochgeladene Audiodateien, hochgeladene Videos oder eine Browser-Aufnahme mit einem selbst gehosteten Transkriptionsmodell (z. B. Voxtral) transkribieren und das Ergebnis als Chat-Antwort anzeigen.",
+        "transcriptionDesc": "Hochgeladene Audiodateien, hochgeladene Videos oder eine Browser-Aufnahme mit einem Transkriptionsmodell (z. B. Voxtral) in Text umwandeln. Der Text wird zur Nachricht des Nutzers, die das Chat-Modell beantwortet.",
         "enableTranscription": "Transkription aktivieren",
         "transcriptionModel": "Transkriptionsmodell",
         "selectTranscriptionModel": "Modell auswählen…",
@@ -4393,10 +4521,14 @@
     "scheduled": "Geplant"
   },
   "transcription": {
-    "record": "Audio zum Transkribieren aufnehmen",
-    "stopRecording": "Aufnahme beenden & transkribieren",
+    "record": "Nachricht einsprechen",
+    "stopRecording": "Aufnahme beenden und senden",
     "recording": "Aufnahme",
-    "empty": "_(Keine Sprache erkannt)_",
+    "listening": "Hört zu…",
+    "transcribing": "Wird transkribiert…",
+    "transcriptOf": "Transkript von {{name}}:",
+    "noSpeechInFile": "(keine Sprache erkannt)",
+    "partialInInput": "Der bisher transkribierte Text steht im Eingabefeld.",
     "errors": {
       "noModel": "Für diese App ist kein Transkriptionsmodell konfiguriert.",
       "decode": "Diese Audiodatei konnte im Browser nicht dekodiert werden. Das Format oder der Codec wird möglicherweise nicht unterstützt (z. B. OGG in Safari).",
@@ -4404,6 +4536,7 @@
       "notReady": "Der Transkriptionsdienst war nicht bereit. Bitte überprüfen Sie die Modellkonfiguration und versuchen Sie es erneut.",
       "connection": "Der Transkriptionsdienst konnte nicht erreicht werden. Bitte versuchen Sie es später erneut.",
       "timeout": "Zeitüberschreitung bei der Transkription. Die Datei ist möglicherweise zu lang.",
+      "interrupted": "Die Transkription wurde unterbrochen, bevor sie abgeschlossen war.",
       "aborted": "Die Transkription wurde abgebrochen.",
       "serverTooLong": "Diese Aufnahme ist zu lang für das konfigurierte Transkriptionsmodell. Bitte teilen Sie sie in kürzere Abschnitte auf.",
       "serverBusy": "Der Transkriptionsdienst ist derzeit ausgelastet. Bitte versuchen Sie es in einem Moment erneut.",
@@ -4413,11 +4546,11 @@
       "tooLong": "Diese Audiodatei ist {{duration}} s lang und überschreitet das Limit von {{max}} s für die Transkription.",
       "mic": "Auf das Mikrofon konnte nicht zugegriffen werden. Bitte erteilen Sie die Berechtigung und versuchen Sie es erneut.",
       "busy": "Es läuft bereits eine Transkription. Bitte zuerst stoppen.",
-      "interrupted": "Die Transkription wurde unterbrochen — das Transkript ist möglicherweise unvollständig.",
+      "noSpeech": "Es wurde keine Sprache erkannt. Es wurde nichts gesendet.",
       "audioNeedsTranscription": "Das ausgewählte Chat-Modell kann Audio nicht direkt verarbeiten. Aktivieren Sie die Transkription im Aktionsmenü oder entfernen Sie den Audio-Anhang."
     },
     "toggleLabel": "Transkription",
-    "toggleDescription": "Hochgeladene Audio-/Videodateien mit dem Transkriptionsmodell statt dem Chat-Modell transkribieren"
+    "toggleDescription": "Hochgeladene Audio- und Videodateien werden in Ihre Nachricht transkribiert, und das Chat-Modell beantwortet den Text"
   },
   "documentPreview": {
     "title": "Dokumentvorschau",
@@ -4625,7 +4758,7 @@
     "connected": "{{name}} ist verbunden. Senden Sie Ihre Anfrage erneut, um es zu nutzen.",
     "failed": "Das Verbinden von {{name}} hat nicht geklappt. Bitte erneut versuchen."
   },
-  "webSources": {
+  "sources": {
     "title": "Quellen",
     "searchedFor": "Gesucht nach „{{query}}“",
     "searches_one": "{{count}} Suche",
@@ -4636,7 +4769,44 @@
     "cited": "In dieser Antwort zitiert",
     "noneCited": "Die Antwort zitiert keine der Quellen direkt.",
     "considered": "Ebenfalls berücksichtigt",
-    "opensInNewTab": "(öffnet in einem neuen Tab)"
+    "opensInNewTab": "(öffnet in einem neuen Tab)",
+    "untitled": "Ohne Titel",
+    "passages_one": "{{count}} Textstelle",
+    "passages_other": "{{count}} Textstellen",
+    "showInDocument": "Diese Textstelle im Dokument anzeigen",
+    "actions": "Aktionen",
+    "actionsFor": "Aktionen für {{title}}",
+    "openExternal": "Im Browser öffnen",
+    "preview": "Vorschau (PDF)",
+    "download": "Herunterladen",
+    "attachToMail": "An E-Mail anhängen",
+    "openInApp": "In App öffnen",
+    "details": "Details",
+    "copyLink": "Link kopieren",
+    "linkCopied": "Link kopiert.",
+    "attachedToMail": "Als {{filename}} an Ihre E-Mail angehängt.",
+    "openUnavailable": "Für diese Quelle gibt es keinen Link zum Öffnen.",
+    "openBlocked": "Der Link konnte nicht geöffnet werden – dieses Fenster hat ihn blockiert. Öffnen Sie ihn stattdessen über iHub im Browser.",
+    "downloadUnavailable": "Dieses Dokument kann hier nicht heruntergeladen werden.",
+    "downloadFailed": "Das Dokument konnte nicht heruntergeladen werden. Bitte erneut versuchen.",
+    "attachNeedsDraft": "Öffnen Sie zuerst eine neue E-Mail oder eine Antwort und hängen Sie das Dokument dort an.",
+    "attachTooLarge": "Dieses Dokument ist zu groß zum Anhängen. Laden Sie es stattdessen herunter.",
+    "attachUnavailable": "Dieses Dokument kann von hier aus nicht angehängt werden.",
+    "attachFailed": "Das Dokument konnte nicht an Ihre E-Mail angehängt werden.",
+    "copyFailed": "Der Link konnte nicht kopiert werden.",
+    "actionFailed": "Diese Aktion konnte nicht ausgeführt werden.",
+    "documentDetails": "Details",
+    "fileType": "Dateityp",
+    "fileSize": "Dateigröße",
+    "author": "Autor",
+    "source": "Quelle",
+    "modified": "Geändert",
+    "indexed": "Indiziert",
+    "language": "Sprache",
+    "breadcrumbs": "Pfad",
+    "loading": "Wird geladen…",
+    "detailsUnavailable": "Keine weiteren Details verfügbar.",
+    "documentFromSource": "Dokument"
   },
   "prompts": {
     "actions": {

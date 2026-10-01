@@ -340,6 +340,9 @@ class PromptService {
       if (msg.imageData) processedMsg.imageData = msg.imageData;
       if (msg.fileData) processedMsg.fileData = msg.fileData;
       if (msg.audioData) processedMsg.audioData = msg.audioData;
+      // The text holds the transcript of uploaded audio (the chat's
+      // transcription): the answer is based on that recording.
+      if (msg.audioTranscript === true) processedMsg.audioTranscript = true;
       return processedMsg;
     });
 

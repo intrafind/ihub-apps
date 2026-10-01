@@ -32,6 +32,7 @@ import { activeRequests, routeEnvelope } from '../../sse.js';
 import PromptService from '../../services/PromptService.js';
 import { LLM_ERROR_CODES } from '../../services/loop/contracts/errors.js';
 import {
+  fakeResponse,
   makeClient,
   sseResponse,
   textResponse,
@@ -48,6 +49,7 @@ const {
   TOOL_STARTED,
   TOOL_PROGRESS,
   TOOL_COMPLETED,
+  SOURCES_ADDED,
   INTERACTION_RAISED,
   STREAM_ERROR
 } = SSE_V2_EVENTS;
@@ -290,6 +292,11 @@ function assertLedger(runLog, summary, { status, finishReason, errorCode } = {})
   assert.ok(Number.isInteger(end.durationMs) && end.durationMs >= 0);
   if (errorCode) assert.equal(end.error.code, errorCode);
   else assert.equal(end.error, undefined);
+  assert.deepEqual(
+    end.knowledgeSources,
+    summary.knowledgeSources,
+    'the ledger keeps the sources run/ended reported, so a replay badges the answer the same way'
+  );
 }
 
 // ── tool definitions ────────────────────────────────────────────────────────
@@ -297,6 +304,8 @@ function assertLedger(runLog, summary, { status, finishReason, errorCode } = {})
 const webSearchTool = {
   id: 'webSearch',
   name: 'webSearch',
+  // Runs the platform's own web search script: its hits are public.
+  script: 'braveSearch.js',
   description: 'search the web',
   parameters: { type: 'object', properties: { query: { type: 'string' } } }
 };
@@ -358,7 +367,7 @@ test('no tools, streaming: run/started → step/delta×2 → step/completed → 
   const ended = frame(frames, RUN_ENDED).data;
   assert.equal(ended.status, 'completed');
   assert.equal(ended.finishReason, 'stop');
-  assert.deepEqual(ended.knowledgeSources, [], 'no badge without a source');
+  assert.deepEqual(ended.knowledgeSources, ['llm'], 'no other source → named as the model itself');
   assert.equal(ended.toolName, undefined);
   assert.equal(ended.error, undefined);
   assert.equal(ended.usage.source, 'estimate', 'no provider usage on the wire → estimated');
@@ -369,7 +378,7 @@ test('no tools, streaming: run/started → step/delta×2 → step/completed → 
   assert.equal(summary.status, 'completed');
   assert.equal(summary.content, 'Hello there');
   assert.equal(summary.finishReason, 'stop');
-  assert.deepEqual(summary.knowledgeSources, []);
+  assert.deepEqual(summary.knowledgeSources, ['llm']);
   assert.equal(requests.length, 1);
   assert.equal(requests[0].request.body.tools, undefined, 'no tools offered');
 
@@ -555,7 +564,25 @@ test('no tools: a message carrying audioData ends with run/ended.knowledgeSource
   const none = await sourcesEmittedFor(t, 'audio-empty', [
     { role: 'user', content: 'Hello', audioData: [] }
   ]);
-  assert.deepEqual(none.ended.knowledgeSources, []);
+  assert.deepEqual(none.ended.knowledgeSources, ['llm']);
+});
+
+test('no tools: a message holding the transcript of uploaded audio ends with knowledgeSources ["audio"]', async t => {
+  const transcript = await sourcesEmittedFor(t, 'audio-transcript', [
+    {
+      role: 'user',
+      content: 'Summarize the call\n\nTranscript of call.mp3:\nWe agreed to ship on Friday.',
+      audioTranscript: true
+    }
+  ]);
+  assert.deepEqual(transcript.ended.knowledgeSources, ['audio']);
+
+  // Only the flag counts — a message that merely mentions a transcript is text,
+  // answered from the model's own knowledge.
+  const text = await sourcesEmittedFor(t, 'audio-transcript-text', [
+    { role: 'user', content: 'Transcript of call.mp3: we agreed', audioTranscript: 'yes' }
+  ]);
+  assert.deepEqual(text.ended.knowledgeSources, ['llm']);
 });
 
 test('no tools: an open email yields knowledgeSources ["email"]; email + upload yields both', async t => {
@@ -603,7 +630,7 @@ test('no tools: added emails and an open meeting each yield knowledgeSources ["e
 
 // ── 4. tool round ───────────────────────────────────────────────────────────
 
-test('tools path: step/completed{tool_calls} → tool/started → tool/completed → step/delta → step/completed → run/ended{websearch}; runTool gets the chat context; telemetry per model call', async t => {
+test('tools path: step/completed{tool_calls} → tool/started → tool/completed → sources/added → step/delta → step/completed → run/ended{websearch}; runTool gets the chat context; telemetry per model call', async t => {
   const chatId = newChatId('tools');
   const frames = captureFrames(t, chatId);
   const { service, requests, runTool, logInteraction, telemetry, runLog } = makeService(
@@ -620,10 +647,19 @@ test('tools path: step/completed{tool_calls} → tool/started → tool/completed
     STEP_COMPLETED,
     TOOL_STARTED,
     TOOL_COMPLETED,
+    SOURCES_ADDED,
     STEP_DELTA,
     STEP_COMPLETED,
     RUN_ENDED
   ]);
+  // A web search reports what it searched for, even when it found no pages.
+  assert.deepEqual(frame(frames, SOURCES_ADDED).data, {
+    step: 1,
+    callId: 'call_1',
+    toolId: 'webSearch',
+    items: [],
+    queries: ['berlin']
+  });
 
   const [round1, round2] = framesOf(frames, STEP_COMPLETED).map(f => f.data);
   assert.equal(round1.step, 1);
@@ -699,7 +735,7 @@ test('tools path: step/completed{tool_calls} → tool/started → tool/completed
   assert.deepEqual(endOutcomes(telemetry), ['completed', 'completed']);
 });
 
-test('search tool: tool/completed carries the pages found and read, even when the preview is truncated', async t => {
+test('search tool: sources/added carries the pages found and read, even when the preview is truncated', async t => {
   const chatId = newChatId('web-sources');
   const frames = captureFrames(t, chatId);
   const page = 'x'.repeat(5000);
@@ -729,14 +765,33 @@ test('search tool: tool/completed carries the pages found and read, even when th
 
   const done = frame(frames, TOOL_COMPLETED).data;
   assert.equal(typeof done.resultPreview, 'string', 'the preview itself is truncated text');
-  assert.deepEqual(done.webSources, [
-    { url: 'https://weather.example/berlin', title: 'Weather', read: true },
-    { url: 'https://news.example/', title: 'News', readFailed: true }
+  assert.equal(done.webSources, undefined, 'no second carrier for sources');
+  const found = frame(frames, SOURCES_ADDED).data;
+  assert.equal(found.callId, done.callId);
+  assert.deepEqual(found.items, [
+    {
+      id: 'url:weather.example/berlin',
+      provider: 'web',
+      kind: 'page',
+      title: 'Weather',
+      url: 'https://weather.example/berlin',
+      read: { ok: true },
+      private: false
+    },
+    {
+      id: 'url:news.example',
+      provider: 'web',
+      kind: 'page',
+      title: 'News',
+      url: 'https://news.example/',
+      read: { ok: false },
+      private: false
+    }
   ]);
 });
 
-test('iFinder tools: each call that finds documents sends the turn’s whole document list as tool/progress{citation}, with ACCESS links; a failed call sends none', async t => {
-  const chatId = newChatId('ifinder-citations');
+test('iFinder tools: each call that finds documents reports them as sources/added, with a ref for the provider’s actions; a failed search reports only its query', async t => {
+  const chatId = newChatId('ifinder-sources');
   const frames = captureFrames(t, chatId);
   const iFinderTool = name => ({
     id: name,
@@ -793,39 +848,48 @@ test('iFinder tools: each call that finds documents sends the turn’s whole doc
   });
 
   assertWellFormed(frames);
-  const citations = framesOf(frames, TOOL_PROGRESS).filter(f => f.data.phase === 'citation');
-  assert.equal(citations.length, 2, 'one frame per call that found documents');
+  const found = framesOf(frames, SOURCES_ADDED).map(f => f.data);
   assert.deepEqual(
-    citations.map(f => f.data.data.resultItems.map(item => item.document_id)),
-    [['sp-7f3a9c11'], ['sp-7f3a9c11', 'fs-0042aa99']]
+    found.map(f => [f.toolId, f.items.map(item => item.id), f.queries]),
+    [
+      ['iFinder_search', ['ifinder:sp-7f3a9c11'], ['acme']],
+      ['iFinder_getContent', ['ifinder:fs-0042aa99'], []],
+      ['iFinder_search', [], ['boom']]
+    ],
+    'one frame per call that found something; the facet lookup found no documents'
   );
-  const [contract, agreement] = citations[1].data.data.resultItems;
-  assert.deepEqual(contract.links, [
-    { type: 'ACCESS', documentId: 'sp-7f3a9c11', searchProfile: 'sales' }
-  ]);
-  assert.equal(
-    contract.additional_document_metadata['accessInfo.deepLink'],
-    'https://sp.example/acme.pdf'
-  );
-  assert.equal(agreement.title, 'Framework agreement');
+  assert.deepEqual(found[0].items[0], {
+    id: 'ifinder:sp-7f3a9c11',
+    provider: 'ifinder',
+    kind: 'document',
+    title: 'Supplier contract ACME',
+    url: 'https://sp.example/acme.pdf',
+    fileName: 'acme.pdf',
+    ref: { id: 'sp-7f3a9c11', scope: 'sales' },
+    private: true
+  });
+  assert.deepEqual(found[1].items[0].read, { ok: true });
+  assert.equal(found[1].items[0].title, 'Framework agreement');
   // Sent after the call it comes from has completed.
   const firstDone = frames.indexOf(frame(frames, TOOL_COMPLETED));
-  assert.ok(frames.indexOf(citations[0]) > firstDone);
-  // The summary the materializer stores carries the final list, so the
-  // reopened chat draws the same tiles.
+  assert.ok(frames.indexOf(framesOf(frames, SOURCES_ADDED)[0]) > firstDone);
+  // No second channel for documents any more.
+  assert.equal(framesOf(frames, TOOL_PROGRESS).filter(f => f.data.phase === 'citation').length, 0);
+  // The summary the materializer stores carries the whole set.
   assert.deepEqual(
-    summary.citations.resultItems.map(item => item.document_id),
-    ['sp-7f3a9c11', 'fs-0042aa99']
+    summary.sources.items.map(item => item.id),
+    ['ifinder:sp-7f3a9c11', 'ifinder:fs-0042aa99']
   );
-  assert.deepEqual(summary.citations.references, []);
+  assert.deepEqual(summary.sources.queries, ['acme', 'boom']);
 });
 
-test('a turn without iFinder documents has no citations on its summary', async t => {
-  const chatId = newChatId('no-citations');
-  captureFrames(t, chatId);
+test('a turn that found nothing has an empty source set on its summary', async t => {
+  const chatId = newChatId('no-sources');
+  const frames = captureFrames(t, chatId);
   const { service } = makeService([textTurn('Hello.')]);
   const summary = await runTurn(service, { chatId, prep: makePrep() });
-  assert.equal(summary.citations, null);
+  assert.deepEqual(summary.sources, { items: [], queries: [], supports: [] });
+  assert.equal(framesOf(frames, SOURCES_ADDED).length, 0);
 });
 
 // ── 5. tool failure ─────────────────────────────────────────────────────────
@@ -1163,7 +1227,7 @@ test('passthrough: tool text streams as step/delta, closes with tool/completed{a
   assert.equal(ended.status, 'completed');
   assert.equal(ended.finishReason, 'tool_passthrough_complete');
   assert.equal(ended.toolName, 'workflow_x');
-  assert.deepEqual(ended.knowledgeSources, []);
+  assert.deepEqual(ended.knowledgeSources, [], "the tool's answer, not the model's knowledge");
 
   assert.equal(requests.length, 1, 'the model gets no follow-up call');
   assert.equal(runTool.calls.length, 1);
@@ -1284,6 +1348,11 @@ test('abort mid-turn (stop button / disconnect): run/ended{aborted, connection_c
   assert.equal(ended.status, 'aborted');
   assert.equal(ended.finishReason, 'connection_closed');
   assert.equal(ended.error, undefined);
+  assert.equal(
+    ended.knowledgeSources,
+    undefined,
+    'nothing written: no answer to name a source for'
+  );
   assert.equal(has(frames, STREAM_ERROR), false, 'a cancelled turn is not an error');
   assert.equal(requests.length, 1);
   assert.ok(requests[0].ctx.signal.aborted, 'the loop signal is the tracked controller');
@@ -1291,10 +1360,59 @@ test('abort mid-turn (stop button / disconnect): run/ended{aborted, connection_c
   assert.equal(summary.status, 'aborted');
   assert.equal(summary.finishReason, 'connection_closed');
   assert.equal(summary.content, '');
+  assert.equal(summary.knowledgeSources, undefined);
   assertLedger(runLog, summary, { status: 'aborted', finishReason: 'connection_closed' });
   assert.deepEqual(logTypes(logInteraction), []);
   assert.deepEqual(endOutcomes(telemetry), ['aborted']);
   assert.equal(activeRequests.has(chatId), false, 'controller released after the turn');
+});
+
+test('abort after the answer started: run/ended{aborted} names the sources of the kept text; the ledger records them', async t => {
+  const chatId = newChatId('abort-partial');
+  const frames = captureFrames(t, chatId);
+  const { service, runLog } = makeService([
+    () => {
+      const wire = `data: ${JSON.stringify({
+        choices: [
+          { index: 0, delta: { role: 'assistant', content: 'Half an' }, finish_reason: null }
+        ]
+      })}\n\n`;
+      let sent = false;
+      // Pulled only when the reader asks, so the first chunk is handled before
+      // the stop.
+      const body = new ReadableStream(
+        {
+          pull(controller) {
+            if (!sent) {
+              sent = true;
+              controller.enqueue(new TextEncoder().encode(wire));
+              return;
+            }
+            // The user presses Stop once the first words are on screen.
+            activeRequests.get(chatId).abort();
+            controller.error(new DOMException('The operation was aborted.', 'AbortError'));
+          }
+        },
+        { highWaterMark: 0 }
+      );
+      return fakeResponse({
+        status: 200,
+        headers: { 'content-type': 'text/event-stream' },
+        body,
+        text: wire
+      });
+    }
+  ]);
+
+  const summary = await runTurn(service, { chatId, prep: makePrep() });
+
+  assertWellFormed(frames, { runId: summary.runId });
+  assert.ok(has(frames, STEP_DELTA), 'part of the answer reached the user');
+  const ended = frame(frames, RUN_ENDED).data;
+  assert.equal(ended.status, 'aborted');
+  assert.deepEqual(ended.knowledgeSources, ['llm']);
+  assert.deepEqual(summary.knowledgeSources, ['llm']);
+  assertLedger(runLog, summary, { status: 'aborted', finishReason: 'connection_closed' });
 });
 
 test('a new turn on the same chatId supersedes the previous in-flight controller', async t => {
@@ -1439,68 +1557,74 @@ test('image lift: a tool result carrying imageData reaches the model as "Retriev
   const done = frame(frames, TOOL_COMPLETED).data;
   assert.deepEqual(done.resultPreview, imageResult, 'the client sees the raw tool result');
   assert.equal(done.knowledgeSource, undefined, 'a fetch tool is not a knowledge source');
-  assert.deepEqual(frame(frames, RUN_ENDED).data.knowledgeSources, []);
+  assert.deepEqual(frame(frames, RUN_ENDED).data.knowledgeSources, ['llm']);
   assert.equal(summary.content, 'A cat.');
-  assert.deepEqual(summary.knowledgeSources, []);
+  assert.deepEqual(summary.knowledgeSources, ['llm']);
 });
 
-// ── 13. answer-source bookkeeping (resolveAnswerSources / getKnowledgeSources) ──
+// ── 13. answer-source bookkeeping (resolveAnswerSources / prep.promptSources) ──
 
-test('resolveAnswerSources merges loop and prompt sources, clears them and emits no frame of its own', t => {
+test('resolveAnswerSources merges loop and prompt sources, names the model itself without any, and emits no frame', t => {
   const chatId = newChatId('resolve');
   const frames = captureFrames(t, chatId);
   const service = new ChatService({ agentLoop: {}, logInteraction: async () => {} });
-  PromptService.trackPromptSources(chatId);
-  t.after(() => PromptService.resetPromptSources(chatId));
 
-  assert.deepEqual(service.getKnowledgeSources(chatId, ['file', 'sources']).sort(), [
-    'file',
-    'sources'
-  ]);
-
-  const resolved = service.resolveAnswerSources(chatId, ['file', 'grounding']);
+  const resolved = service.resolveAnswerSources(['file', 'grounding', 'file'], ['sources']);
   assert.deepEqual([...resolved].sort(), ['file', 'grounding', 'sources']);
-  assert.deepEqual(service.getKnowledgeSources(chatId), [], 'prompt sources cleared');
-  assert.deepEqual(PromptService.getPromptSources(chatId), []);
-
-  assert.deepEqual(service.resolveAnswerSources(chatId), [], 'idempotent: nothing stale');
-  assert.deepEqual(frames, [], 'pure bookkeeping — the badge rides on run/ended');
+  assert.deepEqual(service.resolveAnswerSources([], []), ['llm']);
+  assert.deepEqual(service.resolveAnswerSources(), ['llm']);
+  assert.deepEqual(
+    service.resolveAnswerSources([], [], { byModel: false }),
+    [],
+    "a passthrough answer is the tool's, not the model's knowledge"
+  );
+  assert.deepEqual(frames, [], 'pure — the badge rides on run/ended');
 });
 
-test('resolveAnswerSources returns nothing without sources and keeps conversations isolated', t => {
-  const chatA = newChatId('iso-a');
-  const chatB = newChatId('iso-b');
-  const framesA = captureFrames(t, chatA);
-  const framesB = captureFrames(t, chatB);
-  const service = new ChatService({ agentLoop: {}, logInteraction: async () => {} });
-  PromptService.trackPromptSources(chatA);
-  t.after(() => PromptService.resetPromptSources(chatA));
+test('prepareChatRequest takes the prompt sources noted for the chat with the request and leaves none behind', async t => {
+  const chatId = newChatId('prep-sources');
+  t.after(() => PromptService.resetPromptSources(chatId));
+  const builder = outcome => ({
+    prepareChatRequest: async params => {
+      // What PromptService does while it loads the app's sources into the prompt.
+      PromptService.trackPromptSources(params.chatId);
+      return outcome;
+    }
+  });
 
-  assert.deepEqual(service.getKnowledgeSources(chatB), []);
-  assert.deepEqual(service.resolveAnswerSources(chatB, []), []);
-  assert.deepEqual(service.resolveAnswerSources(chatA), ['sources']);
-  assert.deepEqual(PromptService.getPromptSources(chatA), []);
-  assert.deepEqual(framesA, []);
-  assert.deepEqual(framesB, []);
+  const service = new ChatService({
+    agentLoop: {},
+    logInteraction: async () => {},
+    requestBuilder: builder({ success: true, data: makePrep() })
+  });
+  const prep = await service.prepareChatRequest({ chatId });
+  assert.deepEqual(prep.data.promptSources, ['sources']);
+  assert.deepEqual(PromptService.getPromptSources(chatId), [], 'nothing left for another turn');
+
+  const failing = new ChatService({
+    agentLoop: {},
+    logInteraction: async () => {},
+    requestBuilder: builder({ success: false, error: new Error('no API key') })
+  });
+  const failed = await failing.prepareChatRequest({ chatId });
+  assert.equal(failed.success, false);
+  assert.deepEqual(PromptService.getPromptSources(chatId), [], 'nor after a failed request');
 });
 
-test('prompt sources tracked before a turn end up in run/ended.knowledgeSources and never leak into the next turn; seq keeps climbing across turns', async t => {
+test('prompt sources on the prep end up in run/ended.knowledgeSources and never leak into the next turn; seq keeps climbing across turns', async t => {
   const chatId = newChatId('prompt-sources');
   const frames = captureFrames(t, chatId);
   const { service } = makeService([textTurn('From the docs.'), textTurn('Plain.')]);
-  PromptService.trackPromptSources(chatId);
-  t.after(() => PromptService.resetPromptSources(chatId));
 
-  const first = await runTurn(service, { chatId, prep: makePrep() });
+  const first = await runTurn(service, { chatId, prep: makePrep({ promptSources: ['sources'] }) });
   assertWellFormed(frames, { runId: first.runId });
   assert.deepEqual(first.knowledgeSources, ['sources']);
   assert.deepEqual(frame(frames, RUN_ENDED).data.knowledgeSources, ['sources']);
   assert.deepEqual(
     frame(frames, STEP_COMPLETED).data.sources,
     [],
-    'prompt sources are chat bookkeeping, not loop sources'
+    'prompt sources are request bookkeeping, not loop sources'
   );
-  assert.deepEqual(PromptService.getPromptSources(chatId), [], 'reset after the turn');
   const lastSeq = frames.at(-1).seq;
 
   frames.length = 0;
@@ -1508,12 +1632,79 @@ test('prompt sources tracked before a turn end up in run/ended.knowledgeSources 
   assertWellFormed(frames, { runId: second.runId });
   assert.notEqual(second.runId, first.runId, 'every turn is its own run');
   assert.ok(frames[0].seq > lastSeq, 'seq is per stream, not per run');
-  assert.deepEqual(second.knowledgeSources, []);
+  assert.deepEqual(second.knowledgeSources, ['llm']);
   assert.deepEqual(
     frame(frames, RUN_ENDED).data.knowledgeSources,
-    [],
+    ['llm'],
     'no stale badge on the follow-up turn'
   );
+});
+
+test('a turn superseded after it started answering keeps its own sources; the newer turn keeps the ones its request loaded', async t => {
+  const chatId = newChatId('supersede-sources');
+  const frames = captureFrames(t, chatId);
+  t.after(() => PromptService.resetPromptSources(chatId));
+  let reachedWait;
+  const waiting = new Promise(resolve => (reachedWait = resolve));
+  const { service } = makeService([
+    // The older turn writes a few words, then waits for the model until it is superseded.
+    (request, ctx) => {
+      const wire = `data: ${JSON.stringify({
+        choices: [
+          { index: 0, delta: { role: 'assistant', content: 'Half an' }, finish_reason: null }
+        ]
+      })}\n\n`;
+      let sent = false;
+      const body = new ReadableStream(
+        {
+          pull(controller) {
+            if (!sent) {
+              sent = true;
+              controller.enqueue(new TextEncoder().encode(wire));
+              return undefined;
+            }
+            return new Promise(resolve => {
+              const abort = () => {
+                controller.error(new DOMException('The operation was aborted.', 'AbortError'));
+                resolve();
+              };
+              if (ctx.signal.aborted) abort();
+              else ctx.signal.addEventListener('abort', abort, { once: true });
+              reachedWait();
+            });
+          }
+        },
+        { highWaterMark: 0 }
+      );
+      return fakeResponse({
+        status: 200,
+        headers: { 'content-type': 'text/event-stream' },
+        body,
+        text: wire
+      });
+    },
+    textTurn('From the docs.')
+  ]);
+
+  const older = runTurn(service, { chatId, prep: makePrep() });
+  await waiting;
+  // The newer request is prepared while the older turn still runs, with an app
+  // whose sources the prompt loads.
+  service.requestBuilder = {
+    prepareChatRequest: async params => {
+      PromptService.trackPromptSources(params.chatId);
+      return { success: true, data: makePrep() };
+    }
+  };
+  const prep = await service.prepareChatRequest({ chatId });
+  const newer = await runTurn(service, { chatId, prep: prep.data });
+  const stopped = await older;
+
+  const endedOf = runId => frames.find(f => f.type === RUN_ENDED && f.runId === runId).data;
+  assert.equal(stopped.status, 'aborted');
+  assert.deepEqual(endedOf(stopped.runId).knowledgeSources, ['llm'], 'not the newer request’s');
+  assert.equal(newer.status, 'completed');
+  assert.deepEqual(endedOf(newer.runId).knowledgeSources, ['sources']);
 });
 
 // ── MCP App views ───────────────────────────────────────────────────────────
@@ -1754,7 +1945,7 @@ test('the page read cap defaults to 5 and counts only the page reader', async t 
   assert.equal(ids.filter(id => id === 'webSearch').length, 1);
 });
 
-test('the turn summary carries its web search: queries and sources for the stored answer', async t => {
+test('the turn summary carries its sources: queries and pages for the stored answer', async t => {
   const chatId = newChatId('web-search-record');
   captureFrames(t, chatId);
   const { service } = makeService(
@@ -1772,12 +1963,12 @@ test('the turn summary carries its web search: queries and sources for the store
     }
   );
   const summary = await runTurn(service, { chatId, prep: makePrep({ tools: [webSearchTool] }) });
-  assert.deepEqual(summary.webSearch.queries, ['langdock']);
+  assert.deepEqual(summary.sources.queries, ['langdock']);
   assert.deepEqual(
-    summary.webSearch.sources.map(s => [s.url, s.title, s.snippet]),
+    summary.sources.items.map(s => [s.url, s.title, s.snippet, s.private]),
     [
-      ['https://langdock.com/', 'Langdock', 'AI platform'],
-      ['https://other.example/', 'Other', undefined]
+      ['https://langdock.com/', 'Langdock', 'AI platform', false],
+      ['https://other.example/', 'Other', undefined, false]
     ]
   );
 });

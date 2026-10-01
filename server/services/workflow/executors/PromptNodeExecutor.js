@@ -1557,7 +1557,7 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
       disabledTools: result.disabledTools,
       maxTokens,
       messages: result.messages,
-      citations: result.citations,
+      sources: result.sources,
       status: result.status
     };
   }

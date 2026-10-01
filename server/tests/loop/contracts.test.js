@@ -114,6 +114,7 @@ test('every RunLog event type has a data schema and validates a minimal payload'
     'budget/checkpoint': { step: 1, usage: {}, runUsage: {} },
     'budget/exhausted': { step: 1, reason: 'tokens' },
     'context/compaction': { step: 1, trigger: 'proactive', collapsed: 1, freedChars: 10 },
+    'sources/added': { items: [] },
     error: { code: 'PROVIDER_ERROR', message: 'x' }
   };
   for (const type of RUN_LOG_EVENT_LIST) {

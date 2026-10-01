@@ -15,11 +15,11 @@
  * @module services/chat/chatMaterializer
  */
 import { boundStoredViews } from '../mcp/mcpApps.js';
-import { boundStoredCitations } from './chatCitations.js';
+import { boundStoredSources } from './chatSources.js';
 import { boundStoredProposals } from '../scheduler/tasks/proposals.js';
 import { generatedFilesOf } from '../../../shared/generatedFiles.js';
 import { boundStoredActivity, takeRunActivity } from './runActivity.js';
-import { insertSupportMarkers, storedWebSearch } from '../../../shared/webCitations.js';
+import { insertSupportMarkers } from '../../../shared/sources/index.js';
 
 /** Connect cards kept per stored answer. */
 const MAX_STORED_AUTH_PROMPTS = 10;
@@ -372,7 +372,7 @@ export async function materializeUserTurn({
  * @param {string} params.runId
  * @param {Object} params.summary - the turn outcome: `status`, `content`, `finishReason`,
  *   `usage`, `images` (generated pictures, stored beside the transcript as
- *   artifacts), `mcpApps`, `citations` (see `chatCitations.js`), `activity`
+ *   artifacts), `mcpApps`, `sources` (see `chatSources.js`), `activity`
  *   (what the run did, when it was not recorded — see `runActivity.js`), and
  *   `error`/`errorInfo` on a failure
  * @param {boolean} params.clientConnected - whether an SSE client was attached when the
@@ -479,9 +479,6 @@ export async function settleAssistantTurn({
     // MCP App views the turn rendered (tool input + result per view), bounded
     // so a chat document cannot grow without limit.
     const mcpApps = pausedWithoutAnswer ? [] : boundStoredViews(summary?.mcpApps);
-    // The documents behind the answer, so the reopened chat draws the same
-    // Documents panel — bounded, and only the fields the panel reads.
-    const citations = pausedWithoutAnswer ? null : boundStoredCitations(summary?.citations);
     // Connect cards for per-user OAuth MCP servers (see chatSeams.authRequiredOf).
     const mcpAuthRequired = pausedWithoutAnswer
       ? []
@@ -495,14 +492,14 @@ export async function settleAssistantTurn({
     const activity = pausedWithoutAnswer
       ? null
       : boundStoredActivity(summary?.activity ?? recorded);
-    // The web sources behind the answer, so the reopened chat shows the same
-    // sources view and inline citations. Google's grounding supports are
-    // turned into citation markers in the stored text (the live chat places
-    // them the same way); what is stored beside it is queries and sources.
-    const webSearch = pausedWithoutAnswer ? null : storedWebSearch(summary?.webSearch);
+    // Everything the turn found, so the reopened chat shows the same sources
+    // panel and inline citations. Google's grounding supports are turned into
+    // citation markers in the stored text (the live chat places them the same
+    // way); what is stored beside it is the sources and queries.
+    const sources = pausedWithoutAnswer ? null : boundStoredSources(summary?.sources);
     const storedContent =
-      webSearch && Array.isArray(summary?.webSearch?.supports)
-        ? insertSupportMarkers(content, summary.webSearch.supports)
+      sources && Array.isArray(summary?.sources?.supports)
+        ? insertSupportMarkers(content, summary.sources.supports)
         : content;
 
     let appended = null;
@@ -525,11 +522,10 @@ export async function settleAssistantTurn({
             ...(error ? { error } : {}),
             ...(artifacts.length > 0 ? { artifacts } : {}),
             ...(mcpApps.length > 0 ? { mcpApps } : {}),
-            ...(citations ? { citations } : {}),
             ...(mcpAuthRequired.length > 0 ? { mcpAuthRequired } : {}),
             ...(scheduledTaskProposals.length > 0 ? { scheduledTaskProposals } : {}),
             ...(activity ? { activity } : {}),
-            ...(webSearch ? { webSearch } : {})
+            ...(sources ? { sources } : {})
           },
           // The end of the transcript for an ordinary turn, and the position
           // right after this run's own question for a superseded one.

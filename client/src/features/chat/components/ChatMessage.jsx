@@ -17,15 +17,17 @@ import {
 import CustomResponseRenderer from '../../../shared/components/CustomResponseRenderer';
 import ClarificationCard from './ClarificationCard';
 import GeneratedImage from './GeneratedImage';
-import CitationPanel from './CitationPanel';
-import WebSearchSources from './WebSearchSources';
-import { resolveCitations } from '../../../../../shared/webCitations.js';
+import AnswerSources from './AnswerSources';
+import { resolveCitations } from '../../../../../shared/sources/index.js';
 import SearchStatusIndicator from './SearchStatusIndicator';
 import SearchSummary from './SearchSummary';
 import ToolActivity from './ToolActivity';
 import WorkflowStepIndicator from './WorkflowStepIndicator';
 import HumanCheckpoint from '../../workflows/components/HumanCheckpoint';
 import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
+import ReadAloudButton from '../../voice/components/ReadAloudButton';
+import { useReadAloudAvailability } from '../../voice/hooks/useReadAloud';
+import useReadAloudPlayback from '../../voice/hooks/useReadAloudPlayback';
 
 /**
  * Renders a workflow checkpoint inline in a chat bubble. The checkpoint is an
@@ -100,7 +102,9 @@ function ChatMessage({
   models = [], // Available models for determining if model param should be included in link
   onClarificationSubmit = null, // Callback when a clarification response is submitted
   onClarificationSkip = null, // Callback when a clarification is skipped
-  onDocumentAction = null, // Callback for citation document actions (preview, download, openInApp)
+  // `(source, appId)`: open a source in a new chat of another app ("Open in
+  // App"). Only surfaces with a router pass it.
+  onOpenSourceInApp = null,
   // Page the copy-link action points at. Defaults to the current page; a host
   // page that isn't the app's own route (the admin app editor) passes the app's.
   linkPath = null,
@@ -133,25 +137,30 @@ function ChatMessage({
   const isUser = message.role === 'user';
   const isError = message.error === true;
 
-  // The web sources behind the answer and which of them it cites — shared by
-  // the inline citation badges and the sources view under the answer.
+  // Everything the answer found and which of it the answer cites — shared by
+  // the inline citation badges and the sources panel under the answer.
   const fallbackId = useId();
   const messageKey = message.id || fallbackId;
   const answerText = typeof message.content === 'string' ? message.content : '';
-  const webCitationView = useMemo(
-    () => (!isUser && message.webSearch ? resolveCitations(answerText, message.webSearch) : null),
-    [isUser, answerText, message.webSearch]
+  // Read aloud: offered on every finished message when a TTS model is set up
+  // in Admin → Voice Input and this app has not opted out.
+  const readAloud = useReadAloudAvailability(app);
+  const readAloudPlayback = useReadAloudPlayback(messageKey);
+  const citationView = useMemo(
+    () => (!isUser && message.sources ? resolveCitations(answerText, message.sources) : null),
+    [isUser, answerText, message.sources]
   );
-  const webCitations = useMemo(
+  const citations = useMemo(
     () =>
-      webCitationView?.numbers.size
+      citationView?.cited.length
         ? {
             messageKey,
-            numbers: webCitationView.numbers,
-            byNumber: new Map(webCitationView.cited.map(source => [source.n, source]))
+            numberOfUrl: citationView.numberOfUrl,
+            numberOfMarker: citationView.numberOfMarker,
+            byNumber: new Map(citationView.cited.map(source => [source.n, source]))
           }
         : null,
-    [webCitationView, messageKey]
+    [citationView, messageKey]
   );
   const hasVariables = message.variables && Object.keys(message.variables).length > 0;
   const [isEditing, setIsEditing] = useState(false);
@@ -163,6 +172,12 @@ function ChatMessage({
   };
 
   const [editedContent, setEditedContent] = useState(getEditableContent());
+  // What read aloud speaks: the user's own words, or the answer without its
+  // reasoning (thoughts live apart in message.thoughts).
+  const speechText = (() => {
+    const text = isUser ? getEditableContent() : answerText;
+    return typeof text === 'string' && text.trim() ? text : '';
+  })();
   const editTextareaRef = useRef(null);
   const [showActions, setShowActions] = useState(false);
   const [insertDropdownOpen, setInsertDropdownOpen] = useState(false);
@@ -653,8 +668,7 @@ function ChatMessage({
           <div className="flex flex-col">
             <StreamingMarkdown
               content={mdContent}
-              hasCitations={!!message.citations}
-              webCitations={effectiveOutputFormat === 'json' ? null : webCitations}
+              citations={effectiveOutputFormat === 'json' ? null : citations}
               streaming
             />
             {hasSearchStatus && <SearchStatusIndicator status={message.searchStatus} />}
@@ -771,8 +785,7 @@ function ChatMessage({
       return (
         <StreamingMarkdown
           content={mdContent}
-          hasCitations={!!message.citations}
-          webCitations={effectiveOutputFormat === 'json' ? null : webCitations}
+          citations={effectiveOutputFormat === 'json' ? null : citations}
         />
       );
     }
@@ -1050,37 +1063,34 @@ function ChatMessage({
             with the other provenance. */}
         {!isUser && !message.loading && <SearchSummary summary={message.searchSummary} />}
 
-        {/* Documents behind the answer: an iAssistant conversation's, or the
-            ones the turn's iFinder tool calls found */}
-        {!isUser && message.citations && !message.loading && (
-          <CitationPanel
-            citations={message.citations}
-            content={message.content}
-            onDocumentAction={onDocumentAction}
-          />
-        )}
-
-        {/* The web sources behind the answer: "Searched for …", opening the
-            sources view with what it cites and what it only considered. */}
-        {!isUser && !message.loading && webCitationView && (
-          <WebSearchSources
+        {/* Everything the answer found — web pages, documents, records —
+            behind "Searched for …" / "N sources", opening the sources panel
+            with what it cites and what it only considered. Shown while the
+            answer streams too: its badges open the panel. */}
+        {!isUser && citationView && (
+          <AnswerSources
             messageKey={messageKey}
-            webSearch={message.webSearch}
-            citations={webCitationView}
+            sources={message.sources}
+            citations={citationView}
+            onOpenInApp={onOpenSourceInApp}
           />
         )}
 
         {/* Workflow result attribution — handled by unified WorkflowStepIndicator above */}
 
-        {/* Answer source indicator - show for completed assistant messages inside bubble */}
-        {!isUser && !isError && !message.loading && (
-          <div className="flex justify-end">
-            <AnswerSourceBadge
-              answerSource={message.answerSource}
-              workflowResult={message.workflowResult}
-            />
-          </div>
-        )}
+        {/* Answer source indicator - completed assistant messages whose source
+            the server reported (or a workflow produced), inside the bubble */}
+        {!isUser &&
+          !isError &&
+          !message.loading &&
+          (message.answerSource || message.workflowResult) && (
+            <div className="flex justify-end">
+              <AnswerSourceBadge
+                answerSource={message.answerSource}
+                workflowResult={message.workflowResult}
+              />
+            </div>
+          )}
       </div>
 
       {/*
@@ -1201,167 +1211,178 @@ function ChatMessage({
         </div>
       )}
 
-      {/* Combined action icons and feedback buttons in a single row */}
-      <div className="mt-1 px-1">
-        <div
-          className={`flex items-center ${compact ? 'gap-1 flex-wrap' : 'gap-3'} text-xs transition-opacity duration-200 ${
-            showActions ? 'opacity-100' : 'opacity-0'
-          } ${isUser ? 'text-gray-500' : 'text-gray-500'}`}
-        >
-          {/* Standard actions first */}
-          <div className="relative inline-flex items-center" ref={copyMenuRef}>
-            <button
-              onClick={() => handleCopy('text')}
-              className="flex items-center gap-1 hover:text-gray-700 transition-colors duration-150"
-              title={t('pages.appChat.copyToClipboard')}
-            >
-              {copied ? <Icon name="check" size="sm" /> : <Icon name="copy" size="sm" />}
-            </button>
-            <button
-              onClick={() => setShowCopyMenu(!showCopyMenu)}
-              className="ml-1 hover:text-gray-700"
-              title={t('canvas.export.copyOptions', 'Copy Options')}
-            >
-              <Icon name="chevron-down" size="sm" />
-            </button>
-            {showCopyMenu && (
-              /*
+      {/* Combined action icons and feedback buttons in a single row. None on a
+          transcript still being recorded: it is not a sent message yet. */}
+      {!message.isLiveTranscript && (
+        <div className="mt-1 px-1">
+          <div
+            className={`flex items-center ${compact ? 'gap-1 flex-wrap' : 'gap-3'} text-xs transition-opacity duration-200 ${
+              showActions || readAloudPlayback.state !== 'idle' ? 'opacity-100' : 'opacity-0'
+            } ${isUser ? 'text-gray-500' : 'text-gray-500'}`}
+          >
+            {/* Standard actions first */}
+            <div className="relative inline-flex items-center" ref={copyMenuRef}>
+              <button
+                onClick={() => handleCopy('text')}
+                className="flex items-center gap-1 hover:text-gray-700 transition-colors duration-150"
+                title={t('pages.appChat.copyToClipboard')}
+              >
+                {copied ? <Icon name="check" size="sm" /> : <Icon name="copy" size="sm" />}
+              </button>
+              <button
+                onClick={() => setShowCopyMenu(!showCopyMenu)}
+                className="ml-1 hover:text-gray-700"
+                title={t('canvas.export.copyOptions', 'Copy Options')}
+              >
+                <Icon name="chevron-down" size="sm" />
+              </button>
+              {showCopyMenu && (
+                /*
                 Anchor the menu on the side that has room. Assistant rows are
                 left-aligned, so the copy button sits at the pane's left edge and a
                 right-anchored menu would grow leftward out of the pane (clipped in
                 the narrow Outlook task pane, issue #2592). User rows are
                 right-aligned, so there the menu must open leftward instead.
               */
-              <div
-                className={`absolute ${isUser ? 'right-0' : 'left-0'} mt-1 w-40 max-w-[calc(100vw-2rem)] bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-sm shadow-sm z-50 text-gray-700 dark:text-gray-200`}
+                <div
+                  className={`absolute ${isUser ? 'right-0' : 'left-0'} mt-1 w-40 max-w-[calc(100vw-2rem)] bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-sm shadow-sm z-50 text-gray-700 dark:text-gray-200`}
+                >
+                  <button
+                    onClick={() => handleCopy('text')}
+                    className="block px-3 py-1 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 w-full text-left whitespace-nowrap"
+                  >
+                    {t('canvas.export.copyText', 'as Text')}
+                  </button>
+                  <button
+                    onClick={() => handleCopy('markdown')}
+                    className="block px-3 py-1 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 w-full text-left whitespace-nowrap"
+                  >
+                    {t('canvas.export.copyMarkdown', 'as Markdown')}
+                  </button>
+                  <button
+                    onClick={() => handleCopy('html')}
+                    className="block px-3 py-1 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 w-full text-left whitespace-nowrap"
+                  >
+                    {t('canvas.export.copyHTML', 'as HTML')}
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Download button - opens export dialog */}
+            <button
+              onClick={handleDownload}
+              className="flex items-center gap-1 hover:text-gray-700 transition-colors duration-150"
+              title={t('chatMessage.downloadMessage', 'Download message')}
+            >
+              <Icon name="download" size="sm" />
+            </button>
+
+            {readAloud.available && !message.loading && !isError && !isEditing && speechText && (
+              <ReadAloudButton
+                messageId={messageKey}
+                text={speechText}
+                playback={readAloudPlayback}
+              />
+            )}
+
+            {/* Open in Canvas button for assistant messages */}
+            {!isUser && !isError && canvasEnabled && onOpenInCanvas && (
+              <button
+                onClick={() => onOpenInCanvas(message.content)}
+                className="flex items-center gap-1 hover:text-blue-600 transition-colors duration-150"
+                title={t('chatMessage.openInCanvas', 'Open in Canvas')}
               >
+                <Icon name="document-text" size="sm" />
+              </button>
+            )}
+
+            {!isUser && !isError && onInsert && insertAction?.variant !== 'primary' && (
+              <button
+                onClick={() => onInsert(message.content)}
+                className="flex items-center gap-1 hover:text-blue-600 transition-colors duration-150"
+                title={t('canvas.insertIntoDocument', 'Insert into document')}
+              >
+                <Icon name="arrow-right" size="sm" />
+              </button>
+            )}
+
+            {isUser && editable && (
+              <>
                 <button
-                  onClick={() => handleCopy('text')}
-                  className="block px-3 py-1 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 w-full text-left whitespace-nowrap"
+                  onClick={handleEdit}
+                  className="flex items-center gap-1 hover:text-gray-700 transition-colors duration-150"
+                  title={t('chatMessage.editMessage', 'Edit message')}
                 >
-                  {t('canvas.export.copyText', 'as Text')}
+                  <Icon name="edit" size="sm" />
                 </button>
+
                 <button
-                  onClick={() => handleCopy('markdown')}
-                  className="block px-3 py-1 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 w-full text-left whitespace-nowrap"
+                  onClick={handleResend}
+                  className="flex items-center gap-1 hover:text-gray-700 transition-colors duration-150"
+                  title={t('chatMessage.resendMessage', 'Resend message')}
                 >
-                  {t('canvas.export.copyMarkdown', 'as Markdown')}
+                  <Icon name="refresh" size="sm" />
                 </button>
+
                 <button
-                  onClick={() => handleCopy('html')}
-                  className="block px-3 py-1 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 w-full text-left whitespace-nowrap"
+                  onClick={handleCopyLink}
+                  className="flex items-center gap-1 hover:text-blue-600 transition-colors duration-150"
+                  title={t('chatMessage.copyLink', 'Copy link')}
                 >
-                  {t('canvas.export.copyHTML', 'as HTML')}
+                  {linkCopied ? <Icon name="check" size="sm" /> : <Icon name="link" size="sm" />}
                 </button>
-              </div>
+
+                <ScheduleThisAction
+                  content={
+                    typeof message.rawContent === 'string' ? message.rawContent : message.content
+                  }
+                  appId={appId}
+                  enabledTools={scheduleEnabledTools}
+                />
+              </>
+            )}
+
+            {isUser && !readOnly && onSaveAsPrompt && (
+              <button
+                onClick={() => onSaveAsPrompt(getEditableContent())}
+                className="flex items-center gap-1 hover:text-indigo-600 transition-colors duration-150"
+                title={t('chatMessage.saveAsPrompt', 'Save as prompt')}
+                aria-label={t('chatMessage.saveAsPrompt', 'Save as prompt')}
+              >
+                <Icon name="document-plus" size="sm" />
+              </button>
+            )}
+
+            {!readOnly && (
+              <button
+                onClick={handleDelete}
+                className="flex items-center gap-1 hover:text-red-500 transition-colors duration-150"
+                title={t('chatMessage.deleteMessage', 'Delete message')}
+              >
+                <Icon name="trash" size="sm" />
+              </button>
+            )}
+
+            {/* Add star rating for AI responses only */}
+            {feedbackEnabled && !readOnly && !isUser && !isError && !message.loading && (
+              <>
+                {!compact && <div className="mx-2 h-4 border-l border-gray-300"></div>}
+                <div className="flex items-center gap-2">
+                  <StarRating
+                    rating={activeFeedback}
+                    onRatingChange={handleStarRatingClick}
+                    allowHalfStars={true}
+                    size="w-4 h-4"
+                    showTooltip={true}
+                    className="shrink-0"
+                  />
+                </div>
+              </>
             )}
           </div>
-
-          {/* Download button - opens export dialog */}
-          <button
-            onClick={handleDownload}
-            className="flex items-center gap-1 hover:text-gray-700 transition-colors duration-150"
-            title={t('chatMessage.downloadMessage', 'Download message')}
-          >
-            <Icon name="download" size="sm" />
-          </button>
-
-          {/* Open in Canvas button for assistant messages */}
-          {!isUser && !isError && canvasEnabled && onOpenInCanvas && (
-            <button
-              onClick={() => onOpenInCanvas(message.content)}
-              className="flex items-center gap-1 hover:text-blue-600 transition-colors duration-150"
-              title={t('chatMessage.openInCanvas', 'Open in Canvas')}
-            >
-              <Icon name="document-text" size="sm" />
-            </button>
-          )}
-
-          {!isUser && !isError && onInsert && insertAction?.variant !== 'primary' && (
-            <button
-              onClick={() => onInsert(message.content)}
-              className="flex items-center gap-1 hover:text-blue-600 transition-colors duration-150"
-              title={t('canvas.insertIntoDocument', 'Insert into document')}
-            >
-              <Icon name="arrow-right" size="sm" />
-            </button>
-          )}
-
-          {isUser && editable && (
-            <>
-              <button
-                onClick={handleEdit}
-                className="flex items-center gap-1 hover:text-gray-700 transition-colors duration-150"
-                title={t('chatMessage.editMessage', 'Edit message')}
-              >
-                <Icon name="edit" size="sm" />
-              </button>
-
-              <button
-                onClick={handleResend}
-                className="flex items-center gap-1 hover:text-gray-700 transition-colors duration-150"
-                title={t('chatMessage.resendMessage', 'Resend message')}
-              >
-                <Icon name="refresh" size="sm" />
-              </button>
-
-              <button
-                onClick={handleCopyLink}
-                className="flex items-center gap-1 hover:text-blue-600 transition-colors duration-150"
-                title={t('chatMessage.copyLink', 'Copy link')}
-              >
-                {linkCopied ? <Icon name="check" size="sm" /> : <Icon name="link" size="sm" />}
-              </button>
-
-              <ScheduleThisAction
-                content={
-                  typeof message.rawContent === 'string' ? message.rawContent : message.content
-                }
-                appId={appId}
-                enabledTools={scheduleEnabledTools}
-              />
-            </>
-          )}
-
-          {isUser && !readOnly && onSaveAsPrompt && (
-            <button
-              onClick={() => onSaveAsPrompt(getEditableContent())}
-              className="flex items-center gap-1 hover:text-indigo-600 transition-colors duration-150"
-              title={t('chatMessage.saveAsPrompt', 'Save as prompt')}
-              aria-label={t('chatMessage.saveAsPrompt', 'Save as prompt')}
-            >
-              <Icon name="document-plus" size="sm" />
-            </button>
-          )}
-
-          {!readOnly && (
-            <button
-              onClick={handleDelete}
-              className="flex items-center gap-1 hover:text-red-500 transition-colors duration-150"
-              title={t('chatMessage.deleteMessage', 'Delete message')}
-            >
-              <Icon name="trash" size="sm" />
-            </button>
-          )}
-
-          {/* Add star rating for AI responses only */}
-          {feedbackEnabled && !readOnly && !isUser && !isError && !message.loading && (
-            <>
-              {!compact && <div className="mx-2 h-4 border-l border-gray-300"></div>}
-              <div className="flex items-center gap-2">
-                <StarRating
-                  rating={activeFeedback}
-                  onRatingChange={handleStarRatingClick}
-                  allowHalfStars={true}
-                  size="w-4 h-4"
-                  showTooltip={true}
-                  className="shrink-0"
-                />
-              </div>
-            </>
-          )}
         </div>
-      </div>
+      )}
 
       {/* Feedback form modal */}
       {feedbackEnabled && showFeedbackForm && (

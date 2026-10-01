@@ -258,6 +258,19 @@ function AdminModelEditPage() {
       // Remove helper fields that shouldn't be sent to backend
       delete dataToSend.apiKeySet;
       delete dataToSend.apiKeyMasked;
+      // The `tts` block is only valid on a text-to-speech model (the schema
+      // rejects it elsewhere): switching the type away leaves it behind.
+      if (dataToSend.modelType !== 'tts') delete dataToSend.tts;
+      // Only a chat model can be the default; the checkbox is hidden for the
+      // other types, so a flag left over from before the type changed goes.
+      if ((dataToSend.modelType || 'chat') !== 'chat') dataToSend.default = false;
+      // A language added without a voice yet means nothing to save.
+      if (dataToSend.tts?.voices) {
+        const voices = Object.entries(dataToSend.tts.voices).filter(([, voice]) => voice);
+        dataToSend.tts = { ...dataToSend.tts };
+        if (voices.length) dataToSend.tts.voices = Object.fromEntries(voices);
+        else delete dataToSend.tts.voices;
+      }
 
       // Remove empty and undefined fields (but preserve API key placeholder)
       Object.keys(dataToSend).forEach(key => {

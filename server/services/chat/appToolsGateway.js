@@ -36,6 +36,9 @@ import { getLocalizedString } from '../../utils/localize.js';
 import { canUserAccessResource } from '../../utils/authorization.js';
 import { findByIdCaseInsensitive } from '../../utils/resourceLookup.js';
 
+/** Most sources an app invoked as a tool hands back to its caller. */
+const MAX_FORWARDED_SOURCES = 50;
+
 const chatService = new ChatService();
 
 function getAppById(appId) {
@@ -168,8 +171,11 @@ export function stripAppToolsForAgent(tools, user) {
  * `app__<appId>`.
  *
  * Returns a SLIM payload — callers feed the result back into an LLM tool
- * message, so it must stay small: `{ content, citations?, usage?,
- * finishReason? }` or `{ error, message }`.
+ * message, so it must stay small: `{ content, sources?, usage?,
+ * finishReason? }` or `{ error, message }`. `sources` is the app's source
+ * set as the tool-result envelope (`services/sources/producers/envelope.js`),
+ * so the calling chat lists what the app found; passages and snippets stay
+ * behind, the model only needs what it cites.
  *
  * @param {Object} opts
  * @param {string} opts.toolId
@@ -273,7 +279,7 @@ export async function invokeAppTool({
     // Returning the unfiltered object blows up the caller's context (the
     // user observed 10KB+ of Gemini thought text leaking in). Keep only:
     //   - content: the actual answer the app produced
-    //   - citations: any source URLs the app cited
+    //   - sources: what the app found, for the caller's sources panel
     //   - usage: token counts (optional, useful for audit)
     //   - finishReason: brief stop reason
     if (result?.status === 'error') {
@@ -286,10 +292,16 @@ export async function invokeAppTool({
       (result?.finalMessage && typeof result.finalMessage.content === 'string'
         ? result.finalMessage.content.trim()
         : '') || '';
-    const citations = Array.isArray(result?.citations) ? result.citations : [];
+    const sources = (result?.sources?.items || [])
+      .slice(0, MAX_FORWARDED_SOURCES)
+      // Explicit `private`: the envelope treats a source that names none as private.
+      .map(({ passages: _passages, snippet: _snippet, ...source }) => ({
+        ...source,
+        private: source.private === true
+      }));
     return {
       content,
-      ...(citations.length > 0 ? { citations } : {}),
+      ...(sources.length > 0 ? { sources } : {}),
       ...(result?.usage ? { usage: result.usage } : {}),
       ...(result?.finishReason ? { finishReason: result.finishReason } : {})
     };

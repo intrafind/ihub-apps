@@ -93,7 +93,7 @@ describe('runReducer — chat turn', () => {
       durationMs: 42,
       knowledgeSource: 'websearch'
     });
-    expect(run.knowledgeSources).toEqual(['websearch']); // deduped with run/ended
+    expect(run.knowledgeSources).toEqual(['websearch']); // as run/ended named them
     expect(run.steps[0].completed).toBe(true);
     expect(run.steps[0].finishReason).toBe('stop');
     expect(run.status).toBe('completed');
@@ -132,6 +132,28 @@ describe('runReducer — chat turn', () => {
       })
     ]);
     expect(getRun(twoSteps, 'run-a').text).toBe('AB');
+  });
+
+  test('the answer sources are the ones run/ended named — tool and step hints never add to them', () => {
+    const hinted = [
+      turn[1],
+      turn[5],
+      turn[6],
+      env(8, 'run-a', 'step/completed', { step: 0, content: 'Hi', sources: ['websearch', 'file'] })
+    ];
+    const running = getRun(fold(hinted), 'run-a');
+    expect(running.knowledgeSources).toEqual([]);
+    expect(running.tools[0].knowledgeSource).toBe('websearch');
+
+    const named = fold([
+      ...hinted,
+      env(9, 'run-a', 'run/ended', { status: 'completed', knowledgeSources: ['llm'] })
+    ]);
+    expect(getRun(named, 'run-a').knowledgeSources).toEqual(['llm']);
+
+    // A turn that ended without naming any (failed, stopped before it wrote) has none.
+    const unnamed = fold([...hinted, env(9, 'run-a', 'run/ended', { status: 'aborted' })]);
+    expect(getRun(unnamed, 'run-a').knowledgeSources).toEqual([]);
   });
 
   test('ignores malformed envelopes and run-scoped frames without a runId', () => {

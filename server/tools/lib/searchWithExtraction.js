@@ -18,7 +18,7 @@ import logger from '../../utils/logger.js';
  * where the provider returned them, `publishedDate` (ISO 8601), `age`
  * (Brave's own label, e.g. "2 days ago"), `snippets` (extra excerpts) and
  * `favicon`. The chat's source cards are drawn from these fields
- * (`services/loop/webSources.js`).
+ * (`services/sources/producers/web.js`).
  *
  * ## Filters
  *

@@ -46,10 +46,11 @@ reducer, `client/src/shared/run/runReducer.js`.
 | `run/paused`           | `{ reason: interaction \| manual \| system, interactionId? }`                                                                  | The run waits (a question, an approval)                                       |
 | `run/resumed`          | `{ interactionId? }`                                                                                                          | The run continues                                                             |
 | `step/delta`           | `{ step, kind: text \| thinking \| image, content?, image?, meta? }`                                                           | Streamed answer output of model step `step`                                   |
-| `step/completed`       | `{ step, content, toolCalls, finishReason, usage?, citations?, sources?, groundingMetadata? }`                                 | A model step finished                                                         |
+| `step/completed`       | `{ step, content, toolCalls, finishReason, usage?, sources?, groundingMetadata? }`                                             | A model step finished (`sources`: the knowledge-source names of the step)     |
 | `tool/started`         | `{ step, callId, toolId, name, args, execution }`                                                                             | A tool call begins (`execution`: server, caller, clarification, passthrough)  |
 | `tool/progress`        | `{ phase, message?, data?, step?, callId?, toolId? }`                                                                         | Free-form progress (see phases below)                                         |
-| `tool/completed`       | `{ step, callId, toolId, name, resultPreview, error?, durationMs?, knowledgeSource?, webSources? }`                           | A tool call finished; `resultPreview` is bounded, `webSources` lists the pages a search/fetch tool found (see below) |
+| `tool/completed`       | `{ step, callId, toolId, name, resultPreview, error?, durationMs?, knowledgeSource? }`                                        | A tool call finished; `resultPreview` is bounded                              |
+| `sources/added`        | `{ step?, callId?, toolId?, items, queries?, supports? }`                                                                     | What a tool call, a model adapter or provider search found (see below)        |
 | `interaction/raised`   | `{ interaction }`                                                                                                             | A human touchpoint (question, approval, review) — see `contracts/interaction.js` |
 | `interaction/answered` | `{ interactionId, kind, answer }`                                                                                             | The touchpoint was answered                                                   |
 | `progress/node`        | `{ executionId?, nodeId, nodeName?, nodeType?, status, iteration?, progress?, output?, error? }`                              | Workflow node progress (also chat-launched workflows)                         |
@@ -61,29 +62,33 @@ reducer, `client/src/shared/run/runReducer.js`.
 | ------------------------------ | ------------------------------------------- | ------------------------------------------------------- |
 | `skill.activation`             | chat turn (slash command, `activate_skill`) | `{ skillName, description }`                            |
 | `search.status`                | iAssistant conversation adapter             | provider payload                                        |
-| `citation`                     | iAssistant conversation adapter             | `{ references, resultItems }`                           |
 | `grounding`                    | Google Search grounding                     | grounding metadata                                      |
 | `search`                       | Brave web search                            | `{ query, provider }`                                   |
 | `fetch.loading` / `fetch.parsing` / `fetch.extracting` | `webContentExtractor`   | `{ url, status, type? }`                                |
 | `ifinder_search` / `ifinder_content` / `ifinder_download` | iFinder tools        | `{ query? \| documentId, searchProfile, … }`             |
 | `agent.*`                      | agent runtime (workflow / agent streams)    | the former internal event payload (task queue, plan, artifacts, inbox, memory, skills, hallucinated tools …) |
 
-### `tool/completed.webSources`
+### `sources/added`
 
-The preview of a web search result is cut at 4 KB, which a search that
-extracted page content exceeds on its first hit — so the sources would be lost
-in the truncated text. For search, fetch and source-lookup tools (ids
-containing `search`, `webContentExtractor`, `source_*`) the server therefore
-reduces the *full* result to at most 25 entries
-`{ url, title?, read?, readFailed? }` (`server/services/loop/webSources.js`):
-`read` marks a page whose content was fetched, `readFailed` one whose fetch
-failed. The field is also recorded on the ledger's `tool/result`, so a
-re-sync keeps it. The chat shows it, with the tool's query and the
-`fetch.*` progress, in the activity panel above the answer
-(`client/src/features/chat/toolActivity.js`, `components/ToolActivity.jsx`).
+Everything a run found — the pages a web search returned or the page reader
+read, the documents an iFinder tool or iAssistant found, what any tool, MCP
+server or app invoked as a tool reported — arrives in one frame type, in the
+one shape of [Answer Sources](answer-sources.md): `items` are normalized
+sources, `queries` what was searched for, `supports` Google Search
+grounding's passages with the URLs each rests on (for citation markers).
+
+Frames only ever add. The client folds them with the same `mergeSources`
+the server uses for the stored answer (`shared/sources/sourceSet.js`); a
+frame with a `callId` is also the list of that tool call's own sources,
+which the activity panel above the answer shows. The event is written to the
+run ledger too, so a re-sync replays it.
+
+Sources are taken from the tool's *full* result on the server
+(`server/services/sources/`): the preview of a web search result is cut at
+4 KB, which a search that extracted page content exceeds on its first hit.
 Provider-run web search reports its queries as `webSearchQueries` on the
-grounding metadata (Google natively; Anthropic's `web_search` queries are
-mapped onto the same field).
+grounding metadata as well (Google natively; Anthropic's `web_search` queries
+are mapped onto the same field), which the activity panel shows.
 
 ### `meta.extra`
 
@@ -114,6 +119,19 @@ workflow launched from chat) streams its answer as `step/delta` frames and ends
 with `run/ended { finishReason: 'tool_passthrough_complete', toolName }`. A
 failure is `stream/error` followed by `run/ended { status: 'error' }`; a stop
 or disconnect is `run/ended { status: 'aborted', finishReason: 'connection_closed' }`.
+
+`run/ended.knowledgeSources` is what the answer was based on, and the only
+thing the answer badge reads: `websearch`, `ifinder`, `sources`, `iassistant`,
+`grounding`, `email`, `file`, `audio` — or `llm` when the model answered from
+none of them (its own knowledge). A passthrough answer is the tool's output, not
+the model's, so it lists only the sources it used; a workflow's answer is badged
+by its workflow result. The server always names the list on an answered turn,
+including a stopped one that had already written part of its answer; a turn that
+failed, paused for a question or was stopped before it wrote anything carries
+none, and the client shows no badge. `tool/completed.knowledgeSource` and
+`step/completed.sources` are per-tool and per-step detail, not the answer's
+sources. The ledger's `run/end` keeps the same list, so a replayed turn is badged
+like the live one.
 
 ## A workflow run on the wire
 

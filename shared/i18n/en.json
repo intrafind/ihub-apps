@@ -720,7 +720,7 @@
         },
         "recording": {
           "title": "Recording (record → transcribe)",
-          "description": "Record a short clip (up to {{seconds}} seconds) and transcribe it with a transcription model, exactly like the record button in a chat.",
+          "description": "Record a short clip (up to {{seconds}} seconds) and transcribe it with a transcription model over the same connection a chat uses, then see how long the transcript took.",
           "model": "Transcription model",
           "platformDefault": "platform default",
           "start": "Start recording",
@@ -731,6 +731,20 @@
           "noText": "The model returned no text. Use the microphone check to confirm the microphone picks up sound.",
           "empty": "Nothing was recorded."
         }
+      },
+      "tts": {
+        "title": "Read aloud (text-to-speech)",
+        "description": "Adds a play button to every chat message. The message is spoken by the text-to-speech model below and the audio streams while it is generated. Users only see the button when their groups may use the model; an app opts out with features.textToSpeech: false.",
+        "enabled": "Show a read-aloud button on chat messages",
+        "model": "Text-to-speech model",
+        "modelDisabled": "disabled",
+        "modelMissing": "This model no longer exists, so no read-aloud button is shown.",
+        "modelDisabledHint": "This model is disabled, so no read-aloud button is shown. Enable it under Admin → Models and make sure it has an API key.",
+        "noModelHint": "Choose a model, or no read-aloud button is shown.",
+        "modelHint": "Models with the type \"Text-to-Speech\" from Admin → Models. The voice is set on the model.",
+        "test": "Test",
+        "testHint": "Speaks the text with the selected model, the way a chat message is read. Works before saving, but the model must be enabled.",
+        "sampleText": "Hello! This is how answers sound when they are read aloud."
       }
     },
     "agents": {
@@ -808,7 +822,8 @@
         "info": {
           "title": "About Provider API Keys",
           "description": "API keys configured here are used as a fallback for all models of this provider that do not have their own API key configured. If you leave this field empty, the system will use the environment variable instead."
-        }
+        },
+        "subtitle": "Configure this provider and its API key"
       },
       "create": {
         "title": "Create New Provider",
@@ -824,7 +839,10 @@
         "enabled": "Provider Enabled",
         "cancel": "Cancel",
         "save": "Create Provider",
-        "saving": "Creating..."
+        "saving": "Creating...",
+        "llmHelp": "An LLM provider holds one API key for all of its models. Link models to it in the model editor, or import them from its endpoint.",
+        "nameRequired": "Provider name is required",
+        "subtitle": "Create an LLM provider for your own endpoint, a web search provider, or a generic API key"
       },
       "info": {
         "title": "API Key Priority",
@@ -861,6 +879,36 @@
         "testFailed": "Test failed",
         "hideResults": "Hide results",
         "showResults": "Show results"
+      },
+      "deleteConfirm": "Delete provider \"{{name}}\"?",
+      "fields": {
+        "name": "Name",
+        "id": "ID",
+        "description": "Description",
+        "apiType": "API type",
+        "baseUrl": "Base URL"
+      },
+      "hints": {
+        "apiType": "Which API the endpoint speaks. Gateways such as T-Systems LLM Hub are OpenAI-compatible; choose vLLM for a self-hosted vLLM server.",
+        "apiTypeBuiltIn": "Built-in providers always speak their own API.",
+        "baseUrl": "Optional. The API base the provider’s models are listed from when importing models."
+      },
+      "apiTypes": {
+        "openai": "OpenAI-compatible (OpenAI, LLM Hub, LM Studio, …)",
+        "local": "vLLM / self-hosted (local)",
+        "mistral": "Mistral",
+        "openai-responses": "OpenAI Responses API",
+        "anthropic": "Anthropic",
+        "google": "Google Gemini",
+        "bedrock": "AWS Bedrock"
+      },
+      "linkedModels": {
+        "title": "Linked models",
+        "description": "These models use this provider’s API key unless they have a key of their own.",
+        "import": "Import models",
+        "none": "No models are linked to this provider.",
+        "count": "{{count}} linked, {{enabled}} enabled",
+        "more": "+{{count}} more"
       }
     },
     "models": {
@@ -979,7 +1027,11 @@
         "thinkingLevelLow": "Low",
         "thinkingLevelMedium": "Medium",
         "thinkingLevelHigh": "High",
-        "thinkingThoughts": "Show reasoning"
+        "thinkingThoughts": "Show reasoning",
+        "ttsVoice": "Voice",
+        "ttsVoices": "Voices per language",
+        "ttsVoiceLanguage": "Language",
+        "customProviders": "Custom providers"
       },
       "hints": {
         "modelId": "Unique identifier for the model (cannot be changed after creation)",
@@ -991,7 +1043,7 @@
         "supportsAudio": "Enable if this model can process audio inputs",
         "supportsImageGeneration": "Enable if this model can generate images (e.g., Gemini Image models)",
         "maxReferenceImages": "Maximum number of reference images (1-14)",
-        "modelType": "Chat models answer prompts. Transcription models convert audio to text via a realtime endpoint (e.g. Voxtral).",
+        "modelType": "Chat models answer prompts. Transcription models convert audio to text via a realtime endpoint (e.g. Voxtral). Text-to-speech models read chat messages aloud (e.g. Voxtral TTS).",
         "realtimeUrl": "WebSocket URL of the vLLM realtime endpoint. It stays server-side and never reaches the browser.",
         "nativeWebSearch": "Apps with web search use the provider's built-in search on this model. Turn it off for models or gateways that do not support it; they fall back to Brave Search.",
         "promptCachingOpenAI": "Sends a cache key so requests that start with the same prompt reuse OpenAI’s cache. On by default for api.openai.com; turn it off for OpenAI-compatible servers that reject unknown parameters.",
@@ -1001,7 +1053,12 @@
         "thinkingEnabled": "Ask the model to think before answering. The reasoning is returned separately from the answer; leave off and a reasoning model writes its thinking into the answer text instead.",
         "thinkingLevel": "Sent as reasoning_effort (OpenAI, vLLM) or thinkingLevel (Gemini). Servers that do not support it ignore the value — leave on provider default unless the model documents these levels.",
         "thinkingThoughts": "Surface the reasoning to users behind the \"Show thinking\" toggle. Turn off to keep it hidden.",
-        "maxOutputTokens": "Empty means the default ({{value}}), not unlimited. Reasoning models spend their thinking tokens from this limit, so keep it well above the longest answer you expect."
+        "maxOutputTokens": "Empty means the default ({{value}}), not unlimited. Reasoning models spend their thinking tokens from this limit, so keep it well above the longest answer you expect.",
+        "ttsUrl": "Speech endpoint of the provider. It stays server-side and never reaches the browser.",
+        "ttsVoice": "Voice id of the provider: a Mistral preset such as en_paul_neutral, gb_jane_neutral or fr_marie_neutral, or the id of a voice saved in your Mistral account. Empty uses en_paul_neutral.",
+        "ttsVoices": "A message written in one of these languages is read with that voice; every other language uses the voice above. The language is told from the message itself.",
+        "ttsVoicesAfterSave": "Save the model once to browse the provider’s voices and create custom voices here.",
+        "linkedProvider": "Uses the API key of the provider \"{{provider}}\" and its API type ({{apiType}})."
       },
       "placeholders": {
         "maxOutputTokens": "Default: {{value}}",
@@ -1010,7 +1067,8 @@
         "apiUrl": "https://api.provider.com/v1/chat/completions",
         "apiKey": "Enter API key (optional - will use environment variable if not set)",
         "apiKeySet": "API key is set (leave blank to keep current)",
-        "realtimeUrl": "ws://host:8080/v1/realtime"
+        "realtimeUrl": "ws://host:8080/v1/realtime",
+        "ttsVoiceId": "Voice id"
       },
       "sections": {
         "imageGeneration": "Image Generation Settings",
@@ -1024,12 +1082,114 @@
       },
       "modelType": {
         "chat": "Chat",
-        "transcription": "Transcription"
+        "transcription": "Transcription",
+        "tts": "Text-to-Speech"
       },
       "imageQuality": {
         "low": "Low (1K)",
         "medium": "Medium (2K)",
         "high": "High (4K)"
+      },
+      "ttsVoices": {
+        "addLanguage": "+ Add a voice for a language",
+        "removeLanguage": "Remove",
+        "title": "Available voices",
+        "load": "Show voices",
+        "reload": "Reload",
+        "loadError": "Could not load voices",
+        "custom": "Your voices",
+        "noCustom": "No custom voices yet. Create one below.",
+        "presets": "Preset voices ({{count}})",
+        "useDefault": "Use as voice",
+        "useFor": "Use for {{language}}",
+        "deleteConfirm": "Delete the voice \"{{name}}\" from the provider account? Models that use it can no longer speak with it.",
+        "deleteError": "Could not delete the voice",
+        "createTitle": "Create a custom voice",
+        "createHint": "Record or upload 10–30 seconds of one person speaking naturally, without music or background noise. The voice is created in the provider account straight away; it reads every language, with the accent of the recording.",
+        "name": "Name",
+        "namePlaceholder": "e.g. Anna (German)",
+        "gender": "Gender (optional)",
+        "female": "Female",
+        "male": "Male",
+        "languages": "Language of the recording",
+        "record": "Record with microphone",
+        "stopRecording": "Stop recording ({{seconds}} s)",
+        "upload": "Upload audio file",
+        "recorded": "Recording",
+        "emptyRecording": "Nothing was recorded.",
+        "fileTooLarge": "The file is larger than 10 MB.",
+        "fileUnreadable": "This file could not be read as audio.",
+        "tooShort": "The sample is shorter than {{seconds}} seconds; record a little more.",
+        "consent": "The person speaking in this sample agreed that their voice is cloned and used to read answers aloud.",
+        "create": "Create voice",
+        "creating": "Creating…",
+        "createError": "Could not create the voice",
+        "created": "Voice \"{{name}}\" created ({{id}}). Use it below, then save the model."
+      },
+      "import": {
+        "button": "Import from URL",
+        "title": "Import models from URL",
+        "subtitle": "Read the model list of an OpenAI-compatible, vLLM, Mistral, Anthropic or Google endpoint and add the models you pick.",
+        "provider": "Provider",
+        "newProvider": "+ New provider",
+        "providerHint": "The provider holds the API key for all imported models. Create one for a new endpoint, such as T-Systems LLM Hub.",
+        "usesProviderKey": "The API key stored on this provider is used.",
+        "noProviderKey": "No API key is stored on this provider: its environment variable is used if set, otherwise the endpoint is called without a key.",
+        "url": "Endpoint URL",
+        "urlHint": "The API base (…/v1), its /models listing or a chat completions URL. iHub reads the model list from /models.",
+        "apiKey": "API key",
+        "apiKeyHint": "Optional. Stored encrypted on the new provider, not on the models. Leave empty for endpoints without authentication, such as a local vLLM server.",
+        "loadModels": "Load models",
+        "loading": "Loading models…",
+        "found": "{{count}} models at {{url}}",
+        "changeConnection": "Change endpoint",
+        "idPrefix": "ID prefix",
+        "enableModels": "Enable imported models",
+        "noModels": "The endpoint lists no models.",
+        "selectAll": "Select all chat models",
+        "model": "Model",
+        "context": "Context",
+        "targetId": "iHub model ID",
+        "targetIdFor": "iHub model ID for {{name}}",
+        "vision": "Vision",
+        "alreadyAdded": "Already added as {{id}}",
+        "endOfLife": "End of life: {{date}}",
+        "importCount": "Import {{count}} models",
+        "importing": "Importing…",
+        "doneSummary": "Imported {{ok}} of {{total}} models into {{provider}}.",
+        "providerCreated": "The provider \"{{provider}}\" was created and holds the API key. Manage it under Providers.",
+        "testHint": "Use \"Test\" in the model list to check each model, and fill in details the endpoint did not report, such as tool support.",
+        "types": {
+          "embedding": "Embedding",
+          "rerank": "Reranker",
+          "audio": "Audio",
+          "image": "Image",
+          "moderation": "Moderation",
+          "other": "Not a chat model"
+        },
+        "errors": {
+          "idInvalid": "Use lowercase letters, numbers, dots, hyphens and underscores only.",
+          "idExists": "A model with this ID already exists.",
+          "idDuplicate": "Two selected models would get this ID.",
+          "providerIdInvalid": "Use lowercase letters, numbers, dots, hyphens and underscores only.",
+          "providerIdExists": "A provider with this ID already exists. Select it above or choose another ID.",
+          "providerCreateFailed": "Could not create the provider: {{error}}",
+          "invalidUrl": "Enter a valid http:// or https:// URL",
+          "credentialsInUrl": "Remove the credentials from the URL and enter the key in the API key field",
+          "unsupportedProvider": "Model import does not support this API type",
+          "apiKeyRequired": "The endpoint requires an API key",
+          "authenticationFailed": "The endpoint rejected the API key",
+          "accessDenied": "Access denied by the endpoint",
+          "notFound": "No model list at this URL",
+          "redirected": "The endpoint redirected the request",
+          "upstreamError": "The endpoint answered with an error",
+          "invalidResponse": "The endpoint did not return a model list",
+          "timeout": "The endpoint did not respond in time",
+          "connectionRefused": "Connection refused",
+          "hostNotFound": "Host not found",
+          "networkError": "Network error",
+          "providerIdReserved": "This ID is the name of an API type. Choose another ID."
+        }
       }
     },
     "auth": {
@@ -2622,7 +2782,7 @@
         "iassistantSystemPromptPreamble": "System Prompt Preamble",
         "iassistantSystemPromptPreambleDesc": "The prompt preamble used in the response state system prompt. This is ideal for changing the identity of the iAssistant. Supports prompt variables like {{user_name}}, {{user_email}}, {{date}} and custom global variables. Use with care.",
         "transcription": "Transcription",
-        "transcriptionDesc": "Transcribe uploaded audio, uploaded video, or a browser recording with a self-hosted transcription model (e.g. Voxtral) and render the result as a chat answer.",
+        "transcriptionDesc": "Turn uploaded audio, uploaded video or a browser recording into text with a transcription model (e.g. Voxtral). The text becomes the user's message, and the chat model answers it.",
         "enableTranscription": "Enable transcription",
         "transcriptionModel": "Transcription model",
         "selectTranscriptionModel": "Select a model…",
@@ -3468,44 +3628,6 @@
     "thinkingLevelMedium": "Medium",
     "thinkingLevelHigh": "High"
   },
-  "citations": {
-    "preview": "Preview (PDF)",
-    "download": "Download",
-    "openInApp": "Open in App",
-    "details": "Details",
-    "fileType": "File Type",
-    "fileSize": "File Size",
-    "author": "Author",
-    "source": "Source",
-    "modified": "Modified",
-    "indexed": "Indexed",
-    "language": "Language",
-    "documentDetails": "Document Details",
-    "loading": "Loading...",
-    "breadcrumbs": "Path",
-    "documents": "Documents",
-    "untitledDocument": "Document",
-    "referenced": "Referenced",
-    "mentioned": "Mentioned",
-    "showMoreDocuments_one": "Show {{count}} more document",
-    "showMoreDocuments_other": "Show {{count}} more documents",
-    "showFewerDocuments": "Show fewer documents",
-    "passages": "{{count}} passage",
-    "passages_plural": "{{count}} passages",
-    "openExternal": "Open in browser",
-    "showInDocument": "Show this passage in the document",
-    "openExternalBlocked": "The document could not be opened — this window blocked it. Try opening it from iHub in your browser.",
-    "openExternalUnavailable": "This document has no link to open.",
-    "downloadFailed": "The document could not be downloaded. Please try again.",
-    "downloadUnavailable": "This document cannot be downloaded from here.",
-    "documentActionFailed": "That action could not be completed.",
-    "attachToMail": "Add to email",
-    "attachedToMail": "Added to your email as {{filename}}.",
-    "attachNeedsDraft": "Open a new email or a reply first, then add the document from there.",
-    "attachTooLarge": "This document is too large to attach. Download it instead.",
-    "attachUnavailable": "This document cannot be attached from here.",
-    "attachFailed": "The document could not be attached to your email."
-  },
   "chatMessage": {
     "user": "You",
     "assistant": "Assistant",
@@ -3559,7 +3681,13 @@
       "expired": "This file is no longer available",
       "failed": "Download failed. Please try again.",
       "notKept": "This file was not kept with the chat"
-    }
+    },
+    "readAloud": "Read aloud",
+    "readAloudLoading": "Loading audio… click to cancel",
+    "readAloudPause": "Pause",
+    "readAloudResume": "Resume",
+    "readAloudStop": "Stop reading",
+    "readAloudError": "Read aloud failed: {{error}}"
   },
   "serverErrors": {
     "appNotFound": "Application not found",
@@ -4428,10 +4556,14 @@
     "scheduled": "Scheduled"
   },
   "transcription": {
-    "record": "Record audio to transcribe",
-    "stopRecording": "Stop recording & transcribe",
+    "record": "Record a spoken message",
+    "stopRecording": "Stop recording and send",
     "recording": "Recording",
-    "empty": "_(No speech detected)_",
+    "listening": "Listening…",
+    "transcribing": "Transcribing…",
+    "transcriptOf": "Transcript of {{name}}:",
+    "noSpeechInFile": "(no speech detected)",
+    "partialInInput": "What was transcribed so far is in the input field.",
     "errors": {
       "noModel": "No transcription model is configured for this app.",
       "decode": "Could not decode this audio in your browser. The format or codec may be unsupported (e.g. OGG in Safari).",
@@ -4439,6 +4571,7 @@
       "notReady": "The transcription service did not become ready. Please check the model configuration and try again.",
       "connection": "Could not reach the transcription service. Please try again later.",
       "timeout": "Transcription timed out. The file may be too long.",
+      "interrupted": "The transcription was interrupted before it finished.",
       "aborted": "Transcription was cancelled.",
       "serverTooLong": "This recording is too long for the configured transcription model. Please split it into shorter parts.",
       "serverBusy": "The transcription service is busy right now. Please try again in a moment.",
@@ -4448,11 +4581,11 @@
       "tooLong": "This audio is {{duration}}s long, which exceeds the {{max}}s limit for transcription.",
       "mic": "Could not access the microphone. Please grant permission and try again.",
       "busy": "A transcription is already running. Stop it first.",
-      "interrupted": "Transcription was interrupted — the transcript may be incomplete.",
+      "noSpeech": "No speech was detected. Nothing was sent.",
       "audioNeedsTranscription": "The selected chat model cannot process audio directly. Enable Transcription in the actions menu, or remove the audio attachment."
     },
     "toggleLabel": "Transcription",
-    "toggleDescription": "Transcribe uploaded audio/video with the transcription model instead of the chat model"
+    "toggleDescription": "Uploaded audio and video are transcribed into your message, and the chat model answers the text"
   },
   "documentPreview": {
     "title": "Document preview",
@@ -4660,7 +4793,7 @@
     "connected": "{{name}} is connected. Send your request again to use it.",
     "failed": "Connecting {{name}} did not succeed. Try again."
   },
-  "webSources": {
+  "sources": {
     "title": "Sources",
     "searchedFor": "Searched for “{{query}}”",
     "searches_one": "{{count}} search",
@@ -4671,7 +4804,44 @@
     "cited": "Cited in this answer",
     "noneCited": "The answer cites none of the sources directly.",
     "considered": "Also considered",
-    "opensInNewTab": "(opens in a new tab)"
+    "opensInNewTab": "(opens in a new tab)",
+    "untitled": "Untitled",
+    "passages_one": "{{count}} passage",
+    "passages_other": "{{count}} passages",
+    "showInDocument": "Show this passage in the document",
+    "actions": "Actions",
+    "actionsFor": "Actions for {{title}}",
+    "openExternal": "Open in browser",
+    "preview": "Preview (PDF)",
+    "download": "Download",
+    "attachToMail": "Add to email",
+    "openInApp": "Open in App",
+    "details": "Details",
+    "copyLink": "Copy link",
+    "linkCopied": "Link copied.",
+    "attachedToMail": "Added to your email as {{filename}}.",
+    "openUnavailable": "This source has no link to open.",
+    "openBlocked": "The link could not be opened — this window blocked it. Try opening it from iHub in your browser.",
+    "downloadUnavailable": "This document cannot be downloaded from here.",
+    "downloadFailed": "The document could not be downloaded. Please try again.",
+    "attachNeedsDraft": "Open a new email or a reply first, then add the document from there.",
+    "attachTooLarge": "This document is too large to attach. Download it instead.",
+    "attachUnavailable": "This document cannot be attached from here.",
+    "attachFailed": "The document could not be attached to your email.",
+    "copyFailed": "The link could not be copied.",
+    "actionFailed": "That action could not be completed.",
+    "documentDetails": "Details",
+    "fileType": "File type",
+    "fileSize": "File size",
+    "author": "Author",
+    "source": "Source",
+    "modified": "Modified",
+    "indexed": "Indexed",
+    "language": "Language",
+    "breadcrumbs": "Path",
+    "loading": "Loading…",
+    "detailsUnavailable": "No further details are available.",
+    "documentFromSource": "Document"
   },
   "prompts": {
     "actions": {

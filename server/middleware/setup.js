@@ -642,6 +642,8 @@ export function setupMiddleware(app, platformConfig = {}) {
 
   // Inference API rate limiter for AI inference endpoints
   app.use(buildApiPath('/inference'), rateLimiters.inferenceApiLimiter);
+  // Read aloud calls a paid speech model on every request.
+  app.use(buildApiPath('/voice/speech'), rateLimiters.inferenceApiLimiter);
 
   // Admin API rate limiter for administrative endpoints (most restrictive)
   app.use(buildApiPath('/admin'), rateLimiters.adminApiLimiter);

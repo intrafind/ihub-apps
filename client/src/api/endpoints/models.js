@@ -42,6 +42,18 @@ export const fetchTranscriptionModels = async () => {
   );
 };
 
+// Fetch text-to-speech models (modelType: 'tts') this user may use, for read
+// aloud. Same sanitized shape as the transcription list; not cached under the
+// chat models key.
+export const fetchTtsModels = async () => {
+  return handleApiResponse(
+    () => apiClient.get('/models', { params: { type: 'tts' } }),
+    null,
+    null,
+    false
+  );
+};
+
 export const fetchModelDetails = async (modelId, options = {}) => {
   const { skipCache = false } = options;
   const cacheKey = skipCache ? null : buildCacheKey(CACHE_KEYS.MODEL_DETAILS, { id: modelId });

@@ -163,8 +163,6 @@ const OPTIONAL_MESSAGE_FIELDS = [
   'artifacts',
   // MCP App views of an assistant answer (see services/mcp/mcpApps.js).
   'mcpApps',
-  // Documents behind an assistant answer (see services/chat/chatCitations.js).
-  'citations',
   // Connect cards for per-user OAuth MCP servers (see chatSeams.authRequiredOf).
   'mcpAuthRequired',
   // Confirmation cards for proposed scheduled tasks (see scheduler/tasks/proposals.js).
@@ -172,8 +170,8 @@ const OPTIONAL_MESSAGE_FIELDS = [
   // What the run did before it answered — searches, tool calls, workflow steps
   // (see services/chat/runActivity.js).
   'activity',
-  // Web search queries and sources behind an assistant answer (shared/webCitations.js).
-  'webSearch'
+  // What an assistant answer found: pages, documents, records (see services/chat/chatSources.js).
+  'sources'
 ];
 
 /** Variables kept per message, and the longest value kept. */

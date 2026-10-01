@@ -1,36 +1,31 @@
-import { memo, useLayoutEffect, useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import { memo, useLayoutEffect, useState, useRef, useEffect, useMemo } from 'react';
 import { renderMarkdown } from '../../../config/marked.config';
 import {
-  transformCitations,
-  attachCitationHandlers,
-  scrollToCitation
-} from '../../../utils/citationTransformer';
-import {
   applyCitationHighlight,
-  transformWebCitations
-} from '../../../utils/webCitationTransformer';
+  transformSourceCitations
+} from '../../../utils/sourceCitationTransformer';
 import {
   currentCitationHighlight,
   highlightCitation,
-  openWebSources,
+  openSources,
   releaseCitation,
-  subscribeWebSources
-} from '../webSourcesStore';
+  subscribeSources
+} from '../sources/sourcesStore';
 import './StreamingMarkdown.css';
 
 /**
  * A component that renders markdown content with optimized real-time updates.
  * Content is rendered via the shared markdown renderer with centralized sanitization.
- * Citation tags are transformed to interactive badges post-render.
+ * Citations are transformed to interactive badges post-render.
  *
  * @param {Object} props
  * @param {string} props.content - Markdown content to render
- * @param {boolean} [props.hasCitations] - Whether content may contain cite tags
- * @param {{messageKey: string, numbers: Map<string, number>, byNumber: Map<number, Object>}} [props.webCitations] -
- *   The answer's web citations (`shared/webCitations.resolveCitations`): links to
- *   cited sources render as numbered badges. Hovering or focusing a badge
+ * @param {{messageKey: string, numberOfUrl: Function, numberOfMarker: Function,
+ *   byNumber: Map<number, Object>}} [props.citations] - The answer's citations
+ *   (`shared/sources/citations.resolveCitations`): links to its sources and
+ *   provider markers render as numbered badges. Hovering or focusing a badge
  *   highlights its passage and source card; a click or tap opens the sources
- *   view on that card and pins the highlight.
+ *   panel on that card and pins the highlight.
  * @param {boolean} [props.streaming] - Whether the message is actively streaming.
  *   While true the container is GPU-promoted (will-change/translateZ) for smooth
  *   incremental updates; once streaming ends the promotion is dropped so finished
@@ -43,16 +38,11 @@ import './StreamingMarkdown.css';
  * message toggles its action row, for example) would therefore wipe and rebuild
  * the whole markdown subtree, throwing away every rendered Mermaid diagram in it.
  */
-function StreamingMarkdown({ content, hasCitations, webCitations = null, streaming = false }) {
+function StreamingMarkdown({ content, citations = null, streaming = false }) {
   const containerRef = useRef(null);
   const [htmlContent, setHtmlContent] = useState('');
   const lastParsedContentRef = useRef(null);
-  const citationsAppliedRef = useRef(false);
-  const lastWebCitationsRef = useRef(null);
-
-  const handleCitationClick = useCallback((type, num) => {
-    scrollToCitation(type, num);
-  }, []);
+  const lastCitationsRef = useRef(null);
 
   // Use useLayoutEffect instead of useEffect to apply DOM changes synchronously
   // before the browser has a chance to paint
@@ -60,32 +50,21 @@ function StreamingMarkdown({ content, hasCitations, webCitations = null, streami
     if (!content) {
       setHtmlContent('');
       lastParsedContentRef.current = null;
-      citationsAppliedRef.current = false;
       return;
     }
 
-    // Re-parse when content changes, when citations become available but weren't
-    // applied yet, or when the web citations (their numbering) changed
+    // Re-parse when the content or the citations (their numbering) changed.
     const contentChanged = content !== lastParsedContentRef.current;
-    const needsCitationTransform = hasCitations && !citationsAppliedRef.current;
-    const webCitationsChanged = webCitations !== lastWebCitationsRef.current;
+    const citationsChanged = citations !== lastCitationsRef.current;
 
-    if (contentChanged || needsCitationTransform || webCitationsChanged) {
+    if (contentChanged || citationsChanged) {
       try {
-        const transforms = [
-          hasCitations ? transformCitations : null,
-          webCitations?.numbers?.size ? html => transformWebCitations(html, webCitations) : null
-        ].filter(Boolean);
-        const transformHtml = transforms.length
-          ? html => transforms.reduce((out, transform) => transform(out), html)
-          : undefined;
         const parsedContent = renderMarkdown(content, {
-          transformHtml
+          transformHtml: citations?.byNumber?.size
+            ? html => transformSourceCitations(html, citations)
+            : undefined
         });
-        lastWebCitationsRef.current = webCitations;
-        if (transformHtml) {
-          citationsAppliedRef.current = true;
-        }
+        lastCitationsRef.current = citations;
         // Only push new HTML when it actually differs. Re-assigning identical
         // markup would tear down and recreate every child node, which throws
         // away already-rendered Mermaid diagrams.
@@ -95,24 +74,17 @@ function StreamingMarkdown({ content, hasCitations, webCitations = null, streami
         console.error('Error parsing markdown:', error);
       }
     }
-  }, [content, hasCitations, webCitations]);
+  }, [content, citations]);
 
-  // Attach citation click handlers after DOM update
-  useEffect(() => {
-    if (hasCitations && containerRef.current) {
-      attachCitationHandlers(containerRef.current, handleCitationClick);
-    }
-  }, [htmlContent, hasCitations, handleCitationClick]);
-
-  // Web citation badges: hover and focus highlight, click and tap open the
-  // sources view. Delegated on the container, whose children are replaced
+  // Citation badges: hover and focus highlight, click and tap open the
+  // sources panel. Delegated on the container, whose children are replaced
   // whenever the markup changes.
-  const messageKey = webCitations?.messageKey || null;
+  const messageKey = citations?.messageKey || null;
   useEffect(() => {
     const container = containerRef.current;
     if (!container || !messageKey) return undefined;
-    const badgeOf = event => event.target?.closest?.('[data-web-citation]');
-    const numberOf = badge => Number(badge.getAttribute('data-web-citation'));
+    const badgeOf = event => event.target?.closest?.('[data-source-citation]');
+    const numberOf = badge => Number(badge.getAttribute('data-source-citation'));
     const onEnter = event => {
       const badge = badgeOf(event);
       if (badge) highlightCitation(messageKey, numberOf(badge));
@@ -132,19 +104,28 @@ function StreamingMarkdown({ content, hasCitations, webCitations = null, streami
       event.preventDefault();
       const n = numberOf(badge);
       highlightCitation(messageKey, n, { pinned: true });
-      openWebSources(messageKey, n);
+      openSources(messageKey, n);
+    };
+    // A badge without a link is a button: Enter and Space press it.
+    const onKey = event => {
+      if (event.key !== 'Enter' && event.key !== ' ') return;
+      const badge = badgeOf(event);
+      if (!badge || badge.getAttribute('role') !== 'button') return;
+      onClick(event);
     };
     container.addEventListener('mouseover', onEnter);
     container.addEventListener('mouseout', onLeave);
     container.addEventListener('focusin', onEnter);
     container.addEventListener('focusout', onLeave);
     container.addEventListener('click', onClick);
+    container.addEventListener('keydown', onKey);
     return () => {
       container.removeEventListener('mouseover', onEnter);
       container.removeEventListener('mouseout', onLeave);
       container.removeEventListener('focusin', onEnter);
       container.removeEventListener('focusout', onLeave);
       container.removeEventListener('click', onClick);
+      container.removeEventListener('keydown', onKey);
     };
   }, [messageKey]);
 
@@ -158,7 +139,7 @@ function StreamingMarkdown({ content, hasCitations, webCitations = null, streami
       applyCitationHighlight(container, highlight?.messageKey === messageKey ? highlight.n : null);
     };
     apply();
-    return subscribeWebSources(apply);
+    return subscribeSources(apply);
   }, [htmlContent, messageKey]);
 
   // Reference-stable as long as the markup is unchanged. React compares the

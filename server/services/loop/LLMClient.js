@@ -74,7 +74,7 @@ const STREAM_ONLY_PROVIDERS = new Set(['iassistant-conversation']);
 
 /** Extra per-chunk fields some adapters emit that a collected result should keep (last value wins). */
 const PASSTHROUGH_FIELDS = [
-  'citations',
+  'sources',
   'searchStatus',
   'conversationTitle',
   'conversationId',
@@ -544,7 +544,7 @@ export class LLMClient {
     let pool = this.listModels(includeDisabled);
     if (requireTextCapable) {
       pool = pool.filter(
-        m => m.enabled !== false && !m.supportsImageGeneration && m.modelType !== 'transcription'
+        m => m.enabled !== false && !m.supportsImageGeneration && (m.modelType || 'chat') === 'chat'
       );
     }
     if (pool.length === 0) return null;

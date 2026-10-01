@@ -1,8 +1,15 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { DEFAULT_LANGUAGE } from '../../../utils/localizeContent';
+import { getLocalizedContent } from '../../../utils/localizeContent';
 import { getAdminApiErrorMessage, makeAdminApiCall } from '../../../api/adminApi';
+import {
+  BUILT_IN_LLM_PROVIDERS,
+  CUSTOM_PROVIDER_API_TYPES,
+  getLinkedModels,
+  getProviderApiType
+} from '../../../../../shared/llmProviders.js';
+import ProviderFormFields from '../components/ProviderFormFields';
 import Icon from '../../../shared/components/Icon';
 import AdminBreadcrumb from '../components/AdminBreadcrumb';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
@@ -10,7 +17,7 @@ import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import WebsearchTestResult from '../components/WebsearchTestResult';
 
 function AdminProviderEditPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const { providerId } = useParams();
 
@@ -25,12 +32,13 @@ function AdminProviderEditPage() {
 
   const [formData, setFormData] = useState({
     id: '',
-    name: { [DEFAULT_LANGUAGE]: '' },
-    description: { [DEFAULT_LANGUAGE]: '' },
+    name: '',
+    description: '',
     enabled: true,
     apiKey: '',
     apiKeySet: false
   });
+  const [models, setModels] = useState([]);
 
   // Connectivity test state — kept out of formData so running a test never
   // looks like an unsaved edit.
@@ -41,6 +49,12 @@ function AdminProviderEditPage() {
   const { blocker, markSaved } = useUnsavedChanges(initialData, formData);
 
   const isWebsearchProvider = formData.category === 'websearch';
+  // Entries without a category are the original built-in LLM providers.
+  const isLlmProvider = (formData.category || 'llm') === 'llm';
+  const isBuiltIn = BUILT_IN_LLM_PROVIDERS.includes(providerId);
+  const linkedModels = isLlmProvider ? getLinkedModels(providerId, models) : [];
+  // Import needs the saved entry: the server reads its key and API type.
+  const canImport = CUSTOM_PROVIDER_API_TYPES.includes(getProviderApiType(initialData));
 
   /**
    * Run one live search through this provider and show the verdict.
@@ -81,22 +95,20 @@ function AdminProviderEditPage() {
   const loadProvider = useCallback(async () => {
     try {
       setLoading(true);
-      const response = await makeAdminApiCall(`/admin/providers/${providerId}`);
+      const [response, modelsResponse] = await Promise.all([
+        makeAdminApiCall(`/admin/providers/${providerId}`),
+        makeAdminApiCall('/admin/models').catch(() => ({ data: [] }))
+      ]);
       const provider = response.data;
+      setModels(Array.isArray(modelsResponse.data) ? modelsResponse.data : []);
 
-      // Ensure name and description are proper localized objects
-      const ensureLocalizedObject = value => {
-        if (!value) return { [DEFAULT_LANGUAGE]: '' };
-        if (typeof value === 'string') return { [DEFAULT_LANGUAGE]: value };
-        if (typeof value === 'object' && value !== null) return value;
-        return { [DEFAULT_LANGUAGE]: '' };
-      };
-
+      // Name and description are plain text. getLocalizedContent also reads an
+      // entry still carrying per-language objects; saving stores the string.
       const formDataObj = {
         ...provider,
         id: provider.id || '',
-        name: ensureLocalizedObject(provider.name),
-        description: ensureLocalizedObject(provider.description),
+        name: getLocalizedContent(provider.name, i18n.language) || provider.id || '',
+        description: getLocalizedContent(provider.description, i18n.language) || '',
         enabled: provider.enabled !== undefined ? provider.enabled : true
       };
 
@@ -116,22 +128,12 @@ function AdminProviderEditPage() {
     } finally {
       setLoading(false);
     }
-  }, [providerId]);
+  }, [providerId, i18n.language]);
 
   const handleChange = (field, value) => {
     setFormData(prev => ({
       ...prev,
       [field]: value
-    }));
-  };
-
-  const handleLocalizedChange = (field, lang, value) => {
-    setFormData(prev => ({
-      ...prev,
-      [field]: {
-        ...prev[field],
-        [lang]: value
-      }
     }));
   };
 
@@ -163,6 +165,12 @@ function AdminProviderEditPage() {
       // Remove helper fields that shouldn't be sent to backend
       delete dataToSend.apiKeySet;
       delete dataToSend.apiKeyMasked;
+      if (typeof dataToSend.baseUrl === 'string') {
+        dataToSend.baseUrl = dataToSend.baseUrl.trim() || undefined;
+      }
+      if (isLlmProvider && !isBuiltIn && !dataToSend.apiType) {
+        dataToSend.apiType = 'openai';
+      }
 
       await makeAdminApiCall(`/admin/providers/${providerId}`, {
         method: 'PUT',
@@ -201,7 +209,7 @@ function AdminProviderEditPage() {
           crumbs={[
             { label: 'Admin', href: '/admin' },
             { label: 'Providers', href: '/admin/providers' },
-            { label: formData?.name?.en ?? providerId }
+            { label: formData?.name || providerId }
           ]}
         />
         <div className="mb-6">
@@ -216,7 +224,7 @@ function AdminProviderEditPage() {
             {t('admin.providers.edit.title', 'Configure Provider')}
           </h1>
           <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-            {t('admin.providers.edit.description', 'Configure API credentials for this provider')}
+            {t('admin.providers.edit.subtitle', 'Configure this provider and its API key')}
           </p>
         </div>
 
@@ -250,68 +258,12 @@ function AdminProviderEditPage() {
 
         {/* Form */}
         <form onSubmit={handleSave} className="bg-white dark:bg-gray-800 shadow-sm rounded-lg p-6">
-          {/* Provider ID (Read-only) */}
-          <div className="mb-6">
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              {t('admin.providers.edit.id', 'Provider ID')}
-            </label>
-            <input
-              type="text"
-              value={formData.id}
-              disabled
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed"
-            />
-          </div>
-
-          {/* Provider Name */}
-          <div className="mb-6">
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              {t('admin.providers.edit.name', 'Provider Name')}
-            </label>
-            <div className="space-y-2">
-              <input
-                type="text"
-                value={formData.name.en || ''}
-                onChange={e => handleLocalizedChange('name', 'en', e.target.value)}
-                placeholder="English"
-                disabled
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed"
-              />
-              <input
-                type="text"
-                value={formData.name.de || ''}
-                onChange={e => handleLocalizedChange('name', 'de', e.target.value)}
-                placeholder="Deutsch"
-                disabled
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed"
-              />
-            </div>
-          </div>
-
-          {/* Provider Description */}
-          <div className="mb-6">
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              {t('admin.providers.edit.description', 'Description')}
-            </label>
-            <div className="space-y-2">
-              <textarea
-                value={formData.description.en || ''}
-                onChange={e => handleLocalizedChange('description', 'en', e.target.value)}
-                placeholder="English"
-                rows={2}
-                disabled
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed resize-none"
-              />
-              <textarea
-                value={formData.description.de || ''}
-                onChange={e => handleLocalizedChange('description', 'de', e.target.value)}
-                placeholder="Deutsch"
-                rows={2}
-                disabled
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed resize-none"
-              />
-            </div>
-          </div>
+          <ProviderFormFields
+            data={formData}
+            onChange={handleChange}
+            isLlm={isLlmProvider}
+            apiTypeLocked={isBuiltIn}
+          />
 
           {/* API Key */}
           <div className="mb-6">
@@ -403,6 +355,71 @@ function AdminProviderEditPage() {
             </button>
           </div>
         </form>
+
+        {/* Models linked to this provider — they take their API key from it. */}
+        {isLlmProvider && (
+          <div className="mt-6 bg-white dark:bg-gray-800 shadow-sm rounded-lg p-6">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-medium text-gray-900 dark:text-gray-100">
+                  {t('admin.providers.linkedModels.title', 'Linked models')}
+                </h2>
+                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                  {t(
+                    'admin.providers.linkedModels.description',
+                    'These models use this provider’s API key unless they have a key of their own.'
+                  )}
+                </p>
+              </div>
+              {canImport && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    navigate('/admin/models', { state: { importProviderId: providerId } })
+                  }
+                  className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 inline-flex items-center gap-2"
+                >
+                  <Icon name="link" className="w-4 h-4" />
+                  {t('admin.providers.linkedModels.import', 'Import models')}
+                </button>
+              )}
+            </div>
+            {linkedModels.length === 0 ? (
+              <p className="mt-4 text-sm text-gray-500 dark:text-gray-400">
+                {t('admin.providers.linkedModels.none', 'No models are linked to this provider.')}
+              </p>
+            ) : (
+              <ul className="mt-4 divide-y divide-gray-100 dark:divide-gray-700">
+                {linkedModels.map(model => (
+                  <li key={model.id} className="flex items-center justify-between gap-3 py-2">
+                    <div className="min-w-0">
+                      <Link
+                        to={`/admin/models/${model.id}`}
+                        className="text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline"
+                      >
+                        {getLocalizedContent(model.name, i18n.language) || model.id}
+                      </Link>
+                      <div className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                        {model.id} · {model.modelId}
+                      </div>
+                    </div>
+                    <span
+                      className={`shrink-0 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                        model.enabled
+                          ? 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200'
+                          : 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-300'
+                      }`}
+                    >
+                      {model.enabled
+                        ? t('admin.providers.enabled', 'Enabled')
+                        : t('admin.providers.disabled', 'Disabled')}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
 
         {/* Connectivity test — web search providers only.
             Deliberately outside the <form>: a button inside one submits it, and

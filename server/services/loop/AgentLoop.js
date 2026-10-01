@@ -29,7 +29,13 @@ import { RUN_LOG_EVENTS } from '../../../shared/runEvents.js';
 import { addUsage, normalizeUsage, usageToBudget } from './llmUsage.js';
 import { repairToolArguments, applyParameterDefaults, matchTool } from './toolArgs.js';
 import { classifyToolResult, isCitationProducingTool } from './toolClassify.js';
-import { extractWebSources } from './webSources.js';
+import { extractToolSources, finalizeSourceFrame } from '../sources/index.js';
+import { runToolCallScope } from '../sources/toolCallScope.js';
+import {
+  emptySourceSet,
+  mergeSources,
+  sourcesFromGrounding
+} from '../../../shared/sources/index.js';
 import { planToolBatches } from './segmentPlanner.js';
 import { takeSteers, steerMessage } from './steering.js';
 import {
@@ -227,7 +233,8 @@ export class AgentLoop {
       iteration: 0,
       disabledTools: new Set(),
       knowledgeSources: new Set(),
-      citations: [],
+      // What the segment's producers found (tool calls, adapters, provider search).
+      sources: emptySourceSet(),
       state: request.state,
       meta: request.meta || {},
       refs: request.refs || {},
@@ -239,8 +246,31 @@ export class AgentLoop {
       addKnowledgeSource: source => {
         if (source) ctx.knowledgeSources.add(source);
       },
-      addCitation: citation => {
-        if (citation) ctx.citations.push(citation);
+      /**
+       * Report sources a producer found: merged into `ctx.sources`, written to
+       * the ledger and handed to the channel (`onSources`) as `sources/added`.
+       * @param {Object|null} frame - `{ items, queries?, supports? }`
+       * @param {{step?: number, callId?: string, toolId?: string, defaults?: Object}} [where]
+       * @returns {Promise<Object|null>} the frame as reported, null when it held nothing
+       */
+      addSources: async (frame, { step, callId, toolId, defaults } = {}) => {
+        const finalized = finalizeSourceFrame(frame, defaults);
+        if (!finalized) return null;
+        const merged = mergeSources(ctx.sources, finalized);
+        // A repeat that adds nothing (Google sends its grounding again with
+        // every chunk) is not reported again. A tool call's frame always is:
+        // it is also that call's own list.
+        if (merged === ctx.sources && !callId) return null;
+        ctx.sources = merged;
+        const data = {
+          ...(Number.isInteger(step) ? { step } : {}),
+          ...(callId ? { callId: String(callId) } : {}),
+          ...(toolId ? { toolId: String(toolId) } : {}),
+          ...finalized
+        };
+        this._ledger(ledgerId, RUN_LOG_EVENTS.SOURCES_ADDED, data);
+        if (ctx.channel?.onSources) await ctx.channel.onSources(data, ctx);
+        return data;
       }
     };
 
@@ -277,7 +307,7 @@ export class AgentLoop {
         totalTokens: runBudget.total
       },
       iterations: iteration,
-      citations: ctx.citations,
+      sources: ctx.sources,
       thoughtSignatures,
       images,
       disabledTools: [...ctx.disabledTools],
@@ -391,6 +421,14 @@ export class AgentLoop {
               if (typeof seam.onChunk === 'function') await seam.onChunk(ctx, chunk);
             }
             if (ctx.channel?.onChunk) await ctx.channel.onChunk(chunk, ctx);
+            // What a model adapter found (iAssistant) and what provider-run web
+            // search reported, as it streams in.
+            if (chunk.sources) await ctx.addSources(chunk.sources, { step: iteration });
+            if (chunk.groundingMetadata) {
+              await ctx.addSources(sourcesFromGrounding(chunk.groundingMetadata), {
+                step: iteration
+              });
+            }
           }
           result = stream.result();
         } catch (err) {
@@ -846,6 +884,8 @@ export class AgentLoop {
     let message;
     let rawResult;
     let failure = null;
+    // Sources the call reports beside its result (services/sources/toolCallScope).
+    const reported = [];
     if (!toolDef) {
       const available = ctx.tools.map(t => t.id).filter(Boolean);
       const safeMessage =
@@ -874,7 +914,16 @@ export class AgentLoop {
         }
         rawResult = await raceAbort(
           () =>
-            ctx.request.executeTool(call, { toolDef, toolId, args, ctx, info, signal: ctx.signal }),
+            runToolCallScope(reported, () =>
+              ctx.request.executeTool(call, {
+                toolDef,
+                toolId,
+                args,
+                ctx,
+                info,
+                signal: ctx.signal
+              })
+            ),
           ctx.signal,
           () => abortError('Agent loop aborted (cancelled or timed out)')
         );
@@ -911,9 +960,16 @@ export class AgentLoop {
       message: bound.message,
       durationMs: Date.now() - started,
       error: failure,
-      // The pages a search/fetch tool found or read, taken from the full
-      // result: the previews that reach clients are too short to hold them.
-      webSources: failure ? [] : extractWebSources(toolId, rawResult ?? message.content)
+      // What the call found, taken from the full result: the previews that
+      // reach clients are too short to hold it (see services/sources).
+      sources: extractToolSources({
+        toolId,
+        toolDef,
+        args,
+        result: rawResult ?? message.content,
+        reported,
+        failed: !!failure
+      })
     };
     await runHooks(seams, 'postTool', ctx, info, outcome);
     messages.push(outcome.message);
@@ -932,9 +988,15 @@ export class AgentLoop {
         : undefined,
       durationMs: outcome.durationMs,
       hasImage: !!outcome.message.imageData,
-      knowledgeSource: outcome.knowledgeSource,
-      ...(outcome.webSources?.length ? { webSources: outcome.webSources } : {})
+      knowledgeSource: outcome.knowledgeSource
     });
+    if (outcome.sources) {
+      await ctx.addSources(outcome.sources, {
+        step: iteration,
+        callId: call.id || `${call.index}`,
+        toolId
+      });
+    }
     if (ctx.channel?.onToolEnd) await ctx.channel.onToolEnd({ ...info, outcome, verdict }, ctx);
 
     // ── circuit breaker ───────────────────────────────────────────────

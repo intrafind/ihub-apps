@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useFilterState } from '../hooks/useFilterState';
 import { getLocalizedContent } from '../../../utils/localizeContent';
@@ -8,6 +8,7 @@ import ModelDetailsPopup from '../../../shared/components/ModelDetailsPopup';
 import { getAdminApiErrorMessage, makeAdminApiCall, toggleModels } from '../../../api/adminApi';
 import { DataTable, SearchInput, FilterSelect } from '../components/data-table';
 import { translateModelTestMessage } from '../utils/modelTestMessages';
+import ModelImportDialog from '../components/ModelImportDialog';
 
 function ModelNameCell({ model, currentLanguage }) {
   return (
@@ -54,6 +55,7 @@ function AdminModelsPage() {
   const { t, i18n } = useTranslation();
   const currentLanguage = i18n.language;
   const navigate = useNavigate();
+  const location = useLocation();
   const [models, setModels] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -64,6 +66,13 @@ function AdminModelsPage() {
   const [selectedModel, setSelectedModel] = useState(null);
   const [showModelDetails, setShowModelDetails] = useState(false);
   const [uploading, setUploading] = useState(false);
+  // The Providers page opens the import dialog for one provider through
+  // navigation state ({ importProviderId }).
+  const [importDialog, setImportDialog] = useState(() =>
+    location.state?.importProviderId
+      ? { open: true, providerId: location.state.importProviderId }
+      : { open: false, providerId: null }
+  );
 
   const loadModels = async () => {
     try {
@@ -396,6 +405,14 @@ function AdminModelsPage() {
                 <Icon name="plus" className="h-4 w-4 mr-2" />
                 {t('admin.models.addNew', 'Add New Model')}
               </button>
+              <button
+                type="button"
+                onClick={() => setImportDialog({ open: true, providerId: null })}
+                className="inline-flex items-center justify-center rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 shadow-xs hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+              >
+                <Icon name="link" className="h-4 w-4 mr-2" />
+                {t('admin.models.import.button', 'Import from URL')}
+              </button>
               <div className="relative">
                 <input
                   type="file"
@@ -489,6 +506,20 @@ function AdminModelsPage() {
           isOpen={showModelDetails}
           onClose={() => setShowModelDetails(false)}
         />
+
+        {importDialog.open && (
+          <ModelImportDialog
+            initialProviderId={importDialog.providerId}
+            existingModelIds={models.map(m => m.id)}
+            onImported={loadModels}
+            onClose={() => {
+              setImportDialog({ open: false, providerId: null });
+              if (location.state?.importProviderId) {
+                navigate(location.pathname, { replace: true, state: null });
+              }
+            }}
+          />
+        )}
       </div>
     </div>
   );

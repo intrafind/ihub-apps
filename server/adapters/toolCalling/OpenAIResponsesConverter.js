@@ -16,7 +16,7 @@ import {
 } from './GenericToolCalling.js';
 import logger from '../../utils/logger.js';
 import { parseJsonAsync } from '../../utils/asyncJson.js';
-import { citationMarkers, linkTargets, sourceKey } from '../../../shared/webCitations.js';
+import { citationMarkers, linkTargets, urlKey } from '../../../shared/sources/index.js';
 
 /**
  * Sanitize a JSON Schema for the OpenAI Responses API's tool `parameters`.
@@ -229,18 +229,18 @@ const CITATION_SPAN_SLACK = 16;
  * annotation then only locates them.
  */
 function citationIsLinked(text, annotation) {
-  const key = sourceKey(annotation?.url);
+  const key = urlKey(annotation?.url);
   if (!key) return true;
   const { start_index: start, end_index: end } = annotation;
   const span =
     Number.isInteger(start) && Number.isInteger(end)
       ? text.slice(Math.max(0, start - CITATION_SPAN_SLACK), end + CITATION_SPAN_SLACK)
       : text;
-  return linkTargets(span).some(url => sourceKey(url) === key);
+  return linkTargets(span).some(url => urlKey(url) === key);
 }
 
 /**
- * Put a citation marker (`[n](url)`, see `shared/webCitations.js`) after
+ * Put a citation marker (`[n](url)`, see `shared/sources/citations.js`) after
  * every annotated range that does not link its source yet, so the chat shows
  * an inline badge there too, not only a source card.
  *
@@ -304,7 +304,7 @@ export function clearOpenaiResponsesStreamingState(streamId = 'default') {
 /**
  * Native web search activity in the `groundingMetadata` shape the other
  * providers use (see `features/chat/webSearch` on the client and
- * `shared/webCitations.js`):
+ * `shared/sources/citations.js`):
  *
  *  - `webSearchQueries` — what a `web_search_call` searched for
  *    (`action.query`, or `action.queries` on newer models);

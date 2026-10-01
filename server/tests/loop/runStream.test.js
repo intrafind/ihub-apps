@@ -1004,6 +1004,17 @@ test('projectLedgerEvent: run/end → run/ended', () => {
   });
   const [minimal] = projected(RUN_LOG_EVENTS.RUN_END, {});
   assert.deepEqual(minimal.data, { status: 'completed', finishReason: null });
+  // A replayed chat turn badges its answer the way the live `run/ended` did.
+  const [answered] = projected(RUN_LOG_EVENTS.RUN_END, {
+    status: 'completed',
+    finishReason: 'stop',
+    knowledgeSources: ['websearch', 'file']
+  });
+  assert.deepEqual(answered.data, {
+    status: 'completed',
+    finishReason: 'stop',
+    knowledgeSources: ['websearch', 'file']
+  });
 });
 
 test('projectLedgerEvent: run/paused, run/resumed', () => {
@@ -1113,17 +1124,29 @@ test('projectLedgerEvent: tool/call → tool/started, tool/result → tool/compl
     resultPreview: null,
     error: { message: 'error' }
   });
-  // The pages a search found survive a rebuild from the ledger.
-  const webSources = [{ url: 'https://example.com/', title: 'Example', read: true }];
-  const [searched] = projected(RUN_LOG_EVENTS.TOOL_RESULT, {
+});
+
+test('projectLedgerEvent: sources/added survives a rebuild from the ledger as it was sent', () => {
+  const data = {
     step: 1,
     callId: 'c2',
     toolId: 'braveSearch',
-    resultPreview: '…',
-    durationMs: 3,
-    webSources
-  });
-  assert.deepEqual(searched.data.webSources, webSources);
+    items: [
+      {
+        id: 'url:example.com',
+        provider: 'web',
+        kind: 'page',
+        url: 'https://example.com/',
+        title: 'Example',
+        read: { ok: true },
+        private: false
+      }
+    ],
+    queries: ['example']
+  };
+  const [found] = projected(RUN_LOG_EVENTS.SOURCES_ADDED, data);
+  assert.equal(found.type, SSE_V2_EVENTS.SOURCES_ADDED);
+  assert.deepEqual(found.data, data);
 });
 
 test('projectLedgerEvent: interaction/raised and interaction/answered project only when complete', () => {

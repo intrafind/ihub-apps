@@ -1,7 +1,7 @@
 /**
- * Map a transcription failure (from decodeAudioFileToBuffer / transcribeAudioBuffer)
- * to a clear, localized message. Used by the chat (assistant bubble) and the
- * admin voice-input test panel.
+ * Map a transcription failure (from decodeAudioFileToBuffer / transcribeAudioBuffer /
+ * startLiveTranscription) to a clear, localized message. Used by the chat and
+ * the admin voice-input test panel.
  */
 export const getTranscriptionErrorMessage = (err, t) => {
   const code = err?.code || err?.message;
@@ -28,6 +28,11 @@ export const getTranscriptionErrorMessage = (err, t) => {
       return t(
         'transcription.errors.timeout',
         'Transcription timed out. The file may be too long.'
+      );
+    case 'interrupted':
+      return t(
+        'transcription.errors.interrupted',
+        'The transcription was interrupted before it finished.'
       );
     case 'aborted':
       return t('transcription.errors.aborted', 'Transcription was cancelled.');

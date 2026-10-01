@@ -1,7 +1,7 @@
 /**
  * Display helpers for the sources behind a chat answer. The sources themselves
  * — web search results, page reads and provider grounding — are collected by
- * `shared/webCitations.js` (see `features/chat/webSearch.js`).
+ * `shared/sources`.
  *
  * @module shared/run/groundingSources
  */

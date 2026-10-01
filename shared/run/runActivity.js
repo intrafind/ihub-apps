@@ -12,8 +12,8 @@
  * reopened a week later shows the searches, tool calls and workflow steps the
  * user watched live — rendered by the same components, from the same shapes.
  *
- * The web sources behind the answer are not part of it: they are stored as
- * the message's `webSearch` (`shared/webCitations.js`).
+ * The sources behind the answer are not part of it: they are stored as the
+ * message's `sources` (`shared/sources`); each tool call lists its own here.
  *
  * Pure and dependency-free apart from its siblings, so both sides import it.
  *
@@ -88,7 +88,9 @@ export function workflowResultOf(run) {
 
 /**
  * The knowledge the answer drew on, for the answer badge ("Based on web
- * search", "… iFinder"). Only once the run is over: the list grows while it runs.
+ * search", "… iFinder", "… AI knowledge"): the list the server named on
+ * `run/ended`, nothing inferred here. A run that ended without one — failed,
+ * stopped before it wrote anything, or not a chat turn — has no answer source.
  *
  * @param {Object} run - RunState
  * @returns {{sources: string[], type: 'mixed'}|null}
@@ -104,8 +106,8 @@ export function answerSourceOf(run) {
  * the workflow run itself for an `@mention` launch.
  *
  * Every field is left out when the run has nothing for it, and null comes
- * back when the run did nothing worth showing — a plain answer from the
- * model's own knowledge.
+ * back when the run did nothing worth showing. A chat turn that answered
+ * always has its answer source, even one from the model's own knowledge.
  *
  * @param {Object|null} run - RunState of the message's own run
  * @param {Object[]} [childRuns] - workflow runs started inside it

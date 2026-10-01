@@ -3,6 +3,7 @@ import {
   CHUNK_SAMPLES,
   TARGET_SAMPLE_RATE,
   createTranscriptAssembler,
+  isCompletionClose,
   resampleTo16kMono,
   floatTo16BitPCM
 } from './realtimeTranscriptionCore';
@@ -31,6 +32,8 @@ import {
  * @param {(text: string) => void} [opts.onDelta] - Running transcript on each update.
  * @param {(text: string) => void} [opts.onFinal] - Final transcript when complete.
  * @param {(err: { code: string, message?: string }) => void} [opts.onError]
+ * @param {(sources: string[]) => void} [opts.onSources] - What the server says the
+ *   transcript is based on (`ready.knowledgeSources`), for the answer badge.
  * @param {AbortSignal} [opts.signal] - Abort/cancel the transcription.
  * @returns {Promise<string>} Resolves with the final transcript.
  */
@@ -55,7 +58,7 @@ const overallTimeoutFor = durationSeconds =>
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 export async function transcribeAudioBuffer(audioBuffer, opts = {}) {
-  const { modelId, onDelta, onFinal, onError, signal } = opts;
+  const { modelId, onDelta, onFinal, onError, onSources, signal } = opts;
 
   const float32 = await resampleTo16kMono(audioBuffer);
   if (!float32.length) {
@@ -187,6 +190,9 @@ export async function transcribeAudioBuffer(audioBuffer, opts = {}) {
         case 'ready':
           if (ready) break;
           ready = true;
+          if (typeof onSources === 'function' && Array.isArray(msg.knowledgeSources)) {
+            onSources(msg.knowledgeSources);
+          }
           streamAudio();
           break;
         case 'delta':
@@ -214,13 +220,15 @@ export async function transcribeAudioBuffer(audioBuffer, opts = {}) {
       if (!settled && !ready) fail('connect', 'Transcription connection failed');
     };
 
-    ws.onclose = () => {
+    ws.onclose = evt => {
       if (settled) return;
-      // Completion is only trusted after `stop` was sent — a close mid-stream
-      // means the transcript is TRUNCATED, and silently resolving would present
-      // a partial transcript as complete. The caller keeps the partial text via
-      // its onDelta bookkeeping and can annotate it as interrupted.
-      if (stopSent) finish();
+      // Completion is only trusted after `stop` was sent, and only on the
+      // server's own completion close (see isCompletionClose). A close
+      // mid-stream, a dropped connection after `stop` (proxy timeout, network)
+      // or a close with an error code means the transcript is TRUNCATED, and
+      // silently resolving would present a partial transcript as complete —
+      // the chat would send it as the message.
+      if (stopSent && isCompletionClose(evt)) finish();
       else fail('interrupted', 'Transcription connection closed before completion');
     };
   });

@@ -10,7 +10,7 @@
 
 import { saveAs } from 'file-saver';
 import { renderMarkdown } from '../../../config/marked.config';
-import { exportPdfOnServer } from '../../../api/endpoints/documents';
+import { exportPdfOnServer } from '../../../api/endpoints/exports';
 
 /**
  * Fetch the artifact's raw text via authenticated request.
