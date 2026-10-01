@@ -41,3 +41,10 @@ It streams the transcript while the audio is still arriving, without a GPU of yo
 - It ships disabled, because enabling it sends user audio to Mistral. Enable it under
   **Admin → Models**, then choose it under **Admin → Voice Input** or in an app's transcription
   settings.
+
+## Model Import: Create a Provider Without Importing Models
+
+When **Import from URL** creates a new provider, the provider can now be created without picking
+a model: with nothing selected, the button reads **Create provider without models**. The provider
+keeps the endpoint's base URL and API key, so its models can be imported later — also when the
+endpoint does not list any models yet.

@@ -199,6 +199,9 @@ you pick, so they need not be typed in one by one.
    are marked and not selected by **Select all**. Models already configured for the same endpoint
    show as **Already added**.
 4. Adjust the iHub model IDs if needed (an ID prefix applies to all of them), and **Import**.
+   With **+ New provider**, you can also pick no model and choose **Create provider without
+   models**: the provider is created with the endpoint's normalized base URL and the key, for an
+   endpoint that lists no models yet or to import its models later.
 
 Supported listings: OpenAI and every OpenAI-compatible server (vLLM, LM Studio, Ollama, LLM Hub,
 OpenRouter, Together, Groq), Mistral, Anthropic and Google. The call goes through the platform's
