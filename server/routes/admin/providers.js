@@ -22,6 +22,7 @@ import {
   getProviderApiType,
   isCustomLlmProvider
 } from '../../services/llmProviders.js';
+import { stripTrailingSlashes } from '../../services/ModelEndpointDiscovery.js';
 
 /** The provider configuration, as a path relative to `contents/`. */
 const PROVIDERS_FILE = 'config/providers.json';
@@ -75,7 +76,7 @@ function normalizeProviderFields(provider) {
   ) {
     return 'Base URL must be an http:// or https:// URL';
   } else {
-    provider.baseUrl = provider.baseUrl.trim().replace(/\/+$/, '');
+    provider.baseUrl = stripTrailingSlashes(provider.baseUrl.trim());
   }
   return null;
 }

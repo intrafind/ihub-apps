@@ -28,6 +28,13 @@ describe('suggestModelId / slugify', () => {
     expect(suggestModelId('gpt-oss-120b', 'llmhub-')).toBe('llmhub-gpt-oss-120b');
     expect(suggestModelId('???')).toBe('');
     expect(slugify('T-Systems LLM Hub')).toBe('t-systems-llm-hub');
+    expect(slugify('._-model-._')).toBe('model');
+  });
+
+  it('trims a long run of separators in linear time', () => {
+    const started = Date.now();
+    expect(slugify(`${'._'.repeat(100000)}x${'._'.repeat(100000)}`)).toBe('x');
+    expect(Date.now() - started).toBeLessThan(1000);
   });
 });
 

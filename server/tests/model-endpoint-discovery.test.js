@@ -15,6 +15,7 @@ import {
   parseModelsResponse,
   discoverModels,
   comparableUrl,
+  stripTrailingSlashes,
   ModelDiscoveryError
 } from '../services/ModelEndpointDiscovery.js';
 
@@ -326,4 +327,17 @@ test('comparableUrl ignores case of the origin and trailing slashes', () => {
     comparableUrl('https://LLM-Server.example.com/v2/chat/completions/'),
     comparableUrl('https://llm-server.example.com/v2/chat/completions')
   );
+});
+
+test('trailing slashes are stripped in linear time, also from a long run of them', () => {
+  assert.equal(stripTrailingSlashes('https://host/v1///'), 'https://host/v1');
+  assert.equal(stripTrailingSlashes('///'), '');
+  const started = Date.now();
+  const slashes = '/'.repeat(200000);
+  assert.equal(
+    resolveModelsEndpoint(`https://host/v1${slashes}`, 'openai').baseUrl,
+    'https://host/v1'
+  );
+  assert.equal(comparableUrl(`https://host/v1${slashes}x`), `https://host/v1${slashes}x`);
+  assert.ok(Date.now() - started < 1000, 'no quadratic backtracking');
 });

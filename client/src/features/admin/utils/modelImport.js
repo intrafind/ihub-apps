@@ -39,11 +39,17 @@ export function apiTypeLabel(t, apiType) {
  * @returns {string} Empty when nothing usable is left
  */
 export function slugify(text) {
-  return String(text || '')
+  const slug = String(text || '')
     .toLowerCase()
     .replace(/[^a-z0-9._-]+/g, '-')
-    .replace(/-{2,}/g, '-')
-    .replace(/^[-._]+|[-._]+$/g, '');
+    .replace(/-{2,}/g, '-');
+  // Trim separators with a loop: `/[-._]+$/` backtracks quadratically on
+  // input made of many separators.
+  let start = 0;
+  let end = slug.length;
+  while (start < end && '-._'.includes(slug[start])) start++;
+  while (end > start && '-._'.includes(slug[end - 1])) end--;
+  return slug.slice(start, end);
 }
 
 /**

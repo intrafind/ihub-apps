@@ -59,6 +59,19 @@ export class ModelDiscoveryError extends Error {
 }
 
 /**
+ * `value` without trailing slashes. A loop rather than `/\/+$/`, whose
+ * backtracking is quadratic on input made of many slashes.
+ *
+ * @param {string} value
+ * @returns {string}
+ */
+export function stripTrailingSlashes(value) {
+  let end = value.length;
+  while (end > 0 && value[end - 1] === '/') end--;
+  return value.slice(0, end);
+}
+
+/**
  * Trailing path segments that name an inference call rather than the API
  * root. Stripping one leaves the base the `/models` listing hangs off.
  */
@@ -105,7 +118,7 @@ export function resolveModelsEndpoint(input, provider) {
     );
   }
 
-  let path = parsed.pathname.replace(/\/+$/, '');
+  let path = stripTrailingSlashes(parsed.pathname);
 
   if (provider === 'google') {
     // A model URL: …/models/gemini-x:streamGenerateContent → …/models
@@ -551,8 +564,8 @@ export function comparableUrl(url) {
   if (typeof url !== 'string') return '';
   try {
     const parsed = new URL(url);
-    return `${parsed.origin}${parsed.pathname.replace(/\/+$/, '')}`.toLowerCase();
+    return `${parsed.origin}${stripTrailingSlashes(parsed.pathname)}`.toLowerCase();
   } catch {
-    return url.trim().replace(/\/+$/, '').toLowerCase();
+    return stripTrailingSlashes(url.trim()).toLowerCase();
   }
 }
