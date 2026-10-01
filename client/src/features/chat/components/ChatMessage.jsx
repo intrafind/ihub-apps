@@ -920,7 +920,7 @@ function ChatMessage({
         {renderContent()}
         {/* Files the answer's tools generated (a PDF from the pdf skill). */}
         {!isUser && message.generatedFiles?.length > 0 && (
-          <GeneratedFiles files={message.generatedFiles} readOnly={readOnly} />
+          <GeneratedFiles files={message.generatedFiles} chatId={chatId} />
         )}
         {isUser && hasVariables && <MessageVariables variables={message.variables} />}
 

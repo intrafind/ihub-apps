@@ -74,20 +74,8 @@ export const ARTIFACT_VERSION = 1;
  * - `chat` — a durable chat; its turns' pictures, swept with the chat.
  * - `run`  — one run of the ledger: a workflow execution, an agent run, or a
  *   chat turn that wants its output kept per run rather than per chat.
- * - `user` — files a tool generated for one user (a PDF the model created),
- *   independent of whether the chat is stored; keyed by an owner key from
- *   `services/documents/generatedFiles.js` and swept by age there.
  */
-export const ARTIFACT_SCOPES = Object.freeze(['chat', 'run', 'user']);
-
-/**
- * Scope types whose artifacts are only ever found through their documents:
- * nothing empties them with {@link ArtifactRepository#deleteScope}, whose
- * payload walk is what collects a blob left without a document. Their deletes
- * remove the payload first, so a failed delete keeps the document the next
- * sweep finds it by.
- */
-const DOCUMENT_SWEPT_SCOPES = new Set(['user']);
+export const ARTIFACT_SCOPES = Object.freeze(['chat', 'run']);
 
 /**
  * Separator between the scope, its id and the artifact id in a key.
@@ -422,34 +410,6 @@ export class ArtifactRepository {
   }
 
   /**
-   * Remove every artifact of one scope type created before a cutoff, across
-   * all scopes of that type.
-   *
-   * The age sweep for artifacts no owner's lifecycle removes: a `user`
-   * scope's files are not tied to a chat, so nothing else deletes them.
-   *
-   * @param {string} scopeType - One of {@link ARTIFACT_SCOPES}.
-   * @param {number} cutoffMs - Epoch milliseconds; older artifacts go.
-   * @returns {Promise<number>} How many artifacts were removed.
-   */
-  async deleteCreatedBefore(scopeType, cutoffMs) {
-    if (!this.isAvailable() || !ARTIFACT_SCOPES.includes(scopeType)) return 0;
-    const docs = await this._scanPrefix(
-      `${scopeType}${KEY_SEPARATOR}`,
-      { type: scopeType },
-      { includeData: true }
-    );
-    let removed = 0;
-    for (const doc of docs) {
-      const created = Date.parse(doc.data?.createdAt || '');
-      if (doc.data?.scope?.type !== scopeType || !Number.isFinite(created)) continue;
-      if (created >= cutoffMs) continue;
-      if (await this._delete(doc.key, doc.data.scope)) removed += 1;
-    }
-    return removed;
-  }
-
-  /**
    * The payload keys of one scope, by key prefix.
    *
    * @param {{type: string, id: string}} scope - Validated scope.
@@ -485,58 +445,36 @@ export class ArtifactRepository {
    * so a failure between the two leaves a blob the prefix sweep still
    * collects, rather than a descriptor pointing at bytes that are gone.
    *
-   * A scope no prefix sweep empties ({@link DOCUMENT_SWEPT_SCOPES}) has
-   * nothing that would collect that blob, so there the payload goes first and
-   * a payload that could not be removed keeps its document for the next try.
-   * A document left behind the other way round reads as missing (`get`
-   * refuses metadata without a payload) and is removed by the same retry.
-   *
    * @param {string} key - Artifact key.
    * @param {{type: string, id: string}} scope - Scope, for the log line.
    * @returns {Promise<boolean>} Whether anything went.
    * @private
    */
   async _delete(key, scope) {
-    if (DOCUMENT_SWEPT_SCOPES.has(scope.type)) {
-      const payload = await this._deleteHalf('payload', key, scope);
-      if (payload === null) return false;
-      const document = await this._deleteHalf('document', key, scope);
-      return Boolean(payload || document);
-    }
-    const document = await this._deleteHalf('document', key, scope);
-    const payload = await this._deleteHalf('payload', key, scope);
-    return Boolean(document || payload);
-  }
-
-  /**
-   * Delete the document or the payload of one artifact.
-   *
-   * @param {'document'|'payload'} half
-   * @param {string} key - Artifact key.
-   * @param {{type: string, id: string}} scope - Scope, for the log line.
-   * @returns {Promise<boolean|null>} Whether it went, or null when the store
-   *   failed (logged).
-   * @private
-   */
-  async _deleteHalf(half, key, scope) {
-    const store = half === 'payload' ? this.blobs : this.documents;
+    let removed = false;
     try {
-      return Boolean(await store.delete(ARTIFACTS_NAMESPACE, key));
+      removed = await this.documents.delete(ARTIFACTS_NAMESPACE, key);
     } catch (error) {
-      this.logger.error(
-        half === 'payload'
-          ? 'Failed to delete an artifact payload'
-          : 'Failed to delete an artifact',
-        {
-          component: COMPONENT,
-          scopeType: scope.type,
-          scopeId: scope.id,
-          key,
-          error: error.message
-        }
-      );
-      return null;
+      this.logger.error('Failed to delete an artifact', {
+        component: COMPONENT,
+        scopeType: scope.type,
+        scopeId: scope.id,
+        key,
+        error: error.message
+      });
     }
+    try {
+      if (await this.blobs.delete(ARTIFACTS_NAMESPACE, key)) removed = true;
+    } catch (error) {
+      this.logger.error('Failed to delete an artifact payload', {
+        component: COMPONENT,
+        scopeType: scope.type,
+        scopeId: scope.id,
+        key,
+        error: error.message
+      });
+    }
+    return removed;
   }
 
   /**
@@ -555,21 +493,6 @@ export class ArtifactRepository {
    */
   async _scan(scope, { includeData = false } = {}) {
     const prefix = scopePrefix(scope);
-    const docs = await this._scanPrefix(prefix, scope, { includeData });
-    return docs.filter(doc => !doc.key.slice(prefix.length).includes(KEY_SEPARATOR));
-  }
-
-  /**
-   * The artifact documents under one key prefix.
-   *
-   * @param {string} prefix - Key prefix.
-   * @param {{type: string, id?: string}} scope - For the log line.
-   * @param {Object} [options]
-   * @param {boolean} [options.includeData=false]
-   * @returns {Promise<Array<Object>>} Documents, empty when the walk failed.
-   * @private
-   */
-  async _scanPrefix(prefix, scope, { includeData = false } = {}) {
     const docs = [];
     try {
       if (this.documents.supportsScan) {
@@ -597,7 +520,7 @@ export class ArtifactRepository {
       });
       return [];
     }
-    return docs;
+    return docs.filter(doc => !doc.key.slice(prefix.length).includes(KEY_SEPARATOR));
   }
 }
 

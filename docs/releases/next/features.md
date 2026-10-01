@@ -210,6 +210,6 @@ without Python or a browser.
 - `pdf` is a **system skill**: it ships with iHub and is updated with it, and it shows a
   **System** badge in **Admin → Skills**. It cannot be changed or deleted there, and its name is
   reserved: a skill with the same name is ignored or refused on import.
-- Only the user who asked for a file can download it. Files are kept as long as chats are
-  (`chats.retentionDays`), and durable chats keep the download card after a reload.
+- A PDF is kept like a generated image: a stored chat keeps it with the answer, deletes it with
+  the chat and includes it in a share of the chat.
 - Editing, merging or filling in PDFs the user uploaded is not supported yet.

@@ -79,15 +79,15 @@ The skill's instructions and references are in `server/systemSkills/pdf/`:
 
 ### Generated files
 
-A file the model created is stored under the user who asked for it. It uses the [artifact store](artifacts.md), scope `user`, keyed by a hash of the user id.
+A file the model created takes the path a generated picture takes. There is no download route of its own:
 
-- **Download:** `GET /api/generated-files/:id`. Only the owner can download the file; any other caller gets `404`.
-  - Anonymous users share one owner key. For them, the random 128-bit file id is what keeps a file private, like a share link.
-- **Chats:** the download card appears below the answer.
-  - Durable chats store the card with the answer, so it is still there after a reload.
-  - In a shared chat the card only names the file: the file is not part of the share.
-- **Retention:** files are deleted after `platform.chats.retentionDays` (default 90 days; `0` keeps them). Each user keeps at most 200 files, and the oldest are removed first. A card whose file has been removed says so.
-- **Limits:** 25 MB per file.
+- **While the answer streams:** `create_pdf` keeps the PDF in server memory and returns only a descriptor, so the model never sees the bytes. The bytes reach the chat with the tool's `tool/completed` event, and the download card below the answer saves them.
+- **Stored with the answer:** in a durable chat, the PDF is stored as a `document` [artifact](artifacts.md) of the chat. After a reload, the card downloads it from `GET /api/chats/:chatId/artifacts/:artifactId`. It is deleted with the chat, and a [share](chat-sharing.md) of the chat includes it.
+- **Chats that are not stored:** the file lives as long as the page, like a generated picture. After a reload, the card says it is no longer available.
+- **Limits:**
+  - 25 MB per file.
+  - Storing follows the artifact settings (`platform.artifacts`: `maxBytes`, default 10 MB, and `maxPerBatch`). A file over the cap is still downloadable while the answer is on screen; its stored card says it was not kept.
+- **Preview:** `preview_pdf` reads the PDF from the server's memory. That works for PDFs created in the same chat within the last hour.
 
 ## Server-side PDF export
 
@@ -133,4 +133,4 @@ The PDF export is the base the planned signed exports build on (EU AI Act conten
 
 1. Create `server/systemSkills/<name>/SKILL.md` (frontmatter `name`, `description`, `allowed-tools`), plus `references/` as needed.
 2. Define the tools as plain data (compare `server/services/documents/pdf/pdfToolDefinitions.js`) and register them in `server/services/systemSkillTools.js`, with a handler that is loaded when the tool runs.
-3. A tool that produces a file stores it with `saveGeneratedFile()` (`server/services/documents/generatedFiles.js`) and returns the descriptor in `files`. The chat then shows the download card. Add the file's media type to `GENERATED_FILE_TYPES` and to `shared/generatedFiles.js`.
+3. A tool that produces a file holds it with `holdGeneratedFile()` (`server/services/documents/generatedFiles.js`) and returns the descriptor in `files`. The chat streams the bytes to the download card and stores the file as a `document` artifact with the answer. Add the file's media type to `GENERATED_FILE_TYPES`, to `shared/generatedFiles.js` and, if it is new, to the `document` kind in `server/services/artifacts/artifactPolicy.js`.

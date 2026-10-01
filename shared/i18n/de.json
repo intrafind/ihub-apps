@@ -598,7 +598,7 @@
       "downloadNamed": "{{name}} herunterladen",
       "expired": "Diese Datei ist nicht mehr verfügbar",
       "failed": "Download fehlgeschlagen. Bitte versuchen Sie es erneut.",
-      "notShared": "Nicht im geteilten Chat enthalten"
+      "notKept": "Diese Datei wurde nicht mit dem Chat gespeichert"
     }
   },
   "errors": {

@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
-import { fetchGeneratedFile } from '../../../api';
+import { fetchChatArtifact } from '../../../api';
 import { saveBlobAs } from '../../../utils/externalNavigation';
+import { useArtifactFetcher } from '../contexts/ArtifactFetchContext';
 
 function formatBytes(bytes) {
   const n = Number(bytes);
@@ -12,25 +13,40 @@ function formatBytes(bytes) {
   return `${(n / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+function blobOfBase64(data, mimeType) {
+  const binary = atob(data);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+  return new Blob([bytes], { type: mimeType });
+}
+
 /**
  * One file a tool generated for the user, with a download button.
  *
+ * The bytes come the way a generated picture's do: with the live turn
+ * (`data`), or — once the answer is stored — as a `document` artifact of the
+ * chat, fetched by id from the owner's route or, in a shared chat, the
+ * share's (see `ArtifactFetchContext`).
+ *
  * @param {Object} props
- * @param {{ id: string, name: string, mimeType: string, bytes: number, pages?: number }} props.file
- * @param {boolean} [props.readOnly] - Shared chat: the file belongs to the
- *   chat's owner and is not part of the share, so it is only named.
+ * @param {Object} props.file - A descriptor from `shared/generatedFiles.js`.
+ * @param {string} [props.chatId] - The chat a stored file belongs to.
  */
-function GeneratedFileCard({ file, readOnly = false }) {
+function GeneratedFileCard({ file, chatId }) {
   const { t } = useTranslation();
-  const [state, setState] = useState('idle');
+  const customFetch = useArtifactFetcher();
+  const [state, setState] = useState(file.unavailable ? 'missing' : 'idle');
+  const canFetch = Boolean(file.data || (file.stored && file.id && chatId));
 
   const download = async () => {
     setState('loading');
     try {
-      const blob = await fetchGeneratedFile(file.id);
+      const blob = file.data
+        ? blobOfBase64(file.data, file.mimeType)
+        : await (customFetch || fetchChatArtifact)(chatId, file.id);
       setState(saveBlobAs(blob, file.name) ? 'idle' : 'error');
     } catch (error) {
-      setState(error?.response?.status === 404 ? 'missing' : 'error');
+      setState(error?.response?.status === 404 || error?.status === 404 ? 'missing' : 'error');
     }
   };
 
@@ -56,16 +72,16 @@ function GeneratedFileCard({ file, readOnly = false }) {
           {file.name}
         </div>
         <div className="text-xs text-gray-500 dark:text-gray-400">
-          {state === 'missing'
-            ? t('chatMessage.generatedFiles.expired', 'This file is no longer available')
+          {state === 'missing' || !canFetch
+            ? file.unavailable && file.unavailable !== 'expired'
+              ? t('chatMessage.generatedFiles.notKept', 'This file was not kept with the chat')
+              : t('chatMessage.generatedFiles.expired', 'This file is no longer available')
             : state === 'error'
               ? t('chatMessage.generatedFiles.failed', 'Download failed. Please try again.')
-              : readOnly
-                ? t('chatMessage.generatedFiles.notShared', 'Not included in the shared chat')
-                : details}
+              : details}
         </div>
       </div>
-      {!readOnly && state !== 'missing' && (
+      {canFetch && state !== 'missing' && (
         <button
           type="button"
           onClick={download}
@@ -92,14 +108,14 @@ function GeneratedFileCard({ file, readOnly = false }) {
  *
  * @param {Object} props
  * @param {Array<Object>} props.files - Descriptors (see shared/generatedFiles.js).
- * @param {boolean} [props.readOnly]
+ * @param {string} [props.chatId] - The chat the message belongs to.
  */
-export default function GeneratedFiles({ files, readOnly = false }) {
+export default function GeneratedFiles({ files, chatId }) {
   if (!Array.isArray(files) || files.length === 0) return null;
   return (
     <div className="my-2 flex flex-col gap-2">
-      {files.map(file => (
-        <GeneratedFileCard key={file.id} file={file} readOnly={readOnly} />
+      {files.map((file, index) => (
+        <GeneratedFileCard key={file.id || `unavailable-${index}`} file={file} chatId={chatId} />
       ))}
     </div>
   );

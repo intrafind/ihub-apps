@@ -3558,7 +3558,7 @@
       "downloadNamed": "Download {{name}}",
       "expired": "This file is no longer available",
       "failed": "Download failed. Please try again.",
-      "notShared": "Not included in the shared chat"
+      "notKept": "This file was not kept with the chat"
     }
   },
   "serverErrors": {

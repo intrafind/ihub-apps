@@ -25,18 +25,18 @@ import {
 import { systemSkillToolsFor } from '../services/systemSkillTools.js';
 import { getToolsForApp, runTool } from '../toolLoader.js';
 import { chatToolSeam } from '../services/chat/chatSeams.js';
-import { generatedFilesOf } from '../../shared/generatedFiles.js';
+import { generatedFilesFromArtifacts, generatedFilesOf } from '../../shared/generatedFiles.js';
 import {
-  getGeneratedFile,
-  ownerKeyOf,
-  safeFileName,
-  saveGeneratedFile,
-  sweepExpiredGeneratedFiles
+  clearHeldGeneratedFiles,
+  heldGeneratedFile,
+  heldGeneratedFileData,
+  holdGeneratedFile,
+  safeFileName
 } from '../services/documents/generatedFiles.js';
-import {
-  ArtifactRepository,
-  ARTIFACTS_NAMESPACE
-} from '../services/artifacts/ArtifactRepository.js';
+import { ArtifactRepository } from '../services/artifacts/ArtifactRepository.js';
+import { ChatRepository } from '../services/chat/ChatRepository.js';
+import { materializeAssistantTurn } from '../services/chat/chatMaterializer.js';
+import { runCreatePdf, runPreviewPdf } from '../services/documents/pdf/pdfTools.js';
 import { FilesystemStorageProvider } from '../storage/providers/filesystem/index.js';
 import {
   buildChatExportSpec,
@@ -195,33 +195,55 @@ describe('skill activation checks access', () => {
   });
 });
 
-describe('generated file descriptors', () => {
-  const descriptor = {
-    id: 'a'.repeat(32),
-    name: 'report.pdf',
-    mimeType: 'application/pdf',
-    bytes: 1200,
-    pages: 2
-  };
+describe('generated files', () => {
+  const pdf = Buffer.from('%PDF-1.3 test');
+  const hold = (overrides = {}) =>
+    holdGeneratedFile({
+      user: { id: 'alice@example.com' },
+      chatId: 'chat-1',
+      data: pdf,
+      mimeType: 'application/pdf',
+      name: 'Report',
+      meta: { pages: 2 },
+      ...overrides
+    });
 
   it('accept only well-formed PDF descriptors', () => {
+    const descriptor = { id: 'a'.repeat(32), name: 'r.pdf', mimeType: 'application/pdf', bytes: 9 };
     assert.deepEqual(generatedFilesOf([descriptor, descriptor]), [descriptor]);
     assert.deepEqual(generatedFilesOf([{ ...descriptor, id: '../x' }]), []);
     assert.deepEqual(generatedFilesOf([{ ...descriptor, mimeType: 'text/html' }]), []);
     assert.deepEqual(generatedFilesOf('nope'), []);
+    assert.equal(safeFileName('../../etc/Report: Q3?', 'pdf'), 'etc Report Q3.pdf');
+    assert.equal(safeFileName('', 'pdf'), 'document.pdf');
   });
 
-  it('reach the chat only from system skill tools', async () => {
+  it('are held for the user and chat that generated them, and nobody else', () => {
+    clearHeldGeneratedFiles();
+    const file = hold();
+    assert.deepEqual(Object.keys(file).sort(), ['bytes', 'id', 'mimeType', 'name', 'pages']);
+    assert.equal(file.name, 'Report.pdf');
+    const alice = { id: 'alice@example.com' };
+    assert.ok(heldGeneratedFile(alice, file.id, { chatId: 'chat-1' }).data.equals(pdf));
+    assert.equal(heldGeneratedFile({ id: 'bob' }, file.id), null);
+    assert.equal(heldGeneratedFile(alice, file.id, { chatId: 'chat-2' }), null);
+    assert.equal(heldGeneratedFileData(file.id, { chatId: 'chat-1' }), pdf.toString('base64'));
+    assert.throws(() => hold({ mimeType: 'text/html' }), /Unsupported/);
+  });
+
+  it('reach the chat with their bytes, only from system skill tools', async () => {
+    clearHeldGeneratedFiles();
+    const file = hold();
     const frames = [];
     const collected = [];
     const seam = chatToolSeam({
-      chatId: 'c',
+      chatId: 'chat-1',
       buildLogData: () => ({}),
       logInteraction: async () => {},
       generatedFiles: collected
     });
     const ctx = { iteration: 1, meta: { stream: { emit: (type, data) => frames.push(data) } } };
-    const outcome = () => ({ rawResult: { files: [descriptor] }, message: { content: '' } });
+    const outcome = () => ({ rawResult: { files: [file] }, message: { content: '' } });
     await seam.postTool(
       ctx,
       { toolId: 'evil', toolDef: { id: 'evil', script: 'evil.js' }, call: { id: '1' } },
@@ -236,139 +258,88 @@ describe('generated file descriptors', () => {
       },
       outcome()
     );
+    const delivered = { ...file, data: pdf.toString('base64') };
     assert.equal(frames[0].files, undefined);
-    assert.deepEqual(frames[1].files, [descriptor]);
-    assert.deepEqual(collected, [descriptor]);
+    assert.deepEqual(frames[1].files, [delivered]);
+    assert.deepEqual(collected, [delivered]);
   });
-});
 
-describe('generated file store', () => {
-  it('keeps each file private to the user it was generated for', async () => {
-    const baseDir = await fs.mkdtemp(path.join(os.tmpdir(), 'ihub-generated-'));
-    const provider = new FilesystemStorageProvider({ baseDir, flushIntervalMs: 25 });
-    await provider.initialize();
-    const repository = new ArtifactRepository({
-      documents: provider.documents,
-      blobs: provider.blobs,
-      policy: () => ({ enabled: true })
+  it('keep their bytes out of what the model sees', async () => {
+    clearHeldGeneratedFiles();
+    const result = await runCreatePdf({
+      markdown: '# Hello',
+      filename: 'hello',
+      user: { id: 'alice' },
+      chatId: 'chat-1'
     });
-    try {
-      const owner = { id: 'alice@example.com' };
-      const saved = await saveGeneratedFile({
-        user: owner,
-        data: Buffer.from('%PDF-1.3 test'),
-        mimeType: 'application/pdf',
-        name: '../../etc/Report: Q3?',
-        meta: { pages: 3 },
-        repository
-      });
-      assert.equal(saved.name, 'etc Report Q3.pdf');
-      assert.equal(saved.pages, 3);
-      const mine = await getGeneratedFile(owner, saved.id, { repository });
-      assert.equal(mine.data.toString(), '%PDF-1.3 test');
-      assert.equal(await getGeneratedFile({ id: 'bob' }, saved.id, { repository }), null);
-      assert.equal(await getGeneratedFile(null, saved.id, { repository }), null);
-      assert.equal(await getGeneratedFile(owner, '../x', { repository }), null);
-    } finally {
-      await provider.shutdown();
-      await fs.rm(baseDir, { recursive: true, force: true });
-    }
+    assert.equal(result.success, true);
+    assert.equal(result.files[0].data, undefined);
+    assert.ok(!JSON.stringify(result).includes('JVBER'), 'no base64 PDF in the result');
+    const preview = await runPreviewPdf({
+      file_id: result.file.id,
+      user: { id: 'alice' },
+      chatId: 'chat-1'
+    });
+    assert.equal(preview.success, true);
+    const other = await runPreviewPdf({ file_id: result.file.id, user: { id: 'bob' } });
+    assert.equal(other.success, false);
   });
 
-  it('drops files past the retention window, on download and in the daily sweep', async () => {
+  it('are stored with the answer as document artifacts of the chat', async () => {
     const baseDir = await fs.mkdtemp(path.join(os.tmpdir(), 'ihub-generated-'));
     const provider = new FilesystemStorageProvider({ baseDir, flushIntervalMs: 25 });
     await provider.initialize();
-    const repository = new ArtifactRepository({
+    const artifacts = new ArtifactRepository({
       documents: provider.documents,
       blobs: provider.blobs,
-      policy: () => ({ enabled: true })
+      policy: () => ({ enabled: true, maxBytes: 20, maxPerBatch: 8 })
+    });
+    const repository = new ChatRepository({
+      documents: provider.documents,
+      locks: provider.locks,
+      artifacts
     });
     const platform = configCache.getPlatform;
-    const save = user =>
-      saveGeneratedFile({
-        user,
-        data: Buffer.from('%PDF-1.3'),
-        mimeType: 'application/pdf',
-        name: 'old',
-        repository
-      });
+    // The live artifact policy, with a size cap only the second file exceeds.
+    configCache.getPlatform = () => ({ artifacts: { maxBytes: 20 } });
     try {
-      const alice = { id: 'alice' };
-      const bob = { id: 'bob' };
-      const aliceFile = await save(alice);
-      const bobFile = await save(bob);
-      // A window of a few milliseconds: both files are past it after a pause.
-      configCache.getPlatform = () => ({ chats: { retentionDays: 0.00000005 } });
-      await new Promise(resolve => setTimeout(resolve, 30));
-      assert.equal(await getGeneratedFile(alice, aliceFile.id, { repository }), null);
-      assert.equal(await sweepExpiredGeneratedFiles({ repository }), 1, "bob's file is swept");
-      configCache.getPlatform = () => ({ chats: { retentionDays: 0 } });
-      assert.equal(await getGeneratedFile(bob, bobFile.id, { repository }), null);
-      const kept = await save(bob);
-      assert.equal(await sweepExpiredGeneratedFiles({ repository }), 0, 'zero keeps files');
-      assert.ok(await getGeneratedFile(bob, kept.id, { repository }));
+      await repository.ensureChat({ chatId: 'chat-1', ownerId: 'alice', appId: 'chat' });
+      await repository.appendMessage('chat-1', { role: 'user', content: 'a PDF', runId: 'r1' });
+      const big = Buffer.alloc(64, 1);
+      await materializeAssistantTurn({
+        repository,
+        chatId: 'chat-1',
+        runId: 'r1',
+        summary: {
+          status: 'completed',
+          content: 'Here it is.',
+          generatedFiles: [
+            { ...hold(), data: pdf.toString('base64') },
+            { ...hold({ data: big, name: 'Big' }), data: big.toString('base64') }
+          ]
+        },
+        clientConnected: true
+      });
+      const { messages } = await repository.getMessages('chat-1');
+      const answer = messages.at(-1);
+      assert.equal(answer.generatedFiles, undefined, 'no field of its own');
+      assert.equal(JSON.stringify(answer).includes(pdf.toString('base64')), false);
+      const cards = generatedFilesFromArtifacts(answer.artifacts);
+      assert.equal(cards.length, 2);
+      assert.equal(cards[0].stored, true);
+      assert.equal(cards[0].name, 'Report.pdf');
+      const stored = await artifacts.get(repository.artifactScope('chat-1'), cards[0].id);
+      assert.ok(stored.data.equals(pdf));
+      assert.equal(stored.kind, 'document');
+      assert.equal(stored.mimeType, 'application/pdf');
+      // Over the artifact size cap: described, not stored, still named.
+      assert.equal(cards[1].unavailable, 'too-large');
+      assert.equal(cards[1].name, 'Big.pdf');
     } finally {
       configCache.getPlatform = platform;
       await provider.shutdown();
       await fs.rm(baseDir, { recursive: true, force: true });
     }
-  });
-
-  it('keeps a file whose payload could not be deleted, for the next sweep', async () => {
-    const baseDir = await fs.mkdtemp(path.join(os.tmpdir(), 'ihub-generated-'));
-    const provider = new FilesystemStorageProvider({ baseDir, flushIntervalMs: 25 });
-    await provider.initialize();
-    let deletesFail = true;
-    const blobs = {
-      put: (...args) => provider.blobs.put(...args),
-      get: (...args) => provider.blobs.get(...args),
-      list: (...args) => provider.blobs.list(...args),
-      async delete(...args) {
-        if (deletesFail) throw new Error('storage unavailable');
-        return provider.blobs.delete(...args);
-      }
-    };
-    const quiet = { error() {}, warn() {}, info() {}, debug() {} };
-    const repository = new ArtifactRepository({
-      documents: provider.documents,
-      blobs,
-      logger: quiet,
-      policy: () => ({ enabled: true })
-    });
-    const platform = configCache.getPlatform;
-    try {
-      const alice = { id: 'alice' };
-      await saveGeneratedFile({
-        user: alice,
-        data: Buffer.from('%PDF-1.3'),
-        mimeType: 'application/pdf',
-        name: 'old',
-        repository
-      });
-      configCache.getPlatform = () => ({ chats: { retentionDays: 0.00000005 } });
-      await new Promise(resolve => setTimeout(resolve, 30));
-      assert.equal(await sweepExpiredGeneratedFiles({ repository }), 0);
-      const owner = { type: 'user', id: ownerKeyOf(alice) };
-      assert.equal((await repository.list(owner)).length, 1, 'the document stays to be found');
-      deletesFail = false;
-      assert.equal(await sweepExpiredGeneratedFiles({ repository }), 1);
-      assert.equal((await repository.list(owner)).length, 0);
-      const left = await provider.blobs.list(ARTIFACTS_NAMESPACE, { prefix: 'user__' });
-      assert.equal(left.items.length, 0, 'and the payload is gone');
-    } finally {
-      configCache.getPlatform = platform;
-      await provider.shutdown();
-      await fs.rm(baseDir, { recursive: true, force: true });
-    }
-  });
-
-  it('keys owners so that user ids never reach a storage key', () => {
-    assert.equal(ownerKeyOf(null), 'anonymous');
-    assert.equal(ownerKeyOf({ id: 'anonymous' }), 'anonymous');
-    assert.match(ownerKeyOf({ id: 'a@b:c' }), /^u[a-f0-9]{40}$/);
-    assert.equal(safeFileName('', 'pdf'), 'document.pdf');
-    assert.equal(safeFileName('report.pdf', 'pdf'), 'report.pdf');
   });
 });
 

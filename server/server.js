@@ -27,7 +27,6 @@ import registerToolRoutes from './routes/toolRoutes.js';
 import registerMcpAppRoutes from './routes/mcpAppRoutes.js';
 import registerMcpOAuthRoutes from './routes/mcpOAuth.js';
 import registerSkillRoutes from './routes/skillRoutes.js';
-import registerGeneratedFileRoutes from './routes/generatedFiles.js';
 import registerExportRoutes from './routes/exports.js';
 import registerPageRoutes from './routes/pageRoutes.js';
 import registerRendererRoutes from './routes/rendererRoutes.js';
@@ -53,10 +52,6 @@ import registerChatShareRoutes from './routes/chatShares.js';
 import registerScheduledTaskRoutes from './routes/scheduledTasks.js';
 import runLog from './services/loop/RunLog.js';
 import { startChatRetentionSweep, stopChatRetentionSweep } from './services/chat/chatRetention.js';
-import {
-  startGeneratedFileSweep,
-  stopGeneratedFileSweep
-} from './services/documents/generatedFiles.js';
 import {
   startWorkflowStateRetention,
   stopWorkflowStateRetention
@@ -725,7 +720,6 @@ if (cluster.isPrimary && workerCount > 1) {
   registerMcpAppRoutes(app);
   registerMcpOAuthRoutes(app);
   registerSkillRoutes(app);
-  registerGeneratedFileRoutes(app);
   registerExportRoutes(app);
   registerPageRoutes(app);
   registerRendererRoutes(app);
@@ -763,10 +757,6 @@ if (cluster.isPrimary && workerCount > 1) {
     // independent of `runLog.cleanupEnabled`. Same ownership guard, though —
     // two workers sweeping in parallel would only race each other's deletes.
     startChatRetentionSweep();
-    // Files a tool generated for a user (a PDF from `create_pdf`) are not tied
-    // to a chat, so they age out on their own sweep, independent of whether
-    // durable chats are on. Same window as chats: `platform.chats.retentionDays`.
-    startGeneratedFileSweep();
     // Terminal workflow state accumulated forever before this: a completed
     // run kept its full state document, its run summary and — for a
     // sub-workflow — a state nothing ever deleted. Same daily cadence and the
@@ -1126,7 +1116,6 @@ if (cluster.isPrimary && workerCount > 1) {
     // Stop the retention sweeps before storage goes away, so a tick cannot
     // start against a provider that is being torn down.
     stopChatRetentionSweep();
-    stopGeneratedFileSweep();
     stopWorkflowStateRetention();
     // Conversation state coalesces its writes on a timer to keep document I/O
     // off the streaming path; drain what is still buffered, or a chat resumes

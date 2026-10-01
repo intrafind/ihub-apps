@@ -1,17 +1,13 @@
 import { createPdf, PdfGenerationError, renderPagePreview } from './PdfService.js';
-import {
-  describeGeneratedFile,
-  GeneratedFileError,
-  getGeneratedFile,
-  saveGeneratedFile
-} from '../generatedFiles.js';
+import { GeneratedFileError, heldGeneratedFile, holdGeneratedFile } from '../generatedFiles.js';
 
 /**
  * The tools the `pdf` system skill brings (see `server/systemSkills/pdf`).
  *
  * `create_pdf` renders a document from Markdown and/or layout blocks and
- * stores it as a generated file the user can download; `preview_pdf` shows
- * the model one page of a PDF it created, so it can check the layout.
+ * hands it to the chat as a generated file (see `../generatedFiles.js`);
+ * `preview_pdf` shows the model one page of a PDF it created, so it can check
+ * the layout.
  */
 
 const MAX_SPEC_CHARS = 4 * 1024 * 1024;
@@ -80,13 +76,12 @@ function failure(error) {
 }
 
 /**
- * `create_pdf`: render the document and store it for the user.
+ * `create_pdf`: render the document and hand it to the chat.
  *
  * @param {Object} params - Tool arguments plus the trusted context (`user`, `chatId`, …).
  * @returns {Promise<Object>}
  */
 export async function runCreatePdf(params) {
-  const { user } = params;
   try {
     if (!params.markdown && !params.blocks) {
       throw new PdfGenerationError(
@@ -96,18 +91,19 @@ export async function runCreatePdf(params) {
     }
     const spec = specFromToolArgs(params);
     const { buffer, pages, warnings } = await createPdf(spec);
-    const saved = await saveGeneratedFile({
-      user,
+    const file = holdGeneratedFile({
+      user: params.user,
+      chatId: params.chatId,
       data: buffer,
       mimeType: 'application/pdf',
       name: params.filename || params.title,
       meta: { pages }
     });
-    const file = describeGeneratedFile(saved);
     return {
       success: true,
       file,
-      // Picked up by the chat tool seam: the chat shows a download card.
+      // Picked up by the chat tool seam, which streams the bytes to the chat's
+      // download card. The result itself never carries them.
       files: [file],
       ...(warnings.length ? { warnings } : {}),
       message: `Created "${file.name}" (${pages} page${pages === 1 ? '' : 's'}). The user sees a download card for it in the chat — do not add a link. Its file_id for preview_pdf is ${file.id}.`
@@ -118,17 +114,23 @@ export async function runCreatePdf(params) {
 }
 
 /**
- * `preview_pdf`: one page of the user's generated PDF as an image for the
- * model (the image-lift seam turns `imageData` into a vision message).
+ * `preview_pdf`: one page of a PDF `create_pdf` made in this chat, as an
+ * image for the model (the image-lift seam turns `imageData` into a vision
+ * message).
  *
  * @param {Object} params
  * @returns {Promise<Object>}
  */
 export async function runPreviewPdf(params) {
   try {
-    const file = await getGeneratedFile(params.user, String(params.file_id || ''));
+    const file = heldGeneratedFile(params.user, String(params.file_id || ''), {
+      chatId: params.chatId
+    });
     if (!file || file.mimeType !== 'application/pdf') {
-      return { success: false, error: `No PDF with id "${params.file_id}" was found.` };
+      return {
+        success: false,
+        error: `No PDF with id "${params.file_id}" is available. Only PDFs created in this chat within the last hour can be previewed; create it again to preview it.`
+      };
     }
     const preview = await renderPagePreview(file.data, Number(params.page) || 1);
     return {

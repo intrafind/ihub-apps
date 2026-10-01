@@ -67,23 +67,6 @@ export const fetchIFinderDocumentMetadata = async ({ documentId, searchProfile, 
 };
 
 /**
- * Download a file a tool generated for the current user (e.g. a PDF from the
- * `pdf` skill). Through `apiClient` for the same reason as the iFinder proxy
- * above: the embedded hosts authenticate with a header, not a cookie.
- *
- * @param {string} fileId - Id from the file descriptor.
- * @returns {Promise<Blob>}
- */
-export const fetchGeneratedFile = async fileId => {
-  if (!fileId) throw new Error('Missing required parameters');
-  const response = await apiClient.get(`/generated-files/${encodeURIComponent(fileId)}`, {
-    responseType: 'blob',
-    timeout: DOCUMENT_REQUEST_TIMEOUT
-  });
-  return response.data;
-};
-
-/**
  * With `responseType: 'blob'` a JSON error body arrives as a Blob; read its
  * `error` message so the user sees the reason rather than a status code.
  *

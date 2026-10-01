@@ -556,8 +556,9 @@ class ChatService {
     // Scheduled-task proposals the scheduling tools made, stored with the
     // answer so the confirmation card is still there when the chat reopens.
     const scheduledTaskProposals = [];
-    // Files the turn's tools generated (a PDF from `create_pdf`), stored with
-    // the answer so the download card is still there when the chat reopens.
+    // Files the turn's tools generated (a PDF from `create_pdf`), with their
+    // bytes, stored with the answer as `document` artifacts of the chat so the
+    // download card is still there when the chat reopens.
     const generatedFiles = [];
     // The turn's web search — tool calls with their sources, and the provider's
     // grounding per step — stored with the answer so reopening the chat shows

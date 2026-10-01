@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { debugLog } from '../../../utils/debugLog';
-import { generatedFilesOf } from '../../../../../shared/generatedFiles.js';
+import { generatedFilesFromArtifacts } from '../../../../../shared/generatedFiles.js';
 
 /**
  * The provenance fields a stored answer's `activity` restores onto the message
@@ -77,9 +77,6 @@ export function transformStoredMessage(msg) {
   if (Array.isArray(msg.scheduledTaskProposals) && msg.scheduledTaskProposals.length > 0) {
     message.scheduledTaskProposals = msg.scheduledTaskProposals;
   }
-  // Download cards for files the turn's tools generated.
-  const generatedFiles = generatedFilesOf(msg.generatedFiles);
-  if (generatedFiles.length > 0) message.generatedFiles = generatedFiles;
   // The web searches and sources behind the answer, so the sources view and
   // the inline citations come back (the citation markers are in the content).
   if (msg.webSearch && typeof msg.webSearch === 'object') {
@@ -107,6 +104,11 @@ export function transformStoredMessage(msg) {
     message.artifacts = msg.artifacts;
     const images = msg.artifacts.filter(artifact => (artifact?.kind || 'image') === 'image');
     if (images.length > 0) message.images = images;
+    // Files the turn's tools generated (a PDF from `create_pdf`) are stored as
+    // `document` artifacts; they come back as the download cards a live turn
+    // shows, fetched by artifact id like a stored picture.
+    const generatedFiles = generatedFilesFromArtifacts(msg.artifacts);
+    if (generatedFiles.length > 0) message.generatedFiles = generatedFiles;
   }
   if (msg.error) {
     // A stopped turn kept whatever it had already produced — that is a
@@ -387,10 +389,11 @@ function useChatMessages(chatId = 'default', { ephemeral = false, serverBacked =
       // Strip image data to avoid sessionStorage quota issues
       // Images can be very large (base64 encoded) and exceed the ~5-10MB quota
       const messagesWithoutImageData = persistableMessages.map(msg => {
+        let persisted = msg;
         if (msg.images && msg.images.length > 0) {
           // Keep metadata but remove the actual image data
-          return {
-            ...msg,
+          persisted = {
+            ...persisted,
             images: msg.images.map(img => ({
               mimeType: img.mimeType,
               // Mark that image data was present but not persisted
@@ -398,7 +401,17 @@ function useChatMessages(chatId = 'default', { ephemeral = false, serverBacked =
             }))
           };
         }
-        return msg;
+        // A generated file's bytes are dropped for the same reason; its card
+        // then says the file is gone, as a picture's placeholder does.
+        if (msg.generatedFiles?.some(file => file.data)) {
+          persisted = {
+            ...persisted,
+            generatedFiles: msg.generatedFiles.map(({ data, ...file }) =>
+              data ? { ...file, unavailable: 'expired' } : file
+            )
+          };
+        }
+        return persisted;
       });
 
       // Debug logging for image persistence

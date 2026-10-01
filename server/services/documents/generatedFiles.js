@@ -1,36 +1,41 @@
-import { createHash } from 'crypto';
-import configCache from '../../configCache.js';
-import logger from '../../utils/logger.js';
-import { isValidId } from '../../utils/pathSecurity.js';
-import { getArtifactRepository } from '../artifacts/ArtifactRepository.js';
+import { randomUUID } from 'crypto';
 
 /**
- * Files a tool generated for a user — a PDF the model created on request,
- * later a DOCX, PPTX or XLSX.
+ * Files a tool generated during a chat turn — a PDF from `create_pdf`, later
+ * a DOCX, PPTX or XLSX.
  *
- * They are stored as artifacts in the `user` scope, keyed by the owner, so a
- * file does not depend on the chat being stored (durable chats are optional)
- * and only its owner can download it (`GET /api/generated-files/:id`).
- * Anonymous users share one owner key; for them the random file id is what
- * keeps a file private, like a share link.
+ * They take the path generated pictures already take, so there is no store or
+ * download route of their own:
  *
- * Files are swept by age — as long as chats are kept
- * (`platform.chats.retentionDays`) — and each owner keeps at most
- * {@link MAX_FILES_PER_OWNER}.
+ * 1. The tool holds the bytes here and returns only a descriptor, so the model
+ *    never sees them.
+ * 2. The chat tool seam streams the bytes to the client on the tool's
+ *    `tool/completed` event, where the chat shows a download card.
+ * 3. When the chat is stored, the materializer stores them with the answer as
+ *    `document` artifacts of the chat, served by
+ *    `GET /api/chats/:chatId/artifacts/:artifactId` and a share's artifact
+ *    route, and deleted with the chat. A chat that is not stored keeps the
+ *    file as long as the page does, like a generated picture.
+ *
+ * A file stays held for {@link HOLD_MS} so `preview_pdf` can render a page of
+ * what `create_pdf` just made. In memory and per process, bounded in count
+ * and size: a turn runs on one worker, and so do the previews it asks for.
  */
 
-const COMPONENT = 'GeneratedFiles';
-const SCOPE_TYPE = 'user';
-const DAY_MS = 24 * 60 * 60 * 1000;
-
+/** Largest file a tool may hand the user. */
 export const MAX_GENERATED_FILE_BYTES = 25 * 1024 * 1024;
-export const MAX_FILES_PER_OWNER = 200;
-const DEFAULT_RETENTION_DAYS = 90;
 
 /** Media types a generated file may have, with the extension it gets. */
 export const GENERATED_FILE_TYPES = Object.freeze({
   'application/pdf': 'pdf'
 });
+
+const HOLD_MS = 60 * 60 * 1000;
+const MAX_HELD_FILES = 50;
+const MAX_HELD_BYTES = 200 * 1024 * 1024;
+
+/** Held files by id, oldest first (a `Map` keeps insertion order). */
+const held = new Map();
 
 export class GeneratedFileError extends Error {
   constructor(message, code = 'failed') {
@@ -38,23 +43,6 @@ export class GeneratedFileError extends Error {
     this.name = 'GeneratedFileError';
     this.code = code;
   }
-}
-
-/**
- * The owner key a user's files are stored under. A user id may contain
- * characters a storage key cannot (`@`, `:`), so it is hashed.
- *
- * @param {Object|null|undefined} user
- * @returns {string}
- */
-export function ownerKeyOf(user) {
-  const id = user?.id;
-  if (!id || id === 'anonymous' || typeof id !== 'string') return 'anonymous';
-  return `u${createHash('sha256').update(id).digest('hex').slice(0, 40)}`;
-}
-
-function scopeOf(user) {
-  return { type: SCOPE_TYPE, id: ownerKeyOf(user) };
 }
 
 /**
@@ -75,66 +63,37 @@ export function safeFileName(name, extension) {
   return `${base || 'document'}.${extension}`;
 }
 
-function retentionDays() {
-  const configured = Number(configCache.getPlatform()?.chats?.retentionDays);
-  return Number.isFinite(configured) ? configured : DEFAULT_RETENTION_DAYS;
+function ownerOf(user) {
+  return typeof user?.id === 'string' && user.id ? user.id : 'anonymous';
 }
 
-/**
- * Epoch milliseconds before which a generated file has expired, or null when
- * files are kept indefinitely (`retentionDays` zero or less).
- *
- * @returns {number|null}
- */
-function retentionCutoff() {
-  const days = retentionDays();
-  return days > 0 ? Date.now() - days * DAY_MS : null;
-}
-
-function isExpired(entry, cutoff = retentionCutoff()) {
-  if (cutoff === null) return false;
-  const created = Date.parse(entry?.createdAt || '');
-  return Number.isFinite(created) && created < cutoff;
-}
-
-/**
- * Remove an owner's files past the retention window and beyond the cap.
- * Best effort: a failed sweep never fails the save that triggered it.
- */
-async function sweep(repository, scope) {
-  try {
-    const entries = await repository.list(scope); // newest first
-    const cutoff = retentionCutoff();
-    const expired = entries
-      .filter((entry, index) => index >= MAX_FILES_PER_OWNER || isExpired(entry, cutoff))
-      .map(entry => entry.id);
-    if (expired.length) await repository.deleteMany(scope, expired);
-  } catch (error) {
-    logger.warn('Sweeping generated files failed', { component: COMPONENT, error: error.message });
+/** Drop expired files, then the oldest until the bounds hold. */
+function prune(now = Date.now()) {
+  let total = 0;
+  for (const [id, entry] of held) {
+    if (entry.expires <= now) held.delete(id);
+    else total += entry.data.length;
+  }
+  for (const [id, entry] of held) {
+    if (held.size <= MAX_HELD_FILES && total <= MAX_HELD_BYTES) break;
+    held.delete(id);
+    total -= entry.data.length;
   }
 }
 
 /**
- * Store a generated file for its owner.
+ * Hold a file a tool generated, for the chat to pick up.
  *
  * @param {Object} params
- * @param {Object} params.user - The user the file is for.
+ * @param {Object} [params.user] - The user the file is for.
+ * @param {string} [params.chatId] - The chat whose turn generated it.
  * @param {Buffer} params.data
  * @param {string} params.mimeType - A key of {@link GENERATED_FILE_TYPES}.
  * @param {string} [params.name] - Download name; the extension is added.
- * @param {Object} [params.meta] - Extra fields for the descriptor (e.g. `pages`).
- * @param {import('../artifacts/ArtifactRepository.js').ArtifactRepository} [params.repository] -
- *   Artifact store; defaults to the shared one.
- * @returns {Promise<{ id: string, name: string, mimeType: string, bytes: number, createdAt: string }>}
+ * @param {Object} [params.meta] - Extra descriptor fields (`pages`).
+ * @returns {{ id: string, name: string, mimeType: string, bytes: number, pages?: number }}
  */
-export async function saveGeneratedFile({
-  user,
-  data,
-  mimeType,
-  name,
-  meta = {},
-  repository = getArtifactRepository()
-}) {
+export function holdGeneratedFile({ user, chatId, data, mimeType, name, meta = {} }) {
   const extension = GENERATED_FILE_TYPES[mimeType];
   if (!extension) throw new GeneratedFileError(`Unsupported file type: ${mimeType}`, 'invalid');
   if (!Buffer.isBuffer(data) || data.length === 0) {
@@ -146,121 +105,61 @@ export async function saveGeneratedFile({
       'too-large'
     );
   }
-  if (!repository.isAvailable()) {
-    throw new GeneratedFileError('File storage is not available on this server.', 'unavailable');
-  }
-  const scope = scopeOf(user);
-  const fileName = safeFileName(name, extension);
-  const descriptor = await repository.put(scope, {
-    kind: 'document',
+  const descriptor = {
+    id: randomUUID().replace(/-/g, ''),
+    name: safeFileName(name, extension),
     mimeType,
-    data,
-    name: fileName
-  });
-  if (!descriptor) {
-    throw new GeneratedFileError(
-      'The file could not be stored (artifact storage is disabled).',
-      'unavailable'
-    );
-  }
-  await sweep(repository, scope);
-  return {
-    id: descriptor.id,
-    name: fileName,
-    mimeType: descriptor.mimeType,
-    bytes: descriptor.bytes,
-    createdAt: descriptor.createdAt,
-    ...meta
+    bytes: data.length,
+    ...(Number.isInteger(meta.pages) && meta.pages > 0 ? { pages: meta.pages } : {})
   };
+  held.set(descriptor.id, {
+    owner: ownerOf(user),
+    chatId: typeof chatId === 'string' && chatId ? chatId : null,
+    data,
+    descriptor,
+    expires: Date.now() + HOLD_MS
+  });
+  prune();
+  return descriptor;
+}
+
+function heldEntry(id, chatId) {
+  const entry = held.get(String(id || ''));
+  if (!entry || entry.expires <= Date.now()) return null;
+  if (entry.chatId && chatId && entry.chatId !== chatId) return null;
+  return entry;
 }
 
 /**
- * Read one of a user's generated files.
+ * A held file, for its owner (`preview_pdf`).
  *
  * @param {Object} user
- * @param {string} fileId
+ * @param {string} id
  * @param {Object} [options]
- * @param {import('../artifacts/ArtifactRepository.js').ArtifactRepository} [options.repository]
- * @returns {Promise<{ id: string, name?: string, mimeType: string, bytes: number, data: Buffer } | null>}
+ * @param {string} [options.chatId] - Only a file of this chat.
+ * @returns {{ id: string, name: string, mimeType: string, bytes: number, pages?: number, data: Buffer } | null}
  */
-export async function getGeneratedFile(
-  user,
-  fileId,
-  { repository = getArtifactRepository() } = {}
-) {
-  if (!isValidId(fileId) || !/^[a-f0-9]{32}$/.test(fileId)) return null;
-  if (!repository.isAvailable()) return null;
-  const scope = scopeOf(user);
-  const file = await repository.get(scope, fileId);
-  if (!file) return null;
-  // Past the retention window a file is gone, whether or not the daily sweep
-  // has reached it yet.
-  if (isExpired(file)) {
-    await repository.deleteMany(scope, [fileId]).catch(() => {});
-    return null;
-  }
-  return file;
+export function heldGeneratedFile(user, id, { chatId } = {}) {
+  const entry = heldEntry(id, chatId);
+  if (!entry || entry.owner !== ownerOf(user)) return null;
+  return { ...entry.descriptor, data: entry.data };
 }
 
 /**
- * Remove every generated file past the retention window, for all owners.
+ * The bytes of a held file, base64, for the chat tool seam: it found the id
+ * in the result of a system skill tool this same turn ran.
  *
+ * @param {string} id
  * @param {Object} [options]
- * @param {import('../artifacts/ArtifactRepository.js').ArtifactRepository} [options.repository]
- * @returns {Promise<number>} How many files were removed.
+ * @param {string} [options.chatId] - Only a file of this chat.
+ * @returns {string|null}
  */
-export async function sweepExpiredGeneratedFiles({ repository = getArtifactRepository() } = {}) {
-  const cutoff = retentionCutoff();
-  if (cutoff === null || !repository.isAvailable()) return 0;
-  const removed = await repository.deleteCreatedBefore(SCOPE_TYPE, cutoff);
-  if (removed > 0) {
-    logger.info('Expired generated files removed', { component: COMPONENT, removed });
-  }
-  return removed;
+export function heldGeneratedFileData(id, { chatId } = {}) {
+  const entry = heldEntry(id, chatId);
+  return entry ? entry.data.toString('base64') : null;
 }
 
-let sweepTimer = null;
-
-/**
- * Sweep expired generated files once now and then daily. Owners that never
- * generate another file would otherwise keep theirs past the window.
- *
- * @param {Object} [options]
- * @param {number} [options.intervalMs]
- * @returns {() => void} Stops the sweep.
- */
-export function startGeneratedFileSweep({ intervalMs = DAY_MS } = {}) {
-  if (sweepTimer) return stopGeneratedFileSweep;
-  const tick = () =>
-    sweepExpiredGeneratedFiles().catch(error =>
-      logger.warn('Generated file sweep failed', { component: COMPONENT, error: error.message })
-    );
-  sweepTimer = setInterval(tick, intervalMs);
-  if (typeof sweepTimer.unref === 'function') sweepTimer.unref();
-  tick();
-  return stopGeneratedFileSweep;
-}
-
-/** Stop the daily sweep. */
-export function stopGeneratedFileSweep() {
-  if (sweepTimer) clearInterval(sweepTimer);
-  sweepTimer = null;
-}
-
-/**
- * The client-facing descriptor of a generated file: what a tool result and
- * the chat's download card carry.
- *
- * @param {Object} file - From {@link saveGeneratedFile}.
- * @returns {Object}
- */
-export function describeGeneratedFile(file) {
-  return {
-    id: file.id,
-    name: file.name,
-    mimeType: file.mimeType,
-    bytes: file.bytes,
-    ...(Number.isInteger(file.pages) ? { pages: file.pages } : {}),
-    createdAt: file.createdAt
-  };
+/** Forget every held file (tests). */
+export function clearHeldGeneratedFiles() {
+  held.clear();
 }
