@@ -41,11 +41,16 @@
 import vllmRealtimeProvider from './vllmRealtimeProvider.js';
 import googleLiveProvider from './googleLiveProvider.js';
 import googleTranscribeProvider from './googleTranscribeProvider.js';
+import mistralRealtimeProvider from './mistralRealtimeProvider.js';
 
+// `mistral` is a chat provider too: a model only reaches this registry with
+// `modelType: 'transcription'` (the bridge checks it first), as Voxtral TTS
+// reaches server/tts/ with `modelType: 'tts'`.
 const providers = {
   'vllm-realtime': vllmRealtimeProvider,
   'google-live': googleLiveProvider,
-  'google-transcribe': googleTranscribeProvider
+  'google-transcribe': googleTranscribeProvider,
+  mistral: mistralRealtimeProvider
 };
 
 /**

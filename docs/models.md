@@ -268,15 +268,17 @@ Models with `modelType: "transcription"` are **speech-to-text** models, not chat
 
 Transcription models are **not** routed through the LLM adapter pipeline. They use a parallel transcription provider registry (`server/transcription/`) and are streamed over the same authenticated realtime WebSocket (`/api/voice/realtime`) that dictation uses.
 
-Three transcription providers ship. All three speak the same browser-facing protocol, so switching a model changes nothing in the app or the UI:
+Four transcription providers ship. All of them speak the same browser-facing protocol, so switching a model changes nothing in the app or the UI:
 
 | Provider | Model | Shape | Use it for |
 | --- | --- | --- | --- |
 | `vllm-realtime` | `voxtral-mini-realtime` | Streaming (WebSocket) | Self-hosted, fully private transcription |
+| `mistral` | `voxtral-mini-transcribe-realtime` | Streaming (Mistral realtime API) | The same Voxtral model, hosted by Mistral |
 | `google-live` | `gemini-3.5-transcribe-live` | Streaming (Gemini Live API) | Hosted realtime transcription, recordings up to 10 min |
 | `google-transcribe` | `gemini-3.5-transcribe` | Batch (one request) | Hosted transcription of complete recordings, up to 1 h |
 
 - **vLLM Realtime** (`provider: "vllm-realtime"`) — a self-hosted vLLM `/v1/realtime` endpoint (e.g. Voxtral). The `url` is a `ws://` / `wss://` WebSocket URL and stays server-side.
+- **Mistral** (`provider: "mistral"` with `modelType: "transcription"`) — Mistral's hosted `voxtral-mini-transcribe-realtime-2602` on `wss://api.mistral.ai/v1/audio/transcriptions/realtime`. Streams the transcript while the audio is still arriving and detects the language by itself. It takes the same credential as the Mistral chat models: a per-model `apiKey`, the `mistral` entry in `providers.json`, or `MISTRAL_API_KEY`. `config.targetStreamingDelayMs` (optional, milliseconds) trades latency for accuracy: Mistral waits that long before it transcribes.
 - **Gemini Live** (`provider: "google-live"`) — Google's hosted realtime speech-to-text over the Gemini Live API (`wss://…BidiGenerateContent`). Streams a transcript while the audio is still arriving, auto-detects 85+ languages and handles code-switching. **A Live API session runs for at most 10 minutes**, so longer recordings need the batch provider. Pin languages with `config.languageCodes` (BCP-47, empty means auto-detect).
 - **Gemini Batch** (`provider: "google-transcribe"`) — Google's hosted transcription for complete recordings, up to one hour of audio. It transcribes in a single request rather than streaming, so the transcript appears at the end instead of word by word. The audio is uploaded to Google's Files API first and deleted again afterwards. `config` accepts `mode` (`"smart"`, the default, or `"verbatim"`), `languageCodes`, and `customVocabulary` (up to 1,000 phrases that bias recognition toward domain terms).
 
@@ -320,6 +322,7 @@ Key points:
 Every transcription model file ships **disabled**. Enable the one you want:
 
 - `voxtral-mini-realtime` — point its `url` at your vLLM realtime endpoint (migration `V073` seeds it for existing installations, carrying over any configured `platform.speech.realtime` settings).
+- `voxtral-mini-transcribe-realtime` — set `MISTRAL_API_KEY` (or a per-model key) and enable. **Enabling it sends user audio to Mistral**, which is why it is off by default. Migration `V144` seeds it, disabled.
 - `gemini-3.5-transcribe-live` / `gemini-3.5-transcribe` — set `GOOGLE_API_KEY` (or a per-model key) and enable. **Enabling either sends user audio to Google**, and the batch model additionally stores it in Google's Files API (48 h retention) for the duration of the request; that is why neither is on by default. Migration `V089` seeds both, disabled.
 
 #### Batch providers and memory

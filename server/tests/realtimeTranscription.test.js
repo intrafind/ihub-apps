@@ -509,6 +509,141 @@ describe('bridgeConnection state machine (fake sockets)', () => {
  * one `transcribe()` call on `stop`. The browser-facing protocol is identical
  * to a streaming provider's, which is what lets the client stay unchanged.
  */
+describe('bridgeConnection — Mistral realtime (fake sockets)', () => {
+  const user = {
+    id: 'u1',
+    name: 'u1',
+    permissions: { models: new Set(['voxtral-mini-transcribe-realtime']) }
+  };
+
+  const mistralModel = {
+    id: 'voxtral-mini-transcribe-realtime',
+    modelId: 'voxtral-mini-transcribe-realtime-2602',
+    url: 'wss://api.mistral.ai/v1/audio/transcriptions/realtime',
+    provider: 'mistral',
+    modelType: 'transcription',
+    apiKey: 'mistral-test-key',
+    enabled: true
+  };
+
+  beforeEach(() => {
+    jest.useFakeTimers();
+    configCache.setCacheEntry('config/platform.json', {
+      jwt: { algorithm: 'HS256' },
+      auth: { jwtSecret: 'realtime-stt-test-secret' }
+    });
+    configCache.setCacheEntry('config/models.json', [mistralModel]);
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  afterAll(() => {
+    for (const key of ['config/platform.json', 'config/models.json']) {
+      const timer = configCache.refreshTimers?.get(key);
+      if (timer) clearTimeout(timer);
+      configCache.refreshTimers?.delete(key);
+    }
+  });
+
+  test('golden path: session.created → session.update → audio → flush + end → deltas, done → final', async () => {
+    const client = new FakeWs();
+    const upstream = new FakeWs(WebSocket.CONNECTING);
+    const limiter = new ConnectionLimiter({ maxTotal: 5, maxPerUser: 5 });
+    limiter.tryAcquire(user.id);
+    const createUpstream = jest.fn(() => upstream);
+    bridgeConnection(client, user, limiter, { createUpstream });
+
+    client.emit(
+      'message',
+      JSON.stringify({ type: 'start', modelId: 'voxtral-mini-transcribe-realtime' }),
+      false
+    );
+    client.emit('message', Buffer.from([1, 2, 3, 4]), true);
+    await jest.advanceTimersByTimeAsync(0);
+
+    // The model rides in the query string, the key in a header — never in the url.
+    expect(createUpstream).toHaveBeenCalledTimes(1);
+    const [url, options] = createUpstream.mock.calls[0];
+    expect(url).toBe(
+      'wss://api.mistral.ai/v1/audio/transcriptions/realtime?model=voxtral-mini-transcribe-realtime-2602'
+    );
+    expect(options.headers.Authorization).toBe('Bearer mistral-test-key');
+
+    upstream.readyState = WebSocket.OPEN;
+    upstream.emit('open');
+    await jest.advanceTimersByTimeAsync(0);
+    // Nothing goes out before the session exists, and there is no fallback window.
+    expect(upstream.sent).toHaveLength(0);
+    await jest.advanceTimersByTimeAsync(3000);
+    expect(client.framesOfType('ready')).toHaveLength(0);
+
+    upstream.emit(
+      'message',
+      JSON.stringify({ type: 'session.created', session: { request_id: 'r1' } })
+    );
+    await jest.advanceTimersByTimeAsync(0);
+    expect(upstream.framesOfType('session.update')[0]).toEqual({
+      type: 'session.update',
+      session: { audio_format: { encoding: 'pcm_s16le', sample_rate: 16000 } }
+    });
+    expect(upstream.framesOfType('input_audio.append')[0].audio).toBe(
+      Buffer.from([1, 2, 3, 4]).toString('base64')
+    );
+    expect(client.framesOfType('ready')).toHaveLength(1);
+
+    upstream.emit('message', JSON.stringify({ type: 'transcription.text.delta', text: 'Hallo ' }));
+    upstream.emit('message', JSON.stringify({ type: 'transcription.language', language: 'de' }));
+    await jest.advanceTimersByTimeAsync(0);
+    expect(client.framesOfType('delta').map(f => f.text)).toEqual(['Hallo ']);
+
+    client.emit('message', JSON.stringify({ type: 'stop' }), false);
+    await jest.advanceTimersByTimeAsync(0);
+    expect(upstream.framesOfType('input_audio.flush')).toHaveLength(1);
+    expect(upstream.framesOfType('input_audio.end')).toHaveLength(1);
+
+    upstream.emit(
+      'message',
+      JSON.stringify({ type: 'transcription.done', text: 'Hallo Welt', language: 'de' })
+    );
+    await jest.advanceTimersByTimeAsync(0);
+    expect(client.framesOfType('final').map(f => f.text)).toEqual(['Hallo Welt']);
+
+    await jest.advanceTimersByTimeAsync(2600);
+    expect(client.framesOfType('done')).toHaveLength(1);
+    expect(limiter.total).toBe(0);
+  });
+
+  test('an upstream error frame reaches the client with its message', async () => {
+    const client = new FakeWs();
+    const upstream = new FakeWs(WebSocket.CONNECTING);
+    const limiter = new ConnectionLimiter({ maxTotal: 5, maxPerUser: 5 });
+    limiter.tryAcquire(user.id);
+    bridgeConnection(client, user, limiter, { createUpstream: () => upstream });
+
+    client.emit(
+      'message',
+      JSON.stringify({ type: 'start', modelId: 'voxtral-mini-transcribe-realtime' }),
+      false
+    );
+    client.emit('message', Buffer.from([1, 2]), true);
+    await jest.advanceTimersByTimeAsync(0);
+    upstream.readyState = WebSocket.OPEN;
+    upstream.emit('open');
+    upstream.emit(
+      'message',
+      JSON.stringify({ type: 'error', error: { message: 'Invalid model', code: 3001 } })
+    );
+    await jest.advanceTimersByTimeAsync(0);
+
+    const [error] = client.framesOfType('error');
+    expect(error.code).toBe('upstream-error');
+    expect(error.message).toContain('3001: Invalid model');
+    expect(limiter.total).toBe(0);
+  });
+});
+
 describe('bridgeConnection — batch providers', () => {
   const user = {
     id: 'u1',

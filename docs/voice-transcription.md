@@ -28,13 +28,14 @@ Browser                          iHub Apps server                     GPU host
 └───────────────────────┘       └──────────────────────────┘        └─────────────────┘
 ```
 
-The GPU host above is one of three interchangeable backends. Which one a
+The GPU host above is one of four interchangeable backends. Which one a
 session uses comes from the selected transcription model's provider, and the
 browser-facing protocol is identical for all of them:
 
 | Provider | Upstream | Shape |
 | --- | --- | --- |
 | `vllm-realtime` | your own vLLM `/v1/realtime` | Streaming WebSocket |
+| `mistral` | Mistral realtime API (`wss://api.mistral.ai/v1/audio/transcriptions/realtime`) | Streaming WebSocket |
 | `google-live` | Gemini Live API (`wss://…BidiGenerateContent`) | Streaming WebSocket |
 | `google-transcribe` | Gemini Files API + `/v1beta/interactions` | Batch: one HTTPS request on `stop` |
 
@@ -141,6 +142,37 @@ Field notes:
 - **`enabled`** — must be `true` for the model to be usable.
 
 Configure it in **Admin → Models** (select model type "Transcription"), or edit the JSON directly — changes are hot-reloaded. Use the **Test connection** button in Admin → Voice/Models to validate reachability and protocol without streaming audio.
+
+### Hosted alternative: Voxtral on the Mistral platform
+
+The Voxtral model you would run on vLLM is also available as a hosted model,
+`voxtral-mini-transcribe-realtime-2602`. A disabled model ships next to the
+vLLM one:
+
+```json
+{
+  "id": "voxtral-mini-transcribe-realtime",
+  "modelId": "voxtral-mini-transcribe-realtime-2602",
+  "url": "wss://api.mistral.ai/v1/audio/transcriptions/realtime",
+  "provider": "mistral",
+  "modelType": "transcription",
+  "enabled": false
+}
+```
+
+- It streams the transcript as the audio arrives, like the vLLM model, and
+  detects the language by itself.
+- It uses the Mistral credential the chat models already use: a per-model
+  `apiKey`, the `mistral` entry in `providers.json`, or `MISTRAL_API_KEY`. The
+  key is sent to Mistral as a Bearer token from the iHub server and never
+  reaches the browser.
+- `config.targetStreamingDelayMs` (optional, milliseconds) lets Mistral wait
+  longer before transcribing, for more accuracy at the cost of latency.
+- Enabling it **sends user audio to Mistral**, which is why it is off by
+  default.
+
+Enable it in **Admin → Models**, then pick it under **Admin → Voice Input** or
+in an app's Transcription section.
 
 ### Hosted alternative: Gemini transcription
 

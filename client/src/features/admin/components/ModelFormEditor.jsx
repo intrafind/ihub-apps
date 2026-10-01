@@ -609,7 +609,12 @@ function ModelFormEditor({
                       onChange={handleInputChange}
                       placeholder={
                         isTranscription
-                          ? t('admin.models.placeholders.realtimeUrl', 'ws://host:8080/v1/realtime')
+                          ? data.provider === 'mistral'
+                            ? 'wss://api.mistral.ai/v1/audio/transcriptions/realtime'
+                            : t(
+                                'admin.models.placeholders.realtimeUrl',
+                                'ws://host:8080/v1/realtime'
+                              )
                           : isTts
                             ? 'https://api.mistral.ai/v1/audio/speech'
                             : t('admin.models.placeholders.apiUrl')
@@ -623,7 +628,7 @@ function ModelFormEditor({
                       <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
                         {t(
                           'admin.models.hints.realtimeUrl',
-                          'WebSocket URL of the vLLM realtime endpoint. It stays server-side and never reaches the browser.'
+                          'Endpoint of the transcription service: a vLLM /v1/realtime WebSocket URL, or the provider’s API. It stays server-side and never reaches the browser.'
                         )}
                       </p>
                     )}

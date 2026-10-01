@@ -1061,13 +1061,15 @@ function ChatMessage({
         {/* Everything the answer found — web pages, documents, records —
             behind "Searched for …" / "N sources", opening the sources panel
             with what it cites and what it only considered. Shown while the
-            answer streams too: its badges open the panel. */}
+            answer streams too: its badges open the panel. Once it is
+            complete, the sources it cites are also listed at its end. */}
         {!isUser && citationView && (
           <AnswerSources
             messageKey={messageKey}
             sources={message.sources}
             citations={citationView}
             onOpenInApp={onOpenSourceInApp}
+            listCited={!message.loading}
           />
         )}
 
