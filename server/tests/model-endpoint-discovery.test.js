@@ -276,6 +276,7 @@ test('discoverModels sends the key, does not follow redirects, and adds the infe
   assert.equal(calls[0].url, 'https://llm-server.llmhub.t-systems.net/v2/models');
   assert.equal(calls[0].init.headers.Authorization, 'Bearer gen-key');
   assert.equal(calls[0].init.redirect, 'manual');
+  assert.equal(calls[0].init.size, 10 * 1024 * 1024);
   assert.equal(result.models.length, 3);
   assert.equal(result.models[0].url, 'https://llm-server.llmhub.t-systems.net/v2/chat/completions');
 });
@@ -340,4 +341,20 @@ test('trailing slashes are stripped in linear time, also from a long run of them
   );
   assert.equal(comparableUrl(`https://host/v1${slashes}x`), `https://host/v1${slashes}x`);
   assert.ok(Date.now() - started < 1000, 'no quadratic backtracking');
+});
+
+test('a body cut off at the size limit is reported as too large', async () => {
+  const tooLarge = {
+    ok: true,
+    status: 200,
+    headers: { get: () => null },
+    text: async () => {
+      throw Object.assign(new Error('content size over limit'), { type: 'max-size' });
+    }
+  };
+  const { fetch } = fakeFetch(tooLarge);
+  await assert.rejects(
+    discoverModels({ url: 'https://host/v1', provider: 'openai' }, { fetch }),
+    err => err.messageKey === 'invalidResponse' && /too large/.test(err.message)
+  );
 });

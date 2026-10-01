@@ -442,18 +442,32 @@ function describeHttpFailure(status, sentKey) {
   });
 }
 
+function responseTooLarge() {
+  return new ModelDiscoveryError('invalidResponse', 'The model list is too large', {
+    details: `The response exceeds ${MAX_RESPONSE_BYTES / (1024 * 1024)} MB.`
+  });
+}
+
+/**
+ * Read the listing body as JSON. The fetch is made with node-fetch's `size`
+ * option, which aborts the stream once MAX_RESPONSE_BYTES is passed — also
+ * when the endpoint sends no `content-length` — and rejects with a `max-size`
+ * FetchError; the length checks here cover an injected fetch without it.
+ */
 async function readJsonBody(response) {
   const declared = Number(response.headers?.get?.('content-length'));
   if (Number.isFinite(declared) && declared > MAX_RESPONSE_BYTES) {
-    throw new ModelDiscoveryError('invalidResponse', 'The model list is too large', {
-      details: `The response exceeds ${MAX_RESPONSE_BYTES / (1024 * 1024)} MB.`
-    });
+    throw responseTooLarge();
   }
-  const text = await response.text();
+  let text;
+  try {
+    text = await response.text();
+  } catch (err) {
+    if (err?.type === 'max-size') throw responseTooLarge();
+    throw describeFetchFailure(err);
+  }
   if (text.length > MAX_RESPONSE_BYTES) {
-    throw new ModelDiscoveryError('invalidResponse', 'The model list is too large', {
-      details: `The response exceeds ${MAX_RESPONSE_BYTES / (1024 * 1024)} MB.`
-    });
+    throw responseTooLarge();
   }
   try {
     return JSON.parse(text);
@@ -508,6 +522,8 @@ export async function discoverModels({ url, provider = 'openai', apiKey } = {}, 
       method: 'GET',
       headers: buildDiscoveryHeaders(provider, key),
       redirect: 'manual',
+      // node-fetch stops reading the body past this many bytes.
+      size: MAX_RESPONSE_BYTES,
       signal: AbortSignal.timeout(DISCOVERY_TIMEOUT_MS)
     });
   } catch (err) {
