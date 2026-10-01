@@ -67,6 +67,18 @@ function stripInline(line) {
 }
 
 /**
+ * Close tags of the dropped elements, matched the way a browser ends them:
+ * `</script >` and `</SCRIPT foo>` close the element too. `[^<>]*` stops at
+ * the next tag, so an unterminated close tag cannot rescan the rest.
+ */
+const CLOSE_TAGS = {
+  script: /<\/script\b[^<>]*>/gi,
+  style: /<\/style\b[^<>]*>/gi,
+  think: /<\/think\b[^<>]*>/gi,
+  thinking: /<\/thinking\b[^<>]*>/gi
+};
+
+/**
  * Remove `<script>`, `<style>` and `<think>`/`<thinking>` elements with their
  * content: code that styles the page, and a model's reasoning. Each search
  * continues from where the last one ended (`lastIndex`), so many unclosed
@@ -80,7 +92,7 @@ function dropElements(text) {
   let match;
   while ((match = openTag.exec(text))) {
     result += `${text.slice(pos, match.index)}\n`;
-    const closeTag = new RegExp(`</${match[1]}\\s*>`, 'gi');
+    const closeTag = CLOSE_TAGS[match[1].toLowerCase()];
     closeTag.lastIndex = openTag.lastIndex;
     const end = closeTag.exec(text);
     if (!end) return result;
@@ -109,6 +121,10 @@ export function toSpeechText(markdown) {
     .replace(/<br\s*\/?>/gi, '\n')
     .replace(/<\/?(?:p|div|li|tr|h[1-6]|details|summary|blockquote|ul|ol|table)\b[^<>]*>/gi, '\n')
     .replace(/<\/?[a-z][^<>]*>/gi, '')
+    // Whatever is left of a tag after one pass (`<scr<b>ipt>` becomes
+    // `<script>`) or a stray bracket is noise to a listener: no `<` or `>`
+    // from the markup survives into the spoken text.
+    .replace(/[<>]/g, ' ')
     .replace(/&(?:amp|lt|gt|quot|apos|nbsp|#39);/g, m => HTML_ENTITIES[m]);
 
   // Collapse runs before any per-line pattern sees them: a run of spaces or

@@ -114,6 +114,21 @@ describe('toSpeechText', () => {
     expect(toSpeechText('<p>Fish &amp; chips</p><br><b>now</b>')).toBe('Fish & chips\n\nnow');
   });
 
+  test('ends dropped elements at any close tag a browser accepts', () => {
+    expect(toSpeechText('One <script>x()</script > two <STYLE>.a{}</style foo> three')).toBe(
+      'One two three'
+    );
+    // `</thinking>` does not close a `<think>` block.
+    expect(toSpeechText('A <think>secret</thinking> still secret</think> B')).toBe('A B');
+  });
+
+  test('leaves no angle bracket from split or stray tags', () => {
+    const text = toSpeechText('Before <scr<b>ipt>alert(1)</script> after a < b > c');
+    expect(text).not.toMatch(/[<>]/);
+    expect(text).toContain('Before');
+    expect(text).toContain('after');
+  });
+
   test('returns an empty string when nothing is speakable', () => {
     expect(toSpeechText('```\ncode only\n```')).toBe('');
     expect(toSpeechText('---')).toBe('');
