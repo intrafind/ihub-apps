@@ -565,7 +565,7 @@ export class LLMClient {
     let pool = this.listModels(includeDisabled);
     if (requireTextCapable) {
       pool = pool.filter(
-        m => m.enabled !== false && !m.supportsImageGeneration && m.modelType !== 'transcription'
+        m => m.enabled !== false && !m.supportsImageGeneration && (m.modelType || 'chat') === 'chat'
       );
     }
     if (pool.length === 0) return null;

@@ -78,6 +78,7 @@
     - [Audio UI Guide](AUDIO_UI_GUIDE.md)
     - [Microphone Feature](microphone-feature.md)
     - [Realtime Voice & Transcription](voice-transcription.md)
+    - [Read Aloud (Text-to-Speech)](text-to-speech.md)
     - [Web Tools](web-tools.md)
     - [Magic Prompt](magic-prompt-feature.md)
     - [Image Upload Feature](image-upload-feature.md)

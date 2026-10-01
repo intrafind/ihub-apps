@@ -501,34 +501,38 @@ describe('Migration Runner', () => {
       expect(history.migrations[0].version).toBe('111');
     });
 
-    it("moves an EU AI Act entry recorded at V141 to V142 so main's V141 runs", () => {
-      // A dev install that ran the branch while it was V141 recorded that
-      // number; main's provider plain names migration holds V141 now.
-      const history = {
-        schemaVersion: '1.0',
-        migrations: [
-          {
-            version: '141',
-            description: 'add_ai_transparency',
-            file: 'V141__add_ai_transparency.js',
-            checksum: 'abc123',
-            status: 'success'
-          },
-          {
-            version: '140',
-            description: 'web_tools_filters_and_page_offset',
-            file: 'V140__web_tools_filters_and_page_offset.js',
-            checksum: 'def456',
-            status: 'success'
-          }
-        ]
-      };
+    it.each(['141', '142'])(
+      "moves an EU AI Act entry recorded at V%s to V143 so main's migration of that number runs",
+      oldVersion => {
+        // A dev install that ran the branch while it held that number recorded
+        // it; main's provider plain names (V141) and text-to-speech (V142)
+        // migrations hold those numbers now.
+        const history = {
+          schemaVersion: '1.0',
+          migrations: [
+            {
+              version: oldVersion,
+              description: 'add_ai_transparency',
+              file: `V${oldVersion}__add_ai_transparency.js`,
+              checksum: 'abc123',
+              status: 'success'
+            },
+            {
+              version: '140',
+              description: 'web_tools_filters_and_page_offset',
+              file: 'V140__web_tools_filters_and_page_offset.js',
+              checksum: 'def456',
+              status: 'success'
+            }
+          ]
+        };
 
-      expect(reconcileRenamedMigrations(history)).toBe(true);
-      expect(history.migrations[0].version).toBe('142');
-      expect(history.migrations[0].file).toBe('V142__add_ai_transparency.js');
-      expect(history.migrations[1].version).toBe('140');
-    });
+        expect(reconcileRenamedMigrations(history)).toBe(true);
+        expect(history.migrations[0].version).toBe('143');
+        expect(history.migrations[0].file).toBe('V143__add_ai_transparency.js');
+        expect(history.migrations[1].version).toBe('140');
+      }
+    );
 
     it('is a no-op on a fresh install with no matching history entries', () => {
       const history = { schemaVersion: '1.0', migrations: [] };

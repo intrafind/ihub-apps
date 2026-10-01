@@ -97,6 +97,24 @@ const promptCachingSchema = z
   })
   .strict();
 
+// Text-to-speech settings for a `modelType: "tts"` model. `voice` is the
+// provider's voice id — for Mistral a preset slug such as `en_paul_neutral` or
+// the id of a voice saved in the Mistral account. Unset uses the provider's
+// default voice. `voices` maps a language (`de`, `fr`, …) to the voice that
+// reads messages written in it; any other language uses `voice`.
+const ttsVoiceIdSchema = z.string().trim().min(1).max(200);
+const ttsSchema = z
+  .object({
+    voice: z.string().trim().max(200).optional(),
+    voices: z
+      .record(
+        z.string().regex(/^[a-z]{2}$/, 'Voice languages are two-letter codes such as "de"'),
+        ttsVoiceIdSchema
+      )
+      .optional()
+  })
+  .strict();
+
 const baseModelConfigSchema = z
   .object({
     // Required fields
@@ -165,9 +183,11 @@ const baseModelConfigSchema = z
       .optional(),
     // Distinguishes chat models (routed through the LLM adapter pipeline) from
     // transcription models (routed through the transcription provider registry
-    // and the realtime WebSocket proxy). Existing models default to 'chat', so
-    // no migration is needed for the field itself.
-    modelType: z.enum(['chat', 'transcription']).optional().prefault('chat'),
+    // and the realtime WebSocket proxy) and text-to-speech models (routed
+    // through the TTS provider registry in server/tts/ by /api/voice/speech).
+    // Existing models default to 'chat', so no migration is needed for the
+    // field itself.
+    modelType: z.enum(['chat', 'transcription', 'tts']).optional().prefault('chat'),
     // Total input+output tokens the model supports. Used for fitting documents
     // and showing remaining capacity to the user — NOT sent to the provider.
     contextWindow: z
@@ -244,6 +264,8 @@ const baseModelConfigSchema = z
     supportsUsageTracking: z.boolean().optional(),
     supportsImageGeneration: z.boolean().optional().prefault(false),
     imageGeneration: imageGenerationSchema.optional(),
+    // Text-to-speech settings (modelType: 'tts' only).
+    tts: ttsSchema.optional(),
     config: z.record(z.any()).optional(), // Allow provider-specific configuration
 
     // Hint configuration - display important messages when model is selected
@@ -267,6 +289,10 @@ const baseModelConfigSchema = z
 // a model into the chat selector that the LLM adapter pipeline cannot route.
 export const TRANSCRIPTION_ONLY_PROVIDERS = ['vllm-realtime', 'google-live', 'google-transcribe'];
 
+// Providers with a text-to-speech implementation in server/tts/. A `tts` model
+// on any other provider could never be played, so it fails validation.
+export const TTS_PROVIDERS = ['mistral'];
+
 // Cross-field validation. Kept as a superRefine on top of the base object so
 // `knownModelKeys` can still be derived from `baseModelConfigSchema.shape`
 // (a ZodEffects wrapper has no `.shape`).
@@ -276,6 +302,20 @@ export const modelConfigSchema = baseModelConfigSchema.superRefine((data, ctx) =
       code: z.ZodIssueCode.custom,
       message: `Provider "${data.provider}" is only valid for modelType "transcription"`,
       path: ['provider']
+    });
+  }
+  if (data.modelType === 'tts' && !TTS_PROVIDERS.includes(data.provider)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: `Provider "${data.provider}" does not support modelType "tts" (supported: ${TTS_PROVIDERS.join(', ')})`,
+      path: ['provider']
+    });
+  }
+  if (data.tts !== undefined && data.modelType !== 'tts') {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'The "tts" settings are only valid for modelType "tts"',
+      path: ['tts']
     });
   }
 });

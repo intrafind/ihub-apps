@@ -785,6 +785,20 @@
           "noText": "The model returned no text. Use the microphone check to confirm the microphone picks up sound.",
           "empty": "Nothing was recorded."
         }
+      },
+      "tts": {
+        "title": "Read aloud (text-to-speech)",
+        "description": "Adds a play button to every chat message. The message is spoken by the text-to-speech model below and the audio streams while it is generated. Users only see the button when their groups may use the model; an app opts out with features.textToSpeech: false.",
+        "enabled": "Show a read-aloud button on chat messages",
+        "model": "Text-to-speech model",
+        "modelDisabled": "disabled",
+        "modelMissing": "This model no longer exists, so no read-aloud button is shown.",
+        "modelDisabledHint": "This model is disabled, so no read-aloud button is shown. Enable it under Admin → Models and make sure it has an API key.",
+        "noModelHint": "Choose a model, or no read-aloud button is shown.",
+        "modelHint": "Models with the type \"Text-to-Speech\" from Admin → Models. The voice is set on the model.",
+        "test": "Test",
+        "testHint": "Speaks the text with the selected model, the way a chat message is read. Works before saving, but the model must be enabled.",
+        "sampleText": "Hello! This is how answers sound when they are read aloud."
       }
     },
     "agents": {
@@ -1068,7 +1082,10 @@
         "thinkingLevelMedium": "Medium",
         "thinkingLevelHigh": "High",
         "thinkingThoughts": "Show reasoning",
-        "customProviders": "Custom providers"
+        "customProviders": "Custom providers",
+        "ttsVoice": "Voice",
+        "ttsVoices": "Voices per language",
+        "ttsVoiceLanguage": "Language"
       },
       "hints": {
         "modelId": "Unique identifier for the model (cannot be changed after creation)",
@@ -1080,7 +1097,7 @@
         "supportsAudio": "Enable if this model can process audio inputs",
         "supportsImageGeneration": "Enable if this model can generate images (e.g., Gemini Image models)",
         "maxReferenceImages": "Maximum number of reference images (1-14)",
-        "modelType": "Chat models answer prompts. Transcription models convert audio to text via a realtime endpoint (e.g. Voxtral).",
+        "modelType": "Chat models answer prompts. Transcription models convert audio to text via a realtime endpoint (e.g. Voxtral). Text-to-speech models read chat messages aloud (e.g. Voxtral TTS).",
         "realtimeUrl": "WebSocket URL of the vLLM realtime endpoint. It stays server-side and never reaches the browser.",
         "nativeWebSearch": "Apps with web search use the provider's built-in search on this model. Turn it off for models or gateways that do not support it; they fall back to Brave Search.",
         "promptCachingOpenAI": "Sends a cache key so requests that start with the same prompt reuse OpenAI’s cache. On by default for api.openai.com; turn it off for OpenAI-compatible servers that reject unknown parameters.",
@@ -1091,7 +1108,11 @@
         "thinkingLevel": "Sent as reasoning_effort (OpenAI, vLLM) or thinkingLevel (Gemini). Servers that do not support it ignore the value — leave on provider default unless the model documents these levels.",
         "thinkingThoughts": "Surface the reasoning to users behind the \"Show thinking\" toggle. Turn off to keep it hidden.",
         "maxOutputTokens": "Empty means the default ({{value}}), not unlimited. Reasoning models spend their thinking tokens from this limit, so keep it well above the longest answer you expect.",
-        "linkedProvider": "Uses the API key of the provider \"{{provider}}\" and its API type ({{apiType}})."
+        "linkedProvider": "Uses the API key of the provider \"{{provider}}\" and its API type ({{apiType}}).",
+        "ttsUrl": "Speech endpoint of the provider. It stays server-side and never reaches the browser.",
+        "ttsVoice": "Voice id of the provider: a Mistral preset such as en_paul_neutral, gb_jane_neutral or fr_marie_neutral, or the id of a voice saved in your Mistral account. Empty uses en_paul_neutral.",
+        "ttsVoices": "A message written in one of these languages is read with that voice; every other language uses the voice above. The language is told from the message itself.",
+        "ttsVoicesAfterSave": "Save the model once to browse the provider’s voices and create custom voices here."
       },
       "placeholders": {
         "maxOutputTokens": "Default: {{value}}",
@@ -1100,7 +1121,8 @@
         "apiUrl": "https://api.provider.com/v1/chat/completions",
         "apiKey": "Enter API key (optional - will use environment variable if not set)",
         "apiKeySet": "API key is set (leave blank to keep current)",
-        "realtimeUrl": "ws://host:8080/v1/realtime"
+        "realtimeUrl": "ws://host:8080/v1/realtime",
+        "ttsVoiceId": "Voice id"
       },
       "sections": {
         "imageGeneration": "Image Generation Settings",
@@ -1114,7 +1136,8 @@
       },
       "modelType": {
         "chat": "Chat",
-        "transcription": "Transcription"
+        "transcription": "Transcription",
+        "tts": "Text-to-Speech"
       },
       "imageQuality": {
         "low": "Low (1K)",
@@ -1237,6 +1260,42 @@
           "providerIdReserved": "This ID is the name of an API type. Choose another ID.",
           "needsJustification": "Not imported: enabling a model that does not mark its output needs a justification. Import it again without enabling it, or give a justification."
         }
+      },
+      "ttsVoices": {
+        "addLanguage": "+ Add a voice for a language",
+        "removeLanguage": "Remove",
+        "title": "Available voices",
+        "load": "Show voices",
+        "reload": "Reload",
+        "loadError": "Could not load voices",
+        "custom": "Your voices",
+        "noCustom": "No custom voices yet. Create one below.",
+        "presets": "Preset voices ({{count}})",
+        "useDefault": "Use as voice",
+        "useFor": "Use for {{language}}",
+        "deleteConfirm": "Delete the voice \"{{name}}\" from the provider account? Models that use it can no longer speak with it.",
+        "deleteError": "Could not delete the voice",
+        "createTitle": "Create a custom voice",
+        "createHint": "Record or upload 10–30 seconds of one person speaking naturally, without music or background noise. The voice is created in the provider account straight away; it reads every language, with the accent of the recording.",
+        "name": "Name",
+        "namePlaceholder": "e.g. Anna (German)",
+        "gender": "Gender (optional)",
+        "female": "Female",
+        "male": "Male",
+        "languages": "Language of the recording",
+        "record": "Record with microphone",
+        "stopRecording": "Stop recording ({{seconds}} s)",
+        "upload": "Upload audio file",
+        "recorded": "Recording",
+        "emptyRecording": "Nothing was recorded.",
+        "fileTooLarge": "The file is larger than 10 MB.",
+        "fileUnreadable": "This file could not be read as audio.",
+        "tooShort": "The sample is shorter than {{seconds}} seconds; record a little more.",
+        "consent": "The person speaking in this sample agreed that their voice is cloned and used to read answers aloud.",
+        "create": "Create voice",
+        "creating": "Creating…",
+        "createError": "Could not create the voice",
+        "created": "Voice \"{{name}}\" created ({{id}}). Use it below, then save the model."
       }
     },
     "auth": {
@@ -4762,7 +4821,13 @@
     "imageLoadFailed": "The stored image could not be loaded.",
     "imageNotStored": "This image could not be stored and is no longer available.",
     "loadingImage": "Loading image…",
-    "saveAsPrompt": "Save as prompt"
+    "saveAsPrompt": "Save as prompt",
+    "readAloud": "Read aloud",
+    "readAloudLoading": "Loading audio… click to cancel",
+    "readAloudPause": "Pause",
+    "readAloudResume": "Resume",
+    "readAloudStop": "Stop reading",
+    "readAloudError": "Read aloud failed: {{error}}"
   },
   "serverErrors": {
     "appNotFound": "Application not found",

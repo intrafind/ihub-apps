@@ -25,6 +25,13 @@ jest.mock('../../../client/src/api/adminApi', () => ({
   makeAdminApiCall: (...args) => mockMakeAdminApiCall(...args)
 }));
 
+// The read-aloud test player builds its URL here (import.meta, not CJS-safe).
+jest.mock('../../../client/src/utils/runtimeBasePath', () => ({
+  buildApiUrl: path => `/api${path}`,
+  buildPath: path => `/${path}`,
+  buildAssetUrl: path => path
+}));
+
 const mockRefreshConfig = jest.fn();
 jest.mock('../../../client/src/shared/contexts/PlatformConfigContext', () => ({
   __esModule: true,

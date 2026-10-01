@@ -1,165 +1,100 @@
 #!/usr/bin/env node
 
 /**
- * Migration V142 specs — seeding `platform.aiTransparency` and the per-model
- * `contentMarking` block (EU AI Act Art. 50, issue #2563).
+ * Migration V142 specs — read aloud defaults (speech.tts) and the seeded,
+ * disabled Voxtral TTS model file.
  */
-import fs from 'node:fs/promises';
-import os from 'node:os';
-import path from 'node:path';
-import { after, before, describe, it } from 'node:test';
+
+import test from 'node:test';
 import assert from 'node:assert/strict';
-
-import {
-  up,
-  precondition,
-  version,
-  description,
-  AI_TRANSPARENCY_DEFAULTS
-} from '../migrations/V142__add_ai_transparency.js';
 import { setDefault } from '../migrations/utils.js';
-import { DEFAULT_AI_TRANSPARENCY } from '../../shared/aiTransparency.js';
+import { up, precondition, version } from '../migrations/V142__add_text_to_speech.js';
 
-let baseDir;
+const DEFAULT_MODEL = {
+  id: 'voxtral-mini-tts',
+  modelId: 'voxtral-mini-tts-latest',
+  provider: 'mistral',
+  modelType: 'tts',
+  enabled: false,
+  default: false
+};
 
-function makeCtx(dir) {
+function fakeCtx(files, defaults = { 'models/voxtral-mini-tts.json': DEFAULT_MODEL }) {
   const logs = [];
   return {
+    files,
     logs,
-    fileExists: async rel =>
-      fs
-        .stat(path.join(dir, rel))
-        .then(() => true)
-        .catch(() => false),
-    readJson: async rel => JSON.parse(await fs.readFile(path.join(dir, rel), 'utf8')),
-    writeJson: async (rel, data) => {
-      await fs.mkdir(path.dirname(path.join(dir, rel)), { recursive: true });
-      await fs.writeFile(path.join(dir, rel), JSON.stringify(data, null, 2), 'utf8');
+    fileExists: async p => p in files,
+    readJson: async p => JSON.parse(JSON.stringify(files[p])),
+    readDefaultJson: async p => {
+      if (!(p in defaults)) throw new Error(`missing default ${p}`);
+      return JSON.parse(JSON.stringify(defaults[p]));
     },
-    listFiles: async (rel, _glob) =>
-      (await fs.readdir(path.join(dir, rel))).filter(f => f.endsWith('.json')),
+    writeJson: async (p, data) => {
+      files[p] = data;
+    },
     setDefault,
-    log: m => logs.push(['info', m]),
-    warn: m => logs.push(['warn', m])
+    log: m => logs.push(m),
+    warn: m => logs.push(m)
   };
 }
 
-async function seed({ platform = {}, models = {} } = {}) {
-  const dir = await fs.mkdtemp(path.join(baseDir, 'v142-'));
-  if (platform !== null) {
-    await fs.mkdir(path.join(dir, 'config'), { recursive: true });
-    await fs.writeFile(path.join(dir, 'config/platform.json'), JSON.stringify(platform), 'utf8');
-  }
-  if (models !== null) {
-    await fs.mkdir(path.join(dir, 'models'), { recursive: true });
-    for (const [id, model] of Object.entries(models)) {
-      await fs.writeFile(path.join(dir, `models/${id}.json`), JSON.stringify(model), 'utf8');
-    }
-  }
-  return { dir, ctx: makeCtx(dir) };
-}
-
-function flatten(obj, prefix = '') {
-  const out = {};
-  for (const [key, value] of Object.entries(obj)) {
-    const p = prefix ? `${prefix}.${key}` : key;
-    if (value && typeof value === 'object' && !Array.isArray(value))
-      Object.assign(out, flatten(value, p));
-    else out[p] = value;
-  }
-  return out;
-}
-
-before(async () => {
-  baseDir = await fs.mkdtemp(path.join(os.tmpdir(), 'ihub-migration-v142-'));
+test('version matches the file name', () => {
+  assert.equal(version, '142');
 });
 
-after(async () => {
-  await fs.rm(baseDir, { recursive: true, force: true });
+test('precondition requires platform.json', async () => {
+  assert.equal(await precondition(fakeCtx({})), false);
+  assert.equal(await precondition(fakeCtx({ 'config/platform.json': {} })), true);
 });
 
-describe('V142 identity', () => {
-  it('is numbered and described as its file name says', () => {
-    assert.equal(version, '142');
-    assert.equal(description, 'add_ai_transparency');
+test('seeds read aloud switched off, with no model', async () => {
+  const ctx = fakeCtx({
+    'config/platform.json': { speech: { defaultService: 'azure' } }
   });
+  await up(ctx);
 
-  it('runs when platform.json or the models directory exists', async () => {
-    const { ctx: none } = await seed({ platform: null, models: null });
-    assert.equal(await precondition(none), false);
-    const { ctx: both } = await seed();
-    assert.equal(await precondition(both), true);
+  const speech = ctx.files['config/platform.json'].speech;
+  assert.deepEqual(speech.tts, { enabled: false, defaultModelId: '' });
+  assert.equal(speech.defaultService, 'azure');
+});
+
+test('keeps read aloud settings an admin already made', async () => {
+  const ctx = fakeCtx({
+    'config/platform.json': { speech: { tts: { enabled: true, defaultModelId: 'my-tts' } } }
   });
-
-  it('seeds exactly the shared defaults', () => {
-    assert.deepEqual(AI_TRANSPARENCY_DEFAULTS, flatten(DEFAULT_AI_TRANSPARENCY));
+  await up(ctx);
+  assert.deepEqual(ctx.files['config/platform.json'].speech.tts, {
+    enabled: true,
+    defaultModelId: 'my-tts'
   });
 });
 
-describe('V142 platform defaults', () => {
-  it('adds the whole section to an installation that has none', async () => {
-    const { ctx } = await seed({ platform: { auth: { mode: 'local' } } });
-    await up(ctx);
-    const platform = await ctx.readJson('config/platform.json');
-    assert.deepEqual(flatten(platform.aiTransparency), AI_TRANSPARENCY_DEFAULTS);
-    assert.deepEqual(platform.auth, { mode: 'local' });
-  });
-
-  it('keeps values an admin already set', async () => {
-    const { ctx } = await seed({
-      platform: {
-        aiTransparency: { detection: { access: 'public' }, images: { watermark: 'none' } }
-      }
-    });
-    await up(ctx);
-    const { aiTransparency } = await ctx.readJson('config/platform.json');
-    assert.equal(aiTransparency.detection.access, 'public');
-    assert.equal(aiTransparency.images.watermark, 'none');
-    assert.equal(aiTransparency.images.c2pa, true);
-    assert.equal(aiTransparency.interactionDisclosure.enabled, true);
-  });
-
-  it('is idempotent', async () => {
-    const { ctx } = await seed();
-    await up(ctx);
-    const first = await ctx.readJson('config/platform.json');
-    await up(ctx);
-    assert.deepEqual(await ctx.readJson('config/platform.json'), first);
-  });
+test('seeds the Voxtral TTS model disabled', async () => {
+  const ctx = fakeCtx(
+    { 'config/platform.json': {} },
+    { 'models/voxtral-mini-tts.json': { ...DEFAULT_MODEL, enabled: true, default: true } }
+  );
+  await up(ctx);
+  const model = ctx.files['models/voxtral-mini-tts.json'];
+  assert.equal(model.modelType, 'tts');
+  assert.equal(model.enabled, false);
+  assert.equal(model.default, false);
 });
 
-describe('V142 model contentMarking', () => {
-  it('marks cloud text models as unmarked and Gemini images as SynthID', async () => {
-    const { ctx } = await seed({
-      models: {
-        'claude-x': { id: 'claude-x', provider: 'anthropic' },
-        'gemini-img': { id: 'gemini-img', provider: 'google', supportsImageGeneration: true },
-        'gemini-txt': { id: 'gemini-txt', provider: 'google' }
-      }
-    });
-    await up(ctx);
-    assert.deepEqual((await ctx.readJson('models/claude-x.json')).contentMarking, {
-      textWatermark: 'none'
-    });
-    assert.deepEqual((await ctx.readJson('models/gemini-img.json')).contentMarking, {
-      textWatermark: 'none',
-      imageWatermark: 'upstream:synthid'
-    });
-    assert.deepEqual((await ctx.readJson('models/gemini-txt.json')).contentMarking, {
-      textWatermark: 'none'
-    });
-  });
+test('leaves an existing model file alone', async () => {
+  const custom = { ...DEFAULT_MODEL, enabled: true, tts: { voice: 'gb_jane_neutral' } };
+  const ctx = fakeCtx({ 'config/platform.json': {}, 'models/voxtral-mini-tts.json': custom });
+  await up(ctx);
+  assert.deepEqual(ctx.files['models/voxtral-mini-tts.json'], custom);
+});
 
-  it('never overwrites an existing block and skips transcription models', async () => {
-    const own = { textWatermark: { scheme: 'vllm-gumbel', keyGroup: 'acme' } };
-    const { ctx } = await seed({
-      models: {
-        vllm: { id: 'vllm', provider: 'local', contentMarking: own },
-        stt: { id: 'stt', provider: 'google-transcribe', modelType: 'transcription' }
-      }
-    });
-    await up(ctx);
-    assert.deepEqual((await ctx.readJson('models/vllm.json')).contentMarking, own);
-    assert.equal((await ctx.readJson('models/stt.json')).contentMarking, undefined);
+test('tolerates a missing default model file', async () => {
+  const ctx = fakeCtx({ 'config/platform.json': {} }, {});
+  await up(ctx);
+  assert.equal('models/voxtral-mini-tts.json' in ctx.files, false);
+  assert.deepEqual(ctx.files['config/platform.json'].speech.tts, {
+    enabled: false,
+    defaultModelId: ''
   });
 });

@@ -252,7 +252,9 @@ export function appendWebSearchSourceGuidance(llmMessages, app, websearchEnabled
  * @returns {Array} Filtered models that match app requirements
  */
 export function filterModelsForApp(models, app) {
-  let availableModels = models;
+  // Only chat models answer a prompt; transcription and text-to-speech models
+  // share the models list but are served by their own routes.
+  let availableModels = models.filter(model => (model.modelType || 'chat') === 'chat');
 
   // Filter by allowedModels if specified
   if (app?.allowedModels && app.allowedModels.length > 0) {

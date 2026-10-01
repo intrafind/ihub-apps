@@ -246,40 +246,47 @@ const RENAMED_MIGRATIONS = [
     newVersion: '140',
     newFile: 'V140__web_tools_filters_and_page_offset.js'
   },
-  // The EU AI Act migration moved five times while its branch was open and
+  // The EU AI Act migration moved six times while its branch was open and
   // dev installs were running it: the prompt placeholder (V136), scheduled
-  // tasks defaults (V138), speech defaults (V139), web tool parameters (V140)
-  // and provider plain names (V141) each took its number on main first. Every
-  // old number reconciles to V142, so main's migration of that number runs.
+  // tasks defaults (V138), speech defaults (V139), web tool parameters (V140),
+  // provider plain names (V141) and text-to-speech (V142) each took its number
+  // on main first. Every old number reconciles to V143, so main's migration of
+  // that number runs.
   {
     oldVersion: '136',
     oldFile: 'V136__add_ai_transparency.js',
-    newVersion: '142',
-    newFile: 'V142__add_ai_transparency.js'
+    newVersion: '143',
+    newFile: 'V143__add_ai_transparency.js'
   },
   {
     oldVersion: '138',
     oldFile: 'V138__add_ai_transparency.js',
-    newVersion: '142',
-    newFile: 'V142__add_ai_transparency.js'
+    newVersion: '143',
+    newFile: 'V143__add_ai_transparency.js'
   },
   {
     oldVersion: '139',
     oldFile: 'V139__add_ai_transparency.js',
-    newVersion: '142',
-    newFile: 'V142__add_ai_transparency.js'
+    newVersion: '143',
+    newFile: 'V143__add_ai_transparency.js'
   },
   {
     oldVersion: '140',
     oldFile: 'V140__add_ai_transparency.js',
-    newVersion: '142',
-    newFile: 'V142__add_ai_transparency.js'
+    newVersion: '143',
+    newFile: 'V143__add_ai_transparency.js'
   },
   {
     oldVersion: '141',
     oldFile: 'V141__add_ai_transparency.js',
-    newVersion: '142',
-    newFile: 'V142__add_ai_transparency.js'
+    newVersion: '143',
+    newFile: 'V143__add_ai_transparency.js'
+  },
+  {
+    oldVersion: '142',
+    oldFile: 'V142__add_ai_transparency.js',
+    newVersion: '143',
+    newFile: 'V143__add_ai_transparency.js'
   }
 ];
 

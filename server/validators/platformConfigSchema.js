@@ -575,6 +575,20 @@ export const platformConfigSchema = z
           })
           .passthrough()
           .prefault({}),
+        // Read aloud: a play button on every chat message, spoken by the
+        // `modelType: "tts"` model `defaultModelId`. Apps opt out with
+        // features.textToSpeech: false.
+        tts: z
+          .object({
+            enabled: z.boolean().prefault(false),
+            defaultModelId: z.string().prefault(''),
+            // Most characters of speakable text (after Markdown is stripped)
+            // one message may be read; the rest is cut. Optional; the code
+            // default is 20,000.
+            maxCharacters: z.number().int().positive().max(200000).optional()
+          })
+          .passthrough()
+          .prefault({}),
         realtime: z
           .object({
             enabled: z.boolean().prefault(false),
