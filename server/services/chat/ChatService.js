@@ -27,7 +27,11 @@ import { OPTIONAL_COUNTERS } from '../loop/llmUsage.js';
 import runLogSingleton, { newRunId, isValidRunId } from '../loop/RunLog.js';
 import interactionServiceSingleton from '../loop/InteractionService.js';
 import { RunStreamEmitter, bindStreamRun, unbindStreamRun } from '../loop/RunStream.js';
-import { RUN_LOG_EVENTS, SSE_V2_EVENTS } from '../../../shared/runEvents.js';
+import {
+  MODEL_KNOWLEDGE_SOURCE,
+  RUN_LOG_EVENTS,
+  SSE_V2_EVENTS
+} from '../../../shared/runEvents.js';
 import { storedSourceSet } from '../../../shared/sources/index.js';
 import {
   imageLiftSeam,
@@ -232,7 +236,18 @@ class ChatService {
   }
 
   async prepareChatRequest(params) {
-    return await this.requestBuilder.prepareChatRequest({ ...params, processMessageTemplates });
+    const result = await this.requestBuilder.prepareChatRequest({
+      ...params,
+      processMessageTemplates
+    });
+    // `PromptService` notes the app sources it loaded under the chat id while
+    // the prompt is built. Take them with this request: a turn then reports
+    // its own sources, never those of a newer turn on the same chat that was
+    // prepared while it still ran (and superseded it).
+    const promptSources = PromptService.getPromptSources(params?.chatId);
+    PromptService.resetPromptSources(params?.chatId);
+    if (result?.success && result.data) result.data.promptSources = promptSources;
+    return result;
   }
 
   // ── clarification bookkeeping ──────────────────────────────────────────
@@ -257,25 +272,18 @@ class ChatService {
   // ── knowledge sources (answer-source badge) ────────────────────────────
 
   /**
-   * Sources of a turn: what the loop recorded (tools, grounding, uploads,
-   * email context) plus prompt-based sources PromptService tracked per chat.
+   * The knowledge sources to report on a terminal answer (`run/ended`): what
+   * the loop recorded (tools, grounding, uploads, email context) plus the app
+   * sources this turn's prompt was built with (`prep.promptSources`).
+   *
+   * A model's answer that drew on nothing else is named as the model's own
+   * knowledge, so the client never has to infer it from a missing list. A
+   * passthrough answer is the tool's output, not the model's (`byModel: false`),
+   * and is named by the sources it used alone.
    */
-  getKnowledgeSources(chatId, loopSources = []) {
-    return Array.from(new Set([...loopSources, ...PromptService.getPromptSources(chatId)]));
-  }
-
-  resetKnowledgeSources(chatId) {
-    PromptService.resetPromptSources(chatId);
-  }
-
-  /**
-   * The knowledge sources to report on a terminal answer (`run/ended`), and
-   * clear the per-chat bookkeeping so nothing leaks into the next turn.
-   */
-  resolveAnswerSources(chatId, loopSources = []) {
-    const sources = this.getKnowledgeSources(chatId, loopSources);
-    this.resetKnowledgeSources(chatId);
-    return sources;
+  resolveAnswerSources(loopSources = [], promptSources = [], { byModel = true } = {}) {
+    const sources = Array.from(new Set([...(loopSources || []), ...(promptSources || [])]));
+    return sources.length > 0 || !byModel ? sources : [MODEL_KNOWLEDGE_SOURCE];
   }
 
   // ── ledger ─────────────────────────────────────────────────────────────
@@ -325,12 +333,15 @@ class ChatService {
     }
   }
 
-  _endLedgerRun(runId, { status, finishReason, usage, error, startedAt }) {
+  _endLedgerRun(runId, { status, finishReason, usage, error, knowledgeSources, startedAt }) {
     try {
       this.runLog.endRun(runId, {
         status,
         finishReason: finishReason ?? null,
         usage: wireUsage(usage),
+        // What `run/ended` reported, so a replay of the ledger badges the
+        // answer the same way the live stream did.
+        ...(Array.isArray(knowledgeSources) ? { knowledgeSources } : {}),
         ...(error
           ? {
               error: {
@@ -437,7 +448,8 @@ class ChatService {
       responseFormat,
       responseSchema,
       llmOptions = {},
-      userFileData
+      userFileData,
+      promptSources = []
     } = prep;
     const log = typeof buildLogData === 'function' ? buildLogData : () => ({});
     const loopTools = markInteractiveTools(tools);
@@ -702,6 +714,7 @@ class ChatService {
         mcpAppViews,
         mcpAuthPrompts,
         scheduledTaskProposals,
+        promptSources,
         takePendingCall: () => turnSeam.takePendingCall(),
         structured: outputSeam
           ? {
@@ -732,6 +745,7 @@ class ChatService {
         finishReason: outcome.finishReason,
         usage: outcome.usage,
         error: outcome.error || (outcome.errorInfo ? outcome.errorInfo : undefined),
+        knowledgeSources: outcome.knowledgeSources,
         startedAt
       });
       // The single choke point: every terminal shape `_finishTurn` produces —
@@ -780,8 +794,6 @@ class ChatService {
       }
       throw error;
     } finally {
-      // Never let a detected source leak into the next turn on this chatId.
-      this.resetKnowledgeSources(chatId);
       if (stream !== NO_STREAM) unbindStreamRun(chatId, runId);
       if (trackRequest && activeRequests.get(chatId) === controller) {
         activeRequests.delete(chatId);
@@ -809,6 +821,7 @@ class ChatService {
     mcpAppViews = [],
     mcpAuthPrompts = [],
     scheduledTaskProposals = [],
+    promptSources = [],
     takePendingCall = () => null,
     structured = null
   }) {
@@ -834,8 +847,10 @@ class ChatService {
       scheduledTaskProposals,
       // Everything the turn found — web pages, documents, records — and the
       // passages they back, which the sources panel draws again on reopen.
-      sources: result.sources || null,
-      knowledgeSources: this.getKnowledgeSources(chatId, loopSources)
+      sources: result.sources || null
+      // `knowledgeSources` is set by the branches that name the answer's
+      // sources on `run/ended` — the ledger records the summary's list, so it
+      // must be exactly what the stream reported.
     };
     const translate = async (key, params) => {
       if (typeof getLocalizedError !== 'function') return null;
@@ -847,6 +862,10 @@ class ChatService {
     };
     const endRun = data =>
       stream.emit(SSE_V2_EVENTS.RUN_ENDED, { ...(usage ? { usage } : {}), ...data });
+    // Whether the turn wrote any answer — text or a picture — the user sees.
+    const producedOutput = channel
+      ? channel.state.answerOutput
+      : content.length > 0 || (result.images?.length ?? 0) > 0;
 
     if (result.status === 'aborted') {
       // Stop button, client disconnect or a superseding turn: no error bubble.
@@ -857,8 +876,23 @@ class ChatService {
         request: takePendingCall(),
         outcome: 'aborted'
       });
-      endRun({ status: 'aborted', finishReason: 'connection_closed' });
-      return { ...summary, status: 'aborted', finishReason: 'connection_closed' };
+      // A stopped turn keeps what it had already written, and that answer is
+      // based on what the turn used until then. One that wrote nothing has no
+      // answer to name a source for.
+      const knowledgeSources = producedOutput
+        ? this.resolveAnswerSources(loopSources, promptSources)
+        : undefined;
+      endRun({
+        status: 'aborted',
+        finishReason: 'connection_closed',
+        ...(knowledgeSources ? { knowledgeSources } : {})
+      });
+      return {
+        ...summary,
+        status: 'aborted',
+        finishReason: 'connection_closed',
+        ...(knowledgeSources ? { knowledgeSources } : {})
+      };
     }
 
     if (result.status === 'error') {
@@ -923,7 +957,7 @@ class ChatService {
 
     if (result.status === 'paused') {
       // The turn pauses for the user's answer: the question seam already sent
-      // `interaction/raised`; no badge, and the caller's finally resets sources.
+      // `interaction/raised`; no badge.
       const pendingInteraction = result.pendingInteraction;
       stream.emit(SSE_V2_EVENTS.RUN_PAUSED, {
         reason: 'interaction',
@@ -1020,7 +1054,9 @@ class ChatService {
           toolName
         })
       );
-      const knowledgeSources = this.resolveAnswerSources(chatId, loopSources);
+      const knowledgeSources = this.resolveAnswerSources(loopSources, promptSources, {
+        byModel: false
+      });
       endRun({
         status: 'completed',
         finishReason: 'tool_passthrough_complete',
@@ -1039,9 +1075,6 @@ class ChatService {
     // Degenerate completion: a failure finish reason (e.g. Gemini's
     // MALFORMED_FUNCTION_CALL) with no answer output would reach the client as
     // a clean end with an empty bubble — surface an error instead.
-    const producedOutput = channel
-      ? channel.state.answerOutput
-      : content.length > 0 || (result.images?.length ?? 0) > 0;
     if (!producedOutput && isFailureFinishReason(result.finishReason)) {
       const message =
         (await translate('malformedModelResponse')) ||
@@ -1089,7 +1122,7 @@ class ChatService {
     if (rejected) return rejected;
 
     const finishReason = result.finishReason || 'stop';
-    const knowledgeSources = this.resolveAnswerSources(chatId, loopSources);
+    const knowledgeSources = this.resolveAnswerSources(loopSources, promptSources);
     endRun({ status: result.status || 'completed', finishReason, knowledgeSources });
     await this.logInteraction(
       'chat_response',

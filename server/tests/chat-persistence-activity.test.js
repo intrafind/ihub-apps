@@ -159,7 +159,11 @@ function emitSearchingTurn(stream) {
     data: { url: 'https://example.org/wind' }
   });
   stream.emit(SSE_V2_EVENTS.STEP_DELTA, { step: 1, kind: 'text', content: 'The answer.' });
-  stream.emit(SSE_V2_EVENTS.RUN_ENDED, { status: 'completed', finishReason: 'stop' });
+  stream.emit(SSE_V2_EVENTS.RUN_ENDED, {
+    status: 'completed',
+    finishReason: 'stop',
+    knowledgeSources: ['websearch', 'ifinder']
+  });
 }
 
 describe('recording what a turn did', () => {
@@ -205,13 +209,37 @@ describe('recording what a turn did', () => {
     assert.equal(takeRunActivity(RUN_ID), null);
   });
 
-  it('returns nothing for a plain answer', () => {
+  it('keeps only the answer source of a plain answer', () => {
     recordRunActivity(RUN_ID);
     const stream = emitter();
     stream.emit(SSE_V2_EVENTS.RUN_STARTED, { kind: 'chat', refs: {} });
     stream.emit(SSE_V2_EVENTS.STEP_DELTA, { step: 0, kind: 'text', content: 'hello' });
-    stream.emit(SSE_V2_EVENTS.RUN_ENDED, { status: 'completed', finishReason: 'stop' });
-    assert.equal(takeRunActivity(RUN_ID), null);
+    stream.emit(SSE_V2_EVENTS.RUN_ENDED, {
+      status: 'completed',
+      finishReason: 'stop',
+      knowledgeSources: ['llm']
+    });
+    assert.deepEqual(takeRunActivity(RUN_ID), {
+      answerSource: { sources: ['llm'], type: 'mixed' }
+    });
+  });
+
+  it('keeps no answer source the server did not name on run/ended', () => {
+    recordRunActivity(RUN_ID);
+    const stream = emitter();
+    stream.emit(SSE_V2_EVENTS.RUN_STARTED, { kind: 'chat', refs: {} });
+    // A tool and a step that report a source are provenance, not the verdict.
+    stream.emit(SSE_V2_EVENTS.TOOL_COMPLETED, {
+      step: 0,
+      callId: 'call-web',
+      toolId: 'braveSearch',
+      name: 'braveSearch',
+      resultPreview: null,
+      knowledgeSource: 'websearch'
+    });
+    stream.emit(SSE_V2_EVENTS.STEP_COMPLETED, { step: 0, content: '', sources: ['websearch'] });
+    stream.emit(SSE_V2_EVENTS.RUN_ENDED, { status: 'aborted', finishReason: 'connection_closed' });
+    assert.equal(takeRunActivity(RUN_ID)?.answerSource, undefined);
   });
 
   it('keeps the steps and the result of an @mention workflow run', () => {

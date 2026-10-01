@@ -1004,6 +1004,17 @@ test('projectLedgerEvent: run/end → run/ended', () => {
   });
   const [minimal] = projected(RUN_LOG_EVENTS.RUN_END, {});
   assert.deepEqual(minimal.data, { status: 'completed', finishReason: null });
+  // A replayed chat turn badges its answer the way the live `run/ended` did.
+  const [answered] = projected(RUN_LOG_EVENTS.RUN_END, {
+    status: 'completed',
+    finishReason: 'stop',
+    knowledgeSources: ['websearch', 'file']
+  });
+  assert.deepEqual(answered.data, {
+    status: 'completed',
+    finishReason: 'stop',
+    knowledgeSources: ['websearch', 'file']
+  });
 });
 
 test('projectLedgerEvent: run/paused, run/resumed', () => {

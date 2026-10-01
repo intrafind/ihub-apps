@@ -392,7 +392,7 @@ describe('AnswerSources', () => {
 });
 
 describe('a reopened chat', () => {
-  test('restores the sources of a stored answer, and what the answer drew on', () => {
+  test('restores the sources of a stored answer; the badge is never inferred from them', () => {
     const message = transformStoredMessage({
       id: 'm1',
       role: 'assistant',
@@ -401,7 +401,8 @@ describe('a reopened chat', () => {
     });
     expect(message.sources.queries).toEqual(['what is langdock']);
     expect(message.sources.items.map(item => item.id)).toEqual(sources.items.map(i => i.id));
-    expect(message.answerSource).toEqual({ sources: ['websearch', 'ifinder'], type: 'mixed' });
+    // The badge is the stored activity's: the server named the answer's sources.
+    expect(message.answerSource).toBeUndefined();
     expect(resolveCitations(message.content, message.sources).cited).toHaveLength(3);
   });
 

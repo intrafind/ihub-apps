@@ -16,15 +16,6 @@ const STORED_ACTIVITY_FIELDS = [
   'outputFormat'
 ];
 
-/** The answer badge's knowledge sources ("Based on web search", "… iFinder") for a source set. */
-function answerSourcesOf(sources) {
-  const providers = new Set(sources.items.map(item => item.provider));
-  const drewOn = [];
-  if (providers.has('web')) drewOn.push('websearch');
-  if (providers.has('ifinder')) drewOn.push('ifinder');
-  return drewOn;
-}
-
 /**
  * One message of a stored chat transcript, as the chat UI renders it.
  *
@@ -78,15 +69,10 @@ export function transformStoredMessage(msg) {
     message.scheduledTaskProposals = msg.scheduledTaskProposals;
   }
   // Everything the answer found, so the sources panel and the inline
-  // citations come back (the citation markers are in the content).
+  // citations come back (the citation markers are in the content). The badge
+  // is the stored activity's below, never inferred from what was found.
   const sources = storedSourceSet(msg.sources);
-  if (sources) {
-    message.sources = sources;
-    // An answer built on what was found is not "based on AI knowledge" when it
-    // is reopened. The stored activity below names every source it drew on.
-    const drewOn = answerSourcesOf(sources);
-    if (drewOn.length) message.answerSource = { sources: drewOn, type: 'mixed' };
-  }
+  if (sources) message.sources = sources;
   // What the run did before it answered — searches, documents, tool calls,
   // workflow steps and the answer's source — in the fields a live turn fills
   // from its stream (`shared/run/runActivity.js` builds both), so the reopened

@@ -7,8 +7,8 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
  *
  * A transcript is rendered client-side as an assistant turn — it never goes
  * through the server's chat run, which is what reports `answerSource` for every
- * other answer. Without a source of its own, the badge under the transcript fell
- * back to "Based on AI knowledge" although the text is the user's own audio.
+ * other answer. The transcription server names the source instead, on the
+ * session's `ready` frame (`onSources`); the client only passes it on.
  *
  * The mock setup mirrors app-chat-embedded.test.jsx.
  */
@@ -345,9 +345,16 @@ beforeEach(() => {
   decodeAudioFileToBuffer.mockResolvedValue({ duration: 3 });
 });
 
+/** A transcription session whose server names the transcript's source, as `ready` does. */
+const transcribing = result =>
+  transcribeAudioBuffer.mockImplementation(async (_buffer, { onSources }) => {
+    onSources(['audio']);
+    return result;
+  });
+
 describe('transcribing audio into the chat', () => {
-  test('marks the transcript as built from audio, not from AI knowledge', async () => {
-    transcribeAudioBuffer.mockResolvedValue('hello from the recording');
+  test('marks the transcript with the source the transcription server named', async () => {
+    transcribing('hello from the recording');
     renderApp();
     await sendAudio();
 
@@ -358,7 +365,7 @@ describe('transcribing audio into the chat', () => {
   });
 
   test('keeps the audio source when the recording holds no speech', async () => {
-    transcribeAudioBuffer.mockResolvedValue('');
+    transcribing('');
     renderApp();
     await sendAudio();
 
@@ -369,7 +376,8 @@ describe('transcribing audio into the chat', () => {
   });
 
   test('keeps the audio source on a partial transcript that was interrupted', async () => {
-    transcribeAudioBuffer.mockImplementation(async (_buffer, { onDelta }) => {
+    transcribeAudioBuffer.mockImplementation(async (_buffer, { onDelta, onSources }) => {
+      onSources(['audio']);
       onDelta('the part we got');
       throw Object.assign(new Error('closed mid-stream'), { code: 'interrupted' });
     });
@@ -381,6 +389,17 @@ describe('transcribing audio into the chat', () => {
     expect(turn.content).toContain('the part we got');
     expect(turn.isError).toBeUndefined();
     expect(turn.answerSource).toEqual({ sources: ['audio'], type: 'mixed' });
+  });
+
+  test('invents no source the server did not name', async () => {
+    transcribeAudioBuffer.mockResolvedValue('hello from the recording');
+    renderApp();
+    await sendAudio();
+
+    await waitFor(() => expect(assistantTurns()[0]?.loading).toBe(false));
+    const [turn] = assistantTurns();
+    expect(turn.content).toBe('hello from the recording');
+    expect(turn.answerSource).toBeUndefined();
   });
 
   test('gives a failed transcription no source — it is an error bubble, not an answer', async () => {

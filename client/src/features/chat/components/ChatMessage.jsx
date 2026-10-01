@@ -1060,15 +1060,19 @@ function ChatMessage({
 
         {/* Workflow result attribution — handled by unified WorkflowStepIndicator above */}
 
-        {/* Answer source indicator - show for completed assistant messages inside bubble */}
-        {!isUser && !isError && !message.loading && (
-          <div className="flex justify-end">
-            <AnswerSourceBadge
-              answerSource={message.answerSource}
-              workflowResult={message.workflowResult}
-            />
-          </div>
-        )}
+        {/* Answer source indicator - completed assistant messages whose source
+            the server reported (or a workflow produced), inside the bubble */}
+        {!isUser &&
+          !isError &&
+          !message.loading &&
+          (message.answerSource || message.workflowResult) && (
+            <div className="flex justify-end">
+              <AnswerSourceBadge
+                answerSource={message.answerSource}
+                workflowResult={message.workflowResult}
+              />
+            </div>
+          )}
       </div>
 
       {/*

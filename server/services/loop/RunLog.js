@@ -605,13 +605,17 @@ export class RunLog {
   }
 
   /** Convenience: append run/end. */
-  endRun(runId, { status = 'completed', finishReason = null, usage, error, durationMs } = {}) {
+  endRun(
+    runId,
+    { status = 'completed', finishReason = null, usage, error, durationMs, knowledgeSources } = {}
+  ) {
     return this.append(runId, RUN_LOG_EVENTS.RUN_END, {
       status,
       finishReason,
       usage,
       error,
-      durationMs
+      durationMs,
+      ...(knowledgeSources ? { knowledgeSources } : {})
     });
   }
 

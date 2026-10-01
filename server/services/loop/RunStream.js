@@ -538,6 +538,7 @@ export function projectLedgerEvent(ev) {
           status: d.status || 'completed',
           finishReason: d.finishReason ?? null,
           ...(d.usage ? { usage: d.usage } : {}),
+          ...(Array.isArray(d.knowledgeSources) ? { knowledgeSources: d.knowledgeSources } : {}),
           ...(d.error ? { error: d.error } : {})
         })
       ];

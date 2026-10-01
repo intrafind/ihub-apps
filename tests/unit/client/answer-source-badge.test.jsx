@@ -3,9 +3,9 @@ import '@testing-library/jest-dom';
 import AnswerSourceBadge from '../../../client/src/features/chat/components/AnswerSourceBadge';
 
 /**
- * The badge under an assistant answer names where the answer came from. An
- * Outlook answer grounded in the user's own email and its attachments must not
- * be labelled as "external" knowledge (issue #2451).
+ * The badge under an assistant answer names where the answer came from, as the
+ * server reported it. An Outlook answer grounded in the user's own email and its
+ * attachments must not be labelled as "external" knowledge (issue #2451).
  */
 
 jest.mock('react-i18next', () => ({
@@ -49,9 +49,23 @@ describe('AnswerSourceBadge', () => {
     expect(screen.queryByText('chatMessage.answerSource.llmOnly')).not.toBeInTheDocument();
   });
 
-  it('still falls back to AI knowledge when a message carries no answer source', () => {
-    render(<AnswerSourceBadge answerSource={undefined} />);
+  it('labels an answer the server named as the model itself as AI knowledge', () => {
+    renderBadge(['llm']);
     expect(screen.getByText('chatMessage.answerSource.llmOnly')).toBeInTheDocument();
+    expect(screen.getByTestId('icon')).toHaveAttribute('data-name', 'sparkles');
+  });
+
+  it('shows nothing when the server reported no source — it never guesses AI knowledge', () => {
+    const { container: missing } = render(<AnswerSourceBadge answerSource={undefined} />);
+    expect(missing).toBeEmptyDOMElement();
+    const { container: empty } = render(<AnswerSourceBadge answerSource={{ sources: [] }} />);
+    expect(empty).toBeEmptyDOMElement();
+    expect(screen.queryByText('chatMessage.answerSource.llmOnly')).not.toBeInTheDocument();
+  });
+
+  it('still names the workflow of a workflow answer without an answer source', () => {
+    render(<AnswerSourceBadge workflowResult={{ status: 'completed', workflowName: 'Review' }} />);
+    expect(screen.getByText('chatMessage.answerSource.workflow: Review')).toBeInTheDocument();
   });
 
   it('labels iFinder answers as iFinder documents, not web search', () => {
