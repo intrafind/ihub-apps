@@ -194,6 +194,29 @@ knowledge".
   owner's document list. Public web searches keep their pages.
 - Applies to answers stored from this release on (requires **Durable Chats**).
 
+## Models: Import From URL and Custom LLM Providers
+
+Admins can now add all models of an endpoint at once, and keep one API key for a gateway such as
+T-Systems AI Foundation Services (LLM Hub) on a provider instead of on every model.
+
+- **Import from URL** on the Models page reads an endpoint's model list — OpenAI, vLLM, LM Studio,
+  LLM Hub and other OpenAI-compatible servers, Mistral, Anthropic or Google — with or without an
+  API key, and creates the models you pick. Context window, output limit, image input and
+  end-of-life date are taken from the endpoint where it reports them; embedding and other non-chat
+  models are marked, and models already configured are flagged.
+- The import asks which provider the models belong to: pick an existing one, or create a new one
+  right there with its name, API type and API key. The models are linked to it and carry no key of
+  their own.
+- **Providers** can now be created, edited and deleted for LLM endpoints too. An LLM provider has a
+  name, ID and description, the **API type** its endpoint speaks (OpenAI-compatible, vLLM,
+  Mistral, …), an optional base URL and its API key. Its page lists the linked models and imports
+  more, and a provider still used by models cannot be deleted.
+- The model editor lists custom providers under **Provider**. A linked model uses the provider's
+  key, or the provider's own environment variable (e.g. `LLMHUB_API_KEY`) — never the key of its
+  API type, so an LLM Hub model is not sent `OPENAI_API_KEY`.
+- Provider names and descriptions are plain text now instead of one field per language. Existing
+  entries are converted on upgrade, keeping the text in the platform's default language.
+
 ## Read Aloud: A Play Button on Every Chat Message
 
 Chat messages can now be read aloud. A play button in each message's action row sends the message

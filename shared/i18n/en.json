@@ -720,7 +720,7 @@
         },
         "recording": {
           "title": "Recording (record → transcribe)",
-          "description": "Record a short clip (up to {{seconds}} seconds) and transcribe it with a transcription model, exactly like the record button in a chat.",
+          "description": "Record a short clip (up to {{seconds}} seconds) and transcribe it with a transcription model over the same connection a chat uses, then see how long the transcript took.",
           "model": "Transcription model",
           "platformDefault": "platform default",
           "start": "Start recording",
@@ -822,7 +822,8 @@
         "info": {
           "title": "About Provider API Keys",
           "description": "API keys configured here are used as a fallback for all models of this provider that do not have their own API key configured. If you leave this field empty, the system will use the environment variable instead."
-        }
+        },
+        "subtitle": "Configure this provider and its API key"
       },
       "create": {
         "title": "Create New Provider",
@@ -838,7 +839,10 @@
         "enabled": "Provider Enabled",
         "cancel": "Cancel",
         "save": "Create Provider",
-        "saving": "Creating..."
+        "saving": "Creating...",
+        "llmHelp": "An LLM provider holds one API key for all of its models. Link models to it in the model editor, or import them from its endpoint.",
+        "nameRequired": "Provider name is required",
+        "subtitle": "Create an LLM provider for your own endpoint, a web search provider, or a generic API key"
       },
       "info": {
         "title": "API Key Priority",
@@ -875,6 +879,36 @@
         "testFailed": "Test failed",
         "hideResults": "Hide results",
         "showResults": "Show results"
+      },
+      "deleteConfirm": "Delete provider \"{{name}}\"?",
+      "fields": {
+        "name": "Name",
+        "id": "ID",
+        "description": "Description",
+        "apiType": "API type",
+        "baseUrl": "Base URL"
+      },
+      "hints": {
+        "apiType": "Which API the endpoint speaks. Gateways such as T-Systems LLM Hub are OpenAI-compatible; choose vLLM for a self-hosted vLLM server.",
+        "apiTypeBuiltIn": "Built-in providers always speak their own API.",
+        "baseUrl": "Optional. The API base the provider’s models are listed from when importing models."
+      },
+      "apiTypes": {
+        "openai": "OpenAI-compatible (OpenAI, LLM Hub, LM Studio, …)",
+        "local": "vLLM / self-hosted (local)",
+        "mistral": "Mistral",
+        "openai-responses": "OpenAI Responses API",
+        "anthropic": "Anthropic",
+        "google": "Google Gemini",
+        "bedrock": "AWS Bedrock"
+      },
+      "linkedModels": {
+        "title": "Linked models",
+        "description": "These models use this provider’s API key unless they have a key of their own.",
+        "import": "Import models",
+        "none": "No models are linked to this provider.",
+        "count": "{{count}} linked, {{enabled}} enabled",
+        "more": "+{{count}} more"
       }
     },
     "models": {
@@ -996,7 +1030,8 @@
         "thinkingThoughts": "Show reasoning",
         "ttsVoice": "Voice",
         "ttsVoices": "Voices per language",
-        "ttsVoiceLanguage": "Language"
+        "ttsVoiceLanguage": "Language",
+        "customProviders": "Custom providers"
       },
       "hints": {
         "modelId": "Unique identifier for the model (cannot be changed after creation)",
@@ -1022,7 +1057,8 @@
         "ttsUrl": "Speech endpoint of the provider. It stays server-side and never reaches the browser.",
         "ttsVoice": "Voice id of the provider: a Mistral preset such as en_paul_neutral, gb_jane_neutral or fr_marie_neutral, or the id of a voice saved in your Mistral account. Empty uses en_paul_neutral.",
         "ttsVoices": "A message written in one of these languages is read with that voice; every other language uses the voice above. The language is told from the message itself.",
-        "ttsVoicesAfterSave": "Save the model once to browse the provider’s voices and create custom voices here."
+        "ttsVoicesAfterSave": "Save the model once to browse the provider’s voices and create custom voices here.",
+        "linkedProvider": "Uses the API key of the provider \"{{provider}}\" and its API type ({{apiType}})."
       },
       "placeholders": {
         "maxOutputTokens": "Default: {{value}}",
@@ -1089,6 +1125,71 @@
         "creating": "Creating…",
         "createError": "Could not create the voice",
         "created": "Voice \"{{name}}\" created ({{id}}). Use it below, then save the model."
+      },
+      "import": {
+        "button": "Import from URL",
+        "title": "Import models from URL",
+        "subtitle": "Read the model list of an OpenAI-compatible, vLLM, Mistral, Anthropic or Google endpoint and add the models you pick.",
+        "provider": "Provider",
+        "newProvider": "+ New provider",
+        "providerHint": "The provider holds the API key for all imported models. Create one for a new endpoint, such as T-Systems LLM Hub.",
+        "usesProviderKey": "The API key stored on this provider is used.",
+        "noProviderKey": "No API key is stored on this provider: its environment variable is used if set, otherwise the endpoint is called without a key.",
+        "url": "Endpoint URL",
+        "urlHint": "The API base (…/v1), its /models listing or a chat completions URL. iHub reads the model list from /models.",
+        "apiKey": "API key",
+        "apiKeyHint": "Optional. Stored encrypted on the new provider, not on the models. Leave empty for endpoints without authentication, such as a local vLLM server.",
+        "loadModels": "Load models",
+        "loading": "Loading models…",
+        "found": "{{count}} models at {{url}}",
+        "changeConnection": "Change endpoint",
+        "idPrefix": "ID prefix",
+        "enableModels": "Enable imported models",
+        "noModels": "The endpoint lists no models.",
+        "selectAll": "Select all chat models",
+        "model": "Model",
+        "context": "Context",
+        "targetId": "iHub model ID",
+        "targetIdFor": "iHub model ID for {{name}}",
+        "vision": "Vision",
+        "alreadyAdded": "Already added as {{id}}",
+        "endOfLife": "End of life: {{date}}",
+        "importCount": "Import {{count}} models",
+        "importing": "Importing…",
+        "doneSummary": "Imported {{ok}} of {{total}} models into {{provider}}.",
+        "providerCreated": "The provider \"{{provider}}\" was created and holds the API key. Manage it under Providers.",
+        "testHint": "Use \"Test\" in the model list to check each model, and fill in details the endpoint did not report, such as tool support.",
+        "types": {
+          "embedding": "Embedding",
+          "rerank": "Reranker",
+          "audio": "Audio",
+          "image": "Image",
+          "moderation": "Moderation",
+          "other": "Not a chat model"
+        },
+        "errors": {
+          "idInvalid": "Use lowercase letters, numbers, dots, hyphens and underscores only.",
+          "idExists": "A model with this ID already exists.",
+          "idDuplicate": "Two selected models would get this ID.",
+          "providerIdInvalid": "Use lowercase letters, numbers, dots, hyphens and underscores only.",
+          "providerIdExists": "A provider with this ID already exists. Select it above or choose another ID.",
+          "providerCreateFailed": "Could not create the provider: {{error}}",
+          "invalidUrl": "Enter a valid http:// or https:// URL",
+          "credentialsInUrl": "Remove the credentials from the URL and enter the key in the API key field",
+          "unsupportedProvider": "Model import does not support this API type",
+          "apiKeyRequired": "The endpoint requires an API key",
+          "authenticationFailed": "The endpoint rejected the API key",
+          "accessDenied": "Access denied by the endpoint",
+          "notFound": "No model list at this URL",
+          "redirected": "The endpoint redirected the request",
+          "upstreamError": "The endpoint answered with an error",
+          "invalidResponse": "The endpoint did not return a model list",
+          "timeout": "The endpoint did not respond in time",
+          "connectionRefused": "Connection refused",
+          "hostNotFound": "Host not found",
+          "networkError": "Network error",
+          "providerIdReserved": "This ID is the name of an API type. Choose another ID."
+        }
       }
     },
     "auth": {
@@ -2681,7 +2782,7 @@
         "iassistantSystemPromptPreamble": "System Prompt Preamble",
         "iassistantSystemPromptPreambleDesc": "The prompt preamble used in the response state system prompt. This is ideal for changing the identity of the iAssistant. Supports prompt variables like {{user_name}}, {{user_email}}, {{date}} and custom global variables. Use with care.",
         "transcription": "Transcription",
-        "transcriptionDesc": "Transcribe uploaded audio, uploaded video, or a browser recording with a self-hosted transcription model (e.g. Voxtral) and render the result as a chat answer.",
+        "transcriptionDesc": "Turn uploaded audio, uploaded video or a browser recording into text with a transcription model (e.g. Voxtral). The text becomes the user's message, and the chat model answers it.",
         "enableTranscription": "Enable transcription",
         "transcriptionModel": "Transcription model",
         "selectTranscriptionModel": "Select a model…",
@@ -4477,10 +4578,14 @@
     "scheduled": "Scheduled"
   },
   "transcription": {
-    "record": "Record audio to transcribe",
-    "stopRecording": "Stop recording & transcribe",
+    "record": "Record a spoken message",
+    "stopRecording": "Stop recording and send",
     "recording": "Recording",
-    "empty": "_(No speech detected)_",
+    "listening": "Listening…",
+    "transcribing": "Transcribing…",
+    "transcriptOf": "Transcript of {{name}}:",
+    "noSpeechInFile": "(no speech detected)",
+    "partialInInput": "What was transcribed so far is in the input field.",
     "errors": {
       "noModel": "No transcription model is configured for this app.",
       "decode": "Could not decode this audio in your browser. The format or codec may be unsupported (e.g. OGG in Safari).",
@@ -4488,6 +4593,7 @@
       "notReady": "The transcription service did not become ready. Please check the model configuration and try again.",
       "connection": "Could not reach the transcription service. Please try again later.",
       "timeout": "Transcription timed out. The file may be too long.",
+      "interrupted": "The transcription was interrupted before it finished.",
       "aborted": "Transcription was cancelled.",
       "serverTooLong": "This recording is too long for the configured transcription model. Please split it into shorter parts.",
       "serverBusy": "The transcription service is busy right now. Please try again in a moment.",
@@ -4497,11 +4603,11 @@
       "tooLong": "This audio is {{duration}}s long, which exceeds the {{max}}s limit for transcription.",
       "mic": "Could not access the microphone. Please grant permission and try again.",
       "busy": "A transcription is already running. Stop it first.",
-      "interrupted": "Transcription was interrupted — the transcript may be incomplete.",
+      "noSpeech": "No speech was detected. Nothing was sent.",
       "audioNeedsTranscription": "The selected chat model cannot process audio directly. Enable Transcription in the actions menu, or remove the audio attachment."
     },
     "toggleLabel": "Transcription",
-    "toggleDescription": "Transcribe uploaded audio/video with the transcription model instead of the chat model"
+    "toggleDescription": "Uploaded audio and video are transcribed into your message, and the chat model answers the text"
   },
   "documentPreview": {
     "title": "Document preview",

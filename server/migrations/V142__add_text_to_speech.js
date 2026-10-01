@@ -1,5 +1,5 @@
-// server/migrations/V141__add_text_to_speech.js
-export const version = '141';
+// server/migrations/V142__add_text_to_speech.js
+export const version = '142';
 export const description = 'add_text_to_speech';
 
 const MODEL_PATH = 'models/voxtral-mini-tts.json';

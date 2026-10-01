@@ -10,6 +10,15 @@ import AdminPageSkeleton from '../components/AdminPageSkeleton';
 import AdminEmptyState from '../components/AdminEmptyState';
 import WebsearchTestResult from '../components/WebsearchTestResult';
 import { translateModelTestMessage } from '../utils/modelTestMessages';
+import { apiTypeLabel } from '../utils/modelImport';
+import {
+  BUILT_IN_LLM_PROVIDERS,
+  getModelProviderId,
+  getProviderApiType
+} from '../../../../../shared/llmProviders.js';
+
+/** Linked model names shown in the list before "+N more". */
+const LINKED_MODEL_PREVIEW = 3;
 
 function HealthBadge({ status }) {
   const { t } = useTranslation();
@@ -113,14 +122,17 @@ function AdminProvidersPage() {
     loadData();
   }, []);
 
-  // Group enabled models by provider
-  const enabledModelsByProvider = models.reduce((acc, model) => {
-    if (!model.enabled) return acc;
-    const provider = model.provider || 'unknown';
+  // Group models by the provider entry they take their key from: `providerId`
+  // for a model linked to a custom provider, else its `provider`.
+  const linkedModelsByProvider = models.reduce((acc, model) => {
+    const provider = getModelProviderId(model) || 'unknown';
     if (!acc[provider]) acc[provider] = [];
     acc[provider].push(model);
     return acc;
   }, {});
+  const enabledModelsByProvider = Object.fromEntries(
+    Object.entries(linkedModelsByProvider).map(([id, list]) => [id, list.filter(m => m.enabled)])
+  );
 
   const testProvider = async providerId => {
     const providerModels = enabledModelsByProvider[providerId] || [];
@@ -277,7 +289,11 @@ function AdminProvidersPage() {
   };
 
   const deleteProvider = async (providerId, providerName) => {
-    if (!confirm(`Delete provider "${providerName}"?`)) {
+    if (
+      !confirm(
+        t('admin.providers.deleteConfirm', 'Delete provider "{{name}}"?', { name: providerName })
+      )
+    ) {
       return;
     }
 
@@ -410,7 +426,7 @@ function AdminProvidersPage() {
                   <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-3 px-2">
                     {categoryLabels[category]}
                   </h2>
-                  <div className="bg-white dark:bg-gray-800 shadow-sm rounded-lg overflow-hidden">
+                  <div className="bg-white dark:bg-gray-800 shadow-sm rounded-lg overflow-x-auto">
                     <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                       <thead className="bg-gray-50 dark:bg-gray-900">
                         <tr>
@@ -445,6 +461,7 @@ function AdminProvidersPage() {
                         {categoryProviders.map(provider => {
                           const providerHealth = healthStatus[provider.id] || {};
                           const enabledModels = enabledModelsByProvider[provider.id] || [];
+                          const linkedModels = linkedModelsByProvider[provider.id] || [];
                           const isExpanded = providerHealth.expanded;
                           const hasResults =
                             (providerHealth.results && providerHealth.results.length > 0) ||
@@ -465,6 +482,11 @@ function AdminProvidersPage() {
                                       </div>
                                       <div className="text-sm text-gray-500 dark:text-gray-400">
                                         {provider.id}
+                                        {isLlm && getProviderApiType(provider) && (
+                                          <span className="ml-1 text-xs">
+                                            · {apiTypeLabel(t, getProviderApiType(provider))}
+                                          </span>
+                                        )}
                                       </div>
                                     </div>
                                   </div>
@@ -508,14 +530,42 @@ function AdminProvidersPage() {
                                   )}
                                 </td>
                                 {isLlm && (
-                                  <td className="px-6 py-4 whitespace-nowrap">
-                                    <span className="text-sm text-gray-700 dark:text-gray-300">
-                                      {enabledModels.length > 0 ? (
-                                        <span className="font-medium">{enabledModels.length}</span>
-                                      ) : (
-                                        <span className="text-gray-400 dark:text-gray-500">—</span>
-                                      )}
-                                    </span>
+                                  <td className="px-6 py-4">
+                                    {linkedModels.length > 0 ? (
+                                      <div
+                                        className="text-sm text-gray-700 dark:text-gray-300"
+                                        title={linkedModels.map(m => m.id).join('\n')}
+                                      >
+                                        <div className="font-medium whitespace-nowrap">
+                                          {t(
+                                            'admin.providers.linkedModels.count',
+                                            '{{count}} linked, {{enabled}} enabled',
+                                            {
+                                              count: linkedModels.length,
+                                              enabled: enabledModels.length
+                                            }
+                                          )}
+                                        </div>
+                                        <div className="text-xs text-gray-500 dark:text-gray-400 max-w-56 truncate">
+                                          {linkedModels
+                                            .slice(0, LINKED_MODEL_PREVIEW)
+                                            .map(m => getLocalizedContent(m.name, currentLanguage))
+                                            .join(', ')}
+                                          {linkedModels.length > LINKED_MODEL_PREVIEW &&
+                                            ` ${t(
+                                              'admin.providers.linkedModels.more',
+                                              '+{{count}} more',
+                                              {
+                                                count: linkedModels.length - LINKED_MODEL_PREVIEW
+                                              }
+                                            )}`}
+                                        </div>
+                                      </div>
+                                    ) : (
+                                      <span className="text-sm text-gray-400 dark:text-gray-500">
+                                        —
+                                      </span>
+                                    )}
                                   </td>
                                 )}
                                 {hasConnectivity && (
@@ -589,20 +639,21 @@ function AdminProvidersPage() {
                                     >
                                       {t('admin.providers.configure', 'Configure')}
                                     </button>
-                                    {provider.category && provider.category !== 'llm' && (
-                                      <button
-                                        onClick={e => {
-                                          e.stopPropagation();
-                                          deleteProvider(
-                                            provider.id,
-                                            getLocalizedContent(provider.name, currentLanguage)
-                                          );
-                                        }}
-                                        className="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300"
-                                      >
-                                        {t('admin.providers.delete', 'Delete')}
-                                      </button>
-                                    )}
+                                    {provider.category &&
+                                      !BUILT_IN_LLM_PROVIDERS.includes(provider.id) && (
+                                        <button
+                                          onClick={e => {
+                                            e.stopPropagation();
+                                            deleteProvider(
+                                              provider.id,
+                                              getLocalizedContent(provider.name, currentLanguage)
+                                            );
+                                          }}
+                                          className="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300"
+                                        >
+                                          {t('admin.providers.delete', 'Delete')}
+                                        </button>
+                                      )}
                                   </div>
                                 </td>
                               </tr>

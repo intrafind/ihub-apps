@@ -4,11 +4,13 @@ This guide covers iHub Apps' realtime speech-to-text stack end to end: what user
 
 Three user-facing features share one server-side pipeline:
 
-| Feature                     | What the user does                                                     | Where the text goes                              |
-| --------------------------- | ---------------------------------------------------------------------- | ------------------------------------------------ |
-| **Dictation**               | Clicks the microphone icon and speaks                                  | Into the chat **input field**                    |
-| **Record → transcribe**     | Clicks the record button, speaks, clicks stop                          | Streams into an **assistant chat message**       |
-| **File/video transcription**| Uploads an audio file or a video (audio track is extracted in-browser) | Streams into an **assistant chat message**       |
+| Feature                     | What the user does                                                     | Where the text goes                                                        |
+| --------------------------- | ---------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| **Dictation**               | Clicks the microphone icon and speaks                                  | Into the chat **input field**                                              |
+| **Record → send**           | Clicks the record button, speaks, clicks stop                          | Grows the **user's message** while speaking; sent to the chat model on stop |
+| **File/video transcription**| Uploads an audio file or a video (audio track is extracted in-browser) | Into the **user's message**, after the typed text; sent to the chat model  |
+
+In all three the transcript is **user input**. The selected chat model answers it like any typed message — the transcription model only turns speech into text.
 
 All three send audio to the same iHub WebSocket endpoint, `/api/voice/realtime`, which relays it to a vLLM realtime endpoint (e.g. Voxtral). The browser **never** connects to vLLM directly, and the vLLM URL / API key **never** reach the browser.
 
@@ -46,7 +48,7 @@ Key properties:
 
 - **All audio processing happens in the browser.** Decoding uploaded files (`decodeAudioData`), extracting the audio track from videos, downmixing to mono, and resampling to 16 kHz run client-side (AudioWorklet / `OfflineAudioContext`). The server only relays already-prepared PCM16 frames — there is no server-side decoding, no ffmpeg, and no CPU-heavy work on the Node.js event loop.
 - **The server is a thin, per-connection bridge.** Each browser connection gets its own dedicated upstream socket and closure-scoped state. There is no broadcast and no shared session registry — one user can never receive another user's transcript frames.
-- **Nothing is persisted.** Audio is relayed and discarded; transcripts stream to the requesting client only. Server logs record frame counts and text lengths (at debug level), never transcript content.
+- **Audio is never persisted.** Audio is relayed and discarded; transcripts stream to the requesting client only. Once sent, a transcript is an ordinary user message and is stored like one (see [Chat persistence](chat-persistence.md)). Server logs record frame counts and text lengths (at debug level), never transcript content.
 
 ### WebSocket protocol (browser ↔ iHub)
 
@@ -91,6 +93,7 @@ A transcription session pins a GPU-backed upstream socket, so the bridge is deli
 | Frame size cap              | 256 KB    | `maxPayload` on the WebSocket server; oversized frames terminate the connection.               |
 | Connection caps             | 50 total / 3 per user | Enforced **before** the handshake completes; excess upgrades get HTTP 429. Anonymous users are capped per client IP (first `X-Forwarded-For` hop behind a proxy), not as one shared bucket. |
 | Upstream backpressure       | 4 MB high water | If iHub→vLLM is the slow hop, the client socket is paused (real TCP flow control) until the upstream send buffer drains below 1 MB — per-connection memory stays bounded instead of buffering a whole file. |
+| Browser send queue (live recording) | 8 MB | While the server holds the client socket paused, a recording's audio queues in the browser. Past ~4 minutes of queued audio the recording stops with a "service is busy" error and the text transcribed so far goes into the input field, instead of buffering the rest of the recording in the tab. |
 
 Everything on the relay path is asynchronous and O(one frame): per-frame work is a ≤256 KB base64 encode and a JSON stringify. The Node.js event loop is never blocked by file-sized work.
 
@@ -213,10 +216,10 @@ Add a `transcription` block to the app config (Admin → Apps → Edit → Trans
 | `enabled`            | `false` | Master switch for the app.                                                                   |
 | `modelId`            | `""`    | Which `modelType: "transcription"` model to route to. Empty uses the platform default (`speech.transcription.defaultModelId`, see below). |
 | `defaultEnabled`     | `true`  | Whether the per-chat **Transcription** toggle starts on. Users can flip it per conversation (like web search). When off, audio/video submissions fall through to the multimodal chat path instead. |
-| `streaming`          | `true`  | Stream partial deltas into the assistant bubble.                                             |
+| `streaming`          | `true`  | Show the transcript growing in the user's message while it is produced. When off, the message shows "Listening…" / "Transcribing…" until the transcript is complete. |
 | `maxDurationSeconds` | `900`   | Client-enforced cap on recording length / decoded audio duration (max `7200`).               |
 | `inputs.upload`      | `true`  | Allow transcribing uploaded audio files.                                                     |
-| `inputs.record`      | `true`  | Show the record→transcribe button.                                                          |
+| `inputs.record`      | `true`  | Show the record → send button.                                                              |
 | `inputs.video`       | `true`  | Allow transcribing uploaded videos (audio track extracted in the browser).                   |
 
 ### Platform default transcription model
@@ -235,9 +238,11 @@ Instead of picking the same model in every app, set it once under **Admin → Vo
 
 ### What users see
 
-- A **Transcription** toggle in the chat input's actions menu (when the app has it enabled) showing that audio/video will be handled by a separate transcription model.
-- A **record button** (red dot → elapsed timer → stop square). Stopping streams the transcript into the chat as an assistant message.
-- Attaching an audio/video file and submitting streams its transcript the same way. An in-flight transcription can be **cancelled**; text transcribed so far is kept and a cancellation notice is appended.
+- A **Transcription** toggle in the chat input's actions menu (when the app has it enabled): on, uploaded audio and video are transcribed into the message before the chat model sees it.
+- A **record button** (red dot → elapsed timer → stop square). While recording, a user message shows "Listening…" and grows with the transcript as the user speaks. Stopping (the button, Send, or reaching `maxDurationSeconds`) sends it to the selected chat model, which answers. Anything already typed in the input field leads the message, and attachments in the input go along. A batch model (`google-transcribe`) fills the message in one piece after stop.
+- Attaching an audio/video file and sending shows the typed text as the user message, followed by `Transcript of <file>:` and the transcript growing below it; one section per file. When every file is done the message goes to the chat model, with any non-audio attachments. A file without speech is marked `(no speech detected)`.
+- Nothing is sent when something goes wrong: a failed or **cancelled** (Stop) upload transcription, or audio without any speech, gives the input field back its text and files. A recording that fails or is cancelled part-way leaves the text transcribed so far in the input field, to check and send.
+- When the message holds the transcript of an uploaded file, the answer is labelled **Based on audio recording**. A spoken message is the user's own words, like typed text, and gets no such label.
 
 ## Permissions
 
@@ -284,7 +289,7 @@ Both backends can point at the same vLLM deployment. The WebSocket endpoint is a
 
 - **Microphone check**: input level meter and device name, with no speech service involved. It tells "the browser gets no audio" apart from "the backend returns no text".
 - **Live dictation (realtime)**: pick a service (browser, Azure or vLLM Realtime; the platform default is preselected), a language and a mode, then speak. It shows the interim and final transcript and the time to the first text.
-- **Recording (record → transcribe)**: pick an enabled transcription model (the platform default is preselected) and record up to 60 s. The clip goes over `/api/voice/realtime` exactly like the chat's record button. It shows the transcript, audio duration and processing time; on failure, the raw server code is shown too (e.g. `model-disabled`, `upstream-unreachable`).
+- **Recording (record → transcribe)**: pick an enabled transcription model (the platform default is preselected) and record up to 60 s. The clip goes over `/api/voice/realtime` with the same model check a chat uses; unlike the chat's record button, it is sent after recording rather than streamed live, so the processing time can be measured. It shows the transcript, audio duration and processing time; on failure, the raw server code is shown too (e.g. `model-disabled`, `upstream-unreachable`).
 
 The **Test connection** buttons check the backends from the iHub server instead. For vLLM Realtime that is a WebSocket handshake; for Azure it exchanges the key for a token.
 

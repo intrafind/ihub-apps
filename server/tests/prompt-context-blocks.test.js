@@ -93,6 +93,28 @@ test('a message that is only typed text is sent as typed', async () => {
   assert.ok(!lastUser(out).content.includes('</user_instruction>'));
 });
 
+test('a transcript of uploaded audio is typed text that keeps its audio flag', async () => {
+  const typed = 'Summarize the call\n\nTranscript of call.mp3:\nWe ship on Friday.';
+  const out = await render([
+    {
+      role: 'user',
+      content: typed,
+      audioTranscript: true,
+      promptTemplate: translator.prompt,
+      variables: { language: 'English' }
+    }
+  ]);
+  const message = lastUser(out);
+  assert.ok(message.content.endsWith(`</task>\n\n${typed}`));
+  // What labels the answer "Based on audio recording" (see detectContextSources).
+  assert.equal(message.audioTranscript, true);
+
+  const plain = await render([{ role: 'user', content: 'Hello', audioTranscript: 'yes' }], {
+    id: 'plain'
+  });
+  assert.equal(lastUser(plain).audioTranscript, undefined);
+});
+
 test('without a template the rendered blocks are the message; history turns render too', async () => {
   const app = { system: { en: 'You are a helpful assistant.' } };
   const out = await render(

@@ -169,6 +169,17 @@ const baseModelConfigSchema = z
           'Provider must be one of: openai, openai-responses, anthropic, google, mistral, local, iassistant-conversation, bedrock, vllm-realtime, google-live, google-transcribe'
       }
     ),
+    // Provider entry (config/providers.json) the API key comes from, when it is
+    // not the one named after `provider` — e.g. "llmhub" for a model served by
+    // T-Systems LLM Hub through the OpenAI API. `provider` stays the API type
+    // and is kept equal to that entry's `apiType`. See services/llmProviders.js.
+    providerId: z
+      .string()
+      .regex(
+        /^[a-z0-9._-]+$/,
+        'Provider ID must contain only lowercase letters, numbers, underscores, dots, and hyphens'
+      )
+      .optional(),
     // Distinguishes chat models (routed through the LLM adapter pipeline) from
     // transcription models (routed through the transcription provider registry
     // and the realtime WebSocket proxy) and text-to-speech models (routed
