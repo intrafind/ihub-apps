@@ -152,12 +152,13 @@ async function runTests() {
 
     logTest('Brave provider in providers.json', !!braveInFile);
     logTest('Custom provider in providers.json', !!customInFile);
-    logTest('Brave has name.en', !!braveInFile?.name?.en);
-    logTest('Brave has name.de', !!braveInFile?.name?.de);
-    logTest('Custom has name.en', !!customInFile?.name?.en);
-    logTest('Custom has name.de', !!customInFile?.name?.de);
+    // Provider names are plain text since migration V141.
+    const hasTextName = provider => typeof provider?.name === 'string' && provider.name.length > 0;
+    logTest('Brave has a name', hasTextName(braveInFile));
+    logTest('Custom has a name', hasTextName(customInFile));
 
-    const test5Passed = braveInFile && customInFile && braveInFile.name?.en && braveInFile.name?.de;
+    const test5Passed =
+      braveInFile && customInFile && hasTextName(braveInFile) && hasTextName(customInFile);
     if (test5Passed) passedTests++;
 
     // Summary

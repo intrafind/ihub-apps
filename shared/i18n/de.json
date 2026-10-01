@@ -1070,7 +1070,8 @@
         "info": {
           "title": "Über Anbieter-API-Schlüssel",
           "description": "API-Schlüssel, die hier konfiguriert werden, werden als Fallback für alle Modelle dieses Anbieters verwendet, die keinen eigenen API-Schlüssel konfiguriert haben. Wenn Sie dieses Feld leer lassen, verwendet das System stattdessen die Umgebungsvariable."
-        }
+        },
+        "subtitle": "Diesen Anbieter und seinen API-Schlüssel konfigurieren"
       },
       "create": {
         "title": "Neuen Anbieter erstellen",
@@ -1086,7 +1087,10 @@
         "enabled": "Anbieter aktiviert",
         "cancel": "Abbrechen",
         "save": "Anbieter erstellen",
-        "saving": "Wird erstellt..."
+        "saving": "Wird erstellt...",
+        "llmHelp": "Ein LLM-Anbieter hält einen API-Schlüssel für alle seine Modelle. Verknüpfen Sie Modelle im Modell-Editor mit ihm oder importieren Sie sie von seinem Endpunkt.",
+        "nameRequired": "Der Name des Anbieters ist erforderlich",
+        "subtitle": "Legen Sie einen LLM-Anbieter für einen eigenen Endpunkt, einen Websuche-Anbieter oder einen allgemeinen API-Schlüssel an"
       },
       "info": {
         "title": "API-Schlüssel-Priorität",
@@ -1123,6 +1127,36 @@
         "testFailed": "Test fehlgeschlagen",
         "hideResults": "Ergebnisse ausblenden",
         "showResults": "Ergebnisse anzeigen"
+      },
+      "deleteConfirm": "Anbieter „{{name}}“ löschen?",
+      "fields": {
+        "name": "Name",
+        "id": "ID",
+        "description": "Beschreibung",
+        "apiType": "API-Typ",
+        "baseUrl": "Basis-URL"
+      },
+      "hints": {
+        "apiType": "Welche API der Endpunkt spricht. Gateways wie T-Systems LLM Hub sind OpenAI-kompatibel; für einen selbst betriebenen vLLM-Server vLLM wählen.",
+        "apiTypeBuiltIn": "Integrierte Anbieter sprechen immer ihre eigene API.",
+        "baseUrl": "Optional. Die API-Basis, von der beim Import die Modelle des Anbieters gelesen werden."
+      },
+      "apiTypes": {
+        "openai": "OpenAI-kompatibel (OpenAI, LLM Hub, LM Studio, …)",
+        "local": "vLLM / selbst betrieben (local)",
+        "mistral": "Mistral",
+        "openai-responses": "OpenAI Responses API",
+        "anthropic": "Anthropic",
+        "google": "Google Gemini",
+        "bedrock": "AWS Bedrock"
+      },
+      "linkedModels": {
+        "title": "Verknüpfte Modelle",
+        "description": "Diese Modelle verwenden den API-Schlüssel dieses Anbieters, sofern sie keinen eigenen haben.",
+        "import": "Modelle importieren",
+        "none": "Mit diesem Anbieter sind keine Modelle verknüpft.",
+        "count": "{{count}} verknüpft, {{enabled}} aktiv",
+        "more": "+{{count}} weitere"
       }
     },
     "models": {
@@ -1241,7 +1275,8 @@
         "thinkingLevelLow": "Niedrig",
         "thinkingLevelMedium": "Mittel",
         "thinkingLevelHigh": "Hoch",
-        "thinkingThoughts": "Reasoning anzeigen"
+        "thinkingThoughts": "Reasoning anzeigen",
+        "customProviders": "Eigene Anbieter"
       },
       "hints": {
         "modelId": "Eindeutige Kennung für das Modell (kann nach der Erstellung nicht geändert werden)",
@@ -1263,7 +1298,8 @@
         "thinkingEnabled": "Das Modell vor der Antwort nachdenken lassen. Das Reasoning wird getrennt von der Antwort zurückgegeben; ohne diese Option schreibt ein Reasoning-Modell seine Gedanken stattdessen in den Antworttext.",
         "thinkingLevel": "Wird als reasoning_effort (OpenAI, vLLM) bzw. thinkingLevel (Gemini) gesendet. Server ohne Unterstützung ignorieren den Wert — beim Provider-Standard belassen, sofern das Modell diese Stufen nicht dokumentiert.",
         "thinkingThoughts": "Das Reasoning Nutzern hinter dem Umschalter „Denkprozess anzeigen“ zugänglich machen. Zum Verbergen deaktivieren.",
-        "maxOutputTokens": "Leer bedeutet der Standardwert ({{value}}), nicht unbegrenzt. Reasoning-Modelle verbrauchen ihre Denk-Tokens aus diesem Limit – halten Sie es deutlich über der längsten erwarteten Antwort."
+        "maxOutputTokens": "Leer bedeutet der Standardwert ({{value}}), nicht unbegrenzt. Reasoning-Modelle verbrauchen ihre Denk-Tokens aus diesem Limit – halten Sie es deutlich über der längsten erwarteten Antwort.",
+        "linkedProvider": "Verwendet den API-Schlüssel des Anbieters „{{provider}}“ und dessen API-Typ ({{apiType}})."
       },
       "placeholders": {
         "maxOutputTokens": "Standard: {{value}}",
@@ -1292,6 +1328,71 @@
         "low": "Niedrig (1K)",
         "medium": "Mittel (2K)",
         "high": "Hoch (4K)"
+      },
+      "import": {
+        "button": "Von URL importieren",
+        "title": "Modelle von URL importieren",
+        "subtitle": "Liest die Modellliste eines OpenAI-kompatiblen, vLLM-, Mistral-, Anthropic- oder Google-Endpunkts und legt die ausgewählten Modelle an.",
+        "provider": "Anbieter",
+        "newProvider": "+ Neuer Anbieter",
+        "providerHint": "Der Anbieter hält den API-Schlüssel für alle importierten Modelle. Legen Sie für einen neuen Endpunkt, z. B. T-Systems LLM Hub, einen neuen an.",
+        "usesProviderKey": "Der beim Anbieter gespeicherte API-Schlüssel wird verwendet.",
+        "noProviderKey": "Beim Anbieter ist kein API-Schlüssel gespeichert: Seine Umgebungsvariable wird verwendet, falls gesetzt, sonst wird der Endpunkt ohne Schlüssel aufgerufen.",
+        "url": "Endpunkt-URL",
+        "urlHint": "Die API-Basis (…/v1), ihre /models-Liste oder eine Chat-Completions-URL. iHub liest die Modellliste von /models.",
+        "apiKey": "API-Schlüssel",
+        "apiKeyHint": "Optional. Wird verschlüsselt beim neuen Anbieter gespeichert, nicht bei den Modellen. Für Endpunkte ohne Authentifizierung, z. B. einen lokalen vLLM-Server, leer lassen.",
+        "loadModels": "Modelle laden",
+        "loading": "Modelle werden geladen…",
+        "found": "{{count}} Modelle unter {{url}}",
+        "changeConnection": "Endpunkt ändern",
+        "idPrefix": "ID-Präfix",
+        "enableModels": "Importierte Modelle aktivieren",
+        "noModels": "Der Endpunkt listet keine Modelle.",
+        "selectAll": "Alle Chat-Modelle auswählen",
+        "model": "Modell",
+        "context": "Kontext",
+        "targetId": "iHub-Modell-ID",
+        "targetIdFor": "iHub-Modell-ID für {{name}}",
+        "vision": "Bilder",
+        "alreadyAdded": "Bereits angelegt als {{id}}",
+        "endOfLife": "Abkündigung: {{date}}",
+        "importCount": "{{count}} Modelle importieren",
+        "importing": "Wird importiert…",
+        "doneSummary": "{{ok}} von {{total}} Modellen in {{provider}} importiert.",
+        "providerCreated": "Der Anbieter „{{provider}}“ wurde angelegt und hält den API-Schlüssel. Sie verwalten ihn unter Anbieter.",
+        "testHint": "Prüfen Sie jedes Modell mit „Testen“ in der Modellliste und ergänzen Sie Angaben, die der Endpunkt nicht liefert, etwa die Tool-Unterstützung.",
+        "types": {
+          "embedding": "Embedding",
+          "rerank": "Reranker",
+          "audio": "Audio",
+          "image": "Bild",
+          "moderation": "Moderation",
+          "other": "Kein Chat-Modell"
+        },
+        "errors": {
+          "idInvalid": "Nur Kleinbuchstaben, Ziffern, Punkte, Binde- und Unterstriche verwenden.",
+          "idExists": "Ein Modell mit dieser ID existiert bereits.",
+          "idDuplicate": "Zwei ausgewählte Modelle würden diese ID erhalten.",
+          "providerIdInvalid": "Nur Kleinbuchstaben, Ziffern, Punkte, Binde- und Unterstriche verwenden.",
+          "providerIdExists": "Ein Anbieter mit dieser ID existiert bereits. Wählen Sie ihn oben aus oder vergeben Sie eine andere ID.",
+          "providerCreateFailed": "Der Anbieter konnte nicht angelegt werden: {{error}}",
+          "invalidUrl": "Geben Sie eine gültige http://- oder https://-URL ein",
+          "credentialsInUrl": "Entfernen Sie die Zugangsdaten aus der URL und tragen Sie den Schlüssel im Feld API-Schlüssel ein",
+          "unsupportedProvider": "Der Modellimport unterstützt diesen API-Typ nicht",
+          "apiKeyRequired": "Der Endpunkt erfordert einen API-Schlüssel",
+          "authenticationFailed": "Der Endpunkt hat den API-Schlüssel abgelehnt",
+          "accessDenied": "Zugriff durch den Endpunkt verweigert",
+          "notFound": "Unter dieser URL gibt es keine Modellliste",
+          "redirected": "Der Endpunkt hat die Anfrage umgeleitet",
+          "upstreamError": "Der Endpunkt hat mit einem Fehler geantwortet",
+          "invalidResponse": "Der Endpunkt hat keine Modellliste geliefert",
+          "timeout": "Der Endpunkt hat nicht rechtzeitig geantwortet",
+          "connectionRefused": "Verbindung abgelehnt",
+          "hostNotFound": "Host nicht gefunden",
+          "networkError": "Netzwerkfehler",
+          "providerIdReserved": "Diese ID ist der Name eines API-Typs. Wählen Sie eine andere ID."
+        }
       }
     },
     "chat": {
