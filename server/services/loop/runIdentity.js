@@ -19,7 +19,8 @@ export const ANONYMOUS_USER_ID = 'anonymous';
 
 /** Whether `user` has admin access (permission flag or admin group membership). */
 export function isAdminUser(user) {
-  if (!user) return false;
+  // The anonymous principal is never an admin, whatever groups it carries.
+  if (!user || user.id === ANONYMOUS_USER_ID) return false;
   if (user.permissions?.adminAccess === true) return true;
   const groups = Array.isArray(user.groups) ? user.groups : [];
   return groups.includes('admin') || groups.includes('admins');

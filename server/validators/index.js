@@ -41,9 +41,9 @@ export const feedbackSchema = {
 };
 
 export const magicPromptSchema = {
+  // The instruction is resolved on the server from the app's configuration.
   body: z.object({
     input: z.string().min(1),
-    prompt: z.string().optional(),
     modelId: z.string().optional(),
     appId: z.string().optional()
   })

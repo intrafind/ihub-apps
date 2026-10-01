@@ -536,6 +536,11 @@ Configuration for anonymous (unauthenticated) access.
 - **enabled** (boolean) – Allow anonymous access to the platform. Default: `true`
 - **defaultGroups** (array) – Groups assigned to anonymous users. Default: `["anonymous"]`
 
+Every request without a signed-in user is checked against the permissions of these groups — in
+the web app and on the API alike, including the OpenAI-compatible inference API, app and model
+details, the model test and Magic Prompt. Anonymous users never get admin or content-admin access,
+even when one of these groups grants it.
+
 ### **localAuth**
 Built-in username/password authentication.
 

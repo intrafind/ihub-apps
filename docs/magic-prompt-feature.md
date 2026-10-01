@@ -18,7 +18,7 @@ Enable and configure the feature for an app by adding a `magicPrompt` object und
 }
 ```
 
-If `model` or `prompt` is omitted, the server falls back to the environment variables `MAGIC_PROMPT_MODEL` and `MAGIC_PROMPT_PROMPT`. If neither is set, the system uses the globally configured default model and a built-in fallback prompt of `"Improve the following prompt."`.
+The server reads `model` and `prompt` from the app's configuration; the browser only sends the user's input and the app id. If `model` or `prompt` is omitted, the server falls back to the environment variables `MAGIC_PROMPT_MODEL` and `MAGIC_PROMPT_PROMPT`. If neither is set, the system uses the globally configured default model and a built-in fallback prompt of `"Improve the following prompt."`.
 
 ## API Endpoint
 
@@ -31,9 +31,10 @@ Request body:
 | Field | Type | Required | Description |
 | ----- | ---- | -------- | ----------- |
 | `input` | string | Yes | The raw user text to be improved. |
-| `prompt` | string | No | Custom system instruction. Overrides `MAGIC_PROMPT_PROMPT` and the default. |
-| `modelId` | string | No | Model to use. Overrides the app config and `MAGIC_PROMPT_MODEL`. |
-| `appId` | string | No | App context for usage tracking. Defaults to `"direct"`. |
+| `modelId` | string | No | Model to use. Overrides the app config and `MAGIC_PROMPT_MODEL`. Must be a model the caller may use. |
+| `appId` | string | No | The app whose `features.magicPrompt` settings apply, also used for usage tracking. Must be an app the caller may use. Defaults to `"direct"` (platform defaults). |
+
+The instruction always comes from the app configuration (or `MAGIC_PROMPT_PROMPT`); a `prompt` field in the request body is ignored.
 
 Response body:
 
@@ -43,18 +44,22 @@ Response body:
 }
 ```
 
-The endpoint requires authentication (`authRequired` middleware). Unauthenticated requests receive a `401` response.
+The endpoint requires authentication (`authRequired` middleware). Unauthenticated requests receive a `401` response when anonymous access is disabled; otherwise the anonymous group's permissions apply.
 
-## 4-Level Model Fallback Chain
+- An unknown `appId`, or one the caller may not use, is answered with `404`.
+- A `modelId` the caller may not use is answered with `403`.
 
-When determining which model to call, the server follows a four-level fallback chain:
+## Model Fallback Chain
+
+When determining which model to call, the server follows a fallback chain. Only models the caller may use (`permissions.models` of their groups) are considered at every level:
 
 1. **`modelId` from the request body** — highest priority, used if provided and the model exists.
-2. **`MAGIC_PROMPT_MODEL` environment variable** — used if the requested model is not found or not provided.
-3. **Globally configured default model** — if no explicit model is selected from the request or environment, the model marked as `default` in `configCache.getModels()` is used.
-4. **First available model** — as a last resort, if no default is configured or available, the server selects the first model returned by `configCache.getModels()`.
+2. **The app's `features.magicPrompt.model`** — used if no model was requested or the requested one does not exist.
+3. **`MAGIC_PROMPT_MODEL` environment variable**.
+4. **Globally configured default model** — the model marked as `default` in `configCache.getModels()`.
+5. **First available model** — as a last resort, the first model returned by `configCache.getModels()`.
 
-This ensures the feature always has a working model even in environments with restricted model availability.
+If the caller may use none of them, the request is answered with `403`.
 
 ## Token Limit
 

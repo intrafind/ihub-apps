@@ -619,6 +619,9 @@ export function getDefaultAnonymousGroups(platform) {
   return ['anonymous'];
 }
 
+/** The id of the principal built for requests without a signed-in user. */
+export const ANONYMOUS_PRINCIPAL_ID = 'anonymous';
+
 /**
  * Enhance user object with permissions
  * @param {Object} user - User object from request
@@ -635,10 +638,11 @@ export function enhanceUserWithPermissions(user, authConfig, platform) {
       defaultGroups
     });
     user = {
-      id: 'anonymous',
+      id: ANONYMOUS_PRINCIPAL_ID,
       name: 'Anonymous',
       email: null,
-      groups: defaultGroups
+      // A copy, so nothing downstream can change the platform config's array.
+      groups: [...defaultGroups]
     };
   }
 
@@ -649,7 +653,7 @@ export function enhanceUserWithPermissions(user, authConfig, platform) {
       component: 'Authorization',
       defaultGroups
     });
-    user.groups = defaultGroups;
+    user.groups = [...defaultGroups];
   }
 
   // Handle external groups mapping and merging with internal groups
@@ -721,6 +725,15 @@ export function enhanceUserWithPermissions(user, authConfig, platform) {
     user.isOAuthClient || isOAuthDelegated || user.isAgent === true
       ? false
       : hasAdminAccess(user.groups) || user.permissions.adminAccess;
+
+  // The anonymous principal is never an administrator, whatever groups
+  // `anonymousAuth.defaultGroups` lists: adminAuth and contentAdminAuth already
+  // refuse it, and checks that read these flags directly must agree.
+  if (user.id === ANONYMOUS_PRINCIPAL_ID) {
+    user.isAdmin = false;
+    user.permissions.adminAccess = false;
+    user.permissions.contentAdmin = false;
+  }
 
   logger.debug('User enhancement complete', {
     component: 'Authorization',
