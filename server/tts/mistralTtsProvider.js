@@ -167,33 +167,47 @@ export async function synthesize({ cfg, text, signal, onAudio }) {
     let usage = null;
     let done = false;
 
+    const handleEvents = async () => {
+      while (events.length) {
+        const event = events.shift();
+        let data;
+        try {
+          data = JSON.parse(event.data);
+        } catch {
+          continue;
+        }
+        const type = data?.type || event.event;
+        if (type === 'speech.audio.delta' && typeof data.audio_data === 'string') {
+          const pcm = convert(Buffer.from(data.audio_data, 'base64'));
+          if (pcm.length) await onAudio(pcm);
+        } else if (type === 'speech.audio.done') {
+          usage = data.usage || null;
+          done = true;
+        } else if (type === 'error' || data?.error) {
+          const message = data?.error?.message || data?.message || 'stream error';
+          throw new TtsUpstreamError(`Mistral TTS failed: ${String(message).slice(0, 300)}`);
+        }
+      }
+    };
+
     try {
       while (!done) {
         const { done: ended, value } = await reader.read();
-        if (ended) break;
+        if (ended) {
+          // A last event without its closing blank line still counts.
+          parser.feed(`${decoder.decode()}\n\n`);
+          await handleEvents();
+          break;
+        }
         touch();
         parser.feed(decoder.decode(value, { stream: true }));
-
-        while (events.length) {
-          const event = events.shift();
-          let data;
-          try {
-            data = JSON.parse(event.data);
-          } catch {
-            continue;
-          }
-          const type = data?.type || event.event;
-          if (type === 'speech.audio.delta' && typeof data.audio_data === 'string') {
-            const pcm = convert(Buffer.from(data.audio_data, 'base64'));
-            if (pcm.length) await onAudio(pcm);
-          } else if (type === 'speech.audio.done') {
-            usage = data.usage || null;
-            done = true;
-          } else if (type === 'error' || data?.error) {
-            const message = data?.error?.message || data?.message || 'stream error';
-            throw new TtsUpstreamError(`Mistral TTS failed: ${String(message).slice(0, 300)}`);
-          }
-        }
+        await handleEvents();
+      }
+      // A stream cut off before `speech.audio.done` (a proxy timeout, a
+      // dropped connection) is a failure, not a short answer: the listener
+      // would hear part of the text as if it were all of it.
+      if (!done) {
+        throw new TtsUpstreamError('Mistral TTS stream ended before the audio was complete');
       }
     } catch (error) {
       if (signal?.aborted) throw error;

@@ -229,7 +229,8 @@ Voxtral TTS.
   time. Leaving the chat stops it, and the request to the provider stops with it.
 - **What is read:** the message text without Markdown. Formatting marks, code blocks, images,
   URLs and citation markers are left out, and tables are read cell by cell. A message that was
-  already played replays from memory without a new request.
+  already played to the end replays from memory without a new request (the last five, up to
+  10 minutes of audio each).
 - **Setup:** enable the new **Voxtral TTS (Read aloud)** model under **Admin → Models**. It needs
   a Mistral API key: on the model, the `mistral` provider key or `MISTRAL_API_KEY`. Then switch
   read aloud on under **Admin → Voice Input → Read aloud (text-to-speech)** and pick the model.

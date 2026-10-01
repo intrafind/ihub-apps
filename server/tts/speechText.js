@@ -102,8 +102,50 @@ function dropElements(text) {
   return result + text.slice(pos);
 }
 
-/** A fence line (``` or ~~~), with up to three spaces of indent. */
-const FENCE = /^ ?(`{3,}|~{3,})/;
+/**
+ * A fence line (``` or ~~~), at any indent: a fence inside a list item is
+ * indented by the list's depth, and LLM answers nest code in lists a lot.
+ */
+const FENCE = /^[^\S\n]*(`{3,}|~{3,})/;
+
+/**
+ * Drop fenced code blocks and defuse inline code. This runs before any HTML
+ * handling: an answer that explains HTML shows `<script>` or `<think>` as
+ * code, and that must not open an element that swallows the rest of the
+ * message. Code blocks are never read, and an unterminated fence (a cut-off
+ * answer) drops everything after it. Inline code keeps its words; only its
+ * angle brackets go.
+ */
+function dropCode(text) {
+  const lines = [];
+  // While inside a fenced code block: the opening marker.
+  let fence = null;
+  for (const line of text.split('\n')) {
+    const marker = line.match(FENCE);
+    if (fence) {
+      const closes =
+        marker &&
+        marker[1][0] === fence[0] &&
+        marker[1].length >= fence.length &&
+        !line.slice(marker[0].length).trim();
+      if (closes) fence = null;
+      continue;
+    }
+    if (marker) {
+      fence = marker[1];
+      // A code block ends the paragraph around it.
+      lines.push('');
+      continue;
+    }
+    lines.push(line.replace(/`+[^`\n]*`+/g, code => code.replace(/[<>]/g, ' ')));
+  }
+  return lines.join('\n');
+}
+
+/** Decode the entities Markdown renderers leave in text, in one pass. */
+function decodeEntities(text) {
+  return text.replace(/&(?:amp|lt|gt|quot|apos|nbsp|#39);/g, m => HTML_ENTITIES[m]);
+}
 
 /**
  * Convert Markdown into plain, speakable text.
@@ -114,7 +156,9 @@ const FENCE = /^ ?(`{3,}|~{3,})/;
 export function toSpeechText(markdown) {
   if (typeof markdown !== 'string' || !markdown.trim()) return '';
 
-  let text = dropElements(markdown.replace(/\r\n?/g, '\n'))
+  // Entities first, so an escaped `&lt;think&gt;` is dropped like a literal
+  // one; then code, so tags shown as code are not taken for elements.
+  let text = dropElements(dropCode(decodeEntities(markdown.replace(/\r\n?/g, '\n'))))
     // Block math is never read.
     .replace(/\$\$[\s\S]*?\$\$/g, '\n')
     // HTML: block-level tags end a paragraph, every other tag just goes.
@@ -125,8 +169,7 @@ export function toSpeechText(markdown) {
     .replace(/<\/?[a-z][^<>]*>/gi, ' ')
     // A stray bracket is noise to a listener: no `<` or `>` from the markup
     // survives into the spoken text.
-    .replace(/[<>]/g, ' ')
-    .replace(/&(?:amp|lt|gt|quot|apos|nbsp|#39);/g, m => HTML_ENTITIES[m]);
+    .replace(/[<>]/g, ' ');
 
   // Collapse runs before any per-line pattern sees them: a run of spaces or
   // of sentence punctuation is where a backtracking pattern turns quadratic.
@@ -139,27 +182,7 @@ export function toSpeechText(markdown) {
     current = [];
   };
 
-  // While inside a fenced code block: the opening marker. Code is never read,
-  // and an unterminated fence (a cut-off answer) drops everything after it.
-  let fence = null;
-
   for (const rawLine of text.split('\n')) {
-    const marker = rawLine.match(FENCE);
-    if (fence) {
-      const closes =
-        marker &&
-        marker[1][0] === fence[0] &&
-        marker[1].length >= fence.length &&
-        !rawLine.slice(marker[0].length).trim();
-      if (closes) fence = null;
-      continue;
-    }
-    if (marker) {
-      flush();
-      fence = marker[1];
-      continue;
-    }
-
     let line = rawLine.trim();
     if (!line) {
       flush();

@@ -184,6 +184,47 @@ describe('toSpeechText', () => {
   test('an unterminated code fence drops the rest instead of reading code', () => {
     expect(toSpeechText('Intro.\n```python\nprint(1)')).toBe('Intro.');
   });
+
+  test('drops indented fences, including ones nested in list items', () => {
+    const text = toSpeechText(
+      [
+        '1. Install:',
+        '   ```bash',
+        '   npm install',
+        '   ```',
+        '   - Then build:',
+        '      ```',
+        '      npm run build',
+        '      ```',
+        'Done.'
+      ].join('\n')
+    );
+    expect(text).not.toMatch(/npm/);
+    expect(text).toContain('Install:');
+    expect(text).toContain('Then build:');
+    expect(text).toContain('Done.');
+  });
+
+  test('drops escaped reasoning and script elements like literal ones', () => {
+    expect(toSpeechText('Before &lt;think&gt;secret&lt;/think&gt; after.')).toBe('Before after.');
+    expect(toSpeechText('A &lt;script&gt;x()&lt;/script&gt; B')).toBe('A B');
+  });
+
+  test('a tag shown as code does not swallow the rest of the message', () => {
+    const text = toSpeechText(
+      [
+        'Put scripts in a `<script>` element, and reasoning goes in `&lt;think&gt;`.',
+        '```html',
+        '<script>alert(1)</script>',
+        '```',
+        'The rest is read.'
+      ].join('\n')
+    );
+    expect(text).not.toMatch(/alert|[<>]/);
+    expect(text).toContain('Put scripts in a script element');
+    expect(text).toContain('reasoning goes in think');
+    expect(text).toContain('The rest is read.');
+  });
 });
 
 describe('toSpeechText on hostile input', () => {
@@ -202,7 +243,9 @@ describe('toSpeechText on hostile input', () => {
     ['a heading with a hash run', `# a${repeat('#')}b`],
     ['a punctuation run', `a${repeat('.')}a`],
     ['a whitespace run', `a${repeat(' ')}b`],
-    ['table pipes', repeat('|')]
+    ['table pipes', repeat('|')],
+    ['unclosed inline code', repeat('`<a')],
+    ['fence-like lines', repeat('  ``\n')]
   ])('stays fast for %s', (_name, input) => {
     const started = Date.now();
     prepareSpeech(input, { maxCharacters: N });
@@ -482,6 +525,37 @@ describe('Mistral TTS provider', () => {
       await expect(synthesize({ cfg: cfg(), text: 'Hi', onAudio: () => {} })).rejects.toThrow(
         /HTTP 400.*Voice not found/
       );
+    });
+
+    const deltaEvent = values =>
+      `event: speech.audio.delta\ndata: ${JSON.stringify({
+        type: 'speech.audio.delta',
+        audio_data: floatAudio(values)
+      })}\n\n`;
+
+    test('a stream that ends before speech.audio.done rejects', async () => {
+      handler = (req, res) => {
+        res.writeHead(200, { 'Content-Type': 'text/event-stream' });
+        res.end(deltaEvent([0.5]));
+      };
+      const chunks = [];
+      await expect(
+        synthesize({ cfg: cfg(), text: 'Hi', onAudio: pcm => chunks.push(pcm) })
+      ).rejects.toMatchObject({
+        name: 'TtsUpstreamError',
+        message: expect.stringMatching(/ended before the audio was complete/)
+      });
+      expect(chunks).toHaveLength(1);
+    });
+
+    test('a final done event without its blank line still completes', async () => {
+      handler = (req, res) => {
+        res.writeHead(200, { 'Content-Type': 'text/event-stream' });
+        res.write(deltaEvent([0.5]));
+        res.end(`data: ${JSON.stringify({ type: 'speech.audio.done', usage: { n: 1 } })}`);
+      };
+      const { usage } = await synthesize({ cfg: cfg(), text: 'Hi', onAudio: () => {} });
+      expect(usage).toEqual({ n: 1 });
     });
 
     test('an error event in the stream rejects', async () => {

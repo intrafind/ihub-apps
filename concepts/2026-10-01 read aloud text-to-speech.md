@@ -58,7 +58,7 @@ provider.
 7. **One playback per page** (`client/src/features/voice/utils/readAloud.js`, a
    `useSyncExternalStore` store). Only the message being played re-renders. The last five
    finished recordings, up to 64 MB, replay without a request, which saves cost when a user
-   listens twice.
+   listens twice. A recording over 10 minutes (about 29 MB) is not kept.
 8. **Gating.** `platform.speech.tts.enabled` and `defaultModelId` turn it on, the user must be
    allowed the model (the client checks `GET /api/models?type=tts`), and an app can opt out with
    `features.textToSpeech: false`. An explicit `modelId` in the API works for any enabled,

@@ -250,6 +250,13 @@ function applyProviderLink(model) {
 
 export { applyProviderLink };
 
+/**
+ * Only a chat model can be the default (see `modelsLoader.js`): a TTS or
+ * transcription model never takes the flag, nor the flag from the chat model
+ * it would replace.
+ */
+const isChatModel = model => (model.modelType || 'chat') === 'chat';
+
 export default function registerAdminModelsRoutes(app) {
   /**
    * @swagger
@@ -527,6 +534,7 @@ export default function registerAdminModelsRoutes(app) {
       delete updatedModel.apiKeySet;
       delete updatedModel.apiKeyMasked;
 
+      if (!isChatModel(updatedModel)) updatedModel.default = false;
       if (updatedModel.default === true) {
         const modelsResponse = configCache.getModels(true);
         const allModels = modelsResponse.data || modelsResponse;
@@ -610,6 +618,7 @@ export default function registerAdminModelsRoutes(app) {
       if ((await configStore.readJson(newModelPath)) !== null) {
         return sendErrorResponse(res, 409, 'Model with this ID already exists');
       }
+      if (!isChatModel(newModel)) newModel.default = false;
       if (newModel.default === true) {
         const modelsResponse = configCache.getModels(true);
         const allModels = modelsResponse.data || modelsResponse;
@@ -652,7 +661,9 @@ export default function registerAdminModelsRoutes(app) {
       const newEnabledState = !model.enabled;
       model.enabled = newEnabledState;
       if (!newEnabledState && model.default === true) {
-        const enabledModels = models.filter(m => m.id !== modelId && m.enabled === true);
+        const enabledModels = models.filter(
+          m => m.id !== modelId && m.enabled === true && isChatModel(m)
+        );
         if (enabledModels.length > 0) {
           enabledModels[0].default = true;
           await configStore.writeJson(await modelPath(enabledModels[0].id), enabledModels[0]);
@@ -706,7 +717,7 @@ export default function registerAdminModelsRoutes(app) {
       }
 
       // ensure at least one enabled model has default=true
-      const enabledModels = models.filter(m => m.enabled);
+      const enabledModels = models.filter(m => m.enabled && isChatModel(m));
       if (enabledModels.length > 0 && !enabledModels.some(m => m.default)) {
         enabledModels[0].default = true;
         await configStore.writeJson(await modelPath(enabledModels[0].id), enabledModels[0]);
@@ -745,7 +756,9 @@ export default function registerAdminModelsRoutes(app) {
         return sendNotFound(res, 'Model');
       }
       if (model.default === true) {
-        const otherModels = models.filter(m => m.id !== modelId && m.enabled === true);
+        const otherModels = models.filter(
+          m => m.id !== modelId && m.enabled === true && isChatModel(m)
+        );
         if (otherModels.length > 0) {
           otherModels[0].default = true;
           await configStore.writeJson(await modelPath(otherModels[0].id), otherModels[0]);

@@ -18,8 +18,9 @@ The first supported provider is [Mistral Voxtral TTS](https://mistral.ai/news/vo
   spot. **Stop** (the square next to it) ends playback.
 - Only one message plays at a time. Starting another message stops the current
   one, and so does leaving the chat.
-- Playing a message you have already listened to replays it from memory. There
-  is no second request and no second charge.
+- Playing one of the last five messages you listened to to the end replays it
+  from memory, with no second request and no second charge. Only recordings of
+  up to 10 minutes are kept; a longer message is requested again.
 - What is read is the message's text. Markdown is removed first: formatting
   marks, links (their text is kept), images, code blocks, tables (read cell by
   cell), raw URLs and citation markers such as `[1]` are not read out. A
@@ -246,8 +247,9 @@ plays with Web Audio as it arrives      next piece once one is finished …
 - **Cost control.** When playback stops, or the user leaves the chat, the
   request is aborted and the server aborts the provider request with it.
   Requests count against the inference rate limiter
-  (`rateLimit.inferenceApi`). A replay of a message that already finished
-  plays from memory.
+  (`rateLimit.inferenceApi`). A replay of one of the last five finished
+  messages plays from memory, if its audio is at most 10 minutes long (about
+  29 MB; 64 MB for all five together).
 - **Long answers.** The server synthesizes the pieces one after another into a
   single stream. Voxtral generates audio several times faster than it plays,
   so the listener never hears the gap between pieces. The browser decodes only

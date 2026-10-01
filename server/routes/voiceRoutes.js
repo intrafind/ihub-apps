@@ -63,6 +63,14 @@ export default function registerVoiceRoutes(app) {
    * upstream request, so audio nobody will hear is not paid for.
    */
   app.post(buildServerPath('/api/voice/speech'), authRequired, async (req, res) => {
+    // First thing: a client that hangs up at any point, even before this
+    // handler ran (its `close` is then already past), starts no synthesis.
+    const controller = new AbortController();
+    res.on('close', () => {
+      if (!res.writableFinished) controller.abort();
+    });
+    if (res.destroyed || req.socket?.destroyed) controller.abort();
+
     const platform = configCache.getPlatform() || {};
     if (!req.user && isAnonymousAccessAllowed(platform)) {
       req.user = enhanceUserWithPermissions(null, platform.auth || {}, platform);
@@ -98,10 +106,6 @@ export default function registerVoiceRoutes(app) {
       hint: typeof languageHint === 'string' ? languageHint : undefined
     });
     const cfg = provider.resolveUpstream(model, { language });
-    const controller = new AbortController();
-    res.on('close', () => {
-      if (!res.writableFinished) controller.abort();
-    });
 
     let started = false;
     const start = () => {
@@ -132,23 +136,28 @@ export default function registerVoiceRoutes(app) {
           return writeWithBackpressure(res, pcm);
         }
       });
-      if (!controller.signal.aborted) {
-        if (!started) start();
-        res.end();
+      const summary = {
+        component: 'VoiceRoutes',
+        modelId: model.id,
+        userId: req.user?.id,
+        characters,
+        chunks: chunks.length,
+        language,
+        voice: cfg.voice,
+        durationMs: Date.now() - startedAt
+      };
+      if (controller.signal.aborted) {
+        logger.info('Read aloud stopped by the client', summary);
+        return undefined;
       }
-      logger.info(
-        controller.signal.aborted ? 'Read aloud stopped by the client' : 'Read aloud finished',
-        {
-          component: 'VoiceRoutes',
-          modelId: model.id,
-          userId: req.user?.id,
-          characters,
-          chunks: chunks.length,
-          language,
-          voice: cfg.voice,
-          durationMs: Date.now() - startedAt
-        }
-      );
+      if (!started) {
+        // The provider finished without a single sample: a failure, reported
+        // like any other before the first byte rather than as empty audio.
+        logger.error('Read aloud returned no audio', summary);
+        return res.status(502).json({ error: 'No audio was returned', code: 'no-audio' });
+      }
+      res.end();
+      logger.info('Read aloud finished', summary);
     } catch (error) {
       if (controller.signal.aborted) {
         logger.info('Read aloud stopped by the client', {

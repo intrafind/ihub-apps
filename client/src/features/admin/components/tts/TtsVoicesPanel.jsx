@@ -109,10 +109,10 @@ function TtsVoicesPanel({ modelId, onUseVoice, t, uiLanguage }) {
     }
   };
 
-  const takeSample = (blob, filename, seconds, source) => {
-    // Only a recording made here is previewed: its bytes come from our own
-    // encoder, not from a file the browser was handed.
-    setPreviewUrl(source === 'recording' ? URL.createObjectURL(blob) : '');
+  // `preview` is an object URL for a recording made here, or '' for an
+  // uploaded file, which is not played back on this page.
+  const takeSample = (blob, filename, seconds, source, preview = '') => {
+    setPreviewUrl(preview);
     setSample({ blob, filename, seconds, source });
     setCreated(null);
     setCreateError('');
@@ -147,7 +147,10 @@ function TtsVoicesPanel({ modelId, onUseVoice, t, uiLanguage }) {
         setCreateError(t('admin.models.ttsVoices.emptyRecording', 'Nothing was recorded.'));
         return;
       }
-      takeSample(audioBufferToWav(audioBuffer), 'recording.wav', durationSeconds, 'recording');
+      // Only a recording is previewed: its bytes come from our own encoder,
+      // not from a file the browser was handed.
+      const wav = audioBufferToWav(audioBuffer);
+      takeSample(wav, 'recording.wav', durationSeconds, 'recording', URL.createObjectURL(wav));
     } catch (error) {
       setCreateError(getMicrophoneErrorMessage(error, t));
     }

@@ -32,6 +32,8 @@ const state = {
   failWith: null,
   // When set, the fake provider streams until its signal aborts.
   streamUntilAbort: false,
+  // When set, the fake provider finishes without emitting any audio.
+  silent: false,
   signals: [],
   resolvedLanguages: []
 };
@@ -79,7 +81,7 @@ jest.unstable_mockModule('../tts/mistralTtsProvider.js', () => ({
         error.name = 'AbortError';
         throw error;
       }
-      await onAudio(Buffer.from([1, 0, 2, 0]));
+      if (!state.silent) await onAudio(Buffer.from([1, 0, 2, 0]));
       return { usage: null };
     }
   }
@@ -104,6 +106,7 @@ beforeEach(() => {
   state.calls = [];
   state.failWith = null;
   state.streamUntilAbort = false;
+  state.silent = false;
   state.signals = [];
   state.resolvedLanguages = [];
 });
@@ -178,6 +181,38 @@ describe('POST /api/voice/speech', () => {
     }
   });
 
+  test('a client gone before the handler runs starts no synthesis', async () => {
+    // The socket closes while the request is still in middleware, so its
+    // `close` event fires before the route could listen for it.
+    const hungUp = express();
+    hungUp.use(express.json());
+    hungUp.use((req, res, next) => {
+      req.socket.destroy();
+      setTimeout(next, 20);
+    });
+    registerVoiceRoutes(hungUp);
+    const server = hungUp.listen(0, '127.0.0.1');
+    await new Promise(resolve => server.once('listening', resolve));
+    try {
+      await new Promise(resolve => {
+        const req = http.request({
+          host: '127.0.0.1',
+          port: server.address().port,
+          path: '/api/voice/speech',
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' }
+        });
+        req.on('error', () => resolve());
+        req.on('close', () => resolve());
+        req.end(JSON.stringify({ text: 'Hello there.' }));
+      });
+      await new Promise(resolve => setTimeout(resolve, 60));
+      expect(state.calls).toHaveLength(0);
+    } finally {
+      await new Promise(resolve => server.close(resolve));
+    }
+  });
+
   test('picks the voice by the language of the message', async () => {
     const res = await request(app)
       .post('/api/voice/speech')
@@ -244,6 +279,13 @@ describe('POST /api/voice/speech', () => {
       error: 'Mistral rejected the API key (HTTP 401)',
       code: 'upstream-error'
     });
+  });
+
+  test('502 when the provider finishes without any audio', async () => {
+    state.silent = true;
+    const res = await request(app).post('/api/voice/speech').send({ text: 'Hi' });
+    expect(res.status).toBe(502);
+    expect(res.body).toEqual({ error: 'No audio was returned', code: 'no-audio' });
   });
 
   test('an unexpected error does not leak its message', async () => {
