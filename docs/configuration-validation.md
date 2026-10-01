@@ -223,6 +223,8 @@ Validates marketplace catalog documents fetched from a registry's `catalog.json`
   - `github`: GitHub repository file via the Contents API
   - `url`: Absolute URL with optional companion files
 - **Metadata**: Version, author, category, tags, license, minimum iHub version
+- **License link**: `licenseUrl` (optional) points at the full license text; the admin marketplace
+  detail panel shows `license` as a link to it
 
 **On install:** each item's content is validated against the schema of its type (app, model,
 prompt or workflow) before anything is written, and its `id` must equal the item's `name`. An item
@@ -243,6 +245,8 @@ whose `name` matches one already on the instance that the marketplace did not in
       "displayName": { "en": "Data Analyzer" },
       "version": "2.1.0",
       "category": "analytics",
+      "license": "MIT",
+      "licenseUrl": "https://opensource.org/license/mit",
       "source": {
         "type": "github",
         "owner": "intrafind",
