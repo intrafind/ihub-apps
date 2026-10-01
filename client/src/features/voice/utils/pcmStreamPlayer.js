@@ -80,7 +80,10 @@ export class PcmStreamPlayer {
     this.streamError = null;
     this.scheduledAny = false;
     this.pausedByUser = false;
-    // Received bytes not yet scheduled.
+    // Received bytes not yet scheduled. The request keeps streaming while
+    // playback is paused, so this can hold the rest of the answer: at most
+    // `speech.tts.maxCharacters` of speech (20,000 characters ≈ 20 minutes ≈
+    // 60 MB of 16-bit audio), shared with `recording` rather than copied.
     this.queue = [];
     this.queuedBytes = 0;
     // Everything received, so a finished stream replays without a request.

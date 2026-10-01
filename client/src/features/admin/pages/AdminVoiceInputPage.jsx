@@ -12,6 +12,7 @@ import {
 import VoiceInputTestPanel from '../components/voice/VoiceInputTestPanel';
 import ReadAloudButton from '../../voice/components/ReadAloudButton';
 import useReadAloudPlayback from '../../voice/hooks/useReadAloudPlayback';
+import { stop as stopReadAloud } from '../../voice/utils/readAloud';
 
 /** Playback id of the read-aloud test, apart from every chat message. */
 const READ_ALOUD_TEST_ID = 'admin-read-aloud-test';
@@ -640,12 +641,15 @@ function AdminVoiceInputPage() {
             <select
               id="tts-model"
               value={ttsModelId}
-              onChange={e =>
+              onChange={e => {
+                // The test belongs to the model it was started with; choosing
+                // another one (or None, which hides the controls) ends it.
+                stopReadAloud(READ_ALOUD_TEST_ID);
                 setConfig(prev => ({
                   ...prev,
                   tts: { ...prev.tts, defaultModelId: e.target.value }
-                }))
-              }
+                }));
+              }}
               className={inputClass}
             >
               <option value="">{t('admin.voiceInput.defaults.noModel', 'None')}</option>

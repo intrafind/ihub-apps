@@ -605,9 +605,16 @@ export default function registerAdminModelsRoutes(app) {
       const message = error.name === 'TtsUpstreamError' ? error.message : 'Text-to-speech failed';
       return res.status(502).json({ error: message, details: message, code: 'upstream-error' });
     }
+    if (bytes === 0) {
+      return res.status(502).json({
+        error: 'No audio was returned',
+        details: 'The text-to-speech model answered without any audio.',
+        code: 'no-audio'
+      });
+    }
     const seconds = bytes / 2 / provider.sampleRate;
     return res.json({
-      success: bytes > 0,
+      success: true,
       message: 'Model test successful',
       messageKey: 'testSuccessful',
       response: `Generated ${seconds.toFixed(1)} s of speech (voice: ${cfg.voice})`,

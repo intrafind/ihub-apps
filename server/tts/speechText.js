@@ -71,12 +71,12 @@ function stripInline(line) {
  * `</script >` and `</SCRIPT foo>` close the element too. `[^<>]*` stops at
  * the next tag, so an unterminated close tag cannot rescan the rest.
  */
-const CLOSE_TAGS = {
-  script: /<\/script\b[^<>]*>/gi,
-  style: /<\/style\b[^<>]*>/gi,
-  think: /<\/think\b[^<>]*>/gi,
-  thinking: /<\/thinking\b[^<>]*>/gi
-};
+const CLOSE_TAGS = new Map([
+  ['script', /<\/script\b[^<>]*>/gi],
+  ['style', /<\/style\b[^<>]*>/gi],
+  ['think', /<\/think\b[^<>]*>/gi],
+  ['thinking', /<\/thinking\b[^<>]*>/gi]
+]);
 
 /**
  * Remove `<script>`, `<style>` and `<think>`/`<thinking>` elements with their
@@ -92,7 +92,7 @@ function dropElements(text) {
   let match;
   while ((match = openTag.exec(text))) {
     result += `${text.slice(pos, match.index)}\n`;
-    const closeTag = CLOSE_TAGS[match[1].toLowerCase()];
+    const closeTag = CLOSE_TAGS.get(match[1].toLowerCase());
     closeTag.lastIndex = openTag.lastIndex;
     const end = closeTag.exec(text);
     if (!end) return result;

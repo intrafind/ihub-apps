@@ -84,8 +84,8 @@ example one per language, create one TTS model per voice.
 | --- | --- |
 | `modelType` | `"tts"` marks a text-to-speech model. TTS models never show up in the chat model selector and are never picked as the default chat model. |
 | `provider` | `"mistral"`. A TTS model on any other provider fails validation. |
-| `url` | The speech endpoint. Empty uses `https://api.mistral.ai/v1/audio/speech`. It stays on the server. |
-| `modelId` | The provider's model id. Empty uses `voxtral-mini-tts-latest`. |
+| `url` | Optional. The speech endpoint; leave it out to use `https://api.mistral.ai/v1/audio/speech`. It stays on the server. |
+| `modelId` | Required. The provider's model id, `voxtral-mini-tts-latest` for Voxtral TTS. |
 | `tts.voice` | The voice id. Empty uses `en_paul_neutral`. |
 | `apiKey` | Optional. Stored encrypted. Without one, the `mistral` provider key or `MISTRAL_API_KEY` is used. |
 

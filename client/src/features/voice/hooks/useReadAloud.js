@@ -38,21 +38,28 @@ export function useReadAloudAvailability(app) {
   const defaultModelId = tts?.enabled ? tts.defaultModelId || '' : '';
   const appAllows = featureFlags.isAppFeatureEnabled(app, 'textToSpeech', true);
   const wanted = Boolean(defaultModelId) && appAllows;
-  const [permitted, setPermitted] = useState(null);
+  // The answer is kept with the model it was looked up for, so a change of
+  // default model shows no button until the new model has been checked.
+  const [lookup, setLookup] = useState({ modelId: null, permitted: false });
 
   useEffect(() => {
     if (!wanted) return undefined;
     let active = true;
     loadTtsModels(defaultModelId).then(models => {
-      if (active) setPermitted(models.some(model => model.id === defaultModelId));
+      if (!active) return;
+      setLookup({
+        modelId: defaultModelId,
+        permitted: models.some(model => model.id === defaultModelId)
+      });
     });
     return () => {
       active = false;
     };
   }, [wanted, defaultModelId]);
 
+  const permitted = lookup.modelId === defaultModelId && lookup.permitted;
   return {
-    available: wanted && permitted === true,
+    available: wanted && permitted,
     modelId: wanted ? defaultModelId : null
   };
 }

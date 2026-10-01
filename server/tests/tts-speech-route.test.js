@@ -3,13 +3,15 @@
  *
  * The provider is replaced by a fake that emits PCM, so these cover what the
  * route owns: input validation, model resolution status codes, the streaming
- * response headers and body, chunked synthesis, and how an upstream failure
- * before the first audio byte is reported.
+ * response headers and body, chunked synthesis, how an upstream failure
+ * before the first audio byte is reported, and that a client going away
+ * aborts the provider request.
  *
  * Native ESM: uses `jest.unstable_mockModule` + dynamic imports. Run with
  * `NODE_OPTIONS=--experimental-vm-modules`.
  */
 
+import http from 'node:http';
 import { jest } from '@jest/globals';
 import request from 'supertest';
 import express from 'express';
@@ -27,7 +29,10 @@ const state = {
   models: [ttsModel],
   permissions: new Set(['*']),
   calls: [],
-  failWith: null
+  failWith: null,
+  // When set, the fake provider streams until its signal aborts.
+  streamUntilAbort: false,
+  signals: []
 };
 
 class TtsUpstreamError extends Error {
@@ -57,9 +62,19 @@ jest.unstable_mockModule('../tts/mistralTtsProvider.js', () => ({
     id: 'mistral',
     sampleRate: 24000,
     resolveUpstream: model => ({ model: model.modelId, voice: 'v' }),
-    synthesize: async ({ text, onAudio }) => {
+    synthesize: async ({ text, signal, onAudio }) => {
       state.calls.push(text);
       if (state.failWith) throw state.failWith;
+      if (state.streamUntilAbort) {
+        state.signals.push(signal);
+        while (!signal.aborted) {
+          await onAudio(Buffer.alloc(4800));
+          await new Promise(resolve => setTimeout(resolve, 5));
+        }
+        const error = new Error('The operation was aborted');
+        error.name = 'AbortError';
+        throw error;
+      }
       await onAudio(Buffer.from([1, 0, 2, 0]));
       return { usage: null };
     }
@@ -84,6 +99,8 @@ beforeEach(() => {
   state.permissions = new Set(['*']);
   state.calls = [];
   state.failWith = null;
+  state.streamUntilAbort = false;
+  state.signals = [];
 });
 
 describe('POST /api/voice/speech', () => {
@@ -114,6 +131,46 @@ describe('POST /api/voice/speech', () => {
     expect(res.status).toBe(200);
     expect(state.calls.length).toBeGreaterThan(1);
     expect(res.body.length).toBe(state.calls.length * 4);
+  });
+
+  test('a client that goes away aborts the provider request and the rest', async () => {
+    state.streamUntilAbort = true;
+    const server = app.listen(0, '127.0.0.1');
+    await new Promise(resolve => server.once('listening', resolve));
+    try {
+      const body = JSON.stringify({ text: 'A sentence long enough to matter. '.repeat(120) });
+      await new Promise((resolve, reject) => {
+        const req = http.request(
+          {
+            host: '127.0.0.1',
+            port: server.address().port,
+            path: '/api/voice/speech',
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+          },
+          res => {
+            res.once('data', () => {
+              // Audio is flowing: hang up, as a stopped player does.
+              req.destroy();
+              resolve();
+            });
+          }
+        );
+        req.on('error', error => {
+          if (error.code !== 'ECONNRESET') reject(error);
+        });
+        req.end(body);
+      });
+      for (let i = 0; i < 100 && !state.signals[0]?.aborted; i++) {
+        await new Promise(resolve => setTimeout(resolve, 10));
+      }
+      expect(state.signals[0].aborted).toBe(true);
+      // The answer had several pieces; none after the first was requested.
+      await new Promise(resolve => setTimeout(resolve, 50));
+      expect(state.calls).toHaveLength(1);
+    } finally {
+      await new Promise(resolve => server.close(resolve));
+    }
   });
 
   test('400 without text', async () => {
