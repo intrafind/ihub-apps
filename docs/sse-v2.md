@@ -115,6 +115,19 @@ with `run/ended { finishReason: 'tool_passthrough_complete', toolName }`. A
 failure is `stream/error` followed by `run/ended { status: 'error' }`; a stop
 or disconnect is `run/ended { status: 'aborted', finishReason: 'connection_closed' }`.
 
+`run/ended.knowledgeSources` is what the answer was based on, and the only
+thing the answer badge reads: `websearch`, `ifinder`, `sources`, `iassistant`,
+`grounding`, `email`, `file`, `audio` — or `llm` when the model answered from
+none of them (its own knowledge). A passthrough answer is the tool's output, not
+the model's, so it lists only the sources it used; a workflow's answer is badged
+by its workflow result. The server always names the list on an answered turn,
+including a stopped one that had already written part of its answer; a turn that
+failed, paused for a question or was stopped before it wrote anything carries
+none, and the client shows no badge. `tool/completed.knowledgeSource` and
+`step/completed.sources` are per-tool and per-step detail, not the answer's
+sources. The ledger's `run/end` keeps the same list, so a replayed turn is badged
+like the live one.
+
 ## A workflow run on the wire
 
 ```

@@ -1,13 +1,20 @@
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import Icon from '../../../shared/components/Icon';
+import { MODEL_KNOWLEDGE_SOURCE } from '../../../../../shared/runEvents.js';
 
 /**
  * Component to display the source of an AI answer (LLM, websearch, sources, workflow, ...).
  * Shows a non-intrusive badge indicating where the information came from.
  *
+ * The sources are the ones the server named when the turn ended
+ * (`run/ended.knowledgeSources`, or the transcription session's): nothing is
+ * inferred here, so an answer without them — a failed turn, one stopped before
+ * it wrote anything or cut off by a server restart, a notice, an answer stored
+ * before the server kept its sources — shows no badge.
+ *
  * @param {Object} props
- * @param {Object} [props.answerSource] - LLM-side answer source metadata (sources array)
+ * @param {Object} [props.answerSource] - Server-reported answer source (`{ sources }`)
  * @param {Object} [props.workflowResult] - Workflow result metadata when message was produced by a workflow run
  *                                          ({ status, executionId, workflowName })
  */
@@ -52,20 +59,8 @@ function AnswerSourceBadge({ answerSource, workflowResult }) {
     );
   }
 
-  if (!answerSource || !answerSource.sources) {
-    // No external sources used - show LLM-only badge
-    return (
-      <div
-        className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-600 dark:bg-gray-800/50 dark:text-gray-400 border border-gray-200 dark:border-gray-700"
-        title={t('chatMessage.answerSource.llmOnly')}
-      >
-        <Icon name="sparkles" className="w-3 h-3" />
-        <span>{t('chatMessage.answerSource.llmOnly')}</span>
-      </div>
-    );
-  }
-
-  const { sources } = answerSource;
+  const sources = Array.isArray(answerSource?.sources) ? answerSource.sources : [];
+  if (sources.length === 0) return null;
 
   // Determine the primary source to display
   let displayText = t('chatMessage.answerSource.mixed');
@@ -76,6 +71,13 @@ function AnswerSourceBadge({ answerSource, workflowResult }) {
   if (sources.length === 1) {
     const source = sources[0];
     switch (source) {
+      case MODEL_KNOWLEDGE_SOURCE:
+        // Nothing but the model itself.
+        displayText = t('chatMessage.answerSource.llmOnly');
+        iconName = 'sparkles';
+        colorClasses =
+          'bg-gray-100 text-gray-600 dark:bg-gray-800/50 dark:text-gray-400 border-gray-200 dark:border-gray-700';
+        break;
       case 'websearch':
         displayText = t('chatMessage.answerSource.websearch');
         iconName = 'globe-alt';

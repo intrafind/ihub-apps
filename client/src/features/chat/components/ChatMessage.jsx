@@ -1074,29 +1074,35 @@ function ChatMessage({
 
         {/* Workflow result attribution — handled by unified WorkflowStepIndicator above */}
 
-        {/* Answer source indicator - show for completed assistant messages inside bubble.
+        {/* Answer source indicator - completed assistant messages whose source
+            the server reported (or a workflow produced), inside the bubble.
             The EU AI Act "AI generated" chip sits in the same row; its details
             panel wraps onto its own line below. */}
-        {!isUser && !isError && !message.loading && (
-          <div className="flex flex-wrap items-center justify-end gap-2">
-            {aiChipEnabled && (
-              <AIProvenanceChip
-                provenance={message.provenance || null}
-                // Only a model recorded with this answer, never the current selection.
-                fallbackModelId={
-                  message.modelId ||
-                  (typeof message.model === 'string' ? message.model : message.model?.id) ||
-                  null
-                }
-                models={models}
-              />
-            )}
-            <AnswerSourceBadge
-              answerSource={message.answerSource}
-              workflowResult={message.workflowResult}
-            />
-          </div>
-        )}
+        {!isUser &&
+          !isError &&
+          !message.loading &&
+          (aiChipEnabled || message.answerSource || message.workflowResult) && (
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              {aiChipEnabled && (
+                <AIProvenanceChip
+                  provenance={message.provenance || null}
+                  // Only a model recorded with this answer, never the current selection.
+                  fallbackModelId={
+                    message.modelId ||
+                    (typeof message.model === 'string' ? message.model : message.model?.id) ||
+                    null
+                  }
+                  models={models}
+                />
+              )}
+              {(message.answerSource || message.workflowResult) && (
+                <AnswerSourceBadge
+                  answerSource={message.answerSource}
+                  workflowResult={message.workflowResult}
+                />
+              )}
+            </div>
+          )}
       </div>
 
       {/*

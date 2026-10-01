@@ -85,7 +85,8 @@ describe('projectRunToMessage — streaming content', () => {
     expect(content).toBe('Answer');
     expect(loading).toBe(false);
     expect(extras.finishReason).toBe('stop');
-    expect(extras.answerSource).toEqual({ sources: ['sources', 'websearch'], type: 'mixed' });
+    // Exactly what run/ended named — a tool's own hint is not merged in.
+    expect(extras.answerSource).toEqual({ sources: ['websearch'], type: 'mixed' });
     expect(extras.ifinderMessageId).toBe('resp-9');
   });
 

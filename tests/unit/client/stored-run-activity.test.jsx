@@ -72,7 +72,11 @@ const SEARCHING_TURN = [
     data: { event: 'search.finished', numberOfHits: 7 }
   }),
   env(6, 'step/delta', { step: 1, kind: 'text', content: 'The answer.' }),
-  env(7, 'run/ended', { status: 'completed', finishReason: 'stop' })
+  env(7, 'run/ended', {
+    status: 'completed',
+    finishReason: 'stop',
+    knowledgeSources: ['websearch']
+  })
 ];
 
 /** An @mention workflow run with two steps. */

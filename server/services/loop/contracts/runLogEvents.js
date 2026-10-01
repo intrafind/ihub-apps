@@ -110,6 +110,8 @@ export const runEndData = z.object({
   status: runStatusSchema,
   finishReason: z.string().nullable().prefault(null),
   usage: usageSchema.optional(),
+  /** The answer's sources as `run/ended` reported them (chat turns). */
+  knowledgeSources: z.array(z.string()).optional(),
   cost: z.number().nonnegative().optional(),
   durationMs: z.number().int().nonnegative().optional(),
   error: z

@@ -216,6 +216,12 @@
                 "required": ["promptTokens", "completionTokens", "totalTokens"],
                 "additionalProperties": false
               },
+              "knowledgeSources": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
               "cost": {
                 "type": "number",
                 "minimum": 0

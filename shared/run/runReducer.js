@@ -73,6 +73,9 @@ export function createRunState(runId, init = {}) {
     pendingInteractionId: null,
     // surface metadata
     meta: { extra: {} },
+    // The answer's sources as the server named them on `run/ended` — never
+    // gathered here from the tools or steps, so the badge shows exactly what
+    // the server reported (see shared/run/runActivity.js#answerSourceOf).
     knowledgeSources: [],
     citations: [],
     skills: [],
@@ -291,7 +294,7 @@ export function reduceRunEvent(state, envelope) {
         status: data.status || 'completed',
         finishReason: data.finishReason ?? null,
         usage: data.usage || run.usage,
-        knowledgeSources: union(run.knowledgeSources, data.knowledgeSources),
+        knowledgeSources: union([], data.knowledgeSources),
         toolName: data.toolName || run.toolName,
         output: data.output !== undefined ? data.output : run.output,
         provenance:
@@ -382,7 +385,6 @@ export function reduceRunEvent(state, envelope) {
         text,
         currentStep: stepNo,
         steps: { ...run.steps, [stepNo]: step },
-        knowledgeSources: union(run.knowledgeSources, data.sources),
         citations: data.citations ? [...run.citations, data.citations] : run.citations,
         usage: data.usage || run.usage
       };
@@ -446,14 +448,7 @@ export function reduceRunEvent(state, envelope) {
       };
       const tools =
         idx >= 0 ? run.tools.map((t, i) => (i === idx ? tool : t)) : [...run.tools, tool];
-      run = {
-        ...run,
-        tools,
-        knowledgeSources: union(
-          run.knowledgeSources,
-          data.knowledgeSource ? [data.knowledgeSource] : []
-        )
-      };
+      run = { ...run, tools };
       return withRun(next, run);
     }
 
