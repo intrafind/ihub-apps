@@ -351,8 +351,9 @@ appear in the chat model selector, and they can never be the default chat
 model. `GET /api/models?type=tts` lists the ones a user may use, without `url`
 or `apiKey`.
 
-The only provider so far is `mistral` (Voxtral TTS). The voice is set with
-`tts.voice`:
+Two providers are supported: `mistral` (Voxtral TTS) and `google` (Gemini TTS,
+`gemini-3.8-flash-tts` and `gemini-3.8-flash-lite-tts`, which use the Google key of
+the Gemini chat models). The voice is set with `tts.voice`:
 
 ```json
 {
@@ -368,8 +369,8 @@ The only provider so far is `mistral` (Voxtral TTS). The voice is set with
 }
 ```
 
-The model ships disabled. Enable it, give it a Mistral API key (or use the
-`mistral` provider key or `MISTRAL_API_KEY`), and choose it under
+The models ship disabled. Enable one, give it an API key (or use the provider
+key, `MISTRAL_API_KEY` or `GOOGLE_API_KEY`), and choose it under
 **Admin → Voice Input → Read aloud**. **Admin → Models → Test** speaks a short
 sentence and reports how much audio came back.
 

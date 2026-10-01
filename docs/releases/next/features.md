@@ -49,3 +49,14 @@ When **Import from URL** creates a new provider, the provider can now be created
 a model: with nothing selected, the button reads **Create provider without models**. The provider
 keeps the endpoint's base URL and API key, so its models can be imported later — also when the
 endpoint does not list any models yet.
+
+## Read Aloud with Google Gemini TTS
+
+Read aloud can now speak with Google's Gemini text-to-speech models: **Gemini 3.8 Flash TTS** and
+the faster, cheaper **Gemini 3.8 Flash-Lite TTS**. Their 30 voices speak every language, which
+Gemini detects from the text.
+
+- Both models ship disabled, because enabling one sends the message text to Google. Enable one
+  under **Admin → Models**, then choose it under **Admin → Voice Input → Read aloud**.
+- They use the Google API key the Gemini chat models already use.
+
