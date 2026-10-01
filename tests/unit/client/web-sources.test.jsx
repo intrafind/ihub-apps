@@ -278,7 +278,8 @@ describe('a reopened chat', () => {
       webSearch: { queries: ['what is langdock'], sources: webSearch.sources }
     });
     expect(message.webSearch.queries).toEqual(['what is langdock']);
-    expect(message.answerSource).toEqual({ sources: ['websearch'], type: 'mixed' });
+    // The badge is the stored activity's, never inferred from the record.
+    expect(message.answerSource).toBeUndefined();
     expect(resolveCitations(message.content, message.webSearch).cited).toHaveLength(2);
     expect(transformStoredMessage({ id: 'm2', role: 'assistant', content: 'x' }).webSearch).toBe(
       undefined

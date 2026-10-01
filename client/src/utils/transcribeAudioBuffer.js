@@ -32,6 +32,8 @@ import {
  * @param {(text: string) => void} [opts.onDelta] - Running transcript on each update.
  * @param {(text: string) => void} [opts.onFinal] - Final transcript when complete.
  * @param {(err: { code: string, message?: string }) => void} [opts.onError]
+ * @param {(sources: string[]) => void} [opts.onSources] - What the server says the
+ *   transcript is based on (`ready.knowledgeSources`), for the answer badge.
  * @param {AbortSignal} [opts.signal] - Abort/cancel the transcription.
  * @returns {Promise<string>} Resolves with the final transcript.
  */
@@ -56,7 +58,7 @@ const overallTimeoutFor = durationSeconds =>
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 export async function transcribeAudioBuffer(audioBuffer, opts = {}) {
-  const { modelId, onDelta, onFinal, onError, signal } = opts;
+  const { modelId, onDelta, onFinal, onError, onSources, signal } = opts;
 
   const float32 = await resampleTo16kMono(audioBuffer);
   if (!float32.length) {
@@ -188,6 +190,9 @@ export async function transcribeAudioBuffer(audioBuffer, opts = {}) {
         case 'ready':
           if (ready) break;
           ready = true;
+          if (typeof onSources === 'function' && Array.isArray(msg.knowledgeSources)) {
+            onSources(msg.knowledgeSources);
+          }
           streamAudio();
           break;
         case 'delta':
