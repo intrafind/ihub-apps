@@ -58,9 +58,16 @@ export function resolveUpstream(model) {
   };
 }
 
-/** Dial details: the model as a query parameter, the key as a Bearer token. */
+/**
+ * Dial details: the model as a query parameter, the key as a Bearer token.
+ * The key only ever goes out over TLS: a `ws://` URL with a key is refused
+ * (the bridge reports it as an unreachable upstream and logs why).
+ */
 export function connect(cfg) {
   const url = new URL(cfg.url);
+  if (cfg.apiKey && url.protocol !== 'wss:') {
+    throw new Error('Mistral realtime transcription needs a wss:// URL to send the API key');
+  }
   if (cfg.model) url.searchParams.set('model', cfg.model);
   const headers = {};
   if (cfg.apiKey) headers.Authorization = `Bearer ${cfg.apiKey}`;

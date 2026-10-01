@@ -615,6 +615,29 @@ describe('bridgeConnection — Mistral realtime (fake sockets)', () => {
     expect(limiter.total).toBe(0);
   });
 
+  test('a keyed ws:// endpoint is refused before anything is dialed', async () => {
+    configCache.setCacheEntry('config/models.json', [
+      { ...mistralModel, url: 'ws://proxy.internal/v1/audio/transcriptions/realtime' }
+    ]);
+    const client = new FakeWs();
+    const limiter = new ConnectionLimiter({ maxTotal: 5, maxPerUser: 5 });
+    limiter.tryAcquire(user.id);
+    const createUpstream = jest.fn(() => new FakeWs(WebSocket.CONNECTING));
+    bridgeConnection(client, user, limiter, { createUpstream });
+
+    client.emit(
+      'message',
+      JSON.stringify({ type: 'start', modelId: 'voxtral-mini-transcribe-realtime' }),
+      false
+    );
+    client.emit('message', Buffer.from([1, 2]), true);
+    await jest.advanceTimersByTimeAsync(0);
+
+    expect(createUpstream).not.toHaveBeenCalled();
+    expect(client.framesOfType('error')[0].code).toBe('upstream-unreachable');
+    expect(limiter.total).toBe(0);
+  });
+
   test('an upstream error frame reaches the client with its message', async () => {
     const client = new FakeWs();
     const upstream = new FakeWs(WebSocket.CONNECTING);

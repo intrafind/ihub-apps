@@ -71,6 +71,12 @@ describe('connection', () => {
     expect(options.headers).toEqual({ Authorization: 'Bearer k123' });
   });
 
+  test('connect() never sends the key over a connection without TLS', () => {
+    expect(() =>
+      mistral.connect({ url: 'ws://proxy.internal/v1/audio/transcriptions/realtime', apiKey: 'k' })
+    ).toThrow(/wss:\/\//);
+  });
+
   test('connect() sends no Authorization header without a key', () => {
     expect(mistral.connect({ url: DEFAULT_REALTIME_URL, model: 'm' }).options.headers).toEqual({});
   });
