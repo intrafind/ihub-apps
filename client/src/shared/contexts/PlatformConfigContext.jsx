@@ -61,6 +61,11 @@ export function PlatformConfigProvider({ children }) {
             }, {})
           : platformCfg.features || {},
 
+        // Voice input: backend switches and the Azure host / keyConfigured flag
+        // that useVoiceRecognition falls back to. Dropping it here silently
+        // broke the platform host fallback and the server-side Azure token.
+        speech: platformCfg.speech,
+
         // Additional auth status fields
         authenticated: authStatus.authenticated,
         user: authStatus.user,
