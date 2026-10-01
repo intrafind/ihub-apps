@@ -171,9 +171,18 @@ const SVG_DROPPED_ELEMENTS = new Set([
   'listener'
 ]);
 
-function hrefOf(element) {
-  return element.attr?.href ?? element.attr?.['xlink:href'];
+/**
+ * Every link attribute of an element, as `[name, value]`: `href`,
+ * `xlink:href`, or `href` under any other namespace prefix. An element can
+ * carry several, and a renderer may read any of them, so each is checked.
+ */
+function hrefsOf(element) {
+  return Object.keys(element.attr || {})
+    .filter(name => /^(?:[\w.-]+:)?href$/i.test(name))
+    .map(name => [name, String(element.attr[name]).trim()]);
 }
+
+const isLocalReference = value => value.startsWith('#');
 
 function cleanSvgElement(element) {
   for (const name of Object.keys(element.attr || {})) {
@@ -184,9 +193,17 @@ function cleanSvgElement(element) {
   const tag = String(element.name || '')
     .replace(/^svg:/i, '')
     .toLowerCase();
-  if (tag === 'a' && hrefOf(element) !== undefined && !safeLink(String(hrefOf(element)))) {
-    delete element.attr.href;
-    delete element.attr['xlink:href'];
+  for (const [name, value] of hrefsOf(element)) {
+    // A link may stay a link annotation and a picture an inline image;
+    // anything else may only point inside the document (a gradient or pattern
+    // it inherits from, a text path).
+    const allowed =
+      tag === 'a'
+        ? safeLink(value)
+        : tag === 'image' || tag === 'feimage'
+          ? checkImageDataUri(value).ok
+          : isLocalReference(value);
+    if (!allowed) delete element.attr[name];
   }
   element.children = (element.children || []).filter(child => {
     if (child.type === 'comment') return false;
@@ -195,9 +212,11 @@ function cleanSvgElement(element) {
       .replace(/^svg:/i, '')
       .toLowerCase();
     if (SVG_DROPPED_ELEMENTS.has(name)) return false;
-    const href = hrefOf(child);
-    if ((name === 'image' || name === 'feimage') && !checkImageDataUri(href).ok) return false;
-    if (name === 'use' && href !== undefined && !String(href).trim().startsWith('#')) return false;
+    const hrefs = hrefsOf(child).map(([, value]) => value);
+    if (name === 'image' || name === 'feimage') {
+      if (hrefs.length === 0 || !hrefs.every(value => checkImageDataUri(value).ok)) return false;
+    }
+    if (name === 'use' && !hrefs.every(isLocalReference)) return false;
     if (name === 'style') {
       for (const node of child.children || []) {
         if (node.type === 'text') node.text = String(node.text).replace(/@import[^;]*;?/gi, '');
@@ -215,7 +234,9 @@ function cleanSvgElement(element) {
  * The markup is parsed as XML (strictly — malformed markup is refused, not
  * guessed at) and rebuilt without scripts, foreign content, event handlers,
  * comments, `<image>`s that are not inline PNG/JPEG, `<use>` of anything but
- * a local `#id`, and `@import` in styles.
+ * a local `#id`, and `@import` in styles. Every link attribute is checked,
+ * whatever its prefix: an `<a>` keeps only `http(s)`/`mailto` targets, and
+ * any other element only references to a local `#id`.
  *
  * svg-to-pdfkit opens `<image href>` targets with pdfkit, which reads local
  * files for anything that is not a `data:` URI. The renderer also replaces

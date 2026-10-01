@@ -17,7 +17,8 @@ import { PNG } from 'pngjs';
 import { markdownToContent } from '../services/documents/pdf/markdownToPdfmake.js';
 import { sanitizeBlocks } from '../services/documents/pdf/sanitizeBlocks.js';
 import { printableRuns } from '../services/documents/pdf/glyphs.js';
-import { resolveTheme } from '../services/documents/pdf/themes.js';
+import { isColor, resolveTheme } from '../services/documents/pdf/themes.js';
+import { CREATE_PDF_TOOL } from '../services/documents/pdf/pdfToolDefinitions.js';
 import { renderPdfSpec } from '../services/documents/pdf/renderPdf.js';
 import {
   createPdf,
@@ -158,6 +159,22 @@ describe('layout block sanitiser', () => {
     assert.match(svgImageCallback('/etc/hosts'), /^data:image\/png/);
   });
 
+  it('checks every link attribute of an SVG element, not only the first', () => {
+    const svg = sanitizeSvg(
+      '<svg xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:xl="http://www.w3.org/1999/xlink">' +
+        `<image id="pair" href="${PNG_2X1}" xlink:href="/etc/passwd"/>` +
+        `<image id="prefixed" href="${PNG_2X1}" xl:href="file:///etc/passwd"/>` +
+        '<use id="u" href="#local" xlink:href="https://example.com/s.svg#a"/>' +
+        '<a href="https://example.com/ok" xlink:href="javascript:alert(1)"><text>x</text></a>' +
+        '<linearGradient id="g" xlink:href="https://example.com/g.svg#h"/>' +
+        '<linearGradient id="g2" xlink:href="#g"/></svg>'
+    );
+    assert.doesNotMatch(svg, /id="pair"|id="prefixed"|id="u"|etc\/passwd|javascript|g\.svg/);
+    assert.match(svg, /href="https:\/\/example.com\/ok"/);
+    assert.match(svg, /<linearGradient id="g"\/>/);
+    assert.match(svg, /xlink:href="#g"/);
+  });
+
   it('parses SVG as XML and refuses markup that is not a well-formed <svg>', () => {
     assert.equal(sanitizeSvg('<svg><script>alert(1)</script\t\n bar></svg>'), null);
     assert.equal(sanitizeSvg('<html><svg/></html>'), null);
@@ -198,6 +215,17 @@ describe('layout block sanitiser', () => {
     assert.equal(content[0].fontSize, 144, 'clamped');
     assert.equal(content[1].layout, 'ihubTable');
     assert.ok(c.warnings.some(w => w.includes('attachments')));
+  });
+
+  it('accepts only the colours pdfkit knows', () => {
+    assert.equal(isColor('teal'), true);
+    assert.equal(isColor('#0f766e'), true);
+    assert.equal(isColor('#abc'), true);
+    assert.equal(isColor('brandblue'), false);
+    assert.equal(isColor('Red'), false, 'pdfkit looks names up as written');
+    const [node] = sanitizeBlocks([{ text: 'x', color: 'brandblue' }], ctx());
+    assert.equal(node.color, undefined);
+    assert.notEqual(resolveTheme('default', { primaryColor: 'brandblue' }).primary, 'brandblue');
   });
 
   it('builds callouts and boxes as flowing one-cell tables', () => {
@@ -287,6 +315,15 @@ describe('rendering', () => {
     assert.deepEqual(spec.blocks, [{ text: 'x', style: 'badge' }]);
     assert.deepEqual(spec.styles, { badge: { bold: true } });
     assert.throws(() => specFromToolArgs({ title: 't', blocks: '[' }), PdfGenerationError);
+  });
+
+  it('declares blocks, styles and images as JSON text', () => {
+    // Blocks are alternatives (one content key each); a schema'd array would
+    // become "every key required" under a provider's strict schema mode.
+    const { properties } = CREATE_PDF_TOOL.parameters;
+    for (const key of ['blocks', 'styles', 'images']) {
+      assert.equal(properties[key].type, 'string', key);
+    }
   });
 });
 

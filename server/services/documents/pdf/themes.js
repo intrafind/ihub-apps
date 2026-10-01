@@ -84,19 +84,43 @@ export const THEMES = Object.freeze({
 export const DEFAULT_THEME = 'default';
 
 const COLOR_PATTERN = /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i;
-const NAMED_COLOR_PATTERN = /^[a-z]{3,20}$/i;
 
 /**
- * Whether a value is a colour pdfkit understands: `#rgb`, `#rrggbb` or a CSS
- * colour name.
+ * The CSS colour names pdfkit knows, as it spells them (lower case): it
+ * looks a name up exactly, and a name it does not know would silently draw
+ * nothing.
+ */
+const NAMED_COLORS = new Set(
+  (
+    'aliceblue antiquewhite aqua aquamarine azure beige bisque black blanchedalmond blue ' +
+    'blueviolet brown burlywood cadetblue chartreuse chocolate coral cornflowerblue cornsilk ' +
+    'crimson cyan darkblue darkcyan darkgoldenrod darkgray darkgreen darkgrey darkkhaki ' +
+    'darkmagenta darkolivegreen darkorange darkorchid darkred darksalmon darkseagreen ' +
+    'darkslateblue darkslategray darkslategrey darkturquoise darkviolet deeppink deepskyblue ' +
+    'dimgray dimgrey dodgerblue firebrick floralwhite forestgreen fuchsia gainsboro ghostwhite ' +
+    'gold goldenrod gray grey green greenyellow honeydew hotpink indianred indigo ivory khaki ' +
+    'lavender lavenderblush lawngreen lemonchiffon lightblue lightcoral lightcyan ' +
+    'lightgoldenrodyellow lightgray lightgreen lightgrey lightpink lightsalmon lightseagreen ' +
+    'lightskyblue lightslategray lightslategrey lightsteelblue lightyellow lime limegreen linen ' +
+    'magenta maroon mediumaquamarine mediumblue mediumorchid mediumpurple mediumseagreen ' +
+    'mediumslateblue mediumspringgreen mediumturquoise mediumvioletred midnightblue mintcream ' +
+    'mistyrose moccasin navajowhite navy oldlace olive olivedrab orange orangered orchid ' +
+    'palegoldenrod palegreen paleturquoise palevioletred papayawhip peachpuff peru pink plum ' +
+    'powderblue purple red rosybrown royalblue saddlebrown salmon sandybrown seagreen seashell ' +
+    'sienna silver skyblue slateblue slategray slategrey snow springgreen steelblue tan teal ' +
+    'thistle tomato turquoise violet wheat white whitesmoke yellow yellowgreen'
+  ).split(' ')
+);
+
+/**
+ * Whether a value is a colour pdfkit understands: `#rgb`, `#rrggbb` or one of
+ * its CSS colour names.
  *
  * @param {unknown} value
  * @returns {boolean}
  */
 export function isColor(value) {
-  return (
-    typeof value === 'string' && (COLOR_PATTERN.test(value) || NAMED_COLOR_PATTERN.test(value))
-  );
+  return typeof value === 'string' && (COLOR_PATTERN.test(value) || NAMED_COLORS.has(value));
 }
 
 /**

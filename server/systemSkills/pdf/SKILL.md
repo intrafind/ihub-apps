@@ -56,7 +56,7 @@ If `create_pdf` returns `warnings`, read them. They name content that was skippe
 
 ## Layout blocks: when Markdown is not enough
 
-`blocks` is an optional list that is rendered after the Markdown. Each block has one content key. Typical uses:
+`blocks` is an optional list that is rendered after the Markdown. Pass it as JSON text, like `styles` and `images`. Each block has one content key. Typical uses:
 
 ```json
 [

@@ -1,6 +1,6 @@
 # create_pdf examples
 
-Complete `create_pdf` calls to adapt. Keep the structure, replace the content.
+Complete `create_pdf` calls to adapt. Keep the structure, replace the content. `blocks`, `styles` and `images` are shown as JSON values for readability; pass each one as JSON text.
 
 ## 1. Business report (cover page, table of contents, chart, callout)
 

@@ -1,6 +1,6 @@
 # Layout blocks reference
 
-`blocks` is a JSON array passed to `create_pdf`. Blocks render after `markdown`, in order. Each block is an object with **one content key**. A block may also be a plain string (a paragraph) or an array (blocks stacked vertically).
+`blocks` is a JSON array, passed to `create_pdf` as JSON text. Blocks render after `markdown`, in order. Each block is an object with **one content key**. A block may also be a plain string (a paragraph) or an array (blocks stacked vertically).
 
 Unknown keys or invalid values are dropped, and each drop is reported in the tool's `warnings`.
 
@@ -119,7 +119,7 @@ Use canvas for rules, colour bands and simple decoration; use SVG for charts.
 
 ## Named styles and images
 
-Two more `create_pdf` parameters work with blocks:
+Two more `create_pdf` parameters work with blocks. Like `blocks`, both are passed as JSON text:
 
 - `styles`: `{ "badge": { "fontSize": 8, "bold": true, "color": "#ffffff", "background": "#0f766e" } }`. Refer to one with `"style": "badge"`.
   - Built-in styles: `h1`–`h6`, `paragraph`, `caption`, `small`, `muted`, `quote`, `code`, `title`, `subtitle`, `tableHeader`, `tableCell`.

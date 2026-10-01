@@ -5,58 +5,6 @@
  * anywhere without pulling in the PDF service.
  */
 
-const blockItemSchema = {
-  type: 'object',
-  description:
-    'One layout block. Use exactly one content key per block. The full grammar (styles, spans, canvas shapes, images) is in the pdf skill reference "references/layout-blocks.md".',
-  properties: {
-    markdown: { type: 'string', description: 'Markdown content.' },
-    text: {
-      type: 'string',
-      description: 'Plain text, styled with bold/italics/fontSize/color/alignment.'
-    },
-    callout: {
-      type: 'object',
-      description: 'Shaded box with a coloured edge.',
-      properties: {
-        tone: { type: 'string', enum: ['info', 'success', 'warning', 'danger', 'note'] },
-        title: { type: 'string' },
-        markdown: { type: 'string' }
-      }
-    },
-    columns: {
-      type: 'array',
-      description:
-        'Side-by-side columns, each a block with an optional width ("*", "auto", points or "30%").',
-      items: {
-        type: 'object',
-        properties: {
-          width: { type: 'string' },
-          markdown: { type: 'string' }
-        }
-      }
-    },
-    table: {
-      type: 'object',
-      description: 'Table with repeated header rows, column widths and spans.',
-      properties: {
-        headerRows: { type: 'integer' },
-        widths: { type: 'array', items: { type: 'string' } },
-        body: { type: 'array', items: { type: 'array', items: { type: 'string' } } }
-      }
-    },
-    svg: { type: 'string', description: 'SVG markup (charts, diagrams, logos).' },
-    image: { type: 'string', description: 'A data:image/png or data:image/jpeg base64 URI.' },
-    qr: { type: 'string', description: 'Text or URL to encode as a QR code.' },
-    pageBreak: { type: 'string', enum: ['before', 'after'] },
-    toc: {
-      type: 'object',
-      description: 'Table of contents built from the headings.',
-      properties: { title: { type: 'string' } }
-    }
-  }
-};
-
 export const CREATE_PDF_TOOL = {
   id: 'create_pdf',
   name: { en: 'Create PDF', de: 'PDF erstellen' },
@@ -86,10 +34,13 @@ export const CREATE_PDF_TOOL = {
         description:
           'The document body in Markdown. Supports GFM tables with column alignment, task lists, nested lists, code blocks, quotes, horizontal rules, <sub>/<sup>, and images as data:image/png|jpeg URIs.'
       },
+      // JSON text rather than a schema'd array: the blocks are alternatives
+      // (one content key each), which providers with a strict schema mode
+      // would turn into "every key required".
       blocks: {
-        type: 'array',
-        description: 'Optional layout blocks, rendered after the markdown.',
-        items: blockItemSchema
+        type: 'string',
+        description:
+          'Optional JSON array of layout blocks, rendered after the markdown. Each block has one content key: markdown, text, stack, columns, table, ul, ol, image, svg, canvas, qr, toc, pageBreak, callout or box. Example: [{"callout": {"tone": "warning", "title": "Action required", "markdown": "Renew by **31 March**."}}, {"qr": "https://example.com", "fit": 90}]. The full grammar is in the pdf skill reference "references/layout-blocks.md".'
       },
       theme: {
         type: 'string',

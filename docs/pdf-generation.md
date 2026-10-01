@@ -53,7 +53,7 @@ The model then sees the skill in `<available_skills>`, can load its instructions
 `create_pdf` renders a document from **Markdown**, optionally followed by **layout blocks** for layouts Markdown cannot express. It also sets the document up:
 
 - **Content:** headings, paragraphs, bold/italic/strikethrough, links, nested and task lists, GFM tables with column alignment, code blocks, quotes, horizontal rules, `<sub>`/`<sup>`, page breaks (`\pagebreak`), and images as `data:` URIs.
-- **Layout blocks:** columns, callouts (info/success/warning/danger/note), boxes, tables with merged cells and custom widths, SVG charts and diagrams, canvas shapes, QR codes, named styles.
+- **Layout blocks:** columns, callouts (info/success/warning/danger/note), boxes, tables with merged cells and custom widths, SVG charts and diagrams, canvas shapes, QR codes, named styles. The tool takes `blocks`, `styles` and `images` as JSON text, so the schema works with providers that enforce strict tool schemas.
 - **Document settings:**
   - title, subtitle, author, language
   - theme (`default`, `professional`, `minimal`) and brand colour
@@ -124,8 +124,8 @@ The PDF export is the base the planned signed exports build on (EU AI Act conten
 - **Untrusted layouts:** model-authored layout blocks pass an allowlist sanitiser.
   - Every node type and property is checked; unknown ones are dropped with a warning.
   - Images must be PNG/JPEG `data:` URIs whose bytes match their type.
-  - SVG loses scripts, foreign objects and external images; the SVG renderer's image loader only accepts `data:` URIs as well.
-  - Links must be `http(s):` or `mailto:`. Fonts are limited to the bundled families.
+  - SVG loses scripts, foreign objects and external images; the SVG renderer's image loader only accepts `data:` URIs as well. Every link attribute is checked, `href` and `xlink:href` alike: a link keeps only `http(s):`/`mailto:` targets, and other references must stay inside the SVG (`#id`).
+  - Links must be `http(s):` or `mailto:`. Fonts are limited to the bundled families. Colours are hex values or CSS colour names; anything else is ignored.
   - Size limits: 50,000 layout elements, 5 MB per image, 15 MB of images per document, 500 pages.
   - The renderer's file and URL access policies deny everything. Fonts are loaded from memory.
 
