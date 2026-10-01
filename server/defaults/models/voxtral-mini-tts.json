@@ -1,0 +1,20 @@
+{
+  "id": "voxtral-mini-tts",
+  "modelId": "voxtral-mini-tts-latest",
+  "name": {
+    "en": "Voxtral TTS (Read aloud)",
+    "de": "Voxtral TTS (Vorlesen)"
+  },
+  "description": {
+    "en": "Mistral's Voxtral text-to-speech model. Reads chat messages aloud, streaming the audio as it is generated. Uses the Mistral API key.",
+    "de": "Mistrals Voxtral-Sprachausgabemodell. Liest Chat-Nachrichten vor und streamt das Audio, während es erzeugt wird. Verwendet den Mistral-API-Schlüssel."
+  },
+  "url": "https://api.mistral.ai/v1/audio/speech",
+  "provider": "mistral",
+  "modelType": "tts",
+  "tts": {
+    "voice": "en_paul_neutral"
+  },
+  "enabled": false,
+  "default": false
+}

@@ -109,7 +109,10 @@ import {
   UserGroupIcon,
   PrinterIcon,
   BoltIcon,
-  CursorArrowRaysIcon
+  CursorArrowRaysIcon,
+  SpeakerWaveIcon,
+  PauseIcon,
+  StopIcon
 } from '@heroicons/react/24/outline';
 
 import {
@@ -203,7 +206,10 @@ import {
   UserGroupIcon as SolidUserGroupIcon,
   PrinterIcon as SolidPrinterIcon,
   BoltIcon as SolidBoltIcon,
-  CursorArrowRaysIcon as SolidCursorArrowRaysIcon
+  CursorArrowRaysIcon as SolidCursorArrowRaysIcon,
+  SpeakerWaveIcon as SolidSpeakerWaveIcon,
+  PauseIcon as SolidPauseIcon,
+  StopIcon as SolidStopIcon
 } from '@heroicons/react/24/solid';
 
 // Custom icons not available in Heroicons. They mirror the Heroicons component
@@ -476,7 +482,10 @@ const iconMap = {
   'user-group': { outline: UserGroupIcon, solid: SolidUserGroupIcon },
   printer: { outline: PrinterIcon, solid: SolidPrinterIcon },
   workflow: { outline: BoltIcon, solid: SolidBoltIcon },
-  'cursor-text': { outline: CursorArrowRaysIcon, solid: SolidCursorArrowRaysIcon }
+  'cursor-text': { outline: CursorArrowRaysIcon, solid: SolidCursorArrowRaysIcon },
+  'speaker-wave': { outline: SpeakerWaveIcon, solid: SolidSpeakerWaveIcon },
+  pause: { outline: PauseIcon, solid: SolidPauseIcon },
+  stop: { outline: StopIcon, solid: SolidStopIcon }
 };
 
 const sizeClasses = {

@@ -233,3 +233,37 @@ T-Systems AI Foundation Services (LLM Hub) on a provider instead of on every mod
   API type, so an LLM Hub model is not sent `OPENAI_API_KEY`.
 - Provider names and descriptions are plain text now instead of one field per language. Existing
   entries are converted on upgrade, keeping the text in the platform's default language.
+
+## Read Aloud: A Play Button on Every Chat Message
+
+Chat messages can now be read aloud. A play button in each message's action row sends the message
+to a text-to-speech model. The audio starts within about a second and keeps streaming while the
+rest is generated, so long answers play without waiting. The first supported model is Mistral
+Voxtral TTS.
+
+- **Play, pause, resume, stop:** while a message plays, the button pauses it, and clicking again
+  resumes from the same spot. The square next to it stops playback. Only one message plays at a
+  time. Leaving the chat stops it, and the request to the provider stops with it.
+- **What is read:** the message text without Markdown. Formatting marks, code blocks, images,
+  URLs and citation markers are left out, and tables are read cell by cell. A message that was
+  already played to the end replays from memory without a new request (the last five, up to
+  10 minutes of audio each).
+- **Setup:** enable the new **Voxtral TTS (Read aloud)** model under **Admin → Models**. It needs
+  a Mistral API key: on the model, the `mistral` provider key or `MISTRAL_API_KEY`. Then switch
+  read aloud on under **Admin → Voice Input → Read aloud (text-to-speech)** and pick the model.
+  The **Test** field there speaks a sentence before you save. On the model, **Test** reports how
+  much audio came back.
+- **Voices:** set on the model (**Voice**), for example `en_paul_neutral`, `gb_jane_neutral` or
+  `fr_marie_neutral`. Every voice reads every supported language, with its own accent.
+  **Voices per language** picks a native voice for each language. The language is detected from
+  the message, so a German answer gets the German voice even in an English UI.
+- **Custom voices:** Mistral has no German preset. On the TTS model, **Create a custom voice**
+  records 10–30 seconds from the microphone, or takes an uploaded audio file, and creates a voice
+  from it in the Mistral account, after you confirm the speaker agreed. **Show voices** lists the
+  presets and your own voices, with buttons to use one for a language or delete it.
+- **Who sees it:** users whose groups may use the TTS model. An app turns the button off with
+  `features.textToSpeech: false`.
+- **Model type:** **Text-to-Speech** is a new model type. Like transcription models, TTS models
+  never appear in the chat model selector and are never chosen as the default chat model.
+
+Read aloud is off until an admin switches it on. See `docs/text-to-speech.md`.

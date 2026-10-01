@@ -1,0 +1,297 @@
+/**
+ * Route tests for `POST /api/voice/speech` (read aloud, issue #2642).
+ *
+ * The provider is replaced by a fake that emits PCM, so these cover what the
+ * route owns: input validation, model resolution status codes, the streaming
+ * response headers and body, chunked synthesis, how an upstream failure
+ * before the first audio byte is reported, and that a client going away
+ * aborts the provider request.
+ *
+ * Native ESM: uses `jest.unstable_mockModule` + dynamic imports. Run with
+ * `NODE_OPTIONS=--experimental-vm-modules`.
+ */
+
+import http from 'node:http';
+import { jest } from '@jest/globals';
+import request from 'supertest';
+import express from 'express';
+
+const ttsModel = {
+  id: 'voxtral-mini-tts',
+  modelId: 'voxtral-mini-tts-latest',
+  provider: 'mistral',
+  modelType: 'tts',
+  enabled: true
+};
+
+const state = {
+  platform: {},
+  models: [ttsModel],
+  permissions: new Set(['*']),
+  calls: [],
+  failWith: null,
+  // When set, the fake provider streams until its signal aborts.
+  streamUntilAbort: false,
+  // When set, the fake provider finishes without emitting any audio.
+  silent: false,
+  signals: [],
+  resolvedLanguages: []
+};
+
+class TtsUpstreamError extends Error {
+  constructor(message, { status } = {}) {
+    super(message);
+    this.name = 'TtsUpstreamError';
+    this.status = status;
+  }
+}
+
+jest.unstable_mockModule('../middleware/authRequired.js', () => ({
+  authRequired: (req, res, next) => {
+    req.user = { id: 'u1', permissions: { models: state.permissions } };
+    next();
+  }
+}));
+
+jest.unstable_mockModule('../configCache.js', () => ({
+  default: {
+    getPlatform: () => state.platform,
+    getModels: () => ({ data: state.models })
+  }
+}));
+
+jest.unstable_mockModule('../tts/mistralTtsProvider.js', () => ({
+  default: {
+    id: 'mistral',
+    sampleRate: 24000,
+    resolveUpstream: (model, { language } = {}) => {
+      state.resolvedLanguages.push(language);
+      return { model: model.modelId, voice: 'v' };
+    },
+    synthesize: async ({ text, signal, onAudio }) => {
+      state.calls.push(text);
+      if (state.failWith) throw state.failWith;
+      if (state.streamUntilAbort) {
+        state.signals.push(signal);
+        while (!signal.aborted) {
+          await onAudio(Buffer.alloc(4800));
+          await new Promise(resolve => setTimeout(resolve, 5));
+        }
+        const error = new Error('The operation was aborted');
+        error.name = 'AbortError';
+        throw error;
+      }
+      if (!state.silent) await onAudio(Buffer.from([1, 0, 2, 0]));
+      return { usage: null };
+    }
+  }
+}));
+
+const { default: registerVoiceRoutes } = await import('../routes/voiceRoutes.js');
+
+const app = express();
+app.use(express.json({ limit: '2mb' }));
+registerVoiceRoutes(app);
+
+const binary = (res, cb) => {
+  const chunks = [];
+  res.on('data', chunk => chunks.push(chunk));
+  res.on('end', () => cb(null, Buffer.concat(chunks)));
+};
+
+beforeEach(() => {
+  state.platform = { speech: { tts: { enabled: true, defaultModelId: 'voxtral-mini-tts' } } };
+  state.models = [ttsModel];
+  state.permissions = new Set(['*']);
+  state.calls = [];
+  state.failWith = null;
+  state.streamUntilAbort = false;
+  state.silent = false;
+  state.signals = [];
+  state.resolvedLanguages = [];
+});
+
+describe('POST /api/voice/speech', () => {
+  test('streams 16-bit PCM with its format in the headers', async () => {
+    const res = await request(app)
+      .post('/api/voice/speech')
+      .send({ text: 'Hello **world**.' })
+      .buffer(true)
+      .parse(binary);
+    expect(res.status).toBe(200);
+    expect(res.headers['content-type']).toBe('application/octet-stream');
+    expect(res.headers['x-audio-encoding']).toBe('pcm_s16le');
+    expect(res.headers['x-audio-sample-rate']).toBe('24000');
+    expect(res.headers['x-audio-channels']).toBe('1');
+    expect(res.headers['x-accel-buffering']).toBe('no');
+    expect(res.body).toEqual(Buffer.from([1, 0, 2, 0]));
+    // The provider gets speakable text, not Markdown.
+    expect(state.calls).toEqual(['Hello world.']);
+  });
+
+  test('synthesizes a long message piece by piece into one stream', async () => {
+    const text = 'A sentence that is long enough to matter here. '.repeat(80);
+    const res = await request(app)
+      .post('/api/voice/speech')
+      .send({ text })
+      .buffer(true)
+      .parse(binary);
+    expect(res.status).toBe(200);
+    expect(state.calls.length).toBeGreaterThan(1);
+    expect(res.body.length).toBe(state.calls.length * 4);
+  });
+
+  test('a client that goes away aborts the provider request and the rest', async () => {
+    state.streamUntilAbort = true;
+    const server = app.listen(0, '127.0.0.1');
+    await new Promise(resolve => server.once('listening', resolve));
+    try {
+      const body = JSON.stringify({ text: 'A sentence long enough to matter. '.repeat(120) });
+      await new Promise((resolve, reject) => {
+        const req = http.request(
+          {
+            host: '127.0.0.1',
+            port: server.address().port,
+            path: '/api/voice/speech',
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+          },
+          res => {
+            res.once('data', () => {
+              // Audio is flowing: hang up, as a stopped player does.
+              req.destroy();
+              resolve();
+            });
+          }
+        );
+        req.on('error', error => {
+          if (error.code !== 'ECONNRESET') reject(error);
+        });
+        req.end(body);
+      });
+      for (let i = 0; i < 100 && !state.signals[0]?.aborted; i++) {
+        await new Promise(resolve => setTimeout(resolve, 10));
+      }
+      expect(state.signals[0].aborted).toBe(true);
+      // The answer had several pieces; none after the first was requested.
+      await new Promise(resolve => setTimeout(resolve, 50));
+      expect(state.calls).toHaveLength(1);
+    } finally {
+      await new Promise(resolve => server.close(resolve));
+    }
+  });
+
+  test('a client gone before the handler runs starts no synthesis', async () => {
+    // The socket closes while the request is still in middleware, so its
+    // `close` event fires before the route could listen for it.
+    const hungUp = express();
+    hungUp.use(express.json());
+    hungUp.use((req, res, next) => {
+      req.socket.destroy();
+      setTimeout(next, 20);
+    });
+    registerVoiceRoutes(hungUp);
+    const server = hungUp.listen(0, '127.0.0.1');
+    await new Promise(resolve => server.once('listening', resolve));
+    try {
+      await new Promise(resolve => {
+        const req = http.request({
+          host: '127.0.0.1',
+          port: server.address().port,
+          path: '/api/voice/speech',
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' }
+        });
+        req.on('error', () => resolve());
+        req.on('close', () => resolve());
+        req.end(JSON.stringify({ text: 'Hello there.' }));
+      });
+      await new Promise(resolve => setTimeout(resolve, 60));
+      expect(state.calls).toHaveLength(0);
+    } finally {
+      await new Promise(resolve => server.close(resolve));
+    }
+  });
+
+  test('picks the voice by the language of the message', async () => {
+    const res = await request(app)
+      .post('/api/voice/speech')
+      .send({
+        text: 'Die Sprachausgabe liest Antworten vor. Das ist praktisch, wenn man unterwegs ist.',
+        language: 'en'
+      })
+      .buffer(true)
+      .parse(binary);
+    expect(res.status).toBe(200);
+    expect(res.headers['x-speech-language']).toBe('de');
+    expect(state.resolvedLanguages).toEqual(['de']);
+  });
+
+  test('uses the UI language when the text is too short to tell', async () => {
+    const res = await request(app)
+      .post('/api/voice/speech')
+      .send({ text: 'Hallo.', language: 'fr-FR' })
+      .buffer(true)
+      .parse(binary);
+    expect(res.headers['x-speech-language']).toBe('fr');
+  });
+
+  test('400 without text', async () => {
+    const res = await request(app).post('/api/voice/speech').send({ text: '  ' });
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe('invalid-text');
+  });
+
+  test('503 when read aloud is not configured', async () => {
+    state.platform = { speech: { tts: { enabled: false, defaultModelId: 'voxtral-mini-tts' } } };
+    const res = await request(app).post('/api/voice/speech').send({ text: 'Hi' });
+    expect(res.status).toBe(503);
+    expect(res.body.code).toBe('not-configured');
+  });
+
+  test('403 when the user may not use the model', async () => {
+    state.permissions = new Set(['some-chat-model']);
+    const res = await request(app).post('/api/voice/speech').send({ text: 'Hi' });
+    expect(res.status).toBe(403);
+    expect(state.calls).toHaveLength(0);
+  });
+
+  test('404 for a model id that is not a TTS model', async () => {
+    const res = await request(app).post('/api/voice/speech').send({ text: 'Hi', modelId: 'gpt-4' });
+    expect(res.status).toBe(404);
+  });
+
+  test('422 when nothing is left to read', async () => {
+    const res = await request(app)
+      .post('/api/voice/speech')
+      .send({ text: '```js\nconsole.log(1)\n```' });
+    expect(res.status).toBe(422);
+    expect(res.body.code).toBe('no-speakable-text');
+  });
+
+  test('502 with the provider message when it fails before any audio', async () => {
+    state.failWith = new TtsUpstreamError('Mistral rejected the API key (HTTP 401)', {
+      status: 401
+    });
+    const res = await request(app).post('/api/voice/speech').send({ text: 'Hi' });
+    expect(res.status).toBe(502);
+    expect(res.body).toEqual({
+      error: 'Mistral rejected the API key (HTTP 401)',
+      code: 'upstream-error'
+    });
+  });
+
+  test('502 when the provider finishes without any audio', async () => {
+    state.silent = true;
+    const res = await request(app).post('/api/voice/speech').send({ text: 'Hi' });
+    expect(res.status).toBe(502);
+    expect(res.body).toEqual({ error: 'No audio was returned', code: 'no-audio' });
+  });
+
+  test('an unexpected error does not leak its message', async () => {
+    state.failWith = new Error('ECONNREFUSED 10.0.0.5:443');
+    const res = await request(app).post('/api/voice/speech').send({ text: 'Hi' });
+    expect(res.status).toBe(502);
+    expect(res.body.error).toBe('Text-to-speech failed');
+  });
+});

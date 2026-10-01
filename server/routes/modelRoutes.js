@@ -13,18 +13,22 @@ import { findByIdCaseInsensitive } from '../utils/resourceLookup.js';
 /**
  * Strip server-side secrets before a model is sent to the browser.
  * - `apiKey` (an encrypted ciphertext blob) is removed for EVERY model.
- * - `url` is removed for transcription models so a self-hosted vLLM endpoint
- *   never reaches the browser (the acceptance criterion for issue #1927). Chat
- *   models keep their `url` (the client shows/uses it as today).
+ * - `url` is removed for transcription and text-to-speech models so a
+ *   self-hosted endpoint never reaches the browser (the acceptance criterion
+ *   for issue #1927). Chat models keep their `url` (the client shows/uses it
+ *   as today).
  */
 function sanitizeModelForPublic(model) {
   const clean = { ...model };
   delete clean.apiKey;
-  if (clean.modelType === 'transcription') {
+  if (clean.modelType === 'transcription' || clean.modelType === 'tts') {
     delete clean.url;
   }
   return clean;
 }
+
+/** Model types `GET /api/models?type=` lists. */
+const MODEL_TYPES = ['chat', 'transcription', 'tts'];
 
 export default function registerModelRoutes(app, { getLocalizedError }) {
   /**
@@ -117,17 +121,18 @@ export default function registerModelRoutes(app, { getLocalizedError }) {
       // Filter by model type. Default to chat models so transcription models
       // never leak into the chat model selector, magic prompt, compare mode,
       // workflows, or the default-model fallback (G9). `?type=transcription`
-      // returns the permitted transcription models (for the app editor picker).
+      // returns the permitted transcription models (for the app editor picker),
+      // `?type=tts` the permitted text-to-speech models (read aloud).
       // Unknown types are a 400, not a silent fallback to chat — otherwise a
       // future model type would silently return the wrong list.
       const requestedType = req.query.type ?? 'chat';
-      if (requestedType !== 'chat' && requestedType !== 'transcription') {
+      if (!MODEL_TYPES.includes(requestedType)) {
         return res.status(400).json({ error: `Unknown model type: ${requestedType}` });
       }
       const typedModels = models.filter(m => (m.modelType || 'chat') === requestedType);
 
       // Strip server-side secrets (encrypted apiKey for all; url for
-      // transcription models) so they never reach the browser (G2).
+      // transcription and TTS models) so they never reach the browser (G2).
       const sanitizedModels = typedModels.map(sanitizeModelForPublic);
 
       // Discriminate the ETag by type so the chat and transcription lists don't
@@ -171,10 +176,10 @@ export default function registerModelRoutes(app, { getLocalizedError }) {
           return sendFailedOperationError(res, 'load models configuration');
         }
         const model = findByIdCaseInsensitive(models, modelId);
-        // Transcription models are not exposed through this public chat-model
-        // route (G9); their internal ws:// url / apiKey must never reach the
-        // browser. Treat them as not-found here.
-        if (!model || model.modelType === 'transcription') {
+        // Transcription and TTS models are not exposed through this public
+        // chat-model route (G9); their internal url / apiKey must never reach
+        // the browser. Treat them as not-found here.
+        if (!model || (model.modelType || 'chat') !== 'chat') {
           const errorMessage = await getLocalizedError('modelNotFound', {}, language);
           return sendNotFound(res, errorMessage);
         }
