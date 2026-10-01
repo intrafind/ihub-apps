@@ -310,7 +310,8 @@
       "continueButton": "Weiter zu {{appName}}",
       "warning": "Sie verlassen iHub Apps",
       "openingInNewTab": "Wird in neuem Tab geöffnet...",
-      "redirecting": "Weiterleitung..."
+      "redirecting": "Weiterleitung...",
+      "invalidUrl": "Für diese App ist keine gültige Webadresse hinterlegt. Nur http- und https-Links können geöffnet werden."
     },
     "iframeApp": {
       "title": "Eingebettete Anwendung",
