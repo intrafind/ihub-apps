@@ -134,6 +134,9 @@ function slim(envelope) {
         resultPreview: _preview,
         scheduledTaskProposal: _proposal,
         authRequired: _auth,
+        // The bytes of a generated file; the stored answer keeps the file as
+        // a `document` artifact instead.
+        files: _files,
         ...rest
       } = data || {};
       return { ...envelope, data: rest };

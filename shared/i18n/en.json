@@ -3402,6 +3402,13 @@
         "value": "{{free}} free",
         "valueTitle": "{{percent}} of {{total}} used"
       }
+    },
+    "skills": {
+      "system": "System",
+      "systemTooltip": "Delivered with iHub. It cannot be changed or deleted.",
+      "systemNotice": "This is a system skill delivered with iHub. It is updated with iHub and cannot be changed or deleted here. Enable it for an app in the app’s Skills settings.",
+      "providedTools": "Tools this skill provides:",
+      "view": "View"
     }
   },
   "cloudStorage": {
@@ -3666,6 +3673,15 @@
     "imageNotStored": "This image could not be stored and is no longer available.",
     "loadingImage": "Loading image…",
     "saveAsPrompt": "Save as prompt",
+    "generatedFiles": {
+      "pages_one": "{{count}} page",
+      "pages_other": "{{count}} pages",
+      "download": "Download",
+      "downloadNamed": "Download {{name}}",
+      "expired": "This file is no longer available",
+      "failed": "Download failed. Please try again.",
+      "notKept": "This file was not kept with the chat"
+    },
     "readAloud": "Read aloud",
     "readAloudLoading": "Loading audio… click to cancel",
     "readAloudPause": "Pause",

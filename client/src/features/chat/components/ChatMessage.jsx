@@ -66,6 +66,7 @@ import McpAppViews from '../mcpApps/McpAppViews';
 import McpConnectCards from '../mcpApps/McpConnectCard';
 import ScheduledTaskProposalCards from '../../tasks/components/ScheduledTaskProposalCard';
 import ScheduleThisAction from '../../tasks/components/ScheduleThisAction';
+import GeneratedFiles from './GeneratedFiles';
 import './ChatMessage.css';
 
 function ChatMessage({
@@ -930,6 +931,10 @@ function ChatMessage({
           <McpConnectCards prompts={message.mcpAuthRequired} readOnly={readOnly} />
         )}
         {renderContent()}
+        {/* Files the answer's tools generated (a PDF from the pdf skill). */}
+        {!isUser && message.generatedFiles?.length > 0 && (
+          <GeneratedFiles files={message.generatedFiles} chatId={chatId} />
+        )}
         {isUser && hasVariables && <MessageVariables variables={message.variables} />}
 
         {/* A shared chat carries an upload only as its name: the file itself

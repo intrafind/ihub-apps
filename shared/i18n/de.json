@@ -553,6 +553,15 @@
     "imageNotStored": "Dieses Bild konnte nicht gespeichert werden und ist nicht mehr verfügbar.",
     "loadingImage": "Bild wird geladen…",
     "saveAsPrompt": "Als Prompt speichern",
+    "generatedFiles": {
+      "pages_one": "{{count}} Seite",
+      "pages_other": "{{count}} Seiten",
+      "download": "Herunterladen",
+      "downloadNamed": "{{name}} herunterladen",
+      "expired": "Diese Datei ist nicht mehr verfügbar",
+      "failed": "Download fehlgeschlagen. Bitte versuchen Sie es erneut.",
+      "notKept": "Diese Datei wurde nicht mit dem Chat gespeichert"
+    },
     "readAloud": "Vorlesen",
     "readAloudLoading": "Audio wird geladen… Klicken zum Abbrechen",
     "readAloudPause": "Pausieren",
@@ -3658,6 +3667,13 @@
         "value": "{{free}} frei",
         "valueTitle": "{{percent}} von {{total}} belegt"
       }
+    },
+    "skills": {
+      "system": "System",
+      "systemTooltip": "Wird mit iHub ausgeliefert. Kann nicht geändert oder gelöscht werden.",
+      "systemNotice": "Dies ist ein System-Skill, der mit iHub ausgeliefert wird. Er wird mit iHub aktualisiert und kann hier weder geändert noch gelöscht werden. Aktivieren Sie ihn für eine App in den Skill-Einstellungen der App.",
+      "providedTools": "Werkzeuge dieses Skills:",
+      "view": "Ansehen"
     }
   },
   "cloudStorage": {

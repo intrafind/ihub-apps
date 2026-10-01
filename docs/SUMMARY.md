@@ -51,6 +51,7 @@
     - [MCP Integration](mcp-integration.md)
     - [Remote A2A Agents as Tools](a2a-agents.md)
     - [Ask User Tool](ask-user-tool.md)
+    - [PDF Generation & System Skills](pdf-generation.md)
     - [Structured Output](structured-output.md)
     - [Tools (Legacy)](tools.md)
     - [Compare Mode](compare-mode.md)

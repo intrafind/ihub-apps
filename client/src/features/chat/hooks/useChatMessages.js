@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { debugLog } from '../../../utils/debugLog';
+import { generatedFilesFromArtifacts } from '../../../../../shared/generatedFiles.js';
 import { storedSourceSet } from '../../../../../shared/sources/index.js';
 
 /**
@@ -17,6 +18,24 @@ const STORED_ACTIVITY_FIELDS = [
 ];
 
 /**
+ * A message without the bytes of its generated files, for sessionStorage: a
+ * PDF is megabytes, like a picture, and its card then says the file is gone,
+ * as a picture's placeholder does.
+ *
+ * @param {Object} msg - Chat message.
+ * @returns {Object} The message, or a copy without the bytes.
+ */
+function withoutGeneratedFileData(msg) {
+  if (!msg.generatedFiles?.some(file => file.data)) return msg;
+  return {
+    ...msg,
+    generatedFiles: msg.generatedFiles.map(({ data, ...file }) =>
+      data ? { ...file, unavailable: 'expired' } : file
+    )
+  };
+}
+
+/**
  * One message of a stored chat transcript, as the chat UI renders it.
  *
  * Shape on the wire (`GET /api/chats/:chatId` → `messages[]`):
@@ -28,7 +47,8 @@ const STORED_ACTIVITY_FIELDS = [
  * id, and a locally minted `user-<ts>-<rand>` means nothing to the store.
  *
  * An artifact is anything the turn produced that is content in its own right —
- * a generated image today. Its descriptor carries no payload:
+ * a generated image, or a file a system skill tool generated (kind
+ * `document`, surfaced as `generatedFiles`). Its descriptor carries no payload:
  * `{ id, kind, mimeType, bytes }`, or `{ kind, mimeType, bytes, unavailable }`
  * for one the server declined to store. The bytes are fetched per artifact
  * when the message is rendered, so a transcript with a dozen pictures in it
@@ -88,6 +108,11 @@ export function transformStoredMessage(msg) {
     message.artifacts = msg.artifacts;
     const images = msg.artifacts.filter(artifact => (artifact?.kind || 'image') === 'image');
     if (images.length > 0) message.images = images;
+    // Files the turn's tools generated (a PDF from `create_pdf`) are stored as
+    // `document` artifacts; they come back as the download cards a live turn
+    // shows, fetched by artifact id like a stored picture.
+    const generatedFiles = generatedFilesFromArtifacts(msg.artifacts);
+    if (generatedFiles.length > 0) message.generatedFiles = generatedFiles;
   }
   if (msg.error) {
     // A stopped turn kept whatever it had already produced — that is a
@@ -366,10 +391,11 @@ function useChatMessages(chatId = 'default', { ephemeral = false, serverBacked =
       // Strip image data to avoid sessionStorage quota issues
       // Images can be very large (base64 encoded) and exceed the ~5-10MB quota
       const messagesWithoutImageData = persistableMessages.map(msg => {
+        let persisted = msg;
         if (msg.images && msg.images.length > 0) {
           // Keep metadata but remove the actual image data
-          return {
-            ...msg,
+          persisted = {
+            ...persisted,
             images: msg.images.map(img => ({
               mimeType: img.mimeType,
               // Mark that image data was present but not persisted
@@ -377,7 +403,7 @@ function useChatMessages(chatId = 'default', { ephemeral = false, serverBacked =
             }))
           };
         }
-        return msg;
+        return withoutGeneratedFileData(persisted);
       });
 
       // Debug logging for image persistence
@@ -412,7 +438,7 @@ function useChatMessages(chatId = 'default', { ephemeral = false, serverBacked =
           const textOnlyMessages = messages
             .filter(msg => !msg.isGreeting && !msg.isLiveTranscript)
             .map(msg => {
-              const { images: _images, ...rest } = msg;
+              const { images: _images, ...rest } = withoutGeneratedFileData(msg);
               return rest;
             });
           if (textOnlyMessages.length > 0) {
@@ -766,6 +792,7 @@ function useChatMessages(chatId = 'default', { ephemeral = false, serverBacked =
           mcpApps: _mcpApps,
           mcpAuthRequired: _mcpAuthRequired,
           scheduledTaskProposals: _scheduledTaskProposals,
+          generatedFiles: _generatedFiles,
           ...apiMsg
         } = msg;
         const content = rawContent !== undefined ? rawContent : apiMsg.content;

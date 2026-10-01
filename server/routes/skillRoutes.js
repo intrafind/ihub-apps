@@ -35,11 +35,12 @@ export default function registerSkillRoutes(app) {
         }
 
         // Return only safe metadata (no paths)
-        const safeSkills = skills.map(({ name, displayName, description, metadata }) => ({
+        const safeSkills = skills.map(({ name, displayName, description, metadata, isSystem }) => ({
           name,
           displayName,
           description,
-          metadata
+          metadata,
+          isSystem: isSystem === true
         }));
 
         res.json(safeSkills);
