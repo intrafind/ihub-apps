@@ -26,6 +26,9 @@ import ToolActivity from './ToolActivity';
 import WorkflowStepIndicator from './WorkflowStepIndicator';
 import HumanCheckpoint from '../../workflows/components/HumanCheckpoint';
 import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
+import ReadAloudButton from '../../voice/components/ReadAloudButton';
+import { useReadAloudAvailability } from '../../voice/hooks/useReadAloud';
+import useReadAloudPlayback from '../../voice/hooks/useReadAloudPlayback';
 
 /**
  * Renders a workflow checkpoint inline in a chat bubble. The checkpoint is an
@@ -137,6 +140,10 @@ function ChatMessage({
   const fallbackId = useId();
   const messageKey = message.id || fallbackId;
   const answerText = typeof message.content === 'string' ? message.content : '';
+  // Read aloud: offered on every finished message when a TTS model is set up
+  // in Admin → Voice Input and this app has not opted out.
+  const readAloud = useReadAloudAvailability(app);
+  const readAloudPlayback = useReadAloudPlayback(messageKey);
   const webCitationView = useMemo(
     () => (!isUser && message.webSearch ? resolveCitations(answerText, message.webSearch) : null),
     [isUser, answerText, message.webSearch]
@@ -162,6 +169,12 @@ function ChatMessage({
   };
 
   const [editedContent, setEditedContent] = useState(getEditableContent());
+  // What read aloud speaks: the user's own words, or the answer without its
+  // reasoning (thoughts live apart in message.thoughts).
+  const speechText = (() => {
+    const text = isUser ? getEditableContent() : answerText;
+    return typeof text === 'string' && text.trim() ? text : '';
+  })();
   const editTextareaRef = useRef(null);
   const [showActions, setShowActions] = useState(false);
   const [insertDropdownOpen, setInsertDropdownOpen] = useState(false);
@@ -1206,7 +1219,7 @@ function ChatMessage({
         <div className="mt-1 px-1">
           <div
             className={`flex items-center ${compact ? 'gap-1 flex-wrap' : 'gap-3'} text-xs transition-opacity duration-200 ${
-              showActions ? 'opacity-100' : 'opacity-0'
+              showActions || readAloudPlayback.state !== 'idle' ? 'opacity-100' : 'opacity-0'
             } ${isUser ? 'text-gray-500' : 'text-gray-500'}`}
           >
             {/* Standard actions first */}
@@ -1266,6 +1279,14 @@ function ChatMessage({
             >
               <Icon name="download" size="sm" />
             </button>
+
+            {readAloud.available && !message.loading && !isError && !isEditing && speechText && (
+              <ReadAloudButton
+                messageId={messageKey}
+                text={speechText}
+                playback={readAloudPlayback}
+              />
+            )}
 
             {/* Open in Canvas button for assistant messages */}
             {!isUser && !isError && canvasEnabled && onOpenInCanvas && (

@@ -10,10 +10,17 @@ import {
   isSpeechServiceEnabled
 } from '../../voice/utils/speechService';
 import VoiceInputTestPanel from '../components/voice/VoiceInputTestPanel';
+import ReadAloudButton from '../../voice/components/ReadAloudButton';
+import useReadAloudPlayback from '../../voice/hooks/useReadAloudPlayback';
+import { stop as stopReadAloud } from '../../voice/utils/readAloud';
+
+/** Playback id of the read-aloud test, apart from every chat message. */
+const READ_ALOUD_TEST_ID = 'admin-read-aloud-test';
 
 const DEFAULT_SPEECH = {
   defaultService: 'browser',
   transcription: { defaultModelId: '' },
+  tts: { enabled: false, defaultModelId: '' },
   realtime: { enabled: false, url: 'ws://localhost:8080/v1/realtime', model: '', apiKey: '' },
   azure: { enabled: false, host: '', region: '', subscriptionKey: '' }
 };
@@ -21,6 +28,7 @@ const DEFAULT_SPEECH = {
 const toFormSpeech = (speech = {}) => ({
   defaultService: speech.defaultService || DEFAULT_SPEECH.defaultService,
   transcription: { ...DEFAULT_SPEECH.transcription, ...(speech.transcription || {}) },
+  tts: { ...DEFAULT_SPEECH.tts, ...(speech.tts || {}) },
   realtime: { ...DEFAULT_SPEECH.realtime, ...(speech.realtime || {}) },
   azure: { ...DEFAULT_SPEECH.azure, ...(speech.azure || {}) }
 });
@@ -33,6 +41,7 @@ const toFormSpeech = (speech = {}) => ({
 const toPublicSpeech = speech => ({
   defaultService: speech.defaultService,
   transcription: { defaultModelId: speech.transcription.defaultModelId },
+  tts: { enabled: !!speech.tts.enabled, defaultModelId: speech.tts.defaultModelId },
   realtime: { enabled: !!speech.realtime.enabled },
   azure: {
     enabled: !!speech.azure.enabled,
@@ -65,6 +74,11 @@ function AdminVoiceInputPage() {
   const [azureTesting, setAzureTesting] = useState(false);
   const [azureTestResult, setAzureTestResult] = useState(null);
   const [transcriptionModels, setTranscriptionModels] = useState(null);
+  // Every TTS model, disabled ones included: the seeded Voxtral TTS model
+  // ships disabled, and the picker says so instead of hiding it.
+  const [ttsModels, setTtsModels] = useState(null);
+  const [ttsSample, setTtsSample] = useState('');
+  const readAloudTest = useReadAloudPlayback(READ_ALOUD_TEST_ID);
 
   useEffect(() => {
     loadConfig();
@@ -82,8 +96,13 @@ function AdminVoiceInputPage() {
         setTranscriptionModels(
           models.filter(m => m.modelType === 'transcription' && m.enabled !== false)
         );
+        setTtsModels(models.filter(m => m.modelType === 'tts'));
       })
-      .catch(() => active && setTranscriptionModels([]));
+      .catch(() => {
+        if (!active) return;
+        setTranscriptionModels([]);
+        setTtsModels([]);
+      });
     return () => {
       active = false;
     };
@@ -123,6 +142,7 @@ function AdminVoiceInputPage() {
         ...(platform.speech || {}),
         defaultService: config.defaultService,
         transcription: { ...(platform.speech?.transcription || {}), ...config.transcription },
+        tts: { ...(platform.speech?.tts || {}), ...config.tts },
         realtime: config.realtime,
         azure: config.azure
       };
@@ -254,6 +274,16 @@ function AdminVoiceInputPage() {
     !!defaultModelId &&
     Array.isArray(transcriptionModels) &&
     !transcriptionModels.some(m => m.id === defaultModelId);
+  const ttsModelId = config.tts.defaultModelId;
+  const ttsModel = (ttsModels || []).find(m => m.id === ttsModelId);
+  const ttsModelMissing = !!ttsModelId && Array.isArray(ttsModels) && !ttsModel;
+  const ttsModelDisabled = !!ttsModel && ttsModel.enabled === false;
+  const ttsSampleText =
+    ttsSample.trim() ||
+    t(
+      'admin.voiceInput.tts.sampleText',
+      'Hello! This is how answers sound when they are read aloud.'
+    );
 
   const renderTestResult = result =>
     result && (
@@ -576,6 +606,126 @@ function AdminVoiceInputPage() {
               'Checks the key and region from the iHub server by requesting a token, using the values above. Speech recognition itself runs in the browser: use the live dictation test below.'
             )}
           </p>
+        </div>
+
+        {/* Read aloud (text-to-speech) */}
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6 space-y-4">
+          <div>
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+              {t('admin.voiceInput.tts.title', 'Read aloud (text-to-speech)')}
+            </h2>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+              {t(
+                'admin.voiceInput.tts.description',
+                'Adds a play button to every chat message. The message is spoken by the text-to-speech model below and the audio streams while it is generated. Users only see the button when their groups may use the model; an app opts out with features.textToSpeech: false.'
+              )}
+            </p>
+          </div>
+
+          <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+            <input
+              type="checkbox"
+              checked={!!config.tts.enabled}
+              onChange={e =>
+                setConfig(prev => ({ ...prev, tts: { ...prev.tts, enabled: e.target.checked } }))
+              }
+              className="rounded-sm border-gray-300 text-indigo-600 focus:ring-indigo-500"
+            />
+            {t('admin.voiceInput.tts.enabled', 'Show a read-aloud button on chat messages')}
+          </label>
+
+          <div>
+            <label className={labelClass} htmlFor="tts-model">
+              {t('admin.voiceInput.tts.model', 'Text-to-speech model')}
+            </label>
+            <select
+              id="tts-model"
+              value={ttsModelId}
+              onChange={e => {
+                // The test belongs to the model it was started with; choosing
+                // another one (or None, which hides the controls) ends it.
+                stopReadAloud(READ_ALOUD_TEST_ID);
+                setConfig(prev => ({
+                  ...prev,
+                  tts: { ...prev.tts, defaultModelId: e.target.value }
+                }));
+              }}
+              className={inputClass}
+            >
+              <option value="">{t('admin.voiceInput.defaults.noModel', 'None')}</option>
+              {ttsModelMissing && <option value={ttsModelId}>{ttsModelId}</option>}
+              {(ttsModels || []).map(m => (
+                <option key={m.id} value={m.id}>
+                  {getLocalizedContent(m.name, i18n.language) || m.id}
+                  {m.enabled === false
+                    ? ` (${t('admin.voiceInput.tts.modelDisabled', 'disabled')})`
+                    : ''}
+                </option>
+              ))}
+            </select>
+            <p
+              className={`mt-1 text-xs ${
+                ttsModelMissing || ttsModelDisabled || (config.tts.enabled && !ttsModelId)
+                  ? 'text-amber-600 dark:text-amber-400'
+                  : 'text-gray-500 dark:text-gray-400'
+              }`}
+            >
+              {ttsModelMissing
+                ? t(
+                    'admin.voiceInput.tts.modelMissing',
+                    'This model no longer exists, so no read-aloud button is shown.'
+                  )
+                : ttsModelDisabled
+                  ? t(
+                      'admin.voiceInput.tts.modelDisabledHint',
+                      'This model is disabled, so no read-aloud button is shown. Enable it under Admin → Models and make sure it has an API key.'
+                    )
+                  : config.tts.enabled && !ttsModelId
+                    ? t(
+                        'admin.voiceInput.tts.noModelHint',
+                        'Choose a model, or no read-aloud button is shown.'
+                      )
+                    : t(
+                        'admin.voiceInput.tts.modelHint',
+                        'Models with the type "Text-to-Speech" from Admin → Models. The voice is set on the model.'
+                      )}
+            </p>
+          </div>
+
+          <div className="pt-2 border-t border-gray-100 dark:border-gray-700 space-y-2">
+            <label className={labelClass} htmlFor="tts-sample">
+              {t('admin.voiceInput.tts.test', 'Test')}
+            </label>
+            <div className="flex items-center gap-3">
+              <input
+                id="tts-sample"
+                type="text"
+                value={ttsSample}
+                onChange={e => setTtsSample(e.target.value)}
+                placeholder={ttsSampleText}
+                className="block w-full flex-1 rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+              />
+              {ttsModelId && !ttsModelMissing && (
+                <span className="flex items-center gap-2 text-gray-600 dark:text-gray-300">
+                  <ReadAloudButton
+                    messageId={READ_ALOUD_TEST_ID}
+                    text={ttsSampleText}
+                    modelId={ttsModelId}
+                    playback={readAloudTest}
+                  />
+                </span>
+              )}
+            </div>
+            {readAloudTest.state === 'error' && (
+              <p className="text-sm text-red-600 dark:text-red-400">{readAloudTest.error}</p>
+            )}
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              {t(
+                'admin.voiceInput.tts.testHint',
+                'Speaks the text with the selected model, the way a chat message is read. Works before saving, but the model must be enabled.'
+              )}
+            </p>
+          </div>
         </div>
 
         <div className="flex justify-end">
