@@ -15,9 +15,95 @@ import {
 import { getProxyConfig, redactUrlSecrets } from '../../utils/httpConfig.js';
 import config from '../../config.js';
 import logger from '../../utils/logger.js';
+import {
+  BUILT_IN_LLM_PROVIDERS,
+  CUSTOM_PROVIDER_API_TYPES,
+  getLinkedModels,
+  getProviderApiType,
+  isCustomLlmProvider
+} from '../../services/llmProviders.js';
 
 /** The provider configuration, as a path relative to `contents/`. */
 const PROVIDERS_FILE = 'config/providers.json';
+
+/** Categories a provider can be created in. */
+const PROVIDER_CATEGORIES = ['llm', 'websearch', 'custom'];
+
+/**
+ * Validate and tidy the editable fields of a provider entry, in place.
+ *
+ * `name` and `description` are plain strings (V141 converted the per-language
+ * objects). A custom LLM provider needs the `apiType` its endpoint speaks and
+ * may carry a `baseUrl` used to list its models; a built-in LLM provider's API
+ * type is its id, so an `apiType` on it is dropped. Other categories have
+ * neither field.
+ *
+ * @param {Object} provider - Provider entry from the request body
+ * @returns {string|null} Error message, or null when the entry is valid
+ */
+function normalizeProviderFields(provider) {
+  if (typeof provider.name !== 'string' || !provider.name.trim()) {
+    return 'Provider name is required and must be text';
+  }
+  provider.name = provider.name.trim();
+  if (provider.description === undefined || provider.description === null) {
+    provider.description = '';
+  }
+  if (typeof provider.description !== 'string') {
+    return 'Provider description must be text';
+  }
+  provider.description = provider.description.trim();
+
+  // Entries without a category are the original built-in LLM providers.
+  if ((provider.category || 'llm') !== 'llm') {
+    delete provider.apiType;
+    delete provider.baseUrl;
+    return null;
+  }
+
+  if (BUILT_IN_LLM_PROVIDERS.includes(provider.id)) {
+    delete provider.apiType;
+  } else if (!CUSTOM_PROVIDER_API_TYPES.includes(provider.apiType)) {
+    return `API type must be one of: ${CUSTOM_PROVIDER_API_TYPES.join(', ')}`;
+  }
+
+  if (provider.baseUrl === undefined || provider.baseUrl === null || provider.baseUrl === '') {
+    delete provider.baseUrl;
+  } else if (
+    typeof provider.baseUrl !== 'string' ||
+    !/^https?:\/\/[^\s]+$/i.test(provider.baseUrl.trim())
+  ) {
+    return 'Base URL must be an http:// or https:// URL';
+  } else {
+    provider.baseUrl = provider.baseUrl.trim().replace(/\/+$/, '');
+  }
+  return null;
+}
+
+/**
+ * Point every model linked to a custom LLM provider at the provider's API
+ * type, so changing it on the provider changes it for all of its models.
+ *
+ * @param {Object} provider - The saved provider entry
+ * @returns {Promise<string[]>} Ids of the models rewritten
+ */
+async function syncLinkedModelsApiType(provider) {
+  if (!isCustomLlmProvider(provider)) return [];
+  const apiType = getProviderApiType(provider);
+  const { data: models = [] } = configCache.getModels(true);
+  const updated = [];
+  for (const model of getLinkedModels(provider.id, models)) {
+    if (model.provider === apiType) continue;
+    const modelPath = await configStore.resolveIdToPath('models', model.id);
+    if (!modelPath) continue;
+    await configStore.writeJson(modelPath, { ...model, provider: apiType });
+    updated.push(model.id);
+  }
+  if (updated.length > 0) {
+    await configCache.refreshModelsCache();
+  }
+  return updated;
+}
 
 /**
  * Query used when the admin does not supply one. Deliberately bland and
@@ -255,13 +341,29 @@ export default function registerAdminProvidersRoutes(app) {
         return sendNotFound(res, 'Provider');
       }
 
+      // The category decides which fields an entry has; it is fixed at creation.
+      if (providers[index].category !== undefined) {
+        updatedProvider.category = providers[index].category;
+      } else {
+        delete updatedProvider.category;
+      }
+      const validationError = normalizeProviderFields(updatedProvider);
+      if (validationError) {
+        return sendBadRequest(res, validationError);
+      }
+
       providers[index] = updatedProvider;
 
       // Save updated providers
       await configStore.writeJson(PROVIDERS_FILE, { providers });
       await configCache.refreshProvidersCache();
+      const updatedModels = await syncLinkedModelsApiType(updatedProvider);
 
-      res.json({ message: 'Provider updated successfully', provider: updatedProvider });
+      res.json({
+        message: 'Provider updated successfully',
+        provider: updatedProvider,
+        updatedModels
+      });
     } catch (error) {
       return sendInternalError(res, error, 'update provider');
     }
@@ -293,16 +395,24 @@ export default function registerAdminProvidersRoutes(app) {
       const newProvider = req.body;
 
       // Validate required fields
-      if (!newProvider.id || !newProvider.name || !newProvider.description) {
-        return sendBadRequest(
-          res,
-          'Missing required fields: id, name, and description are required'
-        );
+      if (!newProvider.id) {
+        return sendBadRequest(res, 'Missing required field: id');
       }
 
       // Validate providerId for security
       if (!validateIdForPath(newProvider.id, 'provider', res)) {
         return;
+      }
+
+      if (!newProvider.category) {
+        newProvider.category = 'custom';
+      }
+      if (!PROVIDER_CATEGORIES.includes(newProvider.category)) {
+        return sendBadRequest(res, `Category must be one of: ${PROVIDER_CATEGORIES.join(', ')}`);
+      }
+      const validationError = normalizeProviderFields(newProvider);
+      if (validationError) {
+        return sendBadRequest(res, validationError);
       }
 
       // Load current providers. Nothing readable means nothing configured yet,
@@ -333,9 +443,6 @@ export default function registerAdminProvidersRoutes(app) {
       // Set defaults
       if (newProvider.enabled === undefined) {
         newProvider.enabled = true;
-      }
-      if (!newProvider.category) {
-        newProvider.category = 'custom';
       }
 
       // Add new provider
@@ -390,12 +497,22 @@ export default function registerAdminProvidersRoutes(app) {
       }
 
       // Prevent deletion of built-in LLM providers
-      const builtInProviders = ['openai', 'anthropic', 'google', 'mistral', 'local'];
-      if (builtInProviders.includes(providerId)) {
+      if (BUILT_IN_LLM_PROVIDERS.includes(providerId)) {
         return sendBadRequest(
           res,
           `Cannot delete built-in provider '${providerId}'. Only custom providers can be deleted.`
         );
+      }
+
+      // A provider still holding the key of some models cannot go: they would
+      // silently fall back to another key, or to none.
+      const { data: models = [] } = configCache.getModels(true);
+      const linkedModels = getLinkedModels(providerId, models).map(m => m.id);
+      if (linkedModels.length > 0) {
+        return res.status(409).json({
+          error: `Provider '${providerId}' is used by ${linkedModels.length} model(s). Delete them or move them to another provider first.`,
+          linkedModels
+        });
       }
 
       // Load current providers

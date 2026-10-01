@@ -28,6 +28,7 @@ Each model is defined with the following properties:
 | `name`                         | Object  | -        | **Required.** Localized display name (e.g., `{"en": "GPT-4"}`) shown in the user interface    |
 | `description`                  | Object  | -        | **Required.** Localized short description (e.g., `{"en": "..."}`) of the model's capabilities |
 | `provider`                     | String  | -        | **Required.** Provider identifier. See [Providers](#providers) for valid values                |
+| `providerId`                   | String  | -        | Provider entry (Admin → Providers) the model takes its API key from, when it is not the one named after `provider`. Set for models of a [custom LLM provider](#custom-llm-providers); `provider` is then kept equal to that provider's API type |
 | `modelType`                    | String  | `chat`   | `chat` (routed through the LLM adapter pipeline) or `transcription` (speech-to-text, routed through the transcription provider registry). See [Transcription Models](#transcription-models) |
 | `url`                          | String  | -        | API endpoint URL for the model. Supports environment variable references like `${MY_URL}`. Transcription models use a `ws://` / `wss://` realtime URL |
 | `contextWindow`                | Number  | -        | Total input+output token capacity of the model's context window (nullable). Used for fitting documents and showing the user how much capacity is left |
@@ -145,6 +146,68 @@ The system currently supports the following providers:
    - Supports text, vision (`png/jpeg/gif/webp`), tool calling, parallel tool use, streaming, and reasoning (extended thinking)
    - Bedrock service limits are enforced by the server-side adapter before each request: max 5 documents per request and a strict filename character allowlist (alphanumerics, single spaces, `-`, `()`, `[]`)
    - See [AWS Bedrock](#aws-bedrock) below for full setup instructions
+
+### Custom LLM Providers
+
+A gateway that serves many models behind one API key — T-Systems AI Foundation Services (LLM Hub),
+a company LLM proxy, a shared vLLM server — is set up as its own provider under **Admin →
+Providers → Create New Provider** (category **LLM Providers**):
+
+| Field | Description |
+| ----- | ----------- |
+| Name, ID, Description | Plain text. The ID cannot be changed later |
+| API type | The API the endpoint speaks: `openai` (OpenAI-compatible — LLM Hub, LM Studio, …), `local` (vLLM, through the vLLM adapter), `mistral`, `openai-responses`, `anthropic` or `google` |
+| Base URL | Optional. The API base, used to list the provider's models when importing |
+| API key | Stored encrypted on the provider and used by all of its models |
+
+Models link to the provider with `providerId`; their `provider` is the provider's API type. The
+model editor lists custom providers under **Provider**, and changing a provider's API type moves
+all of its models with it. The provider page lists its linked models, and a provider that still
+has models cannot be deleted.
+
+```json
+{
+  "id": "llmhub-gpt-oss-120b",
+  "modelId": "gpt-oss-120b",
+  "url": "https://llm-server.llmhub.t-systems.net/v2/chat/completions",
+  "provider": "openai",
+  "providerId": "llmhub"
+}
+```
+
+The API key of a linked model is looked up in this order: the model's own `apiKey`, the
+provider's stored key, the `<MODEL_ID>_API_KEY` environment variable, then the provider's
+variable — `LLMHUB_API_KEY` for a provider with ID `llmhub`. A linked model never falls back to the
+variable of its API type, so an LLM Hub model speaking the OpenAI API is never sent
+`OPENAI_API_KEY`.
+
+### Importing Models from an Endpoint
+
+**Admin → Models → Import from URL** reads the model list of an endpoint and creates the models
+you pick, so they need not be typed in one by one.
+
+1. Choose the provider the models belong to, or **+ New provider** to create one with a name, ID,
+   API type and API key. The key is stored on the provider, not on the models. Opening **Import
+   models** on a provider's page preselects it and uses its stored key and base URL.
+2. Enter the endpoint URL: the API base (`https://llm-server.llmhub.t-systems.net/v2`), its
+   `/models` listing, or a chat completions URL. A bare host is read as `<host>/v1`. Leave the API
+   key empty for endpoints without authentication, such as a local vLLM server.
+3. **Load models** calls `GET <base>/models` and lists what it returns. The endpoint's own
+   metadata is used where it reports it: display name, context window and output limit (vLLM
+   `max_model_len`, LLM Hub `meta_data`, Mistral `max_context_length`, Google token limits),
+   image input, tool support and end-of-life date. Embedding, audio, image and moderation models
+   are marked and not selected by **Select all**. Models already configured for the same endpoint
+   show as **Already added**.
+4. Adjust the iHub model IDs if needed (an ID prefix applies to all of them), and **Import**.
+
+Supported listings: OpenAI and every OpenAI-compatible server (vLLM, LM Studio, Ollama, LLM Hub,
+OpenRouter, Together, Groq), Mistral, Anthropic and Google. The call goes through the platform's
+proxy and SSL settings; it does not follow redirects, so a key is never sent to a host other than
+the one entered. The import fills in only what the endpoint reports — check tool support and test
+each model before enabling it for users.
+
+The import uses `POST /api/admin/models/_discover`, which returns the normalized list without
+storing anything, and then the regular `POST /api/admin/providers` and `POST /api/admin/models`.
 
 ### AWS Bedrock
 
