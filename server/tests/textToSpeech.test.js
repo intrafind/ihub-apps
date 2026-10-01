@@ -14,8 +14,13 @@ import { resolveTtsModel, prepareSpeech, getTtsProvider, isTtsModel } from '../t
 import mistralTtsProvider, {
   createFloat32ToPcm16Converter,
   resolveUpstream,
-  synthesize
+  synthesize,
+  voicesUrl,
+  listVoices,
+  createVoice,
+  deleteVoice
 } from '../tts/mistralTtsProvider.js';
+import { detectSpeechLanguage, normalizeLanguage, selectVoice } from '../tts/language.js';
 import configCache from '../configCache.js';
 
 const ttsModel = {
@@ -41,6 +46,26 @@ describe('modelConfigSchema — modelType tts', () => {
     const result = modelConfigSchema.safeParse({ ...ttsModel, provider: 'anthropic' });
     expect(result.success).toBe(false);
     expect(result.error.issues[0].path).toEqual(['provider']);
+  });
+
+  test('accepts a voice per language', () => {
+    const result = modelConfigSchema.safeParse({
+      ...ttsModel,
+      tts: {
+        voice: 'en_paul_neutral',
+        voices: { de: '01a0f7a6-649d-732a', fr: 'fr_marie_neutral' }
+      }
+    });
+    expect(result.success).toBe(true);
+  });
+
+  test('rejects a language that is not a two-letter code, or an empty voice', () => {
+    expect(
+      modelConfigSchema.safeParse({ ...ttsModel, tts: { voices: { german: 'x' } } }).success
+    ).toBe(false);
+    expect(modelConfigSchema.safeParse({ ...ttsModel, tts: { voices: { de: '' } } }).success).toBe(
+      false
+    );
   });
 
   test('rejects tts settings on a chat model', () => {
@@ -301,6 +326,52 @@ describe('TTS provider registry and model resolution', () => {
   });
 });
 
+describe('message language and voice', () => {
+  const samples = {
+    en: 'Text to speech lets users listen to an answer instead of reading it. This is useful when you are on the move.',
+    de: 'Die Sprachausgabe liest Antworten vor. Das ist praktisch, wenn man unterwegs ist und nicht auf den Bildschirm schauen kann.',
+    fr: "La synthèse vocale lit les réponses à voix haute. C'est pratique quand on est en déplacement et que l'on ne peut pas lire.",
+    es: 'La síntesis de voz lee las respuestas en voz alta. Es útil cuando estás en movimiento y no puedes leer la pantalla.',
+    it: 'La sintesi vocale legge le risposte ad alta voce. È utile quando sei in movimento e non puoi leggere lo schermo.',
+    nl: 'De spraakuitvoer leest de antwoorden voor. Dat is handig als je onderweg bent en niet op het scherm kunt kijken.',
+    pt: 'A síntese de voz lê as respostas em voz alta. É útil quando você está em movimento e não pode ler a tela.',
+    ar: 'تقرأ ميزة تحويل النص إلى كلام الإجابات بصوت عالٍ.',
+    hi: 'टेक्स्ट टू स्पीच उत्तरों को ज़ोर से पढ़ता है।'
+  };
+
+  test.each(Object.entries(samples))('tells %s from its text', (language, text) => {
+    expect(detectSpeechLanguage(text)).toBe(language);
+  });
+
+  test('the text beats the UI language', () => {
+    expect(detectSpeechLanguage(samples.de, { hint: 'en' })).toBe('de');
+  });
+
+  test('too little text falls back to the UI language, or to nothing', () => {
+    expect(detectSpeechLanguage('Hallo.', { hint: 'de-DE' })).toBe('de');
+    expect(detectSpeechLanguage('Hallo.')).toBeNull();
+    expect(detectSpeechLanguage('npm install', { hint: 'ja' })).toBeNull();
+  });
+
+  test('normalizes UI languages to the ones a voice can be set for', () => {
+    expect(normalizeLanguage('de-AT')).toBe('de');
+    expect(normalizeLanguage('pt_BR')).toBe('pt');
+    expect(normalizeLanguage('ja')).toBeNull();
+    expect(normalizeLanguage(undefined)).toBeNull();
+  });
+
+  test('picks the language voice, else the model voice', () => {
+    const tts = { voice: 'en_paul_neutral', voices: { de: 'german-voice' } };
+    expect(selectVoice(tts, 'de')).toBe('german-voice');
+    expect(selectVoice(tts, 'fr')).toBe('en_paul_neutral');
+    expect(selectVoice(tts, null)).toBe('en_paul_neutral');
+    expect(selectVoice(undefined, 'de')).toBeUndefined();
+    expect(resolveUpstream({ provider: 'mistral', tts }, { language: 'de' }).voice).toBe(
+      'german-voice'
+    );
+  });
+});
+
 describe('Mistral TTS provider', () => {
   test('converts float32 samples to 16-bit PCM across odd chunk boundaries', () => {
     const floats = Buffer.alloc(16);
@@ -420,6 +491,71 @@ describe('Mistral TTS provider', () => {
       };
       await expect(synthesize({ cfg: cfg(), text: 'Hi', onAudio: () => {} })).rejects.toThrow(
         /boom/
+      );
+    });
+
+    test('lists every page of voices', async () => {
+      handler = (req, res) => {
+        const page = Number(new URL(req.url, 'http://x').searchParams.get('page'));
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(
+          JSON.stringify({
+            items: [
+              {
+                id: `v${page}`,
+                slug: `s${page}`,
+                name: `Voice ${page}`,
+                languages: ['de'],
+                type: page === 2 ? 'custom' : 'preset',
+                extra: 'dropped'
+              }
+            ],
+            total_pages: 2
+          })
+        );
+      };
+      const voices = await listVoices(cfg());
+      expect(voices).toEqual([
+        { id: 'v1', slug: 's1', name: 'Voice 1', languages: ['de'], gender: null, type: 'preset' },
+        { id: 'v2', slug: 's2', name: 'Voice 2', languages: ['de'], gender: null, type: 'custom' }
+      ]);
+      expect(requests[0].headers.authorization).toBe('Bearer test-key');
+    });
+
+    test('creates a voice from a sample and deletes it again', async () => {
+      handler = (req, res) => {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(
+          req.method === 'POST'
+            ? JSON.stringify({ id: 'new-id', name: 'Anna', languages: ['de'], type: 'custom' })
+            : JSON.stringify({ deleted: true })
+        );
+      };
+      const voice = await createVoice(cfg(), {
+        name: 'Anna',
+        audio: Buffer.from('RIFF'),
+        filename: 'anna.wav',
+        languages: ['de'],
+        gender: 'female'
+      });
+      expect(voice).toMatchObject({ id: 'new-id', name: 'Anna', type: 'custom' });
+      expect(requests[0].body).toEqual({
+        name: 'Anna',
+        sample_audio: Buffer.from('RIFF').toString('base64'),
+        sample_filename: 'anna.wav',
+        languages: ['de'],
+        gender: 'female'
+      });
+      await deleteVoice(cfg(), 'new-id');
+      expect(requests).toHaveLength(2);
+    });
+
+    test('derives the voices endpoint from the speech URL', () => {
+      expect(voicesUrl({ url: 'https://api.mistral.ai/v1/audio/speech' })).toBe(
+        'https://api.mistral.ai/v1/audio/voices'
+      );
+      expect(voicesUrl({ url: 'https://proxy.example.com/mistral/tts' })).toBe(
+        'https://proxy.example.com/v1/audio/voices'
       );
     });
 

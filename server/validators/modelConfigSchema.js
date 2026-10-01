@@ -98,11 +98,19 @@ const promptCachingSchema = z
 
 // Text-to-speech settings for a `modelType: "tts"` model. `voice` is the
 // provider's voice id — for Mistral a preset slug such as `en_paul_neutral` or
-// the id of a voice saved in the Mistral console. Unset uses the provider's
-// default voice.
+// the id of a voice saved in the Mistral account. Unset uses the provider's
+// default voice. `voices` maps a language (`de`, `fr`, …) to the voice that
+// reads messages written in it; any other language uses `voice`.
+const ttsVoiceIdSchema = z.string().trim().min(1).max(200);
 const ttsSchema = z
   .object({
-    voice: z.string().trim().max(200).optional()
+    voice: z.string().trim().max(200).optional(),
+    voices: z
+      .record(
+        z.string().regex(/^[a-z]{2}$/, 'Voice languages are two-letter codes such as "de"'),
+        ttsVoiceIdSchema
+      )
+      .optional()
   })
   .strict();
 

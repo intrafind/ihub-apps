@@ -994,7 +994,9 @@
         "thinkingLevelMedium": "Medium",
         "thinkingLevelHigh": "High",
         "thinkingThoughts": "Show reasoning",
-        "ttsVoice": "Voice"
+        "ttsVoice": "Voice",
+        "ttsVoices": "Voices per language",
+        "ttsVoiceLanguage": "Language"
       },
       "hints": {
         "modelId": "Unique identifier for the model (cannot be changed after creation)",
@@ -1018,7 +1020,9 @@
         "thinkingThoughts": "Surface the reasoning to users behind the \"Show thinking\" toggle. Turn off to keep it hidden.",
         "maxOutputTokens": "Empty means the default ({{value}}), not unlimited. Reasoning models spend their thinking tokens from this limit, so keep it well above the longest answer you expect.",
         "ttsUrl": "Speech endpoint of the provider. It stays server-side and never reaches the browser.",
-        "ttsVoice": "Voice id of the provider: a Mistral preset such as en_paul_neutral, gb_jane_neutral or fr_marie_neutral, or the id of a voice saved in your Mistral account. Empty uses en_paul_neutral."
+        "ttsVoice": "Voice id of the provider: a Mistral preset such as en_paul_neutral, gb_jane_neutral or fr_marie_neutral, or the id of a voice saved in your Mistral account. Empty uses en_paul_neutral.",
+        "ttsVoices": "A message written in one of these languages is read with that voice; every other language uses the voice above. The language is told from the message itself.",
+        "ttsVoicesAfterSave": "Save the model once to browse the provider’s voices and create custom voices here."
       },
       "placeholders": {
         "maxOutputTokens": "Default: {{value}}",
@@ -1027,7 +1031,8 @@
         "apiUrl": "https://api.provider.com/v1/chat/completions",
         "apiKey": "Enter API key (optional - will use environment variable if not set)",
         "apiKeySet": "API key is set (leave blank to keep current)",
-        "realtimeUrl": "ws://host:8080/v1/realtime"
+        "realtimeUrl": "ws://host:8080/v1/realtime",
+        "ttsVoiceId": "Voice id"
       },
       "sections": {
         "imageGeneration": "Image Generation Settings",
@@ -1048,6 +1053,42 @@
         "low": "Low (1K)",
         "medium": "Medium (2K)",
         "high": "High (4K)"
+      },
+      "ttsVoices": {
+        "addLanguage": "+ Add a voice for a language",
+        "removeLanguage": "Remove",
+        "title": "Available voices",
+        "load": "Show voices",
+        "reload": "Reload",
+        "loadError": "Could not load voices",
+        "custom": "Your voices",
+        "noCustom": "No custom voices yet. Create one below.",
+        "presets": "Preset voices ({{count}})",
+        "useDefault": "Use as voice",
+        "useFor": "Use for {{language}}",
+        "deleteConfirm": "Delete the voice \"{{name}}\" from the provider account? Models that use it can no longer speak with it.",
+        "deleteError": "Could not delete the voice",
+        "createTitle": "Create a custom voice",
+        "createHint": "Record or upload 10–30 seconds of one person speaking naturally, without music or background noise. The voice is created in the provider account straight away; it reads every language, with the accent of the recording.",
+        "name": "Name",
+        "namePlaceholder": "e.g. Anna (German)",
+        "gender": "Gender (optional)",
+        "female": "Female",
+        "male": "Male",
+        "languages": "Language of the recording",
+        "record": "Record with microphone",
+        "stopRecording": "Stop recording ({{seconds}} s)",
+        "upload": "Upload audio file",
+        "recorded": "Recording",
+        "emptyRecording": "Nothing was recorded.",
+        "fileTooLarge": "The file is larger than 10 MB.",
+        "fileUnreadable": "This file could not be read as audio.",
+        "tooShort": "The sample is shorter than {{seconds}} seconds; record a little more.",
+        "consent": "The person speaking in this sample agreed that their voice is cloned and used to read answers aloud.",
+        "create": "Create voice",
+        "creating": "Creating…",
+        "createError": "Could not create the voice",
+        "created": "Voice \"{{name}}\" created ({{id}}). Use it below, then save the model."
       }
     },
     "auth": {

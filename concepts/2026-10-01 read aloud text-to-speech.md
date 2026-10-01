@@ -63,7 +63,20 @@ provider.
    allowed the model (the client checks `GET /api/models?type=tts`), and an app can opt out with
    `features.textToSpeech: false`. An explicit `modelId` in the API works for any enabled,
    permitted TTS model, the same rule chat models follow. The admin test uses it before saving.
-9. **Non-chat models stay out of chat.** `filterModelsForApp`, the default-model fallback in
+9. **A voice per language, chosen by the text** (`server/tts/language.js`). Voxtral takes no
+   language parameter and every voice reads every language (verified: German text in
+   `en_paul_neutral`, `gb_jane_neutral` and `fr_marie_neutral` transcribes back word for word),
+   but a voice keeps its accent. `tts.voices` maps a language to a voice. The message's language
+   is detected from its own text: script for Arabic and Hindi, weighted frequent words for the
+   Latin-script languages. The UI language only decides when the text is too short to tell. One
+   message gets one voice.
+10. **Custom voices from the admin UI.** Mistral clones a voice from one sample
+   (`POST /v1/audio/voices` `{ name, sample_audio, sample_filename, languages, gender }`, answering
+   with a UUID that `voice_id` accepts). The model editor records the sample with the existing
+   `AudioBufferRecorder` (encoded as WAV), or takes an uploaded file. The admin must confirm the
+   speaker's consent first. The server calls Mistral with the model's stored key and logs the
+   create and delete actions in the audit log.
+11. **Non-chat models stay out of chat.** `filterModelsForApp`, the default-model fallback in
    `modelsLoader`, `LLMClient.resolveModel` and `/api/models/:id` now accept chat models only.
    Before, only `/api/models` filtered by type.
 
@@ -77,6 +90,6 @@ provider.
 
 - More providers: OpenAI-compatible `/v1/audio/speech` (OpenAI, self-hosted Voxtral via
   vLLM-Omni), Google, Azure.
-- A voice per language (the answer's language → voice), and per-app model and voice overrides.
+- Per-app model and voice overrides.
 - Usage tracking: Mistral returns `usage` on `speech.audio.done`.
 - Step 2 of #2243: a voice conversation (STT → LLM → TTS, with automatic playback).

@@ -61,10 +61,11 @@ function remember(key, recording) {
  * only start audio from a user gesture.
  *
  * @param {string} id - The message being read.
- * @param {{ text: string, modelId?: string }} params - `modelId` omitted uses
- *   the platform default.
+ * @param {{ text: string, modelId?: string, language?: string }} params -
+ *   `modelId` omitted uses the platform default. `language` (the UI language)
+ *   picks the voice when the message's own language is unclear.
  */
-export function play(id, { text, modelId } = {}) {
+export function play(id, { text, modelId, language } = {}) {
   stop();
   const key = recordingKey(text, modelId);
 
@@ -102,7 +103,11 @@ export function play(id, { text, modelId } = {}) {
     fetchWithAuthRetry(buildApiUrl('/voice/speech'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(modelId ? { text, modelId } : { text }),
+      body: JSON.stringify({
+        text,
+        ...(modelId ? { modelId } : {}),
+        ...(language ? { language } : {})
+      }),
       signal
     })
   );
@@ -129,7 +134,7 @@ export function stop(id) {
  * The play button's click: play, pause, or resume message `id`.
  *
  * @param {string} id
- * @param {{ text: string, modelId?: string }} params
+ * @param {{ text: string, modelId?: string, language?: string }} params
  */
 export function toggle(id, params) {
   if (snapshot.id === id) {

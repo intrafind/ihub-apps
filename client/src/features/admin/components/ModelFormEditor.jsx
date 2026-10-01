@@ -10,6 +10,7 @@ import {
 import Icon from '../../../shared/components/Icon';
 import { getAdminApiErrorMessage, makeAdminApiCall } from '../../../api/adminApi';
 import AdminFormErrorSummary from './AdminFormErrorSummary';
+import TtsVoicesPanel, { TTS_LANGUAGES, languageName } from './tts/TtsVoicesPanel';
 import { FormValidationProvider } from '../../../shared/contexts/formValidationContext';
 import {
   isPromptCachingEnabled,
@@ -168,7 +169,7 @@ function ModelFormEditor({
   isNewModel = false,
   jsonSchema
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [validationErrors, setValidationErrors] = useState({});
 
   // Validation function
@@ -286,6 +287,37 @@ function ModelFormEditor({
     if (value === '' || value === null || value === undefined) delete next[key];
     else next[key] = value;
     onChange({ ...data, tts: next });
+  };
+
+  // Voices per language (`tts.voices`), in the order the admin added them.
+  // Language codes and voice ids are cut down to the characters they can
+  // contain before they reach the model data.
+  const ttsVoiceEntries = Object.entries(data.tts?.voices || {});
+  const setTtsVoices = entries => {
+    const next = { ...(data.tts || {}) };
+    if (entries.length) next.voices = Object.fromEntries(entries);
+    else delete next.voices;
+    onChange({ ...data, tts: next });
+  };
+  const addTtsVoiceLanguage = () => {
+    const used = new Set(ttsVoiceEntries.map(([code]) => code));
+    const code = TTS_LANGUAGES.find(language => !used.has(language));
+    if (code) setTtsVoices([...ttsVoiceEntries, [code, '']]);
+  };
+  // From the voices panel: a voice for the whole model, or for one language.
+  const handleUseVoice = (voiceId, language) => {
+    const id = String(voiceId).replace(/[^\w-]/g, '');
+    if (!language) {
+      handleTtsChange('voice', id);
+      return;
+    }
+    const code = String(language).replace(/[^a-z]/g, '');
+    const exists = ttsVoiceEntries.some(([entry]) => entry === code);
+    setTtsVoices(
+      exists
+        ? ttsVoiceEntries.map(([entry, voice]) => [entry, entry === code ? id : voice])
+        : [...ttsVoiceEntries, [code, id]]
+    );
   };
 
   const providerOptions = [
@@ -572,6 +604,104 @@ function ModelFormEditor({
                         'Voice id of the provider: a Mistral preset such as en_paul_neutral, gb_jane_neutral or fr_marie_neutral, or the id of a voice saved in your Mistral account. Empty uses en_paul_neutral.'
                       )}
                     </p>
+                  </div>
+                )}
+
+                {isTts && (
+                  <div className="col-span-6 space-y-2">
+                    <span className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                      {t('admin.models.fields.ttsVoices', 'Voices per language')}
+                    </span>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                      {t(
+                        'admin.models.hints.ttsVoices',
+                        'A message written in one of these languages is read with that voice; every other language uses the voice above. The language is told from the message itself.'
+                      )}
+                    </p>
+                    {ttsVoiceEntries.map(([code, voice]) => (
+                      <div key={code} className="flex items-center gap-2">
+                        <select
+                          aria-label={t('admin.models.fields.ttsVoiceLanguage', 'Language')}
+                          value={code}
+                          onChange={e => {
+                            const next = e.target.value.replace(/[^a-z]/g, '');
+                            setTtsVoices(
+                              ttsVoiceEntries.map(([entry, id]) => [
+                                entry === code ? next : entry,
+                                id
+                              ])
+                            );
+                          }}
+                          className="block w-40 py-2 px-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md shadow-xs sm:text-sm"
+                        >
+                          {TTS_LANGUAGES.filter(
+                            language =>
+                              language === code ||
+                              !ttsVoiceEntries.some(([entry]) => entry === language)
+                          ).map(language => (
+                            <option key={language} value={language}>
+                              {languageName(language, i18n.language)}
+                            </option>
+                          ))}
+                        </select>
+                        <input
+                          type="text"
+                          list="ttsVoiceOptions"
+                          aria-label={t('admin.models.fields.ttsVoice', 'Voice')}
+                          value={voice}
+                          onChange={e => {
+                            const next = e.target.value.replace(/[^\w-]/g, '');
+                            setTtsVoices(
+                              ttsVoiceEntries.map(([entry, id]) => [
+                                entry,
+                                entry === code ? next : id
+                              ])
+                            );
+                          }}
+                          placeholder={t('admin.models.placeholders.ttsVoiceId', 'Voice id')}
+                          className="block flex-1 shadow-xs sm:text-sm border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md"
+                        />
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setTtsVoices(ttsVoiceEntries.filter(([entry]) => entry !== code))
+                          }
+                          className="p-2 text-gray-500 hover:text-red-600"
+                          title={t('admin.models.ttsVoices.removeLanguage', 'Remove')}
+                          aria-label={t('admin.models.ttsVoices.removeLanguage', 'Remove')}
+                        >
+                          <Icon name="trash" size="sm" />
+                        </button>
+                      </div>
+                    ))}
+                    {ttsVoiceEntries.length < TTS_LANGUAGES.length && (
+                      <button
+                        type="button"
+                        onClick={addTtsVoiceLanguage}
+                        className="text-sm text-indigo-600 dark:text-indigo-400 hover:underline"
+                      >
+                        {t(
+                          'admin.models.actions.addTtsVoiceLanguage',
+                          '+ Add a voice for a language'
+                        )}
+                      </button>
+                    )}
+                    {data.provider === 'mistral' &&
+                      (isNewModel ? (
+                        <p className="text-sm text-gray-500 dark:text-gray-400">
+                          {t(
+                            'admin.models.hints.ttsVoicesAfterSave',
+                            'Save the model once to browse the provider’s voices and create custom voices here.'
+                          )}
+                        </p>
+                      ) : (
+                        <TtsVoicesPanel
+                          modelId={data.id}
+                          onUseVoice={handleUseVoice}
+                          t={t}
+                          uiLanguage={i18n.language}
+                        />
+                      ))}
                   </div>
                 )}
 

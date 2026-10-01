@@ -218,13 +218,16 @@ describe('PcmStreamPlayer', () => {
 describe('readAloud store', () => {
   test('toggle plays, pauses and resumes one message', async () => {
     mockFetch.mockResolvedValue(streamResponse([pcm(1)]));
-    readAloud.toggle('m1', { text: 'Hello' });
+    readAloud.toggle('m1', { text: 'Hello', language: 'de' });
     expect(readAloud.getPlaybackFor('m1').state).toBe('loading');
     await flush();
     expect(readAloud.getPlaybackFor('m1').state).toBe('playing');
     expect(mockFetch).toHaveBeenCalledWith(
       '/api/voice/speech',
-      expect.objectContaining({ method: 'POST', body: JSON.stringify({ text: 'Hello' }) })
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ text: 'Hello', language: 'de' })
+      })
     );
 
     readAloud.toggle('m1', { text: 'Hello' });

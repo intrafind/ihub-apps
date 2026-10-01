@@ -1262,7 +1262,9 @@
         "thinkingLevelMedium": "Mittel",
         "thinkingLevelHigh": "Hoch",
         "thinkingThoughts": "Reasoning anzeigen",
-        "ttsVoice": "Stimme"
+        "ttsVoice": "Stimme",
+        "ttsVoices": "Stimmen pro Sprache",
+        "ttsVoiceLanguage": "Sprache"
       },
       "hints": {
         "modelId": "Eindeutige Kennung für das Modell (kann nach der Erstellung nicht geändert werden)",
@@ -1286,7 +1288,9 @@
         "thinkingThoughts": "Das Reasoning Nutzern hinter dem Umschalter „Denkprozess anzeigen“ zugänglich machen. Zum Verbergen deaktivieren.",
         "maxOutputTokens": "Leer bedeutet der Standardwert ({{value}}), nicht unbegrenzt. Reasoning-Modelle verbrauchen ihre Denk-Tokens aus diesem Limit – halten Sie es deutlich über der längsten erwarteten Antwort.",
         "ttsUrl": "Sprach-Endpunkt des Anbieters. Er bleibt auf dem Server und erreicht nie den Browser.",
-        "ttsVoice": "Stimmen-ID des Anbieters: eine Mistral-Vorlage wie en_paul_neutral, gb_jane_neutral oder fr_marie_neutral oder die ID einer in Ihrem Mistral-Konto gespeicherten Stimme. Leer verwendet en_paul_neutral."
+        "ttsVoice": "Stimmen-ID des Anbieters: eine Mistral-Vorlage wie en_paul_neutral, gb_jane_neutral oder fr_marie_neutral oder die ID einer in Ihrem Mistral-Konto gespeicherten Stimme. Leer verwendet en_paul_neutral.",
+        "ttsVoices": "Eine Nachricht in einer dieser Sprachen wird mit der zugeordneten Stimme gelesen; alle anderen Sprachen verwenden die Stimme oben. Die Sprache wird an der Nachricht selbst erkannt.",
+        "ttsVoicesAfterSave": "Speichern Sie das Modell einmal, um hier die Stimmen des Anbieters anzuzeigen und eigene Stimmen anzulegen."
       },
       "placeholders": {
         "maxOutputTokens": "Standard: {{value}}",
@@ -1295,7 +1299,8 @@
         "apiUrl": "https://api.anbieter.com/v1/chat/completions",
         "apiKey": "API-Schlüssel eingeben (optional - verwendet Umgebungsvariable, wenn nicht gesetzt)",
         "apiKeySet": "API-Schlüssel ist gesetzt (leer lassen, um aktuellen zu behalten)",
-        "realtimeUrl": "ws://host:8080/v1/realtime"
+        "realtimeUrl": "ws://host:8080/v1/realtime",
+        "ttsVoiceId": "Stimmen-ID"
       },
       "sections": {
         "imageGeneration": "Bilderzeugungseinstellungen",
@@ -1316,6 +1321,42 @@
         "low": "Niedrig (1K)",
         "medium": "Mittel (2K)",
         "high": "Hoch (4K)"
+      },
+      "ttsVoices": {
+        "addLanguage": "+ Stimme für eine Sprache hinzufügen",
+        "removeLanguage": "Entfernen",
+        "title": "Verfügbare Stimmen",
+        "load": "Stimmen anzeigen",
+        "reload": "Neu laden",
+        "loadError": "Stimmen konnten nicht geladen werden",
+        "custom": "Eigene Stimmen",
+        "noCustom": "Noch keine eigenen Stimmen. Legen Sie unten eine an.",
+        "presets": "Vorlage-Stimmen ({{count}})",
+        "useDefault": "Als Stimme verwenden",
+        "useFor": "Für {{language}} verwenden",
+        "deleteConfirm": "Die Stimme „{{name}}“ im Anbieterkonto löschen? Modelle, die sie verwenden, können dann nicht mehr mit ihr sprechen.",
+        "deleteError": "Die Stimme konnte nicht gelöscht werden",
+        "createTitle": "Eigene Stimme anlegen",
+        "createHint": "Nehmen Sie 10–30 Sekunden einer Person auf, die natürlich spricht, ohne Musik oder Hintergrundgeräusche, oder laden Sie eine solche Aufnahme hoch. Die Stimme wird sofort im Anbieterkonto angelegt; sie liest jede Sprache, mit dem Akzent der Aufnahme.",
+        "name": "Name",
+        "namePlaceholder": "z. B. Anna (Deutsch)",
+        "gender": "Geschlecht (optional)",
+        "female": "Weiblich",
+        "male": "Männlich",
+        "languages": "Sprache der Aufnahme",
+        "record": "Mit Mikrofon aufnehmen",
+        "stopRecording": "Aufnahme beenden ({{seconds}} s)",
+        "upload": "Audiodatei hochladen",
+        "recorded": "Aufnahme",
+        "emptyRecording": "Es wurde nichts aufgenommen.",
+        "fileTooLarge": "Die Datei ist größer als 10 MB.",
+        "fileUnreadable": "Diese Datei konnte nicht als Audio gelesen werden.",
+        "tooShort": "Die Aufnahme ist kürzer als {{seconds}} Sekunden; nehmen Sie etwas mehr auf.",
+        "consent": "Die Person in dieser Aufnahme ist damit einverstanden, dass ihre Stimme nachgebildet und zum Vorlesen von Antworten verwendet wird.",
+        "create": "Stimme anlegen",
+        "creating": "Wird angelegt…",
+        "createError": "Die Stimme konnte nicht angelegt werden",
+        "created": "Stimme „{{name}}“ angelegt ({{id}}). Verwenden Sie sie unten und speichern Sie dann das Modell."
       }
     },
     "chat": {

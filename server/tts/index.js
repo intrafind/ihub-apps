@@ -8,11 +8,19 @@
  * ## Provider contract
  *
  *   sampleRate                         → number   Hz of the PCM `synthesize` emits
- *   resolveUpstream(model)             → cfg      `{ url, apiKey, model, voice, … }`
+ *   resolveUpstream(model, { language }) → cfg    `{ url, apiKey, model, voice, … }`
+ *     `language` is the message's language (server/tts/language.js); the
+ *     provider picks the voice configured for it.
  *   synthesize({ cfg, text, signal, onAudio }) → Promise<{ usage }>
  *     Streams 16-bit signed little-endian mono PCM to `onAudio(Buffer)` as the
  *     provider generates it, awaiting each call (backpressure). Rejects with a
  *     `TtsUpstreamError` on an upstream failure; stops when `signal` aborts.
+ *
+ * Optional, for providers with managed voices (Admin → Models → Voices):
+ *   listVoices(cfg)                    → Promise<voice[]>
+ *   createVoice(cfg, { name, audio, filename, languages, gender }) → Promise<voice>
+ *   deleteVoice(cfg, voiceId)          → Promise<void>
+ *   where voice is `{ id, slug, name, languages, gender, type }`.
  *
  * Every provider emits the same PCM format, so the browser player
  * (`client/src/features/voice/utils/pcmStreamPlayer.js`) never knows which

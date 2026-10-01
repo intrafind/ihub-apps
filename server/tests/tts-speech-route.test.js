@@ -32,7 +32,8 @@ const state = {
   failWith: null,
   // When set, the fake provider streams until its signal aborts.
   streamUntilAbort: false,
-  signals: []
+  signals: [],
+  resolvedLanguages: []
 };
 
 class TtsUpstreamError extends Error {
@@ -61,7 +62,10 @@ jest.unstable_mockModule('../tts/mistralTtsProvider.js', () => ({
   default: {
     id: 'mistral',
     sampleRate: 24000,
-    resolveUpstream: model => ({ model: model.modelId, voice: 'v' }),
+    resolveUpstream: (model, { language } = {}) => {
+      state.resolvedLanguages.push(language);
+      return { model: model.modelId, voice: 'v' };
+    },
     synthesize: async ({ text, signal, onAudio }) => {
       state.calls.push(text);
       if (state.failWith) throw state.failWith;
@@ -101,6 +105,7 @@ beforeEach(() => {
   state.failWith = null;
   state.streamUntilAbort = false;
   state.signals = [];
+  state.resolvedLanguages = [];
 });
 
 describe('POST /api/voice/speech', () => {
@@ -171,6 +176,29 @@ describe('POST /api/voice/speech', () => {
     } finally {
       await new Promise(resolve => server.close(resolve));
     }
+  });
+
+  test('picks the voice by the language of the message', async () => {
+    const res = await request(app)
+      .post('/api/voice/speech')
+      .send({
+        text: 'Die Sprachausgabe liest Antworten vor. Das ist praktisch, wenn man unterwegs ist.',
+        language: 'en'
+      })
+      .buffer(true)
+      .parse(binary);
+    expect(res.status).toBe(200);
+    expect(res.headers['x-speech-language']).toBe('de');
+    expect(state.resolvedLanguages).toEqual(['de']);
+  });
+
+  test('uses the UI language when the text is too short to tell', async () => {
+    const res = await request(app)
+      .post('/api/voice/speech')
+      .send({ text: 'Hallo.', language: 'fr-FR' })
+      .buffer(true)
+      .parse(binary);
+    expect(res.headers['x-speech-language']).toBe('fr');
   });
 
   test('400 without text', async () => {

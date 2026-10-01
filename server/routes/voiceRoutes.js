@@ -11,6 +11,7 @@ import {
   TTS_AUDIO_ENCODING,
   DEFAULT_MAX_CHARACTERS
 } from '../tts/index.js';
+import { detectSpeechLanguage } from '../tts/language.js';
 
 /** Longest message body `/api/voice/speech` accepts, before markup is stripped. */
 const MAX_INPUT_CHARACTERS = 200_000;
@@ -46,7 +47,10 @@ function writeWithBackpressure(res, chunk) {
  */
 export default function registerVoiceRoutes(app) {
   /**
-   * Read a message aloud: `POST /api/voice/speech` `{ text, modelId? }`.
+   * Read a message aloud: `POST /api/voice/speech` `{ text, modelId?, language? }`.
+   * `language` is a hint (the user's UI language) for when the message's own
+   * language cannot be told from its text; it picks the voice from the
+   * model's `tts.voices` (see server/tts/language.js).
    *
    * Streams the speech as it is generated — raw 16-bit signed little-endian
    * mono PCM (`X-Audio-Encoding: pcm_s16le`, rate in `X-Audio-Sample-Rate`)
@@ -66,7 +70,7 @@ export default function registerVoiceRoutes(app) {
       req.user = enhanceUserWithPermissions(req.user, platform.auth || {}, platform);
     }
 
-    const { text, modelId } = req.body || {};
+    const { text, modelId, language: languageHint } = req.body || {};
     if (typeof text !== 'string' || !text.trim()) {
       return res.status(400).json({ error: 'text is required', code: 'invalid-text' });
     }
@@ -89,7 +93,11 @@ export default function registerVoiceRoutes(app) {
       return res.status(422).json({ error: 'Nothing to read aloud', code: 'no-speakable-text' });
     }
 
-    const cfg = provider.resolveUpstream(model);
+    // One voice for the whole message: its language decides it once.
+    const language = detectSpeechLanguage(chunks.join('\n\n'), {
+      hint: typeof languageHint === 'string' ? languageHint : undefined
+    });
+    const cfg = provider.resolveUpstream(model, { language });
     const controller = new AbortController();
     res.on('close', () => {
       if (!res.writableFinished) controller.abort();
@@ -106,6 +114,7 @@ export default function registerVoiceRoutes(app) {
       res.setHeader('X-Audio-Sample-Rate', String(provider.sampleRate));
       res.setHeader('X-Audio-Channels', '1');
       res.setHeader('X-Speech-Characters', String(characters));
+      if (language) res.setHeader('X-Speech-Language', language);
       if (truncated) res.setHeader('X-Speech-Truncated', 'true');
       res.flushHeaders?.();
     };
@@ -135,6 +144,8 @@ export default function registerVoiceRoutes(app) {
           userId: req.user?.id,
           characters,
           chunks: chunks.length,
+          language,
+          voice: cfg.voice,
           durationMs: Date.now() - startedAt
         }
       );

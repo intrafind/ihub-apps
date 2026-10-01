@@ -17,6 +17,51 @@ import { logAudit } from '../../services/AuditLogService.js';
 import { saveSnapshot } from '../../services/ChangeHistoryService.js';
 import llmClient, { isLLMError, LLM_ERROR_CODES } from '../../services/loop/LLMClient.js';
 import { getTtsProvider, isTtsModel } from '../../tts/index.js';
+import { TTS_LANGUAGES } from '../../tts/language.js';
+
+/** Largest voice sample accepted (Mistral needs seconds, not minutes, of audio). */
+const MAX_VOICE_SAMPLE_BYTES = 10 * 1024 * 1024;
+/** Audio file types a voice sample may have. */
+const VOICE_SAMPLE_EXTENSIONS = ['wav', 'mp3', 'm4a', 'ogg', 'oga', 'opus', 'flac', 'webm'];
+
+/**
+ * The TTS model and its provider for a voices request, or an error response.
+ * Disabled models are allowed, so voices can be set up before enabling.
+ */
+function resolveVoicesModel(req, res) {
+  const { modelId } = req.params;
+  if (!validateIdForPath(modelId, 'model', res)) return null;
+  const { data: models } = configCache.getModels(true);
+  const model = models.find(m => m.id === modelId);
+  if (!model) {
+    sendNotFound(res, 'Model');
+    return null;
+  }
+  if (!isTtsModel(model)) {
+    res.status(400).json({ error: 'Not a text-to-speech model', code: 'not-tts-model' });
+    return null;
+  }
+  const provider = getTtsProvider(model.provider);
+  if (!provider?.listVoices) {
+    res.status(501).json({
+      error: `Provider "${model.provider}" does not manage voices`,
+      code: 'voices-unsupported'
+    });
+    return null;
+  }
+  return { model, provider, cfg: provider.resolveUpstream(model) };
+}
+
+/** Upstream failures carry a safe message; anything else stays in the log. */
+function sendVoicesError(res, error, action) {
+  logger.error(`Text-to-speech voices: ${action} failed`, {
+    component: 'ModelsRoutes',
+    upstreamStatus: error.status,
+    error: error.message
+  });
+  const message = error.name === 'TtsUpstreamError' ? error.message : `Could not ${action}`;
+  return res.status(502).json({ error: message, code: 'upstream-error' });
+}
 import { llmErrorToHttpStatus, isMissingApiKeyError } from '../../services/loop/llmHttpErrors.js';
 
 /**
@@ -621,6 +666,115 @@ export default function registerAdminModelsRoutes(app) {
       model: safeModel
     });
   }
+
+  /**
+   * GET /api/admin/models/:modelId/tts/voices — the voices a TTS model can
+   * use: the provider's presets and the account's custom voices.
+   */
+  app.get(buildServerPath('/api/admin/models/:modelId/tts/voices'), adminAuth, async (req, res) => {
+    const resolved = resolveVoicesModel(req, res);
+    if (!resolved) return undefined;
+    try {
+      const voices = await resolved.provider.listVoices(resolved.cfg);
+      return res.json({ voices });
+    } catch (error) {
+      return sendVoicesError(res, error, 'list voices');
+    }
+  });
+
+  /**
+   * POST /api/admin/models/:modelId/tts/voices — create a custom voice from
+   * one recording of the speaker: `{ name, audio (base64), filename?,
+   * languages?, gender? }`. Answers with the new voice; its `id` goes into the
+   * model's voice settings.
+   */
+  app.post(
+    buildServerPath('/api/admin/models/:modelId/tts/voices'),
+    adminAuth,
+    async (req, res) => {
+      const resolved = resolveVoicesModel(req, res);
+      if (!resolved) return undefined;
+      const { name, audio, filename, languages, gender } = req.body || {};
+
+      const voiceName = typeof name === 'string' ? name.trim() : '';
+      if (!voiceName || voiceName.length > 100) {
+        return res
+          .status(400)
+          .json({ error: 'name is required (at most 100 characters)', code: 'invalid-name' });
+      }
+      if (typeof audio !== 'string' || !audio) {
+        return res.status(400).json({ error: 'audio is required', code: 'invalid-audio' });
+      }
+      const sample = Buffer.from(audio, 'base64');
+      if (!sample.length) {
+        return res.status(400).json({ error: 'audio is not valid base64', code: 'invalid-audio' });
+      }
+      if (sample.length > MAX_VOICE_SAMPLE_BYTES) {
+        return res
+          .status(413)
+          .json({ error: 'The voice sample is too large', code: 'audio-too-large' });
+      }
+      const safeName =
+        typeof filename === 'string' ? filename.replace(/[^\w.-]/g, '_').slice(-100) : '';
+      const extension = safeName.includes('.') ? safeName.split('.').pop().toLowerCase() : 'wav';
+      if (!VOICE_SAMPLE_EXTENSIONS.includes(extension)) {
+        return res
+          .status(400)
+          .json({ error: 'Unsupported audio file type', code: 'invalid-audio' });
+      }
+      const voiceLanguages = Array.isArray(languages)
+        ? [...new Set(languages.filter(l => TTS_LANGUAGES.includes(l)))]
+        : [];
+      const voiceGender = gender === 'male' || gender === 'female' ? gender : undefined;
+
+      try {
+        const voice = await resolved.provider.createVoice(resolved.cfg, {
+          name: voiceName,
+          audio: sample,
+          filename: safeName.includes('.') ? safeName : `sample.${extension}`,
+          languages: voiceLanguages,
+          gender: voiceGender
+        });
+        await logAudit({
+          req,
+          action: 'create',
+          resource: 'tts-voice',
+          resourceId: voice.id,
+          summary: `Created text-to-speech voice "${voiceName}" for model ${resolved.model.id}`
+        });
+        return res.json({ voice });
+      } catch (error) {
+        return sendVoicesError(res, error, 'create the voice');
+      }
+    }
+  );
+
+  /** DELETE /api/admin/models/:modelId/tts/voices/:voiceId — delete a custom voice. */
+  app.delete(
+    buildServerPath('/api/admin/models/:modelId/tts/voices/:voiceId'),
+    adminAuth,
+    async (req, res) => {
+      const resolved = resolveVoicesModel(req, res);
+      if (!resolved) return undefined;
+      const { voiceId } = req.params;
+      if (!/^[\w-]{1,100}$/.test(voiceId)) {
+        return res.status(400).json({ error: 'Invalid voice id', code: 'invalid-voice' });
+      }
+      try {
+        await resolved.provider.deleteVoice(resolved.cfg, voiceId);
+        await logAudit({
+          req,
+          action: 'delete',
+          resource: 'tts-voice',
+          resourceId: voiceId,
+          summary: `Deleted text-to-speech voice ${voiceId} of model ${resolved.model.id}`
+        });
+        return res.json({ deleted: voiceId });
+      } catch (error) {
+        return sendVoicesError(res, error, 'delete the voice');
+      }
+    }
+  );
 
   app.post(buildServerPath('/api/admin/models/:modelId/test'), adminAuth, async (req, res) => {
     try {

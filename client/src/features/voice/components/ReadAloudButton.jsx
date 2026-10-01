@@ -14,7 +14,7 @@ import { toggle, stop } from '../utils/readAloud';
  * @param {{ state: string, error: string|null }} props.playback - From `useReadAloudPlayback`.
  */
 function ReadAloudButton({ messageId, text, modelId = null, playback }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { state, error } = playback;
 
   let icon = 'speaker-wave';
@@ -45,7 +45,9 @@ function ReadAloudButton({ messageId, text, modelId = null, playback }) {
     <>
       <button
         type="button"
-        onClick={() => toggle(messageId, { text, modelId: modelId || undefined })}
+        onClick={() =>
+          toggle(messageId, { text, modelId: modelId || undefined, language: i18n.language })
+        }
         className={`flex items-center gap-1 transition-colors duration-150 ${className}`}
         title={label}
         aria-label={label}

@@ -213,7 +213,13 @@ Voxtral TTS.
   The **Test** field there speaks a sentence before you save. On the model, **Test** reports how
   much audio came back.
 - **Voices:** set on the model (**Voice**), for example `en_paul_neutral`, `gb_jane_neutral` or
-  `fr_marie_neutral`, or the id of a voice saved in the Mistral account.
+  `fr_marie_neutral`. Every voice reads every supported language, with its own accent.
+  **Voices per language** picks a native voice for each language. The language is detected from
+  the message, so a German answer gets the German voice even in an English UI.
+- **Custom voices:** Mistral has no German preset. On the TTS model, **Create a custom voice**
+  records 10–30 seconds from the microphone, or takes an uploaded audio file, and creates a voice
+  from it in the Mistral account, after you confirm the speaker agreed. **Show voices** lists the
+  presets and your own voices, with buttons to use one for a language or delete it.
 - **Who sees it:** users whose groups may use the TTS model. An app turns the button off with
   `features.textToSpeech: false`.
 - **Model type:** **Text-to-Speech** is a new model type. Like transcription models, TTS models

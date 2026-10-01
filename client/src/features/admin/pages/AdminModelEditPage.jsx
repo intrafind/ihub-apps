@@ -261,6 +261,13 @@ function AdminModelEditPage() {
       // The `tts` block is only valid on a text-to-speech model (the schema
       // rejects it elsewhere): switching the type away leaves it behind.
       if (dataToSend.modelType !== 'tts') delete dataToSend.tts;
+      // A language added without a voice yet means nothing to save.
+      if (dataToSend.tts?.voices) {
+        const voices = Object.entries(dataToSend.tts.voices).filter(([, voice]) => voice);
+        dataToSend.tts = { ...dataToSend.tts };
+        if (voices.length) dataToSend.tts.voices = Object.fromEntries(voices);
+        else delete dataToSend.tts.voices;
+      }
 
       // Remove empty and undefined fields (but preserve API key placeholder)
       Object.keys(dataToSend).forEach(key => {

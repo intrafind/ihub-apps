@@ -19,6 +19,7 @@ import { createParser } from 'eventsource-parser';
 import { httpFetch } from '../utils/httpConfig.js';
 import { getReadableStream } from '../utils/streamUtils.js';
 import { expandEnvVars, resolveApiKey } from '../transcription/credentials.js';
+import { selectVoice } from './language.js';
 
 export const DEFAULT_URL = 'https://api.mistral.ai/v1/audio/speech';
 export const DEFAULT_MODEL = 'voxtral-mini-tts-latest';
@@ -43,16 +44,18 @@ export class TtsUpstreamError extends Error {
 
 /**
  * @param {Object} model - The TTS model config as stored in cache.
+ * @param {{ language?: string|null }} [opts] - The message's language: picks
+ *   the voice configured for it in `tts.voices`, else `tts.voice`.
  * @returns {{ url: string, apiKey: string, model: string, voice: string }}
  */
-export function resolveUpstream(model) {
+export function resolveUpstream(model, { language } = {}) {
   return {
     url: expandEnvVars(model?.url || '').trim() || DEFAULT_URL,
     // Same chain a Mistral chat model uses: model key, the `mistral` provider
     // key, <MODEL_ID>_API_KEY, MISTRAL_API_KEY.
     apiKey: resolveApiKey(model, { credentialProvider: 'mistral', envVars: ['MISTRAL_API_KEY'] }),
     model: model?.modelId || DEFAULT_MODEL,
-    voice: model?.tts?.voice || DEFAULT_VOICE
+    voice: selectVoice(model?.tts, language) || DEFAULT_VOICE
   };
 }
 
@@ -207,9 +210,114 @@ export async function synthesize({ cfg, text, signal, onAudio }) {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Voices: the presets every account has, and custom voices cloned from a
+// short recording (`POST /v1/audio/voices` with a name and one audio sample).
+// Admin-only (server/routes/admin/models.js); the key never leaves the server.
+// ---------------------------------------------------------------------------
+
+/** Pages of 100 voices fetched at most when listing. */
+const MAX_VOICE_PAGES = 10;
+
+/** `…/v1/audio/speech` → `…/v1/audio/voices`; any other URL → its origin's. */
+export function voicesUrl(cfg) {
+  const url = String(cfg?.url || DEFAULT_URL).replace(/\/+$/, '');
+  if (/\/audio\/speech$/.test(url)) return url.replace(/\/audio\/speech$/, '/audio/voices');
+  try {
+    return `${new URL(url).origin}/v1/audio/voices`;
+  } catch {
+    return DEFAULT_URL.replace(/\/audio\/speech$/, '/audio/voices');
+  }
+}
+
+/** The fields of a Mistral voice an admin needs to pick one. */
+function toVoice(item) {
+  return {
+    id: item.id,
+    slug: item.slug || null,
+    name: item.name,
+    languages: Array.isArray(item.languages) ? item.languages : [],
+    gender: item.gender || null,
+    type: item.type || null
+  };
+}
+
+async function voicesRequest(cfg, path, init = {}) {
+  if (!cfg.apiKey) {
+    throw new TtsUpstreamError('No Mistral API key is configured for this text-to-speech model');
+  }
+  let response;
+  try {
+    response = await httpFetch(`${voicesUrl(cfg)}${path}`, {
+      ...init,
+      headers: {
+        Authorization: `Bearer ${cfg.apiKey}`,
+        ...(init.body ? { 'Content-Type': 'application/json' } : {}),
+        ...(init.headers || {})
+      },
+      signal: init.signal || AbortSignal.timeout(60_000)
+    });
+  } catch (error) {
+    throw new TtsUpstreamError(`Mistral voices unreachable: ${error.code || 'connection error'}`);
+  }
+  if (!response.ok) {
+    const bodyText = await response.text().catch(() => '');
+    throw new TtsUpstreamError(describeError(response.status, bodyText), {
+      status: response.status
+    });
+  }
+  return response.status === 204 ? null : response.json().catch(() => null);
+}
+
+/**
+ * Every voice the account can use: the presets and its own.
+ *
+ * @param {Object} cfg - `resolveUpstream(model)`
+ * @returns {Promise<Array<{ id, slug, name, languages, gender, type }>>}
+ */
+export async function listVoices(cfg) {
+  const voices = [];
+  for (let page = 1; page <= MAX_VOICE_PAGES; page++) {
+    const body = await voicesRequest(cfg, `?limit=100&page=${page}`);
+    for (const item of body?.items || []) voices.push(toVoice(item));
+    if (!body?.total_pages || page >= body.total_pages) break;
+  }
+  return voices;
+}
+
+/**
+ * Create a custom voice from one recording of the speaker.
+ *
+ * @param {Object} cfg - `resolveUpstream(model)`
+ * @param {{ name: string, audio: Buffer, filename: string, languages?: string[],
+ *   gender?: string }} voice
+ * @returns {Promise<{ id, slug, name, languages, gender, type }>}
+ */
+export async function createVoice(cfg, { name, audio, filename, languages, gender }) {
+  const body = await voicesRequest(cfg, '', {
+    method: 'POST',
+    body: JSON.stringify({
+      name,
+      sample_audio: audio.toString('base64'),
+      sample_filename: filename,
+      ...(languages?.length ? { languages } : {}),
+      ...(gender ? { gender } : {})
+    })
+  });
+  return toVoice(body || {});
+}
+
+/** Delete a custom voice. */
+export async function deleteVoice(cfg, voiceId) {
+  await voicesRequest(cfg, `/${encodeURIComponent(voiceId)}`, { method: 'DELETE' });
+}
+
 export default {
   id: 'mistral',
   sampleRate,
   resolveUpstream,
-  synthesize
+  synthesize,
+  listVoices,
+  createVoice,
+  deleteVoice
 };
