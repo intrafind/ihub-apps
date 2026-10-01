@@ -12,8 +12,8 @@
  * reopened a week later shows the searches, tool calls and workflow steps the
  * user watched live — rendered by the same components, from the same shapes.
  *
- * The web sources behind the answer are not part of it: they are stored as
- * the message's `webSearch` (`shared/webCitations.js`).
+ * The sources behind the answer are not part of it: they are stored as the
+ * message's `sources` (`shared/sources`); each tool call lists its own here.
  *
  * Pure and dependency-free apart from its siblings, so both sides import it.
  *

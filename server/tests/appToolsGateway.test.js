@@ -105,7 +105,7 @@ beforeEach(() => {
     status: 'ok',
     finalMessage: { role: 'assistant', content: '  the specialist answer  ' },
     toolCalls: [],
-    citations: [],
+    sources: null,
     usage: { promptTokens: 11, completionTokens: 7 },
     finishReason: 'stop'
   });
@@ -172,12 +172,65 @@ describe('invokeAppTool', () => {
     expect(call.user.isInvokedViaAppAsTool).toBe(true);
     expect(call.user.id).toBe('u-restricted');
 
-    // Slim payload: trimmed content, no empty citations key, usage passed through.
+    // Slim payload: trimmed content, no empty sources key, usage passed through.
     expect(result).toEqual({
       content: 'the specialist answer',
       usage: { promptTokens: 11, completionTokens: 7 },
       finishReason: 'stop'
     });
+  });
+
+  it('hands the app’s sources to the caller as the tool-result envelope, without passages', async () => {
+    invokeAppInternalMock.mockResolvedValueOnce({
+      status: 'ok',
+      finalMessage: { role: 'assistant', content: 'answer' },
+      toolCalls: [],
+      sources: {
+        items: [
+          {
+            id: 'ifinder:doc-1',
+            provider: 'ifinder',
+            kind: 'document',
+            title: 'Policy',
+            snippet: 'long excerpt',
+            passages: [{ text: 'a long passage' }],
+            ref: { id: 'doc-1', scope: 'hr' },
+            private: true
+          },
+          {
+            id: 'url:example.com',
+            provider: 'web',
+            kind: 'page',
+            url: 'https://example.com/',
+            private: false
+          }
+        ],
+        queries: ['policy']
+      }
+    });
+    const result = await invokeAppTool({
+      toolId: 'app__specialist',
+      args: { message: 'hi' },
+      user: wildcardUser(),
+      chatId: 'chat-1'
+    });
+    expect(result.sources).toEqual([
+      {
+        id: 'ifinder:doc-1',
+        provider: 'ifinder',
+        kind: 'document',
+        title: 'Policy',
+        ref: { id: 'doc-1', scope: 'hr' },
+        private: true
+      },
+      {
+        id: 'url:example.com',
+        provider: 'web',
+        kind: 'page',
+        url: 'https://example.com/',
+        private: false
+      }
+    ]);
   });
 
   it('rejects nested app-to-app calls', async () => {

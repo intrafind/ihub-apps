@@ -74,7 +74,7 @@ const STREAM_ONLY_PROVIDERS = new Set(['iassistant-conversation']);
 
 /** Extra per-chunk fields some adapters emit that a collected result should keep (last value wins). */
 const PASSTHROUGH_FIELDS = [
-  'citations',
+  'sources',
   'searchStatus',
   'conversationTitle',
   'conversationId',

@@ -14,6 +14,7 @@ import iAssistantProfileResolver from '../services/integrations/iAssistantProfil
 import { composeExtraContext } from '../services/integrations/iAssistantGrounding.js';
 import PromptService from '../services/PromptService.js';
 import logger from '../utils/logger.js';
+import { iAssistantSourceFrame } from '../services/sources/producers/ifinder.js';
 
 /**
  * Strings of an SSE array field, trimmed and with the empties dropped.
@@ -62,9 +63,23 @@ class IAssistantConversationAdapterClass extends BaseAdapter {
    * Use the line-delimited SSE parser from BaseAdapter.
    * The conversation API emits multi-event blocks separated by `\n\n` and
    * expects whole-block interpretation in processResponseBuffer.
+   *
+   * The documents and passages a block carries (`citations`) leave the adapter
+   * as sources (`chunk.sources`, see `services/sources/producers/ifinder.js`),
+   * with the conversation's search profile for documents whose ACCESS link
+   * names none, so the sources panel can preview, download and attach them.
    */
-  async *parseResponseStream(response) {
-    yield* this.parseLineDelimitedSseStream(response);
+  async *parseResponseStream(response, ctx) {
+    const searchProfile = ctx?.request?._searchProfile;
+    for await (const chunk of this.parseLineDelimitedSseStream(response)) {
+      if (chunk?.citations) {
+        const { citations, ...rest } = chunk;
+        const sources = iAssistantSourceFrame(citations, { searchProfile });
+        yield sources ? { ...rest, sources } : rest;
+      } else {
+        yield chunk;
+      }
+    }
   }
 
   /**

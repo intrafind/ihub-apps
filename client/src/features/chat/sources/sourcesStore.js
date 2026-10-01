@@ -1,7 +1,7 @@
 import { useSyncExternalStore } from 'react';
 
 /**
- * Which answer's sources view is open, and which citation is highlighted.
+ * Which answer's sources panel is open, and which citation is highlighted.
  *
  * The inline citation badges live inside the answer's rendered Markdown, the
  * source cards in a panel rendered next to the chat — two trees that share no
@@ -17,33 +17,37 @@ import { useSyncExternalStore } from 'react';
  *   hover:  { messageKey, n } | null — set while a badge or card is hovered or
  *           focused; shown over the pinned one, which returns when it ends
  *
- * @module features/chat/webSourcesStore
+ * @module features/chat/sources/sourcesStore
  */
 
 let state = { open: null, pinned: null, hover: null };
 const listeners = new Set();
 
+/** Update the state and notify the subscribers. */
 function set(next) {
   state = { ...state, ...next };
   for (const listener of listeners) listener();
 }
 
+/** For `useSyncExternalStore`: add a listener, return its removal. */
 function subscribe(listener) {
   listeners.add(listener);
   return () => listeners.delete(listener);
 }
 
+/** For `useSyncExternalStore`: the current state. */
 const getSnapshot = () => state;
 
+/** Whether `a` refers to citation `n` of the answer `messageKey`. */
 const same = (a, messageKey, n) => a?.messageKey === messageKey && a?.n === n;
 
-/** Open the sources view of an answer, optionally scrolled to citation `n`. */
-export function openWebSources(messageKey, focus = null) {
+/** Open the sources panel of an answer, optionally scrolled to citation `n`. */
+export function openSources(messageKey, focus = null) {
   set({ open: { messageKey, focus } });
 }
 
-/** Close the sources view, and drop the pinned highlight with it. */
-export function closeWebSources() {
+/** Close the sources panel, and drop the pinned highlight with it. */
+export function closeSources() {
   set({ open: null, pinned: null, hover: null });
 }
 
@@ -71,7 +75,7 @@ export function releaseCitation(messageKey, n) {
  * @returns {{open: Object|null, highlight: {messageKey: string, n: number}|null,
  *   pinned: Object|null}} `highlight` is the hovered citation, else the pinned one
  */
-export function useWebSourcesState() {
+export function useSourcesState() {
   const current = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
   return { open: current.open, pinned: current.pinned, highlight: current.hover || current.pinned };
 }
@@ -82,7 +86,7 @@ export function useWebSourcesState() {
  * @param {() => void} listener
  * @returns {() => void} unsubscribe
  */
-export function subscribeWebSources(listener) {
+export function subscribeSources(listener) {
   return subscribe(listener);
 }
 
@@ -92,6 +96,6 @@ export function currentCitationHighlight() {
 }
 
 /** Test helper — back to the initial state. */
-export function _resetWebSourcesStore() {
+export function _resetSourcesStore() {
   set({ open: null, pinned: null, hover: null });
 }

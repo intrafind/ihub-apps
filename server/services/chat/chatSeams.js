@@ -111,13 +111,7 @@ function toolCallRecords(toolCalls) {
  * aborted or failed — is still recorded, with the estimate taken when it
  * started: on the next `preStep`, or by the owner via `takePendingCall()`.
  */
-export function chatTurnSeam({
-  chatId,
-  buildLogData,
-  streaming,
-  telemetry = defaultTelemetry,
-  webSearchLog = null
-}) {
+export function chatTurnSeam({ chatId, buildLogData, streaming, telemetry = defaultTelemetry }) {
   /** The model call in flight: `{ model, request }` until its request side is recorded. */
   let pending = null;
   const take = () => {
@@ -160,9 +154,6 @@ export function chatTurnSeam({
     },
     async stepEnd(ctx, step) {
       const call = take();
-      if (webSearchLog && step.result?.groundingMetadata) {
-        webSearchLog.grounding.push(step.result.groundingMetadata);
-      }
       await telemetry.recordChatCallEnd({
         baseLog: buildLogData(streaming),
         model: ctx.model,
@@ -289,8 +280,7 @@ export function chatToolSeam({
   logInteraction,
   mcpAppViews = null,
   mcpAuthPrompts = null,
-  scheduledTaskProposals = null,
-  webSearchLog = null
+  scheduledTaskProposals = null
 }) {
   const recordView = view => {
     if (Array.isArray(mcpAppViews)) mcpAppViews.push(view);
@@ -341,14 +331,6 @@ export function chatToolSeam({
     },
     async postTool(ctx, info, outcome) {
       const { toolId, args } = info;
-      if (webSearchLog) {
-        webSearchLog.tools.push({
-          toolId: String(toolId),
-          args,
-          webSources: outcome.webSources || [],
-          status: outcome.error ? 'error' : 'completed'
-        });
-      }
       const mcp = mcpAppOf(info);
       // The auth-required marker is only ever produced by an MCP tool call
       // (McpClientManager._callUserTool); gate on the tool's own declared
@@ -422,7 +404,6 @@ export function chatToolSeam({
         resultPreview: previewToolResult(outcome.rawResult),
         ...(Number.isInteger(outcome.durationMs) ? { durationMs: outcome.durationMs } : {}),
         ...(outcome.knowledgeSource ? { knowledgeSource: outcome.knowledgeSource } : {}),
-        ...(outcome.webSources?.length ? { webSources: outcome.webSources } : {}),
         ...(mcpApp ? { mcpApp } : {}),
         ...(authRequired ? { authRequired } : {}),
         ...(scheduledTaskProposal ? { scheduledTaskProposal } : {})

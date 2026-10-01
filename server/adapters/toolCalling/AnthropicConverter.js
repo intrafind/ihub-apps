@@ -16,7 +16,7 @@ import {
 import { validateProviderToolName } from './toolNameValidator.js';
 import logger from '../../utils/logger.js';
 import { parseJsonAsync } from '../../utils/asyncJson.js';
-import { citationMarkers } from '../../../shared/webCitations.js';
+import { citationMarkers } from '../../../shared/sources/index.js';
 
 /**
  * Sanitize a JSON Schema for Anthropic's tool `input_schema`. Anthropic's
@@ -213,7 +213,7 @@ function addWebSearchCitations(result, citations) {
 /**
  * Citation markers for a text block Claude attached web search citations to,
  * appended right after the block so the chat can show a numbered badge where
- * the claim is made (see `shared/webCitations.js`). The API reports which
+ * the claim is made (see `shared/sources/citations.js`). The API reports which
  * block each citation supports but puts nothing into the text itself.
  * @param {Object} block - a text content block with `citations`
  * @param {Map<string, number>} numbers - URL → marker number, for the message

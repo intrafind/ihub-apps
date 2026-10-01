@@ -6,7 +6,12 @@
  */
 import { z } from 'zod';
 import { RUN_KINDS, RUN_STATUSES } from '../../../../shared/runEvents.js';
-import { usageSchema, principalSchema, toolCallRecordSchema } from './runLogEvents.js';
+import {
+  usageSchema,
+  principalSchema,
+  toolCallRecordSchema,
+  sourceSchema
+} from './runLogEvents.js';
 import { interactionSchema } from './interaction.js';
 
 /** A tool as offered to the model (provider-agnostic generic tool). */
@@ -153,16 +158,6 @@ export const loopRequestSchema = z.object({
     .optional()
 });
 
-export const citationSchema = z
-  .object({
-    url: z.string().optional(),
-    title: z.string().optional(),
-    source: z.string().optional(),
-    toolId: z.string().optional(),
-    taskId: z.string().nullable().optional()
-  })
-  .passthrough();
-
 export const loopResultSchema = z.object({
   runId: z.string(),
   status: z.enum(RUN_STATUSES),
@@ -172,7 +167,17 @@ export const loopResultSchema = z.object({
   usage: usageSchema,
   runUsage: usageSchema.optional(),
   iterations: z.number().int().nonnegative(),
-  citations: z.array(citationSchema).prefault([]),
+  /**
+   * Everything the segment's producers found — tool calls, model adapters,
+   * provider-run search — merged (`shared/sources/sourceSet.js`).
+   */
+  sources: z
+    .object({
+      items: z.array(sourceSchema).prefault([]),
+      queries: z.array(z.string()).prefault([]),
+      supports: z.array(z.object({ text: z.string(), urls: z.array(z.string()) })).prefault([])
+    })
+    .prefault({}),
   /** Present when toolExecution === 'caller' and the model requested tools. */
   toolCalls: z.array(toolCallRecordSchema).optional(),
   thoughtSignatures: z.array(z.any()).optional(),

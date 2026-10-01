@@ -192,8 +192,10 @@ default; a prompt an admin changed is left as is (the added guidance applies to 
 
 Every answer that used web search gets a **Searched for “…”** entry under it
 (**N searches** when there were several), with the icons of the sites it found.
-It opens the **sources view**, a side panel on desktop and a bottom sheet on
-phones, with two sections:
+It opens the **Sources** panel, a side panel on desktop and a bottom sheet on
+phones — the same panel that lists the documents iFinder, iAssistant or any
+other integration found for the answer (see [Answer Sources](answer-sources.md)),
+with two sections:
 
 - **Cited in this answer**: the sources the answer cites, numbered in the order
   it first cites them;
@@ -202,9 +204,10 @@ phones, with two sections:
 
 Each source card shows the site's favicon (as the search provider returned it;
 iHub fetches none from a third-party service, sites without one get their
-initial), the site, the title (opening the page in a new tab), the snippet or
+initial), the site, the title (opening the page), the snippet or
 the cited passage, the published date when known, and whether the page was
-**Read** or **Not readable**, with the words read and a *truncated* hint.
+**Read** or **Not readable**, with the words read and a *truncated* hint. Its
+menu copies the link.
 
 In the answer, each citation is a numbered superscript badge. Hovering or
 focusing a badge highlights the paragraph it supports and its card; hovering a
@@ -225,9 +228,11 @@ ordinary link. How the links get into the answer depends on the search path:
 | Google | The grounding supports: markers go after the passage each one backs. A grounding chunk no support rests on is listed under *Also considered* |
 | OpenAI Responses | The links OpenAI writes into the text. A `url_citation` annotation whose range does not link its source gets a marker after the range. Streamed annotations and `web_search_call` items are read into the same grounding metadata as the other providers |
 
-The queries and sources are stored with the saved answer (`webSearch` on the
-message), so a reopened or shared chat shows the same sources view and badges.
-For Google the markers are written into the stored text.
+The queries and sources are stored with the saved answer (`sources` on the
+message), so a reopened chat shows the same panel and badges, and a shared one
+the public web pages among them. A page only the page reader read is not
+shared: the reader can reach intranet hosts on the SSL whitelist. For Google
+the markers are written into the stored text.
 
 When web search is on for a turn, the server adds a short source instruction to
 the system prompt, next to the research guidance. It is not an admin setting —
@@ -537,7 +542,7 @@ Google Search grounding, OpenAI Web Search, and Anthropic Web Search are **not**
 | OpenAI (Responses API) | OpenAI Web Search | Combinable with function tools in the same request |
 | Anthropic Claude | Anthropic's server-side [web search tool](https://platform.claude.com/docs/en/agents-and-tools/tool-use/web-search-tool) | Combinable with function tools; Claude runs the search itself and returns results and citations in the same response, without a round trip through iHub; billed separately by Anthropic per search |
 
-None of these take any parameters — they're automatically enabled when `websearch.useNativeSearch` is on and the app's model supports them (Anthropic additionally receives the app's search cap as `max_uses`). Search queries, results and citations are surfaced as grounding metadata, which powers the "Grounding" answer-source badge and the [sources view and inline citations](#sources-and-citations). For OpenAI this includes streamed answers: the `url_citation` annotations and `web_search_call` items of the stream are read into the grounding metadata (before, only a non-streamed response's annotations were parsed, and nothing read them).
+None of these take any parameters — they're automatically enabled when `websearch.useNativeSearch` is on and the app's model supports them (Anthropic additionally receives the app's search cap as `max_uses`). Search queries, results and citations are surfaced as grounding metadata, which powers the "Grounding" answer-source badge and the [sources panel and inline citations](#sources-and-citations). For OpenAI this includes streamed answers: the `url_citation` annotations and `web_search_call` items of the stream are read into the grounding metadata (before, only a non-streamed response's annotations were parsed, and nothing read them).
 
 ### Web Content Extractor (`webContentExtractor`)
 

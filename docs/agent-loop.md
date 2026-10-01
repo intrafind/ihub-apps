@@ -87,7 +87,7 @@ defaults.
   content, finishReason,    // finishReason: provider value, or 'budget_exhausted' | 'clarification' | 'tool_passthrough_complete'
   usage, runUsage,          // this segment / the whole run (promptTokens, completionTokens, totalTokens)
   iterations, messages,     // rounds used; final provider-valid transcript
-  citations, knowledgeSources, thoughtSignatures, images,
+  sources, knowledgeSources, thoughtSignatures, images,   // sources: { items, queries, supports }
   disabledTools, budgetExhausted, budgetReason,   // 'tools_dead' | 'tokens' | 'rounds'
   toolCalls,                // only with toolExecution: 'caller'
   pendingInteraction,       // only with status 'paused'
@@ -107,7 +107,7 @@ is an object with any of these hooks; register it for every run with
 | `onChunk(ctx, chunk)`           | Every streamed chunk                                                | Forward to a client                                |
 | `stepEnd(ctx, step)`            | After each model turn (`step.result`, `step.usage`, `step.toolCalls`) | Capture grounding metadata, telemetry            |
 | `preTool(ctx, info)`            | Before a tool executes                                              | Return `{ handled, message, terminate }` to take the call over |
-| `postTool(ctx, info, outcome)`  | After a tool executed                                               | Rewrite `outcome.message`, lift images, add citations / knowledge sources |
+| `postTool(ctx, info, outcome)`  | After a tool executed                                               | Rewrite `outcome.message`, lift images, add knowledge sources |
 | `onHallucinated(ctx, info)`     | Model called an unregistered tool                                   | Record for audit                                   |
 | `onCircuitBroken(ctx, info)`    | A tool was withheld                                                 | Record / notify                                    |
 | `onCompaction(ctx, info)`       | Transcript was compacted (`trigger: 'proactive' | 'overflow'`)      | Telemetry                                          |
@@ -137,6 +137,20 @@ Built-in seams live in `server/services/loop/seams/`:
   (the inference API's JSON Schema validation) and asks for one corrected
   attempt when it does not hold; the ledger records the rejected attempt as a
   recoverable `error` and the correction as `message/user { synthetic: 'nudge' }`.
+
+## Sources
+
+What a run found is collected by the loop itself, for every caller (see
+[Answer Sources](answer-sources.md)): after each tool call it asks
+`extractToolSources()` (`server/services/sources/`) for the call's sources —
+a declaration in the tool definition, a registered producer (web search,
+page reader, iFinder), or the tool's own `sources` / MCP `resource_link`s —
+and it reads `chunk.sources` (model adapters such as iAssistant) and
+`chunk.groundingMetadata` (provider-run web search) as they stream.
+`ctx.addSources(frame, { step, callId, toolId })` merges each report into
+`ctx.sources`, writes it to the ledger as `sources/added` and hands it to the
+channel (`channel.onSources`), which the chat emits as the SSE frame of the
+same name. `LoopResult.sources` is the merged set.
 
 ## Callers
 
@@ -204,7 +218,7 @@ Seams a chat turn registers (`server/services/chat/chatSeams.js`), in order:
 
 Streamed chunks go to the channel (`server/services/chat/chatChannel.js`),
 which projects them onto `step/delta` (text, thinking, image), `tool/progress`
-(grounding, citations, search status) and `meta` frames through the run's
+(grounding, search status) and `meta` frames through the run's
 `RunStreamEmitter` → `sse.js` (see [SSE v2 Streaming](sse-v2.md)). `ChatService`
 emits the run frames itself: `run/started`, `run/paused`, `stream/error`
 (payload from `chatErrors.describeChatError()`) and `run/ended`.
@@ -216,7 +230,7 @@ nobody can answer a question, so `ask_user` gets a `NO_USER_AVAILABLE` error
 result instead of pausing the segment. The non-SSE POST answers with
 `{ messageId, model, content, finishReason, usage }`; `invokeAppInternal()`
 runs a `kind: 'subagent'` segment and returns
-`{ status, finalMessage, toolCalls, citations, usage, finishReason, model }`.
+`{ status, finalMessage, toolCalls, sources, usage, finishReason, model }`.
 
 ### Degenerate runs
 

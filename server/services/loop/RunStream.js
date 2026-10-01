@@ -583,10 +583,11 @@ export function projectLedgerEvent(ev) {
           resultPreview: d.resultPreview ?? null,
           ...(d.error ? { error: { message: String(d.error.message || 'error') } } : {}),
           ...(Number.isInteger(d.durationMs) ? { durationMs: d.durationMs } : {}),
-          ...(d.knowledgeSource ? { knowledgeSource: d.knowledgeSource } : {}),
-          ...(d.webSources?.length ? { webSources: d.webSources } : {})
+          ...(d.knowledgeSource ? { knowledgeSource: d.knowledgeSource } : {})
         })
       ];
+    case RUN_LOG_EVENTS.SOURCES_ADDED:
+      return [wrap(SSE_V2_EVENTS.SOURCES_ADDED, d)];
     case RUN_LOG_EVENTS.INTERACTION_RAISED:
       return d.interaction
         ? [wrap(SSE_V2_EVENTS.INTERACTION_RAISED, { interaction: d.interaction })]

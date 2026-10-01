@@ -1,55 +1,10 @@
 /**
- * The web search behind a live chat turn, as the sources view and the inline
- * citations read it — the same record the server stores with the answer
- * (`server/services/chat/chatMaterializer.js`), built by the same code
- * (`shared/webCitations.js`).
- *
- *   buildRunWebSearch(run) → { queries, sources, supports } | null
- *   webSearchLabel(t, webSearch) → "Searched for “…”" | "3 searches" | "Sources"
+ * Whether web search works with a model in an app — for the model picker.
+ * The sources a web search found are part of the answer's sources
+ * (`shared/sources`, `features/chat/sources/`).
  *
  * @module features/chat/webSearch
  */
-import { buildWebSearch } from '../../../../shared/webCitations.js';
-
-/**
- * @param {Object|null} run - RunState from the run reducer
- * @returns {{queries: string[], sources: Object[], supports: Object[]}|null}
- */
-export function buildRunWebSearch(run) {
-  if (!run) return null;
-  const tools = (run.tools || [])
-    .filter(tool => !tool.execution || tool.execution === 'server')
-    .map(tool => ({
-      toolId: tool.toolId,
-      args: tool.args,
-      webSources: tool.webSources,
-      status: tool.status,
-      error: tool.error
-    }));
-  // A completed step carries the server-merged grounding of that step; while
-  // streaming, the progress frames the reducer merged stand in.
-  const stepGrounding = Object.values(run.steps || {})
-    .map(step => step.groundingMetadata)
-    .filter(Boolean);
-  const grounding = stepGrounding.length ? stepGrounding : run.grounding ? [run.grounding] : [];
-  return buildWebSearch({ tools, grounding });
-}
-
-/**
- * The entry point's label: the query when there was one, the count when there
- * were several, "Sources" when the provider reported none.
- * @param {Function} t - i18next t
- * @param {{queries?: string[]}|null} webSearch
- * @returns {string}
- */
-export function webSearchLabel(t, webSearch) {
-  const queries = webSearch?.queries || [];
-  if (queries.length === 1) {
-    return t('webSources.searchedFor', 'Searched for “{{query}}”', { query: queries[0] });
-  }
-  if (queries.length > 1) return t('webSources.searches', { count: queries.length });
-  return t('webSources.title', 'Sources');
-}
 
 /** Providers that run web search themselves (mirrors the server's list). */
 const NATIVE_WEB_SEARCH_PROVIDERS = ['google', 'openai-responses', 'anthropic'];

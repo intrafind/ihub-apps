@@ -2,7 +2,6 @@ import { useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { hostnameOf } from '../../../../../shared/run/groundingSources.js';
-import { sourceKey } from '../../../../../shared/run/toolActivity.js';
 
 /**
  * What the turn did before it answered: the searches it ran (web or the
@@ -83,12 +82,12 @@ function ToolActivity({ activity, loading = false }) {
 function countRead(items, scope) {
   const keys = items
     .filter(item => (item.scope === 'documents') === (scope === 'documents'))
-    .flatMap(item => item.sources.filter(source => source.read).map(sourceKey));
+    .flatMap(item => item.sources.filter(source => source.read?.ok).map(source => source.id));
   return new Set(keys).size;
 }
 
 function countSources(items) {
-  return new Set(items.flatMap(item => item.sources.map(sourceKey))).size;
+  return new Set(items.flatMap(item => item.sources.map(source => source.id))).size;
 }
 
 function runningHeadline(t, items, reading) {
@@ -194,7 +193,7 @@ function ActivityItem({ item }) {
         {item.sources.length > 0 && (
           <ul className="mt-1 ms-5 space-y-0.5">
             {item.sources.map(source => (
-              <SourceRow key={sourceKey(source)} source={source} />
+              <SourceRow key={source.id} source={source} />
             ))}
           </ul>
         )}
@@ -232,12 +231,12 @@ function ActivityItem({ item }) {
           {label !== host && host && (
             <span className="text-gray-400 dark:text-gray-500">{host}</span>
           )}
-          {Number.isInteger(page?.wordCount) && page.wordCount > 0 && (
+          {page?.read?.words > 0 && (
             <span className="text-gray-400 dark:text-gray-500">
-              {t('toolActivity.wordsRead', { count: page.wordCount })}
+              {t('toolActivity.wordsRead', { count: page.read.words })}
             </span>
           )}
-          {page?.truncated && (
+          {page?.read?.truncated && (
             <span
               className="text-amber-600 dark:text-amber-400"
               title={t('toolActivity.truncatedTitle', 'The page is longer than what was read')}
@@ -355,17 +354,17 @@ function SourceRow({ source }) {
         </a>
       ) : (
         <span className="text-gray-700 dark:text-gray-300 truncate">
-          {source.title || source.documentId}
+          {source.title || source.ref?.id}
         </span>
       )}
       {source.title && host && (
         <span className="shrink-0 text-gray-400 dark:text-gray-500">{host}</span>
       )}
-      {source.read && (
+      {source.read?.ok && (
         <span
           className="shrink-0 inline-flex items-center gap-0.5 text-emerald-600 dark:text-emerald-400"
           title={
-            source.documentId
+            source.kind === 'document'
               ? t('toolActivity.readDocumentTitle', 'The document was read')
               : t('toolActivity.readTitle', 'The page was fetched and read')
           }
@@ -374,7 +373,7 @@ function SourceRow({ source }) {
           {t('toolActivity.read', 'Read')}
         </span>
       )}
-      {source.readFailed && (
+      {source.read?.ok === false && (
         <span
           className="shrink-0 text-amber-600 dark:text-amber-400"
           title={t('toolActivity.readFailedTitle', 'The page could not be fetched')}

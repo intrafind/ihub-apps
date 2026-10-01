@@ -13,7 +13,7 @@ import {
   RUN_STATUSES,
   RUN_KINDS
 } from '../../../../shared/runEvents.js';
-import { usageSchema, toolCallRecordSchema, webSourceSchema } from './runLogEvents.js';
+import { usageSchema, toolCallRecordSchema, sourcesAddedData } from './runLogEvents.js';
 import { interactionSchema, interactionAnswerSchema } from './interaction.js';
 
 const ts = z.string().datetime({ offset: true });
@@ -86,7 +86,6 @@ export const stepCompletedData = z.object({
   toolCalls: z.array(toolCallRecordSchema).prefault([]),
   finishReason: z.string().nullable().prefault(null),
   usage: usageSchema.optional(),
-  citations: z.any().optional(),
   sources: z.array(z.string()).optional(),
   groundingMetadata: z.any().optional()
 });
@@ -149,8 +148,6 @@ export const toolCompletedData = z.object({
   error: z.object({ code: z.string().optional(), message: z.string() }).optional(),
   durationMs: z.number().int().nonnegative().optional(),
   knowledgeSource: z.string().optional(),
-  /** Pages the call found or read (search / fetch tools), from the full result. */
-  webSources: z.array(webSourceSchema).optional(),
   /** MCP App view drawn from this call's full result. */
   mcpApp: mcpAppViewSchema.optional(),
   /**
@@ -227,6 +224,7 @@ export const sseV2EventSchema = z.discriminatedUnion('type', [
   z.object({ ...base, type: z.literal(SSE_V2_EVENTS.TOOL_STARTED), data: toolStartedData }),
   z.object({ ...base, type: z.literal(SSE_V2_EVENTS.TOOL_PROGRESS), data: toolProgressData }),
   z.object({ ...base, type: z.literal(SSE_V2_EVENTS.TOOL_COMPLETED), data: toolCompletedData }),
+  z.object({ ...base, type: z.literal(SSE_V2_EVENTS.SOURCES_ADDED), data: sourcesAddedData }),
   z.object({
     ...base,
     type: z.literal(SSE_V2_EVENTS.INTERACTION_RAISED),
@@ -253,6 +251,7 @@ export const sseV2EventDataSchemas = Object.freeze({
   [SSE_V2_EVENTS.TOOL_STARTED]: toolStartedData,
   [SSE_V2_EVENTS.TOOL_PROGRESS]: toolProgressData,
   [SSE_V2_EVENTS.TOOL_COMPLETED]: toolCompletedData,
+  [SSE_V2_EVENTS.SOURCES_ADDED]: sourcesAddedData,
   [SSE_V2_EVENTS.INTERACTION_RAISED]: interactionRaisedData,
   [SSE_V2_EVENTS.INTERACTION_ANSWERED]: interactionAnsweredData,
   [SSE_V2_EVENTS.PROGRESS_NODE]: progressNodeData,
