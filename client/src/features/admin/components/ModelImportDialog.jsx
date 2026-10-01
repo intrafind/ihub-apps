@@ -7,7 +7,8 @@ import { getLocalizedContent } from '../../../utils/localizeContent';
 import {
   CUSTOM_PROVIDER_API_TYPES,
   getProviderApiType,
-  isCustomLlmProvider
+  isCustomLlmProvider,
+  isReservedProviderId
 } from '../../../../../shared/llmProviders.js';
 import {
   apiTypeLabel,
@@ -147,6 +148,12 @@ function ModelImportDialog({ onClose, onImported, existingModelIds, initialProvi
       return t(
         'admin.models.import.errors.providerIdInvalid',
         'Use lowercase letters, numbers, dots, hyphens and underscores only.'
+      );
+    }
+    if (isReservedProviderId(newProvider.id)) {
+      return t(
+        'admin.models.import.errors.providerIdReserved',
+        'This ID is the name of an API type. Choose another ID.'
       );
     }
     if (providerIds.has(newProvider.id)) {

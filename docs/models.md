@@ -155,7 +155,7 @@ Providers → Create New Provider** (category **LLM Providers**):
 
 | Field | Description |
 | ----- | ----------- |
-| Name, ID, Description | Plain text. The ID cannot be changed later |
+| Name, ID, Description | Plain text. The ID cannot be changed later, and cannot be the name of an API type (`openai`, `openai-responses`, …) |
 | API type | The API the endpoint speaks: `openai` (OpenAI-compatible — LLM Hub, LM Studio, …), `local` (vLLM, through the vLLM adapter), `mistral`, `openai-responses`, `anthropic` or `google` |
 | Base URL | Optional. The API base, used to list the provider's models when importing |
 | API key | Stored encrypted on the provider and used by all of its models |

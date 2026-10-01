@@ -1128,7 +1128,8 @@
           "timeout": "The endpoint did not respond in time",
           "connectionRefused": "Connection refused",
           "hostNotFound": "Host not found",
-          "networkError": "Network error"
+          "networkError": "Network error",
+          "providerIdReserved": "This ID is the name of an API type. Choose another ID."
         }
       }
     },

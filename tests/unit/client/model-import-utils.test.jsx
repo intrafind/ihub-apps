@@ -4,6 +4,7 @@ import {
   buildNewProviderConfig,
   findIdProblems,
   getImportableProviders,
+  isValidId,
   slugify,
   suggestModelId,
   translateDiscoveryError
@@ -35,6 +36,20 @@ describe('suggestModelId / slugify', () => {
     const started = Date.now();
     expect(slugify(`${'._'.repeat(100000)}x${'._'.repeat(100000)}`)).toBe('x');
     expect(Date.now() - started).toBeLessThan(1000);
+  });
+});
+
+describe('isValidId', () => {
+  it('refuses what the server refuses, so an import fails before anything is created', () => {
+    expect(isValidId('llmhub-gpt-oss-120b')).toBe(true);
+    expect(isValidId('a'.repeat(100))).toBe(true);
+    expect(isValidId('a'.repeat(101))).toBe(false);
+    expect(isValidId('.')).toBe(false);
+    expect(isValidId('a..b')).toBe(false);
+    expect(isValidId('constructor')).toBe(false);
+    expect(isValidId('__proto__')).toBe(false);
+    expect(isValidId('Upper')).toBe(false);
+    expect(isValidId('')).toBe(false);
   });
 });
 
@@ -80,6 +95,16 @@ describe('buildImportedModelConfig', () => {
       supportsVision: true
     });
     expect(config.apiKey).toBeUndefined();
+  });
+
+  it('keeps the link to a custom provider whose ID equals an API type', () => {
+    const config = buildImportedModelConfig(entry, {
+      id: 'm',
+      apiType: 'openai-responses',
+      providerId: 'openai-responses',
+      modelsUrl: 'https://gateway.example.com/v1/models'
+    });
+    expect(config.providerId).toBe('openai-responses');
   });
 
   it('omits the link for a built-in provider of the same API type', () => {

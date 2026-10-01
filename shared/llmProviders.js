@@ -36,6 +36,34 @@ export const CUSTOM_PROVIDER_API_TYPES = Object.freeze([
   'google'
 ]);
 
+/**
+ * Every value a model's `provider` (API type) can take. Mirrors the `provider`
+ * enum of server/validators/modelConfigSchema.js; a test keeps them equal.
+ *
+ * None of them can be the ID of a new provider entry: a model without
+ * `providerId` takes its key from the entry named after its API type, so an
+ * entry called `openai-responses` would silently pick up every unlinked
+ * Responses-API model.
+ */
+export const MODEL_API_TYPES = Object.freeze([
+  'openai',
+  'openai-responses',
+  'anthropic',
+  'google',
+  'mistral',
+  'local',
+  'iassistant-conversation',
+  'bedrock',
+  'vllm-realtime',
+  'google-live',
+  'google-transcribe'
+]);
+
+/** True for an ID a new provider entry cannot take (see MODEL_API_TYPES). */
+export function isReservedProviderId(id) {
+  return MODEL_API_TYPES.includes(id);
+}
+
 /** True for an entry an admin created for an LLM gateway of their own. */
 export function isCustomLlmProvider(provider) {
   return Boolean(

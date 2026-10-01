@@ -10,12 +10,16 @@
  */
 
 import {
+  BUILT_IN_LLM_PROVIDERS,
   CUSTOM_PROVIDER_API_TYPES,
   getProviderApiType
 } from '../../../../../shared/llmProviders.js';
 
 /** Same rule as the `id` field of the model and provider schemas. */
 const ID_PATTERN = /^[a-z0-9._-]+$/;
+
+/** Names `isValidId` in server/utils/pathSecurity.js refuses as IDs. */
+const DANGEROUS_IDS = new Set(['__proto__', 'constructor', 'prototype']);
 
 /** English labels of the API types, used as i18n fallbacks. */
 const API_TYPE_LABELS = {
@@ -65,8 +69,22 @@ export function suggestModelId(remoteId, prefix = '') {
   return `${cleanPrefix}${slug}`;
 }
 
+/**
+ * Whether the server will accept `id` for a model or provider: the schema's
+ * character rule plus the path checks of `isValidId` in
+ * server/utils/pathSecurity.js. Checked before anything is created, so an
+ * import never creates the provider and then fails on every model.
+ */
 export function isValidId(id) {
-  return typeof id === 'string' && id.length > 0 && ID_PATTERN.test(id);
+  return (
+    typeof id === 'string' &&
+    id.length > 0 &&
+    id.length <= 100 &&
+    id !== '.' &&
+    !id.includes('..') &&
+    !DANGEROUS_IDS.has(id) &&
+    ID_PATTERN.test(id)
+  );
 }
 
 /**
@@ -155,8 +173,11 @@ export function buildImportedModelConfig(
     enabled,
     default: false
   };
-  // A built-in provider is named after its API type; linking to it is implied.
-  if (providerId && providerId !== apiType) config.providerId = providerId;
+  // A model reaches a built-in provider through its API type; a link to a
+  // custom provider is always stored (the server applies the same rule).
+  if (providerId && !BUILT_IN_LLM_PROVIDERS.includes(providerId)) {
+    config.providerId = providerId;
+  }
   if (entry.contextWindow) config.contextWindow = entry.contextWindow;
   if (entry.maxOutputTokens) config.maxOutputTokens = entry.maxOutputTokens;
   if (entry.supportsVision === true) config.supportsVision = true;

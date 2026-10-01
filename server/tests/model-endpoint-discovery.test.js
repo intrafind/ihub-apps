@@ -323,10 +323,14 @@ test('discoverModels rejects an API type it cannot list', async () => {
   );
 });
 
-test('comparableUrl ignores case of the origin and trailing slashes', () => {
+test('comparableUrl ignores case of the origin and trailing slashes, but not of the path', () => {
   assert.equal(
     comparableUrl('https://LLM-Server.example.com/v2/chat/completions/'),
     comparableUrl('https://llm-server.example.com/v2/chat/completions')
+  );
+  assert.notEqual(
+    comparableUrl('https://host/v1/Foo/chat/completions'),
+    comparableUrl('https://host/v1/foo/chat/completions')
   );
 });
 

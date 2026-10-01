@@ -20,7 +20,8 @@ import {
   CUSTOM_PROVIDER_API_TYPES,
   getLinkedModels,
   getProviderApiType,
-  isCustomLlmProvider
+  isCustomLlmProvider,
+  isReservedProviderId
 } from '../../services/llmProviders.js';
 import { stripTrailingSlashes } from '../../services/ModelEndpointDiscovery.js';
 
@@ -403,6 +404,13 @@ export default function registerAdminProvidersRoutes(app) {
       // Validate providerId for security
       if (!validateIdForPath(newProvider.id, 'provider', res)) {
         return;
+      }
+
+      if (isReservedProviderId(newProvider.id)) {
+        return sendBadRequest(
+          res,
+          `Provider ID '${newProvider.id}' is reserved for an API type. Choose another ID.`
+        );
       }
 
       if (!newProvider.category) {

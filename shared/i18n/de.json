@@ -1390,7 +1390,8 @@
           "timeout": "Der Endpunkt hat nicht rechtzeitig geantwortet",
           "connectionRefused": "Verbindung abgelehnt",
           "hostNotFound": "Host nicht gefunden",
-          "networkError": "Netzwerkfehler"
+          "networkError": "Netzwerkfehler",
+          "providerIdReserved": "Diese ID ist der Name eines API-Typs. Wählen Sie eine andere ID."
         }
       }
     },

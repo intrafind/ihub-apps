@@ -22,7 +22,11 @@ import {
   comparableUrl,
   ModelDiscoveryError
 } from '../../services/ModelEndpointDiscovery.js';
-import { getProviderApiType, resolveProviderApiKey } from '../../services/llmProviders.js';
+import {
+  BUILT_IN_LLM_PROVIDERS,
+  getProviderApiType,
+  resolveProviderApiKey
+} from '../../services/llmProviders.js';
 
 /**
  * The file a model id lives in.
@@ -170,10 +174,10 @@ export { describeModelTestFailure };
 
 /**
  * Bring a model's link to a provider entry in line with that entry, in place:
- * the model's `provider` becomes the entry's API type, and a link to the entry
- * the model would use anyway (`providerId: "openai"` on an OpenAI model) is
- * dropped. A model therefore cannot claim one API type while its provider
- * declares another.
+ * the model's `provider` becomes the entry's API type, and a link to a built-in
+ * entry (`providerId: "openai"`) is dropped, since the model reaches it through
+ * its API type anyway. A link to a custom entry is always kept. A model
+ * therefore cannot claim one API type while its provider declares another.
  *
  * @param {Object} model - Model config from the request body
  * @returns {string|null} Error message for a link that cannot be honoured
@@ -192,7 +196,7 @@ function applyProviderLink(model) {
     return `Provider "${model.providerId}" does not exist or is not an LLM provider`;
   }
   model.provider = apiType;
-  if (model.providerId === apiType) {
+  if (BUILT_IN_LLM_PROVIDERS.includes(model.providerId)) {
     delete model.providerId;
   }
   return null;

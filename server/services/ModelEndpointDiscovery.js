@@ -572,15 +572,17 @@ export async function discoverModels({ url, provider = 'openai', apiKey } = {}, 
 }
 
 /**
- * Comparable form of an inference URL: lower-case origin, no trailing slash.
- * Used to tell the admin which listed models are already configured.
+ * Comparable form of an inference URL: no trailing slash, and the origin in
+ * the lower case `URL` gives it. The path keeps its case — paths are
+ * case-sensitive. Used to tell the admin which listed models are already
+ * configured.
  */
 export function comparableUrl(url) {
   if (typeof url !== 'string') return '';
   try {
     const parsed = new URL(url);
-    return `${parsed.origin}${stripTrailingSlashes(parsed.pathname)}`.toLowerCase();
+    return `${parsed.origin}${stripTrailingSlashes(parsed.pathname)}`;
   } catch {
-    return stripTrailingSlashes(url.trim()).toLowerCase();
+    return stripTrailingSlashes(url.trim());
   }
 }

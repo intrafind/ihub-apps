@@ -41,6 +41,14 @@ function reset() {
       },
       { id: 'gateway', name: 'Gateway', category: 'llm', apiType: 'openai', enabled: true },
       { id: 'nokey', name: 'No key', category: 'llm', apiType: 'openai', enabled: true },
+      // Created before API-type names were reserved as provider IDs.
+      {
+        id: 'openai-responses',
+        name: 'Legacy gateway',
+        category: 'llm',
+        apiType: 'openai-responses',
+        enabled: true
+      },
       { id: 'brave', name: 'Brave', category: 'websearch', enabled: true }
     ]
   };
@@ -105,6 +113,8 @@ jest.unstable_mockModule('../services/ChangeHistoryService.js', () => ({
 const { default: registerAdminModelsRoutes } = await import('../routes/admin/models.js');
 const { default: registerAdminProvidersRoutes } = await import('../routes/admin/providers.js');
 const { getApiKeyForModel } = await import('../utils.js');
+const { modelConfigSchema } = await import('../validators/modelConfigSchema.js');
+const { MODEL_API_TYPES } = await import('../../shared/llmProviders.js');
 
 const app = express();
 app.use(express.json());
@@ -161,6 +171,17 @@ describe('POST/PUT /api/admin/models with providerId', () => {
       .send({ ...baseModel, id: 'gpt-x', provider: 'openai', providerId: 'openai' });
     expect(res.status).toBe(200);
     expect(store['models/gpt-x.json'].providerId).toBeUndefined();
+  });
+
+  it('keeps a link to a custom provider even when its ID equals its API type', async () => {
+    const res = await request(app)
+      .post('/api/admin/models')
+      .send({ ...baseModel, id: 'legacy-m', provider: 'openai', providerId: 'openai-responses' });
+    expect(res.status).toBe(200);
+    expect(store['models/legacy-m.json']).toMatchObject({
+      provider: 'openai-responses',
+      providerId: 'openai-responses'
+    });
   });
 
   it('rejects a link to an unknown or non-LLM provider', async () => {
@@ -251,6 +272,21 @@ describe('LLM provider CRUD', () => {
     delete store['models/llmhub-a.json'];
     const deleted = await request(app).delete('/api/admin/providers/llmhub');
     expect(deleted.status).toBe(200);
+  });
+
+  it('refuses an API-type name as the ID of a new provider', async () => {
+    for (const id of ['google-live', 'openai-responses', 'vllm-realtime']) {
+      const res = await request(app)
+        .post('/api/admin/providers')
+        .send({ id, name: 'Gateway', category: 'llm', apiType: 'openai' });
+      expect(res.status).toBe(400);
+    }
+  });
+
+  it('reserves exactly the API types the model schema accepts', () => {
+    expect([...MODEL_API_TYPES].sort()).toEqual(
+      [...modelConfigSchema.shape.provider.options].sort()
+    );
   });
 
   it('refuses to delete a built-in provider', async () => {
