@@ -549,7 +549,6 @@ export async function discoverModels({ url, provider = 'openai', apiKey } = {}, 
     component: 'ModelEndpointDiscovery',
     url: redactUrlSecrets(modelsUrl),
     provider,
-    withApiKey: Boolean(key),
     models: models.length
   });
 

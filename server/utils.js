@@ -144,13 +144,13 @@ export async function getApiKeyForModel(modelId) {
 
     // Fourth priority: Check for provider-specific API keys from environment
     if (providerConfigId !== provider) {
-      const linkedKeyName = providerEnvKeyName(providerConfigId);
-      if (config[linkedKeyName]) {
+      const providerEnvVar = providerEnvKeyName(providerConfigId);
+      if (config[providerEnvVar]) {
         logger.info(`Using environment variable API key`, {
           component: 'Utils',
-          envVar: linkedKeyName
+          envVar: providerEnvVar
         });
-        return config[linkedKeyName];
+        return config[providerEnvVar];
       }
       logger.error(`No API key found for provider or model-specific key`, {
         component: 'Utils',
