@@ -89,6 +89,25 @@ function JsonConfigField({ id, value, onChange, className }) {
  * @param {Object} model - The model configuration
  * @returns {Array<string>} List of environment variable names in priority order
  */
+// Mistral's preset voices (GET /v1/audio/voices), offered as suggestions for
+// a Mistral TTS model. Any other voice id saved in the account works too.
+const MISTRAL_PRESET_VOICES = [
+  'en_paul_neutral',
+  'en_paul_cheerful',
+  'en_paul_confident',
+  'en_paul_happy',
+  'en_paul_excited',
+  'gb_jane_neutral',
+  'gb_jane_confident',
+  'gb_jane_curious',
+  'gb_oliver_neutral',
+  'gb_oliver_cheerful',
+  'gb_oliver_confident',
+  'fr_marie_neutral',
+  'fr_marie_happy',
+  'fr_marie_curious'
+];
+
 const getEnvironmentVariableNames = model => {
   if (!model || !model.id || !model.provider) {
     return [];
@@ -257,6 +276,29 @@ function ModelFormEditor({
   };
 
   const isTranscription = data.modelType === 'transcription';
+  const isTts = data.modelType === 'tts';
+  // Chat-only settings (context window, reasoning, …) mean nothing to a model
+  // that turns audio into text or text into audio.
+  const isChat = !isTranscription && !isTts;
+
+  // The `tts` block is only valid on a TTS model (the schema rejects it on any
+  // other type), so leaving that type drops it.
+  const handleModelTypeChange = e => {
+    const modelType = e.target.value;
+    if (modelType === 'tts') {
+      onChange({ ...data, modelType, tts: { ...(data.tts || {}) } });
+      return;
+    }
+    const { tts: _dropped, ...rest } = data;
+    onChange({ ...rest, modelType });
+  };
+
+  const handleTtsChange = (key, value) => {
+    const next = { ...(data.tts || {}) };
+    if (value === '' || value === null || value === undefined) delete next[key];
+    else next[key] = value;
+    onChange({ ...data, tts: next });
+  };
 
   const providerOptions = [
     { value: 'openai', label: 'OpenAI' },
@@ -385,18 +427,19 @@ function ModelFormEditor({
                     id="modelType"
                     name="modelType"
                     value={data.modelType || 'chat'}
-                    onChange={handleInputChange}
+                    onChange={handleModelTypeChange}
                     className="mt-1 block w-full py-2 px-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md shadow-xs focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                   >
                     <option value="chat">{t('admin.models.modelType.chat', 'Chat')}</option>
                     <option value="transcription">
                       {t('admin.models.modelType.transcription', 'Transcription')}
                     </option>
+                    <option value="tts">{t('admin.models.modelType.tts', 'Text-to-Speech')}</option>
                   </select>
                   <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
                     {t(
                       'admin.models.hints.modelType',
-                      'Chat models answer prompts. Transcription models convert audio to text via a realtime endpoint (e.g. Voxtral).'
+                      'Chat models answer prompts. Transcription models convert audio to text via a realtime endpoint (e.g. Voxtral). Text-to-speech models read chat messages aloud (e.g. Voxtral TTS).'
                     )}
                   </p>
                 </div>
@@ -477,7 +520,9 @@ function ModelFormEditor({
                       placeholder={
                         isTranscription
                           ? t('admin.models.placeholders.realtimeUrl', 'ws://host:8080/v1/realtime')
-                          : t('admin.models.placeholders.apiUrl')
+                          : isTts
+                            ? 'https://api.mistral.ai/v1/audio/speech'
+                            : t('admin.models.placeholders.apiUrl')
                       }
                       className={`mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-xs sm:text-sm border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md ${
                         errors.url ? 'border-red-300 text-red-900 placeholder-red-300' : ''
@@ -492,9 +537,50 @@ function ModelFormEditor({
                         )}
                       </p>
                     )}
+                    {isTts && (
+                      <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                        {t(
+                          'admin.models.hints.ttsUrl',
+                          'Speech endpoint of the provider. It stays server-side and never reaches the browser.'
+                        )}
+                      </p>
+                    )}
                     {errors.url && (
                       <p className="mt-2 text-sm text-red-600 dark:text-red-400">{errors.url}</p>
                     )}
+                  </div>
+                )}
+
+                {isTts && (
+                  <div className="col-span-6 sm:col-span-3">
+                    <label
+                      htmlFor="ttsVoice"
+                      className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                    >
+                      {t('admin.models.fields.ttsVoice', 'Voice')}
+                    </label>
+                    <input
+                      type="text"
+                      id="ttsVoice"
+                      list="ttsVoiceOptions"
+                      value={data.tts?.voice || ''}
+                      onChange={e => handleTtsChange('voice', e.target.value)}
+                      placeholder="en_paul_neutral"
+                      className="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-xs sm:text-sm border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md"
+                    />
+                    {data.provider === 'mistral' && (
+                      <datalist id="ttsVoiceOptions">
+                        {MISTRAL_PRESET_VOICES.map(voice => (
+                          <option key={voice} value={voice} />
+                        ))}
+                      </datalist>
+                    )}
+                    <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                      {t(
+                        'admin.models.hints.ttsVoice',
+                        'Voice id of the provider: a Mistral preset such as en_paul_neutral, gb_jane_neutral or fr_marie_neutral, or the id of a voice saved in your Mistral account. Empty uses en_paul_neutral.'
+                      )}
+                    </p>
                   </div>
                 )}
 
@@ -569,7 +655,7 @@ function ModelFormEditor({
             </div>
             <div className="mt-5 md:mt-0 md:col-span-2">
               <div className="grid grid-cols-6 gap-6">
-                {!isTranscription && (
+                {isChat && (
                   <>
                     <div className="col-span-6 sm:col-span-2">
                       <label
@@ -841,26 +927,29 @@ function ModelFormEditor({
                           </label>
                         </div>
                       </div>
-                      <div className="flex items-start">
-                        <div className="flex items-center h-5">
-                          <input
-                            id="default"
-                            name="default"
-                            type="checkbox"
-                            checked={data.default || false}
-                            onChange={handleInputChange}
-                            className="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded-sm"
-                          />
+                      {/* Only a chat model can be the default chat model. */}
+                      {isChat && (
+                        <div className="flex items-start">
+                          <div className="flex items-center h-5">
+                            <input
+                              id="default"
+                              name="default"
+                              type="checkbox"
+                              checked={data.default || false}
+                              onChange={handleInputChange}
+                              className="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded-sm"
+                            />
+                          </div>
+                          <div className="ml-3 text-sm">
+                            <label
+                              htmlFor="default"
+                              className="font-medium text-gray-700 dark:text-gray-300"
+                            >
+                              {t('admin.models.fields.defaultModel')}
+                            </label>
+                          </div>
                         </div>
-                        <div className="ml-3 text-sm">
-                          <label
-                            htmlFor="default"
-                            className="font-medium text-gray-700 dark:text-gray-300"
-                          >
-                            {t('admin.models.fields.defaultModel')}
-                          </label>
-                        </div>
-                      </div>
+                      )}
                       <div className="flex items-start">
                         <div className="flex items-center h-5">
                           <input
@@ -925,7 +1014,7 @@ function ModelFormEditor({
                   </fieldset>
                 </div>
 
-                {!isTranscription && (
+                {isChat && (
                   <div className="col-span-6">
                     <fieldset>
                       <legend className="text-base font-medium text-gray-900 dark:text-gray-100">

@@ -833,11 +833,19 @@ export default function registerDataRoutes(app) {
         // a key (on-prem container, air-gapped) it connects to the host directly.
         // defaultService / transcription.defaultModelId are the platform-wide
         // voice defaults apps fall back to when they pick none of their own.
+        // tts says whether read aloud is on and with which model; whether this
+        // user may use that model is the client's /api/models?type=tts list.
         speech: platform.speech
           ? {
               defaultService: platform.speech.defaultService,
               transcription: platform.speech.transcription
                 ? { defaultModelId: platform.speech.transcription.defaultModelId }
+                : undefined,
+              tts: platform.speech.tts
+                ? {
+                    enabled: platform.speech.tts.enabled === true,
+                    defaultModelId: platform.speech.tts.defaultModelId || ''
+                  }
                 : undefined,
               realtime: platform.speech.realtime
                 ? { enabled: platform.speech.realtime.enabled }

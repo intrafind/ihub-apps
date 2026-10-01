@@ -28,7 +28,7 @@ Each model is defined with the following properties:
 | `name`                         | Object  | -        | **Required.** Localized display name (e.g., `{"en": "GPT-4"}`) shown in the user interface    |
 | `description`                  | Object  | -        | **Required.** Localized short description (e.g., `{"en": "..."}`) of the model's capabilities |
 | `provider`                     | String  | -        | **Required.** Provider identifier. See [Providers](#providers) for valid values                |
-| `modelType`                    | String  | `chat`   | `chat` (routed through the LLM adapter pipeline) or `transcription` (speech-to-text, routed through the transcription provider registry). See [Transcription Models](#transcription-models) |
+| `modelType`                    | String  | `chat`   | `chat` (routed through the LLM adapter pipeline), `transcription` (speech-to-text, routed through the transcription provider registry) or `tts` (text-to-speech for read aloud). See [Transcription Models](#transcription-models) and [Text-to-Speech Models](#text-to-speech-models) |
 | `url`                          | String  | -        | API endpoint URL for the model. Supports environment variable references like `${MY_URL}`. Transcription models use a `ws://` / `wss://` realtime URL |
 | `contextWindow`                | Number  | -        | Total input+output token capacity of the model's context window (nullable). Used for fitting documents and showing the user how much capacity is left |
 | `maxOutputTokens`              | Number  | -        | Maximum tokens the model may generate in a response, sent to the provider as `max_tokens` / `maxOutputTokens` (nullable). Defaults to 16384 at runtime if unset (never more than half the context window). Reasoning models spend their thinking tokens from this limit, so keep it well above the longest answer you expect |
@@ -271,6 +271,38 @@ under `platform.speech.realtime`:
 | `maxBufferedAudioBytesTotal` | 268435456 (256 MB) | Across the whole process. Exceeding it fails the session with `server-busy`. |
 
 Raise `maxBufferedAudioBytes` for hour-long recordings (one hour of 16 kHz PCM16 is ≈115 MB) and size `maxBufferedAudioBytesTotal` against the memory the instance can spare — `maxConnections` × `maxBufferedAudioBytes` is the theoretical worst case.
+
+### Text-to-Speech Models
+
+Models with `modelType: "tts"` read chat messages aloud: they power the play
+button on every message (see [Read Aloud (Text-to-Speech)](text-to-speech.md)).
+Like transcription models, they are not chat models. They run through the TTS
+provider registry (`server/tts/`) behind `POST /api/voice/speech`. They never
+appear in the chat model selector, and they can never be the default chat
+model. `GET /api/models?type=tts` lists the ones a user may use, without `url`
+or `apiKey`.
+
+The only provider so far is `mistral` (Voxtral TTS). The voice is set with
+`tts.voice`:
+
+```json
+{
+  "id": "voxtral-mini-tts",
+  "modelId": "voxtral-mini-tts-latest",
+  "name": { "en": "Voxtral TTS (Read aloud)" },
+  "description": { "en": "Mistral's Voxtral text-to-speech model." },
+  "url": "https://api.mistral.ai/v1/audio/speech",
+  "provider": "mistral",
+  "modelType": "tts",
+  "tts": { "voice": "en_paul_neutral" },
+  "enabled": false
+}
+```
+
+The model ships disabled. Enable it, give it a Mistral API key (or use the
+`mistral` provider key or `MISTRAL_API_KEY`), and choose it under
+**Admin → Voice Input → Read aloud**. **Admin → Models → Test** speaks a short
+sentence and reports how much audio came back.
 
 ### Image Generation Defaults
 

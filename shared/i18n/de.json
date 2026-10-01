@@ -590,7 +590,13 @@
     "imageLoadFailed": "Das gespeicherte Bild konnte nicht geladen werden.",
     "imageNotStored": "Dieses Bild konnte nicht gespeichert werden und ist nicht mehr verfügbar.",
     "loadingImage": "Bild wird geladen…",
-    "saveAsPrompt": "Als Prompt speichern"
+    "saveAsPrompt": "Als Prompt speichern",
+    "readAloud": "Vorlesen",
+    "readAloudLoading": "Audio wird geladen… Klicken zum Abbrechen",
+    "readAloudPause": "Pausieren",
+    "readAloudResume": "Fortsetzen",
+    "readAloudStop": "Vorlesen beenden",
+    "readAloudError": "Vorlesen fehlgeschlagen: {{error}}"
   },
   "errors": {
     "componentError": "Komponenten-Fehler",
@@ -993,6 +999,20 @@
           "noText": "Das Modell hat keinen Text geliefert. Prüfen Sie mit dem Mikrofon-Check, ob das Mikrofon Ton aufnimmt.",
           "empty": "Es wurde nichts aufgenommen."
         }
+      },
+      "tts": {
+        "title": "Vorlesen (Sprachausgabe)",
+        "description": "Fügt jeder Chat-Nachricht eine Wiedergabe-Schaltfläche hinzu. Die Nachricht wird vom unten gewählten Sprachausgabemodell gesprochen, und das Audio wird gestreamt, während es erzeugt wird. Nutzer sehen die Schaltfläche nur, wenn ihre Gruppen das Modell verwenden dürfen; eine App schaltet sie mit features.textToSpeech: false ab.",
+        "enabled": "Vorlese-Schaltfläche an Chat-Nachrichten anzeigen",
+        "model": "Sprachausgabemodell",
+        "modelDisabled": "deaktiviert",
+        "modelMissing": "Dieses Modell existiert nicht mehr, daher wird keine Vorlese-Schaltfläche angezeigt.",
+        "modelDisabledHint": "Dieses Modell ist deaktiviert, daher wird keine Vorlese-Schaltfläche angezeigt. Aktivieren Sie es unter Admin → Modelle und hinterlegen Sie einen API-Schlüssel.",
+        "noModelHint": "Wählen Sie ein Modell, sonst wird keine Vorlese-Schaltfläche angezeigt.",
+        "modelHint": "Modelle vom Typ „Sprachausgabe (TTS)“ aus Admin → Modelle. Die Stimme wird am Modell eingestellt.",
+        "test": "Test",
+        "testHint": "Spricht den Text mit dem gewählten Modell, so wie eine Chat-Nachricht vorgelesen wird. Funktioniert schon vor dem Speichern, das Modell muss aber aktiviert sein.",
+        "sampleText": "Hallo! So klingen Antworten, wenn sie vorgelesen werden."
       }
     },
     "agents": {
@@ -1241,7 +1261,8 @@
         "thinkingLevelLow": "Niedrig",
         "thinkingLevelMedium": "Mittel",
         "thinkingLevelHigh": "Hoch",
-        "thinkingThoughts": "Reasoning anzeigen"
+        "thinkingThoughts": "Reasoning anzeigen",
+        "ttsVoice": "Stimme"
       },
       "hints": {
         "modelId": "Eindeutige Kennung für das Modell (kann nach der Erstellung nicht geändert werden)",
@@ -1253,7 +1274,7 @@
         "supportsAudio": "Aktivieren, wenn dieses Modell Audioeingaben verarbeiten kann",
         "supportsImageGeneration": "Aktivieren, wenn dieses Modell Bilder erzeugen kann (z.B. Gemini Bildmodelle)",
         "maxReferenceImages": "Maximale Anzahl von Referenzbildern (1-14)",
-        "modelType": "Chat-Modelle beantworten Prompts. Transkriptionsmodelle wandeln Audio über einen Echtzeit-Endpunkt (z. B. Voxtral) in Text um.",
+        "modelType": "Chat-Modelle beantworten Prompts. Transkriptionsmodelle wandeln Audio über einen Echtzeit-Endpunkt (z. B. Voxtral) in Text um. Sprachausgabemodelle lesen Chat-Nachrichten vor (z. B. Voxtral TTS).",
         "realtimeUrl": "WebSocket-URL des vLLM-Echtzeit-Endpunkts. Sie bleibt serverseitig und erreicht niemals den Browser.",
         "nativeWebSearch": "Apps mit Websuche verwenden auf diesem Modell die integrierte Suche des Anbieters. Für Modelle oder Gateways ohne Unterstützung ausschalten; sie greifen dann auf Brave Search zurück.",
         "promptCachingOpenAI": "Sendet einen Cache-Schlüssel, damit Anfragen mit gleichem Prompt-Anfang den Cache von OpenAI wiederverwenden. Für api.openai.com standardmäßig an; für OpenAI-kompatible Server ausschalten, die unbekannte Parameter ablehnen.",
@@ -1263,7 +1284,9 @@
         "thinkingEnabled": "Das Modell vor der Antwort nachdenken lassen. Das Reasoning wird getrennt von der Antwort zurückgegeben; ohne diese Option schreibt ein Reasoning-Modell seine Gedanken stattdessen in den Antworttext.",
         "thinkingLevel": "Wird als reasoning_effort (OpenAI, vLLM) bzw. thinkingLevel (Gemini) gesendet. Server ohne Unterstützung ignorieren den Wert — beim Provider-Standard belassen, sofern das Modell diese Stufen nicht dokumentiert.",
         "thinkingThoughts": "Das Reasoning Nutzern hinter dem Umschalter „Denkprozess anzeigen“ zugänglich machen. Zum Verbergen deaktivieren.",
-        "maxOutputTokens": "Leer bedeutet der Standardwert ({{value}}), nicht unbegrenzt. Reasoning-Modelle verbrauchen ihre Denk-Tokens aus diesem Limit – halten Sie es deutlich über der längsten erwarteten Antwort."
+        "maxOutputTokens": "Leer bedeutet der Standardwert ({{value}}), nicht unbegrenzt. Reasoning-Modelle verbrauchen ihre Denk-Tokens aus diesem Limit – halten Sie es deutlich über der längsten erwarteten Antwort.",
+        "ttsUrl": "Sprach-Endpunkt des Anbieters. Er bleibt auf dem Server und erreicht nie den Browser.",
+        "ttsVoice": "Stimmen-ID des Anbieters: eine Mistral-Vorlage wie en_paul_neutral, gb_jane_neutral oder fr_marie_neutral oder die ID einer in Ihrem Mistral-Konto gespeicherten Stimme. Leer verwendet en_paul_neutral."
       },
       "placeholders": {
         "maxOutputTokens": "Standard: {{value}}",
@@ -1286,7 +1309,8 @@
       },
       "modelType": {
         "chat": "Chat",
-        "transcription": "Transkription"
+        "transcription": "Transkription",
+        "tts": "Sprachausgabe (TTS)"
       },
       "imageQuality": {
         "low": "Niedrig (1K)",

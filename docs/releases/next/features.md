@@ -193,3 +193,30 @@ knowledge".
   MCP and intranet tools, and pages read by the page reader — the same way they leave out the
   owner's document list. Public web searches keep their pages.
 - Applies to answers stored from this release on (requires **Durable Chats**).
+
+## Read Aloud: A Play Button on Every Chat Message
+
+Chat messages can now be read aloud. A play button in each message's action row sends the message
+to a text-to-speech model. The audio starts within about a second and keeps streaming while the
+rest is generated, so long answers play without waiting. The first supported model is Mistral
+Voxtral TTS.
+
+- **Play, pause, resume, stop:** while a message plays, the button pauses it, and clicking again
+  resumes from the same spot. The square next to it stops playback. Only one message plays at a
+  time. Leaving the chat stops it, and the request to the provider stops with it.
+- **What is read:** the message text without Markdown. Formatting marks, code blocks, images,
+  URLs and citation markers are left out, and tables are read cell by cell. A message that was
+  already played replays from memory without a new request.
+- **Setup:** enable the new **Voxtral TTS (Read aloud)** model under **Admin → Models**. It needs
+  a Mistral API key: on the model, the `mistral` provider key or `MISTRAL_API_KEY`. Then switch
+  read aloud on under **Admin → Voice Input → Read aloud (text-to-speech)** and pick the model.
+  The **Test** field there speaks a sentence before you save. On the model, **Test** reports how
+  much audio came back.
+- **Voices:** set on the model (**Voice**), for example `en_paul_neutral`, `gb_jane_neutral` or
+  `fr_marie_neutral`, or the id of a voice saved in the Mistral account.
+- **Who sees it:** users whose groups may use the TTS model. An app turns the button off with
+  `features.textToSpeech: false`.
+- **Model type:** **Text-to-Speech** is a new model type. Like transcription models, TTS models
+  never appear in the chat model selector and are never chosen as the default chat model.
+
+Read aloud is off until an admin switches it on. See `docs/text-to-speech.md`.

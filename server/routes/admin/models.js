@@ -16,6 +16,7 @@ import {
 import { logAudit } from '../../services/AuditLogService.js';
 import { saveSnapshot } from '../../services/ChangeHistoryService.js';
 import llmClient, { isLLMError, LLM_ERROR_CODES } from '../../services/loop/LLMClient.js';
+import { getTtsProvider, isTtsModel } from '../../tts/index.js';
 import { llmErrorToHttpStatus, isMissingApiKeyError } from '../../services/loop/llmHttpErrors.js';
 
 /**
@@ -567,6 +568,53 @@ export default function registerAdminModelsRoutes(app) {
    * `LLMError` code and a body of `{ error, details, code }` — `error` is the
    * short headline, `details` the remediation text shown by the admin UI.
    */
+  /**
+   * Synthesize one short sentence with a TTS model and report how much audio
+   * came back. Same response shape as a chat model test; `response` names the
+   * audio length and voice instead of an answer.
+   */
+  async function testTtsModel(model, res) {
+    const safeModel = { ...model };
+    delete safeModel.apiKey;
+    const provider = getTtsProvider(model.provider);
+    if (!provider) {
+      return res.status(400).json({
+        error: `Unsupported text-to-speech provider: ${model.provider}`,
+        code: 'unsupported-provider'
+      });
+    }
+    const cfg = provider.resolveUpstream(model);
+    let bytes = 0;
+    try {
+      await provider.synthesize({
+        cfg,
+        text: 'This is a test of the text to speech model.',
+        signal: AbortSignal.timeout(MODEL_TEST_TIMEOUT_MS),
+        onAudio: pcm => {
+          bytes += pcm.length;
+        }
+      });
+    } catch (error) {
+      logger.error('Text-to-speech model test failed', {
+        component: 'ModelsRoutes',
+        modelId: model.id,
+        provider: model.provider,
+        upstreamStatus: error.status,
+        error: error.message
+      });
+      const message = error.name === 'TtsUpstreamError' ? error.message : 'Text-to-speech failed';
+      return res.status(502).json({ error: message, details: message, code: 'upstream-error' });
+    }
+    const seconds = bytes / 2 / provider.sampleRate;
+    return res.json({
+      success: bytes > 0,
+      message: 'Model test successful',
+      messageKey: 'testSuccessful',
+      response: `Generated ${seconds.toFixed(1)} s of speech (voice: ${cfg.voice})`,
+      model: safeModel
+    });
+  }
+
   app.post(buildServerPath('/api/admin/models/:modelId/test'), adminAuth, async (req, res) => {
     try {
       const { modelId } = req.params;
@@ -580,6 +628,11 @@ export default function registerAdminModelsRoutes(app) {
       const model = models.find(m => m.id === modelId);
       if (!model) {
         return sendNotFound(res, 'Model');
+      }
+
+      // A text-to-speech model is tested by speaking a short sentence.
+      if (isTtsModel(model)) {
+        return testTtsModel(model, res);
       }
 
       try {
