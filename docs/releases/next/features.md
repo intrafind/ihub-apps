@@ -9,11 +9,12 @@ prompt for one app opens in that app and comes first in its `/` search.
 - **Save as prompt** on a chat message starts with the chat's app selected; switch to **Any app**
   to use the message everywhere.
 
-## Chat: Cited Sources Listed at the End of the Answer
+## Chat: Sources Entry Above the Answer, Cited Sources at Its End
 
-An answer that cites web pages, documents or records lists them again at its end, numbered like
-its citation badges, above the **Sources** entry. Sources that were only considered stay in the
-Sources panel.
+The **Searched for …** / **N sources** entry that opens the Sources panel now sits above the
+answer, so it is in view while the answer streams. An answer that cites web pages, documents or
+records also lists them again at its end, numbered like its citation badges. Sources that were
+only considered stay in the Sources panel.
 
 - A source's title opens it; its number opens the Sources panel at that source, with its passages
   and actions.

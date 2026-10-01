@@ -20,7 +20,9 @@ import {
   transformSourceCitations
 } from '../../../client/src/utils/sourceCitationTransformer';
 import StreamingMarkdown from '../../../client/src/features/chat/components/StreamingMarkdown';
-import AnswerSources from '../../../client/src/features/chat/components/AnswerSources';
+import AnswerSources, {
+  CitedSources
+} from '../../../client/src/features/chat/components/AnswerSources';
 import ModelSelector from '../../../client/src/features/chat/components/ModelSelector';
 import {
   _resetSourcesStore,
@@ -376,8 +378,24 @@ describe('AnswerSources', () => {
     }
   });
 
-  test('lists the cited sources at the end of the answer, not the ones only considered', () => {
+  // The entry above the answer and the cited list at its end, as ChatMessage renders them.
+  const renderWithCited = (set = sources, content = answer) => {
+    const view = resolveCitations(content, set);
+    return render(
+      <>
+        <AnswerSources messageKey="msg-1" sources={set} citations={view} />
+        <CitedSources messageKey="msg-1" sources={view.cited} />
+      </>
+    );
+  };
+
+  test('the entry itself lists no sources; the cited list does', () => {
     renderSources();
+    expect(screen.queryByRole('list', { name: 'Cited in this answer' })).not.toBeInTheDocument();
+  });
+
+  test('lists the cited sources at the end of the answer, not the ones only considered', () => {
+    renderWithCited();
     const list = screen.getByRole('list', { name: 'Cited in this answer' });
     const rows = within(list).getAllByRole('listitem');
     expect(rows.map(row => row.textContent)).toEqual([
@@ -403,7 +421,7 @@ describe('AnswerSources', () => {
       open = useSourcesState().open;
       return null;
     }
-    renderSources();
+    renderWithCited();
     render(<Probe />);
     const row = within(screen.getByRole('list', { name: 'Cited in this answer' }))
       .getByText('Docs')
@@ -420,16 +438,14 @@ describe('AnswerSources', () => {
   test('a source without a link opens the panel from its title', () => {
     const items = [{ ...minutes, markers: ['r:1'] }];
     const content = 'See the minutes <cite type="r">1</cite>.';
-    const set = { queries: [], items };
-    const view = resolveCitations(content, set);
-    render(<AnswerSources messageKey="msg-1" sources={set} citations={view} />);
+    renderWithCited({ queries: [], items }, content);
     const list = screen.getByRole('list', { name: 'Cited in this answer' });
     expect(within(list).queryByRole('link')).not.toBeInTheDocument();
     fireEvent.click(within(list).getByRole('button', { name: 'Board minutes' }));
     expect(screen.getByRole('dialog', { name: 'Sources' })).toBeInTheDocument();
   });
 
-  test('a long list folds after five, and no list is shown while the answer streams', () => {
+  test('a long list folds after five', () => {
     const many = Array.from({ length: 7 }, (_, i) => ({
       id: `url:site${i}.example`,
       provider: 'web',
@@ -439,21 +455,19 @@ describe('AnswerSources', () => {
       private: false
     }));
     const content = many.map((source, i) => `Claim ${i} [${i + 1}](${source.url}).`).join(' ');
-    const set = { queries: [], items: many };
-    const view = resolveCitations(content, set);
-    const { rerender } = render(
-      <AnswerSources messageKey="msg-1" sources={set} citations={view} listCited={false} />
-    );
-    expect(screen.queryByRole('list', { name: 'Cited in this answer' })).not.toBeInTheDocument();
+    renderWithCited({ queries: [], items: many }, content);
     expect(screen.getByRole('button', { name: /sources.sourcesCount:7/ })).toBeInTheDocument();
-
-    rerender(<AnswerSources messageKey="msg-1" sources={set} citations={view} />);
     const list = screen.getByRole('list', { name: 'Cited in this answer' });
     expect(within(list).getAllByRole('listitem')).toHaveLength(5);
     fireEvent.click(screen.getByRole('button', { name: 'sources.showMoreCited:2' }));
     expect(within(list).getAllByRole('listitem')).toHaveLength(7);
     fireEvent.click(screen.getByRole('button', { name: 'Show fewer' }));
     expect(within(list).getAllByRole('listitem')).toHaveLength(5);
+  });
+
+  test('nothing cited, no list', () => {
+    const { container } = render(<CitedSources messageKey="m" sources={[]} />);
+    expect(container).toBeEmptyDOMElement();
   });
 
   test('an answer that found nothing shows no entry', () => {

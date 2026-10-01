@@ -43,13 +43,11 @@ const CITED_LIST_LIMIT = 5;
 
 /**
  * Everything an answer found — web pages, documents, records, whichever
- * integration found them (`shared/sources`) — behind one entry under the
+ * integration found them (`shared/sources`) — behind one entry above the
  * answer: "Searched for “…”" or "N sources", with the sources' icons. It opens
  * the sources panel, a side panel on desktop and a bottom sheet on phones.
  *
- * Above the entry, the sources the answer cites are listed like footnotes,
- * numbered like its badges, so they can be read and opened without the panel.
- * What was only considered stays in the panel.
+ * At the answer's end, `CitedSources` lists what it cites like footnotes.
  *
  * The panel lists what the answer cites, numbered like its inline badges, and
  * what was found without being cited. Every card offers the actions its
@@ -64,11 +62,8 @@ const CITED_LIST_LIMIT = 5;
  * @param {Function} [props.onOpenInApp] - `(source, appId)`: open the source in a
  *   new chat of another app. Only surfaces with a router pass it (the Outlook
  *   task pane and the extension side panel have none, issue #2453).
- * @param {boolean} [props.listCited=true] - List the cited sources under the
- *   answer. Off while the answer streams, so the list does not grow under the
- *   text being written.
  */
-function AnswerSources({ messageKey, sources, citations, onOpenInApp = null, listCited = true }) {
+function AnswerSources({ messageKey, sources, citations, onOpenInApp = null }) {
   const { t } = useTranslation();
   const triggerRef = useRef(null);
   const { open, highlight } = useSourcesState();
@@ -85,10 +80,7 @@ function AnswerSources({ messageKey, sources, citations, onOpenInApp = null, lis
   const highlighted = highlight?.messageKey === messageKey ? highlight.n : null;
 
   return (
-    <div className="mt-2">
-      {listCited && cited.length > 0 && (
-        <CitedSources messageKey={messageKey} sources={cited} highlight={highlighted} />
-      )}
+    <div className="mb-2">
       <button
         ref={triggerRef}
         type="button"
@@ -139,20 +131,28 @@ function AnswerSources({ messageKey, sources, citations, onOpenInApp = null, lis
 }
 
 /**
- * The sources the answer cites, at its end like footnotes: number, icon,
- * title and where it lives. The title opens a source with a link; the number
- * (and the title of one without a link) shows it in the sources panel, where
- * its passages and actions are. Long lists fold after a few entries.
+ * The sources an answer cites, at its end like footnotes: number, icon, title
+ * and where it lives. The title opens a source with a link; the number (and
+ * the title of one without a link) shows it in the sources panel, where its
+ * passages and actions are. Long lists fold after a few entries. What was only
+ * considered stays in the panel.
+ *
+ * @param {Object} props
+ * @param {string} props.messageKey - The answer's id
+ * @param {Object[]} props.sources - The cited sources, numbered (`resolveCitations().cited`)
  */
-function CitedSources({ messageKey, sources, highlight }) {
+export function CitedSources({ messageKey, sources }) {
   const { t } = useTranslation();
   const headingId = useId();
+  const { highlight: current } = useSourcesState();
   const [showAll, setShowAll] = useState(false);
+  if (!sources?.length) return null;
+  const highlight = current?.messageKey === messageKey ? current.n : null;
   const shown = showAll ? sources : sources.slice(0, CITED_LIST_LIMIT);
   const folded = sources.length - CITED_LIST_LIMIT;
 
   return (
-    <div className="mb-2 border-t border-gray-200 pt-2 dark:border-gray-700">
+    <div className="mt-3 border-t border-gray-200 pt-2 dark:border-gray-700">
       <h4
         id={headingId}
         className="mb-1 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400"
