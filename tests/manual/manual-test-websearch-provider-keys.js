@@ -157,7 +157,8 @@ async function runTests() {
     logTest('Brave has a name', hasTextName(braveInFile));
     logTest('Custom has a name', hasTextName(customInFile));
 
-    const test5Passed = braveInFile && customInFile && hasTextName(braveInFile);
+    const test5Passed =
+      braveInFile && customInFile && hasTextName(braveInFile) && hasTextName(customInFile);
     if (test5Passed) passedTests++;
 
     // Summary

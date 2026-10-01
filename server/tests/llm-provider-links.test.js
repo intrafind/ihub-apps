@@ -19,6 +19,7 @@ import express from 'express';
 
 process.env.OPENAI_API_KEY = 'sk-openai-env';
 process.env.GATEWAY_API_KEY = 'gateway-env-key';
+process.env.DEFAULT_API_KEY = 'default-env-key';
 
 /** In-memory `contents/`, keyed by relative path. */
 const store = {};
@@ -144,6 +145,16 @@ describe('API key of a linked model', () => {
   it('never falls back to the environment key of its API type', async () => {
     addModel({ ...baseModel, id: 'nokey-model', provider: 'openai', providerId: 'nokey' });
     expect(await getApiKeyForModel('nokey-model')).toBeNull();
+  });
+
+  it('never falls back to DEFAULT_API_KEY for a custom provider named like its API type', async () => {
+    addModel({
+      ...baseModel,
+      id: 'legacy-linked',
+      provider: 'openai-responses',
+      providerId: 'openai-responses'
+    });
+    expect(await getApiKeyForModel('legacy-linked')).toBeNull();
   });
 
   it('is unchanged for unlinked models', async () => {

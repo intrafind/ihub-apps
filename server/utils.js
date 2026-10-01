@@ -6,7 +6,11 @@ import configCache from './configCache.js';
 import tokenStorageService from './services/TokenStorageService.js';
 import logger from './utils/logger.js';
 import { findByIdCaseInsensitive } from './utils/resourceLookup.js';
-import { getModelProviderId, providerEnvKeyName } from './services/llmProviders.js';
+import {
+  BUILT_IN_LLM_PROVIDERS,
+  getModelProviderId,
+  providerEnvKeyName
+} from './services/llmProviders.js';
 
 /**
  * Sanitize user-provided input for logging to prevent log injection
@@ -142,8 +146,10 @@ export async function getApiKeyForModel(modelId) {
       return modelSpecificKey;
     }
 
-    // Fourth priority: Check for provider-specific API keys from environment
-    if (providerConfigId !== provider) {
+    // Fourth priority: Check for provider-specific API keys from environment.
+    // Decided by the link itself, not by comparing IDs: a custom entry may be
+    // named like its API type (created before those names were reserved).
+    if (model.providerId && !BUILT_IN_LLM_PROVIDERS.includes(model.providerId)) {
       const providerEnvVar = providerEnvKeyName(providerConfigId);
       if (config[providerEnvVar]) {
         logger.info(`Using environment variable API key`, {
