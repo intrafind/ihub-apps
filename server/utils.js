@@ -6,6 +6,11 @@ import configCache from './configCache.js';
 import tokenStorageService from './services/TokenStorageService.js';
 import logger from './utils/logger.js';
 import { findByIdCaseInsensitive } from './utils/resourceLookup.js';
+import {
+  BUILT_IN_LLM_PROVIDERS,
+  getModelProviderId,
+  providerEnvKeyName
+} from './services/llmProviders.js';
 
 /**
  * Sanitize user-provided input for logging to prevent log injection
@@ -28,9 +33,13 @@ function sanitizeForLog(input) {
  * Helper function to get API key for a model
  * Checks in this order:
  * 1. Model's stored encrypted API key (from model config)
- * 2. Provider's stored encrypted API key (from providers config)
+ * 2. Provider's stored encrypted API key (from providers config) — the entry
+ *    named by `model.providerId`, else by `model.provider`
  * 3. Environment variable for model-specific key
- * 4. Environment variable for provider key
+ * 4. Environment variable for provider key. A model linked to a custom
+ *    provider only reads that provider's variable (e.g. LLMHUB_API_KEY), never
+ *    the one of its API type: an LLM Hub model speaking the OpenAI API must not
+ *    be sent OPENAI_API_KEY.
  * @param {string} modelId - The model ID
  * @returns {string|null} The API key or null if not found
  */
@@ -87,9 +96,10 @@ export async function getApiKeyForModel(modelId) {
     }
 
     // Second priority: Check provider-level encrypted API key
+    const providerConfigId = getModelProviderId(model);
     try {
       const { data: providers = [] } = configCache.getProviders(true);
-      const providerConfig = providers.find(p => p.id === provider);
+      const providerConfig = providers.find(p => p.id === providerConfigId);
 
       if (providerConfig && providerConfig.apiKey) {
         try {
@@ -99,21 +109,21 @@ export async function getApiKeyForModel(modelId) {
             const decryptedKey = tokenStorageService.decryptString(providerConfig.apiKey);
             logger.info(`Using stored encrypted provider API key for provider`, {
               component: 'Utils',
-              provider: sanitizeForLog(provider)
+              provider: sanitizeForLog(providerConfigId)
             });
             return decryptedKey;
           } else {
             // If not encrypted, use as-is (for backwards compatibility during migration)
             logger.info(`Using stored plaintext provider API key for provider`, {
               component: 'Utils',
-              provider: sanitizeForLog(provider)
+              provider: sanitizeForLog(providerConfigId)
             });
             return providerConfig.apiKey;
           }
         } catch (error) {
           logger.error('Failed to decrypt provider API key', {
             component: 'Utils',
-            provider: sanitizeForLog(provider),
+            provider: sanitizeForLog(providerConfigId),
             error: error.message
           });
           // Continue to fallback options
@@ -136,7 +146,25 @@ export async function getApiKeyForModel(modelId) {
       return modelSpecificKey;
     }
 
-    // Fourth priority: Check for provider-specific API keys from environment
+    // Fourth priority: Check for provider-specific API keys from environment.
+    // Decided by the link itself, not by comparing IDs: a custom entry may be
+    // named like its API type (created before those names were reserved).
+    if (model.providerId && !BUILT_IN_LLM_PROVIDERS.includes(model.providerId)) {
+      const providerEnvVar = providerEnvKeyName(providerConfigId);
+      if (config[providerEnvVar]) {
+        logger.info(`Using environment variable API key`, {
+          component: 'Utils',
+          envVar: providerEnvVar
+        });
+        return config[providerEnvVar];
+      }
+      logger.error(`No API key found for provider or model-specific key`, {
+        component: 'Utils',
+        provider: sanitizeForLog(providerConfigId),
+        modelSpecificKeyName
+      });
+      return null;
+    }
     switch (provider) {
       case 'openai':
         return config.OPENAI_API_KEY;

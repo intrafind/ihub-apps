@@ -3,6 +3,7 @@ import {
   CHUNK_SAMPLES,
   TARGET_SAMPLE_RATE,
   createTranscriptAssembler,
+  isCompletionClose,
   resampleTo16kMono,
   floatTo16BitPCM
 } from './realtimeTranscriptionCore';
@@ -219,13 +220,15 @@ export async function transcribeAudioBuffer(audioBuffer, opts = {}) {
       if (!settled && !ready) fail('connect', 'Transcription connection failed');
     };
 
-    ws.onclose = () => {
+    ws.onclose = evt => {
       if (settled) return;
-      // Completion is only trusted after `stop` was sent — a close mid-stream
-      // means the transcript is TRUNCATED, and silently resolving would present
-      // a partial transcript as complete. The caller keeps the partial text via
-      // its onDelta bookkeeping and can annotate it as interrupted.
-      if (stopSent) finish();
+      // Completion is only trusted after `stop` was sent, and only on the
+      // server's own completion close (see isCompletionClose). A close
+      // mid-stream, a dropped connection after `stop` (proxy timeout, network)
+      // or a close with an error code means the transcript is TRUNCATED, and
+      // silently resolving would present a partial transcript as complete —
+      // the chat would send it as the message.
+      if (stopSent && isCompletionClose(evt)) finish();
       else fail('interrupted', 'Transcription connection closed before completion');
     };
   });

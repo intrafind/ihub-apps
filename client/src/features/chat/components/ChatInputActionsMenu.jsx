@@ -550,7 +550,7 @@ function ChatInputActionsMenu({
                   <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
                     {t(
                       'transcription.toggleDescription',
-                      'Transcribe uploaded audio/video with the transcription model instead of the chat model'
+                      'Uploaded audio and video are transcribed into your message, and the chat model answers the text'
                     )}
                   </div>
                 </div>

@@ -944,7 +944,7 @@
         },
         "recording": {
           "title": "Aufnahme (aufnehmen → transkribieren)",
-          "description": "Nehmen Sie einen kurzen Clip auf (bis zu {{seconds}} Sekunden) und lassen Sie ihn von einem Transkriptionsmodell transkribieren – genau wie mit der Aufnahme-Schaltfläche im Chat.",
+          "description": "Nehmen Sie einen kurzen Clip auf (bis zu {{seconds}} Sekunden) und lassen Sie ihn über dieselbe Verbindung wie im Chat von einem Transkriptionsmodell transkribieren – mit der Dauer bis zum Transkript.",
           "model": "Transkriptionsmodell",
           "platformDefault": "Plattform-Standard",
           "start": "Aufnahme starten",
@@ -1032,7 +1032,8 @@
         "info": {
           "title": "Über Anbieter-API-Schlüssel",
           "description": "API-Schlüssel, die hier konfiguriert werden, werden als Fallback für alle Modelle dieses Anbieters verwendet, die keinen eigenen API-Schlüssel konfiguriert haben. Wenn Sie dieses Feld leer lassen, verwendet das System stattdessen die Umgebungsvariable."
-        }
+        },
+        "subtitle": "Diesen Anbieter und seinen API-Schlüssel konfigurieren"
       },
       "create": {
         "title": "Neuen Anbieter erstellen",
@@ -1048,7 +1049,10 @@
         "enabled": "Anbieter aktiviert",
         "cancel": "Abbrechen",
         "save": "Anbieter erstellen",
-        "saving": "Wird erstellt..."
+        "saving": "Wird erstellt...",
+        "llmHelp": "Ein LLM-Anbieter hält einen API-Schlüssel für alle seine Modelle. Verknüpfen Sie Modelle im Modell-Editor mit ihm oder importieren Sie sie von seinem Endpunkt.",
+        "nameRequired": "Der Name des Anbieters ist erforderlich",
+        "subtitle": "Legen Sie einen LLM-Anbieter für einen eigenen Endpunkt, einen Websuche-Anbieter oder einen allgemeinen API-Schlüssel an"
       },
       "info": {
         "title": "API-Schlüssel-Priorität",
@@ -1085,6 +1089,36 @@
         "testFailed": "Test fehlgeschlagen",
         "hideResults": "Ergebnisse ausblenden",
         "showResults": "Ergebnisse anzeigen"
+      },
+      "deleteConfirm": "Anbieter „{{name}}“ löschen?",
+      "fields": {
+        "name": "Name",
+        "id": "ID",
+        "description": "Beschreibung",
+        "apiType": "API-Typ",
+        "baseUrl": "Basis-URL"
+      },
+      "hints": {
+        "apiType": "Welche API der Endpunkt spricht. Gateways wie T-Systems LLM Hub sind OpenAI-kompatibel; für einen selbst betriebenen vLLM-Server vLLM wählen.",
+        "apiTypeBuiltIn": "Integrierte Anbieter sprechen immer ihre eigene API.",
+        "baseUrl": "Optional. Die API-Basis, von der beim Import die Modelle des Anbieters gelesen werden."
+      },
+      "apiTypes": {
+        "openai": "OpenAI-kompatibel (OpenAI, LLM Hub, LM Studio, …)",
+        "local": "vLLM / selbst betrieben (local)",
+        "mistral": "Mistral",
+        "openai-responses": "OpenAI Responses API",
+        "anthropic": "Anthropic",
+        "google": "Google Gemini",
+        "bedrock": "AWS Bedrock"
+      },
+      "linkedModels": {
+        "title": "Verknüpfte Modelle",
+        "description": "Diese Modelle verwenden den API-Schlüssel dieses Anbieters, sofern sie keinen eigenen haben.",
+        "import": "Modelle importieren",
+        "none": "Mit diesem Anbieter sind keine Modelle verknüpft.",
+        "count": "{{count}} verknüpft, {{enabled}} aktiv",
+        "more": "+{{count}} weitere"
       }
     },
     "models": {
@@ -1203,7 +1237,8 @@
         "thinkingLevelLow": "Niedrig",
         "thinkingLevelMedium": "Mittel",
         "thinkingLevelHigh": "Hoch",
-        "thinkingThoughts": "Reasoning anzeigen"
+        "thinkingThoughts": "Reasoning anzeigen",
+        "customProviders": "Eigene Anbieter"
       },
       "hints": {
         "modelId": "Eindeutige Kennung für das Modell (kann nach der Erstellung nicht geändert werden)",
@@ -1225,7 +1260,8 @@
         "thinkingEnabled": "Das Modell vor der Antwort nachdenken lassen. Das Reasoning wird getrennt von der Antwort zurückgegeben; ohne diese Option schreibt ein Reasoning-Modell seine Gedanken stattdessen in den Antworttext.",
         "thinkingLevel": "Wird als reasoning_effort (OpenAI, vLLM) bzw. thinkingLevel (Gemini) gesendet. Server ohne Unterstützung ignorieren den Wert — beim Provider-Standard belassen, sofern das Modell diese Stufen nicht dokumentiert.",
         "thinkingThoughts": "Das Reasoning Nutzern hinter dem Umschalter „Denkprozess anzeigen“ zugänglich machen. Zum Verbergen deaktivieren.",
-        "maxOutputTokens": "Leer bedeutet der Standardwert ({{value}}), nicht unbegrenzt. Reasoning-Modelle verbrauchen ihre Denk-Tokens aus diesem Limit – halten Sie es deutlich über der längsten erwarteten Antwort."
+        "maxOutputTokens": "Leer bedeutet der Standardwert ({{value}}), nicht unbegrenzt. Reasoning-Modelle verbrauchen ihre Denk-Tokens aus diesem Limit – halten Sie es deutlich über der längsten erwarteten Antwort.",
+        "linkedProvider": "Verwendet den API-Schlüssel des Anbieters „{{provider}}“ und dessen API-Typ ({{apiType}})."
       },
       "placeholders": {
         "maxOutputTokens": "Standard: {{value}}",
@@ -1254,6 +1290,71 @@
         "low": "Niedrig (1K)",
         "medium": "Mittel (2K)",
         "high": "Hoch (4K)"
+      },
+      "import": {
+        "button": "Von URL importieren",
+        "title": "Modelle von URL importieren",
+        "subtitle": "Liest die Modellliste eines OpenAI-kompatiblen, vLLM-, Mistral-, Anthropic- oder Google-Endpunkts und legt die ausgewählten Modelle an.",
+        "provider": "Anbieter",
+        "newProvider": "+ Neuer Anbieter",
+        "providerHint": "Der Anbieter hält den API-Schlüssel für alle importierten Modelle. Legen Sie für einen neuen Endpunkt, z. B. T-Systems LLM Hub, einen neuen an.",
+        "usesProviderKey": "Der beim Anbieter gespeicherte API-Schlüssel wird verwendet.",
+        "noProviderKey": "Beim Anbieter ist kein API-Schlüssel gespeichert: Seine Umgebungsvariable wird verwendet, falls gesetzt, sonst wird der Endpunkt ohne Schlüssel aufgerufen.",
+        "url": "Endpunkt-URL",
+        "urlHint": "Die API-Basis (…/v1), ihre /models-Liste oder eine Chat-Completions-URL. iHub liest die Modellliste von /models.",
+        "apiKey": "API-Schlüssel",
+        "apiKeyHint": "Optional. Wird verschlüsselt beim neuen Anbieter gespeichert, nicht bei den Modellen. Für Endpunkte ohne Authentifizierung, z. B. einen lokalen vLLM-Server, leer lassen.",
+        "loadModels": "Modelle laden",
+        "loading": "Modelle werden geladen…",
+        "found": "{{count}} Modelle unter {{url}}",
+        "changeConnection": "Endpunkt ändern",
+        "idPrefix": "ID-Präfix",
+        "enableModels": "Importierte Modelle aktivieren",
+        "noModels": "Der Endpunkt listet keine Modelle.",
+        "selectAll": "Alle Chat-Modelle auswählen",
+        "model": "Modell",
+        "context": "Kontext",
+        "targetId": "iHub-Modell-ID",
+        "targetIdFor": "iHub-Modell-ID für {{name}}",
+        "vision": "Bilder",
+        "alreadyAdded": "Bereits angelegt als {{id}}",
+        "endOfLife": "Abkündigung: {{date}}",
+        "importCount": "{{count}} Modelle importieren",
+        "importing": "Wird importiert…",
+        "doneSummary": "{{ok}} von {{total}} Modellen in {{provider}} importiert.",
+        "providerCreated": "Der Anbieter „{{provider}}“ wurde angelegt und hält den API-Schlüssel. Sie verwalten ihn unter Anbieter.",
+        "testHint": "Prüfen Sie jedes Modell mit „Testen“ in der Modellliste und ergänzen Sie Angaben, die der Endpunkt nicht liefert, etwa die Tool-Unterstützung.",
+        "types": {
+          "embedding": "Embedding",
+          "rerank": "Reranker",
+          "audio": "Audio",
+          "image": "Bild",
+          "moderation": "Moderation",
+          "other": "Kein Chat-Modell"
+        },
+        "errors": {
+          "idInvalid": "Nur Kleinbuchstaben, Ziffern, Punkte, Binde- und Unterstriche verwenden.",
+          "idExists": "Ein Modell mit dieser ID existiert bereits.",
+          "idDuplicate": "Zwei ausgewählte Modelle würden diese ID erhalten.",
+          "providerIdInvalid": "Nur Kleinbuchstaben, Ziffern, Punkte, Binde- und Unterstriche verwenden.",
+          "providerIdExists": "Ein Anbieter mit dieser ID existiert bereits. Wählen Sie ihn oben aus oder vergeben Sie eine andere ID.",
+          "providerCreateFailed": "Der Anbieter konnte nicht angelegt werden: {{error}}",
+          "invalidUrl": "Geben Sie eine gültige http://- oder https://-URL ein",
+          "credentialsInUrl": "Entfernen Sie die Zugangsdaten aus der URL und tragen Sie den Schlüssel im Feld API-Schlüssel ein",
+          "unsupportedProvider": "Der Modellimport unterstützt diesen API-Typ nicht",
+          "apiKeyRequired": "Der Endpunkt erfordert einen API-Schlüssel",
+          "authenticationFailed": "Der Endpunkt hat den API-Schlüssel abgelehnt",
+          "accessDenied": "Zugriff durch den Endpunkt verweigert",
+          "notFound": "Unter dieser URL gibt es keine Modellliste",
+          "redirected": "Der Endpunkt hat die Anfrage umgeleitet",
+          "upstreamError": "Der Endpunkt hat mit einem Fehler geantwortet",
+          "invalidResponse": "Der Endpunkt hat keine Modellliste geliefert",
+          "timeout": "Der Endpunkt hat nicht rechtzeitig geantwortet",
+          "connectionRefused": "Verbindung abgelehnt",
+          "hostNotFound": "Host nicht gefunden",
+          "networkError": "Netzwerkfehler",
+          "providerIdReserved": "Diese ID ist der Name eines API-Typs. Wählen Sie eine andere ID."
+        }
       }
     },
     "chat": {
@@ -2872,7 +2973,7 @@
         "iassistantSystemPromptPreamble": "System-Prompt-Präambel",
         "iassistantSystemPromptPreambleDesc": "Die Prompt-Präambel, die im Response-State-System-Prompt verwendet wird. Ideal zum Ändern der Identität des iAssistant. Unterstützt Prompt-Variablen wie {{user_name}}, {{user_email}}, {{date}} sowie eigene globale Variablen. Mit Vorsicht verwenden.",
         "transcription": "Transkription",
-        "transcriptionDesc": "Hochgeladene Audiodateien, hochgeladene Videos oder eine Browser-Aufnahme mit einem selbst gehosteten Transkriptionsmodell (z. B. Voxtral) transkribieren und das Ergebnis als Chat-Antwort anzeigen.",
+        "transcriptionDesc": "Hochgeladene Audiodateien, hochgeladene Videos oder eine Browser-Aufnahme mit einem Transkriptionsmodell (z. B. Voxtral) in Text umwandeln. Der Text wird zur Nachricht des Nutzers, die das Chat-Modell beantwortet.",
         "enableTranscription": "Transkription aktivieren",
         "transcriptionModel": "Transkriptionsmodell",
         "selectTranscriptionModel": "Modell auswählen…",
@@ -4339,10 +4440,14 @@
     "scheduled": "Geplant"
   },
   "transcription": {
-    "record": "Audio zum Transkribieren aufnehmen",
-    "stopRecording": "Aufnahme beenden & transkribieren",
+    "record": "Nachricht einsprechen",
+    "stopRecording": "Aufnahme beenden und senden",
     "recording": "Aufnahme",
-    "empty": "_(Keine Sprache erkannt)_",
+    "listening": "Hört zu…",
+    "transcribing": "Wird transkribiert…",
+    "transcriptOf": "Transkript von {{name}}:",
+    "noSpeechInFile": "(keine Sprache erkannt)",
+    "partialInInput": "Der bisher transkribierte Text steht im Eingabefeld.",
     "errors": {
       "noModel": "Für diese App ist kein Transkriptionsmodell konfiguriert.",
       "decode": "Diese Audiodatei konnte im Browser nicht dekodiert werden. Das Format oder der Codec wird möglicherweise nicht unterstützt (z. B. OGG in Safari).",
@@ -4350,6 +4455,7 @@
       "notReady": "Der Transkriptionsdienst war nicht bereit. Bitte überprüfen Sie die Modellkonfiguration und versuchen Sie es erneut.",
       "connection": "Der Transkriptionsdienst konnte nicht erreicht werden. Bitte versuchen Sie es später erneut.",
       "timeout": "Zeitüberschreitung bei der Transkription. Die Datei ist möglicherweise zu lang.",
+      "interrupted": "Die Transkription wurde unterbrochen, bevor sie abgeschlossen war.",
       "aborted": "Die Transkription wurde abgebrochen.",
       "serverTooLong": "Diese Aufnahme ist zu lang für das konfigurierte Transkriptionsmodell. Bitte teilen Sie sie in kürzere Abschnitte auf.",
       "serverBusy": "Der Transkriptionsdienst ist derzeit ausgelastet. Bitte versuchen Sie es in einem Moment erneut.",
@@ -4359,11 +4465,11 @@
       "tooLong": "Diese Audiodatei ist {{duration}} s lang und überschreitet das Limit von {{max}} s für die Transkription.",
       "mic": "Auf das Mikrofon konnte nicht zugegriffen werden. Bitte erteilen Sie die Berechtigung und versuchen Sie es erneut.",
       "busy": "Es läuft bereits eine Transkription. Bitte zuerst stoppen.",
-      "interrupted": "Die Transkription wurde unterbrochen — das Transkript ist möglicherweise unvollständig.",
+      "noSpeech": "Es wurde keine Sprache erkannt. Es wurde nichts gesendet.",
       "audioNeedsTranscription": "Das ausgewählte Chat-Modell kann Audio nicht direkt verarbeiten. Aktivieren Sie die Transkription im Aktionsmenü oder entfernen Sie den Audio-Anhang."
     },
     "toggleLabel": "Transkription",
-    "toggleDescription": "Hochgeladene Audio-/Videodateien mit dem Transkriptionsmodell statt dem Chat-Modell transkribieren"
+    "toggleDescription": "Hochgeladene Audio- und Videodateien werden in Ihre Nachricht transkribiert, und das Chat-Modell beantwortet den Text"
   },
   "documentPreview": {
     "title": "Dokumentvorschau",

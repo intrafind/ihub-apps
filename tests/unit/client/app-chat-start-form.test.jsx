@@ -21,7 +21,10 @@ jest.mock('uuid', () => ({
 
 // Every hook stubbed below returns a *stable* identity: `AppChat` has effects
 // keyed on these objects, and a fresh one per render turns them into loops.
-const mockT = (key, def) => (typeof def === 'string' ? def : key);
+const mockT = (key, def, opts) =>
+  typeof def === 'string'
+    ? def.replace(/\{\{(\w+)\}\}/g, (_m, name) => String(opts?.[name] ?? `{{${name}}}`))
+    : key;
 const mockTranslation = { t: mockT, i18n: { language: 'en' } };
 jest.mock('react-i18next', () => ({
   __esModule: true,
@@ -509,7 +512,7 @@ describe('AppChat with a start form', () => {
     });
   });
 
-  test('a file that is transcribed first is followed by the rendered prompt', async () => {
+  test('a file dropped on the form is transcribed into the rendered prompt, sent once', async () => {
     const audio = { type: 'audio', fileName: 'call.mp3', base64: 'data:audio/mpeg;base64,AA' };
     mockUpload.config = { enabled: true, localUploadEnabled: true };
     mockUpload.dropped = audio;
@@ -520,21 +523,25 @@ describe('AppChat with a start form', () => {
     fireEvent.click(screen.getByRole('button', { name: 'drop a file' }));
 
     await fillAndSend();
-    // The transcript lands first; the prompt then goes out on its own.
+    // The transcript takes the audio's place in the form's message.
     await waitFor(() => expect(mockStream.opened).toBe(1));
     await answerTurn('run-1');
     const sent = requestMessages(0);
-    expect(sent.map(m => [m.role, m.content])).toEqual([
-      ['user', '🎙 call.mp3'],
-      ['assistant', 'Notes from the call'],
-      ['user', 'Write to Ada about the Q3 report.']
-    ]);
-    expect(sent[2].promptTemplate).toBeNull();
-    expect(sent[2].variables).toEqual({ recipient: 'Ada', subject: 'the Q3 report' });
+    expect(sent).toHaveLength(1);
+    expect(sent[0]).toMatchObject({
+      role: 'user',
+      content: 'Write to Ada about the Q3 report.\n\nTranscript of call.mp3:\nNotes from the call',
+      promptTemplate: null,
+      // Still the form's message, so it sets the chat's variables.
+      variables: { recipient: 'Ada', subject: 'the Q3 report' },
+      audioTranscript: true
+    });
+    expect(sent[0].audioData).toBeFalsy();
     expect(transcribeAudioBuffer).toHaveBeenCalledTimes(1);
+    expect(screen.queryByTestId('start-form')).toBeNull();
   });
 
-  test('when transcription yields nothing, the prompt waits and a manual send still sets the variables', async () => {
+  test('when transcription yields nothing, nothing is sent and the form comes back with the file', async () => {
     const audio = { type: 'audio', fileName: 'call.mp3', base64: 'data:audio/mpeg;base64,AA' };
     mockUpload.config = { enabled: true, localUploadEnabled: true };
     mockUpload.dropped = audio;
@@ -543,24 +550,18 @@ describe('AppChat with a start form', () => {
     renderApp({ ...APP, transcription: { enabled: true, modelId: 'voxtral' } });
     await screen.findByTestId('start-form');
     fireEvent.click(screen.getByRole('button', { name: 'drop a file' }));
+    fireEvent.change(screen.getByPlaceholderText('Who'), { target: { value: 'Ada' } });
+    fireEvent.submit(screen.getByTestId('start-form'));
 
-    await fillAndSend();
-    // Nothing is sent on its own; the rendered prompt waits in the composer.
     await waitFor(() =>
-      expect(screen.getAllByTestId('composer-input')[0]).toHaveValue(
-        'Write to Ada about the Q3 report.'
+      expect(screen.getByRole('alert')).toHaveTextContent(
+        'No speech was detected. Nothing was sent.'
       )
     );
+    expect(screen.getByTestId('start-form')).toBeInTheDocument();
+    expect(screen.getByTestId('attached')).toHaveTextContent('call.mp3');
+    expect(screen.getByPlaceholderText('Who')).toHaveValue('Ada');
     expect(mockStream.opened).toBe(0);
-
-    fireEvent.submit(screen.getAllByTestId('composer')[0]);
-    await answerTurn('run-1');
-    const sent = requestMessages(0);
-    expect(sent[sent.length - 1]).toMatchObject({
-      content: 'Write to Ada about the Q3 report.',
-      promptTemplate: null,
-      variables: { recipient: 'Ada', subject: 'the Q3 report' }
-    });
   });
 
   test('text the chat was opened with is shown in the form and sent as {{content}}', async () => {
