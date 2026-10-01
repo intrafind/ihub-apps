@@ -120,10 +120,11 @@ export function toSpeechText(markdown) {
     // HTML: block-level tags end a paragraph, every other tag just goes.
     .replace(/<br\s*\/?>/gi, '\n')
     .replace(/<\/?(?:p|div|li|tr|h[1-6]|details|summary|blockquote|ul|ol|table)\b[^<>]*>/gi, '\n')
-    .replace(/<\/?[a-z][^<>]*>/gi, '')
-    // Whatever is left of a tag after one pass (`<scr<b>ipt>` becomes
-    // `<script>`) or a stray bracket is noise to a listener: no `<` or `>`
-    // from the markup survives into the spoken text.
+    // A removed inline tag leaves a space, so neither the words on either
+    // side nor the halves of a split tag (`<scr<b>ipt>`) join up.
+    .replace(/<\/?[a-z][^<>]*>/gi, ' ')
+    // A stray bracket is noise to a listener: no `<` or `>` from the markup
+    // survives into the spoken text.
     .replace(/[<>]/g, ' ')
     .replace(/&(?:amp|lt|gt|quot|apos|nbsp|#39);/g, m => HTML_ENTITIES[m]);
 

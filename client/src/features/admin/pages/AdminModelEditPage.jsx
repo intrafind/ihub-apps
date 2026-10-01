@@ -258,6 +258,9 @@ function AdminModelEditPage() {
       // Remove helper fields that shouldn't be sent to backend
       delete dataToSend.apiKeySet;
       delete dataToSend.apiKeyMasked;
+      // The `tts` block is only valid on a text-to-speech model (the schema
+      // rejects it elsewhere): switching the type away leaves it behind.
+      if (dataToSend.modelType !== 'tts') delete dataToSend.tts;
 
       // Remove empty and undefined fields (but preserve API key placeholder)
       Object.keys(dataToSend).forEach(key => {

@@ -281,18 +281,6 @@ function ModelFormEditor({
   // that turns audio into text or text into audio.
   const isChat = !isTranscription && !isTts;
 
-  // The `tts` block is only valid on a TTS model (the schema rejects it on any
-  // other type), so leaving that type drops it.
-  const handleModelTypeChange = e => {
-    const modelType = e.target.value;
-    if (modelType === 'tts') {
-      onChange({ ...data, modelType, tts: { ...(data.tts || {}) } });
-      return;
-    }
-    const { tts: _dropped, ...rest } = data;
-    onChange({ ...rest, modelType });
-  };
-
   const handleTtsChange = (key, value) => {
     const next = { ...(data.tts || {}) };
     if (value === '' || value === null || value === undefined) delete next[key];
@@ -427,7 +415,7 @@ function ModelFormEditor({
                     id="modelType"
                     name="modelType"
                     value={data.modelType || 'chat'}
-                    onChange={handleModelTypeChange}
+                    onChange={handleInputChange}
                     className="mt-1 block w-full py-2 px-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md shadow-xs focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                   >
                     <option value="chat">{t('admin.models.modelType.chat', 'Chat')}</option>
@@ -564,7 +552,10 @@ function ModelFormEditor({
                       id="ttsVoice"
                       list="ttsVoiceOptions"
                       value={data.tts?.voice || ''}
-                      onChange={e => handleTtsChange('voice', e.target.value)}
+                      // Voice ids are slugs or UUIDs: keep only what one can contain.
+                      onChange={e =>
+                        handleTtsChange('voice', e.target.value.replace(/[^\w-]/g, ''))
+                      }
                       placeholder="en_paul_neutral"
                       className="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-xs sm:text-sm border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md"
                     />
