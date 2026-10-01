@@ -1103,7 +1103,8 @@ import { ChatMessage } from './ChatMessage.jsx';
 
 **Learning Path**:
 1. Study the multi-mode authentication system
-2. Learn enterprise integration patterns
+2. Learn enterprise integration patterns, and build one with
+   [Building an Integration](integration-development.md)
 3. Understand group inheritance and permissions
 4. Explore Microsoft Teams and OIDC integration
 

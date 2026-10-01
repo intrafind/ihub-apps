@@ -62,9 +62,9 @@ the owner creates another link.
 | --------------------------------------------------------------- | ---------------------------------------------------- |
 | User and assistant messages, as they were stored                | Messages sent after the share, edits made after it   |
 | **Artifacts** the shared messages produced (generated images)   | Artifacts of later turns or edited-away exchanges    |
-| The **web sources** of an answer and its inline citations       |                                                      |
+| The **public sources** of an answer (web pages) and its citations | Sources found with the owner's permissions: iFinder and iAssistant documents, MCP and tool results, pages only the page reader read |
 | The name, type and size of an uploaded file                     | **The uploaded file itself** — it is never stored    |
-| What an answer did: searches, tool calls, public web sources, workflow steps | **The Documents panel** under an answer (citations)  |
+| What an answer did: searches, tool calls, public web sources, workflow steps |                                                      |
 |                                                                 | The documents the owner's searches found, in that activity |
 
 Uploads deserve the explicit note: a stored message carries an attachment
@@ -75,12 +75,11 @@ included: plan.pdf_ where the owner saw the file.
 
 A stored message holds what the transcript holds: the text, the failure that
 cut an answer short, the attachment descriptors, the artifact descriptors, the
-web searches and web sources behind the answer (`webSearch`, see
-[Web Tools → Sources and Citations](web-tools.md#sources-and-citations)), and
-what the answer did (see
-[What a turn did](chat-persistence.md#what-a-turn-did)). A share keeps
-`webSearch`: the viewer sees the same sources view and citation badges as the
-owner. It carries the activity without anything a call found or read with the
+sources the answer found (`sources`, see [Answer Sources](answer-sources.md)),
+and what the answer did (see
+[What a turn did](chat-persistence.md#what-a-turn-did)). A share keeps the
+public sources — the pages a web search returned — so the viewer sees them in
+the sources panel with their citation badges. It carries the activity without anything a call found or read with the
 owner's permissions, for the reason below. In the activity, only the public
 web searches (Brave, Qwant, Staan and a model's own web search) keep their
 hits, arguments and errors; every other call — iFinder and configured sources,
@@ -90,13 +89,19 @@ status. The iAssistant search summary keeps its queries and counts and loses
 the application and source names of its hits, and a workflow result loses the
 link to an execution a viewer cannot open.
 
-The documents listed under an answer are stored, so the owner's reopened chat
-shows them again, but a share leaves them out. They are every document the
-owner's searches found — titles, file names, locations and passages —
-retrieved with the owner's iFinder permissions, and the answer text is what
-the owner chose to share, not the list of hits behind it. A viewer, and on a
-public link anyone with the link, would otherwise see documents iFinder may
-not let them see.
+The private sources of an answer are stored, so the owner's reopened chat
+shows them again, but a share leaves them out: every source marked `private`,
+and every source with a `ref` (one its provider fetches with the owner's
+permissions), whatever it says. They are what the owner's searches found with
+their own permissions — titles, file names, locations and passages — and the
+answer text is what the owner chose to share, not the list of hits behind it.
+A viewer, and on a public link anyone with the link, would otherwise see
+documents iFinder may not let them see. The same goes for a page only the
+page reader read: it can reach intranet hosts on the SSL whitelist. A page
+that both a web search and a private tool returned is shared with only what
+the web search said about it. Answers
+stored before the sources contract kept their documents in `citations`,
+which a share never carries either.
 
 Artifacts are **not copied**. The artifact store is write-once and keyed per
 chat ([Artifacts](artifacts.md)), so the snapshot records the artifact ids its

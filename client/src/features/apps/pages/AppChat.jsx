@@ -13,21 +13,16 @@ import { fetchAppDetails, fetchChat } from '../../../api';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 import { useTranslation } from 'react-i18next';
 import { getLocalizedContent } from '../../../utils/localizeContent';
-import { buildApiUrl, buildPath } from '../../../utils/runtimeBasePath';
+import { buildPath } from '../../../utils/runtimeBasePath';
 import { debugLog } from '../../../utils/debugLog';
 import Icon from '../../../shared/components/Icon';
 import ShareDialog from '../../chat/components/ShareDialog';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
 import { useOptionalAuth } from '../../../shared/contexts/authContextValue';
 import lazyWithRetry from '../../../utils/lazyWithRetry';
-import {
-  downloadCitationDocument,
-  getCitationDocumentAccess,
-  getCitationMeta,
-  openCitationDocument
-} from '../../chat/utils/citationDocuments';
 
 // Import our custom hooks and components
+import { fetchSourceFile } from '../../chat/sources/sourceActions';
 import useAppChat from '../../chat/hooks/useAppChat';
 import useVoiceCommands from '../../voice/hooks/useVoiceCommands';
 import useAppSettings from '../../../shared/hooks/useAppSettings';
@@ -1056,85 +1051,57 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
     showStartForm
   ]);
 
-  // Fetch and attach document when navigated from "Open in App" with source params
+  // Fetch and attach the document when navigated from "Open in App": the
+  // source's provider (`source`), its id and scope, fetched through the one
+  // provider route (`GET /api/sources/:provider/content`) with the user's own
+  // permissions.
   const documentAttached = useRef(false);
   useEffect(() => {
-    if (documentAttached.current || !app || !documentSource) return;
-    if (documentSource !== 'ifinder') return;
+    if (documentAttached.current || !app || !documentSource || !documentId) return;
+    if (!/^[\w.-]{1,100}$/.test(documentSource)) return;
 
     documentAttached.current = true;
+    const source = {
+      provider: documentSource,
+      ref: searchProfileParam ? { id: documentId, scope: searchProfileParam } : { id: documentId }
+    };
+    const displayType =
+      documentSource === 'ifinder'
+        ? 'iFinder Document'
+        : t('sources.documentFromSource', 'Document');
 
     const fetchAndAttach = async () => {
       // Show loading placeholder immediately
       fileUploadHandler.setSelectedFile({
         type: 'document',
-        source: 'ifinder',
+        source: documentSource,
         fileName: prefillMessage || t('attachedFiles.loading', 'Loading document...'),
         fileSize: 0,
         fileType: 'application/octet-stream',
         loading: true,
-        displayType: 'iFinder Document'
+        displayType
       });
 
       try {
-        let file;
-        let fileName = prefillMessage || 'document';
-
-        if (documentId) {
-          // Fetch binary via iFinder proxy (resolves download link server-side)
-          const proxyParams = new URLSearchParams({ documentId });
-          if (searchProfileParam) proxyParams.set('searchProfile', searchProfileParam);
-          const proxyUrl = buildApiUrl(`integrations/ifinder/document?${proxyParams}`);
-          const resp = await fetch(proxyUrl, { credentials: 'include' });
-
-          if (resp.ok) {
-            const blob = await resp.blob();
-            const contentType = resp.headers.get('content-type') || 'application/octet-stream';
-
-            // Extract filename from content-disposition or use prefill title
-            const disposition = resp.headers.get('content-disposition');
-            if (disposition) {
-              const match = disposition.match(/filename\*?=(?:UTF-8''|"?)([^";]+)/i);
-              if (match) fileName = decodeURIComponent(match[1].replace(/"/g, ''));
-            }
-
-            file = new File([blob], fileName, { type: contentType });
-          } else {
-            // Fallback: fetch text content via content endpoint
-            const contentUrl = buildApiUrl(
-              `integrations/ifinder/document/content?documentId=${encodeURIComponent(documentId)}` +
-                (searchProfileParam
-                  ? `&searchProfile=${encodeURIComponent(searchProfileParam)}`
-                  : '')
-            );
-            const contentResp = await fetch(contentUrl, { credentials: 'include' });
-            if (!contentResp.ok) throw new Error(`Content fetch failed: ${contentResp.status}`);
-
-            const text = await contentResp.text();
-            const txtName = fileName.endsWith('.txt') ? fileName : `${fileName}.txt`;
-            file = new File([text], txtName, { type: 'text/plain' });
-          }
-        } else {
-          return; // No document ID to fetch
-        }
+        const file = await fetchSourceFile(source, prefillMessage || 'document');
 
         // Process through the same pipeline as uploaded files
         const { content, pageImages } = await processDocumentFile(file);
 
         const fileData = {
           type: 'document',
-          source: 'ifinder',
+          source: documentSource,
           content,
           pageImages: pageImages || [],
           fileName: file.name,
           fileSize: file.size,
           fileType: file.type,
-          displayType: 'iFinder Document'
+          displayType
         };
 
         fileUploadHandler.setSelectedFile(fileData);
       } catch (err) {
-        console.error('Failed to fetch and attach iFinder document:', err);
+        console.error('Failed to fetch and attach the document:', err);
         fileUploadHandler.clearSelectedFile();
       }
 
@@ -1772,34 +1739,22 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
     ]
   );
 
-  // Handle citation document actions (openExternal, download, openInApp).
-  // "preview" is handled inside CitationPanel, which owns the passage texts the
-  // preview highlights.
-  //
-  // openExternal/download go through the shared helpers so this page and the
-  // panel's own fallback behave identically — including reporting back a
-  // `{ ok: false }` result the panel turns into a visible message instead of a
-  // dead button (issue #2453). Only openInApp is specific to this page: it
-  // needs the app router, which the embedded hosts do not have.
-  const handleDocumentAction = useCallback(
-    async (action, item, targetAppId) => {
-      if (action === 'openExternal') return openCitationDocument(item);
-      if (action === 'download') return downloadCitationDocument(item);
-
-      if (action === 'openInApp' && targetAppId) {
-        const access = getCitationDocumentAccess(item);
-        const params = new URLSearchParams({
-          prefill: item.title || getCitationMeta(item, 'title') || '',
-          documentId: item.document_id || '',
-          ...(access?.searchProfile ? { searchProfile: access.searchProfile } : {}),
-          source: 'ifinder'
-        });
-        const targetPath = `/apps/${targetAppId}?${params.toString()}`;
-        if (embedded) openInNewTab(targetPath);
-        else navigate(targetPath);
-      }
-
-      return undefined;
+  // "Open in App" on a source: a new chat of the chosen app, with the source's
+  // document attached (see the effect above). The one source action that is
+  // this page's own — every other one runs in the sources panel — because it
+  // needs the app router, which the embedded hosts do not have (issue #2453).
+  const handleOpenSourceInApp = useCallback(
+    (source, targetAppId) => {
+      if (!targetAppId || !source?.ref?.id) return;
+      const params = new URLSearchParams({
+        prefill: source.title || '',
+        documentId: source.ref.id,
+        ...(source.ref.scope ? { searchProfile: source.ref.scope } : {}),
+        source: source.provider
+      });
+      const targetPath = `/apps/${targetAppId}?${params.toString()}`;
+      if (embedded) openInNewTab(targetPath);
+      else navigate(targetPath);
     },
     [navigate, embedded, openInNewTab]
   );
@@ -2908,7 +2863,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
                   onConnectIntegration={connectIntegration}
                   onClarificationSubmit={handleClarificationSubmit}
                   onClarificationSkip={handleClarificationSkip}
-                  onDocumentAction={handleDocumentAction}
+                  onOpenSourceInApp={handleOpenSourceInApp}
                   linkPath={appPagePath}
                   ephemeral={ephemeral}
                   startForm={showStartForm ? renderStartForm() : null}
@@ -2953,7 +2908,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
                         models={models}
                         onClarificationSubmit={handleClarificationSubmit}
                         onClarificationSkip={handleClarificationSkip}
-                        onDocumentAction={handleDocumentAction}
+                        onOpenSourceInApp={handleOpenSourceInApp}
                         linkPath={appPagePath}
                       />
                     </div>
@@ -3009,7 +2964,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
                         models={models}
                         onClarificationSubmit={handleClarificationSubmit}
                         onClarificationSkip={handleClarificationSkip}
-                        onDocumentAction={handleDocumentAction}
+                        onOpenSourceInApp={handleOpenSourceInApp}
                         linkPath={appPagePath}
                       />
                     </div>
@@ -3062,7 +3017,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
                     models={models}
                     onClarificationSubmit={handleClarificationSubmit}
                     onClarificationSkip={handleClarificationSkip}
-                    onDocumentAction={handleDocumentAction}
+                    onOpenSourceInApp={handleOpenSourceInApp}
                     linkPath={appPagePath}
                   />
                 </div>
@@ -3097,7 +3052,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
                   models={models}
                   onClarificationSubmit={handleClarificationSubmit}
                   onClarificationSkip={handleClarificationSkip}
-                  onDocumentAction={handleDocumentAction}
+                  onOpenSourceInApp={handleOpenSourceInApp}
                   linkPath={appPagePath}
                 />
 

@@ -62,7 +62,7 @@ function ChatMessageList({
   onClarificationSubmit = null, // Callback when a clarification response is submitted
   onClarificationSkip = null, // Callback when a clarification is skipped
   // Citation document action handlers
-  onDocumentAction = null,
+  onOpenSourceInApp = null,
   // Page a message's copy-link action points at — see ChatMessage.
   linkPath = null,
   showAvatars = true,
@@ -240,7 +240,7 @@ function ChatMessageList({
                 models={models}
                 onClarificationSubmit={onClarificationSubmit}
                 onClarificationSkip={onClarificationSkip}
-                onDocumentAction={onDocumentAction}
+                onOpenSourceInApp={onOpenSourceInApp}
                 linkPath={linkPath}
                 mcpAppHost={mcpAppHost}
                 scheduleEnabledTools={scheduleEnabledTools}

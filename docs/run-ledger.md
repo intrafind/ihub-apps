@@ -101,7 +101,10 @@ contracts in `server/services/loop/contracts/runLogEvents.js`
 `request/header`, `request/retry`, `message/user`, `message/assistant`,
 `tool/call`, `tool/result`, `tool/disabled`, `interaction/raised`,
 `interaction/answered`, `budget/checkpoint`, `budget/exhausted`,
-`context/compaction`, `error`).
+`context/compaction`, `sources/added`, `error`). `sources/added` records what a
+tool call, a model adapter or provider search found (see
+[Answer Sources](answer-sources.md)); a re-sync replays it as the SSE frame of
+the same name.
 
 `request/header` carries the exact model-visible messages on the first request
 (`messages`), only the appended ones when a tool loop grows the context

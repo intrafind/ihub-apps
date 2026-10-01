@@ -246,23 +246,50 @@ export const toolCallData = z.object({
 });
 
 /**
- * A page a search or fetch tool found (`read` when its content was fetched,
- * `readFailed` when fetching it failed). See `services/loop/webSources.js`.
+ * One thing a producer found for the user — a web page, a document, a record
+ * — as `shared/sources/source.js` normalizes it. See `docs/answer-sources.md`.
  */
-export const webSourceSchema = z.object({
-  url: z.string().optional(),
-  // iFinder document id, so a document read later matches the hit that found it.
-  documentId: z.string().optional(),
+export const sourceSchema = z.object({
+  id: z.string(),
+  provider: z.string(),
+  kind: z.enum(['page', 'document', 'item']),
   title: z.string().optional(),
-  // What a web source card shows: the result's excerpt, date and favicon.
-  snippet: z.string().optional(),
-  publishedDate: z.string().optional(),
+  url: z.string().optional(),
+  site: z.string().optional(),
   favicon: z.string().optional(),
-  read: z.boolean().optional(),
-  readFailed: z.boolean().optional(),
-  // A page read: words read, and whether the page had more than was read.
-  wordCount: z.number().int().nonnegative().optional(),
-  truncated: z.boolean().optional()
+  snippet: z.string().optional(),
+  passages: z.array(z.object({ text: z.string(), marker: z.string().optional() })).optional(),
+  publishedDate: z.string().optional(),
+  fileName: z.string().optional(),
+  type: z.string().optional(),
+  /** Handle for the provider's content actions (`GET /api/sources/:provider/*`). */
+  ref: z.object({ id: z.string(), scope: z.string().optional() }).optional(),
+  read: z
+    .object({
+      ok: z.boolean(),
+      words: z.number().int().nonnegative().optional(),
+      truncated: z.boolean().optional()
+    })
+    .optional(),
+  cited: z.boolean().optional(),
+  markers: z.array(z.string()).optional(),
+  /** Found with the user's own permissions or network: a share never carries it. */
+  private: z.boolean()
+});
+
+/**
+ * What one producer reported: a tool call (`callId`, `toolId`), a model
+ * adapter or provider-run search (`step` only). Frames only ever add — see
+ * `shared/sources/sourceSet.js`.
+ */
+export const sourcesAddedData = z.object({
+  step: z.number().int().nonnegative().optional(),
+  callId: z.string().optional(),
+  toolId: z.string().optional(),
+  items: z.array(sourceSchema).prefault([]),
+  queries: z.array(z.string()).optional(),
+  /** Google Search grounding: the passages each source backs, for citation markers. */
+  supports: z.array(z.object({ text: z.string(), urls: z.array(z.string()) })).optional()
 });
 
 export const toolResultData = z.object({
@@ -282,8 +309,7 @@ export const toolResultData = z.object({
     .optional(),
   durationMs: z.number().int().nonnegative(),
   hasImage: z.boolean().optional(),
-  knowledgeSource: z.string().optional(),
-  webSources: z.array(webSourceSchema).optional()
+  knowledgeSource: z.string().optional()
 });
 
 export const toolDisabledData = z.object({
@@ -396,6 +422,7 @@ export const runLogEventSchema = z.discriminatedUnion('type', [
     data: contextCompactionData
   }),
   z.object({ ...base, type: z.literal(RUN_LOG_EVENTS.HUMAN_EVENT), data: humanEventData }),
+  z.object({ ...base, type: z.literal(RUN_LOG_EVENTS.SOURCES_ADDED), data: sourcesAddedData }),
   z.object({ ...base, type: z.literal(RUN_LOG_EVENTS.ERROR), data: errorData })
 ]);
 
@@ -419,6 +446,7 @@ export const runLogEventDataSchemas = Object.freeze({
   [RUN_LOG_EVENTS.BUDGET_EXHAUSTED]: budgetExhaustedData,
   [RUN_LOG_EVENTS.CONTEXT_COMPACTION]: contextCompactionData,
   [RUN_LOG_EVENTS.HUMAN_EVENT]: humanEventData,
+  [RUN_LOG_EVENTS.SOURCES_ADDED]: sourcesAddedData,
   [RUN_LOG_EVENTS.ERROR]: errorData
 });
 

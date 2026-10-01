@@ -126,38 +126,6 @@
     display: list-item !important;
     visibility: visible !important;
   }
-
-  /* Citation badges */
-  & .citation-badge {
-    display: inline-flex !important;
-    align-items: center;
-    justify-content: center;
-    min-width: 1.25rem;
-    height: 1.25rem;
-    padding: 0 0.25rem;
-    margin: 0 0.125rem;
-    font-size: 0.65rem;
-    font-weight: 600;
-    line-height: 1;
-    border-radius: 0.375rem;
-    cursor: pointer;
-    vertical-align: super;
-    transition: background-color 0.15s !important;
-  }
-
-  & .citation-badge:hover {
-    transform: scale(1.1);
-  }
-
-  & .citation-source {
-    background-color: rgb(224, 231, 255);
-    color: rgb(67, 56, 202);
-  }
-
-  & .citation-result {
-    background-color: rgb(209, 250, 229);
-    color: rgb(4, 120, 87);
-  }
 }
 
 /*
@@ -183,16 +151,17 @@
   }
 }
 
-/* Web citation badges (utils/webCitationTransformer.js): a numbered superscript
-   link after the claim, and the passage it supports while it is highlighted. */
-.streaming-markdown sup.web-citation-ref {
+/* Citation badges (utils/sourceCitationTransformer.js): a numbered superscript
+   after the claim, for every kind of source, and the passage it supports while
+   it is highlighted. */
+.streaming-markdown sup.source-citation-ref {
   display: inline !important;
   line-height: 0;
   vertical-align: super;
   margin-inline: 0.0625rem;
 }
 
-.streaming-markdown a.web-citation {
+.streaming-markdown a.source-citation {
   display: inline-flex !important;
   align-items: center;
   justify-content: center;
@@ -212,43 +181,43 @@
     color 0.15s;
 }
 
-.streaming-markdown a.web-citation:hover,
-.streaming-markdown a.web-citation.web-citation-active {
+.streaming-markdown a.source-citation:hover,
+.streaming-markdown a.source-citation.source-citation-active {
   background-color: rgb(79, 70, 229);
   color: #fff !important;
 }
 
-.streaming-markdown a.web-citation:focus-visible {
+.streaming-markdown a.source-citation:focus-visible {
   outline: 2px solid rgb(99, 102, 241);
   outline-offset: 1px;
 }
 
-[data-theme='dark'] .streaming-markdown a.web-citation {
+[data-theme='dark'] .streaming-markdown a.source-citation {
   background-color: rgba(99, 102, 241, 0.3);
   color: rgb(199, 210, 254) !important;
 }
 
-[data-theme='dark'] .streaming-markdown a.web-citation:hover,
-[data-theme='dark'] .streaming-markdown a.web-citation.web-citation-active {
+[data-theme='dark'] .streaming-markdown a.source-citation:hover,
+[data-theme='dark'] .streaming-markdown a.source-citation.source-citation-active {
   background-color: rgb(99, 102, 241);
   color: #fff !important;
 }
 
-.streaming-markdown .web-citation-passage {
+.streaming-markdown .source-citation-passage {
   background-color: rgba(250, 204, 21, 0.18);
   box-shadow: 0 0 0 0.25rem rgba(250, 204, 21, 0.18);
   border-radius: 0.25rem;
   transition: background-color 0.15s;
 }
 
-[data-theme='dark'] .streaming-markdown .web-citation-passage {
+[data-theme='dark'] .streaming-markdown .source-citation-passage {
   background-color: rgba(250, 204, 21, 0.12);
   box-shadow: 0 0 0 0.25rem rgba(250, 204, 21, 0.12);
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .streaming-markdown a.web-citation,
-  .streaming-markdown .web-citation-passage {
+  .streaming-markdown a.source-citation,
+  .streaming-markdown .source-citation-passage {
     transition: none;
   }
 }

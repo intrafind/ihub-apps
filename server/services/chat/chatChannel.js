@@ -10,10 +10,6 @@
  */
 import { SSE_V2_EVENTS } from '../../../shared/runEvents.js';
 import conversationStateManager from '../integrations/ConversationStateManager.js';
-import {
-  createIFinderCitationCollector,
-  withAccessLinks
-} from '../integrations/iFinderCitations.js';
 
 function thoughtToDelta(thought) {
   if (typeof thought === 'string') return { content: thought };
@@ -27,35 +23,18 @@ function thoughtToDelta(thought) {
  * @param {Object} params
  * @param {string} params.chatId
  * @param {import('../loop/RunStream.js').RunStreamEmitter} params.stream
- * @returns {{ state: {answerOutput: boolean}, onChunk: Function, onToolEnd: Function }}
+ * @returns {{ state: {answerOutput: boolean}, onChunk: Function, onSources: Function }}
  */
 export function createChatChannel({ chatId, stream }) {
   const state = { answerOutput: false, conversationIdEmitted: false };
   const emit = (type, data) => stream?.emit(type, data);
-  // iFinder documents the turn's tool calls found, listed in the Documents
-  // panel the way iAssistant's are.
-  const iFinderDocuments = createIFinderCitationCollector();
 
-  // iAssistant conversation adapter: citations, search status, title,
-  // conversation id and the response message id ride along with the chunks.
+  // iAssistant conversation adapter: search status, title, conversation id
+  // and the response message id ride along with the chunks (its documents
+  // come as `chunk.sources`, reported by the loop like every producer's).
   const emitConversationEvents = (chunk, request, ctx) => {
-    if (chunk.citations) {
-      const searchProfile = request?._searchProfile;
-      if (searchProfile) {
-        if (chunk.citations.references) {
-          chunk.citations.references = withAccessLinks(chunk.citations.references, searchProfile);
-        }
-        if (chunk.citations.resultItems) {
-          chunk.citations.resultItems = withAccessLinks(chunk.citations.resultItems, searchProfile);
-        }
-      }
+    if (chunk.sources && ctx.model?.provider === 'iassistant-conversation') {
       ctx.addKnowledgeSource('iassistant');
-      ctx.addCitation(chunk.citations);
-      emit(SSE_V2_EVENTS.TOOL_PROGRESS, {
-        step: ctx.iteration,
-        phase: 'citation',
-        data: chunk.citations
-      });
     }
     if (chunk.searchStatus) {
       emit(SSE_V2_EVENTS.TOOL_PROGRESS, {
@@ -123,20 +102,10 @@ export function createChatChannel({ chatId, stream }) {
       }
       emitConversationEvents(chunk, ctx.stream?.meta?.request, ctx);
     },
-    // The panel keeps the latest `resultItems` it was sent, so every frame
-    // carries the turn's whole list rather than just this call's documents.
-    // Recorded on the loop like the iAssistant citations above, so the list
-    // is stored with the answer and drawn again when the chat is reopened.
-    onToolEnd({ toolId, outcome, verdict }, ctx) {
-      if (outcome?.error || verdict?.failed) return;
-      if (!iFinderDocuments.add(toolId, outcome?.rawResult ?? outcome?.message?.content)) return;
-      const citation = { resultItems: iFinderDocuments.items() };
-      ctx.addCitation(citation);
-      emit(SSE_V2_EVENTS.TOOL_PROGRESS, {
-        step: ctx.iteration,
-        phase: 'citation',
-        data: citation
-      });
+    // Every producer's sources — tool calls, the iAssistant adapter,
+    // provider-run web search — as the loop reported them (`ctx.addSources`).
+    onSources(frame) {
+      emit(SSE_V2_EVENTS.SOURCES_ADDED, frame);
     }
   };
 }

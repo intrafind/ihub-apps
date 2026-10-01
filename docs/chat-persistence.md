@@ -534,7 +534,7 @@ index can answer "list my chats" without scanning:
   messages: [
     { id, role, content, ts, runId,
       clientMessageId?, usage?, finishReason?, error?, attachments?, artifacts?,
-      mcpApps?, citations?, webSearch?,
+      mcpApps?, sources?,
       // inference API turns: on a user message the variables it was rendered
       // with and the rendered text the model saw; on an answer the validated
       // structured output and the model identifier that produced it
@@ -586,24 +586,21 @@ Details that matter:
   read back for as long as the chat lives.
 - **So is what a turn produced** — `{ id, kind, mimeType, bytes }`, with the
   payload in the shared artifact store. See [Artifacts](artifacts.md).
-- **The documents behind an answer are stored with it** — `citations:
-  { references, resultItems }`, the passages and documents of an iAssistant
-  answer or the ones the turn's iFinder tool calls found — so a reopened chat
-  draws the same **Documents** panel, with preview, download and "Add to
-  email". Only what the panel reads is kept (id, title, deep link, file name,
-  source, application, the ACCESS link, passage text capped at 4,000
-  characters): at most 50 documents and 100 passages, 256 KB per answer, and
-  passages are dropped first when that is exceeded. The documents are fetched
-  again with the reader's own iFinder permissions. A share never carries them
-  — see [Chat Sharing](chat-sharing.md#what-is-shared--and-what-is-not).
-- **The web sources behind an answer are stored with it** — `webSearch:
-  { queries, sources }`: what the turn searched for, and every source its
-  searches and page reads returned or the provider reported (URL, title, site,
-  snippet, cited passage, date, favicon, read / not readable, words read), at
-  most 30 queries and 100 sources. The citation markers are part of the stored
-  text (Google's are written into it when the answer is stored), so a reopened
-  or shared chat draws the same sources view and citation badges — see
-  [Web Tools → Sources and Citations](web-tools.md#sources-and-citations).
+- **What an answer found is stored with it** — `sources: { items, queries }`:
+  every web page, document and record the turn's searches, page reads, tools,
+  iAssistant or provider search reported, in the one shape of
+  [Answer Sources](answer-sources.md), and what the turn searched for — at
+  most 100 sources (passages capped at 4,000 characters) and 30 queries, 256 KB
+  per answer, passages dropped first when that is exceeded. The citation
+  markers are part of the stored text (Google's are written into it when the
+  answer is stored), so a reopened chat draws the same sources panel, citation
+  badges and actions. Documents are fetched again with the reader's own
+  permissions. A share carries only the public sources — see
+  [Chat Sharing](chat-sharing.md#what-is-shared--and-what-is-not).
+- **Answers stored before the sources contract** kept their documents in
+  `citations` and their web sources in `webSearch`. Neither is read any more:
+  such answers keep their text and links, without a sources panel, and a share
+  never carries `citations`.
 - **Failures are recorded.** An aborted turn stores its (possibly empty) answer
   with `error: { code: 'ABORTED', … }`, an errored turn with its error code, so a
   truncated answer never reads as a complete one. A turn that paused for a
@@ -736,7 +733,7 @@ therefore shows what the live one showed, in the same components.
   per call, 200 workflow steps (the last ones), 2000 characters per value and
   256 KiB in all, past which the full text of long arguments goes first.
 - **Shared chats** carry it without anything a call found or read with the
-  owner's permissions — the reason a share drops `citations`. Only the public
+  owner's permissions — the reason a share keeps only public sources. Only the public
   web searches (Brave, Qwant, Staan, a model's own web search) keep their hits;
   every other call keeps its name, query and status (`shareableActivity`),
   pages read by the page reader included, as it can reach intranet hosts on the

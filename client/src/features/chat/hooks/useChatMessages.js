@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { debugLog } from '../../../utils/debugLog';
+import { storedSourceSet } from '../../../../../shared/sources/index.js';
 
 /**
  * The provenance fields a stored answer's `activity` restores onto the message
@@ -20,7 +21,7 @@ const STORED_ACTIVITY_FIELDS = [
  *
  * Shape on the wire (`GET /api/chats/:chatId` → `messages[]`):
  * `{ id, role, content, ts, runId, clientMessageId?, usage?, finishReason?,
- * error?, attachments?, artifacts?, mcpApps?, citations?, webSearch?, activity? }`.
+ * error?, attachments?, artifacts?, mcpApps?, sources?, activity? }`.
  *
  * The stored id is adopted as the message id and kept a second time on
  * `serverId`: `replaceFromMessageId` addresses the server's history by that
@@ -62,15 +63,6 @@ export function transformStoredMessage(msg) {
   }
   // Interactive MCP App views of the answer, redrawn from their stored data.
   if (Array.isArray(msg.mcpApps) && msg.mcpApps.length > 0) message.mcpApps = msg.mcpApps;
-  // The documents behind the answer — an iAssistant answer's citations or the
-  // ones its iFinder tool calls found — so the Documents panel comes back.
-  if (msg.citations && typeof msg.citations === 'object') {
-    const references = Array.isArray(msg.citations.references) ? msg.citations.references : [];
-    const resultItems = Array.isArray(msg.citations.resultItems) ? msg.citations.resultItems : [];
-    if (references.length > 0 || resultItems.length > 0) {
-      message.citations = { references, resultItems };
-    }
-  }
   // Connect cards for MCP servers with per-user sign-in.
   if (Array.isArray(msg.mcpAuthRequired) && msg.mcpAuthRequired.length > 0) {
     message.mcpAuthRequired = msg.mcpAuthRequired;
@@ -79,15 +71,11 @@ export function transformStoredMessage(msg) {
   if (Array.isArray(msg.scheduledTaskProposals) && msg.scheduledTaskProposals.length > 0) {
     message.scheduledTaskProposals = msg.scheduledTaskProposals;
   }
-  // The web searches and sources behind the answer, so the sources view and
-  // the inline citations come back (the citation markers are in the content).
-  if (msg.webSearch && typeof msg.webSearch === 'object') {
-    const queries = Array.isArray(msg.webSearch.queries) ? msg.webSearch.queries : [];
-    const sources = Array.isArray(msg.webSearch.sources) ? msg.webSearch.sources : [];
-    if (queries.length > 0 || sources.length > 0) {
-      message.webSearch = { queries, sources };
-    }
-  }
+  // Everything the answer found, so the sources panel and the inline
+  // citations come back (the citation markers are in the content). The badge
+  // is the stored activity's below, never inferred from what was found.
+  const sources = storedSourceSet(msg.sources);
+  if (sources) message.sources = sources;
   // What the run did before it answered — searches, documents, tool calls,
   // workflow steps and the answer's source — in the fields a live turn fills
   // from its stream (`shared/run/runActivity.js` builds both), so the reopened
@@ -141,13 +129,10 @@ function transformConversationMessage(msg) {
     fromServer: true
   };
 
-  // Map citations
-  if (msg.references || msg.result_items) {
-    message.citations = {
-      references: msg.references || [],
-      resultItems: msg.result_items || []
-    };
-  }
+  // The answer's documents, as sources (the server converts them, see
+  // `services/sources/producers/ifinder.withConversationSources`).
+  const sources = storedSourceSet(msg.sources);
+  if (sources) message.sources = sources;
 
   if (msg.type === 'ERROR') {
     message.error = true;
@@ -796,30 +781,6 @@ function useChatMessages(chatId = 'default', { ephemeral = false, serverBacked =
     [serverBacked]
   ); // No dependency on messages anymore
 
-  /**
-   * Merge citation data into a message in a race-safe way.
-   * Uses functional updater so concurrent references/resultItems events
-   * don't overwrite each other.
-   * @param {string} messageId - The ID of the message to update
-   * @param {Object} newCitations - { references?, resultItems? }
-   */
-  const mergeCitations = useCallback((messageId, newCitations) => {
-    setMessages(prev =>
-      prev.map(msg => {
-        if (msg.id !== messageId) return msg;
-        const existing = msg.citations || {};
-        return {
-          ...msg,
-          citations: {
-            references: newCitations.references || existing.references || [],
-            resultItems: newCitations.resultItems || existing.resultItems || []
-          },
-          _timestamp: Date.now()
-        };
-      })
-    );
-  }, []);
-
   return {
     messages,
     messagesRef,
@@ -837,8 +798,7 @@ function useChatMessages(chatId = 'default', { ephemeral = false, serverBacked =
     addSystemMessage,
     clearMessages,
     getMessagesForApi,
-    loadServerMessages,
-    mergeCitations
+    loadServerMessages
   };
 }
 

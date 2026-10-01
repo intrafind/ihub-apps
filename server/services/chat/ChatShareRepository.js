@@ -48,6 +48,7 @@ import { getStorage, readFacet } from '../../storage/bootstrap.js';
 import { RUNTIME_NAMESPACES } from '../../storage/namespaces.js';
 import { SHARE_MODES, shareState } from './chatSharing.js';
 import { shareableActivity } from './runActivity.js';
+import { shareableSourceSet } from '../../../shared/sources/index.js';
 
 const COMPONENT = 'ChatShareRepository';
 
@@ -92,11 +93,12 @@ const LOCK_OPTIONS = { ttlMs: 15000, waitMs: 5000 };
 /**
  * Fields of a stored message that a share never carries.
  *
- * `citations` lists every document the owner's searches found — titles, file
- * names, source locations and passages — retrieved with the owner's iFinder
- * permissions. The answer text is what the owner chose to share; the full
- * list of hits behind it would show a viewer documents iFinder may not let
- * them see, including to viewers of a public link.
+ * `citations` is where answers stored before the sources contract kept every
+ * document the owner's searches found — titles, file names, source locations
+ * and passages — retrieved with the owner's iFinder permissions. Those
+ * answers are still in stored chats, and a viewer must not see what iFinder
+ * may not let them see, including viewers of a public link. `sources` is
+ * carried, but only its public part (see {@link snapshotMessage}).
  */
 const MESSAGE_FIELDS_DROPPED = new Set(['clientMessageId', 'citations']);
 
@@ -154,8 +156,16 @@ export function snapshotMessage(message) {
     if (MESSAGE_FIELDS_DROPPED.has(key)) continue;
     copy[key] = value;
   }
+  // What the answer found is shared without what the owner found with their
+  // own permissions or from their own network: iFinder and iAssistant
+  // documents, MCP and intranet tools, pages only the page reader read.
+  if (copy.sources) {
+    const sources = shareableSourceSet(copy.sources);
+    if (sources) copy.sources = sources;
+    else delete copy.sources;
+  }
   // The activity behind an answer is shared without the document hits the
-  // owner's searches found — the same reason `citations` is dropped above.
+  // owner's searches found, for the same reason.
   if (copy.activity) {
     const activity = shareableActivity(copy.activity);
     if (activity) copy.activity = activity;
