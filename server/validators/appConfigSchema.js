@@ -246,15 +246,16 @@ const uploadSchema = z
 //
 // When enabled, audio sources (uploaded audio, audio extracted from an uploaded
 // video, or a browser recording) are transcribed by the referenced
-// `modelType: "transcription"` model and rendered as an assistant chat turn —
-// instead of being sent as `audioData` to the multimodal chat model. Coexists
-// with the multimodal `audioUpload` path; both never fire for one submission.
+// `modelType: "transcription"` model and the text becomes the user's message,
+// which the chat model answers — instead of the audio being sent as
+// `audioData` to a multimodal chat model. Coexists with the multimodal
+// `audioUpload` path; both never fire for one submission.
 const transcriptionSchema = z
   .object({
     enabled: z.boolean().optional().prefault(false),
     // Whether the per-chat transcription toggle starts on. When on, audio/video
-    // submissions are transcribed by the transcription model; when off they fall
-    // through to the multimodal chat path. Users can flip it per conversation.
+    // submissions are transcribed into the message; when off they fall through
+    // to the multimodal chat path. Users can flip it per conversation.
     defaultEnabled: z.boolean().optional().prefault(true),
     // Id of the transcription model (modelType: 'transcription') to route to.
     modelId: z.string().optional().prefault(''),
@@ -266,7 +267,7 @@ const transcriptionSchema = z
       })
       .optional()
       .prefault({}),
-    // Stream partial transcription deltas into the assistant bubble.
+    // Show the transcript growing in the user's message while it is produced.
     streaming: z.boolean().optional().prefault(true),
     // Client-enforced cap on decoded audio / recording length (seconds).
     maxDurationSeconds: z.number().int().min(1).max(7200).optional().prefault(900)

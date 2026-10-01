@@ -56,14 +56,14 @@ function ChatInput({
   onCancel,
   onVoiceInput,
   onVoiceCommand,
-  // Record→transcribe control (distinct from dictation onVoiceInput):
-  // records audio and renders the transcript as an assistant chat turn.
+  // Record→send control (distinct from dictation onVoiceInput): what is said
+  // grows a user message while recording and is sent when it stops.
   onRecordTranscription = null,
   transcriptionRecordEnabled = false,
   isRecordingTranscription = false,
   recordTranscriptionElapsed = 0,
   // Per-chat transcription toggle (like websearch): when on, audio/video
-  // uploads are transcribed by the transcription model instead of the chat LLM.
+  // uploads are transcribed into the message before the chat model sees it.
   transcriptionAvailable = false,
   transcriptionEnabled = false,
   onTranscriptionEnabledChange = null,
@@ -795,8 +795,8 @@ function ChatInput({
               </div>
             )}
 
-            {/* Record → transcribe. Distinct from dictation: the
-                recording is transcribed into an assistant chat message. */}
+            {/* Record → send. Distinct from dictation: what is said grows a
+                user message and is sent when the recording stops. */}
             {transcriptionRecordEnabled && onRecordTranscription && (
               <button
                 type="button"
@@ -805,8 +805,8 @@ function ChatInput({
                 aria-pressed={isRecordingTranscription}
                 title={
                   isRecordingTranscription
-                    ? t('transcription.stopRecording', 'Stop recording & transcribe')
-                    : t('transcription.record', 'Record audio to transcribe')
+                    ? t('transcription.stopRecording', 'Stop recording and send')
+                    : t('transcription.record', 'Record a spoken message')
                 }
                 className={`flex items-center gap-1.5 p-2 rounded-lg transition-colors disabled:opacity-50 ${
                   isRecordingTranscription

@@ -14,8 +14,10 @@ const selectClass =
 
 /**
  * Record → transcribe test: records a short clip and sends it to a
- * transcription model over `/api/voice/realtime`, exactly like the record
- * button in a chat whose app has transcription enabled.
+ * transcription model over `/api/voice/realtime`, the endpoint and model check
+ * a chat's transcription goes through. The clip is sent after recording (not
+ * streamed live like the chat's record button) so the processing time can be
+ * measured on its own.
  *
  * @param {object} props
  * @param {object} props.speech Saved speech config in the public client shape.
@@ -157,7 +159,7 @@ function RecordingTest({ speech, models, t, language }) {
         <p className="text-xs text-gray-500 dark:text-gray-400">
           {t(
             'admin.voiceInput.test.recording.description',
-            'Record a short clip (up to {{seconds}} seconds) and transcribe it with a transcription model, exactly like the record button in a chat.',
+            'Record a short clip (up to {{seconds}} seconds) and transcribe it with a transcription model over the same connection a chat uses, then see how long the transcript took.',
             { seconds: MAX_TEST_SECONDS }
           )}
         </p>

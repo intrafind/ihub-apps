@@ -24,6 +24,16 @@ import {
   preserveStoredRecords,
   UnmarkedModelError
 } from '../../services/provenance/records.js';
+import {
+  discoverModels,
+  comparableUrl,
+  ModelDiscoveryError
+} from '../../services/ModelEndpointDiscovery.js';
+import {
+  BUILT_IN_LLM_PROVIDERS,
+  getProviderApiType,
+  resolveProviderApiKey
+} from '../../services/llmProviders.js';
 
 /**
  * The file a model id lives in.
@@ -174,6 +184,38 @@ function describeModelTestFailure(err) {
 
 export { describeModelTestFailure };
 
+/**
+ * Bring a model's link to a provider entry in line with that entry, in place:
+ * the model's `provider` becomes the entry's API type, and a link to a built-in
+ * entry (`providerId: "openai"`) is dropped, since the model reaches it through
+ * its API type anyway. A link to a custom entry is always kept. A model
+ * therefore cannot claim one API type while its provider declares another.
+ *
+ * @param {Object} model - Model config from the request body
+ * @returns {string|null} Error message for a link that cannot be honoured
+ */
+function applyProviderLink(model) {
+  if (model.providerId === undefined || model.providerId === null || model.providerId === '') {
+    delete model.providerId;
+    return null;
+  }
+  if (typeof model.providerId !== 'string') {
+    return 'Invalid providerId';
+  }
+  const { data: providers = [] } = configCache.getProviders(true);
+  const apiType = getProviderApiType(providers.find(p => p.id === model.providerId));
+  if (!apiType) {
+    return `Provider "${model.providerId}" does not exist or is not an LLM provider`;
+  }
+  model.provider = apiType;
+  if (BUILT_IN_LLM_PROVIDERS.includes(model.providerId)) {
+    delete model.providerId;
+  }
+  return null;
+}
+
+export { applyProviderLink };
+
 export default function registerAdminModelsRoutes(app) {
   /**
    * @swagger
@@ -235,6 +277,131 @@ export default function registerAdminModelsRoutes(app) {
     }
   });
 
+  /**
+   * @swagger
+   * /admin/models/_discover:
+   *   post:
+   *     summary: List the models an endpoint offers (Admin)
+   *     description: |
+   *       Calls the `/models` listing behind a URL — OpenAI, Mistral, vLLM,
+   *       LM Studio, T-Systems LLM Hub and other OpenAI-compatible servers,
+   *       Anthropic or Google — and returns its entries normalized, so the
+   *       admin can pick models to import. Nothing is stored. The URL may be
+   *       the listing itself, the API base (`…/v1`) or an inference URL.
+   *
+   *       With `providerId`, the call uses that provider's API type, stored
+   *       API key (or its environment variable) and, when `url` is empty, its
+   *       `baseUrl` — the key never has to leave the server. Without it,
+   *       `apiType` and an optional `apiKey` describe a provider that does
+   *       not exist yet.
+   *
+   *       A failure on the endpoint's side answers 502 (never 401, which would
+   *       end the admin session) with `{ error, details, messageKey }`.
+   *     tags:
+   *       - Admin - Models
+   *     security:
+   *       - bearerAuth: []
+   *       - sessionAuth: []
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             properties:
+   *               url:
+   *                 type: string
+   *                 example: https://llm-server.llmhub.t-systems.net/v2
+   *               providerId:
+   *                 type: string
+   *                 description: Existing LLM provider whose API type and key are used
+   *               apiType:
+   *                 type: string
+   *                 enum: [openai, openai-responses, mistral, local, anthropic, google]
+   *                 default: openai
+   *               apiKey:
+   *                 type: string
+   *                 description: Optional. Sent only to this endpoint, never stored by this call.
+   *     responses:
+   *       200:
+   *         description: Normalized model list
+   *       400:
+   *         description: Invalid URL, provider or API type
+   *       502:
+   *         description: The endpoint could not be reached or rejected the request
+   */
+  app.post(buildServerPath('/api/admin/models/_discover'), adminAuth, async (req, res) => {
+    const { url, providerId, apiType = 'openai', apiKey } = req.body || {};
+    if (url !== undefined && url !== null && typeof url !== 'string') {
+      return sendBadRequest(res, 'Invalid URL');
+    }
+    if (apiKey !== undefined && apiKey !== null && typeof apiKey !== 'string') {
+      return sendBadRequest(res, 'Invalid API key');
+    }
+
+    let discoveryUrl = (url || '').trim();
+    let discoveryApiType = apiType;
+    let discoveryKey = (apiKey || '').trim();
+
+    try {
+      if (providerId !== undefined && providerId !== null && providerId !== '') {
+        if (!validateIdForPath(providerId, 'provider', res)) {
+          return;
+        }
+        const { data: providers = [] } = configCache.getProviders(true);
+        const providerEntry = providers.find(p => p.id === providerId);
+        if (!providerEntry) {
+          return sendNotFound(res, 'Provider');
+        }
+        discoveryApiType = getProviderApiType(providerEntry);
+        if (!discoveryApiType) {
+          return sendBadRequest(res, `Provider "${providerId}" is not an LLM provider`);
+        }
+        if (!discoveryUrl) discoveryUrl = providerEntry.baseUrl || '';
+        if (!discoveryKey) discoveryKey = resolveProviderApiKey(providerEntry) || '';
+      } else if (typeof apiType !== 'string') {
+        return sendBadRequest(res, 'Invalid API type');
+      }
+
+      if (!discoveryUrl) {
+        return sendBadRequest(res, 'URL is required');
+      }
+
+      const result = await discoverModels({
+        url: discoveryUrl,
+        provider: discoveryApiType,
+        apiKey: discoveryKey
+      });
+
+      // Flag listed models an existing config already points at (same remote
+      // model id on the same endpoint), so the admin does not import twice.
+      const { data: configured = [] } = configCache.getModels(true);
+      const existing = new Map();
+      for (const model of configured) {
+        existing.set(`${model.modelId}\n${comparableUrl(model.url)}`, model.id);
+      }
+      res.json({
+        apiType: result.provider,
+        modelsUrl: result.modelsUrl,
+        baseUrl: result.baseUrl,
+        models: result.models.map(model => ({
+          ...model,
+          existingModelId: existing.get(`${model.id}\n${comparableUrl(model.url)}`) || null
+        }))
+      });
+    } catch (error) {
+      if (error instanceof ModelDiscoveryError) {
+        return res.status(error.status).json({
+          error: error.message,
+          details: error.details,
+          messageKey: error.messageKey,
+          upstreamStatus: error.upstreamStatus
+        });
+      }
+      return sendInternalError(res, error, 'discover models');
+    }
+  });
+
   app.get(buildServerPath('/api/admin/models/:modelId'), adminAuth, async (req, res) => {
     try {
       const { modelId } = req.params;
@@ -290,6 +457,10 @@ export default function registerAdminModelsRoutes(app) {
       }
       if (updatedModel.id !== modelId) {
         return sendBadRequest(res, 'Model ID cannot be changed');
+      }
+      const providerLinkError = applyProviderLink(updatedModel);
+      if (providerLinkError) {
+        return sendBadRequest(res, providerLinkError);
       }
 
       // EU AI Act: the acknowledgement of an unmarked model is a record of this
@@ -393,6 +564,10 @@ export default function registerAdminModelsRoutes(app) {
       // Validate newModel.id for security
       if (!validateIdForPath(newModel.id, 'model', res)) {
         return;
+      }
+      const providerLinkError = applyProviderLink(newModel);
+      if (providerLinkError) {
+        return sendBadRequest(res, providerLinkError);
       }
 
       // EU AI Act: records never arrive with a model (upload, copy from another

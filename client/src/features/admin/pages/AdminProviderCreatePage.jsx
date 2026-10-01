@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { DEFAULT_LANGUAGE } from '../../../utils/localizeContent';
 import { getAdminApiErrorMessage, makeAdminApiCall } from '../../../api/adminApi';
 import Icon from '../../../shared/components/Icon';
+import ProviderFormFields from '../components/ProviderFormFields';
+import { slugify } from '../utils/modelImport';
 
 function AdminProviderCreatePage() {
   const { t } = useTranslation();
@@ -15,28 +16,24 @@ function AdminProviderCreatePage() {
 
   const [formData, setFormData] = useState({
     id: '',
-    name: { [DEFAULT_LANGUAGE]: '', de: '' },
-    description: { [DEFAULT_LANGUAGE]: '', de: '' },
+    name: '',
+    description: '',
     enabled: true,
-    category: 'custom',
+    category: 'llm',
+    apiType: 'openai',
+    baseUrl: '',
     apiKey: ''
   });
+  // The ID follows the name until the admin types one of their own.
+  const [idEdited, setIdEdited] = useState(false);
 
   const handleChange = (field, value) => {
-    setFormData(prev => ({
-      ...prev,
-      [field]: value
-    }));
-  };
-
-  const handleLocalizedChange = (field, lang, value) => {
-    setFormData(prev => ({
-      ...prev,
-      [field]: {
-        ...prev[field],
-        [lang]: value
-      }
-    }));
+    if (field === 'id') setIdEdited(true);
+    setFormData(prev => {
+      const next = { ...prev, [field]: value };
+      if (field === 'name' && !idEdited) next.id = slugify(value);
+      return next;
+    });
   };
 
   const handleSave = async e => {
@@ -51,13 +48,8 @@ function AdminProviderCreatePage() {
         return;
       }
 
-      if (!formData.name.en.trim()) {
-        setError('Provider name (English) is required');
-        return;
-      }
-
-      if (!formData.description.en.trim()) {
-        setError('Provider description (English) is required');
+      if (!formData.name.trim()) {
+        setError(t('admin.providers.create.nameRequired', 'Provider name is required'));
         return;
       }
 
@@ -65,8 +57,13 @@ function AdminProviderCreatePage() {
       const dataToSend = {
         ...formData,
         // Remove empty API key
-        apiKey: formData.apiKey.trim() || undefined
+        apiKey: formData.apiKey.trim() || undefined,
+        baseUrl: formData.baseUrl.trim() || undefined
       };
+      if (formData.category !== 'llm') {
+        delete dataToSend.apiType;
+        delete dataToSend.baseUrl;
+      }
 
       await makeAdminApiCall('/admin/providers', {
         method: 'POST',
@@ -105,8 +102,8 @@ function AdminProviderCreatePage() {
           </h1>
           <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
             {t(
-              'admin.providers.create.description',
-              'Create a new custom provider for storing API keys'
+              'admin.providers.create.subtitle',
+              'Create an LLM provider for your own endpoint, a web search provider, or a generic API key'
             )}
           </p>
         </div>
@@ -141,89 +138,44 @@ function AdminProviderCreatePage() {
 
         {/* Form */}
         <form onSubmit={handleSave} className="bg-white dark:bg-gray-800 shadow-sm rounded-lg p-6">
-          {/* Provider ID */}
-          <div className="mb-6">
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              {t('admin.providers.create.id', 'Provider ID')} *
-            </label>
-            <input
-              type="text"
-              value={formData.id}
-              onChange={e => handleChange('id', e.target.value)}
-              placeholder="my-custom-provider"
-              required
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-            />
-            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-              {t(
-                'admin.providers.create.idHelp',
-                'Unique identifier (lowercase, use hyphens instead of spaces)'
-              )}
-            </p>
-          </div>
-
-          {/* Provider Name */}
-          <div className="mb-6">
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              {t('admin.providers.create.name', 'Provider Name')} *
-            </label>
-            <div className="space-y-2">
-              <input
-                type="text"
-                value={formData.name.en || ''}
-                onChange={e => handleLocalizedChange('name', 'en', e.target.value)}
-                placeholder="English"
-                required
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-              />
-              <input
-                type="text"
-                value={formData.name.de || ''}
-                onChange={e => handleLocalizedChange('name', 'de', e.target.value)}
-                placeholder="Deutsch"
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-              />
-            </div>
-          </div>
-
-          {/* Provider Description */}
-          <div className="mb-6">
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              {t('admin.providers.create.description', 'Description')} *
-            </label>
-            <div className="space-y-2">
-              <textarea
-                value={formData.description.en || ''}
-                onChange={e => handleLocalizedChange('description', 'en', e.target.value)}
-                placeholder="English"
-                rows={2}
-                required
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-none"
-              />
-              <textarea
-                value={formData.description.de || ''}
-                onChange={e => handleLocalizedChange('description', 'de', e.target.value)}
-                placeholder="Deutsch"
-                rows={2}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-none"
-              />
-            </div>
-          </div>
-
           {/* Category */}
           <div className="mb-6">
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            <label
+              htmlFor="provider-category"
+              className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+            >
               {t('admin.providers.create.category', 'Category')}
             </label>
             <select
+              id="provider-category"
               value={formData.category}
               onChange={e => handleChange('category', e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
             >
-              <option value="custom">Custom / Generic</option>
-              <option value="websearch">Web Search</option>
+              <option value="llm">{t('admin.providers.category.llm', 'LLM Providers')}</option>
+              <option value="websearch">
+                {t('admin.providers.category.websearch', 'Web Search Providers')}
+              </option>
+              <option value="custom">
+                {t('admin.providers.category.custom', 'Custom / Generic API Keys')}
+              </option>
             </select>
+            {formData.category === 'llm' && (
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                {t(
+                  'admin.providers.create.llmHelp',
+                  'An LLM provider holds one API key for all of its models. Link models to it in the model editor, or import them from its endpoint.'
+                )}
+              </p>
+            )}
           </div>
+
+          <ProviderFormFields
+            data={formData}
+            onChange={handleChange}
+            isNew
+            isLlm={formData.category === 'llm'}
+          />
 
           {/* API Key */}
           <div className="mb-6">

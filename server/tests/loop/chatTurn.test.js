@@ -564,6 +564,24 @@ test('no tools: a message carrying audioData ends with run/ended.knowledgeSource
   assert.deepEqual(none.ended.knowledgeSources, ['llm']);
 });
 
+test('no tools: a message holding the transcript of uploaded audio ends with knowledgeSources ["audio"]', async t => {
+  const transcript = await sourcesEmittedFor(t, 'audio-transcript', [
+    {
+      role: 'user',
+      content: 'Summarize the call\n\nTranscript of call.mp3:\nWe agreed to ship on Friday.',
+      audioTranscript: true
+    }
+  ]);
+  assert.deepEqual(transcript.ended.knowledgeSources, ['audio']);
+
+  // Only the flag counts — a message that merely mentions a transcript is text,
+  // answered from the model's own knowledge.
+  const text = await sourcesEmittedFor(t, 'audio-transcript-text', [
+    { role: 'user', content: 'Transcript of call.mp3: we agreed', audioTranscript: 'yes' }
+  ]);
+  assert.deepEqual(text.ended.knowledgeSources, ['llm']);
+});
+
 test('no tools: an open email yields knowledgeSources ["email"]; email + upload yields both', async t => {
   const email = await sourcesEmittedFor(t, 'email', [
     {

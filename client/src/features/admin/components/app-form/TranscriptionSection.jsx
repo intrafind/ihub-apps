@@ -26,7 +26,7 @@ function TranscriptionSection({
           <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
             {t(
               'admin.apps.edit.transcriptionDesc',
-              'Transcribe uploaded audio, uploaded video, or a browser recording with a self-hosted transcription model (e.g. Voxtral) and render the result as a chat answer.'
+              "Turn uploaded audio, uploaded video or a browser recording into text with a transcription model (e.g. Voxtral). The text becomes the user's message, and the chat model answers it."
             )}
           </p>
         </div>

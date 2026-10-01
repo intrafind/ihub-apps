@@ -17,6 +17,9 @@ import {
   supportsPromptCaching
 } from '../../../../../shared/promptCaching.js';
 import { DEFAULT_MAX_OUTPUT_TOKENS } from '../../../../../shared/outputTokens.js';
+import { isCustomLlmProvider, providerEnvKeyName } from '../../../../../shared/llmProviders.js';
+import { getLocalizedContent } from '../../../utils/localizeContent';
+import { apiTypeLabel } from '../utils/modelImport';
 
 /**
  * Editor for a JSON-typed provider config field. Keeps the raw textarea contents in
@@ -102,7 +105,12 @@ const getEnvironmentVariableNames = model => {
   const modelSpecificVar = `${model.id.toUpperCase().replace(/-/g, '_')}_API_KEY`;
   envVars.push(modelSpecificVar);
 
-  // Priority 2: Provider-specific environment variable
+  // Priority 2: Provider-specific environment variable. A model linked to a
+  // custom provider reads only that provider's variable (see server/utils.js).
+  if (model.providerId && model.providerId !== model.provider) {
+    envVars.push(providerEnvKeyName(model.providerId));
+    return envVars;
+  }
   const providerMap = {
     openai: 'OPENAI_API_KEY',
     'openai-responses': 'OPENAI_API_KEY',
@@ -227,6 +235,40 @@ function ModelFormEditor({
     };
   }, [data?.provider]);
 
+  // Custom LLM providers (e.g. a T-Systems LLM Hub entry) are offered next to
+  // the API types: picking one links the model to it and takes its API type.
+  const [customProviders, setCustomProviders] = useState([]);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const response = await makeAdminApiCall('/admin/providers');
+        if (cancelled) return;
+        const list = Array.isArray(response?.data) ? response.data : [];
+        setCustomProviders(list.filter(isCustomLlmProvider));
+      } catch {
+        if (!cancelled) setCustomProviders([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  const linkedProvider = data.providerId
+    ? customProviders.find(p => p.id === data.providerId)
+    : null;
+
+  const handleProviderSelect = e => {
+    const value = e.target.value;
+    const custom = customProviders.find(p => p.id === value);
+    if (custom) {
+      onChange({ ...data, providerId: custom.id, provider: custom.apiType });
+      return;
+    }
+    const { providerId: _unlinked, ...rest } = data;
+    onChange({ ...rest, provider: value });
+  };
+
   const handleChange = (field, value) => {
     onChange({ ...data, [field]: value });
   };
@@ -279,15 +321,17 @@ function ModelFormEditor({
     if (!data.id || !data.provider) {
       return null;
     }
-    const envVarsList = getEnvironmentVariableNames({ id: data.id, provider: data.provider }).join(
-      '\n'
-    );
+    const envVarsList = getEnvironmentVariableNames({
+      id: data.id,
+      provider: data.provider,
+      providerId: data.providerId
+    }).join('\n');
     return t(
       'admin.models.hints.apiKeyEnvVars',
       `Environment variables (in priority order):\n${envVarsList}`,
       { envVars: envVarsList }
     );
-  }, [data.id, data.provider, t]);
+  }, [data.id, data.provider, data.providerId, t]);
 
   const mergedErrors = { ...errors, ...validationErrors };
   const errorLabels = {
@@ -412,8 +456,8 @@ function ModelFormEditor({
                   <select
                     id="provider"
                     name="provider"
-                    value={data.provider || ''}
-                    onChange={handleInputChange}
+                    value={data.providerId || data.provider || ''}
+                    onChange={handleProviderSelect}
                     className={`mt-1 block w-full py-2 px-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md shadow-xs focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm ${
                       errors.provider ? 'border-red-300 text-red-900' : ''
                     }`}
@@ -425,9 +469,35 @@ function ModelFormEditor({
                         {option.label}
                       </option>
                     ))}
+                    {customProviders.length > 0 && (
+                      <optgroup
+                        label={t('admin.models.fields.customProviders', 'Custom providers')}
+                      >
+                        {customProviders.map(p => (
+                          <option key={p.id} value={p.id}>
+                            {getLocalizedContent(p.name) || p.id} ({apiTypeLabel(t, p.apiType)})
+                          </option>
+                        ))}
+                      </optgroup>
+                    )}
+                    {data.providerId && !linkedProvider && (
+                      <option value={data.providerId}>{data.providerId}</option>
+                    )}
                   </select>
                   {errors.provider && (
                     <p className="mt-2 text-sm text-red-600 dark:text-red-400">{errors.provider}</p>
+                  )}
+                  {data.providerId && (
+                    <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                      {t(
+                        'admin.models.hints.linkedProvider',
+                        'Uses the API key of the provider "{{provider}}" and its API type ({{apiType}}).',
+                        {
+                          provider: getLocalizedContent(linkedProvider?.name) || data.providerId,
+                          apiType: apiTypeLabel(t, data.provider)
+                        }
+                      )}
+                    </p>
                   )}
                 </div>
 

@@ -377,8 +377,9 @@ function useChatMessages(chatId = 'default', { ephemeral = false, serverBacked =
       return;
     }
     try {
-      // Filter out greeting messages for persistence
-      const persistableMessages = messages.filter(msg => !msg.isGreeting);
+      // Filter out greeting messages and a transcript still being recorded
+      // (it becomes a real message only when it is sent) for persistence
+      const persistableMessages = messages.filter(msg => !msg.isGreeting && !msg.isLiveTranscript);
 
       // Strip image data to avoid sessionStorage quota issues
       // Images can be very large (base64 encoded) and exceed the ~5-10MB quota
@@ -427,7 +428,7 @@ function useChatMessages(chatId = 'default', { ephemeral = false, serverBacked =
         );
         try {
           const textOnlyMessages = messages
-            .filter(msg => !msg.isGreeting)
+            .filter(msg => !msg.isGreeting && !msg.isLiveTranscript)
             .map(msg => {
               const { images: _images, ...rest } = msg;
               return rest;
@@ -650,6 +651,16 @@ function useChatMessages(chatId = 'default', { ephemeral = false, serverBacked =
   }, []); // No dependency on messages anymore
 
   /**
+   * Remove one message, leaving the ones after it in place. Unlike
+   * `deleteMessage` this reads the latest state, so it also removes a message
+   * added in the same tick.
+   * @param {string} messageId - The ID of the message to remove
+   */
+  const removeMessage = useCallback(messageId => {
+    setMessages(prev => prev.filter(message => message.id !== messageId));
+  }, []);
+
+  /**
    * Edit a message's content
    * @param {string} messageId - The ID of the message to edit
    * @param {string} newContent - The new content for the message
@@ -753,9 +764,13 @@ function useChatMessages(chatId = 'default', { ephemeral = false, serverBacked =
       // an app with `sendChatHistory: false` gets only the new message there
       // too. Every other mode keeps posting its whole array.
       // Using messagesRef instead of messages dependency
-      // Filter out greeting messages for API requests
+      // Filter out greeting messages for API requests, and the live transcript
+      // bubble: it is replaced by the message it turns into, but the ref can
+      // still hold it for a render after the swap.
       let messagesForApi =
-        includeFull && !serverBacked ? messagesRef.current.filter(msg => !msg.isGreeting) : [];
+        includeFull && !serverBacked
+          ? messagesRef.current.filter(msg => !msg.isGreeting && !msg.isLiveTranscript)
+          : [];
 
       if (additionalMessage) {
         messagesForApi = [...messagesForApi, additionalMessage];
@@ -817,6 +832,7 @@ function useChatMessages(chatId = 'default', { ephemeral = false, serverBacked =
     appendWorkflowStep,
     setMessageError,
     deleteMessage,
+    removeMessage,
     editMessage,
     addSystemMessage,
     clearMessages,

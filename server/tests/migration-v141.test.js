@@ -1,8 +1,12 @@
 #!/usr/bin/env node
 
 /**
- * Migration V141 specs — seeding `platform.aiTransparency` and the per-model
- * `contentMarking` block (EU AI Act Art. 50, issue #2563).
+ * Migration V141 specs — provider names and descriptions become plain text.
+ *
+ * The admin Providers pages edit `name` and `description` as one string each.
+ * Entries still carrying per-language objects are collapsed into the text in
+ * the platform's default language, else English, else the first non-empty
+ * one. Strings and every other field are left alone.
  */
 import fs from 'node:fs/promises';
 import os from 'node:os';
@@ -15,10 +19,8 @@ import {
   precondition,
   version,
   description,
-  AI_TRANSPARENCY_DEFAULTS
-} from '../migrations/V141__add_ai_transparency.js';
-import { setDefault } from '../migrations/utils.js';
-import { DEFAULT_AI_TRANSPARENCY } from '../../shared/aiTransparency.js';
+  toPlainText
+} from '../migrations/V141__provider_plain_names.js';
 
 let baseDir;
 
@@ -31,135 +33,110 @@ function makeCtx(dir) {
         .stat(path.join(dir, rel))
         .then(() => true)
         .catch(() => false),
-    readJson: async rel => JSON.parse(await fs.readFile(path.join(dir, rel), 'utf8')),
+    readJson: async rel =>
+      fs
+        .readFile(path.join(dir, rel), 'utf8')
+        .then(JSON.parse)
+        .catch(() => null),
     writeJson: async (rel, data) => {
       await fs.mkdir(path.dirname(path.join(dir, rel)), { recursive: true });
       await fs.writeFile(path.join(dir, rel), JSON.stringify(data, null, 2), 'utf8');
     },
-    listFiles: async (rel, _glob) =>
-      (await fs.readdir(path.join(dir, rel))).filter(f => f.endsWith('.json')),
-    setDefault,
     log: m => logs.push(['info', m]),
     warn: m => logs.push(['warn', m])
   };
 }
 
-async function seed({ platform = {}, models = {} } = {}) {
-  const dir = await fs.mkdtemp(path.join(baseDir, 'v141-'));
-  if (platform !== null) {
-    await fs.mkdir(path.join(dir, 'config'), { recursive: true });
-    await fs.writeFile(path.join(dir, 'config/platform.json'), JSON.stringify(platform), 'utf8');
+async function freshDir(files) {
+  const dir = await fs.mkdtemp(path.join(baseDir, 'case-'));
+  for (const [rel, data] of Object.entries(files)) {
+    await fs.mkdir(path.dirname(path.join(dir, rel)), { recursive: true });
+    await fs.writeFile(path.join(dir, rel), JSON.stringify(data), 'utf8');
   }
-  if (models !== null) {
-    await fs.mkdir(path.join(dir, 'models'), { recursive: true });
-    for (const [id, model] of Object.entries(models)) {
-      await fs.writeFile(path.join(dir, `models/${id}.json`), JSON.stringify(model), 'utf8');
-    }
-  }
-  return { dir, ctx: makeCtx(dir) };
-}
-
-function flatten(obj, prefix = '') {
-  const out = {};
-  for (const [key, value] of Object.entries(obj)) {
-    const p = prefix ? `${prefix}.${key}` : key;
-    if (value && typeof value === 'object' && !Array.isArray(value))
-      Object.assign(out, flatten(value, p));
-    else out[p] = value;
-  }
-  return out;
+  return dir;
 }
 
 before(async () => {
-  baseDir = await fs.mkdtemp(path.join(os.tmpdir(), 'ihub-migration-v141-'));
+  baseDir = await fs.mkdtemp(path.join(os.tmpdir(), 'v141-'));
 });
 
 after(async () => {
   await fs.rm(baseDir, { recursive: true, force: true });
 });
 
-describe('V141 identity', () => {
-  it('is numbered and described as its file name says', () => {
+describe('V141 provider_plain_names', () => {
+  it('declares its version and description', () => {
     assert.equal(version, '141');
-    assert.equal(description, 'add_ai_transparency');
+    assert.equal(description, 'provider_plain_names');
   });
 
-  it('runs when platform.json or the models directory exists', async () => {
-    const { ctx: none } = await seed({ platform: null, models: null });
-    assert.equal(await precondition(none), false);
-    const { ctx: both } = await seed();
-    assert.equal(await precondition(both), true);
+  it('runs only when providers.json exists', async () => {
+    assert.equal(await precondition(makeCtx(await freshDir({}))), false);
+    const dir = await freshDir({ 'config/providers.json': { providers: [] } });
+    assert.equal(await precondition(makeCtx(dir)), true);
   });
 
-  it('seeds exactly the shared defaults', () => {
-    assert.deepEqual(AI_TRANSPARENCY_DEFAULTS, flatten(DEFAULT_AI_TRANSPARENCY));
-  });
-});
-
-describe('V141 platform defaults', () => {
-  it('adds the whole section to an installation that has none', async () => {
-    const { ctx } = await seed({ platform: { auth: { mode: 'local' } } });
-    await up(ctx);
-    const platform = await ctx.readJson('config/platform.json');
-    assert.deepEqual(flatten(platform.aiTransparency), AI_TRANSPARENCY_DEFAULTS);
-    assert.deepEqual(platform.auth, { mode: 'local' });
+  it('keeps the default-language text, else English, else the first value', () => {
+    assert.equal(toPlainText({ en: 'Local LLM', de: 'Lokales LLM' }, 'de'), 'Lokales LLM');
+    assert.equal(toPlainText({ en: 'Local LLM', de: 'Lokales LLM' }, 'fr'), 'Local LLM');
+    assert.equal(toPlainText({ fr: 'Recherche' }, 'de'), 'Recherche');
+    assert.equal(toPlainText({ en: '  ', de: 'Nur Deutsch' }, 'en'), 'Nur Deutsch');
+    assert.equal(toPlainText('already text', 'en'), 'already text');
   });
 
-  it('keeps values an admin already set', async () => {
-    const { ctx } = await seed({
-      platform: {
-        aiTransparency: { detection: { access: 'public' }, images: { watermark: 'none' } }
+  it('converts localized entries and leaves everything else on them alone', async () => {
+    const dir = await freshDir({
+      'config/platform.json': { defaultLanguage: 'de' },
+      'config/providers.json': {
+        providers: [
+          {
+            id: 'local',
+            name: { en: 'Local LLM', de: 'Lokales LLM' },
+            description: { en: 'Local providers', de: 'Lokale Anbieter' },
+            enabled: true,
+            apiKey: 'enc-secret'
+          },
+          {
+            id: 'llmhub',
+            name: 'T-Systems LLM Hub',
+            description: 'Gateway',
+            category: 'llm',
+            apiType: 'openai'
+          },
+          { id: 'no-name', category: 'custom' }
+        ]
       }
     });
+    const ctx = makeCtx(dir);
     await up(ctx);
-    const { aiTransparency } = await ctx.readJson('config/platform.json');
-    assert.equal(aiTransparency.detection.access, 'public');
-    assert.equal(aiTransparency.images.watermark, 'none');
-    assert.equal(aiTransparency.images.c2pa, true);
-    assert.equal(aiTransparency.interactionDisclosure.enabled, true);
+    const { providers } = await ctx.readJson('config/providers.json');
+
+    assert.deepEqual(providers[0], {
+      id: 'local',
+      name: 'Lokales LLM',
+      description: 'Lokale Anbieter',
+      enabled: true,
+      apiKey: 'enc-secret'
+    });
+    assert.deepEqual(providers[1], {
+      id: 'llmhub',
+      name: 'T-Systems LLM Hub',
+      description: 'Gateway',
+      category: 'llm',
+      apiType: 'openai'
+    });
+    assert.equal(providers[2].name, 'no-name');
   });
 
-  it('is idempotent', async () => {
-    const { ctx } = await seed();
+  it('does not rewrite a file that is already plain text', async () => {
+    const dir = await freshDir({
+      'config/providers.json': { providers: [{ id: 'openai', name: 'OpenAI', description: '' }] }
+    });
+    const file = path.join(dir, 'config/providers.json');
+    const before = await fs.readFile(file, 'utf8');
+    const ctx = makeCtx(dir);
     await up(ctx);
-    const first = await ctx.readJson('config/platform.json');
-    await up(ctx);
-    assert.deepEqual(await ctx.readJson('config/platform.json'), first);
-  });
-});
-
-describe('V141 model contentMarking', () => {
-  it('marks cloud text models as unmarked and Gemini images as SynthID', async () => {
-    const { ctx } = await seed({
-      models: {
-        'claude-x': { id: 'claude-x', provider: 'anthropic' },
-        'gemini-img': { id: 'gemini-img', provider: 'google', supportsImageGeneration: true },
-        'gemini-txt': { id: 'gemini-txt', provider: 'google' }
-      }
-    });
-    await up(ctx);
-    assert.deepEqual((await ctx.readJson('models/claude-x.json')).contentMarking, {
-      textWatermark: 'none'
-    });
-    assert.deepEqual((await ctx.readJson('models/gemini-img.json')).contentMarking, {
-      textWatermark: 'none',
-      imageWatermark: 'upstream:synthid'
-    });
-    assert.deepEqual((await ctx.readJson('models/gemini-txt.json')).contentMarking, {
-      textWatermark: 'none'
-    });
-  });
-
-  it('never overwrites an existing block and skips transcription models', async () => {
-    const own = { textWatermark: { scheme: 'vllm-gumbel', keyGroup: 'acme' } };
-    const { ctx } = await seed({
-      models: {
-        vllm: { id: 'vllm', provider: 'local', contentMarking: own },
-        stt: { id: 'stt', provider: 'google-transcribe', modelType: 'transcription' }
-      }
-    });
-    await up(ctx);
-    assert.deepEqual((await ctx.readJson('models/vllm.json')).contentMarking, own);
-    assert.equal((await ctx.readJson('models/stt.json')).contentMarking, undefined);
+    assert.equal(await fs.readFile(file, 'utf8'), before);
+    assert.match(ctx.logs.at(-1)[1], /already plain text/);
   });
 });
