@@ -360,6 +360,26 @@ Configuration for PDF export functionality.
   - **opacity** (number) – Opacity level (0.0-1.0)
 - **templates** (object) – Available PDF export templates with name and description
 
+### **shortLinks**
+Where short links (feature `shortLinks`) may redirect.
+
+```json
+{
+  "shortLinks": {
+    "allowedHosts": ["docs.example.com"]
+  }
+}
+```
+
+- **allowedHosts** (array) – Hostnames a short link may redirect to with an absolute `http`/`https`
+  URL, matched exactly and case-insensitively. Paths on this server (`/apps/chat`) are always
+  allowed. Default: `[]` (paths on this server only). The list is checked when a link is saved and
+  again on every redirect, so removing a host stops its links from redirecting.
+
+Short links belong to the signed-in user who creates them. Only that user and administrators can
+list, change or delete them; links saved before links had owners can be managed by administrators
+only.
+
 ### **Request Configuration**
 
 - **defaultLanguage** (string) – Fallback language code when requested language is unavailable. Default: `"en"`

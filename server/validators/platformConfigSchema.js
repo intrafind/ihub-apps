@@ -500,6 +500,19 @@ export const platformConfigSchema = z
       })
       .passthrough()
       .prefault({}),
+    // Short links (feature `shortLinks`): an absolute http(s) target must name
+    // one of these hosts; paths on this server are always allowed.
+    shortLinks: z
+      .object({
+        allowedHosts: z
+          .array(z.string())
+          .prefault([])
+          .describe(
+            'Hostnames (exact, case-insensitive) a short link may redirect to with an absolute URL. Paths on this server are always allowed.'
+          )
+      })
+      .passthrough()
+      .prefault({}),
     // Scheduled tasks: prompts users save to run by themselves, gated by
     // features.scheduledTasks (and durable chats, since every run is a chat).
     // Zero turns off `maxTasksPerUser`, `maxConsecutiveFailures`,
