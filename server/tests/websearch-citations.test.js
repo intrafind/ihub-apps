@@ -346,6 +346,7 @@ describe('shared/sources', () => {
     const sources = setOf(
       extractToolSources({
         toolId: 'braveSearch',
+        toolDef: { id: 'braveSearch', script: 'braveSearch.js' },
         args: { query: 'langdock' },
         result: {
           results: [

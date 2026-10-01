@@ -20,6 +20,7 @@ import {
 } from '../../services/loop/seams/index.js';
 import { LLM_ERROR_CODES } from '../../services/loop/contracts/errors.js';
 import { RUN_LOG_EVENTS } from '../../../shared/runEvents.js';
+import { reportToolCallSources } from '../../services/sources/toolCallScope.js';
 import { planToolBatches } from '../../services/loop/segmentPlanner.js';
 import { steerRun, takeSteers, STEER_MARKER } from '../../services/loop/steering.js';
 import {
@@ -113,6 +114,8 @@ const baseMessages = [
 const searchTool = {
   id: 'webSearch',
   name: 'webSearch',
+  // Runs the platform's own web search script: its hits are public.
+  script: 'braveSearch.js',
   description: 'search',
   parameters: {
     type: 'object',
@@ -1113,6 +1116,32 @@ test('resolvePolicies applies contract defaults', () => {
 });
 
 // ── sources ─────────────────────────────────────────────────────────────────
+
+test('sources: what a tool call reports beside its result counts, whichever executor ran it', async () => {
+  const docsTool = { id: 'docs_find', name: 'docs_find', _mcp: { serverId: 'docs' } };
+  const { loop } = makeLoop([toolTurn([{ id: 'c1', name: 'docs_find', args: {} }])]);
+  const frames = [];
+  const result = await loop.run({
+    model,
+    messages: baseMessages,
+    tools: [docsTool],
+    channel: { onSources: frame => frames.push(frame) },
+    policies: { budgets: { maxToolRounds: 1 } },
+    // Deep inside the call, after an await, as the MCP connection does it.
+    executeTool: async () => {
+      await new Promise(resolve => setImmediate(resolve));
+      reportToolCallSources([{ title: 'Guide', url: 'https://docs.example/guide' }]);
+      return 'Found the guide.';
+    }
+  });
+  assert.deepEqual(
+    frames.map(f => [f.callId, f.items.map(i => [i.id, i.provider, i.private])]),
+    [['c1', [['url:docs.example/guide', 'mcp:docs', true]]]]
+  );
+  assert.equal(result.sources.items.length, 1);
+  // Outside a tool call there is nowhere to report to.
+  assert.doesNotThrow(() => reportToolCallSources([{ url: 'https://x.example/' }]));
+});
 
 test('sources: every tool call, adapter chunk and provider search is collected, ledgered and handed to the channel', async () => {
   const { runLog, events } = await captureRunLog();

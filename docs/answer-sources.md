@@ -9,6 +9,7 @@ with the answer and leaves out of a share whatever was found with the user's own
 > Not to be confused with [knowledge sources](sources.md) (`sources.json`), the documents and
 > websites an app can *search*. Answer sources are what a turn *found*.
 
+Building a new integration step by step: [Building an Integration](integration-development.md).
 Design and background: `concepts/unified-sources/2026-09-30 Answer Sources.md`, issue
 [intrafind/ihub-apps#2637](https://github.com/intrafind/ihub-apps/issues/2637).
 
@@ -118,8 +119,10 @@ tool (which does this for its caller), or an A2A agent:
 ```
 
 MCP tools use the standard `resource_link` content block (`uri`, `name`, `title`, `description`,
-`mimeType`), `structuredContent.sources`, or a text block holding such a JSON object. The sources
-of an MCP tool belong to `mcp:<serverId>`.
+`mimeType`), `structuredContent.sources`, or a text block holding such a JSON object.
+`structuredContent` is read before the connection turns the result into the text the model reads
+(`services/sources/toolCallScope.js`), so it counts even when that text does not repeat it. The
+sources of an MCP tool belong to `mcp:<serverId>`.
 
 What a tool reports this way is **private unless a source says `"private": false`**. The platform
 cannot tell whether a tool's hits are public, and a share must never show a viewer what the owner

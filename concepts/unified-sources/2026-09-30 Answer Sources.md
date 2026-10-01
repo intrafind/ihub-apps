@@ -2,7 +2,9 @@
 
 Issue: [intrafind/ihub-apps#2637](https://github.com/intrafind/ihub-apps/issues/2637) ·
 Builds on #2520 (web search sources view) and #2597 (iFinder tool documents in the Documents
-panel). Developer and admin documentation: [`docs/answer-sources.md`](../../docs/answer-sources.md).
+panel). Developer and admin documentation: [`docs/answer-sources.md`](../../docs/answer-sources.md);
+step-by-step guide for a new integration:
+[`docs/integration-development.md`](../../docs/integration-development.md).
 
 ## Goal
 
@@ -71,10 +73,11 @@ share filter.
 - **No heuristic for "search-like" tools** other than web search engines (by name, including MCP
   search tools named after an engine, for their result shape). Other tools report sources through
   the envelope or a declaration.
-- **A name never makes results public.** Only the platform's own web search tools (Brave, Qwant,
-  Staan, `webSearch`) and provider-run search report public hits. A tool that is only named after
-  an engine may search an intranet, so its hits stay private; a custom tool's declaration can say
-  `"public": true`.
+- **A name never makes results public.** Only the platform's own web search scripts (Brave,
+  Qwant, Staan; decided by the script a definition runs, the way `toolLoader.runTool` dispatches
+  it, never by the tool's id) and provider-run search report public hits. Any other tool, even one
+  called `braveSearch`, may search an intranet, so its hits stay private; a custom tool's
+  declaration can say `"public": true`.
 - **A public sighting never declassifies a private one** (from the PR review). A source merged from a
   public and a private sighting is public but shows only what the public one reported. From the
   private one it takes only whether the source was read and cited, so a private tool's excerpt for

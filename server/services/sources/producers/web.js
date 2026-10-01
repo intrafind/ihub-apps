@@ -13,9 +13,10 @@
  *     (`webContentExtractor`)
  *
  * What the platform's own web search returned is public — it is on the open
- * web. Another tool named after a search engine (an MCP server, a custom tool)
- * may search anything, intranet included: its hits are listed the same way but
- * stay private, unless its definition declares them public (`"sources": {
+ * web. "Own" is the shipped Brave, Qwant and Staan scripts, decided by the
+ * script a definition runs. Any other tool named after a search engine (an MCP
+ * server, a custom or OpenAPI tool) may search anything, intranet included:
+ * its hits are listed the same way but stay private, unless its definition declares them public (`"sources": {
  * …, "public": true }`, `producers/declared.js`). What the page reader read is
  * private unless a public search returned it too: hosts on the SSL whitelist
  * bypass the reader's private-address guard, so a page it read may be an
@@ -55,15 +56,30 @@ export function isWebSearchTool(toolId) {
 }
 
 /**
- * The platform's own web search tools (`server/defaults/tools/*Search.json`)
- * and the generic `webSearch` id: the only tools whose hits are known to come
- * from the open web.
+ * The platform's own web search scripts (`server/tools/`, shipped with the
+ * server): the only tools whose hits are known to come from the open web.
  */
-const BUILT_IN_WEB_SEARCH = new Set(['bravesearch', 'qwantsearch', 'staansearch', 'websearch']);
+const BUILT_IN_WEB_SEARCH_SCRIPTS = new Set(['braveSearch.js', 'qwantSearch.js', 'staanSearch.js']);
 
-/** Whether the call is one of the platform's own web search tools, not a namesake. */
+/** Tool ids `toolLoader.runTool` dispatches by id, before it looks at a script. */
+const DISPATCHED_BY_ID = /^(app__|workflow_|source_)|^(activate_skill|read_skill_resource)$/;
+
+/**
+ * Whether the call ran one of the platform's own web search scripts. Decided
+ * by what the definition runs, the way `toolLoader.runTool` dispatches it, and
+ * never by the tool's id or name: a custom, OpenAPI, MCP or A2A tool called
+ * `braveSearch` runs something else.
+ *
+ * @param {string} toolId
+ * @param {Object} [toolDef]
+ * @returns {boolean}
+ */
 function isBuiltInWebSearch(toolId, toolDef) {
-  return !toolDef?._mcp && BUILT_IN_WEB_SEARCH.has(String(toolId || '').toLowerCase());
+  if (!toolDef || DISPATCHED_BY_ID.test(String(toolId || ''))) return false;
+  if (toolDef._mcp || toolDef._a2a || toolDef.type === 'openapi' || toolDef.isSpecialTool) {
+    return false;
+  }
+  return BUILT_IN_WEB_SEARCH_SCRIPTS.has(toolDef.script);
 }
 
 /** Whether the tool is the page reader, which reads one page rather than searching. */

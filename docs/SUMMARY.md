@@ -98,6 +98,7 @@
     - [Telemetry & Observability](telemetry.md)
   - [Development & Deployment]()
     - [Developer Onboarding](developer-onboarding.md)
+    - [Building an Integration](integration-development.md)
     - [LLM Client](llm-client.md)
     - [Agent Loop](agent-loop.md)
     - [SSE v2 Streaming](sse-v2.md)

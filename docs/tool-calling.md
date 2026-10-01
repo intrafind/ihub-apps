@@ -347,8 +347,9 @@ or per function under `functions.<name>.sources`):
 ```
 
 Both are private (never in a shared chat) unless they say otherwise. See
-[Answer Sources](answer-sources.md) for the fields, the privacy rules and how
-an integration adds preview and download.
+[Answer Sources](answer-sources.md) for the fields and the privacy rules, and
+[Building an Integration](integration-development.md) for a step-by-step guide,
+including how an integration adds preview and download.
 
 ### External Service Integration
 

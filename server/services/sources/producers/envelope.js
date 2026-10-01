@@ -7,8 +7,9 @@
  *     `{ "results": […], "sources": [{ "title": "…", "url": "https://…" }] }`
  *     (see `shared/sources/source.js` for the fields);
  *   - MCP: `resource_link` content blocks (`{ type: 'resource_link', uri,
- *     name, title?, description?, mimeType? }`), `structuredContent.sources`,
- *     or a text block holding such a JSON object.
+ *     name, title?, description?, mimeType? }`), a text block holding such a
+ *     JSON object, or `structuredContent.sources` (which the MCP connection
+ *     reports beside the result the model reads: `../toolCallScope.js`).
  *
  * What a tool reports is private unless it says otherwise per source
  * (`private: false`): the platform cannot tell whether a tool's hits are

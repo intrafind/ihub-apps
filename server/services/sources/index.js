@@ -9,8 +9,9 @@
  *     with result shapes of their own, then the built-in ones for web search
  *     and the page reader (`producers/web.js`) and the iFinder tools
  *     (`producers/ifinder.js`);
- *  3. the tool's own report in its result (`producers/envelope.js`): a
- *     `sources` array, MCP `resource_link` blocks or `structuredContent.sources`.
+ *  3. the tool's own report (`producers/envelope.js`): a `sources` array in
+ *     its result, MCP `resource_link` blocks, or what the call reported beside
+ *     its result (`toolCallScope.js`: an MCP result's `structuredContent.sources`).
  *
  * Model adapters report theirs on the chunk (`chunk.sources`, e.g. iAssistant),
  * and provider-run web search on the chunk's `groundingMetadata`
@@ -142,10 +143,19 @@ export function finalizeSourceFrame(frame, defaults = {}) {
  * @param {Object} [call.toolDef] - the resolved tool definition
  * @param {Object} [call.args]
  * @param {unknown} call.result - the tool's full result (object, array or JSON text)
+ * @param {Array} [call.reported] - source inputs the call reported beside its
+ *   result (`toolCallScope.js`); part of the tool's own report
  * @param {boolean} [call.failed] - the call threw or returned an error
  * @returns {{items: Array, queries: string[]}|null}
  */
-export function extractToolSources({ toolId, toolDef, args, result, failed = false }) {
+export function extractToolSources({
+  toolId,
+  toolDef,
+  args,
+  result,
+  reported = [],
+  failed = false
+}) {
   const parsed = parseResult(result);
   const defaults = { provider: defaultProviderOf(toolId, toolDef), private: true };
   try {
@@ -160,7 +170,9 @@ export function extractToolSources({ toolId, toolDef, args, result, failed = fal
       candidate.matches(call)
     );
     if (producer) return finalizeSourceFrame(producer.fromToolResult(call), defaults);
-    return failed ? null : finalizeSourceFrame(envelopeSources(parsed), defaults);
+    if (failed) return null;
+    const items = [...(envelopeSources(parsed)?.items || []), ...reported];
+    return items.length ? finalizeSourceFrame({ items }, defaults) : null;
   } catch (error) {
     // Reporting sources must never fail a tool call.
     logger.warn('Source extraction failed', { component: 'sources', toolId, error: error.message });

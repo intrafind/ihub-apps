@@ -22,6 +22,7 @@ import {
   withoutRedirects
 } from './McpUserOAuthProvider.js';
 import logger from '../../utils/logger.js';
+import { reportToolCallSources } from '../sources/toolCallScope.js';
 
 /** How long a fetched MCP App UI resource is reused before re-reading it. */
 const UI_RESOURCE_TTL_MS = 5 * 60 * 1000;
@@ -581,6 +582,9 @@ export class McpServerConnection {
       throw err;
     }
 
+    // The model reads the content blocks only; sources the server put in
+    // `structuredContent` would be lost with the rest of it.
+    reportToolCallSources(result?.structuredContent?.sources);
     return normalizeToolResult(result);
   }
 

@@ -30,6 +30,7 @@ import { addUsage, normalizeUsage, usageToBudget } from './llmUsage.js';
 import { repairToolArguments, applyParameterDefaults, matchTool } from './toolArgs.js';
 import { classifyToolResult, isCitationProducingTool } from './toolClassify.js';
 import { extractToolSources, finalizeSourceFrame } from '../sources/index.js';
+import { runToolCallScope } from '../sources/toolCallScope.js';
 import {
   emptySourceSet,
   mergeSources,
@@ -883,6 +884,8 @@ export class AgentLoop {
     let message;
     let rawResult;
     let failure = null;
+    // Sources the call reports beside its result (services/sources/toolCallScope).
+    const reported = [];
     if (!toolDef) {
       const available = ctx.tools.map(t => t.id).filter(Boolean);
       const safeMessage =
@@ -911,7 +914,16 @@ export class AgentLoop {
         }
         rawResult = await raceAbort(
           () =>
-            ctx.request.executeTool(call, { toolDef, toolId, args, ctx, info, signal: ctx.signal }),
+            runToolCallScope(reported, () =>
+              ctx.request.executeTool(call, {
+                toolDef,
+                toolId,
+                args,
+                ctx,
+                info,
+                signal: ctx.signal
+              })
+            ),
           ctx.signal,
           () => abortError('Agent loop aborted (cancelled or timed out)')
         );
@@ -955,6 +967,7 @@ export class AgentLoop {
         toolDef,
         args,
         result: rawResult ?? message.content,
+        reported,
         failed: !!failure
       })
     };

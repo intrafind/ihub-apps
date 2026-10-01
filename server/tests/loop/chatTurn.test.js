@@ -298,6 +298,8 @@ function assertLedger(runLog, summary, { status, finishReason, errorCode } = {})
 const webSearchTool = {
   id: 'webSearch',
   name: 'webSearch',
+  // Runs the platform's own web search script: its hits are public.
+  script: 'braveSearch.js',
   description: 'search the web',
   parameters: { type: 'object', properties: { query: { type: 'string' } } }
 };

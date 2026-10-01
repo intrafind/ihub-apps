@@ -22,8 +22,16 @@ import {
 } from '../../services/sources/providers.js';
 import { sourcesAddedData } from '../../services/loop/contracts/runLogEvents.js';
 
+/** The platform's own web search tools, as their shipped definitions run them. */
+const SCRIPTS = { braveSearch: 'braveSearch.js', qwantSearch: 'qwantSearch.js' };
+
 const extract = (toolId, result, extra = {}) =>
-  extractToolSources({ toolId, toolDef: { id: toolId }, result, ...extra });
+  extractToolSources({
+    toolId,
+    toolDef: { id: toolId, ...(SCRIPTS[toolId] ? { script: SCRIPTS[toolId] } : {}) },
+    result,
+    ...extra
+  });
 
 // ── web search and the page reader ─────────────────────────────────────────
 
@@ -156,18 +164,22 @@ test('web: MCP search tools named after an engine are read from JSON text', () =
   );
 });
 
-test('web: only the platform’s own web search makes its hits public', () => {
+test('web: only the platform’s own web search scripts make their hits public', () => {
   const hits = { results: [{ title: 'Intranet page', url: 'https://wiki.corp.example/x' }] };
   const privacyOf = (toolId, toolDef) =>
-    extractToolSources({ toolId, toolDef: toolDef ?? { id: toolId }, result: hits }).items[0]
-      .private;
-  assert.equal(privacyOf('braveSearch'), false);
-  assert.equal(privacyOf('webSearch'), false);
-  // Named after an engine, but it may search anything: listed, not shareable.
+    extractToolSources({ toolId, toolDef, result: hits }).items[0].private;
+  const brave = { id: 'braveSearch', script: 'braveSearch.js' };
+  assert.equal(privacyOf('braveSearch', brave), false);
+  assert.equal(privacyOf('webSearch', { id: 'webSearch', script: 'qwantSearch.js' }), false);
+  // Named like the platform's search, but running something else.
+  assert.equal(privacyOf('braveSearch', { id: 'braveSearch' }), true);
+  assert.equal(privacyOf('braveSearch', { ...brave, type: 'openapi' }), true);
+  assert.equal(privacyOf('braveSearch', { ...brave, _mcp: { serverId: 'x' } }), true);
+  assert.equal(privacyOf('braveSearch', { ...brave, _a2a: { agentId: 'x' } }), true);
+  assert.equal(privacyOf('webSearch', { id: 'webSearch', script: 'intranetSearch.js' }), true);
   assert.equal(privacyOf('mcp_brave_search', { _mcp: { serverId: 'brave' } }), true);
-  assert.equal(privacyOf('braveSearch', { id: 'braveSearch', _mcp: { serverId: 'x' } }), true);
-  assert.equal(privacyOf('intranet_web_search'), true);
-  assert.equal(privacyOf('tavily_search'), true);
+  assert.equal(privacyOf('intranet_web_search', { id: 'intranet_web_search' }), true);
+  assert.equal(privacyOf('tavily_search', { id: 'tavily_search' }), true);
 });
 
 // ── a tool's own report ────────────────────────────────────────────────────
@@ -250,6 +262,43 @@ test('envelope: MCP resource_link blocks and structuredContent.sources are sourc
     result: { structuredContent: { sources: [{ title: 'S', url: 'https://s.example/' }] } }
   });
   assert.equal(structured.items[0].provider, 'mcp:docs');
+});
+
+test('envelope: sources the call reported beside its result belong to its own report', () => {
+  const toolDef = { id: 'mcp_docs_find', _mcp: { serverId: 'docs' } };
+  // What the MCP connection reports from `structuredContent.sources`, which the
+  // text the model reads no longer carries (services/sources/toolCallScope.js).
+  const reported = [
+    { title: 'Install guide', url: 'https://docs.example/guide' },
+    { title: 'Spec', url: 'https://docs.example/spec', private: false }
+  ];
+  const frame = extractToolSources({
+    toolId: 'mcp_docs_find',
+    toolDef,
+    result: JSON.stringify({ sources: [{ url: 'https://docs.example/guide' }] }),
+    reported
+  });
+  assert.deepEqual(
+    frame.items.map(item => [item.id, item.provider, item.title, item.private]),
+    [
+      ['url:docs.example/guide', 'mcp:docs', 'Install guide', true],
+      ['url:docs.example/spec', 'mcp:docs', 'Spec', false]
+    ]
+  );
+  // A failed call reports nothing; a declaration or a producer decides alone.
+  assert.equal(
+    extractToolSources({ toolId: 'mcp_docs_find', toolDef, result: 'x', reported, failed: true }),
+    null
+  );
+  assert.equal(
+    extractToolSources({
+      toolId: 'braveSearch',
+      toolDef: { id: 'braveSearch' },
+      result: {},
+      reported
+    }),
+    null
+  );
 });
 
 test('envelope: an app invoked as a tool hands its sources on as they were', () => {
