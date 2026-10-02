@@ -7,7 +7,8 @@
  * on this origin and paths including the deployment base path — and turn
  * everything else into the app root.
  *
- * `getHttpUrl` guards redirect apps: only http(s) targets are followed.
+ * `getHttpUrl` guards redirect and iframe apps: only http(s) targets are
+ * followed or embedded.
  */
 
 // runtimeBasePath uses `import.meta`, which the Jest transform cannot parse.
@@ -52,6 +53,7 @@ describe('getSafeReturnPath at the root', () => {
     ['a javascript: URL', 'javascript:void(0)'],
     ['an upper-case javascript: URL', 'JAVASCRIPT:void(0)'],
     ['a data: URL', 'data:text/html,hello'],
+    ['a blob: URL on this origin', `blob:${ORIGIN}/apps/chat`],
     ['a malformed URL', 'http://['],
     ['an empty value', ''],
     ['null', null],

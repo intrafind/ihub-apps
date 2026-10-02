@@ -318,7 +318,8 @@
       "loading": "Anwendung wird geladen...",
       "loadError": "Fehler beim Laden der eingebetteten Anwendung",
       "reload": "Neu laden",
-      "openInNewTab": "In neuem Tab öffnen"
+      "openInNewTab": "In neuem Tab öffnen",
+      "invalidUrl": "Für diese App ist keine gültige Webadresse hinterlegt. Nur http- und https-Links können geöffnet werden."
     },
     "appChat": {
       "messagePlaceholder": "Gib deine Nachricht hier ein...",

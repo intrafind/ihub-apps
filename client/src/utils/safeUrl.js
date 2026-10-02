@@ -38,9 +38,10 @@ const isWithinBasePath = (pathname, basePath) =>
  * stores work: absolute URLs (`window.location.href`) and paths
  * (`/ihub/apps/chat?x=1`). It is accepted only when it resolves to the
  * current origin and, on a subpath deployment, to a path under the base path.
- * Anything else — another origin, a scheme such as `javascript:` or `data:`,
- * a protocol-relative `//host` or `/\host`, a path that normalises to one
- * (`/.//host`), a malformed value — yields the app root instead.
+ * Anything else — another origin, a scheme other than `http:`/`https:`
+ * (`javascript:`, `data:`, or `blob:`, whose origin is that of the URL it
+ * wraps), a protocol-relative `//host` or `/\host`, a path that normalises to
+ * one (`/.//host`), a malformed value — yields the app root instead.
  *
  * The result is always a path (pathname + search + hash), never an absolute
  * URL, so assigning it to `window.location.href` cannot leave the origin.
@@ -73,6 +74,9 @@ export function getSafeReturnPath(returnUrl, options = {}) {
     return fallback;
   }
 
+  // Only http(s) URLs have a pathname that is a path; a `blob:` URL takes its
+  // origin from the URL it wraps and its pathname is that whole URL.
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') return fallback;
   if (url.origin !== origin) return fallback;
   // A pathname that starts with `//` (e.g. from `/.//host` or `/a/..//host`)
   // would be read as a protocol-relative URL once it is used on its own.

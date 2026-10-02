@@ -277,7 +277,7 @@ Embed external applications directly within iHub Apps using an iframe. This crea
 
 | Property | Type | Required | Default | Description |
 |----------|------|----------|---------|-------------|
-| `url` | String (URL) | Yes | - | The URL of the application to embed. Must be a valid URL starting with `http://` or `https://`; other schemes are rejected when the app is saved. |
+| `url` | String (URL) | Yes | - | The URL of the application to embed. Must be a valid URL starting with `http://` or `https://`; other schemes are rejected when the app is saved, and the app shows an error instead of embedding them. |
 | `allowFullscreen` | Boolean | No | `true` | Whether to allow the embedded app to enter fullscreen mode. |
 | `sandbox` | Array<String> | No | `["allow-scripts", "allow-same-origin", "allow-forms"]` | Array of sandbox permissions that control what the iframe can do. See [Sandbox Permissions](#iframe-sandbox-permissions) below. |
 

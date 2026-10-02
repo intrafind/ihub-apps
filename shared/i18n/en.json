@@ -305,7 +305,8 @@
       "loading": "Loading application...",
       "loadError": "Failed to load embedded application",
       "reload": "Reload",
-      "openInNewTab": "Open in new tab"
+      "openInNewTab": "Open in new tab",
+      "invalidUrl": "This app has no valid web address configured. Only http and https links can be opened."
     },
     "appChat": {
       "messagePlaceholder": "Type your message here...",

@@ -3,8 +3,8 @@
 ## Apps: Links Must Use http or https, and Invalid App Configurations Are Not Saved
 
 Redirect apps open, and iframe apps embed, only addresses that start with `http://` or
-`https://`. A redirect app with any other kind of link (for example `mailto:`) shows an error
-instead of opening it.
+`https://`. A redirect or iframe app with any other kind of link (for example `mailto:`) shows an
+error instead of opening or embedding it.
 
 Creating or saving an app — under **Admin → Apps**, with the app creation wizard, by uploading an
 app file or through the admin API — now checks the complete configuration against the app schema.

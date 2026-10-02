@@ -498,7 +498,7 @@ export default function registerAdminAppsRoutes(app) {
    *
    *       **Validation Rules:**
    *       - Application ID cannot be changed
-   *       - Required fields: id, name, description
+   *       - Required fields: id, name, description, color, icon
    *       - All fields are validated against the application schema
    *
    *       **File System Operations:**
@@ -637,7 +637,7 @@ export default function registerAdminAppsRoutes(app) {
    *
    *       **Validation Rules:**
    *       - Application ID must be unique
-   *       - Required fields: id, name, description
+   *       - Required fields: id, name, description, color, icon
    *       - All fields are validated against the application schema
    *       - Application ID will be used as filename
    *
