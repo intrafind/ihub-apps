@@ -32,7 +32,7 @@ const MONO_INPUT_CLASS = `${INPUT_CLASS} font-mono`;
  * @param {boolean} [props.required] - Mark the field as required
  * @returns {JSX.Element}
  */
-export function CredentialRefSelect({ value, onChange, types, label, help, required }) {
+export function CredentialRefSelect({ id, value, onChange, types, label, help, required }) {
   const { t } = useTranslation();
   const [credentials, setCredentials] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -68,13 +68,17 @@ export function CredentialRefSelect({ value, onChange, types, label, help, requi
   return (
     <div>
       {label && (
-        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+        <label
+          htmlFor={id}
+          className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+        >
           {label}
           {required && <span className="text-red-500 ml-0.5">*</span>}
         </label>
       )}
       <div className="flex items-center gap-2">
         <select
+          id={id}
           value={value || ''}
           onChange={e => onChange(e.target.value)}
           disabled={loading}
