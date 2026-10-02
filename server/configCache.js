@@ -251,19 +251,16 @@ function cacheKeyForStorageChange(event) {
 }
 
 /**
- * Decrypt the speech secrets platform.json stores encrypted at rest, in place.
+ * Decrypt the speech secret platform.json stores encrypted at rest, in place.
  *
- * The realtime WS proxy and the Azure token broker (`/api/voice/azure/token`)
- * read these from the cache and expect plaintext. Env-var placeholders are
- * resolved later, when the entry is stored.
+ * The Azure token broker (`/api/voice/azure/token`) reads it from the cache and
+ * expects plaintext. Env-var placeholders are resolved later, when the entry is
+ * stored. Transcription and TTS endpoints keep their keys on their models.
  *
  * @param {Object} platformData - Parsed platform.json
  * @returns {Object} The same object
  */
 function decryptPlatformSecrets(platformData) {
-  if (platformData.speech?.realtime?.apiKey) {
-    platformData.speech.realtime.apiKey = decryptIfEncrypted(platformData.speech.realtime.apiKey);
-  }
   if (platformData.speech?.azure?.subscriptionKey) {
     platformData.speech.azure.subscriptionKey = decryptIfEncrypted(
       platformData.speech.azure.subscriptionKey

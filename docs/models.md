@@ -267,7 +267,7 @@ Example configurations for the most common Bedrock models live in `examples/mode
 
 ### Transcription Models
 
-Models with `modelType: "transcription"` are **speech-to-text** models, not chat models. They convert a complete audio buffer — from an uploaded audio file, an uploaded video (audio track extracted client-side), or a browser recording — into text that becomes the user's message, which the selected chat model then answers. See [Realtime Voice & Transcription](voice-transcription.md) for the full deployment guide (vLLM setup, reverse proxy, limits, security) and [Audio File Support](audio-file-support.md) for how apps use them.
+Models with `modelType: "transcription"` are **speech-to-text** models, not chat models. They convert a complete audio buffer — from an uploaded audio file, an uploaded video (audio track extracted client-side), or a browser recording — into text that becomes the user's message, which the selected chat model then answers. Any of them can also take **dictation**: the microphone button streams to it and the text lands in the input field. See [Realtime Voice & Transcription](voice-transcription.md) for the full deployment guide (vLLM setup, reverse proxy, limits, security) and [Audio File Support](audio-file-support.md) for how apps use them.
 
 Transcription models are **not** routed through the LLM adapter pipeline. They use a parallel transcription provider registry (`server/transcription/`) and are streamed over the same authenticated realtime WebSocket (`/api/voice/realtime`) that dictation uses.
 
@@ -306,7 +306,8 @@ Key points:
 - **Credentials stay server-side.** The public `GET /api/models` endpoint strips `apiKey` from every model and strips `url` from transcription models, so the vLLM URL and API key never reach the browser. `GET /api/models` returns chat models by default; `GET /api/models?type=transcription` returns permitted transcription models (sanitized) for the app editor's model picker.
 - **Permissions** are enforced the same way as chat models — a user must be permitted to use the transcription model.
 - **Selection.** Apps reference a transcription model via the `transcription.modelId` app-config field (Admin → Apps → Transcription), not the chat model selector. Transcription models are hidden from the chat model selector, magic prompt, and compare mode.
-- **Dictation** (`platform.speech.realtime`, `settings.speechRecognition.service: "vllm-realtime"`) is a separate feature and continues to work unchanged. When a realtime session carries no `modelId` it falls back to the platform dictation backend.
+- **Dictation.** The microphone button uses a transcription model when Admin → Voice Input → Voice input (`speech.defaultService: "model"`, `speech.dictation.modelId`) or the app (`settings.speechRecognition.service: "model"`, `modelId`) picks one. See [Microphone Feature](microphone-feature.md#transcription-models-server-proxied).
+- **Testing.** The **Test** action in Admin → Models starts a session with the model's endpoint (a batch model is sent one second of silence), also for a disabled model.
 
 ```json
 {
@@ -324,7 +325,7 @@ Key points:
 
 Every transcription model file ships **disabled**. Enable the one you want:
 
-- `voxtral-mini-realtime` — point its `url` at your vLLM realtime endpoint (migration `V073` seeds it for existing installations, carrying over any configured `platform.speech.realtime` settings).
+- `voxtral-mini-realtime` — point its `url` at your vLLM realtime endpoint. Migration `V077` seeded it for existing installations; migration `V146` moves the former dictation endpoint (`platform.speech.realtime`) onto it, or onto a new `voxtral-mini-realtime-dictation` model when it points elsewhere.
 - `voxtral-mini-transcribe-realtime` — set `MISTRAL_API_KEY` (or a per-model key) and enable. **Enabling it sends user audio to Mistral**, which is why it is off by default. Migration `V144` seeds it, disabled.
 - `gemini-3.5-transcribe-live` / `gemini-3.5-transcribe` — set `GOOGLE_API_KEY` (or a per-model key) and enable. **Enabling either sends user audio to Google**, and the batch model additionally stores it in Google's Files API (48 h retention) for the duration of the request; that is why neither is on by default. Migration `V089` seeds both, disabled.
 

@@ -60,3 +60,23 @@ Gemini detects from the text.
   under **Admin → Models**, then choose it under **Admin → Voice Input → Read aloud**.
 - They use the Google API key the Gemini chat models already use.
 
+
+## Voice Input with Any Transcription Model
+
+The microphone button in a chat can now use any transcription model: self-hosted Voxtral on
+vLLM, Voxtral on Mistral, Gemini Transcribe Live or Gemini Transcribe, next to the browser and
+Azure Speech. **Admin → Voice Input** now has one choice each for voice input, transcription and
+read aloud.
+
+- Pick the model as the platform default under **Admin → Voice Input → Voice input**, or per app
+  under **Speech Recognition Service** in the app editor. Both list every enabled transcription
+  model.
+- Streaming models show the text while the user speaks. Gemini Transcribe inserts it when the
+  user stops.
+- An endpoint and its key are set once, on the model in **Admin → Models**. The same model can
+  take voice input, recordings and uploads.
+- Users need access to the model through their groups. If the default model is disabled, apps
+  that follow the default use the browser until it is back.
+- The **Test** action in **Admin → Models** now checks transcription models too, also disabled
+  ones. It starts a session with the endpoint, or sends one second of silence to Gemini
+  Transcribe.

@@ -2,7 +2,7 @@
 
 ## Overview
 
-The microphone feature allows users to dictate messages instead of typing. It supports two operation modes, an optional transcript overlay, and multiple speech recognition backends (browser-native, Azure Cognitive Services, and an iHub-proxied vLLM realtime endpoint such as Voxtral).
+The microphone feature allows users to dictate messages instead of typing. It supports two operation modes, an optional transcript overlay, and multiple speech recognition backends (browser-native, Azure Cognitive Services, and any transcription model — Voxtral on vLLM or Mistral, Gemini Transcribe Live, Gemini Transcribe — streamed through iHub).
 
 > **Dictation vs. transcription.** This page covers **dictation** — live microphone speech dropped into the **input field** for the user to edit and send. A separate feature, **transcription**, turns a recording or an uploaded audio/video clip into the **user's message** — a recording grows the message while the user speaks and sends it on stop — using a `modelType: "transcription"` model; the chat model then answers it. Both can be enabled on the same app and share the same authenticated `/api/voice/realtime` WebSocket. See [Transcription Models](models.md#transcription-models) and [Audio File Support](audio-file-support.md#two-audio-paths-multimodal-vs-voxtral-transcription).
 
@@ -19,69 +19,54 @@ Configure which backend to use with `settings.speechRecognition.service`:
 
 | Value | Behavior |
 | ----- | -------- |
-| `default` (or omitted) | Uses the **platform default** set under **Admin → Voice Input → Defaults** (`platform.speech.defaultService`, see below). Out of the box that is the browser. |
+| `default` (or omitted) | Uses the **platform default** set under **Admin → Voice Input → Voice input** (`platform.speech.defaultService`, see below). Out of the box that is the browser. |
 | `browser` | Always uses the browser's built-in `SpeechRecognition` / `webkitSpeechRecognition` API, whatever the platform default. No additional credentials are required. |
 | `azure` | Uses Azure Cognitive Services Speech SDK. Set `settings.speechRecognition.host` to your Azure Speech endpoint. |
-| `vllm-realtime` | Streams microphone audio to the iHub server over a WebSocket; iHub proxies it to a vLLM realtime endpoint (e.g. Voxtral on `/v1/realtime`) and streams transcription back. The endpoint is configured **server-side** in `platform.json` (see below) — no per-app `host` is needed and the vLLM URL/key never reach the browser. |
+| `model` | Streams microphone audio through the iHub server to the transcription model in `settings.speechRecognition.modelId` and streams the text back. Any enabled `modelType: "transcription"` model works; its endpoint and key stay on the model, server-side. |
 | `custom` | Uses the browser. Reserved for future custom providers. |
 
 ### Platform default
 
-Rather than configuring every app, set the dictation service once in `platform.json` (or **Admin → Voice Input → Defaults**):
+Rather than configuring every app, set the dictation service once in `platform.json` (or **Admin → Voice Input → Voice input**):
 
 ```json
 {
   "speech": {
-    "defaultService": "vllm-realtime"
+    "defaultService": "model",
+    "dictation": { "modelId": "voxtral-mini-realtime" }
   }
 }
 ```
 
-`defaultService` is `browser` (the default), `azure` or `vllm-realtime`. Every app whose service is `default` or unset follows it, including later changes. Apps that select a service explicitly keep their choice. In the app editor the choice reads **Platform default (…)** and names the current default.
+`defaultService` is `browser` (the default), `azure` or `model`; with `model`, `dictation.modelId` names the transcription model. Every app whose service is `default` or unset follows it, including later changes. Apps that select a service explicitly keep their choice. In the app editor the choice reads **Platform default (…)** and names the current default.
 
-If the default names a backend that is not enabled (for example `vllm-realtime` while `speech.realtime.enabled` is `false`), apps that follow the default use the browser instead of failing. The admin page shows a warning in that case.
+If the default names a backend that is not available — Azure while `speech.azure.enabled` is `false`, or a model that is disabled or deleted — apps that follow the default use the browser instead of failing. The admin page shows a warning in that case.
 
-### vLLM Realtime (server-proxied)
+### Transcription models (server-proxied)
 
-This mode is for self-hosted realtime speech models served by vLLM's realtime API
-(for example `mistralai/Voxtral-Mini-4B-Realtime-2602`). The data flow is:
+Any transcription model can take dictation: self-hosted Voxtral on vLLM, Voxtral on the Mistral platform, Gemini Transcribe Live or Gemini Transcribe. The data flow is:
 
 ```
-browser mic ──(PCM16 16kHz over WebSocket)──▶ iHub /api/voice/realtime
-   iHub ──(vLLM realtime JSON protocol)──▶ vLLM /v1/realtime ──transcription──▶ iHub ──▶ browser
+browser mic ──(PCM16 16kHz over WebSocket, naming the model)──▶ iHub /api/voice/realtime
+   iHub ──(the model's own protocol)──▶ its endpoint ──transcription──▶ iHub ──▶ browser
 ```
 
-**Platform configuration** (`contents/config/platform.json`):
-
-```json
-{
-  "speech": {
-    "realtime": {
-      "enabled": true,
-      "url": "ws://localhost:8080/v1/realtime",
-      "model": "mistralai/Voxtral-Mini-4B-Realtime-2602",
-      "apiKey": ""
-    }
-  }
-}
-```
-
-- `enabled` — master switch for the server-side proxy. When `false` (default), the endpoint returns 503.
-- `url` — the vLLM realtime WebSocket URL (`ws://` or `wss://`).
-- `model` — the model id sent in the `session.update` handshake.
-- `apiKey` — optional. Local vLLM usually needs none. Supports plaintext, a `${ENV_VAR}` placeholder, or an encrypted `ENC[...]` value (decrypted on load).
-
-**App configuration** — an app simply opts in:
+Set the model up once in **Admin → Models** (endpoint, key, enabled; see [Transcription Models](models.md#transcription-models)), then pick it as the platform default or in an app:
 
 ```json
 {
   "settings": {
     "speechRecognition": {
-      "service": "vllm-realtime"
+      "service": "model",
+      "modelId": "gemini-3.5-transcribe-live"
     }
   }
 }
 ```
+
+- A streaming model (Voxtral, Gemini Transcribe Live) shows the text while the user speaks. Gemini Transcribe is a batch model: the text appears in one piece when the user stops.
+- Users need access to the model through their groups, as for any model.
+- The same model can serve dictation, the record button and file transcription.
 
 Both `manual` (continuous) and `automatic` (silence-detected auto-stop via client-side
 voice-activity detection) microphone modes are supported. Because the browser captures
@@ -89,17 +74,22 @@ raw audio via `getUserMedia` + `AudioContext`/`AudioWorklet`, this mode requires
 context (HTTPS, or `localhost`) and does not depend on the browser's Web Speech API — so
 it also works in Firefox.
 
+> **Upgrading from an earlier version:** the `vllm-realtime` service and its endpoint under
+> `speech.realtime` (`url`, `model`, `apiKey`, `enabled`) are gone. Migration V146 moves the
+> endpoint onto a transcription model and switches the platform default and apps to it. See
+> [Choosing what voice input uses](voice-transcription.md#choosing-what-voice-input-uses).
+
 ### Configuring backends in the Admin UI
 
-Admins can configure the platform-level speech backends under **Admin → Voice Input**
-(`/admin/voice-input`) instead of editing `platform.json` by hand:
+Admins choose what voice uses under **Admin → Voice Input** (`/admin/voice-input`)
+instead of editing `platform.json` by hand:
 
-- **vLLM Realtime** — enable/disable, WebSocket URL, model, and an optional API key
-  (stored encrypted at rest; a localhost vLLM usually needs none). Optional resource
-  guards live alongside these under `speech.realtime`: `maxConnections` (global cap,
-  default 50), `maxConnectionsPerUser` (default 3), and `maxFrameBytes` (max inbound
-  audio frame, default 256 KB). The proxy also opens the upstream vLLM socket only on
-  the first audio frame and closes idle / no-audio connections automatically.
+- **Voice input**: the browser, Azure Speech or any enabled transcription model, for every
+  app that follows the platform default (see [Platform default](#platform-default)).
+- **Transcription**: the model for recordings and uploads in apps that enable transcription
+  without picking one (see
+  [Realtime Voice & Transcription](voice-transcription.md#platform-default-transcription-model)).
+- **Read aloud**: the text-to-speech model (see [Text-to-Speech](text-to-speech.md)).
 - **Azure Speech** — enable/disable, default host/endpoint, region, and the subscription
   **key**. The key is stored **encrypted at rest** on the server and exchanged for a
   short-lived authorization token per session via `/api/voice/azure/token`, so it never
@@ -120,20 +110,24 @@ Admins can configure the platform-level speech backends under **Admin → Voice 
   > into the client bundle via this env var. It is no longer used — set the key under
   > **Admin → Voice Input** (`speech.azure.subscriptionKey`) instead.
 
-- **Defaults**: the dictation service and the transcription model apps use when they set none
-  of their own (see [Platform default](#platform-default) and
-  [Realtime Voice & Transcription](voice-transcription.md#platform-default-transcription-model)).
+Transcription models keep their endpoints and keys on the model, set in **Admin → Models**.
+The WebSocket proxy's resource guards live under `speech.realtime`: `maxConnections` (global
+cap, default 50), `maxConnectionsPerUser` (default 3), `maxFrameBytes` (max inbound audio
+frame, default 256 KB) and more; see
+[Runtime limits and tuning](voice-transcription.md#runtime-limits-and-tuning).
 
-An app can still pick its own backend in the app editor's **Speech Recognition Service** dropdown.
+An app can still pick its own backend in the app editor's **Speech Recognition Service** dropdown,
+which lists the transcription models next to the browser and Azure.
 
-**Testing.** Both backends have a **Test connection** button that checks them from the iHub
-server. vLLM Realtime gets a WebSocket handshake; a redirect on a `ws://` URL is reported as
-"use `wss://`". Azure exchanges the key and region for a token. **Test voice input**, below the
-backends, checks everything from the admin's own browser, against the saved configuration:
+**Testing.** Azure Speech has a **Test connection** button that exchanges the key and region
+for a token from the iHub server. A transcription model's endpoint is checked with its **Test**
+action in **Admin → Models**; a redirect on a `ws://` URL is reported as "use `wss://`".
+**Test voice input** checks everything from the admin's own browser, against the saved
+configuration:
 
 - a **microphone check** (input level meter);
-- a **live dictation** test for any service (browser, Azure, vLLM Realtime), showing interim
-  and final text;
+- a **live dictation** test for any service (browser, Azure, any transcription model), showing
+  interim and final text;
 - a **recording** test that records a short clip and transcribes it with a transcription model.
 
 See [Testing from the admin UI](voice-transcription.md#testing-from-the-admin-ui).

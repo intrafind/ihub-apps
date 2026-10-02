@@ -20,7 +20,7 @@ import {
   diagnoseSocketError,
   diagnoseUnexpectedResponse,
   diagnoseUpstreamClose,
-  testRealtimeConnection
+  testTranscriptionModel
 } from '../websocket/realtimeTranscription.js';
 import { generateJwt } from '../utils/tokenService.js';
 import { getTranscriptionProvider } from '../transcription/index.js';
@@ -307,22 +307,26 @@ class FakeWs extends EventEmitter {
   }
 }
 
+// Dictation, live and file transcription all run this path, naming a model.
 describe('bridgeConnection state machine (fake sockets)', () => {
-  const user = { id: 'u1', name: 'u1' };
+  const user = { id: 'u1', name: 'u1', permissions: { models: new Set(['voxtral']) } };
+  const vllmModel = {
+    id: 'voxtral',
+    modelId: 'fake-model',
+    url: 'ws://fake-upstream:9/v1/realtime',
+    provider: 'vllm-realtime',
+    modelType: 'transcription',
+    enabled: true
+  };
+  const START = JSON.stringify({ type: 'start', modelId: 'voxtral' });
 
   beforeEach(() => {
     jest.useFakeTimers();
     configCache.setCacheEntry('config/platform.json', {
       jwt: { algorithm: 'HS256' },
-      auth: { jwtSecret: 'realtime-stt-test-secret' },
-      speech: {
-        realtime: {
-          enabled: true,
-          url: 'ws://fake-upstream:9/v1/realtime',
-          model: 'fake-model'
-        }
-      }
+      auth: { jwtSecret: 'realtime-stt-test-secret' }
     });
+    configCache.setCacheEntry('config/models.json', [vllmModel]);
   });
 
   afterEach(() => {
@@ -355,11 +359,7 @@ describe('bridgeConnection state machine (fake sockets)', () => {
   test('golden path: audio → session.created → ready+flush → stop → segments → done, slot released once', async () => {
     const { client, upstream, limiter } = setup();
 
-    client.emit('message', JSON.stringify({ type: 'start' }), false);
-    await jest.advanceTimersByTimeAsync(0);
-    // Dictation resolves lazily: no upstream open until audio flows.
-    expect(upstream.sent).toHaveLength(0);
-
+    client.emit('message', START, false);
     client.emit('message', Buffer.from([1, 2, 3, 4]), true);
     await jest.advanceTimersByTimeAsync(0);
     await openUpstream(upstream);
@@ -374,8 +374,13 @@ describe('bridgeConnection state machine (fake sockets)', () => {
     expect(upstream.framesOfType('input_audio_buffer.commit')).toHaveLength(1);
     expect(upstream.framesOfType('input_audio_buffer.append')).toHaveLength(1);
     expect(client.framesOfType('ready')).toHaveLength(1);
-    // The server names what the transcript is based on; the chat badge reads it.
-    expect(client.framesOfType('ready')[0]).toEqual({ type: 'ready', knowledgeSources: ['audio'] });
+    // The server names what the transcript is based on (the chat badge reads
+    // it) and the provider mode (a batch transcript only comes after `stop`).
+    expect(client.framesOfType('ready')[0]).toEqual({
+      type: 'ready',
+      mode: 'stream',
+      knowledgeSources: ['audio']
+    });
 
     client.emit('message', JSON.stringify({ type: 'stop' }), false);
     await jest.advanceTimersByTimeAsync(0);
@@ -401,6 +406,7 @@ describe('bridgeConnection state machine (fake sockets)', () => {
 
   test('session.created fallback: initializes after the fallback window when the frame never arrives', async () => {
     const { client, upstream } = setup();
+    client.emit('message', START, false);
     client.emit('message', Buffer.from([1, 2]), true);
     await jest.advanceTimersByTimeAsync(0);
     await openUpstream(upstream);
@@ -413,6 +419,7 @@ describe('bridgeConnection state machine (fake sockets)', () => {
 
   test('stop during handshake: final commit is sent after the pending flush', async () => {
     const { client, upstream } = setup();
+    client.emit('message', START, false);
     client.emit('message', Buffer.from([1, 2]), true);
     client.emit('message', JSON.stringify({ type: 'stop' }), false);
     await jest.advanceTimersByTimeAsync(0);
@@ -441,8 +448,24 @@ describe('bridgeConnection state machine (fake sockets)', () => {
     expect(limiter.total).toBe(0);
   });
 
+  test('audio without a start frame names no model: no-model error, no upstream', async () => {
+    const createUpstream = jest.fn();
+    const client = new FakeWs();
+    const limiter = new ConnectionLimiter({ maxTotal: 5, maxPerUser: 5 });
+    limiter.tryAcquire(user.id);
+    bridgeConnection(client, user, limiter, { createUpstream });
+
+    client.emit('message', Buffer.from([1, 2]), true);
+    await jest.advanceTimersByTimeAsync(0);
+
+    expect(client.framesOfType('error')[0].code).toBe('no-model');
+    expect(createUpstream).not.toHaveBeenCalled();
+    expect(limiter.total).toBe(0);
+  });
+
   test('upstream socket error: client gets code-only diagnostics (no internal address)', async () => {
     const { client, upstream, limiter } = setup();
+    client.emit('message', START, false);
     client.emit('message', Buffer.from([1, 2]), true);
     await jest.advanceTimersByTimeAsync(0);
     const err = new Error('connect ECONNREFUSED 10.0.0.5:8000');
@@ -459,6 +482,7 @@ describe('bridgeConnection state machine (fake sockets)', () => {
 
   test('keepalive terminates a client that never pongs', async () => {
     const { client, upstream, limiter } = setup();
+    client.emit('message', START, false);
     client.emit('message', Buffer.from([1, 2]), true); // clears the no-audio grace
     await jest.advanceTimersByTimeAsync(0);
     await openUpstream(upstream);
@@ -479,16 +503,10 @@ describe('bridgeConnection state machine (fake sockets)', () => {
     configCache.setCacheEntry('config/platform.json', {
       jwt: { algorithm: 'HS256' },
       auth: { jwtSecret: 'realtime-stt-test-secret' },
-      speech: {
-        realtime: {
-          enabled: true,
-          url: 'ws://fake-upstream:9/v1/realtime',
-          model: 'fake-model',
-          maxSessionSeconds: 1
-        }
-      }
+      speech: { realtime: { maxSessionSeconds: 1 } }
     });
     const { client, upstream, limiter } = setup();
+    client.emit('message', START, false);
     client.emit('message', Buffer.from([1, 2]), true);
     await jest.advanceTimersByTimeAsync(0);
     await openUpstream(upstream);
@@ -957,8 +975,9 @@ describe('bridgeConnection — batch providers', () => {
   });
 });
 
-// The admin "Test connection" button, against a real local socket server.
-describe('testRealtimeConnection', () => {
+// The admin "Test" action for a transcription model, against a real local
+// socket server for the streaming providers.
+describe('testTranscriptionModel', () => {
   let server;
   let url;
 
@@ -971,6 +990,15 @@ describe('testRealtimeConnection', () => {
         resolve();
       });
     });
+  const model = (overrides = {}) => ({
+    id: 'voxtral',
+    modelId: 'm',
+    url,
+    provider: 'vllm-realtime',
+    modelType: 'transcription',
+    enabled: true,
+    ...overrides
+  });
 
   afterEach(async () => {
     await new Promise(resolve => (server ? server.close(() => resolve()) : resolve()));
@@ -987,7 +1015,7 @@ describe('testRealtimeConnection', () => {
       })
     );
 
-    const result = await testRealtimeConnection({ url, model: 'm' }, 3000);
+    const result = await testTranscriptionModel(model(), { timeoutMs: 3000 });
     expect(result.ok).toBe(false);
     expect(result.message).toMatch(/HTTP 308/);
     expect(result.message).toMatch(/use wss:\/\//);
@@ -995,15 +1023,79 @@ describe('testRealtimeConnection', () => {
     expect(result.message).not.toMatch(/internal\.example/);
   });
 
-  test('reports ok when the endpoint answers the handshake', async () => {
+  test('passes once the endpoint starts the session', async () => {
     await listen(srv => {
       const wss = new WebSocketServer({ server: srv });
-      wss.on('connection', ws => {
-        ws.on('message', () => ws.send(JSON.stringify({ type: 'session.created' })));
-      });
+      wss.on('connection', ws => ws.send(JSON.stringify({ type: 'session.created' })));
     });
 
-    const result = await testRealtimeConnection({ url, model: 'm' }, 3000);
-    expect(result).toEqual({ ok: true, message: 'Connected — received "session.created"' });
+    const result = await testTranscriptionModel(model(), { timeoutMs: 3000 });
+    expect(result).toEqual({ ok: true, message: 'Connected — the endpoint started a session' });
+  });
+
+  test('reports an error frame from the endpoint', async () => {
+    await listen(srv => {
+      const wss = new WebSocketServer({ server: srv });
+      wss.on('connection', ws => ws.send(JSON.stringify({ type: 'error', error: 'bad model' })));
+    });
+
+    const result = await testTranscriptionModel(model(), { timeoutMs: 3000 });
+    expect(result).toEqual({ ok: false, message: 'Endpoint error: bad model' });
+  });
+
+  test('a provider that always starts a session fails when it never does', async () => {
+    await listen(srv => new WebSocketServer({ server: srv }));
+    const result = await testTranscriptionModel(model({ provider: 'mistral' }), {
+      timeoutMs: 300
+    });
+    expect(result).toEqual({
+      ok: false,
+      message: 'Connected, but the endpoint never started a session'
+    });
+  });
+
+  test('reports the reason the endpoint closed with', async () => {
+    await listen(srv => {
+      const wss = new WebSocketServer({ server: srv });
+      wss.on('connection', ws => ws.close(1008, 'API key not valid'));
+    });
+    const result = await testTranscriptionModel(model(), { timeoutMs: 3000 });
+    expect(result.ok).toBe(false);
+    expect(result.message).toMatch(/1008: API key not valid/);
+  });
+
+  test('a batch model transcribes a second of silence', async () => {
+    const provider = getTranscriptionProvider('google-transcribe');
+    const spy = jest.spyOn(provider, 'transcribe').mockResolvedValue({ text: '' });
+    try {
+      const batch = model({
+        provider: 'google-transcribe',
+        url: 'https://generativelanguage.googleapis.com/v1beta',
+        apiKey: 'k'
+      });
+      expect(await testTranscriptionModel(batch)).toEqual({
+        ok: true,
+        message: 'Transcribed a second of silence'
+      });
+      expect(spy.mock.calls[0][0].pcm).toHaveLength(32000);
+
+      spy.mockRejectedValueOnce(new Error('API key not valid'));
+      expect(await testTranscriptionModel(batch)).toEqual({
+        ok: false,
+        message: 'Transcription failed: API key not valid'
+      });
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  test('an unknown provider or a missing URL fails without dialling', async () => {
+    expect((await testTranscriptionModel(model({ provider: 'nope' }))).message).toMatch(
+      /Unsupported transcription provider: nope/
+    );
+    expect(await testTranscriptionModel(model({ url: '' }))).toEqual({
+      ok: false,
+      message: 'The model has no endpoint URL'
+    });
   });
 });

@@ -312,7 +312,13 @@ function AppFormEditor({
             {/* Response Feedback */}
             <FeedbackSection app={app} onChange={onChange} />
 
-            <InputModeSection app={app} onChange={onChange} t={t} />
+            <InputModeSection
+              app={app}
+              onChange={onChange}
+              t={t}
+              transcriptionModels={transcriptionModels}
+              currentLanguage={currentLanguage}
+            />
 
             {/* Sources Configuration - Only show if sources feature is enabled */}
             {isSourcesEnabled && <SourcesConfigSection app={app} onChange={onChange} t={t} />}

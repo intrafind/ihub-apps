@@ -132,11 +132,13 @@ const settingsSchema = z
     speechRecognition: z
       .object({
         // 'default' follows the platform default (platform.speech.defaultService);
-        // 'browser' pins the browser Web Speech API.
+        // 'browser' pins the browser Web Speech API; 'model' streams the
+        // microphone through iHub to the transcription model `modelId`.
         service: z
-          .enum(['default', 'browser', 'azure', 'custom', 'vllm-realtime'])
+          .enum(['default', 'browser', 'azure', 'custom', 'model'])
           .optional()
           .prefault('default'),
+        modelId: z.string().optional(),
         host: z.string().url().optional()
       })
       .optional()

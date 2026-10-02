@@ -2,8 +2,10 @@
  * Dictation service selection and recognizer plumbing shared by the chat's
  * microphone button and the admin voice-input test panel (issue #2622).
  *
- * "default" follows the platform default (Admin → Voice Input), an explicit
- * service wins, and a platform default whose backend is switched off falls
+ * A choice is `{ service, modelId }`: the browser, Azure Speech, or any
+ * transcription model. "default" follows the platform default (Admin → Voice
+ * Input), an explicit choice wins, and a platform default whose backend is
+ * switched off — or whose model is not an enabled transcription model — falls
  * back to the browser instead of failing.
  */
 jest.mock('../../../client/src/utils/azureRecognitionService', () => ({
@@ -13,73 +15,120 @@ jest.mock('../../../client/src/utils/azureRecognitionService', () => ({
     initRecognizer() {}
   }
 }));
-jest.mock('../../../client/src/utils/vllmRealtimeRecognitionService', () => ({
+jest.mock('../../../client/src/utils/modelRecognitionService', () => ({
   __esModule: true,
-  default: class VllmRealtimeRecognition {
+  default: class ModelSpeechRecognition {
     usesTextEventShape = true;
+    constructor(modelId) {
+      this.modelId = modelId;
+    }
   }
 }));
 
 import {
   createSpeechRecognizer,
+  fromDictationValue,
   getMicrophoneErrorMessage,
   getPlatformDefaultService,
   getRecognitionErrorMessage,
   parseRecognitionResult,
   resolveSpeechService,
+  toDictationValue,
   toRecognitionLang
 } from '../../../client/src/features/voice/utils/speechService';
 import AzureSpeechRecognition from '../../../client/src/utils/azureRecognitionService';
-import VllmRealtimeRecognition from '../../../client/src/utils/vllmRealtimeRecognitionService';
+import ModelSpeechRecognition from '../../../client/src/utils/modelRecognitionService';
 
 const t = (key, fallback) => fallback;
-const appWith = service => ({ settings: { speechRecognition: { service } } });
+const appWith = (service, modelId) => ({ settings: { speechRecognition: { service, modelId } } });
 const platform = speech => ({ speech });
-const ALL_ENABLED = { realtime: { enabled: true }, azure: { enabled: true } };
+const BROWSER = { service: 'browser', modelId: '' };
+const VOXTRAL = { service: 'model', modelId: 'voxtral' };
+const ALL_ENABLED = {
+  dictation: { modelId: 'voxtral', available: true },
+  azure: { enabled: true }
+};
 
 describe('resolveSpeechService', () => {
   test('without any configuration it is the browser, as before', () => {
-    expect(resolveSpeechService({}, null)).toBe('browser');
-    expect(resolveSpeechService(appWith('default'), platform({}))).toBe('browser');
+    expect(resolveSpeechService({}, null)).toEqual(BROWSER);
+    expect(resolveSpeechService(appWith('default'), platform({}))).toEqual(BROWSER);
   });
 
   test('"default" and no setting follow the platform default', () => {
-    const cfg = platform({ ...ALL_ENABLED, defaultService: 'vllm-realtime' });
-    expect(resolveSpeechService(appWith('default'), cfg)).toBe('vllm-realtime');
-    expect(resolveSpeechService({}, cfg)).toBe('vllm-realtime');
-    expect(resolveSpeechService({ settings: {} }, cfg)).toBe('vllm-realtime');
+    const cfg = platform({ ...ALL_ENABLED, defaultService: 'model' });
+    expect(resolveSpeechService(appWith('default'), cfg)).toEqual(VOXTRAL);
+    expect(resolveSpeechService({}, cfg)).toEqual(VOXTRAL);
+    expect(resolveSpeechService({ settings: {} }, cfg)).toEqual(VOXTRAL);
   });
 
-  test('an explicit service wins over the platform default', () => {
-    const cfg = platform({ ...ALL_ENABLED, defaultService: 'vllm-realtime' });
-    expect(resolveSpeechService(appWith('browser'), cfg)).toBe('browser');
-    expect(resolveSpeechService(appWith('azure'), cfg)).toBe('azure');
+  test('an explicit choice wins over the platform default', () => {
+    const cfg = platform({ ...ALL_ENABLED, defaultService: 'model' });
+    expect(resolveSpeechService(appWith('browser'), cfg)).toEqual(BROWSER);
+    expect(resolveSpeechService(appWith('azure'), cfg)).toEqual({ service: 'azure', modelId: '' });
+    expect(resolveSpeechService(appWith('model', 'gemini-live'), cfg)).toEqual({
+      service: 'model',
+      modelId: 'gemini-live'
+    });
+  });
+
+  test('a model choice without a model follows the platform default', () => {
+    const cfg = platform({ ...ALL_ENABLED, defaultService: 'azure' });
+    expect(resolveSpeechService(appWith('model', ''), cfg)).toEqual({
+      service: 'azure',
+      modelId: ''
+    });
   });
 
   test('"custom" keeps falling back to the browser', () => {
     const cfg = platform({ ...ALL_ENABLED, defaultService: 'azure' });
-    expect(resolveSpeechService(appWith('custom'), cfg)).toBe('browser');
+    expect(resolveSpeechService(appWith('custom'), cfg)).toEqual(BROWSER);
   });
 
-  test('an explicit service is used even when its backend is off (the error then says why)', () => {
-    expect(resolveSpeechService(appWith('vllm-realtime'), platform({}))).toBe('vllm-realtime');
+  test('an explicit model is used even when it is off (the server error then says why)', () => {
+    expect(resolveSpeechService(appWith('model', 'voxtral'), platform({}))).toEqual(VOXTRAL);
   });
 });
 
 describe('getPlatformDefaultService', () => {
   test('uses the configured backend when it is enabled', () => {
-    expect(getPlatformDefaultService({ ...ALL_ENABLED, defaultService: 'azure' })).toBe('azure');
+    expect(getPlatformDefaultService({ ...ALL_ENABLED, defaultService: 'azure' })).toEqual({
+      service: 'azure',
+      modelId: ''
+    });
+    expect(getPlatformDefaultService({ ...ALL_ENABLED, defaultService: 'model' })).toEqual(VOXTRAL);
   });
 
   test('falls back to the browser when the configured backend is off', () => {
-    expect(getPlatformDefaultService({ defaultService: 'vllm-realtime' })).toBe('browser');
-    expect(getPlatformDefaultService({ defaultService: 'azure', azure: { enabled: false } })).toBe(
-      'browser'
-    );
+    expect(
+      getPlatformDefaultService({ defaultService: 'azure', azure: { enabled: false } })
+    ).toEqual(BROWSER);
+    expect(
+      getPlatformDefaultService({
+        defaultService: 'model',
+        dictation: { modelId: 'voxtral', available: false }
+      })
+    ).toEqual(BROWSER);
+    expect(
+      getPlatformDefaultService({ defaultService: 'model', dictation: { modelId: '' } })
+    ).toEqual(BROWSER);
   });
 
-  test('ignores an unknown value', () => {
-    expect(getPlatformDefaultService({ ...ALL_ENABLED, defaultService: 'custom' })).toBe('browser');
+  test('ignores an unknown value, the retired vllm-realtime included', () => {
+    for (const defaultService of ['custom', 'vllm-realtime']) {
+      expect(getPlatformDefaultService({ ...ALL_ENABLED, defaultService })).toEqual(BROWSER);
+    }
+  });
+});
+
+describe('dictation choice as one select value', () => {
+  test.each([
+    [BROWSER, 'browser'],
+    [{ service: 'azure', modelId: '' }, 'azure'],
+    [VOXTRAL, 'model:voxtral']
+  ])('%j ↔ %s', (choice, value) => {
+    expect(toDictationValue(choice)).toBe(value);
+    expect(fromDictationValue(value)).toEqual(choice);
   });
 });
 
@@ -105,8 +154,10 @@ describe('createSpeechRecognizer', () => {
     expect(keyless.useServerToken).toBe(false);
   });
 
-  test('vllm-realtime builds the iHub-proxied recognizer', () => {
-    expect(createSpeechRecognizer('vllm-realtime')).toBeInstanceOf(VllmRealtimeRecognition);
+  test('model builds the iHub-proxied recognizer for that model', () => {
+    const recognition = createSpeechRecognizer('model', { modelId: 'voxtral' });
+    expect(recognition).toBeInstanceOf(ModelSpeechRecognition);
+    expect(recognition.modelId).toBe('voxtral');
   });
 
   test('browser uses the (prefixed) Web Speech API', () => {
@@ -143,7 +194,7 @@ describe('parseRecognitionResult', () => {
     expect(parseRecognitionResult(event, false)).toEqual({ final: 'hello ', interim: 'wor' });
   });
 
-  test('{ text, isFinal } events (Azure, vLLM realtime)', () => {
+  test('{ text, isFinal } events (Azure, transcription models)', () => {
     expect(parseRecognitionResult({ text: 'partial', isFinal: false }, true)).toEqual({
       interim: 'partial',
       final: ''
