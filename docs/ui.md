@@ -648,6 +648,102 @@ The `theme` section controls the color palette used throughout the UI. All color
 
 Theme colors are injected as CSS custom properties at runtime, so they affect the entire application without a page reload when changed through the admin panel.
 
+### Diagram Colors
+
+Diagrams in chat responses are drawn with [Mermaid](https://mermaid.js.org/) in its default theme. The `theme` colors above do not apply to them. There are two ways to give diagrams your own palette.
+
+| Approach | Scope | Covers | Depends on the model |
+| -------- | ----- | ------ | -------------------- |
+| [Theme settings in the diagram](#theme-settings-in-the-diagram) | One app | Every diagram type | Yes |
+| [Custom CSS](#custom-css-for-diagrams) | All apps | Flowcharts, sequence diagrams, pie charts | No |
+
+#### Theme settings in the diagram
+
+Mermaid reads theme settings from a front-matter block at the top of a diagram. Tell the model in the app's system prompt to start every diagram with it, for example:
+
+````text
+Begin every ```mermaid code block with exactly this header, then the diagram:
+---
+config:
+  theme: base
+  themeVariables:
+    primaryColor: "#E30613"
+    primaryTextColor: "#FFFFFF"
+    primaryBorderColor: "#B0050F"
+    lineColor: "#003366"
+    secondaryColor: "#F2F2F2"
+    tertiaryColor: "#FFFFFF"
+    fontFamily: "Arial, sans-serif"
+    pie1: "#E30613"
+    pie2: "#003366"
+    pie3: "#7F7F7F"
+---
+````
+
+- `theme: base` is required. It is the only Mermaid theme whose colors can be changed.
+- `primaryColor`, `primaryTextColor` and `primaryBorderColor` style nodes, `lineColor` styles connections, and `pie1` to `pie12` set the pie chart slices in order. The full list of variables is in the [Mermaid theming guide](https://mermaid.js.org/config/theming.html).
+- The older directive form, `%%{init: {'theme': 'base', 'themeVariables': {...}}}%%` on the first line, works as well.
+- The palette only appears when the model copies the header, so keep the instruction explicit. A low `preferredTemperature` makes the output more consistent.
+
+#### Custom CSS for diagrams
+
+CSS entered under **Admin → UI Customization → Styles → Custom CSS** (stored as `customStyles.css` in `ui.json`) is loaded on every page, so it recolors diagrams in all apps regardless of what the model writes. Mermaid embeds its own styles in each diagram, so every rule needs `!important`:
+
+```css
+/* Flowcharts: nodes, labels, connections, arrowheads */
+.mermaid-svg-container .node rect,
+.mermaid-svg-container .node circle,
+.mermaid-svg-container .node ellipse,
+.mermaid-svg-container .node polygon,
+.mermaid-svg-container .node path {
+  fill: #E30613 !important;
+  stroke: #B0050F !important;
+}
+.mermaid-svg-container .nodeLabel {
+  color: #FFFFFF !important;
+}
+.mermaid-svg-container .flowchart-link {
+  stroke: #003366 !important;
+}
+.mermaid-svg-container .marker {
+  fill: #003366 !important;
+  stroke: #003366 !important;
+}
+
+/* Sequence diagrams: participants */
+.mermaid-svg-container rect.actor {
+  fill: #E30613 !important;
+  stroke: #B0050F !important;
+}
+.mermaid-svg-container text.actor,
+.mermaid-svg-container text.actor > tspan {
+  fill: #FFFFFF !important;
+  stroke: none !important;
+}
+
+/* Pie charts: slice n and legend entry n+1 share a color */
+.mermaid-svg-container .legend rect {
+  stroke: none !important;
+}
+.mermaid-svg-container .pieCircle:nth-of-type(1),
+.mermaid-svg-container .legend:nth-of-type(2) rect {
+  fill: #E30613 !important;
+}
+.mermaid-svg-container .pieCircle:nth-of-type(2),
+.mermaid-svg-container .legend:nth-of-type(3) rect {
+  fill: #003366 !important;
+}
+.mermaid-svg-container .pieCircle:nth-of-type(3),
+.mermaid-svg-container .legend:nth-of-type(4) rect {
+  fill: #7F7F7F !important;
+}
+```
+
+- Pie chart colors are assigned by position. For more slices, add a rule pairing `.pieCircle:nth-of-type(4)` with `.legend:nth-of-type(5) rect`, and so on.
+- The selectors cover flowcharts, sequence diagrams and pie charts. Other diagram types keep their default colors unless you add rules for them; theme settings in the diagram are simpler there.
+- The selectors follow Mermaid's generated markup, which can change between Mermaid versions. Check your diagrams after upgrading iHub.
+- Where both approaches are used, the CSS wins for the elements it targets.
+
 ### PWA Configuration
 
 The `pwa` section controls Progressive Web App metadata. When `enabled` is `true`, the application can be installed as a standalone desktop or mobile app through the browser's "Add to Home Screen" / "Install" prompt.
