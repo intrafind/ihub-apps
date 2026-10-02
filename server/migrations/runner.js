@@ -94,31 +94,57 @@ export async function scanMigrationFiles(migrationsDir) {
 const RENAMED_MIGRATIONS = [
   // The 5.5.30 follow-ups (Translator system prompt, Mistral transcription,
   // Gemini TTS, dictation through transcription models) were written as
-  // V143-V146 while V144 (app wizard fields) landed on main. Shifted by two to
-  // keep their order; matched by file name, so main's V144 is untouched.
+  // V143-V146, moved to V145-V148 when the app wizard field cleanup took V144
+  // on main, and to V146-V149 when the short-link allowlist took V145. Either
+  // old number reconciles to the current one, keeping their order. Matching on
+  // the file keeps these rules off the history rows of main's V144 and V145.
   {
     oldVersion: '143',
     oldFile: 'V143__translator_task_in_system_prompt.js',
-    newVersion: '145',
-    newFile: 'V145__translator_task_in_system_prompt.js'
+    newVersion: '146',
+    newFile: 'V146__translator_task_in_system_prompt.js'
+  },
+  {
+    oldVersion: '145',
+    oldFile: 'V145__translator_task_in_system_prompt.js',
+    newVersion: '146',
+    newFile: 'V146__translator_task_in_system_prompt.js'
   },
   {
     oldVersion: '144',
     oldFile: 'V144__seed_mistral_realtime_transcription_model.js',
-    newVersion: '146',
-    newFile: 'V146__seed_mistral_realtime_transcription_model.js'
+    newVersion: '147',
+    newFile: 'V147__seed_mistral_realtime_transcription_model.js'
+  },
+  {
+    oldVersion: '146',
+    oldFile: 'V146__seed_mistral_realtime_transcription_model.js',
+    newVersion: '147',
+    newFile: 'V147__seed_mistral_realtime_transcription_model.js'
   },
   {
     oldVersion: '145',
     oldFile: 'V145__seed_google_tts_models.js',
-    newVersion: '147',
-    newFile: 'V147__seed_google_tts_models.js'
+    newVersion: '148',
+    newFile: 'V148__seed_google_tts_models.js'
+  },
+  {
+    oldVersion: '147',
+    oldFile: 'V147__seed_google_tts_models.js',
+    newVersion: '148',
+    newFile: 'V148__seed_google_tts_models.js'
   },
   {
     oldVersion: '146',
     oldFile: 'V146__dictation_via_transcription_models.js',
-    newVersion: '148',
-    newFile: 'V148__dictation_via_transcription_models.js'
+    newVersion: '149',
+    newFile: 'V149__dictation_via_transcription_models.js'
+  },
+  {
+    oldVersion: '148',
+    oldFile: 'V148__dictation_via_transcription_models.js',
+    newVersion: '149',
+    newFile: 'V149__dictation_via_transcription_models.js'
   },
   {
     // The staan provider was renumbered twice while its branch was open: the
@@ -273,6 +299,15 @@ const RENAMED_MIGRATIONS = [
     oldFile: 'V139__web_tools_filters_and_page_offset.js',
     newVersion: '140',
     newFile: 'V140__web_tools_filters_and_page_offset.js'
+  },
+  // The short-link host allowlist was written as V143, and the app wizard
+  // field cleanup took V144 on main first. It moved to V145; an install that
+  // ran the branch reconciles its V143 row instead of applying it again.
+  {
+    oldVersion: '143',
+    oldFile: 'V143__add_short_link_allowed_hosts.js',
+    newVersion: '145',
+    newFile: 'V145__add_short_link_allowed_hosts.js'
   }
 ];
 

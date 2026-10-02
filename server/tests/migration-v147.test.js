@@ -1,22 +1,25 @@
 #!/usr/bin/env node
 
 /**
- * Migration V147 specs — seeds the disabled Gemini TTS models next to Voxtral
- * TTS, without touching a model file an admin already has.
+ * Migration V147 specs — seeds the disabled Mistral realtime transcription
+ * model (voxtral-mini-transcribe-realtime-2602) next to the vLLM one.
  */
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { up, precondition, version } from '../migrations/V147__seed_google_tts_models.js';
+import {
+  up,
+  precondition,
+  version
+} from '../migrations/V147__seed_mistral_realtime_transcription_model.js';
 import { modelConfigSchema } from '../validators/modelConfigSchema.js';
 
-const PATHS = ['models/gemini-3.8-flash-tts.json', 'models/gemini-3.8-flash-lite-tts.json'];
-const shipped = path =>
-  JSON.parse(fs.readFileSync(new URL(`../defaults/${path}`, import.meta.url), 'utf8'));
-const allDefaults = () => Object.fromEntries(PATHS.map(path => [path, shipped(path)]));
+const MODEL_PATH = 'models/voxtral-mini-transcribe-realtime.json';
+const shippedDefault = () =>
+  JSON.parse(fs.readFileSync(new URL(`../defaults/${MODEL_PATH}`, import.meta.url), 'utf8'));
 
-function fakeCtx(files, defaults = allDefaults()) {
+function fakeCtx(files, defaults = { [MODEL_PATH]: shippedDefault() }) {
   const logs = [];
   const writes = [];
   return {
@@ -47,35 +50,32 @@ test('precondition requires platform.json', async () => {
   assert.equal(await precondition(fakeCtx({ 'config/platform.json': {} })), true);
 });
 
-test('the shipped defaults are valid, disabled Google TTS models', () => {
-  for (const path of PATHS) {
-    const model = shipped(path);
-    assert.equal(modelConfigSchema.safeParse(model).success, true, path);
-    assert.equal(model.provider, 'google');
-    assert.equal(model.modelType, 'tts');
-    assert.equal(model.enabled, false);
-  }
+test('the shipped default is a valid, disabled Mistral transcription model', () => {
+  const model = shippedDefault();
+  assert.equal(modelConfigSchema.safeParse(model).success, true);
+  assert.equal(model.provider, 'mistral');
+  assert.equal(model.modelType, 'transcription');
+  assert.equal(model.modelId, 'voxtral-mini-transcribe-realtime-2602');
+  assert.equal(model.enabled, false);
 });
 
-test('seeds both model files, disabled', async () => {
+test('seeds the model file, disabled', async () => {
   const ctx = fakeCtx({ 'config/platform.json': {} });
   await up(ctx);
-  for (const path of PATHS) {
-    assert.deepEqual(ctx.files[path], { ...shipped(path), enabled: false, default: false });
-  }
+  assert.deepEqual(ctx.files[MODEL_PATH], { ...shippedDefault(), enabled: false, default: false });
 });
 
 test('keeps a model file an admin already has', async () => {
-  const mine = { ...shipped(PATHS[0]), enabled: true, tts: { voice: 'Puck' } };
-  const ctx = fakeCtx({ 'config/platform.json': {}, [PATHS[0]]: mine });
+  const mine = { ...shippedDefault(), enabled: true, apiKey: 'ENC[x]' };
+  const ctx = fakeCtx({ 'config/platform.json': {}, [MODEL_PATH]: mine });
   await up(ctx);
-  assert.deepEqual(ctx.files[PATHS[0]], mine);
-  assert.deepEqual(ctx.writes, [PATHS[1]]);
+  assert.deepEqual(ctx.writes, []);
+  assert.deepEqual(ctx.files[MODEL_PATH], mine);
 });
 
-test('warns and writes nothing when the defaults are missing', async () => {
+test('warns and writes nothing when the default is missing', async () => {
   const ctx = fakeCtx({ 'config/platform.json': {} }, {});
   await up(ctx);
   assert.deepEqual(ctx.writes, []);
-  assert.equal(ctx.logs.filter(line => line.includes('not found')).length, 2);
+  assert.ok(ctx.logs.some(line => line.includes('not found')));
 });

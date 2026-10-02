@@ -347,8 +347,8 @@ Key points:
 
 Every transcription model file ships **disabled**. Enable the one you want:
 
-- `voxtral-mini-realtime` — point its `url` at your vLLM realtime endpoint. Migration `V077` seeded it for existing installations; migration `V148` moves the former dictation endpoint (`platform.speech.realtime`) onto it, or onto a new `voxtral-mini-realtime-dictation` model when it points elsewhere.
-- `voxtral-mini-transcribe-realtime` — set `MISTRAL_API_KEY` (or a per-model key) and enable. **Enabling it sends user audio to Mistral**, which is why it is off by default. Migration `V146` seeds it, disabled.
+- `voxtral-mini-realtime` — point its `url` at your vLLM realtime endpoint. Migration `V077` seeded it for existing installations; migration `V149` moves the former dictation endpoint (`platform.speech.realtime`) onto it, or onto a new `voxtral-mini-realtime-dictation` model when it points elsewhere.
+- `voxtral-mini-transcribe-realtime` — set `MISTRAL_API_KEY` (or a per-model key) and enable. **Enabling it sends user audio to Mistral**, which is why it is off by default. Migration `V147` seeds it, disabled.
 - `gemini-3.5-transcribe-live` / `gemini-3.5-transcribe` — set `GOOGLE_API_KEY` (or a per-model key) and enable. **Enabling either sends user audio to Google**, and the batch model additionally stores it in Google's Files API (48 h retention) for the duration of the request; that is why neither is on by default. Migration `V089` seeds both, disabled.
 
 #### Batch providers and memory

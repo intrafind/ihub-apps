@@ -39,7 +39,7 @@ and the faster, cheaper `gemini-3.8-flash-lite-tts`).
    keys the Mistral chat models use.
 
    For Google, the models `gemini-3.8-flash-tts.json` and
-   `gemini-3.8-flash-lite-tts.json` ship the same way (migration `V147` adds
+   `gemini-3.8-flash-lite-tts.json` ship the same way (migration `V148` adds
    them to existing installations). They use the Google key of the Gemini chat
    models: a key on the model, the `google` provider key, or `GOOGLE_API_KEY`.
 2. **Switch it on.** Open **Admin → Voice Input → Read aloud

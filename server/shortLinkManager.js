@@ -3,6 +3,7 @@ import path from 'path';
 import { getRootDir } from './pathUtils.js';
 import config from './config.js';
 import { createDebouncedJsonStore } from './utils/debouncedJsonStore.js';
+import { isAllowedShortLinkTarget } from './utils/shortLinkTarget.js';
 
 const contentsDir = config.CONTENTS_DIR;
 const dataFile = path.join(getRootDir(), contentsDir, 'data', 'shortlinks.json');
@@ -46,16 +47,63 @@ function generateCode(length = 6) {
   return code;
 }
 
-export async function createLink({
-  code,
-  appId,
-  userId,
-  path = null,
-  params = null,
-  url = null,
-  includeParams = false,
-  expiresAt = null
-}) {
+/** A link's target could not be accepted (see utils/shortLinkTarget.js). */
+export class ShortLinkTargetError extends Error {
+  constructor(message = 'Short link target is not allowed') {
+    super(message);
+    this.name = 'ShortLinkTargetError';
+    this.code = 'SHORT_LINK_TARGET_NOT_ALLOWED';
+  }
+}
+
+/** The fields a link's owner (or an admin) may change after creation. */
+const EDITABLE_FIELDS = ['appId', 'path', 'params', 'url', 'includeParams', 'expiresAt'];
+
+/**
+ * The target built from an app or path, plus the settings when included.
+ *
+ * @returns {string}
+ */
+function buildTarget({ appId, path, params, includeParams }) {
+  const basePath = path || (appId ? `/apps/${appId}` : '/');
+  const dummy = new URL('http://localhost');
+  dummy.pathname = basePath;
+  if (includeParams && params && typeof params === 'object') {
+    for (const [k, v] of Object.entries(params)) {
+      if (v !== undefined && v !== null && v !== '') {
+        dummy.searchParams.set(k, String(v));
+      }
+    }
+  }
+  return dummy.pathname + (dummy.search ? `?${dummy.searchParams.toString()}` : '');
+}
+
+/**
+ * Create a link owned by `ownerId`.
+ *
+ * @param {Object} data
+ * @param {Object} [options]
+ * @param {string[]} [options.allowedHosts] - Hosts an absolute `url` may name
+ * @throws {ShortLinkTargetError} When the target is not allowed
+ */
+export async function createLink(
+  {
+    code,
+    appId,
+    ownerId,
+    path = null,
+    params = null,
+    url = null,
+    includeParams = false,
+    expiresAt = null
+  },
+  { allowedHosts = [] } = {}
+) {
+  const finalUrl = url || buildTarget({ appId, path, params, includeParams });
+  if (!isAllowedShortLinkTarget(finalUrl, allowedHosts)) {
+    throw new ShortLinkTargetError();
+  }
+
   const links = await store.load();
   let finalCode = code;
   if (finalCode) {
@@ -68,25 +116,10 @@ export async function createLink({
     } while (links.links.some(l => l.code === finalCode));
   }
 
-  let finalUrl = url;
-  if (!finalUrl) {
-    const basePath = path || (appId ? `/apps/${appId}` : '/');
-    const dummy = new URL('http://localhost');
-    dummy.pathname = basePath;
-    if (includeParams && params && typeof params === 'object') {
-      for (const [k, v] of Object.entries(params)) {
-        if (v !== undefined && v !== null && v !== '') {
-          dummy.searchParams.set(k, String(v));
-        }
-      }
-    }
-    finalUrl = dummy.pathname + (dummy.search ? `?${dummy.searchParams.toString()}` : '');
-  }
-
   const link = {
     code: finalCode,
     appId,
-    userId,
+    ownerId,
     path,
     params,
     url: finalUrl,
@@ -147,17 +180,57 @@ export async function deleteLink(code) {
   return false;
 }
 
-export async function updateLink(code, data) {
+/**
+ * Change a link's editable fields. Everything else in `data` — the code, the
+ * owner, usage counters — is ignored. A link left without a `url` gets one
+ * built from its app or path again.
+ *
+ * @param {string} code
+ * @param {Object} data
+ * @param {Object} [options]
+ * @param {string[]} [options.allowedHosts] - Hosts an absolute `url` may name
+ * @returns {Promise<Object|null>} The updated link, or null when there is none
+ * @throws {ShortLinkTargetError} When the resulting target is not allowed
+ */
+export async function updateLink(code, data, { allowedHosts = [] } = {}) {
   const link = await findByCode(code);
   if (!link) return null;
-  Object.assign(link, data, { code });
+  const changes = {};
+  for (const field of EDITABLE_FIELDS) {
+    if (data && Object.hasOwn(data, field)) changes[field] = data[field];
+  }
+  if (Object.hasOwn(changes, 'includeParams')) {
+    changes.includeParams = changes.includeParams === true;
+  }
+  const next = { ...link, ...changes };
+  if (!next.url) next.url = buildTarget(next);
+  if (!isAllowedShortLinkTarget(next.url, allowedHosts)) {
+    throw new ShortLinkTargetError();
+  }
+  Object.assign(link, changes, { url: next.url });
   store.markDirty();
   return link;
 }
 
-export async function searchLinks({ appId, userId } = {}) {
+/**
+ * Whether `user` may see, change or delete `link`: its owner, or an admin.
+ * A link stored without an owner is managed by admins only.
+ *
+ * @param {Object} link
+ * @param {Object} user - `req.user`
+ * @param {boolean} isAdmin - Whether `user` is an admin
+ * @returns {boolean}
+ */
+export function canManageLink(link, user, isAdmin) {
+  if (isAdmin) return true;
+  return Boolean(link?.ownerId && user?.id && link.ownerId === user.id);
+}
+
+export async function searchLinks({ appId, ownerId } = {}) {
   const links = await store.load();
-  return links.links.filter(l => (!appId || l.appId === appId) && (!userId || l.userId === userId));
+  return links.links.filter(
+    l => (!appId || l.appId === appId) && (!ownerId || l.ownerId === ownerId)
+  );
 }
 
 store.load();

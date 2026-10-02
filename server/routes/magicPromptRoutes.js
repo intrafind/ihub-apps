@@ -4,24 +4,30 @@ import validate from '../validators/validate.js';
 import { magicPromptSchema } from '../validators/index.js';
 import config from '../config.js';
 import { authRequired } from '../middleware/authRequired.js';
-import llmClient, { isLLMError } from '../services/loop/LLMClient.js';
+import defaultLlmClient, { isLLMError } from '../services/loop/LLMClient.js';
 import { sendLLMError } from '../services/loop/llmHttpErrors.js';
 import { buildServerPath } from '../utils/basePath.js';
 import logger from '../utils/logger.js';
+import { canUserAccessResource } from '../utils/authorization.js';
+import { findByIdCaseInsensitive } from '../utils/resourceLookup.js';
 import {
   sendInternalError,
   sendBadRequest,
-  sendFailedOperationError
+  sendFailedOperationError,
+  sendInsufficientPermissions,
+  sendNotFound
 } from '../utils/responseHelpers.js';
 
 /** Output cap for the rewritten prompt. */
 const MAGIC_PROMPT_MAX_TOKENS = 8192;
 
-export default function registerMagicPromptRoutes(app) {
+export default function registerMagicPromptRoutes(app, { llmClient = defaultLlmClient } = {}) {
   /**
    * POST /api/magic-prompt
    *
-   * Rewrites a user's draft prompt with a helper model. The model call goes
+   * Rewrites a user's draft prompt with a helper model. The instruction comes
+   * from the app's `features.magicPrompt` (or the platform defaults), and the
+   * model must be one the caller may use. The model call goes
    * through `LLMClient` (ledger kind `utility`, purpose `magic-prompt`);
    * provider failures are answered with the mapped status from
    * `sendLLMError` instead of a blanket 500.
@@ -32,14 +38,13 @@ export default function registerMagicPromptRoutes(app) {
     validate(magicPromptSchema),
     async (req, res) => {
       try {
-        const { input, prompt, modelId, appId = 'direct' } = req.body;
+        const { input, modelId, appId = 'direct' } = req.body;
         if (!input) {
           return sendBadRequest(res, 'Missing input');
         }
 
         // Get available models and default model
         const { data: models = [] } = configCache.getModels();
-        const defaultModel = models.find(m => m.default)?.id;
 
         // Check if any models are available
         if (!models || models.length === 0) {
@@ -50,32 +55,58 @@ export default function registerMagicPromptRoutes(app) {
           );
         }
 
-        // Determine the model to use with fallback chain
-        let selectedModelId = modelId || config.MAGIC_PROMPT_MODEL || defaultModel;
-
-        // Validate if the specified model exists and fallback if not
-        const modelExists = models.some(m => m.id === selectedModelId);
-
-        if (!modelExists) {
-          const fallbackModel = config.MAGIC_PROMPT_MODEL || defaultModel;
-          logger.warn(
-            `Magic prompt model '${selectedModelId}' not found, falling back to '${fallbackModel}'`
-          );
-          selectedModelId = fallbackModel;
-
-          // Double-check fallback model exists
-          const fallbackExists = models.some(m => m.id === fallbackModel);
-          if (!fallbackExists) {
-            logger.warn('Fallback model not found, using first available model', {
-              component: 'MagicPrompt',
-              fallbackModel
-            });
-            selectedModelId = models[0]?.id;
+        // The instruction and the default model come from the app's own
+        // configuration, never from the request body. Without an app context
+        // the platform defaults apply.
+        let magicConfig = {};
+        if (appId && appId !== 'direct') {
+          const { data: apps = [] } = configCache.getApps();
+          const appConfig = findByIdCaseInsensitive(apps || [], appId);
+          if (!appConfig || !canUserAccessResource(req.user, 'apps', appConfig.id)) {
+            return sendNotFound(res, 'App');
           }
+          magicConfig = appConfig.features?.magicPrompt || {};
         }
 
+        // Only chat models can rewrite a prompt (not transcription or speech models).
+        const chatModels = models.filter(m => (m.modelType || 'chat') === 'chat');
+        const findModel = id => (id ? chatModels.find(m => m.id === id) : undefined);
+        const mayUse = model => canUserAccessResource(req.user, 'models', model.id);
+
+        // An explicitly requested model must be one the caller may use, whatever
+        // its type; only a chat model is then used.
+        const requested = modelId ? findByIdCaseInsensitive(models, modelId) : undefined;
+        if (requested && !mayUse(requested)) {
+          return sendInsufficientPermissions(res, `access to model ${requested.id}`);
+        }
+        const requestedModel = requested && chatModels.includes(requested) ? requested : undefined;
+
+        // Fallback chain: requested model, the app's magic prompt model, the
+        // MAGIC_PROMPT_MODEL setting, the default model, then any model —
+        // limited to models the caller may use.
+        const defaultModel = chatModels.find(m => m.default);
+        const candidates = [
+          requestedModel,
+          findModel(magicConfig.model),
+          findModel(config.MAGIC_PROMPT_MODEL),
+          defaultModel,
+          ...chatModels
+        ];
+        const selectedModel = candidates.find(model => model && mayUse(model));
+        if (!selectedModel) {
+          return sendInsufficientPermissions(res, 'access to a model');
+        }
+        if (modelId && selectedModel !== requestedModel) {
+          logger.warn('Magic prompt model not found, falling back', {
+            component: 'MagicPrompt',
+            modelId,
+            fallbackModel: selectedModel.id
+          });
+        }
+        const selectedModelId = selectedModel.id;
+
         const systemPrompt =
-          prompt || config.MAGIC_PROMPT_PROMPT || 'Improve the following prompt.';
+          magicConfig.prompt || config.MAGIC_PROMPT_PROMPT || 'Improve the following prompt.';
         const messages = [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: input }

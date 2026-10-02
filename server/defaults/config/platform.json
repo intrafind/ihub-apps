@@ -443,6 +443,9 @@
     "retentionDays": 30,
     "cleanupEnabled": true
   },
+  "shortLinks": {
+    "allowedHosts": []
+  },
   "scheduledTasks": {
     "enabled": true,
     "maxTasksPerUser": 10,

@@ -579,7 +579,8 @@ export default function registerMcpServerRoutes(app) {
       const card = buildAgentCard({
         baseUrl: gatewayBaseUrl(req, cfg),
         platform,
-        user: req.user || null,
+        // A tokenless caller gets the public card, not the anonymous principal's.
+        user: req.user && req.user.id !== 'anonymous' ? req.user : null,
         skillId,
         language: platform.defaultLanguage
       });

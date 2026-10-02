@@ -60,9 +60,12 @@ export function appModelLabel(appId, modelId) {
   return `${APP_MODEL_PREFIX}${appId}/${modelId}`;
 }
 
-/** Whether `user` may use the resource with `id` under `permissions[key]`. */
+/**
+ * Whether `user` may use the resource with `id` under `permissions[key]`.
+ * Fails closed: a missing principal or permissions object grants nothing.
+ */
 function permitted(user, key, id) {
-  if (!user?.permissions) return true;
+  if (!user?.permissions) return false;
   const allowed = user.permissions[key] || new Set();
   return allowed.has('*') || hasIdCaseInsensitive(allowed, id);
 }

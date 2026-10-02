@@ -1,6 +1,10 @@
 import configCache from '../configCache.js';
-import { isAnonymousAccessAllowed, enhanceUserWithPermissions } from '../utils/authorization.js';
-import { authRequired, modelAccessRequired } from '../middleware/authRequired.js';
+import {
+  canUserAccessResource,
+  isAnonymousAccessAllowed,
+  enhanceUserWithPermissions
+} from '../utils/authorization.js';
+import { authRequired } from '../middleware/authRequired.js';
 import {
   sendFailedOperationError,
   sendNotFound,
@@ -154,50 +158,44 @@ export default function registerModelRoutes(app, { getLocalizedError }) {
     }
   });
 
-  app.get(
-    buildServerPath('/api/models/:modelId'),
-    authRequired,
-    modelAccessRequired,
-    async (req, res) => {
-      try {
-        const { modelId } = req.params;
+  // No modelAccessRequired here: it answers 403, while this route gives one
+  // answer (404) for a model that does not exist and one the caller may not use.
+  app.get(buildServerPath('/api/models/:modelId'), authRequired, async (req, res) => {
+    try {
+      const { modelId } = req.params;
 
-        // Validate modelId to prevent injection
-        if (!validateIdForPath(modelId, 'model', res)) return;
+      // Validate modelId to prevent injection
+      if (!validateIdForPath(modelId, 'model', res)) return;
 
-        const platform = configCache.getPlatform() || {};
-        const defaultLang = platform?.defaultLanguage || 'en';
-        const language = req.headers['accept-language']?.split(',')[0] || defaultLang;
+      const platform = configCache.getPlatform() || {};
+      const defaultLang = platform?.defaultLanguage || 'en';
+      const language = req.headers['accept-language']?.split(',')[0] || defaultLang;
 
-        // Try to get models from cache first
-        const { data: models } = configCache.getModels();
+      // Try to get models from cache first
+      const { data: models } = configCache.getModels();
 
-        if (!models) {
-          return sendFailedOperationError(res, 'load models configuration');
-        }
-        const model = findByIdCaseInsensitive(models, modelId);
-        // Transcription and TTS models are not exposed through this public
-        // chat-model route (G9); their internal url / apiKey must never reach
-        // the browser. Treat them as not-found here.
-        if (!model || (model.modelType || 'chat') !== 'chat') {
-          const errorMessage = await getLocalizedError('modelNotFound', {}, language);
-          return sendNotFound(res, errorMessage);
-        }
-
-        // Check if user has permission to access this model
-        if (req.user && req.user.permissions) {
-          const allowedModels = req.user.permissions.models || new Set();
-          if (!allowedModels.has('*') && !allowedModels.has(model.id)) {
-            const errorMessage = await getLocalizedError('modelNotFound', {}, language);
-            return sendNotFound(res, errorMessage);
-          }
-        }
-
-        // Strip server-side secrets (encrypted apiKey) before returning.
-        res.json(sanitizeModelForPublic(model));
-      } catch (error) {
-        sendInternalError(res, error, 'fetching model details');
+      if (!models) {
+        return sendFailedOperationError(res, 'load models configuration');
       }
+      const model = findByIdCaseInsensitive(models, modelId);
+      // Transcription and TTS models are not exposed through this public
+      // chat-model route (G9); their internal url / apiKey must never reach
+      // the browser. Treat them as not-found here.
+      if (!model || (model.modelType || 'chat') !== 'chat') {
+        const errorMessage = await getLocalizedError('modelNotFound', {}, language);
+        return sendNotFound(res, errorMessage);
+      }
+
+      // Fails closed: without a principal carrying permissions nothing is granted.
+      if (!canUserAccessResource(req.user, 'models', model.id)) {
+        const errorMessage = await getLocalizedError('modelNotFound', {}, language);
+        return sendNotFound(res, errorMessage);
+      }
+
+      // Strip server-side secrets (encrypted apiKey) before returning.
+      res.json(sanitizeModelForPublic(model));
+    } catch (error) {
+      sendInternalError(res, error, 'fetching model details');
     }
-  );
+  });
 }

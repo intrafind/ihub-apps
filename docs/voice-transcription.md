@@ -359,7 +359,7 @@ An app picks its own the same way:
 - If the platform default's model is disabled or deleted, apps that follow the default use the browser until it is back, just as they do when Azure is switched off. An app that picks a model of its own shows the error instead.
 - Endpoint and key are set once, on the model. The same model can serve voice input, the record button and file transcription.
 
-**Upgrading from an earlier version:** dictation used to stream to a separate endpoint under `speech.realtime` (`url`, `model`, `apiKey`, `enabled`), picked as the `vllm-realtime` service. Migration V148 moves that endpoint onto a transcription model (reusing a `vllm-realtime` model with the same URL, or writing one), switches the platform default and every app that used `vllm-realtime` to that model, and grants the model to every group that could dictate before. `speech.realtime` keeps only the limits below.
+**Upgrading from an earlier version:** dictation used to stream to a separate endpoint under `speech.realtime` (`url`, `model`, `apiKey`, `enabled`), picked as the `vllm-realtime` service. Migration V149 moves that endpoint onto a transcription model (reusing a `vllm-realtime` model with the same URL, or writing one), switches the platform default and every app that used `vllm-realtime` to that model, and grants the model to every group that could dictate before. `speech.realtime` keeps only the limits below.
 
 ## Testing from the admin UI
 
