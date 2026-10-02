@@ -61,8 +61,9 @@ function MarketplaceItemCard({ item, onClick, onAction }) {
   const handleInstall = async e => {
     e.stopPropagation();
     if (isInstalled) return;
-    // Installing would replace the local copy — that is confirmed in the detail panel
-    if (isLocal) {
+    // Installing would replace the local copy — that is confirmed in the detail panel.
+    // A model is installed from the detail panel too, which asks to review it first.
+    if (isLocal || item.type === 'model') {
       onClick?.();
       return;
     }
