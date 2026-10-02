@@ -84,3 +84,19 @@ path count against the same limits as all others — before, they were not limit
 or a list of addresses, make sure it trusts the proxy that sets `X-Forwarded-Prefix` — for example
 `"trustProxy": "loopback"` when the proxy runs on the same host. Otherwise the app no longer finds
 its base path.
+
+## Workflows: The Code Node Is Removed
+
+Workflows can no longer contain **Code** nodes, which ran a JavaScript snippet on the server. The
+node is gone from the workflow editor, a workflow that contains one cannot be saved, and a run that
+reaches one stops with an error naming the node type.
+
+- The shipped **Corpus Completeness Analysis — Decomposed** workflows (both versions) used a code
+  node to collect the documents found for each sub-question. They now use a transform node, and
+  the upgrade changes installed copies the same way.
+- Transform nodes have a new **Append All** operation (`{ "append": "_corpus", "to": "_corpusAll" }`)
+  that adds every item of one array to another — what most code nodes were used for.
+
+**Before upgrading:** check your own workflows for code nodes; the server log lists the workflows
+that still contain one after the upgrade. Replace each with transform operations, or with a prompt
+node where the step needs more than moving data around.

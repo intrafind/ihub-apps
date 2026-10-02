@@ -133,7 +133,7 @@
     },
     {
       "id": "accumulate-corpus",
-      "type": "code",
+      "type": "transform",
       "name": {
         "en": "Accumulate corpus across sub-questions",
         "de": "Korpus über Teilfragen akkumulieren"
@@ -141,19 +141,7 @@
       "position": { "x": 100, "y": 940 },
       "config": {
         "chatVisible": false,
-        "code": "const prev = data._corpusAll; const prevArr = Array.isArray(prev) ? prev : (prev && Array.isArray(prev.result) ? prev.result : []); [...prevArr, ...(data._corpus || [])];",
-        "outputVariable": "_corpusAllRaw",
-        "timeout": 5000
-      }
-    },
-    {
-      "id": "unwrap-corpus-accumulator",
-      "type": "transform",
-      "name": { "en": "Unwrap accumulator", "de": "Akkumulator auspacken" },
-      "position": { "x": 100, "y": 1060 },
-      "config": {
-        "chatVisible": false,
-        "operations": [{ "copy": "_corpusAllRaw.result", "to": "_corpusAll" }]
+        "operations": [{ "append": "_corpus", "to": "_corpusAll" }]
       }
     },
     {
@@ -362,8 +350,7 @@
     { "id": "e5", "source": "pick-subquestion", "target": "announce-subquestion" },
     { "id": "e6", "source": "announce-subquestion", "target": "search-subquestion" },
     { "id": "e7", "source": "search-subquestion", "target": "accumulate-corpus" },
-    { "id": "e8", "source": "accumulate-corpus", "target": "unwrap-corpus-accumulator" },
-    { "id": "e9", "source": "unwrap-corpus-accumulator", "target": "init-doc-cursor" },
+    { "id": "e9", "source": "accumulate-corpus", "target": "init-doc-cursor" },
     { "id": "e10", "source": "init-doc-cursor", "target": "more-docs-initial" },
     {
       "id": "e11-has-docs",

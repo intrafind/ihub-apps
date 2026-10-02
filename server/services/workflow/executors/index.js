@@ -40,7 +40,6 @@ export { LoopNodeExecutor } from './LoopNodeExecutor.js';
 export { ParallelNodeExecutor } from './ParallelNodeExecutor.js';
 export { JoinNodeExecutor } from './JoinNodeExecutor.js';
 export { HttpNodeExecutor } from './HttpNodeExecutor.js';
-export { CodeNodeExecutor } from './CodeNodeExecutor.js';
 export { InboxLoadNodeExecutor } from './InboxLoadNodeExecutor.js';
 export { InboxFinalizeNodeExecutor } from './InboxFinalizeNodeExecutor.js';
 export { MemoryNodeExecutor } from './MemoryNodeExecutor.js';
@@ -66,7 +65,6 @@ import { LoopNodeExecutor } from './LoopNodeExecutor.js';
 import { ParallelNodeExecutor } from './ParallelNodeExecutor.js';
 import { JoinNodeExecutor } from './JoinNodeExecutor.js';
 import { HttpNodeExecutor } from './HttpNodeExecutor.js';
-import { CodeNodeExecutor } from './CodeNodeExecutor.js';
 import { InboxLoadNodeExecutor } from './InboxLoadNodeExecutor.js';
 import { InboxFinalizeNodeExecutor } from './InboxFinalizeNodeExecutor.js';
 import { MemoryNodeExecutor } from './MemoryNodeExecutor.js';
@@ -96,7 +94,6 @@ const executorRegistry = {
   parallel: ParallelNodeExecutor,
   join: JoinNodeExecutor,
   http: HttpNodeExecutor,
-  code: CodeNodeExecutor,
   'inbox-load': InboxLoadNodeExecutor,
   'inbox-finalize': InboxFinalizeNodeExecutor,
   memory: MemoryNodeExecutor,
