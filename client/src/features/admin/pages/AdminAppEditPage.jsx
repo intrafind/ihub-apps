@@ -14,6 +14,11 @@ import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import ContentAccessSection from '../components/ContentAccessSection';
 import AppTestPanel from '../components/AppTestPanel';
 import { buildPath } from '../../../utils/runtimeBasePath';
+import {
+  cleanAppAiTransparencyForSave,
+  mergeAppAiTransparencyRecords,
+  serializeConfigForDownload
+} from '../utils/aiTransparencyAdmin';
 
 function AdminAppEditPage() {
   const { t } = useTranslation();
@@ -250,9 +255,21 @@ function AdminAppEditPage() {
     }
   }, [appId]);
 
+  // EU AI Act: the disclosure opt-out and the exemption were just changed
+  // through their own audited endpoints. Put the stored records into both the
+  // edited app and the saved baseline, so the editor shows them without
+  // discarding — or flagging as unsaved — anything else the admin changed.
+  const applyAiTransparencyRecords = useCallback(records => {
+    const merge = current => (current ? mergeAppAiTransparencyRecords(current, records) : current);
+    setApp(merge);
+    setInitialData(merge);
+  }, []);
+
   const cleanAppData = appData => {
     // Clean up variables - remove empty defaultValue and predefinedValues
-    const cleanedApp = { ...appData };
+    // EU AI Act: records never travel with the generic save (the server
+    // keeps the stored ones); empty notice languages are dropped.
+    const cleanedApp = cleanAppAiTransparencyForSave({ ...appData });
 
     if (cleanedApp.variables) {
       cleanedApp.variables = cleanedApp.variables.map(variable => {
@@ -554,7 +571,9 @@ function AdminAppEditPage() {
                   <button
                     type="button"
                     onClick={() => {
-                      const dataStr = JSON.stringify(app, null, 2);
+                      // Without this installation's EU AI Act records (opt-out,
+                      // exemption): the importing installation decides again.
+                      const dataStr = serializeConfigForDownload('app', app);
                       const dataUri =
                         'data:application/json;charset=utf-8,' + encodeURIComponent(dataStr);
                       const exportFileDefaultName = `app-${app.id}.json`;
@@ -605,7 +624,11 @@ function AdminAppEditPage() {
               formProps={{
                 availableModels,
                 uiConfig,
-                jsonSchema
+                jsonSchema,
+                aiTransparency: {
+                  appId: isNewApp ? null : appId,
+                  onRecordsChange: applyAiTransparencyRecords
+                }
               }}
               jsonSchema={jsonSchema}
               defaultMode={editingMode}

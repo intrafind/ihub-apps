@@ -23,6 +23,7 @@ import { useOverviewData } from '../hooks/useOverviewData';
 import { useUpdateCheck } from '../hooks/useUpdateCheck';
 import { useUIConfig } from '../../../shared/contexts/UIConfigContext';
 import { useAuth } from '../../../shared/contexts/AuthContext';
+import ComplianceBanner from '../components/euAiAct/ComplianceBanner';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
 import { STORAGE_STATUS_STYLES, formatBytes, formatPercent } from '../utils/systemResourcesFormat';
 
@@ -692,6 +693,9 @@ export default function AdminOverview() {
           {t('admin.overview.subtitle', 'Platform overview and quick actions')}
         </p>
       </div>
+
+      {/* EU AI Act compliance warnings (renders nothing when there are none) */}
+      <ComplianceBanner className="mb-6" />
 
       {/* Stat cards */}
       {!isFreshInstance && (

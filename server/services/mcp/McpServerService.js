@@ -349,13 +349,16 @@ export async function buildMcpServer({ user, platform }) {
             return toolErrorResult('access_denied: app not permitted for this caller');
           }
           try {
-            const text = await invokeAppNonStreaming({
+            const { text, result } = await invokeAppNonStreaming({
               appId: app.id,
               args: args || {},
               user,
-              language: platform?.defaultLanguage || 'en'
+              language: platform?.defaultLanguage || 'en',
+              withResult: true
             });
-            return toolSuccessResult(text || '');
+            // EU AI Act Art. 50(2): machine clients get the provenance of the
+            // generated text in the result's `_meta`.
+            return withProvenanceMeta(toolSuccessResult(text || ''), result?.provenance);
           } catch (err) {
             logger.warn('MCP gateway app invocation failed', {
               component: 'McpServerService',
@@ -403,7 +406,9 @@ export async function buildMcpServer({ user, platform }) {
               `workflow_${wf.id}`,
               withTrustedToolContext(args, { user, chatId: `mcp-${Date.now()}` })
             );
-            return toolSuccessResult(result);
+            // EU AI Act Art. 50(2): as for apps, when a model wrote the output.
+            const provenance = await workflowProvenance(wf, result);
+            return withProvenanceMeta(toolSuccessResult(result), provenance);
           } catch (err) {
             logger.warn('MCP gateway workflow run failed', {
               component: 'McpServerService',
@@ -495,6 +500,29 @@ function toolSuccessResult(payload) {
     return { content: [{ type: 'text', text: payload }] };
   }
   return { content: [{ type: 'text', text: JSON.stringify(payload) }] };
+}
+
+/**
+ * Provenance of a workflow result; loaded on first use and never allowed to
+ * fail the tool call.
+ */
+async function workflowProvenance(workflow, output) {
+  try {
+    const { recordWorkflowProvenance } = await import('../provenance/turnProvenance.js');
+    return await recordWorkflowProvenance({ workflow, output });
+  } catch (error) {
+    logger.warn('Workflow provenance failed', {
+      component: 'McpServerService',
+      workflowId: workflow?.id,
+      error: error.message
+    });
+    return null;
+  }
+}
+
+function withProvenanceMeta(toolResult, provenance) {
+  if (!provenance) return toolResult;
+  return { ...toolResult, _meta: { ...(toolResult._meta || {}), provenance } };
 }
 
 function toolErrorResult(message) {

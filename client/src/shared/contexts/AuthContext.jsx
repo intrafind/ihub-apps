@@ -3,7 +3,7 @@ import { AuthContext, useOptionalAuth } from './authContextValue';
 import { apiClient } from '../../api/client.js';
 import { fetchAuthStatus, invalidateAuthStatusCache } from '../../api';
 import {
-  isSharedChatPath,
+  isSelfGatedPath,
   buildPath,
   buildApiUrl,
   getApiBaseUrlOverride
@@ -204,16 +204,16 @@ export function AuthProvider({ children }) {
           // run their own OAuth-popup flow before mounting <App />.
           const isIframed = typeof window !== 'undefined' && window.self !== window.top;
 
-          // A shared chat page is left alone as well: a public link is meant
-          // to open for a visitor with no account, and the server, not this
-          // redirect, decides per link who may read it. The page itself sends
-          // a viewer to the login when the link needs one.
+          // A shared chat and the detector are left alone as well: a public
+          // link or detector is meant to open for a visitor with no account,
+          // and the server, not this redirect, decides who may use it. The
+          // page itself sends a viewer to the login when it needs one.
           if (
             data.autoRedirect &&
             !data.authenticated &&
             !isLogoutPage &&
             !isIframed &&
-            !isSharedChatPath()
+            !isSelfGatedPath()
           ) {
             // Prevent infinite redirect loops by checking if we've already attempted a redirect
             const redirectAttemptKey = `autoRedirect_${data.autoRedirect.provider}`;

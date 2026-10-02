@@ -13,6 +13,7 @@ import registerPromptRoutes from '../promptRoutes.js';
 import crypto from 'crypto';
 import logger from '../../utils/logger.js';
 import { sendInternalError, sendFailedOperationError } from '../../utils/responseHelpers.js';
+import { aiTransparencyClientConfig } from '../../services/provenance/clientConfig.js';
 
 /**
  * @swagger
@@ -765,6 +766,8 @@ export default function registerDataRoutes(app) {
         requestBodyLimitMB: platform.requestBodyLimitMB,
         requestConcurrency: platform.requestConcurrency,
         pdfExport: platform.pdfExport,
+        // EU AI Act Art. 50: disclosure, labels, export and detection switches.
+        aiTransparency: aiTransparencyClientConfig(),
         globalPromptVariables: platform.globalPromptVariables,
         telemetry: platform.telemetry
           ? {

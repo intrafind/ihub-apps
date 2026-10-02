@@ -54,6 +54,7 @@ import {
 } from '../../chat/utils/startForm';
 import SharedAppHeader from '../components/SharedAppHeader';
 import AIDisclaimerBanner from '../../chat/components/AIDisclaimerBanner';
+import AIInteractionNotice from '../../chat/components/AIInteractionNotice';
 import { recordAppUsage } from '../../../utils/recentApps';
 import { saveAppSettings, loadAppSettings } from '../../../utils/appSettings';
 import { processDocumentFile, decodeAudioFileToBuffer } from '../../upload/utils/fileProcessing';
@@ -2646,6 +2647,20 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
     );
   };
 
+  // EU AI Act Art. 50(1): tell people they are talking to an AI system before
+  // the first interaction — in the empty chat, above the input. Not while a
+  // stored chat is still loading (it would flash and vanish) and never once a
+  // message exists; the persistent badge and the message chips take over then.
+  // AIInteractionNotice itself checks the platform and app switches.
+  // A new comparison has its own start form: it shows the notice until the
+  // comparison is sent, whatever the regular transcript holds.
+  const renderInteractionNotice = (className = '') => {
+    const beforeFirstMessage = compareModeActive
+      ? !compareFormSent
+      : messages.length === 0 && !hydrating && !chatModeResolving;
+    return beforeFirstMessage ? <AIInteractionNotice app={app} className={className} /> : null;
+  };
+
   // The start form, for a new chat — or, below the compare panels' model
   // pickers, for a new comparison, which it is then sent to as a whole.
   const renderStartForm = () => {
@@ -2690,6 +2705,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
             showModelSelector={modelSelectionAllowed}
             currentLanguage={currentLanguage}
           />
+          {renderInteractionNotice('mt-4')}
         </div>
       </div>
     );
@@ -2916,7 +2932,10 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
                   )}
                 </div>
                 <div className="shrink-0 px-4 pt-2">
-                  <div className="w-full max-w-4xl mx-auto">{renderChatInput()}</div>
+                  <div className="w-full max-w-4xl mx-auto">
+                    {renderInteractionNotice('mb-2')}
+                    {renderChatInput()}
+                  </div>
                 </div>
               </div>
 
@@ -2963,6 +2982,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
                       )}
                     </div>
                   )}
+                  {renderInteractionNotice('mb-3')}
                   <div>{renderChatInput()}</div>
                 </div>
               </div>

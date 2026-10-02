@@ -8,7 +8,8 @@
  *
  *   StreamState { streamId, connected, lastSeq, gap, runs: { [runId]: RunState }, order, activeRunId, error }
  *   RunState    { runId, kind, status, refs, model, text, thinking, images, steps, tools, progress,
- *                 nodes, interactions, pendingInteractionId, meta, knowledgeSources, sources, … }
+ *                 nodes, interactions, pendingInteractionId, meta, knowledgeSources, sources,
+ *                 provenance, … }
  *
  * Surfaces project this state onto their own view (a chat message, a
  * workflow execution page) — they never interpret event names themselves.
@@ -89,6 +90,11 @@ export function createRunState(runId, init = {}) {
     grounding: null,
     output: undefined,
     toolName: null,
+    /**
+     * EU AI Act provenance of the answer (content id, hash, model, marking),
+     * delivered on `run/ended`. Public record only — never content.
+     */
+    provenance: null,
     error: null
   };
 }
@@ -293,6 +299,10 @@ export function reduceRunEvent(state, envelope) {
         knowledgeSources: union([], data.knowledgeSources),
         toolName: data.toolName || run.toolName,
         output: data.output !== undefined ? data.output : run.output,
+        provenance:
+          data.provenance && typeof data.provenance === 'object'
+            ? data.provenance
+            : run.provenance || null,
         error: data.error || run.error,
         endedAt: ts,
         lastLifecycleAt: ts,

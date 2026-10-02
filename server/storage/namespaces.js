@@ -191,6 +191,16 @@ export const RUNTIME_NAMESPACES = Object.freeze({
    */
   mcpToolCatalog: 'mcp-tool-catalog',
   /**
+   * EU AI Act provenance records, one document per generated output, keyed by
+   * its content id: content hash, model, time and marking status — never the
+   * content itself. Deployer-controlled retention (CoP 1.1.3).
+   */
+  provenanceRecords: 'provenance-records',
+  /** Content hash → content id, so client-sent content can be verified. */
+  provenanceHashes: 'provenance-hashes',
+  /** Detection log: metadata of each verification (never submitted content). */
+  provenanceDetections: 'provenance-detections',
+  /**
    * Scheduled tasks — one document per task, owned by the task owner's
    * principal id (the id their chats are owned by), so "my tasks" is an owner
    * index read.

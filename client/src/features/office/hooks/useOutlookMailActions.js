@@ -14,6 +14,25 @@ import {
 } from '../utilities/officeMailAction';
 import { detectOutlookMode, runOutlookMailAction } from '../utilities/outlookMailActions';
 import { describeOfficeError, logOfficeError } from '../utilities/officeLog';
+import { fetchPlatformConfig } from '../../../api';
+
+/**
+ * Whether answers put into Outlook get the visible AI label (EU AI Act
+ * Art. 50(1); platform `aiTransparency.labels.outbound`, resolved
+ * server-side). Read when an action runs rather than on mount: the pane has
+ * no platform-config context, the response is cached, and a failed read must
+ * never block the action — it then adds no label, as before the feature.
+ *
+ * @returns {Promise<boolean>}
+ */
+async function isOutboundAiLabelEnabled() {
+  try {
+    const config = await fetchPlatformConfig();
+    return config?.aiTransparency?.labels?.outbound === true;
+  } catch {
+    return false;
+  }
+}
 
 /** Outlook's own iconography: the reply arrow, the forward arrow, a new draft. */
 const ACTION_ICONS = {
@@ -97,7 +116,14 @@ export default function useOutlookMailActions({ officeConfig } = {}) {
     async (actionId, content) => {
       setNotice(null);
       try {
+        const aiLabel = (await isOutboundAiLabelEnabled())
+          ? t(
+              'aiTransparency.outbound.label',
+              'AI-generated with iHub Apps — please review before sending.'
+            )
+          : null;
         const result = await runOutlookMailAction(actionId, content, {
+          aiLabel,
           forwardLabels: {
             forwarded: t('office.mailActions.forwardedMessage', 'Forwarded message'),
             from: t('office.mailActions.forwardFrom', 'From'),

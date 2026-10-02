@@ -387,6 +387,25 @@ function normalizeIncomingMessage(params) {
 }
 
 /**
+ * EU AI Act Art. 50(2) provenance of a workflow skill's answer, when a model
+ * wrote it. Loaded on first use; never fails the task.
+ */
+async function workflowProvenance(workflowId, output) {
+  try {
+    const workflow = (configCache.getWorkflows(true)?.data || []).find(w => w.id === workflowId);
+    const { recordWorkflowProvenance } = await import('../provenance/turnProvenance.js');
+    return await recordWorkflowProvenance({ workflow, output });
+  } catch (error) {
+    logger.warn('Workflow provenance failed', {
+      component: 'A2A',
+      workflowId,
+      error: error.message
+    });
+    return null;
+  }
+}
+
+/**
  * Decide which skill a message runs (see the module doc for the order) and
  * check that the caller may use it.
  *
@@ -497,9 +516,10 @@ async function runTask({ task, skill, text, data, userMessage, user, platform, s
   let statusMessage = null;
   try {
     let answer;
+    let provenance = null;
     if (skill._kind === 'app') {
       const history = contextMessages(await store.getContext(contextId, user.id));
-      const { text: result } = await invokeApp({
+      const { text: result, result: invocation } = await invokeApp({
         appId: skill._id,
         messages: [...history, { role: 'user', content: text }],
         variables: data,
@@ -524,6 +544,7 @@ async function runTask({ task, skill, text, data, userMessage, user, platform, s
           : undefined
       });
       answer = result;
+      provenance = invocation?.provenance || null;
     } else {
       const output = await runTool(
         `workflow_${skill._id}`,
@@ -533,10 +554,17 @@ async function runTask({ task, skill, text, data, userMessage, user, platform, s
         )
       );
       answer = typeof output === 'string' ? output : JSON.stringify(output);
+      provenance = await workflowProvenance(skill._id, answer);
     }
     if (controller.signal.aborted) throw new A2aError(A2A_ERRORS.INTERNAL, 'Task cancelled');
 
-    const artifact = { artifactId, name: 'response', parts: [{ kind: 'text', text: answer }] };
+    const artifact = {
+      artifactId,
+      name: 'response',
+      parts: [{ kind: 'text', text: answer }],
+      // EU AI Act Art. 50(2): provenance of the generated text for machine clients.
+      ...(provenance ? { metadata: { provenance } } : {})
+    };
     // Streamed fragments came from every model step; the artifact is the
     // final answer. When they differ, the last event replaces what was
     // streamed (append: false); otherwise it just closes the artifact.
@@ -545,7 +573,12 @@ async function runTask({ task, skill, text, data, userMessage, user, platform, s
         kind: 'artifact-update',
         taskId: task.id,
         contextId,
-        artifact: { artifactId, name: 'response', parts: [] },
+        artifact: {
+          artifactId,
+          name: 'response',
+          parts: [],
+          ...(provenance ? { metadata: { provenance } } : {})
+        },
         append: true,
         lastChunk: true
       });

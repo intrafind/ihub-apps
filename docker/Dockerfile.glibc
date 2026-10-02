@@ -1,0 +1,127 @@
+# =============================================================================
+# iHub Apps - Multi-Stage Docker Build on Debian slim (glibc)
+# =============================================================================
+#
+# Same image as docker/Dockerfile, on a glibc base instead of Alpine (musl).
+#
+# Why: EU AI Act content marking (docs/eu-ai-act.md) signs C2PA manifests and
+# embeds TrustMark watermarks with @contentauth/c2pa-node, a native addon that
+# ships prebuilt binaries for glibc Linux (x64, arm64), macOS and Windows —
+# not for musl. On the Alpine image the addon is missing, signing reports
+# "unavailable" and the EU AI Act page shows the installation as
+# non-conforming. Build this variant to get signing in a container:
+#
+#   docker build -f docker/Dockerfile.glibc -t ihub-apps:glibc .
+#
+# Everything else (user, volumes, healthcheck, entrypoint) matches the Alpine
+# image, so the two are interchangeable for docker-compose.
+
+# -----------------------------------------------------------------------------
+# Stage 1: Dependencies Installation
+# -----------------------------------------------------------------------------
+FROM node:24-bookworm-slim AS dependencies
+
+RUN apt-get update && \
+    apt-get upgrade -y && \
+    apt-get install -y --no-install-recommends \
+      dumb-init \
+      git \
+      python3 \
+      make \
+      g++ \
+      curl \
+      ca-certificates && \
+    rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+COPY package*.json ./
+COPY client/package*.json ./client/
+COPY server/package*.json ./server/
+
+# Installs @contentauth/c2pa-node (optional dependency) with its prebuilt
+# glibc binary.
+RUN npm run install:all
+
+# -----------------------------------------------------------------------------
+# Stage 2: Build Stage
+# -----------------------------------------------------------------------------
+FROM dependencies AS builder
+
+COPY . .
+RUN npm run build:docker
+
+# -----------------------------------------------------------------------------
+# Stage 3: Production Runtime
+# -----------------------------------------------------------------------------
+FROM node:24-bookworm-slim AS production
+
+ENV NODE_ENV=production
+ENV IHUB_CONTAINER=true
+
+ARG BUILDTIME=unknown
+
+RUN echo "Applying Debian security patches (build ${BUILDTIME})" && \
+    apt-get update && \
+    apt-get upgrade -y && \
+    apt-get install -y --no-install-recommends \
+      dumb-init \
+      curl \
+      tini \
+      netcat-openbsd \
+      ca-certificates && \
+    rm -rf /var/lib/apt/lists/*
+
+# The runtime only runs `node`; drop npm like the Alpine image does.
+RUN rm -rf /usr/local/lib/node_modules/npm \
+    /usr/local/bin/npm \
+    /usr/local/bin/npx
+
+RUN groupadd --system ihub && \
+    useradd --system --no-create-home --shell /usr/sbin/nologin --gid ihub ihub
+
+WORKDIR /app
+
+COPY --from=builder --chown=ihub:ihub /app/dist ./
+
+RUN mkdir -p /app/contents/ /app/logs && \
+    chown -R ihub:ihub /app/contents /app/logs
+
+# Health check script (same as docker/Dockerfile)
+COPY --chown=ihub:ihub <<EOF /app/healthcheck.js
+import http from 'http';
+
+const options = {
+  hostname: 'localhost',
+  port: process.env.PORT || 3000,
+  path: '/api/health',
+  timeout: 5000
+};
+
+const request = http.request(options, (res) => {
+  process.exit(res.statusCode === 200 ? 0 : 1);
+});
+request.on('error', () => process.exit(1));
+request.on('timeout', () => {
+  request.destroy();
+  process.exit(1);
+});
+request.end();
+EOF
+
+COPY --chown=ihub:ihub docker/docker-entrypoint.sh /app/docker-entrypoint.sh
+RUN chmod +x /app/docker-entrypoint.sh
+
+USER ihub
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD node /app/healthcheck.js
+
+EXPOSE 3000
+
+VOLUME ["/app/contents/", "/app/logs"]
+
+# Debian installs tini at /usr/bin/tini (Alpine: /sbin/tini).
+ENTRYPOINT ["/usr/bin/tini", "--", "/app/docker-entrypoint.sh"]
+
+CMD ["node", "server/server.js"]

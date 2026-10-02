@@ -19,6 +19,7 @@ import { buildPath } from '../../../utils/runtimeBasePath';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import ReorderableList from '../components/ReorderableList';
 import { DataTable, SearchInput, FilterSelect } from '../components/data-table';
+import { serializeConfigForDownload } from '../utils/aiTransparencyAdmin';
 
 function AppNameCell({ app, currentLanguage }) {
   return (
@@ -214,7 +215,9 @@ function AdminAppsPage() {
     try {
       const response = await makeAdminApiCall(`/admin/apps/${appId}`);
       const app = response.data;
-      const configData = JSON.stringify(app, null, 2);
+      // Without this installation's EU AI Act records (disclosure opt-out,
+      // exemption): an opt-out must never silently carry over (concept §8.2).
+      const configData = serializeConfigForDownload('app', app);
       const blob = new Blob([configData], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');

@@ -530,6 +530,55 @@ describe('Migration Runner', () => {
       expect(history.migrations[1].file).toBe('V144__remove_app_wizard_fields.js');
     });
 
+    it.each(['141', '142', '143', '145', '146', '147'])(
+      'moves an EU AI Act entry recorded at V%s to V148 so it no longer blocks main',
+      oldVersion => {
+        // A dev install that ran the branch while it held that number recorded
+        // it; main's provider plain names (V141), text-to-speech (V142),
+        // short-link allowlist (V145), local sign-in lockout (V146) and
+        // proxy-auth trusted sources (V147) migrations hold those numbers now,
+        // and V143 sorts below main's app wizard field cleanup (V144).
+        const history = {
+          schemaVersion: '1.0',
+          migrations: [
+            {
+              version: oldVersion,
+              description: 'add_ai_transparency',
+              file: `V${oldVersion}__add_ai_transparency.js`,
+              checksum: 'abc123',
+              status: 'success'
+            },
+            {
+              version: '140',
+              description: 'web_tools_filters_and_page_offset',
+              file: 'V140__web_tools_filters_and_page_offset.js',
+              checksum: 'def456',
+              status: 'success'
+            }
+          ]
+        };
+
+        expect(reconcileRenamedMigrations(history)).toBe(true);
+        expect(history.migrations[0].version).toBe('148');
+        expect(history.migrations[0].file).toBe('V148__add_ai_transparency.js');
+        expect(history.migrations[1].version).toBe('140');
+      }
+    );
+
+    it("leaves main's V145 short-link entry alone when reconciling the EU AI Act V145", () => {
+      const shortLinks = {
+        version: '145',
+        description: 'add_short_link_allowed_hosts',
+        file: 'V145__add_short_link_allowed_hosts.js',
+        checksum: 'abc123',
+        status: 'success'
+      };
+      const history = { schemaVersion: '1.0', migrations: [{ ...shortLinks }] };
+
+      expect(reconcileRenamedMigrations(history)).toBe(false);
+      expect(history.migrations).toEqual([shortLinks]);
+    });
+
     it('is a no-op on a fresh install with no matching history entries', () => {
       const history = { schemaVersion: '1.0', migrations: [] };
 

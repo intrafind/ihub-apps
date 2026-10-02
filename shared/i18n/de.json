@@ -370,6 +370,60 @@
           "html": "HTML-Dokument",
           "json": "JSON-Format mit Metadaten",
           "jsonl": "JSON-Zeilen-Format"
+        },
+        "copying": "Wird kopiert…",
+        "template": "Vorlage",
+        "templateDefault": "Standard",
+        "templateProfessional": "Professionell",
+        "templateMinimal": "Minimal",
+        "serverNote": "Die Datei wird auf dem Server erstellt und als KI-generierter Inhalt gekennzeichnet.",
+        "messages": {
+          "heading": "Zu exportierende Nachrichten",
+          "selectedCount": "{{count}} von {{total}} ausgewählt",
+          "selectAll": "Alle auswählen",
+          "selectNone": "Keine auswählen",
+          "rangeHint": "Tipp: Halten Sie beim Klicken die Umschalttaste gedrückt, um einen Bereich aus- oder abzuwählen.",
+          "roleUser": "Sie",
+          "roleAssistant": "Assistent",
+          "roleSystem": "System",
+          "empty": "Es gibt noch keine Nachrichten zum Exportieren.",
+          "noneSelected": "Wählen Sie mindestens eine Nachricht aus."
+        },
+        "options": {
+          "heading": "KI-Kennzeichnung",
+          "euIcon": "EU-KI-Symbol hinzufügen",
+          "euIconAlways": "Diese Installation fügt das EU-KI-Symbol immer hinzu.",
+          "humanReviewed": "Von einem Menschen geprüft (redaktionelle Verantwortung)",
+          "humanReviewedHint": "Erklärt, dass eine Person den Inhalt geprüft hat und die redaktionelle Verantwortung dafür übernimmt."
+        },
+        "status": {
+          "preparing": "Export wird vorbereitet…",
+          "downloaded": "Export heruntergeladen: {{filename}}",
+          "copying": "Text für die Zwischenablage wird vorbereitet…",
+          "copied": "In die Zwischenablage kopiert."
+        },
+        "errors": {
+          "failed": "Der Export ist fehlgeschlagen: {{message}}",
+          "generic": "Der Export ist fehlgeschlagen. Bitte versuchen Sie es erneut.",
+          "disabled": "Exporte sind in dieser Installation deaktiviert.",
+          "chatNotFound": "Die Unterhaltung wurde auf dem Server nicht gefunden.",
+          "downloadBlocked": "Der Download konnte nicht gestartet werden."
+        },
+        "document": {
+          "message": "Nachricht",
+          "chat": "Chat",
+          "untitled": "Dokument"
+        },
+        "menu": {
+          "trigger": "⬇ herunterladen ▾",
+          "title": "Herunterladen als…",
+          "busy": "Wird vorbereitet…",
+          "markdown": "Markdown (.md)",
+          "html": "HTML (.html)",
+          "pdf": "PDF (.pdf)",
+          "docx": "Word (.docx)",
+          "asPdf": "als PDF",
+          "asDocx": "als Word-Dokument"
         }
       },
       "copyToClipboard": "In die Zwischenablage kopieren",
@@ -700,7 +754,8 @@
       "copyOptions": "Kopieroptionen",
       "downloadText": "als Text",
       "downloadMarkdown": "als Markdown",
-      "downloadHTML": "als HTML"
+      "downloadHTML": "als HTML",
+      "downloadOptions": "Download-Optionen"
     },
     "insertIntoDocument": "In Dokument einfügen",
     "voiceInput": {
@@ -1260,10 +1315,10 @@
         "thinkingLevelMedium": "Mittel",
         "thinkingLevelHigh": "Hoch",
         "thinkingThoughts": "Reasoning anzeigen",
+        "customProviders": "Eigene Anbieter",
         "ttsVoice": "Stimme",
         "ttsVoices": "Stimmen pro Sprache",
-        "ttsVoiceLanguage": "Sprache",
-        "customProviders": "Eigene Anbieter"
+        "ttsVoiceLanguage": "Sprache"
       },
       "hints": {
         "modelId": "Eindeutige Kennung für das Modell (kann nach der Erstellung nicht geändert werden)",
@@ -1286,11 +1341,11 @@
         "thinkingLevel": "Wird als reasoning_effort (OpenAI, vLLM) bzw. thinkingLevel (Gemini) gesendet. Server ohne Unterstützung ignorieren den Wert — beim Provider-Standard belassen, sofern das Modell diese Stufen nicht dokumentiert.",
         "thinkingThoughts": "Das Reasoning Nutzern hinter dem Umschalter „Denkprozess anzeigen“ zugänglich machen. Zum Verbergen deaktivieren.",
         "maxOutputTokens": "Leer bedeutet der Standardwert ({{value}}), nicht unbegrenzt. Reasoning-Modelle verbrauchen ihre Denk-Tokens aus diesem Limit – halten Sie es deutlich über der längsten erwarteten Antwort.",
+        "linkedProvider": "Verwendet den API-Schlüssel des Anbieters „{{provider}}“ und dessen API-Typ ({{apiType}}).",
         "ttsUrl": "Sprach-Endpunkt des Anbieters. Er bleibt auf dem Server und erreicht nie den Browser.",
         "ttsVoice": "Stimmen-ID des Anbieters: eine Mistral-Vorlage wie en_paul_neutral, gb_jane_neutral oder fr_marie_neutral oder die ID einer in Ihrem Mistral-Konto gespeicherten Stimme. Leer verwendet en_paul_neutral.",
         "ttsVoices": "Eine Nachricht in einer dieser Sprachen wird mit der zugeordneten Stimme gelesen; alle anderen Sprachen verwenden die Stimme oben. Die Sprache wird an der Nachricht selbst erkannt.",
-        "ttsVoicesAfterSave": "Speichern Sie das Modell einmal, um hier die Stimmen des Anbieters anzuzeigen und eigene Stimmen anzulegen.",
-        "linkedProvider": "Verwendet den API-Schlüssel des Anbieters „{{provider}}“ und dessen API-Typ ({{apiType}})."
+        "ttsVoicesAfterSave": "Speichern Sie das Modell einmal, um hier die Stimmen des Anbieters anzuzeigen und eigene Stimmen anzulegen."
       },
       "placeholders": {
         "maxOutputTokens": "Standard: {{value}}",
@@ -1322,41 +1377,56 @@
         "medium": "Mittel (2K)",
         "high": "Hoch (4K)"
       },
-      "ttsVoices": {
-        "addLanguage": "+ Stimme für eine Sprache hinzufügen",
-        "removeLanguage": "Entfernen",
-        "title": "Verfügbare Stimmen",
-        "load": "Stimmen anzeigen",
-        "reload": "Neu laden",
-        "loadError": "Stimmen konnten nicht geladen werden",
-        "custom": "Eigene Stimmen",
-        "noCustom": "Noch keine eigenen Stimmen. Legen Sie unten eine an.",
-        "presets": "Vorlage-Stimmen ({{count}})",
-        "useDefault": "Als Stimme verwenden",
-        "useFor": "Für {{language}} verwenden",
-        "deleteConfirm": "Die Stimme „{{name}}“ im Anbieterkonto löschen? Modelle, die sie verwenden, können dann nicht mehr mit ihr sprechen.",
-        "deleteError": "Die Stimme konnte nicht gelöscht werden",
-        "createTitle": "Eigene Stimme anlegen",
-        "createHint": "Nehmen Sie 10–30 Sekunden einer Person auf, die natürlich spricht, ohne Musik oder Hintergrundgeräusche, oder laden Sie eine solche Aufnahme hoch. Die Stimme wird sofort im Anbieterkonto angelegt; sie liest jede Sprache, mit dem Akzent der Aufnahme.",
-        "name": "Name",
-        "namePlaceholder": "z. B. Anna (Deutsch)",
-        "gender": "Geschlecht (optional)",
-        "female": "Weiblich",
-        "male": "Männlich",
-        "languages": "Sprache der Aufnahme",
-        "record": "Mit Mikrofon aufnehmen",
-        "stopRecording": "Aufnahme beenden ({{seconds}} s)",
-        "upload": "Audiodatei hochladen",
-        "recorded": "Aufnahme",
-        "emptyRecording": "Es wurde nichts aufgenommen.",
-        "fileTooLarge": "Die Datei ist größer als 10 MB.",
-        "fileUnreadable": "Diese Datei konnte nicht als Audio gelesen werden.",
-        "tooShort": "Die Aufnahme ist kürzer als {{seconds}} Sekunden; nehmen Sie etwas mehr auf.",
-        "consent": "Die Person in dieser Aufnahme ist damit einverstanden, dass ihre Stimme nachgebildet und zum Vorlesen von Antworten verwendet wird.",
-        "create": "Stimme anlegen",
-        "creating": "Wird angelegt…",
-        "createError": "Die Stimme konnte nicht angelegt werden",
-        "created": "Stimme „{{name}}“ angelegt ({{id}}). Verwenden Sie sie unten und speichern Sie dann das Modell."
+      "marking": {
+        "acknowledgement": {
+          "by": "Bestätigt von",
+          "hint": "Vom Server erfasst, als das Modell mit einer Begründung aktiviert wurde. Der Eintrag dokumentiert die Lücke; das Modell bleibt nicht konform.",
+          "installation": "Installation",
+          "justification": "Begründung",
+          "title": "Aktiviert, obwohl nicht gekennzeichnet"
+        },
+        "description": "Wie die Ausgaben dieses Modells maschinenlesbar gekennzeichnet werden (Art. 50(2)). Steuert die Kennzeichnung und den Konformitätsbericht.",
+        "enableDialog": {
+          "body": "Diese Modelle versehen den erzeugten Text nicht mit einem Wasserzeichen. Nach dem Verhaltenskodex zum EU AI Act (Maßnahme 1.1.2) muss frei formulierter Text über 200 Tokens ein unsichtbares Wasserzeichen tragen – Antworten dieser Modelle sind daher nicht konform.",
+          "confirm": "Trotzdem aktivieren",
+          "justification": "Begründung",
+          "placeholder": "z. B. Für das Rechtsteam nötig, bis das selbst gehostete Modell mit Wasserzeichen verfügbar ist (geplant Q1).",
+          "saveConfirm": "Speichern und aktivieren",
+          "stays": "Ihre Begründung wird als Bestätigung für diese Installation erfasst. Das Modell bleibt auf der EU-AI-Act-Seite als nicht konform gelistet, bis es gekennzeichnet wird.",
+          "title": "Ein Modell aktivieren, das seine Ausgaben nicht kennzeichnet?"
+        },
+        "idFormat": "Nur Kleinbuchstaben, Ziffern, Punkt, Unterstrich und Bindestrich.",
+        "image": {
+          "hint": "iHub versieht jedes generierte Bild zusätzlich mit eigenen Content Credentials (C2PA) und einem unsichtbaren Wasserzeichen – unabhängig vom Anbieter.",
+          "label": "Wasserzeichen des Anbieters",
+          "legend": "Bild-Wasserzeichen des Anbieters",
+          "none": "Keines",
+          "technique": "Verfahren",
+          "techniqueHint": "z. B. synthid für Google-Bilder. Gespeichert als upstream:<technique>.",
+          "upstream": "Vom Anbieter gekennzeichnet"
+        },
+        "notMarked": "Nicht gekennzeichnet",
+        "notMarkedAcknowledged": "Nicht gekennzeichnet · bestätigt",
+        "notMarkedTooltip": "Frei formulierter Text über 200 Tokens von diesem Modell erhält kein Wasserzeichen – nicht konform mit dem Verhaltenskodex zum EU AI Act",
+        "notes": "Notizen",
+        "notesHint": "z. B. wo der Anbieter seine Kennzeichnung dokumentiert. Erscheint im Konformitätsbericht.",
+        "text": {
+          "keyGroup": "Schlüsselgruppe",
+          "keyGroupHint": "Die in vLLM konfigurierte Wasserzeichen-Schlüsselgruppe (--watermark-config). Leer verwendet „default“.",
+          "label": "Kennzeichnung",
+          "legend": "Text-Wasserzeichen",
+          "none": "Nicht gekennzeichnet",
+          "perRequest": "Wasserzeichen-Flag pro Anfrage senden",
+          "perRequestHint": "Für vLLM-Server, die das Wasserzeichen pro Anfrage einschalten. Aus lassen, wenn der Server jede Antwort kennzeichnet.",
+          "upstream": "Vom Anbieter gekennzeichnet",
+          "vendor": "Anbieter",
+          "vendorHint": "Nur wenn der Anbieter schriftlich dokumentiert, dass er den Text dieses Modells mit einem Wasserzeichen versieht. Gespeichert als upstream:<vendor>.",
+          "vllm": "Selbst gehostetes vLLM-Wasserzeichen"
+        },
+        "title": "Inhaltskennzeichnung (EU AI Act)",
+        "transcription": "Transkription gilt als Standardbearbeitung und fällt nicht unter die Kennzeichnungspflicht.",
+        "warningBody": "Frei formulierte Antworten über {{count}} Tokens erhalten kein Wasserzeichen – nicht konform mit dem Verhaltenskodex zum EU AI Act (Maßnahme 1.1.2). Die Aktivierung erfordert eine Begründung, und das Modell bleibt als nicht konform gelistet, bis es gekennzeichnet wird.",
+        "warningTitle": "Dieses Modell kennzeichnet seinen Text nicht"
       },
       "import": {
         "button": "Von URL importieren",
@@ -1420,8 +1490,45 @@
           "connectionRefused": "Verbindung abgelehnt",
           "hostNotFound": "Host nicht gefunden",
           "networkError": "Netzwerkfehler",
-          "providerIdReserved": "Diese ID ist der Name eines API-Typs. Wählen Sie eine andere ID."
+          "providerIdReserved": "Diese ID ist der Name eines API-Typs. Wählen Sie eine andere ID.",
+          "needsJustification": "Nicht importiert: Ein Modell, das seine Ausgabe nicht kennzeichnet, lässt sich nur mit einer Begründung aktivieren. Importieren Sie es erneut, ohne es zu aktivieren, oder geben Sie eine Begründung an."
         }
+      },
+      "ttsVoices": {
+        "addLanguage": "+ Stimme für eine Sprache hinzufügen",
+        "removeLanguage": "Entfernen",
+        "title": "Verfügbare Stimmen",
+        "load": "Stimmen anzeigen",
+        "reload": "Neu laden",
+        "loadError": "Stimmen konnten nicht geladen werden",
+        "custom": "Eigene Stimmen",
+        "noCustom": "Noch keine eigenen Stimmen. Legen Sie unten eine an.",
+        "presets": "Vorlage-Stimmen ({{count}})",
+        "useDefault": "Als Stimme verwenden",
+        "useFor": "Für {{language}} verwenden",
+        "deleteConfirm": "Die Stimme „{{name}}“ im Anbieterkonto löschen? Modelle, die sie verwenden, können dann nicht mehr mit ihr sprechen.",
+        "deleteError": "Die Stimme konnte nicht gelöscht werden",
+        "createTitle": "Eigene Stimme anlegen",
+        "createHint": "Nehmen Sie 10–30 Sekunden einer Person auf, die natürlich spricht, ohne Musik oder Hintergrundgeräusche, oder laden Sie eine solche Aufnahme hoch. Die Stimme wird sofort im Anbieterkonto angelegt; sie liest jede Sprache, mit dem Akzent der Aufnahme.",
+        "name": "Name",
+        "namePlaceholder": "z. B. Anna (Deutsch)",
+        "gender": "Geschlecht (optional)",
+        "female": "Weiblich",
+        "male": "Männlich",
+        "languages": "Sprache der Aufnahme",
+        "record": "Mit Mikrofon aufnehmen",
+        "stopRecording": "Aufnahme beenden ({{seconds}} s)",
+        "upload": "Audiodatei hochladen",
+        "recorded": "Aufnahme",
+        "emptyRecording": "Es wurde nichts aufgenommen.",
+        "fileTooLarge": "Die Datei ist größer als 10 MB.",
+        "fileUnreadable": "Diese Datei konnte nicht als Audio gelesen werden.",
+        "tooShort": "Die Aufnahme ist kürzer als {{seconds}} Sekunden; nehmen Sie etwas mehr auf.",
+        "consent": "Die Person in dieser Aufnahme ist damit einverstanden, dass ihre Stimme nachgebildet und zum Vorlesen von Antworten verwendet wird.",
+        "create": "Stimme anlegen",
+        "creating": "Wird angelegt…",
+        "createError": "Die Stimme konnte nicht angelegt werden",
+        "created": "Stimme „{{name}}“ angelegt ({{id}}). Verwenden Sie sie unten und speichern Sie dann das Modell."
       }
     },
     "chat": {
@@ -2486,7 +2593,8 @@
       "changelog": "Neuigkeiten",
       "feedback": "Feedback",
       "localization": "Lokalisierung",
-      "scheduledTasks": "Geplante Aufgaben"
+      "scheduledTasks": "Geplante Aufgaben",
+      "euAiAct": "EU AI Act"
     },
     "mcp": {
       "common": {
@@ -3110,6 +3218,87 @@
       },
       "status": {
         "disabled": "Deaktiviert"
+      },
+      "aiTransparency": {
+        "description": "Transparenz nach Art. 50 für diese App: Hinweis, dass Personen mit einem KI-System sprechen, Erinnerungen in sensiblen Kontexten und Ausnahmen von der maschinenlesbaren Kennzeichnung.",
+        "disclosure": {
+          "onDescription": "Nutzer sehen vor ihrer ersten Nachricht einen Hinweis, ein „KI“-Badge neben der Eingabe und auf jeder Antwort einen Chip „KI-generiert“.",
+          "platformOffHint": "Der Interaktionshinweis ist für die gesamte Installation ausgeschaltet (Admin → EU AI Act). Keine App zeigt ihn, bis er dort wieder eingeschaltet wird.",
+          "statusOff": "Für diese App aus",
+          "statusOn": "An",
+          "statusPlatformOff": "Plattformweit aus",
+          "switchOff": "Hinweis ausschalten …",
+          "switchOn": "Wieder einschalten",
+          "title": "KI-Hinweis (Art. 50(1))"
+        },
+        "exemption": {
+          "declare": "Ausnahme erklären …",
+          "none": "Keine – Antworten werden gekennzeichnet",
+          "noneDescription": "Antworten dieser App werden maschinenlesbar gekennzeichnet, soweit das Modell es unterstützt. Erklären Sie eine Ausnahme nur für Standardbearbeitung oder rein technische B2B-Ausgaben.",
+          "title": "Ausnahme von der Kennzeichnung (Art. 50(2))",
+          "types": {
+            "b2bTechnical": {
+              "description": "Rein technische Ausgaben, die nur ein begrenzter, vorab festgelegter Kreis von Fachleuten innerhalb der Organisation sieht und die das Unternehmen nicht verlassen sollen (alle drei Bedingungen müssen erfüllt sein).",
+              "label": "Technische B2B-Ausgabe"
+            },
+            "standardEditing": {
+              "description": "Grammatik- und Rechtschreibprüfung, kleinere stilistische Glättung, Übersetzung, Formatumwandlung, Transkription – keine wesentliche Veränderung der Eingabe.",
+              "label": "Standardbearbeitung"
+            }
+          },
+          "withdraw": "Ausnahme zurückziehen"
+        },
+        "exemptionDialog": {
+          "body": "Antworten einer ausgenommenen App müssen keine maschinenlesbare KI-Kennzeichnung tragen (Art. 50(2)). Zusammenfassungen, Umformulierungen, die Stil oder Bedeutung ändern, und generierte Bilder sind nie ausgenommen. Die meisten Apps – E-Mails, Marketing, Berichte, Kundenantworten – erfüllen die Voraussetzungen nicht.",
+          "confirm": "Ausnahme erklären",
+          "justification": "Begründung",
+          "title": "Ausnahme von der Kennzeichnung erklären?",
+          "type": "Art der Ausnahme"
+        },
+        "firstTurnNotice": {
+          "hint": "Wird im leeren Chat vor der ersten Nachricht angezeigt. Leer lassen für den Standardtext. Der Text muss klar sagen, dass Nutzer mit einem KI-System interagieren.",
+          "label": "Hinweis vor der ersten Nachricht"
+        },
+        "off": "Aus",
+        "on": "An",
+        "optOutDialog": {
+          "body": "Art. 50(1) EU AI Act verlangt, dass Personen darüber informiert werden, dass sie mit einem KI-System interagieren. Die Leitlinien der Kommission (¶45) lassen eine Ausnahme nur zu, wenn dies offensichtlich ist – zum Beispiel bei einem internen Assistenten, den ausschließlich geschulte, KI-kompetente Mitarbeitende nutzen. Apps für Kunden oder die Öffentlichkeit fallen nicht darunter.",
+          "confirm": "Hinweis ausschalten",
+          "placeholder": "z. B. Interner Assistent nur für das IT-Support-Team; alle Nutzer haben die KI-Kompetenzschulung absolviert.",
+          "reason": "Begründung",
+          "record": "Die Entscheidung gilt nur für diese Installation. Sie wird entfernt, wenn die App heruntergeladen, gesichert oder veröffentlicht wird – eine andere Installation muss neu entscheiden.",
+          "title": "KI-Hinweis für diese App ausschalten?"
+        },
+        "platformDefault": "Standard",
+        "readOnlyHint": "Nur Administratoren können den Hinweis ausschalten oder eine Ausnahme erklären.",
+        "record": {
+          "by": "Entschieden von",
+          "foreign": "Dieser Eintrag wurde auf einer anderen Installation erstellt und gilt hier nicht. Ein Administrator dieser Installation muss neu entscheiden.",
+          "installation": "Installation",
+          "reason": "Begründung"
+        },
+        "reminderInterval": {
+          "hint": "Nur für sensible Apps. Leer verwendet den Plattformstandard ({{value}}); 0 schaltet Erinnerungen aus.",
+          "label": "Erinnerung alle N Antworten"
+        },
+        "saveFirst": "Speichern Sie die App zuerst, um den Hinweis auszuschalten oder eine Ausnahme zu erklären.",
+        "sensitive": {
+          "complaints": "Beschwerden",
+          "finance": "Finanzen",
+          "health": "Gesundheit",
+          "hint": "Rechtliche, finanzielle, gesundheitliche Kontexte, Beschwerden oder schutzbedürftige Personen erhalten regelmäßige Erinnerungen, dass Nutzer mit einem KI-System sprechen.",
+          "label": "Sensibler Kontext",
+          "legal": "Recht",
+          "none": "Keiner",
+          "vulnerable": "Schutzbedürftige Personen"
+        },
+        "signpost": {
+          "clipboard": "Text-Signpost beim Kopieren",
+          "default": "Plattformstandard ({{value}})",
+          "exports": "Text-Signpost in Exporten",
+          "hint": "Der Signpost ist ein unsichtbares, signiertes C2PA-Textmanifest, mit dem andere Werkzeuge KI-generierten Text erkennen können."
+        },
+        "title": "EU AI Act"
       }
     },
     "features": {
@@ -3673,6 +3862,936 @@
         "label": "Speicherplatz",
         "value": "{{free}} frei",
         "valueTitle": "{{percent}} von {{total}} belegt"
+      }
+    },
+    "euAiAct": {
+      "apps": {
+        "clearOptOut": "Hinweis wieder einschalten",
+        "columns": {
+          "actions": "Aktionen",
+          "app": "App",
+          "disclosure": "KI-Hinweis",
+          "exemption": "Ausnahme (Art. 50 Abs. 2)",
+          "sensitive": "Sensible Kategorie",
+          "temperature": "Temperatur"
+        },
+        "count": "Angezeigte Apps: {{shown}} von {{total}}",
+        "declareExemption": "Ausnahme erklären…",
+        "description": "Der Hinweis nach Art. 50 Abs. 1 teilt den Nutzenden mit, dass sie mit einer KI interagieren. Er ist in jeder App eingeschaltet, sofern Sie keine begründete Abschaltung dokumentieren. Ausnahmen nach Art. 50 Abs. 2 werden je App mit einer Begründung erklärt. Jeder Nachweis wird mit Person, Zeitpunkt und Installation gespeichert und erscheint im Konformitätsbericht.",
+        "disclosureOffGlobal": "Für alle Apps aus",
+        "disclosureOn": "Ein",
+        "disclosureOptedOut": "Aus (abgeschaltet)",
+        "edit": "App bearbeiten",
+        "empty": "Keine Apps entsprechen diesem Filter.",
+        "exemptionDialog": {
+          "b2bCondition1": "Die Ausgabe ist rein technisch (Konstruktionsentwürfe, technische Anleitungen, interne Dokumentation vor ihrer Fertigstellung).",
+          "b2bCondition2": "Nur ein begrenzter, vorab festgelegter Kreis von Fachleuten in Ihrer Organisation sieht sie.",
+          "b2bCondition3": "Sie soll die Organisation nicht verlassen, und Schutzmaßnahmen wie Abschottung und Zugriffskontrolle sind vorhanden.",
+          "b2bHelp": "Nur wenn alle drei Voraussetzungen der Leitlinien (Rn. 87) erfüllt sind:",
+          "b2bNotQualifying": "E-Mails, Marketingtexte, Berichte und Antworten an Kundinnen und Kunden fallen nicht darunter.",
+          "description": "Mit einer Ausnahme nach Art. 50 Abs. 2 muss in dieser App erzeugter Text nicht gekennzeichnet werden. Erklären Sie sie nur, wenn die unten genannten Voraussetzungen erfüllt sind, und begründen Sie sie. Die Erklärung erscheint auf dieser Seite und im Konformitätsbericht.",
+          "standardEditingHelp": "Die App unterstützt nur bei Standardbearbeitung, die die Eingabe oder deren Bedeutung nicht wesentlich verändert: Grammatik- und Rechtschreibprüfung, Übersetzung, Formatumwandlung. Zusammenfassungen und Umformulierungen, die Stil, Aufbau oder Bedeutung ändern, fallen nicht darunter.",
+          "submit": "Ausnahme erklären",
+          "title": "Ausnahme für {{name}} erklären",
+          "typeLegend": "Art der Ausnahme"
+        },
+        "exemptionSaved": "Ausnahme für {{name}} erklärt.",
+        "exemptionTypes": {
+          "b2bTechnical": "Technische B2B-Ausgaben",
+          "standardEditing": "Standardbearbeitung"
+        },
+        "exemptionWithdrawn": "Ausnahme für {{name}} zurückgezogen.",
+        "filter": {
+          "all": "Alle Apps",
+          "issues": "Mit Problemen",
+          "label": "Anzeigen",
+          "records": "Mit Abschaltung oder Ausnahme"
+        },
+        "foreignRecords": "Enthält Nachweise einer anderen Installation. Diese werden hier ignoriert; erfassen Sie sie erneut, falls sie weiterhin zutreffen.",
+        "noExemption": "Keine Ausnahme",
+        "notSensitive": "Keine",
+        "optOut": "Hinweis abschalten…",
+        "optOutCleared": "Der KI-Hinweis ist für {{name}} wieder eingeschaltet.",
+        "optOutDialog": {
+          "description": "Art. 50 Abs. 1 verlangt, Menschen darüber zu informieren, dass sie mit einer KI interagieren, sofern dies nicht aus dem Kontext offensichtlich ist — etwa bei einem internen Assistenten für geschulte, KI-kompetente Mitarbeitende (Leitlinien Rn. 45). Apps für Kundinnen und Kunden oder für die Öffentlichkeit erfüllen das nicht.",
+          "record": "Begründen Sie, warum die Interaktion für die Nutzenden dieser App offensichtlich ist. Der Grund erscheint auf dieser Seite und im Konformitätsbericht.",
+          "submit": "Hinweis abschalten",
+          "title": "KI-Hinweis für {{name}} abschalten"
+        },
+        "optOutSaved": "Der KI-Hinweis ist für {{name}} jetzt abgeschaltet.",
+        "sensitive": {
+          "complaints": "Beschwerden",
+          "finance": "Finanzen",
+          "health": "Gesundheit",
+          "legal": "Recht",
+          "vulnerable": "Schutzbedürftige Gruppen"
+        },
+        "temperatureDefault": "Standard",
+        "temperatureZero": "Temperatur 0",
+        "temperatureZeroHint": "Das Wasserzeichen-Modell bettet bei Temperatur 0 kein Wasserzeichen ein.",
+        "title": "Apps: Hinweis, Abschaltungen und Ausnahmen",
+        "withdrawExemption": "Ausnahme zurückziehen"
+      },
+      "banner": {
+        "adminsOnly": "Nur Administratoren sehen diesen Hinweis.",
+        "count": "(offene Warnungen: {{count}})",
+        "dismiss": "Ausblenden…",
+        "more": "Weitere Warnungen auf der EU-AI-Act-Seite: {{count}}",
+        "open": "EU-AI-Act-Seite öffnen",
+        "title": "EU AI Act: Konformitätswarnungen",
+        "titleNonConforming": "EU AI Act: Diese Installation ist nicht konform"
+      },
+      "checkStatus": {
+        "error": "Fehler",
+        "ok": "OK",
+        "warning": "Warnung"
+      },
+      "checklist": {
+        "detection": "Erkennung",
+        "disclosure": "Hinweis auf KI-Interaktion (Art. 50 Abs. 1)",
+        "editorial": "Redaktionelle Verantwortung (Art. 50 Abs. 4)",
+        "exports": "Serverseitige Exporte",
+        "feature": "KI-Transparenzfunktionen",
+        "imageMarking": "Kennzeichnung von Bildern",
+        "provenanceRecords": "Herkunftsnachweise",
+        "provider": "Angaben zum Anbieter",
+        "signing": "Signaturzertifikat",
+        "signpost": "Wegweiser (Signpost)",
+        "termsOfService": "Nutzungsbedingungen: kein Entfernen von Kennzeichnungen",
+        "textWatermarking": "Text-Wasserzeichen je Modell"
+      },
+      "common": {
+        "disabled": "Deaktiviert",
+        "enabled": "Aktiviert",
+        "no": "nein",
+        "yes": "ja"
+      },
+      "dialog": {
+        "justification": "Begründung",
+        "lengthHint": "Mindestens {{min}} Zeichen (bisher {{count}}).",
+        "lengthOk": "{{count}} Zeichen.",
+        "reason": "Grund",
+        "recordNote": "Wird mit Ihrer Benutzer-ID, dem Zeitpunkt, dieser Installation und der iHub-Version gespeichert und ins Audit-Log geschrieben.",
+        "saving": "Wird gespeichert…",
+        "submit": "Speichern"
+      },
+      "dismissDialog": {
+        "description": "Die Warnung wird nur für die aktuelle Lage im Banner ausgeblendet. Der Konformitätsstatus ändert sich nicht, und die Warnung erscheint wieder, wenn sich die Lage ändert (zum Beispiel, wenn ein weiteres nicht kennzeichnendes Modell aktiviert wird).",
+        "submit": "Warnung ausblenden",
+        "title": "Warnung ausblenden"
+      },
+      "installation": {
+        "generatedAt": "Stand",
+        "id": "Installations-ID",
+        "url": "Installations-URL",
+        "version": "iHub-Version"
+      },
+      "loadError": "Der EU-AI-Act-Status konnte nicht geladen werden.",
+      "models": {
+        "ackDialog": {
+          "description": "Dieses Modell kennzeichnet nicht alle seine Ausgaben. Mit der Bestätigung dokumentieren Sie die bekannte Lücke und warum Sie sie in Kauf nehmen, zum Beispiel weil es noch keine kennzeichnende Alternative gibt.",
+          "stillNonConforming": "Die Bestätigung macht das Modell nicht konform. Es bleibt hier und im Konformitätsbericht als nicht konform aufgeführt.",
+          "submit": "Bestätigung speichern",
+          "title": "Nicht gekennzeichnete Ausgaben von {{name}} bestätigen"
+        },
+        "acknowledge": "Bestätigen…",
+        "acknowledged": "Bestätigung für {{name}} gespeichert. Das Modell bleibt nicht konform.",
+        "acknowledgedGap": "Bekannte Lücke bestätigt — weiterhin nicht konform.",
+        "columns": {
+          "acknowledgement": "Bestätigung",
+          "actions": "Aktionen",
+          "conformance": "Konformität",
+          "enabled": "Aktiviert",
+          "image": "Bildkennzeichnung",
+          "model": "Modell",
+          "provider": "Anbieter",
+          "text": "Textkennzeichnung"
+        },
+        "count": "Angezeigte Modelle: {{shown}} von {{total}}",
+        "description": "Ob jedes Modell seine Ausgaben kennzeichnet: Text durch ein vLLM-Wasserzeichen oder durch den Anbieter des Modells, Bilder durch ein signiertes C2PA-Manifest und ein unsichtbares Wasserzeichen. Ein nicht kennzeichnendes Modell lässt sich nur mit einer begründeten Bestätigung aktivieren. Die Bestätigung dokumentiert die Lücke; das Modell bleibt nicht konform.",
+        "edit": "Modell bearbeiten",
+        "empty": "Keine Modelle entsprechen diesem Filter.",
+        "filter": {
+          "all": "Alle Modelle",
+          "attention": "Aktiviert und nicht konform",
+          "enabled": "Aktiviert",
+          "label": "Anzeigen",
+          "nonConforming": "Nicht konform"
+        },
+        "image": {
+          "layers": "C2PA: {{c2pa}} · Wasserzeichen: {{watermark}}",
+          "marked": "Gekennzeichnet (C2PA + Wasserzeichen)",
+          "notImageModel": "Kein Bildmodell",
+          "notMarked": "Nicht gekennzeichnet",
+          "partial": "Teilweise gekennzeichnet",
+          "upstream": "Anbieter: {{technique}}"
+        },
+        "noAcknowledgement": "Keine Bestätigung",
+        "text": {
+          "keyGroup": "Schlüsselgruppe: {{keyGroup}}",
+          "keyGroupMissing": "Schlüsselgruppe fehlt",
+          "markedUpstream": "Vom Modellanbieter gekennzeichnet",
+          "markedVllm": "Gekennzeichnet (vLLM-Wasserzeichen)",
+          "notApplicable": "Nicht zutreffend",
+          "notMarked": "Nicht gekennzeichnet",
+          "perRequest": "Schlüssel wird pro Anfrage übergeben",
+          "vendor": "Verfahren: {{vendor}}"
+        },
+        "title": "Konformitätsmatrix der Modelle",
+        "withdraw": "Bestätigung zurückziehen",
+        "withdrawing": "Wird zurückgezogen…",
+        "withdrawn": "Bestätigung für {{name}} zurückgezogen."
+      },
+      "overview": {
+        "checklistEmpty": "Keine Checklistenpunkte gemeldet.",
+        "checklistSummary": "OK: {{ok}} von {{total}} · Warnungen: {{warning}} · Fehler: {{error}}",
+        "checklistTitle": "Konformitäts-Checkliste",
+        "configure": "Konfigurieren",
+        "dismiss": "Ausblenden…",
+        "dismissExplainer": "Administratoren sehen diese Warnungen in einem Banner auf der Startseite und in der Admin-Übersicht. Warnungen zu Modellen, Zertifikaten und Apps können mit einer Begründung ausgeblendet werden. Das Ausblenden entfernt nur den Eintrag im Banner — es ändert nichts am Konformitätsstatus, und die Warnung erscheint wieder, sobald sich die Lage ändert.",
+        "dismissed": "Warnung ausgeblendet. Sie erscheint nicht mehr im Banner; der Konformitätsstatus bleibt unverändert.",
+        "dismissedDescription": "Nur im Banner ausgeblendet. Sie zählen weiterhin in der Checkliste und erscheinen im Konformitätsbericht.",
+        "dismissedTitle": "Ausgeblendete Warnungen",
+        "fix": "Beheben",
+        "noDismissed": "Es sind keine Warnungen ausgeblendet.",
+        "noWarnings": "Es gibt keine offenen Warnungen.",
+        "notDismissible": "Diese Warnung kann nicht ausgeblendet werden. Sie verschwindet, sobald das Problem behoben ist.",
+        "outdatedDismissal": "Wurde früher ausgeblendet, doch die Lage hat sich seitdem geändert, daher ist die Warnung zurück.",
+        "restore": "Wiederherstellen",
+        "restored": "Warnung wiederhergestellt. Sie erscheint wieder im Banner.",
+        "restoring": "Wird wiederhergestellt…",
+        "warningsTitle": "Warnungen"
+      },
+      "record": {
+        "at": "Wann",
+        "by": "Von",
+        "byAt": "{{who}}, {{when}}",
+        "installation": "Installation",
+        "justification": "Begründung",
+        "reason": "Grund",
+        "unknownUser": "unbekannter Benutzer",
+        "version": "iHub {{version}}"
+      },
+      "refresh": "Aktualisieren",
+      "refreshError": "Der Status konnte nicht aktualisiert werden; angezeigt wird der zuletzt geladene Stand. {{error}}",
+      "refreshing": "Wird aktualisiert…",
+      "report": {
+        "download": "Konformitätsbericht herunterladen",
+        "downloaded": "Konformitätsbericht gespeichert als {{filename}}.",
+        "downloading": "Bericht wird erstellt…",
+        "error": "Der Konformitätsbericht konnte nicht erstellt werden: {{error}}"
+      },
+      "retry": "Erneut versuchen",
+      "severity": {
+        "error": "Fehler",
+        "warning": "Warnung"
+      },
+      "status": {
+        "conforming": "Konform",
+        "nonConforming": "Nicht konform"
+      },
+      "subtitle": "Transparenz nach Art. 50 für diese Installation: Konformitätsstatus, Nachweise und Einstellungen.",
+      "tabs": {
+        "apps": "Apps",
+        "aria": "Bereiche des EU AI Act",
+        "certificates": "Zertifikate",
+        "detection": "Erkennung",
+        "models": "Modelle",
+        "overview": "Übersicht",
+        "settings": "Einstellungen"
+      },
+      "title": "EU AI Act",
+      "certificates": {
+        "active": {
+          "chain": "Zertifikatskette",
+          "expired": "Das Signaturzertifikat ist abgelaufen.",
+          "expiredBody": "Neue Inhalte können nicht gültig signiert werden. Rotieren oder installieren Sie jetzt ein neues Zertifikat.",
+          "expiringSoon_one": "Das Signaturzertifikat läuft in {{count}} Tag ab.",
+          "expiringSoon_other": "Das Signaturzertifikat läuft in {{count}} Tagen ab.",
+          "expiringSoonBody": "Rotieren oder installieren Sie vor dem Ablauf ein neues Zertifikat.",
+          "none": "Es gibt kein aktives Signaturzertifikat.",
+          "noneBody": "Stellen Sie ein Installationszertifikat aus oder installieren Sie Ihr eigenes Zertifikat, um Inhalte zu signieren.",
+          "title": "Aktives Zertifikat"
+        },
+        "all": {
+          "caption": "Signaturzertifikate dieser Installation",
+          "description": "Ausgemusterte Zertifikate bleiben für die Erkennung erhalten, damit damit signierte Inhalte weiterhin geprüft werden können.",
+          "empty": "Noch keine Zertifikate.",
+          "title": "Alle Zertifikate"
+        },
+        "anchor": {
+          "download": "Vertrauensanker herunterladen (PEM)",
+          "error": "Der Vertrauensanker konnte nicht heruntergeladen werden: {{error}}"
+        },
+        "available": "Verfügbar",
+        "c2paLibrary": "C2PA-Bibliothek",
+        "chain": {
+          "ekus": "Erweiterte Schlüsselverwendung: {{ekus}}",
+          "issuedBy": "Ausgestellt von {{issuer}}",
+          "issuerLevel": "Aussteller {{level}}",
+          "leaf": "Signaturzertifikat",
+          "selfSigned": "Stamm (selbst signiert)",
+          "validity": "Gültig {{from}} – {{until}}"
+        },
+        "complete": {
+          "button": "Ausgestelltes Zertifikat installieren",
+          "error": "Das ausgestellte Zertifikat wurde abgelehnt.",
+          "success": "Ausgestelltes Zertifikat installiert: {{subject}}."
+        },
+        "copied": "Kopiert",
+        "copy": "Kopieren",
+        "copyFailed": "Kopieren fehlgeschlagen",
+        "csr": {
+          "body": "iHub erzeugt das Schlüsselpaar auf diesem Server; der private Schlüssel verlässt ihn nie. Sie erhalten einen CSR für Ihre Zertifizierungsstelle und installieren danach das ausgestellte Zertifikat. Alle Felder sind optional; leere Felder verwenden die Einstellungen zu Signatur und Anbieter.",
+          "button": "Schlüssel + CSR erzeugen",
+          "commonName": "Common Name",
+          "confirm": "CSR erzeugen",
+          "email": "E-Mail",
+          "error": "Die Anfrage konnte nicht erstellt werden.",
+          "organization": "Organisation",
+          "success": "Schlüssel und Zertifikatsanfrage erstellt. Kopieren oder laden Sie den CSR unten herunter, senden Sie ihn an Ihre Zertifizierungsstelle und fügen Sie dann das ausgestellte Zertifikat ein.",
+          "title": "Schlüssel und Zertifikatsanfrage erzeugen"
+        },
+        "custom": {
+          "body": "Verwenden Sie ein Zertifikat aus Ihrer eigenen PKI oder von einer Zertifizierungsstelle auf der C2PA Trust List. iHub prüft Kette, erweiterte Schlüsselverwendung, Schlüsselzuordnung und Ablauf und führt vor dem Umschalten eine Testsignatur durch. Das aktuelle Zertifikat bleibt für die Erkennung erhalten.",
+          "button": "Eigenes Zertifikat installieren",
+          "chainFile": "Zertifikatskette aus Datei laden",
+          "chainPem": "Zertifikatskette (PEM)",
+          "chainPemHint": "Zuerst das Signaturzertifikat, dann die Zwischenzertifikate.",
+          "confirm": "Prüfen und installieren",
+          "error": "Das Zertifikat wurde abgelehnt.",
+          "format": "Format",
+          "formatPem": "PEM (Kette + privater Schlüssel)",
+          "formatPkcs12": "PKCS#12 (.p12 / .pfx)",
+          "keyFile": "Privaten Schlüssel aus Datei laden",
+          "keyPem": "Privater Schlüssel (PEM)",
+          "keyPemHint": "Wird verschlüsselt auf dem Server gespeichert. Nutzen Sie lieber „Schlüssel + CSR erzeugen“, wenn der Schlüssel nicht von woanders kommen muss.",
+          "password": "Passwort",
+          "passwordHint": "Leer lassen, wenn die Datei kein Passwort hat.",
+          "pkcs12File": "PKCS#12-Datei",
+          "pkcs12Selected": "Ausgewählt: {{name}}",
+          "success": "Eigenes Zertifikat installiert: {{subject}}. Das bisherige Zertifikat bleibt nur für die Erkennung erhalten.",
+          "title": "Eigenes Zertifikat installieren"
+        },
+        "dialog": {
+          "cancel": "Abbrechen",
+          "close": "Dialog schließen"
+        },
+        "disabled": "Deaktiviert",
+        "enabled": "Aktiviert",
+        "expiry": {
+          "daysLeft_one": "noch {{count}} Tag",
+          "daysLeft_other": "noch {{count}} Tage",
+          "expired": "Abgelaufen"
+        },
+        "fields": {
+          "actions": "Aktionen",
+          "activatedAt": "Aktiv seit",
+          "daysLeft": "Verbleibend",
+          "fingerprint": "Fingerabdruck (SHA-256)",
+          "issuer": "Aussteller",
+          "serialNumber": "Seriennummer",
+          "source": "Herkunft",
+          "status": "Status",
+          "subject": "Inhaber",
+          "validUntil": "Gültig bis",
+          "validity": "Gültigkeit",
+          "validityRange": "{{from}} – {{until}}"
+        },
+        "intrafind": {
+          "body": "Noch nicht verfügbar (Issue #2578). Registrierte Installationen werden mit einem Klick auf das C2PA-Zertifikat von IntraFind umstellen können, das von einer Zertifizierungsstelle auf der C2PA Trust List stammt. Öffentliche Prüfwerkzeuge zeigen den Signierer dann als vertrauenswürdig an. Voraussetzung ist die C2PA-Konformität von iHub. Bis dahin verwenden Sie das Installationszertifikat oder installieren Ihr eigenes.",
+          "button": "IntraFind-Zertifikat verwenden",
+          "title": "IntraFind-Zertifikat verwenden"
+        },
+        "loadError": "Die Zertifikate konnten nicht geladen werden.",
+        "loading": "Zertifikate werden geladen…",
+        "notAvailable": "Nicht verfügbar",
+        "openSettings": "Einstellungen öffnen",
+        "pending": {
+          "created": "Erstellt {{date}}",
+          "csrLabel": "Zertifikatsanfrage (CSR, PEM)",
+          "description": "Der private Schlüssel wurde auf diesem Server erzeugt und verlässt ihn nie. Senden Sie den CSR an Ihre Zertifizierungsstelle und fügen Sie dann das ausgestellte Zertifikat mit seiner Kette ein.",
+          "downloadCsr": "CSR herunterladen",
+          "issuedLabel": "Ausgestelltes Zertifikat einfügen (PEM, mit Kette)",
+          "title": "Offene Zertifikatsanfragen"
+        },
+        "refreshError": "Die Liste konnte nicht aktualisiert werden: {{error}}",
+        "remove": {
+          "body": "Der erzeugte private Schlüssel wird gelöscht. Ein Zertifikat, das Ihre Zertifizierungsstelle für diese Anfrage ausstellt, kann dann nicht mehr installiert werden.",
+          "button": "Anfrage entfernen",
+          "buttonAria": "Anfrage {{subject}} entfernen",
+          "confirm": "Anfrage entfernen",
+          "error": "Die Anfrage konnte nicht entfernt werden.",
+          "short": "Entfernen",
+          "success": "Zertifikatsanfrage entfernt.",
+          "title": "Diese Zertifikatsanfrage entfernen?"
+        },
+        "retry": "Erneut versuchen",
+        "rollback": {
+          "body": "Neue Inhalte werden wieder mit {{subject}} signiert. Das derzeit aktive Zertifikat bleibt nur für die Erkennung erhalten.",
+          "button": "Wieder verwenden (Rollback)",
+          "buttonAria": "{{subject}} wieder verwenden (Rollback)",
+          "confirm": "Wieder verwenden",
+          "error": "Das Zertifikat konnte nicht aktiviert werden.",
+          "success": "Es wird wieder mit {{subject}} signiert.",
+          "title": "Wieder mit diesem Zertifikat signieren?"
+        },
+        "rotate": {
+          "body": "iHub erstellt ein neues Stamm- und Signaturzertifikat für die Installation und signiert alle neuen Inhalte damit. Das aktuelle Zertifikat bleibt für die Erkennung erhalten, damit damit signierte Inhalte weiterhin geprüft werden können. Andere Installationen, die dem alten Stamm vertrauen, brauchen den neuen Vertrauensanker.",
+          "button": "Neues Installationszertifikat ausstellen (rotieren)",
+          "confirm": "Neues Zertifikat ausstellen",
+          "error": "Das Zertifikat konnte nicht ausgestellt werden.",
+          "success": "Neues Installationszertifikat ausgestellt: {{subject}}. Das bisherige Zertifikat bleibt nur für die Erkennung erhalten.",
+          "title": "Neues Installationszertifikat ausstellen?"
+        },
+        "signing": "Signatur",
+        "source": {
+          "auto": "Automatisch erzeugt",
+          "csr": "CSR (von Ihrer Zertifizierungsstelle ausgestellt)",
+          "custom": "Eigenes"
+        },
+        "status": {
+          "active": "Aktiv",
+          "detectOnly": "Nur Erkennung",
+          "pending": "Offen"
+        },
+        "statusTitle": "Signaturstatus",
+        "test": {
+          "notRun": "nicht geprüft",
+          "summary": "Testsignatur: JWS {{jws}}, C2PA {{c2pa}}.",
+          "trusted": "vertrauenswürdig",
+          "valid": "gültig"
+        },
+        "timestamping": "Zeitstempel",
+        "timestampingLocal": "Lokale Uhr dieses Servers (kein Zeitstempeldienst konfiguriert)",
+        "timestampingTsa": "Zeitstempeldienst nach RFC 3161: {{url}}",
+        "trustInfo": {
+          "body": "Automatisch erzeugte Installationszertifikate sind überall kryptografisch gültig. Öffentliche Prüfwerkzeuge wie contentcredentials.org zeigen den Signierer als nicht vertrauenswürdig oder unbekannt an, bis sein Stammzertifikat auf der C2PA Trust List steht. Das wird vorerst akzeptiert. Der Detektor dieser Installation vertraut dem eigenen Stamm und den Vertrauensankern aus den Einstellungen.",
+          "title": "Warum öffentliche Prüfwerkzeuge „nicht vertrauenswürdig“ anzeigen können"
+        },
+        "trustedAnchors": "Zusätzliche Vertrauensanker",
+        "validation": {
+          "email": "Geben Sie eine gültige E-Mail-Adresse ein.",
+          "pemCertificate": "Fügen Sie PEM-Zertifikate ein (sie beginnen mit -----BEGIN CERTIFICATE-----).",
+          "pemKey": "Fügen Sie einen privaten PEM-Schlüssel ein (er beginnt mit -----BEGIN PRIVATE KEY----- oder ähnlich).",
+          "pkcs12": "Wählen Sie eine PKCS#12-Datei.",
+          "required": "Dieses Feld ist erforderlich."
+        },
+        "warningsTitle": "Warnungen"
+      },
+      "detection": {
+        "access": {
+          "authenticated": "Angemeldete Benutzer",
+          "authenticatedDesc": "Alle angemeldeten Benutzer dieser Installation können Inhalte prüfen.",
+          "internal": "Intern",
+          "internalDesc": "Nur Administratoren und freigegebene Experten können Inhalte prüfen.",
+          "public": "Öffentlich",
+          "publicDesc": "Alle können Inhalte ohne Anmeldung prüfen, mit Ratenbegrenzung."
+        },
+        "accessOverview": {
+          "access": "Wer ihn nutzen darf",
+          "change": "In den Einstellungen ändern",
+          "disabled": "Die Erkennung ist ausgeschaltet. Niemand kann Inhalte dieser Installation prüfen, und die Installation ist nicht konform.",
+          "loadError": "Die Erkennungseinstellungen konnten nicht geladen werden: {{error}}",
+          "log": "Erkennungsprotokoll",
+          "logOff": "Aus",
+          "logOnDays": "An, Aufbewahrung {{days}} Tage",
+          "logOnKeep": "An, Aufbewahrung bis zur Löschung",
+          "off": "Aus",
+          "on": "An",
+          "rateLimit": "Ratenbegrenzung",
+          "rateLimitValue": "{{limit}} Prüfungen pro {{minutes}} Minuten",
+          "status": "Erkennung",
+          "title": "Zugriff auf den Detektor",
+          "zeroRetention": "Eingereichte Inhalte",
+          "zeroRetentionValue": "Werden nie gespeichert (keine Speicherung, fest)"
+        },
+        "anchors": {
+          "change": "In den Einstellungen verwalten",
+          "count_one": "{{count}} zusätzlicher Vertrauensanker ist konfiguriert.",
+          "count_other": "{{count}} zusätzliche Vertrauensanker sind konfiguriert.",
+          "explanation": "Neben dem eigenen Stamm vertraut der Detektor Inhalten, die von diesen Installationen signiert wurden, z. B. von anderen Installationen desselben Kunden.",
+          "title": "Vertrauensanker"
+        },
+        "benchmark": {
+          "caption": "Benchmark-Ergebnisse pro Verfahren und Transformation",
+          "colDetected": "Erkannt",
+          "colFpr": "FPR",
+          "colSamples": "Proben",
+          "colStatus": "Status",
+          "colTechnique": "Verfahren",
+          "colTpr": "TPR",
+          "colTransform": "Transformation",
+          "description": "Kennzeichnet Beispielinhalte mit der aktuellen Konfiguration, wendet übliche Transformationen an (z. B. erneute Komprimierung, Skalieren, Zuschneiden oder Kopieren von Text) und misst, wie oft jedes Verfahren die Kennzeichnung noch findet (TPR) und wie oft es fälschlich eine meldet (FPR). Die Ergebnisse fließen in den Konformitätsbericht ein.",
+          "environment": "Testumgebung",
+          "failed": "{{number}} fehlgeschlagen",
+          "finished": "Lauf abgeschlossen: {{passed}} von {{total}} Prüfungen bestanden, {{failed}} fehlgeschlagen, {{skipped}} übersprungen.",
+          "finishedAt": "Abgeschlossen",
+          "fprLong": "Falsch-positiv-Rate",
+          "fullHint": "Der vollständige Benchmark kann mehrere Minuten dauern. Lassen Sie diese Seite geöffnet, bis er fertig ist.",
+          "loadError": "Der letzte Bericht konnte nicht geladen werden.",
+          "loading": "Der letzte Bericht wird geladen…",
+          "noResults": "Der Bericht enthält keine Ergebnisse.",
+          "none": "Es wurde noch kein Selbsttest oder Benchmark ausgeführt.",
+          "passed": "{{number}} bestanden",
+          "runError": "Der Lauf ist fehlgeschlagen: {{error}}",
+          "runFull": "Vollständigen Benchmark ausführen",
+          "runQuick": "Selbsttest ausführen",
+          "runningFull": "Der vollständige Benchmark läuft… Das kann mehrere Minuten dauern.",
+          "runningQuick": "Der Selbsttest läuft…",
+          "skipped": "{{number}} übersprungen",
+          "statusFail": "Fehlgeschlagen",
+          "statusPass": "Bestanden",
+          "statusSkipped": "Übersprungen",
+          "summary": "Zusammenfassung",
+          "title": "Selbsttest und Robustheits-Benchmark",
+          "total": "von {{number}}",
+          "tprLong": "Richtig-positiv-Rate",
+          "trigger": "Gestartet von",
+          "type": "Art",
+          "typeFull": "Vollständiger Benchmark",
+          "typeQuick": "Selbsttest"
+        },
+        "copied": "Kopiert",
+        "copy": "Kopieren",
+        "copyFailed": "Kopieren fehlgeschlagen",
+        "dialog": {
+          "cancel": "Abbrechen",
+          "close": "Dialog schließen",
+          "done": "Schließen"
+        },
+        "experts": {
+          "approve": "Experten freigeben…",
+          "approveBody": "Der Benutzer kann dann die Wasserzeichenerkennung für Freitext ausführen. Geben Sie den Grund der Freigabe an, z. B. die Rolle oder den Fall.",
+          "approveConfirm": "Freigeben",
+          "approveError": "Der Experte konnte nicht freigegeben werden.",
+          "approveTitle": "Experten freigeben",
+          "approved": "{{name}} ist jetzt ein freigegebener Experte.",
+          "approvedBy": "von {{name}}",
+          "caption": "Freigegebene Experten für die Texterkennung",
+          "colActions": "Aktionen",
+          "colApproved": "Freigegeben",
+          "colExpert": "Experte",
+          "colReason": "Grund",
+          "description": "Experten dürfen die Wasserzeichenerkennung für Freitext ausführen (CoP 2.1.2). Jede Freigabe braucht einen Grund und wird im Audit-Log festgehalten.",
+          "empty": "Noch keine Experten freigegeben.",
+          "name": "Anzeigename (optional)",
+          "reason": "Grund",
+          "reasonHint": "{{length}} von mindestens {{min}} Zeichen.",
+          "reasonTooShort": "Geben Sie einen Grund mit mindestens {{min}} Zeichen an.",
+          "revoke": "Entziehen",
+          "revokeAria": "Expertenzugriff für {{name}} entziehen",
+          "revokeBody": "{{name}} kann die Wasserzeichenerkennung für Freitext dann nicht mehr ausführen.",
+          "revokeConfirm": "Zugriff entziehen",
+          "revokeError": "Der Zugriff konnte nicht entzogen werden.",
+          "revokeTitle": "Expertenzugriff entziehen?",
+          "revoked": "Der Expertenzugriff für {{name}} wurde entzogen.",
+          "title": "Freigegebene Experten",
+          "userId": "Benutzer-ID",
+          "userIdHint": "Die ID des Benutzers, wie in der Benutzerverwaltung angezeigt.",
+          "userIdRequired": "Geben Sie die Benutzer-ID ein."
+        },
+        "keyGroups": {
+          "caption": "Schlüsselgruppen für Text-Wasserzeichen",
+          "colActions": "Aktionen",
+          "colActiveVersion": "Aktive Version",
+          "colDetectorUrl": "Detektor-URL",
+          "colId": "ID",
+          "colName": "Name",
+          "colSelect": "Für Export auswählen",
+          "colVersions": "Versionen",
+          "contextWidth": "Kontextbreite (optional)",
+          "contextWidthHint": "Anzahl der vorangehenden Tokens, die das Wasserzeichen bestimmen ({{min}}–{{max}}); muss zur vLLM-Konfiguration passen. Leer verwendet den Standard.",
+          "contextWidthValue": "Kontextbreite {{width}}",
+          "create": "Schlüsselgruppe anlegen",
+          "createBody": "iHub erzeugt einen neuen geheimen Schlüssel (Version 1). Weisen Sie die Schlüsselgruppe im Modell-Editor vLLM-Modellen zu.",
+          "createConfirm": "Anlegen",
+          "createTitle": "Schlüsselgruppe anlegen",
+          "created": "Schlüsselgruppe {{id}} angelegt.",
+          "delete": "Löschen",
+          "deleteAria": "{{id}} löschen",
+          "deleteBody": "Alle Schlüsselversionen werden gelöscht. Text, der mit dieser Schlüsselgruppe gekennzeichnet wurde, kann von dieser Installation nicht mehr erkannt werden. Das lässt sich nicht rückgängig machen; exportieren Sie vorher ein Paket, falls Sie die Schlüssel noch brauchen könnten.",
+          "deleteConfirm": "Schlüsselgruppe löschen",
+          "deleteError": "Die Schlüsselgruppe konnte nicht gelöscht werden.",
+          "deleteTitle": "Schlüsselgruppe {{id}} löschen?",
+          "deleted": "Schlüsselgruppe {{id}} gelöscht.",
+          "description": "vLLM versieht Text mit dem aktiven Schlüssel einer Schlüsselgruppe mit einem Wasserzeichen; iHub erkennt es mit jeder Version. Teilen Sie eine Schlüsselgruppe über ein verschlüsseltes Schlüsselpaket mit den anderen Installationen desselben Kunden.",
+          "detectorUrl": "Detektor-URL (optional)",
+          "detectorUrlHint": "Wasserzeichen-Detektordienst, der Text mit den Schlüsseln dieser Gruppe prüft (Referenzimplementierung: docker/watermark-detector). Ohne ihn kann Text dieser Schlüsselgruppe nicht erkannt werden.",
+          "edit": "Bearbeiten",
+          "editAria": "{{id}} bearbeiten",
+          "editConfirm": "Speichern",
+          "editTitle": "Schlüsselgruppe {{id}} bearbeiten",
+          "empty": "Noch keine Schlüsselgruppen.",
+          "exportBody": "Das Paket enthält alle Schlüsselversionen der ausgewählten Schlüsselgruppen, verschlüsselt mit Ihrer Passphrase. Importieren Sie es in die anderen Installationen desselben Kunden.",
+          "exportConfirm": "Exportieren und herunterladen",
+          "exportError": "Das Paket konnte nicht exportiert werden.",
+          "exportSelected": "Auswahl exportieren ({{number}})",
+          "exportSelection": "Ausgewählt: {{ids}}",
+          "exportTitle": "Verschlüsseltes Schlüsselpaket exportieren",
+          "exported": "Verschlüsseltes Schlüsselpaket heruntergeladen ({{ids}}). Geben Sie die Passphrase über einen anderen Kanal weiter als die Datei.",
+          "id": "ID",
+          "idHint": "Kleinbuchstaben, Ziffern, Punkte, Binde- und Unterstriche, z. B. kunde-a. Kann später nicht geändert werden.",
+          "import": "Paket importieren",
+          "importBody": "Importieren Sie ein Paket, das eine andere Installation desselben Kunden exportiert hat. Diese Installation kennzeichnet und erkennt dann mit denselben Schlüsseln.",
+          "importConfirm": "Importieren",
+          "importError": "Das Paket konnte nicht importiert werden.",
+          "importFile": "Paketdatei (.json)",
+          "importFileRequired": "Wählen Sie eine Paketdatei.",
+          "importInvalid": "Diese Datei ist kein Schlüsselpaket (ungültiges JSON).",
+          "importSelected": "Ausgewählt: {{name}}",
+          "importTitle": "Schlüsselpaket importieren",
+          "imported": "Importierte Schlüsselgruppen: {{ids}}.",
+          "importedNone": "Das Paket enthielt keine neuen Schlüsselgruppen.",
+          "importedTag": "importiert",
+          "loadError": "Die Schlüsselgruppen konnten nicht geladen werden.",
+          "loading": "Schlüsselgruppen werden geladen…",
+          "name": "Name",
+          "noDetector": "Kein Detektor: Text kann nicht geprüft werden",
+          "passphrase": "Passphrase",
+          "passphraseConfirm": "Passphrase wiederholen",
+          "passphraseHint": "Mindestens {{min}} Zeichen. Sie wird nicht gespeichert; ohne sie lässt sich das Paket nicht importieren.",
+          "passphraseMismatch": "Die Passphrasen stimmen nicht überein.",
+          "passphraseRequired": "Geben Sie die Passphrase des Pakets ein.",
+          "passphraseTooShort": "Verwenden Sie mindestens {{min}} Zeichen.",
+          "refreshError": "Die Liste konnte nicht aktualisiert werden: {{error}}",
+          "rotate": "Rotieren",
+          "rotateAria": "Schlüssel von {{id}} rotieren",
+          "rotateBody": "Eine neue Schlüsselversion wird für das Wasserzeichen aktiv. Ältere Versionen bleiben für die Erkennung erhalten, sodass älterer Text erkennbar bleibt. Aktualisieren Sie danach die vLLM-Konfiguration aller Modelle, die diese Schlüsselgruppe verwenden, und exportieren Sie ein neues Paket für die anderen Installationen.",
+          "rotateConfirm": "Schlüssel rotieren",
+          "rotateError": "Der Schlüssel konnte nicht rotiert werden.",
+          "rotateTitle": "Schlüssel von {{id}} rotieren?",
+          "rotated": "Schlüsselgruppe {{id}} kennzeichnet jetzt mit Version {{version}}. Aktualisieren Sie die vLLM-Konfiguration der Modelle, die sie verwenden.",
+          "saveError": "Die Schlüsselgruppe konnte nicht gespeichert werden.",
+          "selectAria": "{{id}} für den Export auswählen",
+          "title": "Schlüsselgruppen für Text-Wasserzeichen",
+          "updated": "Schlüsselgruppe {{id}} aktualisiert.",
+          "validation": {
+            "contextWidth": "Geben Sie eine ganze Zahl zwischen {{min}} und {{max}} ein.",
+            "idPattern": "Verwenden Sie 1–64 Kleinbuchstaben, Ziffern, Punkte, Binde- oder Unterstriche.",
+            "required": "Dieses Feld ist erforderlich.",
+            "url": "Geben Sie eine absolute http(s)-URL ein oder lassen Sie das Feld leer."
+          },
+          "versionActive": "aktiv",
+          "versionDetectOnly": "nur Erkennung",
+          "versionNumber": "v{{version}}",
+          "vllm": "vLLM-Konfiguration anzeigen",
+          "vllmAria": "vLLM-Konfiguration von {{id}} anzeigen",
+          "vllmBody": "Starten Sie vLLM mit diesem Argument, damit das Modell seine Ausgabe mit dem aktiven Schlüssel dieser Schlüsselgruppe kennzeichnet.",
+          "vllmCodeLabel": "vLLM-Argument (Schlüsselversion {{version}})",
+          "vllmError": "Die Konfiguration konnte nicht geladen werden.",
+          "vllmReveal": "Konfiguration anzeigen",
+          "vllmTitle": "vLLM-Konfiguration von {{id}}",
+          "vllmWarningBody": "Wer diese Konfiguration kennt, kann Wasserzeichen dieser Schlüsselgruppe erzeugen und erkennen. Behandeln Sie sie wie ein Passwort: Fügen Sie sie nicht in Tickets, Chats oder die Versionsverwaltung ein. Das Anzeigen wird im Audit-Log festgehalten.",
+          "vllmWarningTitle": "Dies legt den geheimen Wasserzeichen-Schlüssel offen."
+        },
+        "log": {
+          "caption": "Letzte Prüfungen",
+          "colHash": "Inhalts-Hash",
+          "colKind": "Art",
+          "colRequester": "Anfragende Stelle",
+          "colTechniques": "Verfahren",
+          "colTime": "Zeit",
+          "colVerdict": "Ergebnis",
+          "description": "Die letzten {{limit}} Prüfungen dieser Installation.",
+          "disabled": "Das Erkennungsprotokoll ist ausgeschaltet. Neue Prüfungen werden nicht aufgezeichnet.",
+          "duration": "{{ms}} ms",
+          "empty": "Noch keine Prüfungen aufgezeichnet.",
+          "loadError": "Das Erkennungsprotokoll konnte nicht geladen werden.",
+          "loading": "Das Erkennungsprotokoll wird geladen…",
+          "refresh": "Aktualisieren",
+          "retention": "Einträge werden nach {{days}} Tagen gelöscht.",
+          "retentionKeep": "Einträge werden bis zur Löschung aufbewahrt.",
+          "title": "Erkennungsprotokoll",
+          "zeroRetention": "Eingereichte Inhalte werden nicht gespeichert (keine Speicherung, CoP 2.1.3).",
+          "zeroRetentionBody": "Das Protokoll enthält nur Metadaten: Zeit, anfragende Stelle, Inhalts-Hash, Art, Ergebnis und Verfahren."
+        },
+        "marking": {
+          "exempt": "Ausgenommen",
+          "marked": "Gekennzeichnet",
+          "notRequired": "Nicht erforderlich",
+          "unmarked": "Nicht gekennzeichnet"
+        },
+        "requester": {
+          "anonymous": "Anonym",
+          "cli": "Kommandozeile",
+          "user": "Benutzer"
+        },
+        "retry": "Erneut versuchen",
+        "techniques": {
+          "c2pa": "C2PA-Manifest",
+          "ihubManifest": "iHub-Manifest",
+          "provenanceRecord": "Herkunftsdatensatz",
+          "textSignpost": "Text-Wegweiser",
+          "textWatermark": "Text-Wasserzeichen",
+          "trustmark": "TrustMark-Wasserzeichen",
+          "xmp": "IPTC/XMP-Metadaten"
+        },
+        "test": {
+          "checkedAt": "Geprüft am",
+          "checking": "Wird geprüft…",
+          "checkingStatus": "Der Inhalt wird geprüft…",
+          "colDetail": "Detail",
+          "colFound": "Gefunden",
+          "colTechnique": "Verfahren",
+          "colTrusted": "Vertrauenswürdig",
+          "colValid": "Gültig",
+          "contentId": "Inhalts-ID",
+          "contentTitle": "Geprüfter Inhalt",
+          "description": "Prüfen Sie eine Datei oder einen Text mit dem Detektor dieser Installation, genau wie /verify. Eingereichte Inhalte werden nicht gespeichert.",
+          "detector": "Detektor",
+          "downloadReport": "Signierten Bericht herunterladen",
+          "error": "Die Prüfung ist fehlgeschlagen: {{error}}",
+          "file": "Zu prüfende Datei",
+          "fileHint": "Bilder, PDF-, Word-, PowerPoint-, Excel-, HTML-, JSON- oder Textdateien.",
+          "fileRequired": "Wählen Sie eine Datei zum Prüfen.",
+          "forbidden": "Ihr Konto darf den Detektor mit der aktuellen Zugriffsstufe nicht nutzen.",
+          "generatedAt": "Erzeugt am",
+          "generator": "Generator",
+          "kind": "Art",
+          "marking": "Kennzeichnung",
+          "mimeType": "MIME-Typ",
+          "mode": "Was möchten Sie prüfen?",
+          "modeFile": "Eine Datei",
+          "modeText": "Eingefügten Text",
+          "model": "Modell",
+          "no": "Nein",
+          "noProvenance": "Kein Herkunftsdatensatz dieser Installation passt zum Inhalt.",
+          "noReport": "Für diese Prüfung ist kein signierter Bericht verfügbar.",
+          "noTechniques": "Es wurde kein Verfahren ausgeführt.",
+          "provenanceKind": "Ursprung",
+          "provenanceTitle": "Herkunft",
+          "rateLimited": "Zu viele Prüfungen in kurzer Zeit. Versuchen Sie es später erneut.",
+          "reportHint": "JSON-Datei mit dem signierten Bericht (JWS) und seinem entschlüsselten Inhalt, für Prüfende oder die anfragende Person.",
+          "sha256": "SHA-256",
+          "size": "Größe",
+          "skipped": "Übersprungen",
+          "skippedReason": "Übersprungen: {{reason}}",
+          "submit": "Inhalt prüfen",
+          "summary": "Zusammenfassung des Detektors:",
+          "techniquesCaption": "Ergebnisse pro Verfahren",
+          "text": "Zu prüfender Text",
+          "textHint": "Fügen Sie den Text genau so ein, wie Sie ihn erhalten haben; unsichtbare Wegweiser-Zeichen müssen erhalten bleiben.",
+          "textRequired": "Fügen Sie den zu prüfenden Text ein.",
+          "title": "Erkennung testen",
+          "verdictLabel": "Ergebnis:",
+          "yes": "Ja"
+        },
+        "verdict": {
+          "aiGenerated": "KI-generiert",
+          "inconclusive": "Nicht eindeutig",
+          "notDetected": "Keine KI-Kennzeichnung gefunden"
+        }
+      },
+      "settings": {
+        "detection": {
+          "access": "Wer den Detektor nutzen darf",
+          "accessAuthenticated": "Angemeldete Benutzer",
+          "accessAuthenticatedDesc": "Alle angemeldeten Benutzer dieser Installation.",
+          "accessHint": "Experten für die Wasserzeichenerkennung in Freitext werden im Tab „Erkennung“ freigegeben (CoP 2.1.2).",
+          "accessInternal": "Intern",
+          "accessInternalDesc": "Nur Administratoren und freigegebene Experten.",
+          "accessPublic": "Öffentlich",
+          "accessPublicDesc": "Alle, ohne Anmeldung, mit Ratenbegrenzung. Zum Beispiel für öffentlich geteilte Chats.",
+          "alwaysOn": "Immer aktiv",
+          "description": "Die Seite /verify und die Erkennungs-API dieser Installation (CoP 2.1).",
+          "enabled": "Erkennung",
+          "enabledDesc": "Ermöglicht zu prüfen, ob Inhalte von dieser Installation erzeugt wurden.",
+          "limit": "Prüfungen pro Zeitfenster",
+          "logEnabled": "Erkennungsprotokoll",
+          "logEnabledDesc": "Speichert nur Metadaten: Zeit, anfragende Stelle, Inhalts-Hash, Ergebnis und Verfahren.",
+          "logRetentionDays": "Aufbewahrung des Protokolls (Tage)",
+          "logRetentionDaysHint": "0 bewahrt Protokolleinträge auf, bis sie gelöscht werden.",
+          "windowMinutes": "Zeitfenster der Ratenbegrenzung (Minuten)",
+          "zeroRetention": "Keine Speicherung eingereichter Inhalte",
+          "zeroRetentionDesc": "Zur Prüfung eingereichte Dateien und Texte werden nie gespeichert (CoP 2.1.3). Diese Einstellung ist fest und kann nicht ausgeschaltet werden."
+        },
+        "disclosure": {
+          "description": "Art. 50(1): Menschen müssen wissen, dass sie mit einem KI-System interagieren. Administratoren können den Hinweis für einzelne Apps weiterhin mit dokumentierter Begründung abschalten.",
+          "enabled": "Hinweis auf KI-Interaktion",
+          "enabledDesc": "Weist Benutzer in jeder App darauf hin, dass sie mit einem KI-System sprechen.",
+          "firstTurnNotice": "Hinweis vor der ersten Nachricht",
+          "firstTurnNoticeDesc": "Zeigt vor der ersten Nachricht eines Gesprächs einen Hinweis an.",
+          "guardrail": "Leitplanke „Bist du eine KI?“",
+          "guardrailDesc": "Weist das Modell an, auf Nachfrage immer zuzugeben, dass es eine KI ist.",
+          "persistentBadge": "Dauerhaftes KI-Kennzeichen",
+          "persistentBadgeDesc": "Zeigt im Chat-Kopf dauerhaft ein „KI“-Kennzeichen an.",
+          "reminderInterval": "Erinnerungsintervall für sensible Apps (Antworten)",
+          "reminderIntervalHint": "In Apps, die als sensibel markiert sind (Recht, Finanzen, Gesundheit, Beschwerden, schutzbedürftige Gruppen), wird der Hinweis alle N Antworten wiederholt. 0 schaltet die Erinnerungen ab."
+        },
+        "editorial": {
+          "contact": "Redaktioneller Kontakt",
+          "contactHint": "Name, Team oder E-Mail-Adresse der Stelle, die KI-generierte Veröffentlichungen prüft.",
+          "description": "Art. 50(4): KI-generierte Texte, die zur Information der Öffentlichkeit veröffentlicht werden, brauchen eine Person oder ein Team mit redaktioneller Verantwortung.",
+          "policyUrl": "URL der redaktionellen Richtlinie",
+          "policyUrlHint": "Link auf die Richtlinie, die die menschliche Prüfung beschreibt."
+        },
+        "exports": {
+          "sign": "Exportierte Dateien signieren",
+          "signDesc": "Fügt jeder exportierten Datei ein signiertes Herkunftsmanifest hinzu (C2PA, wo das Format es unterstützt)."
+        },
+        "featureInactive": {
+          "body": "Diese Einstellungen wirken, sobald die Funktion eingeschaltet ist.",
+          "link": "Funktionen öffnen",
+          "title": "Die Funktion EU AI Act ist ausgeschaltet."
+        },
+        "formLabel": "Einstellungen zum EU AI Act",
+        "images": {
+          "available": "Verfügbar",
+          "c2pa": "C2PA-Manifest",
+          "c2paDesc": "Bettet in jedes generierte Bild ein signiertes C2PA-Manifest ein.",
+          "c2paLibrary": "C2PA-Bibliothek",
+          "description": "Maschinenlesbare Kennzeichnung generierter Bilder (Art. 50(2)).",
+          "modelPathInUse": "Verwendeter Modellpfad",
+          "modelsFound": "Gefunden",
+          "modelsMissing": "Nicht gefunden",
+          "notAvailable": "Nicht verfügbar",
+          "runtimeTitle": "Laufzeitstatus auf diesem Server",
+          "trustmarkModelPath": "TrustMark-Modellpfad",
+          "trustmarkModelPathHint": "Verzeichnis mit den TrustMark-ONNX-Modellen. Leer verwendet contents/data/trustmark-models.",
+          "trustmarkModels": "TrustMark-Modelle",
+          "watermark": "Unsichtbares Wasserzeichen",
+          "watermarkError": "Wasserzeichen-Fehler",
+          "watermarkHint": "Das Wasserzeichen bleibt erhalten, wenn Metadaten entfernt werden, z. B. durch Screenshots oder erneutes Hochladen.",
+          "watermarkNone": "Keines",
+          "watermarkStrength": "Stärke des Wasserzeichens",
+          "watermarkStrengthHint": "Zwischen 0,1 und 1. Höhere Werte sind robuster, können aber sichtbar werden. Standard: 0,95.",
+          "watermarkTrustmark": "TrustMark",
+          "xmp": "IPTC/XMP-Metadaten",
+          "xmpDesc": "Schreibt den IPTC-Quelltyp „trained algorithmic media“ als Rückfallebene für Werkzeuge, die kein C2PA lesen."
+        },
+        "installation": {
+          "currentUrl": "Verwendete URL",
+          "description": "Die öffentliche Adresse dieser Installation. Sie wird in Herkunfts- und Opt-out-Datensätze geschrieben und in den Wegweiser, der Prüfende zu /.well-known/ai-provenance führt.",
+          "id": "Installations-ID",
+          "url": "Installations-URL",
+          "urlHint": "Leer verwendet die öffentliche MCP-URL, sonst die Adresse, von der die Anfrage kam.",
+          "version": "iHub-Version"
+        },
+        "labels": {
+          "description": "Sichtbare Kennzeichen, die Lesenden zeigen, dass Inhalte von einer KI erzeugt wurden.",
+          "euIcon": "EU-KI-Symbol in Exporten",
+          "euIconAlways": "Immer",
+          "euIconOff": "Aus",
+          "euIconOptional": "Optional (der Benutzer entscheidet pro Export)",
+          "exportLabel": "Kennzeichen in Exporten",
+          "exportLabelDesc": "Fügt der Kopfzeile oder dem Impressum exportierter Dateien ein sichtbares KI-Kennzeichen hinzu.",
+          "messageBadge": "Kennzeichen an Nachrichten",
+          "messageBadgeDesc": "Zeigt an jeder Antwort des Assistenten ein Kennzeichen „KI-generiert“.",
+          "outbound": "Kennzeichen für ausgehende Inhalte",
+          "outboundDesc": "Fügt Inhalten, die Agenten an Menschen senden, ein sichtbares KI-Kennzeichen hinzu: Jira, Outlook, Webhooks und geteilte Chats."
+        },
+        "loadError": "Die Einstellungen konnten nicht geladen werden.",
+        "loading": "Einstellungen werden geladen…",
+        "nav": {
+          "changed": "geändert",
+          "label": "Abschnitte der Einstellungen"
+        },
+        "provenance": {
+          "description": "Ein kleiner Datensatz pro KI-Antwort: Inhalts-Hash, Modell, Zeit und Kennzeichnungsstatus, nie der Inhalt. Damit kann iHub Exporte von Chats prüfen, die nicht gespeichert werden.",
+          "enabled": "Herkunftsdatensätze speichern",
+          "retentionDays": "Aufbewahrung (Tage)",
+          "retentionDaysHint": "0 bewahrt die Datensätze auf, bis sie gelöscht werden."
+        },
+        "provider": {
+          "address": "Anschrift",
+          "contact": "Kontakt",
+          "contactHint": "E-Mail-Adresse oder Telefonnummer für Fragen zur KI-Transparenz.",
+          "description": "Wer diese Installation in Betrieb nimmt. Erscheint im Konformitätsbericht und ist für selbst betriebene Installationen erforderlich.",
+          "legalEntity": "Rechtsträger",
+          "legalEntityHint": "Name des Unternehmens oder der Organisation, wie eingetragen.",
+          "role": "Ihre Rolle nach der KI-Verordnung",
+          "roleDeployer": "Betreiber",
+          "roleDeployerDesc": "Sie nutzen iHub unverändert und in eigener Verantwortung.",
+          "roleInfoBody": "Anbieter ist, wer ein KI-System unter eigenem Namen oder eigener Marke in Verkehr bringt oder in Betrieb nimmt oder es wesentlich verändert. Betreiber ist, wer ein KI-System in eigener Verantwortung verwendet, ohne es zu verändern. iHub plant vorsichtig: Wer iHub selbst installiert und betreibt, gilt als Anbieter dieser Installation. Wählen Sie „Betreiber“ nur nach Ihrer eigenen rechtlichen Prüfung.",
+          "roleInfoTitle": "So entscheiden Sie (Art. 3(3))",
+          "roleProvider": "Anbieter",
+          "roleProviderDesc": "Sie nehmen iHub unter eigenem Namen oder eigener Marke in Betrieb oder haben es verändert."
+        },
+        "requiredForConformance": "Für Konformität erforderlich",
+        "retry": "Erneut versuchen",
+        "save": {
+          "dirty": "Ungespeicherte Änderungen in: {{sections}}",
+          "discard": "Verwerfen",
+          "error": "Speichern fehlgeschlagen: {{error}}",
+          "noChanges": "Auf dem Server hat sich nichts geändert.",
+          "region": "Einstellungen speichern",
+          "save": "Änderungen speichern",
+          "saving": "Wird gespeichert…",
+          "success": "Einstellungen gespeichert: {{sections}}.",
+          "validationFailed_one": "Korrigieren Sie vor dem Speichern das markierte Feld ({{count}} offen).",
+          "validationFailed_other": "Korrigieren Sie vor dem Speichern die markierten Felder ({{count}} offen)."
+        },
+        "sections": {
+          "detection": "Erkennung",
+          "editorialResponsibility": "Redaktionelle Verantwortung",
+          "exports": "Exporte",
+          "images": "Bilder",
+          "installationUrl": "Installations-URL",
+          "interactionDisclosure": "Hinweis auf KI-Interaktion",
+          "labels": "Kennzeichen",
+          "provenance": "Herkunftsdatensätze",
+          "provider": "Angaben zum Anbieter",
+          "signing": "Signatur",
+          "termsOfService": "Nutzungsbedingungen",
+          "text": "Text"
+        },
+        "signing": {
+          "addAnchor": "Vertrauensanker hinzufügen",
+          "anchorLabel": "Vertrauensanker {{number}} (PEM)",
+          "commonName": "Common Name (Zertifikatsinhaber)",
+          "commonNameHint": "Leer verwendet „<Organisation> iHub“. Gilt für das nächste Zertifikat, das iHub ausstellt.",
+          "description": "Signaturen machen Manifeste, Exporte und Prüfberichte manipulationssicher. Zertifikate verwalten Sie im Tab „Zertifikate“.",
+          "enabled": "Signatur",
+          "enabledDesc": "Signiert C2PA-Manifeste, Exporte und Prüfberichte mit dem Zertifikat der Installation.",
+          "noAnchors": "Keine zusätzlichen Vertrauensanker.",
+          "organization": "Organisation (Zertifikatsinhaber)",
+          "organizationHint": "Leer verwendet den Rechtsträger aus den Angaben zum Anbieter. Gilt für das nächste Zertifikat, das iHub ausstellt.",
+          "removeAnchor": "Entfernen",
+          "removeAnchorAria": "Vertrauensanker {{number}} entfernen",
+          "trustedAnchors": "Vertrauensanker",
+          "trustedAnchorsHint": "Stammzertifikate (PEM) anderer Installationen, z. B. desselben Kunden. Von ihnen signierte Inhalte gelten hier als vertrauenswürdig.",
+          "tsaUrl": "URL des Zeitstempeldienstes (RFC 3161)",
+          "tsaUrlHint": "Leer verwendet die lokale Uhr dieses Servers; das wird in jedem Datensatz dokumentiert (üblich für Offline-Installationen)."
+        },
+        "switch": {
+          "off": "Aus",
+          "on": "An"
+        },
+        "terms": {
+          "description": "Der Verhaltenskodex verlangt von Anbietern, das Entfernen von KI-Kennzeichnungen in ihren Nutzungsbedingungen zu untersagen.",
+          "markRemovalClause": "Unsere Nutzungsbedingungen untersagen das Entfernen oder Manipulieren von KI-Kennzeichnungen (CoP-Maßnahme 1.2(b))",
+          "url": "URL der Nutzungsbedingungen"
+        },
+        "text": {
+          "description": "Kennzeichnung von KI-generiertem Freitext.",
+          "signpost": "Wegweiser",
+          "signpostClipboard": "Beim Kopieren in die Zwischenablage",
+          "signpostClipboardDesc": "Standardmäßig aus, bis es in einem Pilotprojekt geprüft ist: Die unsichtbaren Zeichen werden mit dem kopierten Text übernommen.",
+          "signpostExports": "In exportierten Textdateien",
+          "signpostHint": "Ein C2PA-Textmanifest aus unsichtbaren Zeichen. Es verweist Prüfende auf den Detektor dieser Installation (CoP 3.4).",
+          "strictMode": "Strikter Modus",
+          "strictModeDesc": "Blockiert nicht gekennzeichneten Freitext oberhalb der Mindestlänge (z. B. von Modellen ohne Textkennzeichnung), statt ihn nur zu markieren.",
+          "strictModeNoteBody": "Ob iHub einen strikten Modus überhaupt anbieten soll, ist noch nicht entschieden. Standard ist Markieren, nicht Blockieren. Schalten Sie ihn nur ein, wenn Ihre Installation volle Konformität mit Art. 50(2) beanspruchen muss und Ihre Benutzer mit blockierten Antworten leben können.",
+          "strictModeNoteTitle": "Offene Entscheidung: blockiert nicht gekennzeichnete lange Texte. Standardmäßig aus.",
+          "watermarkMinTokens": "Mindestlänge für Text-Wasserzeichen (Tokens)",
+          "watermarkMinTokensHint": "Kürzere Antworten sind ausgenommen, weil sich ein Wasserzeichen darin nicht zuverlässig erkennen lässt (CoP 1.1.2). Standard: 200."
+        },
+        "validation": {
+          "integerMin": "Geben Sie eine ganze Zahl von mindestens {{min}} ein.",
+          "integerRange": "Geben Sie eine ganze Zahl zwischen {{min}} und {{max}} ein.",
+          "invalid": "Dieser Wert ist ungültig.",
+          "numberRange": "Geben Sie eine Zahl zwischen {{min}} und {{max}} ein.",
+          "pem": "Fügen Sie ein PEM-Zertifikat ein (es beginnt mit -----BEGIN CERTIFICATE-----).",
+          "url": "Geben Sie eine absolute http(s)-URL ein oder lassen Sie das Feld leer."
+        },
+        "warnings": {
+          "c2pa": "Aus: Generierte Bilder enthalten kein signiertes Herkunftsmanifest. Die Installation ist nicht konform mit Art. 50(2).",
+          "detection": "Aus: Niemand kann Inhalte dieser Installation prüfen. Die Installation ist nicht konform, und diese Warnung kann nicht ausgeblendet werden.",
+          "disclosure": "Aus: Benutzer erfahren nicht mehr, dass sie mit einem KI-System sprechen. Die Installation ist nicht konform mit Art. 50(1). Nutzen Sie stattdessen begründete Opt-outs pro App.",
+          "signing": "Aus: Nichts wird signiert, Kennzeichnungen können also unbemerkt gefälscht oder verändert werden. Die Installation ist nicht konform, und diese Warnung kann nicht ausgeblendet werden.",
+          "watermark": "Kein unsichtbares Wasserzeichen: Die Kennzeichnung geht verloren, sobald Metadaten entfernt werden. Die Installation ist nicht konform mit Art. 50(2)."
+        }
       }
     }
   },
@@ -4524,11 +5643,6 @@
     "record": "Nachricht einsprechen",
     "stopRecording": "Aufnahme beenden und senden",
     "recording": "Aufnahme",
-    "listening": "Hört zu…",
-    "transcribing": "Wird transkribiert…",
-    "transcriptOf": "Transkript von {{name}}:",
-    "noSpeechInFile": "(keine Sprache erkannt)",
-    "partialInInput": "Der bisher transkribierte Text steht im Eingabefeld.",
     "errors": {
       "noModel": "Für diese App ist kein Transkriptionsmodell konfiguriert.",
       "decode": "Diese Audiodatei konnte im Browser nicht dekodiert werden. Das Format oder der Codec wird möglicherweise nicht unterstützt (z. B. OGG in Safari).",
@@ -4536,7 +5650,6 @@
       "notReady": "Der Transkriptionsdienst war nicht bereit. Bitte überprüfen Sie die Modellkonfiguration und versuchen Sie es erneut.",
       "connection": "Der Transkriptionsdienst konnte nicht erreicht werden. Bitte versuchen Sie es später erneut.",
       "timeout": "Zeitüberschreitung bei der Transkription. Die Datei ist möglicherweise zu lang.",
-      "interrupted": "Die Transkription wurde unterbrochen, bevor sie abgeschlossen war.",
       "aborted": "Die Transkription wurde abgebrochen.",
       "serverTooLong": "Diese Aufnahme ist zu lang für das konfigurierte Transkriptionsmodell. Bitte teilen Sie sie in kürzere Abschnitte auf.",
       "serverBusy": "Der Transkriptionsdienst ist derzeit ausgelastet. Bitte versuchen Sie es in einem Moment erneut.",
@@ -4546,11 +5659,17 @@
       "tooLong": "Diese Audiodatei ist {{duration}} s lang und überschreitet das Limit von {{max}} s für die Transkription.",
       "mic": "Auf das Mikrofon konnte nicht zugegriffen werden. Bitte erteilen Sie die Berechtigung und versuchen Sie es erneut.",
       "busy": "Es läuft bereits eine Transkription. Bitte zuerst stoppen.",
-      "noSpeech": "Es wurde keine Sprache erkannt. Es wurde nichts gesendet.",
-      "audioNeedsTranscription": "Das ausgewählte Chat-Modell kann Audio nicht direkt verarbeiten. Aktivieren Sie die Transkription im Aktionsmenü oder entfernen Sie den Audio-Anhang."
+      "interrupted": "Die Transkription wurde unterbrochen, bevor sie abgeschlossen war.",
+      "audioNeedsTranscription": "Das ausgewählte Chat-Modell kann Audio nicht direkt verarbeiten. Aktivieren Sie die Transkription im Aktionsmenü oder entfernen Sie den Audio-Anhang.",
+      "noSpeech": "Es wurde keine Sprache erkannt. Es wurde nichts gesendet."
     },
     "toggleLabel": "Transkription",
-    "toggleDescription": "Hochgeladene Audio- und Videodateien werden in Ihre Nachricht transkribiert, und das Chat-Modell beantwortet den Text"
+    "toggleDescription": "Hochgeladene Audio- und Videodateien werden in Ihre Nachricht transkribiert, und das Chat-Modell beantwortet den Text",
+    "listening": "Hört zu…",
+    "transcribing": "Wird transkribiert…",
+    "transcriptOf": "Transkript von {{name}}:",
+    "noSpeechInFile": "(keine Sprache erkannt)",
+    "partialInInput": "Der bisher transkribierte Text steht im Eingabefeld."
   },
   "documentPreview": {
     "title": "Dokumentvorschau",
@@ -5147,6 +6266,252 @@
       "TOO_MANY_APPROVALS": "Der Lauf hat zu oft um Freigabe gebeten",
       "TOO_MANY_FAILURES": "Nach zu vielen fehlgeschlagenen Läufen in Folge pausiert",
       "TOOL_NOT_AVAILABLE": "Die App bietet ein Werkzeug dieser Aufgabe nicht mehr an"
+    }
+  },
+  "aiTransparency": {
+    "badge": {
+      "srText": "Sie interagieren mit einem KI-System",
+      "text": "KI",
+      "tooltip": "Sie interagieren mit einem KI-System"
+    },
+    "categories": {
+      "complaints": "Beschwerden",
+      "finance": "finanziellen Fragen",
+      "health": "Gesundheitsfragen",
+      "legal": "rechtlichen Fragen",
+      "vulnerable": "persönlichen Anliegen"
+    },
+    "chip": {
+      "contentId": "Inhalts-ID",
+      "exemptReason": {
+        "b2bTechnical": "technische B2B-Ausgabe",
+        "other": "vom Administrator erklärt",
+        "standardEditing": "Standardbearbeitung (z. B. Übersetzung, Grammatik)",
+        "transcription": "Transkription"
+      },
+      "generatedAt": "Erzeugt am",
+      "generatedInApp": "In dieser App von KI erzeugt",
+      "label": "KI-generiert",
+      "marking": {
+        "exempt": "Ausgenommen: {{reason}}",
+        "marked": "Mit einem unsichtbaren Wasserzeichen gekennzeichnet",
+        "markedUpstream": "Vom Modellanbieter gekennzeichnet ({{vendor}})",
+        "markedVllm": "Mit einem unsichtbaren Text-Wasserzeichen gekennzeichnet (selbst gehostetes vLLM)",
+        "notRequired": "Nicht erforderlich: kurzer Text (bis {{count}} Tokens)",
+        "unknown": "Für diese Antwort nicht erfasst",
+        "unmarked": "Nicht gekennzeichnet: Das Modell versieht seine Ausgaben nicht mit einem Wasserzeichen (Text über {{count}} Tokens)",
+        "unmarkedTemperatureZero": "Nicht gekennzeichnet: Bei Temperatur 0 lässt sich kein Wasserzeichen einbetten (Text über {{count}} Tokens)"
+      },
+      "markingLabel": "Kennzeichnung",
+      "model": "Modell",
+      "panelTitle": "Über diese Antwort",
+      "tooltip": "Von einem KI-System erzeugt – Details anzeigen",
+      "verify": "Inhalt prüfen"
+    },
+    "common": {
+      "opensInNewTab": "(öffnet in einem neuen Tab)"
+    },
+    "image": {
+      "label": "KI-generiert",
+      "labelWithCredentials": "KI-generiert · Content Credentials",
+      "markedWith": "Maschinenlesbare Kennzeichnungen: {{markings}}",
+      "markings": {
+        "c2pa": "Content Credentials (C2PA, signiert)",
+        "trustmark": "Unsichtbares TrustMark-Wasserzeichen",
+        "upstream": "Wasserzeichen des Modellanbieters ({{vendor}})",
+        "xmp": "IPTC/XMP-Metadaten „KI-generiert“"
+      },
+      "notMarked": "Dieses Bild konnte nicht maschinenlesbar gekennzeichnet werden."
+    },
+    "justification": {
+      "choice": "Art",
+      "choiceRequired": "Bitte wählen Sie eine Option.",
+      "failed": "Die Änderung konnte nicht gespeichert werden.",
+      "hint": "Mindestens {{min}} Zeichen (bisher {{count}}). Wird mit Ihrem Namen, der Uhrzeit und dieser Installation gespeichert und im Audit-Log protokolliert.",
+      "label": "Begründung",
+      "saving": "Wird gespeichert …",
+      "tooShort": "Bitte geben Sie eine Begründung mit mindestens {{min}} Zeichen an."
+    },
+    "notice": {
+      "default": "Sie chatten mit einem KI-System{{provider}}. Antworten werden automatisch erzeugt und können fehlerhaft sein – prüfen Sie wichtige Informationen.",
+      "label": "Hinweis: KI-System",
+      "operatedBy": ", betrieben von {{legalEntity}}"
+    },
+    "outbound": {
+      "label": "KI-generiert mit iHub Apps – bitte vor dem Senden prüfen."
+    },
+    "reminder": {
+      "text": "Erinnerung: Sie sprechen mit einem KI-System, nicht mit einem Menschen. Prüfen Sie wichtige Informationen zu {{category}} mit einer qualifizierten Person."
+    },
+    "shared": {
+      "label": "Diese Unterhaltung wurde mit einem KI-System (iHub Apps) erzeugt.",
+      "verify": "Prüfen"
+    }
+  },
+  "verify": {
+    "pageTitle": "Inhalte prüfen",
+    "heading": "Inhalte auf KI-Kennzeichnungen prüfen",
+    "intro": "Finden Sie heraus, ob eine Datei oder ein Text eine Kennzeichnung trägt, die sie als KI-generiert ausweist (EU AI Act, Art. 50) – ein signiertes C2PA-Manifest, ein unsichtbares Wasserzeichen, ein Text-Signpost oder ein Herkunftsnachweis dieser Installation.",
+    "openApp": "iHub Apps öffnen",
+    "loading": "Wird geladen…",
+    "loadFailed": "Der Detektor ist nicht erreichbar.",
+    "loadFailedHint": "Prüfen Sie Ihre Verbindung und versuchen Sie es erneut.",
+    "retry": "Erneut versuchen",
+    "unavailable": {
+      "title": "Die Erkennung ist in dieser Installation nicht verfügbar",
+      "description": "Die Administration hat die Inhaltserkennung hier nicht eingeschaltet."
+    },
+    "signin": {
+      "title": "Melden Sie sich an, um Inhalte zu prüfen",
+      "description": "Der Detektor dieser Installation steht angemeldeten Nutzenden zur Verfügung. Nach der Anmeldung kommen Sie hierher zurück.",
+      "action": "Anmelden"
+    },
+    "forbidden": {
+      "title": "Sie haben keinen Zugriff auf den Detektor",
+      "description": "Der Detektor dieser Installation ist auf freigegebene Nutzende beschränkt. Bitten Sie Ihre Administration um Zugriff."
+    },
+    "input": {
+      "heading": "Zu prüfender Inhalt",
+      "modeLabel": "Was möchten Sie prüfen?",
+      "modeFile": "Eine Datei",
+      "modeText": "Eingefügten Text",
+      "dropTitle": "Ziehen Sie eine Datei hierher oder",
+      "chooseFile": "Datei auswählen",
+      "fileHint": "Bilder, PDF, Word, PowerPoint, Excel, HTML, Text oder JSON – bis {{max}} MB",
+      "selectedFile": "Ausgewählte Datei",
+      "removeFile": "{{name}} entfernen",
+      "fileTooLarge": "Die Datei ist größer als {{max}} MB.",
+      "fileEmpty": "Die Datei ist leer.",
+      "textLabel": "Zu prüfender Text",
+      "textPlaceholder": "Fügen Sie den Text ein, den Sie prüfen möchten",
+      "textHint": "Prüft den Text-Signpost und Herkunftsnachweise. Text-Wasserzeichen können nur freigegebene Fachleute prüfen.",
+      "textHintExpert": "Prüft den Text-Signpost, Herkunftsnachweise und das Text-Wasserzeichen selbst betriebener Modelle.",
+      "privacy": "Der Inhalt wird geprüft und sofort verworfen – er wird nicht gespeichert.",
+      "submit": "Inhalt prüfen",
+      "checking": "Wird geprüft…"
+    },
+    "errors": {
+      "signin": "Melden Sie sich an, um in dieser Installation Inhalte zu prüfen.",
+      "forbidden": "Sie dürfen den Detektor nicht verwenden.",
+      "disabled": "Die Erkennung ist in dieser Installation nicht verfügbar.",
+      "tooLarge": "Die Datei ist zu groß.",
+      "rateLimited": "Zu viele Prüfungen in kurzer Zeit. Bitte warten Sie einen Moment und versuchen Sie es erneut.",
+      "failed": "Der Inhalt konnte nicht geprüft werden: {{message}}",
+      "generic": "Der Inhalt konnte nicht geprüft werden. Bitte versuchen Sie es erneut."
+    },
+    "result": {
+      "heading": "Ergebnis",
+      "verdict": {
+        "aiGenerated": "KI-generiert",
+        "notDetected": "Keine Kennzeichnung gefunden",
+        "inconclusive": "Nicht eindeutig"
+      },
+      "verdictDescription": {
+        "aiGenerated": "Eine Kennzeichnung weist diesen Inhalt als durch KI erzeugt oder verändert aus.",
+        "notDetected": "Keines der geprüften Verfahren hat eine KI-Kennzeichnung gefunden.",
+        "inconclusive": "Es wurde eine Kennzeichnung gefunden, sie konnte aber nicht bestätigt werden."
+      },
+      "foundBy": "Gefunden durch: {{techniques}}",
+      "foundByNone": "Kein Verfahren hat eine Kennzeichnung gefunden.",
+      "caveat": "Fehlt eine Kennzeichnung, beweist das nicht, dass ein Mensch den Inhalt verfasst hat: Kennzeichnungen lassen sich entfernen, und Inhalte anderer Werkzeuge tragen womöglich keine.",
+      "notStored": "Der geprüfte Inhalt wurde nicht gespeichert.",
+      "techniques": {
+        "caption": "Geprüfte Verfahren",
+        "technique": "Verfahren",
+        "result": "Ergebnis",
+        "trust": "Signatur",
+        "detail": "Details"
+      },
+      "status": {
+        "found": "Gefunden",
+        "none": "Keine",
+        "skipped": "Übersprungen",
+        "invalid": "Ungültig"
+      },
+      "trust": {
+        "trusted": "Vertrauenswürdig",
+        "untrusted": "Nicht vertrauenswürdig",
+        "notApplicable": "Nicht zutreffend"
+      },
+      "skippedReason": "Nicht geprüft: {{reason}}",
+      "content": {
+        "heading": "Inhalt",
+        "kind": "Art",
+        "type": "Typ",
+        "size": "Größe",
+        "sha256": "SHA-256"
+      },
+      "kinds": {
+        "image": "Bild",
+        "pdf": "PDF-Dokument",
+        "docx": "Word-Dokument",
+        "pptx": "PowerPoint-Präsentation",
+        "xlsx": "Excel-Arbeitsmappe",
+        "html": "HTML-Dokument",
+        "text": "Text",
+        "json": "JSON",
+        "other": "Sonstiges"
+      },
+      "provenance": {
+        "heading": "Herkunft",
+        "generatedAt": "Erzeugt am",
+        "model": "Modell",
+        "generator": "Erzeugt mit",
+        "contentId": "Inhalts-ID"
+      },
+      "detector": {
+        "heading": "Detektor",
+        "installationUrl": "Installation",
+        "id": "Installations-ID",
+        "version": "Version",
+        "checkedAt": "Geprüft am"
+      },
+      "downloadReport": "Signierten Bericht herunterladen",
+      "downloadUnsignedReport": "Bericht herunterladen (unsigniert)",
+      "unsignedNote": "Diese Installation hat kein aktives Signaturzertifikat, daher ist der Bericht nicht signiert.",
+      "downloadFailed": "Der Bericht konnte nicht heruntergeladen werden."
+    },
+    "techniques": {
+      "c2pa": "C2PA-Manifest",
+      "ihubManifest": "iHub-Export-Manifest",
+      "trustmark": "TrustMark-Bildwasserzeichen",
+      "xmp": "XMP-Metadaten",
+      "textSignpost": "Text-Signpost",
+      "textWatermark": "Text-Wasserzeichen",
+      "provenanceRecord": "Herkunftsnachweis"
+    },
+    "report": {
+      "heading": "Signierten Bericht prüfen",
+      "description": "Fügen Sie einen Prüfbericht ein oder laden Sie seine .json-Datei hoch, um zu bestätigen, dass ein vertrauenswürdiger Detektor ihn signiert hat und er unverändert ist.",
+      "inputLabel": "Bericht",
+      "placeholder": "Bericht-JSON oder signiertes Bericht-Token einfügen",
+      "hint": "Die mit „Signierten Bericht herunterladen“ gespeicherte Datei funktioniert unverändert.",
+      "upload": "Berichtsdatei hochladen",
+      "readFailed": "Die Datei konnte nicht gelesen werden.",
+      "submit": "Bericht prüfen",
+      "checking": "Wird geprüft…",
+      "invalidInput": "Das ist kein Prüfbericht. Fügen Sie die heruntergeladene Berichtsdatei oder ihren Wert „report“ ein.",
+      "valid": "Signatur gültig",
+      "invalid": "Signatur ungültig",
+      "trusted": "Mit einem vertrauenswürdigen Zertifikat signiert",
+      "untrusted": "Diese Installation vertraut der signierenden Stelle nicht",
+      "errors": "Gefundene Probleme",
+      "signer": {
+        "heading": "Signiert von",
+        "subject": "Inhaber",
+        "issuer": "Aussteller",
+        "validUntil": "Gültig bis",
+        "fingerprint": "Fingerabdruck (SHA-256)"
+      },
+      "payload": {
+        "heading": "Inhalt des Berichts",
+        "verdict": "Ergebnis",
+        "techniquesFound": "Gefunden durch",
+        "checkedAt": "Geprüft am",
+        "detector": "Detektor",
+        "contentHash": "SHA-256 des Inhalts",
+        "content": "Inhalt"
+      }
     }
   }
 }

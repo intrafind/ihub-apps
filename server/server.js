@@ -38,6 +38,9 @@ import registerOAuthRoutes from './routes/oauth.js';
 import registerOAuthAuthorizeRoutes from './routes/oauthAuthorize.js';
 import registerOAuthRegisterRoutes from './routes/oauthRegister.js';
 import registerWellKnownRoutes from './routes/wellKnown.js';
+import registerProvenanceRoutes from './routes/provenance.js';
+import registerExportRoutes from './routes/exports.js';
+import { initAiTransparency } from './services/provenance/lifecycle.js';
 import registerMcpServerRoutes from './routes/mcpServer.js';
 import registerSwaggerRoutes from './routes/swagger.js';
 import registerWorkflowRoutes from './routes/workflow/index.js';
@@ -711,6 +714,9 @@ if (cluster.isPrimary && workerCount > 1) {
   registerOAuthAuthorizeRoutes(app);
   registerOAuthRegisterRoutes(app);
   registerWellKnownRoutes(app);
+  // EU AI Act Art. 50: /.well-known/ai-provenance, /api/provenance/*, /api/exports.
+  registerProvenanceRoutes(app);
+  registerExportRoutes(app);
   registerMcpServerRoutes(app);
   registerGeneralRoutes(app, { getLocalizedError });
   registerModelRoutes(app, { getLocalizedError });
@@ -745,6 +751,15 @@ if (cluster.isPrimary && workerCount > 1) {
   // ends the run its question paused.
   registerChatClarificationLifecycle();
   // ownsClusterSingletons computed above, before the rollup/audit schedulers.
+  // EU AI Act: installation id, signing certificate, TrustMark warm-up; the
+  // retention sweeps of provenance records and the detection log run on the
+  // worker that owns the other singletons.
+  initAiTransparency({ ownsSingletons: ownsClusterSingletons }).catch(error =>
+    logger.warn('AI transparency initialisation failed', {
+      component: 'Server',
+      error: error.message
+    })
+  );
   if (ownsClusterSingletons) {
     interactionService.startExpirySweep();
     runLog.startCleanupScheduler();

@@ -72,6 +72,12 @@ export function PlatformConfigProvider({ children }) {
         // history UI on it, so it has to survive this hand-assembled object.
         chats: platformCfg.chats,
 
+        // EU AI Act Art. 50 transparency switches (disclosure, badges, labels,
+        // exports, detection) — resolved server-side, see
+        // server/services/provenance/clientConfig.js. The chat reads them for
+        // the first-turn notice, the AI badge and the per-message chip.
+        aiTransparency: platformCfg.aiTransparency,
+
         // Voice input: backend switches, the Azure host / keyConfigured flag and
         // the platform-wide defaults (dictation service, transcription model)
         // that apps fall back to. Dropping it here silently broke all of them.

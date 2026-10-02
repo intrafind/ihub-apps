@@ -11,6 +11,13 @@ import ChangeHistoryDrawer from '../components/ChangeHistoryDrawer';
 import AdminBreadcrumb from '../components/AdminBreadcrumb';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
+import JustificationDialog from '../../../shared/components/JustificationDialog';
+import { stripInstallationRecords } from '../../../../../shared/aiTransparency.js';
+import {
+  JUSTIFICATION_FIELD,
+  getUnmarkedModelError,
+  serializeConfigForDownload
+} from '../utils/aiTransparencyAdmin';
 
 function AdminModelEditPage() {
   const { t, i18n } = useTranslation();
@@ -32,6 +39,9 @@ function AdminModelEditPage() {
   const [usage, setUsage] = useState(null);
   const [jsonSchema, setJsonSchema] = useState(null);
   const [initialData, setInitialData] = useState(null);
+  // EU AI Act: a save the server refused because it would enable a model that
+  // does not mark its text — `{ models, data }`, retried with a justification.
+  const [pendingAcknowledgement, setPendingAcknowledgement] = useState(null);
 
   const [formData, setFormData] = useState({
     id: '',
@@ -75,7 +85,9 @@ function AdminModelEditPage() {
 
   useEffect(() => {
     if (isNewModel && location.state?.templateModel) {
-      const tpl = location.state.templateModel;
+      // A clone never inherits the source's EU AI Act acknowledgement: the
+      // new model is enabled — or justified — on its own.
+      const tpl = stripInstallationRecords('model', location.state.templateModel);
       const tplData = {
         ...tpl,
         id: '',
@@ -223,7 +235,15 @@ function AdminModelEditPage() {
     return Number.isFinite(parsed) ? parsed : undefined;
   };
 
-  const handleSave = async data => {
+  /**
+   * Save the model. `justification` is only passed on the retry after the
+   * EU AI Act gate (409 UNMARKED_MODEL_ACKNOWLEDGEMENT_REQUIRED) asked for it;
+   * the server stores it as the model's acknowledgement.
+   *
+   * @param {Object} data - Model form data
+   * @param {string} [justification] - Why an unmarked model is enabled
+   */
+  const handleSave = async (data, justification) => {
     try {
       setSaving(true);
       setError(null);
@@ -283,6 +303,8 @@ function AdminModelEditPage() {
         }
       });
 
+      if (justification) dataToSend[JUSTIFICATION_FIELD] = justification;
+
       const url = isNewModel ? '/admin/models' : `/admin/models/${modelId}`;
       const method = isNewModel ? 'POST' : 'PUT';
 
@@ -302,6 +324,13 @@ function AdminModelEditPage() {
         navigate('/admin/models');
       }, 1500);
     } catch (err) {
+      const gate = justification ? null : getUnmarkedModelError(err);
+      if (gate) {
+        // Not an error the admin has to fix in the form: ask for the
+        // justification and send the same save again.
+        setPendingAcknowledgement({ models: gate.models, data });
+        return;
+      }
       setError(getAdminApiErrorMessage(err));
       throw err; // Re-throw to let DualModeEditor handle it
     } finally {
@@ -350,7 +379,8 @@ function AdminModelEditPage() {
                 <button
                   type="button"
                   onClick={() => {
-                    const dataStr = JSON.stringify(formData, null, 2);
+                    // Without this installation's EU AI Act acknowledgement.
+                    const dataStr = serializeConfigForDownload('model', formData);
                     const dataUri =
                       'data:application/json;charset=utf-8,' + encodeURIComponent(dataStr);
                     const exportFileDefaultName = `model-${formData.id}.json`;
@@ -563,6 +593,41 @@ function AdminModelEditPage() {
         onClose={() => setHistoryOpen(false)}
         resource="model"
         resourceId={modelId}
+      />
+
+      <JustificationDialog
+        isOpen={pendingAcknowledgement !== null}
+        title={t(
+          'admin.models.marking.enableDialog.title',
+          'Enable a model that does not mark its output?'
+        )}
+        description={
+          <>
+            <p>
+              {t(
+                'admin.models.marking.enableDialog.body',
+                'These models do not watermark the text they generate. Under the EU AI Act Code of Practice (Measure 1.1.2) free-form text over 200 tokens must carry an invisible watermark, so answers of these models are non-conforming.'
+              )}
+            </p>
+            <p className="mt-2">
+              {t(
+                'admin.models.marking.enableDialog.stays',
+                'Your justification is recorded as an acknowledgement for this installation. The model stays listed as non-conforming on the EU AI Act page until it is marked.'
+              )}
+            </p>
+          </>
+        }
+        label={t('admin.models.marking.enableDialog.justification', 'Justification')}
+        placeholder={t(
+          'admin.models.marking.enableDialog.placeholder',
+          'e.g. Needed for the legal team until the self-hosted watermarked model is available (planned Q1).'
+        )}
+        confirmLabel={t('admin.models.marking.enableDialog.saveConfirm', 'Save and enable')}
+        onConfirm={async justification => {
+          await handleSave(pendingAcknowledgement.data, justification);
+          setPendingAcknowledgement(null);
+        }}
+        onCancel={() => setPendingAcknowledgement(null)}
       />
 
       <ConfirmDialog

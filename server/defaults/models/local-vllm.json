@@ -19,5 +19,9 @@
   "autoDiscovery": true,
   "thinking": {
     "enabled": true
+  },
+  "contentMarking": {
+    "textWatermark": "none",
+    "notes": "Self-hosted: start vLLM with --watermark-config and set textWatermark to { scheme: vllm-gumbel, keyGroup } (see docs/eu-ai-act.md)."
   }
 }

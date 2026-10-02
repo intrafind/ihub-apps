@@ -20,6 +20,13 @@ import { getTtsProvider, isTtsModel } from '../../tts/index.js';
 import { TTS_LANGUAGES } from '../../tts/language.js';
 import { llmErrorToHttpStatus, isMissingApiKeyError } from '../../services/loop/llmHttpErrors.js';
 import {
+  applyUnmarkedModelGate,
+  auditNewAcknowledgements,
+  JUSTIFICATION_FIELD,
+  preserveStoredRecords,
+  UnmarkedModelError
+} from '../../services/provenance/records.js';
+import {
   discoverModels,
   comparableUrl,
   ModelDiscoveryError
@@ -88,6 +95,11 @@ function sendVoicesError(res, error, action) {
  */
 function modelPath(modelId) {
   return configStore.resolveIdToPath('models', modelId);
+}
+
+/** 409 for enabling a model that does not mark text without a justification. */
+function sendUnmarkedModelError(res, error) {
+  return res.status(409).json({ error: error.message, code: error.code, models: error.models });
 }
 
 /** Prompt sent by the admin "test model" diagnostic. */
@@ -504,6 +516,22 @@ export default function registerAdminModelsRoutes(app) {
         return sendBadRequest(res, providerLinkError);
       }
 
+      // EU AI Act: the acknowledgement of an unmarked model is a record of this
+      // installation, set only through the gate below — never by the editor.
+      const justification = updatedModel[JUSTIFICATION_FIELD];
+      delete updatedModel[JUSTIFICATION_FIELD];
+      const storedForRecords = await configStore.readJson(await modelPath(modelId));
+      preserveStoredRecords('model', updatedModel, storedForRecords);
+      let acknowledged = [];
+      if (updatedModel.enabled !== false && storedForRecords?.enabled === false) {
+        try {
+          acknowledged = applyUnmarkedModelGate([updatedModel], req, justification);
+        } catch (error) {
+          if (error instanceof UnmarkedModelError) return sendUnmarkedModelError(res, error);
+          throw error;
+        }
+      }
+
       // Handle API key encryption
       if (updatedModel.apiKey) {
         // Check if this is a new key or unchanged masked value
@@ -567,6 +595,7 @@ export default function registerAdminModelsRoutes(app) {
         resourceId: modelId,
         summary: `Updated model ${modelId}`
       });
+      auditNewAcknowledgements(req, [updatedModel], acknowledged);
       res.json({ message: 'Model updated successfully', model: updatedModel });
     } catch (error) {
       return sendInternalError(res, error, 'update model');
@@ -593,6 +622,21 @@ export default function registerAdminModelsRoutes(app) {
       const providerLinkError = applyProviderLink(newModel);
       if (providerLinkError) {
         return sendBadRequest(res, providerLinkError);
+      }
+
+      // EU AI Act: records never arrive with a model (upload, copy from another
+      // installation); enabling an unmarked model needs a justification here.
+      const justification = newModel[JUSTIFICATION_FIELD];
+      delete newModel[JUSTIFICATION_FIELD];
+      if (newModel.contentMarking) delete newModel.contentMarking.acknowledgement;
+      let acknowledged = [];
+      if (newModel.enabled !== false) {
+        try {
+          acknowledged = applyUnmarkedModelGate([newModel], req, justification);
+        } catch (error) {
+          if (error instanceof UnmarkedModelError) return sendUnmarkedModelError(res, error);
+          throw error;
+        }
       }
 
       // Handle API key encryption
@@ -638,6 +682,7 @@ export default function registerAdminModelsRoutes(app) {
         resourceId: newModel.id,
         summary: `Created model ${newModel.id}`
       });
+      auditNewAcknowledgements(req, [newModel], acknowledged);
       res.json({ message: 'Model created successfully', model: newModel });
     } catch (error) {
       return sendInternalError(res, error, 'create model');
@@ -659,6 +704,15 @@ export default function registerAdminModelsRoutes(app) {
         return sendNotFound(res, 'Model');
       }
       const newEnabledState = !model.enabled;
+      let acknowledged = [];
+      if (newEnabledState) {
+        try {
+          acknowledged = applyUnmarkedModelGate([model], req, req.body?.[JUSTIFICATION_FIELD]);
+        } catch (error) {
+          if (error instanceof UnmarkedModelError) return sendUnmarkedModelError(res, error);
+          throw error;
+        }
+      }
       model.enabled = newEnabledState;
       if (!newEnabledState && model.default === true) {
         const enabledModels = models.filter(
@@ -679,6 +733,7 @@ export default function registerAdminModelsRoutes(app) {
         resourceId: modelId,
         summary: `${newEnabledState ? 'Enabled' : 'Disabled'} model ${modelId}`
       });
+      auditNewAcknowledgements(req, [model], acknowledged);
       res.json({
         message: `Model ${newEnabledState ? 'enabled' : 'disabled'} successfully`,
         model: model,
@@ -706,6 +761,17 @@ export default function registerAdminModelsRoutes(app) {
       const { data: models } = configCache.getModels(true);
       const resolvedIds = ids.includes('*') ? models.map(m => m.id) : ids;
 
+      let acknowledged = [];
+      if (enabled) {
+        const turningOn = models.filter(m => resolvedIds.includes(m.id) && m.enabled === false);
+        try {
+          acknowledged = applyUnmarkedModelGate(turningOn, req, req.body?.[JUSTIFICATION_FIELD]);
+        } catch (error) {
+          if (error instanceof UnmarkedModelError) return sendUnmarkedModelError(res, error);
+          throw error;
+        }
+      }
+
       for (const id of resolvedIds) {
         const model = models.find(m => m.id === id);
         if (!model) continue;
@@ -731,6 +797,7 @@ export default function registerAdminModelsRoutes(app) {
         resourceId: resolvedIds.join(','),
         summary: `Batch ${enabled ? 'enabled' : 'disabled'} ${resolvedIds.length} models`
       });
+      auditNewAcknowledgements(req, models, acknowledged);
       res.json({
         message: `Models ${enabled ? 'enabled' : 'disabled'} successfully`,
         enabled,

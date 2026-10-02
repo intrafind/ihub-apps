@@ -9,6 +9,7 @@ import {
 import { BaseAdapter } from './BaseAdapter.js';
 import logger from '../utils/logger.js';
 import modelDiscoveryService from '../services/ModelDiscoveryService.js';
+import { watermarkRequestFields } from '../services/provenance/watermark/requestParams.js';
 
 class OpenAIAdapterClass extends BaseAdapter {
   /**
@@ -199,6 +200,10 @@ class OpenAIAdapterClass extends BaseAdapter {
     } else if (responseFormat === 'json') {
       body.response_format = { type: 'json_object' };
     }
+
+    // EU AI Act text watermark for OpenAI-compatible self-hosted servers
+    // (vLLM): server-owned, from the model config only.
+    Object.assign(body, watermarkRequestFields(model));
 
     // Note: Request body logging disabled to prevent exposing sensitive data in logs
     // logger.info('OpenAI request body:', JSON.stringify(body, null, 2));

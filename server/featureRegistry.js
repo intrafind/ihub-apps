@@ -205,6 +205,16 @@ export const featureRegistry = [
     preview: true
   },
   {
+    id: 'aiTransparency',
+    name: { en: 'EU AI Act Transparency', de: 'EU-AI-Act-Transparenz' },
+    description: {
+      en: 'Art. 50 transparency: tell people they are talking to an AI, mark generated images and exports with signed C2PA metadata and an invisible watermark, keep provenance records and offer detection (/verify). Settings and the conformance status are under Admin → EU AI Act. Switching this off makes the installation non-conforming',
+      de: 'Transparenz nach Art. 50: Hinweis, dass man mit einer KI spricht, generierte Bilder und Exporte mit signierten C2PA-Metadaten und unsichtbarem Wasserzeichen kennzeichnen, Herkunftsnachweise führen und eine Erkennung anbieten (/verify). Einstellungen und Konformitätsstatus unter Admin → EU AI Act. Abgeschaltet ist die Installation nicht konform'
+    },
+    category: 'ai',
+    default: true
+  },
+  {
     id: 'runLog',
     name: { en: 'Run Ledger (RunLog)', de: 'Run-Ledger (RunLog)' },
     description: {

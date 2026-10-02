@@ -357,6 +357,60 @@
           "html": "HTML document",
           "json": "JSON format with metadata",
           "jsonl": "JSON Lines format"
+        },
+        "copying": "Copying…",
+        "template": "Template",
+        "templateDefault": "Default",
+        "templateProfessional": "Professional",
+        "templateMinimal": "Minimal",
+        "serverNote": "The file is created on the server and labelled as AI-generated content.",
+        "messages": {
+          "heading": "Messages to export",
+          "selectedCount": "{{count}} of {{total}} selected",
+          "selectAll": "Select all",
+          "selectNone": "Select none",
+          "rangeHint": "Tip: hold Shift while clicking to select or clear a range.",
+          "roleUser": "You",
+          "roleAssistant": "Assistant",
+          "roleSystem": "System",
+          "empty": "There are no messages to export yet.",
+          "noneSelected": "Select at least one message."
+        },
+        "options": {
+          "heading": "AI label",
+          "euIcon": "Add the EU AI icon",
+          "euIconAlways": "This installation always adds the EU AI icon.",
+          "humanReviewed": "Reviewed by a human (editorial responsibility)",
+          "humanReviewedHint": "Declares that a person reviewed the content and takes editorial responsibility for it."
+        },
+        "status": {
+          "preparing": "Preparing the export…",
+          "downloaded": "Export downloaded: {{filename}}",
+          "copying": "Preparing the text for the clipboard…",
+          "copied": "Copied to the clipboard."
+        },
+        "errors": {
+          "failed": "The export failed: {{message}}",
+          "generic": "The export failed. Please try again.",
+          "disabled": "Exports are disabled on this installation.",
+          "chatNotFound": "The conversation could not be found on the server.",
+          "downloadBlocked": "The download could not be started."
+        },
+        "document": {
+          "message": "Message",
+          "chat": "Chat",
+          "untitled": "Document"
+        },
+        "menu": {
+          "trigger": "⬇ download ▾",
+          "title": "Download as…",
+          "busy": "Preparing…",
+          "markdown": "Markdown (.md)",
+          "html": "HTML (.html)",
+          "pdf": "PDF (.pdf)",
+          "docx": "Word (.docx)",
+          "asPdf": "as PDF",
+          "asDocx": "as Word document"
         }
       },
       "copyToClipboard": "Copy to clipboard",
@@ -1030,10 +1084,10 @@
         "thinkingLevelMedium": "Medium",
         "thinkingLevelHigh": "High",
         "thinkingThoughts": "Show reasoning",
+        "customProviders": "Custom providers",
         "ttsVoice": "Voice",
         "ttsVoices": "Voices per language",
-        "ttsVoiceLanguage": "Language",
-        "customProviders": "Custom providers"
+        "ttsVoiceLanguage": "Language"
       },
       "hints": {
         "modelId": "Unique identifier for the model (cannot be changed after creation)",
@@ -1056,11 +1110,11 @@
         "thinkingLevel": "Sent as reasoning_effort (OpenAI, vLLM) or thinkingLevel (Gemini). Servers that do not support it ignore the value — leave on provider default unless the model documents these levels.",
         "thinkingThoughts": "Surface the reasoning to users behind the \"Show thinking\" toggle. Turn off to keep it hidden.",
         "maxOutputTokens": "Empty means the default ({{value}}), not unlimited. Reasoning models spend their thinking tokens from this limit, so keep it well above the longest answer you expect.",
+        "linkedProvider": "Uses the API key of the provider \"{{provider}}\" and its API type ({{apiType}}).",
         "ttsUrl": "Speech endpoint of the provider. It stays server-side and never reaches the browser.",
         "ttsVoice": "Voice id of the provider: a Mistral preset such as en_paul_neutral, gb_jane_neutral or fr_marie_neutral, or the id of a voice saved in your Mistral account. Empty uses en_paul_neutral.",
         "ttsVoices": "A message written in one of these languages is read with that voice; every other language uses the voice above. The language is told from the message itself.",
-        "ttsVoicesAfterSave": "Save the model once to browse the provider’s voices and create custom voices here.",
-        "linkedProvider": "Uses the API key of the provider \"{{provider}}\" and its API type ({{apiType}})."
+        "ttsVoicesAfterSave": "Save the model once to browse the provider’s voices and create custom voices here."
       },
       "placeholders": {
         "maxOutputTokens": "Default: {{value}}",
@@ -1092,41 +1146,56 @@
         "medium": "Medium (2K)",
         "high": "High (4K)"
       },
-      "ttsVoices": {
-        "addLanguage": "+ Add a voice for a language",
-        "removeLanguage": "Remove",
-        "title": "Available voices",
-        "load": "Show voices",
-        "reload": "Reload",
-        "loadError": "Could not load voices",
-        "custom": "Your voices",
-        "noCustom": "No custom voices yet. Create one below.",
-        "presets": "Preset voices ({{count}})",
-        "useDefault": "Use as voice",
-        "useFor": "Use for {{language}}",
-        "deleteConfirm": "Delete the voice \"{{name}}\" from the provider account? Models that use it can no longer speak with it.",
-        "deleteError": "Could not delete the voice",
-        "createTitle": "Create a custom voice",
-        "createHint": "Record or upload 10–30 seconds of one person speaking naturally, without music or background noise. The voice is created in the provider account straight away; it reads every language, with the accent of the recording.",
-        "name": "Name",
-        "namePlaceholder": "e.g. Anna (German)",
-        "gender": "Gender (optional)",
-        "female": "Female",
-        "male": "Male",
-        "languages": "Language of the recording",
-        "record": "Record with microphone",
-        "stopRecording": "Stop recording ({{seconds}} s)",
-        "upload": "Upload audio file",
-        "recorded": "Recording",
-        "emptyRecording": "Nothing was recorded.",
-        "fileTooLarge": "The file is larger than 10 MB.",
-        "fileUnreadable": "This file could not be read as audio.",
-        "tooShort": "The sample is shorter than {{seconds}} seconds; record a little more.",
-        "consent": "The person speaking in this sample agreed that their voice is cloned and used to read answers aloud.",
-        "create": "Create voice",
-        "creating": "Creating…",
-        "createError": "Could not create the voice",
-        "created": "Voice \"{{name}}\" created ({{id}}). Use it below, then save the model."
+      "marking": {
+        "acknowledgement": {
+          "by": "Acknowledged by",
+          "hint": "Recorded by the server when the model was enabled with a justification. It documents the gap; the model stays non-conforming.",
+          "installation": "Installation",
+          "justification": "Justification",
+          "title": "Enabled although not marked"
+        },
+        "description": "How the output of this model is marked machine-readably (Art. 50(2)). Drives the marking and the compliance report.",
+        "enableDialog": {
+          "body": "These models do not watermark the text they generate. Under the EU AI Act Code of Practice (Measure 1.1.2) free-form text over 200 tokens must carry an invisible watermark, so answers of these models are non-conforming.",
+          "confirm": "Enable anyway",
+          "justification": "Justification",
+          "placeholder": "e.g. Needed for the legal team until the self-hosted watermarked model is available (planned Q1).",
+          "saveConfirm": "Save and enable",
+          "stays": "Your justification is recorded as an acknowledgement for this installation. The model stays listed as non-conforming on the EU AI Act page until it is marked.",
+          "title": "Enable a model that does not mark its output?"
+        },
+        "idFormat": "Lowercase letters, digits, dot, underscore and hyphen only.",
+        "image": {
+          "hint": "iHub adds its own Content Credentials (C2PA) and invisible watermark to every generated image, whatever the vendor does.",
+          "label": "Vendor watermark",
+          "legend": "Image watermark of the vendor",
+          "none": "None",
+          "technique": "Technique",
+          "techniqueHint": "E.g. synthid for Google images. Saved as upstream:<technique>.",
+          "upstream": "Marked by the vendor"
+        },
+        "notMarked": "Not marked",
+        "notMarkedAcknowledged": "Not marked · acknowledged",
+        "notMarkedTooltip": "Free-form text over 200 tokens from this model is not watermarked — non-conforming under the EU AI Act Code of Practice",
+        "notes": "Notes",
+        "notesHint": "E.g. where the vendor documents its marking. Shown in the compliance report.",
+        "text": {
+          "keyGroup": "Key group",
+          "keyGroupHint": "The watermark key group configured in vLLM (--watermark-config). Empty uses \"default\".",
+          "label": "Marking",
+          "legend": "Text watermark",
+          "none": "Not marked",
+          "perRequest": "Send the per-request watermark flag",
+          "perRequestHint": "For vLLM servers that switch the watermark on per request. Leave off when the server watermarks every response.",
+          "upstream": "Marked by the vendor",
+          "vendor": "Vendor",
+          "vendorHint": "Only when the vendor documents in writing that it watermarks this model’s text. Saved as upstream:<vendor>.",
+          "vllm": "Self-hosted vLLM watermark"
+        },
+        "title": "Content marking (EU AI Act)",
+        "transcription": "Transcription counts as standard editing and is out of scope of the marking duty.",
+        "warningBody": "Free-form answers over {{count}} tokens are not watermarked — non-conforming under the EU AI Act Code of Practice (Measure 1.1.2). Enabling it requires a justification, and it stays listed as non-conforming until it is marked.",
+        "warningTitle": "This model does not mark its text"
       },
       "import": {
         "button": "Import from URL",
@@ -1190,8 +1259,45 @@
           "connectionRefused": "Connection refused",
           "hostNotFound": "Host not found",
           "networkError": "Network error",
-          "providerIdReserved": "This ID is the name of an API type. Choose another ID."
+          "providerIdReserved": "This ID is the name of an API type. Choose another ID.",
+          "needsJustification": "Not imported: enabling a model that does not mark its output needs a justification. Import it again without enabling it, or give a justification."
         }
+      },
+      "ttsVoices": {
+        "addLanguage": "+ Add a voice for a language",
+        "removeLanguage": "Remove",
+        "title": "Available voices",
+        "load": "Show voices",
+        "reload": "Reload",
+        "loadError": "Could not load voices",
+        "custom": "Your voices",
+        "noCustom": "No custom voices yet. Create one below.",
+        "presets": "Preset voices ({{count}})",
+        "useDefault": "Use as voice",
+        "useFor": "Use for {{language}}",
+        "deleteConfirm": "Delete the voice \"{{name}}\" from the provider account? Models that use it can no longer speak with it.",
+        "deleteError": "Could not delete the voice",
+        "createTitle": "Create a custom voice",
+        "createHint": "Record or upload 10–30 seconds of one person speaking naturally, without music or background noise. The voice is created in the provider account straight away; it reads every language, with the accent of the recording.",
+        "name": "Name",
+        "namePlaceholder": "e.g. Anna (German)",
+        "gender": "Gender (optional)",
+        "female": "Female",
+        "male": "Male",
+        "languages": "Language of the recording",
+        "record": "Record with microphone",
+        "stopRecording": "Stop recording ({{seconds}} s)",
+        "upload": "Upload audio file",
+        "recorded": "Recording",
+        "emptyRecording": "Nothing was recorded.",
+        "fileTooLarge": "The file is larger than 10 MB.",
+        "fileUnreadable": "This file could not be read as audio.",
+        "tooShort": "The sample is shorter than {{seconds}} seconds; record a little more.",
+        "consent": "The person speaking in this sample agreed that their voice is cloned and used to read answers aloud.",
+        "create": "Create voice",
+        "creating": "Creating…",
+        "createError": "Could not create the voice",
+        "created": "Voice \"{{name}}\" created ({{id}}). Use it below, then save the model."
       }
     },
     "auth": {
@@ -2230,7 +2336,8 @@
       "changelog": "What's New",
       "feedback": "Feedback",
       "localization": "Localization",
-      "scheduledTasks": "Scheduled Tasks"
+      "scheduledTasks": "Scheduled Tasks",
+      "euAiAct": "EU AI Act"
     },
     "mcp": {
       "common": {
@@ -2854,6 +2961,87 @@
       },
       "status": {
         "disabled": "Disabled"
+      },
+      "aiTransparency": {
+        "description": "Art. 50 transparency for this app: telling people they talk to an AI system, reminders in sensitive contexts, and exemptions from machine-readable marking.",
+        "disclosure": {
+          "onDescription": "People see a notice before their first message, an \"AI\" badge next to the input and an \"AI generated\" chip on every answer.",
+          "platformOffHint": "The interaction disclosure is switched off for the whole installation (Admin → EU AI Act). No app shows it until it is switched back on there.",
+          "statusOff": "Off for this app",
+          "statusOn": "On",
+          "statusPlatformOff": "Off platform-wide",
+          "switchOff": "Switch off disclosure…",
+          "switchOn": "Switch back on",
+          "title": "AI disclosure (Art. 50(1))"
+        },
+        "exemption": {
+          "declare": "Declare exemption…",
+          "none": "None — answers are marked",
+          "noneDescription": "Answers of this app are marked machine-readably where the model supports it. Declare an exemption only for standard editing or strictly technical B2B output.",
+          "title": "Marking exemption (Art. 50(2))",
+          "types": {
+            "b2bTechnical": {
+              "description": "Strictly technical output, seen only by a limited, pre-defined group of professionals inside the organisation, and not meant to leave it (all three must hold).",
+              "label": "Technical B2B output"
+            },
+            "standardEditing": {
+              "description": "Grammar and spell checking, minor stylistic polishing, translation, format conversion, transcription — no substantial alteration of the input.",
+              "label": "Standard editing"
+            }
+          },
+          "withdraw": "Withdraw exemption"
+        },
+        "exemptionDialog": {
+          "body": "Answers of an exempt app are not required to carry a machine-readable AI marking (Art. 50(2)). Summaries, rewrites that change style or meaning, and generated images are never exempt. Most apps — emails, marketing, reports, customer answers — do not qualify.",
+          "confirm": "Declare exemption",
+          "justification": "Justification",
+          "title": "Declare an exemption from marking?",
+          "type": "Exemption type"
+        },
+        "firstTurnNotice": {
+          "hint": "Shown in the empty chat before the first message. Leave empty for the default text. It must say clearly that the user is interacting with an AI system.",
+          "label": "First-turn notice"
+        },
+        "off": "Off",
+        "on": "On",
+        "optOutDialog": {
+          "body": "Art. 50(1) EU AI Act requires telling people that they are interacting with an AI system. The Commission guidelines (¶45) allow an exception only where this is obvious — for example an internal assistant used only by trained, AI-literate staff. Customer-facing or public apps do not qualify.",
+          "confirm": "Switch off disclosure",
+          "placeholder": "e.g. Internal assistant for the IT support team only; all users completed the AI literacy training.",
+          "reason": "Reason",
+          "record": "The decision applies to this installation only. It is removed when the app is downloaded, backed up or published, so another installation has to decide again.",
+          "title": "Switch off the AI disclosure for this app?"
+        },
+        "platformDefault": "default",
+        "readOnlyHint": "Only administrators can switch off the disclosure or declare an exemption.",
+        "record": {
+          "by": "Decided by",
+          "foreign": "This record was made on another installation and is not in effect here. An administrator of this installation has to decide again.",
+          "installation": "Installation",
+          "reason": "Reason"
+        },
+        "reminderInterval": {
+          "hint": "Only for sensitive apps. Empty uses the platform default ({{value}}); 0 turns reminders off.",
+          "label": "Reminder every N answers"
+        },
+        "saveFirst": "Save the app first to switch off the disclosure or declare an exemption.",
+        "sensitive": {
+          "complaints": "Complaints",
+          "finance": "Finance",
+          "health": "Health",
+          "hint": "Legal, financial, health, complaint or vulnerable-person contexts get periodic reminders that the user is talking to an AI system.",
+          "label": "Sensitive context",
+          "legal": "Legal",
+          "none": "None",
+          "vulnerable": "Vulnerable people"
+        },
+        "signpost": {
+          "clipboard": "Text signpost when copying",
+          "default": "Platform default ({{value}})",
+          "exports": "Text signpost in exports",
+          "hint": "The signpost is an invisible, signed C2PA text manifest that lets other tools detect AI-generated text."
+        },
+        "title": "EU AI Act"
       }
     },
     "features": {
@@ -3418,6 +3606,936 @@
         "value": "{{free}} free",
         "valueTitle": "{{percent}} of {{total}} used"
       }
+    },
+    "euAiAct": {
+      "apps": {
+        "clearOptOut": "Switch disclosure back on",
+        "columns": {
+          "actions": "Actions",
+          "app": "App",
+          "disclosure": "AI disclosure",
+          "exemption": "Exemption (Art. 50(2))",
+          "sensitive": "Sensitive category",
+          "temperature": "Temperature"
+        },
+        "count": "Apps shown: {{shown}} of {{total}}",
+        "declareExemption": "Declare exemption…",
+        "description": "The Art. 50(1) disclosure tells users they are interacting with an AI. It is on for every app unless you document an opt-out. Art. 50(2) exemptions are declared per app with a justification. Every record is stored with who, when and the installation, and appears in the compliance report.",
+        "disclosureOffGlobal": "Off for all apps",
+        "disclosureOn": "On",
+        "disclosureOptedOut": "Off (opt-out)",
+        "edit": "Edit app",
+        "empty": "No apps match this filter.",
+        "exemptionDialog": {
+          "b2bCondition1": "The output is strictly technical (engineering designs, technical instructions, internal documentation before it is finalised).",
+          "b2bCondition2": "Only a limited, pre-defined group of professionals inside your organisation sees it.",
+          "b2bCondition3": "It is not meant to leave the organisation, and safeguards such as isolation and access control are in place.",
+          "b2bHelp": "Only if all three conditions of the guidelines (¶87) hold:",
+          "b2bNotQualifying": "Emails, marketing texts, reports and customer answers do not qualify.",
+          "description": "With an Art. 50(2) exemption, text generated in this app does not have to be marked. Declare it only if the conditions below hold, and explain why. The declaration appears on this page and in the compliance report.",
+          "standardEditingHelp": "The app only assists with standard editing that does not substantially change the input or its meaning: grammar and spell checking, translation, format conversion. Summaries and rewrites that change style, structure or meaning do not qualify.",
+          "submit": "Declare exemption",
+          "title": "Declare an exemption for {{name}}",
+          "typeLegend": "Type of exemption"
+        },
+        "exemptionSaved": "Exemption declared for {{name}}.",
+        "exemptionTypes": {
+          "b2bTechnical": "B2B technical output",
+          "standardEditing": "Standard editing"
+        },
+        "exemptionWithdrawn": "Exemption withdrawn for {{name}}.",
+        "filter": {
+          "all": "All apps",
+          "issues": "With issues",
+          "label": "Show",
+          "records": "With opt-out or exemption"
+        },
+        "foreignRecords": "Has records from another installation. They are ignored here; record them again if they still apply.",
+        "noExemption": "No exemption",
+        "notSensitive": "None",
+        "optOut": "Switch off disclosure…",
+        "optOutCleared": "The AI disclosure is on again for {{name}}.",
+        "optOutDialog": {
+          "description": "Art. 50(1) requires telling people that they are interacting with an AI unless this is obvious from the context — for example an internal assistant used by trained, AI-literate staff (guidelines ¶45). Customer-facing or public apps do not qualify.",
+          "record": "Explain why the interaction is obvious for the users of this app. The reason appears on this page and in the compliance report.",
+          "submit": "Switch off disclosure",
+          "title": "Switch off the AI disclosure for {{name}}"
+        },
+        "optOutSaved": "The AI disclosure is now off for {{name}}.",
+        "sensitive": {
+          "complaints": "Complaints",
+          "finance": "Finance",
+          "health": "Health",
+          "legal": "Legal",
+          "vulnerable": "Vulnerable groups"
+        },
+        "temperatureDefault": "Default",
+        "temperatureZero": "Temperature 0",
+        "temperatureZeroHint": "The watermarking model embeds no watermark at temperature 0.",
+        "title": "Apps: disclosure, opt-outs and exemptions",
+        "withdrawExemption": "Withdraw exemption"
+      },
+      "banner": {
+        "adminsOnly": "Only administrators see this notice.",
+        "count": "(open warnings: {{count}})",
+        "dismiss": "Dismiss…",
+        "more": "More warnings on the EU AI Act page: {{count}}",
+        "open": "Open EU AI Act page",
+        "title": "EU AI Act: compliance warnings",
+        "titleNonConforming": "EU AI Act: this installation does not conform"
+      },
+      "checkStatus": {
+        "error": "Error",
+        "ok": "OK",
+        "warning": "Warning"
+      },
+      "checklist": {
+        "detection": "Detection",
+        "disclosure": "Interaction disclosure (Art. 50(1))",
+        "editorial": "Editorial responsibility (Art. 50(4))",
+        "exports": "Server-side exports",
+        "feature": "AI transparency features",
+        "imageMarking": "Image marking",
+        "provenanceRecords": "Provenance records",
+        "provider": "Provider details",
+        "signing": "Signing certificate",
+        "signpost": "Signpost",
+        "termsOfService": "Terms of service: no removal of markings",
+        "textWatermarking": "Text watermarking per model"
+      },
+      "common": {
+        "disabled": "Disabled",
+        "enabled": "Enabled",
+        "no": "no",
+        "yes": "yes"
+      },
+      "dialog": {
+        "justification": "Justification",
+        "lengthHint": "At least {{min}} characters ({{count}} so far).",
+        "lengthOk": "{{count}} characters.",
+        "reason": "Reason",
+        "recordNote": "Stored with your user ID, the time, this installation and the iHub version, and written to the audit log.",
+        "saving": "Saving…",
+        "submit": "Save"
+      },
+      "dismissDialog": {
+        "description": "The warning is hidden from the banner for the current situation only. The conformance status does not change, and the warning comes back if the situation changes (for example when another unmarked model is enabled).",
+        "submit": "Dismiss warning",
+        "title": "Dismiss warning"
+      },
+      "installation": {
+        "generatedAt": "Status as of",
+        "id": "Installation ID",
+        "url": "Installation URL",
+        "version": "iHub version"
+      },
+      "loadError": "The EU AI Act status could not be loaded.",
+      "models": {
+        "ackDialog": {
+          "description": "This model does not mark all of its output. Recording an acknowledgement documents the known gap and why you accept it, for example that no marking-capable alternative exists yet.",
+          "stillNonConforming": "The acknowledgement does not make the model conforming. It stays listed as non-conforming here and in the compliance report.",
+          "submit": "Record acknowledgement",
+          "title": "Acknowledge unmarked output of {{name}}"
+        },
+        "acknowledge": "Acknowledge…",
+        "acknowledged": "Acknowledgement recorded for {{name}}. The model stays non-conforming.",
+        "acknowledgedGap": "Known gap acknowledged — still non-conforming.",
+        "columns": {
+          "acknowledgement": "Acknowledgement",
+          "actions": "Actions",
+          "conformance": "Conformance",
+          "enabled": "Enabled",
+          "image": "Image marking",
+          "model": "Model",
+          "provider": "Provider",
+          "text": "Text marking"
+        },
+        "count": "Models shown: {{shown}} of {{total}}",
+        "description": "Whether each model marks its output: text by a vLLM watermark or by the upstream vendor, images by a signed C2PA manifest and an invisible watermark. Enabling an unmarked model needs an acknowledgement with a justification. The acknowledgement documents the gap; the model stays non-conforming.",
+        "edit": "Edit model",
+        "empty": "No models match this filter.",
+        "filter": {
+          "all": "All models",
+          "attention": "Enabled and non-conforming",
+          "enabled": "Enabled",
+          "label": "Show",
+          "nonConforming": "Non-conforming"
+        },
+        "image": {
+          "layers": "C2PA: {{c2pa}} · Watermark: {{watermark}}",
+          "marked": "Marked (C2PA + watermark)",
+          "notImageModel": "Not an image model",
+          "notMarked": "Not marked",
+          "partial": "Partially marked",
+          "upstream": "Vendor: {{technique}}"
+        },
+        "noAcknowledgement": "No acknowledgement",
+        "text": {
+          "keyGroup": "Key group: {{keyGroup}}",
+          "keyGroupMissing": "Key group missing",
+          "markedUpstream": "Marked by the vendor",
+          "markedVllm": "Marked (vLLM watermark)",
+          "notApplicable": "Not applicable",
+          "notMarked": "Not marked",
+          "perRequest": "key sent per request",
+          "vendor": "Technique: {{vendor}}"
+        },
+        "title": "Model compliance matrix",
+        "withdraw": "Withdraw acknowledgement",
+        "withdrawing": "Withdrawing…",
+        "withdrawn": "Acknowledgement for {{name}} withdrawn."
+      },
+      "overview": {
+        "checklistEmpty": "No checklist items reported.",
+        "checklistSummary": "OK: {{ok}} of {{total}} · Warnings: {{warning}} · Errors: {{error}}",
+        "checklistTitle": "Conformance checklist",
+        "configure": "Configure",
+        "dismiss": "Dismiss…",
+        "dismissExplainer": "Admins see these warnings in a banner on the start page and the admin overview. Warnings about models, certificates and apps can be dismissed with a justification. A dismissal only hides the banner entry — it does not change the conformance status, and the warning comes back when the situation changes.",
+        "dismissed": "Warning dismissed. It no longer shows in the banner; the conformance status is unchanged.",
+        "dismissedDescription": "Hidden from the banner only. They still count in the checklist and appear in the compliance report.",
+        "dismissedTitle": "Dismissed warnings",
+        "fix": "Fix",
+        "noDismissed": "No warnings are dismissed.",
+        "noWarnings": "There are no active warnings.",
+        "notDismissible": "This warning cannot be dismissed. It disappears once the problem is fixed.",
+        "outdatedDismissal": "Dismissed earlier, but the situation has changed since, so the warning is back.",
+        "restore": "Restore",
+        "restored": "Warning restored. It shows in the banner again.",
+        "restoring": "Restoring…",
+        "warningsTitle": "Warnings"
+      },
+      "record": {
+        "at": "When",
+        "by": "By",
+        "byAt": "{{who}}, {{when}}",
+        "installation": "Installation",
+        "justification": "Justification",
+        "reason": "Reason",
+        "unknownUser": "unknown user",
+        "version": "iHub {{version}}"
+      },
+      "refresh": "Refresh",
+      "refreshError": "Refreshing the status failed; showing the last loaded status. {{error}}",
+      "refreshing": "Refreshing…",
+      "report": {
+        "download": "Download compliance report",
+        "downloaded": "Compliance report saved as {{filename}}.",
+        "downloading": "Creating report…",
+        "error": "The compliance report could not be created: {{error}}"
+      },
+      "retry": "Try again",
+      "severity": {
+        "error": "Error",
+        "warning": "Warning"
+      },
+      "status": {
+        "conforming": "Conforming",
+        "nonConforming": "Non-conforming"
+      },
+      "subtitle": "Art. 50 transparency of this installation: conformance status, records and settings.",
+      "tabs": {
+        "apps": "Apps",
+        "aria": "EU AI Act sections",
+        "certificates": "Certificates",
+        "detection": "Detection",
+        "models": "Models",
+        "overview": "Overview",
+        "settings": "Settings"
+      },
+      "title": "EU AI Act",
+      "certificates": {
+        "active": {
+          "chain": "Certificate chain",
+          "expired": "The signing certificate has expired.",
+          "expiredBody": "New content cannot be signed validly. Rotate or install a new certificate now.",
+          "expiringSoon_one": "The signing certificate expires in {{count}} day.",
+          "expiringSoon_other": "The signing certificate expires in {{count}} days.",
+          "expiringSoonBody": "Rotate or install a new certificate before it expires.",
+          "none": "There is no active signing certificate.",
+          "noneBody": "Issue an installation certificate or install your own certificate to sign content.",
+          "title": "Active certificate"
+        },
+        "all": {
+          "caption": "Signing certificates of this installation",
+          "description": "Retired certificates stay detect-only, so content they signed can still be verified.",
+          "empty": "No certificates yet.",
+          "title": "All certificates"
+        },
+        "anchor": {
+          "download": "Download trust anchor (PEM)",
+          "error": "The trust anchor could not be downloaded: {{error}}"
+        },
+        "available": "Available",
+        "c2paLibrary": "C2PA library",
+        "chain": {
+          "ekus": "Extended key usage: {{ekus}}",
+          "issuedBy": "Issued by {{issuer}}",
+          "issuerLevel": "Issuer {{level}}",
+          "leaf": "Signing certificate",
+          "selfSigned": "Root (self-signed)",
+          "validity": "Valid {{from}} – {{until}}"
+        },
+        "complete": {
+          "button": "Install issued certificate",
+          "error": "The issued certificate was rejected.",
+          "success": "Issued certificate installed: {{subject}}."
+        },
+        "copied": "Copied",
+        "copy": "Copy",
+        "copyFailed": "Copying failed",
+        "csr": {
+          "body": "iHub generates the key pair on this server; the private key never leaves it. You get a CSR to send to your CA and install the issued certificate afterwards. All fields are optional; empty fields use the signing and provider settings.",
+          "button": "Generate key + CSR",
+          "commonName": "Common name",
+          "confirm": "Generate CSR",
+          "email": "E-mail",
+          "error": "The request could not be created.",
+          "organization": "Organization",
+          "success": "Key and certificate request created. Copy or download the CSR below, send it to your CA, then paste the issued certificate.",
+          "title": "Generate key and certificate request"
+        },
+        "custom": {
+          "body": "Use a certificate from your own PKI or from a CA on the C2PA Trust List. iHub checks the chain, the extended key usage, the key match and the expiry, and runs a test signature before switching over. The current certificate stays detect-only.",
+          "button": "Install custom certificate",
+          "chainFile": "Load certificate chain from file",
+          "chainPem": "Certificate chain (PEM)",
+          "chainPemHint": "Signing certificate first, then the intermediate certificates.",
+          "confirm": "Validate and install",
+          "error": "The certificate was rejected.",
+          "format": "Format",
+          "formatPem": "PEM (chain + private key)",
+          "formatPkcs12": "PKCS#12 (.p12 / .pfx)",
+          "keyFile": "Load private key from file",
+          "keyPem": "Private key (PEM)",
+          "keyPemHint": "Stored encrypted on the server. Prefer “Generate key + CSR” if the key does not have to come from elsewhere.",
+          "password": "Password",
+          "passwordHint": "Leave empty if the file has no password.",
+          "pkcs12File": "PKCS#12 file",
+          "pkcs12Selected": "Selected: {{name}}",
+          "success": "Custom certificate installed: {{subject}}. The previous certificate is kept for detection only.",
+          "title": "Install custom certificate"
+        },
+        "dialog": {
+          "cancel": "Cancel",
+          "close": "Close dialog"
+        },
+        "disabled": "Disabled",
+        "enabled": "Enabled",
+        "expiry": {
+          "daysLeft_one": "{{count}} day left",
+          "daysLeft_other": "{{count}} days left",
+          "expired": "Expired"
+        },
+        "fields": {
+          "actions": "Actions",
+          "activatedAt": "Active since",
+          "daysLeft": "Remaining",
+          "fingerprint": "Fingerprint (SHA-256)",
+          "issuer": "Issuer",
+          "serialNumber": "Serial number",
+          "source": "Source",
+          "status": "Status",
+          "subject": "Subject",
+          "validUntil": "Valid until",
+          "validity": "Validity",
+          "validityRange": "{{from}} – {{until}}"
+        },
+        "intrafind": {
+          "body": "Not available yet (issue #2578). Registered installations will be able to switch to IntraFind’s C2PA certificate from a CA on the C2PA Trust List with one click, so public validators show the signer as trusted. This needs iHub’s C2PA conformance first. Until then, use the installation certificate or install your own.",
+          "button": "Use IntraFind certificate",
+          "title": "Use IntraFind certificate"
+        },
+        "loadError": "The certificates could not be loaded.",
+        "loading": "Loading certificates…",
+        "notAvailable": "Not available",
+        "openSettings": "Open settings",
+        "pending": {
+          "created": "Created {{date}}",
+          "csrLabel": "Certificate signing request (PEM)",
+          "description": "The private key was generated on this server and never leaves it. Send the CSR to your CA, then paste the issued certificate with its chain.",
+          "downloadCsr": "Download CSR",
+          "issuedLabel": "Paste issued certificate (PEM, with chain)",
+          "title": "Pending certificate requests"
+        },
+        "refreshError": "The list could not be refreshed: {{error}}",
+        "remove": {
+          "body": "The generated private key is deleted. A certificate your CA issues for this request can no longer be installed.",
+          "button": "Remove request",
+          "buttonAria": "Remove request {{subject}}",
+          "confirm": "Remove request",
+          "error": "The request could not be removed.",
+          "short": "Remove",
+          "success": "Certificate request removed.",
+          "title": "Remove this certificate request?"
+        },
+        "retry": "Try again",
+        "rollback": {
+          "body": "New content will be signed with {{subject}} again. The currently active certificate becomes detect-only.",
+          "button": "Use again (rollback)",
+          "buttonAria": "Use {{subject}} again (rollback)",
+          "confirm": "Use again",
+          "error": "The certificate could not be activated.",
+          "success": "Signing with {{subject}} again.",
+          "title": "Sign with this certificate again?"
+        },
+        "rotate": {
+          "body": "iHub creates a new installation root and signing certificate and signs all new content with it. The current certificate stays detect-only, so content it signed can still be verified. Other installations that trust the old root need the new trust anchor.",
+          "button": "Issue new installation certificate (rotate)",
+          "confirm": "Issue new certificate",
+          "error": "The certificate could not be issued.",
+          "success": "New installation certificate issued: {{subject}}. The previous certificate is kept for detection only.",
+          "title": "Issue a new installation certificate?"
+        },
+        "signing": "Signing",
+        "source": {
+          "auto": "Auto-generated",
+          "csr": "CSR (issued by your CA)",
+          "custom": "Custom"
+        },
+        "status": {
+          "active": "Active",
+          "detectOnly": "Detect only",
+          "pending": "Pending"
+        },
+        "statusTitle": "Signing status",
+        "test": {
+          "notRun": "not tested",
+          "summary": "Test signature: JWS {{jws}}, C2PA {{c2pa}}.",
+          "trusted": "trusted",
+          "valid": "valid"
+        },
+        "timestamping": "Time-stamping",
+        "timestampingLocal": "Local clock of this server (no time-stamp authority configured)",
+        "timestampingTsa": "RFC 3161 TSA: {{url}}",
+        "trustInfo": {
+          "body": "Auto-generated installation certificates validate cryptographically everywhere. Public validators such as contentcredentials.org show the signer as untrusted or unknown until its root is on the C2PA Trust List. This is accepted for now. The detector of this installation trusts its own root and the trusted anchors from the settings.",
+          "title": "Why public validators may show “untrusted”"
+        },
+        "trustedAnchors": "Additional trusted anchors",
+        "validation": {
+          "email": "Enter a valid e-mail address.",
+          "pemCertificate": "Paste PEM certificates (they start with -----BEGIN CERTIFICATE-----).",
+          "pemKey": "Paste a PEM private key (it starts with -----BEGIN PRIVATE KEY----- or similar).",
+          "pkcs12": "Choose a PKCS#12 file.",
+          "required": "This field is required."
+        },
+        "warningsTitle": "Warnings"
+      },
+      "detection": {
+        "access": {
+          "authenticated": "Signed-in users",
+          "authenticatedDesc": "Every signed-in user of this installation can check content.",
+          "internal": "Internal",
+          "internalDesc": "Only admins and approved experts can check content.",
+          "public": "Public",
+          "publicDesc": "Anyone can check content without signing in, rate-limited."
+        },
+        "accessOverview": {
+          "access": "Who may use it",
+          "change": "Change in Settings",
+          "disabled": "Detection is switched off. Nobody can check content from this installation, and the installation does not conform.",
+          "loadError": "The detection settings could not be loaded: {{error}}",
+          "log": "Detection log",
+          "logOff": "Off",
+          "logOnDays": "On, kept for {{days}} days",
+          "logOnKeep": "On, kept until deleted",
+          "off": "Off",
+          "on": "On",
+          "rateLimit": "Rate limit",
+          "rateLimitValue": "{{limit}} checks per {{minutes}} minutes",
+          "status": "Detection",
+          "title": "Detector access",
+          "zeroRetention": "Submitted content",
+          "zeroRetentionValue": "Never stored (zero retention, fixed)"
+        },
+        "anchors": {
+          "change": "Manage in Settings",
+          "count_one": "{{count}} additional trust anchor is configured.",
+          "count_other": "{{count}} additional trust anchors are configured.",
+          "explanation": "Besides its own root, the detector trusts content signed by these installations, e.g. other installations of the same customer.",
+          "title": "Trusted anchors"
+        },
+        "benchmark": {
+          "caption": "Benchmark results per technique and transformation",
+          "colDetected": "Detected",
+          "colFpr": "FPR",
+          "colSamples": "Samples",
+          "colStatus": "Status",
+          "colTechnique": "Technique",
+          "colTpr": "TPR",
+          "colTransform": "Transformation",
+          "description": "Marks sample content with the current configuration, applies common transformations (for example re-compression, resizing, cropping or copying text) and measures how often each technique still finds the mark (TPR) and how often it wrongly reports one (FPR). The results go into the compliance report.",
+          "environment": "Test environment",
+          "failed": "{{number}} failed",
+          "finished": "Run finished: {{passed}} of {{total}} checks passed, {{failed}} failed, {{skipped}} skipped.",
+          "finishedAt": "Finished",
+          "fprLong": "False positive rate",
+          "fullHint": "The full benchmark can take several minutes. Keep this page open until it finishes.",
+          "loadError": "The latest report could not be loaded.",
+          "loading": "Loading the latest report…",
+          "noResults": "The report has no results.",
+          "none": "No self-test or benchmark has run yet.",
+          "passed": "{{number}} passed",
+          "runError": "The run failed: {{error}}",
+          "runFull": "Run full benchmark",
+          "runQuick": "Run self-test",
+          "runningFull": "Running the full benchmark… This can take several minutes.",
+          "runningQuick": "Running the self-test…",
+          "skipped": "{{number}} skipped",
+          "statusFail": "Fail",
+          "statusPass": "Pass",
+          "statusSkipped": "Skipped",
+          "summary": "Summary",
+          "title": "Self-test and robustness benchmark",
+          "total": "of {{number}}",
+          "tprLong": "True positive rate",
+          "trigger": "Started by",
+          "type": "Type",
+          "typeFull": "Full benchmark",
+          "typeQuick": "Self-test"
+        },
+        "copied": "Copied",
+        "copy": "Copy",
+        "copyFailed": "Copying failed",
+        "dialog": {
+          "cancel": "Cancel",
+          "close": "Close dialog",
+          "done": "Close"
+        },
+        "experts": {
+          "approve": "Approve expert…",
+          "approveBody": "The user can then run free-form text watermark detection. Give the reason for the approval, e.g. the role or the case.",
+          "approveConfirm": "Approve",
+          "approveError": "The expert could not be approved.",
+          "approveTitle": "Approve an expert",
+          "approved": "{{name}} is now an approved expert.",
+          "approvedBy": "by {{name}}",
+          "caption": "Approved experts for text detection",
+          "colActions": "Actions",
+          "colApproved": "Approved",
+          "colExpert": "Expert",
+          "colReason": "Reason",
+          "description": "Experts may run free-form text watermark detection (CoP 2.1.2). Every approval needs a reason and is written to the audit log.",
+          "empty": "No experts approved yet.",
+          "name": "Display name (optional)",
+          "reason": "Reason",
+          "reasonHint": "{{length}} of at least {{min}} characters.",
+          "reasonTooShort": "Give a reason of at least {{min}} characters.",
+          "revoke": "Revoke",
+          "revokeAria": "Revoke expert access for {{name}}",
+          "revokeBody": "{{name}} can no longer run free-form text watermark detection.",
+          "revokeConfirm": "Revoke access",
+          "revokeError": "Access could not be revoked.",
+          "revokeTitle": "Revoke expert access?",
+          "revoked": "Expert access for {{name}} was revoked.",
+          "title": "Approved experts",
+          "userId": "User ID",
+          "userIdHint": "The ID of the user as shown in the user administration.",
+          "userIdRequired": "Enter the user ID."
+        },
+        "keyGroups": {
+          "caption": "Text watermark key groups",
+          "colActions": "Actions",
+          "colActiveVersion": "Active version",
+          "colDetectorUrl": "Detector URL",
+          "colId": "ID",
+          "colName": "Name",
+          "colSelect": "Select for export",
+          "colVersions": "Versions",
+          "contextWidth": "Context width (optional)",
+          "contextWidthHint": "Number of preceding tokens that seed the watermark ({{min}}–{{max}}); must match the vLLM configuration. Empty uses the default.",
+          "contextWidthValue": "Context width {{width}}",
+          "create": "Create key group",
+          "createBody": "iHub generates a new secret key (version 1). Assign the key group to vLLM models in the model editor.",
+          "createConfirm": "Create",
+          "createTitle": "Create key group",
+          "created": "Key group {{id}} created.",
+          "delete": "Delete",
+          "deleteAria": "Delete {{id}}",
+          "deleteBody": "All key versions are deleted. Text marked with this key group can no longer be detected by this installation. This cannot be undone; export a bundle first if you may need the keys again.",
+          "deleteConfirm": "Delete key group",
+          "deleteError": "The key group could not be deleted.",
+          "deleteTitle": "Delete key group {{id}}?",
+          "deleted": "Key group {{id}} deleted.",
+          "description": "vLLM watermarks text with the active key of a key group; iHub detects it with every version. Share a key group with the other installations of the same customer through an encrypted key bundle.",
+          "detectorUrl": "Detector URL (optional)",
+          "detectorUrlHint": "Watermark detector service that checks text with the keys of this group (reference implementation: docker/watermark-detector). Without it, text marked with this key group cannot be detected.",
+          "edit": "Edit",
+          "editAria": "Edit {{id}}",
+          "editConfirm": "Save",
+          "editTitle": "Edit key group {{id}}",
+          "empty": "No key groups yet.",
+          "exportBody": "The bundle contains every key version of the selected key groups, encrypted with your passphrase. Import it into the other installations of the same customer.",
+          "exportConfirm": "Export and download",
+          "exportError": "The bundle could not be exported.",
+          "exportSelected": "Export selected ({{number}})",
+          "exportSelection": "Selected: {{ids}}",
+          "exportTitle": "Export encrypted key bundle",
+          "exported": "Encrypted key bundle downloaded ({{ids}}). Share the passphrase through a different channel than the file.",
+          "id": "ID",
+          "idHint": "Lowercase letters, digits, dots, dashes and underscores, e.g. customer-a. Cannot be changed later.",
+          "import": "Import bundle",
+          "importBody": "Import a bundle exported by another installation of the same customer. This installation then watermarks and detects with the same keys.",
+          "importConfirm": "Import",
+          "importError": "The bundle could not be imported.",
+          "importFile": "Bundle file (.json)",
+          "importFileRequired": "Choose a bundle file.",
+          "importInvalid": "This file is not a key bundle (invalid JSON).",
+          "importSelected": "Selected: {{name}}",
+          "importTitle": "Import key bundle",
+          "imported": "Imported key groups: {{ids}}.",
+          "importedNone": "The bundle contained no new key groups.",
+          "importedTag": "imported",
+          "loadError": "The key groups could not be loaded.",
+          "loading": "Loading key groups…",
+          "name": "Name",
+          "noDetector": "No detector: text cannot be checked",
+          "passphrase": "Passphrase",
+          "passphraseConfirm": "Repeat passphrase",
+          "passphraseHint": "At least {{min}} characters. It is not stored; without it the bundle cannot be imported.",
+          "passphraseMismatch": "The passphrases do not match.",
+          "passphraseRequired": "Enter the passphrase of the bundle.",
+          "passphraseTooShort": "Use at least {{min}} characters.",
+          "refreshError": "The list could not be refreshed: {{error}}",
+          "rotate": "Rotate",
+          "rotateAria": "Rotate the key of {{id}}",
+          "rotateBody": "A new key version becomes active for watermarking. Older versions stay detect-only, so older text remains detectable. Afterwards, update the vLLM configuration of every model that uses this key group and export a new bundle for the other installations.",
+          "rotateConfirm": "Rotate key",
+          "rotateError": "The key could not be rotated.",
+          "rotateTitle": "Rotate the key of {{id}}?",
+          "rotated": "Key group {{id}} now watermarks with version {{version}}. Update the vLLM configuration of the models that use it.",
+          "saveError": "The key group could not be saved.",
+          "selectAria": "Select {{id}} for export",
+          "title": "Text watermark key groups",
+          "updated": "Key group {{id}} updated.",
+          "validation": {
+            "contextWidth": "Enter a whole number between {{min}} and {{max}}.",
+            "idPattern": "Use 1–64 lowercase letters, digits, dots, dashes or underscores.",
+            "required": "This field is required.",
+            "url": "Enter an absolute http(s) URL, or leave the field empty."
+          },
+          "versionActive": "active",
+          "versionDetectOnly": "detect only",
+          "versionNumber": "v{{version}}",
+          "vllm": "Show vLLM config",
+          "vllmAria": "Show the vLLM config of {{id}}",
+          "vllmBody": "Start vLLM with this argument so the model watermarks its output with the active key of this key group.",
+          "vllmCodeLabel": "vLLM argument (key version {{version}})",
+          "vllmError": "The configuration could not be loaded.",
+          "vllmReveal": "Reveal configuration",
+          "vllmTitle": "vLLM configuration of {{id}}",
+          "vllmWarningBody": "Anyone with this configuration can create and detect watermarks of this key group. Treat it like a password: do not paste it into tickets, chats or version control. Revealing it is written to the audit log.",
+          "vllmWarningTitle": "This reveals the secret watermark key."
+        },
+        "log": {
+          "caption": "Latest detection checks",
+          "colHash": "Content hash",
+          "colKind": "Kind",
+          "colRequester": "Requester",
+          "colTechniques": "Techniques",
+          "colTime": "Time",
+          "colVerdict": "Verdict",
+          "description": "The latest {{limit}} checks of this installation.",
+          "disabled": "The detection log is switched off. New checks are not recorded.",
+          "duration": "{{ms}} ms",
+          "empty": "No checks recorded yet.",
+          "loadError": "The detection log could not be loaded.",
+          "loading": "Loading the detection log…",
+          "refresh": "Refresh",
+          "retention": "Entries are deleted after {{days}} days.",
+          "retentionKeep": "Entries are kept until deleted.",
+          "title": "Detection log",
+          "zeroRetention": "No submitted content is stored (zero retention, CoP 2.1.3).",
+          "zeroRetentionBody": "The log keeps metadata only: time, requester, content hash, kind, verdict and techniques."
+        },
+        "marking": {
+          "exempt": "Exempt",
+          "marked": "Marked",
+          "notRequired": "Not required",
+          "unmarked": "Not marked"
+        },
+        "requester": {
+          "anonymous": "Anonymous",
+          "cli": "Command line",
+          "user": "User"
+        },
+        "retry": "Try again",
+        "techniques": {
+          "c2pa": "C2PA manifest",
+          "ihubManifest": "iHub manifest",
+          "provenanceRecord": "Provenance record",
+          "textSignpost": "Text signpost",
+          "textWatermark": "Text watermark",
+          "trustmark": "TrustMark watermark",
+          "xmp": "IPTC/XMP metadata"
+        },
+        "test": {
+          "checkedAt": "Checked at",
+          "checking": "Checking…",
+          "checkingStatus": "Checking the content…",
+          "colDetail": "Detail",
+          "colFound": "Found",
+          "colTechnique": "Technique",
+          "colTrusted": "Trusted",
+          "colValid": "Valid",
+          "contentId": "Content ID",
+          "contentTitle": "Checked content",
+          "description": "Check a file or a text with the detector of this installation, exactly as /verify does. Submitted content is not stored.",
+          "detector": "Detector",
+          "downloadReport": "Download signed report",
+          "error": "The check failed: {{error}}",
+          "file": "File to check",
+          "fileHint": "Images, PDF, Word, PowerPoint, Excel, HTML, JSON or text files.",
+          "fileRequired": "Choose a file to check.",
+          "forbidden": "Your account may not use the detector with the current access level.",
+          "generatedAt": "Generated at",
+          "generator": "Generator",
+          "kind": "Kind",
+          "marking": "Marking",
+          "mimeType": "MIME type",
+          "mode": "What do you want to check?",
+          "modeFile": "A file",
+          "modeText": "Pasted text",
+          "model": "Model",
+          "no": "No",
+          "noProvenance": "No provenance record of this installation matches the content.",
+          "noReport": "No signed report is available for this check.",
+          "noTechniques": "No technique was run.",
+          "provenanceKind": "Origin",
+          "provenanceTitle": "Provenance",
+          "rateLimited": "Too many checks in a short time. Try again later.",
+          "reportHint": "JSON file with the signed report (JWS) and its decoded content, for auditors or the person who asked.",
+          "sha256": "SHA-256",
+          "size": "Size",
+          "skipped": "Skipped",
+          "skippedReason": "Skipped: {{reason}}",
+          "submit": "Check content",
+          "summary": "Detector summary:",
+          "techniquesCaption": "Results per technique",
+          "text": "Text to check",
+          "textHint": "Paste the text exactly as received; invisible signpost characters must stay in place.",
+          "textRequired": "Paste the text to check.",
+          "title": "Test detection",
+          "verdictLabel": "Result:",
+          "yes": "Yes"
+        },
+        "verdict": {
+          "aiGenerated": "AI-generated",
+          "inconclusive": "Inconclusive",
+          "notDetected": "No AI marking found"
+        }
+      },
+      "settings": {
+        "detection": {
+          "access": "Who may use the detector",
+          "accessAuthenticated": "Signed-in users",
+          "accessAuthenticatedDesc": "Every signed-in user of this installation.",
+          "accessHint": "Experts for free-form text watermark detection are approved on the Detection tab (CoP 2.1.2).",
+          "accessInternal": "Internal",
+          "accessInternalDesc": "Only admins and approved experts.",
+          "accessPublic": "Public",
+          "accessPublicDesc": "Anyone, without signing in, rate-limited. For example for publicly shared chats.",
+          "alwaysOn": "Always on",
+          "description": "The /verify page and the detection API of this installation (CoP 2.1).",
+          "enabled": "Detection",
+          "enabledDesc": "Let people check whether content was generated by this installation.",
+          "limit": "Checks per window",
+          "logEnabled": "Detection log",
+          "logEnabledDesc": "Records metadata only: time, requester, content hash, verdict and techniques.",
+          "logRetentionDays": "Log retention (days)",
+          "logRetentionDaysHint": "0 keeps log entries until they are deleted.",
+          "windowMinutes": "Rate limit window (minutes)",
+          "zeroRetention": "Zero retention of submitted content",
+          "zeroRetentionDesc": "Files and text submitted for detection are never stored (CoP 2.1.3). This is fixed and cannot be switched off."
+        },
+        "disclosure": {
+          "description": "Art. 50(1): people must know they are interacting with an AI system. Admins can still switch the disclosure off for single apps, with a recorded reason.",
+          "enabled": "AI interaction disclosure",
+          "enabledDesc": "Tell users in every app that they are talking to an AI system.",
+          "firstTurnNotice": "First-turn notice",
+          "firstTurnNoticeDesc": "Show a notice before the first message of a conversation.",
+          "guardrail": "“Are you an AI?” guardrail",
+          "guardrailDesc": "Instruct the model to always admit that it is an AI when asked.",
+          "persistentBadge": "Persistent AI badge",
+          "persistentBadgeDesc": "Keep an “AI” badge visible in the chat header.",
+          "reminderInterval": "Reminder interval for sensitive apps (answers)",
+          "reminderIntervalHint": "In apps marked as sensitive (legal, finance, health, complaints, vulnerable groups), repeat the notice every N assistant answers. 0 turns reminders off."
+        },
+        "editorial": {
+          "contact": "Editorial contact",
+          "contactHint": "Name, team or e-mail address of whoever reviews AI-generated publications.",
+          "description": "Art. 50(4): AI-generated text published to inform the public needs a person or team that holds editorial responsibility.",
+          "policyUrl": "Editorial policy URL",
+          "policyUrlHint": "Link to the policy that describes the human review."
+        },
+        "exports": {
+          "sign": "Sign exported files",
+          "signDesc": "Add a signed provenance manifest to every exported file (C2PA where the format supports it)."
+        },
+        "featureInactive": {
+          "body": "These settings take effect once the feature is switched on.",
+          "link": "Open Features",
+          "title": "The EU AI Act feature is switched off."
+        },
+        "formLabel": "EU AI Act settings",
+        "images": {
+          "available": "Available",
+          "c2pa": "C2PA manifest",
+          "c2paDesc": "Embed a signed C2PA manifest in every generated image.",
+          "c2paLibrary": "C2PA library",
+          "description": "Machine-readable marks on generated images (Art. 50(2)).",
+          "modelPathInUse": "Model path in use",
+          "modelsFound": "Found",
+          "modelsMissing": "Not found",
+          "notAvailable": "Not available",
+          "runtimeTitle": "Runtime status on this server",
+          "trustmarkModelPath": "TrustMark model path",
+          "trustmarkModelPathHint": "Directory with the TrustMark ONNX models. Empty uses contents/data/trustmark-models.",
+          "trustmarkModels": "TrustMark models",
+          "watermark": "Invisible watermark",
+          "watermarkError": "Watermark error",
+          "watermarkHint": "The watermark survives when metadata is stripped, e.g. by screenshots or re-uploads.",
+          "watermarkNone": "None",
+          "watermarkStrength": "Watermark strength",
+          "watermarkStrengthHint": "Between 0.1 and 1. Higher values are more robust but can become visible. Default: 0.95.",
+          "watermarkTrustmark": "TrustMark",
+          "xmp": "IPTC/XMP metadata",
+          "xmpDesc": "Write the IPTC “trained algorithmic media” source type as a fallback for tools that do not read C2PA."
+        },
+        "installation": {
+          "currentUrl": "URL in use",
+          "description": "The public address of this installation. It is written into provenance and opt-out records and into the signpost that points verifiers to /.well-known/ai-provenance.",
+          "id": "Installation ID",
+          "url": "Installation URL",
+          "urlHint": "Empty uses the MCP public URL, or else the address the request came from.",
+          "version": "iHub version"
+        },
+        "labels": {
+          "description": "Visible labels that tell readers content was generated by AI.",
+          "euIcon": "EU AI icon on exports",
+          "euIconAlways": "Always",
+          "euIconOff": "Off",
+          "euIconOptional": "Optional (the user decides per export)",
+          "exportLabel": "Export label",
+          "exportLabelDesc": "Add a visible AI label to the header or colophon of exported files.",
+          "messageBadge": "Message badge",
+          "messageBadgeDesc": "Show an “AI generated” chip on every assistant message.",
+          "outbound": "Outbound label",
+          "outboundDesc": "Add a visible AI label to content that agents send to people: Jira, Outlook, webhooks and shared chats."
+        },
+        "loadError": "The settings could not be loaded.",
+        "loading": "Loading settings…",
+        "nav": {
+          "changed": "changed",
+          "label": "Settings sections"
+        },
+        "provenance": {
+          "description": "A small record per AI answer: content hash, model, time and marking status, never the content. It lets iHub verify exports of chats that are not stored.",
+          "enabled": "Keep provenance records",
+          "retentionDays": "Retention (days)",
+          "retentionDaysHint": "0 keeps the records until they are deleted."
+        },
+        "provider": {
+          "address": "Address",
+          "contact": "Contact",
+          "contactHint": "E-mail address or phone number for questions about AI transparency.",
+          "description": "Who puts this installation into service. Shown in the compliance report and required for installations you run yourself.",
+          "legalEntity": "Legal entity",
+          "legalEntityHint": "Company or organisation name, as registered.",
+          "role": "Your role under the AI Act",
+          "roleDeployer": "Deployer",
+          "roleDeployerDesc": "You use iHub unmodified, under your own authority.",
+          "roleInfoBody": "A provider places an AI system on the market or puts it into service under its own name or trademark, or substantially modifies it. A deployer uses an AI system under its own authority without changing it. iHub plans conservatively: whoever installs and runs iHub themselves is treated as the provider of that installation. Choose “Deployer” only after your own legal assessment.",
+          "roleInfoTitle": "How to decide (Art. 3(3))",
+          "roleProvider": "Provider",
+          "roleProviderDesc": "You put iHub into service under your own name or trademark, or you modified it."
+        },
+        "requiredForConformance": "Required for conformance",
+        "retry": "Try again",
+        "save": {
+          "dirty": "Unsaved changes in: {{sections}}",
+          "discard": "Discard",
+          "error": "Saving failed: {{error}}",
+          "noChanges": "Nothing changed on the server.",
+          "region": "Save settings",
+          "save": "Save changes",
+          "saving": "Saving…",
+          "success": "Settings saved: {{sections}}.",
+          "validationFailed_one": "Fix the highlighted field before saving ({{count}} to fix).",
+          "validationFailed_other": "Fix the highlighted fields before saving ({{count}} to fix)."
+        },
+        "sections": {
+          "detection": "Detection",
+          "editorialResponsibility": "Editorial responsibility",
+          "exports": "Exports",
+          "images": "Images",
+          "installationUrl": "Installation URL",
+          "interactionDisclosure": "Interaction disclosure",
+          "labels": "Labels",
+          "provenance": "Provenance records",
+          "provider": "Provider details",
+          "signing": "Signing",
+          "termsOfService": "Terms of service",
+          "text": "Text"
+        },
+        "signing": {
+          "addAnchor": "Add trust anchor",
+          "anchorLabel": "Trust anchor {{number}} (PEM)",
+          "commonName": "Common name (certificate subject)",
+          "commonNameHint": "Empty uses “<organization> iHub”. Applies to the next certificate that iHub issues.",
+          "description": "Signatures make manifests, exports and detection reports tamper-evident. Certificates are managed on the Certificates tab.",
+          "enabled": "Signing",
+          "enabledDesc": "Sign C2PA manifests, exports and detection reports with the installation certificate.",
+          "noAnchors": "No additional trust anchors.",
+          "organization": "Organization (certificate subject)",
+          "organizationHint": "Empty uses the legal entity from the provider details. Applies to the next certificate that iHub issues.",
+          "removeAnchor": "Remove",
+          "removeAnchorAria": "Remove trust anchor {{number}}",
+          "trustedAnchors": "Trusted anchors",
+          "trustedAnchorsHint": "Root certificates (PEM) of other installations, e.g. of the same customer. Content they signed is shown as trusted here.",
+          "tsaUrl": "Time-stamp authority URL (RFC 3161)",
+          "tsaUrlHint": "Empty uses the local clock of this server, which is documented in every record (typical for offline installations)."
+        },
+        "switch": {
+          "off": "Off",
+          "on": "On"
+        },
+        "terms": {
+          "description": "The Code of Practice asks providers to forbid removing AI markings in their terms of service.",
+          "markRemovalClause": "Our terms of service prohibit removing or tampering with AI markings (CoP Measure 1.2(b))",
+          "url": "Terms of service URL"
+        },
+        "text": {
+          "description": "Marks on AI-generated free-form text.",
+          "signpost": "Signpost",
+          "signpostClipboard": "When copying to the clipboard",
+          "signpostClipboardDesc": "Off by default until validated in a pilot: the invisible characters travel with the copied text.",
+          "signpostExports": "In exported text files",
+          "signpostHint": "A C2PA text manifest made of invisible characters. It points verifiers to the detector of this installation (CoP 3.4).",
+          "strictMode": "Strict mode",
+          "strictModeDesc": "Block unmarked free-form text above the minimum length (for example from models without text marking) instead of only flagging it.",
+          "strictModeNoteBody": "Whether iHub should offer strict mode at all is still an open decision. The default is to flag, not block. Switch it on only if your installation must claim full Art. 50(2) conformance and your users can live with blocked answers.",
+          "strictModeNoteTitle": "Open decision: blocks unmarked long text. Off by default.",
+          "watermarkMinTokens": "Minimum length for text watermarking (tokens)",
+          "watermarkMinTokensHint": "Shorter answers are exempt, because a watermark cannot be detected reliably in them (CoP 1.1.2). Default: 200."
+        },
+        "validation": {
+          "integerMin": "Enter a whole number of at least {{min}}.",
+          "integerRange": "Enter a whole number between {{min}} and {{max}}.",
+          "invalid": "This value is not valid.",
+          "numberRange": "Enter a number between {{min}} and {{max}}.",
+          "pem": "Paste a PEM certificate (it starts with -----BEGIN CERTIFICATE-----).",
+          "url": "Enter an absolute http(s) URL, or leave the field empty."
+        },
+        "warnings": {
+          "c2pa": "Off: generated images carry no signed provenance manifest. The installation does not conform to Art. 50(2).",
+          "detection": "Off: nobody can check content from this installation. The installation does not conform, and this warning cannot be dismissed.",
+          "disclosure": "Off: users are no longer told that they are talking to an AI system. The installation does not conform to Art. 50(1). Use per-app opt-outs with a reason instead.",
+          "signing": "Off: nothing is signed, so marks can be forged or altered unnoticed. The installation does not conform, and this warning cannot be dismissed.",
+          "watermark": "No invisible watermark: the mark is lost as soon as metadata is removed. The installation does not conform to Art. 50(2)."
+        }
+      }
     }
   },
   "cloudStorage": {
@@ -3807,7 +4925,8 @@
       "copyOptions": "Copy Options",
       "downloadText": "as Text",
       "downloadMarkdown": "as Markdown",
-      "downloadHTML": "as HTML"
+      "downloadHTML": "as HTML",
+      "downloadOptions": "Download Options"
     },
     "insertIntoDocument": "Insert into document",
     "voiceInput": {
@@ -4559,11 +5678,6 @@
     "record": "Record a spoken message",
     "stopRecording": "Stop recording and send",
     "recording": "Recording",
-    "listening": "Listening…",
-    "transcribing": "Transcribing…",
-    "transcriptOf": "Transcript of {{name}}:",
-    "noSpeechInFile": "(no speech detected)",
-    "partialInInput": "What was transcribed so far is in the input field.",
     "errors": {
       "noModel": "No transcription model is configured for this app.",
       "decode": "Could not decode this audio in your browser. The format or codec may be unsupported (e.g. OGG in Safari).",
@@ -4571,7 +5685,6 @@
       "notReady": "The transcription service did not become ready. Please check the model configuration and try again.",
       "connection": "Could not reach the transcription service. Please try again later.",
       "timeout": "Transcription timed out. The file may be too long.",
-      "interrupted": "The transcription was interrupted before it finished.",
       "aborted": "Transcription was cancelled.",
       "serverTooLong": "This recording is too long for the configured transcription model. Please split it into shorter parts.",
       "serverBusy": "The transcription service is busy right now. Please try again in a moment.",
@@ -4581,11 +5694,17 @@
       "tooLong": "This audio is {{duration}}s long, which exceeds the {{max}}s limit for transcription.",
       "mic": "Could not access the microphone. Please grant permission and try again.",
       "busy": "A transcription is already running. Stop it first.",
-      "noSpeech": "No speech was detected. Nothing was sent.",
-      "audioNeedsTranscription": "The selected chat model cannot process audio directly. Enable Transcription in the actions menu, or remove the audio attachment."
+      "interrupted": "The transcription was interrupted before it finished.",
+      "audioNeedsTranscription": "The selected chat model cannot process audio directly. Enable Transcription in the actions menu, or remove the audio attachment.",
+      "noSpeech": "No speech was detected. Nothing was sent."
     },
     "toggleLabel": "Transcription",
-    "toggleDescription": "Uploaded audio and video are transcribed into your message, and the chat model answers the text"
+    "toggleDescription": "Uploaded audio and video are transcribed into your message, and the chat model answers the text",
+    "listening": "Listening…",
+    "transcribing": "Transcribing…",
+    "transcriptOf": "Transcript of {{name}}:",
+    "noSpeechInFile": "(no speech detected)",
+    "partialInInput": "What was transcribed so far is in the input field."
   },
   "documentPreview": {
     "title": "Document preview",
@@ -5182,6 +6301,252 @@
       "TOO_MANY_APPROVALS": "The run asked for approval too many times",
       "TOO_MANY_FAILURES": "Paused after too many failed runs in a row",
       "TOOL_NOT_AVAILABLE": "The app no longer offers a tool this task uses"
+    }
+  },
+  "aiTransparency": {
+    "badge": {
+      "srText": "You are interacting with an AI system",
+      "text": "AI",
+      "tooltip": "You are interacting with an AI system"
+    },
+    "categories": {
+      "complaints": "complaint-related",
+      "finance": "financial",
+      "health": "health",
+      "legal": "legal",
+      "vulnerable": "personal"
+    },
+    "chip": {
+      "contentId": "Content ID",
+      "exemptReason": {
+        "b2bTechnical": "technical B2B output",
+        "other": "declared by the administrator",
+        "standardEditing": "standard editing (e.g. translation, grammar)",
+        "transcription": "transcription"
+      },
+      "generatedAt": "Generated at",
+      "generatedInApp": "Generated by AI in this app",
+      "label": "AI generated",
+      "marking": {
+        "exempt": "Exempt: {{reason}}",
+        "marked": "Marked with an invisible watermark",
+        "markedUpstream": "Marked by the model vendor ({{vendor}})",
+        "markedVllm": "Marked with an invisible text watermark (self-hosted vLLM)",
+        "notRequired": "Not required: short text (up to {{count}} tokens)",
+        "unknown": "Not recorded for this answer",
+        "unmarked": "Not marked: the model does not watermark its output (text over {{count}} tokens)",
+        "unmarkedTemperatureZero": "Not marked: no watermark can be embedded at temperature 0 (text over {{count}} tokens)"
+      },
+      "markingLabel": "Marking",
+      "model": "Model",
+      "panelTitle": "About this answer",
+      "tooltip": "Generated by an AI system — show details",
+      "verify": "Verify content"
+    },
+    "common": {
+      "opensInNewTab": "(opens in a new tab)"
+    },
+    "image": {
+      "label": "AI generated",
+      "labelWithCredentials": "AI generated · Content Credentials",
+      "markedWith": "Machine-readable markings: {{markings}}",
+      "markings": {
+        "c2pa": "Content Credentials (C2PA, signed)",
+        "trustmark": "Invisible TrustMark watermark",
+        "upstream": "Watermark of the model vendor ({{vendor}})",
+        "xmp": "IPTC/XMP metadata \"AI generated\""
+      },
+      "notMarked": "No machine-readable marking could be applied to this image."
+    },
+    "justification": {
+      "choice": "Type",
+      "choiceRequired": "Please choose one option.",
+      "failed": "The change could not be saved.",
+      "hint": "At least {{min}} characters ({{count}} so far). Stored with your name, the time and this installation, and written to the audit log.",
+      "label": "Justification",
+      "saving": "Saving…",
+      "tooShort": "Please give a justification of at least {{min}} characters."
+    },
+    "notice": {
+      "default": "You are chatting with an AI system{{provider}}. Answers are generated automatically and may be inaccurate — check important information.",
+      "label": "Notice: AI system",
+      "operatedBy": " operated by {{legalEntity}}"
+    },
+    "outbound": {
+      "label": "AI-generated with iHub Apps — please review before sending."
+    },
+    "reminder": {
+      "text": "Reminder: you are talking to an AI system, not a person. For {{category}} matters, check important information with a qualified person."
+    },
+    "shared": {
+      "label": "This conversation was generated with an AI system (iHub Apps).",
+      "verify": "Verify"
+    }
+  },
+  "verify": {
+    "pageTitle": "Verify content",
+    "heading": "Check content for AI markings",
+    "intro": "Find out whether a file or a text carries a marking that identifies it as generated by AI (EU AI Act, Art. 50) — a signed C2PA manifest, an invisible watermark, a text signpost or a provenance record of this installation.",
+    "openApp": "Open iHub Apps",
+    "loading": "Loading…",
+    "loadFailed": "The detector could not be reached.",
+    "loadFailedHint": "Check your connection and try again.",
+    "retry": "Try again",
+    "unavailable": {
+      "title": "Detection is not available on this installation",
+      "description": "The administrator has not switched on content detection here."
+    },
+    "signin": {
+      "title": "Sign in to check content",
+      "description": "The detector of this installation is available to signed-in users. Sign in and you will be brought back here.",
+      "action": "Sign in"
+    },
+    "forbidden": {
+      "title": "You do not have access to the detector",
+      "description": "The detector of this installation is limited to approved users. Ask your administrator for access."
+    },
+    "input": {
+      "heading": "Content to check",
+      "modeLabel": "What do you want to check?",
+      "modeFile": "A file",
+      "modeText": "Pasted text",
+      "dropTitle": "Drag a file here, or",
+      "chooseFile": "Choose a file",
+      "fileHint": "Images, PDF, Word, PowerPoint, Excel, HTML, text or JSON — up to {{max}} MB",
+      "selectedFile": "Selected file",
+      "removeFile": "Remove {{name}}",
+      "fileTooLarge": "The file is larger than {{max}} MB.",
+      "fileEmpty": "The file is empty.",
+      "textLabel": "Text to check",
+      "textPlaceholder": "Paste the text you want to check",
+      "textHint": "Checks the text signpost and provenance records. Text watermarks can only be checked by approved experts.",
+      "textHintExpert": "Checks the text signpost, provenance records and the text watermark of self-hosted models.",
+      "privacy": "The content is checked and discarded right away — it is not stored.",
+      "submit": "Check content",
+      "checking": "Checking…"
+    },
+    "errors": {
+      "signin": "Sign in to check content on this installation.",
+      "forbidden": "You are not allowed to use the detector.",
+      "disabled": "Detection is not available on this installation.",
+      "tooLarge": "The file is too large.",
+      "rateLimited": "Too many checks in a short time. Please wait a moment and try again.",
+      "failed": "The content could not be checked: {{message}}",
+      "generic": "The content could not be checked. Please try again."
+    },
+    "result": {
+      "heading": "Result",
+      "verdict": {
+        "aiGenerated": "AI-generated",
+        "notDetected": "No marking found",
+        "inconclusive": "Inconclusive"
+      },
+      "verdictDescription": {
+        "aiGenerated": "A marking identifies this content as generated or manipulated by AI.",
+        "notDetected": "None of the checked techniques found an AI marking.",
+        "inconclusive": "A marking was found but could not be confirmed."
+      },
+      "foundBy": "Found by: {{techniques}}",
+      "foundByNone": "No technique found a marking.",
+      "caveat": "The absence of a mark does not prove that a person wrote the content: marks can be removed, and content from other tools may carry none.",
+      "notStored": "The checked content was not stored.",
+      "techniques": {
+        "caption": "Checked techniques",
+        "technique": "Technique",
+        "result": "Result",
+        "trust": "Signature",
+        "detail": "Detail"
+      },
+      "status": {
+        "found": "Found",
+        "none": "None",
+        "skipped": "Skipped",
+        "invalid": "Invalid"
+      },
+      "trust": {
+        "trusted": "Trusted",
+        "untrusted": "Not trusted",
+        "notApplicable": "Not applicable"
+      },
+      "skippedReason": "Not checked: {{reason}}",
+      "content": {
+        "heading": "Content",
+        "kind": "Kind",
+        "type": "Type",
+        "size": "Size",
+        "sha256": "SHA-256"
+      },
+      "kinds": {
+        "image": "Image",
+        "pdf": "PDF document",
+        "docx": "Word document",
+        "pptx": "PowerPoint presentation",
+        "xlsx": "Excel workbook",
+        "html": "HTML document",
+        "text": "Text",
+        "json": "JSON",
+        "other": "Other"
+      },
+      "provenance": {
+        "heading": "Provenance",
+        "generatedAt": "Generated at",
+        "model": "Model",
+        "generator": "Generator",
+        "contentId": "Content ID"
+      },
+      "detector": {
+        "heading": "Detector",
+        "installationUrl": "Installation",
+        "id": "Installation ID",
+        "version": "Version",
+        "checkedAt": "Checked at"
+      },
+      "downloadReport": "Download signed report",
+      "downloadUnsignedReport": "Download report (unsigned)",
+      "unsignedNote": "This installation has no active signing certificate, so the report is not signed.",
+      "downloadFailed": "The report could not be downloaded."
+    },
+    "techniques": {
+      "c2pa": "C2PA manifest",
+      "ihubManifest": "iHub export manifest",
+      "trustmark": "TrustMark image watermark",
+      "xmp": "XMP metadata",
+      "textSignpost": "Text signpost",
+      "textWatermark": "Text watermark",
+      "provenanceRecord": "Provenance record"
+    },
+    "report": {
+      "heading": "Check a signed report",
+      "description": "Paste a verification report or upload its .json file to confirm that a trusted detector signed it and that it has not been changed.",
+      "inputLabel": "Report",
+      "placeholder": "Paste the report JSON or the signed report token",
+      "hint": "The file saved with \"Download signed report\" works as it is.",
+      "upload": "Upload report file",
+      "readFailed": "The file could not be read.",
+      "submit": "Check report",
+      "checking": "Checking…",
+      "invalidInput": "This is not a verification report. Paste the downloaded report file or its \"report\" value.",
+      "valid": "Signature valid",
+      "invalid": "Signature invalid",
+      "trusted": "Signed by a trusted certificate",
+      "untrusted": "The signer is not trusted by this installation",
+      "errors": "Problems found",
+      "signer": {
+        "heading": "Signer",
+        "subject": "Subject",
+        "issuer": "Issuer",
+        "validUntil": "Valid until",
+        "fingerprint": "Fingerprint (SHA-256)"
+      },
+      "payload": {
+        "heading": "Report contents",
+        "verdict": "Verdict",
+        "techniquesFound": "Found by",
+        "checkedAt": "Checked at",
+        "detector": "Detector",
+        "contentHash": "Content SHA-256",
+        "content": "Content"
+      }
     }
   }
 }

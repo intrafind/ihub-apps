@@ -21,6 +21,7 @@ import FeedbackSection from './app-form/FeedbackSection';
 import SystemInstructionsSection from './app-form/SystemInstructionsSection';
 import SourcesConfigSection from './app-form/SourcesConfigSection';
 import SettingsConfigSection from './app-form/SettingsConfigSection';
+import AiTransparencySection from './app-form/AiTransparencySection';
 import { validateWithSchema, errorsToFieldErrors } from '../../../utils/schemaValidation';
 import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
 import AdminFormErrorSummary from './AdminFormErrorSummary';
@@ -42,6 +43,8 @@ import parseNumberOrUndefined from '../utils/parseNumberOrUndefined';
  * @param {Function} props.onValidationChange - Callback fired when validation state changes
  * @param {Array} props.availableModels - Available AI models
  * @param {Object} props.uiConfig - UI configuration for categories etc.
+ * @param {Object} [props.aiTransparency] - EU AI Act record handling for the saved app:
+ *   `{ appId: string|null, onRecordsChange: (records) => void }` (see AiTransparencySection)
  * @returns {React.Component} AppFormEditor component
  */
 function AppFormEditor({
@@ -50,7 +53,8 @@ function AppFormEditor({
   onValidationChange,
   availableModels = [],
   uiConfig = null,
-  jsonSchema
+  jsonSchema,
+  aiTransparency = null
 }) {
   const { t, i18n } = useTranslation();
   const currentLanguage = i18n.language;
@@ -319,6 +323,14 @@ function AppFormEditor({
 
             {/* Settings Configuration */}
             <SettingsConfigSection app={app} onChange={onChange} t={t} />
+
+            {/* EU AI Act Art. 50: disclosure, exemption, reminders */}
+            <AiTransparencySection
+              app={app}
+              onChange={onChange}
+              appId={aiTransparency?.appId || null}
+              onRecordsChange={aiTransparency?.onRecordsChange || null}
+            />
           </>
         )}
       </div>

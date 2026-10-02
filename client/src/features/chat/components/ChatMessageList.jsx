@@ -1,8 +1,11 @@
 import { useRef, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import ChatMessage from './ChatMessage';
+import AIReminderNotice from './AIReminderNotice';
 import Icon from '../../../shared/components/Icon';
 import { useUIConfig } from '../../../shared/contexts/UIConfigContext';
+import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
+import { getReminderMessageIds, getReminderSettings } from '../utils/aiTransparency';
 import IntegrationAuthPrompts from '../../../shared/components/integrations/IntegrationAuthPrompts';
 
 /**
@@ -75,6 +78,7 @@ function ChatMessageList({
   const { t } = useTranslation();
   const chatContainerRef = useRef(null);
   const { uiConfig } = useUIConfig();
+  const { platformConfig } = usePlatformConfig();
   const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
   const isUserScrollingRef = useRef(false);
   const prevMessageCountRef = useRef(0);
@@ -163,6 +167,14 @@ function ChatMessageList({
     return null;
   }
 
+  // EU AI Act Art. 50(1), guidelines ¶40: a sensitive app (legal, finance,
+  // health, …) reminds the user every N answers that this is an AI system.
+  // Derived from the rendered list, never stored with the messages.
+  const reminderSettings = getReminderSettings(platformConfig?.aiTransparency, app);
+  const reminderIds = reminderSettings
+    ? getReminderMessageIds(displayedMessages, reminderSettings.interval)
+    : null;
+
   // Index of the most recent assistant message. The Office insertAction
   // ('primary' variant) uses this to stay always-visible on the latest
   // response while older assistant turns fold back into hover-revealed icons,
@@ -236,6 +248,12 @@ function ChatMessageList({
               />
             </div>
           </div>
+
+          {reminderIds?.has(message.id) && (
+            <div className={`max-w-2xl ${showAvatars ? 'ml-12' : ''}`}>
+              <AIReminderNotice category={reminderSettings.category} />
+            </div>
+          )}
 
           {/* Show integration auth prompts after the last assistant message if auth is required */}
           {index === displayedMessages.length - 1 &&
