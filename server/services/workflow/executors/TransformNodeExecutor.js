@@ -7,6 +7,7 @@
  * - Copying values between variables
  * - Incrementing counters
  * - Pushing items to arrays
+ * - Appending all items of one array to another
  * - Any operation that doesn't require AI reasoning
  *
  * Using transform nodes instead of agent nodes for simple operations
@@ -63,6 +64,8 @@ function debugValue(value, maxLen = 300) {
  * @property {string} [increment] - Variable path to increment (with 'by' property)
  * @property {number} [by] - Amount to increment by (default: 1)
  * @property {string} [push] - Variable path containing item to push (with 'to' property)
+ * @property {string} [append] - Variable path of an array whose items are appended to the
+ *   array at 'to' (a missing or null source appends nothing)
  * @property {string} [arrayGet] - Array path to get item from (with 'index' and 'to')
  * @property {number|string} [index] - Index for arrayGet (number or variable path)
  * @property {string} [lengthOf] - Array path to get length of (with 'to')
@@ -334,6 +337,34 @@ export class TransformNodeExecutor extends BaseNodeExecutor {
         component: 'TransformNodeExecutor',
         itemPath,
         arrayPath,
+        arrayLength: array.length
+      });
+    }
+
+    // APPEND operation: append every item of an array to another array
+    if ('append' in operation && 'to' in operation) {
+      const sourcePath = operation.append;
+      const arrayPath = operation.to;
+
+      const mergedData = deepMerge(state.data, stateUpdates);
+      const source = this.getNestedValue(sourcePath, mergedData);
+      const items = source === undefined || source === null ? [] : [].concat(source);
+
+      const currentArray = this.getNestedValue(arrayPath, mergedData);
+      const array = Array.isArray(currentArray) ? [...currentArray] : [];
+      for (const item of items) {
+        array.push(
+          typeof item === 'object' && item !== null ? JSON.parse(JSON.stringify(item)) : item
+        );
+      }
+
+      this.setNestedValue(arrayPath, array, stateUpdates);
+
+      this.logger.debug('APPEND operation', {
+        component: 'TransformNodeExecutor',
+        sourcePath,
+        arrayPath,
+        appended: items.length,
         arrayLength: array.length
       });
     }

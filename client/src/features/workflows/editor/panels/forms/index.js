@@ -9,7 +9,6 @@ import ParallelForm from './ParallelForm';
 import JoinForm from './JoinForm';
 import TransformForm from './TransformForm';
 import HttpForm from './HttpForm';
-import CodeForm from './CodeForm';
 import HumanForm from './HumanForm';
 import ToolForm from './ToolForm';
 import MemoryForm from './MemoryForm';
@@ -35,7 +34,6 @@ export const nodeFormRegistry = {
   join: JoinForm,
   transform: TransformForm,
   http: HttpForm,
-  code: CodeForm,
   human: HumanForm,
   tool: ToolForm,
   memory: MemoryForm,
