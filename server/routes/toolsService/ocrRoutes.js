@@ -1,6 +1,6 @@
 import express from 'express';
 import multer from 'multer';
-import { authRequired } from '../../middleware/authRequired.js';
+import { authRequired, authenticatedOnly } from '../../middleware/authRequired.js';
 import configCache from '../../configCache.js';
 import { createJob } from './jobStore.js';
 import { processOcrJob } from './processors/ocrProcessor.js';
@@ -51,10 +51,14 @@ const upload = multer({
  *   prompt:    string (optional, max 2000 chars)
  *   ocrMode:   'full' | 'smart' | 'text-only' (default: 'full')
  *   debugMode: 'true' | 'false' (optional)
+ *
+ * Needs a signed-in user: a job belongs to the user who started it, and
+ * anonymous visitors share one principal, so their jobs could never be
+ * polled or downloaded.
  */
 router.post(
   '/ocr/process',
-  authRequired,
+  authenticatedOnly,
   (req, res, next) => {
     upload.array('files', MAX_FILES)(req, res, err => {
       if (err) {

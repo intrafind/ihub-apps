@@ -70,11 +70,11 @@ router.get('/auth', authRequired, office365AuthLimiter, async (req, res) => {
       return sendErrorResponse(res, 500, 'Session not available');
     }
 
-    // authRequired only rejects missing `req.user` or anonymous users;
-    // it does NOT guarantee req.user.id is truthy. Refuse to start an
-    // OAuth flow without a real user id — otherwise tokens would land
-    // under a shared sentinel key and could be read by another caller.
-    if (!req.user?.id) {
+    // authRequired lets the anonymous principal through when anonymous
+    // access is allowed, and does not guarantee req.user.id is truthy.
+    // Refuse to start an OAuth flow without a signed-in user id — otherwise
+    // tokens would land under a shared key and could be read by another caller.
+    if (!req.user?.id || req.user.id === 'anonymous') {
       return sendAuthRequired(res);
     }
 
@@ -256,7 +256,7 @@ router.get('/:providerId/callback', authOptional, async (req, res) => {
  */
 router.get('/status', authRequired, async (req, res) => {
   try {
-    if (!req.user?.id) {
+    if (!req.user?.id || req.user.id === 'anonymous') {
       return sendAuthRequired(res);
     }
 
@@ -318,7 +318,7 @@ router.get('/status', authRequired, async (req, res) => {
  */
 router.post('/disconnect', authRequired, async (req, res) => {
   try {
-    if (!req.user?.id) {
+    if (!req.user?.id || req.user.id === 'anonymous') {
       return sendAuthRequired(res);
     }
 
@@ -356,7 +356,7 @@ router.post('/disconnect', authRequired, async (req, res) => {
  */
 router.get('/sources', authRequired, async (req, res) => {
   try {
-    if (!req.user?.id) {
+    if (!req.user?.id || req.user.id === 'anonymous') {
       return sendAuthRequired(res);
     }
 
@@ -402,7 +402,7 @@ router.get('/sources', authRequired, async (req, res) => {
  */
 router.get('/drives/:source', authRequired, async (req, res) => {
   try {
-    if (!req.user?.id) {
+    if (!req.user?.id || req.user.id === 'anonymous') {
       return sendAuthRequired(res);
     }
 
@@ -449,7 +449,7 @@ router.get('/drives/:source', authRequired, async (req, res) => {
  */
 router.get('/items', authRequired, async (req, res) => {
   try {
-    if (!req.user?.id) {
+    if (!req.user?.id || req.user.id === 'anonymous') {
       return sendAuthRequired(res);
     }
 
@@ -499,7 +499,7 @@ router.get('/items', authRequired, async (req, res) => {
  */
 router.get('/download', authRequired, async (req, res) => {
   try {
-    if (!req.user?.id) {
+    if (!req.user?.id || req.user.id === 'anonymous') {
       return sendAuthRequired(res);
     }
 
