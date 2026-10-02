@@ -32,7 +32,7 @@ function fakeCtx(files, { defaults = { 'models/voxtral-mini-realtime.json': ship
     logs,
     fileExists: async p => p in files || Object.keys(files).some(name => name.startsWith(`${p}/`)),
     listFiles: async (dir, pattern) => {
-      const suffix = pattern.replace('*', '');
+      const suffix = pattern.replace(/\*/g, '');
       return Object.keys(files)
         .filter(name => name.startsWith(`${dir}/`) && name.endsWith(suffix))
         .map(name => name.slice(dir.length + 1))
