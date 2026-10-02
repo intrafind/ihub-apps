@@ -207,7 +207,12 @@
   },
   "localAuth": {
     "enabled": true,
-    "showDemoAccounts": true
+    "showDemoAccounts": true,
+    "lockout": {
+      "enabled": true,
+      "maxAttempts": 5,
+      "durationMinutes": 15
+    }
   },
   "swagger": {
     "enabled": true,

@@ -11,6 +11,13 @@ import {
 import configCache from '../configCache.js';
 import { ensureFirstUserIsAdmin } from '../utils/adminRescue.js';
 import { localUsersFile } from '../utils/contentsPath.js';
+import {
+  LoginLockedError,
+  lockoutKey,
+  reserveLoginAttempt,
+  resolveLockoutConfig,
+  settleLoginAttempt
+} from '../utils/loginLockout.js';
 
 const DUMMY_USER_ID = 'nonexistent-user';
 const DUMMY_PASSWORD_HASH = '$2a$12$n6wyln4ERyOHBD6UAx2fAOkt0F7nX0x6X2ZiYAbBVvK7i7diOaJjG';
@@ -22,7 +29,7 @@ const DUMMY_PASSWORD_HASH = '$2a$12$n6wyln4ERyOHBD6UAx2fAOkt0F7nX0x6X2ZiYAbBVvK7
  * @param {string} hash - Stored password hash
  * @returns {Promise<boolean>} True if password matches
  */
-async function verifyPasswordWithUserId(password, userId, hash) {
+export async function verifyPasswordWithUserId(password, userId, hash) {
   // Combine password with user ID same way as during hashing
   const passwordWithUserId = `${userId}:${password}`;
 
@@ -51,6 +58,8 @@ export default function localAuthMiddleware(req, res, next) {
  * @param {string} password - Password
  * @param {Object} localAuthConfig - Local auth configuration
  * @returns {Object} Login result with user and token
+ * @throws {LoginLockedError} While the account is locked after repeated failures
+ *   (`localAuthConfig.lockout`, see utils/loginLockout.js)
  */
 export async function loginUser(username, password, localAuthConfig) {
   const usersConfig = loadUsers(localUsersFile(localAuthConfig));
@@ -61,20 +70,38 @@ export async function loginUser(username, password, localAuthConfig) {
     u => equalsIgnoreCase(u.username, username) || equalsIgnoreCase(u.email, username)
   );
 
-  if (!user) {
-    await verifyPasswordWithUserId(password, DUMMY_USER_ID, DUMMY_PASSWORD_HASH);
-    throw new Error('Invalid credentials');
+  // Reserve the attempt before any password is checked: a locked account is
+  // refused here, and attempts sent in parallel cannot all slip past the check
+  // while the comparison runs.
+  const lockout = resolveLockoutConfig(localAuthConfig);
+  const key = lockoutKey(user, username);
+  let reservation = null;
+  if (lockout.enabled) {
+    reservation = await reserveLoginAttempt(key, lockout);
+    if (reservation.waitMs > 0) throw new LoginLockedError(Math.ceil(reservation.waitMs / 1000));
   }
 
-  // Verify password using user ID
-  const isValidPassword = await verifyPasswordWithUserId(password, user.id, user.passwordHash);
-  if (!isValidPassword) {
-    throw new Error('Invalid credentials');
-  }
+  // Only a sign-in that goes through settles as a success; a right password on
+  // a disabled account does not clear the count.
+  let signedIn = false;
+  try {
+    if (!user) {
+      await verifyPasswordWithUserId(password, DUMMY_USER_ID, DUMMY_PASSWORD_HASH);
+      throw new Error('Invalid credentials');
+    }
+    // Verify password using user ID
+    const isValidPassword = await verifyPasswordWithUserId(password, user.id, user.passwordHash);
+    if (!isValidPassword) {
+      throw new Error('Invalid credentials');
+    }
 
-  // Check if user is active
-  if (user.active === false) {
-    throw new Error('Account is disabled');
+    // Check if user is active
+    if (user.active === false) {
+      throw new Error('Account is disabled');
+    }
+    signedIn = true;
+  } finally {
+    if (reservation) await settleLoginAttempt(key, lockout, signedIn, reservation.shared);
   }
 
   // Create user response object (without sensitive information)

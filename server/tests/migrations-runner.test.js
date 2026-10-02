@@ -448,9 +448,9 @@ describe('Migration Runner', () => {
       expect(history.migrations[1].file).toBe('V110__add_proxy_defaults.js');
     });
 
-    it('moves the 5.5.30 follow-ups to V146-V149 from either earlier numbering', () => {
-      // They were V143-V146, then V145-V148, and main's V144 and V145 share
-      // numbers with them: only the file name tells them apart.
+    it('moves the 5.5.30 follow-ups to V147-V150 from any earlier numbering', () => {
+      // They were V143-V146, V145-V148 and V146-V149, and main's V144, V145
+      // and V146 share numbers with them: only the file name tells them apart.
       const entry = (version, file) => ({
         version,
         description: file.replace(/^V\d+__|\.js$/g, ''),
@@ -458,41 +458,31 @@ describe('Migration Runner', () => {
         checksum: 'abc123',
         status: 'success'
       });
-      const rows = history => history.migrations.map(m => `${m.version} ${m.file}`);
-      const current = [
-        '146 V146__translator_task_in_system_prompt.js',
-        '147 V147__seed_mistral_realtime_transcription_model.js',
-        '144 V144__remove_app_wizard_fields.js',
-        '148 V148__seed_google_tts_models.js',
-        '149 V149__dictation_via_transcription_models.js'
+      const files = [
+        'translator_task_in_system_prompt',
+        'seed_mistral_realtime_transcription_model',
+        'seed_google_tts_models',
+        'dictation_via_transcription_models'
       ];
+      const mains = [
+        entry('144', 'V144__remove_app_wizard_fields.js'),
+        entry('145', 'V145__add_short_link_allowed_hosts.js'),
+        entry('146', 'V146__add_local_auth_lockout.js')
+      ];
+      const rows = history => history.migrations.map(m => `${m.version} ${m.file}`);
+      const current = files.map((name, i) => `${147 + i} V${147 + i}__${name}.js`);
 
-      const first = {
-        schemaVersion: '1.0',
-        migrations: [
-          entry('143', 'V143__translator_task_in_system_prompt.js'),
-          entry('144', 'V144__seed_mistral_realtime_transcription_model.js'),
-          entry('144', 'V144__remove_app_wizard_fields.js'),
-          entry('145', 'V145__seed_google_tts_models.js'),
-          entry('146', 'V146__dictation_via_transcription_models.js')
-        ]
-      };
-      expect(reconcileRenamedMigrations(first)).toBe(true);
-      expect(rows(first)).toEqual(current);
-
-      const second = {
-        schemaVersion: '1.0',
-        migrations: [
-          entry('145', 'V145__translator_task_in_system_prompt.js'),
-          entry('146', 'V146__seed_mistral_realtime_transcription_model.js'),
-          entry('144', 'V144__remove_app_wizard_fields.js'),
-          entry('147', 'V147__seed_google_tts_models.js'),
-          entry('148', 'V148__dictation_via_transcription_models.js'),
-          entry('145', 'V145__add_short_link_allowed_hosts.js')
-        ]
-      };
-      expect(reconcileRenamedMigrations(second)).toBe(true);
-      expect(rows(second)).toEqual([...current, '145 V145__add_short_link_allowed_hosts.js']);
+      for (const first of [143, 145, 146]) {
+        const history = {
+          schemaVersion: '1.0',
+          migrations: [
+            ...files.map((name, i) => entry(String(first + i), `V${first + i}__${name}.js`)),
+            ...mains.map(m => ({ ...m }))
+          ]
+        };
+        expect(reconcileRenamedMigrations(history)).toBe(true);
+        expect(rows(history)).toEqual([...current, ...rows({ migrations: mains })]);
+      }
     });
 
     it('rewrites both CIMD governance entries, V111/V112 -> V112/V113', () => {

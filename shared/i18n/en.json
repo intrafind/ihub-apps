@@ -2614,6 +2614,12 @@
       "viewDetails": "View system resources",
       "dismiss": "Dismiss"
     },
+    "demoAccountsAlert": {
+      "message": "The login page shows the demo accounts, and {{accounts}} still use the password they ship with. Anyone who opens the login page can sign in with them. Turn off \"Show Demo Accounts in Login Form\" or change their passwords.",
+      "authSettings": "Authentication settings",
+      "users": "Users",
+      "dismiss": "Dismiss"
+    },
     "home": {
       "sections": {
         "loggingDesc": "Configure logging levels, components, metadata, and debug settings",

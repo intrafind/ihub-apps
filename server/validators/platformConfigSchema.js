@@ -309,7 +309,16 @@ export const platformConfigSchema = z
         // follows CONTENTS_DIR — see localUsersFile() in utils/contentsPath.js.
         usersFile: z.string().optional(),
         sessionTimeoutMinutes: z.number().min(1).prefault(480),
-        showDemoAccounts: z.boolean().prefault(true)
+        showDemoAccounts: z.boolean().prefault(true),
+        // Repeated failed sign-ins lock the account for a while; see
+        // utils/loginLockout.js.
+        lockout: z
+          .object({
+            enabled: z.boolean().prefault(true),
+            maxAttempts: z.number().int().min(1).prefault(5),
+            durationMinutes: z.number().int().min(1).prefault(15)
+          })
+          .prefault({})
       })
       .prefault({}),
     oidcAuth: z

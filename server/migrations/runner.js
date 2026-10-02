@@ -94,57 +94,82 @@ export async function scanMigrationFiles(migrationsDir) {
 const RENAMED_MIGRATIONS = [
   // The 5.5.30 follow-ups (Translator system prompt, Mistral transcription,
   // Gemini TTS, dictation through transcription models) were written as
-  // V143-V146, moved to V145-V148 when the app wizard field cleanup took V144
-  // on main, and to V146-V149 when the short-link allowlist took V145. Either
-  // old number reconciles to the current one, keeping their order. Matching on
-  // the file keeps these rules off the history rows of main's V144 and V145.
+  // V143-V146 and shifted up each time main took a number first: to V145-V148
+  // (app wizard field cleanup, V144), V146-V149 (short-link allowlist, V145)
+  // and V147-V150 (local sign-in lockout, V146). Every old number reconciles
+  // to the current one, keeping their order. Matching on the file keeps these
+  // rules off the history rows of main's V144, V145 and V146.
   {
     oldVersion: '143',
     oldFile: 'V143__translator_task_in_system_prompt.js',
-    newVersion: '146',
-    newFile: 'V146__translator_task_in_system_prompt.js'
+    newVersion: '147',
+    newFile: 'V147__translator_task_in_system_prompt.js'
   },
   {
     oldVersion: '145',
     oldFile: 'V145__translator_task_in_system_prompt.js',
-    newVersion: '146',
-    newFile: 'V146__translator_task_in_system_prompt.js'
+    newVersion: '147',
+    newFile: 'V147__translator_task_in_system_prompt.js'
+  },
+  {
+    oldVersion: '146',
+    oldFile: 'V146__translator_task_in_system_prompt.js',
+    newVersion: '147',
+    newFile: 'V147__translator_task_in_system_prompt.js'
   },
   {
     oldVersion: '144',
     oldFile: 'V144__seed_mistral_realtime_transcription_model.js',
-    newVersion: '147',
-    newFile: 'V147__seed_mistral_realtime_transcription_model.js'
+    newVersion: '148',
+    newFile: 'V148__seed_mistral_realtime_transcription_model.js'
   },
   {
     oldVersion: '146',
     oldFile: 'V146__seed_mistral_realtime_transcription_model.js',
-    newVersion: '147',
-    newFile: 'V147__seed_mistral_realtime_transcription_model.js'
+    newVersion: '148',
+    newFile: 'V148__seed_mistral_realtime_transcription_model.js'
+  },
+  {
+    oldVersion: '147',
+    oldFile: 'V147__seed_mistral_realtime_transcription_model.js',
+    newVersion: '148',
+    newFile: 'V148__seed_mistral_realtime_transcription_model.js'
   },
   {
     oldVersion: '145',
     oldFile: 'V145__seed_google_tts_models.js',
-    newVersion: '148',
-    newFile: 'V148__seed_google_tts_models.js'
+    newVersion: '149',
+    newFile: 'V149__seed_google_tts_models.js'
   },
   {
     oldVersion: '147',
     oldFile: 'V147__seed_google_tts_models.js',
-    newVersion: '148',
-    newFile: 'V148__seed_google_tts_models.js'
+    newVersion: '149',
+    newFile: 'V149__seed_google_tts_models.js'
+  },
+  {
+    oldVersion: '148',
+    oldFile: 'V148__seed_google_tts_models.js',
+    newVersion: '149',
+    newFile: 'V149__seed_google_tts_models.js'
   },
   {
     oldVersion: '146',
     oldFile: 'V146__dictation_via_transcription_models.js',
-    newVersion: '149',
-    newFile: 'V149__dictation_via_transcription_models.js'
+    newVersion: '150',
+    newFile: 'V150__dictation_via_transcription_models.js'
   },
   {
     oldVersion: '148',
     oldFile: 'V148__dictation_via_transcription_models.js',
-    newVersion: '149',
-    newFile: 'V149__dictation_via_transcription_models.js'
+    newVersion: '150',
+    newFile: 'V150__dictation_via_transcription_models.js'
+  },
+  {
+    oldVersion: '149',
+    oldFile: 'V149__dictation_via_transcription_models.js',
+    newVersion: '150',
+    newFile: 'V150__dictation_via_transcription_models.js'
   },
   {
     // The staan provider was renumbered twice while its branch was open: the

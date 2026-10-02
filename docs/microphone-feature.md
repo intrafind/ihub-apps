@@ -75,7 +75,7 @@ context (HTTPS, or `localhost`) and does not depend on the browser's Web Speech 
 it also works in Firefox.
 
 > **Upgrading from an earlier version:** the `vllm-realtime` service and its endpoint under
-> `speech.realtime` (`url`, `model`, `apiKey`, `enabled`) are gone. Migration V149 moves the
+> `speech.realtime` (`url`, `model`, `apiKey`, `enabled`) are gone. Migration V150 moves the
 > endpoint onto a transcription model and switches the platform default and apps to it. See
 > [Choosing what voice input uses](voice-transcription.md#choosing-what-voice-input-uses).
 
