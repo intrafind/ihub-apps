@@ -4,7 +4,9 @@
  * Migration V146 specs — dictation moves from the `speech.realtime` vLLM
  * endpoint onto a transcription model: the endpoint lands on a model (reused or
  * written), every `vllm-realtime` choice points at it, groups that could
- * dictate keep the right to, and only the connection limits stay behind.
+ * dictate — those reaching an app that streamed to it — keep the right to, and
+ * only the connection limits stay behind. What it cannot read fails it before
+ * anything is written.
  */
 
 import test from 'node:test';
@@ -80,16 +82,23 @@ const voxtral = overrides => ({
 const groups = {
   'config/groups.json': {
     groups: {
-      admins: { permissions: { models: ['*'] } },
-      anonymous: { permissions: { models: ['gemini-flash-latest'] } },
-      authenticated: { inherits: ['anonymous'], permissions: { models: ['*'] } },
+      admins: { permissions: { apps: ['*'], models: ['*'] } },
+      anonymous: { permissions: { apps: ['chat'], models: ['gemini-flash-latest'] } },
+      authenticated: { inherits: ['anonymous'], permissions: { apps: ['*'], models: ['*'] } },
       // Grants nothing itself, but inherits a wildcard: needs nothing.
-      'team-01': { inherits: ['authenticated'], permissions: { models: [] } },
-      // Inherits only what anonymous has: needs the model too.
-      guests: { inherits: ['anonymous'], permissions: { models: [] } }
+      'team-01': { inherits: ['authenticated'], permissions: { apps: [], models: [] } },
+      // Inherits anonymous: gets the model through it, not on its own.
+      guests: { inherits: ['anonymous'], permissions: { apps: [], models: [] } },
+      // Reaches no app that dictated through the endpoint.
+      reporting: { permissions: { apps: ['reports'], models: [] } },
+      // Reaches the dictating app, with no model list at all.
+      'meeting-team': { permissions: { apps: ['meeting'] } }
     }
   }
 };
+
+// Follows the platform default.
+const chatApp = { 'apps/chat.json': { id: 'chat', settings: { speechRecognition: {} } } };
 
 const dictatingApp = {
   'apps/meeting.json': {
@@ -132,6 +141,7 @@ test('the platform default moves to the model already on the endpoint, enabled',
   const ctx = fakeCtx({
     ...platform({ defaultService: 'vllm-realtime' }),
     ...voxtral({ enabled: false }),
+    ...chatApp,
     ...groups
   });
   await up(ctx);
@@ -145,16 +155,36 @@ test('the platform default moves to the model already on the endpoint, enabled',
   assert.equal(ctx.files['models/voxtral-mini-realtime.json'].apiKey, ENC_KEY);
   assert.equal(platformConfigSchema.safeParse(ctx.files['config/platform.json']).success, true);
 
-  // Whoever could dictate still can; a group with a wildcard, its own or
-  // inherited, needs nothing.
+  // Whoever could dictate in an app that followed the default still can; a
+  // group with a wildcard or the inherited grant needs nothing, and one that
+  // reaches no such app gets nothing.
   const { groups: after } = ctx.files['config/groups.json'];
   assert.deepEqual(after.anonymous.permissions.models, [
     'gemini-flash-latest',
     'voxtral-mini-realtime'
   ]);
-  assert.deepEqual(after.guests.permissions.models, ['voxtral-mini-realtime']);
+  assert.deepEqual(after.guests.permissions.models, []);
   assert.deepEqual(after.admins.permissions.models, ['*']);
   assert.deepEqual(after['team-01'].permissions.models, []);
+  assert.deepEqual(after.reporting.permissions.models, []);
+  assert.equal(after['meeting-team'].permissions.models, undefined);
+});
+
+test('for one app, only the groups reaching that app get the model', async () => {
+  const ctx = fakeCtx({
+    ...platform(),
+    ...voxtral(),
+    ...chatApp,
+    ...dictatingApp,
+    ...groups
+  });
+  await up(ctx);
+  const { groups: after } = ctx.files['config/groups.json'];
+  // A missing model list is started, not skipped.
+  assert.deepEqual(after['meeting-team'].permissions.models, ['voxtral-mini-realtime']);
+  // Anonymous reaches only the chat app, which kept the browser.
+  assert.deepEqual(after.anonymous.permissions.models, ['gemini-flash-latest']);
+  assert.deepEqual(after.reporting.permissions.models, []);
 });
 
 test('an app moves to a new model when the shipped one points elsewhere', async () => {
@@ -245,17 +275,21 @@ test('an inheritance cycle does not hang the grant', async () => {
   const ctx = fakeCtx({
     ...platform({ defaultService: 'vllm-realtime' }),
     ...voxtral(),
+    ...chatApp,
     'config/groups.json': {
       groups: {
-        a: { inherits: ['b'], permissions: { models: [] } },
-        b: { inherits: ['a'], permissions: { models: [] } }
+        a: { inherits: ['b'], permissions: { apps: ['chat'], models: [] } },
+        b: { inherits: ['a'], permissions: { apps: [], models: [] } }
       }
     }
   });
   await up(ctx);
   const { groups: after } = ctx.files['config/groups.json'];
-  assert.deepEqual(after.a.permissions.models, ['voxtral-mini-realtime']);
-  assert.deepEqual(after.b.permissions.models, ['voxtral-mini-realtime']);
+  const granted = [after.a, after.b].filter(g =>
+    g.permissions.models.includes('voxtral-mini-realtime')
+  );
+  // Both reach the app; one grant covers both, since each inherits the other.
+  assert.equal(granted.length, 1);
 });
 
 test('a second run changes nothing', async () => {
@@ -291,18 +325,35 @@ test('a half-finished run resumes on the same model', async () => {
   assert.equal(ctx.files['models/voxtral-mini-realtime-dictation-2.json'], undefined);
 });
 
-test('without the shipped default to build on, choices fall back to the browser', async () => {
-  const ctx = fakeCtx(
-    {
-      ...platform({
-        defaultService: 'vllm-realtime',
-        realtime: { enabled: true, url: '', model: '' }
-      }),
-      ...dictatingApp
-    },
-    { defaults: {} }
-  );
-  await up(ctx);
-  assert.equal(ctx.files['config/platform.json'].speech.defaultService, 'browser');
-  assert.equal(ctx.files['apps/meeting.json'].settings.speechRecognition.service, 'default');
+test('without the shipped default to build on, it fails and changes nothing', async () => {
+  const files = {
+    ...platform({
+      defaultService: 'vllm-realtime',
+      realtime: { enabled: true, url: '', model: '' }
+    }),
+    ...dictatingApp
+  };
+  const before = JSON.parse(JSON.stringify(files));
+  const ctx = fakeCtx(files, { defaults: {} });
+  await assert.rejects(up(ctx), /Cannot read the shipped voxtral-mini-realtime model/);
+  assert.deepEqual(ctx.files, before);
+});
+
+test('an unreadable app fails it before anything is written, to run again later', async () => {
+  const files = {
+    ...platform({ defaultService: 'vllm-realtime' }),
+    ...voxtral({ enabled: false }),
+    ...dictatingApp,
+    'apps/broken.json': null
+  };
+  const before = JSON.parse(JSON.stringify(files));
+  const ctx = fakeCtx(files);
+  const readJson = ctx.readJson;
+  ctx.readJson = async p => {
+    if (p === 'apps/broken.json') throw new SyntaxError('Unexpected end of JSON input');
+    return readJson(p);
+  };
+  await assert.rejects(up(ctx), /Cannot read apps\/broken\.json/);
+  // The endpoint is still there for the next run.
+  assert.deepEqual(ctx.files, before);
 });

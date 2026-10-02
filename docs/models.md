@@ -325,7 +325,7 @@ Both Gemini providers reuse the same credential as the Google chat models: a per
 
 Key points:
 
-- **Credentials stay server-side.** The public `GET /api/models` endpoint strips `apiKey` from every model and strips `url` from transcription models, so the vLLM URL and API key never reach the browser. `GET /api/models` returns chat models by default; `GET /api/models?type=transcription` returns permitted transcription models (sanitized) for the app editor's model picker.
+- **Credentials stay server-side.** The public `GET /api/models` endpoint strips `apiKey` from every model and strips `url` from transcription models, so the vLLM URL and API key never reach the browser. `GET /api/models` returns chat models by default; `GET /api/models?type=transcription` returns permitted transcription models (sanitized). The admin pages (app editor, Voice Input) list models from `GET /api/admin/models` instead, since admin access does not imply model permissions.
 - **Permissions** are enforced the same way as chat models — a user must be permitted to use the transcription model.
 - **Selection.** Apps reference a transcription model via the `transcription.modelId` app-config field (Admin → Apps → Transcription), not the chat model selector. Transcription models are hidden from the chat model selector, magic prompt, and compare mode.
 - **Dictation.** The microphone button uses a transcription model when Admin → Voice Input → Voice input (`speech.defaultService: "model"`, `speech.dictation.modelId`) or the app (`settings.speechRecognition.service: "model"`, `modelId`) picks one. See [Microphone Feature](microphone-feature.md#transcription-models-server-proxied).

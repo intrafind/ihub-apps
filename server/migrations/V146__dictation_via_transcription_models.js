@@ -26,15 +26,20 @@
  *    `settings.speechRecognition.service: "vllm-realtime"` becomes `"model"`
  *    with `modelId`.
  * 4. **Groups.** The platform backend needed no model permission; a model
- *    does. When the endpoint was working and in use, every group that —
- *    counting what it inherits — grants neither `*` nor the model gets it, so
- *    whoever could dictate before still can. On a shipped setup that is only
- *    `anonymous`: every other group inherits a `*`.
+ *    does. When the endpoint was working, a group gets the model if it could
+ *    dictate through it — it reaches an app that used `vllm-realtime`, or one
+ *    that followed a `vllm-realtime` platform default — and, counting what it
+ *    inherits, grants neither `*` nor the model already. Parents come first,
+ *    so a group that inherits the grant is not granted again. On a shipped
+ *    setup that is only `anonymous`: every other group inherits a `*`.
  * 5. **Cleanup.** `speech.realtime` keeps only its connection limits;
  *    `enabled`, `url`, `model` and `apiKey` go.
  *
  * Idempotent: the model is found again by its endpoint until platform.json —
- * written last — no longer carries it.
+ * written last — no longer carries it. Anything it cannot read (an app or
+ * model file, the shipped default) fails the migration before it writes, so
+ * the endpoint is not dropped and the migration runs again on the next start,
+ * once the file is fixed.
  */
 
 export const version = '146';
@@ -49,6 +54,7 @@ export async function precondition(ctx) {
   return await ctx.fileExists('config/platform.json');
 }
 
+/** Every JSON file of a directory. An unreadable one fails the migration. */
 async function readJsonFiles(ctx, directory) {
   if (!(await ctx.fileExists(directory))) return [];
   const names = await ctx.listFiles(directory, '*.json');
@@ -57,8 +63,8 @@ async function readJsonFiles(ctx, directory) {
     const path = `${directory}/${name}`;
     try {
       files.push({ path, data: await ctx.readJson(path) });
-    } catch {
-      ctx.warn(`Skipping unreadable ${path}`);
+    } catch (err) {
+      throw new Error(`Cannot read ${path} (${err.message}); fix it and restart`);
     }
   }
   return files;
@@ -75,10 +81,7 @@ function findEndpointModel(models, endpoint) {
   return matches.find(({ data }) => data.id === DEFAULT_MODEL_ID) || matches[0] || null;
 }
 
-/**
- * The model dictation moves to: reused, or written from the shipped default.
- * Returns its id, or null when the shipped default is missing.
- */
+/** The model dictation moves to, reused or written from the shipped default; its id. */
 async function resolveDictationModel(ctx, models, endpoint, working) {
   if (endpoint.url) {
     const existing = findEndpointModel(models, endpoint);
@@ -106,9 +109,8 @@ async function resolveDictationModel(ctx, models, endpoint, working) {
   let model;
   try {
     model = await ctx.readDefaultJson(`models/${DEFAULT_MODEL_ID}.json`);
-  } catch {
-    ctx.warn(`Default ${DEFAULT_MODEL_ID} model not found in defaults; cannot move dictation`);
-    return null;
+  } catch (err) {
+    throw new Error(`Cannot read the shipped ${DEFAULT_MODEL_ID} model (${err.message})`);
   }
   if (await ctx.fileExists(`models/${DEFAULT_MODEL_ID}.json`)) {
     // Never overwrite a model file an admin has.
@@ -128,36 +130,59 @@ async function resolveDictationModel(ctx, models, endpoint, working) {
 }
 
 /**
- * A group's model grants including what it inherits — what its members get,
- * since permissions are the union over a user's groups and their ancestors.
+ * A group's grants of one kind (`apps`, `models`) including what it inherits —
+ * what its members get, since permissions are the union over a user's groups
+ * and their ancestors.
  */
-function effectiveModels(groups, groupId, seen = new Set()) {
+function effectiveGrants(groups, groupId, kind, seen = new Set()) {
   if (seen.has(groupId) || !groups[groupId]) return new Set();
   seen.add(groupId);
   const group = groups[groupId];
-  const models = new Set(Array.isArray(group.permissions?.models) ? group.permissions.models : []);
+  const grants = new Set(Array.isArray(group.permissions?.[kind]) ? group.permissions[kind] : []);
   for (const parent of Array.isArray(group.inherits) ? group.inherits : []) {
-    for (const id of effectiveModels(groups, parent, seen)) models.add(id);
+    for (const id of effectiveGrants(groups, parent, kind, seen)) grants.add(id);
   }
-  return models;
+  return grants;
 }
 
-async function grantModelToGroups(ctx, modelId) {
-  if (!(await ctx.fileExists('config/groups.json'))) return;
+/** How many ancestors deep a group sits, so parents can be handled first. */
+function inheritanceDepth(groups, groupId, seen = new Set()) {
+  if (seen.has(groupId) || !groups[groupId]) return 0;
+  seen.add(groupId);
+  const parents = Array.isArray(groups[groupId].inherits) ? groups[groupId].inherits : [];
+  return parents.reduce(
+    (deepest, parent) => Math.max(deepest, 1 + inheritanceDepth(groups, parent, new Set(seen))),
+    0
+  );
+}
+
+/**
+ * Grant the model to every group whose members could dictate through the
+ * retired backend: those reaching one of `dictatingAppIds`.
+ */
+async function grantModelToGroups(ctx, modelId, dictatingAppIds) {
+  if (dictatingAppIds.size === 0 || !(await ctx.fileExists('config/groups.json'))) return;
   const config = await ctx.readJson('config/groups.json');
-  if (!config?.groups || typeof config.groups !== 'object') return;
-  // Decided on the groups as they were, so one grant does not hide another.
-  const lacking = Object.keys(config.groups).filter(groupId => {
-    const models = effectiveModels(config.groups, groupId);
-    return (
-      Array.isArray(config.groups[groupId]?.permissions?.models) &&
-      !models.has('*') &&
-      !models.has(modelId)
-    );
-  });
+  const groups = config?.groups;
+  if (!groups || typeof groups !== 'object') return;
+
+  const couldDictate = groupId => {
+    const apps = effectiveGrants(groups, groupId, 'apps');
+    return apps.has('*') || [...dictatingAppIds].some(id => apps.has(id));
+  };
+  const order = Object.keys(groups).sort(
+    (a, b) => inheritanceDepth(groups, a) - inheritanceDepth(groups, b)
+  );
   const granted = [];
-  for (const groupId of lacking) {
-    config.groups[groupId].permissions.models.push(modelId);
+  for (const groupId of order) {
+    if (!couldDictate(groupId)) continue;
+    const models = effectiveGrants(groups, groupId, 'models');
+    if (models.has('*') || models.has(modelId)) continue;
+    const group = groups[groupId];
+    // The schema defaults a missing list to none at all.
+    if (!group.permissions || typeof group.permissions !== 'object') group.permissions = {};
+    if (!Array.isArray(group.permissions.models)) group.permissions.models = [];
+    group.permissions.models.push(modelId);
     granted.push(groupId);
   }
   if (granted.length === 0) return;
@@ -177,11 +202,23 @@ export async function up(ctx) {
   // What the bridge treated as a configured backend.
   const working = realtime.enabled !== false && !!endpoint.url;
 
-  const apps = (await readJsonFiles(ctx, 'apps')).filter(
-    ({ data }) => data?.settings?.speechRecognition?.service === RETIRED_SERVICE
-  );
+  const allApps = await readJsonFiles(ctx, 'apps');
+  const serviceOf = app => app.data?.settings?.speechRecognition?.service;
+  const apps = allApps.filter(app => serviceOf(app) === RETIRED_SERVICE);
   const defaultUsesIt = speech?.defaultService === RETIRED_SERVICE;
   const inUse = defaultUsesIt || apps.length > 0;
+  // Every app whose microphone streamed to the endpoint: its own choice, or the
+  // platform default it followed.
+  const dictatingAppIds = new Set(
+    allApps
+      .filter(app => {
+        const service = serviceOf(app);
+        return (
+          service === RETIRED_SERVICE || (defaultUsesIt && (!service || service === 'default'))
+        );
+      })
+      .map(app => app.data?.id || app.path.replace(/^apps\//, '').replace(/\.json$/, ''))
+  );
 
   let modelId = null;
   if (inUse || working) {
@@ -195,24 +232,18 @@ export async function up(ctx) {
 
   for (const app of apps) {
     const recognition = app.data.settings.speechRecognition;
-    if (modelId) {
-      recognition.service = 'model';
-      recognition.modelId = modelId;
-    } else {
-      recognition.service = 'default';
-    }
+    recognition.service = 'model';
+    recognition.modelId = modelId;
     await ctx.writeJson(app.path, app.data);
-    ctx.log(`${app.path}: dictation ${modelId ? `via model ${modelId}` : 'follows the default'}`);
+    ctx.log(`${app.path}: dictation via model ${modelId}`);
   }
 
-  if (modelId && inUse && working) await grantModelToGroups(ctx, modelId);
+  if (modelId && working) await grantModelToGroups(ctx, modelId, dictatingAppIds);
 
   if (speech) {
-    if (defaultUsesIt) {
-      speech.defaultService = modelId ? 'model' : 'browser';
-    }
+    if (defaultUsesIt) speech.defaultService = 'model';
     ctx.setDefault(platform, 'speech.dictation.modelId', '');
-    if (defaultUsesIt && modelId) speech.dictation.modelId = modelId;
+    if (defaultUsesIt) speech.dictation.modelId = modelId;
 
     if (speech.realtime && typeof speech.realtime === 'object') {
       for (const field of ENDPOINT_FIELDS) delete speech.realtime[field];

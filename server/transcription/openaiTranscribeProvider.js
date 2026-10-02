@@ -27,7 +27,9 @@
  * detects it otherwise), `prompt` (spelling of names and terms),
  * `maxChunkSeconds`.
  */
+import { randomBytes } from 'node:crypto';
 import { providerEnvKeyName } from '../../shared/llmProviders.js';
+import { httpFetch } from '../utils/httpConfig.js';
 import { expandEnvVars, resolveApiKey } from './credentials.js';
 import { pcm16ToWav } from './wav.js';
 
@@ -178,21 +180,52 @@ export function describeError(status, body, sentKey) {
   return `the service answered HTTP ${status}${detail ? `: ${detail}` : ''}`;
 }
 
-async function transcribePart({ cfg, wav, signal }) {
-  const form = new FormData();
-  form.append('file', new Blob([wav], { type: 'audio/wav' }), 'audio.wav');
-  form.append('model', cfg.model);
-  form.append('response_format', 'json');
-  if (cfg.options?.language) form.append('language', String(cfg.options.language));
-  if (cfg.options?.prompt) form.append('prompt', String(cfg.options.prompt));
+/**
+ * A `multipart/form-data` body of text fields and one file, as a Buffer, so
+ * it goes through `httpFetch` like any other body.
+ *
+ * @param {Record<string, string>} fields
+ * @param {{ name: string, filename: string, type: string, data: Buffer }} file
+ * @returns {{ body: Buffer, contentType: string }}
+ */
+export function buildMultipart(fields, file) {
+  const boundary = `----ihub${randomBytes(12).toString('hex')}`;
+  const parts = Object.entries(fields).map(([name, value]) =>
+    Buffer.from(
+      `--${boundary}\r\nContent-Disposition: form-data; name="${name}"\r\n\r\n${value}\r\n`
+    )
+  );
+  parts.push(
+    Buffer.from(
+      `--${boundary}\r\nContent-Disposition: form-data; name="${file.name}"; filename="${file.filename}"\r\n` +
+        `Content-Type: ${file.type}\r\n\r\n`
+    ),
+    file.data,
+    Buffer.from(`\r\n--${boundary}--\r\n`)
+  );
+  return { body: Buffer.concat(parts), contentType: `multipart/form-data; boundary=${boundary}` };
+}
 
-  const headers = {};
+async function transcribePart({ cfg, wav, signal }) {
+  const fields = { model: cfg.model, response_format: 'json' };
+  if (cfg.options?.language) fields.language = String(cfg.options.language);
+  if (cfg.options?.prompt) fields.prompt = String(cfg.options.prompt);
+  const { body, contentType } = buildMultipart(fields, {
+    name: 'file',
+    filename: 'audio.wav',
+    type: 'audio/wav',
+    data: wav
+  });
+
+  const headers = { 'Content-Type': contentType };
   if (cfg.apiKey) headers.Authorization = `Bearer ${cfg.apiKey}`;
   const timeout = AbortSignal.timeout(TRANSCRIBE_TIMEOUT_MS);
-  const res = await fetch(cfg.url, {
+  // The platform's transport: its proxy, TLS settings and DNS guard apply,
+  // as they do to the model import that found this endpoint.
+  const res = await httpFetch(cfg.url, {
     method: 'POST',
     headers,
-    body: form,
+    body,
     signal: signal ? AbortSignal.any([signal, timeout]) : timeout
   });
   if (!res.ok) {
