@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * Migration V143 specs — short links get a host allowlist.
+ * Migration V145 specs — short links get a host allowlist.
  *
  * `platform.shortLinks.allowedHosts` lists the hosts an absolute short link
  * target may name. It starts empty (paths on this server only) and an
@@ -18,7 +18,7 @@ import {
   precondition,
   version,
   description
-} from '../migrations/V143__add_short_link_allowed_hosts.js';
+} from '../migrations/V145__add_short_link_allowed_hosts.js';
 import { setDefault } from '../migrations/utils.js';
 
 let baseDir;
@@ -55,16 +55,16 @@ const readPlatform = async dir =>
   JSON.parse(await fs.readFile(path.join(dir, 'config/platform.json'), 'utf8'));
 
 before(async () => {
-  baseDir = await fs.mkdtemp(path.join(os.tmpdir(), 'v143-'));
+  baseDir = await fs.mkdtemp(path.join(os.tmpdir(), 'v145-'));
 });
 
 after(async () => {
   await fs.rm(baseDir, { recursive: true, force: true });
 });
 
-describe('V143 add_short_link_allowed_hosts', () => {
+describe('V145 add_short_link_allowed_hosts', () => {
   it('declares its version and description', () => {
-    assert.equal(version, '143');
+    assert.equal(version, '145');
     assert.equal(description, 'add_short_link_allowed_hosts');
   });
 

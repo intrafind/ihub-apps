@@ -167,7 +167,7 @@ Link to external applications or websites directly from the app list. Perfect fo
 
 | Property | Type | Required | Default | Description |
 |----------|------|----------|---------|-------------|
-| `url` | String (URL) | Yes | - | The target URL to redirect to. Must be a valid HTTP/HTTPS URL. |
+| `url` | String (URL) | Yes | - | The target URL to redirect to. Must be a valid URL starting with `http://` or `https://`; other schemes (such as `mailto:`) are rejected when the app is saved, and the app shows an error instead of opening them. |
 | `openInNewTab` | Boolean | No | `true` | Whether to open the URL in a new browser tab. When `false`, navigates in the same window. |
 | `showWarning` | Boolean | No | `true` | Whether to display a warning page before redirecting. When `false`, redirects immediately without confirmation. |
 
@@ -277,7 +277,7 @@ Embed external applications directly within iHub Apps using an iframe. This crea
 
 | Property | Type | Required | Default | Description |
 |----------|------|----------|---------|-------------|
-| `url` | String (URL) | Yes | - | The URL of the application to embed. Must be a valid HTTP/HTTPS URL. |
+| `url` | String (URL) | Yes | - | The URL of the application to embed. Must be a valid URL starting with `http://` or `https://`; other schemes are rejected when the app is saved, and the app shows an error instead of embedding them. |
 | `allowFullscreen` | Boolean | No | `true` | Whether to allow the embedded app to enter fullscreen mode. |
 | `sandbox` | Array<String> | No | `["allow-scripts", "allow-same-origin", "allow-forms"]` | Array of sandbox permissions that control what the iframe can do. See [Sandbox Permissions](#iframe-sandbox-permissions) below. |
 
@@ -454,7 +454,7 @@ Redirect apps require:
 |-------|------|-------------|---------|
 | `type` | String | Must be `"redirect"` | `"redirect"` |
 | `redirectConfig` | Object | Redirect configuration | See below |
-| `redirectConfig.url` | String | Target URL | `"https://example.com"` |
+| `redirectConfig.url` | String | Target URL (`http://` or `https://` only) | `"https://example.com"` |
 
 ### Iframe Apps (Additional Required Fields)
 
@@ -464,7 +464,7 @@ Iframe apps require:
 |-------|------|-------------|---------|
 | `type` | String | Must be `"iframe"` | `"iframe"` |
 | `iframeConfig` | Object | Iframe configuration | See below |
-| `iframeConfig.url` | String | URL to embed | `"https://example.com/app"` |
+| `iframeConfig.url` | String | URL to embed (`http://` or `https://` only) | `"https://example.com/app"` |
 
 ### Common Optional Fields
 
@@ -1275,6 +1275,19 @@ Here are some practical examples of how to configure the settings for different 
 - Test with simpler schemas first
 - Check provider-specific limitations
 
+**"Invalid app configuration: …" when saving an app:**
+- Creating or saving an app under **Admin → Apps**, uploading an app file and the admin API
+  check the complete configuration against the app schema; a configuration that does not pass
+  is not saved. The message names each field that failed, for example
+  `redirectConfig.url: Redirect URL must use http or https`.
+- `Unrecognized keys` means the configuration contains fields that are not part of an app;
+  remove them in the JSON editor. (The unused fields older versions of the app creation wizard
+  saved — `useAI`, `useTemplate`, `useManual`, `aiGenerated`, `aiPrompt`, a top-level
+  `imageUpload` and `"parentId": null` — are removed from app files on the server by the
+  upgrade.)
+- App files on the server that do not pass still load; the server log reports them as
+  "Resource validation issues".
+
 ### App Type Specific Issues
 
 **Redirect Apps:**
@@ -1289,6 +1302,10 @@ Here are some practical examples of how to configure the settings for different 
 - Check browser console for JavaScript errors
 - Verify the `redirectConfig.url` is a valid URL format
 - Ensure no network policies are blocking the redirect
+
+*The app shows an error that it has no valid web address:*
+- `redirectConfig.url` is missing or does not start with `http://` or `https://`. Only web
+  addresses are opened; correct the URL under **Admin → Apps**
 
 *Users don't want to see the warning page:*
 - Set `redirectConfig.showWarning: false` for immediate redirect

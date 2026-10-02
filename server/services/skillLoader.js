@@ -1,9 +1,9 @@
 import { promises as fs } from 'fs';
 import path from 'path';
-import matter from 'gray-matter';
 import { getRootDir } from '../pathUtils.js';
 import config from '../config.js';
 import logger from '../utils/logger.js';
+import { parseFrontMatter } from '../utils/frontMatter.js';
 import { resolveAndValidatePath, resolveAndValidateRealPath } from '../utils/pathSecurity.js';
 
 // Agent Skills spec constraints
@@ -48,14 +48,19 @@ function getSkillsDirectory(customDir) {
 }
 
 /**
- * Parse SKILL.md frontmatter and body
+ * Parse SKILL.md frontmatter and body.
+ *
+ * The frontmatter must be YAML (see `utils/frontMatter.js`). A file that cannot
+ * be read, has invalid YAML, or declares another frontmatter language is
+ * logged and yields `null`, so callers skip that skill instead of failing.
+ *
  * @param {string} filePath - Path to SKILL.md
  * @returns {Promise<{ frontmatter: object, body: string } | null>}
  */
 async function parseSkillFile(filePath) {
   try {
     const content = await fs.readFile(filePath, 'utf-8');
-    const { data: frontmatter, content: body } = matter(content);
+    const { data: frontmatter, content: body } = parseFrontMatter(content);
     return { frontmatter, body: body.trim() };
   } catch (error) {
     logger.error('Failed to parse SKILL.md', { component: 'SkillLoader', filePath, error });

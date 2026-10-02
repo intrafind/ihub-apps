@@ -501,6 +501,35 @@ describe('Migration Runner', () => {
       expect(history.migrations[0].version).toBe('111');
     });
 
+    it('rewrites the short-link allowlist entry renumbered V143 -> V145', () => {
+      const history = {
+        schemaVersion: '1.0',
+        migrations: [
+          {
+            version: '143',
+            description: 'add_short_link_allowed_hosts',
+            file: 'V143__add_short_link_allowed_hosts.js',
+            checksum: 'abc123',
+            status: 'success'
+          },
+          {
+            version: '144',
+            description: 'remove_app_wizard_fields',
+            file: 'V144__remove_app_wizard_fields.js',
+            checksum: 'def456',
+            status: 'success'
+          }
+        ]
+      };
+
+      expect(reconcileRenamedMigrations(history)).toBe(true);
+      expect(history.migrations[0].version).toBe('145');
+      expect(history.migrations[0].file).toBe('V145__add_short_link_allowed_hosts.js');
+      // V144 belongs to the app wizard cleanup, which kept its number.
+      expect(history.migrations[1].version).toBe('144');
+      expect(history.migrations[1].file).toBe('V144__remove_app_wizard_fields.js');
+    });
+
     it('is a no-op on a fresh install with no matching history entries', () => {
       const history = { schemaVersion: '1.0', migrations: [] };
 

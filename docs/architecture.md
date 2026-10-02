@@ -622,6 +622,7 @@ contents/skills/
 ### Key Components
 
 - **`server/services/skillLoader.js`**: Loads, validates, and serves skill content. Enforces the Agent Skills specification (name pattern, description length, path traversal prevention).
+- **`server/utils/frontMatter.js`**: `parseFrontMatter()` splits `SKILL.md` files and marketplace content previews into front matter and body. It accepts YAML front matter only: a block that names another language after the opening `---` (e.g. `---json`) is rejected, and the skill is skipped with a log entry. It is the only module allowed to import `gray-matter` (enforced by ESLint).
 - **Authorization integration**: Skills are permission-controlled via group configuration using the `skills` permission key.
 
 ### Skill Metadata (SKILL.md frontmatter)
