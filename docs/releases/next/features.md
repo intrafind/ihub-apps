@@ -80,3 +80,17 @@ read aloud.
 - The **Test** action in **Admin → Models** now checks transcription models too, also disabled
   ones. It starts a session with the endpoint, or sends one second of silence to Gemini
   Transcribe.
+
+## Whisper Transcription on T-Systems LLM Hub and Other OpenAI-Compatible Servers
+
+Whisper can now transcribe in iHub: `whisper-large-v3` and `whisper-large-v3-turbo` on T-Systems
+LLM Hub, OpenAI's `whisper-1` and `gpt-4o-transcribe`, or Whisper on your own vLLM server. Like
+every transcription model, it can take voice input, recordings and audio/video uploads.
+
+- **Admin → Models → Import from URL** lists such models as **Transcription** and imports them as
+  transcription models, using the provider's stored key.
+- A model set up by hand uses the provider **OpenAI** or **Local** with the model type
+  **Transcription** and the endpoint's `/audio/transcriptions` URL.
+- The transcript arrives in one piece when the user stops. Recordings longer than ten minutes are
+  sent in parts, each cut at a pause, to stay within the usual upload limit.
+- Before enabling the model for users, check it with **Test** in **Admin → Models**.

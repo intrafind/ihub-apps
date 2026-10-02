@@ -195,9 +195,14 @@ you pick, so they need not be typed in one by one.
 3. **Load models** calls `GET <base>/models` and lists what it returns. The endpoint's own
    metadata is used where it reports it: display name, context window and output limit (vLLM
    `max_model_len`, LLM Hub `meta_data`, Mistral `max_context_length`, Google token limits),
-   image input, tool support and end-of-life date. Embedding, audio, image and moderation models
-   are marked and not selected by **Select all**. Models already configured for the same endpoint
-   show as **Already added**.
+   image input, tool support and end-of-life date. Embedding, transcription, audio, image and
+   moderation models are marked and not selected by **Select all**. Models already configured for
+   the same endpoint show as **Already added**.
+
+   A **Transcription** model (Whisper; LLM Hub reports it as `model_type: "STT"`) from an
+   OpenAI-compatible endpoint is imported as a [transcription model](#transcription-models) on
+   the endpoint's `/audio/transcriptions`, ready for voice input and recording. With the provider
+   it keeps the provider's key.
 4. Adjust the iHub model IDs if needed (an ID prefix applies to all of them), and **Import**.
    With **+ New provider**, you can also pick no model and choose **Create provider without
    models**: the provider is created with the endpoint's normalized base URL and the key, for an
@@ -271,7 +276,7 @@ Models with `modelType: "transcription"` are **speech-to-text** models, not chat
 
 Transcription models are **not** routed through the LLM adapter pipeline. They use a parallel transcription provider registry (`server/transcription/`) and are streamed over the same authenticated realtime WebSocket (`/api/voice/realtime`) that dictation uses.
 
-Four transcription providers ship. All of them speak the same browser-facing protocol, so switching a model changes nothing in the app or the UI:
+Five transcription providers ship. All of them speak the same browser-facing protocol, so switching a model changes nothing in the app or the UI:
 
 | Provider | Model | Shape | Use it for |
 | --- | --- | --- | --- |
@@ -279,13 +284,30 @@ Four transcription providers ship. All of them speak the same browser-facing pro
 | `mistral` | `voxtral-mini-transcribe-realtime` | Streaming (Mistral realtime API) | The same Voxtral model, hosted by Mistral |
 | `google-live` | `gemini-3.5-transcribe-live` | Streaming (Gemini Live API) | Hosted realtime transcription, recordings up to 10 min |
 | `google-transcribe` | `gemini-3.5-transcribe` | Batch (one request) | Hosted transcription of complete recordings, up to 1 h |
+| `openai` / `local` | any Whisper-style model (`whisper-large-v3-turbo` on LLM Hub, `whisper-1`) | Batch (OpenAI `/audio/transcriptions`) | Whisper on T-Systems LLM Hub, OpenAI, vLLM or another OpenAI-compatible server |
 
 - **vLLM Realtime** (`provider: "vllm-realtime"`) — a self-hosted vLLM `/v1/realtime` endpoint (e.g. Voxtral). The `url` is a `ws://` / `wss://` WebSocket URL and stays server-side.
 - **Mistral** (`provider: "mistral"` with `modelType: "transcription"`) — Mistral's hosted `voxtral-mini-transcribe-realtime-2602` on `wss://api.mistral.ai/v1/audio/transcriptions/realtime`. Streams the transcript while the audio is still arriving and detects the language by itself. It takes the same credential as the Mistral chat models: a per-model `apiKey`, the `mistral` entry in `providers.json`, or `MISTRAL_API_KEY`. `config.targetStreamingDelayMs` (optional, milliseconds) trades latency for accuracy: Mistral waits that long before it transcribes.
 - **Gemini Live** (`provider: "google-live"`) — Google's hosted realtime speech-to-text over the Gemini Live API (`wss://…BidiGenerateContent`). Streams a transcript while the audio is still arriving, auto-detects 85+ languages and handles code-switching. **A Live API session runs for at most 10 minutes**, so longer recordings need the batch provider. Pin languages with `config.languageCodes` (BCP-47, empty means auto-detect).
 - **Gemini Batch** (`provider: "google-transcribe"`) — Google's hosted transcription for complete recordings, up to one hour of audio. It transcribes in a single request rather than streaming, so the transcript appears at the end instead of word by word. The audio is uploaded to Google's Files API first and deleted again afterwards. `config` accepts `mode` (`"smart"`, the default, or `"verbatim"`), `languageCodes`, and `customVocabulary` (up to 1,000 phrases that bias recognition toward domain terms).
 
+- **OpenAI-compatible** (`provider: "openai"` or `"local"` with `modelType: "transcription"`) — the OpenAI audio API: the recording goes up as a WAV file to `/audio/transcriptions`, the transcript comes back in one piece. `url` is that endpoint or the API base (`https://llm-server.llmhub.t-systems.net/v2`). A recording longer than `config.maxChunkSeconds` (default 600, under the usual 25 MB upload limit) is sent in parts cut at a pause. Optional `config.language` (ISO-639-1) and `config.prompt` (spelling of names and terms) are passed on. The key comes from the model, else from its linked provider (`providerId`, e.g. `llmhub`) or the `openai` / `local` entry in `providers.json`, else from `<PROVIDER>_API_KEY`; a self-hosted server may need none.
+
 Both Gemini providers reuse the same credential as the Google chat models: a per-model `apiKey`, the `google` entry in `providers.json`, or `GOOGLE_API_KEY`.
+
+```json
+{
+  "id": "llmhub-whisper-large-v3-turbo",
+  "modelId": "whisper-large-v3-turbo",
+  "name": { "en": "Whisper Large v3 Turbo" },
+  "description": { "en": "Whisper on T-Systems LLM Hub." },
+  "url": "https://llm-server.llmhub.t-systems.net/v2/audio/transcriptions",
+  "provider": "openai",
+  "providerId": "llmhub",
+  "modelType": "transcription",
+  "enabled": true
+}
+```
 
 ```json
 {

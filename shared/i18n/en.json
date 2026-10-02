@@ -1041,7 +1041,7 @@
         "supportsImageGeneration": "Enable if this model can generate images (e.g., Gemini Image models)",
         "maxReferenceImages": "Maximum number of reference images (1-14)",
         "modelType": "Chat models answer prompts. Transcription models convert audio to text via a realtime endpoint (e.g. Voxtral). Text-to-speech models read chat messages aloud (e.g. Voxtral TTS).",
-        "realtimeUrl": "Endpoint of the transcription service: a vLLM /v1/realtime WebSocket URL, or the provider’s API. It stays server-side and never reaches the browser.",
+        "realtimeUrl": "Endpoint of the transcription service: a vLLM /v1/realtime WebSocket URL, an OpenAI-compatible /audio/transcriptions URL (Whisper with the OpenAI or Local provider), or the provider’s API. It stays server-side and never reaches the browser.",
         "nativeWebSearch": "Apps with web search use the provider's built-in search on this model. Turn it off for models or gateways that do not support it; they fall back to Brave Search.",
         "promptCachingOpenAI": "Sends a cache key so requests that start with the same prompt reuse OpenAI’s cache. On by default for api.openai.com; turn it off for OpenAI-compatible servers that reject unknown parameters.",
         "promptCachingExplicit": "Marks the tools, system prompt and conversation for caching. Cached input costs about a tenth of normal input, but writing it costs a quarter more, so this pays off when the same app is used again within five minutes. Only for models that support prompt caching.",
@@ -1165,6 +1165,7 @@
           "embedding": "Embedding",
           "rerank": "Reranker",
           "audio": "Audio",
+          "transcription": "Transcription",
           "image": "Image",
           "moderation": "Moderation",
           "other": "Not a chat model"

@@ -2,7 +2,7 @@
 
 ## Overview
 
-The microphone feature allows users to dictate messages instead of typing. It supports two operation modes, an optional transcript overlay, and multiple speech recognition backends (browser-native, Azure Cognitive Services, and any transcription model — Voxtral on vLLM or Mistral, Gemini Transcribe Live, Gemini Transcribe — streamed through iHub).
+The microphone feature allows users to dictate messages instead of typing. It supports two operation modes, an optional transcript overlay, and multiple speech recognition backends (browser-native, Azure Cognitive Services, and any transcription model — Voxtral on vLLM or Mistral, Gemini Transcribe Live, Gemini Transcribe, Whisper on T-Systems LLM Hub or OpenAI — streamed through iHub).
 
 > **Dictation vs. transcription.** This page covers **dictation** — live microphone speech dropped into the **input field** for the user to edit and send. A separate feature, **transcription**, turns a recording or an uploaded audio/video clip into the **user's message** — a recording grows the message while the user speaks and sends it on stop — using a `modelType: "transcription"` model; the chat model then answers it. Both can be enabled on the same app and share the same authenticated `/api/voice/realtime` WebSocket. See [Transcription Models](models.md#transcription-models) and [Audio File Support](audio-file-support.md#two-audio-paths-multimodal-vs-voxtral-transcription).
 
@@ -44,7 +44,7 @@ If the default names a backend that is not available — Azure while `speech.azu
 
 ### Transcription models (server-proxied)
 
-Any transcription model can take dictation: self-hosted Voxtral on vLLM, Voxtral on the Mistral platform, Gemini Transcribe Live or Gemini Transcribe. The data flow is:
+Any transcription model can take dictation: self-hosted Voxtral on vLLM, Voxtral on the Mistral platform, Gemini Transcribe Live, Gemini Transcribe, or Whisper on T-Systems LLM Hub, OpenAI or another OpenAI-compatible server. The data flow is:
 
 ```
 browser mic ──(PCM16 16kHz over WebSocket, naming the model)──▶ iHub /api/voice/realtime
@@ -64,7 +64,7 @@ Set the model up once in **Admin → Models** (endpoint, key, enabled; see [Tran
 }
 ```
 
-- A streaming model (Voxtral, Gemini Transcribe Live) shows the text while the user speaks. Gemini Transcribe is a batch model: the text appears in one piece when the user stops.
+- A streaming model (Voxtral, Gemini Transcribe Live) shows the text while the user speaks. Gemini Transcribe and Whisper are batch models: the text appears in one piece when the user stops.
 - Users need access to the model through their groups, as for any model.
 - The same model can serve dictation, the record button and file transcription.
 

@@ -649,10 +649,12 @@ function ModelFormEditor({
                         isTranscription
                           ? data.provider === 'mistral'
                             ? 'wss://api.mistral.ai/v1/audio/transcriptions/realtime'
-                            : t(
-                                'admin.models.placeholders.realtimeUrl',
-                                'ws://host:8080/v1/realtime'
-                              )
+                            : data.provider === 'openai' || data.provider === 'local'
+                              ? 'https://llm-server.llmhub.t-systems.net/v2/audio/transcriptions'
+                              : t(
+                                  'admin.models.placeholders.realtimeUrl',
+                                  'ws://host:8080/v1/realtime'
+                                )
                           : isTts
                             ? data.provider === 'google'
                               ? 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash-tts:streamGenerateContent'
@@ -668,7 +670,7 @@ function ModelFormEditor({
                       <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
                         {t(
                           'admin.models.hints.realtimeUrl',
-                          'Endpoint of the transcription service: a vLLM /v1/realtime WebSocket URL, or the provider’s API. It stays server-side and never reaches the browser.'
+                          'Endpoint of the transcription service: a vLLM /v1/realtime WebSocket URL, an OpenAI-compatible /audio/transcriptions URL (Whisper with the OpenAI or Local provider), or the provider’s API. It stays server-side and never reaches the browser.'
                         )}
                       </p>
                     )}

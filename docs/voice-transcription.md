@@ -40,6 +40,7 @@ browser-facing protocol is identical for all of them:
 | `mistral` | Mistral realtime API (`wss://api.mistral.ai/v1/audio/transcriptions/realtime`) | Streaming WebSocket |
 | `google-live` | Gemini Live API (`wss://…BidiGenerateContent`) | Streaming WebSocket |
 | `google-transcribe` | Gemini Files API + `/v1beta/interactions` | Batch: one HTTPS request on `stop` |
+| `openai` / `local` | OpenAI-compatible `/audio/transcriptions` (Whisper on T-Systems LLM Hub, OpenAI, vLLM) | Batch: one HTTPS request on `stop` (in parts for long recordings) |
 
 A batch provider has no upstream socket. The server buffers the PCM the browser
 streams, makes a single transcription request when the client sends `stop`, and
@@ -143,7 +144,7 @@ Field notes:
 - **`apiKey`** — optional. Plaintext values are encrypted at rest (AES-256-GCM `ENC[...]`) when saved through the admin UI; `${ENV_VAR}` placeholders are also supported. Sent upstream as a Bearer token, never to browsers.
 - **`enabled`** — must be `true` for the model to be usable.
 
-Configure it in **Admin → Models** (select model type "Transcription"), or edit the JSON directly — changes are hot-reloaded. The **Test** action on the model validates reachability and protocol without streaming speech: a streaming model passes once its endpoint starts a session, a batch model (Gemini Transcribe) is sent one second of silence. It also works on a disabled model, so you can check one before enabling it.
+Configure it in **Admin → Models** (select model type "Transcription"), or edit the JSON directly — changes are hot-reloaded. The **Test** action on the model validates reachability and protocol without streaming speech: a streaming model passes once its endpoint starts a session, a batch model (Gemini Transcribe, Whisper) is sent one second of silence. It also works on a disabled model, so you can check one before enabling it.
 
 ### Hosted alternative: Voxtral on the Mistral platform
 
@@ -212,6 +213,34 @@ they are off by default.
   Long recordings need the buffer cap raised: one hour of 16 kHz PCM16 is
   ≈115 MB and the default `maxBufferedAudioBytes` is 32 MB. See
   [Runtime limits and tuning](#runtime-limits-and-tuning).
+
+### Hosted alternative: Whisper (T-Systems LLM Hub, OpenAI)
+
+Any server that speaks the OpenAI audio API can transcribe: `whisper-large-v3` and
+`whisper-large-v3-turbo` on T-Systems LLM Hub, OpenAI's `whisper-1` and `gpt-4o-transcribe`, or
+Whisper on your own vLLM. Such a model is a transcription model with `provider: "openai"` (or
+`"local"`):
+
+```json
+{
+  "id": "llmhub-whisper-large-v3-turbo",
+  "modelId": "whisper-large-v3-turbo",
+  "url": "https://llm-server.llmhub.t-systems.net/v2/audio/transcriptions",
+  "provider": "openai",
+  "providerId": "llmhub",
+  "modelType": "transcription",
+  "enabled": true
+}
+```
+
+- The quickest way is **Admin → Models → Import from URL** on the LLM Hub provider: Whisper is
+  listed as **Transcription** and imported exactly like this, using the provider's key.
+- It is a batch provider: the transcript arrives in one piece when the user stops, not word by
+  word. Recordings longer than `config.maxChunkSeconds` (default 600 s, under the common 25 MB
+  upload limit) are sent in parts, each cut at a pause.
+- `config.language` (e.g. `"de"`) skips language detection; `config.prompt` helps with the
+  spelling of names and terms.
+- On LLM Hub, which models a key can use depends on its plan; Whisper is in every paid plan.
 
 Speaker diarization and word-level timestamps are **not** exposed. iHub renders
 a plain transcript into a chat bubble with nowhere to show them, and Gemini
@@ -325,7 +354,7 @@ An app picks its own the same way:
 }
 ```
 
-- A streaming model (Voxtral on vLLM or Mistral, Gemini Transcribe Live) shows the text in the input field while the user speaks. The batch model (Gemini Transcribe) inserts it in one piece when the user stops.
+- A streaming model (Voxtral on vLLM or Mistral, Gemini Transcribe Live) shows the text in the input field while the user speaks. A batch model (Gemini Transcribe, Whisper) inserts it in one piece when the user stops.
 - Users need access to the model through their groups (see [Permissions](#permissions)). Without it, pressing the microphone shows `Not permitted to use transcription model`.
 - If the platform default's model is disabled or deleted, apps that follow the default use the browser until it is back, just as they do when Azure is switched off. An app that picks a model of its own shows the error instead.
 - Endpoint and key are set once, on the model. The same model can serve voice input, the record button and file transcription.

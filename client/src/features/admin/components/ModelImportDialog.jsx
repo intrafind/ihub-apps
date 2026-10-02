@@ -48,6 +48,7 @@ function typeLabel(t, type) {
     embedding: t('admin.models.import.types.embedding', 'Embedding'),
     rerank: t('admin.models.import.types.rerank', 'Reranker'),
     audio: t('admin.models.import.types.audio', 'Audio'),
+    transcription: t('admin.models.import.types.transcription', 'Transcription'),
     image: t('admin.models.import.types.image', 'Image'),
     moderation: t('admin.models.import.types.moderation', 'Moderation'),
     other: t('admin.models.import.types.other', 'Not a chat model')

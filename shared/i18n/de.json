@@ -1271,7 +1271,7 @@
         "supportsImageGeneration": "Aktivieren, wenn dieses Modell Bilder erzeugen kann (z.B. Gemini Bildmodelle)",
         "maxReferenceImages": "Maximale Anzahl von Referenzbildern (1-14)",
         "modelType": "Chat-Modelle beantworten Prompts. Transkriptionsmodelle wandeln Audio über einen Echtzeit-Endpunkt (z. B. Voxtral) in Text um. Sprachausgabemodelle lesen Chat-Nachrichten vor (z. B. Voxtral TTS).",
-        "realtimeUrl": "Endpunkt des Transkriptionsdienstes: eine vLLM-/v1/realtime-WebSocket-URL oder die API des Anbieters. Sie bleibt serverseitig und erreicht niemals den Browser.",
+        "realtimeUrl": "Endpunkt des Transkriptionsdienstes: eine vLLM-/v1/realtime-WebSocket-URL, eine OpenAI-kompatible /audio/transcriptions-URL (Whisper mit dem Anbieter OpenAI oder Local) oder die API des Anbieters. Er bleibt serverseitig und erreicht niemals den Browser.",
         "nativeWebSearch": "Apps mit Websuche verwenden auf diesem Modell die integrierte Suche des Anbieters. Für Modelle oder Gateways ohne Unterstützung ausschalten; sie greifen dann auf Brave Search zurück.",
         "promptCachingOpenAI": "Sendet einen Cache-Schlüssel, damit Anfragen mit gleichem Prompt-Anfang den Cache von OpenAI wiederverwenden. Für api.openai.com standardmäßig an; für OpenAI-kompatible Server ausschalten, die unbekannte Parameter ablehnen.",
         "promptCachingExplicit": "Markiert Tools, System-Prompt und Unterhaltung zum Cachen. Gecachte Eingaben kosten etwa ein Zehntel normaler Eingaben, das Schreiben in den Cache aber ein Viertel mehr – das lohnt sich, wenn dieselbe App innerhalb von fünf Minuten erneut genutzt wird. Nur für Modelle, die Prompt-Caching unterstützen.",
@@ -1395,6 +1395,7 @@
           "embedding": "Embedding",
           "rerank": "Reranker",
           "audio": "Audio",
+          "transcription": "Transkription",
           "image": "Bild",
           "moderation": "Moderation",
           "other": "Kein Chat-Modell"
