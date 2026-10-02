@@ -13,11 +13,10 @@ import { ensureFirstUserIsAdmin } from '../utils/adminRescue.js';
 import { localUsersFile } from '../utils/contentsPath.js';
 import {
   LoginLockedError,
-  clearFailedLogins,
-  lockedForMs,
   lockoutKey,
-  recordFailedLogin,
-  resolveLockoutConfig
+  reserveLoginAttempt,
+  resolveLockoutConfig,
+  settleLoginAttempt
 } from '../utils/loginLockout.js';
 
 const DUMMY_USER_ID = 'nonexistent-user';
@@ -30,7 +29,7 @@ const DUMMY_PASSWORD_HASH = '$2a$12$n6wyln4ERyOHBD6UAx2fAOkt0F7nX0x6X2ZiYAbBVvK7
  * @param {string} hash - Stored password hash
  * @returns {Promise<boolean>} True if password matches
  */
-async function verifyPasswordWithUserId(password, userId, hash) {
+export async function verifyPasswordWithUserId(password, userId, hash) {
   // Combine password with user ID same way as during hashing
   const passwordWithUserId = `${userId}:${password}`;
 
@@ -71,27 +70,31 @@ export async function loginUser(username, password, localAuthConfig) {
     u => equalsIgnoreCase(u.username, username) || equalsIgnoreCase(u.email, username)
   );
 
-  // A locked account is refused before any password is checked.
+  // Reserve the attempt before any password is checked: a locked account is
+  // refused here, and attempts sent in parallel cannot all slip past the check
+  // while the comparison runs.
   const lockout = resolveLockoutConfig(localAuthConfig);
   const key = lockoutKey(user, username);
+  let reservation = null;
   if (lockout.enabled) {
-    const remainingMs = lockedForMs(key);
-    if (remainingMs > 0) throw new LoginLockedError(Math.ceil(remainingMs / 1000));
+    reservation = await reserveLoginAttempt(key, lockout);
+    if (reservation.waitMs > 0) throw new LoginLockedError(Math.ceil(reservation.waitMs / 1000));
   }
 
-  if (!user) {
-    await verifyPasswordWithUserId(password, DUMMY_USER_ID, DUMMY_PASSWORD_HASH);
-    if (lockout.enabled) recordFailedLogin(key, lockout);
-    throw new Error('Invalid credentials');
+  let isValidPassword = false;
+  try {
+    if (!user) {
+      await verifyPasswordWithUserId(password, DUMMY_USER_ID, DUMMY_PASSWORD_HASH);
+      throw new Error('Invalid credentials');
+    }
+    // Verify password using user ID
+    isValidPassword = await verifyPasswordWithUserId(password, user.id, user.passwordHash);
+    if (!isValidPassword) {
+      throw new Error('Invalid credentials');
+    }
+  } finally {
+    if (reservation) await settleLoginAttempt(key, lockout, isValidPassword, reservation.shared);
   }
-
-  // Verify password using user ID
-  const isValidPassword = await verifyPasswordWithUserId(password, user.id, user.passwordHash);
-  if (!isValidPassword) {
-    if (lockout.enabled) recordFailedLogin(key, lockout);
-    throw new Error('Invalid credentials');
-  }
-  clearFailedLogins(key);
 
   // Check if user is active
   if (user.active === false) {

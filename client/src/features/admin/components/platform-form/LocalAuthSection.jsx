@@ -15,6 +15,9 @@ function LocalAuthSection({ config, onChange }) {
   const lockout = config.localAuth?.lockout || {};
   const updateLockout = (field, value) =>
     updateLocalAuth('lockout', { ...lockout, [field]: value });
+  // An emptied number field drops the setting, so the server default applies.
+  const updateLockoutNumber = (field, text) =>
+    updateLockout(field, text === '' ? undefined : parseInt(text, 10));
 
   return (
     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xs border border-gray-200 dark:border-gray-700 p-6">
@@ -105,7 +108,7 @@ function LocalAuthSection({ config, onChange }) {
             type="number"
             min="1"
             value={lockout.maxAttempts ?? ''}
-            onChange={e => updateLockout('maxAttempts', parseInt(e.target.value))}
+            onChange={e => updateLockoutNumber('maxAttempts', e.target.value)}
             disabled={lockout.enabled === false}
             className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-xs focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
             placeholder="5"
@@ -123,7 +126,7 @@ function LocalAuthSection({ config, onChange }) {
             type="number"
             min="1"
             value={lockout.durationMinutes ?? ''}
-            onChange={e => updateLockout('durationMinutes', parseInt(e.target.value))}
+            onChange={e => updateLockoutNumber('durationMinutes', e.target.value)}
             disabled={lockout.enabled === false}
             className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-xs focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
             placeholder="15"

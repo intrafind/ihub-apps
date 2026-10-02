@@ -3,7 +3,10 @@
  * (`platform.localAuth.lockout`, utils/loginLockout.js). While it is locked,
  * sign-in is refused without checking the password; a successful sign-in or a
  * new password clears the count. A name without an account is counted the
- * same way, so a lock says nothing about whether the account exists.
+ * same way, so a lock says nothing about whether the account exists. Each
+ * attempt reserves a slot before its password is checked, so attempts sent in
+ * parallel are held to the same limit, and in cluster mode the primary holds
+ * the one table all workers use.
  */
 import bcrypt from 'bcryptjs';
 import fs from 'fs/promises';
@@ -27,14 +30,31 @@ jest.unstable_mockModule('../configCache.js', () => ({
     setCacheEntry: () => {}
   }
 }));
-// The cluster bus is replaced by a recorder: what this worker publishes is
-// captured, and messages "from another worker" are delivered by hand.
-const published = [];
-const busHandlers = new Map();
+
+// The cluster bus is replaced by a stand-in. The handlers the module registers
+// for the primary are captured; `cluster.worker` decides whether calls go to
+// "the primary" (those handlers, reached through `request`) or to this
+// process's own table.
+const cluster = { worker: false, primaryAnswers: true };
+const primaryHandlers = new Map();
+const busRequests = [];
+const realBus = await import('../clusterBus.js');
 jest.unstable_mockModule('../clusterBus.js', () => ({
   __esModule: true,
-  publish: (type, payload) => published.push({ type, payload }),
-  subscribe: (type, handler) => busHandlers.set(type, handler)
+  ...realBus,
+  isClusterBusActive: () => cluster.worker,
+  respondInPrimary: (type, handler) => primaryHandlers.set(type, handler),
+  request: async (type, payload) => {
+    busRequests.push({ type, payload });
+    return cluster.primaryAnswers ? primaryHandlers.get(type)(payload) : null;
+  }
+}));
+const realCluster = (await import('node:cluster')).default;
+jest.unstable_mockModule('node:cluster', () => ({
+  __esModule: true,
+  default: new Proxy(realCluster, {
+    get: (target, prop) => (prop === 'isPrimary' ? !cluster.worker : Reflect.get(target, prop))
+  })
 }));
 jest.unstable_mockModule('../utils/adminRescue.js', () => ({
   __esModule: true,
@@ -48,18 +68,20 @@ const { default: registerAuthRoutes } = await import('../routes/auth.js');
 const {
   LoginLockedError,
   clearFailedLogins,
-  lockedForMs,
   lockoutKey,
-  recordFailedLogin,
+  reserveLoginAttempt,
   resetLoginLockouts,
-  resolveLockoutConfig
+  resolveLockoutConfig,
+  settleLoginAttempt
 } = await import('../utils/loginLockout.js');
 
 const MINUTE = 60 * 1000;
 
 beforeEach(() => {
   resetLoginLockouts();
-  published.length = 0;
+  cluster.worker = false;
+  cluster.primaryAnswers = true;
+  busRequests.length = 0;
 });
 
 describe('resolveLockoutConfig', () => {
@@ -83,33 +105,50 @@ describe('resolveLockoutConfig', () => {
   });
 });
 
-describe('failed sign-in counting', () => {
+describe('reserving and settling attempts', () => {
   const config = { maxAttempts: 3, durationMs: 15 * MINUTE };
+  const fail = async (key, now) => {
+    const { waitMs, shared } = await reserveLoginAttempt(key, config, now);
+    if (waitMs === 0) await settleLoginAttempt(key, config, false, shared, now);
+    return waitMs;
+  };
 
-  test('locks after the configured number of failures, for the configured time', () => {
+  test('locks after the configured number of failures, for the configured time', async () => {
     const now = 1_000_000;
-    expect(recordFailedLogin('user:a', config, now)).toBe(false);
-    expect(recordFailedLogin('user:a', config, now + 1)).toBe(false);
-    expect(lockedForMs('user:a', now + 2)).toBe(0);
-    expect(recordFailedLogin('user:a', config, now + 2)).toBe(true);
-    expect(lockedForMs('user:a', now + 2)).toBe(15 * MINUTE);
-    expect(lockedForMs('user:a', now + 2 + 15 * MINUTE)).toBe(0);
+    expect(await fail('user:a', now)).toBe(0);
+    expect(await fail('user:a', now + 1)).toBe(0);
+    expect(await fail('user:a', now + 2)).toBe(0);
+    expect((await reserveLoginAttempt('user:a', config, now + 2)).waitMs).toBe(15 * MINUTE);
+    expect((await reserveLoginAttempt('user:a', config, now + 2 + 15 * MINUTE)).waitMs).toBe(0);
   });
 
-  test('failures older than the window start a new count', () => {
+  test('failures older than the window start a new count', async () => {
     const now = 1_000_000;
-    recordFailedLogin('user:a', config, now);
-    recordFailedLogin('user:a', config, now + 1);
-    expect(recordFailedLogin('user:a', config, now + 16 * MINUTE)).toBe(false);
-    expect(lockedForMs('user:a', now + 16 * MINUTE)).toBe(0);
+    await fail('user:a', now);
+    await fail('user:a', now + 1);
+    expect(await fail('user:a', now + 16 * MINUTE)).toBe(0);
+    expect((await reserveLoginAttempt('user:a', config, now + 16 * MINUTE)).waitMs).toBe(0);
   });
 
-  test('clearing ends a lock', () => {
+  test('attempts still in flight count against the limit', async () => {
+    const now = 1_000_000;
+    for (let i = 0; i < 3; i++) {
+      expect((await reserveLoginAttempt('user:a', config, now)).waitMs).toBe(0);
+    }
+    expect((await reserveLoginAttempt('user:a', config, now)).waitMs).toBeGreaterThan(0);
+    // One of them succeeds: its slot is released and counting starts afresh,
+    // while the two others are still in flight.
+    await settleLoginAttempt('user:a', config, true, false, now);
+    expect((await reserveLoginAttempt('user:a', config, now)).waitMs).toBe(0);
+    expect((await reserveLoginAttempt('user:a', config, now)).waitMs).toBeGreaterThan(0);
+  });
+
+  test('clearing ends a lock', async () => {
     const now = Date.now();
-    for (let i = 0; i < 3; i++) recordFailedLogin('user:a', config, now);
-    expect(lockedForMs('user:a', now)).toBeGreaterThan(0);
-    clearFailedLogins('user:a');
-    expect(lockedForMs('user:a', now)).toBe(0);
+    for (let i = 0; i < 3; i++) await fail('user:a', now);
+    expect((await reserveLoginAttempt('user:a', config, now)).waitMs).toBeGreaterThan(0);
+    await clearFailedLogins('user:a');
+    expect((await reserveLoginAttempt('user:a', config, now)).waitMs).toBe(0);
   });
 
   test('counts per account, or per typed name when there is no account', () => {
@@ -118,31 +157,49 @@ describe('failed sign-in counting', () => {
   });
 });
 
-describe('lockout across cluster workers', () => {
+describe('lockout in cluster mode', () => {
   const config = { maxAttempts: 3, durationMs: 15 * MINUTE };
 
-  test('a failure here is published to the other workers', () => {
-    recordFailedLogin('user:a', config, 1_000);
-    clearFailedLogins('user:a');
-    expect(published).toEqual([
+  test('a worker reserves and settles through the primary', async () => {
+    cluster.worker = true;
+    const reservation = await reserveLoginAttempt('user:a', config);
+    expect(reservation).toEqual({ waitMs: 0, shared: true });
+    await settleLoginAttempt('user:a', config, false, true);
+    await clearFailedLogins('user:a');
+    expect(busRequests).toEqual([
       {
-        type: 'loginLockout:failure',
-        payload: { key: 'user:a', now: 1_000, maxAttempts: 3, durationMs: 15 * MINUTE }
+        type: 'loginLockout:reserve',
+        payload: { key: 'user:a', maxAttempts: 3, durationMs: 15 * MINUTE }
+      },
+      {
+        type: 'loginLockout:settle',
+        payload: { key: 'user:a', maxAttempts: 3, durationMs: 15 * MINUTE, succeeded: false }
       },
       { type: 'loginLockout:clear', payload: { key: 'user:a' } }
     ]);
   });
 
-  test('failures on other workers count here too', () => {
-    const now = Date.now();
-    const remoteFailure = busHandlers.get('loginLockout:failure');
-    remoteFailure({ key: 'user:a', now, maxAttempts: 3, durationMs: 15 * MINUTE });
-    remoteFailure({ key: 'user:a', now, maxAttempts: 3, durationMs: 15 * MINUTE });
-    expect(recordFailedLogin('user:a', config, now)).toBe(true);
-    expect(lockedForMs('user:a', now)).toBe(15 * MINUTE);
+  test("the primary's table holds the limit for every worker", async () => {
+    cluster.worker = true;
+    for (let i = 0; i < 3; i++) {
+      const { shared } = await reserveLoginAttempt('user:a', config);
+      await settleLoginAttempt('user:a', config, false, shared);
+    }
+    const locked = await reserveLoginAttempt('user:a', config);
+    expect(locked.shared).toBe(true);
+    expect(locked.waitMs).toBeGreaterThan(14 * MINUTE);
+  });
 
-    busHandlers.get('loginLockout:clear')({ key: 'user:a' });
-    expect(lockedForMs('user:a', now)).toBe(0);
+  test('without an answer from the primary a worker uses its own table', async () => {
+    cluster.worker = true;
+    cluster.primaryAnswers = false;
+    const now = Date.now();
+    for (let i = 0; i < 3; i++) {
+      const { waitMs, shared } = await reserveLoginAttempt('user:a', config, now);
+      expect({ waitMs, shared }).toEqual({ waitMs: 0, shared: false });
+      await settleLoginAttempt('user:a', config, false, shared, now);
+    }
+    expect((await reserveLoginAttempt('user:a', config, now)).waitMs).toBe(15 * MINUTE);
   });
 });
 
@@ -197,6 +254,22 @@ describe('loginUser with lockout', () => {
     } finally {
       compareSpy.mockRestore();
     }
+  });
+
+  test('attempts sent in parallel are held to the limit', async () => {
+    const compareSpy = jest.spyOn(bcrypt, 'compare');
+    try {
+      const results = await Promise.allSettled(
+        Array.from({ length: 10 }, () => loginUser('testuser', 'wrong-password', localAuthConfig))
+      );
+      expect(compareSpy).toHaveBeenCalledTimes(3);
+      expect(results.filter(r => r.reason instanceof LoginLockedError)).toHaveLength(7);
+    } finally {
+      compareSpy.mockRestore();
+    }
+    await expect(loginUser('testuser', 'correct-password', localAuthConfig)).rejects.toBeInstanceOf(
+      LoginLockedError
+    );
   });
 
   test('username and email share one count', async () => {

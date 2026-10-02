@@ -602,10 +602,11 @@ Built-in username/password authentication.
 
   While an account is locked, `POST /api/auth/local/login` answers `429` with a `Retry-After` header
   and does not check the password. A successful sign-in clears the count, and so does a new password
-  set under **Admin → Users**. A name without an account is counted the same way, so a lock does not
-  reveal whether an account exists. Counts are kept in memory and shared between the workers of
-  one server, so they reset on restart; separate servers (for example several pods) count
-  separately.
+  set under **Admin → Users**. Attempts still being checked count against the limit too, so sign-ins
+  sent in parallel cannot exceed it. A name without an account is counted the same way, so a lock
+  does not reveal whether an account exists. Counts are kept in memory and shared between the
+  workers of one server, so they reset on restart; separate servers (for example several pods)
+  count separately.
 
 ### **proxyAuth**
 Header-based authentication for reverse proxy setups.

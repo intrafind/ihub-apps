@@ -597,7 +597,7 @@ export default function registerAdminAuthRoutes(app) {
         }
         user.passwordHash = await hashPasswordWithUserId(password, userId);
         // A new password ends a lockout from failed sign-ins.
-        clearFailedLogins(lockoutKey(user));
+        await clearFailedLogins(lockoutKey(user));
       }
 
       user.updatedAt = new Date().toISOString();

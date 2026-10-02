@@ -1,8 +1,8 @@
 /**
- * The admin is warned while the login page lists the demo accounts and one of
- * them still has the password it ships with (utils/demoAccounts.js). "Still
- * has" means the stored hash is the shipped hash from
- * server/defaults/config/users.json.
+ * The admin is warned while the login page lists the demo accounts and the
+ * credentials it prints still sign in (utils/demoAccounts.js): the account is
+ * looked up the way local sign-in does it and the printed password is checked
+ * against its stored hash.
  */
 import fs from 'fs/promises';
 import { jest } from '@jest/globals';
@@ -20,6 +20,7 @@ jest.unstable_mockModule('../configCache.js', () => ({
 }));
 
 const { getDemoAccountStatus } = await import('../utils/demoAccounts.js');
+const { hashPasswordWithUserId } = await import('../utils/userManager.js');
 
 const shippedUsersFile = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -83,6 +84,27 @@ describe('demo account warning', () => {
       accounts: [],
       warn: false
     });
+  });
+
+  test('still warns when the shipped password was saved again with a new salt', async () => {
+    const passwordHash = await hashPasswordWithUserId('password123', 'user_demo_admin');
+    await writeUsers(users => ({
+      ...users,
+      user_demo_admin: { ...users.user_demo_admin, passwordHash }
+    }));
+    expect((await getDemoAccountStatus(localAuth({ showDemoAccounts: true }))).accounts).toContain(
+      'admin'
+    );
+  });
+
+  test('checks whichever account answers to the printed username', async () => {
+    const passwordHash = await hashPasswordWithUserId('password123', 'user_custom');
+    await writeUsers(() => ({
+      user_custom: { id: 'user_custom', username: 'Admin', active: true, passwordHash }
+    }));
+    expect((await getDemoAccountStatus(localAuth({ showDemoAccounts: true }))).accounts).toEqual([
+      'admin'
+    ]);
   });
 
   test('names only the accounts that still have the shipped password', async () => {
