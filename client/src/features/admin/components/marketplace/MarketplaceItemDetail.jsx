@@ -75,7 +75,9 @@ function MarketplaceItemDetail({ item: initialItem, onClose, onAction }) {
   const lang = i18n.language?.split('-')[0] || 'en';
   const displayName = item?.displayName?.[lang] || item?.displayName?.en || item?.name;
   const description = item?.description?.[lang] || item?.description?.en || '';
-  const isInstalled = item?.installationStatus === 'installed';
+  // An item with a newer version available is installed too
+  const hasUpdate = item?.installationStatus === 'update-available';
+  const isInstalled = item?.installationStatus === 'installed' || hasUpdate;
   // Present on this instance, but not installed from the marketplace
   const isLocal = item?.installationStatus === 'local';
 
@@ -211,6 +213,15 @@ function MarketplaceItemDetail({ item: initialItem, onClose, onAction }) {
               className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 text-sm font-medium"
             >
               {actionLoading === 'install' ? '...' : t('admin.marketplace.install', 'Install')}
+            </button>
+          )}
+          {hasUpdate && (
+            <button
+              onClick={() => handleAction('update')}
+              disabled={!!actionLoading}
+              className="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 disabled:opacity-50 text-sm font-medium"
+            >
+              {actionLoading === 'update' ? '...' : t('admin.marketplace.update', 'Update')}
             </button>
           )}
           {isInstalled && (

@@ -2967,7 +2967,7 @@
       },
       "modelReview": {
         "title": "Prüfen Sie dieses Modell, bevor Sie es testen oder aktivieren",
-        "body": "Modelle aus dem Marketplace bringen eigene Einstellungen mit, darunter die Endpunkt-URL. Beim Testen oder Verwenden des Modells werden Ihr Provider-API-Schlüssel und die Prompts an diesen Endpunkt gesendet. Prüfen Sie deshalb zuerst die URL und die Einstellungen."
+        "body": "Modelle aus dem Marketplace bringen eigene Einstellungen mit, darunter die Endpunkt-URL. Beim Testen oder Verwenden des Modells werden der verwendete API-Schlüssel (der eigene oder, falls keiner gesetzt ist, der des Providers) und die Prompts an diesen Endpunkt gesendet. Prüfen Sie deshalb zuerst die URL und die Einstellungen."
       }
     },
     "apps": {

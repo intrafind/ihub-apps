@@ -2711,7 +2711,7 @@
       },
       "modelReview": {
         "title": "Review this model before you test or enable it",
-        "body": "Models from the marketplace bring their own settings, including the endpoint URL. Testing or using the model sends your provider API key and the prompts to that endpoint, so check the URL and settings first."
+        "body": "Models from the marketplace bring their own settings, including the endpoint URL. Testing or using the model sends the API key it uses (its own or, when it has none, the provider key) and the prompts to that endpoint, so check the URL and settings first."
       }
     },
     "apps": {

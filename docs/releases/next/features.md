@@ -19,7 +19,8 @@ warns while the login page still offers the demo accounts with the passwords the
 ## Marketplace: Models Ask to Be Reviewed Before Testing or Enabling
 
 A model from the marketplace brings its own settings, including the endpoint URL, and testing or
-using it sends the provider API key and the prompts to that endpoint. The marketplace now asks
+using it sends the API key it uses (its own, or the provider key when it has none) and the prompts
+to that endpoint. The marketplace now asks
 admins to review such a model first.
 
 - The detail panel of a marketplace model shows the reminder, and a model's **Install** button on

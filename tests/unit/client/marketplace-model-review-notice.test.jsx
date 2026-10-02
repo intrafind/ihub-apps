@@ -1,17 +1,19 @@
 /**
  * Models from the marketplace ask the admin to review them before testing or
  * enabling them: the item's detail panel says so, a model card opens that
- * panel instead of installing straight away, and the model's edit page shows
- * the same notice while the model is installed from the marketplace.
+ * panel instead of installing straight away (the panel offers Update when a
+ * newer version is available), and the model's edit page shows the same
+ * notice while the model is installed from the marketplace.
  */
 import '@testing-library/jest-dom';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { MemoryRouter, Route, Routes, useNavigate } from 'react-router-dom';
 
 const mockApi = {
   fetchMarketplaceItemDetail: jest.fn(),
   fetchMarketplaceInstallations: jest.fn(),
   installMarketplaceItem: jest.fn(),
+  updateMarketplaceItem: jest.fn(),
   makeAdminApiCall: jest.fn()
 };
 jest.mock('../../../client/src/api/adminApi', () => ({
@@ -20,7 +22,7 @@ jest.mock('../../../client/src/api/adminApi', () => ({
   fetchMarketplaceItemDetail: (...args) => mockApi.fetchMarketplaceItemDetail(...args),
   fetchMarketplaceInstallations: (...args) => mockApi.fetchMarketplaceInstallations(...args),
   installMarketplaceItem: (...args) => mockApi.installMarketplaceItem(...args),
-  updateMarketplaceItem: jest.fn(),
+  updateMarketplaceItem: (...args) => mockApi.updateMarketplaceItem(...args),
   uninstallMarketplaceItem: jest.fn(),
   detachMarketplaceItem: jest.fn(),
   makeAdminApiCall: (...args) => mockApi.makeAdminApiCall(...args)
@@ -105,6 +107,24 @@ describe('marketplace detail panel', () => {
     await waitFor(() => expect(mockApi.fetchMarketplaceItemDetail).toHaveBeenCalled());
   });
 
+  test('offers Update, not Install, for a model with a newer version', async () => {
+    const updatable = { ...item('model'), installationStatus: 'update-available' };
+    mockApi.fetchMarketplaceItemDetail.mockResolvedValue(updatable);
+    mockApi.updateMarketplaceItem.mockResolvedValue({});
+    render(
+      <MemoryRouter>
+        <MarketplaceItemDetail item={updatable} onClose={() => {}} onAction={() => {}} />
+      </MemoryRouter>
+    );
+    await screen.findByText(REVIEW);
+    expect(screen.queryByRole('button', { name: 'Install' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Update' }));
+    await waitFor(() =>
+      expect(mockApi.updateMarketplaceItem).toHaveBeenCalledWith('official', 'model', 'model-item')
+    );
+    expect(mockApi.installMarketplaceItem).not.toHaveBeenCalled();
+  });
+
   test('says nothing of the kind for other item types', async () => {
     render(
       <MemoryRouter>
@@ -160,6 +180,38 @@ describe('model edit page', () => {
     });
     renderPage();
     expect(await screen.findByText(REVIEW)).toBeInTheDocument();
+  });
+
+  test('drops the notice when switching to a model that is not from the marketplace', async () => {
+    mockApi.makeAdminApiCall.mockImplementation(async path => {
+      const id = path.split('/').pop();
+      return path.startsWith('/admin/models/')
+        ? { data: { id, name: { en: id }, provider: 'openai', enabled: false } }
+        : { data: [] };
+    });
+    // The lookup for the second model never answers: the notice must not
+    // linger from the first one while it is pending.
+    mockApi.fetchMarketplaceInstallations
+      .mockResolvedValueOnce({ 'model:gpt-x': { type: 'model' } })
+      .mockReturnValue(new Promise(() => {}));
+    let navigate;
+    function NavigateHandle() {
+      navigate = useNavigate();
+      return null;
+    }
+    render(
+      <MemoryRouter initialEntries={['/admin/models/gpt-x']}>
+        <NavigateHandle />
+        <Routes>
+          <Route path="/admin/models/:modelId" element={<AdminModelEditPage />} />
+        </Routes>
+      </MemoryRouter>
+    );
+    expect(await screen.findByText(REVIEW)).toBeInTheDocument();
+
+    act(() => navigate('/admin/models/local-model'));
+    await waitFor(() => expect(mockApi.fetchMarketplaceInstallations).toHaveBeenCalledTimes(2));
+    expect(screen.queryByText(REVIEW)).not.toBeInTheDocument();
   });
 
   test('shows no notice for other models, or when the marketplace is unavailable', async () => {

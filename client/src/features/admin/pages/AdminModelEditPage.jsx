@@ -29,7 +29,10 @@ function AdminModelEditPage() {
   const API_KEY_PLACEHOLDER = '••••••••';
 
   const [historyOpen, setHistoryOpen] = useState(false);
-  const [fromMarketplace, setFromMarketplace] = useState(false);
+  // The model id the marketplace lookup found installed, so a stale answer for
+  // a previous model id never shows on another one.
+  const [marketplaceModelId, setMarketplaceModelId] = useState(null);
+  const fromMarketplace = !isNewModel && marketplaceModelId === modelId;
   const [loading, setLoading] = useState(!isNewModel);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
@@ -184,10 +187,10 @@ function AdminModelEditPage() {
     let cancelled = false;
     fetchMarketplaceInstallations()
       .then(installations => {
-        if (!cancelled) setFromMarketplace(Boolean(installations?.[`model:${modelId}`]));
+        if (!cancelled) setMarketplaceModelId(installations?.[`model:${modelId}`] ? modelId : null);
       })
       .catch(() => {
-        if (!cancelled) setFromMarketplace(false);
+        if (!cancelled) setMarketplaceModelId(null);
       });
     return () => {
       cancelled = true;

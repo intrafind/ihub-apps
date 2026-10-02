@@ -4,7 +4,8 @@ import Icon from '../../../../shared/components/Icon';
 /**
  * Asks the admin to review a model from the marketplace before testing or
  * enabling it: the model's endpoint URL comes with the item, and testing or
- * using the model sends the provider API key and the prompts there.
+ * using the model sends the API key it uses (its own, or the provider key) and
+ * the prompts there.
  *
  * @param {Object} props
  * @param {string} [props.className] - Extra classes for the outer element
@@ -30,7 +31,7 @@ function MarketplaceModelReviewNotice({ className = '' }) {
         <p className="mt-1">
           {t(
             'admin.marketplace.modelReview.body',
-            'Models from the marketplace bring their own settings, including the endpoint URL. Testing or using the model sends your provider API key and the prompts to that endpoint, so check the URL and settings first.'
+            'Models from the marketplace bring their own settings, including the endpoint URL. Testing or using the model sends the API key it uses (its own or, when it has none, the provider key) and the prompts to that endpoint, so check the URL and settings first.'
           )}
         </p>
       </div>
