@@ -501,13 +501,42 @@ describe('Migration Runner', () => {
       expect(history.migrations[0].version).toBe('111');
     });
 
-    it.each(['141', '142', '143'])(
-      'moves an EU AI Act entry recorded at V%s to V145 so it no longer blocks main',
+    it('rewrites the short-link allowlist entry renumbered V143 -> V145', () => {
+      const history = {
+        schemaVersion: '1.0',
+        migrations: [
+          {
+            version: '143',
+            description: 'add_short_link_allowed_hosts',
+            file: 'V143__add_short_link_allowed_hosts.js',
+            checksum: 'abc123',
+            status: 'success'
+          },
+          {
+            version: '144',
+            description: 'remove_app_wizard_fields',
+            file: 'V144__remove_app_wizard_fields.js',
+            checksum: 'def456',
+            status: 'success'
+          }
+        ]
+      };
+
+      expect(reconcileRenamedMigrations(history)).toBe(true);
+      expect(history.migrations[0].version).toBe('145');
+      expect(history.migrations[0].file).toBe('V145__add_short_link_allowed_hosts.js');
+      // V144 belongs to the app wizard cleanup, which kept its number.
+      expect(history.migrations[1].version).toBe('144');
+      expect(history.migrations[1].file).toBe('V144__remove_app_wizard_fields.js');
+    });
+
+    it.each(['141', '142', '143', '145'])(
+      'moves an EU AI Act entry recorded at V%s to V146 so it no longer blocks main',
       oldVersion => {
         // A dev install that ran the branch while it held that number recorded
-        // it; main's provider plain names (V141) and text-to-speech (V142)
-        // migrations hold those numbers now, and V143 sorts below main's app
-        // wizard field cleanup (V144).
+        // it; main's provider plain names (V141), text-to-speech (V142) and
+        // short-link allowlist (V145) migrations hold those numbers now, and
+        // V143 sorts below main's app wizard field cleanup (V144).
         const history = {
           schemaVersion: '1.0',
           migrations: [
@@ -529,11 +558,25 @@ describe('Migration Runner', () => {
         };
 
         expect(reconcileRenamedMigrations(history)).toBe(true);
-        expect(history.migrations[0].version).toBe('145');
-        expect(history.migrations[0].file).toBe('V145__add_ai_transparency.js');
+        expect(history.migrations[0].version).toBe('146');
+        expect(history.migrations[0].file).toBe('V146__add_ai_transparency.js');
         expect(history.migrations[1].version).toBe('140');
       }
     );
+
+    it("leaves main's V145 short-link entry alone when reconciling the EU AI Act V145", () => {
+      const shortLinks = {
+        version: '145',
+        description: 'add_short_link_allowed_hosts',
+        file: 'V145__add_short_link_allowed_hosts.js',
+        checksum: 'abc123',
+        status: 'success'
+      };
+      const history = { schemaVersion: '1.0', migrations: [{ ...shortLinks }] };
+
+      expect(reconcileRenamedMigrations(history)).toBe(false);
+      expect(history.migrations).toEqual([shortLinks]);
+    });
 
     it('is a no-op on a fresh install with no matching history entries', () => {
       const history = { schemaVersion: '1.0', migrations: [] };

@@ -69,7 +69,7 @@ test.before(async () => {
 });
 const body = extra => ({ model: 'oa', messages: [{ role: 'user', content: 'hi' }], ...extra });
 
-test('GET /v1/models — permission filtering, unfiltered without a user', async () => {
+test('GET /v1/models — permission filtering, anonymous principal without a user', async () => {
   const { client } = makeClient({ transport: async () => sseResponse([]) });
   const app = buildApp(client);
   const all = await request(app).get('/api/inference/v1/models');
@@ -91,13 +91,24 @@ test('GET /v1/models — permission filtering, unfiltered without a user', async
     .set('x-test-user', JSON.stringify({ id: 'u3', permissions: { models: [] } }));
   assert.deepEqual(none.body.data, []);
 
+  // Without a user the anonymous principal's permissions apply.
+  const savedGroups = configCache.cache.get('config/groups.json');
   configCache.cache.set('config/platform.json', { data: { anonymousAuth: { enabled: true } } });
+  configCache.cache.set('config/groups.json', {
+    data: { groups: { anonymous: { id: 'anonymous', permissions: { models: ['gm'] } } } }
+  });
   try {
     const anon = await request(app).get('/api/inference/v1/models').set('x-test-user', 'none');
     assert.equal(anon.status, 200);
-    assert.equal(anon.body.data.length, 8, 'no user → no permission filtering');
+    assert.deepEqual(
+      anon.body.data.map(m => m.id),
+      ['gm'],
+      'no user → the anonymous group decides'
+    );
   } finally {
     configCache.cache.delete('config/platform.json');
+    if (savedGroups) configCache.cache.set('config/groups.json', savedGroups);
+    else configCache.cache.delete('config/groups.json');
   }
 });
 

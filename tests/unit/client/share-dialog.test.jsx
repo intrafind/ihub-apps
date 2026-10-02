@@ -160,6 +160,8 @@ describe('ShareDialog app link', () => {
       expiresAt: null
     });
     expect(body).not.toHaveProperty('code');
+    // The server records the signed-in user as the owner.
+    expect(body).not.toHaveProperty('userId');
     expect(await screen.findByRole('textbox', { name: 'Share link' })).toHaveValue(
       'http://localhost/ihub/s/Ab12Cd'
     );

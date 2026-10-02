@@ -52,7 +52,10 @@ const COMPONENT = 'ScheduledTaskRoutes';
 const checkFeature = requireFeature(SCHEDULED_TASKS_FEATURE);
 
 function userKey(req) {
-  return req.user?.id ? `user:${req.user.id}` : ipKeyGenerator(req.ip || '');
+  // Anonymous callers share one principal id, so they are keyed by IP.
+  return req.user?.id && req.user.id !== 'anonymous'
+    ? `user:${req.user.id}`
+    : ipKeyGenerator(req.ip || '');
 }
 
 /** Creating tasks: generous for a person, a wall for a script. */

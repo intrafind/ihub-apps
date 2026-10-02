@@ -221,7 +221,10 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
   // server's answer (feature on, admin switch on, storage up) and needs a
   // durable chat.
   const [showShare, setShowShare] = useState(false);
-  const shareEnabled = featureFlags.isBothEnabled(app, 'shortLinks', true);
+  const auth = useOptionalAuth();
+  // A short link belongs to the signed-in user who creates it.
+  const signedOut = auth ? auth.isAuthenticated !== true : false;
+  const shareEnabled = featureFlags.isBothEnabled(app, 'shortLinks', true) && !signedOut;
   const { platformConfig } = usePlatformConfig();
   const chatSharingEnabled = platformConfig?.chats?.sharing?.enabled === true;
   // The app's transcription model, or the platform default (Admin → Voice Input).
@@ -229,7 +232,6 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
     app?.transcription?.modelId || platformConfig?.speech?.transcription?.defaultModelId || '';
   // "Save as prompt" on a sent message: offered to a signed-in user when the
   // installation lets users keep prompts of their own (#2519).
-  const auth = useOptionalAuth();
   const userPromptsEnabled =
     platformConfig?.userPrompts?.enabled === true && auth?.isAuthenticated === true;
   const [promptDraft, setPromptDraft] = useState(null);

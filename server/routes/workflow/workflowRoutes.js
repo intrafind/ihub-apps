@@ -42,7 +42,7 @@ import { createExecutionChat } from '../../services/workflow/executionChat.js';
 import { getChatRepository } from '../../services/chat/ChatRepository.js';
 import { isChatPersistenceActive } from '../../services/chat/chatPersistence.js';
 import runLog from '../../services/loop/RunLog.js';
-import { resolvePrincipal } from '../../services/loop/runIdentity.js';
+import { isAnonymousUser, resolvePrincipal } from '../../services/loop/runIdentity.js';
 import logger from '../../utils/logger.js';
 import configCache from '../../configCache.js';
 import { findByIdCaseInsensitive } from '../../utils/resourceLookup.js';
@@ -872,8 +872,12 @@ export default function registerWorkflowRoutes(app, deps = {}) {
           return sendNotFound(res, 'Workflow');
         }
 
-        // Check if user has permission to execute this workflow
-        const accessible = filterByPermissions([workflow], req.user);
+        // Check if user has permission to execute this workflow. Executions
+        // are keyed by the caller's id, which every anonymous visitor shares,
+        // so the anonymous principal cannot start one here.
+        const accessible = isAnonymousUser(req.user)
+          ? []
+          : filterByPermissions([workflow], req.user);
         if (accessible.length === 0) {
           return sendInsufficientPermissions(res, 'workflow execution');
         }

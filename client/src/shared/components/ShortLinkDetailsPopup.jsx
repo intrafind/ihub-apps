@@ -36,7 +36,7 @@ function ShortLinkDetailsPopup({ link, isOpen, onClose }) {
             <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">
               {t('admin.shortlinks.userId', 'User ID')}
             </div>
-            <div className="text-sm text-gray-900 mt-1">{link.userId || '-'}</div>
+            <div className="text-sm text-gray-900 mt-1">{link.ownerId || '-'}</div>
           </div>
           {link.url && (
             <div className="bg-gray-50 rounded-lg p-3">

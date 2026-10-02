@@ -95,20 +95,24 @@ function resourceAccessRequired(resourceType) {
     const resourceId = req.params[`${resourceType}Id`]; // e.g., req.params.appId
     const permissionsKey = `${resourceType}s`; // e.g., 'apps'
 
-    // If user is authenticated, check resource permissions
-    if (req.user && req.user.permissions) {
-      const allowedResources = req.user.permissions[permissionsKey] || new Set();
+    // Fail closed: every request reaching a resource route carries a principal
+    // (a signed-in user, or the anonymous principal built in setup.js when
+    // anonymous access is allowed). No principal means nothing was granted.
+    if (!req.user) {
+      return res.status(401).json({ error: 'authentication required' });
+    }
 
-      // Check if user has wildcard access or specific resource access.
-      // Resource ids arriving from outside (e.g. the OpenAI-compatible
-      // inference API) may not match the configured casing exactly.
-      if (!allowedResources.has('*') && !hasIdCaseInsensitive(allowedResources, resourceId)) {
-        return res.status(403).json({
-          error: 'Access denied',
-          code: `${resourceType.toUpperCase()}_ACCESS_DENIED`,
-          message: `You do not have permission to access ${resourceType}: ${resourceId}`
-        });
-      }
+    const allowedResources = req.user.permissions?.[permissionsKey] || new Set();
+
+    // Check if user has wildcard access or specific resource access.
+    // Resource ids arriving from outside (e.g. the OpenAI-compatible
+    // inference API) may not match the configured casing exactly.
+    if (!allowedResources.has('*') && !hasIdCaseInsensitive(allowedResources, resourceId)) {
+      return res.status(403).json({
+        error: 'Access denied',
+        code: `${resourceType.toUpperCase()}_ACCESS_DENIED`,
+        message: `You do not have permission to access ${resourceType}: ${resourceId}`
+      });
     }
 
     next();
@@ -173,13 +177,9 @@ export function chatAuthRequired(req, res, next) {
   authRequired(req, res, err => {
     if (err) return next(err);
 
-    // Tokenless requests reach here with req.user still undefined whenever
-    // anonymousAuth is enabled (authRequired only enforces auth, it never
-    // materializes a principal). Without a principal, appAccessRequired's
-    // permission check silently no-ops, so anonymous callers could reach any
-    // app id, including ones not allowlisted for the anonymous group. Build
-    // the same resolved-permissions anonymous principal here that the apps
-    // list endpoint already builds for itself, scoped to chat endpoints only.
+    // setup.js gives tokenless requests the anonymous principal when
+    // anonymousAuth is enabled. Routers mounted without that middleware (tests,
+    // embedded apps) still need one, so build the same principal here.
     if (!req.user) {
       const platformConfig = configCache.getPlatform() || {};
       if (isAnonymousAccessAllowed(platformConfig)) {

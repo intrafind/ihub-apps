@@ -13,6 +13,7 @@ import CanvasEditor from '../components/CanvasEditor';
 import FloatingToolbox from '../components/FloatingToolbox';
 import CanvasContentConfirmationModal from '../components/CanvasContentConfirmationModal';
 import ShareDialog from '../../chat/components/ShareDialog';
+import { useOptionalAuth } from '../../../shared/contexts/authContextValue';
 
 // Import hooks and utilities
 import useAppChat from '../../chat/hooks/useAppChat';
@@ -132,7 +133,10 @@ export default function AppCanvas() {
   // Configuration panel states
   const [showConfig, setShowConfig] = useState(false);
   const [showShare, setShowShare] = useState(false);
-  const shareEnabled = app?.features?.shortLinks !== false;
+  const auth = useOptionalAuth();
+  // A short link belongs to the signed-in user who creates it.
+  const signedOut = auth ? auth.isAuthenticated !== true : false;
+  const shareEnabled = app?.features?.shortLinks !== false && !signedOut;
 
   // Content confirmation modal state
   const [showContentModal, setShowContentModal] = useState(false);

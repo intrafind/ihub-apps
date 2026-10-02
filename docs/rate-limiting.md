@@ -22,8 +22,8 @@ The system supports six different types of rate limiters, each configurable thro
   - `/api/configs`
   - `/api/sessions`
   - `/api/pages`
-  - `/api/magic-prompts`
-  - `/api/short-links`
+  - `/api/magic-prompt`
+  - `/api/shortlinks`
 
 ### 2. Admin API Rate Limiter
 - **Default Limit**: 500 requests per 1 minute per IP address
