@@ -191,10 +191,31 @@ export const isMermaidLanguage = language => {
   return MERMAID_LANGUAGES.has(language.toLowerCase());
 };
 
+// Mermaid accepts a YAML front-matter block and `%%{init: ...}%%` directives
+// ahead of the diagram declaration, mostly to set a theme and its colours.
+const MERMAID_FRONTMATTER = /^---[ \t]*\r?\n[\s\S]*?\r?\n---[ \t]*(?:\r?\n|$)/;
+const MERMAID_LEADING_DIRECTIVE = /^%%\{[\s\S]*?\}%%/;
+const MERMAID_LEADING_COMMENT = /^%%[^\n]*/;
+
+// Returns the diagram source without that preamble (and leading `%%`
+// comments), so its first line is the diagram declaration again.
+const stripMermaidPreamble = code => {
+  let rest = code.trimStart().replace(MERMAID_FRONTMATTER, '');
+  let previous;
+  do {
+    previous = rest;
+    rest = rest
+      .trimStart()
+      .replace(MERMAID_LEADING_DIRECTIVE, '')
+      .replace(MERMAID_LEADING_COMMENT, '');
+  } while (rest !== previous);
+  return rest;
+};
+
 export const validateMermaidCode = code => {
   if (!code || typeof code !== 'string') return false;
 
-  const trimmedCode = code.trim();
+  const trimmedCode = stripMermaidPreamble(code).trim();
   if (trimmedCode.length < 10) return false; // Too short to be meaningful
 
   // Check for obvious incomplete patterns
@@ -274,7 +295,7 @@ export const processMermaidCode = code => {
 };
 
 export const detectDiagramType = code => {
-  const trimmedCode = code.trim();
+  const trimmedCode = stripMermaidPreamble(code).trim();
   const lines = trimmedCode.split('\n');
   const firstLine = lines[0]?.trim().toLowerCase() || '';
 

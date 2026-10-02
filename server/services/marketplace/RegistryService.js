@@ -14,13 +14,13 @@
  * @module services/marketplace/RegistryService
  */
 
-import matter from 'gray-matter';
 import { throttledFetch } from '../../requestThrottler.js';
 import configStore from '../../services/config/ConfigStore.js';
 import { validateCatalog } from '../../validators/catalogSchema.js';
 import { validateRegistryConfig } from '../../validators/registryConfigSchema.js';
 import tokenStorageService from '../TokenStorageService.js';
 import logger from '../../utils/logger.js';
+import { parseFrontMatter } from '../../utils/frontMatter.js';
 import { getLocalContentIds, installationStatusFor } from './localContent.js';
 
 const COMPONENT = 'RegistryService';
@@ -919,15 +919,24 @@ class RegistryService {
     }
 
     // Parse YAML frontmatter from SKILL.md content previews so the client
-    // can render it as a metadata table rather than raw --- delimiters
+    // can render it as a metadata table rather than raw --- delimiters.
+    // Only YAML frontmatter is accepted (see utils/frontMatter.js).
     if (typeof contentPreview === 'string') {
       try {
-        const parsed = matter(contentPreview);
+        const parsed = parseFrontMatter(contentPreview);
         if (parsed.data && Object.keys(parsed.data).length > 0) {
           contentPreview = { body: parsed.content.trim(), frontmatter: parsed.data };
         }
-      } catch {
-        // Keep as plain string if parsing fails
+      } catch (error) {
+        // Invalid YAML or a non-YAML frontmatter language: the preview stays
+        // the plain text it was fetched as, and the item detail still loads.
+        logger.warn('Could not parse content preview frontmatter, showing it as plain text', {
+          component: COMPONENT,
+          registryId,
+          itemType: type,
+          itemName: name,
+          error
+        });
       }
     }
 
