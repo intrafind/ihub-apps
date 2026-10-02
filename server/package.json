@@ -71,6 +71,7 @@
     "playwright": "^1.63.0",
     "pngjs": "^7.0.0",
     "pptxgenjs": "^4.0.1",
+    "proxy-addr": "^2.0.7",
     "reflect-metadata": "^0.2.2",
     "selenium-webdriver": "^4.49.0",
     "swagger-jsdoc": "^6.3.0",

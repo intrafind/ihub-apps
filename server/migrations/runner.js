@@ -255,67 +255,73 @@ const RENAMED_MIGRATIONS = [
     newVersion: '145',
     newFile: 'V145__add_short_link_allowed_hosts.js'
   },
-  // The EU AI Act migration moved nine times while its branch was open and
+  // The EU AI Act migration moved ten times while its branch was open and
   // dev installs were running it: the prompt placeholder (V136), scheduled
   // tasks defaults (V138), speech defaults (V139), web tool parameters (V140),
   // provider plain names (V141) and text-to-speech (V142) each took its number
   // on main first, the app wizard field cleanup (V144) left V143 out of order,
-  // and the short-link host allowlist (V145) and local sign-in lockout (V146)
-  // took the next two. Every old number reconciles to V147, so main's
-  // migration of that number runs.
+  // and the short-link host allowlist (V145), local sign-in lockout (V146) and
+  // proxy-auth trusted sources (V147) took the next three. Every old number
+  // reconciles to V148, so main's migration of that number runs.
   {
     oldVersion: '136',
     oldFile: 'V136__add_ai_transparency.js',
-    newVersion: '147',
-    newFile: 'V147__add_ai_transparency.js'
+    newVersion: '148',
+    newFile: 'V148__add_ai_transparency.js'
   },
   {
     oldVersion: '138',
     oldFile: 'V138__add_ai_transparency.js',
-    newVersion: '147',
-    newFile: 'V147__add_ai_transparency.js'
+    newVersion: '148',
+    newFile: 'V148__add_ai_transparency.js'
   },
   {
     oldVersion: '139',
     oldFile: 'V139__add_ai_transparency.js',
-    newVersion: '147',
-    newFile: 'V147__add_ai_transparency.js'
+    newVersion: '148',
+    newFile: 'V148__add_ai_transparency.js'
   },
   {
     oldVersion: '140',
     oldFile: 'V140__add_ai_transparency.js',
-    newVersion: '147',
-    newFile: 'V147__add_ai_transparency.js'
+    newVersion: '148',
+    newFile: 'V148__add_ai_transparency.js'
   },
   {
     oldVersion: '141',
     oldFile: 'V141__add_ai_transparency.js',
-    newVersion: '147',
-    newFile: 'V147__add_ai_transparency.js'
+    newVersion: '148',
+    newFile: 'V148__add_ai_transparency.js'
   },
   {
     oldVersion: '142',
     oldFile: 'V142__add_ai_transparency.js',
-    newVersion: '147',
-    newFile: 'V147__add_ai_transparency.js'
+    newVersion: '148',
+    newFile: 'V148__add_ai_transparency.js'
   },
   {
     oldVersion: '143',
     oldFile: 'V143__add_ai_transparency.js',
-    newVersion: '147',
-    newFile: 'V147__add_ai_transparency.js'
+    newVersion: '148',
+    newFile: 'V148__add_ai_transparency.js'
   },
   {
     oldVersion: '145',
     oldFile: 'V145__add_ai_transparency.js',
-    newVersion: '147',
-    newFile: 'V147__add_ai_transparency.js'
+    newVersion: '148',
+    newFile: 'V148__add_ai_transparency.js'
   },
   {
     oldVersion: '146',
     oldFile: 'V146__add_ai_transparency.js',
-    newVersion: '147',
-    newFile: 'V147__add_ai_transparency.js'
+    newVersion: '148',
+    newFile: 'V148__add_ai_transparency.js'
+  },
+  {
+    oldVersion: '147',
+    oldFile: 'V147__add_ai_transparency.js',
+    newVersion: '148',
+    newFile: 'V148__add_ai_transparency.js'
   }
 ];
 

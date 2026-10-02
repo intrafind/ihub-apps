@@ -88,6 +88,8 @@ For Model Context Protocol (MCP) servers, see [MCP Integration](mcp-integration.
 | `PROXY_AUTH_GROUPS_HEADER` | Optional header with comma separated group names                  | –                                                |
 | `PROXY_AUTH_JWKS`          | JSON Web Key Set URL for verifying forwarded JWTs                 | –                                                |
 | `PROXY_AUTH_JWT_HEADER`    | Header containing the JWT if not using `Authorization`            | `Authorization`                                  |
+| `PROXY_AUTH_TRUSTED_PROXIES` | Comma-separated addresses/subnets the proxy connects from; the identity headers are used only from these. Replaces `proxyAuth.trustedProxies` (default `loopback`) | – |
+| `PROXY_AUTH_SHARED_SECRET` | Secret the proxy sends in `proxyAuth.sharedSecretHeader` (default `X-Proxy-Secret`); the identity headers are used only with it | – |
 | `JWT_SECRET`               | HMAC secret for signing JWTs. **Only required when `jwt.algorithm` is `HS256`.** RS256 (the default) uses auto-generated RSA key files instead. | – |
 | `JWT_PRIVATE_KEY`          | PEM-encoded RSA private key for RS256 JWT signing. Overrides the auto-generated key stored at `contents/.jwt-private-key.pem`. | – |
 | `JWT_PUBLIC_KEY`           | PEM-encoded RSA public key for RS256 JWT verification. Overrides the auto-generated key stored at `contents/.jwt-public-key.pem`. | – |

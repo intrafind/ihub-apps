@@ -44,6 +44,10 @@ const env = cleanEnv(
     PROXY_AUTH_GROUPS_HEADER: str({ optional: true }),
     PROXY_AUTH_JWKS: str({ optional: true }),
     PROXY_AUTH_JWT_HEADER: str({ optional: true }),
+    // Where proxy identity headers may come from (see utils/proxyAuthTrust.js):
+    // a comma-separated address/subnet list, and a secret the proxy sends.
+    PROXY_AUTH_TRUSTED_PROXIES: str({ optional: true }),
+    PROXY_AUTH_SHARED_SECRET: str({ optional: true }),
     HTTP_PROXY: str({ optional: true }),
     HTTPS_PROXY: str({ optional: true }),
     NO_PROXY: str({ optional: true }),
@@ -112,6 +116,8 @@ const config = Object.freeze({
   PROXY_AUTH_GROUPS_HEADER: env.PROXY_AUTH_GROUPS_HEADER,
   PROXY_AUTH_JWKS: env.PROXY_AUTH_JWKS,
   PROXY_AUTH_JWT_HEADER: env.PROXY_AUTH_JWT_HEADER,
+  PROXY_AUTH_TRUSTED_PROXIES: env.PROXY_AUTH_TRUSTED_PROXIES,
+  PROXY_AUTH_SHARED_SECRET: env.PROXY_AUTH_SHARED_SECRET,
   HTTP_PROXY: env.HTTP_PROXY,
   HTTPS_PROXY: env.HTTPS_PROXY,
   NO_PROXY: env.NO_PROXY,

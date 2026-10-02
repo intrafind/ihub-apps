@@ -530,14 +530,14 @@ describe('Migration Runner', () => {
       expect(history.migrations[1].file).toBe('V144__remove_app_wizard_fields.js');
     });
 
-    it.each(['141', '142', '143', '145', '146'])(
-      'moves an EU AI Act entry recorded at V%s to V147 so it no longer blocks main',
+    it.each(['141', '142', '143', '145', '146', '147'])(
+      'moves an EU AI Act entry recorded at V%s to V148 so it no longer blocks main',
       oldVersion => {
         // A dev install that ran the branch while it held that number recorded
         // it; main's provider plain names (V141), text-to-speech (V142),
-        // short-link allowlist (V145) and local sign-in lockout (V146)
-        // migrations hold those numbers now, and V143 sorts below main's app
-        // wizard field cleanup (V144).
+        // short-link allowlist (V145), local sign-in lockout (V146) and
+        // proxy-auth trusted sources (V147) migrations hold those numbers now,
+        // and V143 sorts below main's app wizard field cleanup (V144).
         const history = {
           schemaVersion: '1.0',
           migrations: [
@@ -559,8 +559,8 @@ describe('Migration Runner', () => {
         };
 
         expect(reconcileRenamedMigrations(history)).toBe(true);
-        expect(history.migrations[0].version).toBe('147');
-        expect(history.migrations[0].file).toBe('V147__add_ai_transparency.js');
+        expect(history.migrations[0].version).toBe('148');
+        expect(history.migrations[0].file).toBe('V148__add_ai_transparency.js');
         expect(history.migrations[1].version).toBe('140');
       }
     );
