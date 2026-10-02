@@ -1,7 +1,7 @@
-// server/migrations/V143__translator_task_in_system_prompt.js
+// server/migrations/V145__translator_task_in_system_prompt.js
 import crypto from 'node:crypto';
 
-export const version = '143';
+export const version = '145';
 export const description = 'translator_task_in_system_prompt';
 
 const FILE = 'apps/translator.json';

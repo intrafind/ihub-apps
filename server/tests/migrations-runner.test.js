@@ -448,6 +448,37 @@ describe('Migration Runner', () => {
       expect(history.migrations[1].file).toBe('V110__add_proxy_defaults.js');
     });
 
+    it('shifts the 5.5.30 follow-ups V143-V146 to V145-V148, leaving main V144 alone', () => {
+      // Each moves onto a number the next one vacates, and main's V144 shares
+      // a number with one of them: only the file name tells them apart.
+      const entry = (version, file) => ({
+        version,
+        description: file.replace(/^V\d+__|\.js$/g, ''),
+        file,
+        checksum: 'abc123',
+        status: 'success'
+      });
+      const history = {
+        schemaVersion: '1.0',
+        migrations: [
+          entry('143', 'V143__translator_task_in_system_prompt.js'),
+          entry('144', 'V144__seed_mistral_realtime_transcription_model.js'),
+          entry('144', 'V144__remove_app_wizard_fields.js'),
+          entry('145', 'V145__seed_google_tts_models.js'),
+          entry('146', 'V146__dictation_via_transcription_models.js')
+        ]
+      };
+
+      expect(reconcileRenamedMigrations(history)).toBe(true);
+      expect(history.migrations.map(m => `${m.version} ${m.file}`)).toEqual([
+        '145 V145__translator_task_in_system_prompt.js',
+        '146 V146__seed_mistral_realtime_transcription_model.js',
+        '144 V144__remove_app_wizard_fields.js',
+        '147 V147__seed_google_tts_models.js',
+        '148 V148__dictation_via_transcription_models.js'
+      ]);
+    });
+
     it('rewrites both CIMD governance entries, V111/V112 -> V112/V113', () => {
       // The chain is the interesting part: the governance migration moves onto
       // the number the grandfathering one is vacating, so a rule that matched

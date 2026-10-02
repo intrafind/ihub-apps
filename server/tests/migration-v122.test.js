@@ -69,7 +69,7 @@ test('moves every shipped prompt to the new default and adds the upload section'
     const defaults = readDefault(file);
     for (const field of Object.keys(fields)) {
       // A field a later release dropped from the defaults is left for that
-      // release's migration (V143: the Translator's template).
+      // release's migration (V145: the Translator's template).
       const next = getPath(defaults, field);
       assert.deepEqual(
         getPath(ctx.files[file], field),

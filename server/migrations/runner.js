@@ -92,6 +92,34 @@ export async function scanMigrationFiles(migrationsDir) {
  * the original number.
  */
 const RENAMED_MIGRATIONS = [
+  // The 5.5.30 follow-ups (Translator system prompt, Mistral transcription,
+  // Gemini TTS, dictation through transcription models) were written as
+  // V143-V146 while V144 (app wizard fields) landed on main. Shifted by two to
+  // keep their order; matched by file name, so main's V144 is untouched.
+  {
+    oldVersion: '143',
+    oldFile: 'V143__translator_task_in_system_prompt.js',
+    newVersion: '145',
+    newFile: 'V145__translator_task_in_system_prompt.js'
+  },
+  {
+    oldVersion: '144',
+    oldFile: 'V144__seed_mistral_realtime_transcription_model.js',
+    newVersion: '146',
+    newFile: 'V146__seed_mistral_realtime_transcription_model.js'
+  },
+  {
+    oldVersion: '145',
+    oldFile: 'V145__seed_google_tts_models.js',
+    newVersion: '147',
+    newFile: 'V147__seed_google_tts_models.js'
+  },
+  {
+    oldVersion: '146',
+    oldFile: 'V146__dictation_via_transcription_models.js',
+    newVersion: '148',
+    newFile: 'V148__dictation_via_transcription_models.js'
+  },
   {
     // The staan provider was renumbered twice while its branch was open: the
     // CIMD governance migrations took V112/V113 and the proxy-defaults fix took

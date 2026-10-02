@@ -1,5 +1,5 @@
-// server/migrations/V144__seed_mistral_realtime_transcription_model.js
-export const version = '144';
+// server/migrations/V146__seed_mistral_realtime_transcription_model.js
+export const version = '146';
 export const description = 'seed_mistral_realtime_transcription_model';
 
 const MODEL_PATH = 'models/voxtral-mini-transcribe-realtime.json';

@@ -297,14 +297,16 @@
       "continueButton": "Continue to {{appName}}",
       "warning": "You are about to leave iHub Apps",
       "openingInNewTab": "Opening in new tab...",
-      "redirecting": "Redirecting..."
+      "redirecting": "Redirecting...",
+      "invalidUrl": "This app has no valid web address configured. Only http and https links can be opened."
     },
     "iframeApp": {
       "title": "Embedded Application",
       "loading": "Loading application...",
       "loadError": "Failed to load embedded application",
       "reload": "Reload",
-      "openInNewTab": "Open in new tab"
+      "openInNewTab": "Open in new tab",
+      "invalidUrl": "This app has no valid web address configured. Only http and https links can be opened."
     },
     "appChat": {
       "messagePlaceholder": "Type your message here...",
