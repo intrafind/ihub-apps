@@ -18,7 +18,7 @@ Enable and configure the feature for an app by adding a `magicPrompt` object und
 }
 ```
 
-The server reads `model` and `prompt` from the app's configuration; the browser only sends the user's input and the app id. If `model` or `prompt` is omitted, the server falls back to the environment variables `MAGIC_PROMPT_MODEL` and `MAGIC_PROMPT_PROMPT`. If neither is set, the system uses the globally configured default model and a built-in fallback prompt of `"Improve the following prompt."`.
+The server reads `model` and `prompt` from the app's configuration; the browser only sends the user's input and the app id. An app with a `magicPrompt` section that leaves out `model` or `prompt` gets the app schema's defaults (`gpt-4` and a built-in "improve this prompt" instruction). The environment variables `MAGIC_PROMPT_MODEL` and `MAGIC_PROMPT_PROMPT` apply to requests without an app and to apps without a `magicPrompt` section; `MAGIC_PROMPT_MODEL` is also tried when the app's model does not exist or the caller may not use it (see the fallback chain below). If neither is set, the system uses the globally configured default model and a built-in fallback prompt of `"Improve the following prompt."`.
 
 ## API Endpoint
 

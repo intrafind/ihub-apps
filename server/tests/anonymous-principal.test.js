@@ -21,6 +21,7 @@ import registerModelRoutes from '../routes/modelRoutes.js';
 import registerMagicPromptRoutes from '../routes/magicPromptRoutes.js';
 import registerSessionRoutes from '../routes/chat/sessionRoutes.js';
 import { createJob, canAccessJob, listJobs } from '../routes/toolsService/jobStore.js';
+import { registerOcrRoutes } from '../routes/toolsService/ocrRoutes.js';
 import { isAdminUser } from '../services/loop/runIdentity.js';
 import { isAdmin as isWorkflowAdmin } from '../services/workflow/workflowAccess.js';
 import { InteractionService } from '../services/loop/InteractionService.js';
@@ -137,8 +138,11 @@ function buildApp(platform = PLATFORM) {
   registerOpenAIProxyRoutes(app, { llmClient: client });
   registerGeneralRoutes(app, { getLocalizedError });
   registerModelRoutes(app, { getLocalizedError });
-  registerMagicPromptRoutes(app);
+  registerMagicPromptRoutes(app, { llmClient: client });
   registerSessionRoutes(app, { getLocalizedError, DEFAULT_TIMEOUT: 1000 });
+  const toolsService = express.Router();
+  registerOcrRoutes(toolsService);
+  app.use('/api/tools-service', toolsService);
   return { app, calls };
 }
 
@@ -256,6 +260,36 @@ describe('app and model details without a token', () => {
 });
 
 describe('magic prompt without a token', () => {
+  test("uses the app's instruction, not one sent with the request", async () => {
+    const { app, calls } = buildApp();
+    const res = await request(app)
+      .post('/api/magic-prompt')
+      .send({ input: 'draft', prompt: 'Instruction from the request.', appId: 'open-app' });
+    assert.equal(res.status, 200);
+    assert.equal(calls.length, 1);
+    assert.deepEqual(calls[0].request.body.messages, [
+      { role: 'system', content: 'Configured instruction.' },
+      { role: 'user', content: 'draft' }
+    ]);
+  });
+
+  test('refuses a requested non-chat model outside the anonymous group with 403', async () => {
+    const { app, calls } = buildApp();
+    configCache.cache.set('config/models.json', {
+      data: [...MODELS, { id: 'restricted-transcription', modelType: 'transcription' }],
+      etag: 'm2'
+    });
+    try {
+      const res = await request(app)
+        .post('/api/magic-prompt')
+        .send({ input: 'draft', modelId: 'restricted-transcription', appId: 'open-app' });
+      assert.equal(res.status, 403);
+      assert.equal(calls.length, 0);
+    } finally {
+      seed();
+    }
+  });
+
   test('refuses an explicitly requested model outside the anonymous group with 403', async () => {
     const { app } = buildApp();
     const res = await request(app)
@@ -290,6 +324,21 @@ describe('magic prompt without a token', () => {
     } finally {
       seed();
     }
+  });
+});
+
+describe('OCR tool without a token', () => {
+  test('POST /api/tools-service/ocr/process answers 401 and starts no job', async () => {
+    const { app } = buildApp();
+    const before = listJobs('admin', true).length;
+    const res = await request(app)
+      .post('/api/tools-service/ocr/process')
+      .attach('files', Buffer.from('not an image'), {
+        filename: 'scan.png',
+        contentType: 'image/png'
+      });
+    assert.equal(res.status, 401);
+    assert.equal(listJobs('admin', true).length, before);
   });
 });
 

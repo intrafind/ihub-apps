@@ -4,7 +4,7 @@ import validate from '../validators/validate.js';
 import { magicPromptSchema } from '../validators/index.js';
 import config from '../config.js';
 import { authRequired } from '../middleware/authRequired.js';
-import llmClient, { isLLMError } from '../services/loop/LLMClient.js';
+import defaultLlmClient, { isLLMError } from '../services/loop/LLMClient.js';
 import { sendLLMError } from '../services/loop/llmHttpErrors.js';
 import { buildServerPath } from '../utils/basePath.js';
 import logger from '../utils/logger.js';
@@ -21,7 +21,7 @@ import {
 /** Output cap for the rewritten prompt. */
 const MAGIC_PROMPT_MAX_TOKENS = 8192;
 
-export default function registerMagicPromptRoutes(app) {
+export default function registerMagicPromptRoutes(app, { llmClient = defaultLlmClient } = {}) {
   /**
    * POST /api/magic-prompt
    *
@@ -73,11 +73,13 @@ export default function registerMagicPromptRoutes(app) {
         const findModel = id => (id ? chatModels.find(m => m.id === id) : undefined);
         const mayUse = model => canUserAccessResource(req.user, 'models', model.id);
 
-        // An explicitly requested model must be one the caller may use.
-        const requestedModel = findModel(modelId);
-        if (requestedModel && !mayUse(requestedModel)) {
-          return sendInsufficientPermissions(res, `access to model ${requestedModel.id}`);
+        // An explicitly requested model must be one the caller may use, whatever
+        // its type; only a chat model is then used.
+        const requested = modelId ? findByIdCaseInsensitive(models, modelId) : undefined;
+        if (requested && !mayUse(requested)) {
+          return sendInsufficientPermissions(res, `access to model ${requested.id}`);
         }
+        const requestedModel = requested && chatModels.includes(requested) ? requested : undefined;
 
         // Fallback chain: requested model, the app's magic prompt model, the
         // MAGIC_PROMPT_MODEL setting, the default model, then any model —
