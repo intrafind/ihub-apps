@@ -5,6 +5,8 @@ export const description = 'replace_workflow_code_accumulator';
 /** The code step the shipped corpus-analysis workflows used, and its follow-up. */
 const ACCUMULATOR_ID = 'accumulate-corpus';
 const UNWRAP_ID = 'unwrap-corpus-accumulator';
+const SHIPPED_CODE =
+  'const prev = data._corpusAll; const prevArr = Array.isArray(prev) ? prev : (prev && Array.isArray(prev.result) ? prev.result : []); [...prevArr, ...(data._corpus || [])];';
 
 export async function precondition(ctx) {
   const files = await ctx.listFiles('workflows', '*.json');
@@ -18,11 +20,12 @@ export async function precondition(ctx) {
  * (`unwrap-corpus-accumulator`) that copied the result into place. Both
  * become one transform with an `append` operation; the follow-up step is
  * removed and its outgoing edges start at the accumulator instead. When that
- * step was changed by an admin it is kept, and the accumulator also writes
- * the value it reads.
+ * step was changed or removed by an admin, the accumulator also writes the
+ * value it used to read (`_corpusAllRaw.result`).
  *
- * Other code nodes are left as they are and listed: those workflows fail when
- * run until the node is replaced.
+ * Only the code the workflows shipped with is replaced. An accumulator whose
+ * code an admin changed, and any other code node, is left as it is and
+ * listed: those workflows fail when run until the node is replaced.
  */
 export async function up(ctx) {
   const files = await ctx.listFiles('workflows', '*.json');
@@ -59,7 +62,9 @@ export function replaceAccumulator(workflow) {
     node =>
       node.id === ACCUMULATOR_ID &&
       node.type === 'code' &&
-      node.config?.outputVariable === '_corpusAllRaw'
+      node.config?.outputVariable === '_corpusAllRaw' &&
+      typeof node.config?.code === 'string' &&
+      node.config.code.trim() === SHIPPED_CODE
   );
   if (!accumulator) return false;
 
@@ -70,7 +75,7 @@ export function replaceAccumulator(workflow) {
       JSON.stringify([{ copy: '_corpusAllRaw.result', to: '_corpusAll' }]);
 
   const operations = [{ append: '_corpus', to: '_corpusAll' }];
-  if (unwrap && !unwrapIsShipped) {
+  if (!unwrapIsShipped) {
     operations.push({ copy: '_corpusAll', to: '_corpusAllRaw.result' });
   }
   accumulator.type = 'transform';

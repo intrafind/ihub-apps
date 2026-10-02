@@ -93,7 +93,7 @@ reaches one stops with an error naming the node type.
 
 - The shipped **Corpus Completeness Analysis — Decomposed** workflows (both versions) used a code
   node to collect the documents found for each sub-question. They now use a transform node, and
-  the upgrade changes installed copies the same way.
+  the upgrade changes installed copies the same way, unless that code node was edited.
 - Transform nodes have a new **Append All** operation (`{ "append": "_corpus", "to": "_corpusAll" }`)
   that adds every item of one array to another — what most code nodes were used for.
 

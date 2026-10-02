@@ -26,7 +26,7 @@ function makeCtx(dir) {
   return {
     logs,
     listFiles: async (directory, pattern) => {
-      const suffix = pattern.replace('*', '');
+      const suffix = pattern.startsWith('*') ? pattern.slice(1) : pattern;
       try {
         return (await fs.readdir(path.join(dir, directory))).filter(f => f.endsWith(suffix));
       } catch {
@@ -54,6 +54,9 @@ async function freshDir(workflows) {
 const readWorkflow = async (dir, file) =>
   JSON.parse(await fs.readFile(path.join(dir, 'workflows', file), 'utf8'));
 
+const SHIPPED_CODE =
+  'const prev = data._corpusAll; const prevArr = Array.isArray(prev) ? prev : (prev && Array.isArray(prev.result) ? prev.result : []); [...prevArr, ...(data._corpus || [])];';
+
 /** The shape the shipped workflows had before this release. */
 function shippedBefore() {
   return {
@@ -66,7 +69,7 @@ function shippedBefore() {
         position: { x: 100, y: 940 },
         config: {
           chatVisible: false,
-          code: 'previous.concat(next)',
+          code: SHIPPED_CODE,
           outputVariable: '_corpusAllRaw',
           timeout: 5000
         }
@@ -159,6 +162,31 @@ describe('V148 replace_workflow_code_accumulator', () => {
       { copy: '_corpusAll', to: '_corpusAllRaw.result' }
     ]);
     assert.deepEqual(workflow.edges, before.edges);
+  });
+
+  it('also writes the old result variable when the unwrap step was removed', async () => {
+    const before = shippedBefore();
+    before.nodes.splice(2, 1);
+    before.edges = [before.edges[0]];
+    const dir = await freshDir({ 'no-unwrap.json': before });
+    await up(makeCtx(dir));
+    assert.deepEqual((await readWorkflow(dir, 'no-unwrap.json')).nodes[1].config.operations, [
+      { append: '_corpus', to: '_corpusAll' },
+      { copy: '_corpusAll', to: '_corpusAllRaw.result' }
+    ]);
+  });
+
+  it('leaves an accumulator whose code an admin changed, and lists it', async () => {
+    const before = shippedBefore();
+    before.nodes[1].config.code = 'data._corpus';
+    const dir = await freshDir({ 'changed.json': before });
+    const ctx = makeCtx(dir);
+    await up(ctx);
+
+    assert.deepEqual(await readWorkflow(dir, 'changed.json'), before);
+    assert.ok(
+      ctx.logs.some(([level, message]) => level === 'warn' && message.includes('changed.json'))
+    );
   });
 
   it('leaves other code nodes alone and lists their workflows', async () => {
