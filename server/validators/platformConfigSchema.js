@@ -294,8 +294,9 @@ export const platformConfigSchema = z
         // Where the identity headers may come from (utils/proxyAuthTrust.js):
         // addresses/subnets of trusted proxies, in `trust proxy` syntax, and/or
         // a shared secret the proxy sends in `sharedSecretHeader` (a credential
-        // store reference). Without either, the headers are ignored.
-        trustedProxies: z.array(z.string()).prefault([]),
+        // store reference). Without either, the headers are ignored. The list
+        // defaults to the local host, so a proxy in the same pod works.
+        trustedProxies: z.array(z.string()).prefault(['loopback']),
         sharedSecretRef: z.string().optional(),
         sharedSecretHeader: z.string().prefault('X-Proxy-Secret'),
         jwtProviders: z.array(jwtProviderSchema).prefault([]),

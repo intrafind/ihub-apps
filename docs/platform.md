@@ -640,8 +640,9 @@ Header-based authentication for reverse proxy setups.
 - **groupsHeader** (string) – Header containing comma-separated groups. Default: `"X-Forwarded-Groups"`
 - **trustedProxies** (array) – Addresses or subnets the proxy connects from, in the syntax of
   `trustProxy` (`"loopback"`, `"10.0.0.5"`, `"10.0.0.0/8"`). The address checked is the peer that
-  opened the connection. Default: `[]`. Overridden by `PROXY_AUTH_TRUSTED_PROXIES`
-  (comma-separated).
+  opened the connection. Default: `["loopback"]`, which covers a proxy on the same host or in the
+  same pod. Overridden by `PROXY_AUTH_TRUSTED_PROXIES` (comma-separated), which replaces the list —
+  include `loopback` there if you still need it.
 - **sharedSecretRef** (string) – A `secret` credential (Admin → Credentials) the proxy sends in
   `sharedSecretHeader`. Overridden by `PROXY_AUTH_SHARED_SECRET`.
 - **sharedSecretHeader** (string) – Header the proxy sends the shared secret in. Default:
@@ -650,10 +651,13 @@ Header-based authentication for reverse proxy setups.
 
 The user, groups, `X-Forwarded-Name` and `X-Forwarded-Email` headers are used only on requests
 that come from a trusted proxy and/or carry the shared secret. When both `trustedProxies` and a
-shared secret are configured, both must match. When neither is configured, the headers are ignored
-and the server logs a warning. Make sure the proxy removes these headers from client requests
-before setting its own. Signed JWTs from `jwtProviders` are verified against their keys and do not
-depend on these settings.
+shared secret are configured, both must match — so with the default list, a proxy on another host
+needs its address added, or an empty list (`[]`) to rely on the secret alone. When neither is
+configured, the headers are ignored and the server logs a warning. If something else on the same
+host or in the same pod forwards traffic to iHub over loopback (for example a service-mesh
+sidecar), configure the shared secret as well, so only requests that carry it are trusted. Make
+sure the proxy removes these headers from client requests before setting its own. Signed JWTs from
+`jwtProviders` are verified against their keys and do not depend on these settings.
 
 ### **oidcAuth**
 OpenID Connect provider configuration.

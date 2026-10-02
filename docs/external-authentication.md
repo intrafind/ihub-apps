@@ -176,7 +176,8 @@ PROXY_AUTH_ENABLED=true|false
 PROXY_AUTH_USER_HEADER=X-Forwarded-User
 PROXY_AUTH_GROUPS_HEADER=X-Forwarded-Groups
 PROXY_AUTH_ANONYMOUS_GROUP=anonymous
-# Where the identity headers may come from (at least one is required)
+# Where the identity headers may come from. Without the variable, the
+# platform.json list applies (default: loopback, a proxy on the same host or pod).
 PROXY_AUTH_TRUSTED_PROXIES=10.0.0.5,loopback
 PROXY_AUTH_SHARED_SECRET=change-me
 

@@ -10,6 +10,8 @@
  *    and subnets the connection must come from, in the syntax of Express's
  *    `trust proxy` (`loopback`, `10.0.0.0/8`, `192.168.1.5`, …). The address
  *    checked is the peer that opened the connection, never a forwarded one.
+ *    Unset, it is `["loopback"]`, so a proxy on the same host or in the same
+ *    pod works once proxy auth is on; an admin can replace or empty it.
  *  - A shared secret the proxy adds in `proxyAuth.sharedSecretHeader`
  *    (default `X-Proxy-Secret`), from the credential store
  *    (`proxyAuth.sharedSecretRef`) or `PROXY_AUTH_SHARED_SECRET`.
@@ -28,6 +30,9 @@ import logger from './logger.js';
 
 /** Header the proxy sends the shared secret in, unless configured otherwise. */
 export const DEFAULT_SHARED_SECRET_HEADER = 'X-Proxy-Secret';
+
+/** `proxyAuth.trustedProxies` when it is not set: the local host. */
+export const DEFAULT_TRUSTED_PROXIES = Object.freeze(['loopback']);
 
 /** Compiled `trustedProxies` lists, by their joined source. */
 const compiled = new Map();
@@ -51,14 +56,18 @@ function warnOnce(key, message, meta) {
 
 /**
  * The configured trusted proxy list: `PROXY_AUTH_TRUSTED_PROXIES` when set,
- * otherwise `proxyAuth.trustedProxies`.
+ * otherwise `proxyAuth.trustedProxies`, otherwise `DEFAULT_TRUSTED_PROXIES`.
+ * An empty list stays empty. A string is read as a comma-separated list.
  *
  * @param {object} proxyAuthConfig - `platform.proxyAuth`
  * @returns {string[]}
  */
 export function getTrustedProxies(proxyAuthConfig = {}) {
-  const fromEnv = config.PROXY_AUTH_TRUSTED_PROXIES;
-  const list = fromEnv ? fromEnv.split(',') : proxyAuthConfig.trustedProxies || [];
+  const configured = config.PROXY_AUTH_TRUSTED_PROXIES || proxyAuthConfig.trustedProxies;
+  let list;
+  if (configured === undefined || configured === null) list = DEFAULT_TRUSTED_PROXIES;
+  else if (typeof configured === 'string') list = configured.split(',');
+  else list = Array.isArray(configured) ? configured : [];
   return list.map(entry => String(entry).trim()).filter(Boolean);
 }
 

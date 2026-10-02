@@ -607,10 +607,10 @@ location /ihub/ {
 }
 ```
 
-iHub uses these headers only from a trusted proxy and/or with the shared secret. Set
-`proxyAuth.trustedProxies` to the address the proxy connects from (for example `["loopback"]` when
-it runs on the same host), a shared secret, or both — see
-[platform configuration](platform.md#proxyauth).
+iHub uses these headers only from a trusted proxy and/or with the shared secret. By default,
+`proxyAuth.trustedProxies` is `["loopback"]`, which covers a proxy on the same host or in the same
+pod. For a proxy elsewhere, add the address it connects from, configure a shared secret, or both —
+see [platform configuration](platform.md#proxyauth).
 
 ### JWT Authentication
 

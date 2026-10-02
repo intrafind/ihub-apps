@@ -95,23 +95,25 @@ were ignored.
 
 - `proxyAuth.trustedProxies` in `platform.json` (or `PROXY_AUTH_TRUSTED_PROXIES`, a
   comma-separated list) lists the addresses the connection must come from: `loopback`, single
-  addresses such as `10.0.0.5`, or subnets such as `10.0.0.0/8`.
+  addresses such as `10.0.0.5`, or subnets such as `10.0.0.0/8`. It defaults to `["loopback"]` in
+  new installations and after the upgrade, so a proxy on the same host or in the same pod works as
+  soon as proxy authentication is on.
 - Instead of, or in addition to, the address list, the proxy can send a shared secret in the
   header `proxyAuth.sharedSecretHeader` (default `X-Proxy-Secret`). The secret is a **Secret**
   credential chosen in `proxyAuth.sharedSecretRef`, or the value of `PROXY_AUTH_SHARED_SECRET`.
-  When both are set, a request must pass both. The secret header is removed from the request
-  after the check.
+  When both are set, a request must pass both — to rely on the secret alone, empty the address
+  list. The secret header is removed from the request after the check.
 - With neither set, the headers are ignored. **Admin → Authentication** has fields for both and
-  shows a warning in the proxy authentication settings until one of them is set.
-- The upgrade sets `trustedProxies` to `["loopback"]` where proxy authentication is on, so a proxy
-  on the same host keeps working.
+  shows a warning in the proxy authentication settings while both are empty.
 - `GET /api/auth/status` only says whether proxy authentication is on; it no longer lists the
   header names.
 - Signed tokens from `proxyAuth.jwtProviders` are verified as before.
 
 **Before upgrading:** if proxy authentication is on and the proxy runs on another host or in
 another container, add its address or subnet to `proxyAuth.trustedProxies`, or configure a shared
-secret and have the proxy send it. The proxy should set the identity headers itself and drop any
+secret, have the proxy send it and empty the address list. If other processes on the same host or
+in the same pod forward traffic to iHub over loopback (for example a service-mesh sidecar),
+configure the shared secret as well. The proxy should set the identity headers itself and drop any
 values the client sent.
 
 ## Docker Quickstart and Development Setups Listen on 127.0.0.1 Only

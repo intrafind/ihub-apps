@@ -623,8 +623,11 @@ server {
 }
 ```
 
-iHub uses the proxy identity headers only from addresses in `proxyAuth.trustedProxies` and/or with
-the shared secret (`proxyAuth.sharedSecretRef`) — see [platform configuration](platform.md#proxyauth).
+iHub uses the proxy identity headers only from addresses in `proxyAuth.trustedProxies` (by default
+`loopback`, a proxy on the same host or in the same pod) and/or with the shared secret
+(`proxyAuth.sharedSecretRef`) — see [platform configuration](platform.md#proxyauth). If other
+local processes, such as a service-mesh sidecar, forward traffic to iHub, configure the shared
+secret as well.
 
 #### Firewall Configuration
 ```bash

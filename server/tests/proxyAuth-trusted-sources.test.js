@@ -3,8 +3,9 @@
  * the request came through a proxy an admin trusts: a connection from an
  * address in `proxyAuth.trustedProxies`, and/or the shared secret in
  * `proxyAuth.sharedSecretHeader`. When both are configured both must hold;
- * when neither is, the headers are ignored. The secret header never travels
- * past the check.
+ * when neither is, the headers are ignored. Unset, the list is the local host,
+ * so a proxy in the same pod works. The secret header never travels past the
+ * check.
  */
 import { jest } from '@jest/globals';
 
@@ -73,10 +74,21 @@ beforeEach(() => {
   };
 });
 
-describe('without a trusted proxy or shared secret', () => {
+describe('without trustedProxies set', () => {
+  test('a connection from the local host is trusted', async () => {
+    expect((await call()).user?.id).toBe('alice');
+    expect((await call({ from: '::1' })).user?.id).toBe('alice');
+  });
+
+  test('a connection from any other address has the identity headers ignored', async () => {
+    expect((await call({ from: '192.0.2.10' })).user).toBeNull();
+  });
+});
+
+describe('with an empty list and no shared secret', () => {
   test('identity headers are ignored', async () => {
-    const req = await call();
-    expect(req.user).toBeNull();
+    platform.proxyAuth.trustedProxies = [];
+    expect((await call()).user).toBeNull();
   });
 });
 
@@ -116,10 +128,16 @@ describe('trusted proxy addresses', () => {
     expect((await call({ from: '192.0.2.10' })).user?.id).toBe('alice');
     expect((await call({ from: '10.1.2.3' })).user).toBeNull();
   });
+
+  test('a list without loopback does not trust the local host', async () => {
+    platform.proxyAuth.trustedProxies = ['10.0.0.0/8'];
+    expect((await call()).user).toBeNull();
+  });
 });
 
-describe('shared secret', () => {
+describe('shared secret alone (empty trustedProxies)', () => {
   beforeEach(() => {
+    platform.proxyAuth.trustedProxies = [];
     platform.proxyAuth.sharedSecretRef = 'cred_proxy';
   });
 
@@ -160,5 +178,12 @@ describe('trusted proxies and a shared secret together', () => {
     expect((await call({ headers: secret })).user?.id).toBe('alice');
     expect((await call({ from: '192.0.2.10', headers: secret })).user).toBeNull();
     expect((await call()).user).toBeNull();
+  });
+
+  test('the same holds with the default list', async () => {
+    delete platform.proxyAuth.trustedProxies;
+    const secret = { 'x-proxy-secret': 'proxy-secret-value' };
+    expect((await call({ headers: secret })).user?.id).toBe('alice');
+    expect((await call({ from: '192.0.2.10', headers: secret })).user).toBeNull();
   });
 });

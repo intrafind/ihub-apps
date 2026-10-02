@@ -3,14 +3,14 @@
 /**
  * Migration V147 specs — where proxy identity headers may come from.
  *
- * Installs with proxy auth on (platform.json or PROXY_AUTH_ENABLED) trust the
- * local host; others start with an empty list. A list an admin already set is
- * kept.
+ * Every installation trusts the local host, whether proxy auth is on yet or
+ * not, so a proxy in the same pod works once it is. A list an admin already
+ * set is kept.
  */
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { after, afterEach, before, describe, it } from 'node:test';
+import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
@@ -63,15 +63,6 @@ after(async () => {
 });
 
 describe('V147 add_proxy_auth_trusted_sources', () => {
-  const ENV_NAMES = ['PROXY_AUTH_ENABLED', 'IHUB_PLATFORM__PROXY_AUTH__ENABLED'];
-  const savedEnv = Object.fromEntries(ENV_NAMES.map(name => [name, process.env[name]]));
-  afterEach(() => {
-    for (const name of ENV_NAMES) {
-      if (savedEnv[name] === undefined) delete process.env[name];
-      else process.env[name] = savedEnv[name];
-    }
-  });
-
   it('declares its version and description', () => {
     assert.equal(version, '147');
     assert.equal(description, 'add_proxy_auth_trusted_sources');
@@ -84,7 +75,6 @@ describe('V147 add_proxy_auth_trusted_sources', () => {
   });
 
   it('trusts the local host where proxy auth is on', async () => {
-    for (const name of ENV_NAMES) delete process.env[name];
     const dir = await freshDir({
       'config/platform.json': { proxyAuth: { enabled: true, userHeader: 'X-Forwarded-User' } }
     });
@@ -97,38 +87,28 @@ describe('V147 add_proxy_auth_trusted_sources', () => {
     });
   });
 
-  for (const name of ENV_NAMES) {
-    it(`trusts the local host when ${name} turns proxy auth on`, async () => {
-      for (const other of ENV_NAMES) delete process.env[other];
-      process.env[name] = 'TRUE';
-      const dir = await freshDir({ 'config/platform.json': { proxyAuth: { enabled: false } } });
+  it('trusts the local host where proxy auth is off or not configured', async () => {
+    for (const platform of [{ proxyAuth: { enabled: false } }, { defaultLanguage: 'en' }]) {
+      const dir = await freshDir({ 'config/platform.json': platform });
       await up(makeCtx(dir));
       assert.deepEqual((await readPlatform(dir)).proxyAuth.trustedProxies, ['loopback']);
-    });
-  }
-
-  it('starts with an empty list where proxy auth is off', async () => {
-    for (const name of ENV_NAMES) delete process.env[name];
-    const dir = await freshDir({ 'config/platform.json': { defaultLanguage: 'en' } });
-    await up(makeCtx(dir));
-    assert.deepEqual((await readPlatform(dir)).proxyAuth, {
-      trustedProxies: [],
-      sharedSecretHeader: 'X-Proxy-Secret'
-    });
+      assert.equal((await readPlatform(dir)).proxyAuth.sharedSecretHeader, 'X-Proxy-Secret');
+    }
   });
 
-  it('keeps a list and header an admin already set', async () => {
-    for (const name of ENV_NAMES) delete process.env[name];
-    const dir = await freshDir({
-      'config/platform.json': {
-        proxyAuth: { enabled: true, trustedProxies: ['10.0.0.5'], sharedSecretHeader: 'X-Gate' }
-      }
-    });
-    await up(makeCtx(dir));
-    assert.deepEqual((await readPlatform(dir)).proxyAuth, {
-      enabled: true,
-      trustedProxies: ['10.0.0.5'],
-      sharedSecretHeader: 'X-Gate'
-    });
+  it('keeps a list and header an admin already set, including an empty list', async () => {
+    for (const trustedProxies of [['10.0.0.5'], []]) {
+      const dir = await freshDir({
+        'config/platform.json': {
+          proxyAuth: { enabled: true, trustedProxies, sharedSecretHeader: 'X-Gate' }
+        }
+      });
+      await up(makeCtx(dir));
+      assert.deepEqual((await readPlatform(dir)).proxyAuth, {
+        enabled: true,
+        trustedProxies,
+        sharedSecretHeader: 'X-Gate'
+      });
+    }
   });
 });

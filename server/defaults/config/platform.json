@@ -207,7 +207,7 @@
   },
   "proxyAuth": {
     "enabled": false,
-    "trustedProxies": [],
+    "trustedProxies": ["loopback"],
     "sharedSecretHeader": "X-Proxy-Secret"
   },
   "localAuth": {

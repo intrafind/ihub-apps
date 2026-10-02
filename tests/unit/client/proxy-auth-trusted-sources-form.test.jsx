@@ -1,8 +1,8 @@
 /**
  * The proxy auth settings show where the identity headers may come from:
- * trusted proxy addresses, a shared secret and its header. While neither a
- * trusted proxy nor a shared secret is set, they warn that the headers are
- * ignored.
+ * trusted proxy addresses (loopback unless set otherwise, as on the server), a
+ * shared secret and its header. While neither a trusted proxy nor a shared
+ * secret is set, they warn that the headers are ignored.
  */
 import '@testing-library/jest-dom';
 import { fireEvent, render, screen } from '@testing-library/react';
@@ -52,18 +52,24 @@ async function renderEditor(proxyAuth) {
 
 const IGNORED_WARNING = /headers are ignored until you list trusted proxies/;
 
-test('warns while neither a trusted proxy nor a shared secret is set', async () => {
+test('shows loopback as the trusted proxy when none is set, without a warning', async () => {
   await renderEditor({});
+  expect(screen.getByLabelText('Trusted Proxies')).toHaveValue('loopback');
+  expect(screen.queryByText(IGNORED_WARNING)).not.toBeInTheDocument();
+});
+
+test('warns while neither a trusted proxy nor a shared secret is set', async () => {
+  await renderEditor({ trustedProxies: [] });
   expect(screen.getByText(IGNORED_WARNING)).toBeInTheDocument();
 });
 
-test('does not warn once a trusted proxy or a shared secret is set', async () => {
-  await renderEditor({ trustedProxies: ['loopback'] });
+test('does not warn with a shared secret and no trusted proxy', async () => {
+  await renderEditor({ trustedProxies: [], sharedSecretRef: 'cred_proxy' });
   expect(screen.queryByText(IGNORED_WARNING)).not.toBeInTheDocument();
 });
 
 test('stores the trusted proxies as a list', async () => {
-  const onChange = await renderEditor({});
+  const onChange = await renderEditor({ trustedProxies: [] });
   fireEvent.change(screen.getByLabelText('Trusted Proxies'), {
     target: { value: 'loopback, 10.0.0.0/8,' }
   });

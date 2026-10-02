@@ -9,6 +9,9 @@ import LocalAuthSection from './platform-form/LocalAuthSection';
 import NtlmAuthSection from './platform-form/NtlmAuthSection';
 import { CredentialRefSelect } from './OpenApiToolEditor';
 
+/** `proxyAuth.trustedProxies` when it is not set, as on the server. */
+const DEFAULT_TRUSTED_PROXIES = ['loopback'];
+
 /**
  * Comma-separated list input for `proxyAuth.trustedProxies`. Keeps its own
  * text so separators can be typed; the parsed list goes to `onChange`.
@@ -391,7 +394,7 @@ function PlatformFormEditor({ value: config, onChange, onValidationChange, avail
             </div>
 
             {/* Where the identity headers may come from */}
-            {!(config.proxyAuth?.trustedProxies || []).length &&
+            {!(config.proxyAuth?.trustedProxies ?? DEFAULT_TRUSTED_PROXIES).length &&
               !config.proxyAuth?.sharedSecretRef && (
                 <div
                   role="alert"
@@ -411,13 +414,15 @@ function PlatformFormEditor({ value: config, onChange, onValidationChange, avail
                   Trusted Proxies
                 </label>
                 <TrustedProxiesInput
-                  value={config.proxyAuth?.trustedProxies}
+                  value={config.proxyAuth?.trustedProxies ?? DEFAULT_TRUSTED_PROXIES}
                   onChange={list => updateNestedConfig('proxyAuth', 'trustedProxies', list)}
                 />
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                   Addresses or subnets the proxy connects from, comma-separated (for example
                   loopback, 10.0.0.5 or 10.0.0.0/8). The headers are used only on connections from
-                  these addresses.
+                  these addresses. The default, loopback, covers a proxy on the same host or in the
+                  same pod; if other local processes (such as a service-mesh sidecar) forward
+                  traffic to iHub, set a shared secret as well.
                 </p>
               </div>
               <div>
@@ -444,7 +449,7 @@ function PlatformFormEditor({ value: config, onChange, onValidationChange, avail
               onChange={id => updateNestedConfig('proxyAuth', 'sharedSecretRef', id || undefined)}
               types={['secret']}
               label="Shared Secret"
-              help="A secret the proxy sends in the shared secret header. When set, the headers are used only on requests that carry it; together with trusted proxies, both must match."
+              help="A secret the proxy sends in the shared secret header. When set, the headers are used only on requests that carry it. Together with trusted proxies, both must match: for a proxy elsewhere, add its address above or clear the list to rely on the secret alone."
             />
 
             {/* Self-signup Setting */}
