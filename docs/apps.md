@@ -1280,10 +1280,11 @@ Here are some practical examples of how to configure the settings for different 
   check the complete configuration against the app schema; a configuration that does not pass
   is not saved. The message names each field that failed, for example
   `redirectConfig.url: Redirect URL must use http or https`.
-- `Unrecognized keys` means the configuration contains fields that are not part of an app.
-  Apps created with the app creation wizard in earlier releases can contain `useAI`,
-  `useTemplate`, `useManual`, `aiGenerated`, `aiPrompt`, a top-level `imageUpload` and
-  `"parentId": null`; they have no effect and can be removed in the JSON editor.
+- `Unrecognized keys` means the configuration contains fields that are not part of an app;
+  remove them in the JSON editor. (The unused fields older versions of the app creation wizard
+  saved — `useAI`, `useTemplate`, `useManual`, `aiGenerated`, `aiPrompt`, a top-level
+  `imageUpload` and `"parentId": null` — are removed from app files on the server by the
+  upgrade.)
 - App files on the server that do not pass still load; the server log reports them as
   "Resource validation issues".
 
