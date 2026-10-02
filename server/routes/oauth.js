@@ -921,7 +921,8 @@ export default function registerOAuthRoutes(app) {
       // Calling verifyJwt() here again would fail because it checks audience: 'ihub-apps'.
       const user = req.user;
 
-      if (!user || !user.id) {
+      // A token jwtAuth could not verify leaves only the anonymous principal.
+      if (!user || !user.id || user.id === 'anonymous') {
         return res
           .status(401)
           .json({ error: 'invalid_token', error_description: 'Token is invalid or expired' });

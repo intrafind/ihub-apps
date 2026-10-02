@@ -14,7 +14,7 @@ import logger from '../utils/logger.js';
  */
 export async function searchTickets({ jql, maxResults = 50, user }) {
   try {
-    if (!user?.id) {
+    if (!user?.id || user.id === 'anonymous') {
       throw new Error('User authentication required for JIRA access');
     }
 
@@ -63,7 +63,7 @@ export async function searchTickets({ jql, maxResults = 50, user }) {
  */
 export async function getTicket({ issueKey, includeComments = true, user }) {
   try {
-    if (!user?.id) {
+    if (!user?.id || user.id === 'anonymous') {
       throw new Error('User authentication required for JIRA access');
     }
 
@@ -113,7 +113,7 @@ export async function getTicket({ issueKey, includeComments = true, user }) {
  */
 export async function addComment({ issueKey, comment, requireConfirmation = true, user }) {
   try {
-    if (!user?.id) {
+    if (!user?.id || user.id === 'anonymous') {
       throw new Error('User authentication required for JIRA access');
     }
 
@@ -171,7 +171,7 @@ export async function addComment({ issueKey, comment, requireConfirmation = true
  */
 export async function getTransitions({ issueKey, user }) {
   try {
-    if (!user?.id) {
+    if (!user?.id || user.id === 'anonymous') {
       throw new Error('User authentication required for JIRA access');
     }
 
@@ -228,7 +228,7 @@ export async function transitionTicket({
   user
 }) {
   try {
-    if (!user?.id) {
+    if (!user?.id || user.id === 'anonymous') {
       throw new Error('User authentication required for JIRA access');
     }
 
@@ -316,7 +316,7 @@ export async function transitionTicket({
  */
 export async function getAttachment({ attachmentId, returnBase64 = false, user }) {
   try {
-    if (!user?.id) {
+    if (!user?.id || user.id === 'anonymous') {
       throw new Error('User authentication required for JIRA access');
     }
 

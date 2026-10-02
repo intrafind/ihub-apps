@@ -56,6 +56,7 @@ import {
 } from '../services/inference/errors.js';
 import {
   APP_MODEL_PREFIX,
+  isModelPermitted,
   listInvocableApps,
   resolveInferenceTarget
 } from '../services/inference/modelIdentifier.js';
@@ -185,15 +186,15 @@ export default function registerOpenAIProxyRoutes(
    *         description: Authentication required
    */
   app.get(`${base}/v1/models`, async (req, res) => {
-    const models = llmClient.listModels();
-    let filtered = models;
-    if (req.user && req.user.permissions) {
-      const allowed = req.user.permissions.models || new Set();
-      filtered = filterResourcesByPermissions(models, allowed);
-    }
+    const user = apiUser(req);
+    // Fails closed: without a principal carrying permissions no model is listed.
+    const filtered = filterResourcesByPermissions(
+      llmClient.listModels(),
+      user?.permissions?.models || new Set()
+    );
     let apps = [];
     try {
-      apps = listInvocableApps(apiUser(req));
+      apps = listInvocableApps(user);
     } catch (error) {
       logger.warn('[OpenAI Proxy] Could not list apps', { component: 'OpenAIProxy', error });
     }
@@ -391,14 +392,13 @@ export default function registerOpenAIProxyRoutes(
       const msg = await getLocalizedError('modelNotFound', {}, lang);
       return res.status(404).json({ error: msg });
     }
-    if (req.user && req.user.permissions) {
-      const allowed = req.user.permissions.models || new Set();
-      // Check against the resolved model's canonical id, not the raw
-      // (possibly differently-cased) id the caller sent.
-      if (!allowed.has('*') && !allowed.has(model.id)) {
-        const msg = await getLocalizedError('modelAccessDenied', {}, lang);
-        return res.status(403).json({ error: msg });
-      }
+    // Check against the resolved model's canonical id, not the raw
+    // (possibly differently-cased) id the caller sent. Fails closed: without a
+    // principal carrying permissions the model is not allowed.
+    const user = apiUser(req);
+    if (!isModelPermitted(user, model)) {
+      const msg = await getLocalizedError('modelAccessDenied', {}, lang);
+      return res.status(403).json({ error: msg });
     }
 
     let format;
@@ -430,7 +430,8 @@ export default function registerOpenAIProxyRoutes(
       }
     }
 
-    const userId = req.user?.id;
+    // Anonymous traffic stays out of the active-user count, as in setup.js.
+    const userId = user && user.id !== 'anonymous' ? user.id : undefined;
     const chatId = `${APP_ID}:${userId || 'anonymous'}`;
     activityTracker.recordActivity({ userId, chatId });
     recordAppUsage(APP_ID, userId, { 'gen_ai.request.model': modelId });
@@ -457,7 +458,7 @@ export default function registerOpenAIProxyRoutes(
       telemetry: {
         kind: 'inference',
         purpose: APP_ID,
-        user: req.user || null,
+        user: user || null,
         trigger: { type: 'api', source: APP_ID },
         refs: { appId: APP_ID }
       }
@@ -476,7 +477,7 @@ export default function registerOpenAIProxyRoutes(
       maxTokens,
       tools: genericTools,
       toolChoice,
-      user: req.user
+      user
     };
     const recordValidation = verdict => {
       if (!format) return;

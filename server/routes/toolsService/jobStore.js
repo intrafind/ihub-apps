@@ -1,4 +1,5 @@
 import crypto from 'crypto';
+import { isAnonymousUser } from '../../services/loop/runIdentity.js';
 
 // In-memory job store
 const jobs = new Map();
@@ -6,6 +7,7 @@ const jobs = new Map();
 // Clean up old jobs after 1 hour
 const JOB_TTL_MS = 60 * 60 * 1000;
 
+// unref: the sweep alone must not keep the process alive.
 setInterval(
   () => {
     const now = Date.now();
@@ -16,7 +18,7 @@ setInterval(
     }
   },
   5 * 60 * 1000
-);
+).unref();
 
 /**
  * Create a new job with common fields and insert into the store.
@@ -60,6 +62,8 @@ export function getJob(jobId) {
 export function canAccessJob(job, user) {
   if (!job || !user) return false;
   if (user.permissions?.adminAccess === true) return true;
+  // Anonymous visitors share one principal id, so no job belongs to them.
+  if (isAnonymousUser(user)) return false;
   return job.userId === user.id;
 }
 
@@ -69,6 +73,8 @@ export function canAccessJob(job, user) {
  */
 export function listJobs(userId, isAdmin, filters = {}) {
   const result = [];
+  // Anonymous visitors share one principal id, so no job belongs to them.
+  if (!isAdmin && isAnonymousUser({ id: userId })) return result;
   for (const [id, job] of jobs) {
     if (!isAdmin && job.userId !== userId) continue;
     if (filters.status && job.status !== filters.status) continue;

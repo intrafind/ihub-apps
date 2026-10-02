@@ -6,7 +6,7 @@ The OCR (Optical Character Recognition) feature converts PDF documents and image
 
 OCR is disabled by default. Enable it in **Admin → Features → Tools Service** (preview category).
 
-Once enabled, the OCR page is available at `/ocr` in the navigation.
+Once enabled, the OCR page is available at `/ocr` in the navigation. Starting an OCR job needs a signed-in user; with anonymous access, visitors who are not signed in cannot start one.
 
 ## Supported File Types
 
@@ -66,6 +66,8 @@ POST /api/tools-service/ocr/process
 Content-Type: multipart/form-data
 Authorization: Bearer <token>
 ```
+
+Requests without a signed-in user (including anonymous visitors) are answered with `401`.
 
 **Form fields:**
 

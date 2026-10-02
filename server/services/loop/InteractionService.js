@@ -830,7 +830,7 @@ export class InteractionService extends EventEmitter {
   assertCanAnswer(interaction, user) {
     const groups = interaction.policy?.approverGroups;
     if (!Array.isArray(groups) || groups.length === 0) return;
-    if (!user || user.isAgent === true) {
+    if (!user || user.id === 'anonymous' || user.isAgent === true) {
       throw new InteractionError('An approver is required', 'APPROVER_REQUIRED', 403);
     }
     // Admins see every interaction in the queue and may answer every one of

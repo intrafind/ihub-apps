@@ -22,7 +22,7 @@ The system supports six different types of rate limiters, each configurable thro
   - `/api/configs`
   - `/api/sessions`
   - `/api/pages`
-  - `/api/magic-prompts`
+  - `/api/magic-prompt`
   - `/api/short-links`
 
 ### 2. Admin API Rate Limiter

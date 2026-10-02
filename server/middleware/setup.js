@@ -10,7 +10,7 @@ import jwtAuthMiddleware from './jwtAuth.js';
 import ldapAuthMiddleware from './ldapAuth.js';
 import { teamsAuthMiddleware } from './teamsAuth.js';
 import ntlmAuthMiddleware from './ntlmAuth.js';
-import { enhanceUserWithPermissions } from '../utils/authorization.js';
+import { enhanceUserWithPermissions, isAnonymousAccessAllowed } from '../utils/authorization.js';
 import { createRateLimiters } from './rateLimiting.js';
 import { buildApiPath } from '../utils/basePath.js';
 import config from '../config.js';
@@ -627,7 +627,7 @@ export function setupMiddleware(app, platformConfig = {}) {
   app.use(buildApiPath('/configs'), rateLimiters.publicApiLimiter);
   app.use(buildApiPath('/sessions'), rateLimiters.publicApiLimiter);
   app.use(buildApiPath('/pages'), rateLimiters.publicApiLimiter);
-  app.use(buildApiPath('/magic-prompts'), rateLimiters.publicApiLimiter);
+  app.use(buildApiPath('/magic-prompt'), rateLimiters.publicApiLimiter);
   app.use(buildApiPath('/short-links'), rateLimiters.publicApiLimiter);
   app.use(buildApiPath('/integrations'), rateLimiters.publicApiLimiter);
 
@@ -700,8 +700,28 @@ export function setupMiddleware(app, platformConfig = {}) {
   // Enhance user with permissions after authentication.
   // Read platform config from configCache per-request so that admin saves and
   // IHUB_PLATFORM__* overrides take effect without a server restart.
+  //
+  // A request without a signed-in user gets the anonymous principal (id
+  // 'anonymous', the anonymousAuth.defaultGroups and their permissions) when
+  // anonymous access is allowed. Every permission check downstream then has a
+  // principal to check against instead of skipping when req.user is missing.
+  // Code that needs a signed-in user must reject id 'anonymous'
+  // (authenticatedOnly does).
   app.use((req, res, next) => {
-    if (req.user && !req.user.permissions) {
+    if (!req.user) {
+      const livePlatform = configCache.getPlatform() || platformConfig;
+      if (isAnonymousAccessAllowed(livePlatform)) {
+        try {
+          req.user = enhanceUserWithPermissions(null, livePlatform.auth || {}, livePlatform);
+        } catch (error) {
+          // No principal: permission checks downstream fail closed.
+          logger.warn('Could not build the anonymous principal', {
+            component: 'Setup',
+            error: error.message
+          });
+        }
+      }
+    } else if (!req.user.permissions) {
       const livePlatform = configCache.getPlatform() || platformConfig;
       const authConfig = livePlatform.auth || {};
       req.user = enhanceUserWithPermissions(req.user, authConfig, livePlatform);

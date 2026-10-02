@@ -19,7 +19,8 @@ import { hasIdCaseInsensitive } from '../../utils/resourceLookup.js';
  * @returns {boolean} True if user has admin access
  */
 export function isAdmin(user) {
-  if (!user) return false;
+  // The anonymous principal is never an admin, whatever groups it carries.
+  if (!user || user.id === 'anonymous') return false;
   return user.groups?.includes('admin') || user.permissions?.adminAccess === true;
 }
 
