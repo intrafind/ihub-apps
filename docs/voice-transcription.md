@@ -6,13 +6,15 @@ Three user-facing features share one server-side pipeline:
 
 | Feature                     | What the user does                                                     | Where the text goes                                                        |
 | --------------------------- | ---------------------------------------------------------------------- | -------------------------------------------------------------------------- |
-| **Dictation**               | Clicks the microphone icon and speaks                                  | Into the chat **input field**                                              |
+| **Dictation** (with a model)| Clicks the microphone icon and speaks                                  | Into the chat **input field**                                              |
 | **Record → send**           | Clicks the record button, speaks, clicks stop                          | Grows the **user's message** while speaking; sent to the chat model on stop |
 | **File/video transcription**| Uploads an audio file or a video (audio track is extracted in-browser) | Into the **user's message**, after the typed text; sent to the chat model  |
 
 In all three the transcript is **user input**. The selected chat model answers it like any typed message — the transcription model only turns speech into text.
 
-All three send audio to the same iHub WebSocket endpoint, `/api/voice/realtime`, which relays it to a vLLM realtime endpoint (e.g. Voxtral). The browser **never** connects to vLLM directly, and the vLLM URL / API key **never** reach the browser.
+All three send audio to the same iHub WebSocket endpoint, `/api/voice/realtime`, naming a transcription model; iHub relays it to that model's endpoint (e.g. Voxtral on vLLM). The browser **never** connects to the endpoint directly, and its URL / API key **never** reach the browser.
+
+Dictation can also run without iHub in the path: the **browser** service (Web Speech API) and **Azure Speech** recognize speech in the browser. Which one an app uses is set under **Admin → Voice Input** (the platform default) or per app — see [Choosing what voice input uses](#choosing-what-voice-input-uses).
 
 ## Architecture
 
@@ -28,15 +30,17 @@ Browser                          iHub Apps server                     GPU host
 └───────────────────────┘       └──────────────────────────┘        └─────────────────┘
 ```
 
-The GPU host above is one of three interchangeable backends. Which one a
+The GPU host above is one of four interchangeable backends. Which one a
 session uses comes from the selected transcription model's provider, and the
 browser-facing protocol is identical for all of them:
 
 | Provider | Upstream | Shape |
 | --- | --- | --- |
 | `vllm-realtime` | your own vLLM `/v1/realtime` | Streaming WebSocket |
+| `mistral` | Mistral realtime API (`wss://api.mistral.ai/v1/audio/transcriptions/realtime`) | Streaming WebSocket |
 | `google-live` | Gemini Live API (`wss://…BidiGenerateContent`) | Streaming WebSocket |
 | `google-transcribe` | Gemini Files API + `/v1beta/interactions` | Batch: one HTTPS request on `stop` |
+| `openai` / `local` | OpenAI-compatible `/audio/transcriptions` (Whisper on T-Systems LLM Hub, OpenAI, vLLM) | Batch: one HTTPS request on `stop` (in parts for long recordings) |
 
 A batch provider has no upstream socket. The server buffers the PCM the browser
 streams, makes a single transcription request when the client sends `stop`, and
@@ -56,10 +60,10 @@ The protocol is iHub-defined (both ends are ours):
 
 | Direction        | Frame                                | Meaning                                                        |
 | ---------------- | ------------------------------------ | -------------------------------------------------------------- |
-| client → server  | `{"type":"start", "modelId"?}`       | Begin a session. With `modelId`: use that transcription model. Without: use the platform dictation backend. |
+| client → server  | `{"type":"start", "modelId"}`        | Begin a session with that transcription model. Audio without a `start` frame gets a `no-model` error. |
 | client → server  | binary frames                        | PCM16 audio, 16 kHz mono, little-endian                        |
 | client → server  | `{"type":"stop"}`                    | No more audio; flush and finish                                 |
-| server → client  | `{"type":"ready"}`                   | Upstream session initialized — safe to stream at full speed     |
+| server → client  | `{"type":"ready","mode"}`            | Upstream session initialized — safe to stream at full speed. `mode` is `stream` or `batch` (a batch transcript only arrives after `stop`) |
 | server → client  | `{"type":"delta","text":"..."}`      | Streaming partial transcript                                    |
 | server → client  | `{"type":"final","text":"..."}`      | A completed utterance/segment                                   |
 | server → client  | `{"type":"done"}`                    | Transcript complete (sent after `stop` once the upstream settles) |
@@ -69,7 +73,7 @@ Error frames carry a stable machine-readable `code` alongside the human-readable
 
 | `code`                                          | Meaning                                                     |
 | ----------------------------------------------- | ----------------------------------------------------------- |
-| `not-configured`                                | No dictation backend configured (dictation sessions)        |
+| `no-model`                                      | The session named no model (`start` without `modelId`, or no `start`) |
 | `unknown-model` / `not-transcription-model` / `model-disabled` | The requested `modelId` is invalid for transcription |
 | `not-permitted`                                 | The user's groups don't grant the model                     |
 | `unsupported-provider` / `no-endpoint` / `resolve-failed` | Model misconfiguration                            |
@@ -84,7 +88,7 @@ A transcription session pins a GPU-backed upstream socket, so the bridge is deli
 
 | Guard                       | Default   | Behavior                                                                                       |
 | --------------------------- | --------- | ---------------------------------------------------------------------------------------------- |
-| Lazy upstream open          | —         | The upstream socket opens on `start` (model-based) or first audio frame (dictation) — an idle browser tab never pins a GPU session. |
+| Upstream opens on `start`   | —         | The upstream socket opens only once the client names a model; with the no-audio grace below, an idle browser tab cannot pin a GPU session for long. |
 | No-audio grace              | 15 s      | A connection that never sends audio is closed.                                                 |
 | Idle timeout                | 60 s      | No audio and no upstream activity → close both legs.                                           |
 | Keepalive ping/pong         | every 25 s| Server pings the browser (browsers auto-pong). A client that misses a whole interval (crashed tab, suspended laptop) is terminated. Pings also keep reverse-proxy read timeouts from killing quiet sessions while the GPU processes a long tail. |
@@ -107,7 +111,7 @@ vllm serve mistralai/Voxtral-Mini-4B-Realtime-2602 \
   --port 8080
 ```
 
-This exposes a WebSocket endpoint at `ws://<gpu-host>:8080/v1/realtime`. Verify it accepts connections before wiring it into iHub (the admin UI has a **Test connection** button that performs the protocol handshake for you).
+This exposes a WebSocket endpoint at `ws://<gpu-host>:8080/v1/realtime`. Verify it accepts connections before wiring it into iHub (the **Test** action on the model in **Admin → Models** performs the protocol handshake for you).
 
 Recommendations for production:
 
@@ -140,7 +144,38 @@ Field notes:
 - **`apiKey`** — optional. Plaintext values are encrypted at rest (AES-256-GCM `ENC[...]`) when saved through the admin UI; `${ENV_VAR}` placeholders are also supported. Sent upstream as a Bearer token, never to browsers.
 - **`enabled`** — must be `true` for the model to be usable.
 
-Configure it in **Admin → Models** (select model type "Transcription"), or edit the JSON directly — changes are hot-reloaded. Use the **Test connection** button in Admin → Voice/Models to validate reachability and protocol without streaming audio.
+Configure it in **Admin → Models** (select model type "Transcription"), or edit the JSON directly — changes are hot-reloaded. The **Test** action on the model validates reachability and protocol without streaming speech: a streaming model passes once its endpoint starts a session, a batch model (Gemini Transcribe, Whisper) is sent one second of silence. It also works on a disabled model, so you can check one before enabling it.
+
+### Hosted alternative: Voxtral on the Mistral platform
+
+The Voxtral model you would run on vLLM is also available as a hosted model,
+`voxtral-mini-transcribe-realtime-2602`. A disabled model ships next to the
+vLLM one:
+
+```json
+{
+  "id": "voxtral-mini-transcribe-realtime",
+  "modelId": "voxtral-mini-transcribe-realtime-2602",
+  "url": "wss://api.mistral.ai/v1/audio/transcriptions/realtime",
+  "provider": "mistral",
+  "modelType": "transcription",
+  "enabled": false
+}
+```
+
+- It streams the transcript as the audio arrives, like the vLLM model, and
+  detects the language by itself.
+- It uses the Mistral credential the chat models already use: a per-model
+  `apiKey`, the `mistral` entry in `providers.json`, or `MISTRAL_API_KEY`. The
+  key is sent to Mistral as a Bearer token from the iHub server and never
+  reaches the browser.
+- `config.targetStreamingDelayMs` (optional, milliseconds) lets Mistral wait
+  longer before transcribing, for more accuracy at the cost of latency.
+- Enabling it **sends user audio to Mistral**, which is why it is off by
+  default.
+
+Enable it in **Admin → Models**, then pick it under **Admin → Voice Input** (for
+voice input, transcription or both) or in an app.
 
 ### Hosted alternative: Gemini transcription
 
@@ -178,6 +213,34 @@ they are off by default.
   Long recordings need the buffer cap raised: one hour of 16 kHz PCM16 is
   ≈115 MB and the default `maxBufferedAudioBytes` is 32 MB. See
   [Runtime limits and tuning](#runtime-limits-and-tuning).
+
+### Hosted alternative: Whisper (T-Systems LLM Hub, OpenAI)
+
+Any server that speaks the OpenAI audio API can transcribe: `whisper-large-v3` and
+`whisper-large-v3-turbo` on T-Systems LLM Hub, OpenAI's `whisper-1` and `gpt-4o-transcribe`, or
+Whisper on your own vLLM. Such a model is a transcription model with `provider: "openai"` (or
+`"local"`):
+
+```json
+{
+  "id": "llmhub-whisper-large-v3-turbo",
+  "modelId": "whisper-large-v3-turbo",
+  "url": "https://llm-server.llmhub.t-systems.net/v2/audio/transcriptions",
+  "provider": "openai",
+  "providerId": "llmhub",
+  "modelType": "transcription",
+  "enabled": true
+}
+```
+
+- The quickest way is **Admin → Models → Import from URL** on the LLM Hub provider: Whisper is
+  listed as **Transcription** and imported exactly like this, using the provider's key.
+- It is a batch provider: the transcript arrives in one piece when the user stops, not word by
+  word. Recordings longer than `config.maxChunkSeconds` (default 600 s, under the common 25 MB
+  upload limit) are sent in parts, each cut at a pause.
+- `config.language` (e.g. `"de"`) skips language detection; `config.prompt` helps with the
+  spelling of names and terms.
+- On LLM Hub, which models a key can use depends on its plan; Whisper is in every paid plan.
 
 Speaker diarization and word-level timestamps are **not** exposed. iHub renders
 a plain transcript into a chat bubble with nowhere to show them, and Gemini
@@ -224,7 +287,7 @@ Add a `transcription` block to the app config (Admin → Apps → Edit → Trans
 
 ### Platform default transcription model
 
-Instead of picking the same model in every app, set it once under **Admin → Voice Input → Defaults → Transcription model** (`platform.json` → `speech.transcription.defaultModelId`). Apps that enable transcription but leave `modelId` empty use it; an app's own `modelId` always wins. The app editor then shows **Platform default (…)** as the model choice.
+Instead of picking the same model in every app, set it once under **Admin → Voice Input → Transcription → Model** (`platform.json` → `speech.transcription.defaultModelId`). Apps that enable transcription but leave `modelId` empty use it; an app's own `modelId` always wins. The app editor then shows **Platform default (…)** as the model choice.
 
 ```json
 {
@@ -262,40 +325,55 @@ Transcription models are permission-checked like chat models, using the same gro
 
 A user whose groups grant neither `voxtral-mini-realtime` nor `*` receives `Not permitted to use transcription model` when a session starts. The check **fails closed**: if permissions cannot be computed for a connection, model-based transcription is denied.
 
-## Dictation backend (platform-level)
+## Choosing what voice input uses
 
-Dictation (microphone → input field) predates transcription models and is configured platform-wide under `platform.json` → `speech.realtime`. Sessions started **without** a `modelId` use it:
+The microphone button (dictation) can use any of these, set under **Admin → Voice Input → Voice input** as the platform default (`platform.json` → `speech.defaultService`), or per app in the app editor's **Speech Recognition Service** (`settings.speechRecognition.service`):
+
+| Choice | Config | Where speech is recognized |
+| --- | --- | --- |
+| Browser | `"browser"` | In the browser (Web Speech API) |
+| Azure Speech | `"azure"` | In the browser (Azure Speech SDK; connection under Admin → Voice Input → Azure Speech) |
+| A transcription model | `"model"` + the model id | Through iHub, by that model — any enabled `modelType: "transcription"` model |
 
 ```json
 {
   "speech": {
-    "realtime": {
-      "enabled": true,
-      "url": "ws://voxtral.internal:8080/v1/realtime",
-      "model": "mistralai/Voxtral-Mini-4B-Realtime-2602",
-      "apiKey": ""
-    }
+    "defaultService": "model",
+    "dictation": { "modelId": "gemini-3.5-transcribe-live" }
   }
 }
 ```
 
-Both backends can point at the same vLLM deployment. The WebSocket endpoint is available when **either** the dictation backend is enabled **or** at least one enabled transcription model exists.
+An app picks its own the same way:
 
-> **Note:** the dictation backend (`platform.speech.realtime.url/model/apiKey`) and a transcription model's config are **independent copies** — the V073 migration seeds the model from the platform values once, but afterwards updating one does not update the other. When you move the vLLM endpoint, update both places.
+```json
+{
+  "settings": {
+    "speechRecognition": { "service": "model", "modelId": "voxtral-mini-realtime" }
+  }
+}
+```
+
+- A streaming model (Voxtral on vLLM or Mistral, Gemini Transcribe Live) shows the text in the input field while the user speaks. A batch model (Gemini Transcribe, Whisper) inserts it in one piece when the user stops.
+- Users need access to the model through their groups (see [Permissions](#permissions)). Without it, pressing the microphone shows `Not permitted to use transcription model`.
+- If the platform default's model is disabled or deleted, apps that follow the default use the browser until it is back, just as they do when Azure is switched off. An app that picks a model of its own shows the error instead.
+- Endpoint and key are set once, on the model. The same model can serve voice input, the record button and file transcription.
+
+**Upgrading from an earlier version:** dictation used to stream to a separate endpoint under `speech.realtime` (`url`, `model`, `apiKey`, `enabled`), picked as the `vllm-realtime` service. Migration V151 moves that endpoint onto a transcription model (reusing a `vllm-realtime` model with the same URL, or writing one), switches the platform default and every app that used `vllm-realtime` to that model, and grants the model to every group that could dictate before. `speech.realtime` keeps only the limits below.
 
 ## Testing from the admin UI
 
 **Admin → Voice Input → Test voice input** runs the same code path as a chat, in the admin's own browser and with their microphone, against the **saved** configuration (save first to test changes):
 
 - **Microphone check**: input level meter and device name, with no speech service involved. It tells "the browser gets no audio" apart from "the backend returns no text".
-- **Live dictation (realtime)**: pick a service (browser, Azure or vLLM Realtime; the platform default is preselected), a language and a mode, then speak. It shows the interim and final transcript and the time to the first text.
+- **Live dictation (realtime)**: pick a service (browser, Azure or any enabled transcription model; the platform default is preselected), a language and a mode, then speak. It shows the interim and final transcript and the time to the first text.
 - **Recording (record → transcribe)**: pick an enabled transcription model (the platform default is preselected) and record up to 60 s. The clip goes over `/api/voice/realtime` with the same model check a chat uses; unlike the chat's record button, it is sent after recording rather than streamed live, so the processing time can be measured. It shows the transcript, audio duration and processing time; on failure, the raw server code is shown too (e.g. `model-disabled`, `upstream-unreachable`).
 
-The **Test connection** buttons check the backends from the iHub server instead. For vLLM Realtime that is a WebSocket handshake; for Azure it exchanges the key for a token.
+The Azure **Test connection** button checks the key from the iHub server instead, by exchanging it for a token. A transcription model's endpoint is checked with the **Test** action in **Admin → Models**.
 
 ## Runtime limits and tuning
 
-All knobs live under `platform.json` → `speech.realtime` and apply to the whole realtime endpoint (dictation and transcription):
+All knobs live under `platform.json` → `speech.realtime` and apply to the whole realtime endpoint (dictation with a model, and transcription):
 
 | Setting                 | Default   | Applies             | Notes                                                                 |
 | ----------------------- | --------- | ------------------- | --------------------------------------------------------------------- |
@@ -355,7 +433,7 @@ Notes:
 - **Cluster workers (`WORKERS>1`):** the WebSocket handler attaches per worker, and the sticky-session cluster router keeps each connection on one worker. Connection caps are therefore **per worker** — with `WORKERS=4` and `maxConnections=50`, the instance-wide ceiling is 200. Set `maxConnections` to your per-GPU budget divided by the worker count.
 - **Multiple iHub instances:** caps are per instance; multiply accordingly, or enforce a global budget at the vLLM deployment (e.g. gateway concurrency limits). WebSocket sessions are connection-oriented, so any load-balancing scheme keeps a session on one instance for its lifetime; no shared state is needed between instances for voice.
 - **GPU capacity:** a realtime session is held open for the duration of the transcription. Uploads stream faster than realtime, so sessions are usually short; dictation sessions last as long as the user talks. If the GPU saturates, new sessions still connect but transcribe slowly — the backpressure mechanism keeps server memory flat while they wait, and per-user caps (429 on the fourth concurrent session) keep one user from monopolizing.
-- **Failure behavior:** if the upstream is unreachable or closes abnormally, the client receives a diagnostic `{"type":"error"}` (e.g. `Transcription service unreachable: ECONNREFUSED`) and the UI surfaces it — sessions never hang silently. If neither a dictation backend nor an enabled transcription model exists, the endpoint answers upgrades with HTTP 503.
+- **Failure behavior:** if the upstream is unreachable or closes abnormally, the client receives a diagnostic `{"type":"error"}` (e.g. `Transcription service unreachable: ECONNREFUSED`) and the UI surfaces it — sessions never hang silently. If no enabled transcription model exists, the endpoint answers upgrades with HTTP 503.
 
 ## Security model
 
@@ -366,7 +444,7 @@ Notes:
 - **Isolation:** each connection's state and upstream socket are private to that connection. There is no cross-connection event bus; user A cannot subscribe to user B's transcription events.
 - **Resource protection:** connection caps (429), frame-size caps, pending-buffer caps, idle/grace timers, keepalive dead-peer detection, upstream backpressure, and a session duration cap bound CPU, memory, and GPU pinning per user and per instance.
 - **Secrets at rest:** model API keys are encrypted (AES-256-GCM) in the config files; `${ENV}` placeholders keep secrets out of files entirely.
-- **Admin test endpoint:** `POST /api/admin/voice/realtime/test` requires admin auth and never echoes the stored key back.
+- **Admin test endpoint:** `POST /api/admin/models/:modelId/test` requires admin auth and never echoes the stored key back.
 - **Privacy:** audio is relayed, never stored; transcript content is never logged (only lengths and frame counts at debug level). Transcripts appear in chat history subject to the same handling as any other chat content.
 
 ## Browser requirements
@@ -382,12 +460,12 @@ Notes:
 | Symptom                                                        | Cause / fix                                                                                      |
 | -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
 | Record/mic button missing                                      | Page not a secure context (HTTPS), app's `transcription.inputs.record` off, or feature disabled.  |
-| Upgrade fails with **503**                                     | No enabled transcription model **and** `speech.realtime` disabled/unset.                          |
+| Upgrade fails with **503**                                     | No enabled transcription model.                                                                   |
 | Upgrade fails with **401**                                     | Missing/expired JWT and anonymous access disabled.                                                |
 | Upgrade fails with **403**                                     | Origin rejected (CSWSH guard). Add the browser origin to `ALLOWED_ORIGINS`, or set `X-Forwarded-Host` at the proxy. |
 | Upgrade fails with **429**                                     | Connection caps reached (`maxConnections` / `maxConnectionsPerUser`).                             |
 | `Not permitted to use transcription model: …`                  | User's groups don't grant the model id — update `groups.json`.                                    |
-| `Transcription service unreachable: ECONNREFUSED / ENOTFOUND`  | vLLM down or wrong `url` (host/port). Test with the admin **Test connection** button.             |
+| `Transcription service unreachable: ECONNREFUSED / ENOTFOUND`  | vLLM down or wrong `url` (host/port). Check with the model's **Test** action in Admin → Models.   |
 | `…rejected the connection (HTTP 301/302/307/308): … use wss://` | The endpoint only accepts TLS; its reverse proxy redirects HTTP to HTTPS, which a WebSocket cannot follow. Change `ws://` to `wss://`. |
 | `…rejected the connection (HTTP 404)`                          | Wrong upstream path — the URL must point at `/v1/realtime`.                                       |
 | `…rejected the connection (HTTP 401/403)`                      | Upstream auth — set/fix the model `apiKey`.                                                       |

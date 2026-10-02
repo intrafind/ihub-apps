@@ -591,15 +591,23 @@ export const platformConfigSchema = z
       })
       .passthrough()
       .prefault({}),
-    // Realtime speech-to-text: the browser streams mic audio to iHub over a
-    // WebSocket and iHub proxies it to a vLLM realtime endpoint (e.g. Voxtral
-    // on /v1/realtime). The url/apiKey stay server-side. Apps opt in with
-    // settings.speechRecognition.service = 'vllm-realtime'.
+    // Voice: dictation (the microphone button), transcription (record/upload)
+    // and read aloud. Transcription and TTS endpoints and keys live on their
+    // models (Admin → Models); this block only picks which ones are used.
     speech: z
       .object({
         // Dictation service for every app whose settings.speechRecognition.service
         // is "default" (or unset). Apps can still pin a service of their own.
-        defaultService: z.enum(['browser', 'azure', 'vllm-realtime']).prefault('browser'),
+        // "model" streams the microphone through iHub to dictation.modelId.
+        defaultService: z.enum(['browser', 'azure', 'model']).prefault('browser'),
+        dictation: z
+          .object({
+            // A `modelType: "transcription"` model; used when defaultService
+            // is "model".
+            modelId: z.string().prefault('')
+          })
+          .passthrough()
+          .prefault({}),
         // Record/upload transcription: the model used when an app enables
         // transcription but sets no transcription.modelId of its own.
         transcription: z
@@ -622,19 +630,17 @@ export const platformConfigSchema = z
           })
           .passthrough()
           .prefault({}),
+        // Resource guards for the transcription WebSocket proxy, which every
+        // model-based dictation and transcription session runs through (each
+        // pins an upstream session). Optional; sane defaults applied in code.
         realtime: z
           .object({
-            enabled: z.boolean().prefault(false),
-            url: z.string().prefault(''),
-            model: z.string().prefault(''),
-            // Optional. Supports plaintext, ${ENV_VAR} placeholders, and
-            // ENC[...] encrypted values (decrypted by configCache on load).
-            apiKey: z.string().prefault(''),
-            // Resource guards for the WS proxy (each session pins a GPU-backed
-            // upstream socket). Optional; sane defaults applied in code.
             maxConnections: z.number().int().positive().optional(),
             maxConnectionsPerUser: z.number().int().positive().optional(),
-            maxFrameBytes: z.number().int().positive().optional()
+            maxFrameBytes: z.number().int().positive().optional(),
+            maxSessionSeconds: z.number().int().positive().optional(),
+            maxBufferedAudioBytes: z.number().int().positive().optional(),
+            maxBufferedAudioBytesTotal: z.number().int().positive().optional()
           })
           .passthrough()
           .prefault({}),

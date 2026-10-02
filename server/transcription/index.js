@@ -41,11 +41,21 @@
 import vllmRealtimeProvider from './vllmRealtimeProvider.js';
 import googleLiveProvider from './googleLiveProvider.js';
 import googleTranscribeProvider from './googleTranscribeProvider.js';
+import mistralRealtimeProvider from './mistralRealtimeProvider.js';
+import openaiTranscribeProvider from './openaiTranscribeProvider.js';
 
+// `mistral`, `openai` and `local` are chat API types too: a model only reaches
+// this registry with `modelType: 'transcription'` (the bridge checks it
+// first), as Voxtral TTS reaches server/tts/ with `modelType: 'tts'`. The two
+// OpenAI types speak the OpenAI audio API (`/audio/transcriptions`): Whisper
+// on T-Systems LLM Hub, OpenAI, vLLM.
 const providers = {
   'vllm-realtime': vllmRealtimeProvider,
   'google-live': googleLiveProvider,
-  'google-transcribe': googleTranscribeProvider
+  'google-transcribe': googleTranscribeProvider,
+  mistral: mistralRealtimeProvider,
+  openai: openaiTranscribeProvider,
+  local: openaiTranscribeProvider
 };
 
 /**
