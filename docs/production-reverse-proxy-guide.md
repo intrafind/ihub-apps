@@ -97,6 +97,12 @@ PORT=3001 npm start
 > **Tip:** If your proxy uses a custom header instead of `X-Forwarded-Prefix`, set
 > `BASE_PATH_HEADER` to the header name (e.g., `export BASE_PATH_HEADER=x-custom-prefix`).
 
+The header is used only when the request comes from a proxy that `trustProxy` in `platform.json`
+trusts (see [rate limiting](rate-limiting.md#proxy-hops-and-the-rate-limit-key)). With a hop count
+such as the default `1`, any peer counts as trusted. To accept the header from your proxy only, list
+its address instead, for example `"trustProxy": "10.0.0.5"` or `"trustProxy": "loopback"` when the
+proxy runs on the same host. With `"trustProxy": false` the header is ignored.
+
 ## Nginx Configuration
 
 ### Production Nginx Configuration (nginx.conf)

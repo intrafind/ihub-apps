@@ -23,6 +23,7 @@ import { getAuthCookieOptions, getClearAuthCookieOptions } from '../utils/cookie
 import { buildPublicBaseUrl } from '../utils/publicBaseUrl.js';
 import { clearOidcLogoutHint, readOidcLogoutHint } from '../utils/oidcLogoutHint.js';
 import { localUsersFile } from '../utils/contentsPath.js';
+import { LoginLockedError } from '../utils/loginLockout.js';
 
 /**
  * Sanitize and validate authentication input
@@ -148,14 +149,21 @@ export default function registerAuthRoutes(app) {
           }
         });
       } catch (error) {
-        logger.warn('Local authentication failed', { component: 'Auth', error });
+        const locked = error instanceof LoginLockedError;
+        logger.warn(
+          locked ? 'Local login refused: account locked' : 'Local authentication failed',
+          {
+            component: 'Auth',
+            error
+          }
+        );
         recordAuthEvent('local', 'login_failure');
         logAudit({
           req,
           action: 'login',
           resource: 'auth',
           result: 'failure',
-          summary: 'Local login failed',
+          summary: locked ? 'Local login refused: too many failed attempts' : 'Local login failed',
           source: 'web',
           actor: {
             id: sanitizedUsername,
@@ -163,6 +171,15 @@ export default function registerAuthRoutes(app) {
             authenticated: false
           }
         });
+        if (locked) {
+          const minutes = Math.ceil(error.retryAfterSeconds / 60);
+          res.set('Retry-After', String(error.retryAfterSeconds));
+          return sendErrorResponse(
+            res,
+            429,
+            `Too many failed sign-in attempts. Try again in ${minutes} minute${minutes === 1 ? '' : 's'}.`
+          );
+        }
         return sendErrorResponse(
           res,
           401,

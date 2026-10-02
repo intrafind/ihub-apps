@@ -188,19 +188,42 @@ export const toAbsolutePath = relativePath => {
 };
 
 /**
+ * The base path header (`X-Forwarded-Prefix`, or `BASE_PATH_HEADER`) of a
+ * request that came through a proxy Express trusts — the `trust proxy`
+ * setting, from `platform.trustProxy`. The header is ignored when the peer
+ * that sent the request is not trusted.
+ *
+ * With a hop count (the default `1`) or `true`, every peer counts as trusted;
+ * list the proxy addresses in `trustProxy` to accept the header from those
+ * proxies only. With `false`, the header is never used.
+ *
+ * @param {Object} req - Express request
+ * @returns {string|undefined} The raw header value, or undefined
+ */
+const trustedBasePathHeader = req => {
+  const headerName = process.env.BASE_PATH_HEADER || 'x-forwarded-prefix';
+  const value = req.headers?.[headerName.toLowerCase()];
+  if (!value) return undefined;
+  const trust = req.app?.get?.('trust proxy fn');
+  if (typeof trust !== 'function' || !trust(req.socket?.remoteAddress, 0)) return undefined;
+  return value;
+};
+
+/**
  * Middleware to rewrite request URL by stripping the X-Forwarded-Prefix.
  * This allows non-stripping reverse proxies to work with root-registered routes.
  * Safe no-op when the proxy already strips the prefix or when no header is present.
  *
- * Must be registered BEFORE all other middleware and routes.
+ * Must be registered BEFORE all other middleware and routes — in particular
+ * before the rate limiters, which match on the rewritten path — and after
+ * `trust proxy` is set. setupMiddleware registers it.
  *
  * @param {Object} req - Express request
  * @param {Object} res - Express response
  * @param {Function} next - Next middleware
  */
 export const basePathRewriteMiddleware = (req, res, next) => {
-  const headerName = process.env.BASE_PATH_HEADER || 'x-forwarded-prefix';
-  let prefix = req.headers[headerName.toLowerCase()];
+  let prefix = trustedBasePathHeader(req);
 
   if (prefix) {
     // Normalize: remove trailing slashes
@@ -229,8 +252,7 @@ export const basePathRewriteMiddleware = (req, res, next) => {
  * @param {Function} next - Next middleware
  */
 export const basePathDetectionMiddleware = (req, res, next) => {
-  const headerName = process.env.BASE_PATH_HEADER || 'x-forwarded-prefix';
-  const detectedPath = req.headers[headerName.toLowerCase()];
+  const detectedPath = trustedBasePathHeader(req);
   if (detectedPath) {
     const normalized =
       detectedPath.endsWith('/') && detectedPath !== '/' ? detectedPath.slice(0, -1) : detectedPath;
@@ -249,7 +271,7 @@ export const basePathDetectionMiddleware = (req, res, next) => {
  */
 export const basePathValidationMiddleware = (req, res, next) => {
   const headerName = process.env.BASE_PATH_HEADER || 'x-forwarded-prefix';
-  const prefix = req.headers[headerName.toLowerCase()];
+  const prefix = trustedBasePathHeader(req);
   if (!prefix) return next();
   let trimmedPrefix = prefix;
   while (trimmedPrefix.endsWith('/')) trimmedPrefix = trimmedPrefix.slice(0, -1);
