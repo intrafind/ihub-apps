@@ -160,7 +160,9 @@ Verify the resolved address with any endpoint that logs `ip` (see
 clients differ, the hop count is too low.
 
 The same setting drives HTTPS detection via `X-Forwarded-Proto` — see
-[SSL/HTTPS setup](ssl-https-setup.md).
+[SSL/HTTPS setup](ssl-https-setup.md) — and decides whose `X-Forwarded-Prefix` is used for subpath
+deployments. The prefix is stripped from the URL before the limiters run, so a request sent under a
+prefix (`/ihub/api/auth/local/login`) counts against the same limiter as one without it.
 
 ### Inheritance
 

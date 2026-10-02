@@ -68,6 +68,23 @@ are not signed in no longer see **Link to the app** in the share dialog.
 installation — add their hosts to `shortLinks.allowedHosts`, or change the links to paths such as
 `/apps/chat`.
 
+## Subpath Deployments: X-Forwarded-Prefix Is Used Only From Trusted Proxies
+
+The base path a reverse proxy sends in `X-Forwarded-Prefix` (or the header named by
+`BASE_PATH_HEADER`) is now used only when the request comes from a proxy that `trustProxy` in
+`platform.json` trusts. It is also applied before the rate limiters, so requests sent under a base
+path count against the same limits as all others — before, they were not limited at all.
+
+- With a hop count such as the default `1`, any peer counts as trusted, so most subpath
+  deployments keep working unchanged.
+- With `"trustProxy": false`, the header is ignored.
+- With a list of addresses, the header is used only from those addresses.
+
+**Before upgrading:** if iHub runs under a subpath (for example `/ihub`) and `trustProxy` is `false`
+or a list of addresses, make sure it trusts the proxy that sets `X-Forwarded-Prefix` — for example
+`"trustProxy": "loopback"` when the proxy runs on the same host. Otherwise the app no longer finds
+its base path.
+
 ## EU AI Act: Unmarked Models Need a Justification, Exports Come From the Server
 
 With the new EU AI Act transparency features, a few existing behaviours change.

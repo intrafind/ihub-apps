@@ -102,7 +102,6 @@ import { getProxyConfig, redactUrlSecrets } from './utils/httpConfig.js';
 import {
   getBasePath,
   buildApiPath,
-  basePathRewriteMiddleware,
   basePathDetectionMiddleware,
   basePathValidationMiddleware
 } from './utils/basePath.js';
@@ -696,11 +695,10 @@ if (cluster.isPrimary && workerCount > 1) {
   // the raw JSON value only if configCache failed to initialize.
   setupMiddleware(app, configCache.getPlatform() || platformConfig);
 
-  // Add base path middleware chain:
-  // 1. Rewrite: strips X-Forwarded-Prefix from req.url (handles non-stripping proxies)
-  // 2. Detection: stores current request for runtime base path resolution
-  // 3. Validation: warns on invalid X-Forwarded-Prefix values
-  app.use(basePathRewriteMiddleware);
+  // Base path middleware chain. The rewrite that strips X-Forwarded-Prefix
+  // from req.url runs inside setupMiddleware, ahead of the rate limiters.
+  // 1. Detection: stores current request for runtime base path resolution
+  // 2. Validation: warns on invalid X-Forwarded-Prefix values
   app.use(basePathDetectionMiddleware);
   app.use(basePathValidationMiddleware);
 

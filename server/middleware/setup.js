@@ -12,7 +12,7 @@ import { teamsAuthMiddleware } from './teamsAuth.js';
 import ntlmAuthMiddleware from './ntlmAuth.js';
 import { enhanceUserWithPermissions, isAnonymousAccessAllowed } from '../utils/authorization.js';
 import { createRateLimiters } from './rateLimiting.js';
-import { buildApiPath } from '../utils/basePath.js';
+import { basePathRewriteMiddleware, buildApiPath } from '../utils/basePath.js';
 import config from '../config.js';
 import configCache from '../configCache.js';
 import tokenStorageService from '../services/TokenStorageService.js';
@@ -439,6 +439,13 @@ export function setupMiddleware(app, platformConfig = {}) {
   // Accepts anything Express accepts: a hop count, `true`, `false`, or a
   // comma-separated list of trusted addresses/subnets.
   app.set('trust proxy', resolveTrustProxy(platformConfig));
+
+  // Strip a forwarded base path (X-Forwarded-Prefix) from the URL before
+  // anything matches on it. The rate limiters below are mounted on
+  // `/api/...`; with the rewrite after them, a prefixed request path would
+  // reach the routes without passing a limiter. Only a trusted proxy's
+  // header is used (see basePathRewriteMiddleware).
+  app.use(basePathRewriteMiddleware);
 
   // Open the per-request logging context. Subsequent middleware and route
   // handlers run inside an AsyncLocalStorage scope, so every logger call on
