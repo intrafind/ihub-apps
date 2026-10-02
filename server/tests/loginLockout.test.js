@@ -297,6 +297,23 @@ describe('loginUser with lockout', () => {
     );
   });
 
+  test('a right password on a disabled account does not clear the count', async () => {
+    await failTimes('testuser', 2);
+    const setActive = async active => {
+      const data = JSON.parse(await fs.readFile(localAuthConfig.usersFile, 'utf8'));
+      data.users.user_1.active = active;
+      await fs.writeFile(localAuthConfig.usersFile, JSON.stringify(data), 'utf8');
+    };
+    await setActive(false);
+    await expect(loginUser('testuser', 'correct-password', localAuthConfig)).rejects.toThrow(
+      'Account is disabled'
+    );
+    await setActive(true);
+    await expect(loginUser('testuser', 'correct-password', localAuthConfig)).rejects.toBeInstanceOf(
+      LoginLockedError
+    );
+  });
+
   test('never locks when lockout is disabled', async () => {
     localAuthConfig.lockout = { enabled: false, maxAttempts: 3 };
     await failTimes('testuser', 5);

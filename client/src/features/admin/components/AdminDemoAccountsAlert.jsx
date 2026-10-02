@@ -62,7 +62,8 @@ export default function AdminDemoAccountsAlert({
     };
   }, [enabled, dismissed, pathname]);
 
-  if (!status?.warn || dismissed) return null;
+  // `enabled` can turn false after a fetch (e.g. the user is now a content admin only).
+  if (!enabled || !status?.warn || dismissed) return null;
 
   const dismiss = () => {
     writeDismissed();

@@ -109,6 +109,20 @@ test('is checked again on a page change and disappears once fixed', async () => 
   expect(mockMakeAdminApiCall).toHaveBeenCalledTimes(2);
 });
 
+test('hides the warning when the user is no longer a full admin', async () => {
+  respond({ showDemoAccounts: true, accounts: ['admin'], warn: true });
+  const { rerender } = renderAlert();
+  await screen.findByRole('alert');
+
+  rerender(
+    <MemoryRouter initialEntries={['/admin']}>
+      <NavigateHandle />
+      <AdminDemoAccountsAlert enabled={false} />
+    </MemoryRouter>
+  );
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+});
+
 test('does not call the endpoint for content admins', () => {
   renderAlert({ enabled: false });
   expect(mockMakeAdminApiCall).not.toHaveBeenCalled();

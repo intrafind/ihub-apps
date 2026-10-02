@@ -81,24 +81,27 @@ export async function loginUser(username, password, localAuthConfig) {
     if (reservation.waitMs > 0) throw new LoginLockedError(Math.ceil(reservation.waitMs / 1000));
   }
 
-  let isValidPassword = false;
+  // Only a sign-in that goes through settles as a success; a right password on
+  // a disabled account does not clear the count.
+  let signedIn = false;
   try {
     if (!user) {
       await verifyPasswordWithUserId(password, DUMMY_USER_ID, DUMMY_PASSWORD_HASH);
       throw new Error('Invalid credentials');
     }
     // Verify password using user ID
-    isValidPassword = await verifyPasswordWithUserId(password, user.id, user.passwordHash);
+    const isValidPassword = await verifyPasswordWithUserId(password, user.id, user.passwordHash);
     if (!isValidPassword) {
       throw new Error('Invalid credentials');
     }
-  } finally {
-    if (reservation) await settleLoginAttempt(key, lockout, isValidPassword, reservation.shared);
-  }
 
-  // Check if user is active
-  if (user.active === false) {
-    throw new Error('Account is disabled');
+    // Check if user is active
+    if (user.active === false) {
+      throw new Error('Account is disabled');
+    }
+    signedIn = true;
+  } finally {
+    if (reservation) await settleLoginAttempt(key, lockout, signedIn, reservation.shared);
   }
 
   // Create user response object (without sensitive information)
