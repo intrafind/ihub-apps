@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import GroupMultiSelect from './GroupMultiSelect';
@@ -7,6 +7,33 @@ import OidcProvidersSection from './platform-form/OidcProvidersSection';
 import LdapProvidersSection from './platform-form/LdapProvidersSection';
 import LocalAuthSection from './platform-form/LocalAuthSection';
 import NtlmAuthSection from './platform-form/NtlmAuthSection';
+import { CredentialRefSelect } from './OpenApiToolEditor';
+
+/**
+ * Comma-separated list input for `proxyAuth.trustedProxies`. Keeps its own
+ * text so separators can be typed; the parsed list goes to `onChange`.
+ */
+function TrustedProxiesInput({ value, onChange }) {
+  const [text, setText] = useState(() => (value || []).join(', '));
+  return (
+    <input
+      id="proxy-auth-trusted-proxies"
+      type="text"
+      value={text}
+      onChange={e => {
+        setText(e.target.value);
+        onChange(
+          e.target.value
+            .split(',')
+            .map(entry => entry.trim())
+            .filter(Boolean)
+        );
+      }}
+      className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-xs focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+      placeholder="loopback, 10.0.0.5"
+    />
+  );
+}
 
 /**
  * PlatformFormEditor - Form-based editor for platform configuration
@@ -362,6 +389,63 @@ function PlatformFormEditor({ value: config, onChange, onValidationChange, avail
                 />
               </div>
             </div>
+
+            {/* Where the identity headers may come from */}
+            {!(config.proxyAuth?.trustedProxies || []).length &&
+              !config.proxyAuth?.sharedSecretRef && (
+                <div
+                  role="alert"
+                  className="p-3 rounded-md border bg-amber-50 dark:bg-amber-900/30 border-amber-200 dark:border-amber-800 text-sm text-amber-800 dark:text-amber-200"
+                >
+                  The user and groups headers are ignored until you list trusted proxies or select a
+                  shared secret (or set PROXY_AUTH_TRUSTED_PROXIES / PROXY_AUTH_SHARED_SECRET).
+                  Without one, any client that can reach the server could set them.
+                </div>
+              )}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label
+                  htmlFor="proxy-auth-trusted-proxies"
+                  className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+                >
+                  Trusted Proxies
+                </label>
+                <TrustedProxiesInput
+                  value={config.proxyAuth?.trustedProxies}
+                  onChange={list => updateNestedConfig('proxyAuth', 'trustedProxies', list)}
+                />
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  Addresses or subnets the proxy connects from, comma-separated (for example
+                  loopback, 10.0.0.5 or 10.0.0.0/8). The headers are used only on connections from
+                  these addresses.
+                </p>
+              </div>
+              <div>
+                <label
+                  htmlFor="proxy-auth-shared-secret-header"
+                  className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+                >
+                  Shared Secret Header
+                </label>
+                <input
+                  id="proxy-auth-shared-secret-header"
+                  type="text"
+                  value={config.proxyAuth?.sharedSecretHeader || ''}
+                  onChange={e =>
+                    updateNestedConfig('proxyAuth', 'sharedSecretHeader', e.target.value)
+                  }
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-xs focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                  placeholder="X-Proxy-Secret"
+                />
+              </div>
+            </div>
+            <CredentialRefSelect
+              value={config.proxyAuth?.sharedSecretRef || ''}
+              onChange={id => updateNestedConfig('proxyAuth', 'sharedSecretRef', id || undefined)}
+              types={['secret']}
+              label="Shared Secret"
+              help="A secret the proxy sends in the shared secret header. When set, the headers are used only on requests that carry it; together with trusted proxies, both must match."
+            />
 
             {/* Self-signup Setting */}
             <div>

@@ -618,6 +618,9 @@ Header-based authentication for reverse proxy setups.
     "allowSelfSignup": false,
     "userHeader": "X-Forwarded-User",
     "groupsHeader": "X-Forwarded-Groups",
+    "trustedProxies": ["10.0.0.5"],
+    "sharedSecretRef": "cred_proxy_secret",
+    "sharedSecretHeader": "X-Proxy-Secret",
     "jwtProviders": [
       {
         "name": "example-provider",
@@ -635,7 +638,22 @@ Header-based authentication for reverse proxy setups.
 - **allowSelfSignup** (boolean) – Allow automatic user creation. Default: `false`
 - **userHeader** (string) – Header containing user ID. Default: `"X-Forwarded-User"`
 - **groupsHeader** (string) – Header containing comma-separated groups. Default: `"X-Forwarded-Groups"`
+- **trustedProxies** (array) – Addresses or subnets the proxy connects from, in the syntax of
+  `trustProxy` (`"loopback"`, `"10.0.0.5"`, `"10.0.0.0/8"`). The address checked is the peer that
+  opened the connection. Default: `[]`. Overridden by `PROXY_AUTH_TRUSTED_PROXIES`
+  (comma-separated).
+- **sharedSecretRef** (string) – A `secret` credential (Admin → Credentials) the proxy sends in
+  `sharedSecretHeader`. Overridden by `PROXY_AUTH_SHARED_SECRET`.
+- **sharedSecretHeader** (string) – Header the proxy sends the shared secret in. Default:
+  `"X-Proxy-Secret"`
 - **jwtProviders** (array) – JWT validation configuration for proxy auth
+
+The user, groups, `X-Forwarded-Name` and `X-Forwarded-Email` headers are used only on requests
+that come from a trusted proxy and/or carry the shared secret. When both `trustedProxies` and a
+shared secret are configured, both must match. When neither is configured, the headers are ignored
+and the server logs a warning. Make sure the proxy removes these headers from client requests
+before setting its own. Signed JWTs from `jwtProviders` are verified against their keys and do not
+depend on these settings.
 
 ### **oidcAuth**
 OpenID Connect provider configuration.

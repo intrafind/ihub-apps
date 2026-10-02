@@ -614,12 +614,17 @@ server {
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
         
-        # For proxy authentication
+        # For proxy authentication: set by the proxy, replacing anything the
+        # client sent ($groups stands for groups from the proxy's own auth)
         proxy_set_header X-Forwarded-User $remote_user;
         proxy_set_header X-Forwarded-Groups $groups;
+        proxy_set_header X-Proxy-Secret "change-me";
     }
 }
 ```
+
+iHub uses the proxy identity headers only from addresses in `proxyAuth.trustedProxies` and/or with
+the shared secret (`proxyAuth.sharedSecretRef`) — see [platform configuration](platform.md#proxyauth).
 
 #### Firewall Configuration
 ```bash

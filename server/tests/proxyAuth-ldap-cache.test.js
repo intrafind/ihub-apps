@@ -17,6 +17,8 @@ const mockPlatformConfig = {
     enabled: true,
     userHeader: 'x-forwarded-user',
     groupsHeader: 'x-forwarded-groups',
+    // The requests below come from the local host, which this trusts.
+    trustedProxies: ['loopback'],
     ldapGroupLookupProvider: 'corp',
     ldapGroupLookupCacheTtlSeconds: 600
   }
@@ -46,7 +48,11 @@ jest.unstable_mockModule('../utils/userManager.js', () => ({
 }));
 
 async function callProxyAuth(proxyAuth, userId, extraHeaders = {}) {
-  const req = { headers: { 'x-forwarded-user': userId, ...extraHeaders }, path: '/api/apps' };
+  const req = {
+    headers: { 'x-forwarded-user': userId, ...extraHeaders },
+    path: '/api/apps',
+    socket: { remoteAddress: '127.0.0.1' }
+  };
   const res = { status: jest.fn(() => res), json: jest.fn() };
   const next = jest.fn();
   await proxyAuth(req, res, next);

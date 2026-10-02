@@ -7,6 +7,7 @@ import { enhanceUserGroups } from '../utils/authorization.js';
 import { validateAndPersistExternalUser } from '../utils/userManager.js';
 import { getLdapProviderByName, lookupLdapGroupsForUser } from './ldapAuth.js';
 import logger from '../utils/logger.js';
+import { checkProxyTrust, reportIgnoredProxyHeaders } from '../utils/proxyAuthTrust.js';
 
 // JWKS documents are cached per provider URL, but only for a bounded TTL. The
 // previous cache never expired, so once an IdP rotated its signing keys every
@@ -306,10 +307,19 @@ export async function proxyAuth(req, res, next) {
     return next();
   }
 
-  let userId = req.headers[proxyCfg.userHeader.toLowerCase()];
+  // Identity headers count only when the request came through a proxy an
+  // admin trusts (proxyAuth.trustedProxies and/or the shared secret); any
+  // client could set them otherwise. Signed JWTs below are verified on their own.
+  const trust = checkProxyTrust(req, platform.proxyAuth || {});
+  const header = name => (trust.trusted ? req.headers[name.toLowerCase()] : undefined);
+  if (!trust.trusted && req.headers[proxyCfg.userHeader.toLowerCase()]) {
+    reportIgnoredProxyHeaders(req, trust.reason);
+  }
+
+  let userId = header(proxyCfg.userHeader);
   let groups = [];
   if (proxyCfg.groupsHeader) {
-    const raw = req.headers[proxyCfg.groupsHeader.toLowerCase()];
+    const raw = header(proxyCfg.groupsHeader);
     if (raw)
       groups = raw
         .split(',')
@@ -409,14 +419,14 @@ export async function proxyAuth(req, res, next) {
   let user = {
     id: userId,
     name:
-      req.headers['x-forwarded-name'] ||
+      header('x-forwarded-name') ||
       (tokenPayload &&
         (tokenPayload.name ||
           (tokenPayload.given_name && tokenPayload.family_name
             ? `${tokenPayload.given_name} ${tokenPayload.family_name}`.trim()
             : tokenPayload.given_name || tokenPayload.family_name))) ||
       userId,
-    email: req.headers['x-forwarded-email'] || (tokenPayload && tokenPayload.email) || null,
+    email: header('x-forwarded-email') || (tokenPayload && tokenPayload.email) || null,
     groups: [], // Will be populated by merging external and internal groups
     externalGroups: groups, // Store raw external groups for mapping and merging
     authenticated: true,

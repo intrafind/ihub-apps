@@ -9,9 +9,11 @@ services:
       target: development
       dockerfile: docker/Dockerfile
     container_name: ihub-dev
+    # Published on 127.0.0.1 only: a development container is not meant to be
+    # reachable from the network.
     ports:
-      - '3000:3000' # Server port
-      - '5173:5173' # Vite dev server port
+      - '127.0.0.1:3000:3000' # Server port
+      - '127.0.0.1:5173:5173' # Vite dev server port
     volumes:
       # Source code volumes for hot reload (read-only to prevent accidental changes)
       - ../server:/app/server:ro

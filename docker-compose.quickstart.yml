@@ -7,13 +7,18 @@
 #   docker compose -f docker-compose.quickstart.yml up
 #
 # Then open http://localhost:3000 and go to Admin → Configuration to add your API keys.
+#
+# The port is published on 127.0.0.1 only, so the app is reachable from this
+# machine and not from the network. To expose it, put a reverse proxy in front
+# (see docs/production-reverse-proxy-guide.md) or change the binding to
+# '3000:3000' once the shipped accounts have been secured.
 
 services:
   ihub-apps:
     image: ghcr.io/intrafind/ihub-apps:latest
     container_name: ihub-apps
     ports:
-      - '3000:3000'
+      - '127.0.0.1:3000:3000'
     volumes:
       - ./contents:/app/contents
     restart: unless-stopped
