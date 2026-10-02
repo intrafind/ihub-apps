@@ -7,7 +7,8 @@ administrators can list, change or delete it, and creating a link needs a sign-i
 are not signed in no longer see **Link to the app** in the share dialog.
 
 - A link redirects to a path on this server, or to an absolute `http`/`https` URL whose host is
-  listed under `shortLinks.allowedHosts` in `platform.json` (empty by default). The target is
+  allowed by `shortLinks.allowedHosts` in `platform.json` (empty by default) — an exact
+  hostname, a subdomain pattern such as `*.example.com`, or a `/regex/`. The target is
   checked when a link is saved and again every time it is opened; a link whose target is not
   allowed answers "Not found".
 - **Admin → Short Links** shows each link's owner. Links saved before this release have no owner

@@ -366,15 +366,24 @@ Where short links (feature `shortLinks`) may redirect.
 ```json
 {
   "shortLinks": {
-    "allowedHosts": ["docs.example.com"]
+    "allowedHosts": ["docs.example.com", "*.intrafind.io", ".local", "/(docs|wiki)\\.example\\.org/"]
   }
 }
 ```
 
-- **allowedHosts** (array) – Hostnames a short link may redirect to with an absolute `http`/`https`
-  URL, matched exactly and case-insensitively. Paths on this server (`/apps/chat`) are always
-  allowed. Default: `[]` (paths on this server only). The list is checked when a link is saved and
-  again on every redirect, so removing a host stops its links from redirecting.
+- **allowedHosts** (array) – Hosts a short link may redirect to with an absolute `http`/`https`
+  URL. Paths on this server (`/apps/chat`) are always allowed. Default: `[]` (paths on this server
+  only). The list is checked when a link is saved and again on every redirect, so removing a host
+  stops its links from redirecting. Each entry is one of:
+  - `docs.example.com` – exactly this host (case-insensitive).
+  - `*.intrafind.io` or `.intrafind.io` – any subdomain (`docs.intrafind.io`,
+    `a.b.intrafind.io`), but not `intrafind.io` itself; add the bare domain as its own entry if
+    needed. `.local` allows every `*.local` host. Same rules as `ssrf.allowedHosts`.
+  - `/…/` – a regular expression the whole hostname must match. It is anchored at both ends, so
+    `/intrafind\.io/` matches `intrafind.io` only. Hostnames are compared in lower case, and
+    internationalised names in their `xn--` form. Patterns longer than 194 characters and
+    patterns with nested quantifiers are rejected; an entry that is not a usable pattern matches
+    nothing and is logged as a warning.
 
 Short links belong to the signed-in user who creates them. Only that user and administrators can
 list, change or delete them; links saved before links had owners can be managed by administrators

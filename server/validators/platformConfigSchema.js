@@ -500,15 +500,16 @@ export const platformConfigSchema = z
       })
       .passthrough()
       .prefault({}),
-    // Short links (feature `shortLinks`): an absolute http(s) target must name
-    // one of these hosts; paths on this server are always allowed.
+    // Short links (feature `shortLinks`): an absolute http(s) target's host must
+    // match one of these entries; paths on this server are always allowed.
+    // Matching lives in utils/shortLinkTarget.js.
     shortLinks: z
       .object({
         allowedHosts: z
           .array(z.string())
           .prefault([])
           .describe(
-            'Hostnames (exact, case-insensitive) a short link may redirect to with an absolute URL. Paths on this server are always allowed.'
+            'Hosts a short link may redirect to with an absolute URL: exact hostnames (docs.example.com), subdomain patterns (*.example.com or .example.com, not the domain itself), or /regex/ entries matched against the whole hostname. Paths on this server are always allowed.'
           )
       })
       .passthrough()

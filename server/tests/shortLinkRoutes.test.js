@@ -239,6 +239,32 @@ describe('short link targets', () => {
     expect(res.headers.location).toBeUndefined();
   });
 
+  test('wildcard and regex entries in the allowlist apply on save and on redirect', async () => {
+    const app = buildApp();
+    const platform = configCache.cache.get('config/platform.json');
+    configCache.cache.set('config/platform.json', {
+      data: {
+        ...platform.data,
+        shortLinks: { allowedHosts: ['*.intrafind.io', '/[a-z]+\\.example\\.org/'] }
+      }
+    });
+    try {
+      for (const url of ['https://docs.intrafind.io/x', 'https://wiki.example.org/']) {
+        const { status, body: link } = await create(app, 'alice', { url });
+        expect([url, status]).toEqual([url, 200]);
+        const res = await request(app).get(`/s/${link.code}`);
+        expect(res.status).toBe(302);
+        expect(res.headers.location).toBe(url);
+      }
+      for (const url of ['https://intrafind.io/', 'https://wiki.example.org.example.net/']) {
+        const res = await create(app, 'alice', { url });
+        expect([url, res.status]).toEqual([url, 400]);
+      }
+    } finally {
+      configCache.cache.set('config/platform.json', platform);
+    }
+  });
+
   test('/s/:code stops redirecting once a host leaves the allowlist', async () => {
     const app = buildApp();
     const { body: link } = await create(app, 'alice', { url: 'https://docs.example.com/x' });
