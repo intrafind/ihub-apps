@@ -245,6 +245,15 @@ const RENAMED_MIGRATIONS = [
     oldFile: 'V139__web_tools_filters_and_page_offset.js',
     newVersion: '140',
     newFile: 'V140__web_tools_filters_and_page_offset.js'
+  },
+  // The short-link host allowlist was written as V143, and the app wizard
+  // field cleanup took V144 on main first. It moved to V145; an install that
+  // ran the branch reconciles its V143 row instead of applying it again.
+  {
+    oldVersion: '143',
+    oldFile: 'V143__add_short_link_allowed_hosts.js',
+    newVersion: '145',
+    newFile: 'V145__add_short_link_allowed_hosts.js'
   }
 ];
 

@@ -190,7 +190,8 @@ audience, lists the newest ones, and lets an administrator revoke any of them.
   can share. **This conversation** is the read-only link described here;
   **Link to the app** is a short link (`/s/<code>`, feature `shortLinks`)
   that opens the app for a new chat, optionally with the current settings, and
-  never carries the conversation. With both on offer they are two tabs, and
+  never carries the conversation. It is offered to signed-in users, who own the
+  links they create (see `shortLinks` in [Platform](platform.md)). With both on offer they are two tabs, and
   the conversation is preselected once the chat has a message; with one, the
   dialog shows only that one. The conversation needs a durable chat
   (`/apps/:appId/c/:chatId`) with at least one message.
