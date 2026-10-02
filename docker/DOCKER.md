@@ -14,6 +14,8 @@ Then open **http://localhost:3000** and navigate to **Admin → Configuration** 
 
 This uses the pre-built image from the registry and mounts a local `./contents/` folder so your configuration persists between restarts. Nothing else is needed to get started.
 
+The quickstart publishes port 3000 on `127.0.0.1` only, so the app is reachable from this machine and not from the network. This holds with Docker Engine 28.0.0 or later; with older engines, other hosts on the same local network segment can still reach the port, so update the engine or block the port in the host firewall. To make it reachable from other machines, put a reverse proxy in front of it (see [Production Reverse Proxy Guide](../docs/production-reverse-proxy-guide.md)), or change the binding to `'3000:3000'` once you have changed the passwords of the shipped accounts.
+
 ### Available Images
 
 Images are published to two registries:
@@ -62,7 +64,7 @@ The Docker development setup **automatically** uses your local `contents/` folde
    - **Main app**: http://localhost:3000 (Node.js server + static files)
    - **Vite dev server**: http://localhost:5173 (Hot reload development server)
 
-   In development, both the Node.js server and Vite dev server run simultaneously for the best development experience.
+   In development, both the Node.js server and Vite dev server run simultaneously for the best development experience. Both ports are published on `127.0.0.1` only (with Docker Engine older than 28.0.0, other hosts on the same local network segment can still reach them).
 
 **Volume Strategy:**
 
@@ -396,7 +398,7 @@ http://localhost:8080
 ### Development Network
 
 - **Bridge network**: `ihub-network`
-- **Port mappings**: 3000 (app), 5173 (vite), 5432 (postgres), 6379 (redis)
+- **Port mappings**: 3000 (app) and 5173 (vite) on `127.0.0.1`, 5432 (postgres), 6379 (redis)
 - **Service discovery**: Containers communicate by service name
 
 ### Production Network

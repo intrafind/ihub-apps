@@ -1782,6 +1782,14 @@
           "running": "Test läuft…",
           "resultTitle": "LDAP-Anmeldetest"
         }
+      },
+      "proxy": {
+        "headersIgnoredWarning": "Sofern PROXY_AUTH_TRUSTED_PROXIES oder PROXY_AUTH_SHARED_SECRET nicht auf dem Server gesetzt ist, werden die Benutzer- und Gruppen-Header ignoriert, bis Sie vertrauenswürdige Proxys eintragen oder ein gemeinsames Geheimnis auswählen. Ohne eines davon könnte jeder Client, der den Server erreicht, sie setzen.",
+        "trustedProxiesLabel": "Vertrauenswürdige Proxys",
+        "trustedProxiesHelp": "Adressen oder Subnetze, von denen der Proxy sich verbindet, durch Kommas getrennt (zum Beispiel loopback, 10.0.0.5 oder 10.0.0.0/8). Die Header werden nur bei Verbindungen von diesen Adressen verwendet. Der Standardwert loopback deckt einen Proxy auf demselben Host oder im selben Pod ab; wenn andere lokale Prozesse (etwa ein Service-Mesh-Sidecar) Datenverkehr an iHub weiterleiten, setzen Sie zusätzlich ein gemeinsames Geheimnis.",
+        "sharedSecretHeaderLabel": "Header für das gemeinsame Geheimnis",
+        "sharedSecretLabel": "Gemeinsames Geheimnis",
+        "sharedSecretHelp": "Ein Geheimnis, das der Proxy im Header für das gemeinsame Geheimnis sendet. Ist es gesetzt, werden die Header nur bei Anfragen verwendet, die es enthalten. Zusammen mit vertrauenswürdigen Proxys müssen beide zutreffen: Für einen Proxy an anderer Stelle tragen Sie oben seine Adresse ein oder leeren die Liste, um sich allein auf das Geheimnis zu verlassen."
       }
     },
     "officeIntegration": {
