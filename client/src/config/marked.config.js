@@ -7,6 +7,10 @@ import {
   hashString,
   detectDiagramType
 } from '../utils/markdownHelpers';
+import {
+  MERMAID_CONTAINER_TOKEN,
+  MERMAID_CONTAINER_TOKEN_ATTRIBUTE
+} from '../utils/mermaidSecurity';
 
 // Occurrence counter for the parse currently in progress. Diagram IDs are
 // derived from the diagram source so that re-parsing the same markdown yields
@@ -22,12 +26,14 @@ const nextMermaidId = code => {
   return occurrence === 0 ? `mermaid-${base}` : `mermaid-${base}-${occurrence}`;
 };
 
+// The token attribute marks the container as created here, so the Mermaid hook
+// can ignore look-alike containers that come from the content itself.
 const renderMermaidPlaceholder = (code, language) => {
   const diagramId = nextMermaidId(code);
   const detectedType = detectDiagramType(code);
 
   return `
-    <div class="mermaid-diagram-container" id="${diagramId}" data-code="${encodeURIComponent(code)}" data-language="${language || 'mermaid'}" data-diagram-type="${detectedType}">
+    <div class="mermaid-diagram-container" id="${diagramId}" ${MERMAID_CONTAINER_TOKEN_ATTRIBUTE}="${MERMAID_CONTAINER_TOKEN}" data-code="${encodeURIComponent(code)}" data-language="${language || 'mermaid'}" data-diagram-type="${detectedType}">
       <div class="mermaid-diagram-placeholder">
         <div class="flex items-center justify-center p-8 bg-gray-50 border border-gray-200 rounded-lg">
           <div class="flex items-center gap-2 text-gray-600">

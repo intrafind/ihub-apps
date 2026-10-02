@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import Icon from '../../../shared/components/Icon';
-import { makeAdminApiCall } from '../../../api/adminApi';
+import { makeAdminApiCall, getAdminApiErrorMessage } from '../../../api/adminApi';
+import { buildAppPayloadFromWizard } from '../../admin/utils/appWizardPayload';
 import { fetchToolsBasic, fetchModels } from '../../../api';
 import { DEFAULT_LANGUAGE, getLocalizedContent } from '../../../utils/localizeContent';
 import { collapseMcpTools } from '../../chat/utils/groupToolsByMcpServer';
@@ -275,25 +276,9 @@ function AppCreationWizard({ onClose, templateApp = null }) {
         }
       }
 
-      // Clean up the app data - remove empty strings for optional fields
-      const cleanedAppData = { ...appData };
-
-      // Remove empty multilingual fields
-      ['messagePlaceholder', 'prompt'].forEach(field => {
-        if (cleanedAppData[field]) {
-          const cleaned = {};
-          Object.entries(cleanedAppData[field]).forEach(([lang, value]) => {
-            if (value && value.trim()) {
-              cleaned[lang] = value;
-            }
-          });
-          if (Object.keys(cleaned).length === 0) {
-            delete cleanedAppData[field];
-          } else {
-            cleanedAppData[field] = cleaned;
-          }
-        }
-      });
+      // Drop the wizard's own state and empty optional fields: the server
+      // validates the body against the app schema.
+      const cleanedAppData = buildAppPayloadFromWizard(appData);
 
       // Create the app
       await makeAdminApiCall('/admin/apps', {
@@ -305,7 +290,9 @@ function AppCreationWizard({ onClose, templateApp = null }) {
       onClose();
       navigate('/admin/apps');
     } catch (err) {
-      setError(err.message);
+      // Prefer the server's message (e.g. which field failed validation) over
+      // the generic "Request failed with status code 400".
+      setError(getAdminApiErrorMessage(err));
     } finally {
       setLoading(false);
     }

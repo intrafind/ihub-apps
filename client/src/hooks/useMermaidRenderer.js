@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
-import { validateMermaidCode, processMermaidCode } from '../utils/markdownHelpers';
+import { validateMermaidCode, processMermaidCode, escapeHtml } from '../utils/markdownHelpers';
+import { isTrustedMermaidContainer, sanitizeMermaidSvg } from '../utils/mermaidSecurity';
 import svgPanZoom from 'svg-pan-zoom';
 
 // A simple debounce utility
@@ -40,6 +41,14 @@ const setCachedRender = (key, entry) => {
     svgCache.delete(svgCache.keys().next().value);
   }
 };
+
+// Sanitized SVG markup of every diagram currently shown, keyed by its
+// container. The fullscreen viewer reads the diagram from here rather than from
+// a DOM attribute, because content could put such an attribute on an element
+// too. Module level, so it outlives a re-run of the hook's effect.
+const renderedSvgByContainer = new WeakMap();
+
+const DIAGRAM_CONTAINER_SELECTOR = '.mermaid-diagram-container';
 
 // Mermaid link tokens, used to estimate a diagram's edge count before
 // rendering it. An arrow (`-->`) needs no alternative of its own: nothing else
@@ -91,7 +100,7 @@ const showMermaidButtonFeedback = (btn, message, colorClass, iconType) => {
     <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       ${icon}
     </svg>
-    <span class="hidden sm:inline">${message}</span>
+    <span class="hidden sm:inline">${escapeHtml(message)}</span>
   `;
 
   btn.className = btn.className.replace(/text-gray-600|text-red-600/, colorClass);
@@ -106,6 +115,9 @@ export const useMermaidRenderer = ({ t }) => {
   useEffect(() => {
     let mermaid;
     let mermaidReady = false;
+
+    // Translated text, escaped for use in the HTML templates below.
+    const label = (key, fallback) => escapeHtml(t ? t(key, fallback) : fallback);
 
     // Every live diagram's pan-zoom instance. A single delegated keydown
     // listener drives them all; previously each diagram registered its own
@@ -122,7 +134,11 @@ export const useMermaidRenderer = ({ t }) => {
           mermaid.initialize({
             startOnLoad: false,
             theme: 'default',
-            securityLevel: 'loose', // Avoids sandboxed iframes, simplifying rendering & cleanup
+            // Diagram source comes from model output and other content. 'strict'
+            // sanitizes label HTML and link URLs and turns off click callbacks
+            // (which this hook never bound anyway). It renders inline like
+            // 'loose'; only 'sandbox' uses iframes.
+            securityLevel: 'strict',
             fontFamily: 'ui-sans-serif, system-ui, sans-serif',
             // Disable useMaxWidth to allow diagrams to render at their natural size
             flowchart: { useMaxWidth: false, htmlLabels: true },
@@ -151,9 +167,11 @@ export const useMermaidRenderer = ({ t }) => {
     };
 
     const initializeMermaidDiagrams = async () => {
-      const containers = document.querySelectorAll(
-        '.mermaid-diagram-container:not([data-processed="true"])'
-      );
+      // Only containers the Markdown renderer created; look-alikes that come
+      // from the content itself are left untouched.
+      const containers = Array.from(
+        document.querySelectorAll(`${DIAGRAM_CONTAINER_SELECTOR}:not([data-processed="true"])`)
+      ).filter(isTrustedMermaidContainer);
 
       if (containers.length === 0) return;
 
@@ -221,7 +239,9 @@ export const useMermaidRenderer = ({ t }) => {
             setCachedRender(processedCode, { svg, renderId });
           }
 
-          svg = rescopeSvgIds(svg, renderId, container.id);
+          // The markup is derived from the diagram source, which comes from
+          // content, so it is sanitized before it goes into the page.
+          const safeSvg = sanitizeMermaidSvg(rescopeSvgIds(svg, renderId, container.id));
 
           // The container may have been swapped out of the DOM while the
           // asynchronous render was in flight.
@@ -232,25 +252,26 @@ export const useMermaidRenderer = ({ t }) => {
           // Drop any pan-zoom instance from a previous render of this container.
           destroyPanZoom(container, panZoomInstances);
 
-          // Create the diagram HTML with toolbar and pan-zoom controls
+          const containerId = escapeHtml(container.id);
+
+          // Create the diagram HTML with toolbar and pan-zoom controls. The
+          // SVG itself is inserted into `.mermaid-svg-container` below.
           container.innerHTML = `
             <div class="mermaid-container code-block-container relative group border border-gray-200 rounded-lg overflow-hidden bg-white shadow-xs">
               <div class="mermaid-diagram p-4 bg-white overflow-x-auto" style="min-height: 200px; width: 100%; max-width: none;">
-                <div class="mermaid-svg-container" style="display: flex; justify-content: flex-start; width: 100%; min-width: 100%;">
-                  ${svg}
-                </div>
+                <div class="mermaid-svg-container" style="display: flex; justify-content: flex-start; width: 100%; min-width: 100%;"></div>
                 <div class="pan-zoom-controls absolute top-2 right-2 flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                  <button class="mermaid-zoom-in p-1.5 rounded-sm bg-white/90 backdrop-blur-xs text-gray-700 hover:bg-white hover:text-gray-900 shadow-xs transition-all duration-200" type="button" title="${t ? t('common.zoomIn', 'Zoom In') : 'Zoom In'} (+)">
+                  <button class="mermaid-zoom-in p-1.5 rounded-sm bg-white/90 backdrop-blur-xs text-gray-700 hover:bg-white hover:text-gray-900 shadow-xs transition-all duration-200" type="button" title="${label('common.zoomIn', 'Zoom In')} (+)">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7"></path>
                     </svg>
                   </button>
-                  <button class="mermaid-zoom-out p-1.5 rounded-sm bg-white/90 backdrop-blur-xs text-gray-700 hover:bg-white hover:text-gray-900 shadow-xs transition-all duration-200" type="button" title="${t ? t('common.zoomOut', 'Zoom Out') : 'Zoom Out'} (-)">
+                  <button class="mermaid-zoom-out p-1.5 rounded-sm bg-white/90 backdrop-blur-xs text-gray-700 hover:bg-white hover:text-gray-900 shadow-xs transition-all duration-200" type="button" title="${label('common.zoomOut', 'Zoom Out')} (-)">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM13 10H7"></path>
                     </svg>
                   </button>
-                  <button class="mermaid-zoom-reset p-1.5 rounded-sm bg-white/90 backdrop-blur-xs text-gray-700 hover:bg-white hover:text-gray-900 shadow-xs transition-all duration-200" type="button" title="${t ? t('common.resetView', 'Reset View') : 'Reset View'} (0)">
+                  <button class="mermaid-zoom-reset p-1.5 rounded-sm bg-white/90 backdrop-blur-xs text-gray-700 hover:bg-white hover:text-gray-900 shadow-xs transition-all duration-200" type="button" title="${label('common.resetView', 'Reset View')} (0)">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
                     </svg>
@@ -259,39 +280,39 @@ export const useMermaidRenderer = ({ t }) => {
               </div>
               <div class="code-block-toolbar flex flex-row items-center justify-between bg-gray-50 border-t border-gray-200 px-3 py-2 rounded-b-lg">
                 <div class="flex flex-row items-center gap-2">
-                  <span class="text-xs font-medium text-gray-600">Mermaid ${language !== 'mermaid' ? `(${language})` : ''}</span>
+                  <span class="text-xs font-medium text-gray-600">Mermaid ${language !== 'mermaid' ? `(${escapeHtml(language)})` : ''}</span>
                 </div>
                 <div class="flex flex-row items-center gap-2">
-                  <button class="mermaid-copy-code p-1.5 rounded-sm text-xs bg-transparent text-gray-600 hover:bg-gray-200 hover:text-gray-800 transition-colors duration-200 flex items-center gap-1" 
-                          data-code="${encodeURIComponent(code)}" data-processed-code="${encodeURIComponent(processedCode)}" type="button" title="${t ? t('common.copyCode', 'Copy code') : 'Copy code'}">
+                  <button class="mermaid-copy-code p-1.5 rounded-sm text-xs bg-transparent text-gray-600 hover:bg-gray-200 hover:text-gray-800 transition-colors duration-200 flex items-center gap-1"
+                          data-code="${encodeURIComponent(code)}" data-processed-code="${encodeURIComponent(processedCode)}" type="button" title="${label('common.copyCode', 'Copy code')}">
                     <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
                     </svg>
-                    <span class="hidden sm:inline">${t ? t('common.copy', 'Code') : 'Code'}</span>
+                    <span class="hidden sm:inline">${label('common.copy', 'Code')}</span>
                   </button>
-                  <button class="mermaid-download-svg p-1.5 rounded-sm text-xs bg-transparent text-gray-600 hover:bg-gray-200 hover:text-gray-800 transition-colors duration-200 flex items-center gap-1" 
-                          data-svg="${encodeURIComponent(svg)}" data-id="${container.id}" type="button" title="${t ? t('common.downloadSVG', 'Download SVG') : 'Download SVG'}">
+                  <button class="mermaid-download-svg p-1.5 rounded-sm text-xs bg-transparent text-gray-600 hover:bg-gray-200 hover:text-gray-800 transition-colors duration-200 flex items-center gap-1"
+                          data-id="${containerId}" type="button" title="${label('common.downloadSVG', 'Download SVG')}">
                     <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
                     </svg>
                     <span class="hidden md:inline">SVG</span>
                   </button>
                   <button class="mermaid-download-png p-1.5 rounded-sm text-xs bg-transparent text-gray-600 hover:bg-gray-200 hover:text-gray-800 transition-colors duration-200 flex items-center gap-1" 
-                          data-svg="${encodeURIComponent(svg)}" data-id="${container.id}" type="button" title="${t ? t('common.downloadPNG', 'Download PNG') : 'Download PNG'}">
+                          data-id="${containerId}" type="button" title="${label('common.downloadPNG', 'Download PNG')}">
                     <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
                     </svg>
                     <span class="hidden md:inline">PNG</span>
                   </button>
                   <button class="mermaid-download-pdf p-1.5 rounded-sm text-xs bg-transparent text-gray-600 hover:bg-gray-200 hover:text-gray-800 transition-colors duration-200 flex items-center gap-1" 
-                          data-svg="${encodeURIComponent(svg)}" data-id="${container.id}" type="button" title="${t ? t('common.downloadPDF', 'Download PDF') : 'Download PDF'}">
+                          data-id="${containerId}" type="button" title="${label('common.downloadPDF', 'Download PDF')}">
                     <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h8.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
                     </svg>
                     <span class="hidden md:inline">PDF</span>
                   </button>
                   <button class="mermaid-fullscreen p-1.5 rounded-sm text-xs bg-transparent text-gray-600 hover:bg-gray-200 hover:text-gray-800 transition-colors duration-200 flex items-center gap-1" 
-                          data-svg="${encodeURIComponent(svg)}" type="button" title="${t ? t('common.viewFullscreen', 'View Fullscreen') : 'View Fullscreen'}">
+                          type="button" title="${label('common.viewFullscreen', 'View Fullscreen')}">
                     <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"></path>
                     </svg>
@@ -302,8 +323,12 @@ export const useMermaidRenderer = ({ t }) => {
             </div>
           `;
 
+          const svgHost = container.querySelector('.mermaid-svg-container');
+          svgHost.innerHTML = safeSvg;
+          renderedSvgByContainer.set(container, safeSvg);
+
           // Make SVG responsive and initialize pan-zoom
-          const svgElement = container.querySelector('svg');
+          const svgElement = svgHost.querySelector('svg');
           if (svgElement) {
             // Simple, reliable width handling
             svgElement.style.width = '100%';
@@ -367,14 +392,16 @@ export const useMermaidRenderer = ({ t }) => {
           }
         } catch (err) {
           console.error('Mermaid rendering error:', err);
+          renderedSvgByContainer.delete(container);
 
-          // Display a user-friendly error state
+          // Display a user-friendly error state. The diagram source and the
+          // error message (which can quote the source) are shown as text.
           container.innerHTML = `
             <div class="code-block-container relative group border border-red-200 rounded-lg overflow-hidden bg-red-50 shadow-xs">
               <div class="bg-red-900 text-red-100 rounded-t-lg p-4 overflow-x-auto">
                 <div class="text-sm text-red-200 mb-2">Mermaid Syntax Error:</div>
-                <div class="text-red-100 text-sm mb-3">${err.message}</div>
-                <pre class="text-red-200 text-xs"><code>${code}</code></pre>
+                <div class="text-red-100 text-sm mb-3">${escapeHtml(err?.message ?? '')}</div>
+                <pre class="text-red-200 text-xs"><code>${escapeHtml(code)}</code></pre>
               </div>
               <div class="code-block-toolbar flex flex-row items-center justify-between bg-red-100 border-t border-red-200 px-3 py-2 rounded-b-lg">
                 <div class="flex flex-row items-center gap-2">
@@ -514,6 +541,11 @@ export const useMermaidRenderer = ({ t }) => {
     const handleMermaidInteraction = e => {
       const button = e.target.closest('button');
       if (!button) return;
+
+      // Only toolbar buttons this hook placed inside a container the Markdown
+      // renderer created; buttons from the content itself are ignored.
+      const diagramContainer = button.closest(DIAGRAM_CONTAINER_SELECTOR);
+      if (!isTrustedMermaidContainer(diagramContainer)) return;
 
       // Copy code
       if (button.classList.contains('mermaid-copy-code')) {
@@ -867,7 +899,10 @@ export const useMermaidRenderer = ({ t }) => {
 
       // Fullscreen viewer
       if (button.classList.contains('mermaid-fullscreen')) {
-        const svg = decodeURIComponent(button.dataset.svg);
+        // The sanitized markup this hook rendered for the container, never an
+        // attribute read back from the DOM.
+        const svg = renderedSvgByContainer.get(diagramContainer);
+        if (!svg) return;
 
         // Check if modal already exists to prevent double opening
         if (document.querySelector('.mermaid-fullscreen-modal')) {
@@ -904,12 +939,11 @@ export const useMermaidRenderer = ({ t }) => {
               </button>
             </div>
             <div class="diagram-viewer flex-1 overflow-hidden p-8 relative" style="cursor: grab;">
-              <div class="diagram-content" style="transform-origin: 0 0; width: fit-content; position: absolute; top: 0; left: 0; opacity: 0;">
-                ${svg}
-              </div>
+              <div class="diagram-content" style="transform-origin: 0 0; width: fit-content; position: absolute; top: 0; left: 0; opacity: 0;"></div>
             </div>
           </div>
         `;
+        modal.querySelector('.diagram-content').innerHTML = svg;
 
         const PADDING = 32; // matches the p-8 padding on .diagram-viewer
         const MIN_ZOOM = 0.1;
