@@ -3,10 +3,15 @@ import { useTranslation } from 'react-i18next';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import Icon from '../../../shared/components/Icon';
 import { useUIConfig } from '../../../shared/contexts/UIConfigContext';
+import { getHttpUrl } from '../../../utils/safeUrl';
 
 /**
  * RedirectApp component
- * Handles redirect-type apps that navigate to external URLs
+ * Handles redirect-type apps that navigate to external URLs.
+ *
+ * Only `http:` and `https:` targets are followed. Any other configured value
+ * (another scheme, an unparsable or empty URL) shows an error instead of a
+ * redirect.
  */
 function RedirectApp({ app }) {
   const { t, i18n } = useTranslation();
@@ -21,6 +26,9 @@ function RedirectApp({ app }) {
 
   const redirectConfig = app.redirectConfig || {};
   const redirectUrl = redirectConfig.url || '';
+  // The URL actually navigated to: the configured one, resolved, or null when it
+  // is not an http(s) URL.
+  const safeRedirectUrl = getHttpUrl(redirectUrl);
   const openInNewTab = redirectConfig.openInNewTab !== false; // Default true
   const showWarning = redirectConfig.showWarning !== false; // Default true
 
@@ -28,8 +36,8 @@ function RedirectApp({ app }) {
   const appDescription = getLocalizedContent(app.description, currentLanguage) || '';
 
   const handleRedirect = () => {
-    if (!redirectUrl) {
-      console.error('No redirect URL configured for app:', app.id);
+    if (!safeRedirectUrl) {
+      console.error('No usable http(s) redirect URL configured for app:', app.id);
       return;
     }
 
@@ -37,22 +45,44 @@ function RedirectApp({ app }) {
 
     if (openInNewTab) {
       // Open in new tab
-      window.open(redirectUrl, '_blank', 'noopener,noreferrer');
+      window.open(safeRedirectUrl, '_blank', 'noopener,noreferrer');
       // Reset state after a brief delay
       setTimeout(() => setRedirecting(false), 1000);
     } else {
       // Navigate in same window
-      window.location.href = redirectUrl;
+      window.location.href = safeRedirectUrl;
     }
   };
 
   // Auto-redirect if warning is disabled
   useEffect(() => {
-    if (!showWarning && redirectUrl) {
+    if (!showWarning && safeRedirectUrl) {
       handleRedirect();
     }
     // eslint-disable-next-line @eslint-react/exhaustive-deps
-  }, [showWarning, redirectUrl]);
+  }, [showWarning, safeRedirectUrl]);
+
+  if (!safeRedirectUrl) {
+    return (
+      <div className="container mx-auto px-4 py-8 max-w-2xl">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-8">
+          <div className="text-center" role="alert">
+            <Icon name="exclamation-circle" className="h-12 w-12 text-red-500 mx-auto mb-4" />
+            <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
+              {t('common.error')}
+            </h2>
+            <p className="text-gray-600 dark:text-gray-300">{t('pages.redirectApp.invalidUrl')}</p>
+            <button
+              onClick={() => window.history.back()}
+              className="mt-4 px-6 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-900 dark:text-white font-medium rounded-md transition-colors"
+            >
+              {t('common.back')}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-2xl">
@@ -114,7 +144,7 @@ function RedirectApp({ app }) {
           <div className="flex flex-col sm:flex-row gap-3">
             <button
               onClick={handleRedirect}
-              disabled={redirecting || !redirectUrl}
+              disabled={redirecting}
               className="flex-1 flex items-center justify-center px-6 py-3 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-400 text-white font-medium rounded-md transition-colors"
             >
               {redirecting ? (
