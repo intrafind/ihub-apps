@@ -141,6 +141,32 @@ export default [
     }
   },
   {
+    // Markdown front matter is parsed only through server/utils/frontMatter.js,
+    // which accepts YAML and nothing else. Importing gray-matter directly would
+    // bypass that, so it is a lint error everywhere but in that helper.
+    // (no-restricted-syntax rather than no-restricted-imports: a second
+    // no-restricted-imports block would replace the one above, not extend it.)
+    // Not *.jsx: gray-matter is a server dependency, and matching *.jsx here
+    // would pull files no other block lints (server/defaults/renderers) into
+    // linting.
+    files: ['**/*.js', '**/*.mjs', '**/*.cjs'],
+    ignores: ['server/utils/frontMatter.js'],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        ...[
+          'ImportDeclaration[source.value=/^gray-matter(\\x2F|$)/]',
+          'ImportExpression[source.value=/^gray-matter(\\x2F|$)/]',
+          "CallExpression[callee.name='require'][arguments.0.value=/^gray-matter(\\x2F|$)/]"
+        ].map(selector => ({
+          selector,
+          message:
+            'Parse front matter with parseFrontMatter() from server/utils/frontMatter.js (YAML only), not gray-matter directly.'
+        }))
+      ]
+    }
+  },
+  {
     files: ['tests/**/*.js', 'tests/**/*.jsx', 'server/tests/**/*.js', '**/__tests__/**/*.js'],
     languageOptions: {
       parserOptions: {
