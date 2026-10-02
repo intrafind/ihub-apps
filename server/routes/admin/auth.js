@@ -15,6 +15,8 @@ import {
 } from '../../utils/responseHelpers.js';
 import { isLastAdmin } from '../../utils/adminRescue.js';
 import { logAudit } from '../../services/AuditLogService.js';
+import { clearFailedLogins, lockoutKey } from '../../utils/loginLockout.js';
+import { getDemoAccountStatus } from '../../utils/demoAccounts.js';
 
 /** The local user database, as a path relative to `contents/`. */
 const USERS_FILE = 'config/users.json';
@@ -221,6 +223,55 @@ export default function registerAdminAuthRoutes(app) {
       res.json({ message: 'Admin authentication successful', authenticated: true });
     } catch (error) {
       return sendInternalError(res, error, 'test authentication');
+    }
+  });
+
+  /**
+   * @swagger
+   * /api/admin/auth/demo-accounts:
+   *   get:
+   *     summary: Demo accounts that still have their shipped password
+   *     description: |
+   *       Reports whether the login page lists the demo accounts
+   *       (`localAuth.showDemoAccounts`) and which of the shipped demo accounts
+   *       still have the shipped password. The admin UI shows a warning while
+   *       both are the case (`warn`).
+   *     tags:
+   *       - Admin
+   *       - Authentication
+   *     security:
+   *       - adminAuth: []
+   *     responses:
+   *       200:
+   *         description: Demo account status
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 showDemoAccounts:
+   *                   type: boolean
+   *                 accounts:
+   *                   type: array
+   *                   items:
+   *                     type: string
+   *                 warn:
+   *                   type: boolean
+   *             example:
+   *               showDemoAccounts: true
+   *               accounts: ["admin", "user"]
+   *               warn: true
+   *       401:
+   *         description: Authentication failed
+   *       500:
+   *         description: Failed to read the demo account status
+   */
+  app.get(buildServerPath('/api/admin/auth/demo-accounts'), adminAuth, async (req, res) => {
+    try {
+      const localAuth = configCache.getPlatform()?.localAuth || {};
+      res.json(await getDemoAccountStatus(localAuth));
+    } catch (error) {
+      return sendInternalError(res, error, 'read demo account status');
     }
   });
 
@@ -545,6 +596,8 @@ export default function registerAdminAuthRoutes(app) {
           return sendBadRequest(res, 'Password must be at least 6 characters long');
         }
         user.passwordHash = await hashPasswordWithUserId(password, userId);
+        // A new password ends a lockout from failed sign-ins.
+        clearFailedLogins(lockoutKey(user));
       }
 
       user.updatedAt = new Date().toISOString();

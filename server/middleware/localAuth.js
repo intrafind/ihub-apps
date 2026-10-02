@@ -11,6 +11,14 @@ import {
 import configCache from '../configCache.js';
 import { ensureFirstUserIsAdmin } from '../utils/adminRescue.js';
 import { localUsersFile } from '../utils/contentsPath.js';
+import {
+  LoginLockedError,
+  clearFailedLogins,
+  lockedForMs,
+  lockoutKey,
+  recordFailedLogin,
+  resolveLockoutConfig
+} from '../utils/loginLockout.js';
 
 const DUMMY_USER_ID = 'nonexistent-user';
 const DUMMY_PASSWORD_HASH = '$2a$12$n6wyln4ERyOHBD6UAx2fAOkt0F7nX0x6X2ZiYAbBVvK7i7diOaJjG';
@@ -51,6 +59,8 @@ export default function localAuthMiddleware(req, res, next) {
  * @param {string} password - Password
  * @param {Object} localAuthConfig - Local auth configuration
  * @returns {Object} Login result with user and token
+ * @throws {LoginLockedError} While the account is locked after repeated failures
+ *   (`localAuthConfig.lockout`, see utils/loginLockout.js)
  */
 export async function loginUser(username, password, localAuthConfig) {
   const usersConfig = loadUsers(localUsersFile(localAuthConfig));
@@ -61,16 +71,27 @@ export async function loginUser(username, password, localAuthConfig) {
     u => equalsIgnoreCase(u.username, username) || equalsIgnoreCase(u.email, username)
   );
 
+  // A locked account is refused before any password is checked.
+  const lockout = resolveLockoutConfig(localAuthConfig);
+  const key = lockoutKey(user, username);
+  if (lockout.enabled) {
+    const remainingMs = lockedForMs(key);
+    if (remainingMs > 0) throw new LoginLockedError(Math.ceil(remainingMs / 1000));
+  }
+
   if (!user) {
     await verifyPasswordWithUserId(password, DUMMY_USER_ID, DUMMY_PASSWORD_HASH);
+    if (lockout.enabled) recordFailedLogin(key, lockout);
     throw new Error('Invalid credentials');
   }
 
   // Verify password using user ID
   const isValidPassword = await verifyPasswordWithUserId(password, user.id, user.passwordHash);
   if (!isValidPassword) {
+    if (lockout.enabled) recordFailedLogin(key, lockout);
     throw new Error('Invalid credentials');
   }
+  clearFailedLogins(key);
 
   // Check if user is active
   if (user.active === false) {

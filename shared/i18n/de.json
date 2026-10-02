@@ -2867,6 +2867,12 @@
       "viewDetails": "Systemressourcen anzeigen",
       "dismiss": "Ausblenden"
     },
+    "demoAccountsAlert": {
+      "message": "Die Anmeldeseite zeigt die Demo-Konten an, und {{accounts}} verwenden noch das mitgelieferte Passwort. Jeder, der die Anmeldeseite öffnet, kann sich damit anmelden. Deaktivieren Sie „Show Demo Accounts in Login Form“ oder ändern Sie die Passwörter.",
+      "authSettings": "Authentifizierungseinstellungen",
+      "users": "Benutzer",
+      "dismiss": "Ausblenden"
+    },
     "home": {
       "sections": {
         "loggingDesc": "Logging-Level, Komponenten, Metadaten und Debug-Einstellungen konfigurieren",

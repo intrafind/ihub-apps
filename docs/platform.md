@@ -577,14 +577,35 @@ Built-in username/password authentication.
 {
   "localAuth": {
     "enabled": true,
-    "showDemoAccounts": true
+    "showDemoAccounts": true,
+    "lockout": {
+      "enabled": true,
+      "maxAttempts": 5,
+      "durationMinutes": 15
+    }
   }
 }
 ```
 
 - **enabled** (boolean) – Enable local authentication. Default: `false`
 - **usersFile** (string) – Path to the users file, relative to the installation root or absolute. Default: `config/users.json` inside the contents directory (`contents/config/users.json`, or under `CONTENTS_DIR` when that is set). Leave it unset unless the file lives elsewhere.
-- **showDemoAccounts** (boolean) – Show demo accounts on login page. Default: `true`
+- **showDemoAccounts** (boolean) – Show demo accounts on login page. Default: `true`. While this is on
+  and a shipped demo account (`admin` or `user`) still has the password it ships with, every admin
+  page shows a warning that links to **Authentication** (to turn this off) and **Users** (to change
+  the passwords).
+- **lockout** (object) – Lock an account after repeated failed sign-ins.
+  - **enabled** (boolean) – Default: `true`
+  - **maxAttempts** (number) – Failed sign-ins within `durationMinutes` that lock the account.
+    Default: `5`
+  - **durationMinutes** (number) – How long the account stays locked, and the window failures are
+    counted in. Default: `15`
+
+  While an account is locked, `POST /api/auth/local/login` answers `429` with a `Retry-After` header
+  and does not check the password. A successful sign-in clears the count, and so does a new password
+  set under **Admin → Users**. A name without an account is counted the same way, so a lock does not
+  reveal whether an account exists. Counts are kept in memory and shared between the workers of
+  one server, so they reset on restart; separate servers (for example several pods) count
+  separately.
 
 ### **proxyAuth**
 Header-based authentication for reverse proxy setups.

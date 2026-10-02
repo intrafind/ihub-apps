@@ -11,6 +11,7 @@ import AdminSidebar from './AdminSidebar';
 import AdminCommandPalette from './AdminCommandPalette';
 import AdminShortcutsModal from './AdminShortcutsModal';
 import AdminStorageAlert from './AdminStorageAlert';
+import AdminDemoAccountsAlert from './AdminDemoAccountsAlert';
 import { SidebarProvider, useSidebar } from '../contexts/SidebarContext';
 import { getAdminNavSections } from './AdminSidebarNavData';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
@@ -92,6 +93,11 @@ function AdminLayoutInner() {
             enabled={!isContentAdminOnly}
             linkVisible={showAdminPage('system')}
             hidden={location.pathname.endsWith('/admin/system-resources')}
+          />
+          <AdminDemoAccountsAlert
+            enabled={!isContentAdminOnly}
+            authLinkVisible={showAdminPage('auth')}
+            usersLinkVisible={showAdminPage('users')}
           />
           <Outlet />
         </main>
