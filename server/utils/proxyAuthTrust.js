@@ -17,8 +17,10 @@
  *    (`proxyAuth.sharedSecretRef`) or `PROXY_AUTH_SHARED_SECRET`.
  *
  * When both are configured, both must pass. When neither is, the headers are
- * never trusted. Signed JWTs from `proxyAuth.jwtProviders` are verified
- * separately and do not depend on this.
+ * never trusted. A shared secret that is configured but cannot be used (its
+ * credential is missing or empty, or its header name is unusable) trusts no
+ * request. Signed JWTs from `proxyAuth.jwtProviders` are verified separately
+ * and do not depend on this.
  *
  * @module utils/proxyAuthTrust
  */
@@ -33,6 +35,24 @@ export const DEFAULT_SHARED_SECRET_HEADER = 'X-Proxy-Secret';
 
 /** `proxyAuth.trustedProxies` when it is not set: the local host. */
 export const DEFAULT_TRUSTED_PROXIES = Object.freeze(['loopback']);
+
+/** An HTTP header name (RFC 9110 token). */
+const HEADER_NAME = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/;
+
+/**
+ * Headers the shared secret may not travel in: the secret header is removed
+ * from every request, and these are needed by other sign-in methods or by
+ * request handling. Every `X-Forwarded-*` header is reserved as well.
+ */
+const RESERVED_SECRET_HEADERS = new Set([
+  'authorization',
+  'cookie',
+  'host',
+  'connection',
+  'content-length',
+  'content-type',
+  'transfer-encoding'
+]);
 
 /** Compiled `trustedProxies` lists, by their joined source. */
 const compiled = new Map();
@@ -73,17 +93,54 @@ export function getTrustedProxies(proxyAuthConfig = {}) {
 
 /**
  * The configured shared secret: `PROXY_AUTH_SHARED_SECRET` when set, otherwise
- * the credential `proxyAuth.sharedSecretRef` names.
+ * the credential `proxyAuth.sharedSecretRef` names. `configured` says whether
+ * one is asked for at all; `secret` is null when it is asked for but the
+ * credential is missing or empty.
  *
  * @param {object} proxyAuthConfig - `platform.proxyAuth`
- * @returns {string|null}
+ * @returns {{configured: boolean, secret: string|null}}
  */
 export function getSharedSecret(proxyAuthConfig = {}) {
-  if (config.PROXY_AUTH_SHARED_SECRET) return config.PROXY_AUTH_SHARED_SECRET;
-  const secret = proxyAuthConfig.sharedSecretRef
-    ? credentialService.tryResolveSecret(proxyAuthConfig.sharedSecretRef)
-    : undefined;
-  return typeof secret === 'string' && secret ? secret : null;
+  if (config.PROXY_AUTH_SHARED_SECRET) {
+    return { configured: true, secret: config.PROXY_AUTH_SHARED_SECRET };
+  }
+  if (!proxyAuthConfig.sharedSecretRef) return { configured: false, secret: null };
+  const secret = credentialService.tryResolveSecret(proxyAuthConfig.sharedSecretRef);
+  return { configured: true, secret: typeof secret === 'string' && secret ? secret : null };
+}
+
+/**
+ * Why `proxyAuth.sharedSecretHeader` cannot be used, or null when it can. The
+ * header is removed from every request, so it must be a valid header name
+ * that nothing else reads: not a reserved header, not an `X-Forwarded-*`
+ * header, and not the user, groups or a JWT provider header.
+ *
+ * @param {object} proxyAuthConfig - `platform.proxyAuth` (with the effective
+ *   `userHeader` / `groupsHeader`)
+ * @returns {string|null}
+ */
+export function sharedSecretHeaderProblem(proxyAuthConfig = {}) {
+  const name = proxyAuthConfig.sharedSecretHeader || DEFAULT_SHARED_SECRET_HEADER;
+  if (typeof name !== 'string' || !HEADER_NAME.test(name)) {
+    return 'is not a valid HTTP header name';
+  }
+  const lower = name.toLowerCase();
+  const providers = Array.isArray(proxyAuthConfig.jwtProviders) ? proxyAuthConfig.jwtProviders : [];
+  const inUse = [
+    proxyAuthConfig.userHeader,
+    proxyAuthConfig.groupsHeader,
+    ...providers.map(provider => provider?.header)
+  ]
+    .filter(header => typeof header === 'string')
+    .map(header => header.toLowerCase());
+  if (
+    RESERVED_SECRET_HEADERS.has(lower) ||
+    lower.startsWith('x-forwarded-') ||
+    inUse.includes(lower)
+  ) {
+    return 'is a header iHub needs for sign-in or request handling';
+  }
+  return null;
 }
 
 /**
@@ -112,38 +169,62 @@ function isTrustedAddress(address, list) {
 }
 
 /**
- * Compare two strings in constant time.
+ * Compare two strings in constant time. `timingSafeEqual` needs equal
+ * lengths, so on a length mismatch the expected value is compared with itself
+ * and the result discarded.
  *
  * @param {string} given
  * @param {string} expected
  * @returns {boolean}
  */
 function secretsMatch(given, expected) {
-  const a = crypto.createHash('sha256').update(String(given)).digest();
-  const b = crypto.createHash('sha256').update(String(expected)).digest();
-  return crypto.timingSafeEqual(a, b);
+  const a = Buffer.from(String(given), 'utf8');
+  const b = Buffer.from(String(expected), 'utf8');
+  const sameLength = a.length === b.length;
+  return crypto.timingSafeEqual(sameLength ? a : b, b) && sameLength;
 }
 
 /**
  * Check whether `req` may use the proxy identity headers. Removes the shared
  * secret header from the request either way, so it does not travel further
- * (into logs or upstream calls).
+ * (into logs or upstream calls) — unless its name is unusable, in which case
+ * the header is left alone and a configured secret trusts no request.
  *
  * @param {import('express').Request} req
- * @param {object} proxyAuthConfig - `platform.proxyAuth`
+ * @param {object} proxyAuthConfig - `platform.proxyAuth`, with the effective
+ *   `userHeader` / `groupsHeader`
  * @returns {{trusted: boolean, reason?: string}} `reason` says which check failed
  */
 export function checkProxyTrust(req, proxyAuthConfig = {}) {
   const trustedProxies = getTrustedProxies(proxyAuthConfig);
-  const sharedSecret = getSharedSecret(proxyAuthConfig);
-  const secretHeader = (
-    proxyAuthConfig.sharedSecretHeader || DEFAULT_SHARED_SECRET_HEADER
-  ).toLowerCase();
-  const givenSecret = req.headers?.[secretHeader];
-  if (req.headers) delete req.headers[secretHeader];
+  const { configured: secretConfigured, secret: sharedSecret } = getSharedSecret(proxyAuthConfig);
+  const headerName = proxyAuthConfig.sharedSecretHeader || DEFAULT_SHARED_SECRET_HEADER;
+  const headerProblem = sharedSecretHeaderProblem(proxyAuthConfig);
+  let givenSecret;
+  if (!headerProblem && req.headers) {
+    const secretHeader = headerName.toLowerCase();
+    givenSecret = req.headers[secretHeader];
+    delete req.headers[secretHeader];
+  }
 
-  if (trustedProxies.length === 0 && !sharedSecret) {
+  if (trustedProxies.length === 0 && !secretConfigured) {
     return { trusted: false, reason: 'not-configured' };
+  }
+  if (secretConfigured && headerProblem) {
+    warnOnce(
+      `secret-header:${headerName}`,
+      `proxyAuth.sharedSecretHeader ${headerProblem}; no proxy is trusted`,
+      { sharedSecretHeader: headerName }
+    );
+    return { trusted: false, reason: 'invalid-secret-header' };
+  }
+  if (secretConfigured && !sharedSecret) {
+    warnOnce(
+      `secret-unavailable:${proxyAuthConfig.sharedSecretRef}`,
+      'The shared secret credential in proxyAuth.sharedSecretRef is missing or empty; no proxy is trusted',
+      { sharedSecretRef: proxyAuthConfig.sharedSecretRef }
+    );
+    return { trusted: false, reason: 'secret-unavailable' };
   }
   const peer = req.socket?.remoteAddress;
   if (trustedProxies.length > 0 && !isTrustedAddress(peer, trustedProxies)) {
@@ -172,7 +253,11 @@ export function reportIgnoredProxyHeaders(req, reason) {
     'untrusted-address':
       'Proxy identity headers ignored: the connection is not from a trusted proxy',
     'secret-mismatch':
-      'Proxy identity headers ignored: the shared secret header is missing or wrong'
+      'Proxy identity headers ignored: the shared secret header is missing or wrong',
+    'secret-unavailable':
+      'Proxy identity headers ignored: the shared secret credential is missing or empty',
+    'invalid-secret-header':
+      'Proxy identity headers ignored: proxyAuth.sharedSecretHeader cannot be used'
   };
   warnOnce(`${reason}:${peer}`, messages[reason] || 'Proxy identity headers ignored', {
     reason,

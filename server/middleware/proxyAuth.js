@@ -310,7 +310,11 @@ export async function proxyAuth(req, res, next) {
   // Identity headers count only when the request came through a proxy an
   // admin trusts (proxyAuth.trustedProxies and/or the shared secret); any
   // client could set them otherwise. Signed JWTs below are verified on their own.
-  const trust = checkProxyTrust(req, platform.proxyAuth || {});
+  const trust = checkProxyTrust(req, {
+    ...(platform.proxyAuth || {}),
+    userHeader: proxyCfg.userHeader,
+    groupsHeader: proxyCfg.groupsHeader
+  });
   const header = name => (trust.trusted ? req.headers[name.toLowerCase()] : undefined);
   if (!trust.trusted && req.headers[proxyCfg.userHeader.toLowerCase()]) {
     reportIgnoredProxyHeaders(req, trust.reason);

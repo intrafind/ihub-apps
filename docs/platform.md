@@ -644,9 +644,12 @@ Header-based authentication for reverse proxy setups.
   same pod. Overridden by `PROXY_AUTH_TRUSTED_PROXIES` (comma-separated), which replaces the list —
   include `loopback` there if you still need it.
 - **sharedSecretRef** (string) – A `secret` credential (Admin → Credentials) the proxy sends in
-  `sharedSecretHeader`. Overridden by `PROXY_AUTH_SHARED_SECRET`.
+  `sharedSecretHeader`. Overridden by `PROXY_AUTH_SHARED_SECRET`. If the credential is missing or
+  empty, no request is trusted until it is fixed.
 - **sharedSecretHeader** (string) – Header the proxy sends the shared secret in. Default:
-  `"X-Proxy-Secret"`
+  `"X-Proxy-Secret"`. iHub removes it from every request, so it cannot be `Authorization`,
+  `Cookie`, `Host`, an `X-Forwarded-*` header, or the user, groups or a JWT provider header; a
+  save with such a name is refused.
 - **jwtProviders** (array) – JWT validation configuration for proxy auth
 
 The user, groups, `X-Forwarded-Name` and `X-Forwarded-Email` headers are used only on requests

@@ -5,7 +5,9 @@
  * `proxyAuth.sharedSecretHeader`. When both are configured both must hold;
  * when neither is, the headers are ignored. Unset, the list is the local host,
  * so a proxy in the same pod works. The secret header never travels past the
- * check.
+ * check. A shared secret that is configured but cannot be used — its
+ * credential is missing or empty, or its header is one sign-in needs — trusts
+ * no request rather than dropping the check.
  */
 import { jest } from '@jest/globals';
 
@@ -164,6 +166,40 @@ describe('shared secret alone (empty trustedProxies)', () => {
     env.PROXY_AUTH_SHARED_SECRET = 'from-env';
     expect((await call({ headers: { 'x-gate': 'from-env' } })).user?.id).toBe('alice');
     expect((await call({ headers: { 'x-gate': 'proxy-secret-value' } })).user).toBeNull();
+  });
+});
+
+describe('a shared secret that cannot be used', () => {
+  beforeEach(() => {
+    platform.proxyAuth.trustedProxies = ['loopback'];
+  });
+
+  test('a credential that is missing or empty trusts no request', async () => {
+    secrets.cred_empty = '';
+    for (const ref of ['cred_deleted', 'cred_empty']) {
+      platform.proxyAuth.sharedSecretRef = ref;
+      expect((await call()).user).toBeNull();
+      expect((await call({ headers: { 'x-proxy-secret': 'anything' } })).user).toBeNull();
+    }
+  });
+
+  test.each(['Authorization', 'X-Forwarded-User', 'x-forwarded-groups', 'X Secret'])(
+    'a secret header named %s trusts no request and is left on the request',
+    async sharedSecretHeader => {
+      platform.proxyAuth.sharedSecretRef = 'cred_proxy';
+      platform.proxyAuth.sharedSecretHeader = sharedSecretHeader;
+      const req = await call({ headers: { authorization: 'Bearer token' } });
+      expect(req.user).toBeNull();
+      expect(req.headers).toHaveProperty('authorization', 'Bearer token');
+      expect(req.headers).toHaveProperty('x-forwarded-user', 'alice');
+    }
+  );
+
+  test('without a secret, an unusable header name does not matter', async () => {
+    platform.proxyAuth.sharedSecretHeader = 'Authorization';
+    const req = await call({ headers: { authorization: 'Bearer token' } });
+    expect(req.user?.id).toBe('alice');
+    expect(req.headers).toHaveProperty('authorization', 'Bearer token');
   });
 });
 

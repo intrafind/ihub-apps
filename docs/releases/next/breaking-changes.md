@@ -102,7 +102,9 @@ were ignored.
   header `proxyAuth.sharedSecretHeader` (default `X-Proxy-Secret`). The secret is a **Secret**
   credential chosen in `proxyAuth.sharedSecretRef`, or the value of `PROXY_AUTH_SHARED_SECRET`.
   When both are set, a request must pass both — to rely on the secret alone, empty the address
-  list. The secret header is removed from the request after the check.
+  list. The secret header is removed from the request after the check, so it cannot be a header
+  sign-in needs (such as `Authorization` or an `X-Forwarded-*` header). If the chosen credential is
+  missing or empty, no request is trusted.
 - With neither set, the headers are ignored. **Admin → Authentication** has fields for both and
   shows a warning in the proxy authentication settings while both are empty.
 - `GET /api/auth/status` only says whether proxy authentication is on; it no longer lists the
@@ -121,6 +123,10 @@ values the client sent.
 `docker-compose.quickstart.yml` and `docker/docker-compose.yml` now publish their ports (3000, and
 5173 for the development setup) on `127.0.0.1` only, so the app is reachable from the machine it
 runs on and not from the network. `docker/docker-compose.prod.yml` is unchanged.
+
+- With Docker Engine older than 28.0.0, other hosts on the same local network segment can still
+  reach ports published on `127.0.0.1`. Update the engine, or block the ports in the host
+  firewall.
 
 **Before upgrading:** if you open a quickstart or development setup from another machine, put a
 reverse proxy in front of it, or change the binding back to `'3000:3000'` once the passwords of

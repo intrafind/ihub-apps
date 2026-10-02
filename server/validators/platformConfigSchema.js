@@ -298,7 +298,13 @@ export const platformConfigSchema = z
         // defaults to the local host, so a proxy in the same pod works.
         trustedProxies: z.array(z.string()).prefault(['loopback']),
         sharedSecretRef: z.string().optional(),
-        sharedSecretHeader: z.string().prefault('X-Proxy-Secret'),
+        // Checked further on save and at runtime (sharedSecretHeaderProblem):
+        // the header is removed from every request, so it must not be one that
+        // sign-in or request handling reads.
+        sharedSecretHeader: z
+          .string()
+          .regex(/^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/, 'Must be a valid HTTP header name')
+          .prefault('X-Proxy-Secret'),
         jwtProviders: z.array(jwtProviderSchema).prefault([]),
         // Name of an entry in `ldapAuth.providers` to query for the user's
         // group memberships after the proxy has identified them. When set,

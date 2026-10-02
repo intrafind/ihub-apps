@@ -35,18 +35,21 @@ jest.mock('../../../client/src/utils/runtimeBasePath', () => ({
 const PlatformFormEditor =
   require('../../../client/src/features/admin/components/PlatformFormEditor').default;
 
+const editor = (proxyAuth, onChange) => (
+  <MemoryRouter>
+    <PlatformFormEditor
+      value={{ auth: { mode: 'proxy' }, proxyAuth: { enabled: true, ...proxyAuth } }}
+      onChange={onChange}
+    />
+  </MemoryRouter>
+);
+
 async function renderEditor(proxyAuth) {
   const onChange = jest.fn();
-  render(
-    <MemoryRouter>
-      <PlatformFormEditor
-        value={{ auth: { mode: 'proxy' }, proxyAuth: { enabled: true, ...proxyAuth } }}
-        onChange={onChange}
-      />
-    </MemoryRouter>
-  );
+  const { rerender } = render(editor(proxyAuth, onChange));
   // Let the shared secret picker finish loading the credential list.
   await screen.findByRole('option', { name: /cred_proxy/ });
+  onChange.rerender = next => rerender(editor(next, onChange));
   return onChange;
 }
 
@@ -80,6 +83,18 @@ test('stores the trusted proxies as a list', async () => {
   expect(screen.getByLabelText('Trusted Proxies')).toHaveValue('loopback, 10.0.0.0/8,');
 });
 
+test('the trusted proxies field follows a list replaced from outside', async () => {
+  const onChange = await renderEditor({ trustedProxies: ['loopback'] });
+  fireEvent.change(screen.getByLabelText('Trusted Proxies'), {
+    target: { value: 'loopback, 10.0.0.5' }
+  });
+  // The parent echoes the edit, then discards it.
+  onChange.rerender({ trustedProxies: ['loopback', '10.0.0.5'] });
+  expect(screen.getByLabelText('Trusted Proxies')).toHaveValue('loopback, 10.0.0.5');
+  onChange.rerender({ trustedProxies: ['loopback'] });
+  expect(screen.getByLabelText('Trusted Proxies')).toHaveValue('loopback');
+});
+
 test('stores the shared secret header name', async () => {
   const onChange = await renderEditor({ trustedProxies: ['loopback'] });
   fireEvent.change(screen.getByLabelText('Shared Secret Header'), {
@@ -88,11 +103,15 @@ test('stores the shared secret header name', async () => {
   expect(onChange.mock.calls.at(-1)[0].proxyAuth.sharedSecretHeader).toBe('X-Gate');
 });
 
+test('an emptied shared secret header falls back to the default', async () => {
+  const onChange = await renderEditor({ sharedSecretHeader: 'X-Gate' });
+  fireEvent.change(screen.getByLabelText('Shared Secret Header'), { target: { value: '' } });
+  expect(onChange.mock.calls.at(-1)[0].proxyAuth.sharedSecretHeader).toBeUndefined();
+});
+
 test('offers secret credentials only, and stores the chosen one', async () => {
   const onChange = await renderEditor({});
   expect(screen.queryByRole('option', { name: /cred_oauth/ })).not.toBeInTheDocument();
-  fireEvent.change(screen.getByRole('option', { name: /cred_proxy/ }).closest('select'), {
-    target: { value: 'cred_proxy' }
-  });
+  fireEvent.change(screen.getByLabelText('Shared Secret'), { target: { value: 'cred_proxy' } });
   expect(onChange.mock.calls.at(-1)[0].proxyAuth.sharedSecretRef).toBe('cred_proxy');
 });

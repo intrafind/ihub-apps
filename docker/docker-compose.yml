@@ -10,7 +10,9 @@ services:
       dockerfile: docker/Dockerfile
     container_name: ihub-dev
     # Published on 127.0.0.1 only: a development container is not meant to be
-    # reachable from the network.
+    # reachable from the network. With Docker Engine older than 28.0.0, other
+    # hosts on the same local network segment can still reach these ports;
+    # update the engine or block them in the host firewall.
     ports:
       - '127.0.0.1:3000:3000' # Server port
       - '127.0.0.1:5173:5173' # Vite dev server port
