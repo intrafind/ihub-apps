@@ -15,6 +15,35 @@ import { removeMarketplaceInstallation } from '../../utils/installationCleanup.j
 import { logAudit } from '../../services/AuditLogService.js';
 import { saveSnapshot } from '../../services/ChangeHistoryService.js';
 import { preserveStoredRecords } from '../../services/provenance/records.js';
+import { appConfigSchema } from '../../validators/appConfigSchema.js';
+import { describeIssues } from '../../validators/userPromptSchema.js';
+
+/**
+ * Validate an app configuration an admin is about to save, and answer 400 when
+ * it does not pass the app schema.
+ *
+ * This is the same schema the apps loader applies. The loader only warns, so
+ * an existing file that fails validation still loads; a write through the admin
+ * API is held to the schema instead, so an invalid configuration (for example a
+ * redirect or iframe URL that is not http(s)) is never stored. The body is
+ * validated as sent and stored unchanged — schema defaults are not written into
+ * the file.
+ *
+ * @param {object} appConfig - App configuration from the request body.
+ * @param {import('express').Response} res - Response used to send the 400.
+ * @returns {boolean} `true` when the configuration is valid; `false` when a 400
+ *   has been sent and the caller must stop.
+ */
+function ensureValidAppConfig(appConfig, res) {
+  const result = appConfigSchema.safeParse(appConfig);
+  if (result.success) return true;
+  sendBadRequest(
+    res,
+    `Invalid app configuration: ${describeIssues(result.error)}`,
+    result.error.issues
+  );
+  return false;
+}
 
 /**
  * @swagger
@@ -470,7 +499,7 @@ export default function registerAdminAppsRoutes(app) {
    *
    *       **Validation Rules:**
    *       - Application ID cannot be changed
-   *       - Required fields: id, name, description
+   *       - Required fields: id, name, description, color, icon
    *       - All fields are validated against the application schema
    *
    *       **File System Operations:**
@@ -536,6 +565,11 @@ export default function registerAdminAppsRoutes(app) {
    *                 summary: App ID cannot be changed
    *                 value:
    *                   error: "App ID cannot be changed"
+   *               invalidConfig:
+   *                 summary: Configuration does not pass the app schema
+   *                 value:
+   *                   error: "Invalid app configuration: redirectConfig.url: Redirect URL must use http or https"
+   *                   details: []
    *       500:
    *         description: Internal server error
    */
@@ -554,6 +588,9 @@ export default function registerAdminAppsRoutes(app) {
       }
       if (updatedApp.id !== appId) {
         return sendBadRequest(res, 'App ID cannot be changed');
+      }
+      if (!ensureValidAppConfig(updatedApp, res)) {
+        return;
       }
 
       // Find the actual file for this app ID (may not match ${appId}.json)
@@ -604,7 +641,8 @@ export default function registerAdminAppsRoutes(app) {
    *
    *       **Validation Rules:**
    *       - Application ID must be unique
-   *       - Required fields: id, name, description
+   *       - Required fields: id, name, description, color, icon
+   *       - All fields are validated against the application schema
    *       - Application ID will be used as filename
    *
    *       **File System Operations:**
@@ -650,13 +688,21 @@ export default function registerAdminAppsRoutes(app) {
    *                 name:
    *                   en: "New Assistant"
    *       400:
-   *         description: Bad request - missing required fields
+   *         description: Bad request - missing required fields or invalid configuration
    *         content:
    *           application/json:
    *             schema:
    *               $ref: '#/components/schemas/AdminError'
-   *             example:
-   *               error: "Missing required fields"
+   *             examples:
+   *               missingFields:
+   *                 summary: Missing required fields
+   *                 value:
+   *                   error: "Missing required fields"
+   *               invalidConfig:
+   *                 summary: Configuration does not pass the app schema
+   *                 value:
+   *                   error: "Invalid app configuration: iframeConfig.url: Iframe URL must use http or https"
+   *                   details: []
    *       409:
    *         description: Conflict - app with ID already exists
    *         content:
@@ -677,6 +723,9 @@ export default function registerAdminAppsRoutes(app) {
 
       // Validate newApp.id for security
       if (!validateIdForPath(newApp.id, 'app', res)) {
+        return;
+      }
+      if (!ensureValidAppConfig(newApp, res)) {
         return;
       }
 

@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../shared/contexts/AuthContext.jsx';
+import { getSafeReturnPath } from '../utils/safeUrl';
 
 export default function LoginPage() {
   const [searchParams] = useSearchParams();
@@ -27,15 +28,17 @@ export default function LoginPage() {
     }
   }, [isLoading, user]);
 
-  // Redirect authenticated users immediately (handles NTLM return and already-logged-in users)
+  // Redirect authenticated users immediately (handles NTLM return and already-logged-in users).
+  // Both return URLs are untrusted input, so only a path on this app is followed;
+  // anything else lands on the app root.
   useEffect(() => {
     if (!isLoading && user) {
       const storedReturnUrl = sessionStorage.getItem('authReturnUrl');
       if (storedReturnUrl) {
         sessionStorage.removeItem('authReturnUrl');
-        window.location.href = storedReturnUrl;
+        window.location.href = getSafeReturnPath(storedReturnUrl);
       } else if (returnUrl) {
-        window.location.href = returnUrl;
+        window.location.href = getSafeReturnPath(returnUrl);
       } else {
         navigate('/');
       }

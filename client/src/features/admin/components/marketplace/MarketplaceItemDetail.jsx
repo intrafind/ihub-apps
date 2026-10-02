@@ -391,7 +391,18 @@ function MarketplaceItemDetail({ item: initialItem, onClose, onAction }) {
                     <span className="text-gray-500 dark:text-gray-400">
                       {t('admin.marketplace.detail.license', 'License')}
                     </span>
-                    <span className="text-gray-900 dark:text-white">{item.license}</span>
+                    {/^https?:\/\//i.test(item.licenseUrl || '') ? (
+                      <a
+                        href={item.licenseUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-600 dark:text-blue-400 hover:underline text-right"
+                      >
+                        {item.license}
+                      </a>
+                    ) : (
+                      <span className="text-gray-900 dark:text-white">{item.license}</span>
+                    )}
                   </div>
                 )}
                 {item?.installation && (

@@ -501,12 +501,13 @@ describe('Migration Runner', () => {
       expect(history.migrations[0].version).toBe('111');
     });
 
-    it.each(['141', '142'])(
-      "moves an EU AI Act entry recorded at V%s to V143 so main's migration of that number runs",
+    it.each(['141', '142', '143'])(
+      'moves an EU AI Act entry recorded at V%s to V145 so it no longer blocks main',
       oldVersion => {
         // A dev install that ran the branch while it held that number recorded
         // it; main's provider plain names (V141) and text-to-speech (V142)
-        // migrations hold those numbers now.
+        // migrations hold those numbers now, and V143 sorts below main's app
+        // wizard field cleanup (V144).
         const history = {
           schemaVersion: '1.0',
           migrations: [
@@ -528,8 +529,8 @@ describe('Migration Runner', () => {
         };
 
         expect(reconcileRenamedMigrations(history)).toBe(true);
-        expect(history.migrations[0].version).toBe('143');
-        expect(history.migrations[0].file).toBe('V143__add_ai_transparency.js');
+        expect(history.migrations[0].version).toBe('145');
+        expect(history.migrations[0].file).toBe('V145__add_ai_transparency.js');
         expect(history.migrations[1].version).toBe('140');
       }
     );

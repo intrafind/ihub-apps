@@ -8,6 +8,7 @@ import {
   buildApiUrl,
   getApiBaseUrlOverride
 } from '../../utils/runtimeBasePath';
+import { getSafeReturnPath } from '../../utils/safeUrl';
 
 // Auth action types
 const AUTH_ACTIONS = {
@@ -88,17 +89,28 @@ function authReducer(state, action) {
 
 // Redirect to a stored return URL after successful authentication, skipping the
 // redirect if we're already on the target page (e.g. embedded login in setup wizard).
+// The stored value is only followed as a path on this app; anything else lands on
+// the app root (see getSafeReturnPath).
 function redirectToReturnUrl(logContext) {
   const returnUrl = sessionStorage.getItem('authReturnUrl');
   if (!returnUrl) return;
 
   sessionStorage.removeItem('authReturnUrl');
+  const safeReturnPath = getSafeReturnPath(returnUrl);
   const currentPath = window.location.pathname;
-  const returnPath = new URL(returnUrl, window.location.origin).pathname;
+  const returnPath = new URL(safeReturnPath, window.location.origin).pathname;
   if (currentPath !== returnPath) {
-    console.log(`↩️ Redirecting to stored return URL after ${logContext}:`, returnUrl);
-    window.location.href = returnUrl;
+    console.log(`↩️ Redirecting to stored return URL after ${logContext}:`, safeReturnPath);
+    window.location.href = safeReturnPath;
   }
+}
+
+// The return URL forwarded to a sign-in provider's start URL, as an absolute URL
+// on this origin. The server validates it again; keeping the absolute form it has
+// always received means its handling of relative paths (e.g. the dev-server
+// prefix) does not come into play.
+function returnUrlForProvider(returnUrl) {
+  return new URL(getSafeReturnPath(returnUrl), window.location.origin).href;
 }
 
 // Create context
@@ -214,7 +226,9 @@ export function AuthProvider({ children }) {
               sessionStorage.setItem(redirectAttemptKey, now.toString());
 
               // Add returnUrl parameter to the OIDC redirect
-              const returnUrl = sessionStorage.getItem('authReturnUrl') || window.location.href;
+              const returnUrl = returnUrlForProvider(
+                sessionStorage.getItem('authReturnUrl') || window.location.href
+              );
               const authUrl = data.autoRedirect.url;
               const separator = authUrl.includes('?') ? '&' : '?';
               const redirectUrl = `${authUrl}${separator}returnUrl=${encodeURIComponent(returnUrl)}`;
@@ -384,7 +398,9 @@ export function AuthProvider({ children }) {
               );
 
               // Redirect to auth provider with return URL
-              const returnUrl = sessionStorage.getItem('authReturnUrl') || currentUrl;
+              const returnUrl = returnUrlForProvider(
+                sessionStorage.getItem('authReturnUrl') || currentUrl
+              );
               const authUrl = data.autoRedirect.url;
               const separator = authUrl.includes('?') ? '&' : '?';
               const redirectUrl = `${authUrl}${separator}returnUrl=${encodeURIComponent(returnUrl)}`;
