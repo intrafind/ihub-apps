@@ -9,6 +9,7 @@ import {
   uninstallMarketplaceItem,
   detachMarketplaceItem
 } from '../../../../api/adminApi';
+import MarketplaceModelReviewNotice from './MarketplaceModelReviewNotice';
 
 /**
  * Flatten a potentially nested YAML frontmatter object to dot-path key/value pairs.
@@ -242,6 +243,8 @@ function MarketplaceItemDetail({ item: initialItem, onClose, onAction }) {
             </>
           )}
         </div>
+
+        {item?.type === 'model' && <MarketplaceModelReviewNotice className="mx-6 mt-3" />}
 
         {/* Why a local item cannot simply be installed */}
         {isLocal && !confirmAction && (
