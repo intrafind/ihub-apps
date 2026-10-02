@@ -744,10 +744,9 @@ export default function registerAuthRoutes(app) {
             }
           : null,
       authMethods: {
+        // Only whether proxy auth is on: the header names are not public.
         proxy: {
-          enabled: proxyAuthConfig.enabled ?? false,
-          userHeader: proxyAuthConfig.userHeader,
-          groupsHeader: proxyAuthConfig.groupsHeader
+          enabled: proxyAuthConfig.enabled ?? false
         },
         local: {
           enabled: localAuthConfig.enabled ?? false,

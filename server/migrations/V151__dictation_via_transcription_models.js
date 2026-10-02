@@ -1,5 +1,5 @@
 /**
- * Migration V150 — dictation through transcription models
+ * Migration V151 — dictation through transcription models
  *
  * Dictation (the chat's microphone button) could stream to exactly one server
  * backend: the vLLM endpoint in `platform.speech.realtime`, picked as the
@@ -42,7 +42,7 @@
  * once the file is fixed.
  */
 
-export const version = '150';
+export const version = '151';
 export const description = 'dictation_via_transcription_models';
 
 const RETIRED_SERVICE = 'vllm-realtime';

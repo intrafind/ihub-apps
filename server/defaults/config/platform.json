@@ -203,7 +203,9 @@
     "defaultGroups": ["anonymous"]
   },
   "proxyAuth": {
-    "enabled": false
+    "enabled": false,
+    "trustedProxies": ["loopback"],
+    "sharedSecretHeader": "X-Proxy-Secret"
   },
   "localAuth": {
     "enabled": true,

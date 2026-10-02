@@ -1529,6 +1529,14 @@
           "running": "Testing…",
           "resultTitle": "LDAP login test"
         }
+      },
+      "proxy": {
+        "headersIgnoredWarning": "Unless PROXY_AUTH_TRUSTED_PROXIES or PROXY_AUTH_SHARED_SECRET is set on the server, the user and groups headers are ignored until you list trusted proxies or select a shared secret. Without one, any client that can reach the server could set them.",
+        "trustedProxiesLabel": "Trusted Proxies",
+        "trustedProxiesHelp": "Addresses or subnets the proxy connects from, comma-separated (for example loopback, 10.0.0.5 or 10.0.0.0/8). The headers are used only on connections from these addresses. The default, loopback, covers a proxy on the same host or in the same pod; if other local processes (such as a service-mesh sidecar) forward traffic to iHub, set a shared secret as well.",
+        "sharedSecretHeaderLabel": "Shared Secret Header",
+        "sharedSecretLabel": "Shared Secret",
+        "sharedSecretHelp": "A secret the proxy sends in the shared secret header. When set, the headers are used only on requests that carry it. Together with trusted proxies, both must match: for a proxy elsewhere, add its address above or clear the list to rely on the secret alone."
       }
     },
     "officeIntegration": {

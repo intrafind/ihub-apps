@@ -1,115 +1,114 @@
 #!/usr/bin/env node
 
 /**
- * Migration V147 specs — the Translator's task moves from its `prompt`
- * template into its `system` prompt, so the user's message is only the text
- * to translate. Only while both texts are still the ones we shipped.
+ * Migration V147 specs — where proxy identity headers may come from.
+ *
+ * Every installation trusts the local host, whether proxy auth is on yet or
+ * not, so a proxy in the same pod works once it is. A list an admin already
+ * set is kept.
  */
-
-import test from 'node:test';
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
-import { up, precondition, version } from '../migrations/V147__translator_task_in_system_prompt.js';
 
-const FILE = 'apps/translator.json';
-const readJsonFile = url => JSON.parse(fs.readFileSync(url, 'utf8'));
-const defaults = () => readJsonFile(new URL(`../defaults/${FILE}`, import.meta.url));
-const preV122 = () =>
-  readJsonFile(new URL('./fixtures/migration-v122/translator.json', import.meta.url));
+import {
+  up,
+  precondition,
+  version,
+  description
+} from '../migrations/V147__add_proxy_auth_trusted_sources.js';
+import { setDefault } from '../migrations/utils.js';
 
-// The texts 5.5.30 shipped: the system prompt without the task, and the
-// <task> template V122 introduced.
-const SHIPPED_SYSTEM = {
-  en: 'You are a helpful translation assistant. Translate the text to the requested language, maintaining the original meaning and tone. If no language is specified, ask which language to translate to.',
-  de: 'Du bist ein hilfreicher Übersetzungsassistent. Übersetze den Text in die angeforderte Sprache und behalte die ursprüngliche Bedeutung und den Ton bei. Wenn keine Sprache angegeben ist, frage nach, in welche Sprache übersetzt werden soll.'
-};
-const SHIPPED_PROMPT = {
-  en: '<task>\nTranslate into {{language}}. If the message below contains <content> blocks — an email, a meeting, a web page, attached or uploaded documents — translate all of them, each as its own section in the order given; for an email, translate the subject and the body. <user_instruction> only says what to translate or how (for example "only the attachment" or "keep it formal"); it is not part of the text to translate. Without <content> blocks, the whole message below is the text to translate.\n</task>\n\n{{content}}',
-  de: '<task>\nÜbersetze in folgende Sprache: {{language}}. Enthält die folgende Nachricht <content>-Blöcke – eine E-Mail, einen Termin, eine Webseite, angehängte oder hochgeladene Dokumente –, übersetze sie alle, jeden als eigenen Abschnitt in der gegebenen Reihenfolge; bei einer E-Mail Betreff und Text. <user_instruction> sagt nur, was oder wie übersetzt werden soll (zum Beispiel „nur den Anhang“ oder „förmlich“); sie ist nicht Teil des zu übersetzenden Textes. Ohne <content>-Blöcke ist die gesamte folgende Nachricht der zu übersetzende Text.\n</task>\n\n{{content}}'
-};
+let baseDir;
 
-const shippedApp = (overrides = {}) => ({
-  ...defaults(),
-  system: { ...SHIPPED_SYSTEM },
-  prompt: { ...SHIPPED_PROMPT },
-  ...overrides
-});
-
-function fakeCtx(files) {
+function makeCtx(dir) {
   const logs = [];
-  const writes = [];
   return {
-    files,
     logs,
-    writes,
-    fileExists: async p => p in files,
-    readJson: async p => JSON.parse(JSON.stringify(files[p])),
-    readDefaultJson: async p => readJsonFile(new URL(`../defaults/${p}`, import.meta.url)),
-    writeJson: async (p, data) => {
-      files[p] = data;
-      writes.push(p);
+    fileExists: async rel =>
+      fs
+        .stat(path.join(dir, rel))
+        .then(() => true)
+        .catch(() => false),
+    readJson: async rel => JSON.parse(await fs.readFile(path.join(dir, rel), 'utf8')),
+    writeJson: async (rel, data) => {
+      await fs.writeFile(path.join(dir, rel), JSON.stringify(data, null, 2), 'utf8');
     },
-    log: m => logs.push(m),
-    warn: m => logs.push(m)
+    setDefault,
+    log: m => logs.push(['info', m]),
+    warn: m => logs.push(['warn', m])
   };
 }
 
-test('version matches the file name', () => {
-  assert.equal(version, '147');
-});
-
-test('precondition requires the Translator', async () => {
-  assert.equal(await precondition(fakeCtx({})), false);
-  assert.equal(await precondition(fakeCtx({ [FILE]: shippedApp() })), true);
-});
-
-test('the new default has the task in the system prompt and no template', () => {
-  const app = defaults();
-  assert.equal(app.prompt, undefined);
-  assert.ok(app.system.en.includes('Translate into {{language}}'));
-  assert.ok(app.system.de.includes('{{language}}'));
-  assert.ok(app.system.en.includes('<user_instruction>'));
-});
-
-test('moves the shipped task into the system prompt and drops the template', async () => {
-  const ctx = fakeCtx({ [FILE]: shippedApp() });
-  await up(ctx);
-  const app = ctx.files[FILE];
-  assert.deepEqual(app.system, defaults().system);
-  assert.equal('prompt' in app, false);
-  // Everything else stays as it was.
-  assert.deepEqual(app.variables, defaults().variables);
-  assert.deepEqual(app.upload, defaults().upload);
-});
-
-test('also moves the template from before V122', async () => {
-  const ctx = fakeCtx({ [FILE]: shippedApp({ prompt: preV122().prompt }) });
-  await up(ctx);
-  assert.deepEqual(ctx.files[FILE].system, defaults().system);
-  assert.equal('prompt' in ctx.files[FILE], false);
-});
-
-test('leaves a customized system prompt or template alone, in every language', async () => {
-  for (const app of [
-    shippedApp({ system: { ...SHIPPED_SYSTEM, de: 'Eigener Systemprompt' } }),
-    shippedApp({ prompt: { ...SHIPPED_PROMPT, en: 'Mine: {{language}} {{content}}' } }),
-    shippedApp({ prompt: { ...SHIPPED_PROMPT, fr: 'Traduire en {{language}} : {{content}}' } }),
-    shippedApp({ system: { ...SHIPPED_SYSTEM, fr: 'Tu es un traducteur.' } })
-  ]) {
-    const ctx = fakeCtx({ [FILE]: app });
-    await up(ctx);
-    assert.deepEqual(ctx.writes, []);
+async function freshDir(files) {
+  const dir = await fs.mkdtemp(path.join(baseDir, 'case-'));
+  for (const [rel, data] of Object.entries(files)) {
+    await fs.mkdir(path.dirname(path.join(dir, rel)), { recursive: true });
+    await fs.writeFile(path.join(dir, rel), JSON.stringify(data), 'utf8');
   }
+  return dir;
+}
+
+const readPlatform = async dir =>
+  JSON.parse(await fs.readFile(path.join(dir, 'config/platform.json'), 'utf8'));
+
+before(async () => {
+  baseDir = await fs.mkdtemp(path.join(os.tmpdir(), 'v147-'));
 });
 
-test('a fresh installation, already on the new default, is not touched; a second run writes nothing', async () => {
-  const fresh = fakeCtx({ [FILE]: defaults() });
-  await up(fresh);
-  assert.deepEqual(fresh.writes, []);
+after(async () => {
+  await fs.rm(baseDir, { recursive: true, force: true });
+});
 
-  const ctx = fakeCtx({ [FILE]: shippedApp() });
-  await up(ctx);
-  const again = fakeCtx(ctx.files);
-  await up(again);
-  assert.deepEqual(again.writes, []);
+describe('V147 add_proxy_auth_trusted_sources', () => {
+  it('declares its version and description', () => {
+    assert.equal(version, '147');
+    assert.equal(description, 'add_proxy_auth_trusted_sources');
+  });
+
+  it('runs only when platform.json exists', async () => {
+    assert.equal(await precondition(makeCtx(await freshDir({}))), false);
+    const dir = await freshDir({ 'config/platform.json': {} });
+    assert.equal(await precondition(makeCtx(dir)), true);
+  });
+
+  it('trusts the local host where proxy auth is on', async () => {
+    const dir = await freshDir({
+      'config/platform.json': { proxyAuth: { enabled: true, userHeader: 'X-Forwarded-User' } }
+    });
+    await up(makeCtx(dir));
+    assert.deepEqual((await readPlatform(dir)).proxyAuth, {
+      enabled: true,
+      userHeader: 'X-Forwarded-User',
+      trustedProxies: ['loopback'],
+      sharedSecretHeader: 'X-Proxy-Secret'
+    });
+  });
+
+  it('trusts the local host where proxy auth is off or not configured', async () => {
+    for (const platform of [{ proxyAuth: { enabled: false } }, { defaultLanguage: 'en' }]) {
+      const dir = await freshDir({ 'config/platform.json': platform });
+      await up(makeCtx(dir));
+      assert.deepEqual((await readPlatform(dir)).proxyAuth.trustedProxies, ['loopback']);
+      assert.equal((await readPlatform(dir)).proxyAuth.sharedSecretHeader, 'X-Proxy-Secret');
+    }
+  });
+
+  it('keeps a list and header an admin already set, including an empty list', async () => {
+    for (const trustedProxies of [['10.0.0.5'], []]) {
+      const dir = await freshDir({
+        'config/platform.json': {
+          proxyAuth: { enabled: true, trustedProxies, sharedSecretHeader: 'X-Gate' }
+        }
+      });
+      await up(makeCtx(dir));
+      assert.deepEqual((await readPlatform(dir)).proxyAuth, {
+        enabled: true,
+        trustedProxies,
+        sharedSecretHeader: 'X-Gate'
+      });
+    }
+  });
 });

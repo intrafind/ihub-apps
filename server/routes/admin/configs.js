@@ -10,6 +10,7 @@ import { sendInternalError, sendBadRequest } from '../../utils/responseHelpers.j
 import { isValidLanguageCode } from '../../utils/pathSecurity.js';
 import { logAudit } from '../../services/AuditLogService.js';
 import { saveSnapshot } from '../../services/ChangeHistoryService.js';
+import { sharedSecretHeaderProblem } from '../../utils/proxyAuthTrust.js';
 
 /** The platform configuration, as a path relative to `contents/`. */
 const PLATFORM_FILE = 'config/platform.json';
@@ -279,6 +280,14 @@ export default function registerAdminConfigRoutes(app) {
         !isValidLanguageCode(newConfig.defaultLanguage)
       ) {
         return sendBadRequest(res, 'defaultLanguage must be a valid language code, e.g. "en"');
+      }
+
+      // The shared secret header is removed from every request, so it must not
+      // be one that sign-in or request handling reads.
+      const secretHeaderProblem =
+        newConfig.proxyAuth && sharedSecretHeaderProblem(newConfig.proxyAuth);
+      if (secretHeaderProblem) {
+        return sendBadRequest(res, `proxyAuth.sharedSecretHeader ${secretHeaderProblem}`);
       }
 
       // Load existing config to preserve other fields and track changes.
