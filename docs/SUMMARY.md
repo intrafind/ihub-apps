@@ -15,6 +15,7 @@
     - [Platform Configuration](platform.md)
     - [Styles](styles.md)
     - [Prompts Database](prompts.md)
+    - [Skills](skills.md)
     - [Content Management](content-management.md)
     - [Sources System](sources.md)
     - [Mimetype Configuration](mimetypes.md)

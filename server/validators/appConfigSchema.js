@@ -476,7 +476,9 @@ const baseAppConfigSchema = z.object({
   skillSettings: z
     .object({
       autoActivate: z.boolean().optional(),
-      maxActiveSkills: z.number().min(1).max(10).optional()
+      maxActiveSkills: z.number().min(1).max(10).optional(),
+      // false keeps users' own and shared skills out of this app
+      allowPersonal: z.boolean().optional()
     })
     .optional(),
   outputSchema: z.union([z.object({}).passthrough(), z.string()]).optional(),
