@@ -641,11 +641,12 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose = () => {
           </Link>
         )}
 
+        {/* The library: prompts, and skills when that feature is on. */}
         {promptsEnabled && (
           <Link
             to="/prompts"
-            title={t('sidebar.prompts', 'Prompts')}
-            aria-label={t('sidebar.prompts', 'Prompts')}
+            title={t('sidebar.library', 'Library')}
+            aria-label={t('sidebar.library', 'Library')}
             aria-current={isOnPrompts ? 'page' : undefined}
             className={railItemClass(isOnPrompts)}
           >

@@ -60,6 +60,7 @@
     "promptSearch": {
       "placeholder": "Search prompts...",
       "appSpecific": "app",
+      "skill": "skill",
       "viewAll": "View all prompts"
     },
     "magicPrompt": "Magic prompt",
@@ -3366,6 +3367,58 @@
         "userCount": "{{count}} user(s)"
       }
     },
+    "skills": {
+      "delete": "Delete",
+      "edit": "Edit",
+      "searchPlaceholder": "Search skills...",
+      "subtitle": "Install, configure, and manage skills for your iHub Apps",
+      "table": {
+        "name": "Name"
+      },
+      "tabs": {
+        "label": "Skill views",
+        "skills": "Skills",
+        "userSkills": "User skills"
+      },
+      "title": "Skill Management",
+      "userSkills": {
+        "allowEveryone": "Everyone signed in",
+        "allowGroups": "Groups",
+        "allowUsers": "Specific users",
+        "deleteMessage": "“{{name}}” by {{owner}} will be deleted for its owner and everyone it is shared with.",
+        "deleted": "Skill deleted",
+        "empty": "No shared user skills",
+        "emptyDesc": "When users share skills with a group or with everyone, they show up here.",
+        "enabled": "Users may create their own skills",
+        "everyone": "Everyone",
+        "inactive": "inactive",
+        "intro": "Skills users have shared with a group or with everyone. You can edit, re-share, delete or promote them to a global skill; private skills and skills shared with named users only are not listed.",
+        "maxFiles": "Files per skill",
+        "maxPerUser": "Skills per user (0 = no limit)",
+        "maxSizeKB": "Maximum size per skill (KB)",
+        "maxVersions": "Versions kept per skill",
+        "owner": "Owner",
+        "promote": "Promote",
+        "promoteHelp": "A copy becomes a global skill, kept in contents/skills. Which apps offer it and which groups may use it is configured like for every other global skill. The user skill itself stays as it is.",
+        "promoteName": "Global skill name",
+        "promoteNameHint": "Lowercase letters, digits and hyphens. Must not be taken by another global skill.",
+        "promoteTitle": "Promote to global skill",
+        "promoted": "Promoted to global skill {{name}}",
+        "promotedTo": "Promoted to {{name}}",
+        "restrictHelp": "Leave all unchecked to let everyone share widely. Sharing with specific users is not affected.",
+        "restrictTitle": "Only members of these groups may share with groups or everyone",
+        "saved": "Saved",
+        "settingsTitle": "Settings for user skills",
+        "sharedWith": "Shared with",
+        "sharingTitle": "Users may share skills with",
+        "storageDown": "The storage provider is not available, so users cannot keep skills right now.",
+        "subtitle": "Skills your users wrote and shared with groups or everyone",
+        "title": "User Skills",
+        "truncated": "Showing the first skills only",
+        "updated": "Last changed",
+        "userCount": "{{count}} user(s)"
+      }
+    },
     "scheduledTasks": {
       "saved": "Settings saved",
       "unchanged": "Nothing changed",
@@ -4476,6 +4529,7 @@
     "navigation": "Navigation",
     "newChat": "New chat",
     "prompts": "Prompts",
+    "library": "Library",
     "browseApps": "Browse all apps",
     "apps": "Apps",
     "recents": "Recents",
@@ -4930,7 +4984,9 @@
       "mine": "My prompts",
       "recent": "Recently used",
       "shared": "Shared with me",
-      "skills": "Skills"
+      "skills": "Skills",
+      "mySkills": "My skills",
+      "sharedSkills": "Shared skills"
     },
     "history": {
       "current": "current",
@@ -4983,6 +5039,142 @@
       "preview": "Preview",
       "required": "This field is required",
       "subtitle": "Fill in the details for this prompt"
+    }
+  },
+  "library": {
+    "empty": {
+      "mine": "You have no prompts or skills yet.",
+      "none": "Nothing found",
+      "shared": "Nobody has shared a prompt or skill with you yet."
+    },
+    "filters": {
+      "mine": "Mine"
+    },
+    "new": {
+      "label": "New"
+    },
+    "searchLabel": "Search the library",
+    "searchPlaceholder": "Search prompts and skills...",
+    "subtitle": "Prompts to start from and skills the assistant follows. Type / in a chat to use them.",
+    "title": "Library",
+    "types": {
+      "all": "All",
+      "label": "Type",
+      "prompts": "Prompts",
+      "skills": "Skills"
+    }
+  },
+  "skills": {
+    "actions": {
+      "copyLink": "Copy link",
+      "copyToMine": "Copy to my skills",
+      "details": "Details",
+      "detailsNamed": "Show skill {{name}}",
+      "duplicate": "Duplicate",
+      "history": "History",
+      "new": "New skill",
+      "share": "Share"
+    },
+    "badge": "Skill",
+    "delete": {
+      "message": "“{{name}}” and its history will be deleted for you and everyone it is shared with.",
+      "title": "Delete skill?"
+    },
+    "details": {
+      "copiedFrom": "Copied from {{name}}",
+      "files": "Files",
+      "instructions": "Instructions",
+      "promotedTo": "Promoted to global skill {{name}}"
+    },
+    "editor": {
+      "addFile": "Add file",
+      "body": "Instructions",
+      "bodyHint": "Markdown. The model reads these instructions when it uses the skill; refer to files by their path, e.g. references/template.md.",
+      "bodyPlaceholder": "# Weekly report\n\n1. Ask for the highlights of the week.\n2. …",
+      "characterCount": "{{count}} / {{max}}",
+      "chooseFolder": "Folder…",
+      "createTitle": "New skill",
+      "description": "Description",
+      "descriptionHint": "Say what the skill does and when to use it.",
+      "descriptionPlaceholder": "Drafts the weekly team report from bullet points. Use when the user asks for a weekly report or status summary.",
+      "editTitle": "Edit skill",
+      "fileContent": "Content of {{path}}",
+      "fileCount": "{{count}} of {{max}} files",
+      "fileFolder": "Folder",
+      "fileName": "File name",
+      "fileNamePlaceholder": "template.md",
+      "files": "Files",
+      "filesHint": "Optional text files the model can read when it needs them: references, templates, examples.",
+      "fixErrors": "Please fix the highlighted fields.",
+      "name": "Name",
+      "nameHint": "Lowercase letters, digits and hyphens. The model sees this name.",
+      "namePlaceholder": "e.g. weekly-report",
+      "removeFile": "Remove {{path}}",
+      "removeFileShort": "Remove file",
+      "saving": "Saving…",
+      "size": "Size: {{size}} KB of {{max}} KB",
+      "tooLarge": "Too large: shorten the instructions or remove files.",
+      "tooManyFiles": "A skill can have at most {{max}} files."
+    },
+    "empty": {
+      "global": "No global skills are available to you.",
+      "mine": "You have no skills yet. Create one, or copy a global skill.",
+      "none": "No skills found",
+      "shared": "Nobody has shared a skill with you yet."
+    },
+    "errors": {
+      "accessChanged": "Your access to this skill has changed. Reload the page to see what you may do now.",
+      "conflict": "Someone else changed this skill in the meantime. Close the editor and open it again to see the latest version.",
+      "disabled": "Personal skills are switched off.",
+      "forbidden": "You are not allowed to do this with this skill.",
+      "generic": "Something went wrong. Please try again.",
+      "limit": "You have reached the maximum number of skills. Delete one to make room.",
+      "limitCount": "You have reached the maximum of {{limit}} skills. Delete one to make room.",
+      "nameTaken": "A global skill with this name already exists. Choose another name.",
+      "notAllowed": "Sign in to keep skills of your own.",
+      "shareNotAllowed": "You are not allowed to share skills with this audience.",
+      "tooLarge": "This skill is too large. Shorten the instructions or remove files.",
+      "unavailable": "Your skills are unavailable right now. Please try again later."
+    },
+    "filters": {
+      "mine": "My skills"
+    },
+    "history": {
+      "current": "current",
+      "restore": "Restore this version",
+      "restoredFrom": "Restored from version {{revision}}",
+      "revision": "Version {{revision}}",
+      "title": "Version history",
+      "versions": "Versions"
+    },
+    "list": {
+      "fileCount": "{{count}} file(s)",
+      "searchPlaceholder": "Search skills..."
+    },
+    "notices": {
+      "copied": "Copied to your skills",
+      "deleted": "Skill deleted",
+      "duplicated": "Skill duplicated",
+      "restored": "Version restored",
+      "saved": "Skill saved",
+      "shared": "Sharing updated"
+    },
+    "share": {
+      "help": "“Can use” lets people use the skill in chats and duplicate it. “Can edit” also lets them change it and share it further.",
+      "private": "Only you — this skill is private",
+      "title": "Share skill"
+    },
+    "validation": {
+      "doubleHyphen": "Use single hyphens only (no “--”).",
+      "duplicate": "Another file has this name.",
+      "extension": "Allowed file types: {{extensions}}",
+      "fileNamePattern": "Use letters, digits, dots, hyphens and underscores only.",
+      "fileNameRequired": "Enter a file name.",
+      "folder": "Choose a folder.",
+      "invalid": "Invalid value",
+      "namePattern": "Use lowercase letters, digits and hyphens; start and end with a letter or digit.",
+      "required": "Required",
+      "tooLong": "Too long"
     }
   },
   "scheduledTasks": {
