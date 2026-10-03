@@ -8,7 +8,7 @@
 
 The market is converging on skills as the main way to package repeatable know-how for AI assistants:
 
-- **Google** launched *Gemini skills* on 30 Sep 2026, replacing Gems. Skills are invoked with `/` (`@` announced), can be stacked in one task, carry reference files, are picked automatically from intent, can be created through a chat interview, and run in the background through Gemini Spark schedules. Existing Gems migrate automatically (personal accounts from Nov 2026, Workspace from Mar 2027). Workspace adds templated "on brand" skills and admin-curated organizational skills ("coming soon").
+- **Google** launched *Gemini skills* on 30 Sep 2026, replacing Gems. Skills are invoked with `/` (`@` announced), can be stacked in one task, carry reference files, are picked automatically from intent, can be created through a chat interview, and run in the background through Gemini Spark schedules. Existing Gems migrate automatically (personal accounts from Nov 2026; Workspace business, enterprise and nonprofit accounts no sooner than Mar 2027; Workspace education accounts no sooner than Jun 2027). Workspace adds templated "on-brand" skills and admin-curated organizational skills ("coming soon").
 - **The format is shared.** Gemini accepts uploaded `SKILL.md` files and enforces the same naming and 1,024-character description rules as the Agent Skills specification (agentskills.io). Anthropic (Claude), OpenAI (ChatGPT/Codex), Gemini CLI and Gemini Enterprise all read the same format.
 - **Google publishes skills as open source** (Apache-2.0): `google/skills` (150 developer and cloud skills), `google-gemini/gemini-skills` (3 Gemini API skills). The consumer premade skills (`/prep-for-meetings`, `/match-my-writing-style`) are not published as files.
 
@@ -69,7 +69,7 @@ These are defects in what already exists. They should be fixed before building o
 | B8 | **Unused settings.** `skillSettings.maxActiveSkills`, `skillSettings.autoActivate` and `platform.skills.maxSkillBodyTokens` are in schema and docs but never read. | `appConfigSchema.js`, `docs/apps.md`, `V003__skills-config.js` | Documented controls do nothing |
 | B9 | **Minor:** skill names and descriptions are inserted into the prompt without XML escaping; the activation event always has an empty `description`; companion files are fetched with `res.text()`, which corrupts binary files; `compatibility` is a string in the loader but an object in the admin UI. | various | Robustness |
 
-Proposed rule for B1–B3, applied in one shared helper (for example `configCache.isSkillUsable(name, { app, user })`): a skill may be loaded only if it is (a) installed, (b) listed on the app (or agent profile / node), and (c) granted to the user's groups. `activate_skill`, `read_skill_resource`, `requestedSkill`, the planner's pre-activation and the MCP resource adapter all call the same helper.
+Proposed rule for B1–B3, applied in one shared helper (for example `configCache.isSkillUsable(name, { app, user })`): a skill may be loaded only if it is (a) installed, (b) listed on the app (or agent profile / node), and (c) granted to the user's groups. Once personal skills exist (G6), a user-owned skill is the one exception to (b): it may be loaded without an assignment entry only when `app.skillSettings.allowPersonal` is enabled and its visibility authorizes the user (the owner for private skills, matching groups for group-shared skills, everyone with access for admin-approved organization-wide skills). `activate_skill`, `read_skill_resource`, `requestedSkill`, sticky re-injection (G1), scheduled runs (G3), the planner's pre-activation and the MCP resource adapter all call the same helper.
 
 ## 4. Gaps and proposals
 
@@ -81,7 +81,7 @@ Proposed rule for B1–B3, applied in one shared helper (for example `configCach
 
 1. **Skill chips in the input.** Typing `/` anywhere opens the picker; choosing a skill inserts a removable chip (`/match-my-writing-style`) and keeps the cursor in the input, so the user adds their own text. Several chips are allowed (stacking).
 2. **API:** `requestedSkills: string[]` (keep accepting `requestedSkill` as an alias for one release only if we decide on compatibility; see §6).
-3. **Sticky activation per chat.** Explicitly invoked skills are stored on the chat (`chat.activeSkills`) and re-injected as `<active_skill>` on every turn until the user removes the chip or starts a new chat. Model-activated skills are added to the same list (so they persist too), shown as chips the user can remove.
+3. **Sticky activation per chat.** Explicitly invoked skills are stored on the chat (`chat.activeSkills`) and re-injected as `<active_skill>` on every turn until the user removes the chip or starts a new chat. Before each injection the shared access check runs again; a skill that no longer passes (grant revoked, removed from the app, uninstalled) is left out and its chip shows why. Model-activated skills are added to the same list (so they persist too), shown as chips the user can remove.
 4. **Limits.** Enforce `skillSettings.maxActiveSkills` (default 3) and a token budget per active skill (`platform.skills.maxSkillBodyTokens`). If the budget is exceeded, inject the description plus a note to read the body with `activate_skill` instead of failing.
 5. **Precedence.** When several skills are active, inject them in the order chosen and add one line: *"Several skills are active. Follow all of them; where they conflict, the skill listed first decides, unless a skill states its own precedence."* Skills can state their own precedence in prose (the new marketplace skills do: "the other skill decides content, this one decides wording").
 6. **Keyboard:** `/` for prompts and skills (as today), `@` stays for workflows. Gemini will move to `@`; we keep `/` because `@` is taken and users already know it from the prompt library.
@@ -146,6 +146,7 @@ Order of work: B4/B5 (agent wiring) → `activeSkills` on prompt nodes → `requ
 - Non-text files: run PDFs, Office files and images through the existing document pipeline when read, instead of returning garbled UTF-8.
 - Binary-safe marketplace install (fetch as `arrayBuffer`, write as buffer).
 - Size limits per file and per skill, shown in the admin UI.
+- Companion files for every marketplace source type. Today only `url` sources carry `companions`; `relative` and `github` sources install `SKILL.md` alone, so a registry cannot ship its own skills with reference files.
 - Scripts stay non-executable. Skills that need computation should use tools; document this for authors (the marketplace `skill-builder` already says so).
 
 ### G8 — Many skills, small context
@@ -193,4 +194,4 @@ Phase 0 is a precondition for everything else: stacking and scheduled skills mul
 The marketplace PR adds:
 
 - **Eight everyday skills** written for iHub, covering what Google ships or showcases as premade skills: `match-my-writing-style`, `presentation-prep`, `perspective-panel`, `newsletter-composer`, `vendor-evaluator`, `executive-email-drafter`, `inbox-triage`, and `skill-builder` (create a skill through an interview, or convert a prompt, Gem, or custom GPT). Google's `/prep-for-meetings` is already covered by `meeting-readiness-pack`.
-- **A curated set of Google's open-source skills** (Apache-2.0) that work in a chat without command execution, referenced at a pinned commit of Google's repositories and installed with their reference files.
+- **89 of Google's 153 open-source skills** (Apache-2.0) that work in a chat without command execution, referenced at a pinned commit of Google's repositories and installed with their reference files. Skills that mainly drive `gcloud`, MCP servers or scripts were left out. An end-to-end install against a local iHub (registry → install → `/api/admin/skills`) worked for both relative and `url` + `companions` sources.
