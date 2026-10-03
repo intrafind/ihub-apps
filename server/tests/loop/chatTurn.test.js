@@ -251,7 +251,7 @@ function baseLogFor(chatId, streaming = true) {
 
 function runTurn(
   service,
-  { chatId, prep, streaming = true, getLocalizedError, messageId, activatedSkill, runId }
+  { chatId, prep, streaming = true, getLocalizedError, messageId, activatedSkills, runId }
 ) {
   const buildLogData = (isStreaming, extra = {}) => ({
     ...baseLogFor(chatId, isStreaming),
@@ -261,7 +261,7 @@ function runTurn(
     prep,
     chatId,
     ...(messageId ? { messageId } : {}),
-    ...(activatedSkill ? { activatedSkill } : {}),
+    ...(activatedSkills ? { activatedSkills } : {}),
     ...(runId ? { runId } : {}),
     streaming,
     buildLogData,
@@ -426,7 +426,7 @@ test('run id: a caller-supplied ledger id is honoured, anything else is replaced
 
 // ── 2. skill activation ─────────────────────────────────────────────────────
 
-test('activatedSkill: tool/progress{skill.activation} is the first frame after run/started; description defaults to ""', async t => {
+test('activatedSkills: one tool/progress{skill.activation} per skill right after run/started; description defaults to ""', async t => {
   const chatId = newChatId('skill');
   const frames = captureFrames(t, chatId);
   const { service } = makeService([textTurn('done')]);
@@ -434,7 +434,7 @@ test('activatedSkill: tool/progress{skill.activation} is the first frame after r
   const summary = await runTurn(service, {
     chatId,
     prep: makePrep(),
-    activatedSkill: { skillName: 'summarize', description: 'Summarize the thread' }
+    activatedSkills: [{ skillName: 'summarize', description: 'Summarize the thread' }]
   });
 
   assertWellFormed(frames, { runId: summary.runId });
@@ -457,7 +457,7 @@ test('activatedSkill: tool/progress{skill.activation} is the first frame after r
   await runTurn(service2, {
     chatId: chatId2,
     prep: makePrep(),
-    activatedSkill: { skillName: 'translate' }
+    activatedSkills: [{ skillName: 'translate' }]
   });
   assert.deepEqual(frames2[1].data, {
     phase: 'skill.activation',
@@ -468,8 +468,23 @@ test('activatedSkill: tool/progress{skill.activation} is the first frame after r
   const chatId3 = newChatId('skill-empty');
   const frames3 = captureFrames(t, chatId3);
   const { service: service3 } = makeService([textTurn('done')]);
-  await runTurn(service3, { chatId: chatId3, prep: makePrep(), activatedSkill: { skillName: '' } });
+  await runTurn(service3, {
+    chatId: chatId3,
+    prep: makePrep(),
+    activatedSkills: [{ skillName: '' }]
+  });
   assert.equal(has(frames3, TOOL_PROGRESS), false, 'an empty skill name activates nothing');
+
+  const chatId4 = newChatId('skill-several');
+  const frames4 = captureFrames(t, chatId4);
+  const { service: service4 } = makeService([textTurn('done')]);
+  await runTurn(service4, {
+    chatId: chatId4,
+    prep: makePrep(),
+    activatedSkills: [{ skillName: 'summarize' }, { skillName: 'translate' }]
+  });
+  assert.deepEqual(types(frames4).slice(0, 3), [RUN_STARTED, TOOL_PROGRESS, TOOL_PROGRESS]);
+  assert.deepEqual([frames4[1].data.message, frames4[2].data.message], ['summarize', 'translate']);
 });
 
 // ── 3. prompt-implied knowledge sources (upload / email context) ────────────
