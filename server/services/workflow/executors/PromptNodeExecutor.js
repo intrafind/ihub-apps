@@ -80,6 +80,23 @@ const PROMPT_NODE_WORKER_TASK_BODY_CHARS = 2000;
  */
 
 /**
+ * The skills a prompt node may use. A `skills` array on the node decides,
+ * an empty one included: a custom workflow sets `skills: []` to give a node
+ * no skills. Only a node without the field falls back to the agent profile.
+ * Embedded workflows copy the profile's list onto every node, so for them
+ * both answers agree.
+ *
+ * @param {Object} [config] - Node config
+ * @param {Object} [profile] - Agent profile
+ * @returns {string[]|null} Skill ids, or null when neither sets a list
+ */
+export function resolveNodeSkillIds(config, profile) {
+  if (Array.isArray(config?.skills)) return config.skills;
+  if (Array.isArray(profile?.skills)) return profile.skills;
+  return null;
+}
+
+/**
  * Executor for agent nodes.
  *
  * Agent nodes are responsible for:
@@ -330,12 +347,7 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
       // Auto-attach `activate_skill` / `read_skill_resource` whenever the
       // node has skills available (either on the profile or override on the
       // node config). Synthesizer nodes skip this — they're text-out only.
-      const nodeSkillIds =
-        Array.isArray(config.skills) && config.skills.length > 0
-          ? config.skills
-          : Array.isArray(agentProfile?.skills) && agentProfile.skills.length > 0
-            ? agentProfile.skills
-            : [];
+      const nodeSkillIds = resolveNodeSkillIds(config, agentProfile) || [];
       if (nodeSkillIds.length > 0 && config._isSynthesizer !== true) {
         if (!configuredToolIds.includes('activate_skill')) {
           configuredToolIds.push('activate_skill');
@@ -2094,12 +2106,8 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
    */
   async _buildSkillsBlock(profile, config, state, context) {
     const isSynthesizer = config?._isSynthesizer === true;
-    const skillIds =
-      (Array.isArray(config?.skills) && config.skills.length > 0
-        ? config.skills
-        : Array.isArray(profile?.skills) && profile.skills.length > 0
-          ? profile.skills
-          : null) || null;
+    const nodeSkills = resolveNodeSkillIds(config, profile);
+    const skillIds = nodeSkills && nodeSkills.length > 0 ? nodeSkills : null;
 
     const activated =
       state?.data?._activatedSkills && typeof state.data._activatedSkills === 'object'

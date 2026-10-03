@@ -88,6 +88,23 @@ export function buildAvailableSkillsBlock(skills) {
 /** How many skills may be active at once when the app does not set `skillSettings.maxActiveSkills`. */
 export const DEFAULT_MAX_ACTIVE_SKILLS = 3;
 
+/** Upper bound for `skillSettings.maxActiveSkills`, as in the app schema. */
+const MAX_ACTIVE_SKILLS_LIMIT = 10;
+
+/**
+ * The app's cap on active skills. App files load even when they fail schema
+ * validation, so a value outside 1–10 or not a whole number falls back to the
+ * default, and a larger one is capped at 10.
+ *
+ * @param {Object} [app] - App config
+ * @returns {number}
+ */
+export function maxActiveSkillsFor(app) {
+  const value = app?.skillSettings?.maxActiveSkills;
+  if (!Number.isInteger(value) || value < 1) return DEFAULT_MAX_ACTIVE_SKILLS;
+  return Math.min(value, MAX_ACTIVE_SKILLS_LIMIT);
+}
+
 /**
  * The skills a request asks to pre-activate (`requestedSkills`), reduced to
  * those usable in `app` for `user`: duplicates dropped, request order kept,
@@ -104,7 +121,7 @@ export async function resolveRequestedSkills(requested, { app, user }) {
   if (!Array.isArray(requested) || requested.length === 0 || !app) return [];
   const usable = await getUsableSkills({ skillIds: app.skills, user });
   const byName = new Map(usable.map(skill => [skill.name, skill]));
-  const limit = app.skillSettings?.maxActiveSkills ?? DEFAULT_MAX_ACTIVE_SKILLS;
+  const limit = maxActiveSkillsFor(app);
   const resolved = [];
   for (const name of new Set(requested)) {
     if (resolved.length >= limit) break;
