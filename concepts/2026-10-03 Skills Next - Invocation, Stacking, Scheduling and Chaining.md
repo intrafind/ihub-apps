@@ -1,7 +1,7 @@
 # Skills Next: Invocation, Stacking, Scheduling and Chaining
 
 **Date:** 2026-10-03
-**Status:** Proposal; decisions 1 and 3 taken (§6). Phase 0 is in #2670
+**Status:** Proposal; decisions 1, 2, 7 and 8 taken (§6). Phase 0 is in #2670, phase 1 and the `/name` part of phase 2 in the user skills PR stacked on it
 **Related:** `concepts/2026-02-22 Agent Skills Integration PRD.md` (original skills PRD), `docs/scheduled-tasks.md`, marketplace PR "Everyday skills and Google's open-source skills" in `intrafind/ihub-marketplace`
 
 ## 1. Why now
@@ -77,11 +77,13 @@ Proposed rule for B1–B3, applied in one shared helper (for example `configCach
 
 **Today:** `/` only works in an empty input, sends a canned message immediately, supports one skill, and forgets it on the next turn. That breaks multi-turn skills: an interview skill (for example the marketplace's `skill-builder`) loses its instructions as soon as the user answers the first question, unless the model happens to re-activate it.
 
+**Decision (7):** a skill is invoked by writing `/skill-name` in the message text, as in Gemini. There is no separate "run skill" construct (no skill chips with their own state, no `skills` field on scheduled tasks, no skill node in workflows): wherever a prompt is written, `/skill-name` in it activates the skill.
+
 **Proposal:**
 
-1. **Skill chips in the input.** Typing `/` anywhere opens the picker; choosing a skill inserts a removable chip (`/match-my-writing-style`) and keeps the cursor in the input, so the user adds their own text. Several chips are allowed (stacking).
-2. **API:** `requestedSkills: string[]`, a clean break from `requestedSkill` without an alias (decided, implemented in #2670 together with the access check and the `maxActiveSkills` cap).
-3. **Sticky activation per chat.** Explicitly invoked skills are stored on the chat (`chat.activeSkills`) and re-injected as `<active_skill>` on every turn until the user removes the chip or starts a new chat. Before each injection the shared access check runs again; a skill that no longer passes (grant revoked, removed from the app, uninstalled) is left out and its chip shows why. Model-activated skills are added to the same list (so they persist too), shown as chips the user can remove.
+1. **`/name` in the text.** Typing `/` at the start of the input or after a space opens the picker; choosing a skill inserts `/match-my-writing-style ` as plain text and keeps the cursor in the input, so the user adds their own text. Several tokens stack. The server reads the tokens from the last user message (`resolveSkillsForTurn` in `server/services/skillAccess.js`): a token counts only when it names a skill the user may use in this app, so a path such as `/usr/bin` or an unknown name stays plain text. On a name clash the user's own skill wins over a shared one, and a shared one over a global one. *(Implemented in the user skills PR.)*
+2. **API:** `requestedSkills: string[]`, a clean break from `requestedSkill` without an alias (decided, implemented in #2670 together with the access check and the `maxActiveSkills` cap). Explicit names come first, `/name` tokens after them, both under the same cap. API clients that cannot change the text can keep using the field.
+3. **Sticky activation per chat.** A `/name` token applies to the message it is in; the next turn re-activates the skill only when the model calls `activate_skill` again. Open (decision 3): also re-inject skills named in earlier user messages of the same chat, re-checking access before each injection, so interview skills keep their instructions.
 4. **Limits.** Enforce `skillSettings.maxActiveSkills` (default 3) and a token budget per active skill (`platform.skills.maxSkillBodyTokens`). If the budget is exceeded, inject the description plus a note to read the body with `activate_skill` instead of failing.
 5. **Precedence.** When several skills are active, inject them in the order chosen and add one line: *"Several skills are active. Follow all of them; where they conflict, the skill listed first decides, unless a skill states its own precedence."* Skills can state their own precedence in prose (the new marketplace skills do: "the other skill decides content, this one decides wording").
 6. **Keyboard:** `/` for prompts and skills (as today), `@` stays for workflows. Gemini will move to `@`; we keep `/` because `@` is taken and users already know it from the prompt library.
@@ -96,14 +98,14 @@ Gemini lets users switch individual skills on and off for automatic use. In iHub
 
 **Today:** a scheduled task runs `instructions` against an app. The app's skills are available, but the task cannot name one, so the model must guess from the instructions.
 
-**Proposal:**
+**Proposal (no new task field, decision 7):**
 
-1. **`skills: string[]` on the task** (validated against the app and the owner's permissions at save time and again at every run, like tools; a revoked skill pauses the task with a stored reason, as revoked tools do today).
-2. Each run pre-activates those skills (the same `requestedSkills` path as G1), so a task like *"Every weekday 07:30, run `/inbox-triage`"* behaves the same every time.
-3. **"Schedule this skill"** entry point: from a skill chip or the skill picker, open the task form with app and skill pre-filled.
-4. **The chat tools learn it too:** `schedule_task` and `update_scheduled_task` accept `skills`, so the user can say "run the newsletter skill every Friday at 10".
+1. **`/name` in the instructions.** A task's instructions go through the same chat pipeline as a typed message, so `/inbox-triage` in them activates the skill on every run with the owner's access, re-checked at run time. A task like *"Every weekday 07:30: /inbox-triage"* behaves the same every time. *(Works with the user skills PR; documented in `docs/scheduled-tasks.md`.)*
+2. **Feedback for a token that no longer resolves.** Today a revoked or uninstalled skill silently stays plain text. Proposal: the run records which `/name` tokens did not resolve, and the task list shows a warning, instead of pausing the task.
+3. **"Schedule this skill"** entry point: from the skill picker or the library, open the task form with the app chosen and `/skill-name ` pre-filled in the instructions.
+4. **The chat tools need nothing new:** `schedule_task` and `update_scheduled_task` take instructions, so "run the newsletter skill every Friday at 10" becomes instructions starting with `/newsletter-composer`.
 5. **Optional skill metadata for unattended use:** skills can declare `metadata.ihub.unattended: supported` and a short `metadata.ihub.scheduleHint` ("weekly, Friday morning"). The task form shows the hint; skills without the flag show a warning that they may ask questions. The run already tells the model it is unattended and refuses `ask_user`; skills written for scheduling (such as the marketplace's `newsletter-composer` and `inbox-triage`) include a "Running on a schedule" section.
-6. **Workflow schedule triggers** get the same: a workflow prompt node can pre-activate skills (see G4).
+6. **Workflow schedule triggers** get the same: `/name` in a workflow prompt node's prompt (see G4).
 
 ### G4 — Chain skills
 
@@ -112,10 +114,10 @@ Gemini lets users switch individual skills on and off for automatic use. In iHub
 | Need | Example | Proposal |
 |---|---|---|
 | A skill relies on another skill | `newsletter-composer` applies `brand-voice-framework` | **Declared dependencies**: `metadata.ihub.requires: [brand-voice-framework]`. When the skill is activated, required skills that the app and user may use are activated with it; missing ones are reported to the model ("required skill not available"). Validation warns admins at assignment time. |
-| Output of one skill feeds the next | research brief → executive email → translation | **Skills in workflows**: a prompt node gets `skills` (offered) and `activeSkills` (pre-activated) for *all* workflows, not only agent runs. Chains are then normal workflows with human checkpoints where needed. A dedicated `skill` node (input → skill → output) is sugar on top of a prompt node. |
+| Output of one skill feeds the next | research brief → executive email → translation | **Skills in workflows**: `/name` in a prompt node's prompt activates the skill for that node, with the same resolution as chat, for *all* workflows, not only agent runs. Chains are then normal workflows of prompt nodes with human checkpoints where needed. No dedicated `skill` node (decision 7). |
 | The model decides the order | "prepare the board talk and stress-test it" | Already possible with stacking (G1) once activation persists; agents get it once B4 is fixed. |
 
-Order of work: B4/B5 (agent wiring) → `activeSkills` on prompt nodes → `requires` → optional `skill` node.
+Order of work: B4/B5 (agent wiring) → `/name` resolution in prompt nodes → `requires`.
 
 ### G5 — Author skills in iHub
 
@@ -124,7 +126,7 @@ Order of work: B4/B5 (agent wiring) → `activeSkills` on prompt nodes → `requ
 **Proposal, in steps:**
 
 1. **Fix B6 and add a real editor:** create, edit and preview `SKILL.md` (frontmatter form + Markdown body), add and edit reference files, validate live (name rules, 1,024-character description).
-2. **"Create with AI":** the marketplace now ships `skill-builder`, an interview skill that produces a valid `SKILL.md`. Make it native: a "New skill → create with AI" button opens a chat with that skill active and a "Save as skill" action on the result.
+2. **"Create with AI":** the marketplace now ships `skill-builder`, an interview skill that produces a valid `SKILL.md`. Make it native: a "New skill → create with AI" button opens a chat with `/skill-builder ` in the input and a "Save as skill" action on the result.
 3. **"Save as skill" from any chat:** turn the current conversation's instructions into a skill draft (the Gemini "Gemini offers to build skills from your chats" pattern).
 4. **Convert prompts to skills:** a prompt library action that creates a skill draft from a prompt, its variables and description. This is also our answer for customers moving from Gems or custom GPTs.
 5. **Import from URL or Git** (the original PRD's phase 4), reusing the marketplace's companion-file logic.
@@ -149,14 +151,14 @@ Order of work: B4/B5 (agent wiring) → `activeSkills` on prompt nodes → `requ
 **What is different for skills:**
 
 - **A skill is a folder.** The metadata document (owner, shares, revision, frontmatter fields, a manifest of files with sha256) lives in the documents facet; `SKILL.md` and reference files live in the blobs facet, like `ArtifactRepository`. Text files only, with size and count limits and the path validation `getSkillResource` already uses.
-- **Ids.** User skills get `usk_…` ids, a separate id space from global skill names. The model sees the id in `<available_skills>` and calls `activate_skill` with it; the picker shows the display name.
-- **Where they apply.** Prompts are inserted client-side, so they work in any app. Skills are resolved server-side, so the shared access rule (§3) gains the user-skill exception: a user's own and shared skills are usable in every app unless the app opts out with `skillSettings.allowPersonal: false`. They appear in the `/` picker (groups `mine` and `shared`, as prompts) and can be sent in `requestedSkills`. They are listed in `<available_skills>` for automatic use only when the user turns that on for the skill (G2), so a long personal library does not bloat every prompt.
+- **Ids and names.** User skills get `usk_…` ids, a separate id space from global skill names. The model sees the id in `<available_skills>` and calls `activate_skill` with it. Users invoke a skill by its `name` (`/my-skill`); on a clash the own skill wins over a shared one, and a shared one over a global one.
+- **Where they apply.** Prompts are inserted client-side, so they work in any app. Skills are resolved server-side, so the shared access rule (§3) gains the user-skill exception: a user's own and shared skills are usable in every app unless the app opts out with `skillSettings.allowPersonal: false`. They appear in the `/` picker (groups `mine` and `shared`, as prompts), resolve from `/name` in the text and can be sent in `requestedSkills`. Up to 20 are listed in `<available_skills>` for automatic use; a per-skill switch (G2) comes later, so a long personal library does not bloat every prompt.
 - **Scheduled tasks** run as their owner, so a task can use its owner's personal skills; a revoked share pauses the task like a revoked tool.
 - **Agents and MCP** keep using admin-assigned global skills only; a user skill reaches them after promotion.
 
-**API (mirrors `/api/prompts`):** `GET /api/skills?scope=all|global|mine|shared|favorites`, `POST /api/skills`, `GET/PUT/DELETE /api/skills/:id`, `PUT /api/skills/:id/shares`, `PUT /api/skills/:id/owner`, `POST /api/skills/:id/duplicate` (from a global or shared skill), `GET /api/skills/:id/versions`, `POST /api/skills/:id/versions/:rev/restore`, `GET/PUT /api/skills/:id/files/*`; admin: `GET /api/admin/skills?scope=user`, `POST /api/admin/skills/:id/promote`, `GET/PUT /api/admin/skills/user-settings`.
+**API (mirrors `/api/prompts`, as implemented):** `GET /api/skills` lists global and personal skills together (`scope: global | mine | shared`); `POST /api/user-skills`, `GET/PUT/DELETE /api/user-skills/:id`, `GET /api/user-skills/share-targets`, `PUT /api/user-skills/:id/shares`, `PUT /api/user-skills/:id/owner`, `POST /api/user-skills/:id/duplicate`, `POST /api/skills/:name/duplicate` (copy a global skill), `GET /api/user-skills/:id/versions[/:rev]`, `POST /api/user-skills/:id/versions/:rev/restore`; reference files travel inside the skill document. Admin: `GET /api/admin/user-skills`, `GET/PUT /api/admin/user-skills/settings`, `POST /api/admin/user-skills/:id/promote`.
 
-**Client:** a `/skills` page like the prompt library (mine, shared, global; new, edit, share, duplicate, history, delete), a `SKILL.md` editor with live validation (name rules, 1,024-character description) and text reference files, "Save as skill" on a chat answer, and the share dialog shared with prompts. The new route goes into `KNOWN_ROUTES` and `client/index.html`.
+**Client (decision 8):** no separate `/skills` page. The prompt library at `/prompts` becomes one library for everything a user can invoke with `/`: a type switch (all, prompts, skills), "New → prompt / skill", the `SKILL.md` editor with live validation (name rules, 1,024-character description) and text reference files, share, duplicate, history and delete, with the share dialog shared with prompts. Admin → Skills gets a user tab. "Save as skill" on a chat answer stays in G5.
 
 ### G7 — Reference files that work like attachments
 
@@ -192,9 +194,9 @@ Gemini reportedly allows up to 100 active skills per user. With 100+ marketplace
 | Phase | Content | Size |
 |---|---|---|
 | **0 — Fix** | B1–B5 and part of B9 (shared access module, agent wiring, escaping), `requestedSkills[]` with the `maxActiveSkills` cap — **#2670** | S |
-| **1 — Own** | G6: user skills with sharing, versions, admin tab, promotion, `/skills` page; B6 (admin create/update routes) | L |
-| **2 — Invoke** | G1: chips, stacking in the UI, sticky per chat; G2 per-user automatic use; G9 counters | M |
-| **3 — Automate** | G3: skills on scheduled tasks, chat tools, "Schedule this skill"; `activeSkills` on workflow prompt nodes | M |
+| **1 — Own** | G6: user skills with sharing, versions, admin tab, promotion, one library with prompts; B6 (admin create/update routes) | L |
+| **2 — Invoke** | G1: `/name` in the text and stacking (done with phase 1), sticky per chat; G2 per-user automatic use; G9 counters | M |
+| **3 — Automate** | G3: unresolved-token warnings, "Schedule this skill"; `/name` in workflow prompt nodes | S |
 | **4 — Author** | G5: editor polish, create with AI, save as skill, prompt → skill (builds on G6) | M |
 | **5 — Scale** | G7 attachments; G8 relevance-based listing; G4 `requires`; G10 MCP prompts; B7 | L |
 
@@ -206,13 +208,16 @@ Phase 0 is a precondition for everything else: stacking and scheduled skills mul
 
 1. **`requestedSkill` → `requestedSkills`:** clean break, no alias (implemented in #2670).
 2. **Personal skills:** yes, with the same model as prompts: users create and share, admins manage, global skills stay admin-managed, user skills can be promoted to global (G6).
+7. **No "run skill" construct:** skills are invoked with `/skill-name` in the prompt text, in chat, scheduled task instructions, workflow prompts and the API alike (G1, G3, G4).
+8. **One library:** prompts and skills share one library in the UI (`/prompts`), as the place that later also takes integrations.
 
 **Open:**
 
-3. **Sticky by default?** Proposal: explicitly invoked skills stay active for the chat; model-activated ones too, shown as removable chips.
+3. **Sticky by default?** Proposal: skills named with `/name` earlier in the chat stay active until the chat ends.
 4. **Relevance-based listing (G8):** acceptable to add an embedding dependency to the skills path, or start with a simple keyword prefilter?
 5. **`metadata.ihub.*` namespace** for iHub-specific frontmatter (`unattended`, `scheduleHint`, `requires`, localized names). Proposal: yes, the spec reserves `metadata` for this.
 6. **User skills on by default?** Proposal: `platform.userSkills.enabled` defaults to `true` (as `userPrompts`), effective only while the `skills` feature is on; apps can opt out with `skillSettings.allowPersonal: false`.
+9. **One store and API for prompts and skills?** The library is one page, but user prompts and user skills keep separate storage and routes (`/api/prompts`, `/api/user-skills`). Merging them into one item store with a `type` would need a migration of the user prompts that have already shipped and a clean break or an alias for `/api/prompts`. Proposal: keep them separate until integrations join the library, then decide together.
 
 ## 7. Marketplace changes made alongside this review
 
