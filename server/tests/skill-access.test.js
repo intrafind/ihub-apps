@@ -45,6 +45,8 @@ const { PlannerNodeExecutor } =
   await import('../services/workflow/executors/PlannerNodeExecutor.js');
 const { buildDefaultWorkflowForProfile } =
   await import('../agents/profile/profileWorkflowSerializer.js');
+const { resolveNodeSkillIds } =
+  await import('../services/workflow/executors/PromptNodeExecutor.js');
 
 const skills = [...(await loadSkillsMetadata()).values()];
 let features = { skills: true };
@@ -168,6 +170,17 @@ describe('resolveRequestedSkills', () => {
     );
   });
 
+  test('falls back to the default cap for an invalid maxActiveSkills and caps it at 10', () => {
+    const cap = maxActiveSkills =>
+      skillAccess.maxActiveSkillsFor({ skillSettings: { maxActiveSkills } });
+    assert.equal(skillAccess.maxActiveSkillsFor({}), skillAccess.DEFAULT_MAX_ACTIVE_SKILLS);
+    for (const invalid of [0, -1, 2.5, '2', 'abc', null]) {
+      assert.equal(cap(invalid), skillAccess.DEFAULT_MAX_ACTIVE_SKILLS, String(invalid));
+    }
+    assert.equal(cap(1), 1);
+    assert.equal(cap(25), 10);
+  });
+
   test('loads nothing on an app without skills', async () => {
     const resolved = await skillAccess.resolveRequestedSkills(['alpha'], {
       app: { id: 'plain' },
@@ -281,6 +294,14 @@ describe('agent planner', () => {
     );
     assert.deepEqual(Object.keys(state.data._activatedSkills), ['alpha']);
     assert.equal(state.data._activatedSkills.alpha.description, 'Alpha skill <b>bold</b> & more');
+  });
+
+  test('an empty skills list on a node means no skills, a missing one the profile', () => {
+    const profile = { skills: ['alpha'] };
+    assert.deepEqual(resolveNodeSkillIds({ skills: [] }, profile), []);
+    assert.deepEqual(resolveNodeSkillIds({ skills: ['beta'] }, profile), ['beta']);
+    assert.deepEqual(resolveNodeSkillIds({}, profile), ['alpha']);
+    assert.equal(resolveNodeSkillIds({}, {}), null);
   });
 
   test('gets the profile skills on the planner node', () => {
