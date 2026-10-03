@@ -8,6 +8,7 @@ import { loadAllTools } from './toolsLoader.js';
 import {
   resolveGroupInheritance,
   filterResourcesByPermissions,
+  getPermissionsForUser,
   isAnonymousAccessAllowed
 } from './utils/authorization.js';
 import { loadTools } from './toolLoader.js';
@@ -1840,30 +1841,31 @@ class ConfigCache {
 
   /**
    * Get skills filtered by user permissions
-   * @param {object} user - User object with permissions
-   * @param {object} platformConfig - Platform configuration
+   * @param {object} user - User object with permissions, or a bare principal with groups
    * @returns {{ data: Array, etag: string }}
    */
-  async getSkillsForUser(user, platformConfig) {
+  async getSkillsForUser(user) {
     const { data: skills, etag: skillsEtag } = this.getSkills();
 
     if (!skills || skills.length === 0) {
       return { data: [], etag: null };
     }
 
-    let filteredSkills = [...skills];
-    const originalCount = filteredSkills.length;
+    const originalCount = skills.length;
     let userSpecificEtag = skillsEtag || 'no-etag';
 
-    // Apply filtering based on user permissions
-    if (user && user.permissions && user.permissions.skills && user.permissions.skills.size > 0) {
-      const allowedSkills = user.permissions.skills;
-      filteredSkills = filterResourcesByPermissions(filteredSkills, allowedSkills);
-    } else if (isAnonymousAccessAllowed(platformConfig)) {
-      // For anonymous users, no default skills
-      const allowedSkills = new Set();
-      filteredSkills = filterResourcesByPermissions(filteredSkills, allowedSkills);
+    // Every principal sees only the skills its groups grant. An expanded user
+    // carries the grant in `permissions.skills`; a bare principal (an agent's
+    // service account) gets it from its groups. An empty grant, or a principal
+    // without groups, sees no skills, as for apps and tools.
+    let allowedSkills = user?.permissions?.skills;
+    if (!(allowedSkills instanceof Set)) {
+      allowedSkills =
+        Array.isArray(user?.groups) && user.groups.length > 0
+          ? getPermissionsForUser(user.groups).skills
+          : new Set();
     }
+    const filteredSkills = filterResourcesByPermissions([...skills], allowedSkills);
 
     // Generate user-specific ETag if skills were filtered
     if (filteredSkills.length < originalCount) {

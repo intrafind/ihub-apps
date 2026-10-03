@@ -558,6 +558,7 @@ function useAppChat({
    * @param {Object} params - Parameters for the request (model, style ...)
    * @param {boolean} sendChatHistory - Include full chat history in request
    * @param {Object} messageMetadata - Metadata to attach to the assistant message (e.g., customResponseRenderer)
+   * @param {string[]} [requestedSkills] - Skills to pre-activate for this turn (slash command)
    */
   const sendMessage = useCallback(
     ({
@@ -566,7 +567,7 @@ function useAppChat({
       params,
       sendChatHistory = true,
       messageMetadata = null,
-      requestedSkill = null
+      requestedSkills = null
     }) => {
       try {
         // Reset cancellation flag when starting a new message
@@ -630,7 +631,7 @@ function useAppChat({
           messages: messagesForAPI,
           params: {
             ...params,
-            ...(requestedSkill ? { requestedSkill } : {}),
+            ...(requestedSkills?.length ? { requestedSkills } : {}),
             ...(mcpAppContext.length > 0 ? { mcpAppContext } : {}),
             ...takeProtocolParams(sendChatHistory)
           }
