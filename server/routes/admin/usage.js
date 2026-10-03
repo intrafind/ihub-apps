@@ -1,11 +1,8 @@
 import { promises as fs } from 'fs';
-import { join } from 'path';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
-import { getRootDir } from '../../pathUtils.js';
 import configStore from '../../services/config/ConfigStore.js';
 import configCache from '../../configCache.js';
-import config from '../../config.js';
 import { getTrackingMode, reloadConfig } from '../../usageTracker.js';
 import {
   getDailyRollups,
@@ -16,6 +13,7 @@ import {
 import { readEvents } from '../../services/UsageEventLog.js';
 import { sendInternalError, sendBadRequest } from '../../utils/responseHelpers.js';
 import { escapeCsvField } from '../../utils/csv.js';
+import { getContentsPath } from '../../utils/contentsPath.js';
 
 function parseRange(range) {
   if (!range) return { startDate: null, endDate: null, granularity: 'daily' };
@@ -231,9 +229,7 @@ export default function registerAdminUsageRoutes(app) {
       const limitNum = parseInt(limit, 10);
       const offsetNum = parseInt(offset, 10);
 
-      const rootDir = getRootDir();
-      const contentsDir = config.CONTENTS_DIR;
-      const feedbackFile = join(rootDir, contentsDir, 'data', 'feedback.jsonl');
+      const feedbackFile = getContentsPath('data', 'feedback.jsonl');
 
       // Check if feedback file exists
       try {

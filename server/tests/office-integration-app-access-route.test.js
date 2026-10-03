@@ -21,6 +21,7 @@
 import { jest } from '@jest/globals';
 import request from 'supertest';
 import express from 'express';
+import path from 'path';
 
 const CLIENT_ID = 'client_office_add_in_test';
 
@@ -85,6 +86,7 @@ jest.unstable_mockModule('../services/AuditLogService.js', () => ({
 }));
 
 jest.unstable_mockModule('../utils/contentsPath.js', () => ({
+  getContentsPath: (...segments) => path.join('/tmp/ihub-test-contents', ...segments),
   oauthClientsFile: () => 'config/oauth-clients.json'
 }));
 

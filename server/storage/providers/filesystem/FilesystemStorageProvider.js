@@ -33,7 +33,6 @@
 import { promises as fs } from 'fs';
 import path from 'path';
 import crypto from 'crypto';
-import { getRootDir } from '../../../pathUtils.js';
 import serverConfig from '../../../config.js';
 import logger from '../../../utils/logger.js';
 import { StorageProvider } from '../../StorageProvider.js';
@@ -46,6 +45,7 @@ import { RawDocumentStore } from './RawDocumentStore.js';
 import { FilesystemAppendLog } from './FilesystemAppendLog.js';
 import { FilesystemBlobStore } from './FilesystemBlobStore.js';
 import { FilesystemLockManager } from './FilesystemLockManager.js';
+import { getContentsPath } from '../../../utils/contentsPath.js';
 
 const COMPONENT = 'FilesystemStorageProvider';
 
@@ -78,7 +78,7 @@ export function resolveFilesystemBaseDir(config = {}) {
   if (typeof config.baseDir === 'string' && config.baseDir.length > 0) {
     return path.resolve(config.baseDir);
   }
-  const contentsDir = path.join(getRootDir(), serverConfig.CONTENTS_DIR);
+  const contentsDir = getContentsPath();
   if (typeof config.dataDir === 'string' && config.dataDir.length > 0) {
     return path.join(contentsDir, config.dataDir);
   }
@@ -112,7 +112,7 @@ export function resolveFilesystemContentsDir(config = {}) {
   if (typeof config.baseDir === 'string' && config.baseDir.length > 0) {
     return path.dirname(path.resolve(config.baseDir));
   }
-  return path.join(getRootDir(), serverConfig.CONTENTS_DIR);
+  return getContentsPath();
 }
 
 /**
