@@ -7,29 +7,70 @@ import { getLocalizedContent } from '../../../utils/localizeContent';
 import { highlightVariables } from '../../../utils/highlightVariables';
 import SearchModal from '../../../shared/components/SearchModal';
 import usePromptPreferences from '../hooks/usePromptPreferences';
+import { selectPickerSkills } from '../../skills/utils/skillPicker';
 import { PromptScopeBadge } from './PromptMeta';
 
 /** Fields a query matches against. A constant: the modal rebuilds its index when this changes. */
 const FUSE_KEYS = ['name', 'prompt', 'description', 'ownerName'];
 
-/** Order of the groups the list shows before anything is typed. */
-const GROUP_ORDER = ['favorites', 'recent', 'mine', 'shared', 'global', 'skill'];
+/**
+ * Order of the groups the list shows before anything is typed. The app's
+ * global skills (`skill`) come before the caller's own skills and the skills
+ * shared with them.
+ */
+const GROUP_ORDER = [
+  'favorites',
+  'recent',
+  'mine',
+  'shared',
+  'global',
+  'skill',
+  'skillMine',
+  'skillShared'
+];
 
 /**
  * The `/` search in an empty chat input: prompts — my own, shared with me,
- * global — and the app's skills. Favorites and recents come first; with no
- * query typed the list is grouped, with a query it is ranked by match.
+ * global — and skills. Favorites and recents come first; with no query typed
+ * the list is grouped, with a query it is ranked by match.
+ *
+ * Skills: a global skill is offered when the app lists it in `appSkills`; a
+ * personal skill (own or shared) in every app unless the app turns them off
+ * (`allowPersonalSkills`, from `skillSettings.allowPersonal`). See
+ * `selectPickerSkills`.
  *
  * `onSelect` receives the chosen prompt (localized) or skill; filling in the
  * prompt's variables is the caller's job. It may return (a promise of)
  * whether the prompt was used: only a prompt that was — not one whose
  * variables dialog was cancelled — moves into "Recently used".
+ *
+ * @param {Object} props
+ * @param {boolean} props.isOpen
+ * @param {() => void} props.onClose
+ * @param {(item: Object) => (boolean|Promise<boolean>|void)} props.onSelect
+ * @param {string} [props.appId] - The current app, to rank its prompts first.
+ * @param {string[]} [props.appSkills=[]] - The app's global skills.
+ * @param {boolean} [props.allowPersonalSkills=true] - Whether the app offers personal skills.
+ * @param {boolean} [props.skillsEnabled=true] - Whether skills are offered at all here.
+ * @param {boolean} [props.promptsEnabled=true] - Whether prompts are offered.
  */
-function PromptSearch({ isOpen, onClose, onSelect, appId, appSkills = [], promptsEnabled = true }) {
+function PromptSearch({
+  isOpen,
+  onClose,
+  onSelect,
+  appId,
+  appSkills = [],
+  allowPersonalSkills = true,
+  skillsEnabled = true,
+  promptsEnabled = true
+}) {
   const { t, i18n } = useTranslation();
   const [prompts, setPrompts] = useState([]);
   const [skills, setSkills] = useState([]);
   const { favorites, recents, recordUsage } = usePromptPreferences();
+  // Compared by content: a new array each render must not refetch. Skill
+  // names are slugs, so '|' cannot occur in one.
+  const appSkillsKey = (Array.isArray(appSkills) ? appSkills : []).join('|');
 
   useEffect(() => {
     if (!isOpen) return undefined;
@@ -38,7 +79,7 @@ function PromptSearch({ isOpen, onClose, onSelect, appId, appSkills = [], prompt
       try {
         const [rawPrompts, rawSkills] = await Promise.all([
           promptsEnabled ? fetchPrompts().catch(() => []) : Promise.resolve([]),
-          fetchSkills().catch(() => [])
+          skillsEnabled ? fetchSkills().catch(() => []) : Promise.resolve([])
         ]);
         if (!active) return;
         setPrompts(
@@ -53,14 +94,10 @@ function PromptSearch({ isOpen, onClose, onSelect, appId, appSkills = [], prompt
           }))
         );
         setSkills(
-          (Array.isArray(rawSkills) ? rawSkills : [])
-            .filter(s => appSkills.length > 0 && appSkills.includes(s.name))
-            .map(s => ({
-              ...s,
-              _type: 'skill',
-              id: s.name,
-              description: s.description || ''
-            }))
+          selectPickerSkills(rawSkills, {
+            appSkills: appSkillsKey ? appSkillsKey.split('|') : [],
+            allowPersonal: allowPersonalSkills
+          })
         );
       } catch (err) {
         console.error('Failed to load prompts/skills', err);
@@ -69,15 +106,13 @@ function PromptSearch({ isOpen, onClose, onSelect, appId, appSkills = [], prompt
     return () => {
       active = false;
     };
-    // appSkills is compared by content; a new array each render must not refetch.
-    // eslint-disable-next-line @eslint-react/exhaustive-deps
-  }, [isOpen, i18n.language, promptsEnabled, (appSkills || []).join('|')]);
+  }, [isOpen, i18n.language, promptsEnabled, skillsEnabled, allowPersonalSkills, appSkillsKey]);
 
   const groupOf = useMemo(() => {
     const favs = new Set(favorites);
     const recentSet = new Set(recents);
     return item => {
-      if (item._type === 'skill') return 'skill';
+      if (item._type === 'skill') return item.group || 'skill';
       if (favs.has(item.id)) return 'favorites';
       if (recentSet.has(item.id)) return 'recent';
       return item.scope;
@@ -104,7 +139,9 @@ function PromptSearch({ isOpen, onClose, onSelect, appId, appSkills = [], prompt
     mine: t('prompts.groups.mine', 'My prompts'),
     shared: t('prompts.groups.shared', 'Shared with me'),
     global: t('prompts.groups.global', 'Global prompts'),
-    skill: t('prompts.groups.skills', 'Skills')
+    skill: t('prompts.groups.skills', 'Skills'),
+    skillMine: t('prompts.groups.mySkills', 'My skills'),
+    skillShared: t('prompts.groups.sharedSkills', 'Shared skills')
   };
 
   const handleSelect = async item => {
@@ -138,6 +175,11 @@ function PromptSearch({ isOpen, onClose, onSelect, appId, appSkills = [], prompt
                 <span className="ml-1 px-1.5 py-0.5 text-xs text-purple-600 bg-purple-100 rounded-full">
                   {t('common.promptSearch.skill', 'skill')}
                 </span>
+                {item.scope !== 'global' && (
+                  <span className="ml-1">
+                    <PromptScopeBadge prompt={item} />
+                  </span>
+                )}
               </div>
               <p
                 className="text-xs text-gray-500 dark:text-gray-400 leading-4 overflow-hidden"
