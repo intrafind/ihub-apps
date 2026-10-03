@@ -16,6 +16,12 @@ import { getRootDir } from '../pathUtils.js';
 /**
  * Absolute path of the contents directory, or of a path inside it.
  *
+ * `CONTENTS_DIR` may be relative to the installation root (`contents`, the
+ * default) or absolute (`/srv/ihub/contents`); both resolve to the same place
+ * for every caller. Joining it onto the root instead turned an absolute
+ * setting into `<root>/srv/ihub/contents` for some parts of the server while
+ * others used the real directory.
+ *
  * Resolved per call rather than at import time, so a test that points
  * `getRootDir()` somewhere else sees the change.
  *
@@ -23,7 +29,7 @@ import { getRootDir } from '../pathUtils.js';
  * @returns {string} Absolute path.
  */
 export function getContentsPath(...segments) {
-  return path.join(getRootDir(), config.CONTENTS_DIR, ...segments);
+  return path.resolve(getRootDir(), config.CONTENTS_DIR || 'contents', ...segments);
 }
 
 /**

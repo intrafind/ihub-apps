@@ -67,3 +67,13 @@ test('a configured path wins over the fallback', () => {
   assert.equal(r.clientsConfigured, '/run/secrets/clients.json');
   assert.equal(r.usersConfigured, 'elsewhere/users.json');
 });
+
+test('an absolute CONTENTS_DIR is used as is, not nested under the installation root', () => {
+  const absolute = path.join(path.parse(serverDir).root, 'srv', 'ihub', 'contents');
+  const r = helpersWith(absolute);
+  assert.equal(r.contents, absolute);
+  assert.equal(r.platform, path.join(absolute, 'config', 'platform.json'));
+  // The root-relative fallbacks still point at the same file once resolved.
+  assert.equal(path.resolve(r.root, r.relative), path.join(absolute, 'config', 'users.json'));
+  assert.equal(path.resolve(r.root, r.usersDefault), path.join(absolute, 'config', 'users.json'));
+});

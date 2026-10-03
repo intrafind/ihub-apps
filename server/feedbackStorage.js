@@ -1,13 +1,10 @@
 import fs from 'fs/promises';
-import path from 'path';
-import { getRootDir } from './pathUtils.js';
-import config from './config.js';
 import { loadJson } from './configLoader.js';
 import logger from './utils/logger.js';
 import { createJsonlAppender } from './utils/jsonlAppender.js';
+import { getContentsPath } from './utils/contentsPath.js';
 
-const contentsDir = config.CONTENTS_DIR;
-const dataFile = path.join(getRootDir(), contentsDir, 'data', 'feedback.jsonl');
+const dataFile = getContentsPath('data', 'feedback.jsonl');
 
 let trackingEnabled = true;
 let configLoaded = false;

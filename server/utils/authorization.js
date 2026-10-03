@@ -226,7 +226,8 @@ export function loadGroupsConfiguration() {
 
   try {
     const contentsDir = process.env.CONTENTS_DIR || 'contents';
-    const configPath = path.join(__dirname, '../..', contentsDir, 'config/groups.json');
+    // resolve, not join: CONTENTS_DIR may be absolute (see utils/contentsPath.js)
+    const configPath = path.resolve(__dirname, '../..', contentsDir, 'config/groups.json');
     const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
 
     // Resolve group inheritance

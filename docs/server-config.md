@@ -70,7 +70,7 @@ The server reads settings from the environment or a `.env` file such as `config.
 | `GOOGLE_API_KEY`           | API key for Google models                                         | –                                                |
 | `DEFAULT_API_KEY`          | Fallback API key used when a model specific key is missing        | –                                                |
 | `LOCAL_API_KEY`            | Generic API key for local models                                  | –                                                |
-| `CONTENTS_DIR`             | Directory containing the `contents` folder                        | `contents`                                       |
+| `CONTENTS_DIR`             | Contents directory, absolute or relative to the installation root | `contents`                                       |
 | `DATA_DIR`                 | Directory for storing application data                            | `data`                                           |
 | `APP_ROOT_DIR`             | Override the application root path when running packaged binaries | –                                                |
 | `BRAVE_SEARCH_API_KEY`     | API key for the Brave Search tool                                 | –                                                |

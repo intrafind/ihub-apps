@@ -1,16 +1,12 @@
-import path from 'path';
-import { getRootDir } from './pathUtils.js';
-import config from './config.js';
-
 import { recordTokenUsage } from './telemetry.js';
 import { recordMagicPromptUsage, recordFeedbackEvent } from './telemetry/metrics.js';
 import { resolveUserId } from './services/UserFingerprint.js';
 import { logUsageEvent } from './services/UsageEventLog.js';
 import { createDebouncedJsonStore } from './utils/debouncedJsonStore.js';
 import { estimateTokens as estimateTokensShared } from '../shared/tokenEstimator.js';
+import { getContentsPath } from './utils/contentsPath.js';
 
-const contentsDir = config.CONTENTS_DIR;
-const dataFile = path.join(getRootDir(), contentsDir, 'data', 'usage.json');
+const dataFile = getContentsPath('data', 'usage.json');
 const now = () => new Date().toISOString();
 
 let trackingEnabled = true;

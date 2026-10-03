@@ -14,7 +14,6 @@ import { createHash } from 'crypto';
 import { pathToFileURL } from 'url';
 import os from 'os';
 import { getRootDir } from '../pathUtils.js';
-import config from '../config.js';
 import { atomicWriteJSON, atomicCreateJSON } from '../utils/atomicWrite.js';
 import logger from '../utils/logger.js';
 import {
@@ -26,6 +25,7 @@ import {
   removeById,
   transformWhere
 } from './utils.js';
+import { getContentsPath } from '../utils/contentsPath.js';
 
 const HISTORY_FILE = '.migration-history.json';
 const LOCK_FILE = '.migration-lock';
@@ -527,7 +527,7 @@ async function loadMigrationConfig(contentsDir) {
  */
 export async function runConfigMigrations() {
   const rootDir = getRootDir();
-  const contentsDir = join(rootDir, config.CONTENTS_DIR);
+  const contentsDir = getContentsPath();
   const migrationsDir = join(rootDir, 'server', 'migrations');
   const defaultsDir = join(rootDir, 'server', 'defaults');
 
