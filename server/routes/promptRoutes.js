@@ -391,10 +391,13 @@ async function listUserPrompts(user, repo) {
  * it stay whatever the settings say today, so an editor with narrower rights
  * can still save a prompt the owner shared widely.
  *
+ * `prompt` is any shared item with `ownerId` and `shares` (a user skill too);
+ * `noun` names what is shared in the refusal message.
+ *
  * @returns {{ok: true, shares: Object[]}|{ok: false, status: number, error: string,
  *   details?: Object}}
  */
-export function resolveShares(requested, { prompt, allowed, users, groups }) {
+export function resolveShares(requested, { prompt, allowed, users, groups, noun = 'prompts' }) {
   const existing = new Set((prompt.shares || []).map(shareTargetKey));
   const byKey = new Map();
   const unknown = [];
@@ -444,7 +447,7 @@ export function resolveShares(requested, { prompt, allowed, users, groups }) {
       return {
         ok: false,
         status: 403,
-        error: `You cannot share prompts with ${share.type === 'everyone' ? 'everyone' : `this ${share.type}`}`,
+        error: `You cannot share ${noun} with ${share.type === 'everyone' ? 'everyone' : `this ${share.type}`}`,
         details: { code: 'SHARE_TARGET_NOT_ALLOWED', type: share.type }
       };
     }

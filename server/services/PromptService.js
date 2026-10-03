@@ -6,10 +6,10 @@ import SourceResolutionService from './SourceResolutionService.js';
 import { isFeatureEnabled } from '../featureRegistry.js';
 import {
   buildAvailableSkillsBlock,
-  getUsableSkills,
+  listSkillsForPrompt,
+  loadUsableSkill,
   resolveRequestedSkills
 } from './skillAccess.js';
-import { getSkillContent } from './skillLoader.js';
 import logger from '../utils/logger.js';
 
 /**
@@ -474,35 +474,31 @@ class PromptService {
         throw new Error(`Failed to process sources: ${error.message}`);
       }
 
-      // Skills: list the app's usable skills (name + description) so the model
-      // can activate one, and pre-load the ones the user picked with a slash
-      // command. Both lists only ever hold skills assigned to the app and
-      // granted to the user.
-      if (
-        isFeatureEnabled('skills', configCache.getFeatures()) &&
-        Array.isArray(app.skills) &&
-        app.skills.length > 0
-      ) {
+      // Skills: list the usable skills (name + description) so the model can
+      // activate one, and pre-load the ones the user picked with a slash
+      // command. Both only ever hold skills this app and this user may use:
+      // the app's assigned, granted global skills and the user's own and
+      // shared user skills (unless the app opts out of those).
+      if (isFeatureEnabled('skills', configCache.getFeatures())) {
         try {
-          const appSkills = await getUsableSkills({ skillIds: app.skills, user });
-          if (appSkills.length > 0) {
-            systemPrompt += `\n\n${buildAvailableSkillsBlock(appSkills)}`;
+          const listed = await listSkillsForPrompt({ app, user });
+          if (listed.length > 0) {
+            systemPrompt += `\n\n${buildAvailableSkillsBlock(listed)}`;
             logger.info('Injected skills into system prompt for app', {
               component: 'PromptService',
-              skillCount: appSkills.length,
+              skillCount: listed.length,
               appId: app.id
             });
           }
 
           const activeSkills = await resolveRequestedSkills(requestedSkills, { app, user });
           const blocks = [];
-          for (const skill of activeSkills) {
-            const content = await getSkillContent(skill.name);
-            if (!content) continue;
-            let block = `<active_skill name="${skill.name}">\n${content.body}\n</active_skill>`;
-            const resources = [...content.references, ...content.scripts, ...content.assets];
-            if (resources.length > 0) {
-              block += `\nAvailable skill resources: ${resources.join(', ')}`;
+          for (const entry of activeSkills) {
+            const skill = await loadUsableSkill(entry.name, { skillIds: app.skills, app, user });
+            if (!skill) continue;
+            let block = `<active_skill name="${skill.name}">\n${skill.body}\n</active_skill>`;
+            if (skill.resources.length > 0) {
+              block += `\nAvailable skill resources: ${skill.resources.join(', ')}`;
             }
             blocks.push(block);
           }

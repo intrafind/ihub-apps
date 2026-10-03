@@ -1,18 +1,40 @@
 /**
  * Skill access: which skills a request may load.
  *
- * A skill is usable when it is installed, listed on the app (or the agent
- * node) the request runs in, and granted to the user's groups. Every path
- * that loads a skill body or file asks this module: the `activate_skill` and
- * `read_skill_resource` tools, `requestedSkills` pre-activation and the agent
- * planner. Keeping the check in one place means a new way of loading a skill
- * cannot forget part of it.
+ * Two kinds of skill reach a request:
+ *
+ * - A **global skill** (a folder under `contents/skills/`) is usable when it
+ *   is installed, listed on the app (or the agent node) the request runs in,
+ *   and granted to the user's groups.
+ * - A **user skill** (`usk_…`, written by a user, see
+ *   `services/skills/UserSkillRepository.js`) is usable when user skills are
+ *   switched on, the app does not opt out (`skillSettings.allowPersonal:
+ *   false`), and the caller owns it or it is shared with them. Agents, OAuth
+ *   clients and anonymous callers never get one.
+ *
+ * Every path that loads a skill body or file asks this module: the
+ * `activate_skill` and `read_skill_resource` tools, `requestedSkills`
+ * pre-activation, the skills listed for the model, and the agent planner.
+ * Keeping the check in one place means a new way of loading a skill cannot
+ * forget part of it.
  *
  * @module services/skillAccess
  */
 
 import configCache from '../configCache.js';
 import { isFeatureEnabled } from '../featureRegistry.js';
+import { getSkillContent, getSkillResource } from './skillLoader.js';
+import { getUserSkillRepository, isUserSkillId } from './skills/UserSkillRepository.js';
+import { isUserSkillsConfigured } from './skills/userSkillSettings.js';
+import {
+  canHoldUserPrompts,
+  effectiveGroups,
+  principalShareKeys,
+  sharePermissionFor
+} from './prompts/userPromptAccess.js';
+
+/** How many user skills are listed for the model at most, newest first. */
+export const MAX_LISTED_USER_SKILLS = 20;
 
 /**
  * The skill ids assigned to the context a tool call runs in: an agent node's
@@ -29,8 +51,8 @@ export function getAssignedSkillIds(appConfig) {
 }
 
 /**
- * The skills among `skillIds` that are installed and granted to `user`.
- * Empty when the skills feature is off.
+ * The global skills among `skillIds` that are installed and granted to
+ * `user`. Empty when the skills feature is off.
  *
  * @param {Object} options
  * @param {string[]} options.skillIds - Skills assigned to the app or agent node
@@ -43,17 +65,145 @@ export async function getUsableSkills({ skillIds, user }) {
   return configCache.getSkillsForApp({ skills: skillIds }, user, configCache.getPlatform() || {});
 }
 
+/** Whether user skills may be used in `app` at all, for anyone. */
+function userSkillsAllowedIn(app) {
+  if (app?._skillIds) return false; // an agent node: global skills only
+  if (app?.skillSettings?.allowPersonal === false) return false;
+  if (!isUserSkillsConfigured(configCache.getFeatures(), configCache.getPlatform() || {})) {
+    return false;
+  }
+  return getUserSkillRepository().isAvailable();
+}
+
 /**
- * Whether `skillName` is one of the usable skills for `skillIds` and `user`.
+ * The user skills `user` may use in `app`: the ones they own and the ones
+ * shared with them, newest first. Being an admin does not add other people's
+ * skills here — admins manage those on the admin page, they do not run them.
  *
- * @param {string} skillName
- * @param {Object} options - See {@link getUsableSkills}
+ * @param {Object} options
+ * @param {Object} [options.app] - App config
+ * @param {Object} options.user - Expanded user
+ * @returns {Promise<Array<Object>>} Stored user skills
+ */
+export async function getUsablePersonalSkills({ app, user }) {
+  if (!canHoldUserPrompts(user) || !userSkillsAllowedIn(app)) return [];
+  const repo = getUserSkillRepository();
+  const groups = effectiveGroups(user);
+  const owned = await repo.listOwned(String(user.id));
+  const ownedIds = new Set(owned.map(skill => skill.id));
+  const shared = (await repo.listSharedWith(principalShareKeys(user, groups))).filter(
+    skill => !ownedIds.has(skill.id) && sharePermissionFor(skill, user, groups)
+  );
+  return [...owned, ...shared].sort((a, b) =>
+    String(b.updatedAt || '').localeCompare(String(a.updatedAt || ''))
+  );
+}
+
+/**
+ * One user skill, if `user` may use it in `app`.
+ *
+ * @param {string} skillId - `usk_…` id
+ * @param {Object} options
+ * @param {Object} [options.app] - App config
+ * @param {Object} options.user - Expanded user
+ * @returns {Promise<Object|null>} The stored skill, or null
+ */
+export async function getUsablePersonalSkill(skillId, { app, user }) {
+  if (!isUserSkillId(skillId) || !canHoldUserPrompts(user) || !userSkillsAllowedIn(app)) {
+    return null;
+  }
+  const skill = await getUserSkillRepository().get(skillId);
+  if (!skill) return null;
+  if (String(skill.ownerId) === String(user.id)) return skill;
+  return sharePermissionFor(skill, user, effectiveGroups(user)) ? skill : null;
+}
+
+/**
+ * Whether `skillName` may be loaded: a global skill among the usable ones for
+ * `skillIds` and `user`, or a user skill `user` may use in `app`.
+ *
+ * @param {string} skillName - Global skill name or `usk_…` id
+ * @param {Object} options
+ * @param {string[]} options.skillIds - Skills assigned to the app or agent node
+ * @param {Object} options.user - Expanded user, or a bare principal with groups
+ * @param {Object} [options.app] - App config (needed for user skills)
  * @returns {Promise<boolean>}
  */
-export async function isSkillUsable(skillName, { skillIds, user }) {
+export async function isSkillUsable(skillName, { skillIds, user, app }) {
   if (typeof skillName !== 'string' || !skillName) return false;
+  if (isUserSkillId(skillName)) {
+    return Boolean(await getUsablePersonalSkill(skillName, { app, user }));
+  }
   const usable = await getUsableSkills({ skillIds, user });
   return usable.some(skill => skill.name === skillName);
+}
+
+/** The resource paths of a user skill, grouped like a global skill's. */
+function userSkillResources(skill) {
+  return (Array.isArray(skill.files) ? skill.files : []).map(file => file.path);
+}
+
+/**
+ * Load a usable skill's instructions and the reader for its files, or null
+ * when it may not be loaded.
+ *
+ * @param {string} skillName - Global skill name or `usk_…` id
+ * @param {Object} options - See {@link isSkillUsable}
+ * @returns {Promise<{name: string, displayName: string, description: string, body: string,
+ *   resources: string[], readFile: (path: string) => Promise<string|null>}|null>}
+ */
+export async function loadUsableSkill(skillName, { skillIds, user, app }) {
+  if (typeof skillName !== 'string' || !skillName) return null;
+  if (isUserSkillId(skillName)) {
+    const skill = await getUsablePersonalSkill(skillName, { app, user });
+    if (!skill) return null;
+    const files = Array.isArray(skill.files) ? skill.files : [];
+    return {
+      name: skill.id,
+      displayName: skill.name,
+      description: skill.description || '',
+      body: skill.body || '',
+      resources: userSkillResources(skill),
+      readFile: async path => {
+        const file = files.find(entry => entry.path === path);
+        return file ? String(file.content) : null;
+      }
+    };
+  }
+  if (!(await isSkillUsable(skillName, { skillIds, user }))) return null;
+  const content = await getSkillContent(skillName);
+  if (!content) return null;
+  return {
+    name: skillName,
+    displayName: skillName,
+    description: content.description || '',
+    body: content.body,
+    resources: [...content.references, ...content.scripts, ...content.assets],
+    readFile: path => getSkillResource(skillName, path)
+  };
+}
+
+/**
+ * The skills listed for the model in `<available_skills>`: the app's usable
+ * global skills, then up to {@link MAX_LISTED_USER_SKILLS} user skills. A user
+ * skill is listed under its id, which is what `activate_skill` takes, with its
+ * name in front of the description.
+ *
+ * @param {Object} options
+ * @param {Object} options.app - App config
+ * @param {Object} options.user - Expanded user
+ * @returns {Promise<Array<{name: string, description: string}>>}
+ */
+export async function listSkillsForPrompt({ app, user }) {
+  const global = await getUsableSkills({ skillIds: app?.skills, user });
+  const personal = (await getUsablePersonalSkills({ app, user })).slice(0, MAX_LISTED_USER_SKILLS);
+  return [
+    ...global.map(skill => ({ name: skill.name, description: skill.description || '' })),
+    ...personal.map(skill => ({
+      name: skill.id,
+      description: `${skill.name}: ${skill.description || ''}`
+    }))
+  ];
 }
 
 const XML_ESCAPES = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' };
@@ -92,13 +242,14 @@ export const DEFAULT_MAX_ACTIVE_SKILLS = 3;
  * The skills a request asks to pre-activate (`requestedSkills`), reduced to
  * those usable in `app` for `user`: duplicates dropped, request order kept,
  * capped at the app's `skillSettings.maxActiveSkills`. Names that are not
- * usable are left out.
+ * usable are left out. Global skills are named, user skills go by id.
  *
- * @param {string[]} requested - Skill names from the request
+ * @param {string[]} requested - Skill names or `usk_…` ids from the request
  * @param {Object} options
  * @param {Object} options.app - App config
  * @param {Object} options.user - Expanded user
- * @returns {Promise<Array<Object>>} Skill metadata entries, in request order
+ * @returns {Promise<Array<{name: string, displayName: string, description: string}>>}
+ *   In request order
  */
 export async function resolveRequestedSkills(requested, { app, user }) {
   if (!Array.isArray(requested) || requested.length === 0 || !app) return [];
@@ -108,8 +259,25 @@ export async function resolveRequestedSkills(requested, { app, user }) {
   const resolved = [];
   for (const name of new Set(requested)) {
     if (resolved.length >= limit) break;
+    if (isUserSkillId(name)) {
+      const skill = await getUsablePersonalSkill(name, { app, user });
+      if (skill) {
+        resolved.push({
+          name: skill.id,
+          displayName: skill.name,
+          description: skill.description || ''
+        });
+      }
+      continue;
+    }
     const skill = byName.get(name);
-    if (skill) resolved.push(skill);
+    if (skill) {
+      resolved.push({
+        name: skill.name,
+        displayName: skill.name,
+        description: skill.description || ''
+      });
+    }
   }
   return resolved;
 }
