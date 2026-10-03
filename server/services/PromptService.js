@@ -6,9 +6,10 @@ import SourceResolutionService from './SourceResolutionService.js';
 import { isFeatureEnabled } from '../featureRegistry.js';
 import {
   buildAvailableSkillsBlock,
+  lastUserText,
   listSkillsForPrompt,
   loadUsableSkill,
-  resolveRequestedSkills
+  resolveSkillsForTurn
 } from './skillAccess.js';
 import logger from '../utils/logger.js';
 
@@ -475,8 +476,8 @@ class PromptService {
       }
 
       // Skills: list the usable skills (name + description) so the model can
-      // activate one, and pre-load the ones the user picked with a slash
-      // command. Both only ever hold skills this app and this user may use:
+      // activate one, and pre-load the ones the user invoked with `/name` in
+      // the message (or the request names in `requestedSkills`). Both only ever hold skills this app and this user may use:
       // the app's assigned, granted global skills and the user's own and
       // shared user skills (unless the app opts out of those).
       if (isFeatureEnabled('skills', configCache.getFeatures())) {
@@ -491,7 +492,14 @@ class PromptService {
             });
           }
 
-          const activeSkills = await resolveRequestedSkills(requestedSkills, { app, user });
+          // Skills the request names, then the ones the user's message
+          // invokes with `/name` — the same in chat, scheduled tasks and API.
+          const activeSkills = await resolveSkillsForTurn({
+            requested: requestedSkills,
+            text: lastUserText(messages),
+            app,
+            user
+          });
           const blocks = [];
           for (const entry of activeSkills) {
             const skill = await loadUsableSkill(entry.name, { skillIds: app.skills, app, user });
@@ -508,7 +516,7 @@ class PromptService {
           }
           if (blocks.length > 0) {
             systemPrompt += `\n\n${blocks.join('\n\n')}`;
-            logger.info('Pre-activated skills via slash command', {
+            logger.info('Pre-activated skills for this turn', {
               component: 'PromptService',
               skills: activeSkills.map(skill => skill.name)
             });

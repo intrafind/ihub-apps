@@ -16,10 +16,16 @@ There are two kinds:
 
 - **Automatically:** the model sees the name and description of every skill it may use in the
   current app and loads a skill's full instructions when a request matches.
-- **With `/`:** typing `/` in an empty chat input lists the skills next to the prompts. Picking a
-  skill loads its instructions for that message. The chat API receives the pick as
-  `requestedSkills`, a list of global skill names or user skill ids; at most
-  `skillSettings.maxActiveSkills` (default 3) are loaded per message.
+- **With `/name` in the message:** writing `/skill-name` at the start of the message or after a
+  space loads that skill's instructions for the message, for example
+  `/newsletter-composer draft this week's issue from my notes`. Several skills can be combined
+  in one message; at most `skillSettings.maxActiveSkills` (default 3) are loaded. Typing `/` at
+  the start of a word opens a picker that lists the skills next to the prompts; picking a skill
+  inserts its `/name` and you keep typing. When your own skill, a skill shared with you and a
+  global skill have the same name, your own is used, then the shared one.
+- **Scheduled tasks and the API** work the same way: put `/skill-name` in a scheduled task's
+  instructions, or in a message sent to the chat API, and the skill is loaded for that run. The
+  chat API also accepts `requestedSkills`, a list of global skill names or user skill ids.
 
 A skill is loaded only when the current app and user may use it. For a global skill that means:
 installed, listed in the app's `skills`, and granted to the user's groups. For a user skill: the

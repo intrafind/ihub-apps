@@ -20,8 +20,10 @@ warns while the login page still offers the demo accounts with the passwords the
 
 Signed-in users can now write skills of their own on the new **Skills** page (`/skills`), the
 same way they keep prompts: instructions the model follows, optional text reference files, and a
-description that tells the model when to use the skill. They work in every chat, from the `/`
-picker or automatically when a request matches.
+description that tells the model when to use the skill. Prompts and skills now share one
+**Library** page (`/prompts`, with a Prompts / Skills switch). A skill is used by writing
+`/skill-name` in a message — the `/` picker inserts it — or automatically when a request matches;
+scheduled tasks use the same `/skill-name` in their instructions.
 
 - A skill is private until it is shared with users, groups or everyone signed in, as *can use*
   or *can edit*. Every save is kept as a version that can be restored, and any skill — global

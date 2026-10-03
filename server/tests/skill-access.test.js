@@ -269,6 +269,60 @@ describe('PromptService skills block', () => {
   });
 });
 
+describe('/name in the prompt', () => {
+  test('finds skill names written as /name', () => {
+    assert.deepEqual(skillAccess.skillTokensIn('/alpha do it'), ['alpha']);
+    assert.deepEqual(skillAccess.skillTokensIn('Use /beta, then /alpha. And /beta again'), [
+      'beta',
+      'alpha'
+    ]);
+    assert.deepEqual(skillAccess.skillTokensIn('and/or http://host/alpha /Alpha /a--b'), []);
+    assert.deepEqual(skillAccess.skillTokensIn(undefined), []);
+  });
+
+  test('reads the last user message, text parts included', () => {
+    assert.equal(
+      skillAccess.lastUserText([
+        { role: 'user', content: '/alpha first' },
+        { role: 'assistant', content: 'ok' },
+        { role: 'user', content: [{ type: 'text', text: '/gamma now' }, { type: 'image_url' }] }
+      ]),
+      '/gamma now'
+    );
+  });
+
+  test('pre-activates the skills the message invokes, if the app and user allow them', async () => {
+    const app = { id: 'app', system: { en: 'SYSTEM' }, skills: ['alpha'] };
+    const [system] = await PromptService.processMessageTemplates(
+      [{ role: 'user', content: '/alpha and /beta: summarize this' }],
+      app,
+      null,
+      null,
+      'en',
+      null,
+      userWith(['*']),
+      null,
+      null,
+      null
+    );
+    assert.match(system.content, /<active_skill name="alpha">\nALPHA BODY/);
+    assert.doesNotMatch(system.content, /BETA BODY/);
+  });
+
+  test('puts explicitly requested skills first and caps the total', async () => {
+    const resolved = await skillAccess.resolveSkillsForTurn({
+      requested: ['gamma'],
+      text: '/alpha /beta /gamma',
+      app: { id: 'app', skills: ['alpha', 'beta', 'gamma'], skillSettings: { maxActiveSkills: 2 } },
+      user: userWith(['*'])
+    });
+    assert.deepEqual(
+      resolved.map(s => s.name),
+      ['gamma', 'alpha']
+    );
+  });
+});
+
 describe('agent planner', () => {
   test('pre-activates only skills on its own list', async () => {
     const executor = new PlannerNodeExecutor();

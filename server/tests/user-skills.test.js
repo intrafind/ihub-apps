@@ -526,6 +526,28 @@ describe('in chat', () => {
     );
   });
 
+  it('invokes a user skill with /name, preferring own over shared over global', async () => {
+    const mine = await create(GRACE, { name: 'brand-voice', body: 'GRACE BRAND' });
+    const theirs = await create(ADA, { name: 'team-notes', body: 'ADA NOTES' });
+    await share(ADA, theirs.id, [{ type: 'user', id: GRACE.id, permission: 'use' }]);
+    const grace = { ...GRACE, permissions: { skills: new Set(['*']) } };
+    const resolved = await skillAccess.resolveSkillsForTurn({
+      text: 'Please /brand-voice and /team-notes this',
+      app,
+      user: grace
+    });
+    assert.deepEqual(
+      resolved.map(entry => entry.name),
+      [mine.id, theirs.id]
+    );
+    const ada = { ...ADA, permissions: { skills: new Set(['*']) } };
+    const forAda = await skillAccess.resolveSkillsForTurn({ text: '/brand-voice', app, user: ada });
+    assert.deepEqual(
+      forAda.map(entry => entry.name),
+      ['brand-voice']
+    );
+  });
+
   it('keeps user skills out of apps that opt out and out of agent nodes', async () => {
     const skill = await create(ADA, { name: 'opt-out' });
     const ada = { ...ADA, permissions: { skills: new Set(['*']) } };

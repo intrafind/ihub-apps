@@ -239,45 +239,120 @@ export function buildAvailableSkillsBlock(skills) {
 export const DEFAULT_MAX_ACTIVE_SKILLS = 3;
 
 /**
- * The skills a request asks to pre-activate (`requestedSkills`), reduced to
- * those usable in `app` for `user`: duplicates dropped, request order kept,
- * capped at the app's `skillSettings.maxActiveSkills`. Names that are not
- * usable are left out. Global skills are named, user skills go by id.
+ * `/name` at the start of the text or after whitespace, ended by whitespace,
+ * punctuation or the end of the text — how a skill is invoked in a prompt,
+ * the same in chat, in a scheduled task's instructions and through the API.
+ */
+const SKILL_TOKEN = /(?:^|\s)\/([a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?)(?=$|[\s.,;:!?)\]])/g;
+
+/**
+ * The skill names a text invokes with `/name`, unique, in order.
+ *
+ * @param {unknown} text
+ * @returns {string[]}
+ */
+export function skillTokensIn(text) {
+  if (typeof text !== 'string' || !text.includes('/')) return [];
+  const names = [];
+  for (const match of text.matchAll(SKILL_TOKEN)) {
+    if (!match[1].includes('--') && !names.includes(match[1])) names.push(match[1]);
+  }
+  return names;
+}
+
+/**
+ * The text of the last user message — the turn whose `/name` tokens count.
+ *
+ * @param {Array<Object>} messages - Chat messages, oldest first
+ * @returns {string}
+ */
+export function lastUserText(messages) {
+  const last = [...(Array.isArray(messages) ? messages : [])]
+    .reverse()
+    .find(message => message?.role === 'user');
+  if (!last) return '';
+  if (typeof last.content === 'string') return last.content;
+  if (Array.isArray(last.content)) {
+    return last.content
+      .filter(part => part?.type === 'text' && typeof part.text === 'string')
+      .map(part => part.text)
+      .join('\n');
+  }
+  return '';
+}
+
+/**
+ * The skills to pre-activate for a turn, reduced to those usable in `app` for
+ * `user`: first the ones the request names explicitly (`requestedSkills`:
+ * global names or `usk_…` ids), then the ones the user's message invokes with
+ * `/name`. Duplicates are dropped, order is kept, and the list is capped at
+ * the app's `skillSettings.maxActiveSkills`. Anything not usable is left out.
+ *
+ * A `/name` token matches a skill by name. When the user's own skill, a skill
+ * shared with them and a global skill have the same name, their own wins, then
+ * the shared one — the more personal choice — and the global skill last.
+ *
+ * @param {Object} options
+ * @param {string[]} [options.requested] - `requestedSkills` from the request
+ * @param {string} [options.text] - The user's message
+ * @param {Object} options.app - App config
+ * @param {Object} options.user - Expanded user
+ * @returns {Promise<Array<{name: string, displayName: string, description: string}>>}
+ *   `name` is what `loadUsableSkill` takes: the global name or the `usk_…` id
+ */
+export async function resolveSkillsForTurn({ requested = [], text = '', app, user }) {
+  const explicit = Array.isArray(requested) ? requested.filter(n => typeof n === 'string') : [];
+  const tokens = skillTokensIn(text);
+  if (!app || (explicit.length === 0 && tokens.length === 0)) return [];
+
+  const global = await getUsableSkills({ skillIds: app.skills, user });
+  const globalByName = new Map(global.map(skill => [skill.name, skill]));
+  const personal = await getUsablePersonalSkills({ app, user });
+  const personalById = new Map(personal.map(skill => [skill.id, skill]));
+  // Own skills before shared ones; within each, the list is newest first.
+  const personalByName = new Map();
+  for (const skill of [...personal].sort(
+    (a, b) =>
+      Number(String(b.ownerId) === String(user?.id)) -
+      Number(String(a.ownerId) === String(user?.id))
+  )) {
+    if (!personalByName.has(skill.name)) personalByName.set(skill.name, skill);
+  }
+
+  const asEntry = skill =>
+    isUserSkillId(skill.id)
+      ? { name: skill.id, displayName: skill.name, description: skill.description || '' }
+      : { name: skill.name, displayName: skill.name, description: skill.description || '' };
+
+  const limit = app.skillSettings?.maxActiveSkills ?? DEFAULT_MAX_ACTIVE_SKILLS;
+  const resolved = [];
+  const seen = new Set();
+  const add = skill => {
+    if (!skill || resolved.length >= limit) return;
+    const entry = asEntry(skill);
+    if (seen.has(entry.name)) return;
+    seen.add(entry.name);
+    resolved.push(entry);
+  };
+  for (const name of explicit) {
+    add(isUserSkillId(name) ? personalById.get(name) : globalByName.get(name));
+  }
+  for (const name of tokens) {
+    add(personalByName.get(name) || globalByName.get(name));
+  }
+  return resolved;
+}
+
+/**
+ * The skills a request names explicitly (`requestedSkills`), reduced to those
+ * usable in `app` for `user` — {@link resolveSkillsForTurn} without a message.
  *
  * @param {string[]} requested - Skill names or `usk_…` ids from the request
  * @param {Object} options
  * @param {Object} options.app - App config
  * @param {Object} options.user - Expanded user
  * @returns {Promise<Array<{name: string, displayName: string, description: string}>>}
- *   In request order
  */
 export async function resolveRequestedSkills(requested, { app, user }) {
-  if (!Array.isArray(requested) || requested.length === 0 || !app) return [];
-  const usable = await getUsableSkills({ skillIds: app.skills, user });
-  const byName = new Map(usable.map(skill => [skill.name, skill]));
-  const limit = app.skillSettings?.maxActiveSkills ?? DEFAULT_MAX_ACTIVE_SKILLS;
-  const resolved = [];
-  for (const name of new Set(requested)) {
-    if (resolved.length >= limit) break;
-    if (isUserSkillId(name)) {
-      const skill = await getUsablePersonalSkill(name, { app, user });
-      if (skill) {
-        resolved.push({
-          name: skill.id,
-          displayName: skill.name,
-          description: skill.description || ''
-        });
-      }
-      continue;
-    }
-    const skill = byName.get(name);
-    if (skill) {
-      resolved.push({
-        name: skill.name,
-        displayName: skill.name,
-        description: skill.description || ''
-      });
-    }
-  }
-  return resolved;
+  return resolveSkillsForTurn({ requested, app, user });
 }
