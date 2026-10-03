@@ -580,6 +580,11 @@ function buildPlannerNode(profile, { hasInbox }) {
       goal: plannerGoal,
       maxTasks: profile.planner?.maxTasks ?? 10,
       taskTemplate,
+      // The planner lists the profile's skills and may pre-activate them
+      // (`skills_used`, `activate_then_replan`); it loads no others.
+      ...(Array.isArray(profile.skills) && profile.skills.length > 0
+        ? { skills: profile.skills.slice() }
+        : {}),
       ...(useDrain ? { dynamicTasks: { enabled: true, maxDepth } } : {})
     }
   };

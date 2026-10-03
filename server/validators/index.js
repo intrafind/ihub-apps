@@ -88,7 +88,7 @@ export const chatPostSchema = {
     websearchEnabled: z.boolean().optional(),
     imageAspectRatio: z.string().optional(),
     imageQuality: z.string().optional(),
-    requestedSkill: z.string().optional(),
+    requestedSkills: z.array(z.string().max(64)).max(10).optional(),
     documentIds: z.array(z.string()).optional(),
     /**
      * MCP Apps: the latest `ui/update-model-context` of each open view, handed

@@ -1,6 +1,7 @@
 import configCache from './configCache.js';
 import { createSourceManager } from './sources/index.js';
 import { getSkillContent, getSkillResource } from './services/skillLoader.js';
+import { getAssignedSkillIds, isSkillUsable } from './services/skillAccess.js';
 import { actionTracker } from './actionTracker.js';
 import { emitToolProgress } from './services/loop/RunStream.js';
 import { isFeatureEnabled } from './featureRegistry.js';
@@ -787,6 +788,19 @@ export async function runTool(toolId, params = {}, options = {}) {
     if (!skillName) {
       throw new Error('skill_name parameter is required');
     }
+    // Only a skill assigned to this app (or agent node) and granted to the
+    // user loads; any other name gets the same answer as a missing skill.
+    const usable = await isSkillUsable(skillName, {
+      skillIds: getAssignedSkillIds(params.appConfig),
+      user: params.user
+    });
+    if (!usable) {
+      logger.warn('Refused to activate a skill that is not available here', {
+        component: 'ToolLoader',
+        skillName
+      });
+      return `Skill '${skillName}' not found or could not be loaded.`;
+    }
     logger.info('Activating skill', { component: 'ToolLoader', skillName });
     const content = await getSkillContent(skillName);
     if (!content) {
@@ -843,6 +857,17 @@ export async function runTool(toolId, params = {}, options = {}) {
     const { skill_name: skillName, file_path: filePath } = params;
     if (!skillName || !filePath) {
       throw new Error('skill_name and file_path parameters are required');
+    }
+    const usable = await isSkillUsable(skillName, {
+      skillIds: getAssignedSkillIds(params.appConfig),
+      user: params.user
+    });
+    if (!usable) {
+      logger.warn('Refused to read a resource of a skill that is not available here', {
+        component: 'ToolLoader',
+        skillName
+      });
+      return `Resource '${filePath}' not found in skill '${skillName}' or access denied.`;
     }
     logger.info('Reading skill resource', { component: 'ToolLoader', skillName, filePath });
     const content = await getSkillResource(skillName, filePath);
