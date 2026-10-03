@@ -1521,7 +1521,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
         },
         params,
         sendChatHistory,
-        requestedSkill: skill.name,
+        requestedSkills: [skill.name],
         messageMetadata: {
           customResponseRenderer: app?.customResponseRenderer,
           outputFormat: selectedOutputFormat
