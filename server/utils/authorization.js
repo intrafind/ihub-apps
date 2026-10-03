@@ -226,8 +226,14 @@ export function loadGroupsConfiguration() {
 
   try {
     const contentsDir = process.env.CONTENTS_DIR || 'contents';
+    // The same root as pathUtils.getRootDir(), spelled out for the same reason
+    // as CONTENTS_DIR above: that module imports server/config.js.
+    const isPackaged = process.pkg !== undefined || process.env.APP_ROOT_DIR !== undefined;
+    const rootDir = isPackaged
+      ? process.env.APP_ROOT_DIR || path.dirname(process.execPath)
+      : path.resolve(__dirname, '../..');
     // resolve, not join: CONTENTS_DIR may be absolute (see utils/contentsPath.js)
-    const configPath = path.resolve(__dirname, '../..', contentsDir, 'config/groups.json');
+    const configPath = path.resolve(rootDir, contentsDir, 'config/groups.json');
     const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
 
     // Resolve group inheritance

@@ -29,7 +29,9 @@ import { getRootDir } from '../pathUtils.js';
  * @returns {string} Absolute path.
  */
 export function getContentsPath(...segments) {
-  return path.resolve(getRootDir(), config.CONTENTS_DIR || 'contents', ...segments);
+  // Only CONTENTS_DIR is resolved; the segments are joined below it, so a
+  // segment that looks absolute (an absolute DATA_DIR) still stays inside.
+  return path.join(path.resolve(getRootDir(), config.CONTENTS_DIR || 'contents'), ...segments);
 }
 
 /**
