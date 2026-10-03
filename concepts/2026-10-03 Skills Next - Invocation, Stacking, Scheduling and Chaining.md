@@ -1,7 +1,7 @@
 # Skills Next: Invocation, Stacking, Scheduling and Chaining
 
 **Date:** 2026-10-03
-**Status:** Proposal, open for decision
+**Status:** Proposal; decisions 1 and 3 taken (§6). Phase 0 is in #2670
 **Related:** `concepts/2026-02-22 Agent Skills Integration PRD.md` (original skills PRD), `docs/scheduled-tasks.md`, marketplace PR "Everyday skills and Google's open-source skills" in `intrafind/ihub-marketplace`
 
 ## 1. Why now
@@ -69,7 +69,7 @@ These are defects in what already exists. They should be fixed before building o
 | B8 | **Unused settings.** `skillSettings.maxActiveSkills`, `skillSettings.autoActivate` and `platform.skills.maxSkillBodyTokens` are in schema and docs but never read. | `appConfigSchema.js`, `docs/apps.md`, `V003__skills-config.js` | Documented controls do nothing |
 | B9 | **Minor:** skill names and descriptions are inserted into the prompt without XML escaping; the activation event always has an empty `description`; companion files are fetched with `res.text()`, which corrupts binary files; `compatibility` is a string in the loader but an object in the admin UI. | various | Robustness |
 
-Proposed rule for B1–B3, applied in one shared helper (for example `configCache.isSkillUsable(name, { app, user })`): a skill may be loaded only if it is (a) installed, (b) listed on the app (or agent profile / node), and (c) granted to the user's groups. Once personal skills exist (G6), a user-owned skill is the one exception to (b): it may be loaded without an assignment entry only when `app.skillSettings.allowPersonal` is enabled and its visibility authorizes the user (the owner for private skills, matching groups for group-shared skills, everyone with access for admin-approved organization-wide skills). `activate_skill`, `read_skill_resource`, `requestedSkill`, every entry of `requestedSkills[]` (G1, including the OpenAI-compatible API in G10), sticky re-injection (G1), scheduled runs (G3), the planner's pre-activation, the MCP resource adapter, and MCP `prompts/list` and `prompts/get` (G10) all call the same helper: `prompts/list` returns only permitted skills, and `prompts/get` checks access again before returning a skill body.
+Proposed rule for B1–B3, applied in one shared helper (for example `configCache.isSkillUsable(name, { app, user })`): a skill may be loaded only if it is (a) installed, (b) listed on the app (or agent profile / node), and (c) granted to the user's groups. Once personal skills exist (G6), a user-owned skill is the one exception to (b): it may be loaded without an assignment entry when the platform allows personal skills (`platform.userSkills.enabled`), the app does not opt out (`skillSettings.allowPersonal: false`) and the skill's owner or shares authorize the user (the owner, a user or group it is shared with, or everyone signed in). `activate_skill`, `read_skill_resource`, `requestedSkill`, every entry of `requestedSkills[]` (G1, including the OpenAI-compatible API in G10), sticky re-injection (G1), scheduled runs (G3), the planner's pre-activation, the MCP resource adapter, and MCP `prompts/list` and `prompts/get` (G10) all call the same helper: `prompts/list` returns only permitted skills, and `prompts/get` checks access again before returning a skill body.
 
 ## 4. Gaps and proposals
 
@@ -80,7 +80,7 @@ Proposed rule for B1–B3, applied in one shared helper (for example `configCach
 **Proposal:**
 
 1. **Skill chips in the input.** Typing `/` anywhere opens the picker; choosing a skill inserts a removable chip (`/match-my-writing-style`) and keeps the cursor in the input, so the user adds their own text. Several chips are allowed (stacking).
-2. **API:** `requestedSkills: string[]` (keep accepting `requestedSkill` as an alias for one release only if we decide on compatibility; see §6).
+2. **API:** `requestedSkills: string[]`, a clean break from `requestedSkill` without an alias (decided, implemented in #2670 together with the access check and the `maxActiveSkills` cap).
 3. **Sticky activation per chat.** Explicitly invoked skills are stored on the chat (`chat.activeSkills`) and re-injected as `<active_skill>` on every turn until the user removes the chip or starts a new chat. Before each injection the shared access check runs again; a skill that no longer passes (grant revoked, removed from the app, uninstalled) is left out and its chip shows why. Model-activated skills are added to the same list (so they persist too), shown as chips the user can remove.
 4. **Limits.** Enforce `skillSettings.maxActiveSkills` (default 3) and a token budget per active skill (`platform.skills.maxSkillBodyTokens`). If the budget is exceeded, inject the description plus a note to read the body with `activate_skill` instead of failing.
 5. **Precedence.** When several skills are active, inject them in the order chosen and add one line: *"Several skills are active. Follow all of them; where they conflict, the skill listed first decides, unless a skill states its own precedence."* Skills can state their own precedence in prose (the new marketplace skills do: "the other skill decides content, this one decides wording").
@@ -129,16 +129,34 @@ Order of work: B4/B5 (agent wiring) → `activeSkills` on prompt nodes → `requ
 4. **Convert prompts to skills:** a prompt library action that creates a skill draft from a prompt, its variables and description. This is also our answer for customers moving from Gems or custom GPTs.
 5. **Import from URL or Git** (the original PRD's phase 4), reusing the marketplace's companion-file logic.
 
-### G6 — Personal and shared skills
+### G6 — Personal and shared skills, the same model as prompts
 
 **Today:** only admins can add skills; every skill is global and then restricted by groups.
 
-**Proposal:** user-owned skills, stored like personal prompts:
+**Decision:** skills get exactly the ownership model user prompts already have (`docs/prompts.md`, `server/services/prompts/`). Users create their own skills and share them; admins manage them; global skills stay admin-managed; an admin can promote a user skill to a global one.
 
-- Owner, visibility (`private`, shared with groups, or submitted for organization-wide use), and an admin approval step for organization-wide publishing (Gemini Enterprise has the same model).
-- Personal skills are available in every app that allows personal skills (`app.skillSettings.allowPersonal`, default off for regulated apps).
-- Group permission `createSkills` controls who may author.
-- Quotas on count and size.
+| | User prompts today | User skills |
+|---|---|---|
+| Who creates | Every signed-in user (`canHoldUserPrompts`: no anonymous, OAuth clients, agents or delegated authorization-code tokens) | Same rule (`canHoldUserSkills`) |
+| Sharing | Private by default; share with users, groups or everyone signed in, each as `use` or `edit`; `restrictToGroups` narrows broad sharing | Same targets and levels |
+| Global items | `contents/prompts/*.json`, visible through `groups.permissions.prompts` | `contents/skills/<name>/`, visible through `groups.permissions.skills` and assigned to apps |
+| Admin management | Admin → Prompts → user tab lists prompts shared with a group or everyone; edit, share, history, delete through the user routes with the admin bypass (`adminAccess` or `contentAdmin`) | Admin → Skills → user tab, same scope and actions; skill admin routes move to `contentAdminAuth` and get audit logging like prompts |
+| Promotion | Admin-initiated `POST /api/admin/prompts/:id/promote`: copies into a global prompt with a slug id, records `promotedTo`, keeps the original, audit entry | `POST /api/admin/skills/:id/promote`: writes `contents/skills/<slug>/` (frontmatter `name` = slug, `sourceSkillId`), refreshes the skills cache, records `promotedTo`, keeps the original, audit entry |
+| Versions | One revision per change, restore, `maxVersions` | Same; a revision snapshots the whole file set |
+| Limits | `platform.userPrompts`: `enabled`, `maxPromptsPerUser`, `maxVersions`, `sharing.*` | `platform.userSkills`: the same keys plus `maxSkillSizeKB` and `maxFilesPerSkill`, seeded by a migration |
+| Favorites, recents, duplicate, transfer | Yes | Yes |
+
+**What is different for skills:**
+
+- **A skill is a folder.** The metadata document (owner, shares, revision, frontmatter fields, a manifest of files with sha256) lives in the documents facet; `SKILL.md` and reference files live in the blobs facet, like `ArtifactRepository`. Text files only, with size and count limits and the path validation `getSkillResource` already uses.
+- **Ids.** User skills get `usk_…` ids, a separate id space from global skill names. The model sees the id in `<available_skills>` and calls `activate_skill` with it; the picker shows the display name.
+- **Where they apply.** Prompts are inserted client-side, so they work in any app. Skills are resolved server-side, so the shared access rule (§3) gains the user-skill exception: a user's own and shared skills are usable in every app unless the app opts out with `skillSettings.allowPersonal: false`. They appear in the `/` picker (groups `mine` and `shared`, as prompts) and can be sent in `requestedSkills`. They are listed in `<available_skills>` for automatic use only when the user turns that on for the skill (G2), so a long personal library does not bloat every prompt.
+- **Scheduled tasks** run as their owner, so a task can use its owner's personal skills; a revoked share pauses the task like a revoked tool.
+- **Agents and MCP** keep using admin-assigned global skills only; a user skill reaches them after promotion.
+
+**API (mirrors `/api/prompts`):** `GET /api/skills?scope=all|global|mine|shared|favorites`, `POST /api/skills`, `GET/PUT/DELETE /api/skills/:id`, `PUT /api/skills/:id/shares`, `PUT /api/skills/:id/owner`, `POST /api/skills/:id/duplicate` (from a global or shared skill), `GET /api/skills/:id/versions`, `POST /api/skills/:id/versions/:rev/restore`, `GET/PUT /api/skills/:id/files/*`; admin: `GET /api/admin/skills?scope=user`, `POST /api/admin/skills/:id/promote`, `GET/PUT /api/admin/skills/user-settings`.
+
+**Client:** a `/skills` page like the prompt library (mine, shared, global; new, edit, share, duplicate, history, delete), a `SKILL.md` editor with live validation (name rules, 1,024-character description) and text reference files, "Save as skill" on a chat answer, and the share dialog shared with prompts. The new route goes into `KNOWN_ROUTES` and `client/index.html`.
 
 ### G7 — Reference files that work like attachments
 
@@ -173,21 +191,28 @@ Gemini reportedly allows up to 100 active skills per user. With 100+ marketplace
 
 | Phase | Content | Size |
 |---|---|---|
-| **0 — Fix** | B1–B3 (shared access helper + tests), B6 (create/update/toggle routes), B7, B9 | S |
-| **1 — Invoke** | G1: chips, stacking, `requestedSkills[]`, sticky per chat, limits; G9 counters | M |
-| **2 — Automate** | G3: skills on scheduled tasks, chat tools, "Schedule this skill"; B4/B5 + `activeSkills` on workflow prompt nodes | M |
-| **3 — Author** | G5.1–G5.4: editor, create with AI, save as skill, prompt → skill | M |
-| **4 — Scale** | G6 personal and shared skills; G7 attachments; G8 relevance-based listing; G4 `requires`; G10 MCP prompts | L |
+| **0 — Fix** | B1–B5 and part of B9 (shared access module, agent wiring, escaping), `requestedSkills[]` with the `maxActiveSkills` cap — **#2670** | S |
+| **1 — Own** | G6: user skills with sharing, versions, admin tab, promotion, `/skills` page; B6 (admin create/update routes) | L |
+| **2 — Invoke** | G1: chips, stacking in the UI, sticky per chat; G2 per-user automatic use; G9 counters | M |
+| **3 — Automate** | G3: skills on scheduled tasks, chat tools, "Schedule this skill"; `activeSkills` on workflow prompt nodes | M |
+| **4 — Author** | G5: editor polish, create with AI, save as skill, prompt → skill (builds on G6) | M |
+| **5 — Scale** | G7 attachments; G8 relevance-based listing; G4 `requires`; G10 MCP prompts; B7 | L |
 
 Phase 0 is a precondition for everything else: stacking and scheduled skills multiply the number of ways a skill gets loaded, so the access check must sit in one place first.
 
-## 6. Decisions needed
+## 6. Decisions
 
-1. **`requestedSkill` → `requestedSkills`:** clean break, or accept both for one release? (Breaking change rule: we ask before adding a compatibility shim.)
-2. **Sticky by default?** Proposal: explicitly invoked skills stay active for the chat; model-activated ones too, shown as removable chips.
-3. **Personal skills (G6):** do we want end users to author skills at all in regulated customer environments, or only admins and a "skill author" group?
+**Taken:**
+
+1. **`requestedSkill` → `requestedSkills`:** clean break, no alias (implemented in #2670).
+2. **Personal skills:** yes, with the same model as prompts: users create and share, admins manage, global skills stay admin-managed, user skills can be promoted to global (G6).
+
+**Open:**
+
+3. **Sticky by default?** Proposal: explicitly invoked skills stay active for the chat; model-activated ones too, shown as removable chips.
 4. **Relevance-based listing (G8):** acceptable to add an embedding dependency to the skills path, or start with a simple keyword prefilter?
 5. **`metadata.ihub.*` namespace** for iHub-specific frontmatter (`unattended`, `scheduleHint`, `requires`, localized names). Proposal: yes, the spec reserves `metadata` for this.
+6. **User skills on by default?** Proposal: `platform.userSkills.enabled` defaults to `true` (as `userPrompts`), effective only while the `skills` feature is on; apps can opt out with `skillSettings.allowPersonal: false`.
 
 ## 7. Marketplace changes made alongside this review
 
