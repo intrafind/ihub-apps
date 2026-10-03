@@ -238,6 +238,23 @@ export function buildAvailableSkillsBlock(skills) {
 /** How many skills may be active at once when the app does not set `skillSettings.maxActiveSkills`. */
 export const DEFAULT_MAX_ACTIVE_SKILLS = 3;
 
+/** Upper bound for `skillSettings.maxActiveSkills`, as in the app schema. */
+const MAX_ACTIVE_SKILLS_LIMIT = 10;
+
+/**
+ * The app's cap on active skills. App files load even when they fail schema
+ * validation, so a value outside 1–10 or not a whole number falls back to the
+ * default, and a larger one is capped at 10.
+ *
+ * @param {Object} [app] - App config
+ * @returns {number}
+ */
+export function maxActiveSkillsFor(app) {
+  const value = app?.skillSettings?.maxActiveSkills;
+  if (!Number.isInteger(value) || value < 1) return DEFAULT_MAX_ACTIVE_SKILLS;
+  return Math.min(value, MAX_ACTIVE_SKILLS_LIMIT);
+}
+
 /**
  * `/name` at the start of the text or after whitespace, ended by whitespace,
  * punctuation or the end of the text — how a skill is invoked in a prompt,
@@ -324,7 +341,7 @@ export async function resolveSkillsForTurn({ requested = [], text = '', app, use
       ? { name: skill.id, displayName: skill.name, description: skill.description || '' }
       : { name: skill.name, displayName: skill.name, description: skill.description || '' };
 
-  const limit = app.skillSettings?.maxActiveSkills ?? DEFAULT_MAX_ACTIVE_SKILLS;
+  const limit = maxActiveSkillsFor(app);
   const resolved = [];
   const seen = new Set();
   const add = skill => {
