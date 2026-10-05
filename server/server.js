@@ -14,6 +14,12 @@ import logger from './utils/logger.js';
 import { findByIdCaseInsensitive } from './utils/resourceLookup.js';
 import { startStickyPrimary, attachStickyWorker, logStickyRoutingCaveat } from './clusterSticky.js';
 import { initPrimaryBus, initWorkerBus } from './clusterBus.js';
+// Modules whose cluster-wide state the primary holds and answers for over the
+// bus. Imported here so the primary always registers them; a worker asking a
+// primary that never loaded one would wait for an answer that never comes.
+import './requestThrottler.js';
+import './utils/clusterRateLimitStore.js';
+import './utils/loginLockout.js';
 import { initSystemResources } from './services/systemResources.js';
 import { registerConfigReloadHooks } from './configReloadHooks.js';
 
