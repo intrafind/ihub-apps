@@ -2,6 +2,7 @@
 
 **Date:** 2026-10-02
 **Status:** Proposal
+**Tracking:** #2667
 
 ## Goal
 
@@ -22,10 +23,12 @@ contains mistakes in rendering code before anyone finds them.
 - **No middleware sets any of these headers.**
   - `helmet` is not a dependency.
   - `X-Powered-By: Express` is sent.
-  - There is no HSTS, `Referrer-Policy` or `Permissions-Policy` anywhere.
+  - There is no HSTS or `Permissions-Policy`, and `Referrer-Policy` is set only on the MCP Apps
+    sandbox page.
   - `docs/security.md` claims "HSTS headers implemented", which is not true.
 - **Pages that already set their own headers:**
-  - The MCP Apps sandbox page (`server/routes/mcpAppRoutes.js`) sets a CSP and `nosniff`.
+  - The MCP Apps sandbox page (`server/routes/mcpAppRoutes.js`) sets a CSP, `nosniff` and
+    `Referrer-Policy: no-referrer`.
   - The Nextcloud embed page (`server/routes/nextcloudEmbedPages.js`) sets `frame-ancestors`
     and removes `X-Frame-Options`.
   - Express's own error pages send `default-src 'none'`.
@@ -72,6 +75,16 @@ Two consequences:
 
 The work is split into phases so nothing breaks unannounced. Each phase is its own PR.
 
+| Work item | Issue |
+| --- | --- |
+| Phase 1: baseline headers with helmet | #2700 |
+| Phase 2: CSP for the SPA in report-only mode | #2701 |
+| Phase 2: self-host Monaco | #2702 |
+| Phase 2: policies for the OAuth, Office add-in, Swagger and docs pages | #2703 |
+| Phase 3: compile React pages and custom renderers on the server | #2704 |
+| Phase 3: schema validation without generated code | #2705 |
+| Phase 3: enforce the CSP | #2706 |
+
 ### Phase 1: baseline headers (no CSP yet)
 
 Use `helmet`, configured explicitly rather than with its defaults:
@@ -106,7 +119,8 @@ Also in this phase:
 
 Send `Content-Security-Policy-Report-Only` for the SPA document. Add a report endpoint (`POST
 /api/csp-report`) that is rate-limited, size-limited, unauthenticated and logs aggregated
-reports. Real deployments then show what would break before anything is enforced.
+reports. The `report-uri` includes the runtime base path (for example `/ihub/api/csp-report`).
+Real deployments then show what would break before anything is enforced.
 
 Proposed policy for `index.html`:
 
@@ -117,21 +131,22 @@ style-src 'self' 'unsafe-inline';
 img-src 'self' data: blob: https:;
 media-src 'self' data: blob:;
 font-src 'self' data:;
-connect-src 'self' <configured speech endpoints>;
+connect-src 'self' <same-origin ws:/wss:> <configured speech endpoints>;
 worker-src 'self' blob:;
 frame-src 'self' <origins of configured iframe apps>;
 frame-ancestors 'self' <Teams hosts when Teams is on> <Nextcloud hosts when the embed is on> <admin list>;
 base-uri 'self';
 object-src 'none';
 form-action 'self';
-report-uri /api/csp-report
+report-uri <base path>/api/csp-report
 ```
 
 - **Inline scripts get hashes, not `'unsafe-inline'`.** `buildIndexHtml` already produces the
-  final document per base path and caches it. It also computes the SHA-256 of every inline
-  `<script>` in that document (the base-path script, the auth-gate script) and stores the hash
-  list next to the cached HTML. The static route sends those hashes in the CSP. This works with
-  the existing cache, needs no nonce, and covers the build-time inlined auth gate.
+  final document per base path and caches it, but its cache holds only `{ content, mtime }`
+  today. Phase 2 extends it: it also computes the SHA-256 of every inline `<script>` in that
+  document (the base-path script, the auth-gate script) and stores the hash list next to the
+  cached HTML. The static route sends those hashes in the CSP. This fits the existing cache,
+  needs no nonce, and covers the build-time inlined auth gate.
 - **`'unsafe-eval'` stays until phase 3.** It is needed by React pages, custom renderers and ajv.
 - **`style-src 'unsafe-inline'` stays.** Mermaid, Monaco, admin custom CSS and the print iframes
   inject styles at runtime, and hashing them is impractical. Inline styles are a much smaller risk
@@ -139,8 +154,9 @@ report-uri /api/csp-report
 - **`img-src https:`** keeps external favicons, markdown images and admin logo URLs working. A
   stricter list can be an admin option later.
 - **`connect-src`** is built from configuration: Azure Speech host and region, and other voice
-  endpoints. `'self'` covers same-origin `ws:`/`wss:` in current browsers. The teams-js domain
-  list (`res.cdn.office.net`) is added on Teams routes only.
+  endpoints. Same-origin `ws:`/`wss:` are listed explicitly, because older browsers do not match
+  them with `'self'`. The teams-js domain list (`res.cdn.office.net`) is added on Teams routes
+  only.
 - **`frame-src`** is built from the origins of the configured iframe apps. The cache refreshes
   when apps change.
 - **`frame-ancestors`** depends on the route and the configuration: Teams routes get the Teams
