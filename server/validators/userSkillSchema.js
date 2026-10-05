@@ -90,6 +90,7 @@ export const userSkillSettingsSchema = z
     maxVersions: z.number().int().min(1).max(1000),
     maxSkillSizeKB: z.number().int().min(1).max(10240),
     maxFilesPerSkill: z.number().int().min(1).max(200),
+    allowMarketplace: z.boolean(),
     sharing: z
       .object({
         allowUsers: z.boolean(),

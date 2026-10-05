@@ -12,6 +12,7 @@ import { getUserPromptRepository } from '../../services/prompts/UserPromptReposi
 import registerPromptRoutes from '../promptRoutes.js';
 import { getUserSkillRepository } from '../../services/skills/UserSkillRepository.js';
 import { userSkillsClientConfig } from '../../services/skills/userSkillSettings.js';
+import { hasSyncedRegistry } from '../../services/skills/marketplaceSkills.js';
 import crypto from 'crypto';
 import logger from '../../utils/logger.js';
 import { sendInternalError, sendFailedOperationError } from '../../utils/responseHelpers.js';
@@ -827,8 +828,11 @@ export default function registerDataRoutes(app) {
         // User skills: whether users may keep and share skills of their own
         // (the `skills` feature, `platform.userSkills` and the storage
         // provider) and the limits the editor shows. The server enforces them.
+        // `marketplace` says whether the library offers skills from the
+        // marketplace: switched on, and an enabled registry has a catalog.
         userSkills: userSkillsClientConfig(configCache.getFeatures(), platform, {
-          storageAvailable: getUserSkillRepository().isAvailable()
+          storageAvailable: getUserSkillRepository().isAvailable(),
+          marketplaceReady: hasSyncedRegistry(configCache.getRegistries().data)
         }),
         rateLimit: platform.rateLimit,
         swagger: platform.swagger

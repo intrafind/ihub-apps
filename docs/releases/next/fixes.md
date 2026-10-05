@@ -20,6 +20,12 @@ had switched these sources off for the provider. It now lists only the enabled s
 to load a disabled one. Opening OneDrive also no longer asks the user to choose between their files
 and a hidden system library ("PersonalCacheLibrary"); it goes straight to their OneDrive files.
 
+## Admin → Skills Is Translated Again
+
+Parts of **Admin → Skills** — the tab names, the **User skills** list and its settings — showed
+English text in the German interface, because a second set of skill texts replaced the first. Both
+sets are now combined, so the page is fully translated.
+
 ## PDF Skill: The Download Card Appears Below the Answer
 
 When the model created a PDF with the `pdf` skill, the chat showed the `create_pdf` tool call and

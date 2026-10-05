@@ -34,7 +34,9 @@ user owns it or it is shared with them, and the app does not set
 
 ## User Skills
 
-Any signed-in user can create skills of their own on `/skills` (**New skill**). The editor has:
+Any signed-in user can create skills of their own in the library (`/prompts`, **New → New
+skill**), or start from a ready-made one in the [marketplace](#skills-from-the-marketplace). The
+editor has:
 
 - **Name** — lowercase letters, digits and hyphens, starting and ending with a letter or digit,
   at most 64 characters.
@@ -48,6 +50,30 @@ Any signed-in user can create skills of their own on `/skills` (**New skill**). 
 
 The marketplace skill **Skill Builder** interviews a user about a task and writes a skill they
 can paste into the editor.
+
+### Skills from the marketplace
+
+Writing a first skill from scratch is hard. When the [marketplace](marketplace.md) is switched
+on and a registry has been refreshed, users can pick ready-made skills from it themselves, so
+admins do not have to install every skill for everyone:
+
+- **New → Skill from the marketplace** in the library opens the skills of all enabled
+  registries. Users search them (in every language the catalog has, and by tag), filter by
+  category and source, and open a skill to read its instructions, license and the files that
+  come with it.
+- On the **Skills** tab, users who have no skills of their own yet see a **Browse the
+  marketplace** prompt.
+- **Add** saves a copy as one of the user's own skills, under the catalog name or a name they
+  choose. Like any user skill it is private until shared, can be edited, versioned and promoted,
+  and is invoked with `/name`. The copy does not follow later catalog changes.
+- A user skill holds text files directly under `references/`, `assets/` or `scripts/`. Other
+  files of a marketplace skill (images, PDFs, nested folders) and files beyond
+  `maxFilesPerSkill` or `maxSkillSizeKB` are left out; the user is told how many.
+- The skill details show where the copy came from (registry, version) and its license.
+
+Users never enter a URL: the skill is fetched from the source its admin-configured catalog
+lists, with the registry's credentials. Registries that are switched off are not offered, and
+users cannot refresh a catalog. Admins switch the feature off with `allowMarketplace` (below).
 
 ### Sharing and permissions
 
@@ -107,6 +133,7 @@ The settings for user skills (full admins only) are stored in `platform.json`:
   "maxVersions": 50,
   "maxSkillSizeKB": 256,
   "maxFilesPerSkill": 20,
+  "allowMarketplace": true,
   "sharing": {
     "allowUsers": true,
     "allowGroups": true,
@@ -123,6 +150,7 @@ The settings for user skills (full admins only) are stored in `platform.json`:
 | `maxVersions` | Versions kept per skill |
 | `maxSkillSizeKB` | Instructions and files together |
 | `maxFilesPerSkill` | Files per skill |
+| `allowMarketplace` | Users may add skills from the marketplace to their own skills (also needs the `marketplace` feature and a refreshed registry) |
 | `sharing.allowUsers` / `allowGroups` / `allowEveryone` | Which audiences users may share with |
 | `sharing.restrictToGroups` | When it names groups, only their members may share with groups or with everyone |
 
@@ -149,6 +177,9 @@ global skills keep working.
 | GET | `/api/user-skills/:id/versions` | Versions, newest first; `/versions/:revision` returns one with its content |
 | POST | `/api/user-skills/:id/versions/:revision/restore` | Restore a version |
 | GET | `/api/user-skills/share-targets?q=` | Users and groups the caller may share with |
+| GET | `/api/user-skills/marketplace?search=&category=&registry=&page=&limit=` | Skills of the enabled registries, with the registries and categories to filter by; each says whether the caller added it already (`added`) |
+| GET | `/api/user-skills/marketplace/:registryId/:name` | One marketplace skill with a preview of its instructions and files |
+| POST | `/api/user-skills/marketplace/:registryId/:name/add` | Copy it into My skills (`name` optional); the response lists `skippedFiles` |
 | GET | `/api/admin/user-skills` | User skills shared with a group or everyone (admins and content admins) |
 | POST | `/api/admin/user-skills/:id/promote` | Promote to a global skill (`name` optional; 409 when taken) |
 | GET / PUT | `/api/admin/user-skills/settings` | The `userSkills` settings (full admins) |

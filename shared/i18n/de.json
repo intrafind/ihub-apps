@@ -3690,8 +3690,15 @@
         "title": "Nutzer-Skills",
         "truncated": "Es werden nur die ersten Skills angezeigt",
         "updated": "Zuletzt geändert",
-        "userCount": "{{count}} Nutzer"
-      }
+        "userCount": "{{count}} Nutzer",
+        "allowMarketplace": "Nutzer dürfen Skills aus dem Marktplatz zu ihren eigenen Skills hinzufügen",
+        "allowMarketplaceHelp": "Nutzer durchsuchen die Skills der aktivierten Registries und kopieren die gewünschten, sodass Sie nicht jeden Skill für alle installieren müssen. Erfordert die Funktion „Marktplatz“ und eine aktualisierte Registry."
+      },
+      "system": "System",
+      "systemTooltip": "Wird mit iHub ausgeliefert. Kann nicht geändert oder gelöscht werden.",
+      "systemNotice": "Dies ist ein System-Skill, der mit iHub ausgeliefert wird. Er wird mit iHub aktualisiert und kann hier weder geändert noch gelöscht werden. Aktivieren Sie ihn für eine App in den Skill-Einstellungen der App.",
+      "providedTools": "Werkzeuge dieses Skills:",
+      "view": "Ansehen"
     },
     "scheduledTasks": {
       "all": "Alle",
@@ -3745,13 +3752,6 @@
         "value": "{{free}} frei",
         "valueTitle": "{{percent}} von {{total}} belegt"
       }
-    },
-    "skills": {
-      "system": "System",
-      "systemTooltip": "Wird mit iHub ausgeliefert. Kann nicht geändert oder gelöscht werden.",
-      "systemNotice": "Dies ist ein System-Skill, der mit iHub ausgeliefert wird. Er wird mit iHub aktualisiert und kann hier weder geändert noch gelöscht werden. Aktivieren Sie ihn für eine App in den Skill-Einstellungen der App.",
-      "providedTools": "Werkzeuge dieses Skills:",
-      "view": "Ansehen"
     }
   },
   "cloudStorage": {
@@ -5087,7 +5087,8 @@
       "duplicate": "Duplizieren",
       "history": "Verlauf",
       "new": "Neuer Skill",
-      "share": "Teilen"
+      "share": "Teilen",
+      "fromMarketplace": "Skill aus dem Marktplatz"
     },
     "badge": "Skill",
     "delete": {
@@ -5098,7 +5099,9 @@
       "copiedFrom": "Kopiert von {{name}}",
       "files": "Dateien",
       "instructions": "Anweisungen",
-      "promotedTo": "Als globaler Skill {{name}} übernommen"
+      "promotedTo": "Als globaler Skill {{name}} übernommen",
+      "fromMarketplace": "Aus dem Marktplatz: {{name}} ({{registry}})",
+      "license": "Lizenz: {{license}}"
     },
     "editor": {
       "addFile": "Datei hinzufügen",
@@ -5134,7 +5137,8 @@
       "global": "Für Sie sind keine globalen Skills verfügbar.",
       "mine": "Sie haben noch keine Skills. Erstellen Sie einen oder kopieren Sie einen globalen Skill.",
       "none": "Keine Skills gefunden",
-      "shared": "Bisher hat niemand einen Skill mit Ihnen geteilt."
+      "shared": "Bisher hat niemand einen Skill mit Ihnen geteilt.",
+      "mineMarketplace": "Sie haben noch keine Skills. Fügen Sie einen fertigen aus dem Marktplatz hinzu, kopieren Sie einen globalen Skill oder erstellen Sie einen eigenen."
     },
     "errors": {
       "accessChanged": "Ihr Zugriff auf diesen Skill hat sich geändert. Laden Sie die Seite neu, um zu sehen, was Sie jetzt tun dürfen.",
@@ -5148,7 +5152,11 @@
       "notAllowed": "Melden Sie sich an, um eigene Skills anzulegen.",
       "shareNotAllowed": "Sie dürfen Skills nicht mit diesem Personenkreis teilen.",
       "tooLarge": "Dieser Skill ist zu groß. Kürzen Sie die Anweisungen oder entfernen Sie Dateien.",
-      "unavailable": "Ihre Skills sind gerade nicht verfügbar. Bitte versuchen Sie es später erneut."
+      "unavailable": "Ihre Skills sind gerade nicht verfügbar. Bitte versuchen Sie es später erneut.",
+      "marketplaceDisabled": "Das Hinzufügen von Skills aus dem Marktplatz ist ausgeschaltet.",
+      "marketplaceNotFound": "Dieser Skill wird im Marktplatz nicht mehr angeboten.",
+      "marketplaceFetch": "Der Marktplatz ist nicht erreichbar. Bitte versuchen Sie es später erneut.",
+      "marketplaceInvalid": "Dieser Skill kann nicht hinzugefügt werden: Er entspricht nicht dem Skill-Format."
     },
     "filters": {
       "mine": "Meine Skills"
@@ -5171,7 +5179,9 @@
       "duplicated": "Skill dupliziert",
       "restored": "Version wiederhergestellt",
       "saved": "Skill gespeichert",
-      "shared": "Freigabe aktualisiert"
+      "shared": "Freigabe aktualisiert",
+      "addedFromMarketplace": "„{{name}}“ wurde Ihren Skills hinzugefügt. Geben Sie /{{name}} in einem Chat ein, um ihn zu nutzen.",
+      "filesLeftOut": "{{count}} Datei(en) wurden weggelassen: Ihre Skills enthalten nur Textdateien innerhalb der Größengrenzen."
     },
     "share": {
       "help": "„Darf verwenden“ erlaubt, den Skill in Chats zu verwenden und zu duplizieren. „Darf bearbeiten“ erlaubt zusätzlich, ihn zu ändern und weiter zu teilen.",
@@ -5189,6 +5199,42 @@
       "namePattern": "Verwenden Sie Kleinbuchstaben, Ziffern und Bindestriche; Anfang und Ende müssen ein Buchstabe oder eine Ziffer sein.",
       "required": "Erforderlich",
       "tooLong": "Zu lang"
+    },
+    "getStarted": {
+      "title": "Neu bei Skills? Starten Sie mit einem fertigen.",
+      "text": "Wählen Sie einen Skill aus dem Marktplatz, fügen Sie ihn Ihren Skills hinzu und nutzen Sie ihn mit / in jedem Chat. Anpassen können Sie ihn später.",
+      "browse": "Marktplatz durchsuchen"
+    },
+    "marketplace": {
+      "title": "Skills aus dem Marktplatz",
+      "subtitle": "Wählen Sie einen fertigen Skill und fügen Sie ihn Ihren Skills hinzu. Er bleibt privat, bis Sie ihn teilen, und Sie können ihn an Ihre Arbeitsweise anpassen.",
+      "searchPlaceholder": "Skills suchen…",
+      "searchLabel": "Marktplatz durchsuchen",
+      "allCategories": "Alle Kategorien",
+      "allRegistries": "Alle Quellen",
+      "category": "Kategorie",
+      "registry": "Quelle",
+      "author": "Autor",
+      "version": "Version",
+      "license": "Lizenz",
+      "count": "{{count}} Skill(s)",
+      "noMatches": "Keine Skills passen zu Ihrer Suche.",
+      "empty": "Der Marktplatz bietet noch keine Skills an. Bitten Sie Ihre Administration, ihn zu aktualisieren.",
+      "more": "Mehr anzeigen",
+      "loading": "Wird geladen…",
+      "add": "Hinzufügen",
+      "addNamed": "{{name}} zu meinen Skills hinzufügen",
+      "showNamed": "Details zu {{name}} anzeigen",
+      "added": "In Ihren Skills",
+      "available": "Bereits verfügbar",
+      "availableHint": "Ein Skill mit diesem Namen ist bereits in Ihrer Bibliothek. Fügen Sie ihn nur hinzu, wenn Sie eine eigene Kopie möchten.",
+      "back": "Alle Skills",
+      "noPreview": "Keine Vorschau verfügbar.",
+      "filesLeftOut": "Durchgestrichene Dateien werden nicht übernommen: Ihre Skills enthalten Textdateien direkt in references/, assets/ oder scripts/.",
+      "nameLabel": "Name in Ihren Skills",
+      "nameHint": "Geben Sie /{{name}} in einem Chat ein, um ihn zu nutzen. Die Kopie bleibt privat, bis Sie sie teilen, und Sie können sie wie jeden Ihrer Skills ändern.",
+      "adding": "Wird hinzugefügt…",
+      "addToMine": "Zu meinen Skills hinzufügen"
     }
   },
   "scheduledTasks": {

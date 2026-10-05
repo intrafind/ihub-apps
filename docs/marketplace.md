@@ -74,6 +74,16 @@ or model JSON, or a skill's `SKILL.md`.
 - **Detach** keeps the files but removes the installation record. The item is then maintained by
   hand like anything an admin created, and the marketplace shows it as **Local copy**.
 
+## Skills for users
+
+Besides installing skills for everyone, admins can let users pick skills from the marketplace
+themselves: in the library, **New → Skill from the marketplace** lists the skills of all enabled
+registries, and **Add** copies one into the user's own skills. Nothing is installed in
+`contents/`, and the copy is private to the user until they share it. This is on by default
+while the marketplace feature is on and a registry has been refreshed; switch it off under
+**Admin → Skills → User skills → Settings** (`userSkills.allowMarketplace`). See
+[Skills → Skills from the marketplace](skills.md#skills-from-the-marketplace).
+
 ## Registries
 
 **Admin → Marketplace → Manage Registries** lists the configured registries with their item count
@@ -115,7 +125,8 @@ servers on separate hosts, run installs and updates against one host (or a CI jo
 
 ## API
 
-All routes are admin-only and require the marketplace feature:
+All routes below are admin-only and require the marketplace feature. The routes users browse and
+add skills with are listed under [Skills → API](skills.md#api).
 
 | Method & path                                                                 | Purpose                                     |
 | ----------------------------------------------------------------------------- | ------------------------------------------- |
