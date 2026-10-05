@@ -291,12 +291,14 @@ export function findClientById(clientsConfig, clientId) {
  * @returns {Promise<Object>} Created client with plain text secret (only time it's shown)
  */
 export async function createOAuthClient(clientData, clientsFilePath, createdBy) {
-  const clientsConfig = await loadOAuthClientsFresh(clientsFilePath);
-
   // Generate client ID from name and secret
   const clientId = generateClientId(clientData.name);
   const clientSecret = await generateClientSecret();
   const hashedSecret = await hashClientSecret(clientSecret);
+
+  // Read after the bcrypt work, right before the write, so a client another
+  // worker registers meanwhile is not overwritten.
+  const clientsConfig = await loadOAuthClientsFresh(clientsFilePath);
 
   const now = new Date().toISOString();
 
@@ -447,16 +449,20 @@ export async function rotateClientSecret(clientId, clientsFilePath, rotatedBy) {
   if (clientId === '__proto__' || clientId === 'constructor' || clientId === 'prototype') {
     throw new Error(`Invalid client ID: ${clientId}`);
   }
-  const clientsConfig = await loadOAuthClientsFresh(clientsFilePath);
-  const client = clientsConfig.clients[clientId];
-
-  if (!client) {
+  if (!(await findClientByIdFresh(clientsFilePath, clientId)).client) {
     throw new Error(`OAuth client not found: ${clientId}`);
   }
 
   // Generate new secret
   const newSecret = await generateClientSecret();
   const hashedSecret = await hashClientSecret(newSecret);
+
+  // Read after the bcrypt work, right before the write (see createOAuthClient).
+  const clientsConfig = await loadOAuthClientsFresh(clientsFilePath);
+  const client = clientsConfig.clients[clientId];
+  if (!client) {
+    throw new Error(`OAuth client not found: ${clientId}`);
+  }
 
   // Update client
   client.clientSecret = hashedSecret;

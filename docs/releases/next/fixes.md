@@ -95,7 +95,7 @@ about it. Any worker can now finish the sign-in.
 
 - A sign-in must still finish in the browser that started it, and within 15 minutes.
 - When users pick Windows sign-in (NTLM) on a server that also offers other sign-in methods,
-  every worker now remembers that choice until they log out.
+  every worker now remembers that choice until they log out, for at most 24 hours.
 - iHub no longer sets the `oidc.session`, `integration.session`, `oauth.session` and
   `app.session` cookies. It sets a short-lived `oidcLoginNonce` cookie during an OIDC sign-in,
   and an `ntlmRequested` cookie after a Windows sign-in.

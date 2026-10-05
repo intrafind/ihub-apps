@@ -83,6 +83,26 @@ describe('createSharedJsonFile', () => {
     assert.deepEqual((await open().read()).items, ['before', 'after']);
   });
 
+  it('refuses to change a file it cannot parse, leaving it as it is', async () => {
+    const worker = open();
+    await worker.update(data => data.items.push('precious'));
+    fs.writeFileSync(filePath, '{"items": ["precious"'); // torn / corrupted
+
+    await assert.rejects(worker.update(data => data.items.push('new')));
+
+    assert.equal(fs.readFileSync(filePath, 'utf8'), '{"items": ["precious"');
+    assert.equal(fs.existsSync(`${filePath}.lock`), false);
+  });
+
+  it('a read of an unparseable file keeps the last good copy', async () => {
+    const worker = open();
+    await worker.update(data => data.items.push('good'));
+    assert.deepEqual((await worker.read()).items, ['good']);
+    fs.writeFileSync(filePath, 'not json at all');
+
+    assert.deepEqual((await worker.read()).items, ['good']);
+  });
+
   it('passes the change’s return value through', async () => {
     assert.equal(await open().update(() => 'result'), 'result');
   });

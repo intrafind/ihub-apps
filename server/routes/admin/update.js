@@ -30,7 +30,11 @@ export default function registerAdminUpdateRoutes(app) {
    */
   app.get(buildServerPath('/api/admin/update/status'), adminAuth, async (req, res) => {
     // The update may be running on another cluster worker.
-    res.json(await getUpdateStatusAnywhere());
+    try {
+      res.json(await getUpdateStatusAnywhere());
+    } catch (error) {
+      return sendInternalError(res, error, 'get update status');
+    }
   });
 
   /**

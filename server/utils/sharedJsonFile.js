@@ -38,28 +38,44 @@ export function createSharedJsonFile({ filePath, createDefault, component = 'Sha
     }
   }
 
+  /**
+   * The file's contents. A missing file is the default; any other failure
+   * (unreadable, malformed) throws, so a change is never written on top of
+   * defaults that stand in for data that is still there.
+   */
   async function readFromDisk() {
+    let text;
     try {
-      return JSON.parse(await fs.readFile(filePath, 'utf8'));
-    } catch {
-      return createDefault();
+      text = await fs.readFile(filePath, 'utf8');
+    } catch (error) {
+      if (error.code === 'ENOENT') return createDefault();
+      throw error;
     }
+    return JSON.parse(text);
   }
 
-  /** The current contents; re-read only when the file changed. */
+  /**
+   * The current contents; re-read only when the file changed. A read that
+   * fails keeps the last good copy (or the default when there is none).
+   */
   async function read() {
     const stamp = await stampOf();
     if (cached === null || stamp !== cachedStamp) {
-      cached = await readFromDisk();
-      cachedStamp = stamp;
+      try {
+        cached = await readFromDisk();
+        cachedStamp = stamp;
+      } catch {
+        if (cached === null) cached = createDefault();
+      }
     }
     return cached;
   }
 
   /**
    * Change the file. `mutate` gets the contents as they are on disk now and
-   * edits them in place; its return value is passed through. A throw leaves
-   * the file untouched.
+   * edits them in place; its return value is passed through. A throw — from
+   * `mutate`, or from reading a file that exists but cannot be read or
+   * parsed — leaves the file untouched.
    */
   async function update(mutate) {
     await fs.mkdir(path.dirname(filePath), { recursive: true });

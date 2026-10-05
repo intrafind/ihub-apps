@@ -21,9 +21,13 @@ import {
   verifyOidcLoginState
 } from '../utils/oidcLoginState.js';
 
-// In-memory key material; nothing touches disk.
+// In-memory key material; nothing touches disk. resolveJwtSecret() falls back
+// to the token store's secret when the platform config (not loaded here) has
+// none; a JWT_SECRET environment variable only reaches it through
+// initializeJwtSecret(), which this test never calls.
+const SECRET = 'oidc-login-state-test-secret';
 tokenStorageService.encryptionKey = 'd'.repeat(64);
-tokenStorageService.jwtSecret = 'oidc-login-state-test-secret';
+tokenStorageService.jwtSecret = SECRET;
 
 let failed = false;
 const check = async (label, fn) => {
@@ -235,15 +239,33 @@ await check('expired state is refused', () => {
 
 await check('state signed with another secret is refused', () => {
   const nonce = 'n'.repeat(43);
-  const state = issueOidcLoginState({ provider: 'keycloak', nonce });
-  const original = tokenStorageService.jwtSecret;
-  tokenStorageService.jwtSecret = 'a-different-secret';
-  try {
-    const result = verifyOidcLoginState({ state, nonce, provider: 'keycloak' });
-    assert.deepStrictEqual(result, { ok: false, reason: 'bad_signature' });
-  } finally {
-    tokenStorageService.jwtSecret = original;
-  }
+  const [encoded] = issueOidcLoginState({ provider: 'keycloak', nonce }).split('.');
+  const otherSignature = crypto
+    .createHmac('sha256', 'a-different-secret')
+    .update(`oidc-login:${encoded}`)
+    .digest('base64url');
+  const result = verifyOidcLoginState({
+    state: `${encoded}.${otherSignature}`,
+    nonce,
+    provider: 'keycloak'
+  });
+  assert.deepStrictEqual(result, { ok: false, reason: 'bad_signature' });
+});
+
+await check('the same state signed with the configured secret verifies', () => {
+  // Guards the test above: it must fail on the signature, not the format.
+  const nonce = 'n'.repeat(43);
+  const [encoded] = issueOidcLoginState({ provider: 'keycloak', nonce }).split('.');
+  const signature = crypto
+    .createHmac('sha256', SECRET)
+    .update(`oidc-login:${encoded}`)
+    .digest('base64url');
+  const result = verifyOidcLoginState({
+    state: `${encoded}.${signature}`,
+    nonce,
+    provider: 'keycloak'
+  });
+  assert.strictEqual(result.ok, true);
 });
 
 await check('a fresh ticket round-trips its fields', () => {

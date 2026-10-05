@@ -167,6 +167,11 @@ export async function findJob(jobId) {
   return reply?.job ? { job: reply.job, local: false } : null;
 }
 
+/** Whether another worker still announces it holds the job. */
+export function isJobOwnedElsewhere(jobId) {
+  return typeof jobId === 'string' && hasRemote(JOB_PRESENCE, jobId);
+}
+
 /** Whether a job's status is final. */
 export function isTerminal(job) {
   return TERMINAL_STATUSES.has(job?.status);
@@ -209,11 +214,16 @@ export async function completeJob(job, { result, contentType, filename }) {
   job.resultFilename = filename;
   if (isClusterBusActive()) {
     const file = path.join(RESULTS_DIR, `${job.id}.result`);
+    // Written beside the final name and renamed, so a crash never leaves a
+    // truncated result behind under that name.
+    const temp = `${file}.${process.pid}.tmp`;
     try {
       await fs.mkdir(RESULTS_DIR, { recursive: true });
-      await fs.writeFile(file, result);
+      await fs.writeFile(temp, result);
+      await fs.rename(temp, file);
       job.resultFile = file;
     } catch (error) {
+      await removeResultFile(temp);
       logger.warn('Could not store tool job result for other workers', {
         component: 'JobStore',
         jobId: job.id,

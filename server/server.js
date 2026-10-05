@@ -1128,6 +1128,14 @@ if (cluster.isPrimary && workerCount > 1) {
     // off the streaming path; drain what is still buffered, or a chat resumes
     // after the restart threaded onto a stale parent message.
     await conversationStateManager.flush();
+    // Usage counts wait in memory for the next flush to usage.json; write
+    // them now rather than losing up to one flush interval.
+    try {
+      const { flushUsage } = await import('./usageTracker.js');
+      await flushUsage();
+    } catch {
+      // Failures are logged within the tracker
+    }
     // Flush buffered storage writes (chat documents, append-log entries) and
     // release the provider's handles before the process goes away.
     await shutdownStorageBootstrap();

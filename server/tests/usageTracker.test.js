@@ -60,7 +60,7 @@ jest.unstable_mockModule('../utils/logger.js', () => ({
 // The flush to usage.json is timed; fake timers let tests drive it.
 jest.useFakeTimers();
 
-const { recordChatRequest, recordChatResponse, recordFeedback, getUsage, resetUsage } =
+const { recordChatRequest, recordChatResponse, recordFeedback, getUsage, resetUsage, flushUsage } =
   await import('../usageTracker.js');
 
 afterAll(() => {
@@ -206,6 +206,43 @@ describe('several workers', () => {
     const flushed = JSON.parse(fileContents);
     expect(flushed.messages.total).toBe(6);
     expect(flushed.feedback.averageRating).toBe(3);
+  });
+
+  it('drops counts gathered before another worker reset the usage', async () => {
+    await recordChatRequest({ userId: 'u1', appId: 'a1', modelId: 'm1', tokens: 10 });
+
+    // Another worker resets: the file is cleared and stamped.
+    await jest.advanceTimersByTimeAsync(5);
+    const cleared = JSON.parse(fileContents);
+    cleared.messages = { total: 0, perUser: {}, perApp: {}, perModel: {} };
+    cleared.lastReset = new Date(Date.now() + 1).toISOString();
+    fileContents = JSON.stringify(cleared);
+
+    expect((await getUsage()).messages.total).toBe(0);
+    await jest.advanceTimersByTimeAsync(10000);
+    expect(JSON.parse(fileContents).messages.total).toBe(0);
+
+    // Counted after the reset is kept.
+    await recordChatRequest({ userId: 'u1', appId: 'a1', modelId: 'm1', tokens: 10 });
+    await jest.advanceTimersByTimeAsync(10000);
+    expect(JSON.parse(fileContents).messages.total).toBe(1);
+  });
+
+  it('a usage.json without lastReset still takes this worker’s counts', async () => {
+    const legacy = JSON.parse(fileContents);
+    delete legacy.lastReset;
+    fileContents = JSON.stringify(legacy);
+
+    await recordChatRequest({ userId: 'u1', appId: 'a1', modelId: 'm1', tokens: 10 });
+    await jest.advanceTimersByTimeAsync(10000);
+
+    expect(JSON.parse(fileContents).messages.total).toBe(1);
+  });
+
+  it('flushUsage writes pending counts right away', async () => {
+    await recordChatRequest({ userId: 'u1', appId: 'a1', modelId: 'm1', tokens: 10 });
+    await flushUsage();
+    expect(JSON.parse(fileContents).messages.total).toBe(1);
   });
 
   it('a reset is not undone by counts recorded before it', async () => {

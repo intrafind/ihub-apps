@@ -5,6 +5,7 @@ import {
   canAccessJob,
   cancelJobAnywhere,
   findJob,
+  isJobOwnedElsewhere,
   isTerminal,
   listJobsEverywhere
 } from './jobStore.js';
@@ -12,6 +13,8 @@ import { sendBadRequest, sendNotFound } from '../../utils/responseHelpers.js';
 
 /** How often a progress stream for a job on another worker asks for news. */
 const REMOTE_PROGRESS_POLL_MS = 1000;
+/** Unanswered polls in a row after which the job counts as gone. */
+const REMOTE_PROGRESS_MAX_MISSES = 5;
 
 function progressPayload(job) {
   return {
@@ -79,30 +82,46 @@ router.get('/jobs/:jobId/progress', authRequired, async (req, res) => {
 
   if (!found.local) {
     // The job runs on another worker, which writes to its own clients only.
-    // Ask it for news until the job ends or the browser goes away.
-    const timer = setInterval(async () => {
+    // Ask it for news until the job ends or the browser goes away. One poll
+    // at a time (a reply can take longer than the interval), and nothing is
+    // written once the browser has gone.
+    let closed = false;
+    let timer = null;
+    let misses = 0;
+    const poll = async () => {
       const latest = await findJob(job.id);
-      if (res.writableEnded) return;
+      if (closed || res.writableEnded) return;
       if (!latest) {
-        // The owning worker is gone, and the job with it.
+        // A busy owner can miss one answer; a job whose owner announced its
+        // end (or died) is gone for good.
+        misses += 1;
+        if (isJobOwnedElsewhere(job.id) && misses < REMOTE_PROGRESS_MAX_MISSES) {
+          timer = setTimeout(poll, REMOTE_PROGRESS_POLL_MS);
+          return;
+        }
         res.write(
           `data: ${JSON.stringify({ ...progressPayload(job), status: 'error', error: 'Job is no longer available' })}\n\n`
         );
-        clearInterval(timer);
         res.end();
         return;
       }
+      misses = 0;
       const next = JSON.stringify(progressPayload(latest.job));
       if (next !== lastSent) {
         lastSent = next;
         res.write(`data: ${next}\n\n`);
       }
       if (isTerminal(latest.job)) {
-        clearInterval(timer);
         res.end();
+        return;
       }
-    }, REMOTE_PROGRESS_POLL_MS);
-    req.on('close', () => clearInterval(timer));
+      timer = setTimeout(poll, REMOTE_PROGRESS_POLL_MS);
+    };
+    timer = setTimeout(poll, REMOTE_PROGRESS_POLL_MS);
+    req.on('close', () => {
+      closed = true;
+      clearTimeout(timer);
+    });
     return;
   }
 

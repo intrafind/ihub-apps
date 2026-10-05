@@ -84,10 +84,30 @@ const usageFile = createSharedJsonFile({
 
 const FLUSH_INTERVAL_MS = 10000;
 
-/** What this worker counted since its last flush. */
+/** What this worker counted since its last flush, and since when. */
 let pending = createDefaultUsage();
+let pendingSince = Date.now();
 let pendingDirty = false;
 let flushTimer = null;
+let flushInFlight = null;
+
+function startPending() {
+  pending = createDefaultUsage();
+  pendingSince = Date.now();
+  pendingDirty = false;
+}
+
+/**
+ * Whether counts gathered since `since` predate the file's last reset. A
+ * reset clears the file and the resetting worker's own counts; the other
+ * workers learn of it here, and drop what they gathered before it rather
+ * than adding it back. Counted between the reset and their next flush is
+ * dropped with it — at most one flush interval.
+ */
+function resetSince(usage, since) {
+  const resetAt = Date.parse(usage?.lastReset);
+  return Number.isFinite(resetAt) && resetAt > since;
+}
 
 const UNSAFE_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
 
@@ -134,22 +154,43 @@ function scheduleFlush() {
 async function flushPending() {
   if (!pendingDirty) return;
   const delta = pending;
-  pending = createDefaultUsage();
-  pendingDirty = false;
+  const deltaSince = pendingSince;
+  startPending();
+  const flush = usageFile.update(data => {
+    // Before normalizing, which stamps a missing lastReset with now.
+    const staleDelta = resetSince(data, deltaSince);
+    normalizeUsage(data);
+    if (staleDelta) return;
+    addCounters(data, delta);
+    recomputeAverages(data);
+    data.lastUpdated = now();
+  });
+  flushInFlight = flush;
   try {
-    await usageFile.update(data => {
-      normalizeUsage(data);
-      addCounters(data, delta);
-      recomputeAverages(data);
-      data.lastUpdated = now();
-    });
+    await flush;
   } catch (error) {
     // Keep the counts for the next attempt rather than losing them.
     addCounters(pending, delta);
+    pendingSince = Math.min(pendingSince, deltaSince);
     pendingDirty = true;
     scheduleFlush();
     logger.error('Failed to save usage data', { component: 'UsageTracker', error });
+  } finally {
+    if (flushInFlight === flush) flushInFlight = null;
   }
+}
+
+/**
+ * Write this worker's pending counts now, e.g. on shutdown, waiting for a
+ * flush already under way as well.
+ */
+export async function flushUsage() {
+  if (flushTimer) {
+    clearTimeout(flushTimer);
+    flushTimer = null;
+  }
+  if (flushInFlight) await flushInFlight.catch(() => {});
+  await flushPending();
 }
 
 async function loadConfig() {
@@ -458,8 +499,9 @@ export async function getUsage() {
   // The file as every worker has flushed it, plus what this worker counted
   // since its last flush.
   const usage = structuredClone(await usageFile.read());
+  const pendingIsStale = resetSince(usage, pendingSince);
   normalizeUsage(usage);
-  addCounters(usage, pending);
+  if (!pendingIsStale) addCounters(usage, pending);
   recomputeAverages(usage);
   return usage;
 }
@@ -476,10 +518,13 @@ export async function getTrackingMode() {
 
 export async function resetUsage() {
   await loadConfig();
-  pending = createDefaultUsage();
-  pendingDirty = false;
+  // This worker's counts start at the reset itself, so they survive it;
+  // other workers' older counts are dropped (see resetSince).
+  const resetAt = new Date();
+  startPending();
+  pendingSince = resetAt.getTime();
   await usageFile.update(data => {
     for (const key of Object.keys(data)) delete data[key];
-    Object.assign(data, createDefaultUsage(), { lastReset: now() });
+    Object.assign(data, createDefaultUsage(), { lastReset: resetAt.toISOString() });
   });
 }
