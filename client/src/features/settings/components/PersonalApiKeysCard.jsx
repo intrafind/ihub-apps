@@ -360,19 +360,17 @@ export default function PersonalApiKeysCard({
                   {endpointRows.length}
                 </span>
               </button>
-              {showEndpoints && (
-                <div id={endpointsId} className="mt-3 space-y-2">
-                  {endpointRows.map(row => (
-                    <CopyField key={row.key} label={row.label} value={endpoints[row.key]} />
-                  ))}
-                  <p className="text-xs text-gray-500 dark:text-gray-400">
-                    {t(
-                      'integrations.page.apiKeys.usageHint',
-                      'Send the API key as an Authorization: Bearer header.'
-                    )}
-                  </p>
-                </div>
-              )}
+              <div id={endpointsId} hidden={!showEndpoints} className="mt-3 space-y-2">
+                {endpointRows.map(row => (
+                  <CopyField key={row.key} label={row.label} value={endpoints[row.key]} />
+                ))}
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  {t(
+                    'integrations.page.apiKeys.usageHint',
+                    'Send the API key as an Authorization: Bearer header.'
+                  )}
+                </p>
+              </div>
             </div>
           )}
         </div>

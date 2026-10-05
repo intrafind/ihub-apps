@@ -236,22 +236,22 @@ export default function ConnectedAppsCard({ connections = [], busy = false, onDi
                           </button>
                         </div>
 
-                        {isOpen && (
-                          <ul id={detailsId} className="mt-2 ml-6 space-y-1">
-                            {connection.scopes.map(scope => (
-                              <li
-                                key={scope}
-                                className="text-xs text-gray-600 dark:text-gray-400 flex items-start gap-1.5"
-                              >
-                                <Icon
-                                  name="check"
-                                  className="w-3.5 h-3.5 mt-0.5 shrink-0 text-green-500"
-                                />
-                                <span>{descriptions[scope] || scope}</span>
-                              </li>
-                            ))}
-                          </ul>
-                        )}
+                        {/* Always mounted, so the toggle's aria-controls always
+                            points at something; `hidden` folds it away. */}
+                        <ul id={detailsId} hidden={!isOpen} className="mt-2 ml-6 space-y-1">
+                          {connection.scopes.map(scope => (
+                            <li
+                              key={scope}
+                              className="text-xs text-gray-600 dark:text-gray-400 flex items-start gap-1.5"
+                            >
+                              <Icon
+                                name="check"
+                                className="w-3.5 h-3.5 mt-0.5 shrink-0 text-green-500"
+                              />
+                              <span>{descriptions[scope] || scope}</span>
+                            </li>
+                          ))}
+                        </ul>
                       </li>
                     );
                   })}

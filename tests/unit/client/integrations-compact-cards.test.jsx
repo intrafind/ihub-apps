@@ -57,17 +57,17 @@ describe('ConnectedAppsCard', () => {
     );
 
     expect(screen.getByText('3 permissions', { exact: false })).toBeInTheDocument();
-    expect(screen.queryByText('Run iHub tools on your behalf')).not.toBeInTheDocument();
+    expect(screen.getByText('Run iHub tools on your behalf')).not.toBeVisible();
 
     const toggle = screen.getByRole('button', { name: /Claude Code/ });
     expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    // The toggle points at the list it opens, folded or not.
+    const details = document.getElementById(toggle.getAttribute('aria-controls'));
+    expect(details).toContainElement(screen.getByText('Run iHub tools on your behalf'));
     fireEvent.click(toggle);
 
     expect(toggle).toHaveAttribute('aria-expanded', 'true');
-    expect(screen.getByText('Run iHub tools on your behalf')).toBeInTheDocument();
-    // The toggle points at the list it opens.
-    const details = document.getElementById(toggle.getAttribute('aria-controls'));
-    expect(details).toContainElement(screen.getByText('Run iHub tools on your behalf'));
+    expect(screen.getByText('Run iHub tools on your behalf')).toBeVisible();
   });
 
   test('lists the most recently used connection first', () => {
@@ -146,14 +146,18 @@ describe('PersonalApiKeysCard', () => {
       />
     );
 
-    expect(screen.queryByDisplayValue('https://ihub.example.com/mcp')).not.toBeInTheDocument();
+    const endpoint = screen.getByDisplayValue('https://ihub.example.com/mcp');
+    expect(endpoint).not.toBeVisible();
 
     const toggle = screen.getByRole('button', { name: /Endpoints/ });
     expect(within(toggle).getByText('2')).toBeInTheDocument();
+    expect(document.getElementById(toggle.getAttribute('aria-controls'))).toContainElement(
+      endpoint
+    );
     fireEvent.click(toggle);
 
     expect(toggle).toHaveAttribute('aria-expanded', 'true');
-    expect(screen.getByDisplayValue('https://ihub.example.com/mcp')).toBeInTheDocument();
+    expect(endpoint).toBeVisible();
     // The primary action stays in view either way.
     expect(screen.getByRole('button', { name: 'Generate API key' })).toBeInTheDocument();
   });
