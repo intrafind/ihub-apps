@@ -152,6 +152,49 @@ export function createGenericToolResult(
 }
 
 /**
+ * Serialize tool-call arguments for an OpenAI-format request. The wire field is
+ * a JSON string: a call the model made without arguments goes out as `'{}'`,
+ * never `''`. OpenAI tolerates `''`; strict OpenAI-compatible servers (Ollama)
+ * parse it and reject the whole request.
+ *
+ * @param {string|Object|null|undefined} args - Arguments as recorded in history
+ * @returns {string} JSON arguments
+ */
+export function serializeToolArguments(args) {
+  if (typeof args === 'string') return args.trim() ? args : '{}';
+  if (args && typeof args === 'object') return JSON.stringify(args);
+  return '{}';
+}
+
+/**
+ * Give every OpenAI-format tool call replayed in message history JSON
+ * arguments (see {@link serializeToolArguments}). Returns the original array
+ * when nothing needs fixing so the common path allocates nothing.
+ *
+ * @param {Object[]} toolCalls - OpenAI-format tool calls (`{ id, type, function }`)
+ * @returns {Object[]} Tool calls whose `function.arguments` is a JSON string
+ */
+export function withSerializedToolArguments(toolCalls) {
+  if (!Array.isArray(toolCalls)) return toolCalls;
+  const needsFix = call =>
+    call?.function &&
+    typeof call.function === 'object' &&
+    serializeToolArguments(call.function.arguments) !== call.function.arguments;
+  if (!toolCalls.some(needsFix)) return toolCalls;
+  return toolCalls.map(call =>
+    needsFix(call)
+      ? {
+          ...call,
+          function: {
+            ...call.function,
+            arguments: serializeToolArguments(call.function.arguments)
+          }
+        }
+      : call
+  );
+}
+
+/**
  * Build the generic `metadata.usage` object a converter hands downstream.
  *
  * Conventions every converter follows, so the numbers compare across providers:

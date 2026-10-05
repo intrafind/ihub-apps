@@ -3,7 +3,7 @@
 /**
  * Mistral "La Plateforme" API adapter
  */
-import { convertToolsFromGeneric } from './toolCalling/index.js';
+import { convertToolsFromGeneric, withSerializedToolArguments } from './toolCalling/index.js';
 import {
   modelConsumesThoughtSignature,
   stripThoughtSignatureExtraContent
@@ -26,11 +26,14 @@ class MistralAdapterClass extends BaseAdapter {
       // Strict OpenAI-compatible providers reject a request that carries it, so
       // drop it unless this model is the one that consumes it — a caller
       // replaying Gemini-originated history against another model must not have
-      // that field forwarded upstream.
+      // that field forwarded upstream. A call made without arguments goes back
+      // as `{}`: strict servers (Ollama) reject `"arguments": ""`.
       if (message.tool_calls) {
-        base.tool_calls = keepExtraContent
-          ? message.tool_calls
-          : stripThoughtSignatureExtraContent(message.tool_calls);
+        base.tool_calls = withSerializedToolArguments(
+          keepExtraContent
+            ? message.tool_calls
+            : stripThoughtSignatureExtraContent(message.tool_calls)
+        );
       }
       if (message.tool_call_id) base.tool_call_id = message.tool_call_id;
       if (message.name) base.name = message.name;
