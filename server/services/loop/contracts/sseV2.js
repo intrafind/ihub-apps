@@ -169,6 +169,23 @@ export const toolCompletedData = z.object({
       draft: z.record(z.any()).optional(),
       summary: z.record(z.any()).optional()
     })
+    .optional(),
+  /**
+   * Files a system skill tool generated for the user (a PDF from
+   * `create_pdf`): the chat shows a download card for each. `data` is the
+   * file, base64 — the model's tool result never carries it.
+   */
+  files: z
+    .array(
+      z.object({
+        id: z.string(),
+        name: z.string(),
+        mimeType: z.string(),
+        bytes: z.number().int().nonnegative(),
+        pages: z.number().int().positive().optional(),
+        data: z.string()
+      })
+    )
     .optional()
 });
 
