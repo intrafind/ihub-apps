@@ -165,9 +165,12 @@ Content-Type: application/json
 - The worker that accepts the POST runs the turn and writes to its own response. The emitter
   gets a `deliver` function bound to `res` (`RunStreamEmitter` already takes a `deliver` option,
   see `ChatService.js`), so there is no presence lookup and no relay on this path.
-- A disconnect is handled where it happens: `req.on('close')` aborts the turn unless it is
-  durable. The turn and the socket are in the same process, so this decision is local. The
-  `chat:abort` relay and the cluster-wide `chat-durable` mark aren't needed for it.
+- A disconnect is handled where it happens. The handler listens for the **response's** `close`
+  event and, if the response hasn't ended, aborts the turn unless it is durable. The request's
+  `close` can't be used: on a POST it has already fired once the JSON body parser has read the
+  body. `openaiProxy.js:443-452` handles its streamed POST the same way. The turn and the socket
+  are in the same process, so this decision is local. The `chat:abort` relay and the
+  cluster-wide `chat-durable` mark aren't needed for it.
 - `activeRequests` (presence `request`) stays. `/stop`, a superseding turn and steering can
   still arrive on another worker and must reach the turn's worker. `ABORT_CHANNEL` already does
   this.
@@ -188,14 +191,21 @@ Content-Type: application/json
 - **Stop** aborts the fetch, which is enough for an ephemeral turn. A stored turn survives a
   disconnect by design, so it also POSTs `/stop`, as today.
 - **No blind retry of the POST.** A POST starts a turn, so retrying it after a network error
-  would start a second one. On a drop, the client reconnects by `runId`, which arrives in the
-  first frame (`run/started`). If the drop came before that frame, the client asks the chat
-  status. The `messageId` the client already sends could also serve as an idempotency key for a
-  retried POST.
+  would start a second one. What happens after a drop depends on the turn:
+  - An **ephemeral** turn is aborted by the server when its response closes. The client shows it
+    as stopped and neither reconnects nor retries.
+  - A **stored** turn keeps running. The client reconnects by `runId`, which arrives in the first
+    frame (`run/started`). If the drop came before that frame, the client asks the chat status.
+  - The `messageId` the client already sends could also serve as an idempotency key, so a
+    retried POST can't start a second turn.
 - The 60-second `/status` poll is no longer needed for the client's own turns, since the open
   response shows the turn is alive. It may stay for reconnect streams.
 
 ### Reconnecting stays a GET
+
+MCP doesn't need this: its 2026-07-28 revision of Streamable HTTP removed the GET stream and
+`Last-Event-ID` resume altogether, because an MCP call is a short request. A stored chat turn
+outlives its client by design, so the chat still needs a way back in.
 
 Some cases have no POST of their own to stream on:
 
@@ -217,6 +227,19 @@ Last-Event-ID: <id>          (or ?after=<id>)
 → ledger events after <id>, then the live tail, ending with run/ended
 ```
 
+- **Access is checked before anything is sent.** The endpoint runs the same checks as today's two
+  endpoints: `authorizeRun(runId, req.user)`, as `GET /api/runs/:runId/events` does
+  (`server/routes/runs.js:144`), and, for a chat run,
+  `authorizeChat(chatId, req.user, { intent: 'read' })`, as the chat GET does
+  (`sessionRoutes.js:565`). A caller who fails either check gets a 404 and no event data.
+- **No gap between replay and live.** If the ledger were read first and the live subscription
+  opened afterwards, an event written in between would reach neither. So the endpoint:
+  1. subscribes to the run's live events and buffers them,
+  2. notes the ledger's last `seq` and replays the ledger after `<id>` up to that `seq`,
+  3. sends the buffered events that follow that `seq`, drops the ones the replay already
+     covered, then continues live.
+
+  An event written during the switch then arrives exactly once.
 - Closing a reconnect stream never aborts the turn. Only stored turns can be reconnected to, and
   a watcher leaving doesn't mean the turn should end. This is what lets the durable check become
   local.
@@ -303,7 +326,10 @@ per-turn `/status` poll.
    - pre-flight errors as HTTP statuses,
    - disconnect aborts an ephemeral turn,
    - disconnect leaves a durable turn running,
+   - a dropped response is detected through the response's `close` event,
    - reconnect after `Last-Event-ID` replays without duplicates,
+   - an event written during the replay-to-live switch arrives exactly once,
+   - a caller without access to the run or its chat gets a 404 and no frame,
    - in a 4-worker cluster test, no `sse:event` relay on the send path.
 2. **Client.** `openSseStream` with a method and a body; `useAppChat` send and stop; reconnect
    through the run stream; the idle watchdog. About ten client test files mock `useEventSource`

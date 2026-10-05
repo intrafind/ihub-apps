@@ -33,7 +33,7 @@ in the admin UI and the docs), then remove it one release later.
 
 ## The two transports
 
-| | Legacy HTTP+SSE (2024-11-05) | Streamable HTTP (2025-03-26+) |
+| | Legacy HTTP+SSE (2024-11-05) | Streamable HTTP (2025-03-26 to 2025-11-25, what iHub implements) |
 | --- | --- | --- |
 | Endpoints | `GET /mcp/sse` stream plus `POST /mcp/messages?sessionId=…` | One endpoint: `POST /mcp`, optional `GET /mcp`, `DELETE /mcp` |
 | Where a response arrives | On the long-lived GET stream; the POST only gets `202 Accepted` | On the POST's own response: JSON, or an SSE stream when there are progress events first |
@@ -44,6 +44,11 @@ in the admin UI and the docs), then remove it one release later.
 
 Streamable HTTP still uses `text/event-stream` as its streaming format. What it drops is sending
 the answer on a different connection from the request.
+
+The 2026-07-28 revision of Streamable HTTP goes further. A server offers only POST: the
+standalone GET stream, `Mcp-Session-Id` sessions and `Last-Event-ID` resume are gone, and GET or
+DELETE gets `405 Method Not Allowed`. iHub implements the 2025 revisions. Its stateless mode
+already behaves much like the new revision.
 
 ## Current state
 
@@ -71,9 +76,11 @@ the answer on a different connection from the request.
 - That worker has no entry in its `sseSessions` Map and answers
   `404 No active SSE session`.
 
-Sticky routing doesn't help either: behind a reverse proxy every request has the same peer
-address, so all traffic lands on one worker (`server/clusterSticky.js:28-39`). Behind several
-replicas it needs load-balancer affinity.
+`STICKY_SESSIONS=true` makes the transport work, but at a price. Behind a reverse proxy every
+request has the same peer address, so all connections go to one worker. That keeps the stream
+and its POSTs together, and it also puts all traffic on that one worker
+(`server/clusterSticky.js:28-39`). Behind several replicas it still needs load-balancer
+affinity.
 
 The round-robin audit found the same thing (finding #1): "Legacy SSE transport has no stateless
 mode." That finding came from reading the code. It has not been reproduced against a running
@@ -153,7 +160,8 @@ round-robin, an `initialize` on one worker followed by a `tools/call` on another
 `404 Session not found` (audit finding #1). Stateless mode avoids that.
 
 Making stateless the default for new installs, or making sessions cluster-aware, is the natural
-next step. It is listed here so it isn't lost, but it is not part of this proposal.
+next step. Stateless is also where the specification has gone: the 2026-07-28 revision has no
+sessions at all. It is listed here so it isn't lost, but it is not part of this proposal.
 
 ## Decisions needed
 
