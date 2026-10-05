@@ -1,12 +1,10 @@
 import crypto from 'crypto';
 import fs from 'fs/promises';
 import path from 'path';
-import { getRootDir } from '../pathUtils.js';
-import config from '../config.js';
 import logger from '../utils/logger.js';
+import { getContentsPath } from '../utils/contentsPath.js';
 
-const contentsDir = config.CONTENTS_DIR;
-const pepperFile = path.join(getRootDir(), contentsDir, '.usage-pepper');
+const pepperFile = getContentsPath('.usage-pepper');
 
 let pepper = null;
 

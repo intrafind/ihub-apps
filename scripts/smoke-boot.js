@@ -22,9 +22,9 @@ const rootDir = join(__dirname, '..');
  *
  * Each scenario boots against a throwaway CONTENTS_DIR, so the fresh-install
  * path (default config copied from server/defaults, every migration applied
- * from scratch) is exercised too. CONTENTS_DIR is always resolved as
- * `path.join(rootDir, CONTENTS_DIR)`, so the throwaway directory has to be
- * repo-relative — an absolute path would be re-rooted inside the repo.
+ * from scratch) is exercised too. CONTENTS_DIR is resolved against the root
+ * dir, so a repo-relative throwaway directory keeps everything under the
+ * git-ignored `.smoke-contents/`.
  *
  * Usage: node scripts/smoke-boot.js [--keep-logs]
  */
@@ -129,7 +129,7 @@ async function shutdown(child) {
 
 async function runScenario(scenario, keepLogs) {
   const port = await findFreePort();
-  // Repo-relative on purpose: the server joins CONTENTS_DIR onto the root dir.
+  // Repo-relative on purpose: the server resolves CONTENTS_DIR against the root dir.
   const contentsDir = join('.smoke-contents', randomUUID());
   const contentsPath = join(rootDir, contentsDir);
   await mkdir(contentsPath, { recursive: true });

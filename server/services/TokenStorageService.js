@@ -2,9 +2,8 @@ import 'dotenv/config';
 import crypto from 'crypto';
 import fs from 'fs/promises';
 import path from 'path';
-import { getRootDir } from '../pathUtils.js';
-import config from '../config.js';
 import logger from '../utils/logger.js';
+import { getContentsPath } from '../utils/contentsPath.js';
 
 /**
  * Create `filePath` containing `contents`, exclusively AND atomically.
@@ -45,18 +44,18 @@ class TokenStorageService {
   constructor() {
     // Initialize encryption key from environment or persistent storage
     this.encryptionKey = null;
-    this.keyFilePath = path.join(getRootDir(), config.CONTENTS_DIR, '.encryption-key');
+    this.keyFilePath = getContentsPath('.encryption-key');
     this.algorithm = 'aes-256-gcm';
-    this.storageBasePath = path.join(getRootDir(), config.CONTENTS_DIR, 'integrations');
+    this.storageBasePath = getContentsPath('integrations');
 
     // JWT secret for token signing
     this.jwtSecret = null;
-    this.jwtSecretFilePath = path.join(getRootDir(), config.CONTENTS_DIR, '.jwt-secret');
+    this.jwtSecretFilePath = getContentsPath('.jwt-secret');
 
     // RSA key pair for RS256 signing
     this.rsaKeyPair = null;
-    this.rsaPublicKeyPath = path.join(getRootDir(), config.CONTENTS_DIR, '.jwt-public-key.pem');
-    this.rsaPrivateKeyPath = path.join(getRootDir(), config.CONTENTS_DIR, '.jwt-private-key.pem');
+    this.rsaPublicKeyPath = getContentsPath('.jwt-public-key.pem');
+    this.rsaPrivateKeyPath = getContentsPath('.jwt-private-key.pem');
   }
 
   /**
