@@ -2,7 +2,11 @@ import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { getLocalizedContent, DEFAULT_LANGUAGE } from '../../../utils/localizeContent';
-import { getAdminApiErrorMessage, makeAdminApiCall } from '../../../api/adminApi';
+import {
+  fetchMarketplaceInstallations,
+  getAdminApiErrorMessage,
+  makeAdminApiCall
+} from '../../../api/adminApi';
 import { fetchJsonSchema } from '../../../utils/schemaService';
 import Icon from '../../../shared/components/Icon';
 import DualModeEditor from '../../../shared/components/DualModeEditor';
@@ -11,6 +15,7 @@ import ChangeHistoryDrawer from '../components/ChangeHistoryDrawer';
 import AdminBreadcrumb from '../components/AdminBreadcrumb';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
+import MarketplaceModelReviewNotice from '../components/marketplace/MarketplaceModelReviewNotice';
 
 function AdminModelEditPage() {
   const { t, i18n } = useTranslation();
@@ -24,6 +29,10 @@ function AdminModelEditPage() {
   const API_KEY_PLACEHOLDER = '••••••••';
 
   const [historyOpen, setHistoryOpen] = useState(false);
+  // The model id the marketplace lookup found installed, so a stale answer for
+  // a previous model id never shows on another one.
+  const [marketplaceModelId, setMarketplaceModelId] = useState(null);
+  const fromMarketplace = !isNewModel && marketplaceModelId === modelId;
   const [loading, setLoading] = useState(!isNewModel);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
@@ -170,6 +179,23 @@ function AdminModelEditPage() {
       setLoading(false);
     }
   }, [modelId]);
+
+  // Models installed from the marketplace ask to be reviewed before they are
+  // tested or enabled. Without the marketplace (feature off) there is nothing to show.
+  useEffect(() => {
+    if (isNewModel) return undefined;
+    let cancelled = false;
+    fetchMarketplaceInstallations()
+      .then(installations => {
+        if (!cancelled) setMarketplaceModelId(installations?.[`model:${modelId}`] ? modelId : null);
+      })
+      .catch(() => {
+        if (!cancelled) setMarketplaceModelId(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [modelId, isNewModel]);
 
   const loadAppsUsingModel = useCallback(async () => {
     try {
@@ -423,6 +449,8 @@ function AdminModelEditPage() {
             </div>
           </div>
         )}
+
+        {fromMarketplace && <MarketplaceModelReviewNotice className="mb-6" />}
 
         <form onSubmit={handleFormSubmit} className="space-y-8">
           <div className="space-y-8">

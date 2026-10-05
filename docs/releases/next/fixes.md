@@ -131,3 +131,17 @@ in one worker and failed, or showed stale data, on the others. They now work on 
 - **Sign-in and OAuth rate limits** now count across all workers. Before, each worker counted on
   its own, which allowed several times the configured attempts. If legitimate sign-ins now hit the
   limit, raise `rateLimit.authApi.limit`.
+  
+## Tools Without Arguments Work With Ollama and Other Strict OpenAI-Compatible Servers
+
+When a model called a tool without arguments — for example an MCP tool such as "list my issues" or
+"who am I", or a tool whose parameters are all optional — the tool ran, but the chat turn then
+failed with "Invalid request sent to openai API". Ollama and other strict OpenAI-compatible
+servers rejected the follow-up request:
+
+> invalid tool call arguments
+
+- Tool calls are now sent back to the model with valid arguments: a call without arguments as an
+  empty object, and arguments iHub had to repair exactly as the tool received them.
+- Applies to models using the `openai`, `local` (vLLM), `mistral` and `openai-responses`
+  providers.

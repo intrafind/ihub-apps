@@ -111,6 +111,17 @@ warns while the login page still offers the demo accounts with the passwords the
   its shipped password, every admin page shows a warning with links to turn the option off or to
   change the passwords.
 
+## Marketplace: Models Ask to Be Reviewed Before Testing or Enabling
+
+A model from the marketplace brings its own settings, including the endpoint URL, and testing or
+using it sends the API key it uses (its own, or the provider key when it has none) and the prompts
+to that endpoint. The marketplace now asks
+admins to review such a model first.
+
+- The detail panel of a marketplace model shows the reminder, and a model's **Install** button on
+  the browse grid opens that panel instead of installing right away.
+- The edit page of a model installed from the marketplace shows the same reminder above the form.
+
 ## Skills: Users Create, Share and Promote Their Own Skills
 
 Signed-in users can now write skills of their own on the new **Skills** page (`/skills`), the

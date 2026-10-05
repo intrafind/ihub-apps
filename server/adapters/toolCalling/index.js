@@ -50,6 +50,8 @@ export {
   createGenericTool,
   createGenericToolCall,
   createGenericToolResult,
+  serializeToolArguments,
+  withSerializedToolArguments,
   createGenericStreamingResponse,
   normalizeFinishReason,
   isFailureFinishReason,
