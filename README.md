@@ -225,7 +225,7 @@ In short: **apps** frame the use case, **skills** define reusable procedures, **
 
 ### 🔒 Full Data Control
 
-Your data never leaves your infrastructure. Deploy on-premise, in your private cloud, or air-gapped. Connect to local LLMs (LM Studio, Jan.ai, Ollama, vLLM) and self-hosted speech-to-text for complete privacy.
+Deploy on-premise, in your private cloud, or air-gapped. With local LLMs (LM Studio, Jan.ai, Ollama, vLLM) and self-hosted speech-to-text, your data never leaves your infrastructure. Cloud models (OpenAI, Anthropic, Google, Mistral, AWS Bedrock) receive the chat content they answer — group permissions and per-app model restrictions decide which users and use cases may send data to which provider.
 
 ### 🤖 Any LLM, Unified Interface
 

@@ -62,7 +62,7 @@ environment variables such as `GOOGLE_API_KEY`, `ANTHROPIC_API_KEY`, `OPENAI_API
   important apps. See the [User Guide](user-guide.md) for a tour.
 - **Admin** (`/admin`, or the user menu) configures everything: apps, models, providers, users,
   groups, authentication, branding. See the [Admin UI Guide](admin-ui.md).
-- **Admin → Features** switches on the preview features: Durable Chats (chat history), Scheduled
+- **Admin → Platform → Features** switches on the preview features: Durable Chats (chat history), Scheduled
   Tasks, Marketplace, Workflows, Agent Skills and more.
 - **Admin → Marketplace** (once enabled) installs more apps, skills, models, workflows and prompts
   — see [Marketplace](marketplace.md).
