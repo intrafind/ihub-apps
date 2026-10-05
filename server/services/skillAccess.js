@@ -493,12 +493,16 @@ export function lastUserText(messages) {
  * else by name), and the skills a user message invoked with `/name`. The last
  * user message is the current turn and is not part of it.
  *
+ * Each reference says who activated the skill (`by`): a user message's
+ * `/name` and an answer's record of a user activation (`activatedBy: 'user'`)
+ * are the user's, every other record the model's.
+ *
  * Only references: {@link resolveSkillsForTurn} keeps the ones the app and
  * the user may still use. The history may come from the client, so nothing in
  * it grants anything a `/name` in the message could not.
  *
  * @param {Array<Object>} messages - Chat messages, oldest first
- * @returns {Array<{id: string}|{name: string}>}
+ * @returns {Array<{id?: string, name?: string, by: 'user'|'model'}>}
  */
 export function earlierSkillRefs(messages) {
   const list = Array.isArray(messages) ? messages : [];
@@ -510,11 +514,14 @@ export function earlierSkillRefs(messages) {
     if (message?.role === 'assistant' && Array.isArray(message.activeSkills)) {
       // Recorded in the order they were activated: the last is the newest.
       for (const skill of [...message.activeSkills].reverse()) {
-        if (typeof skill?.id === 'string' && skill.id) refs.push({ id: skill.id });
-        else if (typeof skill?.name === 'string' && skill.name) refs.push({ name: skill.name });
+        const by = skill?.activatedBy === 'user' ? 'user' : 'model';
+        if (typeof skill?.id === 'string' && skill.id) refs.push({ id: skill.id, by });
+        else if (typeof skill?.name === 'string' && skill.name) {
+          refs.push({ name: skill.name, by });
+        }
       }
     } else if (message?.role === 'user') {
-      for (const name of skillTokensIn(messageText(message))) refs.push({ name });
+      for (const name of skillTokensIn(messageText(message))) refs.push({ name, by: 'user' });
     }
   }
   return refs;
@@ -529,7 +536,8 @@ export function earlierSkillRefs(messages) {
  * 2. the ones the user's message invokes with `/name` — origin `message`;
  * 3. the ones earlier turns of the chat activated, newest first
  *    ({@link earlierSkillRefs}) — origin `chat`. A skill stays active for the
- *    rest of a chat, whether a user named it or the model activated it.
+ *    rest of a chat, whether a user named it or the model activated it. One
+ *    the model activated is dropped once only users may start it.
  *
  * Duplicates are dropped, order is kept, and the list is capped at the app's
  * `skillSettings.maxActiveSkills`, so the skills named last win. Anything not
@@ -542,7 +550,8 @@ export function earlierSkillRefs(messages) {
  * @param {Object} options
  * @param {string[]} [options.requested] - `requestedSkills` from the request
  * @param {string} [options.text] - The user's message
- * @param {Array<{id: string}|{name: string}>} [options.earlier] - From {@link earlierSkillRefs}
+ * @param {Array<{id?: string, name?: string, by?: string}>} [options.earlier] - From
+ *   {@link earlierSkillRefs}
  * @param {Object} options.app - App config
  * @param {Object} options.user - Expanded user
  * @returns {Promise<Array<{name: string, displayName: string, description: string,
@@ -588,7 +597,13 @@ export async function resolveSkillsForTurn({ requested = [], text = '', earlier 
   };
   for (const name of explicit) add(byId(name), 'requested');
   for (const name of tokens) add(byName(name), 'message');
-  for (const ref of refs) add(ref.id ? byId(ref.id) : byName(ref.name), 'chat');
+  for (const ref of refs) {
+    const skill = ref.id ? byId(ref.id) : byName(ref.name);
+    // The model cannot start a skill only users may start; a record saying it
+    // did (made before the skill changed, or sent by a client) keeps none active.
+    if (ref.by !== 'user' && !isModelInvocable(skill)) continue;
+    add(skill, 'chat');
+  }
   return resolved;
 }
 

@@ -272,13 +272,38 @@ describe('a skill only users may start', () => {
 });
 
 describe('skills stay active across a chat', () => {
-  test('earlier turns name their skills newest first', () => {
+  test('earlier turns name their skills newest first, with who activated them', () => {
     const refs = skillAccess.earlierSkillRefs([
       user('/alpha start'),
-      answer('ok', [{ name: 'Beta', id: 'beta' }, { name: 'gamma' }]),
+      answer('ok', [
+        { name: 'Beta', id: 'beta', activatedBy: 'user' },
+        { name: 'gamma', activatedBy: 'someone' }
+      ]),
       user('/manual now')
     ]);
-    assert.deepEqual(refs, [{ name: 'gamma' }, { id: 'beta' }, { name: 'alpha' }]);
+    assert.deepEqual(refs, [
+      { name: 'gamma', by: 'model' },
+      { id: 'beta', by: 'user' },
+      { name: 'alpha', by: 'user' }
+    ]);
+  });
+
+  test('a skill only users may start stays active only when a user started it', async () => {
+    const turn = activatedBy =>
+      systemPromptFor([
+        user('send it'),
+        answer('Sent', [{ name: 'manual', id: 'manual', ...(activatedBy ? { activatedBy } : {}) }]),
+        user('and the next one')
+      ]);
+    assert.match(await turn('user'), /<active_skill name="manual">\nMANUAL BODY/);
+    assert.doesNotMatch(await turn('model'), /MANUAL BODY/);
+    // A record without `activatedBy` counts as the model's.
+    assert.doesNotMatch(await turn(null), /MANUAL BODY/);
+    // `/manual` in an earlier user message is the user's.
+    assert.match(
+      await systemPromptFor([user('/manual send it'), answer('Sent'), user('again')]),
+      /MANUAL BODY/
+    );
   });
 
   test('a skill named with /name stays active in later turns', async () => {
@@ -427,24 +452,29 @@ describe('activation records', () => {
         data: {
           phase: 'skill.activation',
           message: 'My skill',
-          data: { skillName: 'My skill', skillId: 'usk_1', description: 'Mine' }
+          data: {
+            skillName: 'My skill',
+            skillId: 'usk_1',
+            activatedBy: 'user',
+            description: 'Mine'
+          }
         }
       }
     ]);
     assert.deepEqual(state.runs[runId].skills, [
-      { name: 'My skill', description: 'Mine', id: 'usk_1' }
+      { name: 'My skill', description: 'Mine', id: 'usk_1', activatedBy: 'user' }
     ]);
   });
 
   test('the stored answer keeps it', () => {
     const stored = boundStoredActivity({
       activeSkills: [
-        { name: 'My skill', description: 'Mine', id: 'usk_1' },
-        { name: 'alpha', description: '' }
+        { name: 'My skill', description: 'Mine', id: 'usk_1', activatedBy: 'user' },
+        { name: 'alpha', description: '', activatedBy: 'somebody' }
       ]
     });
     assert.deepEqual(stored.activeSkills, [
-      { name: 'My skill', description: 'Mine', id: 'usk_1' },
+      { name: 'My skill', description: 'Mine', id: 'usk_1', activatedBy: 'user' },
       { name: 'alpha', description: '' }
     ]);
   });
@@ -468,7 +498,7 @@ describe('activation records', () => {
         { name: 'usk_1', displayName: 'Mine', description: 'd', origin: 'message' },
         { name: 'alpha', displayName: 'alpha', description: '', origin: 'chat' }
       ]),
-      [{ skillName: 'Mine', skillId: 'usk_1', description: 'd' }]
+      [{ skillName: 'Mine', skillId: 'usk_1', activatedBy: 'user', description: 'd' }]
     );
   });
 });

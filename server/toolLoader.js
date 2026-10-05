@@ -874,7 +874,8 @@ export async function runTool(toolId, params = {}, options = {}) {
     }
     logger.info('Activating skill', { component: 'ToolLoader', skillName });
     // Emit skill activation SSE event for UI indicators. `skillId` is what
-    // the next turns of the chat keep the skill active by.
+    // the next turns of the chat keep the skill active by; `activatedBy`
+    // tells them the model chose it.
     const chatId = params.chatId;
     if (chatId) {
       emitToolProgress(chatId, {
@@ -883,6 +884,7 @@ export async function runTool(toolId, params = {}, options = {}) {
         data: {
           skillName: skill.displayName,
           skillId: skill.name,
+          activatedBy: 'model',
           description: skill.description
         }
       });

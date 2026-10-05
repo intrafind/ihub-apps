@@ -60,7 +60,7 @@ reducer, `client/src/shared/run/runReducer.js`.
 
 | Phase                          | Emitted by                                  | `data`                                                  |
 | ------------------------------ | ------------------------------------------- | ------------------------------------------------------- |
-| `skill.activation`             | chat turn (slash command, `activate_skill`) | `{ skillName, skillId, description }`                   |
+| `skill.activation`             | chat turn (slash command, `activate_skill`) | `{ skillName, skillId, activatedBy, description }`      |
 | `search.status`                | iAssistant conversation adapter             | provider payload                                        |
 | `grounding`                    | Google Search grounding                     | grounding metadata                                      |
 | `search`                       | Brave web search                            | `{ query, provider }`                                   |

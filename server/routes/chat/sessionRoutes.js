@@ -120,7 +120,7 @@ export function historyForPrompt(stored) {
  *
  * @param {Array<{name: string, displayName: string, description?: string, origin: string}>} [skills]
  *   `activeSkills` of the prepared request
- * @returns {Array<{skillName: string, skillId: string, description: string}>}
+ * @returns {Array<{skillName: string, skillId: string, activatedBy: 'user', description: string}>}
  */
 export function announcedSkills(skills) {
   return (Array.isArray(skills) ? skills : [])
@@ -128,6 +128,7 @@ export function announcedSkills(skills) {
     .map(skill => ({
       skillName: skill.displayName,
       skillId: skill.name,
+      activatedBy: 'user',
       description: skill.description || ''
     }));
 }

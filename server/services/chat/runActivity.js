@@ -394,7 +394,11 @@ export function boundStoredActivity(activity) {
       compact({
         name: text(skill?.name, MAX_LABEL_CHARS) || '',
         description: text(skill?.description, MAX_LABEL_CHARS) || '',
-        id: text(skill?.id, MAX_LABEL_CHARS)
+        id: text(skill?.id, MAX_LABEL_CHARS),
+        activatedBy:
+          skill?.activatedBy === 'user' || skill?.activatedBy === 'model'
+            ? skill.activatedBy
+            : undefined
       })
     );
   }

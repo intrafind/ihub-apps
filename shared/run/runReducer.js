@@ -484,6 +484,11 @@ export function reduceRunEvent(state, envelope) {
                 // chat keep the skill active by (`name` is for display).
                 ...(typeof data.data?.skillId === 'string' && data.data.skillId
                   ? { id: data.data.skillId }
+                  : {}),
+                // Who activated it: a skill only users may start stays active
+                // only when a user did.
+                ...(data.data?.activatedBy === 'user' || data.data?.activatedBy === 'model'
+                  ? { activatedBy: data.data.activatedBy }
                   : {})
               }
             ]

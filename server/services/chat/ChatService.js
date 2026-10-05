@@ -374,7 +374,7 @@ class ChatService {
    * @param {Object} params.prep - `prepareChatRequest().data`
    * @param {string} params.chatId
    * @param {string} [params.messageId] - client exchange id of the assistant placeholder
-   * @param {Array<{skillName:string, skillId?:string, description?:string}>} [params.activatedSkills] -
+   * @param {Array<{skillName:string, skillId?:string, activatedBy?:string, description?:string}>} [params.activatedSkills] -
    *   skills the turn activates up front (`requestedSkills`, `/name` in the message)
    * @param {boolean} [params.streaming=true]
    * @param {Function} params.buildLogData - `(streaming, extra) => logData`
@@ -558,6 +558,7 @@ class ChatService {
         data: {
           skillName: skill.skillName,
           ...(skill.skillId ? { skillId: skill.skillId } : {}),
+          ...(skill.activatedBy ? { activatedBy: skill.activatedBy } : {}),
           description: skill.description || ''
         }
       });
