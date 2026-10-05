@@ -4055,13 +4055,19 @@
         "title": "Keine Integrationen konfiguriert",
         "body": "Wenden Sie sich an Ihren Administrator, um externe Integrationen zu aktivieren."
       },
-      "comingSoon": {
-        "title": "Weitere Integrationen folgen in Kürze",
-        "body": "Wir arbeiten daran, weitere Integrationen hinzuzufügen, um Ihre KI-Anwendungen zu erweitern"
+      "sections": {
+        "accounts": {
+          "title": "Ihre Konten",
+          "description": "Melden Sie sich bei Diensten an, damit iHub in Ihrem Namen mit ihnen arbeiten kann."
+        },
+        "access": {
+          "title": "Zugriff auf iHub",
+          "description": "Werkzeuge und Anwendungen, die iHub Apps in Ihrem Namen nutzen."
+        }
       },
       "connections": {
         "title": "Verbundene Apps",
-        "description": "Anwendungen, denen Sie Zugriff auf iHub Apps in Ihrem Namen erlaubt haben. Nach dem Trennen fragt die Anwendung erneut um Erlaubnis.",
+        "description": "Anwendungen, denen Sie Zugriff auf iHub Apps in Ihrem Namen erlaubt haben.",
         "empty": "Sie haben noch keine Anwendungen verbunden.",
         "disconnect": "Trennen",
         "disconnectTitle": "Anwendung trennen",
@@ -4071,6 +4077,12 @@
         "granted": "Verbunden am {{date}}",
         "lastUsed": "Zuletzt genutzt am {{date}}",
         "tokenNote": "Ein bereits ausgestelltes Access-Token funktioniert nach dem Trennen noch bis zu {{minutes}} Minuten. Ein neues kann die Anwendung nicht mehr erhalten.",
+        "permissionCount_one": "{{count}} Berechtigung",
+        "permissionCount_other": "{{count}} Berechtigungen",
+        "search": "Verbundene Apps durchsuchen",
+        "noMatches": "Keine verbundenen Apps passen zu \"{{query}}\".",
+        "showAll": "Alle {{count}} anzeigen",
+        "showFewer": "Weniger anzeigen",
         "scopes": {
           "openid": "Ihre Identität bestätigen",
           "profile": "Auf Ihren Namen und Ihre Profildaten zugreifen",

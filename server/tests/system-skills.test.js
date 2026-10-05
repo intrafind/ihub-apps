@@ -25,6 +25,8 @@ import {
 import { systemSkillToolsFor } from '../services/systemSkillTools.js';
 import { getToolsForApp, runTool } from '../toolLoader.js';
 import { chatToolSeam } from '../services/chat/chatSeams.js';
+import { RunStreamEmitter } from '../services/loop/RunStream.js';
+import { createStreamState, getRun, reduceRunEvents } from '../../shared/run/runReducer.js';
 import { generatedFilesFromArtifacts, generatedFilesOf } from '../../shared/generatedFiles.js';
 import {
   clearHeldGeneratedFiles,
@@ -265,6 +267,36 @@ describe('generated files', () => {
     assert.equal(frames[0].files, undefined);
     assert.deepEqual(frames[1].files, [delivered]);
     assert.deepEqual(collected, [delivered]);
+  });
+
+  it('survive the tool/completed contract on their way to the download card', async () => {
+    clearHeldGeneratedFiles();
+    const file = hold();
+    // A real emitter, so the frame passes the SSE v2 schema like a live turn's.
+    const envelopes = [];
+    const stream = new RunStreamEmitter({
+      streamId: 'chat-1',
+      runId: 'run-1',
+      deliver: (_streamId, envelope) => envelopes.push(envelope)
+    });
+    const seam = chatToolSeam({
+      chatId: 'chat-1',
+      buildLogData: () => ({}),
+      logInteraction: async () => {}
+    });
+    await seam.postTool(
+      { iteration: 1, meta: { stream } },
+      {
+        toolId: 'create_pdf',
+        toolDef: { id: 'create_pdf', isSystemSkillTool: true },
+        call: { id: '1' }
+      },
+      { rawResult: { files: [file] }, message: { content: '' } }
+    );
+    const delivered = { ...file, data: pdf.toString('base64') };
+    assert.deepEqual(envelopes[0].data.files, [delivered]);
+    const run = getRun(reduceRunEvents(createStreamState('chat-1'), envelopes), 'run-1');
+    assert.deepEqual(run.tools[0].files, [delivered]);
   });
 
   it('keep their bytes out of what the model sees', async () => {

@@ -25,3 +25,10 @@ and a hidden system library ("PersonalCacheLibrary"); it goes straight to their 
 Parts of **Admin → Skills** — the tab names, the **User skills** list and its settings — showed
 English text in the German interface, because a second set of skill texts replaced the first. Both
 sets are now combined, so the page is fully translated.
+
+## PDF Skill: The Download Card Appears Below the Answer
+
+When the model created a PDF with the `pdf` skill, the chat showed the `create_pdf` tool call and
+the model's description of the document, but no download card. In a stored chat, the card appeared
+only after reloading the page. In a chat that is not stored, the PDF could not be downloaded at
+all. The card now appears as soon as the PDF is created.

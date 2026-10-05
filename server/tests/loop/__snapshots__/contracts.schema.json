@@ -4595,6 +4595,38 @@
                 },
                 "required": ["proposalId", "action"],
                 "additionalProperties": false
+              },
+              "files": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "mimeType": {
+                      "type": "string"
+                    },
+                    "bytes": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "pages": {
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "data": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["id", "name", "mimeType", "bytes", "data"],
+                  "additionalProperties": false
+                }
               }
             },
             "required": ["step", "callId", "toolId", "name", "resultPreview"],
