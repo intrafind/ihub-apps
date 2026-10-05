@@ -1129,28 +1129,25 @@ spec prescribes, so clients can recover on their own:
 
 | Situation | Response |
 | --- | --- |
-| `Mcp-Session-Id` is unknown, expired, or was opened elsewhere | `404` `Session not found` — the client starts a new session with a fresh `initialize` |
+| `Mcp-Session-Id` is unknown, expired, or was opened on another replica | `404` `Session not found` — the client starts a new session with a fresh `initialize` |
 | POST that is not `initialize` and carries no session id | `400 Bad Request: Mcp-Session-Id header is required` |
 | `GET /mcp` outside a session | `405 Method Not Allowed` — there is no server-initiated SSE stream to attach to |
 
-#### Stateless mode (clustered and load-balanced deployments)
+#### Stateless mode (load-balanced deployments)
 
-Session state lives in the worker's process memory, so a session is only
-usable on the worker that opened it.
+Session state lives in the process memory of the worker that opened the
+session. Within one iHub instance that is not a problem: connections are
+spread across workers round-robin (`WORKERS` defaults to 4), so a client's
+`initialize` and its follow-up `tools/call` usually reach different workers,
+and the workers share which sessions exist. A request for a session another
+worker holds is served on the worker that received it, `DELETE /mcp` is
+forwarded to the owning worker, and legacy SSE messages are relayed to the
+worker holding the SSE stream.
 
-> **Enable stateless mode on any deployment running more than one worker.**
-> Connections are distributed across workers round-robin by default
-> (`WORKERS` defaults to 4), so a client's `initialize` and its follow-up
-> `tools/call` normally land on *different* workers. The second request
-> then gets `404 Session not found` and the client cannot make progress.
-> This applies to a single instance, not just multi-replica deployments —
-> the same is true across replicas behind a load balancer.
->
-> The alternative is `STICKY_SESSIONS=true`, which pins each client to one
-> worker by hashing its TCP peer address. That only works when clients
-> reach iHub directly: behind a reverse proxy or ingress every request
-> carries the same peer address, so all traffic collapses onto a single
-> worker. Prefer stateless mode.
+> **Enable stateless mode when several iHub replicas sit behind a load
+> balancer** without session affinity. Workers share sessions within one
+> instance only; a request that reaches another replica gets
+> `404 Session not found`, and the client starts over on every hop.
 
 Enable **stateless mode** via Admin → MCP gateway → Transports, or
 `platform.mcpServer.transports.streamableHttp.stateless: true`:
@@ -1364,13 +1361,11 @@ Troubleshooting:
   software already on file still succeed; this only blocks a genuinely new
   client. Raise the cap, or run *Remove unused dynamic clients* on
   **Admin → OAuth → Clients**.
-- Consent screen loops or CSRF errors → server was not restarted after
-  enabling OAuth (session middleware missing).
 - `403 insufficient_scope` on `/mcp` → the token carries no `mcp:*`
   scope; check the scopes on the OAuth client and re-authorize.
 - Sign-in and consent succeed but the client still reports it cannot
   connect, and `/mcp` answers `404 Session not found` on every request →
-  requests are not landing on the process that holds the session. Enable
+  requests are not landing on the replica that holds the session. Enable
   stateless mode (see [Stateless mode](#stateless-mode-load-balanced-deployments))
   or configure session affinity on the load balancer.
 - `400 Bad Request: Mcp-Session-Id header is required` → the client sent
