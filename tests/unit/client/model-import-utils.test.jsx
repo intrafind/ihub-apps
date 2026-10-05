@@ -118,6 +118,42 @@ describe('buildImportedModelConfig', () => {
     expect(config.providerId).toBeUndefined();
     expect(config.enabled).toBe(false);
   });
+
+  const whisper = {
+    id: 'whisper-large-v3-turbo',
+    name: 'Whisper Large v3 Turbo',
+    type: 'transcription',
+    url: 'https://llm-server.llmhub.t-systems.net/v2/audio/transcriptions',
+    contextWindow: 4096
+  };
+
+  it('imports a speech-to-text model of an OpenAI endpoint as a transcription model', () => {
+    const config = buildImportedModelConfig(whisper, {
+      id: 'llmhub-whisper-large-v3-turbo',
+      apiType: 'openai',
+      providerId: 'llmhub',
+      modelsUrl: 'https://llm-server.llmhub.t-systems.net/v2/models'
+    });
+    expect(config).toMatchObject({
+      modelId: 'whisper-large-v3-turbo',
+      url: 'https://llm-server.llmhub.t-systems.net/v2/audio/transcriptions',
+      provider: 'openai',
+      providerId: 'llmhub',
+      modelType: 'transcription'
+    });
+    // Chat settings mean nothing to it.
+    expect(config.contextWindow).toBeUndefined();
+  });
+
+  it('leaves it a plain import where iHub cannot run the API type’s speech models', () => {
+    const config = buildImportedModelConfig(whisper, {
+      id: 'm',
+      apiType: 'mistral',
+      providerId: 'mistral',
+      modelsUrl: 'https://api.mistral.ai/v1/models'
+    });
+    expect(config.modelType).toBeUndefined();
+  });
 });
 
 describe('buildNewProviderConfig', () => {

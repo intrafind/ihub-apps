@@ -1,5 +1,5 @@
-// server/migrations/V148__replace_workflow_code_accumulator.js
-export const version = '148';
+// server/migrations/V152__replace_workflow_code_accumulator.js
+export const version = '152';
 export const description = 'replace_workflow_code_accumulator';
 
 /** The code step the shipped corpus-analysis workflows used, and its follow-up. */

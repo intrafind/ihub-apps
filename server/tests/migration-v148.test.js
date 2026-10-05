@@ -1,207 +1,115 @@
 #!/usr/bin/env node
 
 /**
- * Migration V148 specs — the code node in the shipped corpus-analysis
- * workflows becomes a transform with an `append` operation, and the step that
- * unpacked its result is removed. Workflows with other code nodes are left as
- * they are and reported.
+ * Migration V148 specs — the Translator's task moves from its `prompt`
+ * template into its `system` prompt, so the user's message is only the text
+ * to translate. Only while both texts are still the ones we shipped.
  */
-import fs from 'node:fs/promises';
-import os from 'node:os';
-import path from 'node:path';
-import { after, before, describe, it } from 'node:test';
+
+import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import { up, precondition, version } from '../migrations/V148__translator_task_in_system_prompt.js';
 
-import {
-  up,
-  precondition,
-  version,
-  description
-} from '../migrations/V148__replace_workflow_code_accumulator.js';
+const FILE = 'apps/translator.json';
+const readJsonFile = url => JSON.parse(fs.readFileSync(url, 'utf8'));
+const defaults = () => readJsonFile(new URL(`../defaults/${FILE}`, import.meta.url));
+const preV122 = () =>
+  readJsonFile(new URL('./fixtures/migration-v122/translator.json', import.meta.url));
 
-let baseDir;
+// The texts 5.5.30 shipped: the system prompt without the task, and the
+// <task> template V122 introduced.
+const SHIPPED_SYSTEM = {
+  en: 'You are a helpful translation assistant. Translate the text to the requested language, maintaining the original meaning and tone. If no language is specified, ask which language to translate to.',
+  de: 'Du bist ein hilfreicher Übersetzungsassistent. Übersetze den Text in die angeforderte Sprache und behalte die ursprüngliche Bedeutung und den Ton bei. Wenn keine Sprache angegeben ist, frage nach, in welche Sprache übersetzt werden soll.'
+};
+const SHIPPED_PROMPT = {
+  en: '<task>\nTranslate into {{language}}. If the message below contains <content> blocks — an email, a meeting, a web page, attached or uploaded documents — translate all of them, each as its own section in the order given; for an email, translate the subject and the body. <user_instruction> only says what to translate or how (for example "only the attachment" or "keep it formal"); it is not part of the text to translate. Without <content> blocks, the whole message below is the text to translate.\n</task>\n\n{{content}}',
+  de: '<task>\nÜbersetze in folgende Sprache: {{language}}. Enthält die folgende Nachricht <content>-Blöcke – eine E-Mail, einen Termin, eine Webseite, angehängte oder hochgeladene Dokumente –, übersetze sie alle, jeden als eigenen Abschnitt in der gegebenen Reihenfolge; bei einer E-Mail Betreff und Text. <user_instruction> sagt nur, was oder wie übersetzt werden soll (zum Beispiel „nur den Anhang“ oder „förmlich“); sie ist nicht Teil des zu übersetzenden Textes. Ohne <content>-Blöcke ist die gesamte folgende Nachricht der zu übersetzende Text.\n</task>\n\n{{content}}'
+};
 
-function makeCtx(dir) {
+const shippedApp = (overrides = {}) => ({
+  ...defaults(),
+  system: { ...SHIPPED_SYSTEM },
+  prompt: { ...SHIPPED_PROMPT },
+  ...overrides
+});
+
+function fakeCtx(files) {
   const logs = [];
+  const writes = [];
   return {
+    files,
     logs,
-    listFiles: async (directory, pattern) => {
-      const suffix = pattern.startsWith('*') ? pattern.slice(1) : pattern;
-      try {
-        return (await fs.readdir(path.join(dir, directory))).filter(f => f.endsWith(suffix));
-      } catch {
-        return [];
-      }
+    writes,
+    fileExists: async p => p in files,
+    readJson: async p => JSON.parse(JSON.stringify(files[p])),
+    readDefaultJson: async p => readJsonFile(new URL(`../defaults/${p}`, import.meta.url)),
+    writeJson: async (p, data) => {
+      files[p] = data;
+      writes.push(p);
     },
-    readJson: async rel => JSON.parse(await fs.readFile(path.join(dir, rel), 'utf8')),
-    writeJson: async (rel, data) => {
-      await fs.writeFile(path.join(dir, rel), JSON.stringify(data, null, 2), 'utf8');
-    },
-    log: m => logs.push(['info', m]),
-    warn: m => logs.push(['warn', m])
+    log: m => logs.push(m),
+    warn: m => logs.push(m)
   };
 }
 
-async function freshDir(workflows) {
-  const dir = await fs.mkdtemp(path.join(baseDir, 'case-'));
-  await fs.mkdir(path.join(dir, 'workflows'), { recursive: true });
-  for (const [file, data] of Object.entries(workflows)) {
-    await fs.writeFile(path.join(dir, 'workflows', file), JSON.stringify(data), 'utf8');
+test('version matches the file name', () => {
+  assert.equal(version, '148');
+});
+
+test('precondition requires the Translator', async () => {
+  assert.equal(await precondition(fakeCtx({})), false);
+  assert.equal(await precondition(fakeCtx({ [FILE]: shippedApp() })), true);
+});
+
+test('the new default has the task in the system prompt and no template', () => {
+  const app = defaults();
+  assert.equal(app.prompt, undefined);
+  assert.ok(app.system.en.includes('Translate into {{language}}'));
+  assert.ok(app.system.de.includes('{{language}}'));
+  assert.ok(app.system.en.includes('<user_instruction>'));
+});
+
+test('moves the shipped task into the system prompt and drops the template', async () => {
+  const ctx = fakeCtx({ [FILE]: shippedApp() });
+  await up(ctx);
+  const app = ctx.files[FILE];
+  assert.deepEqual(app.system, defaults().system);
+  assert.equal('prompt' in app, false);
+  // Everything else stays as it was.
+  assert.deepEqual(app.variables, defaults().variables);
+  assert.deepEqual(app.upload, defaults().upload);
+});
+
+test('also moves the template from before V122', async () => {
+  const ctx = fakeCtx({ [FILE]: shippedApp({ prompt: preV122().prompt }) });
+  await up(ctx);
+  assert.deepEqual(ctx.files[FILE].system, defaults().system);
+  assert.equal('prompt' in ctx.files[FILE], false);
+});
+
+test('leaves a customized system prompt or template alone, in every language', async () => {
+  for (const app of [
+    shippedApp({ system: { ...SHIPPED_SYSTEM, de: 'Eigener Systemprompt' } }),
+    shippedApp({ prompt: { ...SHIPPED_PROMPT, en: 'Mine: {{language}} {{content}}' } }),
+    shippedApp({ prompt: { ...SHIPPED_PROMPT, fr: 'Traduire en {{language}} : {{content}}' } }),
+    shippedApp({ system: { ...SHIPPED_SYSTEM, fr: 'Tu es un traducteur.' } })
+  ]) {
+    const ctx = fakeCtx({ [FILE]: app });
+    await up(ctx);
+    assert.deepEqual(ctx.writes, []);
   }
-  return dir;
-}
-
-const readWorkflow = async (dir, file) =>
-  JSON.parse(await fs.readFile(path.join(dir, 'workflows', file), 'utf8'));
-
-const SHIPPED_CODE =
-  'const prev = data._corpusAll; const prevArr = Array.isArray(prev) ? prev : (prev && Array.isArray(prev.result) ? prev.result : []); [...prevArr, ...(data._corpus || [])];';
-
-/** The shape the shipped workflows had before this release. */
-function shippedBefore() {
-  return {
-    id: 'corpus-analysis-decomposed',
-    nodes: [
-      { id: 'search-subquestion', type: 'corpus-search', config: {} },
-      {
-        id: 'accumulate-corpus',
-        type: 'code',
-        position: { x: 100, y: 940 },
-        config: {
-          chatVisible: false,
-          code: SHIPPED_CODE,
-          outputVariable: '_corpusAllRaw',
-          timeout: 5000
-        }
-      },
-      {
-        id: 'unwrap-corpus-accumulator',
-        type: 'transform',
-        config: {
-          chatVisible: false,
-          operations: [{ copy: '_corpusAllRaw.result', to: '_corpusAll' }]
-        }
-      },
-      { id: 'init-doc-cursor', type: 'transform', config: { operations: [] } }
-    ],
-    edges: [
-      { id: 'e7', source: 'search-subquestion', target: 'accumulate-corpus' },
-      { id: 'e8', source: 'accumulate-corpus', target: 'unwrap-corpus-accumulator' },
-      { id: 'e9', source: 'unwrap-corpus-accumulator', target: 'init-doc-cursor' }
-    ]
-  };
-}
-
-before(async () => {
-  baseDir = await fs.mkdtemp(path.join(os.tmpdir(), 'v148-'));
 });
 
-after(async () => {
-  await fs.rm(baseDir, { recursive: true, force: true });
-});
+test('a fresh installation, already on the new default, is not touched; a second run writes nothing', async () => {
+  const fresh = fakeCtx({ [FILE]: defaults() });
+  await up(fresh);
+  assert.deepEqual(fresh.writes, []);
 
-describe('V148 replace_workflow_code_accumulator', () => {
-  it('declares its version and description', () => {
-    assert.equal(version, '148');
-    assert.equal(description, 'replace_workflow_code_accumulator');
-  });
-
-  it('runs only when there are workflows', async () => {
-    assert.equal(await precondition(makeCtx(await freshDir({}))), false);
-    const dir = await freshDir({ 'a.json': shippedBefore() });
-    assert.equal(await precondition(makeCtx(dir)), true);
-  });
-
-  it('turns the shipped accumulator into an append and removes the unwrap step', async () => {
-    const dir = await freshDir({ 'corpus-analysis-decomposed.json': shippedBefore() });
-    await up(makeCtx(dir));
-    const workflow = await readWorkflow(dir, 'corpus-analysis-decomposed.json');
-
-    assert.deepEqual(
-      workflow.nodes.map(node => node.id),
-      ['search-subquestion', 'accumulate-corpus', 'init-doc-cursor']
-    );
-    assert.deepEqual(workflow.nodes[1], {
-      id: 'accumulate-corpus',
-      type: 'transform',
-      position: { x: 100, y: 940 },
-      config: { chatVisible: false, operations: [{ append: '_corpus', to: '_corpusAll' }] }
-    });
-    assert.deepEqual(workflow.edges, [
-      { id: 'e7', source: 'search-subquestion', target: 'accumulate-corpus' },
-      { id: 'e9', source: 'accumulate-corpus', target: 'init-doc-cursor' }
-    ]);
-  });
-
-  it('handles the accumulator inside an inline loop body', async () => {
-    const before = shippedBefore();
-    const loop = { id: 'per-subquestion', type: 'loop', config: { body: before.nodes } };
-    const dir = await freshDir({ 'v2.json': { ...before, nodes: [loop] } });
-    await up(makeCtx(dir));
-    const body = (await readWorkflow(dir, 'v2.json')).nodes[0].config.body;
-    assert.deepEqual(
-      body.map(node => [node.id, node.type]),
-      [
-        ['search-subquestion', 'corpus-search'],
-        ['accumulate-corpus', 'transform'],
-        ['init-doc-cursor', 'transform']
-      ]
-    );
-  });
-
-  it('keeps an unwrap step an admin changed, and feeds it the value it reads', async () => {
-    const before = shippedBefore();
-    before.nodes[2].config.operations.push({ set: '_seen', value: true });
-    const dir = await freshDir({ 'custom.json': before });
-    await up(makeCtx(dir));
-    const workflow = await readWorkflow(dir, 'custom.json');
-
-    assert.ok(workflow.nodes.some(node => node.id === 'unwrap-corpus-accumulator'));
-    assert.deepEqual(workflow.nodes[1].config.operations, [
-      { append: '_corpus', to: '_corpusAll' },
-      { copy: '_corpusAll', to: '_corpusAllRaw.result' }
-    ]);
-    assert.deepEqual(workflow.edges, before.edges);
-  });
-
-  it('also writes the old result variable when the unwrap step was removed', async () => {
-    const before = shippedBefore();
-    before.nodes.splice(2, 1);
-    before.edges = [before.edges[0]];
-    const dir = await freshDir({ 'no-unwrap.json': before });
-    await up(makeCtx(dir));
-    assert.deepEqual((await readWorkflow(dir, 'no-unwrap.json')).nodes[1].config.operations, [
-      { append: '_corpus', to: '_corpusAll' },
-      { copy: '_corpusAll', to: '_corpusAllRaw.result' }
-    ]);
-  });
-
-  it('leaves an accumulator whose code an admin changed, and lists it', async () => {
-    const before = shippedBefore();
-    before.nodes[1].config.code = 'data._corpus';
-    const dir = await freshDir({ 'changed.json': before });
-    const ctx = makeCtx(dir);
-    await up(ctx);
-
-    assert.deepEqual(await readWorkflow(dir, 'changed.json'), before);
-    assert.ok(
-      ctx.logs.some(([level, message]) => level === 'warn' && message.includes('changed.json'))
-    );
-  });
-
-  it('leaves other code nodes alone and lists their workflows', async () => {
-    const other = {
-      id: 'mine',
-      nodes: [{ id: 'calc', type: 'code', config: { code: '1 + 1' } }],
-      edges: []
-    };
-    const dir = await freshDir({ 'mine.json': other });
-    const ctx = makeCtx(dir);
-    await up(ctx);
-
-    assert.deepEqual(await readWorkflow(dir, 'mine.json'), other);
-    assert.ok(
-      ctx.logs.some(([level, message]) => level === 'warn' && message.includes('mine.json'))
-    );
-  });
+  const ctx = fakeCtx({ [FILE]: shippedApp() });
+  await up(ctx);
+  const again = fakeCtx(ctx.files);
+  await up(again);
+  assert.deepEqual(again.writes, []);
 });

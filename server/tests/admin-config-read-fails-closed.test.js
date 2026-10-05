@@ -67,10 +67,6 @@ jest.unstable_mockModule('../middleware/oidcAuth.js', () => ({
   reconfigureOidcProviders: async () => {}
 }));
 
-jest.unstable_mockModule('../websocket/realtimeTranscription.js', () => ({
-  testRealtimeConnection: async () => ({ ok: true })
-}));
-
 const { default: registerAdminConfigRoutes } = await import('../routes/admin/configs.js');
 const { default: registerAdminGroupRoutes } = await import('../routes/admin/groups.js');
 

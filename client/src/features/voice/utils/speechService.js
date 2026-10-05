@@ -1,5 +1,5 @@
 import AzureSpeechRecognition from '../../../utils/azureRecognitionService';
-import VllmRealtimeRecognition from '../../../utils/vllmRealtimeRecognitionService';
+import ModelSpeechRecognition from '../../../utils/modelRecognitionService';
 
 /**
  * Dictation (realtime speech-to-text) building blocks shared by the chat's
@@ -7,22 +7,45 @@ import VllmRealtimeRecognition from '../../../utils/vllmRealtimeRecognitionServi
  * panel, so both run exactly the same code path.
  *
  * Services a recognizer can be built for:
- *   - `browser`       — the browser Web Speech API (SpeechRecognition).
- *   - `azure`         — Azure Speech SDK in the browser (token brokered by iHub).
- *   - `vllm-realtime` — mic audio streamed to iHub, proxied to a vLLM endpoint.
+ *   - `browser` — the browser Web Speech API (SpeechRecognition).
+ *   - `azure`   — Azure Speech SDK in the browser (token brokered by iHub).
+ *   - `model`   — mic audio streamed through iHub to a transcription model
+ *                 (Voxtral on vLLM or Mistral, Gemini Transcribe Live, …).
+ *
+ * A dictation choice is `{ service, modelId }`; `modelId` is set for `model`.
  */
-export const SPEECH_SERVICES = ['browser', 'azure', 'vllm-realtime'];
+export const SPEECH_SERVICES = ['browser', 'azure', 'model'];
+
+const BROWSER = Object.freeze({ service: 'browser', modelId: '' });
 
 /** Display name of a dictation service (admin UI). */
 export function getSpeechServiceLabel(service, t) {
   switch (service) {
     case 'azure':
       return t('admin.voiceInput.services.azure', 'Azure Speech');
-    case 'vllm-realtime':
-      return t('admin.voiceInput.services.vllmRealtime', 'vLLM Realtime (server-proxied)');
+    case 'model':
+      return t('admin.voiceInput.services.model', 'Transcription model');
     default:
       return t('admin.voiceInput.services.browser', 'Browser (Web Speech API)');
   }
+}
+
+/**
+ * A dictation choice as one `<select>` value — `browser`, `azure` or
+ * `model:<id>` — and back, so one picker offers services and models side by side.
+ */
+export function toDictationValue(choice) {
+  return choice?.service === 'model'
+    ? `model:${choice.modelId || ''}`
+    : choice?.service || 'browser';
+}
+
+/** @returns {{ service: string, modelId: string }} */
+export function fromDictationValue(value) {
+  if (typeof value === 'string' && value.startsWith('model:')) {
+    return { service: 'model', modelId: value.slice('model:'.length) };
+  }
+  return { service: value || 'browser', modelId: '' };
 }
 
 export function isBrowserSpeechSupported() {
@@ -34,47 +57,52 @@ export function isBrowserSpeechSupported() {
 
 /**
  * Whether a service's platform backend is switched on in Admin → Voice Input.
- * The browser service needs no backend.
+ * The browser service needs no backend; `model` asks about the default
+ * dictation model, which must be an enabled transcription model.
  *
  * @param {string} service
  * @param {object} [speech] `platformConfig.speech`
  */
 export function isSpeechServiceEnabled(service, speech) {
   if (service === 'azure') return !!speech?.azure?.enabled;
-  if (service === 'vllm-realtime') return !!speech?.realtime?.enabled;
+  if (service === 'model') return !!(speech?.dictation?.modelId && speech.dictation.available);
   return true;
 }
 
 /**
- * The platform-wide default dictation service (`speech.defaultService`). Falls
- * back to the browser when the chosen backend is switched off, so apps that
- * follow the default keep working instead of failing on a disabled backend.
+ * The platform-wide default dictation choice (`speech.defaultService`, plus
+ * `speech.dictation.modelId` for a model). Falls back to the browser when the
+ * chosen backend is switched off, so apps that follow the default keep working
+ * instead of failing on a disabled backend.
  *
  * @param {object} [speech] `platformConfig.speech`
- * @returns {'browser'|'azure'|'vllm-realtime'}
+ * @returns {{ service: 'browser'|'azure'|'model', modelId: string }}
  */
 export function getPlatformDefaultService(speech) {
-  const configured = SPEECH_SERVICES.includes(speech?.defaultService)
+  const service = SPEECH_SERVICES.includes(speech?.defaultService)
     ? speech.defaultService
     : 'browser';
-  return isSpeechServiceEnabled(configured, speech) ? configured : 'browser';
+  if (!isSpeechServiceEnabled(service, speech)) return BROWSER;
+  return { service, modelId: service === 'model' ? speech.dictation.modelId : '' };
 }
 
 /**
- * The dictation service an app uses. An explicit choice wins; `default` (or no
- * setting) follows the platform default. `custom` has no implementation and has
- * always used the browser.
+ * The dictation choice an app uses. An explicit choice wins; `default` (or no
+ * setting, or a model choice without a model) follows the platform default.
+ * `custom` has no implementation and has always used the browser.
  *
  * @param {object} app
  * @param {object} [platformConfig]
- * @returns {'browser'|'azure'|'vllm-realtime'}
+ * @returns {{ service: 'browser'|'azure'|'model', modelId: string }}
  */
 export function resolveSpeechService(app, platformConfig) {
-  const service = app?.settings?.speechRecognition?.service;
-  if (service === 'browser' || service === 'azure' || service === 'vllm-realtime') {
-    return service;
+  const recognition = app?.settings?.speechRecognition;
+  const service = recognition?.service;
+  if (service === 'browser' || service === 'azure') return { service, modelId: '' };
+  if (service === 'model' && recognition.modelId) {
+    return { service, modelId: recognition.modelId };
   }
-  if (service === 'custom') return 'browser';
+  if (service === 'custom') return BROWSER;
   return getPlatformDefaultService(platformConfig?.speech);
 }
 
@@ -85,11 +113,12 @@ export function resolveSpeechService(app, platformConfig) {
  *
  * @param {string} service
  * @param {object} [opts]
+ * @param {string} [opts.modelId] Transcription model, for the `model` service.
  * @param {string} [opts.host] Per-app Azure host; falls back to the platform host.
  * @param {object} [opts.speech] `platformConfig.speech` (public shape).
  * @throws {Error} with `code: 'not-supported'` when the browser has no Web Speech API.
  */
-export function createSpeechRecognizer(service, { host = '', speech } = {}) {
+export function createSpeechRecognizer(service, { modelId = '', host = '', speech } = {}) {
   switch (service) {
     case 'azure': {
       const recognition = new AzureSpeechRecognition();
@@ -100,9 +129,9 @@ export function createSpeechRecognizer(service, { host = '', speech } = {}) {
       recognition.useServerToken = !!(speech?.azure?.enabled && speech?.azure?.keyConfigured);
       return recognition;
     }
-    case 'vllm-realtime':
-      // The endpoint is configured server-side, so no host is needed here.
-      return new VllmRealtimeRecognition();
+    case 'model':
+      // The endpoint and key stay on the model, server-side: only its id goes out.
+      return new ModelSpeechRecognition(modelId);
     default: {
       const SpeechRecognition =
         typeof window !== 'undefined'
@@ -150,8 +179,8 @@ export function toRecognitionLang(language) {
 
 /**
  * Normalize one recognizer result event to `{ interim, final }` text.
- * Browser SpeechRecognition events carry a results list; the Azure and vLLM
- * realtime services emit `{ text, isFinal }` and set `usesTextEventShape`.
+ * Browser SpeechRecognition events carry a results list; the Azure and model
+ * services emit `{ text, isFinal }` and set `usesTextEventShape`.
  */
 export function parseRecognitionResult(event, usesTextEventShape) {
   let interim = '';
@@ -226,8 +255,8 @@ export function getRecognitionErrorMessage(event, t) {
     case 'network':
       return t('voiceInput.error.network', 'Network error. Please check your connection.');
     case 'service':
-      // Error surfaced by a proxied backend (e.g. the vLLM realtime endpoint).
-      // Prefer the server-supplied message when available.
+      // Error surfaced by a proxied backend (a transcription model's endpoint,
+      // a model the user may not use). Prefer the server-supplied message.
       return (
         event.message ||
         t('voiceInput.error.service', 'Transcription service unavailable. Please try again.')
