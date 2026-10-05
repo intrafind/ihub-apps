@@ -374,7 +374,8 @@ class ChatService {
    * @param {Object} params.prep - `prepareChatRequest().data`
    * @param {string} params.chatId
    * @param {string} [params.messageId] - client exchange id of the assistant placeholder
-   * @param {Array<{skillName:string, description?:string}>} [params.activatedSkills] - slash-command skills
+   * @param {Array<{skillName:string, skillId?:string, description?:string}>} [params.activatedSkills] -
+   *   skills the turn activates up front (`requestedSkills`, `/name` in the message)
    * @param {boolean} [params.streaming=true]
    * @param {Function} params.buildLogData - `(streaming, extra) => logData`
    * @param {number} [params.timeoutMs] - hard timeout per model call
@@ -554,7 +555,11 @@ class ChatService {
       stream.emit(SSE_V2_EVENTS.TOOL_PROGRESS, {
         phase: 'skill.activation',
         message: skill.skillName,
-        data: { skillName: skill.skillName, description: skill.description || '' }
+        data: {
+          skillName: skill.skillName,
+          ...(skill.skillId ? { skillId: skill.skillId } : {}),
+          description: skill.description || ''
+        }
       });
     }
 

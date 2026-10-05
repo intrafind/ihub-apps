@@ -390,10 +390,13 @@ export function boundStoredActivity(activity) {
     };
   }
   if (Array.isArray(activity.activeSkills) && activity.activeSkills.length > 0) {
-    out.activeSkills = activity.activeSkills.slice(0, MAX_STORED_LIST).map(skill => ({
-      name: text(skill?.name, MAX_LABEL_CHARS) || '',
-      description: text(skill?.description, MAX_LABEL_CHARS) || ''
-    }));
+    out.activeSkills = activity.activeSkills.slice(0, MAX_STORED_LIST).map(skill =>
+      compact({
+        name: text(skill?.name, MAX_LABEL_CHARS) || '',
+        description: text(skill?.description, MAX_LABEL_CHARS) || '',
+        id: text(skill?.id, MAX_LABEL_CHARS)
+      })
+    );
   }
   if (Array.isArray(activity.answerSource?.sources) && activity.answerSource.sources.length) {
     out.answerSource = { sources: strings(activity.answerSource.sources, 20, 100), type: 'mixed' };

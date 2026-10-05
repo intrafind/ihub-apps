@@ -1,10 +1,13 @@
 import configCache from './configCache.js';
 import { createSourceManager } from './sources/index.js';
 import {
+  activeSkillsOf,
+  describeSkillCatalog,
   getAssignedSkillIds,
-  getUsablePersonalSkills,
   getUsableSkills,
-  loadUsableSkill
+  isModelInvocable,
+  loadUsableSkill,
+  searchSkillCatalog
 } from './services/skillAccess.js';
 import { actionTracker } from './actionTracker.js';
 import { emitToolProgress } from './services/loop/RunStream.js';
@@ -234,6 +237,12 @@ export async function discoverA2aTools() {
 
 /** Agent ids whose id clash has been logged, so each is reported once. */
 const reportedA2aIdConflicts = new Set();
+
+/**
+ * Most skill names the skill tools list as allowed values. A longer list costs
+ * more tokens in every request than it saves; the call is checked anyway.
+ */
+export const MAX_SKILL_NAME_ENUM = 100;
 
 /**
  * Mark the skills of every A2A agent whose id is also a local tool's (base)
@@ -701,65 +710,95 @@ export async function getToolsForApp(app, language = null, context = {}) {
     }
   }
 
-  // Add skill activation tools if the skills feature is enabled and the app
-  // has skills configured, or the user has skills of their own to use here.
+  // Skill tools, while the skills feature is on. `activate_skill` and
+  // `read_skill_resource` come when there is a skill to load: one the model is
+  // offered (the list in the system prompt) or one active in this turn
+  // (`context.activeSkills`); their names are the only values the tools take.
+  // `find_skill` comes when that list is shortened to fit its token budget.
   // A system skill (e.g. `pdf`) also brings built-in tools (`create_pdf`):
-  // they come with the usable global skills — the set the prompt lists.
-  const appSkills = await getUsableSkills({ skillIds: app.skills, user: context.user });
-  if (
-    isFeatureEnabled('skills', configCache.getFeatures()) &&
-    ((Array.isArray(app.skills) && app.skills.length > 0) ||
-      (await getUsablePersonalSkills({ app, user: context.user })).length > 0)
-  ) {
+  // they come with the usable global skills.
+  if (isFeatureEnabled('skills', configCache.getFeatures())) {
     const lang = language || 'en';
-    const activateDesc = {
-      en: 'Load the full instructions for a skill when it is relevant to the current task. Call this when you identify a task that matches an available skill from the <available_skills> list.',
-      de: 'Lade die vollständigen Anweisungen für einen Skill, wenn er für die aktuelle Aufgabe relevant ist.'
-    };
-    const readDesc = {
-      en: 'Read a referenced file from an activated skill (scripts, references, assets).',
-      de: 'Lese eine referenzierte Datei aus einem aktivierten Skill.'
-    };
+    const catalog = await describeSkillCatalog({ app, user: context.user });
+    const active = Array.isArray(context.activeSkills) ? context.activeSkills : [];
+    const skillNames = [
+      ...new Set([...catalog.entries.map(entry => entry.name), ...active.map(skill => skill.name)])
+    ];
+    if (skillNames.length > 0) {
+      const skillNameParameter = description => ({
+        type: 'string',
+        description,
+        ...(skillNames.length <= MAX_SKILL_NAME_ENUM ? { enum: skillNames } : {})
+      });
+      const activateDesc = {
+        en: 'Load the full instructions for a skill when it is relevant to the current task. Call this when you identify a task that matches an available skill from the <available_skills> list.',
+        de: 'Lade die vollständigen Anweisungen für einen Skill, wenn er für die aktuelle Aufgabe relevant ist.'
+      };
+      const readDesc = {
+        en: 'Read a referenced file from an activated skill (scripts, references, assets).',
+        de: 'Lese eine referenzierte Datei aus einem aktivierten Skill.'
+      };
 
-    appTools.push({
-      id: 'activate_skill',
-      name: getLocalizedString({ en: 'Activate Skill', de: 'Skill aktivieren' }, lang),
-      description: getLocalizedString(activateDesc, lang),
-      isInternalTool: true,
-      parameters: {
-        type: 'object',
-        properties: {
-          skill_name: {
-            type: 'string',
-            description: 'The name of the skill to activate'
-          }
-        },
-        required: ['skill_name']
-      }
-    });
-
-    appTools.push({
-      id: 'read_skill_resource',
-      name: getLocalizedString({ en: 'Read Skill Resource', de: 'Skill-Ressource lesen' }, lang),
-      description: getLocalizedString(readDesc, lang),
-      isInternalTool: true,
-      parameters: {
-        type: 'object',
-        properties: {
-          skill_name: {
-            type: 'string',
-            description: 'The name of the skill whose resource to read'
+      appTools.push({
+        id: 'activate_skill',
+        name: getLocalizedString({ en: 'Activate Skill', de: 'Skill aktivieren' }, lang),
+        description: getLocalizedString(activateDesc, lang),
+        isInternalTool: true,
+        parameters: {
+          type: 'object',
+          properties: {
+            skill_name: skillNameParameter('The name of the skill to activate')
           },
-          file_path: {
-            type: 'string',
-            description:
-              "Relative path from the skill root, e.g. 'references/REFERENCE.md' or 'scripts/extract.py'"
-          }
-        },
-        required: ['skill_name', 'file_path']
-      }
-    });
+          required: ['skill_name']
+        }
+      });
 
+      appTools.push({
+        id: 'read_skill_resource',
+        name: getLocalizedString({ en: 'Read Skill Resource', de: 'Skill-Ressource lesen' }, lang),
+        description: getLocalizedString(readDesc, lang),
+        isInternalTool: true,
+        parameters: {
+          type: 'object',
+          properties: {
+            skill_name: skillNameParameter('The name of the skill whose resource to read'),
+            file_path: {
+              type: 'string',
+              description:
+                "Relative path from the skill root, e.g. 'references/REFERENCE.md' or 'scripts/extract.py'"
+            }
+          },
+          required: ['skill_name', 'file_path']
+        }
+      });
+
+      if (catalog.compact) {
+        appTools.push({
+          id: 'find_skill',
+          name: getLocalizedString({ en: 'Find Skill', de: 'Skill suchen' }, lang),
+          description: getLocalizedString(
+            {
+              en: 'Search the available skills by keywords and get the full description of the best matches. Use it when the <available_skills> list is shortened and none of the listed names clearly fits the task.',
+              de: 'Durchsuche die verfügbaren Skills nach Stichworten und erhalte die vollständige Beschreibung der besten Treffer.'
+            },
+            lang
+          ),
+          isInternalTool: true,
+          parameters: {
+            type: 'object',
+            properties: {
+              query: {
+                type: 'string',
+                description: 'A few keywords for the task, e.g. "weekly newsletter draft"'
+              }
+            },
+            required: ['query']
+          }
+        });
+      }
+    }
+
+    const appSkills = await getUsableSkills({ skillIds: app.skills, user: context.user });
     const skillTools = systemSkillToolsFor(appSkills, { language: lang, model: context.model });
     appTools = appTools.concat(skillTools.filter(t => !appTools.some(a => a.id === t.id)));
   }
@@ -804,6 +843,12 @@ export async function runTool(toolId, params = {}, options = {}) {
     if (!skillName) {
       throw new Error('skill_name parameter is required');
     }
+    // A skill whose instructions this turn's system prompt already carries
+    // (it is active in the chat) is not loaded a second time.
+    const active = activeSkillsOf(params.appConfig).find(entry => entry.name === skillName);
+    if (active?.full) {
+      return `Skill '${skillName}' is already active: its instructions are in the <active_skill name="${skillName}"> block of the system prompt. Follow them; there is no need to load it again.`;
+    }
     // Only a skill this app (or agent node) and this user may use loads; any
     // other name gets the same answer as a missing skill.
     const skill = await loadUsableSkill(skillName, {
@@ -818,14 +863,28 @@ export async function runTool(toolId, params = {}, options = {}) {
       });
       return `Skill '${skillName}' not found or could not be loaded.`;
     }
+    // `disable-model-invocation`: only a user starts the skill, with `/name`.
+    // Once they did, it is active and its instructions may be read.
+    if (!active && !isModelInvocable(skill)) {
+      logger.warn('Refused to activate a skill only users may start', {
+        component: 'ToolLoader',
+        skillName
+      });
+      return `Skill '${skillName}' can only be started by the user, by writing /${skill.displayName} in a message.`;
+    }
     logger.info('Activating skill', { component: 'ToolLoader', skillName });
-    // Emit skill activation SSE event for UI indicators
+    // Emit skill activation SSE event for UI indicators. `skillId` is what
+    // the next turns of the chat keep the skill active by.
     const chatId = params.chatId;
     if (chatId) {
       emitToolProgress(chatId, {
         phase: 'skill.activation',
         message: skill.displayName,
-        data: { skillName: skill.displayName, description: skill.description }
+        data: {
+          skillName: skill.displayName,
+          skillId: skill.name,
+          description: skill.description
+        }
       });
     }
 
@@ -888,6 +947,27 @@ export async function runTool(toolId, params = {}, options = {}) {
       return `Resource '${filePath}' not found in skill '${skillName}' or access denied.`;
     }
     return content;
+  }
+
+  // Search the skills the model is offered, when their list in the system
+  // prompt is shortened: the same catalog, so the same access rules.
+  if (toolId === 'find_skill') {
+    const query = typeof params.query === 'string' ? params.query.trim() : '';
+    if (!query) {
+      return 'Give a few keywords that describe the task, e.g. "weekly newsletter draft".';
+    }
+    const { entries } = await describeSkillCatalog({ app: params.appConfig, user: params.user });
+    const matches = searchSkillCatalog(entries, query);
+    logger.info('Searching skills', {
+      component: 'ToolLoader',
+      query,
+      matches: matches.length
+    });
+    if (matches.length === 0) {
+      return `No skill matches "${query}". Try other keywords, or go ahead without a skill.`;
+    }
+    const lines = matches.map(entry => `- ${entry.name}: ${entry.description}`);
+    return `Skills matching "${query}":\n${lines.join('\n')}\n\nCall activate_skill with a skill's name to load its instructions.`;
   }
 
   // Built-in tools of system skills (`create_pdf`, …). They are offered only

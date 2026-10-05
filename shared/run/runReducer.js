@@ -479,7 +479,12 @@ export function reduceRunEvent(state, envelope) {
               ...run.skills,
               {
                 name: data.data?.skillName || data.message,
-                description: data.data?.description || ''
+                description: data.data?.description || '',
+                // The global skill name or user skill id the next turns of the
+                // chat keep the skill active by (`name` is for display).
+                ...(typeof data.data?.skillId === 'string' && data.data.skillId
+                  ? { id: data.data.skillId }
+                  : {})
               }
             ]
           };
