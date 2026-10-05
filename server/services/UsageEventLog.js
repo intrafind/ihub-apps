@@ -1,12 +1,10 @@
 import fs from 'fs/promises';
 import path from 'path';
-import { getRootDir } from '../pathUtils.js';
-import config from '../config.js';
 import logger from '../utils/logger.js';
 import { createJsonlAppender } from '../utils/jsonlAppender.js';
+import { getContentsPath } from '../utils/contentsPath.js';
 
-const contentsDir = config.CONTENTS_DIR;
-const dataDir = path.join(getRootDir(), contentsDir, 'data');
+const dataDir = getContentsPath('data');
 const eventFile = path.join(dataDir, 'usage-events.jsonl');
 
 const appender = createJsonlAppender({

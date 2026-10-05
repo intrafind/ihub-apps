@@ -37,10 +37,10 @@ import fs from 'fs/promises';
 import { createReadStream } from 'fs';
 import { createInterface } from 'readline';
 import config from '../../config.js';
-import { getRootDir } from '../../pathUtils.js';
 import logger from '../../utils/logger.js';
 import { getRunSummaryRepository, normalizeRunSummary } from './RunSummaryRepository.js';
 import { RUNTIME_NAMESPACES } from '../../storage/namespaces.js';
+import { getContentsPath } from '../../utils/contentsPath.js';
 
 const COMPONENT = 'RunSummaryImport';
 
@@ -57,13 +57,7 @@ export const IMPORT_STATE_KEY = 'run-summaries';
  * *legacy* location, frozen by what is already on disk, and it must not follow
  * a future change to where the ledger writes.
  */
-export const LEGACY_LEDGER_INDEX_DIR = path.join(
-  getRootDir(),
-  config.CONTENTS_DIR,
-  config.DATA_DIR,
-  'run-log',
-  'index'
-);
+export const LEGACY_LEDGER_INDEX_DIR = getContentsPath(config.DATA_DIR, 'run-log', 'index');
 
 /**
  * The execution registry file.
@@ -73,9 +67,7 @@ export const LEGACY_LEDGER_INDEX_DIR = path.join(
  * `contents/data/`, not under the override, and the import has to read the
  * file that actually exists.
  */
-export const LEGACY_EXECUTION_REGISTRY_FILE = path.join(
-  getRootDir(),
-  config.CONTENTS_DIR,
+export const LEGACY_EXECUTION_REGISTRY_FILE = getContentsPath(
   'data',
   'workflow-state',
   'execution-registry.json'
