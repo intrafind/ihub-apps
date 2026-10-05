@@ -1,18 +1,15 @@
 {
   "speech": {
     "defaultService": "browser",
+    "dictation": {
+      "modelId": ""
+    },
     "transcription": {
       "defaultModelId": ""
     },
     "tts": {
       "enabled": false,
       "defaultModelId": ""
-    },
-    "realtime": {
-      "enabled": false,
-      "url": "ws://localhost:8080/v1/realtime",
-      "model": "mistralai/Voxtral-Mini-4B-Realtime-2602",
-      "apiKey": ""
     },
     "azure": {
       "enabled": false,
@@ -206,7 +203,9 @@
     "defaultGroups": ["anonymous"]
   },
   "proxyAuth": {
-    "enabled": false
+    "enabled": false,
+    "trustedProxies": ["loopback"],
+    "sharedSecretHeader": "X-Proxy-Secret"
   },
   "localAuth": {
     "enabled": true,
@@ -435,6 +434,19 @@
     "enabled": true,
     "maxPromptsPerUser": 0,
     "maxVersions": 50,
+    "sharing": {
+      "allowUsers": true,
+      "allowGroups": true,
+      "allowEveryone": true,
+      "restrictToGroups": []
+    }
+  },
+  "userSkills": {
+    "enabled": true,
+    "maxSkillsPerUser": 50,
+    "maxVersions": 50,
+    "maxSkillSizeKB": 256,
+    "maxFilesPerSkill": 20,
     "sharing": {
       "allowUsers": true,
       "allowGroups": true,

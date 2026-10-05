@@ -233,6 +233,13 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
   // installation lets users keep prompts of their own (#2519).
   const userPromptsEnabled =
     platformConfig?.userPrompts?.enabled === true && auth?.isAuthenticated === true;
+  // Personal skills (own or shared) are offered in the `/` picker of every
+  // app that does not opt out with `skillSettings.allowPersonal: false` —
+  // also in apps without global skills of their own.
+  const personalSkillsAvailable =
+    platformConfig?.userSkills?.enabled === true &&
+    auth?.isAuthenticated === true &&
+    app?.skillSettings?.allowPersonal !== false;
   const [promptDraft, setPromptDraft] = useState(null);
   const [promptSavedNotice, setPromptSavedNotice] = useState(false);
   const handleSaveAsPrompt = useMemo(
@@ -1483,70 +1490,6 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
     }
   };
 
-  const handleSkillSelect = useCallback(
-    skill => {
-      if (processing) return;
-
-      const displayMessage = `/${skill.name}`;
-      const apiMessage = `Activate and follow the "${skill.name}" skill to help me with the next task.`;
-
-      const params = {
-        modelId: selectedModel,
-        style: selectedStyle,
-        temperature,
-        outputFormat: selectedOutputFormat,
-        language: currentLanguage,
-        ...(thinkingEnabled !== null ? { thinkingEnabled } : {}),
-        ...(thinkingLevel !== null ? { thinkingLevel } : {}),
-        ...(thinkingThoughts !== null ? { thinkingThoughts } : {}),
-        ...(effectiveEnabledTools !== null && effectiveEnabledTools !== undefined
-          ? { enabledTools: effectiveEnabledTools }
-          : {}),
-        ...(app?.websearch?.enabled ? { websearchEnabled } : {}),
-        ...(imageAspectRatio ? { imageAspectRatio } : {}),
-        ...(imageQuality ? { imageQuality } : {})
-      };
-
-      sendChatMessage({
-        displayMessage: {
-          content: displayMessage,
-          meta: { rawContent: displayMessage }
-        },
-        apiMessage: {
-          content: apiMessage,
-          promptTemplate: null,
-          variables: {},
-          imageData: null,
-          fileData: null
-        },
-        params,
-        sendChatHistory,
-        requestedSkill: skill.name,
-        messageMetadata: {
-          customResponseRenderer: app?.customResponseRenderer,
-          outputFormat: selectedOutputFormat
-        }
-      });
-    },
-    [
-      processing,
-      sendChatMessage,
-      app,
-      selectedModel,
-      selectedStyle,
-      temperature,
-      selectedOutputFormat,
-      currentLanguage,
-      sendChatHistory,
-      thinkingEnabled,
-      thinkingLevel,
-      thinkingThoughts,
-      effectiveEnabledTools,
-      imageAspectRatio,
-      imageQuality
-    ]
-  );
-
   const handleInputChange = e => {
     setInput(e.target.value);
   };
@@ -2612,13 +2555,11 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
       imageQuality,
       onImageAspectRatioChange: setImageAspectRatio,
       onImageQualityChange: setImageQuality,
-      // Skill activation
-      onSkillSelect: handleSkillSelect,
-      // Skills slash command gating
+      // Skills in the `/` picker: a picked skill goes into the text as
+      // `/<skill-name> ` and the server activates it from the message.
       skillsSlashEnabled:
         featureFlags.isEnabled('skills', false) &&
-        Array.isArray(app?.skills) &&
-        app.skills.length > 0,
+        ((Array.isArray(app?.skills) && app.skills.length > 0) || personalSkillsAvailable),
       // Clarification state
       clarificationPending,
       // Document token size warning

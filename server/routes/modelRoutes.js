@@ -125,7 +125,7 @@ export default function registerModelRoutes(app, { getLocalizedError }) {
       // Filter by model type. Default to chat models so transcription models
       // never leak into the chat model selector, magic prompt, compare mode,
       // workflows, or the default-model fallback (G9). `?type=transcription`
-      // returns the permitted transcription models (for the app editor picker),
+      // returns the permitted transcription models,
       // `?type=tts` the permitted text-to-speech models (read aloud).
       // Unknown types are a 400, not a silent fallback to chat — otherwise a
       // future model type would silently return the wrong list.

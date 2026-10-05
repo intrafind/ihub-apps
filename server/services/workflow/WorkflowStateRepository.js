@@ -47,14 +47,13 @@
  */
 import fs from 'fs/promises';
 import path from 'path';
-import config from '../../config.js';
-import { getRootDir } from '../../pathUtils.js';
 import logger from '../../utils/logger.js';
 import { atomicWriteJSON } from '../../utils/atomicWrite.js';
 import { isValidId } from '../../utils/pathSecurity.js';
 import { getStorage, readFacet } from '../../storage/bootstrap.js';
 import { StorageError } from '../../storage/errors.js';
 import { RUNTIME_NAMESPACES } from '../../storage/namespaces.js';
+import { getContentsPath } from '../../utils/contentsPath.js';
 
 const COMPONENT = 'WorkflowStateRepository';
 
@@ -71,12 +70,7 @@ export const LEGACY_STATE_FILE = 'latest.json';
  * this is where the legacy directories already are, and an installation with
  * `DATA_DIR` overridden still has them here.
  */
-export const DEFAULT_STATE_DIR = path.join(
-  getRootDir(),
-  config.CONTENTS_DIR,
-  'data',
-  'workflow-state'
-);
+export const DEFAULT_STATE_DIR = getContentsPath('data', 'workflow-state');
 
 /** Namespace holding the "this import already ran" markers. */
 export const IMPORT_STATE_NAMESPACE = RUNTIME_NAMESPACES.runtimeImports;

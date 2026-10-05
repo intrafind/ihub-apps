@@ -20,8 +20,8 @@
 import fs from 'fs/promises';
 import path from 'path';
 import { getRootDir } from '../pathUtils.js';
-import config from '../config.js';
 import logger from './logger.js';
+import { getContentsPath } from './contentsPath.js';
 
 /**
  * Recursively copies files and directories from source to destination,
@@ -101,7 +101,7 @@ export async function copyDefaultConfiguration() {
   try {
     const rootDir = getRootDir();
     const defaultConfigPath = path.join(rootDir, 'server', 'defaults');
-    const contentsPath = path.join(rootDir, config.CONTENTS_DIR);
+    const contentsPath = getContentsPath();
 
     // Check if default config directory exists
     try {
@@ -223,7 +223,7 @@ export async function expandManagedDefaultFiles(defaultsPath, entries = MANAGED_
  */
 export async function syncManagedDefaultFiles({
   defaultsPath = path.join(getRootDir(), 'server', 'defaults'),
-  contentsPath = path.join(getRootDir(), config.CONTENTS_DIR),
+  contentsPath = getContentsPath(),
   entries = MANAGED_DEFAULT_FILES
 } = {}) {
   let updated = 0;

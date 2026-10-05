@@ -25,8 +25,8 @@ This guide provides comprehensive installation instructions for iHub Apps across
 
 1. **Download the latest binary** from [GitHub Releases](https://github.com/intrafind/ihub-apps/releases)
 2. **Extract and run** the platform-specific executable
-3. **Open** http://localhost:3000 in your browser
-4. **Start using** the pre-configured AI applications
+3. **Open** http://localhost:3001 in your browser — the binary's port is set by `PORT` in the `config.env` next to the executable
+4. **Follow the setup wizard**: sign in as `admin` / `password123`, connect your first AI provider, and start using the pre-configured AI applications (see [Getting Started](GETTING_STARTED.md))
 
 That's it! No dependencies, no complex setup required.
 
@@ -155,7 +155,7 @@ chmod +x ihub-apps-v*-linux
 
 #### Step 3: Configure Environment (Optional)
 
-Set environment variables for API keys:
+API keys can be entered in the browser — in the setup wizard on first start, or later under **Admin → Providers** — where they are stored encrypted. Alternatively, set environment variables for API keys:
 
 **Windows (PowerShell):**
 ```powershell
@@ -202,8 +202,8 @@ PORT=3000
 
 #### Step 5: Verify Installation
 
-1. **Check console output** for "Server running on port 3000"
-2. **Open browser** to http://localhost:3000
+1. **Check console output** for the port the server listens on (3001 with the shipped `config.env`)
+2. **Open browser** to http://localhost:3001 (or the port you configured)
 3. **Verify interface** loads with default applications available
 4. **Test functionality** by trying a simple chat interaction
 

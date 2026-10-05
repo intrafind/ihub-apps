@@ -70,7 +70,7 @@ The server reads settings from the environment or a `.env` file such as `config.
 | `GOOGLE_API_KEY`           | API key for Google models                                         | –                                                |
 | `DEFAULT_API_KEY`          | Fallback API key used when a model specific key is missing        | –                                                |
 | `LOCAL_API_KEY`            | Generic API key for local models                                  | –                                                |
-| `CONTENTS_DIR`             | Directory containing the `contents` folder                        | `contents`                                       |
+| `CONTENTS_DIR`             | Contents directory, absolute or relative to the installation root | `contents`                                       |
 | `DATA_DIR`                 | Directory for storing application data                            | `data`                                           |
 | `APP_ROOT_DIR`             | Override the application root path when running packaged binaries | –                                                |
 | `BRAVE_SEARCH_API_KEY`     | API key for the Brave Search tool                                 | –                                                |
@@ -88,6 +88,8 @@ For Model Context Protocol (MCP) servers, see [MCP Integration](mcp-integration.
 | `PROXY_AUTH_GROUPS_HEADER` | Optional header with comma separated group names                  | –                                                |
 | `PROXY_AUTH_JWKS`          | JSON Web Key Set URL for verifying forwarded JWTs                 | –                                                |
 | `PROXY_AUTH_JWT_HEADER`    | Header containing the JWT if not using `Authorization`            | `Authorization`                                  |
+| `PROXY_AUTH_TRUSTED_PROXIES` | Comma-separated addresses/subnets the proxy connects from; the identity headers are used only from these. Replaces `proxyAuth.trustedProxies` (default `loopback`) | – |
+| `PROXY_AUTH_SHARED_SECRET` | Secret the proxy sends in `proxyAuth.sharedSecretHeader` (default `X-Proxy-Secret`); the identity headers are used only with it | – |
 | `JWT_SECRET`               | HMAC secret for signing JWTs. **Only required when `jwt.algorithm` is `HS256`.** RS256 (the default) uses auto-generated RSA key files instead. | – |
 | `JWT_PRIVATE_KEY`          | PEM-encoded RSA private key for RS256 JWT signing. Overrides the auto-generated key stored at `contents/.jwt-private-key.pem`. | – |
 | `JWT_PUBLIC_KEY`           | PEM-encoded RSA public key for RS256 JWT verification. Overrides the auto-generated key stored at `contents/.jwt-public-key.pem`. | – |

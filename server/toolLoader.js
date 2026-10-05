@@ -1,6 +1,10 @@
 import configCache from './configCache.js';
 import { createSourceManager } from './sources/index.js';
-import { getSkillContent, getSkillResource } from './services/skillLoader.js';
+import {
+  getAssignedSkillIds,
+  getUsablePersonalSkills,
+  loadUsableSkill
+} from './services/skillAccess.js';
 import { actionTracker } from './actionTracker.js';
 import { emitToolProgress } from './services/loop/RunStream.js';
 import { isFeatureEnabled } from './featureRegistry.js';
@@ -691,11 +695,12 @@ export async function getToolsForApp(app, language = null, context = {}) {
     }
   }
 
-  // Add skill activation tools if the skills feature is enabled and the app has skills configured
+  // Add skill activation tools if the skills feature is enabled and the app
+  // has skills configured, or the user has skills of their own to use here.
   if (
     isFeatureEnabled('skills', configCache.getFeatures()) &&
-    Array.isArray(app.skills) &&
-    app.skills.length > 0
+    ((Array.isArray(app.skills) && app.skills.length > 0) ||
+      (await getUsablePersonalSkills({ app, user: context.user })).length > 0)
   ) {
     const lang = language || 'en';
     const activateDesc = {
@@ -787,18 +792,28 @@ export async function runTool(toolId, params = {}, options = {}) {
     if (!skillName) {
       throw new Error('skill_name parameter is required');
     }
-    logger.info('Activating skill', { component: 'ToolLoader', skillName });
-    const content = await getSkillContent(skillName);
-    if (!content) {
+    // Only a skill this app (or agent node) and this user may use loads; any
+    // other name gets the same answer as a missing skill.
+    const skill = await loadUsableSkill(skillName, {
+      skillIds: getAssignedSkillIds(params.appConfig),
+      user: params.user,
+      app: params.appConfig
+    });
+    if (!skill) {
+      logger.warn('Refused to activate a skill that is not available here', {
+        component: 'ToolLoader',
+        skillName
+      });
       return `Skill '${skillName}' not found or could not be loaded.`;
     }
+    logger.info('Activating skill', { component: 'ToolLoader', skillName });
     // Emit skill activation SSE event for UI indicators
     const chatId = params.chatId;
     if (chatId) {
       emitToolProgress(chatId, {
         phase: 'skill.activation',
-        message: skillName,
-        data: { skillName, description: content.description || '' }
+        message: skill.displayName,
+        data: { skillName: skill.displayName, description: skill.description }
       });
     }
 
@@ -811,8 +826,8 @@ export async function runTool(toolId, params = {}, options = {}) {
     if (workflowState && workflowState.data) {
       workflowState.data._activatedSkills = workflowState.data._activatedSkills || {};
       workflowState.data._activatedSkills[skillName] = {
-        body: content.body,
-        description: content.description || '',
+        body: skill.body,
+        description: skill.description,
         activatedAt: new Date().toISOString(),
         activatedBy: params.user?.isAgent ? `agent:${params.user.profileId || 'unknown'}` : 'llm'
       };
@@ -821,7 +836,7 @@ export async function runTool(toolId, params = {}, options = {}) {
           event: 'agent.skill.activated',
           chatId,
           skillName,
-          description: content.description || '',
+          description: skill.description,
           activatedBy: 'llm'
         });
       } catch {
@@ -829,11 +844,10 @@ export async function runTool(toolId, params = {}, options = {}) {
       }
     }
 
-    let result = content.body;
+    let result = skill.body;
     // Include list of available resources if any exist
-    const allResources = [...content.references, ...content.scripts, ...content.assets];
-    if (allResources.length > 0) {
-      result += `\n\n---\nAvailable resources you can read with read_skill_resource:\n${allResources.map(r => `- ${r}`).join('\n')}`;
+    if (skill.resources.length > 0) {
+      result += `\n\n---\nAvailable resources you can read with read_skill_resource:\n${skill.resources.map(r => `- ${r}`).join('\n')}`;
     }
     return result;
   }
@@ -844,8 +858,20 @@ export async function runTool(toolId, params = {}, options = {}) {
     if (!skillName || !filePath) {
       throw new Error('skill_name and file_path parameters are required');
     }
+    const skill = await loadUsableSkill(skillName, {
+      skillIds: getAssignedSkillIds(params.appConfig),
+      user: params.user,
+      app: params.appConfig
+    });
+    if (!skill) {
+      logger.warn('Refused to read a resource of a skill that is not available here', {
+        component: 'ToolLoader',
+        skillName
+      });
+      return `Resource '${filePath}' not found in skill '${skillName}' or access denied.`;
+    }
     logger.info('Reading skill resource', { component: 'ToolLoader', skillName, filePath });
-    const content = await getSkillResource(skillName, filePath);
+    const content = typeof filePath === 'string' ? await skill.readFile(filePath) : null;
     if (content === null) {
       return `Resource '${filePath}' not found in skill '${skillName}' or access denied.`;
     }

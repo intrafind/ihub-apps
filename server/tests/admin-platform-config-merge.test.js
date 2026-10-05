@@ -11,6 +11,9 @@
  * (Admin → Prompts → Variables) are edited through this generic endpoint
  * rather than a dedicated route, so they must round-trip.
  *
+ * `proxyAuth.sharedSecretHeader` is removed from every request at runtime, so
+ * a save naming a header that sign-in or request handling needs is refused.
+ *
  * Note: The repo's source is native ESM, so this file uses
  * `jest.unstable_mockModule` + dynamic imports. Run with
  * `NODE_OPTIONS=--experimental-vm-modules`.
@@ -50,10 +53,6 @@ jest.unstable_mockModule('../services/TokenStorageService.js', () => ({
     encryptString: v => v,
     decryptString: v => v
   }
-}));
-
-jest.unstable_mockModule('../websocket/realtimeTranscription.js', () => ({
-  testRealtimeConnection: async () => ({ ok: true })
 }));
 
 jest.unstable_mockModule('../services/AuditLogService.js', () => ({
@@ -243,5 +242,48 @@ describe('POST /api/admin/configs/platform section persistence', () => {
     expect(saved.mcpServer).toEqual(before.mcpServer);
     expect(saved.auth).toEqual(before.auth);
     expect(saved.oauth).toEqual(before.oauth);
+  });
+});
+
+describe('POST /api/admin/configs/platform proxyAuth.sharedSecretHeader', () => {
+  const stored = {
+    auth: { mode: 'proxy' },
+    proxyAuth: {
+      enabled: true,
+      userHeader: 'X-Remote-User',
+      jwtProviders: [{ name: 'sso', header: 'X-Token', jwkUrl: 'https://sso.example.com/jwks' }]
+    }
+  };
+
+  beforeEach(async () => {
+    state.rootDir = await fs.mkdtemp(path.join(os.tmpdir(), 'ihub-platform-cfg-'));
+    await fs.mkdir(path.join(state.rootDir, 'contents', 'config'), { recursive: true });
+    await fs.writeFile(platformPath(), JSON.stringify(stored, null, 2));
+  });
+
+  afterEach(async () => {
+    await fs.rm(state.rootDir, { recursive: true, force: true });
+  });
+
+  test.each(['Authorization', 'X-Forwarded-Email', 'X-Remote-User', 'x-token', 'X Secret'])(
+    'refuses %s and leaves the file as stored',
+    async sharedSecretHeader => {
+      const response = await request(createTestApp())
+        .post('/api/admin/configs/platform')
+        .send({ ...stored, proxyAuth: { ...stored.proxyAuth, sharedSecretHeader } });
+
+      expect(response.status).toBe(400);
+      expect(JSON.stringify(response.body)).toContain('proxyAuth.sharedSecretHeader');
+      expect(await readPlatform()).toEqual(stored);
+    }
+  );
+
+  test('saves a header name nothing else reads', async () => {
+    const response = await request(createTestApp())
+      .post('/api/admin/configs/platform')
+      .send({ ...stored, proxyAuth: { ...stored.proxyAuth, sharedSecretHeader: 'X-Gate' } });
+
+    expect(response.status).toBe(200);
+    expect((await readPlatform()).proxyAuth.sharedSecretHeader).toBe('X-Gate');
   });
 });

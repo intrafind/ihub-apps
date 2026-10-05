@@ -243,6 +243,8 @@ test('OpenAI ids without metadata are typed by name; duplicates and id-less entr
       { id: 'gpt-5' },
       { id: 'text-embedding-3-small' },
       { id: 'whisper-1' },
+      { id: 'gpt-4o-transcribe' },
+      { id: 'gpt-4o-mini-tts' },
       { id: 'dall-e-3' },
       { id: 'omni-moderation-latest' },
       { id: 'gpt-5' },
@@ -252,11 +254,49 @@ test('OpenAI ids without metadata are typed by name; duplicates and id-less entr
   const types = Object.fromEntries(models.map(m => [m.id, m.type]));
   assert.deepEqual(types, {
     'dall-e-3': 'image',
+    'gpt-4o-mini-tts': 'audio',
+    'gpt-4o-transcribe': 'transcription',
     'gpt-5': 'chat',
     'omni-moderation-latest': 'moderation',
     'text-embedding-3-small': 'embedding',
-    'whisper-1': 'audio'
+    'whisper-1': 'transcription'
   });
+});
+
+test('a speech-to-text model is a transcription model, called on the audio API', async () => {
+  const body = {
+    data: [
+      ...LLM_HUB_BODY.data,
+      {
+        id: 'whisper-large-v3-turbo',
+        object: 'model',
+        owned_by: 'T-Systems International',
+        meta_data: { model_type: 'STT', display_name: 'Whisper Large v3 Turbo' }
+      }
+    ]
+  };
+  const { fetch } = fakeFetch(fakeResponse(200, body));
+  const { models } = await discoverModels(
+    { url: 'https://llm-server.llmhub.t-systems.net/v2', provider: 'openai', apiKey: 'k' },
+    { fetch }
+  );
+  const whisper = models.find(m => m.id === 'whisper-large-v3-turbo');
+  assert.equal(whisper.type, 'transcription');
+  assert.equal(whisper.url, 'https://llm-server.llmhub.t-systems.net/v2/audio/transcriptions');
+  // Other types keep their chat URL.
+  const embed = models.find(m => m.id === 'text-embedding-bge-m3');
+  assert.equal(embed.url, 'https://llm-server.llmhub.t-systems.net/v2/chat/completions');
+});
+
+test('only the OpenAI API types call a transcription model on the audio API', () => {
+  assert.equal(
+    buildInferenceUrl('local', 'http://gpu:8000/v1', 'whisper', 'transcription'),
+    'http://gpu:8000/v1/audio/transcriptions'
+  );
+  assert.equal(
+    buildInferenceUrl('mistral', 'https://api.mistral.ai/v1', 'voxtral-mini', 'transcription'),
+    'https://api.mistral.ai/v1/chat/completions'
+  );
 });
 
 test('a body that is not a model listing is rejected', () => {

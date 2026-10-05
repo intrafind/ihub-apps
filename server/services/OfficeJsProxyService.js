@@ -21,12 +21,11 @@
 import path from 'path';
 import { createHash } from 'crypto';
 import { promises as fs } from 'fs';
-import config from '../config.js';
-import { getRootDir } from '../pathUtils.js';
 import { httpFetch } from '../utils/httpConfig.js';
 import { atomicWriteFile } from '../utils/atomicWrite.js';
 import { resolveAndValidatePath } from '../utils/pathSecurity.js';
 import logger from '../utils/logger.js';
+import { getContentsPath } from '../utils/contentsPath.js';
 
 /** Matches the CDN's own `cache-control: max-age=14400`. */
 const DEFAULT_TTL_MS = 4 * 60 * 60 * 1000;
@@ -98,7 +97,7 @@ export function contentTypeFor(relPath) {
 }
 
 export function getOfficeJsCacheDir() {
-  return path.join(getRootDir(), config.CONTENTS_DIR, 'data', 'office-js-cache');
+  return getContentsPath('data', 'office-js-cache');
 }
 
 /**

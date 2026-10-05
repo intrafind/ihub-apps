@@ -6,8 +6,8 @@ import RecordingTest from './RecordingTest';
 /**
  * Admin → Voice Input → "Test voice input": end-to-end checks that run in the
  * admin's own browser, on the same code path end users hit, against the SAVED
- * configuration (the WebSocket proxy and the Azure token route read the saved
- * platform config, not the form).
+ * configuration (the Azure token route reads the saved platform config, not
+ * the form; a model is tested as it is saved in Admin → Models).
  *
  * @param {object} props
  * @param {object} props.speech Saved speech config in the public client shape.
@@ -43,8 +43,15 @@ function VoiceInputTestPanel({ speech, models, dirty, t, language }) {
 
       <MicrophoneCheck t={t} />
       <hr className="border-gray-100 dark:border-gray-700" />
-      {/* Remount on a new saved default so the preselected service follows it. */}
-      <DictationTest key={speech.defaultService} speech={speech} t={t} language={language} />
+      {/* Remount on a new saved default (or once its model is known to be
+          available) so the preselected service follows it. */}
+      <DictationTest
+        key={`${speech.defaultService}:${speech.dictation?.modelId || ''}:${!!speech.dictation?.available}`}
+        speech={speech}
+        models={models}
+        t={t}
+        language={language}
+      />
       <hr className="border-gray-100 dark:border-gray-700" />
       <RecordingTest speech={speech} models={models} t={t} language={language} />
     </div>

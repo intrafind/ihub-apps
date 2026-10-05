@@ -22,9 +22,9 @@ import googleTranscribe, {
   buildTranscriptionConfig,
   extractTranscript,
   isPendingStatus,
-  normalizeApiBase,
-  pcm16ToWav
+  normalizeApiBase
 } from '../transcription/googleTranscribeProvider.js';
+import { pcm16ToWav } from '../transcription/wav.js';
 import vllmRealtime from '../transcription/vllmRealtimeProvider.js';
 import { resolveApiKey } from '../transcription/credentials.js';
 

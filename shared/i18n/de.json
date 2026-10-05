@@ -60,6 +60,7 @@
     "promptSearch": {
       "placeholder": "Prompts durchsuchen...",
       "appSpecific": "App",
+      "skill": "Skill",
       "viewAll": "Alle Prompts anzeigen"
     },
     "toggleImageUpload": "Bild-Upload umschalten",
@@ -868,26 +869,29 @@
     },
     "voiceInput": {
       "title": "Spracheingabe (Speech-to-Text)",
-      "description": "Konfigurieren Sie die Speech-to-Text-Backends und die Standards, die Apps verwenden. Apps folgen den Standards, sofern sie im App-Editor keinen eigenen Dienst bzw. kein eigenes Modell auswählen.",
+      "description": "Legen Sie fest, was Apps für Spracheingabe, Transkription und Vorlesen verwenden. Apps folgen dieser Auswahl, sofern sie im App-Editor keine eigene treffen. Endpunkte und Schlüssel von Transkriptions- und Text-to-Speech-Modellen werden unter Admin → Modelle festgelegt.",
       "loadError": "Spracheingabe-Einstellungen konnten nicht geladen werden",
       "saveSuccess": "Spracheingabe-Einstellungen gespeichert.",
       "saveError": "Spracheingabe-Einstellungen konnten nicht gespeichert werden",
-      "realtime": {
-        "title": "vLLM Realtime (serverseitig)",
-        "description": "Überträgt Mikrofon-Audio über den iHub-Server an einen vLLM-Realtime-Endpunkt (z. B. Voxtral). URL und API-Schlüssel bleiben auf dem Server. Legen Sie ihn oben als Standard fest oder wählen Sie „vLLM Realtime“ als Spracherkennungsdienst einer App.",
-        "enabled": "vLLM-Realtime-Transkription aktivieren",
-        "url": "Realtime-WebSocket-URL",
+      "dictation": {
+        "title": "Spracheingabe (Mikrofon-Schaltfläche)",
+        "description": "Was Sprache in Text umwandelt, wenn Benutzer im Chat die Mikrofon-Schaltfläche drücken. Gilt für jede App, deren Spracherkennungsdienst „Plattform-Standard“ ist.",
+        "service": "Spracherkennung",
+        "azureNotEnabled": "Azure Speech ist unten nicht aktiviert. Bis dahin verwenden Apps, die dem Plattform-Standard folgen, den Browser.",
+        "modelUnavailable": "Dieses Modell ist deaktiviert oder existiert nicht mehr. Bis es aktiviert ist, verwenden Apps, die dem Plattform-Standard folgen, den Browser.",
+        "modelHint": "Das Mikrofon wird über den iHub-Server an dieses Modell gestreamt; sein Endpunkt und Schlüssel bleiben auf dem Server. Streamende Modelle zeigen den Text während des Sprechens, andere fügen ihn am Ende ein. Benutzer brauchen über ihre Gruppen Zugriff auf das Modell.",
+        "browserHint": "Läuft im Browser mit der Web Speech API. Welche Browser sie unterstützen und wohin sie das Audio senden, entscheidet der Browser.",
+        "noModels": "Aktivieren Sie unter Admin → Modelle ein Transkriptionsmodell, um es hier anzubieten."
+      },
+      "transcription": {
+        "title": "Transkription (Aufnahmen und Uploads)",
+        "description": "Das Modell, das Aufnahmen sowie Audio-/Video-Uploads in Apps transkribiert, die die Transkription aktivieren, ohne ein eigenes Modell auszuwählen.",
         "model": "Modell",
-        "apiKey": "API-Schlüssel (optional)",
-        "apiKeyPlaceholder": "Leer lassen, falls keiner",
-        "apiKeyHint": "Verschlüsselt gespeichert. Lokales vLLM benötigt meist keinen Schlüssel. Ein angezeigter Wert ***REDACTED*** bedeutet, dass bereits ein Schlüssel gesetzt ist — belassen Sie ihn, um ihn beizubehalten.",
-        "test": "Verbindung testen",
-        "testing": "Teste…",
-        "testHint": "Testet die Verbindung vom iHub-Server zum vLLM-Realtime-Endpunkt mit den obigen Werten (der gespeicherte Schlüssel wird verwendet, wenn das Feld ***REDACTED*** anzeigt)."
+        "modelUnavailable": "Dieses Modell ist deaktiviert oder existiert nicht mehr. Aufnahmen schlagen daher in Apps fehl, die sich auf den Standard verlassen."
       },
       "azure": {
         "title": "Azure Speech",
-        "description": "Azure Cognitive Services Speech läuft im Browser über ein kurzlebiges Token. Der Abonnementschlüssel wird verschlüsselt auf dem Server gespeichert und pro Sitzung gegen ein Token getauscht, sodass er den Browser nie erreicht. Host/Region sind die Standardwerte, wenn eine App keinen eigenen Host festlegt.",
+        "description": "Die Verbindung für den Spracheingabedienst Azure Speech. Azure Speech läuft im Browser über ein kurzlebiges Token: Der Abonnementschlüssel wird verschlüsselt auf dem Server gespeichert und pro Sitzung gegen ein Token getauscht, sodass er den Browser nie erreicht. Host/Region sind die Standardwerte, wenn eine App keinen eigenen Host festlegt.",
         "enabled": "Azure Speech aktivieren",
         "host": "Standard-Host / -Endpunkt",
         "region": "Region",
@@ -904,20 +908,14 @@
         }
       },
       "notEnabled": "nicht aktiviert",
+      "noModel": "Keines",
+      "testConnection": "Verbindung testen",
+      "testingConnection": "Teste…",
       "services": {
         "browser": "Browser (Web Speech API)",
         "azure": "Azure Speech",
-        "vllmRealtime": "vLLM Realtime (über den Server)"
-      },
-      "defaults": {
-        "title": "Standards",
-        "description": "Gilt für jede App ohne eigene Spracheinstellung (Spracherkennungsdienst „Plattform-Standard“, kein Transkriptionsmodell). Apps, die einen Dienst oder ein Modell auswählen, behalten ihre Auswahl.",
-        "service": "Diktierdienst (Mikrofon-Schaltfläche)",
-        "serviceNotEnabled": "{{service}} ist unten nicht aktiviert. Bis dahin verwenden Apps, die dem Plattform-Standard folgen, den Browser.",
-        "transcriptionModel": "Transkriptionsmodell (Aufnahme)",
-        "noModel": "Keines",
-        "modelUnavailable": "Dieses Modell ist deaktiviert oder existiert nicht mehr. Aufnahmen schlagen daher in Apps fehl, die sich auf den Standard verlassen.",
-        "transcriptionModelHint": "Transkribiert Aufnahmen sowie Audio-/Video-Uploads in Apps, die die Transkription aktivieren, ohne ein Modell auszuwählen."
+        "model": "Transkriptionsmodell",
+        "models": "Transkriptionsmodelle"
       },
       "test": {
         "title": "Spracheingabe testen",
@@ -1276,7 +1274,7 @@
         "supportsImageGeneration": "Aktivieren, wenn dieses Modell Bilder erzeugen kann (z.B. Gemini Bildmodelle)",
         "maxReferenceImages": "Maximale Anzahl von Referenzbildern (1-14)",
         "modelType": "Chat-Modelle beantworten Prompts. Transkriptionsmodelle wandeln Audio über einen Echtzeit-Endpunkt (z. B. Voxtral) in Text um. Sprachausgabemodelle lesen Chat-Nachrichten vor (z. B. Voxtral TTS).",
-        "realtimeUrl": "WebSocket-URL des vLLM-Echtzeit-Endpunkts. Sie bleibt serverseitig und erreicht niemals den Browser.",
+        "realtimeUrl": "Endpunkt des Transkriptionsdienstes: eine vLLM-/v1/realtime-WebSocket-URL, eine OpenAI-kompatible /audio/transcriptions-URL (Whisper mit dem Anbieter OpenAI oder Local) oder die API des Anbieters. Er bleibt serverseitig und erreicht niemals den Browser.",
         "nativeWebSearch": "Apps mit Websuche verwenden auf diesem Modell die integrierte Suche des Anbieters. Für Modelle oder Gateways ohne Unterstützung ausschalten; sie greifen dann auf Brave Search zurück.",
         "promptCachingOpenAI": "Sendet einen Cache-Schlüssel, damit Anfragen mit gleichem Prompt-Anfang den Cache von OpenAI wiederverwenden. Für api.openai.com standardmäßig an; für OpenAI-kompatible Server ausschalten, die unbekannte Parameter ablehnen.",
         "promptCachingExplicit": "Markiert Tools, System-Prompt und Unterhaltung zum Cachen. Gecachte Eingaben kosten etwa ein Zehntel normaler Eingaben, das Schreiben in den Cache aber ein Viertel mehr – das lohnt sich, wenn dieselbe App innerhalb von fünf Minuten erneut genutzt wird. Nur für Modelle, die Prompt-Caching unterstützen.",
@@ -1288,6 +1286,7 @@
         "maxOutputTokens": "Leer bedeutet der Standardwert ({{value}}), nicht unbegrenzt. Reasoning-Modelle verbrauchen ihre Denk-Tokens aus diesem Limit – halten Sie es deutlich über der längsten erwarteten Antwort.",
         "ttsUrl": "Sprach-Endpunkt des Anbieters. Er bleibt auf dem Server und erreicht nie den Browser.",
         "ttsVoice": "Stimmen-ID des Anbieters: eine Mistral-Vorlage wie en_paul_neutral, gb_jane_neutral oder fr_marie_neutral oder die ID einer in Ihrem Mistral-Konto gespeicherten Stimme. Leer verwendet en_paul_neutral.",
+        "ttsVoiceGoogle": "Eine der vorgefertigten Gemini-Stimmen, etwa Kore, Puck oder Charon. Jede spricht alle Sprachen; die Sprache wird am Text erkannt. Leer bedeutet Kore.",
         "ttsVoices": "Eine Nachricht in einer dieser Sprachen wird mit der zugeordneten Stimme gelesen; alle anderen Sprachen verwenden die Stimme oben. Die Sprache wird an der Nachricht selbst erkannt.",
         "ttsVoicesAfterSave": "Speichern Sie das Modell einmal, um hier die Stimmen des Anbieters anzuzeigen und eigene Stimmen anzulegen.",
         "linkedProvider": "Verwendet den API-Schlüssel des Anbieters „{{provider}}“ und dessen API-Typ ({{apiType}})."
@@ -1388,6 +1387,10 @@
         "endOfLife": "Abkündigung: {{date}}",
         "importCount": "{{count}} Modelle importieren",
         "importing": "Wird importiert…",
+        "createProviderOnly": "Anbieter ohne Modelle anlegen",
+        "providerOnlyHint": "Wählen Sie die Modelle, die in „{{provider}}“ importiert werden sollen, oder legen Sie den Anbieter ohne Modelle an und importieren Sie sie später.",
+        "providerOnlyCreated": "Der Anbieter „{{provider}}“ wurde ohne Modelle angelegt.",
+        "providerOnlyNext": "Er enthält den Endpunkt und seinen API-Schlüssel. Um später Modelle hinzuzufügen, öffnen Sie erneut „Von URL importieren“ und wählen diesen Anbieter, oder verknüpfen Sie im Modell-Editor ein Modell mit ihm.",
         "doneSummary": "{{ok}} von {{total}} Modellen in {{provider}} importiert.",
         "providerCreated": "Der Anbieter „{{provider}}“ wurde angelegt und hält den API-Schlüssel. Sie verwalten ihn unter Anbieter.",
         "testHint": "Prüfen Sie jedes Modell mit „Testen“ in der Modellliste und ergänzen Sie Angaben, die der Endpunkt nicht liefert, etwa die Tool-Unterstützung.",
@@ -1395,6 +1398,7 @@
           "embedding": "Embedding",
           "rerank": "Reranker",
           "audio": "Audio",
+          "transcription": "Transkription",
           "image": "Bild",
           "moderation": "Moderation",
           "other": "Kein Chat-Modell"
@@ -1782,6 +1786,14 @@
           "running": "Test läuft…",
           "resultTitle": "LDAP-Anmeldetest"
         }
+      },
+      "proxy": {
+        "headersIgnoredWarning": "Sofern PROXY_AUTH_TRUSTED_PROXIES oder PROXY_AUTH_SHARED_SECRET nicht auf dem Server gesetzt ist, werden die Benutzer- und Gruppen-Header ignoriert, bis Sie vertrauenswürdige Proxys eintragen oder ein gemeinsames Geheimnis auswählen. Ohne eines davon könnte jeder Client, der den Server erreicht, sie setzen.",
+        "trustedProxiesLabel": "Vertrauenswürdige Proxys",
+        "trustedProxiesHelp": "Adressen oder Subnetze, von denen der Proxy sich verbindet, durch Kommas getrennt (zum Beispiel loopback, 10.0.0.5 oder 10.0.0.0/8). Die Header werden nur bei Verbindungen von diesen Adressen verwendet. Der Standardwert loopback deckt einen Proxy auf demselben Host oder im selben Pod ab; wenn andere lokale Prozesse (etwa ein Service-Mesh-Sidecar) Datenverkehr an iHub weiterleiten, setzen Sie zusätzlich ein gemeinsames Geheimnis.",
+        "sharedSecretHeaderLabel": "Header für das gemeinsame Geheimnis",
+        "sharedSecretLabel": "Gemeinsames Geheimnis",
+        "sharedSecretHelp": "Ein Geheimnis, das der Proxy im Header für das gemeinsame Geheimnis sendet. Ist es gesetzt, werden die Header nur bei Anfragen verwendet, die es enthalten. Zusammen mit vertrauenswürdigen Proxys müssen beide zutreffen: Für einen Proxy an anderer Stelle tragen Sie oben seine Adresse ein oder leeren die Liste, um sich allein auf das Geheimnis zu verlassen."
       }
     },
     "officeIntegration": {
@@ -3081,6 +3093,8 @@
         "platformDefaultService": "Plattform-Standard ({{service}})",
         "browserService": "Browser (Web Speech API)",
         "platformDefaultServiceHint": "Folgt dem unter Admin → Spracheingabe festgelegten Standard, auch bei späteren Änderungen.",
+        "dictationModelHint": "Das Mikrofon wird über den iHub-Server an dieses Transkriptionsmodell gestreamt. Benutzer brauchen über ihre Gruppen Zugriff auf das Modell.",
+        "dictationModelUnavailable": "Dieses Modell ist deaktiviert oder existiert nicht mehr. Die Spracheingabe schlägt in dieser App daher fehl.",
         "platformDefaultTranscriptionModel": "Plattform-Standard ({{model}})",
         "transcriptionModelRequired": "Wählen Sie ein Modell aus oder legen Sie unter Admin → Spracheingabe ein Standard-Transkriptionsmodell fest.",
         "websearchMaxPageReads": "Max. Seitenaufrufe pro Antwort",
@@ -3614,6 +3628,58 @@
         "subtitle": "Prompts, die Ihre Nutzer geschrieben und mit Gruppen oder allen geteilt haben",
         "title": "Nutzer-Prompts",
         "truncated": "Es werden nur die ersten Prompts angezeigt",
+        "updated": "Zuletzt geändert",
+        "userCount": "{{count}} Nutzer"
+      }
+    },
+    "skills": {
+      "delete": "Löschen",
+      "edit": "Bearbeiten",
+      "searchPlaceholder": "Skills durchsuchen...",
+      "subtitle": "Skills für Ihre iHub Apps installieren, konfigurieren und verwalten",
+      "table": {
+        "name": "Name"
+      },
+      "tabs": {
+        "label": "Skill-Ansichten",
+        "skills": "Skills",
+        "userSkills": "Nutzer-Skills"
+      },
+      "title": "Skill-Verwaltung",
+      "userSkills": {
+        "allowEveryone": "Alle angemeldeten Nutzer",
+        "allowGroups": "Gruppen",
+        "allowUsers": "Bestimmte Nutzer",
+        "deleteMessage": "„{{name}}“ von {{owner}} wird für den Besitzer und alle, mit denen der Skill geteilt ist, gelöscht.",
+        "deleted": "Skill gelöscht",
+        "empty": "Keine geteilten Nutzer-Skills",
+        "emptyDesc": "Sobald Nutzer Skills mit einer Gruppe oder mit allen teilen, erscheinen sie hier.",
+        "enabled": "Nutzer dürfen eigene Skills erstellen",
+        "everyone": "Alle",
+        "inactive": "inaktiv",
+        "intro": "Skills, die Nutzer mit einer Gruppe oder mit allen geteilt haben. Sie können sie bearbeiten, neu freigeben, löschen oder zu einem globalen Skill machen; private Skills und Skills, die nur mit einzelnen Nutzern geteilt sind, werden nicht aufgeführt.",
+        "maxFiles": "Dateien pro Skill",
+        "maxPerUser": "Skills pro Nutzer (0 = unbegrenzt)",
+        "maxSizeKB": "Maximale Größe pro Skill (KB)",
+        "maxVersions": "Aufbewahrte Versionen pro Skill",
+        "owner": "Besitzer",
+        "promote": "Übernehmen",
+        "promoteHelp": "Eine Kopie wird zu einem globalen Skill, abgelegt in contents/skills. Welche Apps ihn anbieten und welche Gruppen ihn verwenden dürfen, wird wie bei jedem anderen globalen Skill konfiguriert. Der Nutzer-Skill selbst bleibt unverändert.",
+        "promoteName": "Name des globalen Skills",
+        "promoteNameHint": "Kleinbuchstaben, Ziffern und Bindestriche. Darf nicht bereits von einem anderen globalen Skill verwendet werden.",
+        "promoteTitle": "Als globalen Skill übernehmen",
+        "promoted": "Als globaler Skill {{name}} übernommen",
+        "promotedTo": "Übernommen als {{name}}",
+        "restrictHelp": "Lassen Sie alles leer, damit alle breit teilen dürfen. Das Teilen mit bestimmten Nutzern ist davon nicht betroffen.",
+        "restrictTitle": "Nur Mitglieder dieser Gruppen dürfen mit Gruppen oder allen teilen",
+        "saved": "Gespeichert",
+        "settingsTitle": "Einstellungen für Nutzer-Skills",
+        "sharedWith": "Geteilt mit",
+        "sharingTitle": "Nutzer dürfen Skills teilen mit",
+        "storageDown": "Der Speicher-Provider ist nicht verfügbar, daher können Nutzer derzeit keine Skills speichern.",
+        "subtitle": "Skills, die Ihre Nutzer geschrieben und mit Gruppen oder allen geteilt haben",
+        "title": "Nutzer-Skills",
+        "truncated": "Es werden nur die ersten Skills angezeigt",
         "updated": "Zuletzt geändert",
         "userCount": "{{count}} Nutzer"
       }
@@ -4437,6 +4503,7 @@
     "navigation": "Navigation",
     "newChat": "Neuer Chat",
     "prompts": "Prompts",
+    "library": "Bibliothek",
     "browseApps": "Alle Apps durchsuchen",
     "apps": "Apps",
     "recents": "Letzte",
@@ -4765,6 +4832,10 @@
     "cited": "In dieser Antwort zitiert",
     "noneCited": "Die Antwort zitiert keine der Quellen direkt.",
     "considered": "Ebenfalls berücksichtigt",
+    "showInPanel": "Quelle {{n}} in der Quellenansicht anzeigen",
+    "showMoreCited_one": "{{count}} weitere anzeigen",
+    "showMoreCited_other": "{{count}} weitere anzeigen",
+    "showFewer": "Weniger anzeigen",
     "opensInNewTab": "(öffnet in einem neuen Tab)",
     "untitled": "Ohne Titel",
     "passages_one": "{{count}} Textstelle",
@@ -4822,20 +4893,19 @@
     },
     "editor": {
       "addOption": "Option hinzufügen",
-      "app": "In App öffnen",
+      "anyApp": "Jede App",
+      "anyAppHelp": "Für jede App: Die Prompt-Bibliothek öffnet ihn in Ihrer Standard-App.",
+      "app": "App",
+      "appRequired": "Wählen Sie eine App, oder machen Sie den Prompt in jeder App verfügbar",
       "automatic": "Wird automatisch ausgefüllt:",
       "category": "Kategorie",
       "configure": "Konfigurieren",
       "createTitle": "Neuer Prompt",
-      "defaultApp": "Standard-App",
       "description": "Beschreibung",
       "descriptionPlaceholder": "Wofür ist dieser Prompt gedacht?",
       "done": "Fertig",
       "editTitle": "Prompt bearbeiten",
       "icon": "Symbol",
-      "insert": "Einfügen",
-      "insertVariable": "Variable einfügen",
-      "invalidVariable": "Ein Variablenname beginnt mit einem Buchstaben und enthält nur Buchstaben, Ziffern, _ und -",
       "name": "Name",
       "namePlaceholder": "z. B. Wöchentliche Status-E-Mail",
       "noCategory": "Keine Kategorie",
@@ -4845,8 +4915,10 @@
       "options": "Optionen",
       "requiredFields": "Name und Prompt-Text sind erforderlich",
       "saving": "Wird gespeichert…",
+      "specificApp": "Eine bestimmte App",
+      "specificAppHelp": "Öffnet sich aus der Prompt-Bibliothek in dieser App und steht in ihrer Prompt-Suche ganz oben.",
       "text": "Prompt",
-      "textHelp": "Verwenden Sie {{name}} für alles, was beim Verwenden des Prompts abgefragt werden soll. {{content}} markiert, wo Ihr eigener Text hingehört; {{user_name}}, {{date}} und die anderen globalen Variablen werden automatisch ausgefüllt.",
+      "textHelp": "Fügen Sie einen Platzhalter ein, indem Sie {{meintext}} schreiben – jeder wird beim Verwenden des Prompts zu einem Feld, das ausgefüllt wird. {{content}} markiert, wo Ihr eigener Text hingehört; {{user_name}}, {{date}} und die anderen globalen Variablen werden automatisch ausgefüllt.",
       "textPlaceholder": "Schreibe eine {{tone}} E-Mail an {{recipient}} über {{topic}}.",
       "types": {
         "string": "Text",
@@ -4855,11 +4927,10 @@
         "boolean": "Ja/Nein",
         "select": "Auswahl"
       },
+      "useWith": "Verwenden mit",
       "variableDefault": "Standardwert",
       "variableDescription": "Hilfetext",
       "variableLabel": "Bezeichnung",
-      "variableName": "Variablenname",
-      "variableNamePlaceholder": "Variablenname, z. B. empfaenger",
       "variableRequired": "Erforderlich",
       "variableType": "Typ",
       "variables": "Variablen"
@@ -4891,7 +4962,9 @@
       "mine": "Meine Prompts",
       "recent": "Zuletzt verwendet",
       "shared": "Mit mir geteilt",
-      "skills": "Skills"
+      "skills": "Skills",
+      "mySkills": "Meine Skills",
+      "sharedSkills": "Geteilte Skills"
     },
     "history": {
       "current": "aktuell",
@@ -4923,7 +4996,6 @@
     },
     "share": {
       "addEveryone": "Mit allen teilen",
-      "addGroup": "Gruppe hinzufügen",
       "canEdit": "Darf bearbeiten",
       "canUse": "Darf verwenden",
       "everyone": "Alle angemeldeten Nutzer",
@@ -4944,6 +5016,142 @@
       "preview": "Vorschau",
       "required": "Dieses Feld ist erforderlich",
       "subtitle": "Füllen Sie die Angaben für diesen Prompt aus"
+    }
+  },
+  "library": {
+    "empty": {
+      "mine": "Sie haben noch keine Prompts oder Skills.",
+      "none": "Nichts gefunden",
+      "shared": "Bisher hat niemand einen Prompt oder Skill mit Ihnen geteilt."
+    },
+    "filters": {
+      "mine": "Meine"
+    },
+    "new": {
+      "label": "Neu"
+    },
+    "searchLabel": "Bibliothek durchsuchen",
+    "searchPlaceholder": "Prompts und Skills durchsuchen...",
+    "subtitle": "Prompts als Ausgangspunkt und Skills, denen der Assistent folgt. Tippen Sie / in einem Chat, um sie zu verwenden.",
+    "title": "Bibliothek",
+    "types": {
+      "all": "Alle",
+      "label": "Typ",
+      "prompts": "Prompts",
+      "skills": "Skills"
+    }
+  },
+  "skills": {
+    "actions": {
+      "copyLink": "Link kopieren",
+      "copyToMine": "In meine Skills kopieren",
+      "details": "Details",
+      "detailsNamed": "Skill {{name}} anzeigen",
+      "duplicate": "Duplizieren",
+      "history": "Verlauf",
+      "new": "Neuer Skill",
+      "share": "Teilen"
+    },
+    "badge": "Skill",
+    "delete": {
+      "message": "„{{name}}“ und sein Verlauf werden für Sie und alle, mit denen der Skill geteilt ist, gelöscht.",
+      "title": "Skill löschen?"
+    },
+    "details": {
+      "copiedFrom": "Kopiert von {{name}}",
+      "files": "Dateien",
+      "instructions": "Anweisungen",
+      "promotedTo": "Als globaler Skill {{name}} übernommen"
+    },
+    "editor": {
+      "addFile": "Datei hinzufügen",
+      "body": "Anweisungen",
+      "bodyHint": "Markdown. Das Modell liest diese Anweisungen, wenn es den Skill verwendet; verweisen Sie auf Dateien über ihren Pfad, z. B. references/vorlage.md.",
+      "bodyPlaceholder": "# Wochenbericht\n\n1. Frage nach den Höhepunkten der Woche.\n2. …",
+      "characterCount": "{{count}} / {{max}}",
+      "chooseFolder": "Ordner…",
+      "createTitle": "Neuer Skill",
+      "description": "Beschreibung",
+      "descriptionHint": "Beschreiben Sie, was der Skill tut und wann er verwendet werden soll.",
+      "descriptionPlaceholder": "Erstellt den wöchentlichen Teambericht aus Stichpunkten. Verwenden, wenn nach einem Wochenbericht oder einer Statusübersicht gefragt wird.",
+      "editTitle": "Skill bearbeiten",
+      "fileContent": "Inhalt von {{path}}",
+      "fileCount": "{{count}} von {{max}} Dateien",
+      "fileFolder": "Ordner",
+      "fileName": "Dateiname",
+      "fileNamePlaceholder": "vorlage.md",
+      "files": "Dateien",
+      "filesHint": "Optionale Textdateien, die das Modell bei Bedarf liest: Referenzen, Vorlagen, Beispiele.",
+      "fixErrors": "Bitte korrigieren Sie die markierten Felder.",
+      "name": "Name",
+      "nameHint": "Kleinbuchstaben, Ziffern und Bindestriche. Das Modell sieht diesen Namen.",
+      "namePlaceholder": "z. B. wochenbericht",
+      "removeFile": "{{path}} entfernen",
+      "removeFileShort": "Datei entfernen",
+      "saving": "Wird gespeichert…",
+      "size": "Größe: {{size}} KB von {{max}} KB",
+      "tooLarge": "Zu groß: Kürzen Sie die Anweisungen oder entfernen Sie Dateien.",
+      "tooManyFiles": "Ein Skill kann höchstens {{max}} Dateien haben."
+    },
+    "empty": {
+      "global": "Für Sie sind keine globalen Skills verfügbar.",
+      "mine": "Sie haben noch keine Skills. Erstellen Sie einen oder kopieren Sie einen globalen Skill.",
+      "none": "Keine Skills gefunden",
+      "shared": "Bisher hat niemand einen Skill mit Ihnen geteilt."
+    },
+    "errors": {
+      "accessChanged": "Ihr Zugriff auf diesen Skill hat sich geändert. Laden Sie die Seite neu, um zu sehen, was Sie jetzt tun dürfen.",
+      "conflict": "Jemand anderes hat diesen Skill inzwischen geändert. Schließen Sie den Editor und öffnen Sie ihn erneut, um die neueste Version zu sehen.",
+      "disabled": "Persönliche Skills sind deaktiviert.",
+      "forbidden": "Sie dürfen das mit diesem Skill nicht tun.",
+      "generic": "Etwas ist schiefgelaufen. Bitte versuchen Sie es erneut.",
+      "limit": "Sie haben die maximale Anzahl an Skills erreicht. Löschen Sie einen, um Platz zu schaffen.",
+      "limitCount": "Sie haben das Maximum von {{limit}} Skills erreicht. Löschen Sie einen, um Platz zu schaffen.",
+      "nameTaken": "Es gibt bereits einen globalen Skill mit diesem Namen. Wählen Sie einen anderen Namen.",
+      "notAllowed": "Melden Sie sich an, um eigene Skills anzulegen.",
+      "shareNotAllowed": "Sie dürfen Skills nicht mit diesem Personenkreis teilen.",
+      "tooLarge": "Dieser Skill ist zu groß. Kürzen Sie die Anweisungen oder entfernen Sie Dateien.",
+      "unavailable": "Ihre Skills sind gerade nicht verfügbar. Bitte versuchen Sie es später erneut."
+    },
+    "filters": {
+      "mine": "Meine Skills"
+    },
+    "history": {
+      "current": "aktuell",
+      "restore": "Diese Version wiederherstellen",
+      "restoredFrom": "Wiederhergestellt aus Version {{revision}}",
+      "revision": "Version {{revision}}",
+      "title": "Versionsverlauf",
+      "versions": "Versionen"
+    },
+    "list": {
+      "fileCount": "{{count}} Datei(en)",
+      "searchPlaceholder": "Skills durchsuchen..."
+    },
+    "notices": {
+      "copied": "In Ihre Skills kopiert",
+      "deleted": "Skill gelöscht",
+      "duplicated": "Skill dupliziert",
+      "restored": "Version wiederhergestellt",
+      "saved": "Skill gespeichert",
+      "shared": "Freigabe aktualisiert"
+    },
+    "share": {
+      "help": "„Darf verwenden“ erlaubt, den Skill in Chats zu verwenden und zu duplizieren. „Darf bearbeiten“ erlaubt zusätzlich, ihn zu ändern und weiter zu teilen.",
+      "private": "Nur Sie – dieser Skill ist privat",
+      "title": "Skill teilen"
+    },
+    "validation": {
+      "doubleHyphen": "Verwenden Sie nur einfache Bindestriche (kein „--“).",
+      "duplicate": "Eine andere Datei hat diesen Namen.",
+      "extension": "Erlaubte Dateitypen: {{extensions}}",
+      "fileNamePattern": "Beginnen Sie mit einem Buchstaben oder einer Ziffer und verwenden Sie danach nur Buchstaben, Ziffern, Punkte, Bindestriche und Unterstriche.",
+      "fileNameRequired": "Geben Sie einen Dateinamen ein.",
+      "folder": "Wählen Sie einen Ordner.",
+      "invalid": "Ungültiger Wert",
+      "namePattern": "Verwenden Sie Kleinbuchstaben, Ziffern und Bindestriche; Anfang und Ende müssen ein Buchstabe oder eine Ziffer sein.",
+      "required": "Erforderlich",
+      "tooLong": "Zu lang"
     }
   },
   "scheduledTasks": {

@@ -1,5 +1,31 @@
 # Fixes — Unreleased
 
+## An Absolute Contents Directory Is Used Where It Points
+
+When the `CONTENTS_DIR` environment variable held an absolute path (for example
+`/srv/ihub/contents`), much of the server treated it as a folder inside the installation directory
+instead: configuration, users, encryption keys, usage data, short links and installed marketplace
+content were written to and read from a copy under the installation directory, while other parts
+used the configured location.
+
+- An absolute `CONTENTS_DIR` is now used as given everywhere. A relative value still resolves
+  against the installation directory, as before.
+- Installations that set an absolute `CONTENTS_DIR` should check whether such a nested copy exists
+  under the installation directory and move any configuration or data they want to keep into the
+  configured location before upgrading.
+  
+## Prompt Editor: Placeholders Are Typed, Not Inserted
+
+**Insert variable** in the prompt editor did not add the variable to the prompt text. The button
+is gone; a hint below the text explains that typing `{{mytext}}` adds a placeholder, which becomes
+a field to fill in when the prompt is used.
+
+## Sharing a Prompt: One Search for People and Groups
+
+The share dialog offered groups twice — in the search box and in a separate list — and with many
+groups the dialog kept growing. Groups are now found through the search box only, at most ten per
+search, and the results and the **Shared with** list scroll instead of growing.
+
 ## Skills and Marketplace Previews Read Front Matter as YAML Only
 
 The metadata block at the top of a `SKILL.md` file — its front matter — is now always read as

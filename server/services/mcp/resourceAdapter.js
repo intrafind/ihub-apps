@@ -93,10 +93,10 @@ function skillResourceUri(skillName, relativePath) {
 function isSkillVisible(skill, user) {
   if (!skill) return false;
   if (skill.enabled === false) return false;
-  // Honour user.permissions.skills if it's a Set (built by
-  // enhanceUserWithPermissions). Wildcard '*' grants all.
+  // Honour user.permissions.skills (built by enhanceUserWithPermissions).
+  // Wildcard '*' grants all; a principal without the set sees none.
   const allowed = user?.permissions?.skills;
-  if (!(allowed instanceof Set)) return true;
+  if (!(allowed instanceof Set)) return false;
   return allowed.has('*') || allowed.has(skill.name);
 }
 

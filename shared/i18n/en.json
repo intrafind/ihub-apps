@@ -60,6 +60,7 @@
     "promptSearch": {
       "placeholder": "Search prompts...",
       "appSpecific": "app",
+      "skill": "skill",
       "viewAll": "View all prompts"
     },
     "magicPrompt": "Magic prompt",
@@ -638,26 +639,29 @@
     },
     "voiceInput": {
       "title": "Voice Input (Speech-to-Text)",
-      "description": "Configure the speech-to-text backends and the defaults apps use. Apps follow the defaults unless they select a service or model of their own in the app editor.",
+      "description": "Choose what apps use for voice input, transcription and read aloud. Apps follow these choices unless they pick their own in the app editor. Endpoints and keys of transcription and text-to-speech models are set under Admin → Models.",
       "loadError": "Failed to load voice input settings",
       "saveSuccess": "Voice input settings saved.",
       "saveError": "Failed to save voice input settings",
-      "realtime": {
-        "title": "vLLM Realtime (server-proxied)",
-        "description": "Streams microphone audio through the iHub server to a vLLM realtime endpoint (e.g. Voxtral). The URL and API key stay on the server. Make it the default above, or select \"vLLM Realtime\" as an app’s Speech Recognition Service.",
-        "enabled": "Enable vLLM realtime transcription",
-        "url": "Realtime WebSocket URL",
+      "dictation": {
+        "title": "Voice input (microphone button)",
+        "description": "What turns speech into text when users press the microphone button in a chat. Used by every app whose Speech Recognition Service is \"Platform default\".",
+        "service": "Speech recognition",
+        "azureNotEnabled": "Azure Speech is not enabled below. Until it is, apps that follow the platform default use the browser.",
+        "modelUnavailable": "This model is disabled or no longer exists. Until it is enabled, apps that follow the platform default use the browser.",
+        "modelHint": "The microphone streams through the iHub server to this model; its endpoint and key stay on the server. Streaming models show the text while the user speaks, others insert it when they stop. Users need access to the model through their groups.",
+        "browserHint": "Runs in the browser with the Web Speech API. Which browsers support it, and where they send the audio, is up to the browser.",
+        "noModels": "Enable a transcription model under Admin → Models to offer it here."
+      },
+      "transcription": {
+        "title": "Transcription (recording and uploads)",
+        "description": "The model that transcribes recordings and audio/video uploads in apps that enable transcription without choosing a model of their own.",
         "model": "Model",
-        "apiKey": "API Key (optional)",
-        "apiKeyPlaceholder": "Leave blank if none",
-        "apiKeyHint": "Stored encrypted at rest. Local vLLM usually needs no key. A shown value of ***REDACTED*** means a key is already set — leave it to keep it.",
-        "test": "Test connection",
-        "testing": "Testing…",
-        "testHint": "Tests connectivity from the iHub server to the vLLM realtime endpoint using the values above (the saved key is used when the field shows ***REDACTED***)."
+        "modelUnavailable": "This model is disabled or no longer exists, so recording fails in apps that rely on the default."
       },
       "azure": {
         "title": "Azure Speech",
-        "description": "Azure Cognitive Services Speech runs in the browser via a short-lived token. The subscription key is stored encrypted on the server and exchanged for a token per session, so it never reaches the browser. Host/region are the defaults used when an app does not set its own host.",
+        "description": "The connection for the Azure Speech voice input service. Azure Speech runs in the browser via a short-lived token: the subscription key is stored encrypted on the server and exchanged for a token per session, so it never reaches the browser. Host/region are the defaults used when an app does not set its own host.",
         "enabled": "Enable Azure Speech",
         "host": "Default host / endpoint",
         "region": "Region",
@@ -674,20 +678,14 @@
         }
       },
       "notEnabled": "not enabled",
+      "noModel": "None",
+      "testConnection": "Test connection",
+      "testingConnection": "Testing…",
       "services": {
         "browser": "Browser (Web Speech API)",
         "azure": "Azure Speech",
-        "vllmRealtime": "vLLM Realtime (server-proxied)"
-      },
-      "defaults": {
-        "title": "Defaults",
-        "description": "Used by every app that has no voice setting of its own (Speech Recognition Service \"Platform default\", no transcription model). Apps that select a service or model keep their choice.",
-        "service": "Dictation service (microphone button)",
-        "serviceNotEnabled": "{{service}} is not enabled below. Until it is, apps that follow the platform default use the browser.",
-        "transcriptionModel": "Transcription model (recording)",
-        "noModel": "None",
-        "modelUnavailable": "This model is disabled or no longer exists, so recording fails in apps that rely on the default.",
-        "transcriptionModelHint": "Used to transcribe recordings and audio/video uploads in apps that enable transcription without choosing a model."
+        "model": "Transcription model",
+        "models": "Transcription models"
       },
       "test": {
         "title": "Test voice input",
@@ -1046,7 +1044,7 @@
         "supportsImageGeneration": "Enable if this model can generate images (e.g., Gemini Image models)",
         "maxReferenceImages": "Maximum number of reference images (1-14)",
         "modelType": "Chat models answer prompts. Transcription models convert audio to text via a realtime endpoint (e.g. Voxtral). Text-to-speech models read chat messages aloud (e.g. Voxtral TTS).",
-        "realtimeUrl": "WebSocket URL of the vLLM realtime endpoint. It stays server-side and never reaches the browser.",
+        "realtimeUrl": "Endpoint of the transcription service: a vLLM /v1/realtime WebSocket URL, an OpenAI-compatible /audio/transcriptions URL (Whisper with the OpenAI or Local provider), or the provider’s API. It stays server-side and never reaches the browser.",
         "nativeWebSearch": "Apps with web search use the provider's built-in search on this model. Turn it off for models or gateways that do not support it; they fall back to Brave Search.",
         "promptCachingOpenAI": "Sends a cache key so requests that start with the same prompt reuse OpenAI’s cache. On by default for api.openai.com; turn it off for OpenAI-compatible servers that reject unknown parameters.",
         "promptCachingExplicit": "Marks the tools, system prompt and conversation for caching. Cached input costs about a tenth of normal input, but writing it costs a quarter more, so this pays off when the same app is used again within five minutes. Only for models that support prompt caching.",
@@ -1058,6 +1056,7 @@
         "maxOutputTokens": "Empty means the default ({{value}}), not unlimited. Reasoning models spend their thinking tokens from this limit, so keep it well above the longest answer you expect.",
         "ttsUrl": "Speech endpoint of the provider. It stays server-side and never reaches the browser.",
         "ttsVoice": "Voice id of the provider: a Mistral preset such as en_paul_neutral, gb_jane_neutral or fr_marie_neutral, or the id of a voice saved in your Mistral account. Empty uses en_paul_neutral.",
+        "ttsVoiceGoogle": "One of the prebuilt Gemini voices, such as Kore, Puck or Charon. Each speaks every language, which is detected from the text. Empty uses Kore.",
         "ttsVoices": "A message written in one of these languages is read with that voice; every other language uses the voice above. The language is told from the message itself.",
         "ttsVoicesAfterSave": "Save the model once to browse the provider’s voices and create custom voices here.",
         "linkedProvider": "Uses the API key of the provider \"{{provider}}\" and its API type ({{apiType}})."
@@ -1158,6 +1157,10 @@
         "endOfLife": "End of life: {{date}}",
         "importCount": "Import {{count}} models",
         "importing": "Importing…",
+        "createProviderOnly": "Create provider without models",
+        "providerOnlyHint": "Pick the models to import into \"{{provider}}\", or create the provider without models and import them later.",
+        "providerOnlyCreated": "The provider \"{{provider}}\" was created without models.",
+        "providerOnlyNext": "It holds the endpoint and its API key. To add models later, open \"Import from URL\" again and choose this provider, or link a model to it in the model editor.",
         "doneSummary": "Imported {{ok}} of {{total}} models into {{provider}}.",
         "providerCreated": "The provider \"{{provider}}\" was created and holds the API key. Manage it under Providers.",
         "testHint": "Use \"Test\" in the model list to check each model, and fill in details the endpoint did not report, such as tool support.",
@@ -1165,6 +1168,7 @@
           "embedding": "Embedding",
           "rerank": "Reranker",
           "audio": "Audio",
+          "transcription": "Transcription",
           "image": "Image",
           "moderation": "Moderation",
           "other": "Not a chat model"
@@ -1526,6 +1530,14 @@
           "running": "Testing…",
           "resultTitle": "LDAP login test"
         }
+      },
+      "proxy": {
+        "headersIgnoredWarning": "Unless PROXY_AUTH_TRUSTED_PROXIES or PROXY_AUTH_SHARED_SECRET is set on the server, the user and groups headers are ignored until you list trusted proxies or select a shared secret. Without one, any client that can reach the server could set them.",
+        "trustedProxiesLabel": "Trusted Proxies",
+        "trustedProxiesHelp": "Addresses or subnets the proxy connects from, comma-separated (for example loopback, 10.0.0.5 or 10.0.0.0/8). The headers are used only on connections from these addresses. The default, loopback, covers a proxy on the same host or in the same pod; if other local processes (such as a service-mesh sidecar) forward traffic to iHub, set a shared secret as well.",
+        "sharedSecretHeaderLabel": "Shared Secret Header",
+        "sharedSecretLabel": "Shared Secret",
+        "sharedSecretHelp": "A secret the proxy sends in the shared secret header. When set, the headers are used only on requests that carry it. Together with trusted proxies, both must match: for a proxy elsewhere, add its address above or clear the list to rely on the secret alone."
       }
     },
     "officeIntegration": {
@@ -2825,6 +2837,8 @@
         "platformDefaultService": "Platform default ({{service}})",
         "browserService": "Browser (Web Speech API)",
         "platformDefaultServiceHint": "Follows the default set under Admin → Voice Input, including later changes.",
+        "dictationModelHint": "The microphone streams through the iHub server to this transcription model. Users need access to the model through their groups.",
+        "dictationModelUnavailable": "This model is disabled or no longer exists, so voice input fails in this app.",
         "platformDefaultTranscriptionModel": "Platform default ({{model}})",
         "transcriptionModelRequired": "Select a model, or set a default transcription model under Admin → Voice Input.",
         "websearchMaxPageReads": "Max Page Reads per Answer",
@@ -3358,6 +3372,58 @@
         "subtitle": "Prompts your users wrote and shared with groups or everyone",
         "title": "User Prompts",
         "truncated": "Showing the first prompts only",
+        "updated": "Last changed",
+        "userCount": "{{count}} user(s)"
+      }
+    },
+    "skills": {
+      "delete": "Delete",
+      "edit": "Edit",
+      "searchPlaceholder": "Search skills...",
+      "subtitle": "Install, configure, and manage skills for your iHub Apps",
+      "table": {
+        "name": "Name"
+      },
+      "tabs": {
+        "label": "Skill views",
+        "skills": "Skills",
+        "userSkills": "User skills"
+      },
+      "title": "Skill Management",
+      "userSkills": {
+        "allowEveryone": "Everyone signed in",
+        "allowGroups": "Groups",
+        "allowUsers": "Specific users",
+        "deleteMessage": "“{{name}}” by {{owner}} will be deleted for its owner and everyone it is shared with.",
+        "deleted": "Skill deleted",
+        "empty": "No shared user skills",
+        "emptyDesc": "When users share skills with a group or with everyone, they show up here.",
+        "enabled": "Users may create their own skills",
+        "everyone": "Everyone",
+        "inactive": "inactive",
+        "intro": "Skills users have shared with a group or with everyone. You can edit, re-share, delete or promote them to a global skill; private skills and skills shared with named users only are not listed.",
+        "maxFiles": "Files per skill",
+        "maxPerUser": "Skills per user (0 = no limit)",
+        "maxSizeKB": "Maximum size per skill (KB)",
+        "maxVersions": "Versions kept per skill",
+        "owner": "Owner",
+        "promote": "Promote",
+        "promoteHelp": "A copy becomes a global skill, kept in contents/skills. Which apps offer it and which groups may use it is configured like for every other global skill. The user skill itself stays as it is.",
+        "promoteName": "Global skill name",
+        "promoteNameHint": "Lowercase letters, digits and hyphens. Must not be taken by another global skill.",
+        "promoteTitle": "Promote to global skill",
+        "promoted": "Promoted to global skill {{name}}",
+        "promotedTo": "Promoted to {{name}}",
+        "restrictHelp": "Leave all unchecked to let everyone share widely. Sharing with specific users is not affected.",
+        "restrictTitle": "Only members of these groups may share with groups or everyone",
+        "saved": "Saved",
+        "settingsTitle": "Settings for user skills",
+        "sharedWith": "Shared with",
+        "sharingTitle": "Users may share skills with",
+        "storageDown": "The storage provider is not available, so users cannot keep skills right now.",
+        "subtitle": "Skills your users wrote and shared with groups or everyone",
+        "title": "User Skills",
+        "truncated": "Showing the first skills only",
         "updated": "Last changed",
         "userCount": "{{count}} user(s)"
       }
@@ -4472,6 +4538,7 @@
     "navigation": "Navigation",
     "newChat": "New chat",
     "prompts": "Prompts",
+    "library": "Library",
     "browseApps": "Browse all apps",
     "apps": "Apps",
     "recents": "Recents",
@@ -4800,6 +4867,10 @@
     "cited": "Cited in this answer",
     "noneCited": "The answer cites none of the sources directly.",
     "considered": "Also considered",
+    "showInPanel": "Show source {{n}} in the sources panel",
+    "showMoreCited_one": "Show {{count}} more",
+    "showMoreCited_other": "Show {{count}} more",
+    "showFewer": "Show fewer",
     "opensInNewTab": "(opens in a new tab)",
     "untitled": "Untitled",
     "passages_one": "{{count}} passage",
@@ -4857,20 +4928,19 @@
     },
     "editor": {
       "addOption": "Add option",
-      "app": "Open in app",
+      "anyApp": "Any app",
+      "anyAppHelp": "For every app: the prompt library opens it in your default app.",
+      "app": "App",
+      "appRequired": "Choose an app, or make the prompt available in any app",
       "automatic": "Filled in automatically:",
       "category": "Category",
       "configure": "Configure",
       "createTitle": "New prompt",
-      "defaultApp": "Default app",
       "description": "Description",
       "descriptionPlaceholder": "What is this prompt for?",
       "done": "Done",
       "editTitle": "Edit prompt",
       "icon": "Icon",
-      "insert": "Insert",
-      "insertVariable": "Insert variable",
-      "invalidVariable": "A variable name starts with a letter and uses only letters, digits, _ and -",
       "name": "Name",
       "namePlaceholder": "e.g. Weekly status email",
       "noCategory": "No category",
@@ -4880,8 +4950,10 @@
       "options": "Options",
       "requiredFields": "Name and prompt text are required",
       "saving": "Saving…",
+      "specificApp": "A specific app",
+      "specificAppHelp": "Opens in this app from the prompt library, and comes first in its prompt search.",
       "text": "Prompt",
-      "textHelp": "Use {{name}} for anything to ask for when the prompt is used. {{content}} marks where your own text goes; {{user_name}}, {{date}} and the other global variables fill in by themselves.",
+      "textHelp": "Add a placeholder by typing {{mytext}} — each one becomes a field to fill in when the prompt is used. {{content}} marks where your own text goes; {{user_name}}, {{date}} and the other global variables fill in by themselves.",
       "textPlaceholder": "Write a {{tone}} email to {{recipient}} about {{topic}}.",
       "types": {
         "string": "Text",
@@ -4890,11 +4962,10 @@
         "boolean": "Yes/no",
         "select": "Choice"
       },
+      "useWith": "Use with",
       "variableDefault": "Default value",
       "variableDescription": "Help text",
       "variableLabel": "Label",
-      "variableName": "Variable name",
-      "variableNamePlaceholder": "Variable name, e.g. recipient",
       "variableRequired": "Required",
       "variableType": "Type",
       "variables": "Variables"
@@ -4926,7 +4997,9 @@
       "mine": "My prompts",
       "recent": "Recently used",
       "shared": "Shared with me",
-      "skills": "Skills"
+      "skills": "Skills",
+      "mySkills": "My skills",
+      "sharedSkills": "Shared skills"
     },
     "history": {
       "current": "current",
@@ -4958,7 +5031,6 @@
     },
     "share": {
       "addEveryone": "Share with everyone",
-      "addGroup": "Add a group",
       "canEdit": "Can edit",
       "canUse": "Can use",
       "everyone": "Everyone signed in",
@@ -4979,6 +5051,142 @@
       "preview": "Preview",
       "required": "This field is required",
       "subtitle": "Fill in the details for this prompt"
+    }
+  },
+  "library": {
+    "empty": {
+      "mine": "You have no prompts or skills yet.",
+      "none": "Nothing found",
+      "shared": "Nobody has shared a prompt or skill with you yet."
+    },
+    "filters": {
+      "mine": "Mine"
+    },
+    "new": {
+      "label": "New"
+    },
+    "searchLabel": "Search the library",
+    "searchPlaceholder": "Search prompts and skills...",
+    "subtitle": "Prompts to start from and skills the assistant follows. Type / in a chat to use them.",
+    "title": "Library",
+    "types": {
+      "all": "All",
+      "label": "Type",
+      "prompts": "Prompts",
+      "skills": "Skills"
+    }
+  },
+  "skills": {
+    "actions": {
+      "copyLink": "Copy link",
+      "copyToMine": "Copy to my skills",
+      "details": "Details",
+      "detailsNamed": "Show skill {{name}}",
+      "duplicate": "Duplicate",
+      "history": "History",
+      "new": "New skill",
+      "share": "Share"
+    },
+    "badge": "Skill",
+    "delete": {
+      "message": "“{{name}}” and its history will be deleted for you and everyone it is shared with.",
+      "title": "Delete skill?"
+    },
+    "details": {
+      "copiedFrom": "Copied from {{name}}",
+      "files": "Files",
+      "instructions": "Instructions",
+      "promotedTo": "Promoted to global skill {{name}}"
+    },
+    "editor": {
+      "addFile": "Add file",
+      "body": "Instructions",
+      "bodyHint": "Markdown. The model reads these instructions when it uses the skill; refer to files by their path, e.g. references/template.md.",
+      "bodyPlaceholder": "# Weekly report\n\n1. Ask for the highlights of the week.\n2. …",
+      "characterCount": "{{count}} / {{max}}",
+      "chooseFolder": "Folder…",
+      "createTitle": "New skill",
+      "description": "Description",
+      "descriptionHint": "Say what the skill does and when to use it.",
+      "descriptionPlaceholder": "Drafts the weekly team report from bullet points. Use when the user asks for a weekly report or status summary.",
+      "editTitle": "Edit skill",
+      "fileContent": "Content of {{path}}",
+      "fileCount": "{{count}} of {{max}} files",
+      "fileFolder": "Folder",
+      "fileName": "File name",
+      "fileNamePlaceholder": "template.md",
+      "files": "Files",
+      "filesHint": "Optional text files the model can read when it needs them: references, templates, examples.",
+      "fixErrors": "Please fix the highlighted fields.",
+      "name": "Name",
+      "nameHint": "Lowercase letters, digits and hyphens. The model sees this name.",
+      "namePlaceholder": "e.g. weekly-report",
+      "removeFile": "Remove {{path}}",
+      "removeFileShort": "Remove file",
+      "saving": "Saving…",
+      "size": "Size: {{size}} KB of {{max}} KB",
+      "tooLarge": "Too large: shorten the instructions or remove files.",
+      "tooManyFiles": "A skill can have at most {{max}} files."
+    },
+    "empty": {
+      "global": "No global skills are available to you.",
+      "mine": "You have no skills yet. Create one, or copy a global skill.",
+      "none": "No skills found",
+      "shared": "Nobody has shared a skill with you yet."
+    },
+    "errors": {
+      "accessChanged": "Your access to this skill has changed. Reload the page to see what you may do now.",
+      "conflict": "Someone else changed this skill in the meantime. Close the editor and open it again to see the latest version.",
+      "disabled": "Personal skills are switched off.",
+      "forbidden": "You are not allowed to do this with this skill.",
+      "generic": "Something went wrong. Please try again.",
+      "limit": "You have reached the maximum number of skills. Delete one to make room.",
+      "limitCount": "You have reached the maximum of {{limit}} skills. Delete one to make room.",
+      "nameTaken": "A global skill with this name already exists. Choose another name.",
+      "notAllowed": "Sign in to keep skills of your own.",
+      "shareNotAllowed": "You are not allowed to share skills with this audience.",
+      "tooLarge": "This skill is too large. Shorten the instructions or remove files.",
+      "unavailable": "Your skills are unavailable right now. Please try again later."
+    },
+    "filters": {
+      "mine": "My skills"
+    },
+    "history": {
+      "current": "current",
+      "restore": "Restore this version",
+      "restoredFrom": "Restored from version {{revision}}",
+      "revision": "Version {{revision}}",
+      "title": "Version history",
+      "versions": "Versions"
+    },
+    "list": {
+      "fileCount": "{{count}} file(s)",
+      "searchPlaceholder": "Search skills..."
+    },
+    "notices": {
+      "copied": "Copied to your skills",
+      "deleted": "Skill deleted",
+      "duplicated": "Skill duplicated",
+      "restored": "Version restored",
+      "saved": "Skill saved",
+      "shared": "Sharing updated"
+    },
+    "share": {
+      "help": "“Can use” lets people use the skill in chats and duplicate it. “Can edit” also lets them change it and share it further.",
+      "private": "Only you — this skill is private",
+      "title": "Share skill"
+    },
+    "validation": {
+      "doubleHyphen": "Use single hyphens only (no “--”).",
+      "duplicate": "Another file has this name.",
+      "extension": "Allowed file types: {{extensions}}",
+      "fileNamePattern": "Start with a letter or digit, then use letters, digits, dots, hyphens and underscores only.",
+      "fileNameRequired": "Enter a file name.",
+      "folder": "Choose a folder.",
+      "invalid": "Invalid value",
+      "namePattern": "Use lowercase letters, digits and hyphens; start and end with a letter or digit.",
+      "required": "Required",
+      "tooLong": "Too long"
     }
   },
   "scheduledTasks": {

@@ -138,6 +138,19 @@ export const RUNTIME_NAMESPACES = Object.freeze({
   /** A user's prompt favorites and recents, one document per user. */
   promptPreferences: 'prompt-preferences',
   /**
+   * Skills users write themselves, one document per skill (instructions and
+   * reference files inline), filed under the owner so "my skills" is an index
+   * read. Global skills stay folders under `contents/skills/`.
+   */
+  userSkills: 'user-skills',
+  /** Saved revisions of a user skill, filed under the skill id. */
+  userSkillVersions: 'user-skill-versions',
+  /**
+   * Share markers of user skills, one per target, filed under the principal
+   * they reach, as for user prompts.
+   */
+  userSkillShares: 'user-skill-shares',
+  /**
    * Artifacts — content a run produced that is worth keeping in its own
    * right. One document per artifact, keyed `<scopeType>__<scopeId>__<id>`.
    *

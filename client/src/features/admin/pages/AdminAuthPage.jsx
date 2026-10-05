@@ -30,6 +30,7 @@ function AdminAuthPage() {
       allowSelfSignup: false,
       userHeader: 'X-Forwarded-User',
       groupsHeader: 'X-Forwarded-Groups',
+      trustedProxies: ['loopback'],
       jwtProviders: []
     },
     localAuth: {

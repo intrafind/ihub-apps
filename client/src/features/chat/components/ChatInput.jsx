@@ -5,6 +5,12 @@ import { UnifiedUploader, CloudStoragePicker, AttachedFilesList } from '../../up
 import PromptSearch from '../../prompts/components/PromptSearch';
 import usePromptLauncher from '../../prompts/hooks/usePromptLauncher';
 import WorkflowMentionSearch from './WorkflowMentionSearch';
+import {
+  insertAtSlash,
+  insertSkillAtSlash,
+  opensSlashPickerMidText,
+  typeSlashAt
+} from '../utils/slashCommand';
 import ChatInputActionsMenu from './ChatInputActionsMenu';
 import ImageGenerationControls from './ImageGenerationControls';
 import ModelSelector from './ModelSelector';
@@ -109,9 +115,9 @@ function ChatInput({
   imageQuality = null,
   onImageAspectRatioChange = null,
   onImageQualityChange = null,
-  // Skill activation
-  onSkillSelect = null,
-  // Skills slash command gating (when skills feature is enabled and app has skills)
+  // Skills in the `/` picker (skills feature on, and the app has skills or the
+  // user may use personal skills in it). A picked skill is inserted as
+  // `/<skill-name> ` into the text; the server activates it from there.
   skillsSlashEnabled = false,
   // Conversation so far. Every prior message is re-sent on each turn, so the
   // context-window indicator has to count the whole history — not just the
@@ -147,6 +153,17 @@ function ChatInput({
   const [showCloudStoragePicker, setShowCloudStoragePicker] = useState(false);
   const [cloudStorageProvider, setCloudStorageProvider] = useState(null);
   const [showPromptSearch, setShowPromptSearch] = useState(false);
+  // The open `/` picker's place: `{ anchor: null }` in an empty input (the
+  // pick becomes the input), `{ anchor: n }` for a `/` typed after whitespace
+  // at offset n (the pick replaces that `/`); null while no pick is pending.
+  // See utils/slashCommand.
+  const slashPickRef = useRef(null);
+  // Take the pending pick's anchor, once.
+  const takeSlashAnchor = () => {
+    const pending = slashPickRef.current;
+    slashPickRef.current = null;
+    return pending ? pending.anchor : null;
+  };
   const [showWorkflowSearch, setShowWorkflowSearch] = useState(false);
   const [modelAlertAcknowledged, setModelAlertAcknowledged] = useState(false);
 
@@ -291,32 +308,64 @@ function ChatInput({
     }
   }, [actualInputRef]);
 
+  // Focus the input with the caret at `at` (clamped), after React rendered
+  // the new value.
+  const focusInputAt = useCallback(
+    at => {
+      setTimeout(() => {
+        const el = actualInputRef.current;
+        if (!el) return;
+        el.focus();
+        const position = Math.min(at, el.value.length);
+        el.setSelectionRange(position, position);
+      }, 0);
+    },
+    [actualInputRef]
+  );
+
+  // Back to the input after the picker closed without a pick: a `/` typed
+  // after whitespace stays as a literal slash, with the caret behind it.
+  // Called once per pick (Escape reaches the picker twice).
+  const returnFromPicker = useCallback(() => {
+    const pending = slashPickRef.current;
+    if (!pending) return;
+    slashPickRef.current = null;
+    if (typeof pending.anchor === 'number') focusInputAt(pending.anchor + 1);
+    else setTimeout(() => focusInputAtEnd(), 0);
+  }, [focusInputAt, focusInputAtEnd]);
+
   // A prompt picked from the `/` search: its variables are asked for first,
   // then the text goes into the input — never sent — with the caret where
-  // `{{content}}` was, or at the end. Resolves to whether it was inserted.
+  // `{{content}}` was, or at the end. In an empty input the prompt becomes
+  // the input; after whitespace it replaces the typed `/`. Resolves to
+  // whether it was inserted.
   const { launch: launchPrompt, dialog: promptVariablesDialog } = usePromptLauncher();
   const insertPrompt = useCallback(
     async prompt => {
       const result = await launchPrompt(prompt);
       if (!result) {
-        setTimeout(() => focusInputAtEnd(), 0);
+        returnFromPicker();
         return false;
       }
-      onChange({ target: { value: result.text } });
-      setTimeout(() => {
-        const el = actualInputRef.current;
-        if (!el) return;
-        if (result.caret === null || result.caret === undefined) {
-          focusInputAtEnd();
-          return;
-        }
-        el.focus();
-        const at = Math.min(result.caret, el.value.length);
-        el.setSelectionRange(at, at);
-      }, 0);
+      const next = insertAtSlash(value, takeSlashAnchor(), result.text, result.caret);
+      onChange({ target: { value: next.value } });
+      focusInputAt(next.caret);
       return true;
     },
-    [launchPrompt, onChange, focusInputAtEnd, actualInputRef]
+    [launchPrompt, onChange, value, returnFromPicker, focusInputAt]
+  );
+
+  // A skill picked from the `/` search is not sent: `/<skill-name> ` goes
+  // into the text at the picker's place, and the user keeps typing. The
+  // server activates the skills named by `/name` tokens in the message.
+  const insertSkill = useCallback(
+    skill => {
+      const next = insertSkillAtSlash(value, takeSlashAnchor(), skill.name);
+      onChange({ target: { value: next.value } });
+      focusInputAt(next.caret);
+      return true;
+    },
+    [onChange, value, focusInputAt]
   );
 
   // Calculate if single-action optimization is active in ChatInputActionsMenu
@@ -485,10 +534,25 @@ function ChatInput({
 
   // Handle key events for the textarea
   const handleKeyDown = e => {
-    if (slashCommandEnabled && !showPromptSearch && e.key === '/' && value === '') {
-      e.preventDefault();
-      setShowPromptSearch(true);
-      return;
+    if (slashCommandEnabled && !showPromptSearch && e.key === '/') {
+      const el = actualInputRef.current;
+      if (value === '') {
+        e.preventDefault();
+        slashPickRef.current = { anchor: null };
+        setShowPromptSearch(true);
+        return;
+      }
+      if (opensSlashPickerMidText(value, el?.selectionStart, el?.selectionEnd)) {
+        // Typed by hand rather than by the browser: the picker takes focus
+        // while the key is still being handled, and the `/` would land in its
+        // search field instead. Closing the picker keeps the slash.
+        e.preventDefault();
+        const anchor = el.selectionStart;
+        slashPickRef.current = { anchor };
+        onChange({ target: { value: typeSlashAt(value, anchor) } });
+        setShowPromptSearch(true);
+        return;
+      }
     }
 
     if (showPromptSearch) {
@@ -937,19 +1001,17 @@ function ChatInput({
         <PromptSearch
           isOpen={showPromptSearch}
           appId={app?.id}
-          onClose={() => setShowPromptSearch(false)}
+          onClose={() => {
+            setShowPromptSearch(false);
+            returnFromPicker();
+          }}
           onSelect={p => {
             setShowPromptSearch(false);
-            if (p._type === 'skill') {
-              onSkillSelect?.(p);
-              setTimeout(() => {
-                focusInputAtEnd();
-              }, 0);
-              return true;
-            }
-            return insertPrompt(p);
+            return p._type === 'skill' ? insertSkill(p) : insertPrompt(p);
           }}
           appSkills={app?.skills}
+          allowPersonalSkills={app?.skillSettings?.allowPersonal !== false}
+          skillsEnabled={skillsSlashEnabled}
           promptsEnabled={promptsListEnabled}
         />
       )}

@@ -133,11 +133,13 @@ const settingsSchema = z
     speechRecognition: z
       .object({
         // 'default' follows the platform default (platform.speech.defaultService);
-        // 'browser' pins the browser Web Speech API.
+        // 'browser' pins the browser Web Speech API; 'model' streams the
+        // microphone through iHub to the transcription model `modelId`.
         service: z
-          .enum(['default', 'browser', 'azure', 'custom', 'vllm-realtime'])
+          .enum(['default', 'browser', 'azure', 'custom', 'model'])
           .optional()
           .prefault('default'),
+        modelId: z.string().optional(),
         host: z.string().url().optional()
       })
       .optional()
@@ -476,7 +478,9 @@ const baseAppConfigSchema = z.object({
   skillSettings: z
     .object({
       autoActivate: z.boolean().optional(),
-      maxActiveSkills: z.number().min(1).max(10).optional()
+      maxActiveSkills: z.number().min(1).max(10).optional(),
+      // false keeps users' own and shared skills out of this app
+      allowPersonal: z.boolean().optional()
     })
     .optional(),
   outputSchema: z.union([z.object({}).passthrough(), z.string()]).optional(),

@@ -1,5 +1,26 @@
 # Breaking Changes — Unreleased
 
+## Voice Input: The vLLM Realtime Setting Moved to a Transcription Model
+
+Voice input now uses transcription models (see the feature entry), so the separate **vLLM
+Realtime** section in **Admin → Voice Input** and the `vllm-realtime` speech recognition service
+are gone. The upgrade moves an existing setup over automatically:
+
+- The endpoint, model and key from `speech.realtime` move onto the `voxtral-mini-realtime` model
+  when it points at the same endpoint, or onto a new `voxtral-mini-realtime-dictation` model when
+  it does not. The model is enabled if the endpoint was.
+- The platform default and every app that used `vllm-realtime` switch to that model.
+- Groups that could dictate before get access to the model, since a model needs a permission
+  that the old setting did not.
+- `speech.realtime` keeps only its connection limits (`maxConnections` and the others).
+- `POST /api/admin/voice/realtime/test` is removed. Use the **Test** action on the model in
+  **Admin → Models**.
+
+**Before upgrading:** Scripts or config management that write `speech.realtime.url`, `model`,
+`apiKey` or `enabled`, or set `speechRecognition.service` to `vllm-realtime`, must set the
+endpoint on the model instead and use `"service": "model"` with a `modelId`. After the upgrade,
+check **Admin → Voice Input** and the groups' model permissions.
+
 ## Anonymous Access: Group Permissions Apply to Every Request
 
 Requests without a sign-in are now checked against the permissions of the groups in
@@ -84,3 +105,75 @@ path count against the same limits as all others — before, they were not limit
 or a list of addresses, make sure it trusts the proxy that sets `X-Forwarded-Prefix` — for example
 `"trustProxy": "loopback"` when the proxy runs on the same host. Otherwise the app no longer finds
 its base path.
+
+## Proxy Authentication: Identity Headers Are Accepted Only From Trusted Proxies
+
+With proxy authentication on, iHub now takes the user, groups, name and email from the proxy
+headers (`X-Forwarded-User`, `X-Forwarded-Groups`, `X-Forwarded-Name`, `X-Forwarded-Email`, or the
+names configured for user and groups) only when the request comes through a proxy you trust.
+Other requests are handled as if the headers were not there, and the server log notes that they
+were ignored.
+
+- `proxyAuth.trustedProxies` in `platform.json` (or `PROXY_AUTH_TRUSTED_PROXIES`, a
+  comma-separated list) lists the addresses the connection must come from: `loopback`, single
+  addresses such as `10.0.0.5`, or subnets such as `10.0.0.0/8`. It defaults to `["loopback"]` in
+  new installations and after the upgrade, so a proxy on the same host or in the same pod works as
+  soon as proxy authentication is on.
+- Instead of, or in addition to, the address list, the proxy can send a shared secret in the
+  header `proxyAuth.sharedSecretHeader` (default `X-Proxy-Secret`). The secret is a **Secret**
+  credential chosen in `proxyAuth.sharedSecretRef`, or the value of `PROXY_AUTH_SHARED_SECRET`.
+  When both are set, a request must pass both — to rely on the secret alone, empty the address
+  list. The secret header is removed from the request after the check, so it cannot be a header
+  sign-in needs (such as `Authorization` or an `X-Forwarded-*` header). If the chosen credential is
+  missing or empty, no request is trusted.
+- With neither set, the headers are ignored. **Admin → Authentication** has fields for both and
+  shows a warning in the proxy authentication settings while both are empty.
+- `GET /api/auth/status` only says whether proxy authentication is on; it no longer lists the
+  header names.
+- Signed tokens from `proxyAuth.jwtProviders` are verified as before.
+
+**Before upgrading:** if proxy authentication is on and the proxy runs on another host or in
+another container, add its address or subnet to `proxyAuth.trustedProxies`, or configure a shared
+secret, have the proxy send it and empty the address list. If other processes on the same host or
+in the same pod forward traffic to iHub over loopback (for example a service-mesh sidecar),
+configure the shared secret as well. The proxy should set the identity headers itself and drop any
+values the client sent.
+
+## Docker Quickstart and Development Setups Listen on 127.0.0.1 Only
+
+`docker-compose.quickstart.yml` and `docker/docker-compose.yml` now publish their ports (3000, and
+5173 for the development setup) on `127.0.0.1` only, so the app is reachable from the machine it
+runs on and not from the network. `docker/docker-compose.prod.yml` is unchanged.
+
+- With Docker Engine older than 28.0.0, other hosts on the same local network segment can still
+  reach ports published on `127.0.0.1`. Update the engine, or block the ports in the host
+  firewall.
+
+**Before upgrading:** if you open a quickstart or development setup from another machine, put a
+reverse proxy in front of it, or change the binding back to `'3000:3000'` once the passwords of
+the shipped accounts have been changed.
+
+## Skills Load Only Where They Are Assigned and Granted
+
+A skill is now loaded only when it is installed, listed in the app's `skills` and granted to the
+user's groups (`permissions.skills` in `groups.json`). Before, once an app had any skill, the model
+could load every installed skill by name, a chat request could pre-load any skill even in an app
+without skills, and users whose groups grant no skills saw all of them when anonymous access was
+off.
+
+- An empty `permissions.skills` now grants no skills, as for apps and tools. API clients
+  (client credentials, static API keys) and MCP clients without a skill grant see none.
+- Skills are invoked by writing `/skill-name` in the message, in chat as in scheduled tasks; the
+  `/` picker inserts that text. The chat API's `requestedSkill` field is replaced by
+  `requestedSkills`, a list of skill names. A request that still sends `requestedSkill` gets no
+  skill pre-loaded.
+- One message pre-loads at most `skillSettings.maxActiveSkills` skills (default 3); further names
+  are ignored.
+- Agents can now load the skills listed on their profile with `activate_skill`, and the planner
+  only pre-loads skills from that list. Which skills an agent may use follows the groups of its
+  service account.
+
+**Before upgrading:** check that every group whose members should use skills grants them in
+`permissions.skills` (for example `["*"]`) or inherits a group that does. Integrations that call
+the chat API with `requestedSkill` must send `requestedSkills: ["<skill-name>"]` or write
+`/<skill-name>` in the message instead.

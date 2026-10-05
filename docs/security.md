@@ -614,12 +614,20 @@ server {
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
         
-        # For proxy authentication
+        # For proxy authentication: set by the proxy, replacing anything the
+        # client sent ($groups stands for groups from the proxy's own auth)
         proxy_set_header X-Forwarded-User $remote_user;
         proxy_set_header X-Forwarded-Groups $groups;
+        proxy_set_header X-Proxy-Secret "change-me";
     }
 }
 ```
+
+iHub uses the proxy identity headers only from addresses in `proxyAuth.trustedProxies` (by default
+`loopback`, a proxy on the same host or in the same pod) and/or with the shared secret
+(`proxyAuth.sharedSecretRef`) — see [platform configuration](platform.md#proxyauth). If other
+local processes, such as a service-mesh sidecar, forward traffic to iHub, configure the shared
+secret as well.
 
 #### Firewall Configuration
 ```bash
