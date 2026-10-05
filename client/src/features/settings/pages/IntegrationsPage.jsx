@@ -236,9 +236,12 @@ export default function IntegrationsPage() {
         // Check cloud storage provider status dynamically
         for (const provider of cloudProviders) {
           try {
-            const response = await fetch(buildApiUrl(`integrations/${provider.type}/status`), {
-              credentials: 'include'
-            });
+            // Tokens are stored per provider; without providerId the server
+            // only finds the legacy single-slot file and reports "not connected".
+            const response = await fetch(
+              `${buildApiUrl(`integrations/${provider.type}/status`)}?providerId=${encodeURIComponent(provider.id)}`,
+              { credentials: 'include' }
+            );
             const data = await response.json();
 
             setIntegrations(prev => ({
@@ -310,7 +313,9 @@ export default function IntegrationsPage() {
         credentials: 'include',
         headers: {
           'Content-Type': 'application/json'
-        }
+        },
+        // Jira has a single connection; cloud providers store tokens per provider.
+        body: JSON.stringify(type === 'jira' ? {} : { providerId: id })
       });
 
       if (response.ok) {
