@@ -157,7 +157,8 @@ export async function storeGeneratedArtifacts({ chatId, runId, artifacts, store,
         mimeType,
         data: artifact.data,
         name: artifact.name,
-        runId
+        runId,
+        provenance: artifact.provenance
       });
       if (descriptor) stored += 1;
       descriptors.push(descriptor || { ...refused, unavailable: 'not-stored' });
@@ -510,6 +511,7 @@ export async function settleAssistantTurn({
             ...(artifacts.length > 0 ? { artifacts } : {}),
             ...(mcpApps.length > 0 ? { mcpApps } : {}),
             ...(mcpAuthRequired.length > 0 ? { mcpAuthRequired } : {}),
+            ...(summary?.provenance ? { provenance: summary.provenance } : {}),
             ...(scheduledTaskProposals.length > 0 ? { scheduledTaskProposals } : {}),
             ...(activity ? { activity } : {}),
             ...(sources ? { sources } : {})

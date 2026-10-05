@@ -56,6 +56,7 @@ import {
   chatPassthroughOptions
 } from './chatSeams.js';
 import { describeChatError } from './chatErrors.js';
+import { recordTurnProvenance } from '../provenance/turnProvenance.js';
 import { appendSchedulingContextNote } from '../scheduler/tasks/schedulingContext.js';
 import * as defaultTelemetry from './chatTelemetry.js';
 import modelDiscoveryService from '../ModelDiscoveryService.js';
@@ -717,6 +718,8 @@ class ChatService {
         scheduledTaskProposals,
         promptSources,
         takePendingCall: () => turnSeam.takePendingCall(),
+        app,
+        temperature,
         structured: outputSeam
           ? {
               validate: structuredOutput.validate,
@@ -824,6 +827,8 @@ class ChatService {
     scheduledTaskProposals = [],
     promptSources = [],
     takePendingCall = () => null,
+    app = null,
+    temperature = null,
     structured = null
   }) {
     const loopSources = result.knowledgeSources || [];
@@ -862,14 +867,30 @@ class ChatService {
       }
     };
     const endRun = data =>
-      stream.emit(SSE_V2_EVENTS.RUN_ENDED, { ...(usage ? { usage } : {}), ...data });
+      stream.emit(SSE_V2_EVENTS.RUN_ENDED, {
+        ...(usage ? { usage } : {}),
+        ...(summary.provenance ? { provenance: summary.provenance } : {}),
+        ...data
+      });
     // Whether the turn wrote any answer — text or a picture — the user sees.
     const producedOutput = channel
       ? channel.state.answerOutput
       : content.length > 0 || (result.images?.length ?? 0) > 0;
+    // EU AI Act: a provenance record per answer (hash, model, marking — never
+    // the content), stored on the message and sent with `run/ended`.
+    const recordProvenance = async () => {
+      summary.provenance = await recordTurnProvenance({
+        content: summary.content,
+        model,
+        app,
+        temperature,
+        images: summary.images
+      });
+    };
 
     if (result.status === 'aborted') {
       // Stop button, client disconnect or a superseding turn: no error bubble.
+      if (producedOutput) await recordProvenance();
       await this.telemetry.recordChatCallEnd({
         baseLog: buildLogData(streaming),
         model,
@@ -1058,6 +1079,7 @@ class ChatService {
       const knowledgeSources = this.resolveAnswerSources(loopSources, promptSources, {
         byModel: false
       });
+      await recordProvenance();
       endRun({
         status: 'completed',
         finishReason: 'tool_passthrough_complete',
@@ -1124,6 +1146,7 @@ class ChatService {
 
     const finishReason = result.finishReason || 'stop';
     const knowledgeSources = this.resolveAnswerSources(loopSources, promptSources);
+    await recordProvenance();
     endRun({ status: result.status || 'completed', finishReason, knowledgeSources });
     await this.logInteraction(
       'chat_response',
@@ -1340,6 +1363,18 @@ class ChatService {
         usage: result.usage,
         startedAt
       });
+      const provenance = await recordTurnProvenance({
+        content: result.content || '',
+        model,
+        app,
+        temperature,
+        images: result.images,
+        kind: String(parentRunId || '').startsWith('a2a-')
+          ? 'a2a'
+          : String(parentRunId || '').startsWith('mcp-')
+            ? 'mcp'
+            : 'chat'
+      });
       return {
         status: 'ok',
         runId,
@@ -1350,7 +1385,8 @@ class ChatService {
         sources: storedSourceSet(result.sources),
         usage: result.usage,
         finishReason: result.finishReason,
-        model: model.id
+        model: model.id,
+        ...(provenance ? { provenance } : {})
       };
     } catch (error) {
       logger.error('invokeAppInternal failed', {

@@ -14,6 +14,7 @@ import {
   sendFailedOperationError,
   sendErrorResponse
 } from '../utils/responseHelpers.js';
+import { publicAppView, publicAppViewTag } from '../services/provenance/clientConfig.js';
 
 /**
  * @swagger
@@ -192,8 +193,8 @@ export default function registerGeneralRoutes(app, { getLocalizedError }) {
         return sendFailedOperationError(res, 'load apps configuration', new Error('apps is null'));
       }
 
-      res.setHeader('ETag', userSpecificEtag);
-      res.json(apps);
+      res.setHeader('ETag', `${userSpecificEtag}-${publicAppViewTag()}`);
+      res.json(apps.map(publicAppView));
     } catch (error) {
       return sendInternalError(res, error, 'fetch apps');
     }
@@ -368,7 +369,8 @@ export default function registerGeneralRoutes(app, { getLocalizedError }) {
       // Whether web search can work for this app, per model (the model
       // picker marks the models it works with).
       const websearchAvailability = await describeWebSearchAvailability(appData);
-      res.json(websearchAvailability ? { ...appData, websearchAvailability } : appData);
+      const view = publicAppView(appData);
+      res.json(websearchAvailability ? { ...view, websearchAvailability } : view);
     } catch (error) {
       return sendInternalError(res, error, 'fetch app details');
     }

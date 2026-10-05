@@ -5,10 +5,55 @@ import { useFilterState } from '../hooks/useFilterState';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import Icon from '../../../shared/components/Icon';
 import ModelDetailsPopup from '../../../shared/components/ModelDetailsPopup';
-import { getAdminApiErrorMessage, makeAdminApiCall, toggleModels } from '../../../api/adminApi';
+import {
+  getAdminApiErrorMessage,
+  makeAdminApiCall,
+  toggleModel as toggleModelRequest,
+  toggleModels
+} from '../../../api/adminApi';
 import { DataTable, SearchInput, FilterSelect } from '../components/data-table';
 import { translateModelTestMessage } from '../utils/modelTestMessages';
 import ModelImportDialog from '../components/ModelImportDialog';
+import JustificationDialog from '../../../shared/components/JustificationDialog';
+import {
+  JUSTIFICATION_FIELD,
+  getModelMarkingFlag,
+  getUnmarkedModelError,
+  serializeConfigForDownload
+} from '../utils/aiTransparencyAdmin';
+
+/**
+ * "Not marked" warning for a chat model whose free-form text is not
+ * watermarked (EU AI Act Code of Practice, Measure 1.1.2). Text plus icon,
+ * with the explanation as tooltip and screen-reader text. An acknowledged
+ * model keeps the badge — the acknowledgement documents the gap, it does not
+ * close it.
+ *
+ * @param {Object} props
+ * @param {Object} props.model - Model config
+ * @param {Function} props.t - i18n translate function
+ * @returns {JSX.Element|null}
+ */
+function MarkingBadge({ model, t }) {
+  const flag = getModelMarkingFlag(model);
+  if (!flag) return null;
+  const tooltip = t(
+    'admin.models.marking.notMarkedTooltip',
+    'Free-form text over 200 tokens from this model is not watermarked — non-conforming under the EU AI Act Code of Practice'
+  );
+  return (
+    <span
+      className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 dark:bg-amber-900/50 text-amber-900 dark:text-amber-100"
+      title={tooltip}
+    >
+      <Icon name="exclamation-triangle" className="h-3.5 w-3.5" aria-hidden="true" />
+      {flag.acknowledged
+        ? t('admin.models.marking.notMarkedAcknowledged', 'Not marked · acknowledged')
+        : t('admin.models.marking.notMarked', 'Not marked')}
+      <span className="sr-only">{`: ${tooltip}`}</span>
+    </span>
+  );
+}
 
 function ModelNameCell({ model, currentLanguage }) {
   return (
@@ -30,7 +75,7 @@ function ModelNameCell({ model, currentLanguage }) {
 
 function StatusCell({ model, t }) {
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex flex-wrap items-center gap-2">
       <span
         className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
           model.enabled
@@ -47,6 +92,7 @@ function StatusCell({ model, t }) {
           {t('admin.models.default', 'Default')}
         </span>
       )}
+      <MarkingBadge model={model} t={t} />
     </div>
   );
 }
@@ -66,6 +112,9 @@ function AdminModelsPage() {
   const [selectedModel, setSelectedModel] = useState(null);
   const [showModelDetails, setShowModelDetails] = useState(false);
   const [uploading, setUploading] = useState(false);
+  // EU AI Act: an enable the server refused until a justification is given —
+  // `{ models: string[], retry: (justification) => Promise<void> }`.
+  const [pendingAcknowledgement, setPendingAcknowledgement] = useState(null);
   // The Providers page opens the import dialog for one provider through
   // navigation state ({ importProviderId }).
   const [importDialog, setImportDialog] = useState(() =>
@@ -93,26 +142,45 @@ function AdminModelsPage() {
     loadModels();
   }, []);
 
-  const toggleModel = async modelId => {
+  /**
+   * Run an enable call; when the server asks for a justification for unmarked
+   * models (409), open the dialog and retry the same call with it.
+   *
+   * @param {(justification?: string) => Promise<void>} run - The call, applying its result
+   * @returns {Promise<void>}
+   */
+  const runWithUnmarkedModelGate = async run => {
     try {
-      const response = await makeAdminApiCall(`/admin/models/${modelId}/toggle`, {
-        method: 'POST'
-      });
-      const result = response.data;
-      setModels(prev => prev.map(m => (m.id === modelId ? { ...m, enabled: result.enabled } : m)));
+      await run();
     } catch (err) {
-      setError(getAdminApiErrorMessage(err));
+      const gate = getUnmarkedModelError(err);
+      if (!gate) {
+        setError(getAdminApiErrorMessage(err));
+        return;
+      }
+      setPendingAcknowledgement({
+        models: gate.models,
+        retry: async justification => {
+          await run(justification);
+          setPendingAcknowledgement(null);
+          // The acknowledgement is stored with the models: reload to show it.
+          loadModels();
+        }
+      });
     }
   };
 
-  const enableAllModels = async () => {
-    try {
-      await toggleModels('*', true);
+  const toggleModel = modelId =>
+    runWithUnmarkedModelGate(async justification => {
+      const result = await toggleModelRequest(modelId, justification);
+      setModels(prev => prev.map(m => (m.id === modelId ? { ...m, enabled: result.enabled } : m)));
+    });
+
+  const enableAllModels = () =>
+    runWithUnmarkedModelGate(async justification => {
+      await toggleModels('*', true, justification);
       setModels(prev => prev.map(m => ({ ...m, enabled: true })));
-    } catch (err) {
-      setError(getAdminApiErrorMessage(err));
-    }
-  };
+    });
 
   const disableAllModels = async () => {
     try {
@@ -169,7 +237,9 @@ function AdminModelsPage() {
     try {
       const response = await makeAdminApiCall(`/admin/models/${modelId}`);
       const model = response.data;
-      const configData = JSON.stringify(model, null, 2);
+      // Without this installation's unmarked-model acknowledgement (EU AI Act
+      // record): the importing installation has to decide again.
+      const configData = serializeConfigForDownload('model', model);
       const blob = new Blob([configData], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
@@ -210,7 +280,26 @@ function AdminModelsPage() {
       await loadModels();
       event.target.value = '';
     } catch (err) {
-      if (getAdminApiErrorMessage(err).includes('already exists')) {
+      const gate = getUnmarkedModelError(err);
+      if (gate) {
+        // Enabled on upload but not marked: same justification gate as the toggle.
+        const uploaded = modelConfig;
+        const input = event.target;
+        setPendingAcknowledgement({
+          models: gate.models,
+          // Cleared on cancel too, so choosing the same file again fires onChange.
+          input,
+          retry: async justification => {
+            await makeAdminApiCall('/admin/models', {
+              method: 'POST',
+              body: { ...uploaded, [JUSTIFICATION_FIELD]: justification }
+            });
+            setPendingAcknowledgement(null);
+            input.value = '';
+            await loadModels();
+          }
+        });
+      } else if (getAdminApiErrorMessage(err).includes('already exists')) {
         setError(`Model with ID "${modelConfig?.id || 'unknown'}" already exists`);
       } else if (err instanceof SyntaxError) {
         setError('Invalid JSON file format');
@@ -505,6 +594,48 @@ function AdminModelsPage() {
           model={selectedModel}
           isOpen={showModelDetails}
           onClose={() => setShowModelDetails(false)}
+        />
+
+        <JustificationDialog
+          isOpen={pendingAcknowledgement !== null}
+          title={t(
+            'admin.models.marking.enableDialog.title',
+            'Enable a model that does not mark its output?'
+          )}
+          description={
+            <>
+              <p>
+                {t(
+                  'admin.models.marking.enableDialog.body',
+                  'These models do not watermark the text they generate. Under the EU AI Act Code of Practice (Measure 1.1.2) free-form text over 200 tokens must carry an invisible watermark, so answers of these models are non-conforming.'
+                )}
+              </p>
+              {pendingAcknowledgement?.models?.length > 0 && (
+                <ul className="mt-2 list-disc pl-5 font-mono text-xs">
+                  {pendingAcknowledgement.models.map(id => (
+                    <li key={id}>{id}</li>
+                  ))}
+                </ul>
+              )}
+              <p className="mt-2">
+                {t(
+                  'admin.models.marking.enableDialog.stays',
+                  'Your justification is recorded as an acknowledgement for this installation. The model stays listed as non-conforming on the EU AI Act page until it is marked.'
+                )}
+              </p>
+            </>
+          }
+          label={t('admin.models.marking.enableDialog.justification', 'Justification')}
+          placeholder={t(
+            'admin.models.marking.enableDialog.placeholder',
+            'e.g. Needed for the legal team until the self-hosted watermarked model is available (planned Q1).'
+          )}
+          confirmLabel={t('admin.models.marking.enableDialog.confirm', 'Enable anyway')}
+          onConfirm={justification => pendingAcknowledgement.retry(justification)}
+          onCancel={() => {
+            if (pendingAcknowledgement?.input) pendingAcknowledgement.input.value = '';
+            setPendingAcknowledgement(null);
+          }}
         />
 
         {importDialog.open && (

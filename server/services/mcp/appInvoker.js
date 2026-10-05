@@ -131,10 +131,18 @@ export async function invokeApp({
  * @param {Object} params.user - Acting user (req.user-like), used for permissions and the ledger
  * @param {string} [params.language] - Response language; defaults to the platform default
  * @param {number} [params.timeoutMs=60000] - Hard timeout for the model call
- * @returns {Promise<string>} Assistant text ('' when the model produced none)
+ * @param {boolean} [params.withResult=false] - return `{text, result}` instead of the text
+ * @returns {Promise<string|{text: string, result: Object}>} Assistant text ('' when the model produced none)
  * @throws {Error} Invalid input, unknown app, request preparation or provider failure (`err.code`)
  */
-export async function invokeAppNonStreaming({ appId, args, user, language, timeoutMs = 60000 }) {
+export async function invokeAppNonStreaming({
+  appId,
+  args,
+  user,
+  language,
+  timeoutMs = 60000,
+  withResult = false
+}) {
   const message = args?.message;
   if (typeof message !== 'string' || !message.trim()) {
     // Validate the app first so an unknown app is reported as such even
@@ -158,7 +166,7 @@ export async function invokeAppNonStreaming({ appId, args, user, language, timeo
   delete variables.message;
   delete variables.modelId;
 
-  const { text } = await invokeApp({
+  const { text, result } = await invokeApp({
     appId,
     messages: [{ role: 'user', content: message }],
     variables,
@@ -167,5 +175,6 @@ export async function invokeAppNonStreaming({ appId, args, user, language, timeo
     language,
     timeoutMs
   });
-  return text;
+  // `withResult` also hands back the run's metadata (provenance, model, runId).
+  return withResult ? { text, result } : text;
 }

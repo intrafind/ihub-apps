@@ -84,6 +84,11 @@ import { appTurnError, executeAppTurn, prepareAppTurn } from '../services/infere
 import { apiUser, numberField, platformLanguage, requestLanguage } from './inference/shared.js';
 import registerResponsesRoutes from './inference/responses.js';
 import registerConversationsRoutes from './inference/conversations.js';
+import { recordTurnProvenance } from '../services/provenance/turnProvenance.js';
+import {
+  setProvenanceHeaders,
+  stripWatermarkOverrides
+} from '../services/provenance/httpProvenance.js';
 
 export { inferenceErrorStatus } from '../services/inference/errors.js';
 
@@ -143,6 +148,9 @@ export default function registerOpenAIProxyRoutes(
 ) {
   const base = buildServerPath('/api/inference');
   app.use(`${base}/v1`, authRequired);
+  // EU AI Act: watermarking is server-owned. A caller can never switch it off
+  // with a request field, whatever the upstream server would accept.
+  app.use(`${base}/v1`, stripWatermarkOverrides);
 
   /**
    * @swagger
@@ -582,6 +590,15 @@ export default function registerOpenAIProxyRoutes(
           'openai'
         );
       }
+      const provenance = await recordTurnProvenance({
+        content: result.content || '',
+        model,
+        temperature,
+        images: result.images,
+        kind: 'inference'
+      });
+      setProvenanceHeaders(res, provenance);
+      if (provenance) response.ihub_provenance = provenance;
       return res.json(response);
     }
 
@@ -604,6 +621,7 @@ export default function registerOpenAIProxyRoutes(
 
     // ── Streaming ──────────────────────────────────────────────────────────
     res.status(200);
+    setProvenanceHeaders(res, null);
     res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('X-Accel-Buffering', 'no');
@@ -670,6 +688,15 @@ export default function registerOpenAIProxyRoutes(
           return finish();
         }
       }
+      const provenance = await recordTurnProvenance({
+        content: result.content || '',
+        model,
+        temperature,
+        images: result.images,
+        kind: 'inference'
+      });
+      // Provenance rides on the usage chunk: a chunk with empty `choices` is
+      // only safe for clients that asked for one (include_usage).
       if (streamOptions?.include_usage === true && !clientDisconnected) {
         write({
           id: completionId,
@@ -677,7 +704,8 @@ export default function registerOpenAIProxyRoutes(
           created: Math.floor(Date.now() / 1000),
           model: modelId,
           choices: [],
-          usage: usageToOpenAI(result.usage)
+          usage: usageToOpenAI(result.usage),
+          ...(provenance ? { ihub_provenance: provenance } : {})
         });
       }
       finish();
@@ -806,6 +834,7 @@ export default function registerOpenAIProxyRoutes(
     };
     if (clientWantsStream) {
       res.status(200);
+      setProvenanceHeaders(res, null);
       res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
       res.setHeader('Cache-Control', 'no-cache');
       res.setHeader('X-Accel-Buffering', 'no');
@@ -891,19 +920,23 @@ export default function registerOpenAIProxyRoutes(
           created,
           model: label,
           choices: [],
-          usage
+          usage,
+          // As in the direct path: only the opted-in usage chunk carries it.
+          ...(outcome.provenance ? { ihub_provenance: outcome.provenance } : {})
         });
       }
       res.write('data: [DONE]\n\n');
       return res.end();
     }
+    setProvenanceHeaders(res, outcome.provenance);
     return res.json({
       id: completionId,
       object: 'chat.completion',
       created,
       model: label,
       choices: [{ index: 0, message: { role: 'assistant', content }, finish_reason: finishReason }],
-      ...(usage ? { usage } : {})
+      ...(usage ? { usage } : {}),
+      ...(outcome.provenance ? { ihub_provenance: outcome.provenance } : {})
     });
   }
 

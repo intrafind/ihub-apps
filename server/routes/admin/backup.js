@@ -13,6 +13,87 @@ import { sendInternalError, sendBadRequest } from '../../utils/responseHelpers.j
 import { runConfigMigrations } from '../../migrations/runner.js';
 import { logAudit } from '../../services/AuditLogService.js';
 import { getContentsPath } from '../../utils/contentsPath.js';
+import {
+  hasInstallationRecords,
+  stripInstallationRecords
+} from '../../../shared/aiTransparency.js';
+import { INSTALLATION_ID_FILE } from '../../services/provenance/installation.js';
+
+/**
+ * Which kind of config a contents-relative path is, for the EU AI Act record
+ * rules: records (disclosure opt-outs, exemptions, acknowledgements,
+ * dismissals, expert approvals) belong to one installation and are removed
+ * from every backup and from every import (concept §8.2, §8.6).
+ * @param {string} relPath - `/`-separated, relative to contents/
+ * @returns {'app'|'model'|'platform'|null}
+ */
+export function recordKindOf(relPath) {
+  if (relPath === 'config/platform.json') return 'platform';
+  if (/^apps\/[^/]+\.json$/.test(relPath)) return 'app';
+  if (/^models\/[^/]+\.json$/.test(relPath)) return 'model';
+  return null;
+}
+
+/**
+ * The file's content without installation records, or null when it has none
+ * (or is not JSON), in which case it is copied as it is.
+ * @param {string} filePath - resolved path inside the extracted backup
+ * @param {'app'|'model'|'platform'} kind
+ * @returns {Promise<string|null>}
+ */
+async function strippedJson(filePath, kind) {
+  try {
+    const data = JSON.parse(await fs.readFile(filePath, 'utf8'));
+    if (!hasInstallationRecords(kind, data)) return null;
+    return JSON.stringify(stripInstallationRecords(kind, data), null, 2);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Remove installation records from an extracted backup before it is swapped
+ * in, so a restored or foreign backup never switches a disclosure off.
+ * Every path is resolved and checked to stay inside `dir`.
+ * @param {string} dir - extracted contents directory
+ * @returns {Promise<number>} files changed
+ */
+export async function stripRecordsFromDirectory(dir) {
+  const root = path.resolve(dir);
+  const rootWithSep = root.endsWith(path.sep) ? root : root + path.sep;
+  let changed = 0;
+  for (const [sub, kind] of [
+    ['apps', 'app'],
+    ['models', 'model']
+  ]) {
+    const subDir = path.resolve(root, sub);
+    if (!subDir.startsWith(rootWithSep)) continue;
+    let entries = [];
+    try {
+      entries = await fs.readdir(subDir);
+    } catch {
+      continue;
+    }
+    for (const name of entries.filter(n => n.endsWith('.json'))) {
+      const file = path.resolve(subDir, name);
+      if (!file.startsWith(rootWithSep)) continue;
+      const next = await strippedJson(file, kind);
+      if (next !== null) {
+        await fs.writeFile(file, next, 'utf8');
+        changed++;
+      }
+    }
+  }
+  const platformFile = path.resolve(root, 'config', 'platform.json');
+  if (platformFile.startsWith(rootWithSep)) {
+    const next = await strippedJson(platformFile, 'platform');
+    if (next !== null) {
+      await fs.writeFile(platformFile, next, 'utf8');
+      changed++;
+    }
+  }
+  return changed;
+}
 
 /**
  * The directory name the backup archive files the contents under.
@@ -216,11 +297,20 @@ export async function exportConfig(req, res) {
           ...path.relative(contentsPath, filePath).split(path.sep)
         );
 
+        const contentsRel = path.relative(contentsPath, filePath).split(path.sep).join('/');
+        // The installation id never leaves the installation.
+        if (contentsRel === INSTALLATION_ID_FILE) continue;
+
         // Debug logging
         logger.info('Adding to archive', { component: 'AdminBackup', relativePath, filePath });
 
-        // Add file to archive
-        archive.file(filePath, { name: relativePath });
+        const kind = recordKindOf(contentsRel);
+        const stripped = kind ? await strippedJson(filePath, kind) : null;
+        if (stripped !== null) {
+          archive.append(stripped, { name: relativePath });
+        } else {
+          archive.file(filePath, { name: relativePath });
+        }
         fileCount++;
       } catch (error) {
         logger.warn('Could not add file to archive', {
@@ -374,6 +464,27 @@ export async function importConfig(req, res) {
       logger.info('No metadata found in backup (this is normal for manual backups)', {
         component: 'AdminBackup'
       });
+    }
+
+    // EU AI Act: records of another (or an earlier) installation are dropped,
+    // and this installation keeps its own id.
+    const resolvedExtractRoot = path.resolve(tempExtractPath);
+    const importedIdFile = path.resolve(extractedContentsPath, INSTALLATION_ID_FILE);
+    if (!importedIdFile.startsWith(resolvedExtractRoot + path.sep)) {
+      return sendBadRequest(res, 'Invalid backup file');
+    }
+    const strippedCount = await stripRecordsFromDirectory(extractedContentsPath);
+    if (strippedCount > 0) {
+      logger.info('Dropped installation records from imported configuration', {
+        component: 'AdminBackup',
+        files: strippedCount
+      });
+    }
+    await fs.rm(importedIdFile, { force: true });
+    try {
+      await fs.copyFile(path.join(contentsPath, INSTALLATION_ID_FILE), importedIdFile);
+    } catch {
+      /* no id yet: one is created on next use */
     }
 
     // Stage the imported contents next to the live directory (same filesystem as

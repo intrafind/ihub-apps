@@ -12,6 +12,7 @@ import logger from '../../utils/logger.js';
 import { findByIdCaseInsensitive } from '../../utils/resourceLookup.js';
 import { normalizeFiles } from '../../../shared/promptContext.js';
 import { resolveMaxOutputTokens } from '../../../shared/outputTokens.js';
+import { appendAiDisclosureGuardrail } from '../provenance/guardrail.js';
 
 /**
  * Attach the page images of image-based PDFs to their message.
@@ -620,6 +621,8 @@ class RequestBuilder {
         native: Boolean(nativeWebSearch),
         pageReader: tools.some(t => t.id === WEB_CONTENT_EXTRACTOR_TOOL_ID)
       });
+      // EU AI Act Art. 50(1): the model admits being an AI whenever asked.
+      appendAiDisclosureGuardrail(llmMessages, model);
 
       // Build imageConfig if image generation is supported and parameters are provided
       // Pass raw user parameters to adapter for provider-specific translation

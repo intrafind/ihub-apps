@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Modal from '../../../shared/components/Modal';
 import Icon from '../../../shared/components/Icon';
+import JustificationDialog from '../../../shared/components/JustificationDialog';
 import { getAdminApiErrorMessage, makeAdminApiCall } from '../../../api/adminApi';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import {
@@ -21,6 +22,7 @@ import {
   suggestModelId,
   translateDiscoveryError
 } from '../utils/modelImport';
+import { JUSTIFICATION_FIELD, getUnmarkedModelError } from '../utils/aiTransparencyAdmin';
 
 const NEW_PROVIDER = '__new__';
 
@@ -97,6 +99,9 @@ function ModelImportDialog({ onClose, onImported, existingModelIds, initialProvi
   const [importError, setImportError] = useState(null);
   const [createdProviderId, setCreatedProviderId] = useState(null);
   const [results, setResults] = useState([]);
+  // EU AI Act: imports the server refused to enable until a justification is
+  // given — `{ outcome, gated: [{ model, id }] }` while the dialog is open.
+  const [pendingAcknowledgement, setPendingAcknowledgement] = useState(null);
 
   const importableProviders = useMemo(() => getImportableProviders(providers), [providers]);
   const existingProvider =
@@ -295,28 +300,72 @@ function ModelImportDialog({ onClose, onImported, existingModelIds, initialProvi
     }
 
     const outcome = [];
+    const gated = [];
     for (const model of selectedModels) {
       const id = targetIdOf(model);
       try {
-        await makeAdminApiCall('/admin/models', {
-          method: 'POST',
-          body: buildImportedModelConfig(model, {
-            id,
-            apiType: discovery.apiType,
-            providerId: targetProviderId,
-            modelsUrl: discovery.modelsUrl,
-            enabled: enableModels
-          })
-        });
+        await importModel(model, id);
+        outcome.push({ id, remoteId: model.id, ok: true });
+      } catch (err) {
+        // Enabling a model that does not mark its output needs a justification
+        // (EU AI Act): ask once for all of them, then import those again.
+        if (getUnmarkedModelError(err)) gated.push({ model, id });
+        else
+          outcome.push({ id, remoteId: model.id, ok: false, error: getAdminApiErrorMessage(err) });
+      }
+    }
+    if (gated.length > 0) {
+      setPendingAcknowledgement({ outcome, gated });
+      return;
+    }
+    finishImport(outcome);
+  };
+
+  const importModel = (model, id, justification) =>
+    makeAdminApiCall('/admin/models', {
+      method: 'POST',
+      body: {
+        ...buildImportedModelConfig(model, {
+          id,
+          apiType: discovery.apiType,
+          providerId: targetProviderId,
+          modelsUrl: discovery.modelsUrl,
+          enabled: enableModels
+        }),
+        ...(justification ? { [JUSTIFICATION_FIELD]: justification } : {})
+      }
+    });
+
+  const finishImport = outcome => {
+    setResults(outcome);
+    setImporting(false);
+    setStep('done');
+    onImported?.();
+  };
+
+  const importAcknowledged = async justification => {
+    const { outcome, gated } = pendingAcknowledgement;
+    for (const { model, id } of gated) {
+      try {
+        await importModel(model, id, justification);
         outcome.push({ id, remoteId: model.id, ok: true });
       } catch (err) {
         outcome.push({ id, remoteId: model.id, ok: false, error: getAdminApiErrorMessage(err) });
       }
     }
-    setResults(outcome);
-    setImporting(false);
-    setStep('done');
-    onImported?.();
+    setPendingAcknowledgement(null);
+    finishImport(outcome);
+  };
+
+  const skipAcknowledged = () => {
+    const { outcome, gated } = pendingAcknowledgement;
+    const error = t(
+      'admin.models.import.errors.needsJustification',
+      'Not imported: enabling a model that does not mark its output needs a justification. Import it again without enabling it, or give a justification.'
+    );
+    for (const { model, id } of gated) outcome.push({ id, remoteId: model.id, ok: false, error });
+    setPendingAcknowledgement(null);
+    finishImport(outcome);
   };
 
   const providerDisplayName =
@@ -771,84 +820,127 @@ function ModelImportDialog({ onClose, onImported, existingModelIds, initialProvi
   };
 
   return (
-    <Modal isOpen onClose={onClose} maxWidthClassName="max-w-4xl" closeOnBackdropClick={false}>
-      <div className="flex items-start justify-between border-b border-gray-200 dark:border-gray-700 px-6 py-4">
-        <div>
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-            {t('admin.models.import.title', 'Import models from URL')}
-          </h2>
-          <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-            {t(
-              'admin.models.import.subtitle',
-              'Read the model list of an OpenAI-compatible, vLLM, Mistral, Anthropic or Google endpoint and add the models you pick.'
-            )}
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label={t('common.close', 'Close')}
-          className="ml-4 p-1 rounded-md text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-        >
-          <Icon name="x" className="h-5 w-5" />
-        </button>
-      </div>
-
-      <div className="flex-1 overflow-y-auto px-6 py-4">
-        {step === 'connect' && renderConnect()}
-        {step === 'select' && discovery && renderSelect()}
-        {step === 'done' && renderDone()}
-      </div>
-
-      <div className="flex items-center justify-end gap-2 border-t border-gray-200 dark:border-gray-700 px-6 py-3">
-        {step === 'done' ? (
-          <button type="button" className={PRIMARY_BUTTON} onClick={onClose}>
-            {t('common.close', 'Close')}
+    <>
+      <Modal isOpen onClose={onClose} maxWidthClassName="max-w-4xl" closeOnBackdropClick={false}>
+        <div className="flex items-start justify-between border-b border-gray-200 dark:border-gray-700 px-6 py-4">
+          <div>
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+              {t('admin.models.import.title', 'Import models from URL')}
+            </h2>
+            <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+              {t(
+                'admin.models.import.subtitle',
+                'Read the model list of an OpenAI-compatible, vLLM, Mistral, Anthropic or Google endpoint and add the models you pick.'
+              )}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label={t('common.close', 'Close')}
+            className="ml-4 p-1 rounded-md text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+          >
+            <Icon name="x" className="h-5 w-5" />
           </button>
-        ) : (
-          <>
-            <button type="button" className={SECONDARY_BUTTON} onClick={onClose}>
-              {t('common.cancel', 'Cancel')}
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-6 py-4">
+          {step === 'connect' && renderConnect()}
+          {step === 'select' && discovery && renderSelect()}
+          {step === 'done' && renderDone()}
+        </div>
+
+        <div className="flex items-center justify-end gap-2 border-t border-gray-200 dark:border-gray-700 px-6 py-3">
+          {step === 'done' ? (
+            <button type="button" className={PRIMARY_BUTTON} onClick={onClose}>
+              {t('common.close', 'Close')}
             </button>
-            {step === 'connect' ? (
-              <button
-                type="button"
-                className={PRIMARY_BUTTON}
-                onClick={discover}
-                disabled={!canDiscover}
-              >
-                <Icon
-                  name={discovering ? 'refresh' : 'search'}
-                  className={`h-4 w-4 mr-2 ${discovering ? 'animate-spin' : ''}`}
-                />
-                {discovering
-                  ? t('admin.models.import.loading', 'Loading models…')
-                  : t('admin.models.import.loadModels', 'Load models')}
+          ) : (
+            <>
+              <button type="button" className={SECONDARY_BUTTON} onClick={onClose}>
+                {t('common.cancel', 'Cancel')}
               </button>
-            ) : (
-              <button
-                type="button"
-                className={PRIMARY_BUTTON}
-                onClick={runImport}
-                disabled={!canImport}
-              >
-                <Icon
-                  name={importing ? 'refresh' : providerOnly ? 'plus' : 'download'}
-                  className={`h-4 w-4 mr-2 ${importing ? 'animate-spin' : ''}`}
-                />
-                {importing
-                  ? t('admin.models.import.importing', 'Importing…')
-                  : providerOnly
-                    ? t('admin.models.import.createProviderOnly', 'Create provider without models')
-                    : t('admin.models.import.importCount', 'Import {{count}} models', {
-                        count: selectedModels.length
-                      })}
-              </button>
-            )}
-          </>
+              {step === 'connect' ? (
+                <button
+                  type="button"
+                  className={PRIMARY_BUTTON}
+                  onClick={discover}
+                  disabled={!canDiscover}
+                >
+                  <Icon
+                    name={discovering ? 'refresh' : 'search'}
+                    className={`h-4 w-4 mr-2 ${discovering ? 'animate-spin' : ''}`}
+                  />
+                  {discovering
+                    ? t('admin.models.import.loading', 'Loading models…')
+                    : t('admin.models.import.loadModels', 'Load models')}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className={PRIMARY_BUTTON}
+                  onClick={runImport}
+                  disabled={!canImport}
+                >
+                  <Icon
+                    name={importing ? 'refresh' : providerOnly ? 'plus' : 'download'}
+                    className={`h-4 w-4 mr-2 ${importing ? 'animate-spin' : ''}`}
+                  />
+                  {importing
+                    ? t('admin.models.import.importing', 'Importing…')
+                    : providerOnly
+                      ? t(
+                          'admin.models.import.createProviderOnly',
+                          'Create provider without models'
+                        )
+                      : t('admin.models.import.importCount', 'Import {{count}} models', {
+                          count: selectedModels.length
+                        })}
+                </button>
+              )}
+            </>
+          )}
+        </div>
+      </Modal>
+      <JustificationDialog
+        isOpen={pendingAcknowledgement !== null}
+        title={t(
+          'admin.models.marking.enableDialog.title',
+          'Enable a model that does not mark its output?'
         )}
-      </div>
-    </Modal>
+        description={
+          <>
+            <p>
+              {t(
+                'admin.models.marking.enableDialog.body',
+                'These models do not watermark the text they generate. Under the EU AI Act Code of Practice (Measure 1.1.2) free-form text over 200 tokens must carry an invisible watermark, so answers of these models are non-conforming.'
+              )}
+            </p>
+            {pendingAcknowledgement?.gated?.length > 0 && (
+              <ul className="mt-2 list-disc pl-5 font-mono text-xs">
+                {pendingAcknowledgement.gated.map(({ id }) => (
+                  <li key={id}>{id}</li>
+                ))}
+              </ul>
+            )}
+            <p className="mt-2">
+              {t(
+                'admin.models.marking.enableDialog.stays',
+                'Your justification is recorded as an acknowledgement for this installation. The model stays listed as non-conforming on the EU AI Act page until it is marked.'
+              )}
+            </p>
+          </>
+        }
+        label={t('admin.models.marking.enableDialog.justification', 'Justification')}
+        placeholder={t(
+          'admin.models.marking.enableDialog.placeholder',
+          'e.g. Needed for the legal team until the self-hosted watermarked model is available (planned Q1).'
+        )}
+        confirmLabel={t('admin.models.marking.enableDialog.confirm', 'Enable anyway')}
+        onConfirm={importAcknowledged}
+        onCancel={skipAcknowledged}
+      />
+    </>
   );
 }
 

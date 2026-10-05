@@ -14,6 +14,7 @@ import logger from '../../utils/logger.js';
 import { removeMarketplaceInstallation } from '../../utils/installationCleanup.js';
 import { logAudit } from '../../services/AuditLogService.js';
 import { saveSnapshot } from '../../services/ChangeHistoryService.js';
+import { preserveStoredRecords } from '../../services/provenance/records.js';
 import { appConfigSchema } from '../../validators/appConfigSchema.js';
 import { describeIssues } from '../../validators/userPromptSchema.js';
 
@@ -601,6 +602,9 @@ export default function registerAdminAppsRoutes(app) {
       }
       const { data: currentApps } = configCache.getApps(true);
       const oldApp = currentApps.find(a => a.id === appId);
+      // EU AI Act records (disclosure opt-out, exemption) are set only through
+      // the admin-only, audited endpoints; the editor keeps what is stored.
+      preserveStoredRecords('app', updatedApp, await configStore.readJson(appFilePath));
       await configStore.writeJson(appFilePath, updatedApp);
       await configCache.refreshAppsCache();
       if (oldApp) {
@@ -724,6 +728,10 @@ export default function registerAdminAppsRoutes(app) {
       if (!ensureValidAppConfig(newApp, res)) {
         return;
       }
+
+      // EU AI Act: an uploaded or copied app never brings its installation's
+      // records along — the disclosure is back on until an admin here decides.
+      preserveStoredRecords('app', newApp, null);
 
       // Check for duplicate ID via configCache (covers filenames that differ from their ID)
       const { data: existingApps } = configCache.getApps(true);

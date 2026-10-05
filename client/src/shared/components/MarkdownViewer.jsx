@@ -16,8 +16,10 @@ import MarkdownDownloadMenu from './MarkdownDownloadMenu';
  * @param {string} props.content   The markdown body to render
  * @param {string} props.name      Title shown in the header, also used as filename hint
  * @param {Function} props.onClose Closes the modal
+ * @param {'markdown'|'workflow'} [props.source='markdown'] What the document is, for the
+ *   server-side export of the download menu
  */
-function MarkdownViewer({ content, name, onClose }) {
+function MarkdownViewer({ content, name, onClose, source = 'markdown' }) {
   const htmlContent = useMemo(() => {
     try {
       return renderMarkdown(content || '');
@@ -51,7 +53,7 @@ function MarkdownViewer({ content, name, onClose }) {
             <h3 className="font-semibold text-gray-900 dark:text-gray-100 truncate">
               {name || 'Report'}
             </h3>
-            <MarkdownDownloadMenu content={content} name={name} size="md" />
+            <MarkdownDownloadMenu content={content} name={name} source={source} size="md" />
           </div>
           <button
             type="button"

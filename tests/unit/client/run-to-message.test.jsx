@@ -472,3 +472,43 @@ describe('projectMessageRuns — chat run + tool-launched workflow child run', (
     expect(projectMessageRuns(parent, [])).toEqual(projectRunToMessage(parent));
   });
 });
+
+describe('projectRunToMessage — EU AI Act provenance', () => {
+  const PROVENANCE = {
+    contentId: 'prv_1',
+    generatedAt: '2026-09-29T10:00:00.000Z',
+    model: { id: 'local-vllm', provider: 'openai' },
+    marking: { status: 'marked', technique: 'vllm-gumbel', required: true, tokens: 512 }
+  };
+
+  test('the provenance of run/ended lands on the message extras', () => {
+    const run = runFrom([
+      started,
+      env(2, 'step/delta', { step: 0, kind: 'text', content: 'Answer' }),
+      env(3, 'run/ended', { status: 'completed', finishReason: 'stop', provenance: PROVENANCE })
+    ]);
+    expect(projectRunToMessage(run).extras.provenance).toEqual(PROVENANCE);
+  });
+
+  test('no provenance while streaming or when the server sent none', () => {
+    const streaming = runFrom([
+      started,
+      env(2, 'step/delta', { step: 0, kind: 'text', content: 'Ans' })
+    ]);
+    expect(projectRunToMessage(streaming).extras).not.toHaveProperty('provenance');
+
+    const ended = runFrom([started, env(2, 'run/ended', { status: 'completed' })]);
+    expect(projectRunToMessage(ended).extras).not.toHaveProperty('provenance');
+  });
+
+  test('a message spanning child workflow runs keeps the chat run provenance', () => {
+    const state = reduceRunEvents(createStreamState('chat-1'), [
+      started,
+      env(2, 'run/started', { kind: 'workflow', parentRunId: 'run-1' }, 'wf-1'),
+      env(3, 'run/ended', { status: 'completed' }, 'wf-1'),
+      env(4, 'run/ended', { status: 'completed', provenance: PROVENANCE })
+    ]);
+    const { extras } = projectMessageRuns(getRun(state, 'run-1'), [getRun(state, 'wf-1')]);
+    expect(extras.provenance).toEqual(PROVENANCE);
+  });
+});

@@ -23,6 +23,8 @@ function ChatActionsMenu({
   showCanvasButton = false,
   appId,
   chatId,
+  // Document title for exports (the conversation's own title, when it has one)
+  conversationTitle = null,
   showEditAppButton = true,
   // Compare mode toggle (parity with desktop header)
   showCompareModeToggle = false,
@@ -182,6 +184,8 @@ function ChatActionsMenu({
           settings={exportSettings}
           appId={appId}
           chatId={chatId}
+          app={app}
+          conversationTitle={conversationTitle}
         />
       )}
     </div>

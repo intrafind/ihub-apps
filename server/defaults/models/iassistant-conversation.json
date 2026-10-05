@@ -22,5 +22,8 @@
     "searchProfile": "searchprofile-standard",
     "filter": [],
     "tools": ["ifinder_search"]
+  },
+  "contentMarking": {
+    "textWatermark": "none"
   }
 }

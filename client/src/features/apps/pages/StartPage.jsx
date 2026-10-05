@@ -25,6 +25,7 @@ import { setPendingChatStart } from '../../chat/startChatHandoff';
 import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
 import { buildStartPageGreeting } from '../../../utils/startPageGreeting';
 import { loadAppSettings } from '../../../utils/appSettings';
+import ComplianceBanner from '../../admin/components/euAiAct/ComplianceBanner';
 
 export default function StartPage() {
   const { t, i18n } = useTranslation();
@@ -350,6 +351,9 @@ export default function StartPage() {
   return (
     <div className="min-h-full flex flex-col items-center justify-center px-6 py-12 bg-gray-50 dark:bg-gray-900">
       <div className="w-full max-w-2xl">
+        {/* EU AI Act compliance warnings — admins only, renders nothing otherwise */}
+        <ComplianceBanner className="mb-8" />
+
         {/* Logo + greeting */}
         <div className="flex flex-col items-center text-center mb-8">
           {logoSrc ? (

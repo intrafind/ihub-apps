@@ -10,6 +10,7 @@ import {
 import Icon from '../../../shared/components/Icon';
 import { getAdminApiErrorMessage, makeAdminApiCall } from '../../../api/adminApi';
 import AdminFormErrorSummary from './AdminFormErrorSummary';
+import ContentMarkingSection from './model-form/ContentMarkingSection';
 import TtsVoicesPanel, { TTS_LANGUAGES, languageName } from './tts/TtsVoicesPanel';
 import { FormValidationProvider } from '../../../shared/contexts/formValidationContext';
 import {
@@ -1722,6 +1723,9 @@ function ModelFormEditor({
             </div>
           </div>
         </div>
+
+        {/* EU AI Act: how this model's output is machine-readably marked */}
+        <ContentMarkingSection model={data} onChange={onChange} />
       </div>
     </FormValidationProvider>
   );

@@ -39,4 +39,36 @@ describe('known route lists', () => {
       expect(routes).toContain(route);
     }
   });
+
+  test('the pages that decide their own audience are listed', () => {
+    // Public share links and a public detector open with nobody signed in.
+    const routes = moduleRoutes();
+    expect(routes).toContain('share');
+    expect(routes).toContain('verify');
+  });
+});
+
+describe('pages exempt from the sign-in redirects', () => {
+  // `isSelfGatedPath` exists twice as well: in runtimeBasePath.js for the
+  // React auth context, and in the pre-React auth gate. Both must let the same
+  // pages through, or a public link works on one load path and not the other.
+  const exemptionIn = relPath => {
+    const source = readFileSync(path.join(repoRoot, relPath), 'utf8');
+    const start =
+      source.indexOf('isSelfGatedPath = (') >= 0
+        ? source.indexOf('isSelfGatedPath = (')
+        : source.indexOf('function isSelfGatedPath()');
+    if (start < 0) throw new Error(`isSelfGatedPath not found in ${relPath}`);
+    return source.slice(start, source.indexOf('}', source.indexOf('return', start)));
+  };
+
+  test.each(['client/src/utils/runtimeBasePath.js', 'client/src/auth-gate/auth-gate.js'])(
+    '%s lets shared chats and the detector through',
+    relPath => {
+      const body = exemptionIn(relPath);
+      expect(body).toContain("'/share/'");
+      expect(body).toContain("'/verify'");
+      expect(body).toContain("'/verify/'");
+    }
+  );
 });

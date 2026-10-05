@@ -78,7 +78,8 @@ export function createChatChannel({ chatId, stream }) {
               data: String(image.data),
               ...(image.thoughtSignature
                 ? { thoughtSignature: String(image.thoughtSignature) }
-                : {})
+                : {}),
+              ...(image.provenance ? { provenance: image.provenance } : {})
             }
           });
         }

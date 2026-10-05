@@ -184,4 +184,42 @@ describe('PUT /api/admin/apps/:appId', () => {
     expect(res.body.error).toContain('color:');
     expect(store['apps/helper.json']).toEqual(chatApp('helper'));
   });
+
+  describe('EU AI Act records', () => {
+    // As the audited opt-out endpoint stamps it; the editor loads and sends it back.
+    const optedOut = chatApp('helper', {
+      aiTransparency: {
+        sensitive: 'legal',
+        disclosureOptOut: {
+          disabledBy: 'admin',
+          disabledAt: '2026-10-01T12:00:00.000Z',
+          reason: 'Internal tool; users know it is an AI',
+          installationId: 'inst-1',
+          ihubVersion: '5.5.31'
+        }
+      }
+    });
+
+    test('an editor save that sends the stored opt-out back passes and keeps it', async () => {
+      seed(optedOut);
+      const updated = { ...clone(optedOut), description: { en: 'Answers more questions' } };
+
+      const res = await request(app).put('/api/admin/apps/helper').send(updated);
+
+      expect(res.status).toBe(200);
+      expect(store['apps/helper.json']).toEqual(updated);
+    });
+
+    test('a save without the record keeps the stored opt-out', async () => {
+      seed(optedOut);
+
+      const res = await request(app).put('/api/admin/apps/helper').send(chatApp('helper'));
+
+      expect(res.status).toBe(200);
+      // `sensitive` is editor content and goes; the record is set only by its endpoint.
+      expect(store['apps/helper.json'].aiTransparency).toEqual({
+        disclosureOptOut: optedOut.aiTransparency.disclosureOptOut
+      });
+    });
+  });
 });

@@ -1,18 +1,23 @@
 #!/usr/bin/env node
 
 /**
- * Tests for spreadsheet-formula-injection sanitization in chat exports.
+ * Tests for the download filename helpers in `exportFormats.js`.
  *
- * exportToCSV/exportToXLSX write message content (LLM output, pasted user
- * text) directly into spreadsheet cells. Values starting with =, +, -, @,
- * tab, or CR are interpreted as formulas by Excel/LibreOffice on open — a
- * classic CSV-injection vector. sanitizeForSpreadsheet neutralizes this by
- * prefixing such values with a single quote (OWASP guidance).
+ * The export files themselves are generated on the server (`POST
+ * /api/exports`, EU AI Act Art. 50); the browser only names a download when
+ * the response carries no `Content-Disposition` filename, and date-stamps
+ * other saved files (e.g. the `/verify` report). The server-side renderers
+ * have their own tests (spreadsheet formula injection included).
  *
  * Run directly: `node client/src/utils/exportFormats.test.js`.
  */
 
-import { sanitizeForSpreadsheet, getExportSettingsRows } from './exportFormats.js';
+import {
+  EXPORT_FILE_EXTENSIONS,
+  buildExportFallbackFilename,
+  formatDateTimeForFilename,
+  slugifyForFilename
+} from './exportFormats.js';
 
 let failures = 0;
 function check(label, cond, details) {
@@ -21,97 +26,63 @@ function check(label, cond, details) {
   if (!cond && details) console.log(`   ${details}`);
 }
 
-console.log('🧪 sanitizeForSpreadsheet\n');
+console.log('🧪 slugifyForFilename\n');
 
 check(
-  'formula starting with = gets a leading quote',
-  sanitizeForSpreadsheet('=HYPERLINK("http://evil","click")') ===
-    '\'=HYPERLINK("http://evil","click")'
-);
-check('value starting with + gets a leading quote', sanitizeForSpreadsheet('+1234') === "'+1234");
-check(
-  'value starting with - gets a leading quote',
-  sanitizeForSpreadsheet('-cmd|calc') === "'-cmd|calc"
+  'markdown markers and punctuation collapse into single dashes',
+  slugifyForFilename('**Pricing** discussion: Q3?') === 'pricing-discussion-q3'
 );
 check(
-  'value starting with @ gets a leading quote',
-  sanitizeForSpreadsheet('@SUM(1)') === "'@SUM(1)"
+  'accents are stripped',
+  slugifyForFilename('Überprüfung für Äpfel') === 'uberprufung-fur-apfel'
 );
 check(
-  'value starting with a tab gets a leading quote',
-  sanitizeForSpreadsheet('\t=1+1') === "'\t=1+1"
+  'fenced code is dropped',
+  slugifyForFilename('Fix ```const a = 1;``` please') === 'fix-please'
+);
+check('links keep their text', slugifyForFilename('[Docs](https://x.y) page') === 'docs-page');
+check(
+  'the slug is capped without a trailing dash',
+  slugifyForFilename('aaaa bbbb cccc', 6) === 'aaaa-b' &&
+    !slugifyForFilename('aaaa bbbb', 5).endsWith('-')
 );
 check(
-  'value starting with a carriage return gets a leading quote',
-  sanitizeForSpreadsheet('\r=1+1') === "'\r=1+1"
-);
-
-check('plain text is left unchanged', sanitizeForSpreadsheet('Hello, world!') === 'Hello, world!');
-check(
-  'text mentioning a formula mid-string is left unchanged',
-  sanitizeForSpreadsheet('the result was =5') === 'the result was =5'
+  'non-strings yield an empty slug',
+  slugifyForFilename(null) === '' && slugifyForFilename(42) === ''
 );
 
-check('null becomes empty string', sanitizeForSpreadsheet(null) === '');
-check('undefined becomes empty string', sanitizeForSpreadsheet(undefined) === '');
-check('empty string stays empty', sanitizeForSpreadsheet('') === '');
+console.log('\n🧪 formatDateTimeForFilename\n');
 
+const fixed = new Date(2026, 5, 9, 15, 3);
 check(
-  'sanitized formula still combines correctly with CSV comma/quote escaping',
-  (() => {
-    // Mirrors exportToCSV's escapeCSV: sanitize first, then quote-wrap if needed.
-    const escapeCSV = value => {
-      const stringValue = sanitizeForSpreadsheet(value);
-      if (/[",\r\n]/.test(stringValue)) {
-        return `"${stringValue.replace(/"/g, '""')}"`;
-      }
-      return stringValue;
-    };
-    return escapeCSV('=1,2') === '"\'=1,2"';
-  })()
+  'formats local time as YYYY-MM-DD_HHmm',
+  formatDateTimeForFilename(fixed) === '2026-06-09_1503',
+  formatDateTimeForFilename(fixed)
 );
 
-console.log('\n🧪 getExportSettingsRows\n');
+console.log('\n🧪 buildExportFallbackFilename\n');
 
-// ExportDialog always passes an object whose fields may all be undefined;
-// exporters must not emit an empty "Settings" section for it (#2452).
 check(
-  'all-undefined settings object yields no rows',
-  getExportSettingsRows({
-    model: undefined,
-    style: undefined,
-    outputFormat: undefined,
-    temperature: undefined,
-    variables: undefined
-  }).length === 0
-);
-check('null settings yields no rows', getExportSettingsRows(null).length === 0);
-check(
-  'variables alone do not produce a settings section',
-  getExportSettingsRows({ variables: { foo: 'bar' } }).length === 0
-);
-check('null temperature is skipped', getExportSettingsRows({ temperature: null }).length === 0);
-check(
-  'temperature 0 is kept',
-  JSON.stringify(getExportSettingsRows({ temperature: 0 })) ===
-    JSON.stringify([['Temperature', '0']])
+  'title slug, date stamp and format extension',
+  buildExportFallbackFilename({
+    title: 'Sales Assistant — Pricing',
+    format: 'pdf',
+    date: fixed
+  }) === 'sales-assistant-pricing-2026-06-09_1503.pdf'
 );
 check(
-  'populated settings yield rows in stable order',
-  JSON.stringify(
-    getExportSettingsRows({
-      outputFormat: 'markdown',
-      style: 'concise',
-      model: 'gpt',
-      temperature: 0.7
-    })
-  ) ===
-    JSON.stringify([
-      ['Model', 'gpt'],
-      ['Temperature', '0.7'],
-      ['Style', 'concise'],
-      ['Output Format', 'markdown']
-    ])
+  'markdown maps to the .md extension',
+  buildExportFallbackFilename({ title: 'Notes', format: 'markdown', date: fixed }).endsWith('.md')
+);
+check(
+  'a missing title falls back to "export"',
+  buildExportFallbackFilename({ format: 'docx', date: fixed }) === 'export-2026-06-09_1503.docx'
+);
+check(
+  'every server export format has an extension',
+  ['pdf', 'docx', 'pptx', 'xlsx', 'csv', 'txt', 'markdown', 'html', 'json', 'jsonl'].every(
+    format => typeof EXPORT_FILE_EXTENSIONS[format] === 'string'
+  )
 );
 
 console.log(`\n${failures === 0 ? '✅ All checks passed' : `❌ ${failures} check(s) failed`}`);

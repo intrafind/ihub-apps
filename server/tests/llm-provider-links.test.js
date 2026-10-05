@@ -73,6 +73,9 @@ jest.unstable_mockModule('../configCache.js', () => ({
   resolveEnvVarsInObject: value => value,
   default: {
     getPlatform: () => ({ defaultLanguage: 'en' }),
+    // Off here: these specs are about provider links, and the EU AI Act gate
+    // (enabling an unmarked model needs a justification) has its own specs.
+    getFeatures: () => ({ aiTransparency: false }),
     getModels: () => ({ data: modelsInStore(), etag: 'm' }),
     getProviders: () => ({ data: clone(store['config/providers.json'].providers), etag: 'p' }),
     refreshModelsCache: async () => {},

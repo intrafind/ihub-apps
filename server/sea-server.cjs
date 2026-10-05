@@ -41,8 +41,24 @@ async function startServer() {
   }
 }
 
-// Start the server
-startServer().catch(err => {
-  console.error('Failed to start server:', err);
-  process.exit(1);
-});
+async function runVerify(args) {
+  require('dotenv').config();
+  const { runVerifyCLI } = await import(
+    url.pathToFileURL(path.join(__dirname, 'cli', 'verify.js')).href
+  );
+  process.exit(await runVerifyCLI(args));
+}
+
+if (process.argv[2] === 'verify') {
+  // `ihub-apps verify <file>`: the offline EU AI Act detector, no server.
+  runVerify(process.argv.slice(3)).catch(err => {
+    console.error('verify failed:', err);
+    process.exit(3);
+  });
+} else {
+  // Start the server
+  startServer().catch(err => {
+    console.error('Failed to start server:', err);
+    process.exit(1);
+  });
+}

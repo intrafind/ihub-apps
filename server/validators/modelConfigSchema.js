@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { contentMarkingSchema } from './aiTransparencySchema.js';
 import {
   CONTEXT_WINDOW_MIN,
   CONTEXT_WINDOW_MAX,
@@ -269,6 +270,10 @@ const baseModelConfigSchema = z
 
     // Hint configuration - display important messages when model is selected
     hint: hintSchema.optional(),
+
+    // EU AI Act Art. 50(2): how this model's output is marked (the marking
+    // capability registry, see shared/aiTransparency.js normalizeContentMarking).
+    contentMarking: contentMarkingSchema.optional(),
 
     // API Key configuration - stored encrypted on server
     apiKey: z.string().optional(), // Encrypted API key for this model

@@ -323,9 +323,10 @@ export class ResponseAssembler {
    * @param {string} options.text - The final answer (the validated JSON for structured output).
    * @param {*} [options.parsed] - The validated structured output.
    * @param {Object|null} [options.usage] - iHub usage.
+   * @param {Object|null} [options.provenance] - provenance record of the answer.
    * @returns {Object} The completed response object.
    */
-  complete({ text, parsed, usage }) {
+  complete({ text, parsed, usage, provenance }) {
     let item = this.current;
     if (!item && text) {
       // An answer that arrived whole (a passthrough tool, Anthropic's
@@ -337,7 +338,9 @@ export class ResponseAssembler {
     const response = this.response({
       status: 'completed',
       output: this._output(),
-      usage: responsesUsage(usage)
+      usage: responsesUsage(usage),
+      // EU AI Act Art. 50(2): provenance of the generated answer.
+      ...(provenance ? { ihub_provenance: provenance } : {})
     });
     this._write('response.completed', { response });
     this._end();

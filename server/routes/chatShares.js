@@ -63,6 +63,7 @@ import { StorageError, storageHttpStatus } from '../storage/errors.js';
 import { loadUsers } from '../utils/userManager.js';
 import { localUsersFile } from '../utils/contentsPath.js';
 import { isAdminEligiblePrincipal } from '../utils/authorization.js';
+import { outboundLabel, outboundLabelEnabled } from '../services/provenance/outboundLabel.js';
 
 const COMPONENT = 'ChatShareRoutes';
 
@@ -231,7 +232,13 @@ function viewerView(share) {
     expiresAt: share.expiresAt || null,
     sharedBy: sharedBy || null,
     messageCount: share.messageCount || 0,
-    readOnly: true
+    readOnly: true,
+    // EU AI Act Art. 50(1): a shared (possibly public) chat says it is AI
+    // output and where it can be verified.
+    aiTransparency: {
+      label: outboundLabelEnabled() ? outboundLabel() : null,
+      verifyUrl: '/verify'
+    }
   };
 }
 

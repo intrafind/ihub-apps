@@ -25,5 +25,8 @@
     "level": "warning"
   },
   "enabled": false,
-  "default": false
+  "default": false,
+  "contentMarking": {
+    "textWatermark": "none"
+  }
 }

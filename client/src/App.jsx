@@ -11,6 +11,7 @@ import PromptsList from './features/prompts/pages/PromptsList';
 import AppRouterWrapper from './features/apps/components/AppRouterWrapper';
 const ChatHistoryPage = lazyWithRetry(() => import('./features/chat/pages/ChatHistoryPage'));
 const SharedChatPage = lazyWithRetry(() => import('./features/chat/pages/SharedChatPage'));
+const VerifyPage = lazyWithRetry(() => import('./features/verify/pages/VerifyPage'));
 const TasksPage = lazyWithRetry(() => import('./features/tasks/pages/TasksPage'));
 const TaskDetailPage = lazyWithRetry(() => import('./features/tasks/pages/TaskDetailPage'));
 const TaskEditorPage = lazyWithRetry(() => import('./features/tasks/pages/TaskEditorPage'));
@@ -36,6 +37,7 @@ const AdminSecurityPage = lazyWithRetry(() => import('./features/admin/pages/Adm
 const AdminBackupPage = lazyWithRetry(() => import('./features/admin/pages/AdminBackupPage'));
 const AdminUpdatesPage = lazyWithRetry(() => import('./features/admin/pages/AdminUpdatesPage'));
 const AdminAdvancedPage = lazyWithRetry(() => import('./features/admin/pages/AdminAdvancedPage'));
+const AdminEuAiActPage = lazyWithRetry(() => import('./features/admin/pages/AdminEuAiActPage'));
 // Lazy load admin components
 const AdminUsageReports = lazyWithRetry(() => import('./features/admin/pages/AdminUsageReports'));
 const AdminFeedbackPage = lazyWithRetry(() => import('./features/admin/pages/AdminFeedbackPage'));
@@ -414,6 +416,18 @@ function App() {
           element={
             <Suspense fallback={<AdminLoading />}>
               <SharedChatPage />
+            </Suspense>
+          }
+        />
+
+        {/* The detector (EU AI Act) — outside Layout for the same reason: with
+            detector access set to public it serves visitors who are not
+            signed in. The server decides who may use it. */}
+        <Route
+          path="verify"
+          element={
+            <Suspense fallback={<AdminLoading />}>
+              <VerifyPage />
             </Suspense>
           }
         />
@@ -818,6 +832,9 @@ function App() {
             <Route path="changelog" element={<LazyAdminRoute component={AdminChangelogPage} />} />
             {showAdminPage('features') && (
               <Route path="features" element={<LazyAdminRoute component={AdminFeaturesPage} />} />
+            )}
+            {showAdminPage('euAiAct') && (
+              <Route path="eu-ai-act" element={<LazyAdminRoute component={AdminEuAiActPage} />} />
             )}
             {showAdminPage('system') && (
               <Route path="security" element={<LazyAdminRoute component={AdminSecurityPage} />} />

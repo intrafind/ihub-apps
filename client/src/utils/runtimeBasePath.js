@@ -26,6 +26,7 @@ export const KNOWN_ROUTES = [
   'chats', // Chat history overview
   'tasks', // Scheduled tasks
   'share', // Read-only shared chat (public or sign-in gated per link)
+  'verify', // EU AI Act detector (public or sign-in gated per installation)
   'settings', // Settings pages (integrations, etc.)
   'teams', // Microsoft Teams embed routes
   'workflows', // Workflow management and execution
@@ -185,24 +186,28 @@ export const getApiBaseUrlOverride = () => apiBaseUrlOverride;
  * @returns {string} The complete path
  */
 /**
- * Whether `pathname` is a shared chat page (`/share/<id>`), under whatever
+ * Whether `pathname` is a page that decides its own audience server-side —
+ * a shared chat (`/share/<id>`) or the detector (`/verify`) — under whatever
  * base path this deployment runs at.
  *
- * A shared chat decides its own audience server-side — a public link opens
- * with nobody signed in — so the sign-in redirects that guard every other
- * page must leave it alone. Both places that redirect ask here: the React
- * auth context, and (as a copy, because it runs before any module loads) the
- * pre-React gate in `client/src/auth-gate/auth-gate.js`.
+ * A public share link or a public detector opens with nobody signed in, so
+ * the sign-in redirects that guard every other page must leave them alone;
+ * the page itself sends a viewer to the login when it needs one. Both places
+ * that redirect ask here: the React auth context, and (as a copy, because it
+ * runs before any module loads) the pre-React gate in
+ * `client/src/auth-gate/auth-gate.js`.
  *
  * @param {string} [pathname] - Path to test; the current location by default.
  * @returns {boolean}
  */
-export const isSharedChatPath = (
+export const isSelfGatedPath = (
   pathname = typeof window !== 'undefined' ? window.location.pathname : ''
 ) => {
   const base = getBasePath();
   const relative = base && pathname.startsWith(base) ? pathname.slice(base.length) : pathname;
-  return relative.startsWith('/share/');
+  return (
+    relative.startsWith('/share/') || relative === '/verify' || relative.startsWith('/verify/')
+  );
 };
 
 export const buildPath = path => {

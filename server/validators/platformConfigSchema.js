@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { cloudStorageConfigSchema } from './cloudStorageSchema.js';
+import { aiTransparencyPlatformSchema } from './aiTransparencySchema.js';
 
 const jwtProviderSchema = z.object({
   name: z.string(),
@@ -443,6 +444,9 @@ export const platformConfigSchema = z
       })
       .passthrough()
       .prefault({}),
+    // EU AI Act Art. 50 transparency: disclosure, marking, signing, detection
+    // (see validators/aiTransparencySchema.js and docs/eu-ai-act.md).
+    aiTransparency: aiTransparencyPlatformSchema.prefault({}),
     // Durable chats: server-side chat history written through the storage
     // abstraction. The feature itself is gated by features.chatPersistence;
     // these are its settings. Both retention rules are switched off by a value

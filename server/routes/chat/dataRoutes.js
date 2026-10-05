@@ -15,6 +15,7 @@ import { userSkillsClientConfig } from '../../services/skills/userSkillSettings.
 import crypto from 'crypto';
 import logger from '../../utils/logger.js';
 import { sendInternalError, sendFailedOperationError } from '../../utils/responseHelpers.js';
+import { aiTransparencyClientConfig } from '../../services/provenance/clientConfig.js';
 
 /**
  * The default dictation model as the client sees it: its id, and whether it is
@@ -783,6 +784,8 @@ export default function registerDataRoutes(app) {
         requestBodyLimitMB: platform.requestBodyLimitMB,
         requestConcurrency: platform.requestConcurrency,
         pdfExport: platform.pdfExport,
+        // EU AI Act Art. 50: disclosure, labels, export and detection switches.
+        aiTransparency: aiTransparencyClientConfig(),
         globalPromptVariables: platform.globalPromptVariables,
         telemetry: platform.telemetry
           ? {

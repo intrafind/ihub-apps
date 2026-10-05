@@ -245,6 +245,7 @@ function ChatHeader({
               parametersVisible={parametersVisible}
               appId={appId}
               chatId={chatId}
+              conversationTitle={conversationTitle}
               showEditAppButton={showEditAppButton}
               showCompareModeToggle={showCompareModeToggle}
               compareModeActive={compareModeActive}
@@ -264,6 +265,8 @@ function ChatHeader({
           settings={exportSettings}
           appId={appId}
           chatId={chatId}
+          app={app}
+          conversationTitle={conversationTitle}
         />
       )}
     </div>

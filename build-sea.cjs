@@ -85,9 +85,14 @@ const { spawn, exec } = require('child_process');
 const http = require('http');
 const net = require('net');
 
+// 'verify <file>': the offline EU AI Act detector (no server, no upload).
+// Its stdout is the report (possibly JSON), so launcher diagnostics go to stderr.
+const verifyMode = process.argv[2] === 'verify';
+const log = verifyMode ? console.error : console.log;
+
 // Get the directory of this script
 const binDir = path.dirname(process.execPath);
-console.log(\`Binary directory: \${binDir}\`);
+log(\`Binary directory: \${binDir}\`);
 
 // Set APP_ROOT_DIR environment variable for server.js
 process.env.APP_ROOT_DIR = binDir;
@@ -95,15 +100,15 @@ process.env.APP_ROOT_DIR = binDir;
 // Load config.env using dotenv if available
 const configPath = path.join(binDir, 'config.env');
 if (fs.existsSync(configPath)) {
-  console.log('Found config.env, loading configuration...');
+  log('Found config.env, loading configuration...');
   try {
     // Load dotenv from the bundled node_modules
     const dotenv = require('./server/node_modules/dotenv');
     dotenv.config({ path: configPath });
-    console.log('Configuration loaded successfully via dotenv');
+    log('Configuration loaded successfully via dotenv');
   } catch (err) {
     console.error('Error loading config.env with dotenv:', err);
-    console.log('Falling back to manual parsing...');
+    log('Falling back to manual parsing...');
     
     // Fallback to manual parsing if dotenv is not available
     try {
@@ -121,7 +126,7 @@ if (fs.existsSync(configPath)) {
           process.env[key] = value;
         }
       });
-      console.log('Configuration loaded successfully via fallback parsing');
+      log('Configuration loaded successfully via fallback parsing');
     } catch (fallbackErr) {
       console.error('Error with fallback config.env parsing:', fallbackErr);
     }
@@ -130,7 +135,14 @@ if (fs.existsSync(configPath)) {
 
 // Check for --update CLI argument before starting the server
 const updateArg = process.argv.find(a => a.startsWith('--update'));
-if (updateArg) {
+if (verifyMode) {
+  import('./server/cli/verify.js').then(mod => mod.runVerifyCLI(process.argv.slice(3))).then(code => {
+    process.exit(code);
+  }).catch(err => {
+    console.error('Failed to run verify:', err.message);
+    process.exit(3);
+  });
+} else if (updateArg) {
   const subcommand = updateArg.includes('=') ? updateArg.split('=')[1] : '';
   const force = process.argv.includes('--force');
   // Dynamic import of the ESM CLI module

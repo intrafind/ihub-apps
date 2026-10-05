@@ -1,0 +1,65 @@
+# EU AI Act marking (issue #2563): C2PA smoke test on every OS the iHub
+# binary ships for, and the nightly marking robustness benchmark.
+name: AI Provenance
+
+on:
+  pull_request:
+    paths:
+      - 'server/services/provenance/**'
+      - 'server/package.json'
+      - 'server/package-lock.json'
+      - 'scripts/c2pa-smoke.mjs'
+      - '.github/workflows/ai-provenance.yml'
+  schedule:
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  c2pa-smoke:
+    name: C2PA smoke test (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: 'npm'
+          cache-dependency-path: server/package-lock.json
+      - name: Install server dependencies
+        working-directory: server
+        run: npm ci --omit=dev
+      - name: Cache TrustMark models
+        uses: actions/cache@v4
+        with:
+          path: .cache/trustmark-models
+          key: trustmark-models-P-v1
+      - name: Sign and verify
+        run: node scripts/c2pa-smoke.mjs
+
+  marking-benchmark:
+    name: Marking robustness benchmark
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: 'npm'
+      - name: Install dependencies
+        run: npm run install:all
+      - name: Run the full benchmark
+        run: npm run test:marking-benchmark -- --full --out marking-benchmark.json
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: marking-benchmark
+          path: marking-benchmark.json

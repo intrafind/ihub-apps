@@ -22,5 +22,8 @@
   "thinking": {
     "enabled": true,
     "level": "high"
+  },
+  "contentMarking": {
+    "textWatermark": "none"
   }
 }
