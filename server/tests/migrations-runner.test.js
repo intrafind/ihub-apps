@@ -448,6 +448,44 @@ describe('Migration Runner', () => {
       expect(history.migrations[1].file).toBe('V110__add_proxy_defaults.js');
     });
 
+    it('moves the 5.5.30 follow-ups to V148-V151 from any earlier numbering', () => {
+      // They were V143-V146, V145-V148, V146-V149, V147-V150, and main's V144-V147 share
+      // numbers with them: only the file name tells them apart.
+      const entry = (version, file) => ({
+        version,
+        description: file.replace(/^V\d+__|\.js$/g, ''),
+        file,
+        checksum: 'abc123',
+        status: 'success'
+      });
+      const files = [
+        'translator_task_in_system_prompt',
+        'seed_mistral_realtime_transcription_model',
+        'seed_google_tts_models',
+        'dictation_via_transcription_models'
+      ];
+      const mains = [
+        entry('144', 'V144__remove_app_wizard_fields.js'),
+        entry('145', 'V145__add_short_link_allowed_hosts.js'),
+        entry('146', 'V146__add_local_auth_lockout.js'),
+        entry('147', 'V147__add_proxy_auth_trusted_sources.js')
+      ];
+      const rows = history => history.migrations.map(m => `${m.version} ${m.file}`);
+      const current = files.map((name, i) => `${148 + i} V${148 + i}__${name}.js`);
+
+      for (const first of [143, 145, 146, 147]) {
+        const history = {
+          schemaVersion: '1.0',
+          migrations: [
+            ...files.map((name, i) => entry(String(first + i), `V${first + i}__${name}.js`)),
+            ...mains.map(m => ({ ...m }))
+          ]
+        };
+        expect(reconcileRenamedMigrations(history)).toBe(true);
+        expect(rows(history)).toEqual([...current, ...rows({ migrations: mains })]);
+      }
+    });
+
     it('rewrites both CIMD governance entries, V111/V112 -> V112/V113', () => {
       // The chain is the interesting part: the governance migration moves onto
       // the number the grandfathering one is vacating, so a rule that matched
@@ -530,14 +568,15 @@ describe('Migration Runner', () => {
       expect(history.migrations[1].file).toBe('V144__remove_app_wizard_fields.js');
     });
 
-    it.each(['141', '142', '143', '145', '146', '147'])(
-      'moves an EU AI Act entry recorded at V%s to V148 so it no longer blocks main',
+    it.each(['141', '142', '143', '145', '146', '147', '148'])(
+      'moves an EU AI Act entry recorded at V%s to V152 so it no longer blocks main',
       oldVersion => {
         // A dev install that ran the branch while it held that number recorded
         // it; main's provider plain names (V141), text-to-speech (V142),
-        // short-link allowlist (V145), local sign-in lockout (V146) and
-        // proxy-auth trusted sources (V147) migrations hold those numbers now,
-        // and V143 sorts below main's app wizard field cleanup (V144).
+        // short-link allowlist (V145), local sign-in lockout (V146), proxy-auth
+        // trusted sources (V147) and Translator system prompt (V148) migrations
+        // hold those numbers now, and V143 sorts below main's app wizard field
+        // cleanup (V144).
         const history = {
           schemaVersion: '1.0',
           migrations: [
@@ -559,8 +598,8 @@ describe('Migration Runner', () => {
         };
 
         expect(reconcileRenamedMigrations(history)).toBe(true);
-        expect(history.migrations[0].version).toBe('148');
-        expect(history.migrations[0].file).toBe('V148__add_ai_transparency.js');
+        expect(history.migrations[0].version).toBe('152');
+        expect(history.migrations[0].file).toBe('V152__add_ai_transparency.js');
         expect(history.migrations[1].version).toBe('140');
       }
     );
@@ -577,6 +616,20 @@ describe('Migration Runner', () => {
 
       expect(reconcileRenamedMigrations(history)).toBe(false);
       expect(history.migrations).toEqual([shortLinks]);
+    });
+
+    it("leaves main's V148 Translator entry alone when reconciling the EU AI Act V148", () => {
+      const translator = {
+        version: '148',
+        description: 'translator_task_in_system_prompt',
+        file: 'V148__translator_task_in_system_prompt.js',
+        checksum: 'abc123',
+        status: 'success'
+      };
+      const history = { schemaVersion: '1.0', migrations: [{ ...translator }] };
+
+      expect(reconcileRenamedMigrations(history)).toBe(false);
+      expect(history.migrations).toEqual([translator]);
     });
 
     it('is a no-op on a fresh install with no matching history entries', () => {

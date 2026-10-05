@@ -55,10 +55,6 @@ jest.unstable_mockModule('../services/TokenStorageService.js', () => ({
   }
 }));
 
-jest.unstable_mockModule('../websocket/realtimeTranscription.js', () => ({
-  testRealtimeConnection: async () => ({ ok: true })
-}));
-
 jest.unstable_mockModule('../services/AuditLogService.js', () => ({
   logAudit: async () => {}
 }));

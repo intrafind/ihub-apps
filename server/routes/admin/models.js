@@ -17,6 +17,8 @@ import { logAudit } from '../../services/AuditLogService.js';
 import { saveSnapshot } from '../../services/ChangeHistoryService.js';
 import llmClient, { isLLMError, LLM_ERROR_CODES } from '../../services/loop/LLMClient.js';
 import { getTtsProvider, isTtsModel } from '../../tts/index.js';
+import { isTranscriptionModel } from '../../transcription/index.js';
+import { testTranscriptionModel } from '../../websocket/realtimeTranscription.js';
 import { TTS_LANGUAGES } from '../../tts/language.js';
 import { llmErrorToHttpStatus, isMissingApiKeyError } from '../../services/loop/llmHttpErrors.js';
 import {
@@ -923,6 +925,35 @@ export default function registerAdminModelsRoutes(app) {
   }
 
   /**
+   * Start a session with a transcription model's upstream (or, for a batch
+   * model, transcribe a second of silence). Same response shape as a chat
+   * model test; `response` says what the endpoint did.
+   */
+  async function testTranscription(model, res) {
+    const safeModel = { ...model };
+    delete safeModel.apiKey;
+    const result = await testTranscriptionModel(model);
+    if (!result.ok) {
+      logger.error('Transcription model test failed', {
+        component: 'ModelsRoutes',
+        modelId: model.id,
+        provider: model.provider,
+        error: result.message
+      });
+      return res
+        .status(502)
+        .json({ error: result.message, details: result.message, code: 'upstream-error' });
+    }
+    return res.json({
+      success: true,
+      message: 'Model test successful',
+      messageKey: 'testSuccessful',
+      response: result.message,
+      model: safeModel
+    });
+  }
+
+  /**
    * GET /api/admin/models/:modelId/tts/voices — the voices a TTS model can
    * use: the provider's presets and the account's custom voices.
    */
@@ -1049,6 +1080,10 @@ export default function registerAdminModelsRoutes(app) {
       // A text-to-speech model is tested by speaking a short sentence.
       if (isTtsModel(model)) {
         return testTtsModel(model, res);
+      }
+      // A transcription model is tested by starting a session upstream.
+      if (isTranscriptionModel(model)) {
+        return testTranscription(model, res);
       }
 
       try {

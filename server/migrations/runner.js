@@ -92,6 +92,110 @@ export async function scanMigrationFiles(migrationsDir) {
  * the original number.
  */
 const RENAMED_MIGRATIONS = [
+  // The 5.5.30 follow-ups (Translator system prompt, Mistral transcription,
+  // Gemini TTS, dictation through transcription models) were written as
+  // V143-V146 and shifted up each time main took a number first: to V145-V148
+  // (app wizard field cleanup, V144), V146-V149 (short-link allowlist, V145),
+  // V147-V150 (local sign-in lockout, V146), V148-V151 (proxy auth trusted
+  // sources, V147). Every old number reconciles to the current one, keeping
+  // their order. Matching on the file keeps these rules off the history rows of
+  // main's V144-V147.
+  {
+    oldVersion: '143',
+    oldFile: 'V143__translator_task_in_system_prompt.js',
+    newVersion: '148',
+    newFile: 'V148__translator_task_in_system_prompt.js'
+  },
+  {
+    oldVersion: '145',
+    oldFile: 'V145__translator_task_in_system_prompt.js',
+    newVersion: '148',
+    newFile: 'V148__translator_task_in_system_prompt.js'
+  },
+  {
+    oldVersion: '146',
+    oldFile: 'V146__translator_task_in_system_prompt.js',
+    newVersion: '148',
+    newFile: 'V148__translator_task_in_system_prompt.js'
+  },
+  {
+    oldVersion: '147',
+    oldFile: 'V147__translator_task_in_system_prompt.js',
+    newVersion: '148',
+    newFile: 'V148__translator_task_in_system_prompt.js'
+  },
+  {
+    oldVersion: '144',
+    oldFile: 'V144__seed_mistral_realtime_transcription_model.js',
+    newVersion: '149',
+    newFile: 'V149__seed_mistral_realtime_transcription_model.js'
+  },
+  {
+    oldVersion: '146',
+    oldFile: 'V146__seed_mistral_realtime_transcription_model.js',
+    newVersion: '149',
+    newFile: 'V149__seed_mistral_realtime_transcription_model.js'
+  },
+  {
+    oldVersion: '147',
+    oldFile: 'V147__seed_mistral_realtime_transcription_model.js',
+    newVersion: '149',
+    newFile: 'V149__seed_mistral_realtime_transcription_model.js'
+  },
+  {
+    oldVersion: '148',
+    oldFile: 'V148__seed_mistral_realtime_transcription_model.js',
+    newVersion: '149',
+    newFile: 'V149__seed_mistral_realtime_transcription_model.js'
+  },
+  {
+    oldVersion: '145',
+    oldFile: 'V145__seed_google_tts_models.js',
+    newVersion: '150',
+    newFile: 'V150__seed_google_tts_models.js'
+  },
+  {
+    oldVersion: '147',
+    oldFile: 'V147__seed_google_tts_models.js',
+    newVersion: '150',
+    newFile: 'V150__seed_google_tts_models.js'
+  },
+  {
+    oldVersion: '148',
+    oldFile: 'V148__seed_google_tts_models.js',
+    newVersion: '150',
+    newFile: 'V150__seed_google_tts_models.js'
+  },
+  {
+    oldVersion: '149',
+    oldFile: 'V149__seed_google_tts_models.js',
+    newVersion: '150',
+    newFile: 'V150__seed_google_tts_models.js'
+  },
+  {
+    oldVersion: '146',
+    oldFile: 'V146__dictation_via_transcription_models.js',
+    newVersion: '151',
+    newFile: 'V151__dictation_via_transcription_models.js'
+  },
+  {
+    oldVersion: '148',
+    oldFile: 'V148__dictation_via_transcription_models.js',
+    newVersion: '151',
+    newFile: 'V151__dictation_via_transcription_models.js'
+  },
+  {
+    oldVersion: '149',
+    oldFile: 'V149__dictation_via_transcription_models.js',
+    newVersion: '151',
+    newFile: 'V151__dictation_via_transcription_models.js'
+  },
+  {
+    oldVersion: '150',
+    oldFile: 'V150__dictation_via_transcription_models.js',
+    newVersion: '151',
+    newFile: 'V151__dictation_via_transcription_models.js'
+  },
   {
     // The staan provider was renumbered twice while its branch was open: the
     // CIMD governance migrations took V112/V113 and the proxy-defaults fix took
@@ -255,73 +359,80 @@ const RENAMED_MIGRATIONS = [
     newVersion: '145',
     newFile: 'V145__add_short_link_allowed_hosts.js'
   },
-  // The EU AI Act migration moved ten times while its branch was open and
+  // The EU AI Act migration moved eleven times while its branch was open and
   // dev installs were running it: the prompt placeholder (V136), scheduled
   // tasks defaults (V138), speech defaults (V139), web tool parameters (V140),
   // provider plain names (V141) and text-to-speech (V142) each took its number
   // on main first, the app wizard field cleanup (V144) left V143 out of order,
-  // and the short-link host allowlist (V145), local sign-in lockout (V146) and
-  // proxy-auth trusted sources (V147) took the next three. Every old number
-  // reconciles to V148, so main's migration of that number runs.
+  // the short-link host allowlist (V145), local sign-in lockout (V146) and
+  // proxy-auth trusted sources (V147) took the next three, and the 5.5.30
+  // follow-ups took V148-V151. Every old number reconciles to V152, so main's
+  // migration of that number runs.
   {
     oldVersion: '136',
     oldFile: 'V136__add_ai_transparency.js',
-    newVersion: '148',
-    newFile: 'V148__add_ai_transparency.js'
+    newVersion: '152',
+    newFile: 'V152__add_ai_transparency.js'
   },
   {
     oldVersion: '138',
     oldFile: 'V138__add_ai_transparency.js',
-    newVersion: '148',
-    newFile: 'V148__add_ai_transparency.js'
+    newVersion: '152',
+    newFile: 'V152__add_ai_transparency.js'
   },
   {
     oldVersion: '139',
     oldFile: 'V139__add_ai_transparency.js',
-    newVersion: '148',
-    newFile: 'V148__add_ai_transparency.js'
+    newVersion: '152',
+    newFile: 'V152__add_ai_transparency.js'
   },
   {
     oldVersion: '140',
     oldFile: 'V140__add_ai_transparency.js',
-    newVersion: '148',
-    newFile: 'V148__add_ai_transparency.js'
+    newVersion: '152',
+    newFile: 'V152__add_ai_transparency.js'
   },
   {
     oldVersion: '141',
     oldFile: 'V141__add_ai_transparency.js',
-    newVersion: '148',
-    newFile: 'V148__add_ai_transparency.js'
+    newVersion: '152',
+    newFile: 'V152__add_ai_transparency.js'
   },
   {
     oldVersion: '142',
     oldFile: 'V142__add_ai_transparency.js',
-    newVersion: '148',
-    newFile: 'V148__add_ai_transparency.js'
+    newVersion: '152',
+    newFile: 'V152__add_ai_transparency.js'
   },
   {
     oldVersion: '143',
     oldFile: 'V143__add_ai_transparency.js',
-    newVersion: '148',
-    newFile: 'V148__add_ai_transparency.js'
+    newVersion: '152',
+    newFile: 'V152__add_ai_transparency.js'
   },
   {
     oldVersion: '145',
     oldFile: 'V145__add_ai_transparency.js',
-    newVersion: '148',
-    newFile: 'V148__add_ai_transparency.js'
+    newVersion: '152',
+    newFile: 'V152__add_ai_transparency.js'
   },
   {
     oldVersion: '146',
     oldFile: 'V146__add_ai_transparency.js',
-    newVersion: '148',
-    newFile: 'V148__add_ai_transparency.js'
+    newVersion: '152',
+    newFile: 'V152__add_ai_transparency.js'
   },
   {
     oldVersion: '147',
     oldFile: 'V147__add_ai_transparency.js',
-    newVersion: '148',
-    newFile: 'V148__add_ai_transparency.js'
+    newVersion: '152',
+    newFile: 'V152__add_ai_transparency.js'
+  },
+  {
+    oldVersion: '148',
+    oldFile: 'V148__add_ai_transparency.js',
+    newVersion: '152',
+    newFile: 'V152__add_ai_transparency.js'
   }
 ];
 

@@ -50,6 +50,7 @@ function typeLabel(t, type) {
     embedding: t('admin.models.import.types.embedding', 'Embedding'),
     rerank: t('admin.models.import.types.rerank', 'Reranker'),
     audio: t('admin.models.import.types.audio', 'Audio'),
+    transcription: t('admin.models.import.types.transcription', 'Transcription'),
     image: t('admin.models.import.types.image', 'Image'),
     moderation: t('admin.models.import.types.moderation', 'Moderation'),
     other: t('admin.models.import.types.other', 'Not a chat model')
@@ -68,7 +69,8 @@ function formatTokens(value) {
  * "Import from URL": list the models an endpoint offers and create the ones the
  * admin picks. The models are linked to a provider — an existing one, or a new
  * one created here with the endpoint's API type and key — so the key lives on
- * the provider and not on every model.
+ * the provider and not on every model. A new provider can also be created
+ * without any model, to import its models later.
  *
  * Mount it only while it is open: its state is not reset between openings.
  */
@@ -234,6 +236,11 @@ function ModelImportDialog({ onClose, onImported, existingModelIds, initialProvi
     existingModelIds
   );
   const hasProblems = Object.keys(idProblems).length > 0;
+  // A new provider is created on its own when no model is picked: its models
+  // can be imported later. An existing provider needs at least one model.
+  const creatingProvider = providerChoice === NEW_PROVIDER && !createdProviderId;
+  const providerOnly = creatingProvider && selectedModels.length === 0;
+  const canImport = !importing && !hasProblems && (selectedModels.length > 0 || creatingProvider);
 
   // "Select all" picks the visible chat models not configured yet; other types
   // and duplicates can still be ticked one by one.
@@ -263,7 +270,7 @@ function ModelImportDialog({ onClose, onImported, existingModelIds, initialProvi
     })[problem];
 
   const runImport = async () => {
-    if (selectedModels.length === 0 || hasProblems) return;
+    if (!canImport) return;
     setImporting(true);
     setImportError(null);
 
@@ -559,6 +566,16 @@ function ModelImportDialog({ onClose, onImported, existingModelIds, initialProvi
         </button>
       </div>
 
+      {creatingProvider && (
+        <p className="text-sm text-gray-600 dark:text-gray-400">
+          {t(
+            'admin.models.import.providerOnlyHint',
+            'Pick the models to import into "{{provider}}", or create the provider without models and import them later.',
+            { provider: providerDisplayName }
+          )}
+        </p>
+      )}
+
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <div className="sm:col-span-1">
           <label htmlFor="import-search" className={LABEL}>
@@ -728,6 +745,28 @@ function ModelImportDialog({ onClose, onImported, existingModelIds, initialProvi
   const renderDone = () => {
     const ok = results.filter(r => r.ok);
     const failed = results.filter(r => !r.ok);
+    if (results.length === 0) {
+      return (
+        <div className="flex items-start gap-3">
+          <Icon name="check-circle" className="h-6 w-6 shrink-0 text-green-500" />
+          <div className="text-sm text-gray-700 dark:text-gray-300">
+            <p className="font-medium text-gray-900 dark:text-gray-100">
+              {t(
+                'admin.models.import.providerOnlyCreated',
+                'The provider "{{provider}}" was created without models.',
+                { provider: providerDisplayName }
+              )}
+            </p>
+            <p className="mt-1">
+              {t(
+                'admin.models.import.providerOnlyNext',
+                'It holds the endpoint and its API key. To add models later, open "Import from URL" again and choose this provider, or link a model to it in the model editor.'
+              )}
+            </p>
+          </div>
+        </div>
+      );
+    }
     return (
       <div className="space-y-4">
         <div className="flex items-start gap-3">
@@ -841,17 +880,22 @@ function ModelImportDialog({ onClose, onImported, existingModelIds, initialProvi
                   type="button"
                   className={PRIMARY_BUTTON}
                   onClick={runImport}
-                  disabled={importing || selectedModels.length === 0 || hasProblems}
+                  disabled={!canImport}
                 >
                   <Icon
-                    name={importing ? 'refresh' : 'download'}
+                    name={importing ? 'refresh' : providerOnly ? 'plus' : 'download'}
                     className={`h-4 w-4 mr-2 ${importing ? 'animate-spin' : ''}`}
                   />
                   {importing
                     ? t('admin.models.import.importing', 'Importing…')
-                    : t('admin.models.import.importCount', 'Import {{count}} models', {
-                        count: selectedModels.length
-                      })}
+                    : providerOnly
+                      ? t(
+                          'admin.models.import.createProviderOnly',
+                          'Create provider without models'
+                        )
+                      : t('admin.models.import.importCount', 'Import {{count}} models', {
+                          count: selectedModels.length
+                        })}
                 </button>
               )}
             </>
