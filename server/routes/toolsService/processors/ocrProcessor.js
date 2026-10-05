@@ -9,7 +9,7 @@ import configCache from '../../../configCache.js';
 import { getApiKeyForModel } from '../../../utils.js';
 import llmClient from '../../../services/loop/LLMClient.js';
 import logger from '../../../utils/logger.js';
-import { notifyClients } from '../jobStore.js';
+import { completeJob, notifyClients } from '../jobStore.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -680,10 +680,11 @@ export async function processOcrJob(job) {
 
       const pdfBytes = await buildOcrPdf(pageTexts, pdfBuffer, job.data.debugMode);
 
-      job.result = Buffer.from(pdfBytes);
-      job.resultContentType = 'application/pdf';
-      job.resultFilename = job.data.outputFilename || 'ocr-result.pdf';
-      job.status = 'completed';
+      await completeJob(job, {
+        result: Buffer.from(pdfBytes),
+        contentType: 'application/pdf',
+        filename: job.data.outputFilename || 'ocr-result.pdf'
+      });
 
       // Free buffer data to save memory
       job.data.fileBuffer = null;
@@ -770,10 +771,11 @@ export async function processOcrJob(job) {
 
       const pdfBytes = await buildOcrPdfFromImages(pageImages, pageTexts, job.data.debugMode);
 
-      job.result = Buffer.from(pdfBytes);
-      job.resultContentType = 'application/pdf';
-      job.resultFilename = job.data.outputFilename || 'ocr-result.pdf';
-      job.status = 'completed';
+      await completeJob(job, {
+        result: Buffer.from(pdfBytes),
+        contentType: 'application/pdf',
+        filename: job.data.outputFilename || 'ocr-result.pdf'
+      });
 
       // Free image data to save memory
       job.data.pageImages = null;
