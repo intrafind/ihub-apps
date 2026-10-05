@@ -222,7 +222,7 @@ export async function loadSkillsMetadata(customDir) {
  * Get the full content (body) of a skill's SKILL.md
  * @param {string} skillName - Skill name/directory
  * @param {string} [customDir] - Optional custom skills directory
- * @returns {Promise<{ body: string, references: string[], scripts: string[], assets: string[] } | null>}
+ * @returns {Promise<{ body: string, description: string, frontmatter: object, references: string[], scripts: string[], assets: string[] } | null>}
  */
 export async function getSkillContent(skillName, customDir) {
   // Validate skill name to prevent path traversal and enforce spec
@@ -269,6 +269,8 @@ export async function getSkillContent(skillName, customDir) {
 
   return {
     body: parsed.body,
+    description:
+      typeof parsed.frontmatter?.description === 'string' ? parsed.frontmatter.description : '',
     frontmatter: parsed.frontmatter,
     references,
     scripts,

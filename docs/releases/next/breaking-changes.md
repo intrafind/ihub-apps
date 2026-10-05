@@ -1,5 +1,26 @@
 # Breaking Changes — Unreleased
 
+## Voice Input: The vLLM Realtime Setting Moved to a Transcription Model
+
+Voice input now uses transcription models (see the feature entry), so the separate **vLLM
+Realtime** section in **Admin → Voice Input** and the `vllm-realtime` speech recognition service
+are gone. The upgrade moves an existing setup over automatically:
+
+- The endpoint, model and key from `speech.realtime` move onto the `voxtral-mini-realtime` model
+  when it points at the same endpoint, or onto a new `voxtral-mini-realtime-dictation` model when
+  it does not. The model is enabled if the endpoint was.
+- The platform default and every app that used `vllm-realtime` switch to that model.
+- Groups that could dictate before get access to the model, since a model needs a permission
+  that the old setting did not.
+- `speech.realtime` keeps only its connection limits (`maxConnections` and the others).
+- `POST /api/admin/voice/realtime/test` is removed. Use the **Test** action on the model in
+  **Admin → Models**.
+
+**Before upgrading:** Scripts or config management that write `speech.realtime.url`, `model`,
+`apiKey` or `enabled`, or set `speechRecognition.service` to `vllm-realtime`, must set the
+endpoint on the model instead and use `"service": "model"` with a `modelId`. After the upgrade,
+check **Admin → Voice Input** and the groups' model permissions.
+
 ## Anonymous Access: Group Permissions Apply to Every Request
 
 Requests without a sign-in are now checked against the permissions of the groups in
@@ -131,3 +152,26 @@ runs on and not from the network. `docker/docker-compose.prod.yml` is unchanged.
 **Before upgrading:** if you open a quickstart or development setup from another machine, put a
 reverse proxy in front of it, or change the binding back to `'3000:3000'` once the passwords of
 the shipped accounts have been changed.
+
+## Skills Load Only Where They Are Assigned and Granted
+
+A skill is now loaded only when it is installed, listed in the app's `skills` and granted to the
+user's groups (`permissions.skills` in `groups.json`). Before, once an app had any skill, the model
+could load every installed skill by name, a chat request could pre-load any skill even in an app
+without skills, and users whose groups grant no skills saw all of them when anonymous access was
+off.
+
+- An empty `permissions.skills` now grants no skills, as for apps and tools. API clients
+  (client credentials, static API keys) and MCP clients without a skill grant see none.
+- The `/` skill picker sends the new chat request field `requestedSkills`, a list of skill names,
+  instead of `requestedSkill`. A request that still sends `requestedSkill` gets no skill
+  pre-loaded.
+- One message pre-loads at most `skillSettings.maxActiveSkills` skills (default 3); further names
+  are ignored.
+- Agents can now load the skills listed on their profile with `activate_skill`, and the planner
+  only pre-loads skills from that list. Which skills an agent may use follows the groups of its
+  service account.
+
+**Before upgrading:** check that every group whose members should use skills grants them in
+`permissions.skills` (for example `["*"]`) or inherits a group that does. Integrations that call
+the chat API with `requestedSkill` must send `requestedSkills: ["<skill-name>"]` instead.

@@ -24,7 +24,7 @@ import {
   MAX_OUTPUT_TOKENS_MAX,
   MAX_OUTPUT_TOKENS_MIN
 } from '../../shared/validationPatterns.js';
-import { CUSTOM_PROVIDER_API_TYPES } from '../../shared/llmProviders.js';
+import { CUSTOM_PROVIDER_API_TYPES, TRANSCRIPTION_API_TYPES } from '../../shared/llmProviders.js';
 
 /**
  * API types whose `/models` listing this module knows how to call and read —
@@ -168,9 +168,15 @@ export function buildDiscoveryHeaders(provider, apiKey) {
  * @param {string} provider
  * @param {string} baseUrl - API base returned by {@link resolveModelsEndpoint}
  * @param {string} modelId - Remote model id
+ * @param {string} [type] - The model's type from the listing
  * @returns {string}
  */
-export function buildInferenceUrl(provider, baseUrl, modelId) {
+export function buildInferenceUrl(provider, baseUrl, modelId, type) {
+  // A speech-to-text model of an OpenAI-compatible endpoint is called on its
+  // audio API, where iHub's transcription provider sends recordings.
+  if (type === 'transcription' && TRANSCRIPTION_API_TYPES.includes(provider)) {
+    return `${baseUrl}/audio/transcriptions`;
+  }
   switch (provider) {
     case 'openai-responses':
       return `${baseUrl}/responses`;
@@ -218,11 +224,13 @@ const DECLARED_TYPES = {
   image: 'image',
   moderation: 'moderation',
   audio: 'audio',
-  stt: 'audio',
-  asr: 'audio',
   tts: 'audio',
-  transcribe: 'audio',
-  transcription: 'audio'
+  // Speech-to-text has a type of its own: it can be imported as a
+  // transcription model (LLM Hub declares Whisper as "STT").
+  stt: 'transcription',
+  asr: 'transcription',
+  transcribe: 'transcription',
+  transcription: 'transcription'
 };
 
 /**
@@ -235,7 +243,8 @@ function typeFromId(id) {
   if (/rerank/.test(s)) return 'rerank';
   if (/embed|(^|[-_/])(bge|gte|e5)[-_]/.test(s)) return 'embedding';
   if (/moderation/.test(s)) return 'moderation';
-  if (/whisper|(^|[-_/])tts([-_]|$)|transcribe|speech|realtime/.test(s)) return 'audio';
+  if (/whisper|transcri/.test(s)) return 'transcription';
+  if (/(^|[-_/])tts([-_]|$)|speech|realtime/.test(s)) return 'audio';
   if (/dall-e|gpt-image|imagen|stable-diffusion|sdxl|(^|[-_/])flux/.test(s)) return 'image';
   if (/(^|[-_/])ocr([-_]|$)/.test(s)) return 'other';
   return 'chat';
@@ -558,7 +567,7 @@ export async function discoverModels({ url, provider = 'openai', apiKey } = {}, 
 
   const models = parseModelsResponse(await readJsonBody(response)).map(entry => ({
     ...entry,
-    url: buildInferenceUrl(provider, baseUrl, entry.id)
+    url: buildInferenceUrl(provider, baseUrl, entry.id, entry.type)
   }));
 
   logger.info('Model endpoint discovered', {

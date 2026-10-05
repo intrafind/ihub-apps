@@ -39,7 +39,7 @@ jest.mock('../../../client/src/utils/azureRecognitionService', () => ({
   }
 }));
 
-import VllmRealtimeRecognition from '../../../client/src/utils/vllmRealtimeRecognitionService';
+import ModelSpeechRecognition from '../../../client/src/utils/modelRecognitionService';
 import MicrophoneCheck from '../../../client/src/features/admin/components/voice/MicrophoneCheck';
 import DictationTest from '../../../client/src/features/admin/components/voice/DictationTest';
 
@@ -67,9 +67,9 @@ afterEach(() => {
   delete navigator.mediaDevices;
 });
 
-test('vLLM realtime: stop() during the permission prompt releases the microphone', async () => {
+test('transcription model: stop() during the permission prompt releases the microphone', async () => {
   const mic = pendingMicrophone();
-  const recognition = new VllmRealtimeRecognition();
+  const recognition = new ModelSpeechRecognition('voxtral');
   recognition.onstart = jest.fn();
 
   const started = recognition.start();

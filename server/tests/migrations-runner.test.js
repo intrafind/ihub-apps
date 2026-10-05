@@ -448,6 +448,44 @@ describe('Migration Runner', () => {
       expect(history.migrations[1].file).toBe('V110__add_proxy_defaults.js');
     });
 
+    it('moves the 5.5.30 follow-ups to V148-V151 from any earlier numbering', () => {
+      // They were V143-V146, V145-V148, V146-V149, V147-V150, and main's V144-V147 share
+      // numbers with them: only the file name tells them apart.
+      const entry = (version, file) => ({
+        version,
+        description: file.replace(/^V\d+__|\.js$/g, ''),
+        file,
+        checksum: 'abc123',
+        status: 'success'
+      });
+      const files = [
+        'translator_task_in_system_prompt',
+        'seed_mistral_realtime_transcription_model',
+        'seed_google_tts_models',
+        'dictation_via_transcription_models'
+      ];
+      const mains = [
+        entry('144', 'V144__remove_app_wizard_fields.js'),
+        entry('145', 'V145__add_short_link_allowed_hosts.js'),
+        entry('146', 'V146__add_local_auth_lockout.js'),
+        entry('147', 'V147__add_proxy_auth_trusted_sources.js')
+      ];
+      const rows = history => history.migrations.map(m => `${m.version} ${m.file}`);
+      const current = files.map((name, i) => `${148 + i} V${148 + i}__${name}.js`);
+
+      for (const first of [143, 145, 146, 147]) {
+        const history = {
+          schemaVersion: '1.0',
+          migrations: [
+            ...files.map((name, i) => entry(String(first + i), `V${first + i}__${name}.js`)),
+            ...mains.map(m => ({ ...m }))
+          ]
+        };
+        expect(reconcileRenamedMigrations(history)).toBe(true);
+        expect(rows(history)).toEqual([...current, ...rows({ migrations: mains })]);
+      }
+    });
+
     it('rewrites both CIMD governance entries, V111/V112 -> V112/V113', () => {
       // The chain is the interesting part: the governance migration moves onto
       // the number the grandfathering one is vacating, so a rule that matched

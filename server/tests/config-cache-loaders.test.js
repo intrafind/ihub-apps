@@ -4,8 +4,8 @@
  * `initialize()` and `_reloadEntry()` used to carry their own copy of each
  * type's loading logic, and the copies drifted: boot decrypted platform.json's
  * speech secrets, the refresh path did not, so the first admin save (or TTL
- * tick) put the `ENC[...]` string back in the cache and broke the realtime
- * proxy and the Azure token broker until restart. The apps/models/prompts/
+ * tick) put the `ENC[...]` string back in the cache and broke the Azure token
+ * broker until restart. The apps/models/prompts/
  * workflows/agents refresh branches also never re-armed their TTL timer when
  * nothing had changed, so edits made outside the admin UI stopped being picked
  * up after the first quiet tick — the bug `config-cache-refresh-chain.test.js`
@@ -64,7 +64,6 @@ describe('platform.json speech secrets', () => {
   it('are decrypted on refresh, not only at boot', async () => {
     await writeJson('config/platform.json', {
       speech: {
-        realtime: { apiKey: tokenStorageService.encryptString('realtime-secret') },
         azure: { subscriptionKey: tokenStorageService.encryptString('azure-secret') }
       }
     });
@@ -72,7 +71,6 @@ describe('platform.json speech secrets', () => {
     await configCache.refreshCacheEntry('config/platform.json');
 
     const platform = configCache.getPlatform();
-    assert.equal(platform.speech.realtime.apiKey, 'realtime-secret');
     assert.equal(platform.speech.azure.subscriptionKey, 'azure-secret');
   });
 });
