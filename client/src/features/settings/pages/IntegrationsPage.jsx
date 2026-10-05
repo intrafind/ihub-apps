@@ -27,12 +27,17 @@ const MCP_ERROR_CODES = [
   'public_url_mismatch'
 ];
 
-/** Cloud storage callback error codes with a dedicated, readable message. */
-const CLOUD_ERROR_CODES = [
+/**
+ * Integration sign-in callback error codes (Jira and cloud storage) with a
+ * dedicated, readable message under `integrations.page.cloud.errors`.
+ */
+const INTEGRATION_ERROR_CODES = [
   'access_denied',
   'invalid_client',
   'invalid_state',
   'session_expired',
+  'oauth_failed',
+  'missing_code',
   'callback_failed'
 ];
 
@@ -85,9 +90,11 @@ export default function IntegrationsPage() {
       // eslint-disable-next-line @eslint-react/set-state-in-effect
       setMessage({
         type: 'error',
-        text: t('integrations.page.jira.connectionFailed', {
-          message: decodeURIComponent(jiraError)
-        })
+        text: INTEGRATION_ERROR_CODES.includes(jiraError)
+          ? t(`integrations.page.cloud.errors.${jiraError}`, { name: 'JIRA' })
+          : t('integrations.page.jira.connectionFailed', {
+              message: decodeURIComponent(jiraError)
+            })
       });
       navigate('/settings/integrations', { replace: true });
     }
@@ -125,7 +132,7 @@ export default function IntegrationsPage() {
       } else if (error) {
         setMessage({
           type: 'error',
-          text: CLOUD_ERROR_CODES.includes(error)
+          text: INTEGRATION_ERROR_CODES.includes(error)
             ? t(`integrations.page.cloud.errors.${error}`, { name: provider.displayName })
             : t('integrations.page.cloud.connectionFailed', {
                 name: provider.displayName,

@@ -81,3 +81,21 @@ started from.
 - Expired or wrong client secret in the Entra app registration: tells the user to contact their
   administrator. The server log contains the Microsoft error (for example `AADSTS7000222`).
 - An expired or unverifiable sign-in asks the user to try again.
+
+## Single Sign-On (OIDC) Works Reliably on Servers With Several Workers
+
+Signing in with an OIDC provider (Entra ID, Keycloak, Google and others) failed at random on
+servers running more than one worker process, which is the default. Users came back from the
+provider to an error such as:
+
+> Unable to verify authorization request state.
+
+The sign-in started on one worker and the provider sent the user back to another that did not know
+about it. Any worker can now finish the sign-in.
+
+- A sign-in must still finish in the browser that started it, and within 15 minutes.
+- When users pick Windows sign-in (NTLM) on a server that also offers other sign-in methods,
+  every worker now remembers that choice until they log out.
+- iHub no longer sets the `oidc.session`, `integration.session`, `oauth.session` and
+  `app.session` cookies. It sets a short-lived `oidcLoginNonce` cookie during an OIDC sign-in,
+  and an `ntlmRequested` cookie after a Windows sign-in.

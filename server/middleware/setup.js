@@ -1,8 +1,6 @@
 import cors from 'cors';
 import express from 'express';
 import cookieParser from 'cookie-parser';
-import session from 'express-session';
-import createMemoryStore from 'memorystore';
 import { proxyAuth } from './proxyAuth.js';
 import localAuthMiddleware from './localAuth.js';
 import { initializePassport, configureOidcProviders } from './oidcAuth.js';
@@ -13,9 +11,7 @@ import ntlmAuthMiddleware from './ntlmAuth.js';
 import { enhanceUserWithPermissions, isAnonymousAccessAllowed } from '../utils/authorization.js';
 import { createRateLimiters } from './rateLimiting.js';
 import { basePathRewriteMiddleware, buildApiPath } from '../utils/basePath.js';
-import config from '../config.js';
 import configCache from '../configCache.js';
-import tokenStorageService from '../services/TokenStorageService.js';
 import logger from '../utils/logger.js';
 import { runWithContext, setContext } from '../utils/requestContext.js';
 import activityTracker from '../telemetry/ActivityTracker.js';
@@ -227,153 +223,6 @@ function makeForgivingOriginMatcher(resolvedOrigin, req) {
     );
     return callback(null, false);
   };
-}
-
-/**
- * Setup session middleware for different authentication flows
- * @param {import('express').Application} app - Express application
- * @param {Object} platformConfig - Platform configuration
- */
-function setupSessionMiddleware(app, platformConfig) {
-  const oidcConfig = platformConfig.oidcAuth || {};
-  const needsOidcSessions = oidcConfig.enabled;
-
-  // Check for OAuth-based external integrations that need sessions
-  const jiraEnabled = platformConfig?.jira?.enabled && platformConfig?.jira?.clientId;
-  const cloudStorageEnabled =
-    platformConfig?.cloudStorage?.enabled &&
-    platformConfig?.cloudStorage?.providers?.some(
-      p => p.type === 'office365' && p.enabled !== false
-    );
-  // Future integrations can be added here:
-  // const microsoftEnabled = process.env.MICROSOFT_CLIENT_ID && process.env.MICROSOFT_CLIENT_SECRET;
-  // const googleEnabled = process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET;
-
-  const needsIntegrationSessions = jiraEnabled || cloudStorageEnabled; // || microsoftEnabled || googleEnabled;
-
-  // Use memorystore instead of the default MemoryStore to avoid memory leaks.
-  // The default MemoryStore never prunes expired entries; memorystore runs a
-  // periodic check and removes stale sessions automatically.
-  const MemoryStore = createMemoryStore(session);
-
-  const sessionSecret =
-    config.JWT_SECRET || tokenStorageService.getJwtSecret() || 'fallback-session-secret';
-
-  // Setup OIDC user authentication sessions
-  if (needsOidcSessions) {
-    logger.info('Enabling session middleware for OIDC user authentication', {
-      component: 'Middleware'
-    });
-    const oidcMaxAge = 30 * 60 * 1000; // 30 minutes for user auth
-    app.use(
-      '/api/auth/oidc',
-      session({
-        store: new MemoryStore({ checkPeriod: oidcMaxAge }),
-        secret: sessionSecret,
-        resave: false,
-        saveUninitialized: false, // Only create session when needed for OIDC
-        name: 'oidc.session',
-        cookie: {
-          secure: config.USE_HTTPS === 'true',
-          httpOnly: true,
-          maxAge: oidcMaxAge,
-          sameSite: 'lax',
-          // Session middleware is configured at startup, but the base path is
-          // request-scoped (X-Forwarded-Prefix). A scoped cookie path like
-          // '/api/auth/oidc' would not match '/ihub/api/auth/oidc/...' under
-          // a subpath deployment, so the OIDC callback would lose its
-          // returnUrl/state. Use '/' to make the cookie reach the callback
-          // regardless of deployment layout. The cookie is httpOnly + signed.
-          path: '/'
-        }
-      })
-    );
-  }
-
-  // Always register integration session middleware — integrations can be enabled
-  // dynamically via admin UI, and routes are always registered with requireFeature guards
-  const enabledIntegrations = [];
-  if (jiraEnabled) enabledIntegrations.push('JIRA');
-  if (cloudStorageEnabled) enabledIntegrations.push('Office 365');
-
-  logger.info('Enabling session middleware for OAuth integrations', {
-    component: 'Middleware',
-    enabledIntegrations:
-      enabledIntegrations.length > 0
-        ? enabledIntegrations.join(', ')
-        : 'ready for dynamic configuration'
-  });
-  const integrationMaxAge = 15 * 60 * 1000; // 15 minutes for OAuth flows
-  app.use(
-    '/api/integrations',
-    session({
-      store: new MemoryStore({ checkPeriod: integrationMaxAge }),
-      secret: sessionSecret,
-      resave: false,
-      saveUninitialized: true, // Required for OAuth2 PKCE state persistence
-      name: 'integration.session',
-      cookie: {
-        secure: config.USE_HTTPS === 'true',
-        httpOnly: true,
-        maxAge: integrationMaxAge,
-        sameSite: 'lax',
-        path: '/'
-      }
-    })
-  );
-
-  // OAuth Authorization Code Flow requires session state for PKCE/CSRF across login redirect
-  const oauthConfig = platformConfig.oauth || {};
-  if (oauthConfig.enabled?.authz || oauthConfig.authorizationCodeEnabled) {
-    logger.info('Enabling session middleware for OAuth Authorization Code Flow', {
-      component: 'Middleware'
-    });
-    const oauthMaxAge = 15 * 60 * 1000; // 15 minutes - auth code flow is short-lived
-    app.use(
-      '/api/oauth',
-      session({
-        store: new MemoryStore({ checkPeriod: oauthMaxAge }),
-        secret: sessionSecret,
-        resave: false,
-        saveUninitialized: true, // Required to save OAuth params before login redirect
-        name: 'oauth.session',
-        cookie: {
-          secure: config.USE_HTTPS === 'true',
-          httpOnly: true,
-          maxAge: oauthMaxAge,
-          sameSite: 'lax',
-          path: '/'
-        }
-      })
-    );
-  }
-
-  // If no specific session middleware is needed, but we still have some auth method,
-  // we might need basic session support for other features
-  if (!needsOidcSessions && !needsIntegrationSessions) {
-    const authConfig = platformConfig.auth || {};
-    if (authConfig.mode === 'local' || authConfig.mode === 'ldap') {
-      logger.info('Enabling minimal session middleware for local/LDAP authentication', {
-        component: 'Middleware'
-      });
-      const appMaxAge = 24 * 60 * 60 * 1000; // 24 hours for regular app sessions
-      app.use(
-        session({
-          store: new MemoryStore({ checkPeriod: appMaxAge }),
-          secret: sessionSecret,
-          resave: false,
-          saveUninitialized: false,
-          name: 'app.session',
-          cookie: {
-            secure: config.USE_HTTPS === 'true',
-            httpOnly: true,
-            maxAge: appMaxAge,
-            sameSite: 'lax'
-          }
-        })
-      );
-    }
-  }
 }
 
 /**
@@ -604,7 +453,7 @@ export function setupMiddleware(app, platformConfig = {}) {
   app.use(cookieParser()); // Add cookie parser middleware
 
   // Store the boot-time platform config for backward compatibility.
-  // NOTE: body-size limit, rate limiters, session store, and the NTLM static-asset
+  // NOTE: body-size limit, rate limiters, and the NTLM static-asset
   // bypass are all wired from this snapshot and are truly restart-only — they rely
   // on Express middleware objects that cannot be hot-swapped at runtime.
   // All per-request auth and permission decisions (authRequired, enhanceUser…) read
@@ -658,8 +507,11 @@ export function setupMiddleware(app, platformConfig = {}) {
   // OAuth API rate limiter for authorization/token endpoints (protect against brute force)
   app.use(buildApiPath('/oauth'), rateLimiters.oauthApiLimiter);
 
-  // Setup session middleware for different use cases
-  setupSessionMiddleware(app, platformConfig);
+  // No server-side sessions: requests from one browser are spread across
+  // cluster workers (and pods), so every multi-request flow carries its state
+  // in a signed ticket or a cookie instead — OIDC login (utils/oidcLoginState.js),
+  // integration sign-ins (utils/integrationOAuthState.js), the OAuth consent
+  // screen (utils/consentTicket.js) and the NTLM choice (ntlmAuth.js).
 
   // Initialize Passport for OIDC authentication
   initializePassport(app);

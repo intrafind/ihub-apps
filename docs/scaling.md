@@ -297,9 +297,15 @@ workers rather than landing on one:
   paths route around this by asking the owning worker to act; direct admin reads
   of a running execution can lag.
 
+Sign-in flows keep no server-side session. OIDC login, connecting an integration
+(Office 365, Google Drive, Jira, Nextcloud), MCP server sign-in and the OAuth
+consent screen carry their state in signed tickets and cookies, so the request
+that finishes a sign-in can land on any worker — or any pod.
+
 Any new feature needing cross-worker visibility should either use the bus
 (`publish`/`subscribe` plus a presence map), persist to the shared `contents/`
-directory, or stay strictly per-request.
+directory, carry its state in a signed ticket or cookie, or stay strictly
+per-request. Do not add `express-session`: its store lives in one worker.
 
 ### Session failover
 
