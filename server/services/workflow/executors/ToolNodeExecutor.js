@@ -18,6 +18,7 @@
 
 import { BaseNodeExecutor } from './BaseNodeExecutor.js';
 import { runTool } from '../../../toolLoader.js';
+import { getAssignedSkillIds } from '../../skillAccess.js';
 
 /**
  * Tool node configuration
@@ -126,7 +127,9 @@ export class ToolNodeExecutor extends BaseNodeExecutor {
           ...resolvedParams,
           chatId,
           user,
-          appConfig
+          // A workflow node loads only the app's global skills, never users'
+          // own: the `_skillIds` marker says so to the skill tools.
+          appConfig: { ...(appConfig || {}), _skillIds: getAssignedSkillIds(appConfig) }
         },
         timeout
       );

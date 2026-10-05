@@ -39,6 +39,11 @@ import {
   USER_PROMPT_SHARES_NAMESPACE,
   PROMPT_PREFERENCES_NAMESPACE
 } from '../services/prompts/UserPromptRepository.js';
+import {
+  USER_SKILLS_NAMESPACE,
+  USER_SKILL_VERSIONS_NAMESPACE,
+  USER_SKILL_SHARES_NAMESPACE
+} from '../services/skills/UserSkillRepository.js';
 import { MCP_TOOL_CATALOG_NAMESPACE } from '../services/mcp/mcpToolCatalogStore.js';
 
 describe('storage namespaces', () => {
@@ -83,7 +88,10 @@ describe('storage namespaces', () => {
       ['UserPromptRepository.USER_PROMPTS_NAMESPACE', USER_PROMPTS_NAMESPACE],
       ['UserPromptRepository.USER_PROMPT_VERSIONS_NAMESPACE', USER_PROMPT_VERSIONS_NAMESPACE],
       ['UserPromptRepository.USER_PROMPT_SHARES_NAMESPACE', USER_PROMPT_SHARES_NAMESPACE],
-      ['UserPromptRepository.PROMPT_PREFERENCES_NAMESPACE', PROMPT_PREFERENCES_NAMESPACE]
+      ['UserPromptRepository.PROMPT_PREFERENCES_NAMESPACE', PROMPT_PREFERENCES_NAMESPACE],
+      ['UserSkillRepository.USER_SKILLS_NAMESPACE', USER_SKILLS_NAMESPACE],
+      ['UserSkillRepository.USER_SKILL_VERSIONS_NAMESPACE', USER_SKILL_VERSIONS_NAMESPACE],
+      ['UserSkillRepository.USER_SKILL_SHARES_NAMESPACE', USER_SKILL_SHARES_NAMESPACE]
     ]) {
       assert.ok(declared.has(ns), `${label} is '${ns}', which RUNTIME_NAMESPACES does not declare`);
     }

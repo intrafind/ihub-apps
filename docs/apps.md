@@ -988,8 +988,11 @@ The `skills` array specifies which skill identifiers are available for an app. S
 | Property                       | Type    | Default | Description                                                                         |
 | ------------------------------ | ------- | ------- | ----------------------------------------------------------------------------------- |
 | `skills`                       | Array   | -       | Array of skill identifier strings. Each string must match a skill defined in the skills directory |
-| `skillSettings.autoActivate`   | Boolean | -       | When `true`, all listed skills are activated automatically when the app opens        |
-| `skillSettings.maxActiveSkills`| Number  | -       | Maximum number of skills that can be active at the same time (1-10)                 |
+| `skillSettings.autoActivate`   | Boolean | -       | Reserved; not used yet                                                              |
+| `skillSettings.maxActiveSkills`| Number  | `3`     | Maximum number of skills a single message can pre-activate with the `/` command (1-10). Further skills in the same request are ignored |
+| `skillSettings.allowPersonal`  | Boolean | `true`  | Offer users' own and shared [user skills](skills.md#user-skills) in this app. Set `false` to allow only the global skills listed in `skills` |
+
+A global skill is only ever loaded for an app when three things hold: it is installed, it is listed in the app's `skills`, and the user's groups grant it (`permissions.skills` in `groups.json`). [User skills](skills.md#user-skills) are the user's own and shared skills; they are offered in every app unless `skillSettings.allowPersonal` is `false`. This applies to every way a skill gets loaded: the model calling `activate_skill` or `read_skill_resource`, the user picking skills with `/` (sent as `requestedSkills`), and agents. An empty `permissions.skills` grants no skills. Agent runs check skills against the agent's service-account groups and the skills listed on the agent profile.
 
 #### Apps as Tools (Concierge Pattern)
 

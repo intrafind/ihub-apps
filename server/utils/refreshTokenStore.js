@@ -4,8 +4,7 @@ import fs from 'fs';
 import bcrypt from 'bcryptjs';
 import { atomicWriteJSON } from './atomicWrite.js';
 import logger from './logger.js';
-import { getRootDir } from '../pathUtils.js';
-import config from '../config.js';
+import { getContentsPath } from './contentsPath.js';
 
 /**
  * File-backed refresh token store for OAuth 2.0 token rotation.
@@ -26,12 +25,7 @@ import config from '../config.js';
  * @module refreshTokenStore
  */
 
-const STORE_PATH = path.join(
-  getRootDir(),
-  config.CONTENTS_DIR,
-  'data',
-  'oauth-refresh-tokens.json'
-);
+const STORE_PATH = getContentsPath('data', 'oauth-refresh-tokens.json');
 
 /** Default refresh token lifetime in days. */
 const TOKEN_TTL_DAYS = 30;

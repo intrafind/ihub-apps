@@ -48,8 +48,6 @@
  */
 import { promises as fs } from 'fs';
 import path from 'path';
-import { getRootDir } from '../../pathUtils.js';
-import serverConfig from '../../config.js';
 import logger from '../../utils/logger.js';
 import { isValidId, resolveAndValidatePath } from '../../utils/pathSecurity.js';
 import { atomicCreateJSON, atomicWriteFile, atomicWriteJSON } from '../../utils/atomicWrite.js';
@@ -60,6 +58,7 @@ import {
   getRawNamespace,
   parseRawRelPath
 } from '../../storage/namespaces.js';
+import { getContentsPath } from '../../utils/contentsPath.js';
 
 const COMPONENT = 'ConfigStore';
 
@@ -85,7 +84,7 @@ let describedNamespaces = null;
  * @returns {string} Absolute path of the contents directory
  */
 function contentsDir() {
-  return path.join(getRootDir(), serverConfig.CONTENTS_DIR);
+  return getContentsPath();
 }
 
 /**

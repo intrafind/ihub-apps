@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 
 /**
- * Migration V152 specs — the code node in the shipped corpus-analysis
- * workflows becomes a transform with an `append` operation, and the step that
- * unpacked its result is removed. Workflows with other code nodes are left as
- * they are and reported.
+ * Migration V152 specs — seeding `platform.userSkills`.
+ *
+ * The migration adds the built-in defaults where they are missing and leaves
+ * every value an admin already set exactly as it is.
  */
 import fs from 'node:fs/promises';
 import os from 'node:os';
@@ -17,210 +17,80 @@ import {
   precondition,
   version,
   description
-} from '../migrations/V152__replace_workflow_code_accumulator.js';
+} from '../migrations/V152__add_user_skills_settings.js';
+import { setDefault } from '../migrations/utils.js';
+import { DEFAULT_USER_SKILL_SETTINGS } from '../services/skills/userSkillSettings.js';
 
 let baseDir;
 
 function makeCtx(dir) {
-  const logs = [];
   return {
-    logs,
-    listFiles: async (directory, pattern) => {
-      const suffix = pattern.startsWith('*') ? pattern.slice(1) : pattern;
-      try {
-        return (await fs.readdir(path.join(dir, directory))).filter(f => f.endsWith(suffix));
-      } catch {
-        return [];
-      }
-    },
+    fileExists: async rel =>
+      fs
+        .stat(path.join(dir, rel))
+        .then(() => true)
+        .catch(() => false),
     readJson: async rel => JSON.parse(await fs.readFile(path.join(dir, rel), 'utf8')),
     writeJson: async (rel, data) => {
+      await fs.mkdir(path.dirname(path.join(dir, rel)), { recursive: true });
       await fs.writeFile(path.join(dir, rel), JSON.stringify(data, null, 2), 'utf8');
     },
-    log: m => logs.push(['info', m]),
-    warn: m => logs.push(['warn', m])
+    setDefault,
+    log: () => {},
+    warn: () => {}
   };
 }
 
-async function freshDir(workflows) {
-  const dir = await fs.mkdtemp(path.join(baseDir, 'case-'));
-  await fs.mkdir(path.join(dir, 'workflows'), { recursive: true });
-  for (const [file, data] of Object.entries(workflows)) {
-    await fs.writeFile(path.join(dir, 'workflows', file), JSON.stringify(data), 'utf8');
+async function seed(platform) {
+  const dir = await fs.mkdtemp(path.join(baseDir, 'v152-'));
+  await fs.mkdir(path.join(dir, 'config'), { recursive: true });
+  if (platform !== null) {
+    await fs.writeFile(path.join(dir, 'config/platform.json'), JSON.stringify(platform), 'utf8');
   }
-  return dir;
-}
-
-const readWorkflow = async (dir, file) =>
-  JSON.parse(await fs.readFile(path.join(dir, 'workflows', file), 'utf8'));
-
-const SHIPPED_CODE =
-  'const prev = data._corpusAll; const prevArr = Array.isArray(prev) ? prev : (prev && Array.isArray(prev.result) ? prev.result : []); [...prevArr, ...(data._corpus || [])];';
-
-/** The shape the shipped workflows had before this release. */
-function shippedBefore() {
-  return {
-    id: 'corpus-analysis-decomposed',
-    nodes: [
-      { id: 'search-subquestion', type: 'corpus-search', config: {} },
-      {
-        id: 'accumulate-corpus',
-        type: 'code',
-        position: { x: 100, y: 940 },
-        config: {
-          chatVisible: false,
-          code: SHIPPED_CODE,
-          outputVariable: '_corpusAllRaw',
-          timeout: 5000
-        }
-      },
-      {
-        id: 'unwrap-corpus-accumulator',
-        type: 'transform',
-        config: {
-          chatVisible: false,
-          operations: [{ copy: '_corpusAllRaw.result', to: '_corpusAll' }]
-        }
-      },
-      { id: 'init-doc-cursor', type: 'transform', config: { operations: [] } }
-    ],
-    edges: [
-      { id: 'e7', source: 'search-subquestion', target: 'accumulate-corpus' },
-      { id: 'e8', source: 'accumulate-corpus', target: 'unwrap-corpus-accumulator' },
-      { id: 'e9', source: 'unwrap-corpus-accumulator', target: 'init-doc-cursor' }
-    ]
-  };
+  return makeCtx(dir);
 }
 
 before(async () => {
-  baseDir = await fs.mkdtemp(path.join(os.tmpdir(), 'v152-'));
+  baseDir = await fs.mkdtemp(path.join(os.tmpdir(), 'ihub-migration-v152-'));
 });
 
 after(async () => {
   await fs.rm(baseDir, { recursive: true, force: true });
 });
 
-describe('V152 replace_workflow_code_accumulator', () => {
-  it('declares its version and description', () => {
+describe('V152', () => {
+  it('is numbered and described as its file name says', () => {
     assert.equal(version, '152');
-    assert.equal(description, 'replace_workflow_code_accumulator');
+    assert.equal(description, 'add_user_skills_settings');
   });
 
-  it('runs only when there are workflows', async () => {
-    assert.equal(await precondition(makeCtx(await freshDir({}))), false);
-    const dir = await freshDir({ 'a.json': shippedBefore() });
-    assert.equal(await precondition(makeCtx(dir)), true);
+  it('only runs when platform.json exists', async () => {
+    assert.equal(await precondition(await seed(null)), false);
+    assert.equal(await precondition(await seed({})), true);
   });
 
-  it('turns the shipped accumulator into an append and removes the unwrap step', async () => {
-    const dir = await freshDir({ 'corpus-analysis-decomposed.json': shippedBefore() });
-    await up(makeCtx(dir));
-    const workflow = await readWorkflow(dir, 'corpus-analysis-decomposed.json');
-
-    assert.deepEqual(
-      workflow.nodes.map(node => node.id),
-      ['search-subquestion', 'accumulate-corpus', 'init-doc-cursor']
-    );
-    assert.deepEqual(workflow.nodes[1], {
-      id: 'accumulate-corpus',
-      type: 'transform',
-      position: { x: 100, y: 940 },
-      config: { chatVisible: false, operations: [{ append: '_corpus', to: '_corpusAll' }] }
+  it('adds the defaults the code falls back to', async () => {
+    const ctx = await seed({ chats: { enabled: true } });
+    await up(ctx);
+    const platform = await ctx.readJson('config/platform.json');
+    assert.deepEqual(platform.userSkills, {
+      ...DEFAULT_USER_SKILL_SETTINGS,
+      sharing: { ...DEFAULT_USER_SKILL_SETTINGS.sharing, restrictToGroups: [] }
     });
-    assert.deepEqual(workflow.edges, [
-      { id: 'e7', source: 'search-subquestion', target: 'accumulate-corpus' },
-      { id: 'e9', source: 'accumulate-corpus', target: 'init-doc-cursor' }
-    ]);
+    assert.deepEqual(platform.chats, { enabled: true });
   });
 
-  it('handles the accumulator inside an inline loop body', async () => {
-    const before = shippedBefore();
-    const loop = { id: 'per-subquestion', type: 'loop', config: { body: before.nodes } };
-    const dir = await freshDir({ 'v2.json': { ...before, nodes: [loop] } });
-    await up(makeCtx(dir));
-    const body = (await readWorkflow(dir, 'v2.json')).nodes[0].config.body;
-    assert.deepEqual(
-      body.map(node => [node.id, node.type]),
-      [
-        ['search-subquestion', 'corpus-search'],
-        ['accumulate-corpus', 'transform'],
-        ['init-doc-cursor', 'transform']
-      ]
-    );
-  });
-
-  it('keeps an unwrap step an admin changed, and feeds it the value it reads', async () => {
-    const before = shippedBefore();
-    before.nodes[2].config.operations.push({ set: '_seen', value: true });
-    const dir = await freshDir({ 'custom.json': before });
-    await up(makeCtx(dir));
-    const workflow = await readWorkflow(dir, 'custom.json');
-
-    assert.ok(workflow.nodes.some(node => node.id === 'unwrap-corpus-accumulator'));
-    assert.deepEqual(workflow.nodes[1].config.operations, [
-      { append: '_corpus', to: '_corpusAll' },
-      { copy: '_corpusAll', to: '_corpusAllRaw.result' }
-    ]);
-    assert.deepEqual(workflow.edges, before.edges);
-  });
-
-  it('keeps the unwrap step when another node also leads into it', async () => {
-    const before = shippedBefore();
-    before.nodes.splice(1, 0, { id: 'validate', type: 'transform', config: { operations: [] } });
-    before.edges.push({ id: 'e10', source: 'validate', target: 'unwrap-corpus-accumulator' });
-    const dir = await freshDir({ 'extra-input.json': before });
-    await up(makeCtx(dir));
-    const workflow = await readWorkflow(dir, 'extra-input.json');
-
-    assert.ok(workflow.nodes.some(node => node.id === 'unwrap-corpus-accumulator'));
-    assert.deepEqual(
-      workflow.nodes.find(node => node.id === 'accumulate-corpus').config.operations,
-      [
-        { append: '_corpus', to: '_corpusAll' },
-        { copy: '_corpusAll', to: '_corpusAllRaw.result' }
-      ]
-    );
-    assert.deepEqual(workflow.edges, before.edges);
-  });
-
-  it('also writes the old result variable when the unwrap step was removed', async () => {
-    const before = shippedBefore();
-    before.nodes.splice(2, 1);
-    before.edges = [before.edges[0]];
-    const dir = await freshDir({ 'no-unwrap.json': before });
-    await up(makeCtx(dir));
-    assert.deepEqual((await readWorkflow(dir, 'no-unwrap.json')).nodes[1].config.operations, [
-      { append: '_corpus', to: '_corpusAll' },
-      { copy: '_corpusAll', to: '_corpusAllRaw.result' }
-    ]);
-  });
-
-  it('leaves an accumulator whose code an admin changed, and lists it', async () => {
-    const before = shippedBefore();
-    before.nodes[1].config.code = 'data._corpus';
-    const dir = await freshDir({ 'changed.json': before });
-    const ctx = makeCtx(dir);
+  it('keeps what an admin set and is idempotent', async () => {
+    const ctx = await seed({
+      userSkills: { enabled: false, sharing: { allowEveryone: false, restrictToGroups: ['x'] } }
+    });
     await up(ctx);
-
-    assert.deepEqual(await readWorkflow(dir, 'changed.json'), before);
-    assert.ok(
-      ctx.logs.some(([level, message]) => level === 'warn' && message.includes('changed.json'))
-    );
-  });
-
-  it('leaves other code nodes alone and lists their workflows', async () => {
-    const other = {
-      id: 'mine',
-      nodes: [{ id: 'calc', type: 'code', config: { code: '1 + 1' } }],
-      edges: []
-    };
-    const dir = await freshDir({ 'mine.json': other });
-    const ctx = makeCtx(dir);
+    const first = await ctx.readJson('config/platform.json');
+    assert.equal(first.userSkills.enabled, false);
+    assert.equal(first.userSkills.sharing.allowEveryone, false);
+    assert.deepEqual(first.userSkills.sharing.restrictToGroups, ['x']);
+    assert.equal(first.userSkills.sharing.allowGroups, true);
     await up(ctx);
-
-    assert.deepEqual(await readWorkflow(dir, 'mine.json'), other);
-    assert.ok(
-      ctx.logs.some(([level, message]) => level === 'warn' && message.includes('mine.json'))
-    );
+    assert.deepEqual(await ctx.readJson('config/platform.json'), first);
   });
 });

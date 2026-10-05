@@ -1,12 +1,9 @@
 import crypto from 'crypto';
-import path from 'path';
-import { getRootDir } from './pathUtils.js';
-import config from './config.js';
 import { createDebouncedJsonStore } from './utils/debouncedJsonStore.js';
 import { isAllowedShortLinkTarget } from './utils/shortLinkTarget.js';
+import { getContentsPath } from './utils/contentsPath.js';
 
-const contentsDir = config.CONTENTS_DIR;
-const dataFile = path.join(getRootDir(), contentsDir, 'data', 'shortlinks.json');
+const dataFile = getContentsPath('data', 'shortlinks.json');
 
 const now = () => new Date().toISOString();
 
