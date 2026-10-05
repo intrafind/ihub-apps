@@ -8,18 +8,18 @@ import { jest } from '@jest/globals';
  */
 
 // The link store keeps its data in memory here; nothing touches the disk.
-jest.unstable_mockModule('../utils/debouncedJsonStore.js', () => ({
-  createDebouncedJsonStore: ({ createDefault }) => {
+jest.unstable_mockModule('../utils/sharedJsonFile.js', () => ({
+  createSharedJsonFile: ({ createDefault }) => {
     let data = createDefault();
     return {
-      load: async () => data,
-      reload: async () => data,
-      markDirty: () => {},
-      replace: next => {
-        data = next;
-      },
-      flush: async () => {},
-      stop: () => {}
+      read: async () => data,
+      update: async mutate => {
+        // Like the file: a change that throws leaves the stored data as it was.
+        const draft = structuredClone(data);
+        const result = await mutate(draft);
+        data = draft;
+        return result;
+      }
     };
   }
 }));

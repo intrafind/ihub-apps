@@ -442,7 +442,7 @@ function getBaseUrl(req) {
  *
  * Flow summary:
  *   1. Validate all OAuth parameters (response_type, client_id, redirect_uri, PKCE).
- *   2. If user is not logged in, store params in session and redirect to /login.
+ *   2. If user is not logged in, redirect to /login with this URL as returnUrl.
  *   3. If client is trusted (consentRequired=false), issue code immediately.
  *   4. Otherwise, render the consent screen carrying a signed consent ticket
  *      and wait for the user's POST.
@@ -659,21 +659,10 @@ export default function registerOAuthAuthorizeRoutes(app) {
         }
       }
 
-      // If not logged in, persist OAuth params in session and redirect to login
+      // If not logged in, redirect to login. The full authorize URL rides along
+      // as returnUrl, so whichever login method the user picks (and whichever
+      // worker finishes it) brings them back here with every parameter intact.
       if (!currentUser) {
-        if (req.session) {
-          req.session.oauthParams = {
-            response_type,
-            client_id,
-            redirect_uri,
-            scope: requestedScopes.join(' '),
-            state: state || '',
-            code_challenge: code_challenge || '',
-            code_challenge_method: code_challenge_method || '',
-            nonce: nonce || ''
-          };
-        }
-
         const basePath = buildServerPath('').replace(/\/$/, '');
         const loginUrl = `${basePath}/login?returnUrl=${encodeURIComponent(req.originalUrl)}`;
         logger.info('[OAuth Authorize] User not logged in, redirecting to login', {

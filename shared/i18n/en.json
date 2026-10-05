@@ -4006,10 +4006,12 @@
         "disconnected": "{{name}} account disconnected successfully",
         "disconnectFailed": "Failed to disconnect {{name}}: {{message}}",
         "errors": {
-          "access_denied": "{{name}} was not connected because access was not granted. If Microsoft asked for admin approval, ask your administrator to grant consent for the app, then try again.",
+          "access_denied": "{{name}} was not connected because access was not granted. If your organization requires administrator approval for the app, ask your administrator to grant it, then try again.",
           "invalid_client": "{{name}} could not be connected because the integration is misconfigured (for example an expired client secret). Please contact your administrator.",
           "invalid_state": "{{name}} sign-in could not be verified. Please try connecting again.",
           "session_expired": "{{name}} sign-in took too long and expired. Please try connecting again.",
+          "oauth_failed": "{{name}} sign-in failed at the provider. Please try again or contact your administrator if the problem persists.",
+          "missing_code": "{{name}} sign-in did not complete. Please try connecting again.",
           "callback_failed": "{{name}} could not be connected. Please try again or contact your administrator if the problem persists."
         }
       },

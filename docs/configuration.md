@@ -36,6 +36,7 @@ import configStore from '../services/config/ConfigStore.js';
 | `readText(relPath)`               | File contents as a string, or `null`                                         |
 | `writeJson(relPath, data)`        | Atomic write, byte-identical to what `atomicWriteJSON` produced before        |
 | `createJson(relPath, data)`       | Same, but fails with `EEXIST` when the file is already there                  |
+| `updateJson(relPath, mutate)`     | Read-modify-write that other workers' writes cannot interleave with           |
 | `writeText(relPath, text)`        | Atomic write of a page body, renderer or markdown source                      |
 | `remove(relPath)`                 | `true` when a file was deleted, `false` when there was nothing to delete      |
 | `list(ns)`                        | The keys a namespace holds — file names without `.json`, ascending            |

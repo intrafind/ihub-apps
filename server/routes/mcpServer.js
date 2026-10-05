@@ -1,6 +1,6 @@
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js';
-import { randomUUID } from 'crypto';
+import { createHash, randomUUID } from 'crypto';
 import express from 'express';
 import mcpAuth from '../middleware/mcpAuth.js';
 import { buildMcpServer } from '../services/mcp/McpServerService.js';
@@ -9,6 +9,14 @@ import { getA2aTaskStore } from '../services/mcp/a2aTaskStore.js';
 import configCache from '../configCache.js';
 import { buildServerPath } from '../utils/basePath.js';
 import logger from '../utils/logger.js';
+import {
+  createPresenceMap,
+  hasRemote,
+  publish,
+  subscribe,
+  request,
+  respond
+} from '../clusterBus.js';
 
 /**
  * Mounts the iHub-as-MCP-server gateway endpoints:
@@ -32,17 +40,108 @@ import logger from '../utils/logger.js';
  * requests. Stateful sessions keep the in-memory `McpServer` registry alive
  * across requests so tool callbacks stay bound to the same authenticated user.
  *
- * Because that registry lives in the worker's process memory, stateful mode
- * needs the client to keep landing on the same worker/replica (the sticky
- * cluster router in `clusterSticky.js` handles the multi-worker case). Behind a
- * load balancer that fans out across pods, set
- * `platform.mcpServer.transports.streamableHttp.stateless = true` — every
- * request then builds its own short-lived transport and no session id is
- * issued, so no affinity is required.
+ * That registry lives in one worker's process memory, and cluster workers
+ * receive connections round-robin, so a client's next request usually lands on
+ * another worker. Session ownership is therefore announced over the cluster bus
+ * (`clusterBus.js` presence maps):
+ *
+ *   - A POST for a session another worker holds is served here statelessly —
+ *     a short-lived McpServer for this one request. That is safe because the
+ *     gateway never sends server-initiated requests that a later POST would
+ *     have to answer, and every request is re-authenticated anyway.
+ *   - A GET (server→client stream) for such a session is declined with 405,
+ *     which clients treat as "no push channel".
+ *   - A DELETE is forwarded to the owning worker.
+ *
+ * Before any of that, a worker that does not hold the session checks that it
+ * was issued to the caller: a session id names its user (see
+ * `mintGatewaySessionId`), so another user's id is refused with 403 here, as
+ * the owning worker would refuse it, instead of being served or kept alive.
+ *   - Legacy SSE messages are relayed to the worker holding the SSE stream,
+ *     since only that worker can write the response onto it.
+ *
+ * The bus spans one process tree, not pods. Behind a load balancer that fans
+ * out across pods, set `platform.mcpServer.transports.streamableHttp.stateless
+ * = true` — every request then builds its own short-lived transport and no
+ * session id is issued, so no affinity is required.
  */
 
-// Map<sessionId, { transport, server, userId, lastSeen }>
-const sessions = new Map();
+// Map<sessionId, { transport, server, userId, lastSeen }>, its keys announced
+// to the other workers.
+const SESSION_PRESENCE = 'mcp-session';
+const sessions = createPresenceMap(SESSION_PRESENCE);
+
+// Map<sessionId, { server, transport, userId }> for the legacy SSE transport.
+const SSE_SESSION_PRESENCE = 'mcp-sse-session';
+const sseSessions = createPresenceMap(SSE_SESSION_PRESENCE);
+
+/** Cross-worker channels, see the module comment. */
+const BUS_SESSION_TOUCH = 'mcp-session:touch';
+const BUS_SESSION_TERMINATE = 'mcp-session:terminate';
+const BUS_SSE_MESSAGE = 'mcp-sse:message';
+
+/**
+ * A new session id, bound to the user it is issued to:
+ * `<uuid>.<sha256(uuid, userId)>`.
+ *
+ * A worker that does not hold a session cannot look up whose it is, and asking
+ * the owner would put a bus round trip in front of every forwarded request.
+ * The id answers instead. The hash needs no secret: a session is only served
+ * when its exact id is held somewhere, and each held id was minted for its
+ * owner, so passing the check as anyone else takes a sha256 collision.
+ * Hashing the uuid in keeps one user's ids from being linkable to each other.
+ *
+ * @param {string} userId - The authenticated user opening the session
+ * @returns {string} Session id; visible ASCII only, as the MCP spec requires
+ */
+export function mintGatewaySessionId(userId) {
+  const nonce = randomUUID();
+  return `${nonce}.${sessionUserTag(nonce, userId)}`;
+}
+
+function sessionUserTag(nonce, userId) {
+  return createHash('sha256')
+    .update(`${nonce}\0${String(userId)}`)
+    .digest('base64url');
+}
+
+/**
+ * Whether a session id was minted for this user by {@link mintGatewaySessionId}.
+ *
+ * @param {string} sessionId - The `Mcp-Session-Id` the client sent
+ * @param {string} userId - The authenticated caller
+ * @returns {boolean}
+ */
+export function isSessionIssuedTo(sessionId, userId) {
+  if (typeof sessionId !== 'string') return false;
+  const dot = sessionId.indexOf('.');
+  if (dot <= 0) return false;
+  return sessionId.slice(dot + 1) === sessionUserTag(sessionId.slice(0, dot), userId);
+}
+
+/** Refuse a session that belongs to another user, as every path here does. */
+function refuseForeignSession(req, res, sessionId, sessionUser, message) {
+  logger.warn(message, {
+    component: 'McpGateway',
+    sessionId,
+    tokenUser: req.user.id,
+    // Unknown when the session lives on another worker; its id said enough.
+    sessionUser: sessionUser ?? null
+  });
+  return res
+    .status(403)
+    .json({ error: 'forbidden', error_description: 'Session belongs to a different user' });
+}
+
+/**
+ * Request headers that may cross to another worker with a relayed message.
+ * Credentials stay behind: the relaying worker already authenticated the
+ * request, and the owner checks the user id it was given.
+ */
+function relayableHeaders(headers = {}) {
+  const { authorization: _authorization, cookie: _cookie, ...rest } = headers;
+  return rest;
+}
 
 // Sessions are dropped after this much inactivity. MCP clients hold a session
 // for the lifetime of their connection, so the window is generous; the sweep
@@ -176,9 +275,56 @@ function isInitializeRequestBody(body) {
   return messages.some(msg => msg && typeof msg === 'object' && msg.method === 'initialize');
 }
 
+/**
+ * Answer the other workers about sessions this worker holds. All no-ops
+ * outside cluster mode, where nothing is ever published.
+ */
+function registerSessionBusHandlers() {
+  // Activity on another worker keeps the session from idling out here.
+  subscribe(BUS_SESSION_TOUCH, ({ sessionId } = {}) => {
+    const entry = sessions.get(sessionId);
+    if (entry) entry.lastSeen = Date.now();
+  });
+
+  subscribe(BUS_SESSION_TERMINATE, ({ sessionId, userId } = {}) => {
+    const entry = sessions.get(sessionId);
+    if (!entry) return;
+    if (entry.userId !== userId) {
+      logger.warn('MCP session termination refused — session belongs to another user', {
+        component: 'McpGateway',
+        sessionId,
+        tokenUser: userId,
+        sessionUser: entry.userId
+      });
+      return;
+    }
+    destroySession(sessionId).catch(() => {});
+  });
+
+  // A legacy SSE client POSTs its messages to whichever worker the connection
+  // reaches; the reply has to go out on the SSE stream this worker holds.
+  respond(BUS_SSE_MESSAGE, async ({ sessionId, userId, body, headers } = {}) => {
+    const entry = sseSessions.get(sessionId);
+    if (!entry) return undefined; // not ours — stay silent for the owner
+    if (entry.userId !== userId) return { status: 403 };
+    try {
+      await entry.transport.handleMessage(body, { requestInfo: { headers } });
+      return { status: 202 };
+    } catch (err) {
+      logger.warn('MCP gateway relayed SSE message failed', {
+        component: 'McpGateway',
+        sessionId,
+        error: err?.message
+      });
+      return { status: 400 };
+    }
+  });
+}
+
 export default function registerMcpServerRoutes(app) {
   // unref() so the sweep timer never keeps the process alive on shutdown.
   setInterval(sweepIdleSessions, SESSION_SWEEP_INTERVAL_MS).unref();
+  registerSessionBusHandlers();
 
   const enabledCheck = (req, res, next) => {
     if (!gatewayEnabled()) {
@@ -207,7 +353,7 @@ export default function registerMcpServerRoutes(app) {
     const transport = new StreamableHTTPServerTransport({
       // `undefined` puts the SDK transport in stateless mode: no session id is
       // issued and no session validation is performed.
-      sessionIdGenerator: stateless ? undefined : () => randomUUID(),
+      sessionIdGenerator: stateless ? undefined : () => mintGatewaySessionId(req.user.id),
       ...(stateless
         ? {}
         : {
@@ -255,6 +401,52 @@ export default function registerMcpServerRoutes(app) {
     return entry;
   }
 
+  /**
+   * Handle one request with a short-lived server and a session-less transport.
+   * Used in stateless mode, and in stateful mode for a session that another
+   * worker holds.
+   */
+  async function handleStatelessRequest(req, res, { reason }) {
+    let entry;
+    try {
+      entry = await createTransport(req, { stateless: true });
+    } catch (err) {
+      logger.error('MCP gateway failed to build stateless server', {
+        component: 'McpGateway',
+        error: err.message
+      });
+      return sendRpcError(res, 500, -32603, 'Failed to initialise MCP server');
+    }
+    if (req.method === 'GET') {
+      // The standalone server→client SSE stream needs a session to belong
+      // to. Declining it with 405 is explicitly allowed by the spec and MCP
+      // clients treat it as "this server has no push channel".
+      await closeServer(entry.server, null);
+      logGatewayRejection(req, { status: 405, reason });
+      return sendRpcError(
+        res,
+        405,
+        -32000,
+        'Method Not Allowed: this gateway offers no server-initiated SSE stream on this connection',
+        { Allow: 'POST, DELETE' }
+      );
+    }
+    try {
+      await entry.transport.handleRequest(req, res, req.body);
+    } catch (err) {
+      logger.error('MCP gateway streamable HTTP handler failed', {
+        component: 'McpGateway',
+        error: err.message,
+        stack: err.stack
+      });
+      if (!res.headersSent) {
+        res.status(500).json({ error: 'internal_error', error_description: err.message });
+      }
+    } finally {
+      await closeServer(entry.server, null);
+    }
+  }
+
   const streamableHttpHandler = async (req, res) => {
     const cfg = gatewayConfig();
     if (cfg.transports?.streamableHttp?.enabled === false) {
@@ -269,53 +461,32 @@ export default function registerMcpServerRoutes(app) {
     if (stateless) {
       // One transport per request: nothing is kept in process memory, so the
       // gateway works behind a load balancer without session affinity.
-      let entry;
-      try {
-        entry = await createTransport(req, { stateless: true });
-      } catch (err) {
-        logger.error('MCP gateway failed to build stateless server', {
-          component: 'McpGateway',
-          error: err.message
-        });
-        return sendRpcError(res, 500, -32603, 'Failed to initialise MCP server');
-      }
-      if (req.method === 'GET') {
-        // The standalone server→client SSE stream needs a session to belong
-        // to. Declining it with 405 is explicitly allowed by the spec and MCP
-        // clients treat it as "this server has no push channel".
-        await closeServer(entry.server, null);
-        logGatewayRejection(req, { status: 405, reason: 'stateless_mode_no_sse_stream' });
-        return sendRpcError(
-          res,
-          405,
-          -32000,
-          'Method Not Allowed: this gateway runs in stateless mode and offers no server-initiated SSE stream',
-          { Allow: 'POST, DELETE' }
-        );
-      }
-      try {
-        await entry.transport.handleRequest(req, res, req.body);
-      } catch (err) {
-        logger.error('MCP gateway streamable HTTP handler failed', {
-          component: 'McpGateway',
-          error: err.message,
-          stack: err.stack
-        });
-        if (!res.headersSent) {
-          res.status(500).json({ error: 'internal_error', error_description: err.message });
-        }
-      } finally {
-        await closeServer(entry.server, null);
-      }
-      return;
+      return handleStatelessRequest(req, res, { reason: 'stateless_mode_no_sse_stream' });
     }
 
     let entry = sessionId ? sessions.get(sessionId) : null;
     let isNewSession = false;
 
+    if (sessionId && !entry && hasRemote(SESSION_PRESENCE, sessionId)) {
+      // Another worker holds this session. Unless it is somebody else's,
+      // serve the request here with a short-lived server (see the module
+      // comment) and tell the owner the session is still in use.
+      if (!isSessionIssuedTo(sessionId, req.user.id)) {
+        return refuseForeignSession(
+          req,
+          res,
+          sessionId,
+          null,
+          'MCP session userId mismatch — rejecting'
+        );
+      }
+      publish(BUS_SESSION_TOUCH, { sessionId }, { kind: SESSION_PRESENCE, key: sessionId });
+      return handleStatelessRequest(req, res, { reason: 'session_on_another_worker' });
+    }
+
     if (sessionId && !entry) {
-      // Unknown session: expired, terminated, or opened on another worker /
-      // replica. The spec requires 404 here so the client knows to start a new
+      // Unknown session: expired, terminated, or opened on another replica.
+      // The spec requires 404 here so the client knows to start a new
       // session with a fresh `initialize`. Handing the request to a brand-new
       // transport instead (as this used to) makes the SDK answer
       // 400 "Server not initialized", which clients treat as a fatal protocol
@@ -334,15 +505,13 @@ export default function registerMcpServerRoutes(app) {
     // immediately.
     if (entry && entry.userId !== req.user.id) {
       // Session belongs to another user — refuse rather than leak resources.
-      logger.warn('MCP session userId mismatch — rejecting', {
-        component: 'McpGateway',
+      return refuseForeignSession(
+        req,
+        res,
         sessionId,
-        tokenUser: req.user.id,
-        sessionUser: entry.userId
-      });
-      return res
-        .status(403)
-        .json({ error: 'forbidden', error_description: 'Session belongs to a different user' });
+        entry.userId,
+        'MCP session userId mismatch — rejecting'
+      );
     }
 
     if (!entry) {
@@ -411,18 +580,33 @@ export default function registerMcpServerRoutes(app) {
   app.delete(buildServerPath('/mcp'), enabledCheck, mcpAuth, async (req, res) => {
     const sessionId = req.headers['mcp-session-id'];
     const entry = sessionId ? sessions.get(sessionId) : null;
+    if (!entry && sessionId && hasRemote(SESSION_PRESENCE, sessionId)) {
+      if (!isSessionIssuedTo(sessionId, req.user.id)) {
+        return refuseForeignSession(
+          req,
+          res,
+          sessionId,
+          null,
+          'MCP session termination refused — session belongs to another user'
+        );
+      }
+      // The owning worker checks the user again and closes it.
+      publish(
+        BUS_SESSION_TERMINATE,
+        { sessionId, userId: req.user.id },
+        { kind: SESSION_PRESENCE, key: sessionId }
+      );
+    }
     // Termination is idempotent: an already-gone session is still "terminated".
     if (entry) {
       if (entry.userId !== req.user.id) {
-        logger.warn('MCP session termination refused — session belongs to another user', {
-          component: 'McpGateway',
+        return refuseForeignSession(
+          req,
+          res,
           sessionId,
-          tokenUser: req.user.id,
-          sessionUser: entry.userId
-        });
-        return res
-          .status(403)
-          .json({ error: 'forbidden', error_description: 'Session belongs to a different user' });
+          entry.userId,
+          'MCP session termination refused — session belongs to another user'
+        );
       }
       await destroySession(sessionId);
     }
@@ -431,7 +615,6 @@ export default function registerMcpServerRoutes(app) {
 
   // ---- Legacy SSE transport ---------------------------------------------
   // Older MCP clients still use the SSE transport. Keep a thin compat layer.
-  const sseSessions = new Map(); // sessionId -> { server, transport }
 
   app.get(buildServerPath('/mcp/sse'), enabledCheck, mcpAuth, async (req, res) => {
     const cfg = gatewayConfig();
@@ -464,8 +647,29 @@ export default function registerMcpServerRoutes(app) {
   });
 
   app.post(buildServerPath('/mcp/messages'), enabledCheck, jsonBody, mcpAuth, async (req, res) => {
-    const sessionId = req.query.sessionId;
+    const sessionId = typeof req.query.sessionId === 'string' ? req.query.sessionId : null;
     const entry = sessionId ? sseSessions.get(sessionId) : null;
+    if (!entry && sessionId && hasRemote(SSE_SESSION_PRESENCE, sessionId)) {
+      // The SSE stream lives on another worker; only it can write the reply.
+      const reply = await request(
+        BUS_SSE_MESSAGE,
+        {
+          sessionId,
+          userId: req.user.id,
+          body: req.body,
+          headers: relayableHeaders(req.headers)
+        },
+        { route: { kind: SSE_SESSION_PRESENCE, key: sessionId } }
+      );
+      if (reply?.status === 202) return res.status(202).end('Accepted');
+      if (reply?.status === 403) {
+        return res
+          .status(403)
+          .json({ error: 'forbidden', error_description: 'Session belongs to a different user' });
+      }
+      if (reply?.status === 400) return res.status(400).end('Invalid message');
+      // No answer: the owner went away between the presence check and now.
+    }
     if (!entry) {
       return res
         .status(404)

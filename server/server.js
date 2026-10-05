@@ -14,6 +14,12 @@ import logger from './utils/logger.js';
 import { findByIdCaseInsensitive } from './utils/resourceLookup.js';
 import { startStickyPrimary, attachStickyWorker, logStickyRoutingCaveat } from './clusterSticky.js';
 import { initPrimaryBus, initWorkerBus } from './clusterBus.js';
+// Modules whose cluster-wide state the primary holds and answers for over the
+// bus. Imported here so the primary always registers them; a worker asking a
+// primary that never loaded one would wait for an answer that never comes.
+import './requestThrottler.js';
+import './utils/clusterRateLimitStore.js';
+import './utils/loginLockout.js';
 import { initSystemResources } from './services/systemResources.js';
 import { registerConfigReloadHooks } from './configReloadHooks.js';
 
@@ -1122,6 +1128,14 @@ if (cluster.isPrimary && workerCount > 1) {
     // off the streaming path; drain what is still buffered, or a chat resumes
     // after the restart threaded onto a stale parent message.
     await conversationStateManager.flush();
+    // Usage counts wait in memory for the next flush to usage.json; write
+    // them now rather than losing up to one flush interval.
+    try {
+      const { flushUsage } = await import('./usageTracker.js');
+      await flushUsage();
+    } catch {
+      // Failures are logged within the tracker
+    }
     // Flush buffered storage writes (chat documents, append-log entries) and
     // release the provider's handles before the process goes away.
     await shutdownStorageBootstrap();

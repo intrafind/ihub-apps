@@ -7,7 +7,12 @@ import {
   configuredProviders
 } from '../middleware/oidcAuth.js';
 import { loginLdapUser, getConfiguredLdapProviders } from '../middleware/ldapAuth.js';
-import { processNtlmLogin, getNtlmConfig } from '../middleware/ntlmAuth.js';
+import {
+  processNtlmLogin,
+  getNtlmConfig,
+  markNtlmRequested,
+  clearNtlmRequested
+} from '../middleware/ntlmAuth.js';
 import {
   teamsTokenExchange,
   teamsTabConfigSave,
@@ -400,11 +405,9 @@ export default function registerAuthRoutes(app) {
         return sendBadRequest(res, 'NTLM authentication is not enabled');
       }
 
-      // Mark session to indicate NTLM was explicitly requested
+      // Remember that NTLM was explicitly requested
       // This allows the NTLM middleware to activate
-      if (req.session) {
-        req.session.ntlmRequested = true;
-      }
+      markNtlmRequested(res, req);
 
       // Check if NTLM data is available from the middleware
       if (!req.ntlm || !req.ntlm.Authenticated) {
@@ -496,10 +499,8 @@ export default function registerAuthRoutes(app) {
         return sendBadRequest(res, 'NTLM authentication is not enabled');
       }
 
-      // Mark session to indicate NTLM was explicitly requested
-      if (req.session) {
-        req.session.ntlmRequested = true;
-      }
+      // Remember that NTLM was explicitly requested
+      markNtlmRequested(res, req);
 
       // Check if NTLM data is available from the middleware
       if (!req.ntlm || !req.ntlm.Authenticated) {
@@ -610,21 +611,8 @@ export default function registerAuthRoutes(app) {
       });
     }
 
-    // Clear NTLM session flag to prevent auto-relogin
-    if (req.session) {
-      // Regenerate session to ensure clean state
-      req.session.regenerate(err => {
-        if (err) {
-          logger.error('Session regeneration error', { component: 'Auth', error: err });
-          // Even if regeneration fails, ensure NTLM auto-login is disabled
-          req.session.ntlmRequested = false;
-          return;
-        }
-
-        // Set flag in the new session to prevent NTLM auto-login
-        req.session.ntlmRequested = false;
-      });
-    }
+    // Forget the NTLM choice to prevent auto-relogin
+    clearNtlmRequested(res, req);
 
     // Log the event for analytics
     if (req.user && req.user.id !== 'anonymous') {

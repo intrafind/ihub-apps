@@ -375,3 +375,49 @@ describe('conversation state: the streaming path', () => {
     });
   });
 });
+
+describe('conversation state: turns on different workers', () => {
+  // Two managers over one store are two cluster workers. Turn 1 ran on A,
+  // turn 2 on B; turn 3 is back on A, whose cache still holds turn 1's
+  // parent id. Threading onto it would fork the remote conversation.
+  it('threads onto the latest answer even when this worker cached an older one', async () => {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'ihub-conversations-'));
+    const provider = new FilesystemStorageProvider({ baseDir: dir, flushIntervalMs: 25 });
+    await provider.initialize();
+    const open = () =>
+      new ConversationStateManager({
+        documents: provider.documents,
+        writeDebounceMs: 5000,
+        cleanupIntervalMs: 60_000
+      });
+    const workerA = open();
+    const workerB = open();
+    try {
+      workerA.setState(CHAT_ID, { conversationId: 'conv-1', lastParentId: 'msg-1' });
+      await workerA.flush();
+
+      await workerB.loadState(CHAT_ID);
+      workerB.updateParentId(CHAT_ID, 'msg-2');
+      await workerB.flush();
+
+      const turn3 = await workerA.loadState(CHAT_ID);
+      assert.equal(turn3.conversationId, 'conv-1');
+      assert.equal(turn3.lastParentId, 'msg-2');
+    } finally {
+      workerA.stop();
+      workerB.stop();
+      await provider.shutdown();
+      await fs.rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('prefers a change this worker has not written yet over the store', async () => {
+    await withManager(async ({ manager }) => {
+      manager.setState(CHAT_ID, { conversationId: 'conv-1', lastParentId: 'msg-1' });
+      await manager.flush();
+      manager.updateParentId(CHAT_ID, 'msg-2'); // pending, not yet written
+
+      assert.equal((await manager.loadState(CHAT_ID)).lastParentId, 'msg-2');
+    });
+  });
+});

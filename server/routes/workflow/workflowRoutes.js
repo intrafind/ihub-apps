@@ -1737,13 +1737,19 @@ export default function registerWorkflowRoutes(app, deps = {}) {
 
       if (!(await authorizeExecutionAccess(req, res, executionId))) return;
 
+      // The execution may run on another cluster worker; watching relays its
+      // events here.
+      const stopWatching = actionTracker.watchRun(executionId);
       const channel = createSseChannel({
         req,
         res,
         id: executionId,
         map: workflowClients,
         component: 'WorkflowRoutes',
-        onClose: () => actionTracker.off('fire-sse', handleWorkflowEvent)
+        onClose: () => {
+          actionTracker.off('fire-sse', handleWorkflowEvent);
+          stopWatching();
+        }
       });
 
       const connected = buildEnvelope({

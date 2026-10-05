@@ -73,6 +73,14 @@ export function resetStateManager() {
   _singletonInstance = null;
 }
 
+/** True when `candidate` was updated strictly after `reference`. */
+function isNewerState(candidate, reference) {
+  const a = Date.parse(candidate?.updatedAt);
+  const b = Date.parse(reference?.updatedAt);
+  if (Number.isNaN(a)) return false;
+  return Number.isNaN(b) || a > b;
+}
+
 export class StateManager {
   /**
    * Creates a new StateManager instance
@@ -110,6 +118,31 @@ export class StateManager {
      * @private
      */
     this._boundRepository = null;
+
+    /**
+     * Whether an execution is running on this worker, set by the engine via
+     * {@link StateManager#setLocalRunCheck}. Null means "unknown": every
+     * cached state is checked against its checkpoint.
+     * @type {((executionId: string) => boolean)|null}
+     * @private
+     */
+    this._isRunningHere = null;
+  }
+
+  /**
+   * Tell the manager which executions this worker is running.
+   *
+   * The worker running an execution holds its authoritative state in memory.
+   * Every other cluster worker only has the copy it read from the last
+   * checkpoint — and used to keep serving that copy forever, so a paused
+   * execution read on another worker stayed `running` there and could not be
+   * resumed. For executions not running here, {@link StateManager#get}
+   * re-reads the checkpoint and takes it when it is newer.
+   *
+   * @param {(executionId: string) => boolean} isRunningHere
+   */
+  setLocalRunCheck(isRunningHere) {
+    this._isRunningHere = typeof isRunningHere === 'function' ? isRunningHere : null;
   }
 
   /**
@@ -274,7 +307,42 @@ export class StateManager {
       return { ...restoredState };
     }
 
+    if (this._isRunningHere && !this._isRunningHere(executionId)) {
+      return this._refreshFromCheckpoint(executionId);
+    }
+
     return { ...state };
+  }
+
+  /**
+   * Replace the cached state of an execution this worker is not running with
+   * its checkpoint, when the checkpoint is newer — another worker ran, paused,
+   * resumed or finished it since this copy was read. A state changed here
+   * since its last checkpoint is newer than the checkpoint and stays.
+   *
+   * @param {string} executionId
+   * @returns {Promise<Object|null>}
+   * @private
+   */
+  async _refreshFromCheckpoint(executionId) {
+    let stored = null;
+    try {
+      stored = await this.repository.read(executionId);
+    } catch (error) {
+      logger.warn('Could not re-read workflow checkpoint; using cached state', {
+        component: 'StateManager',
+        executionId,
+        error: error?.message
+      });
+    }
+    // Read again after the await: a local mutation may have landed meanwhile.
+    const current = this.activeStates.get(executionId);
+    if (!current) return stored ? { ...stored } : null;
+    if (stored && isNewerState(stored, current)) {
+      this.activeStates.set(executionId, stored);
+      return { ...stored };
+    }
+    return { ...current };
   }
 
   /**

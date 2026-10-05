@@ -497,6 +497,14 @@ export default async function workflowRunner(params = {}) {
     let timeoutId;
     let isPaused = false;
 
+    // The run can continue on another cluster worker (a checkpoint answered
+    // there resumes it there); watching relays its events back to this bridge.
+    const stopWatchingRun = actionTracker.watchRun(executionId);
+    const stopBridge = () => {
+      actionTracker.off('fire-sse', bridgeHandler);
+      stopWatchingRun();
+    };
+
     // (Re-)arm the safety-net timeout. While the workflow is paused waiting
     // for human input we suspend the timer so the user can take as long as
     // they want; it re-arms once execution actually resumes.
@@ -505,7 +513,7 @@ export default async function workflowRunner(params = {}) {
       timeoutId = setTimeout(() => {
         if (settled) return;
         settled = true;
-        actionTracker.off('fire-sse', bridgeHandler);
+        stopBridge();
         activeWorkflowExecutions.delete(chatId);
         engine.cancel(executionId, 'timeout').catch(() => {});
         if (chatId) {
@@ -641,7 +649,7 @@ export default async function workflowRunner(params = {}) {
       if (eventType === 'workflow.complete' && !settled) {
         settled = true;
         clearTimeout(timeoutId);
-        actionTracker.off('fire-sse', bridgeHandler);
+        stopBridge();
         activeWorkflowExecutions.delete(chatId);
 
         try {
@@ -698,7 +706,7 @@ export default async function workflowRunner(params = {}) {
       if ((eventType === 'workflow.failed' || eventType === 'workflow.cancelled') && !settled) {
         settled = true;
         clearTimeout(timeoutId);
-        actionTracker.off('fire-sse', bridgeHandler);
+        stopBridge();
         activeWorkflowExecutions.delete(chatId);
 
         const isCancelled = eventType === 'workflow.cancelled';
