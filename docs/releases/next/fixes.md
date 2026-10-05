@@ -64,3 +64,17 @@ page instead.
   expired.
 - On installations served under a subpath (for example `/ihub/`), the return address must also
   lie under that path.
+
+## Tools Without Arguments Work With Ollama and Other Strict OpenAI-Compatible Servers
+
+When a model called a tool without arguments — for example an MCP tool such as "list my issues" or
+"who am I", or a tool whose parameters are all optional — the tool ran, but the chat turn then
+failed with "Invalid request sent to openai API". Ollama and other strict OpenAI-compatible
+servers rejected the follow-up request:
+
+> invalid tool call arguments
+
+- Tool calls are now sent back to the model with valid arguments: a call without arguments as an
+  empty object, and arguments iHub had to repair exactly as the tool received them.
+- Applies to models using the `openai`, `local` (vLLM), `mistral` and `openai-responses`
+  providers.
