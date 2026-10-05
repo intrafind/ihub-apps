@@ -27,6 +27,10 @@ concepts/
 # Other
 *.min.js
 
+# Skills vendored from the marketplace (intrafind/ihub-marketplace), kept as
+# published there: Prettier would fold their numbered lists into paragraphs.
+server/defaults/skills/skill-builder/
+
 # Git-ignored generated output and local tool scratch. `prettier --check .`
 # walks everything not listed here, so build artifacts made these fail the
 # `format` script even though nothing in the repo tracks them.
