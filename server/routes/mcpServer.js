@@ -1,6 +1,6 @@
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js';
-import { randomUUID } from 'crypto';
+import { createHash, randomUUID } from 'crypto';
 import express from 'express';
 import mcpAuth from '../middleware/mcpAuth.js';
 import { buildMcpServer } from '../services/mcp/McpServerService.js';
@@ -52,6 +52,11 @@ import {
  *   - A GET (server→client stream) for such a session is declined with 405,
  *     which clients treat as "no push channel".
  *   - A DELETE is forwarded to the owning worker.
+ *
+ * Before any of that, a worker that does not hold the session checks that it
+ * was issued to the caller: a session id names its user (see
+ * `mintGatewaySessionId`), so another user's id is refused with 403 here, as
+ * the owning worker would refuse it, instead of being served or kept alive.
  *   - Legacy SSE messages are relayed to the worker holding the SSE stream,
  *     since only that worker can write the response onto it.
  *
@@ -74,6 +79,59 @@ const sseSessions = createPresenceMap(SSE_SESSION_PRESENCE);
 const BUS_SESSION_TOUCH = 'mcp-session:touch';
 const BUS_SESSION_TERMINATE = 'mcp-session:terminate';
 const BUS_SSE_MESSAGE = 'mcp-sse:message';
+
+/**
+ * A new session id, bound to the user it is issued to:
+ * `<uuid>.<sha256(uuid, userId)>`.
+ *
+ * A worker that does not hold a session cannot look up whose it is, and asking
+ * the owner would put a bus round trip in front of every forwarded request.
+ * The id answers instead. The hash needs no secret: a session is only served
+ * when its exact id is held somewhere, and each held id was minted for its
+ * owner, so passing the check as anyone else takes a sha256 collision.
+ * Hashing the uuid in keeps one user's ids from being linkable to each other.
+ *
+ * @param {string} userId - The authenticated user opening the session
+ * @returns {string} Session id; visible ASCII only, as the MCP spec requires
+ */
+export function mintGatewaySessionId(userId) {
+  const nonce = randomUUID();
+  return `${nonce}.${sessionUserTag(nonce, userId)}`;
+}
+
+function sessionUserTag(nonce, userId) {
+  return createHash('sha256')
+    .update(`${nonce}\0${String(userId)}`)
+    .digest('base64url');
+}
+
+/**
+ * Whether a session id was minted for this user by {@link mintGatewaySessionId}.
+ *
+ * @param {string} sessionId - The `Mcp-Session-Id` the client sent
+ * @param {string} userId - The authenticated caller
+ * @returns {boolean}
+ */
+export function isSessionIssuedTo(sessionId, userId) {
+  if (typeof sessionId !== 'string') return false;
+  const dot = sessionId.indexOf('.');
+  if (dot <= 0) return false;
+  return sessionId.slice(dot + 1) === sessionUserTag(sessionId.slice(0, dot), userId);
+}
+
+/** Refuse a session that belongs to another user, as every path here does. */
+function refuseForeignSession(req, res, sessionId, sessionUser, message) {
+  logger.warn(message, {
+    component: 'McpGateway',
+    sessionId,
+    tokenUser: req.user.id,
+    // Unknown when the session lives on another worker; its id said enough.
+    sessionUser: sessionUser ?? null
+  });
+  return res
+    .status(403)
+    .json({ error: 'forbidden', error_description: 'Session belongs to a different user' });
+}
 
 /**
  * Request headers that may cross to another worker with a relayed message.
@@ -295,7 +353,7 @@ export default function registerMcpServerRoutes(app) {
     const transport = new StreamableHTTPServerTransport({
       // `undefined` puts the SDK transport in stateless mode: no session id is
       // issued and no session validation is performed.
-      sessionIdGenerator: stateless ? undefined : () => randomUUID(),
+      sessionIdGenerator: stateless ? undefined : () => mintGatewaySessionId(req.user.id),
       ...(stateless
         ? {}
         : {
@@ -410,9 +468,18 @@ export default function registerMcpServerRoutes(app) {
     let isNewSession = false;
 
     if (sessionId && !entry && hasRemote(SESSION_PRESENCE, sessionId)) {
-      // Another worker holds this session. Serve the request here with a
-      // short-lived server (see the module comment) and tell the owner the
-      // session is still in use.
+      // Another worker holds this session. Unless it is somebody else's,
+      // serve the request here with a short-lived server (see the module
+      // comment) and tell the owner the session is still in use.
+      if (!isSessionIssuedTo(sessionId, req.user.id)) {
+        return refuseForeignSession(
+          req,
+          res,
+          sessionId,
+          null,
+          'MCP session userId mismatch — rejecting'
+        );
+      }
       publish(BUS_SESSION_TOUCH, { sessionId }, { kind: SESSION_PRESENCE, key: sessionId });
       return handleStatelessRequest(req, res, { reason: 'session_on_another_worker' });
     }
@@ -438,15 +505,13 @@ export default function registerMcpServerRoutes(app) {
     // immediately.
     if (entry && entry.userId !== req.user.id) {
       // Session belongs to another user — refuse rather than leak resources.
-      logger.warn('MCP session userId mismatch — rejecting', {
-        component: 'McpGateway',
+      return refuseForeignSession(
+        req,
+        res,
         sessionId,
-        tokenUser: req.user.id,
-        sessionUser: entry.userId
-      });
-      return res
-        .status(403)
-        .json({ error: 'forbidden', error_description: 'Session belongs to a different user' });
+        entry.userId,
+        'MCP session userId mismatch — rejecting'
+      );
     }
 
     if (!entry) {
@@ -516,7 +581,16 @@ export default function registerMcpServerRoutes(app) {
     const sessionId = req.headers['mcp-session-id'];
     const entry = sessionId ? sessions.get(sessionId) : null;
     if (!entry && sessionId && hasRemote(SESSION_PRESENCE, sessionId)) {
-      // The owning worker checks the user and closes it.
+      if (!isSessionIssuedTo(sessionId, req.user.id)) {
+        return refuseForeignSession(
+          req,
+          res,
+          sessionId,
+          null,
+          'MCP session termination refused — session belongs to another user'
+        );
+      }
+      // The owning worker checks the user again and closes it.
       publish(
         BUS_SESSION_TERMINATE,
         { sessionId, userId: req.user.id },
@@ -526,15 +600,13 @@ export default function registerMcpServerRoutes(app) {
     // Termination is idempotent: an already-gone session is still "terminated".
     if (entry) {
       if (entry.userId !== req.user.id) {
-        logger.warn('MCP session termination refused — session belongs to another user', {
-          component: 'McpGateway',
+        return refuseForeignSession(
+          req,
+          res,
           sessionId,
-          tokenUser: req.user.id,
-          sessionUser: entry.userId
-        });
-        return res
-          .status(403)
-          .json({ error: 'forbidden', error_description: 'Session belongs to a different user' });
+          entry.userId,
+          'MCP session termination refused — session belongs to another user'
+        );
       }
       await destroySession(sessionId);
     }

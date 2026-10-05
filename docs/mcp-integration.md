@@ -1142,7 +1142,9 @@ spread across workers round-robin (`WORKERS` defaults to 4), so a client's
 and the workers share which sessions exist. A request for a session another
 worker holds is served on the worker that received it, `DELETE /mcp` is
 forwarded to the owning worker, and legacy SSE messages are relayed to the
-worker holding the SSE stream.
+worker holding the SSE stream. Every worker answers `403` for a session that
+belongs to another user: a session id carries a hash of the user it was
+issued to, so the check needs no round trip to the owning worker.
 
 > **Enable stateless mode when several iHub replicas sit behind a load
 > balancer** without session affinity. Workers share sessions within one

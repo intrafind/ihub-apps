@@ -108,7 +108,11 @@ jest.unstable_mockModule('../clusterBus.js', () => ({
   })
 }));
 
-const { default: registerMcpServerRoutes } = await import('../routes/mcpServer.js');
+const {
+  default: registerMcpServerRoutes,
+  mintGatewaySessionId,
+  isSessionIssuedTo
+} = await import('../routes/mcpServer.js');
 
 function makeApp() {
   const app = express();
@@ -284,8 +288,22 @@ describe('MCP gateway session handling', () => {
   // Workers receive connections round-robin, so a client's follow-up request
   // usually reaches a worker that did not handle its initialize.
 
+  it('issues session ids bound to the user who opened the session', async () => {
+    buildMcpServer.mockResolvedValue({ connect: jest.fn(), close: jest.fn() });
+    await request(makeApp())
+      .post('/mcp')
+      .set('Accept', 'application/json, text/event-stream')
+      .send(INITIALIZE);
+
+    const issued = transports[0].options.sessionIdGenerator();
+    expect(issued).toMatch(/^[\x21-\x7e]+$/); // visible ASCII, as the spec requires
+    expect(isSessionIssuedTo(issued, 'user-1')).toBe(true);
+    expect(isSessionIssuedTo(issued, 'someone-else')).toBe(false);
+    expect(transports[0].options.sessionIdGenerator()).not.toBe(issued);
+  });
+
   it('serves a POST for a session held by another worker, statelessly', async () => {
-    const sessionId = '77777777-7777-7777-7777-777777777777';
+    const sessionId = mintGatewaySessionId('user-1');
     bus.remote.add(`mcp-session:${sessionId}`);
     const close = jest.fn();
     buildMcpServer.mockResolvedValue({ connect: jest.fn(), close });
@@ -309,7 +327,7 @@ describe('MCP gateway session handling', () => {
   });
 
   it('declines the push stream for a session held by another worker with 405', async () => {
-    const sessionId = '88888888-8888-8888-8888-888888888888';
+    const sessionId = mintGatewaySessionId('user-1');
     bus.remote.add(`mcp-session:${sessionId}`);
     const close = jest.fn();
     buildMcpServer.mockResolvedValue({ connect: jest.fn(), close });
@@ -324,7 +342,7 @@ describe('MCP gateway session handling', () => {
   });
 
   it('forwards DELETE for a session held by another worker to its owner', async () => {
-    const sessionId = '99999999-9999-9999-9999-999999999999';
+    const sessionId = mintGatewaySessionId('user-1');
     bus.remote.add(`mcp-session:${sessionId}`);
 
     const res = await request(makeApp()).delete('/mcp').set('mcp-session-id', sessionId);
@@ -335,6 +353,42 @@ describe('MCP gateway session handling', () => {
       payload: { sessionId, userId: 'user-1' },
       route: { kind: 'mcp-session', key: sessionId }
     });
+  });
+
+  it('refuses another user’s session held by another worker, without serving or touching it', async () => {
+    const sessionId = mintGatewaySessionId('someone-else');
+    bus.remote.add(`mcp-session:${sessionId}`);
+    buildMcpServer.mockResolvedValue({ connect: jest.fn(), close: jest.fn() });
+    const app = makeApp();
+
+    const post = await request(app)
+      .post('/mcp')
+      .set('Accept', 'application/json, text/event-stream')
+      .set('mcp-session-id', sessionId)
+      .send({ jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} });
+    const get = await request(app)
+      .get('/mcp')
+      .set('Accept', 'text/event-stream')
+      .set('mcp-session-id', sessionId);
+    const del = await request(app).delete('/mcp').set('mcp-session-id', sessionId);
+
+    expect([post.status, get.status, del.status]).toEqual([403, 403, 403]);
+    expect(buildMcpServer).not.toHaveBeenCalled();
+    expect(bus.published).toEqual([]);
+  });
+
+  it('refuses a held session id that carries no user binding', async () => {
+    const sessionId = '77777777-7777-7777-7777-777777777777';
+    bus.remote.add(`mcp-session:${sessionId}`);
+
+    const res = await request(makeApp())
+      .post('/mcp')
+      .set('Accept', 'application/json, text/event-stream')
+      .set('mcp-session-id', sessionId)
+      .send({ jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} });
+
+    expect(res.status).toBe(403);
+    expect(bus.published).toEqual([]);
   });
 
   it('as the owner, closes a session terminated elsewhere only for its own user', async () => {
