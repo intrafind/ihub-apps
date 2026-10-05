@@ -221,6 +221,18 @@ each model before enabling it for users.
 The import uses `POST /api/admin/models/_discover`, which returns the normalized list without
 storing anything, and then the regular `POST /api/admin/providers` and `POST /api/admin/models`.
 
+### Models from the Marketplace
+
+A model installed from **Admin → Marketplace** brings its own configuration, including the
+endpoint `url`. The installer drops any `apiKey` from the item, but when the model has no key of
+its own, iHub uses the provider's key (the provider configuration or its environment variable,
+such as `OPENAI_API_KEY`) — so testing or using the model sends that key and the prompts to the
+model's `url`.
+
+Review such a model before you test or enable it: check the endpoint URL and the other settings
+on its edit page. The marketplace detail panel and the model's edit page both show this reminder,
+and a model is installed from its detail panel rather than straight from the browse grid.
+
 ### AWS Bedrock
 
 #### Authentication
