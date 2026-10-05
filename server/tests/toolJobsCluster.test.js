@@ -77,12 +77,15 @@ async function runPrimary(initPrimaryBus, contentsDir) {
     assert.strictEqual(found.job.result, undefined);
   });
 
-  await check('a completed job can be downloaded on another worker from its result file', async () => {
-    const { found } = await ask(other, { step: 'find', jobId: done });
-    assert.strictEqual(found.job.status, 'completed');
-    assert.ok(found.job.resultFile?.startsWith(contentsDir), 'result not in the data directory');
-    assert.strictEqual(fs.readFileSync(found.job.resultFile, 'utf8'), 'ocr result bytes');
-  });
+  await check(
+    'a completed job can be downloaded on another worker from its result file',
+    async () => {
+      const { found } = await ask(other, { step: 'find', jobId: done });
+      assert.strictEqual(found.job.status, 'completed');
+      assert.ok(found.job.resultFile?.startsWith(contentsDir), 'result not in the data directory');
+      assert.strictEqual(fs.readFileSync(found.job.resultFile, 'utf8'), 'ocr result bytes');
+    }
+  );
 
   await check('the job list on another worker includes the owner’s jobs', async () => {
     const { jobs } = await ask(other, { step: 'list' });

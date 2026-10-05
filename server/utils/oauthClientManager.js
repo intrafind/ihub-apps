@@ -137,7 +137,9 @@ export async function loadOAuthClientsFresh(clientsFilePath) {
       if (relPath) {
         data = await configStore.readJson(relPath);
       } else if (fs.existsSync(fullPath)) {
-        data = JSON.parse(await fs.promises.readFile(fullPath, 'utf8'));
+        // A clients file outside contents/ has no place in the store (see
+        // locateConfigFile); read it directly, as loadOAuthClients does.
+        data = JSON.parse(fs.readFileSync(fullPath, 'utf8'));
       }
       if (data && typeof data === 'object' && data.clients && typeof data.clients === 'object') {
         configCache.setCacheEntry(cacheKey, data);
