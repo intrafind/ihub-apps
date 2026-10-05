@@ -16,7 +16,6 @@ export const NODE_TYPE_COLORS = {
   verifier: '#059669',
   loop: '#F97316',
   http: '#0EA5E9',
-  code: '#84CC16',
   parallel: '#6366F1',
   join: '#6366F1',
   memory: '#A855F7',
@@ -72,7 +71,6 @@ export const NODE_TYPE_META = {
     label: 'Transform',
     description: 'Reshape data: set values, pick items, count, or increment.'
   },
-  code: { label: 'Code', description: 'Run a small JavaScript snippet (advanced).' },
   tool: { label: 'Tool', description: 'Call one of the configured tools (search, iFinder, …).' },
   http: { label: 'HTTP Request', description: 'Call an external API over HTTP.' },
   human: {
@@ -133,7 +131,7 @@ export const NODE_TYPES_LIST = [
     label: 'Knowledge',
     types: ['query-plan', 'corpus-search', 'structured-record', 'quote-validator']
   },
-  { group: 'data', label: 'Data', types: ['transform', 'code', 'template-render'] },
+  { group: 'data', label: 'Data', types: ['transform', 'template-render'] },
   { group: 'integration', label: 'Integration', types: ['tool', 'http'] },
   { group: 'people', label: 'People', types: ['human', 'progress'] },
   {
