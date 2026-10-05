@@ -86,6 +86,37 @@ class Office365Service {
   }
 
   /**
+   * Which file sources the admin enabled for a provider. Missing settings
+   * mean "all on" (providers configured before the toggles existed).
+   *
+   * @param {Object} provider - Office 365 provider configuration
+   * @returns {{personalDrive: boolean, followedSites: boolean, teams: boolean}}
+   */
+  _enabledSources(provider) {
+    const sources = provider?.sources || {};
+    return {
+      personalDrive: sources.personalDrive !== false,
+      followedSites: sources.followedSites !== false,
+      teams: sources.teams !== false
+    };
+  }
+
+  /**
+   * Enabled file sources for a provider id, without resolving its secrets.
+   * Unknown providers get none, so nothing is offered for them.
+   *
+   * @param {string} providerId
+   * @returns {{personalDrive: boolean, followedSites: boolean, teams: boolean}}
+   */
+  getEnabledSources(providerId) {
+    const provider = configCache
+      .getPlatform()
+      ?.cloudStorage?.providers?.find(p => p.id === providerId && p.type === 'office365');
+    if (!provider) return { personalDrive: false, followedSites: false, teams: false };
+    return this._enabledSources(provider);
+  }
+
+  /**
    * Build the minimal set of Microsoft Graph scopes required for the
    * provider's enabled sources.
    *
@@ -99,15 +130,7 @@ class Office365Service {
    * @returns {string} Space-separated scope string
    */
   _buildScopes(provider) {
-    const sources = provider.sources || {
-      personalDrive: true,
-      followedSites: true,
-      teams: true
-    };
-
-    const personalDrive = sources.personalDrive !== false;
-    const followedSites = sources.followedSites !== false;
-    const teams = sources.teams !== false;
+    const { personalDrive, followedSites, teams } = this._enabledSources(provider);
 
     // User.Read and offline_access are delegated user-consent scopes
     // and do not require admin consent.
@@ -897,14 +920,19 @@ class Office365Service {
   }
 
   /**
-   * List personal OneDrive drives
+   * List the user's OneDrive. Only the default drive (`/me/drive`): `/me/drives`
+   * also returns hidden system libraries such as `PersonalCacheLibrary`, which
+   * forced an extra "pick a drive" step. With a single drive the picker opens
+   * it directly.
    * @param {string} userId - User ID
    * @returns {Promise<Array>} List of personal drives
    */
   async listPersonalDrives(userId, providerId) {
     try {
       logger.info('Loading personal OneDrive drives', { component: 'Office365Service' });
-      const personalDrives = await this._fetchAllPages('/me/drives', userId, providerId);
+      const personalDrives = [
+        await this.makeApiRequest('/me/drive', 'GET', null, userId, providerId)
+      ];
 
       const drives = personalDrives.map(drive => ({
         id: drive.id,

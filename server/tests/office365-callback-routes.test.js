@@ -7,6 +7,7 @@ import {
   issueIntegrationOAuthState
 } from '../utils/integrationOAuthState.js';
 import tokenStorageService from '../services/TokenStorageService.js';
+import configCache from '../configCache.js';
 
 // In-memory key material; nothing touches disk.
 tokenStorageService.encryptionKey = 'c'.repeat(64);
@@ -193,6 +194,52 @@ const businessDriveId = 'b!Xk3pQ-7zLmN0aBcD_eF9gH1iJ2kL3mN4oP5qR6sT7uV8wX9yZ0';
 check('drive ID with ! is accepted', (await itemsStatus(businessDriveId)) === 200);
 check('drive ID with ! reaches the service', listedDrive === businessDriveId);
 check('drive ID with a slash is still rejected', (await itemsStatus('b!abc/../me')) === 400);
+
+// Only the sources the admin enabled are offered.
+configCache.getPlatform = () => ({
+  cloudStorage: {
+    enabled: true,
+    providers: [
+      {
+        id: 'office365',
+        type: 'office365',
+        sources: { personalDrive: true, followedSites: false, teams: false }
+      }
+    ]
+  }
+});
+async function callJson(handler, req) {
+  const out = { status: 200 };
+  const res = {
+    status: code => ((out.status = code), res),
+    json: body => ((out.body = body), res)
+  };
+  await handler({ user: { id: 'u1' }, query: { providerId: 'office365' }, ...req }, res);
+  return out;
+}
+const sourcesRes = await callJson(handlerFor('/sources'), {});
+check(
+  'only enabled sources are listed',
+  JSON.stringify(sourcesRes.body.sources.map(source => source.id)) === '["personal"]'
+);
+const teamsRes = await callJson(handlerFor('/drives/:source'), { params: { source: 'teams' } });
+check('drives of a disabled source are refused', teamsRes.status === 403);
+
+// OneDrive lists only the default drive, not hidden system libraries.
+const requested = [];
+Office365Service.makeApiRequest = async endpoint => {
+  requested.push(endpoint);
+  return { id: 'b!default', name: 'OneDrive', driveType: 'business' };
+};
+const personalRes = await callJson(handlerFor('/drives/:source'), {
+  params: { source: 'personal' }
+});
+check(
+  'OneDrive returns only the default drive',
+  personalRes.body.drives.length === 1 &&
+    personalRes.body.drives[0].id === 'b!default' &&
+    requested.join() === '/me/drive'
+);
 
 if (failures > 0) {
   console.error(`\n❌ ${failures} Office 365 callback route check(s) failed`);
