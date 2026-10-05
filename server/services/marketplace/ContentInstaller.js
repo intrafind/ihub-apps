@@ -201,6 +201,8 @@ async function saveInstallations(data) {
 /**
  * Fetch the content of a catalog item from its registry.
  * Resolves the item URL, applies auth headers, and decodes GitHub API responses.
+ * Exported for `services/skills/marketplaceSkills.js`, which copies a skill
+ * into a user's own skills instead of installing it.
  *
  * @param {string} registryId - Registry that hosts the item
  * @param {string} type - Content type ('app'|'model'|'prompt'|'skill'|'workflow')
@@ -209,7 +211,7 @@ async function saveInstallations(data) {
  *   The matching catalog item descriptor and its fetched content
  * @throws {Error} When the catalog is not cached, item is not found, or the fetch fails
  */
-async function fetchItemContent(registryId, type, name) {
+export async function fetchItemContent(registryId, type, name) {
   const registry = await registryService.getRegistryWithAuth(registryId);
   const cached = await registryService.getCachedCatalogAsync(registryId);
 

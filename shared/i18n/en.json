@@ -3425,8 +3425,15 @@
         "title": "User Skills",
         "truncated": "Showing the first skills only",
         "updated": "Last changed",
-        "userCount": "{{count}} user(s)"
-      }
+        "userCount": "{{count}} user(s)",
+        "allowMarketplace": "Users may add skills from the marketplace to their own skills",
+        "allowMarketplaceHelp": "Users browse the skills of the enabled registries and copy the ones they want, so you do not have to install every skill for everyone. Needs the Marketplace feature and a refreshed registry."
+      },
+      "system": "System",
+      "systemTooltip": "Delivered with iHub. It cannot be changed or deleted.",
+      "systemNotice": "This is a system skill delivered with iHub. It is updated with iHub and cannot be changed or deleted here. Enable it for an app in the app’s Skills settings.",
+      "providedTools": "Tools this skill provides:",
+      "view": "View"
     },
     "scheduledTasks": {
       "saved": "Settings saved",
@@ -3480,13 +3487,6 @@
         "value": "{{free}} free",
         "valueTitle": "{{percent}} of {{total}} used"
       }
-    },
-    "skills": {
-      "system": "System",
-      "systemTooltip": "Delivered with iHub. It cannot be changed or deleted.",
-      "systemNotice": "This is a system skill delivered with iHub. It is updated with iHub and cannot be changed or deleted here. Enable it for an app in the app’s Skills settings.",
-      "providedTools": "Tools this skill provides:",
-      "view": "View"
     }
   },
   "cloudStorage": {
@@ -5110,7 +5110,8 @@
       "duplicate": "Duplicate",
       "history": "History",
       "new": "New skill",
-      "share": "Share"
+      "share": "Share",
+      "fromMarketplace": "Skill from the marketplace"
     },
     "badge": "Skill",
     "delete": {
@@ -5121,7 +5122,9 @@
       "copiedFrom": "Copied from {{name}}",
       "files": "Files",
       "instructions": "Instructions",
-      "promotedTo": "Promoted to global skill {{name}}"
+      "promotedTo": "Promoted to global skill {{name}}",
+      "fromMarketplace": "From the marketplace: {{name}} ({{registry}})",
+      "license": "License: {{license}}"
     },
     "editor": {
       "addFile": "Add file",
@@ -5157,7 +5160,8 @@
       "global": "No global skills are available to you.",
       "mine": "You have no skills yet. Create one, or copy a global skill.",
       "none": "No skills found",
-      "shared": "Nobody has shared a skill with you yet."
+      "shared": "Nobody has shared a skill with you yet.",
+      "mineMarketplace": "You have no skills yet. Add a ready-made one from the marketplace, copy a global skill, or create your own."
     },
     "errors": {
       "accessChanged": "Your access to this skill has changed. Reload the page to see what you may do now.",
@@ -5171,7 +5175,11 @@
       "notAllowed": "Sign in to keep skills of your own.",
       "shareNotAllowed": "You are not allowed to share skills with this audience.",
       "tooLarge": "This skill is too large. Shorten the instructions or remove files.",
-      "unavailable": "Your skills are unavailable right now. Please try again later."
+      "unavailable": "Your skills are unavailable right now. Please try again later.",
+      "marketplaceDisabled": "Adding skills from the marketplace is switched off.",
+      "marketplaceNotFound": "This skill is no longer offered by the marketplace.",
+      "marketplaceFetch": "The marketplace could not be reached. Please try again later.",
+      "marketplaceInvalid": "This skill cannot be added: it does not follow the skill format."
     },
     "filters": {
       "mine": "My skills"
@@ -5194,7 +5202,9 @@
       "duplicated": "Skill duplicated",
       "restored": "Version restored",
       "saved": "Skill saved",
-      "shared": "Sharing updated"
+      "shared": "Sharing updated",
+      "addedFromMarketplace": "Added “{{name}}” to your skills. Type /{{name}} in a chat to use it.",
+      "filesLeftOut": "{{count}} file(s) were left out: your skills hold text files only, within the size limits."
     },
     "share": {
       "help": "“Can use” lets people use the skill in chats and duplicate it. “Can edit” also lets them change it and share it further.",
@@ -5212,6 +5222,42 @@
       "namePattern": "Use lowercase letters, digits and hyphens; start and end with a letter or digit.",
       "required": "Required",
       "tooLong": "Too long"
+    },
+    "getStarted": {
+      "title": "New to skills? Start with a ready-made one.",
+      "text": "Pick a skill from the marketplace, add it to your skills and use it with / in any chat. You can adapt it to how you work later.",
+      "browse": "Browse the marketplace"
+    },
+    "marketplace": {
+      "title": "Skills from the marketplace",
+      "subtitle": "Pick a ready-made skill and add it to your skills. It stays private until you share it, and you can adapt it to how you work.",
+      "searchPlaceholder": "Search skills…",
+      "searchLabel": "Search the marketplace",
+      "allCategories": "All categories",
+      "allRegistries": "All sources",
+      "category": "Category",
+      "registry": "Source",
+      "author": "Author",
+      "version": "Version",
+      "license": "License",
+      "count": "{{count}} skill(s)",
+      "noMatches": "No skills match your search.",
+      "empty": "The marketplace has no skills to offer yet. Ask your administrator to refresh it.",
+      "more": "Show more",
+      "loading": "Loading…",
+      "add": "Add",
+      "addNamed": "Add {{name}} to my skills",
+      "showNamed": "Show details of {{name}}",
+      "added": "In your skills",
+      "available": "Already available",
+      "availableHint": "A skill of this name is already in your library. Add it only if you want your own copy.",
+      "back": "All skills",
+      "noPreview": "No preview available.",
+      "filesLeftOut": "Crossed-out files are not added: your skills hold text files directly in references/, assets/ or scripts/.",
+      "nameLabel": "Name in your skills",
+      "nameHint": "Type /{{name}} in a chat to use it. The copy is private until you share it, and you can change it like any of your skills.",
+      "adding": "Adding…",
+      "addToMine": "Add to my skills"
     }
   },
   "scheduledTasks": {

@@ -109,9 +109,23 @@ function SkillDetailsModal({ skill, onClose, onEdit, onShare, onDuplicate, onHis
               )}
               {skill.copiedFrom?.id && (
                 <span className="px-1.5 py-0.5 text-xs text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-full">
-                  {t('skills.details.copiedFrom', {
-                    defaultValue: 'Copied from {{name}}',
-                    name: skill.copiedFrom.id
+                  {skill.copiedFrom.scope === 'marketplace'
+                    ? t('skills.details.fromMarketplace', {
+                        defaultValue: 'From the marketplace: {{name}} ({{registry}})',
+                        name: skill.copiedFrom.id,
+                        registry: skill.copiedFrom.registryName || skill.copiedFrom.registryId
+                      })
+                    : t('skills.details.copiedFrom', {
+                        defaultValue: 'Copied from {{name}}',
+                        name: skill.copiedFrom.id
+                      })}
+                </span>
+              )}
+              {skill.copiedFrom?.scope === 'marketplace' && skill.copiedFrom.license && (
+                <span className="px-1.5 py-0.5 text-xs text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-full">
+                  {t('skills.details.license', {
+                    defaultValue: 'License: {{license}}',
+                    license: skill.copiedFrom.license
                   })}
                 </span>
               )}

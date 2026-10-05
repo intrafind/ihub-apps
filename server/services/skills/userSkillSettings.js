@@ -16,6 +16,9 @@ import { allowedShareTargets } from '../prompts/userPromptSettings.js';
 /** Feature flag gating skills, global and user skills alike. */
 export const SKILLS_FEATURE = 'skills';
 
+/** Feature flag gating the marketplace, which users may add skills from. */
+export const MARKETPLACE_FEATURE = 'marketplace';
+
 /** Built-in `platform.userSkills` values. */
 export const DEFAULT_USER_SKILL_SETTINGS = Object.freeze({
   enabled: true,
@@ -23,6 +26,7 @@ export const DEFAULT_USER_SKILL_SETTINGS = Object.freeze({
   maxVersions: 50,
   maxSkillSizeKB: 256,
   maxFilesPerSkill: 20,
+  allowMarketplace: true,
   sharing: Object.freeze({
     allowUsers: true,
     allowGroups: true,
@@ -58,7 +62,7 @@ function readPositive(value, fallback) {
  *
  * @param {Object} [platformConfig] - Platform configuration.
  * @returns {{enabled: boolean, maxSkillsPerUser: number, maxVersions: number,
- *   maxSkillSizeKB: number, maxFilesPerSkill: number,
+ *   maxSkillSizeKB: number, maxFilesPerSkill: number, allowMarketplace: boolean,
  *   sharing: {allowUsers: boolean, allowGroups: boolean, allowEveryone: boolean,
  *   restrictToGroups: string[]}}}
  */
@@ -75,6 +79,7 @@ export function userSkillSettings(platformConfig) {
     maxVersions: readPositive(block.maxVersions, defaults.maxVersions),
     maxSkillSizeKB: readPositive(block.maxSkillSizeKB, defaults.maxSkillSizeKB),
     maxFilesPerSkill: readPositive(block.maxFilesPerSkill, defaults.maxFilesPerSkill),
+    allowMarketplace: readBoolean(block.allowMarketplace, defaults.allowMarketplace),
     sharing: {
       allowUsers: readBoolean(sharing.allowUsers, defaults.sharing.allowUsers),
       allowGroups: readBoolean(sharing.allowGroups, defaults.sharing.allowGroups),
@@ -101,6 +106,22 @@ export function isUserSkillsConfigured(featureConfig = {}, platformConfig = {}) 
 }
 
 /**
+ * Whether users may add skills from the marketplace to their own skills: user
+ * skills are on, the `marketplace` feature is on, and the admin has not
+ * switched `userSkills.allowMarketplace` off. Whether a registry has a catalog
+ * to offer is the marketplace's to answer.
+ *
+ * @param {Object} featureConfig - Saved feature flags.
+ * @param {Object} platformConfig - Platform configuration.
+ * @returns {boolean}
+ */
+export function isUserSkillMarketplaceConfigured(featureConfig = {}, platformConfig = {}) {
+  if (!isUserSkillsConfigured(featureConfig, platformConfig)) return false;
+  if (!isFeatureEnabled(MARKETPLACE_FEATURE, featureConfig)) return false;
+  return userSkillSettings(platformConfig).allowMarketplace !== false;
+}
+
+/**
  * The audiences one user may share a skill with right now.
  *
  * @param {ReturnType<typeof userSkillSettings>} settings - Effective settings.
@@ -120,18 +141,26 @@ export function allowedSkillShareTargets(settings, effectiveGroups = []) {
  * @param {Object} platformConfig - Platform configuration.
  * @param {Object} [options]
  * @param {boolean} [options.storageAvailable=false] - Whether the repository can store.
- * @returns {{enabled: boolean, maxSkillsPerUser: number, maxSkillSizeKB: number,
- *   maxFilesPerSkill: number, sharing: {allowUsers: boolean, allowGroups: boolean,
- *   allowEveryone: boolean, restricted: boolean}}}
+ * @param {boolean} [options.marketplaceReady=false] - Whether an enabled registry
+ *   has a fetched catalog, so the marketplace has something to offer.
+ * @returns {{enabled: boolean, marketplace: boolean, maxSkillsPerUser: number,
+ *   maxSkillSizeKB: number, maxFilesPerSkill: number, sharing: {allowUsers: boolean,
+ *   allowGroups: boolean, allowEveryone: boolean, restricted: boolean}}}
  */
 export function userSkillsClientConfig(
   featureConfig = {},
   platformConfig = {},
-  { storageAvailable = false } = {}
+  { storageAvailable = false, marketplaceReady = false } = {}
 ) {
   const settings = userSkillSettings(platformConfig);
+  const enabled = storageAvailable && isUserSkillsConfigured(featureConfig, platformConfig);
   return {
-    enabled: storageAvailable && isUserSkillsConfigured(featureConfig, platformConfig),
+    enabled,
+    // The library offers "from the marketplace" only when there is one to browse.
+    marketplace:
+      enabled &&
+      marketplaceReady &&
+      isUserSkillMarketplaceConfigured(featureConfig, platformConfig),
     maxSkillsPerUser: settings.maxSkillsPerUser,
     maxSkillSizeKB: settings.maxSkillSizeKB,
     maxFilesPerSkill: settings.maxFilesPerSkill,

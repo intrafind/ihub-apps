@@ -29,6 +29,7 @@ const DEFAULT_SETTINGS = {
   maxVersions: 50,
   maxSkillSizeKB: 256,
   maxFilesPerSkill: 20,
+  allowMarketplace: true,
   sharing: { allowUsers: true, allowGroups: true, allowEveryone: true, restrictToGroups: [] }
 };
 
@@ -303,6 +304,22 @@ function UserSkillSettingsPanel() {
           draft.enabled,
           value => update({ enabled: value })
         )}
+        <div>
+          {toggle(
+            t(
+              'admin.skills.userSkills.allowMarketplace',
+              'Users may add skills from the marketplace to their own skills'
+            ),
+            draft.allowMarketplace,
+            value => update({ allowMarketplace: value })
+          )}
+          <p className="ml-6 mt-1 text-xs text-gray-500 dark:text-gray-400">
+            {t(
+              'admin.skills.userSkills.allowMarketplaceHelp',
+              'Users browse the skills of the enabled registries and copy the ones they want, so you do not have to install every skill for everyone. Needs the Marketplace feature and a refreshed registry.'
+            )}
+          </p>
+        </div>
         <div className="grid gap-4 sm:grid-cols-2">
           {numberField(
             'user-skills-max',

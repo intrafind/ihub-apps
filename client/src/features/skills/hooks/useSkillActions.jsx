@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { deleteUserSkill, duplicateGlobalSkill, duplicateUserSkill } from '../../../api';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import SkillEditorModal from '../components/SkillEditorModal';
+import SkillMarketplaceModal from '../components/SkillMarketplaceModal';
 import SkillShareDialog from '../components/SkillShareDialog';
 import SkillVersionsModal from '../components/SkillVersionsModal';
 import { skillErrorMessage } from '../utils/skillErrors';
@@ -17,6 +18,9 @@ import { skillErrorMessage } from '../utils/skillErrors';
  * - **duplicate** copies a personal skill — or, for a global skill, "Copy to
  *   my skills" — and opens the copy in the editor: a copy is made to be
  *   changed.
+ * - **browseMarketplace** opens the marketplace; a skill added from there is
+ *   ready to use, so it is not opened in the editor — the notice says how to
+ *   use it, and which of its files were left out.
  *
  * @param {Object} options
  * @param {(skill?: Object|null) => void} [options.onChanged] - Called after a
@@ -29,6 +33,7 @@ export default function useSkillActions({ onChanged } = {}) {
   const [sharing, setSharing] = useState(null);
   const [history, setHistory] = useState(null);
   const [deleting, setDeleting] = useState(null);
+  const [browsing, setBrowsing] = useState(false);
   const [notice, setNotice] = useState(null);
 
   const changed = useCallback(skill => onChanged?.(skill), [onChanged]);
@@ -38,6 +43,7 @@ export default function useSkillActions({ onChanged } = {}) {
   const share = useCallback(skill => setSharing(skill), []);
   const showHistory = useCallback(skill => setHistory(skill), []);
   const remove = useCallback(skill => setDeleting(skill), []);
+  const browseMarketplace = useCallback(() => setBrowsing(true), []);
 
   const duplicate = useCallback(
     async skill => {
@@ -74,8 +80,31 @@ export default function useSkillActions({ onChanged } = {}) {
     }
   };
 
+  const addedFromMarketplace = skill => {
+    setBrowsing(false);
+    const skipped = Array.isArray(skill?.skippedFiles) ? skill.skippedFiles.length : 0;
+    const added = t('skills.notices.addedFromMarketplace', {
+      defaultValue: 'Added “{{name}}” to your skills. Type /{{name}} in a chat to use it.',
+      name: skill?.name || ''
+    });
+    setNotice({
+      type: 'success',
+      text: skipped
+        ? `${added} ${t('skills.notices.filesLeftOut', {
+            defaultValue:
+              '{{count}} file(s) were left out: your skills hold text files only, within the size limits.',
+            count: skipped
+          })}`
+        : added
+    });
+    changed(skill);
+  };
+
   const dialogs = (
     <>
+      {browsing && (
+        <SkillMarketplaceModal onClose={() => setBrowsing(false)} onAdded={addedFromMarketplace} />
+      )}
       {editing && (
         <SkillEditorModal
           skill={editing.skill}
@@ -135,6 +164,7 @@ export default function useSkillActions({ onChanged } = {}) {
     duplicate,
     showHistory,
     remove,
+    browseMarketplace,
     notice,
     clearNotice: () => setNotice(null),
     dialogs

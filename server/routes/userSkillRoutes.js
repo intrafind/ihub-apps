@@ -22,7 +22,7 @@ import configCache from '../configCache.js';
 import { authenticatedOnly } from '../middleware/authRequired.js';
 import { requireFeature } from '../featureRegistry.js';
 import { buildServerPath } from '../utils/basePath.js';
-import { validateIdForPath } from '../utils/pathSecurity.js';
+import { isValidId, validateIdForPath } from '../utils/pathSecurity.js';
 import { enhanceUserWithPermissions, loadGroupsConfiguration } from '../utils/authorization.js';
 import {
   sendBadRequest,
@@ -52,10 +52,20 @@ import {
 import {
   SKILLS_FEATURE,
   allowedSkillShareTargets,
+  isUserSkillMarketplaceConfigured,
   isUserSkillsConfigured,
   userSkillSettings
 } from '../services/skills/userSkillSettings.js';
 import { serializeUserSkill, skillSize } from '../services/skills/userSkillView.js';
+import {
+  MarketplaceSkillError,
+  buildUserSkillFromMarketplace,
+  getMarketplaceSkill,
+  listMarketplaceSkills,
+  marketplaceCopiedFrom,
+  marketplaceCopiesByItem,
+  marketplaceSkillView
+} from '../services/skills/marketplaceSkills.js';
 import {
   SKILL_FILE_PATH_PATTERN,
   SKILL_NAME_PATTERN,
@@ -214,6 +224,43 @@ function refuse(res, message, code = 'SKILL_FORBIDDEN') {
 }
 
 /**
+ * Gate for the marketplace routes: everything `requireUserSkills` asks, plus
+ * the `marketplace` feature and `userSkills.allowMarketplace`. Sends the
+ * refusal itself and returns null when the request cannot go on.
+ */
+function requireMarketplace(req, res) {
+  const deps = requireUserSkills(req, res);
+  if (!deps) return null;
+  if (
+    !isUserSkillMarketplaceConfigured(configCache.getFeatures(), configCache.getPlatform() || {})
+  ) {
+    sendErrorResponse(res, 403, 'Adding skills from the marketplace is switched off', {
+      details: { code: 'MARKETPLACE_SKILLS_DISABLED' }
+    });
+    return null;
+  }
+  return deps;
+}
+
+/** A registry id and a catalog name from the path, both path-safe; false when refused. */
+function marketplaceItemParams(req, res) {
+  const { registryId, name } = req.params;
+  if (!validateIdForPath(registryId, 'registry', res)) return false;
+  if (!isValidId(name)) {
+    sendNotFound(res, 'Skill');
+    return false;
+  }
+  return { registryId, name };
+}
+
+function sendMarketplaceError(res, error, operation) {
+  if (error instanceof MarketplaceSkillError) {
+    return sendErrorResponse(res, error.status, error.message, { details: { code: error.code } });
+  }
+  return sendStorageError(res, error, operation);
+}
+
+/**
  * Load one user skill and what the caller may do with it. Sends a 404 —
  * never a 403, so an id nobody shared with the caller confirms nothing.
  */
@@ -331,8 +378,11 @@ async function contentOfGlobalSkill(name, settings) {
   };
 }
 
-/** Copy of a skill, owned by the caller; sends the response itself. */
-async function createCopy(req, res, deps, content, copiedFrom, auditSummary) {
+/**
+ * Copy of a skill, owned by the caller; sends the response itself. `extra`
+ * is added to the response body (e.g. the files a marketplace copy left out).
+ */
+async function createCopy(req, res, deps, content, copiedFrom, auditSummary, extra = {}) {
   if (refuseTooLarge(res, content, deps.settings)) return;
   if (await refuseOverLimit(res, deps.repo, deps.settings, String(req.user.id))) return;
   const skill = await deps.repo.create({
@@ -353,7 +403,9 @@ async function createCopy(req, res, deps, content, copiedFrom, auditSummary) {
     resourceId: skill.id,
     summary: auditSummary(skill)
   });
-  res.status(201).json(view(skill, req, callerContext(req.user), { includeContent: true }));
+  res
+    .status(201)
+    .json({ ...view(skill, req, callerContext(req.user), { includeContent: true }), ...extra });
 }
 
 export default function registerUserSkillRoutes(app) {
@@ -470,6 +522,173 @@ export default function registerUserSkillRoutes(app) {
       sendFailedOperationError(res, 'look up share targets', error);
     }
   });
+
+  /**
+   * @swagger
+   * /api/user-skills/marketplace:
+   *   get:
+   *     summary: Skills the marketplace offers to add to one's own skills
+   *     description: |
+   *       Lists the skills of the enabled marketplace registries (their
+   *       fetched catalogs), so a user can copy one into their own skills
+   *       without an admin installing it for everyone. Needs the
+   *       `marketplace` feature and `platform.userSkills.allowMarketplace`.
+   *       Each item says whether the caller already added it (`added`) and
+   *       whether a global skill of that name is available to them.
+   *     tags:
+   *       - Skills
+   *     parameters:
+   *       - in: query
+   *         name: search
+   *         schema:
+   *           type: string
+   *       - in: query
+   *         name: registry
+   *         schema:
+   *           type: string
+   *       - in: query
+   *         name: category
+   *         schema:
+   *           type: string
+   *       - in: query
+   *         name: page
+   *         schema:
+   *           type: integer
+   *       - in: query
+   *         name: limit
+   *         schema:
+   *           type: integer
+   *           maximum: 60
+   */
+  app.get(buildServerPath('/api/user-skills/marketplace'), ...gate, async (req, res) => {
+    try {
+      const deps = requireMarketplace(req, res);
+      if (!deps) return;
+      const query = req.query || {};
+      const result = await listMarketplaceSkills({
+        search: typeof query.search === 'string' ? query.search.slice(0, 200) : '',
+        registry: typeof query.registry === 'string' ? query.registry : '',
+        category: typeof query.category === 'string' ? query.category : '',
+        page: query.page,
+        limit: query.limit
+      });
+      const copies = marketplaceCopiesByItem(await deps.repo.listOwned(String(req.user.id)));
+      const { data: visible } = await configCache.getSkillsForUser(req.user);
+      const globalNames = new Set((visible || []).map(skill => skill.name));
+      res.setHeader('Cache-Control', 'private, no-store');
+      res.json({
+        ...result,
+        items: result.items.map(item => ({
+          ...marketplaceSkillView(item),
+          added: copies.get(`${item.registryId}:${item.name}`) || null,
+          availableAsGlobal: globalNames.has(item.name)
+        }))
+      });
+    } catch (error) {
+      sendMarketplaceError(res, error, 'browse marketplace skills');
+    }
+  });
+
+  /**
+   * @swagger
+   * /api/user-skills/marketplace/{registryId}/{name}:
+   *   get:
+   *     summary: One marketplace skill with a preview of its instructions
+   *     tags:
+   *       - Skills
+   */
+  app.get(
+    buildServerPath('/api/user-skills/marketplace/:registryId/:name'),
+    ...gate,
+    async (req, res) => {
+      try {
+        const params = marketplaceItemParams(req, res);
+        if (!params) return;
+        const deps = requireMarketplace(req, res);
+        if (!deps) return;
+        const skill = await getMarketplaceSkill(params.registryId, params.name);
+        const copies = marketplaceCopiesByItem(await deps.repo.listOwned(String(req.user.id)));
+        const { data: visible } = await configCache.getSkillsForUser(req.user);
+        res.setHeader('Cache-Control', 'private, no-store');
+        res.json({
+          ...skill,
+          added: copies.get(`${params.registryId}:${params.name}`) || null,
+          availableAsGlobal: (visible || []).some(global => global.name === params.name)
+        });
+      } catch (error) {
+        sendMarketplaceError(res, error, 'read marketplace skill');
+      }
+    }
+  );
+
+  /**
+   * @swagger
+   * /api/user-skills/marketplace/{registryId}/{name}/add:
+   *   post:
+   *     summary: Copy a marketplace skill into the caller's own skills
+   *     description: |
+   *       Fetches the skill from its registry and saves it as a user skill
+   *       owned by the caller, private until shared. Body `{ name? }` names
+   *       the copy; it defaults to the catalog name. Only text files one
+   *       folder deep that fit the limits of `platform.userSkills` are kept;
+   *       the response lists the others in `skippedFiles`
+   *       (`{ path, reason: unsupported|fileLimit|sizeLimit }`).
+   *     tags:
+   *       - Skills
+   *     responses:
+   *       201:
+   *         description: The new user skill
+   *       404:
+   *         description: The registry is off or does not list the skill
+   *       422:
+   *         description: The item is not a valid skill
+   *       502:
+   *         description: The registry could not be reached
+   */
+  app.post(
+    buildServerPath('/api/user-skills/marketplace/:registryId/:name/add'),
+    ...gate,
+    async (req, res) => {
+      try {
+        const params = marketplaceItemParams(req, res);
+        if (!params) return;
+        const deps = requireMarketplace(req, res);
+        if (!deps) return;
+        const body = parseBody(skillDuplicateSchema, req, res);
+        if (!body) return;
+        // Refuse before fetching anything when there is no room for one more.
+        if (await refuseOverLimit(res, deps.repo, deps.settings, String(req.user.id))) return;
+        const built = await buildUserSkillFromMarketplace(
+          params.registryId,
+          params.name,
+          deps.settings,
+          { requestedName: body.name }
+        );
+        const parsed = userSkillContentSchema.safeParse(built.content);
+        if (!parsed.success) {
+          return sendErrorResponse(
+            res,
+            422,
+            `This skill cannot be added: ${describeIssues(parsed.error)}`,
+            { details: { code: 'MARKETPLACE_SKILL_INVALID' } }
+          );
+        }
+        await createCopy(
+          req,
+          res,
+          deps,
+          normalizeContent(parsed.data),
+          marketplaceCopiedFrom(built.item),
+          copy =>
+            `Added marketplace skill "${params.name}" from registry ${params.registryId} ` +
+            `as user skill "${copy.name}"`,
+          { skippedFiles: built.skipped }
+        );
+      } catch (error) {
+        sendMarketplaceError(res, error, 'add marketplace skill');
+      }
+    }
+  );
 
   /**
    * @swagger

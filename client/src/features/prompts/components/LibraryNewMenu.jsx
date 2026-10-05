@@ -11,8 +11,9 @@ const primaryButton =
  * The entries are data, so another kind of library item is one more entry.
  *
  * @param {Object} props
- * @param {Array<{id: string, label: string, icon?: string, onSelect: () => void}>} props.entries
- *   - What can be created, in menu order.
+ * @param {Array<{id: string, label: string, icon?: string, itemType?: string, onSelect: () => void}>} props.entries
+ *   - What can be created, in menu order. `itemType` is the kind of item an
+ *   entry creates when that differs from its id (e.g. a skill from the marketplace).
  * @param {string} [props.className] - Extra classes for the wrapper.
  */
 function LibraryNewMenu({ entries, className = '' }) {

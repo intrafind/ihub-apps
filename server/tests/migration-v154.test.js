@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 
 /**
- * Migration V152 specs — seeding `platform.userSkills`.
+ * Migration V154 specs — seeding `platform.userSkills.allowMarketplace`.
  *
- * The migration adds the built-in defaults where they are missing and leaves
- * every value an admin already set exactly as it is.
+ * The migration adds the built-in default where it is missing and leaves a
+ * value an admin already set, and the rest of the block, exactly as it is.
  */
 import fs from 'node:fs/promises';
 import os from 'node:os';
@@ -17,7 +17,7 @@ import {
   precondition,
   version,
   description
-} from '../migrations/V152__add_user_skills_settings.js';
+} from '../migrations/V154__add_user_skills_marketplace.js';
 import { setDefault } from '../migrations/utils.js';
 import { DEFAULT_USER_SKILL_SETTINGS } from '../services/skills/userSkillSettings.js';
 
@@ -42,7 +42,7 @@ function makeCtx(dir) {
 }
 
 async function seed(platform) {
-  const dir = await fs.mkdtemp(path.join(baseDir, 'v152-'));
+  const dir = await fs.mkdtemp(path.join(baseDir, 'v154-'));
   await fs.mkdir(path.join(dir, 'config'), { recursive: true });
   if (platform !== null) {
     await fs.writeFile(path.join(dir, 'config/platform.json'), JSON.stringify(platform), 'utf8');
@@ -51,17 +51,17 @@ async function seed(platform) {
 }
 
 before(async () => {
-  baseDir = await fs.mkdtemp(path.join(os.tmpdir(), 'ihub-migration-v152-'));
+  baseDir = await fs.mkdtemp(path.join(os.tmpdir(), 'ihub-migration-v154-'));
 });
 
 after(async () => {
   await fs.rm(baseDir, { recursive: true, force: true });
 });
 
-describe('V152', () => {
+describe('V154', () => {
   it('is numbered and described as its file name says', () => {
-    assert.equal(version, '152');
-    assert.equal(description, 'add_user_skills_settings');
+    assert.equal(version, '154');
+    assert.equal(description, 'add_user_skills_marketplace');
   });
 
   it('only runs when platform.json exists', async () => {
@@ -69,29 +69,23 @@ describe('V152', () => {
     assert.equal(await precondition(await seed({})), true);
   });
 
-  it('adds the defaults the code falls back to', async () => {
-    const ctx = await seed({ chats: { enabled: true } });
+  it('adds the default the code falls back to, next to the existing settings', async () => {
+    const ctx = await seed({ userSkills: { enabled: true, maxSkillsPerUser: 10 } });
     await up(ctx);
     const platform = await ctx.readJson('config/platform.json');
-    // `allowMarketplace` came later and is seeded by V154.
-    const { allowMarketplace: _seededByV154, ...defaults } = DEFAULT_USER_SKILL_SETTINGS;
-    assert.deepEqual(platform.userSkills, {
-      ...defaults,
-      sharing: { ...DEFAULT_USER_SKILL_SETTINGS.sharing, restrictToGroups: [] }
-    });
-    assert.deepEqual(platform.chats, { enabled: true });
+    assert.equal(
+      platform.userSkills.allowMarketplace,
+      DEFAULT_USER_SKILL_SETTINGS.allowMarketplace
+    );
+    assert.equal(platform.userSkills.allowMarketplace, true);
+    assert.equal(platform.userSkills.maxSkillsPerUser, 10);
   });
 
   it('keeps what an admin set and is idempotent', async () => {
-    const ctx = await seed({
-      userSkills: { enabled: false, sharing: { allowEveryone: false, restrictToGroups: ['x'] } }
-    });
+    const ctx = await seed({ userSkills: { allowMarketplace: false } });
     await up(ctx);
     const first = await ctx.readJson('config/platform.json');
-    assert.equal(first.userSkills.enabled, false);
-    assert.equal(first.userSkills.sharing.allowEveryone, false);
-    assert.deepEqual(first.userSkills.sharing.restrictToGroups, ['x']);
-    assert.equal(first.userSkills.sharing.allowGroups, true);
+    assert.equal(first.userSkills.allowMarketplace, false);
     await up(ctx);
     assert.deepEqual(await ctx.readJson('config/platform.json'), first);
   });

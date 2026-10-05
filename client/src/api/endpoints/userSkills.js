@@ -127,6 +127,49 @@ export const duplicateUserSkill = async (skillId, body = {}) =>
 export const duplicateGlobalSkill = async (skillName, body = {}) =>
   write(() => apiClient.post(`/skills/${encodeURIComponent(skillName)}/duplicate`, body));
 
+/* -------------------------------------------------------------------------- */
+/*  Marketplace (needs the marketplace feature and userSkills.allowMarketplace) */
+/* -------------------------------------------------------------------------- */
+
+const marketplaceItemPath = (registryId, name) =>
+  `/user-skills/marketplace/${encodeURIComponent(registryId)}/${encodeURIComponent(name)}`;
+
+/**
+ * The skills the marketplace offers to add to one's own skills, paged, with
+ * the registries and categories to filter by. Each item says whether the
+ * caller already added it (`added: { id, name }`) and whether a global skill
+ * of that name is available to them (`availableAsGlobal`).
+ *
+ * @param {{search?: string, registry?: string, category?: string, page?: number, limit?: number}} [params]
+ * @returns {Promise<{items: Object[], total: number, page: number, limit: number, totalPages: number, registries: Array<{id: string, name: string, count: number}>, categories: string[]}>}
+ */
+export const fetchMarketplaceSkills = async (params = {}) =>
+  read(() => apiClient.get('/user-skills/marketplace', { params }));
+
+/**
+ * One marketplace skill with a preview of its instructions (`preview.body`)
+ * and the files the catalog lists (`preview.files[]: { path, included }`).
+ *
+ * @param {string} registryId - Registry id.
+ * @param {string} name - Catalog name of the skill.
+ * @returns {Promise<Object>}
+ */
+export const fetchMarketplaceSkill = async (registryId, name) =>
+  read(() => apiClient.get(marketplaceItemPath(registryId, name)));
+
+/**
+ * Copy a marketplace skill into the caller's own skills. The response is the
+ * new skill (detail) plus `skippedFiles: [{ path, reason }]` — the files a
+ * personal skill cannot hold or that did not fit the limits.
+ *
+ * @param {string} registryId - Registry id.
+ * @param {string} name - Catalog name of the skill.
+ * @param {{name?: string}} [body] - Optional name of the copy.
+ * @returns {Promise<Object>}
+ */
+export const addMarketplaceSkill = async (registryId, name, body = {}) =>
+  write(() => apiClient.post(`${marketplaceItemPath(registryId, name)}/add`, body));
+
 /**
  * Saved revisions of a personal skill, newest first, without body and files.
  *

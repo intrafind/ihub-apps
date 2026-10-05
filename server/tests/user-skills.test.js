@@ -16,12 +16,16 @@
  *  - in chat, a user skill is listed for the model and loads by id for its
  *    owner and the people it is shared with — never for anyone else, and not
  *    in apps that opt out;
- *  - admins see shared skills and promote one to a global skill folder.
+ *  - admins see shared skills and promote one to a global skill folder;
+ *  - users browse the skills of enabled marketplace registries and add one to
+ *    their own skills, with the text files that fit the limits — never from a
+ *    registry that is off, and only while the marketplace is offered to them.
  *
  * Run: node --test server/tests/user-skills.test.js
  */
 import fs from 'node:fs/promises';
 import fsSync from 'node:fs';
+import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import { after, before, beforeEach, describe, it } from 'node:test';
@@ -54,6 +58,9 @@ const { default: registerSkillRoutes } = await import('../routes/skillRoutes.js'
 const { default: registerAdminSkillsRoutes, skillMarkdownFromUserSkill } =
   await import('../routes/admin/skills.js');
 const { getStorage, readFacet } = await import('../storage/bootstrap.js');
+const { default: configStore } = await import('../services/config/ConfigStore.js');
+const { userSkillsClientConfig } = await import('../services/skills/userSkillSettings.js');
+const { hasSyncedRegistry } = await import('../services/skills/marketplaceSkills.js');
 const { PromptNodeExecutor } = await import('../services/workflow/executors/PromptNodeExecutor.js');
 const { ToolNodeExecutor } = await import('../services/workflow/executors/ToolNodeExecutor.js');
 
@@ -151,6 +158,13 @@ const route = {
   version: handlersFor(userRoutes, 'get', '/api/user-skills/:skillId/versions/:revision'),
   restore: handlersFor(userRoutes, 'post', '/api/user-skills/:skillId/versions/:revision/restore'),
   targets: handlersFor(userRoutes, 'get', '/api/user-skills/share-targets'),
+  marketplace: handlersFor(userRoutes, 'get', '/api/user-skills/marketplace'),
+  marketplaceItem: handlersFor(userRoutes, 'get', '/api/user-skills/marketplace/:registryId/:name'),
+  marketplaceAdd: handlersFor(
+    userRoutes,
+    'post',
+    '/api/user-skills/marketplace/:registryId/:name/add'
+  ),
   picker: handlersFor(skillRoutes, 'get', '/api/skills'),
   adminList: handlersFor(adminRoutes, 'get', '/api/admin/user-skills'),
   promote: handlersFor(adminRoutes, 'post', '/api/admin/user-skills/:skillId/promote'),
@@ -679,5 +693,286 @@ describe('admin', () => {
     assert.equal(res.statusCode, 200);
     assert.equal(res.body.settings.maxFilesPerSkill, 20);
     assert.equal(res.body.storageAvailable, true);
+  });
+});
+
+describe('from the marketplace', () => {
+  // A registry served from 127.0.0.1: one skill with reference files (a `url`
+  // source with companions), one plain SKILL.md (a `relative` source), and one
+  // whose source is gone. A second registry is switched off.
+  const AGENDA = `# Agenda\n${'x'.repeat(2000)}`;
+  const FILES = {
+    '/skills/meeting-notes/SKILL.md':
+      '---\nname: meeting-notes\ndescription: "Turns meeting notes into minutes. Use for minutes."\n' +
+      'license: Apache-2.0\n---\n\nMEETING BODY\n',
+    '/skills/meeting-notes/references/agenda.md': AGENDA,
+    '/skills/meeting-notes/references/deep/nested.md': 'NESTED',
+    '/skills/meeting-notes/assets/logo.png': 'PNG',
+    '/skills/plain/SKILL.md': '---\nname: plain\ndescription: "Plain skill."\n---\n\nPLAIN BODY\n'
+  };
+  let server;
+  let base;
+
+  const catalog = () => ({
+    name: 'Test',
+    items: [
+      {
+        type: 'skill',
+        name: 'meeting-notes',
+        displayName: { en: 'Meeting Notes', de: 'Besprechungsnotizen' },
+        description: { en: 'Turns notes into minutes', de: 'Macht Protokolle' },
+        version: '1.2.0',
+        author: 'Test Author',
+        category: 'productivity',
+        tags: ['minutes'],
+        license: 'Apache-2.0',
+        source: {
+          type: 'url',
+          url: `${base}/skills/meeting-notes/SKILL.md`,
+          companions: ['references/agenda.md', 'references/deep/nested.md', 'assets/logo.png']
+        }
+      },
+      {
+        type: 'skill',
+        name: 'plain',
+        displayName: { en: 'Plain' },
+        description: { en: 'Plain skill' },
+        category: 'writing',
+        source: { type: 'relative', path: 'skills/plain/SKILL.md' }
+      },
+      {
+        type: 'skill',
+        name: 'gone',
+        description: { en: 'Its source is gone' },
+        category: 'writing',
+        source: { type: 'url', url: `${base}/skills/gone/SKILL.md` }
+      },
+      { type: 'app', name: 'not-a-skill', source: { type: 'relative', path: 'apps/x.json' } }
+    ]
+  });
+
+  const registries = () => ({
+    registries: [
+      {
+        id: 'test-reg',
+        name: 'Test Registry',
+        enabled: true,
+        source: `${base}/catalog.json`,
+        auth: { type: 'none' },
+        lastSynced: '2026-10-01T00:00:00.000Z'
+      },
+      {
+        id: 'off-reg',
+        name: 'Switched Off',
+        enabled: false,
+        source: `${base}/catalog.json`,
+        auth: { type: 'none' },
+        lastSynced: '2026-10-01T00:00:00.000Z'
+      }
+    ]
+  });
+
+  const browse = (user, query = {}) => drive(route.marketplace, { user, query });
+  const add = (user, registryId, name, body = {}) =>
+    drive(route.marketplaceAdd, { user, params: { registryId, name }, body });
+
+  before(async () => {
+    server = http.createServer((req, res) => {
+      const file = FILES[req.url];
+      if (file === undefined) {
+        res.writeHead(404).end();
+        return;
+      }
+      res.writeHead(200, { 'Content-Type': 'text/plain' }).end(file);
+    });
+    await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+    base = `http://127.0.0.1:${server.address().port}`;
+    configCache.setCacheEntry('config/registries.json', registries());
+    for (const id of ['test-reg', 'off-reg']) {
+      await configStore.writeJson(`.registry-cache/${id}.json`, {
+        registryId: id,
+        fetchedAt: new Date().toISOString(),
+        catalog: catalog()
+      });
+    }
+  });
+
+  after(async () => {
+    await new Promise(resolve => server.close(resolve));
+  });
+
+  beforeEach(() => {
+    setFeatures({ skills: true, marketplace: true });
+  });
+
+  it('is offered only with the marketplace feature and the setting', async () => {
+    setFeatures({ skills: true, marketplace: false });
+    const featureOff = await browse(ADA);
+    assert.equal(featureOff.statusCode, 403);
+    assert.equal(featureOff.body.details?.code, 'MARKETPLACE_SKILLS_DISABLED');
+
+    setFeatures({ skills: true, marketplace: true });
+    setUserSkillSettings({ allowMarketplace: false });
+    const settingOff = await add(ADA, 'test-reg', 'plain');
+    assert.equal(settingOff.statusCode, 403);
+    assert.equal(settingOff.body.details?.code, 'MARKETPLACE_SKILLS_DISABLED');
+
+    for (const user of [THIRD_PARTY, AGENT]) {
+      setUserSkillSettings();
+      const refused = await browse(user);
+      assert.equal(refused.statusCode, 403);
+      assert.equal(refused.body.details?.code, 'USER_SKILLS_NOT_ALLOWED');
+    }
+  });
+
+  it('tells the client whether there is a marketplace to browse', () => {
+    const features = { skills: true, marketplace: true };
+    const ready = { storageAvailable: true, marketplaceReady: true };
+    assert.equal(userSkillsClientConfig(features, platform, ready).marketplace, true);
+    assert.equal(
+      userSkillsClientConfig({ ...features, marketplace: false }, platform, ready).marketplace,
+      false
+    );
+    assert.equal(
+      userSkillsClientConfig(features, platform, { ...ready, marketplaceReady: false }).marketplace,
+      false
+    );
+    assert.equal(
+      userSkillsClientConfig(features, platform, { ...ready, storageAvailable: false }).marketplace,
+      false
+    );
+    assert.equal(hasSyncedRegistry(registries()), true);
+    assert.equal(
+      hasSyncedRegistry({ registries: [{ id: 'x', enabled: true, lastSynced: null }] }),
+      false
+    );
+    assert.equal(hasSyncedRegistry(undefined), false);
+  });
+
+  it('lists the skills of enabled registries, filtered and paged, without their sources', async () => {
+    const res = await browse(ADA);
+    assert.equal(res.statusCode, 200, JSON.stringify(res.body));
+    assert.equal(res.body.total, 3);
+    assert.deepEqual(res.body.registries, [{ id: 'test-reg', name: 'Test Registry', count: 3 }]);
+    assert.deepEqual(res.body.categories, ['productivity', 'writing']);
+    const notes = res.body.items.find(item => item.name === 'meeting-notes');
+    assert.equal(notes.registryName, 'Test Registry');
+    assert.deepEqual(notes.displayName, { en: 'Meeting Notes', de: 'Besprechungsnotizen' });
+    assert.equal(notes.license, 'Apache-2.0');
+    assert.equal(notes.added, null);
+    assert.equal(notes.availableAsGlobal, false);
+    assert.equal('source' in notes, false);
+    assert.equal('installation' in notes, false);
+
+    const german = await browse(ADA, { search: 'besprechung' });
+    assert.deepEqual(
+      german.body.items.map(item => item.name),
+      ['meeting-notes']
+    );
+    const writing = await browse(ADA, { category: 'writing' });
+    assert.deepEqual(
+      writing.body.items.map(item => item.name),
+      ['plain', 'gone']
+    );
+    const paged = await browse(ADA, { limit: '1', page: '2' });
+    assert.equal(paged.body.totalPages, 3);
+    assert.deepEqual(
+      paged.body.items.map(item => item.name),
+      ['plain']
+    );
+    const otherRegistry = await browse(ADA, { registry: 'off-reg' });
+    assert.equal(otherRegistry.body.total, 0);
+  });
+
+  it('shows a skill with a preview and the files that would come with it', async () => {
+    const res = await drive(route.marketplaceItem, {
+      user: ADA,
+      params: { registryId: 'test-reg', name: 'meeting-notes' }
+    });
+    assert.equal(res.statusCode, 200, JSON.stringify(res.body));
+    assert.match(res.body.preview.body, /MEETING BODY/);
+    assert.deepEqual(res.body.preview.files, [
+      { path: 'references/agenda.md', included: true },
+      { path: 'references/deep/nested.md', included: false },
+      { path: 'assets/logo.png', included: false }
+    ]);
+    assert.equal('source' in res.body, false);
+
+    const off = await drive(route.marketplaceItem, {
+      user: ADA,
+      params: { registryId: 'off-reg', name: 'meeting-notes' }
+    });
+    assert.equal(off.statusCode, 404);
+  });
+
+  it('adds a skill with the text files that fit, privately, and reports the rest', async () => {
+    const res = await add(ADA, 'test-reg', 'meeting-notes');
+    assert.equal(res.statusCode, 201, JSON.stringify(res.body));
+    assert.ok(isUserSkillId(res.body.id));
+    assert.equal(res.body.scope, 'mine');
+    assert.equal(res.body.name, 'meeting-notes');
+    assert.equal(res.body.description, 'Turns meeting notes into minutes. Use for minutes.');
+    assert.equal(res.body.body, 'MEETING BODY');
+    assert.deepEqual(res.body.files, [{ path: 'references/agenda.md', content: AGENDA }]);
+    assert.deepEqual(res.body.skippedFiles, [
+      { path: 'assets/logo.png', reason: 'unsupported' },
+      { path: 'references/deep/nested.md', reason: 'unsupported' }
+    ]);
+    assert.deepEqual(res.body.copiedFrom, {
+      scope: 'marketplace',
+      id: 'meeting-notes',
+      registryId: 'test-reg',
+      registryName: 'Test Registry',
+      version: '1.2.0',
+      license: 'Apache-2.0'
+    });
+
+    const listed = await browse(ADA, { search: 'meeting' });
+    assert.deepEqual(listed.body.items[0].added, { id: res.body.id, name: 'meeting-notes' });
+    assert.ok((await list(ADA, 'mine')).some(skill => skill.id === res.body.id));
+    assert.ok(!(await list(GRACE)).some(skill => skill.id === res.body.id));
+    const graceView = await browse(GRACE, { search: 'meeting' });
+    assert.equal(graceView.body.items[0].added, null);
+
+    const plain = await add(GRACE, 'test-reg', 'plain', { name: 'my-plain' });
+    assert.equal(plain.statusCode, 201, JSON.stringify(plain.body));
+    assert.equal(plain.body.name, 'my-plain');
+    assert.equal(plain.body.body, 'PLAIN BODY');
+    assert.deepEqual(plain.body.skippedFiles, []);
+  });
+
+  it('keeps to the size and per-user limits', async () => {
+    setUserSkillSettings({ maxSkillSizeKB: 1 });
+    const small = await add(CAROL, 'test-reg', 'meeting-notes', { name: 'small-notes' });
+    assert.equal(small.statusCode, 201, JSON.stringify(small.body));
+    assert.deepEqual(small.body.files, []);
+    assert.ok(
+      small.body.skippedFiles.some(
+        file => file.path === 'references/agenda.md' && file.reason === 'sizeLimit'
+      )
+    );
+
+    const owned = (await list(CAROL, 'mine')).length;
+    setUserSkillSettings({ maxSkillsPerUser: owned });
+    const full = await add(CAROL, 'test-reg', 'plain');
+    assert.equal(full.statusCode, 409);
+    assert.equal(full.body.details?.code, 'SKILL_LIMIT_REACHED');
+  });
+
+  it('refuses switched-off registries, unknown items, bad names and unreachable sources', async () => {
+    const off = await add(ADA, 'off-reg', 'plain');
+    assert.equal(off.statusCode, 404);
+    assert.equal(off.body.details?.code, 'MARKETPLACE_SKILL_NOT_FOUND');
+    const unknown = await add(ADA, 'test-reg', 'nope');
+    assert.equal(unknown.statusCode, 404);
+    const notASkill = await add(ADA, 'test-reg', 'not-a-skill');
+    assert.equal(notASkill.statusCode, 404);
+    const traversal = await add(ADA, 'test-reg', '../plain');
+    assert.equal(traversal.statusCode, 404);
+    const badName = await add(ADA, 'test-reg', 'plain', { name: 'Not Valid' });
+    assert.equal(badName.statusCode, 400);
+    const gone = await add(ADA, 'test-reg', 'gone');
+    assert.equal(gone.statusCode, 502);
+    assert.equal(gone.body.details?.code, 'MARKETPLACE_FETCH_FAILED');
   });
 });

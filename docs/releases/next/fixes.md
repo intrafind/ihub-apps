@@ -19,3 +19,9 @@ The Office 365 file picker offered SharePoint Sites and Microsoft Teams even whe
 had switched these sources off for the provider. It now lists only the enabled sources and refuses
 to load a disabled one. Opening OneDrive also no longer asks the user to choose between their files
 and a hidden system library ("PersonalCacheLibrary"); it goes straight to their OneDrive files.
+
+## Admin → Skills Is Translated Again
+
+Parts of **Admin → Skills** — the tab names, the **User skills** list and its settings — showed
+English text in the German interface, because a second set of skill texts replaced the first. Both
+sets are now combined, so the page is fully translated.

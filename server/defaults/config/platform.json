@@ -447,6 +447,7 @@
     "maxVersions": 50,
     "maxSkillSizeKB": 256,
     "maxFilesPerSkill": 20,
+    "allowMarketplace": true,
     "sharing": {
       "allowUsers": true,
       "allowGroups": true,

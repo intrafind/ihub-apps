@@ -95,6 +95,10 @@ function PromptsList() {
   const skillsAvailable = featureFlags.isEnabled('skills', false);
   const userSkillsEnabled =
     skillsAvailable && isAuthenticated && platformConfig?.userSkills?.enabled === true;
+  // Skills from the marketplace: offered when the server says there is one
+  // to browse (the marketplace feature, the setting and a fetched catalog).
+  const skillMarketplaceEnabled =
+    userSkillsEnabled && platformConfig?.userSkills?.marketplace === true;
 
   // The kinds on offer: without skills the library is the prompt list it was.
   const itemTypes = ITEM_TYPES.filter(type => type.id !== 'skills' || skillsAvailable);
@@ -446,10 +450,27 @@ function PromptsList() {
       icon: 'sparkles',
       label: t('skills.actions.new', 'New skill'),
       onSelect: () => skillActions.create()
+    },
+    skillMarketplaceEnabled && {
+      id: 'skill-marketplace',
+      itemType: 'skill',
+      icon: 'squares-2x2',
+      label: t('skills.actions.fromMarketplace', 'Skill from the marketplace'),
+      onSelect: () => skillActions.browseMarketplace()
     }
   ].filter(Boolean);
-  // The empty "Mine" view offers to create what it shows (entry ids are item types).
-  const newEntriesForType = newEntries.filter(entry => shownItemTypes.includes(entry.id));
+  // The empty "Mine" view offers to create what it shows (an entry's item type
+  // is its `itemType`, else its id).
+  const newEntriesForType = newEntries.filter(entry =>
+    shownItemTypes.includes(entry.itemType || entry.id)
+  );
+  // Someone without skills of their own, looking at skills, gets pointed at
+  // ready-made ones — writing a first skill from scratch is the hard way in.
+  const showSkillsGetStarted =
+    skillMarketplaceEnabled &&
+    typeFilter === 'skills' &&
+    (scopeFilter === 'all' || scopeFilter === 'global') &&
+    !personalSkills.some(skill => skill.scope === 'mine');
 
   if (loading) {
     return <LoadingSpinner message={t('app.loading')} />;
@@ -477,10 +498,12 @@ function PromptsList() {
           none: t('library.empty.none', 'Nothing found')
         }
       : {
-          mine: t(
-            'skills.empty.mine',
-            'You have no skills yet. Create one, or copy a global skill.'
-          ),
+          mine: skillMarketplaceEnabled
+            ? t(
+                'skills.empty.mineMarketplace',
+                'You have no skills yet. Add a ready-made one from the marketplace, copy a global skill, or create your own.'
+              )
+            : t('skills.empty.mine', 'You have no skills yet. Create one, or copy a global skill.'),
           shared: t('skills.empty.shared', 'Nobody has shared a skill with you yet.'),
           global: t('skills.empty.global', 'No global skills are available to you.'),
           none: t('skills.empty.none', 'No skills found')
@@ -689,6 +712,36 @@ function PromptsList() {
               {getLocalizedContent(category.name, i18n.language)}
             </button>
           ))}
+        </div>
+      )}
+
+      {showSkillsGetStarted && (
+        <div
+          data-testid="skills-get-started"
+          className="mb-6 w-full max-w-6xl mx-auto flex flex-col sm:flex-row sm:items-center gap-3 rounded-xl border border-purple-200 dark:border-purple-800 bg-purple-50 dark:bg-purple-900/20 px-4 py-3"
+        >
+          <div className="shrink-0 w-9 h-9 bg-purple-100 dark:bg-purple-900/60 rounded-lg flex items-center justify-center">
+            <Icon name="sparkles" className="w-5 h-5 text-purple-600 dark:text-purple-300" />
+          </div>
+          <div className="grow text-sm">
+            <p className="font-medium text-gray-900 dark:text-gray-100">
+              {t('skills.getStarted.title', 'New to skills? Start with a ready-made one.')}
+            </p>
+            <p className="text-gray-600 dark:text-gray-300">
+              {t(
+                'skills.getStarted.text',
+                'Pick a skill from the marketplace, add it to your skills and use it with / in any chat. You can adapt it to how you work later.'
+              )}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => skillActions.browseMarketplace()}
+            className="shrink-0 inline-flex items-center justify-center gap-1.5 px-4 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
+          >
+            <Icon name="squares-2x2" size="sm" />
+            {t('skills.getStarted.browse', 'Browse the marketplace')}
+          </button>
         </div>
       )}
 

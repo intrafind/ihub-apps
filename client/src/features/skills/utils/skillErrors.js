@@ -81,6 +81,26 @@ export function skillErrorMessage(error, t) {
       return t('skills.errors.disabled', 'Personal skills are switched off.');
     case 'USER_SKILLS_NOT_ALLOWED':
       return t('skills.errors.notAllowed', 'Sign in to keep skills of your own.');
+    case 'MARKETPLACE_SKILLS_DISABLED':
+      return t(
+        'skills.errors.marketplaceDisabled',
+        'Adding skills from the marketplace is switched off.'
+      );
+    case 'MARKETPLACE_SKILL_NOT_FOUND':
+      return t(
+        'skills.errors.marketplaceNotFound',
+        'This skill is no longer offered by the marketplace.'
+      );
+    case 'MARKETPLACE_FETCH_FAILED':
+      return t(
+        'skills.errors.marketplaceFetch',
+        'The marketplace could not be reached. Please try again later.'
+      );
+    case 'MARKETPLACE_SKILL_INVALID':
+      return t(
+        'skills.errors.marketplaceInvalid',
+        'This skill cannot be added: it does not follow the skill format.'
+      );
     default:
       return (
         error?.originalMessage ||
