@@ -153,6 +153,8 @@ A gateway that serves many models behind one API key — T-Systems AI Foundation
 a company LLM proxy, a shared vLLM server — is set up as its own provider under **Admin →
 Providers → Create New Provider** (category **LLM Providers**):
 
+![Create a new LLM provider: name, ID, description, API type, base URL and API key](assets/screenshots/admin-provider-new.png)
+
 | Field | Description |
 | ----- | ----------- |
 | Name, ID, Description | Plain text. The ID cannot be changed later, and cannot be the name of an API type (`openai`, `openai-responses`, …) |
@@ -185,6 +187,8 @@ variable of its API type, so an LLM Hub model speaking the OpenAI API is never s
 
 **Admin → Models → Import from URL** reads the model list of an endpoint and creates the models
 you pick, so they need not be typed in one by one.
+
+![Import models from URL with a new provider](assets/screenshots/admin-models-import.png)
 
 1. Choose the provider the models belong to, or **+ New provider** to create one with a name, ID,
    API type and API key. The key is stored on the provider, not on the models. Opening **Import
@@ -578,6 +582,8 @@ per-request variables (`{{user_name}}`, `{{time}}`, `{{timezone}}`) out of the s
 prompts; the shipped defaults use `{{date}}` only, which changes once a day.
 
 ### Model Selection in Apps
+
+![The model selector in the chat input](assets/screenshots/model-picker.png)
 
 The iHub provides a flexible system for selecting which AI model an app uses. The model is determined based on the following order of precedence:
 

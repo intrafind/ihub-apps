@@ -1,40 +1,29 @@
 # Getting Started with iHub Apps
 
-## Quick Start (No Authentication Required)
+iHub Apps runs without a database, without a `.env` file and without manual configuration. Start
+it, open it in the browser and connect a model in the setup wizard.
 
-**iHub Apps works immediately without any setup!**
+## 1. Start iHub
 
-```bash
-# 1. Clone and install
-git clone <repository>
-cd ihub-apps
-npm run install:all
+Pick one of the three ways in. [Installation](INSTALLATION.md) has the details for each.
 
-# 2. Start the application (automatic setup included!)
-npm run dev
+| Method | Command | Open |
+| ------ | ------- | ---- |
+| **Binary** (Linux, macOS, Windows) | Download from [GitHub Releases](https://github.com/intrafind/ihub-apps/releases), extract, run `./ihub-apps-v*-linux` (or the `.bat` on Windows). Or use the installer: `curl -fsSL https://raw.githubusercontent.com/intrafind/ihub-apps/main/install.sh \| sh` | http://localhost:3001 |
+| **Docker** | `docker compose -f docker-compose.quickstart.yml up` | http://localhost:3000 |
+| **npm** (development) | `git clone https://github.com/intrafind/ihub-apps.git && cd ihub-apps && npm run setup:dev && npm run dev` | http://localhost:5173 |
 
-# 3. Open your browser
-# Visit http://localhost:3000
-```
+The binary's port comes from the `config.env` next to the executable (`PORT=3001`); Docker and
+the npm server listen on 3000 (in development the Vite dev server on 5173 serves the UI and
+forwards API calls to port 3000).
 
-**That's it!** The server automatically creates default configuration files on first startup.
+### What happens on first start
 
-## Prerequisites
+When the `contents/` directory is empty, the server copies the default configuration from
+`server/defaults` into it — apps, models, providers, groups, users, UI settings — and then starts
+normally. On later starts it applies any pending [configuration migrations](configuration-migrations.md)
+and leaves your configuration alone.
 
-- **Node.js 24+**: Download from [nodejs.org](https://nodejs.org) (required for npm installation)
-- **npm 8+**: Included with Node.js
-- **Docker**: Alternative to Node.js — see [Docker Installation](INSTALLATION.md#method-2-docker-installation-recommended-for-production)
-
-### What Happens During First Startup
-
-When you start the server for the first time:
-
-1. 🔍 **Smart Detection**: Checks if configuration directory is empty
-2. 📋 **Auto-Setup**: Copies default configuration from `server/defaults`
-3. ✅ **Ready to Use**: All apps, models, and settings configured automatically
-4. 🚀 **Normal Startup**: Server continues and you can start using iHub Apps
-
-**Console output example:**
 ```
 🔍 Checking if initial setup is required...
 📦 Contents directory is empty, performing initial setup...
@@ -42,79 +31,87 @@ When you start the server for the first time:
 ✅ Default configuration copied successfully
 ```
 
-**On subsequent startups:**
-```
-🔍 Checking if initial setup is required...
-✅ Contents directory already exists and is not empty, skipping initial setup
-```
+## 2. Run the setup wizard
 
-## What You Get Out of the Box
+On a fresh installation the browser opens the setup wizard:
 
-✅ **Full Access**: All users can access all apps, models, and features  
-✅ **No Login Required**: Anonymous access enabled by default  
-✅ **30+ AI Apps**: Chat, translation, summarization, analysis tools, and more  
-✅ **Multiple AI Models**: Support for OpenAI, Anthropic, Google, and local models  
-✅ **Zero Configuration**: Works immediately with sensible defaults
+1. **Welcome** — **Get Started**, or **Skip, I'll configure later**.
+2. **Sign in** as an administrator. A fresh installation ships the local account `admin` with the
+   password `password123`.
+3. **Connect your first AI provider** — Google Gemini (with a free tier), Anthropic Claude,
+   OpenAI, Mistral AI or a local provider (LM Studio, Jan.ai, Ollama, vLLM). Paste the API key,
+   **Test Connection**, **Save & Continue**. The key is stored encrypted on the provider.
+4. **Finish** — you land on the start page and can chat right away.
 
-## Default Configuration Summary
+<p align="center">
+  <img src="assets/screenshots/setup-wizard-welcome.png" alt="Setup wizard: welcome" width="45%">
+  &nbsp;
+  <img src="assets/screenshots/setup-wizard-provider.png" alt="Setup wizard: connect your first AI provider" width="45%">
+</p>
 
-```json
-{
-  "authentication": "disabled (anonymous access allowed)",
-  "userAccess": "full (all apps, models, prompts)",
-  "adminPanel": "available (separate authentication)",
-  "restrictions": "none (completely open by default)"
-}
-```
+You can add more providers and models at any time under **Admin → Providers** and
+**Admin → Models** (including **Import from URL** for whole endpoints). API keys can also come from
+environment variables such as `GOOGLE_API_KEY`, `ANTHROPIC_API_KEY`, `OPENAI_API_KEY` or
+`MISTRAL_API_KEY` — see [Models](models.md) and [Environment Variables](environment-variables.md).
 
-## When to Enable Authentication
+## 3. Look around
 
-Consider enabling authentication if you need:
+![The start page after setup](assets/screenshots/start-page.png)
 
-- **👤 User Tracking**: Know who is using which features
-- **🔒 Access Control**: Restrict apps/models to specific users or groups
-- **📊 Usage Analytics**: Track usage per user or department
-- **🏢 Corporate Integration**: Connect with existing SSO/identity systems
-- **📋 Compliance**: Meet security or audit requirements
+- The **start page** greets you with the chat input of the default app and shortcuts to the most
+  important apps. See the [User Guide](user-guide.md) for a tour.
+- **Admin** (`/admin`, or the user menu) configures everything: apps, models, providers, users,
+  groups, authentication, branding. See the [Admin UI Guide](admin-ui.md).
+- **Admin → Features** switches on the preview features: Durable Chats (chat history), Scheduled
+  Tasks, Marketplace, Workflows, Agent Skills and more.
+- **Admin → Marketplace** (once enabled) installs more apps, skills, models, workflows and prompts
+  — see [Marketplace](marketplace.md).
 
-## Authentication Options
+## What you get out of the box
 
-### Option 1: Keep Default (Recommended for Testing)
+- **26 apps** — Chat, Web Chat, Email Composer, Meeting Briefing, Diagram Generator, Image
+  Generator, File Analyzer, NDA Risk Analyzer and more; some ship disabled and are switched on in
+  **Admin → Apps**.
+- **Model configurations** for OpenAI, Anthropic, Google, Mistral, AWS Bedrock and a local vLLM
+  server, plus transcription (Voxtral, Gemini) and text-to-speech (Voxtral TTS) models. Only the
+  ones whose provider has a key can answer.
+- **Two marketplace registries**: the iHub Official Marketplace (90 apps, 98 skills, 19 models,
+  6 workflows, 5 prompts) and the iHub Examples.
+- **Authentication**: local accounts and anonymous access are on.
 
-- **Setup**: None required
-- **Users**: Everyone has full access
-- **Best For**: Development, testing, personal use
+## Default access
 
-### Option 2: Add Local Authentication
+| Who | What they get |
+| --- | ------------- |
+| **Anonymous visitors** (`anonymous` group) | The **Chat** app with the default model, the prompt library. No admin, no scheduled tasks. |
+| **Signed-in users** (`authenticated`, `users`) | All apps, models, prompts and skills; scheduled tasks |
+| **Administrators** (`admins`) | Everything, including the admin area |
 
-- **Setup**: Enable local auth, create user accounts
-- **Users**: Username/password login with different permission levels
-- **Best For**: Small teams, controlled environments
+The shipped accounts are `admin` (group `admins`) and `user` (group `users`), both with the
+password `password123`, and the login page offers them as demo accounts. **Before you open iHub to
+other people**, change both passwords under **Admin → Users** and turn off **Show Demo Accounts in
+Login Form** under **Admin → Authentication** — the admin area warns until you do. Local sign-in
+locks an account for 15 minutes after 5 failed attempts.
 
-### Option 3: Corporate SSO Integration
+## Choosing authentication
 
-- **Setup**: Configure reverse proxy with corporate authentication
-- **Users**: Authenticate via existing corporate identity provider
-- **Best For**: Enterprise deployments, existing SSO infrastructure
+| Option | Best for | Guide |
+| ------ | -------- | ----- |
+| Local accounts (default) | Small teams, trials | [Authentication Quick Start](AUTHENTICATION_QUICK_START.md) |
+| Anonymous only, restricted | Public or kiosk deployments — narrow the `anonymous` group's apps and models | [External Authentication](external-authentication.md) |
+| LDAP / Active Directory, NTLM | Windows domains | [LDAP/NTLM Authentication](ldap-ntlm-authentication.md) |
+| OIDC single sign-on | Microsoft Entra ID, Google, Keycloak, Okta, ADFS | [OIDC Authentication](oidc-authentication.md) |
+| Reverse proxy / JWT | An existing SSO gateway in front of iHub | [External Authentication](external-authentication.md) |
 
-### Option 4: Restricted Anonymous Access
+Groups from LDAP or OIDC are mapped to iHub groups, which decide who sees which apps, models,
+prompts and skills.
 
-- **Setup**: Modify group permissions to limit anonymous access
-- **Users**: Anonymous users see limited apps/models
-- **Best For**: Public deployments with controlled feature access
+## Next steps
 
-## Next Steps
-
-1. **Start using the apps**: Visit http://localhost:3000 and explore the available applications
-2. **Check the admin panel**: Visit http://localhost:3000/admin for configuration options
-3. **Review authentication options**: See [docs/external-authentication.md](external-authentication.md) for detailed configuration
-4. **Configure API keys**: Add your AI provider API keys in `.env` for full functionality
-
-## Need Help?
-
-- 📖 **Full Documentation**: [docs/external-authentication.md](external-authentication.md)
-- 🔧 **Configuration Examples**: See [docs/external-authentication.md#quick-start-scenarios](external-authentication.md#quick-start-scenarios)
-
----
-
-**Remember**: iHub Apps is designed to be functional and useful immediately, with authentication as an optional enhancement rather than a requirement!
+1. **Try the apps** on the start page and in **Browse all apps** — [User Guide](user-guide.md)
+2. **Secure the installation** — change the shipped passwords, choose an authentication method,
+   put a [reverse proxy](production-reverse-proxy-guide.md) with HTTPS in front of it
+3. **Connect your knowledge** — [Sources](sources.md), [iFinder](iFinder-Integration.md),
+   [Office 365](office365-integration.md), [Google Drive](google-drive-integration.md)
+4. **Create your own apps** — [App Configuration](apps.md), or install them from the
+   [Marketplace](marketplace.md)

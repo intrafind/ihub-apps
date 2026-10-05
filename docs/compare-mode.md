@@ -4,6 +4,8 @@ Compare Mode is a powerful feature that enables users to query two different AI 
 
 ## Overview
 
+![Compare mode: Gemini and Claude answer the same question side by side](assets/screenshots/compare-mode.png)
+
 When Compare Mode is active:
 - Your input is sent to **two different models** simultaneously
 - Responses appear in **separate chat panels** (Model A and Model B)

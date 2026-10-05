@@ -12,6 +12,8 @@ Three user-facing features share one server-side pipeline:
 
 In all three the transcript is **user input**. The selected chat model answers it like any typed message — the transcription model only turns speech into text.
 
+![A recorded meeting transcribed into the user's message and answered with meeting notes](assets/screenshots/transcription-chat.png)
+
 All three send audio to the same iHub WebSocket endpoint, `/api/voice/realtime`, which relays it to a vLLM realtime endpoint (e.g. Voxtral). The browser **never** connects to vLLM directly, and the vLLM URL / API key **never** reach the browser.
 
 ## Architecture
@@ -224,6 +226,8 @@ Add a `transcription` block to the app config (Admin → Apps → Edit → Trans
 
 ### Platform default transcription model
 
+![Admin → Voice Input: platform defaults for dictation and transcription](assets/screenshots/admin-voice-input.png)
+
 Instead of picking the same model in every app, set it once under **Admin → Voice Input → Defaults → Transcription model** (`platform.json` → `speech.transcription.defaultModelId`). Apps that enable transcription but leave `modelId` empty use it; an app's own `modelId` always wins. The app editor then shows **Platform default (…)** as the model choice.
 
 ```json
@@ -237,6 +241,11 @@ Instead of picking the same model in every app, set it once under **Admin → Vo
 `upload.videoUpload.maxFileSizeMB` accepts up to `2000`. Note that browsers decode the **entire** file in memory to extract PCM — for very large videos budget roughly 700 MB of tab memory per hour of 48 kHz stereo audio on top of the file itself. The `maxDurationSeconds` cap is the better lever for bounding work.
 
 ### What users see
+
+<p align="center">
+  <img src="assets/screenshots/transcription-upload.png" alt="An audio file attached to the chat input, with the record button (red dot) next to the microphone" width="49%">
+  <img src="assets/screenshots/chat-input-menu.png" alt="The Transcription switch in the chat input's options menu" width="49%">
+</p>
 
 - A **Transcription** toggle in the chat input's actions menu (when the app has it enabled): on, uploaded audio and video are transcribed into the message before the chat model sees it.
 - A **record button** (red dot → elapsed timer → stop square). While recording, a user message shows "Listening…" and grows with the transcript as the user speaks. Stopping (the button, Send, or reaching `maxDurationSeconds`) sends it to the selected chat model, which answers. Anything already typed in the input field leads the message, and attachments in the input go along. A batch model (`google-transcribe`) fills the message in one piece after stop.
@@ -284,6 +293,8 @@ Both backends can point at the same vLLM deployment. The WebSocket endpoint is a
 > **Note:** the dictation backend (`platform.speech.realtime.url/model/apiKey`) and a transcription model's config are **independent copies** — the V073 migration seeds the model from the platform values once, but afterwards updating one does not update the other. When you move the vLLM endpoint, update both places.
 
 ## Testing from the admin UI
+
+![Admin → Voice Input: read aloud settings and the Test voice input panel](assets/screenshots/admin-voice-input-test.png)
 
 **Admin → Voice Input → Test voice input** runs the same code path as a chat, in the admin's own browser and with their microphone, against the **saved** configuration (save first to test changes):
 
