@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 
@@ -78,8 +78,8 @@ function formatDate(value, locale) {
 /**
  * Settings > Integrations card for personal API keys.
  *
- * Shows the endpoints a key works against, the keys the user already has, and a
- * single button that mints a new one. The API key and client secret come back
+ * Shows the keys the user already has, a single button that mints a new one,
+ * and — folded away until asked for — the endpoints a key works against. The API key and client secret come back
  * only in the create/rotate response, so they are rendered in a one-time panel
  * that disappears as soon as the user dismisses it.
  */
@@ -98,6 +98,8 @@ export default function PersonalApiKeysCard({
   const [name, setName] = useState('');
   const [expirationDays, setExpirationDays] = useState('');
   const [showForm, setShowForm] = useState(false);
+  const [showEndpoints, setShowEndpoints] = useState(false);
+  const endpointsId = useId();
 
   const atLimit = keys.length >= (limits?.maxKeysPerUser ?? 0);
 
@@ -123,9 +125,9 @@ export default function PersonalApiKeysCard({
   };
 
   return (
-    <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-6">
-      <div className="flex items-start space-x-4">
-        <div className="shrink-0">
+    <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 sm:p-6">
+      <div className="flex items-start sm:space-x-4">
+        <div className="hidden sm:block shrink-0">
           <div className="w-12 h-12 bg-indigo-600 rounded-lg flex items-center justify-center">
             <Icon name="key" className="w-7 h-7 text-white" />
           </div>
@@ -190,26 +192,6 @@ export default function PersonalApiKeysCard({
                   />
                 )}
               </div>
-            </div>
-          )}
-
-          {/* Endpoints this key can be used against */}
-          {endpointRows.length > 0 && (
-            <div className="mt-4">
-              <h4 className="text-sm font-medium text-gray-900 dark:text-gray-100 mb-2">
-                {t('integrations.page.apiKeys.endpointsTitle', 'Endpoints')}
-              </h4>
-              <div className="space-y-2">
-                {endpointRows.map(row => (
-                  <CopyField key={row.key} label={row.label} value={endpoints[row.key]} />
-                ))}
-              </div>
-              <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
-                {t(
-                  'integrations.page.apiKeys.usageHint',
-                  'Send the API key as an Authorization: Bearer header.'
-                )}
-              </p>
             </div>
           )}
 
@@ -355,6 +337,42 @@ export default function PersonalApiKeysCard({
               </>
             )}
           </div>
+
+          {/* Endpoints this key can be used against — reference material, so
+              folded away until asked for */}
+          {endpointRows.length > 0 && (
+            <div className="mt-4 border-t border-gray-200 dark:border-gray-700 pt-4">
+              <button
+                type="button"
+                onClick={() => setShowEndpoints(current => !current)}
+                aria-expanded={showEndpoints}
+                aria-controls={endpointsId}
+                className="flex items-center gap-1.5 text-sm font-medium text-gray-900 dark:text-gray-100 rounded-sm focus:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-500"
+              >
+                <Icon
+                  name="chevron-right"
+                  className={`w-4 h-4 text-gray-400 transition-transform ${
+                    showEndpoints ? 'rotate-90' : ''
+                  }`}
+                />
+                {t('integrations.page.apiKeys.endpointsTitle', 'Endpoints')}
+                <span className="text-xs font-normal text-gray-500 dark:text-gray-400">
+                  {endpointRows.length}
+                </span>
+              </button>
+              <div id={endpointsId} hidden={!showEndpoints} className="mt-3 space-y-2">
+                {endpointRows.map(row => (
+                  <CopyField key={row.key} label={row.label} value={endpoints[row.key]} />
+                ))}
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  {t(
+                    'integrations.page.apiKeys.usageHint',
+                    'Send the API key as an Authorization: Bearer header.'
+                  )}
+                </p>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

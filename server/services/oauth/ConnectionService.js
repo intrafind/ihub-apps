@@ -8,7 +8,8 @@
  * never will.
  *
  * Nothing new is stored. The data is already in two places and this service is
- * the read model over them:
+ * the read model over them (plus the client store, read only to name grants
+ * that predate the display snapshots — see {@link clientNameLookup}):
  *
  *   - `contents/data/oauth-consent.json` — one entry per `clientId:userId`,
  *     carrying scopes, grant date and (since the connections work) display
@@ -24,19 +25,56 @@
  */
 import { listConsents, revokeConsent } from '../../utils/consentStore.js';
 import { listRefreshTokenUserIds, revokeRefreshTokensFor } from '../../utils/refreshTokenStore.js';
+import { loadOAuthClients } from '../../utils/oauthClientManager.js';
+import { oauthClientsFile } from '../../utils/contentsPath.js';
+import configCache from '../../configCache.js';
 import logger from '../../utils/logger.js';
+
+/**
+ * A lookup of a stored client's display name, for consent entries written
+ * before the display snapshots existed.
+ *
+ * Such an entry carries only the client id, which for a dynamically registered
+ * client reads like `client_claude_code_ihub_1eef9d16`. The client's own record
+ * usually still exists and has the name the user saw on the consent screen.
+ * The store is read lazily — at most once per listing, and only when an entry
+ * actually lacks its snapshot — so the common case joins nothing. A CIMD client
+ * has no record, and a deleted one no longer does; both keep their client id.
+ *
+ * @returns {(clientId: string) => string} Name of the client, or '' if unknown
+ */
+function clientNameLookup() {
+  let clients = null;
+  return clientId => {
+    if (!clients) {
+      try {
+        const platform = configCache.getPlatform() || {};
+        clients = loadOAuthClients(oauthClientsFile(platform.oauth)).clients || {};
+      } catch (error) {
+        logger.warn('Could not read OAuth clients to name connections', {
+          component: 'ConnectionService',
+          error
+        });
+        clients = {};
+      }
+    }
+    return clients[clientId]?.name || '';
+  };
+}
 
 /**
  * Shape one consent entry as a connection for the API and the UI.
  *
  * @param {Object} entry - Consent store entry
+ * @param {(clientId: string) => string} clientName - Fallback name lookup for
+ *   entries without a display snapshot
  * @returns {Object} Connection record
  */
-function toConnection(entry) {
+function toConnection(entry, clientName) {
   return {
     clientId: entry.clientId,
     userId: entry.userId,
-    clientName: entry.clientName || entry.clientId,
+    clientName: entry.clientName || clientName(entry.clientId) || entry.clientId,
     clientHost: entry.clientHost || '',
     clientKind: entry.clientKind || 'stored',
     userName: entry.userName || entry.userId,
@@ -56,7 +94,8 @@ function toConnection(entry) {
  */
 export function listConnectionsForUser(userId) {
   if (!userId) return [];
-  return listConsents({ userId }).map(toConnection);
+  const clientName = clientNameLookup();
+  return listConsents({ userId }).map(entry => toConnection(entry, clientName));
 }
 
 /**
@@ -74,7 +113,10 @@ export function listConnectionsForUser(userId) {
  * @returns {{connections: Array<Object>, total: number, page: number, pageSize: number}}
  */
 export function listConnections({ clientId, userId, host, page = 1, pageSize = 50 } = {}) {
-  const all = listConsents({ clientId, userId, host }).map(toConnection);
+  const clientName = clientNameLookup();
+  const all = listConsents({ clientId, userId, host }).map(entry =>
+    toConnection(entry, clientName)
+  );
   const safePage = Math.max(1, Number(page) || 1);
   const safePageSize = Math.min(Math.max(1, Number(pageSize) || 50), 500);
   const start = (safePage - 1) * safePageSize;

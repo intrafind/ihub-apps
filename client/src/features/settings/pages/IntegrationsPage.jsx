@@ -174,6 +174,12 @@ export default function IntegrationsPage() {
     getLocalizedContent(officeIntegration?.description, lang) || 'AI-powered assistant for Outlook';
   const officeManifestUrl = buildApiUrl('integrations/office-addin/manifest.xml');
 
+  // Two kinds of integration share this page: accounts iHub signs in to on the
+  // user's behalf, and tools that sign in to iHub as the user. Each section is
+  // shown only when it has something in it.
+  const hasAccounts = !!jiraEnabled || cloudProviders.length > 0 || mcpServers?.length > 0;
+  const hasAccess = !!officeEnabled || !!apiKeyOverview?.enabled || !!connectionOverview?.enabled;
+
   // Load integration status
   useEffect(() => {
     const loadIntegrations = async () => {
@@ -642,254 +648,270 @@ export default function IntegrationsPage() {
                 </span>
               </div>
             ) : (
-              <div className="space-y-6">
-                {/* JIRA Integration — only shown when Jira is configured server-side */}
-                {jiraEnabled && (
-                  <IntegrationCard
-                    icon="ticket"
-                    iconBgClassName="bg-blue-600"
-                    title={t('integrations.jira.title')}
-                    description={t('integrations.page.jira.description')}
-                    connected={!!integrations.jira?.connected}
-                    userInfo={
-                      integrations.jira?.userInfo
-                        ? {
-                            displayName: integrations.jira.userInfo.displayName,
-                            email: integrations.jira.userInfo.emailAddress
-                          }
-                        : null
-                    }
-                    features={[
-                      t('integrations.page.jira.features.search'),
-                      t('integrations.page.jira.features.create'),
-                      t('integrations.page.jira.features.update'),
-                      t('integrations.page.jira.features.info')
-                    ]}
-                    connectLabel={t('integrations.page.card.connectAccount', { name: 'JIRA' })}
-                    onConnect={() =>
-                      handleConnect({ type: 'jira', id: 'jira', displayName: 'JIRA' })
-                    }
-                    onDisconnect={() =>
-                      handleDisconnect({ type: 'jira', id: 'jira', displayName: 'JIRA' })
-                    }
-                    extraActions={
-                      <button
-                        onClick={handleTest}
-                        className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md font-medium transition-colors flex items-center"
-                      >
-                        <Icon name="check-circle" className="w-4 h-4 mr-2" />
-                        {t('integrations.jira.test')}
-                      </button>
-                    }
-                  />
-                )}
-
-                {/* Cloud Storage Integrations */}
-                {cloudProviders.map(provider => (
-                  <IntegrationCard
-                    key={provider.id}
-                    icon="cloud"
-                    iconBgClassName="bg-linear-to-br from-purple-600 to-teal-500"
-                    connectButtonClassName="bg-purple-600 hover:bg-purple-700"
-                    title={provider.displayName}
-                    description={
-                      provider.type === 'office365'
-                        ? t('integrations.page.cloud.description.office365')
-                        : t('integrations.page.cloud.description.googleDrive')
-                    }
-                    connected={!!integrations[provider.id]?.connected}
-                    userInfo={
-                      integrations[provider.id]?.userInfo
-                        ? {
-                            displayName: integrations[provider.id].userInfo.displayName,
-                            email:
-                              integrations[provider.id].userInfo.mail ||
-                              integrations[provider.id].userInfo.emailAddress
-                          }
-                        : null
-                    }
-                    tokenExpiring={!!integrations[provider.id]?.tokenInfo?.isExpiring}
-                    features={[
-                      provider.type === 'office365'
-                        ? t('integrations.page.cloud.features.browseOffice365')
-                        : t('integrations.page.cloud.features.browseGoogleDrive'),
-                      t('integrations.page.cloud.features.upload'),
-                      t('integrations.page.cloud.features.oauth')
-                    ]}
-                    connectLabel={t('integrations.page.card.connectAccount', {
-                      name: provider.displayName
-                    })}
-                    onConnect={() =>
-                      handleConnect({
-                        type: provider.type,
-                        id: provider.id,
-                        displayName: provider.displayName
-                      })
-                    }
-                    onDisconnect={() =>
-                      handleDisconnect({
-                        type: provider.type,
-                        id: provider.id,
-                        displayName: provider.displayName
-                      })
-                    }
-                  />
-                ))}
-
-                {/* MCP servers with per-user sign-in */}
-                {mcpServers?.length > 0 && (
-                  <div className="space-y-4">
+              <div className="space-y-10">
+                {/* Services iHub signs in to on the user's behalf */}
+                {hasAccounts && (
+                  <section aria-labelledby="integrations-section-accounts" className="space-y-4">
                     <div>
-                      <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-                        {t('integrations.page.mcp.title', 'MCP servers')}
+                      <h2
+                        id="integrations-section-accounts"
+                        className="text-lg font-semibold text-gray-900 dark:text-gray-100"
+                      >
+                        {t('integrations.page.sections.accounts.title', 'Your accounts')}
                       </h2>
                       <p className="text-sm text-gray-600 dark:text-gray-400">
                         {t(
-                          'integrations.page.mcp.description',
-                          'Tools of these servers act with your own account. Connect a server to use its tools in chats.'
+                          'integrations.page.sections.accounts.description',
+                          'Sign in to services so iHub can work with them on your behalf.'
                         )}
                       </p>
                     </div>
-                    {mcpServers.map(server => {
-                      const name = getLocalizedContent(server.name, lang) || server.serverId;
-                      return (
-                        <IntegrationCard
-                          key={server.serverId}
-                          icon="cube"
-                          iconBgClassName="bg-indigo-600"
-                          connectButtonClassName="bg-indigo-600 hover:bg-indigo-700"
-                          title={name}
-                          description={
-                            getLocalizedContent(server.description, lang) ||
-                            t('integrations.page.mcp.serverDescription', 'MCP server')
-                          }
-                          connected={!!server.connected}
-                          connectLabel={t('integrations.page.mcp.connect', 'Connect {{name}}', {
-                            name
-                          })}
-                          onConnect={() => handleMcpConnect(server)}
-                          onDisconnect={() => handleMcpDisconnect(server)}
-                        />
-                      );
-                    })}
-                  </div>
-                )}
 
-                {/* Office Integration — shown when enabled by admin */}
-                {officeEnabled && (
-                  <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-6">
-                    <div className="flex items-start space-x-4">
-                      <div className="shrink-0">
-                        <div className="w-12 h-12 bg-blue-600 rounded-lg flex items-center justify-center">
-                          <Icon name="envelope" className="w-7 h-7 text-white" />
-                        </div>
-                      </div>
+                    {/* JIRA Integration — only shown when Jira is configured server-side */}
+                    {jiraEnabled && (
+                      <IntegrationCard
+                        icon="ticket"
+                        iconBgClassName="bg-blue-600"
+                        title={t('integrations.jira.title')}
+                        description={t('integrations.page.jira.description')}
+                        connected={!!integrations.jira?.connected}
+                        userInfo={
+                          integrations.jira?.userInfo
+                            ? {
+                                displayName: integrations.jira.userInfo.displayName,
+                                email: integrations.jira.userInfo.emailAddress
+                              }
+                            : null
+                        }
+                        features={[
+                          t('integrations.page.jira.features.search'),
+                          t('integrations.page.jira.features.create'),
+                          t('integrations.page.jira.features.update'),
+                          t('integrations.page.jira.features.info')
+                        ]}
+                        connectLabel={t('integrations.page.card.connectAccount', { name: 'JIRA' })}
+                        onConnect={() =>
+                          handleConnect({ type: 'jira', id: 'jira', displayName: 'JIRA' })
+                        }
+                        onDisconnect={() =>
+                          handleDisconnect({ type: 'jira', id: 'jira', displayName: 'JIRA' })
+                        }
+                        extraActions={
+                          <button
+                            onClick={handleTest}
+                            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md font-medium transition-colors flex items-center"
+                          >
+                            <Icon name="check-circle" className="w-4 h-4 mr-2" />
+                            {t('integrations.jira.test')}
+                          </button>
+                        }
+                      />
+                    )}
 
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-                              {officeDisplayName}
-                            </h3>
-                            <p className="text-gray-600 dark:text-gray-400 text-sm">
-                              {officeDescription}
-                            </p>
-                          </div>
-                          <span className="px-3 py-1 text-xs font-medium rounded-full bg-green-100 dark:bg-green-900/50 text-green-800 dark:text-green-300">
-                            {t('integrations.page.office.available')}
-                          </span>
-                        </div>
+                    {/* Cloud Storage Integrations */}
+                    {cloudProviders.map(provider => (
+                      <IntegrationCard
+                        key={provider.id}
+                        icon="cloud"
+                        iconBgClassName="bg-linear-to-br from-purple-600 to-teal-500"
+                        connectButtonClassName="bg-purple-600 hover:bg-purple-700"
+                        title={provider.displayName}
+                        description={
+                          provider.type === 'office365'
+                            ? t('integrations.page.cloud.description.office365')
+                            : t('integrations.page.cloud.description.googleDrive')
+                        }
+                        connected={!!integrations[provider.id]?.connected}
+                        userInfo={
+                          integrations[provider.id]?.userInfo
+                            ? {
+                                displayName: integrations[provider.id].userInfo.displayName,
+                                email:
+                                  integrations[provider.id].userInfo.mail ||
+                                  integrations[provider.id].userInfo.emailAddress
+                              }
+                            : null
+                        }
+                        tokenExpiring={!!integrations[provider.id]?.tokenInfo?.isExpiring}
+                        features={[
+                          provider.type === 'office365'
+                            ? t('integrations.page.cloud.features.browseOffice365')
+                            : t('integrations.page.cloud.features.browseGoogleDrive'),
+                          t('integrations.page.cloud.features.upload'),
+                          t('integrations.page.cloud.features.oauth')
+                        ]}
+                        connectLabel={t('integrations.page.card.connectAccount', {
+                          name: provider.displayName
+                        })}
+                        onConnect={() =>
+                          handleConnect({
+                            type: provider.type,
+                            id: provider.id,
+                            displayName: provider.displayName
+                          })
+                        }
+                        onDisconnect={() =>
+                          handleDisconnect({
+                            type: provider.type,
+                            id: provider.id,
+                            displayName: provider.displayName
+                          })
+                        }
+                      />
+                    ))}
 
-                        <div className="mt-4">
-                          <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
-                            {t('integrations.page.office.deployHint')}
+                    {/* MCP servers with per-user sign-in */}
+                    {mcpServers?.length > 0 && (
+                      <div className="space-y-4">
+                        <div>
+                          <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">
+                            {t('integrations.page.mcp.title', 'MCP servers')}
+                          </h3>
+                          <p className="text-sm text-gray-600 dark:text-gray-400">
+                            {t(
+                              'integrations.page.mcp.description',
+                              'Tools of these servers act with your own account. Connect a server to use its tools in chats.'
+                            )}
                           </p>
-                          <div className="flex items-center gap-2">
-                            <input
-                              type="text"
-                              readOnly
-                              value={officeManifestUrl}
-                              className="flex-1 rounded-md border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 px-3 py-1.5 text-xs font-mono text-gray-600 dark:text-gray-300 focus:outline-hidden min-w-0"
-                              onClick={e => e.target.select()}
+                        </div>
+                        {mcpServers.map(server => {
+                          const name = getLocalizedContent(server.name, lang) || server.serverId;
+                          return (
+                            <IntegrationCard
+                              key={server.serverId}
+                              icon="cube"
+                              iconBgClassName="bg-indigo-600"
+                              connectButtonClassName="bg-indigo-600 hover:bg-indigo-700"
+                              title={name}
+                              description={
+                                getLocalizedContent(server.description, lang) ||
+                                t('integrations.page.mcp.serverDescription', 'MCP server')
+                              }
+                              connected={!!server.connected}
+                              connectLabel={t('integrations.page.mcp.connect', 'Connect {{name}}', {
+                                name
+                              })}
+                              onConnect={() => handleMcpConnect(server)}
+                              onDisconnect={() => handleMcpDisconnect(server)}
                             />
-                            <button
-                              type="button"
-                              onClick={() => navigator.clipboard?.writeText(officeManifestUrl)}
-                              className="shrink-0 rounded-md border border-gray-300 dark:border-gray-600 px-3 py-1.5 text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
-                            >
-                              {t('integrations.page.office.copy')}
-                            </button>
-                            <a
-                              href={officeManifestUrl}
-                              download="manifest.xml"
-                              className="shrink-0 rounded-md bg-blue-600 text-white px-3 py-1.5 text-sm font-medium hover:bg-blue-700"
-                            >
-                              {t('integrations.page.office.download')}
-                            </a>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </section>
+                )}
+
+                {/* Tools and applications that use iHub as the user */}
+                {hasAccess && (
+                  <section aria-labelledby="integrations-section-access" className="space-y-4">
+                    <div>
+                      <h2
+                        id="integrations-section-access"
+                        className="text-lg font-semibold text-gray-900 dark:text-gray-100"
+                      >
+                        {t('integrations.page.sections.access.title', 'Access to iHub')}
+                      </h2>
+                      <p className="text-sm text-gray-600 dark:text-gray-400">
+                        {t(
+                          'integrations.page.sections.access.description',
+                          'Tools and applications that use iHub Apps as you.'
+                        )}
+                      </p>
+                    </div>
+
+                    {/* Connected apps — shown when the OAuth authorization server is on */}
+                    {connectionOverview?.enabled && (
+                      <ConnectedAppsCard
+                        connections={connectionOverview.connections}
+                        busy={connectionBusy}
+                        onDisconnect={setConnectionPendingRevoke}
+                      />
+                    )}
+
+                    {/* Personal API keys — shown when enabled by admin */}
+                    {apiKeyOverview?.enabled && (
+                      <PersonalApiKeysCard
+                        limits={apiKeyOverview.limits}
+                        endpoints={apiKeyOverview.endpoints}
+                        keys={apiKeyOverview.keys}
+                        busy={apiKeyBusy}
+                        secrets={apiKeySecrets}
+                        onDismissSecrets={() => setApiKeySecrets(null)}
+                        onCreate={handleCreateApiKey}
+                        onRotate={handleRotateApiKey}
+                        onRevoke={setKeyPendingRevoke}
+                      />
+                    )}
+
+                    {/* Office Integration — shown when enabled by admin */}
+                    {officeEnabled && (
+                      <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-6">
+                        <div className="flex items-start space-x-4">
+                          <div className="shrink-0">
+                            <div className="w-12 h-12 bg-blue-600 rounded-lg flex items-center justify-center">
+                              <Icon name="envelope" className="w-7 h-7 text-white" />
+                            </div>
+                          </div>
+
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                                  {officeDisplayName}
+                                </h3>
+                                <p className="text-gray-600 dark:text-gray-400 text-sm">
+                                  {officeDescription}
+                                </p>
+                              </div>
+                              <span className="px-3 py-1 text-xs font-medium rounded-full bg-green-100 dark:bg-green-900/50 text-green-800 dark:text-green-300">
+                                {t('integrations.page.office.available')}
+                              </span>
+                            </div>
+
+                            <div className="mt-4">
+                              <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+                                {t('integrations.page.office.deployHint')}
+                              </p>
+                              <div className="flex items-center gap-2">
+                                <input
+                                  type="text"
+                                  readOnly
+                                  value={officeManifestUrl}
+                                  className="flex-1 rounded-md border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 px-3 py-1.5 text-xs font-mono text-gray-600 dark:text-gray-300 focus:outline-hidden min-w-0"
+                                  onClick={e => e.target.select()}
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => navigator.clipboard?.writeText(officeManifestUrl)}
+                                  className="shrink-0 rounded-md border border-gray-300 dark:border-gray-600 px-3 py-1.5 text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+                                >
+                                  {t('integrations.page.office.copy')}
+                                </button>
+                                <a
+                                  href={officeManifestUrl}
+                                  download="manifest.xml"
+                                  className="shrink-0 rounded-md bg-blue-600 text-white px-3 py-1.5 text-sm font-medium hover:bg-blue-700"
+                                >
+                                  {t('integrations.page.office.download')}
+                                </a>
+                              </div>
+                            </div>
                           </div>
                         </div>
                       </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Personal API keys — shown when enabled by admin */}
-                {apiKeyOverview?.enabled && (
-                  <PersonalApiKeysCard
-                    limits={apiKeyOverview.limits}
-                    endpoints={apiKeyOverview.endpoints}
-                    keys={apiKeyOverview.keys}
-                    busy={apiKeyBusy}
-                    secrets={apiKeySecrets}
-                    onDismissSecrets={() => setApiKeySecrets(null)}
-                    onCreate={handleCreateApiKey}
-                    onRotate={handleRotateApiKey}
-                    onRevoke={setKeyPendingRevoke}
-                  />
-                )}
-
-                {/* Connected apps — shown when the OAuth authorization server is on */}
-                {connectionOverview?.enabled && (
-                  <ConnectedAppsCard
-                    connections={connectionOverview.connections}
-                    tokenExpirationMinutes={connectionOverview.tokenExpirationMinutes}
-                    busy={connectionBusy}
-                    onDisconnect={setConnectionPendingRevoke}
-                  />
+                    )}
+                  </section>
                 )}
 
                 {/* Empty state when no integrations are configured */}
-                {!jiraEnabled &&
-                  cloudProviders.length === 0 &&
-                  !mcpServers?.length &&
-                  !officeEnabled &&
-                  !apiKeyOverview?.enabled &&
-                  !connectionOverview?.enabled && (
-                    <div className="border border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-6 text-center">
-                      <Icon name="link" className="w-8 h-8 text-gray-400 mx-auto mb-2" />
-                      <h3 className="text-lg font-medium text-gray-500 dark:text-gray-400 mb-1">
-                        {t('integrations.page.empty.title')}
-                      </h3>
-                      <p className="text-gray-400 dark:text-gray-500 text-sm">
-                        {t('integrations.page.empty.body')}
-                      </p>
-                    </div>
-                  )}
-
-                {/* Placeholder for future integrations */}
-                {(jiraEnabled ||
-                  cloudProviders.length > 0 ||
-                  mcpServers?.length > 0 ||
-                  officeEnabled ||
-                  apiKeyOverview?.enabled ||
-                  connectionOverview?.enabled) && (
+                {!hasAccounts && !hasAccess && (
                   <div className="border border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-6 text-center">
-                    <Icon name="plus" className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+                    <Icon name="link" className="w-8 h-8 text-gray-400 mx-auto mb-2" />
                     <h3 className="text-lg font-medium text-gray-500 dark:text-gray-400 mb-1">
-                      {t('integrations.page.comingSoon.title')}
+                      {t('integrations.page.empty.title')}
                     </h3>
                     <p className="text-gray-400 dark:text-gray-500 text-sm">
-                      {t('integrations.page.comingSoon.body')}
+                      {t('integrations.page.empty.body')}
                     </p>
                   </div>
                 )}
@@ -902,9 +924,22 @@ export default function IntegrationsPage() {
       <ConfirmDialog
         isOpen={!!connectionPendingRevoke}
         title={t('integrations.page.connections.disconnectTitle', 'Disconnect application')}
-        message={t('integrations.page.connections.disconnectConfirm', {
-          name: connectionPendingRevoke?.clientName || ''
-        })}
+        message={
+          <>
+            <p>
+              {t('integrations.page.connections.disconnectConfirm', {
+                name: connectionPendingRevoke?.clientName || ''
+              })}
+            </p>
+            <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+              {t(
+                'integrations.page.connections.tokenNote',
+                'An access token the app already holds keeps working for up to {{minutes}} minutes after you disconnect. It cannot obtain a new one.',
+                { minutes: connectionOverview?.tokenExpirationMinutes ?? 60 }
+              )}
+            </p>
+          </>
+        }
         confirmLabel={t('integrations.page.connections.disconnect', 'Disconnect')}
         danger
         onConfirm={() => handleDisconnectApp(connectionPendingRevoke)}
