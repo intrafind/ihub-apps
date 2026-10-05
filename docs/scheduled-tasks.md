@@ -80,9 +80,13 @@ There are three ways in, and all of them end on the same form:
   user presses **Save** (or **Edit in form**). A card that was saved stays
   saved — reloading the chat does not offer to save it twice.
 
-The instructions are sent on every run as a complete prompt. A run does not
-see earlier runs, so a prompt that wants "what changed since last time" uses
-the run variables:
+The instructions are sent on every run as a complete prompt. To have a run
+follow a [skill](skills.md), write `/skill-name` in the instructions, as in a
+chat message — for example `/inbox-triage Brief me on yesterday's mail.` The
+skill must be one the task's owner can use in the task's app.
+
+A run does not see earlier runs, so a prompt that wants "what changed since
+last time" uses the run variables:
 
 | Variable                     | Value                                                        |
 | ---------------------------- | ------------------------------------------------------------ |

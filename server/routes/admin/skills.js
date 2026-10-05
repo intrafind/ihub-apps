@@ -26,6 +26,23 @@ import {
   sendBadRequest,
   sendErrorResponse
 } from '../../utils/responseHelpers.js';
+import configStore from '../../services/config/ConfigStore.js';
+import { contentAdminAuth } from '../../middleware/contentAdminAuth.js';
+import { logAudit } from '../../services/AuditLogService.js';
+import { loadUsers } from '../../utils/userManager.js';
+import { localUsersFile } from '../../utils/contentsPath.js';
+import { userPromptPermissions } from '../../services/prompts/userPromptAccess.js';
+import {
+  getUserSkillRepository,
+  isUserSkillId
+} from '../../services/skills/UserSkillRepository.js';
+import { userSkillSettings } from '../../services/skills/userSkillSettings.js';
+import { serializeUserSkill } from '../../services/skills/userSkillView.js';
+import {
+  describeIssues,
+  skillPromoteSchema,
+  userSkillSettingsSchema
+} from '../../validators/userSkillSchema.js';
 
 const MAX_SKILL_ZIP_SIZE = 10 * 1024 * 1024; // 10 MB
 
@@ -54,6 +71,65 @@ async function safeExtractZip(zipBuffer, targetDir) {
       await fs.writeFile(destPath, content);
     }
   }
+}
+
+/** Display name the admin API stamps on what an admin does. */
+function adminName(req) {
+  return String(req.user?.name ?? req.user?.username ?? req.user?.id ?? 'unknown');
+}
+
+/**
+ * The user skills shared with a group or with everyone — what the admin page
+ * lists. Private skills and skills shared only with named users stay out of
+ * it, as for user prompts.
+ *
+ * @param {Object} req - Express request.
+ * @returns {Promise<{skills: Object[], truncated: boolean, available: boolean}>}
+ */
+async function listSharedUserSkills(req) {
+  const repo = getUserSkillRepository();
+  if (!repo.isAvailable()) return { skills: [], truncated: false, available: false };
+  const { skills, truncated } = await repo.scan({
+    filter: skill =>
+      (skill.shares || []).some(share => share.type === 'group' || share.type === 'everyone')
+  });
+  const platform = configCache.getPlatform() || {};
+  const users = loadUsers(localUsersFile(platform.localAuth)).users || {};
+  const items = skills.map(skill => {
+    const owner = Object.hasOwn(users, skill.ownerId) ? users[skill.ownerId] : null;
+    const ownerActive = Boolean(owner) && owner.active !== false;
+    return serializeUserSkill(
+      skill,
+      userPromptPermissions(skill, req.user, { isAdmin: true, ownerActive }),
+      { ownerActive, adminView: true }
+    );
+  });
+  items.sort((a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')));
+  return { skills: items, truncated, available: true };
+}
+
+/**
+ * The SKILL.md of a promoted user skill. Name and description go out as JSON
+ * strings, which YAML reads as double-quoted scalars, so no description can
+ * break the frontmatter.
+ *
+ * @param {Object} skill - Stored user skill.
+ * @param {string} name - Name of the global skill.
+ * @returns {string}
+ */
+export function skillMarkdownFromUserSkill(skill, name) {
+  return [
+    '---',
+    `name: ${JSON.stringify(name)}`,
+    `description: ${JSON.stringify(String(skill.description || ''))}`,
+    'metadata:',
+    `  author: ${JSON.stringify(String(skill.ownerName || skill.ownerId || ''))}`,
+    `  sourceSkillId: ${JSON.stringify(String(skill.id))}`,
+    '---',
+    '',
+    String(skill.body || '').trim(),
+    ''
+  ].join('\n');
 }
 
 export default function registerAdminSkillsRoutes(app) {
@@ -356,6 +432,199 @@ export default function registerAdminSkillsRoutes(app) {
         res.type('text/plain').send(content);
       } catch (error) {
         return sendInternalError(res, error, 'fetch skill resource');
+      }
+    }
+  );
+
+  /**
+   * @swagger
+   * /api/admin/user-skills:
+   *   get:
+   *     summary: User skills shared with a group or with everyone
+   *     tags:
+   *       - Admin - Skills
+   */
+  app.get(
+    buildServerPath('/api/admin/user-skills'),
+    contentAdminAuth,
+    requireFeature('skills'),
+    async (req, res) => {
+      try {
+        res.setHeader('Cache-Control', 'private, no-store');
+        res.json(await listSharedUserSkills(req));
+      } catch (error) {
+        sendInternalError(res, error, 'list user skills');
+      }
+    }
+  );
+
+  /**
+   * @swagger
+   * /api/admin/user-skills/settings:
+   *   get:
+   *     summary: The settings for user skills
+   *     tags:
+   *       - Admin - Skills
+   *   put:
+   *     summary: Update the settings for user skills (any subset)
+   *     tags:
+   *       - Admin - Skills
+   */
+  app.get(buildServerPath('/api/admin/user-skills/settings'), adminAuth, async (req, res) => {
+    try {
+      res.json({
+        settings: userSkillSettings(configCache.getPlatform() || {}),
+        storageAvailable: getUserSkillRepository().isAvailable()
+      });
+    } catch (error) {
+      sendInternalError(res, error, 'read user skill settings');
+    }
+  });
+
+  app.put(buildServerPath('/api/admin/user-skills/settings'), adminAuth, async (req, res) => {
+    const parsed = userSkillSettingsSchema.safeParse(req.body || {});
+    if (!parsed.success) {
+      return sendBadRequest(res, `Invalid user skill settings: ${describeIssues(parsed.error)}`);
+    }
+    try {
+      const platformConfig = await configStore.readJson('config/platform.json');
+      if (!platformConfig) throw new Error('Unable to read config/platform.json');
+      const { sharing, ...rest } = parsed.data;
+      const stored = platformConfig.userSkills || {};
+      platformConfig.userSkills = {
+        ...stored,
+        ...rest,
+        sharing: { ...(stored.sharing || {}), ...(sharing || {}) }
+      };
+      await configStore.writeJson('config/platform.json', platformConfig);
+      await configCache.refreshCacheEntry('config/platform.json');
+      await logAudit({
+        req,
+        action: 'update',
+        resource: 'platform',
+        resourceId: 'user-skills',
+        summary: `Updated user skill settings (${[
+          ...Object.keys(rest),
+          ...Object.keys(sharing || {}).map(key => `sharing.${key}`)
+        ].join(', ')})`
+      });
+      res.json({
+        settings: userSkillSettings(configCache.getPlatform() || platformConfig),
+        storageAvailable: getUserSkillRepository().isAvailable()
+      });
+    } catch (error) {
+      sendInternalError(res, error, 'update user skill settings');
+    }
+  });
+
+  /**
+   * @swagger
+   * /api/admin/user-skills/{skillId}/promote:
+   *   post:
+   *     summary: Promote a user skill to a global skill
+   *     description: |
+   *       Writes `contents/skills/<name>/` from the user skill's instructions
+   *       and files. The user skill stays as it is and records where it was
+   *       promoted to. Who can use the new global skill follows the groups'
+   *       `skills` permission and the apps it is assigned to.
+   *     tags:
+   *       - Admin - Skills
+   *     responses:
+   *       201:
+   *         description: The global skill was written
+   *       409:
+   *         description: A global skill with this name already exists
+   */
+  app.post(
+    buildServerPath('/api/admin/user-skills/:skillId/promote'),
+    contentAdminAuth,
+    requireFeature('skills'),
+    async (req, res) => {
+      const { skillId } = req.params;
+      if (!validateIdForPath(skillId, 'skill', res)) return;
+      if (!isUserSkillId(skillId)) return sendNotFound(res, 'User skill');
+      const repo = getUserSkillRepository();
+      if (!repo.isAvailable()) {
+        return sendErrorResponse(res, 503, 'User skills are unavailable', {
+          details: { code: 'USER_SKILLS_UNAVAILABLE' }
+        });
+      }
+      const parsed = skillPromoteSchema.safeParse(req.body || {});
+      if (!parsed.success) {
+        return sendBadRequest(res, `Invalid request: ${describeIssues(parsed.error)}`);
+      }
+      let created = false;
+      let targetPath = null;
+      try {
+        const skill = await repo.get(skillId);
+        if (!skill) return sendNotFound(res, 'User skill');
+        const name = parsed.data.name || skill.name;
+        const nameValidation = validateSkillName(name);
+        if (!nameValidation.valid) return sendBadRequest(res, nameValidation.error);
+
+        targetPath = await resolveAndValidatePath(name, getSkillsDirectory());
+        if (!targetPath) return sendBadRequest(res, 'Invalid skill name');
+        const taken =
+          existsSync(targetPath) ||
+          (configCache.getSkills().data || []).some(entry => entry.name === name);
+        if (taken) {
+          return sendErrorResponse(res, 409, `A global skill named '${name}' already exists`, {
+            details: { code: 'SKILL_NAME_TAKEN' }
+          });
+        }
+
+        // Claim the name with a non-recursive mkdir: of two promotions to the
+        // same name, only one creates the folder; the other gets EEXIST and
+        // leaves the winner's files alone.
+        await fs.mkdir(path.dirname(targetPath), { recursive: true });
+        try {
+          await fs.mkdir(targetPath);
+        } catch (err) {
+          if (err.code !== 'EEXIST') throw err;
+          return sendErrorResponse(res, 409, `A global skill named '${name}' already exists`, {
+            details: { code: 'SKILL_NAME_TAKEN' }
+          });
+        }
+        created = true;
+        const files = [
+          { path: 'SKILL.md', content: skillMarkdownFromUserSkill(skill, name) },
+          ...(skill.files || [])
+        ];
+        for (const file of files) {
+          const destPath = await resolveAndValidatePath(file.path, targetPath);
+          if (!destPath) throw new Error(`Skill file path escapes the skill folder: ${file.path}`);
+          await fs.mkdir(path.dirname(destPath), { recursive: true });
+          await fs.writeFile(destPath, String(file.content), 'utf8');
+        }
+        const validation = await validateSkillDirectory(targetPath);
+        if (!validation.valid) {
+          await fs.rm(targetPath, { recursive: true, force: true });
+          created = false;
+          return sendBadRequest(res, 'This skill cannot become a global skill', validation.errors);
+        }
+
+        await configCache.refreshSkillsCache();
+        const promotedTo = {
+          skillName: name,
+          at: new Date().toISOString(),
+          by: { id: String(req.user?.id ?? ''), name: adminName(req) }
+        };
+        await repo.markPromoted(skillId, promotedTo);
+        await logAudit({
+          req,
+          action: 'create',
+          resource: 'skill',
+          resourceId: name,
+          summary: `Promoted user skill "${skill.name}" by ${
+            skill.ownerName || skill.ownerId
+          } to global skill ${name}`
+        });
+        res.status(201).json({ name, promotedTo });
+      } catch (error) {
+        if (created && targetPath) {
+          await fs.rm(targetPath, { recursive: true, force: true }).catch(() => {});
+        }
+        sendInternalError(res, error, 'promote skill');
       }
     }
   );

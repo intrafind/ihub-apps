@@ -441,6 +441,19 @@
       "restrictToGroups": []
     }
   },
+  "userSkills": {
+    "enabled": true,
+    "maxSkillsPerUser": 50,
+    "maxVersions": 50,
+    "maxSkillSizeKB": 256,
+    "maxFilesPerSkill": 20,
+    "sharing": {
+      "allowUsers": true,
+      "allowGroups": true,
+      "allowEveryone": true,
+      "restrictToGroups": []
+    }
+  },
   "artifacts": {
     "enabled": true,
     "maxBytes": 10485760,

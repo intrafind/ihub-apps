@@ -24,12 +24,33 @@ function TargetIcon({ type }) {
  * installation can have hundreds of groups, so they are searched for, never
  * listed in full, and both lists scroll instead of growing with the dialog.
  *
+ * Personal skills share the same way, so the API calls, the error wording and
+ * the few texts that name the kind of item can be swapped (see
+ * `features/skills/components/SkillShareDialog`). Without those props it is
+ * the prompt dialog it always was.
+ *
  * @param {Object} props
- * @param {Object} props.prompt - The user prompt, with its `shares`.
+ * @param {Object} props.prompt - The item to share (`id`, `name`, `shares`).
  * @param {() => void} props.onClose
  * @param {(prompt: Object) => void} props.onSaved
+ * @param {(query: string) => Promise<Object>} [props.fetchTargets] - Loads the
+ *   share targets; defaults to the prompt share targets.
+ * @param {(id: string, shares: Object[]) => Promise<Object>} [props.saveShares] -
+ *   Saves the share list; defaults to the prompt shares.
+ * @param {(error: Error, t: Function) => string} [props.errorMessage] - Turns a
+ *   failed call into a message; defaults to the prompt wording.
+ * @param {{title?: string, private?: string, help?: string}} [props.labels] -
+ *   Texts that name the kind of item; each defaults to the prompt text.
  */
-function PromptShareDialog({ prompt, onClose, onSaved }) {
+function PromptShareDialog({
+  prompt,
+  onClose,
+  onSaved,
+  fetchTargets = fetchPromptShareTargets,
+  saveShares = updatePromptShares,
+  errorMessage = promptErrorMessage,
+  labels = {}
+}) {
   const { t } = useTranslation();
   const [shares, setShares] = useState(() => (prompt.shares || []).map(share => ({ ...share })));
   const [query, setQuery] = useState('');
@@ -46,12 +67,12 @@ function PromptShareDialog({ prompt, onClose, onSaved }) {
     let active = true;
     const handle = setTimeout(
       () => {
-        fetchPromptShareTargets(query)
+        fetchTargets(query)
           .then(result => {
             if (active && result) setTargets(result);
           })
           .catch(err => {
-            if (active) setError(promptErrorMessage(err, t));
+            if (active) setError(errorMessage(err, t));
           });
       },
       query ? 250 : 0
@@ -60,7 +81,7 @@ function PromptShareDialog({ prompt, onClose, onSaved }) {
       active = false;
       clearTimeout(handle);
     };
-  }, [query, t]);
+  }, [query, t, fetchTargets, errorMessage]);
 
   const present = new Set(shares.map(keyOf));
   const everyoneShared = present.has('everyone');
@@ -81,7 +102,7 @@ function PromptShareDialog({ prompt, onClose, onSaved }) {
     setSaving(true);
     setError(null);
     try {
-      const saved = await updatePromptShares(
+      const saved = await saveShares(
         prompt.id,
         shares.map(share => ({
           type: share.type,
@@ -91,7 +112,7 @@ function PromptShareDialog({ prompt, onClose, onSaved }) {
       );
       onSaved?.(saved);
     } catch (err) {
-      setError(promptErrorMessage(err, t));
+      setError(errorMessage(err, t));
       setSaving(false);
     }
   };
@@ -120,7 +141,7 @@ function PromptShareDialog({ prompt, onClose, onSaved }) {
       <div className="flex items-start justify-between p-5 border-b border-gray-200 dark:border-gray-700">
         <div className="min-w-0">
           <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-            {t('prompts.share.title', 'Share prompt')}
+            {labels.title || t('prompts.share.title', 'Share prompt')}
           </h2>
           <p className="text-sm text-gray-500 dark:text-gray-400 truncate">{prompt.name}</p>
         </div>
@@ -215,7 +236,7 @@ function PromptShareDialog({ prompt, onClose, onSaved }) {
           {shares.length === 0 ? (
             <p className="text-sm text-gray-500 dark:text-gray-400 flex items-center gap-2">
               <Icon name="lock" size="sm" />
-              {t('prompts.share.private', 'Only you — this prompt is private')}
+              {labels.private || t('prompts.share.private', 'Only you — this prompt is private')}
             </p>
           ) : (
             <ul className="max-h-64 overflow-y-auto overscroll-contain divide-y divide-gray-100 dark:divide-gray-700 border border-gray-200 dark:border-gray-700 rounded-md">
@@ -251,10 +272,11 @@ function PromptShareDialog({ prompt, onClose, onSaved }) {
             </ul>
           )}
           <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
-            {t(
-              'prompts.share.help',
-              '“Can use” lets people insert, copy and duplicate the prompt. “Can edit” also lets them change it and share it further.'
-            )}
+            {labels.help ||
+              t(
+                'prompts.share.help',
+                '“Can use” lets people insert, copy and duplicate the prompt. “Can edit” also lets them change it and share it further.'
+              )}
           </p>
         </div>
 

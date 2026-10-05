@@ -1,5 +1,5 @@
 import configCache from '../../configCache.js';
-import { resolveRequestedSkills } from '../../services/skillAccess.js';
+import { lastUserText, resolveSkillsForTurn } from '../../services/skillAccess.js';
 import { appendMcpAppContext } from '../../services/mcp/mcpAppContext.js';
 import { sendLLMError } from '../../services/loop/llmHttpErrors.js';
 import { logInteraction, trackSession } from '../../utils.js';
@@ -325,7 +325,7 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
    *           maxItems: 10
    *           items:
    *             type: string
-   *           description: Skills to pre-activate for this turn (slash command). Only skills assigned to the app and granted to the user are activated, up to the app's skillSettings.maxActiveSkills (default 3).
+   *           description: Skills to pre-activate for this turn, by global skill name or user skill id. Writing `/skill-name` in the message does the same. Only skills the app and the user may use are activated, up to the app's skillSettings.maxActiveSkills (default 3).
    *         documentIds:
    *           type: array
    *           items:
@@ -1410,17 +1410,22 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
           appendMcpAppContext(prep.data.llmMessages, mcpAppContext);
           llmMessages = prep.data.llmMessages;
 
-          // Skills pre-activated via slash command are announced on the turn's
-          // run: the same usable subset PromptService loaded, never a name the
-          // app or the user's groups don't allow.
+          // Skills pre-activated for this turn (`/name` in the message, or
+          // `requestedSkills`) are announced on the run: the same usable subset
+          // PromptService loaded, never a skill the app or the user may not use.
           const activatedSkills = bypassAppPrompts
             ? []
             : (
-                await resolveRequestedSkills(requestedSkills, {
+                await resolveSkillsForTurn({
+                  requested: requestedSkills,
+                  text: lastUserText(messages),
                   app: prep.data.app,
                   user: req.user
                 })
-              ).map(skill => ({ skillName: skill.name, description: skill.description || '' }));
+              ).map(skill => ({
+                skillName: skill.displayName,
+                description: skill.description || ''
+              }));
 
           await processChatRequest({
             prep: prep.data,

@@ -163,9 +163,10 @@ off.
 
 - An empty `permissions.skills` now grants no skills, as for apps and tools. API clients
   (client credentials, static API keys) and MCP clients without a skill grant see none.
-- The `/` skill picker sends the new chat request field `requestedSkills`, a list of skill names,
-  instead of `requestedSkill`. A request that still sends `requestedSkill` gets no skill
-  pre-loaded.
+- Skills are invoked by writing `/skill-name` in the message, in chat as in scheduled tasks; the
+  `/` picker inserts that text. The chat API's `requestedSkill` field is replaced by
+  `requestedSkills`, a list of skill names. A request that still sends `requestedSkill` gets no
+  skill pre-loaded.
 - One message pre-loads at most `skillSettings.maxActiveSkills` skills (default 3); further names
   are ignored.
 - Agents can now load the skills listed on their profile with `activate_skill`, and the planner
@@ -174,4 +175,5 @@ off.
 
 **Before upgrading:** check that every group whose members should use skills grants them in
 `permissions.skills` (for example `["*"]`) or inherits a group that does. Integrations that call
-the chat API with `requestedSkill` must send `requestedSkills: ["<skill-name>"]` instead.
+the chat API with `requestedSkill` must send `requestedSkills: ["<skill-name>"]` or write
+`/<skill-name>` in the message instead.

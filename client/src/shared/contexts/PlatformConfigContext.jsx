@@ -87,6 +87,12 @@ export function PlatformConfigProvider({ children }) {
         // share them with (#2519). Absent on an older server: no user prompts.
         userPrompts: platformCfg.userPrompts,
 
+        // The same for personal skills: whether users may keep skills of their
+        // own (skills feature on, platform switch on, storage up), the limits
+        // the skill editor respects and whom they may share them with. Absent
+        // on an older server: no personal skills.
+        userSkills: platformCfg.userSkills,
+
         // Platform features and settings
         features: platformCfg.features,
         // Build a boolean lookup map from the resolved features array
