@@ -498,6 +498,30 @@ export const platformConfigSchema = z
       })
       .passthrough()
       .prefault({}),
+    // User skills: skills signed-in users write themselves (instructions plus
+    // text files) and share with users, groups or everyone. Stored through the
+    // storage abstraction; `maxSkillsPerUser` of zero or less means no limit.
+    // When `sharing.restrictToGroups` names groups, only their members may
+    // share with groups or with everyone.
+    userSkills: z
+      .object({
+        enabled: z.boolean().prefault(true),
+        maxSkillsPerUser: z.number().prefault(50),
+        maxVersions: z.number().prefault(50),
+        maxSkillSizeKB: z.number().prefault(256),
+        maxFilesPerSkill: z.number().prefault(20),
+        sharing: z
+          .object({
+            allowUsers: z.boolean().prefault(true),
+            allowGroups: z.boolean().prefault(true),
+            allowEveryone: z.boolean().prefault(true),
+            restrictToGroups: z.array(z.string()).prefault([])
+          })
+          .passthrough()
+          .prefault({})
+      })
+      .passthrough()
+      .prefault({}),
     // Artifacts: what a run produced that is worth keeping in its own right —
     // a chat turn's generated image today, a workflow's report or an agent's
     // output next. One store for every producer, so this block is not under

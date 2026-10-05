@@ -60,6 +60,7 @@
     "promptSearch": {
       "placeholder": "Prompts durchsuchen...",
       "appSpecific": "App",
+      "skill": "Skill",
       "viewAll": "Alle Prompts anzeigen"
     },
     "toggleImageUpload": "Bild-Upload umschalten",
@@ -3816,6 +3817,58 @@
         "userCount": "{{count}} Nutzer"
       }
     },
+    "skills": {
+      "delete": "Löschen",
+      "edit": "Bearbeiten",
+      "searchPlaceholder": "Skills durchsuchen...",
+      "subtitle": "Skills für Ihre iHub Apps installieren, konfigurieren und verwalten",
+      "table": {
+        "name": "Name"
+      },
+      "tabs": {
+        "label": "Skill-Ansichten",
+        "skills": "Skills",
+        "userSkills": "Nutzer-Skills"
+      },
+      "title": "Skill-Verwaltung",
+      "userSkills": {
+        "allowEveryone": "Alle angemeldeten Nutzer",
+        "allowGroups": "Gruppen",
+        "allowUsers": "Bestimmte Nutzer",
+        "deleteMessage": "„{{name}}“ von {{owner}} wird für den Besitzer und alle, mit denen der Skill geteilt ist, gelöscht.",
+        "deleted": "Skill gelöscht",
+        "empty": "Keine geteilten Nutzer-Skills",
+        "emptyDesc": "Sobald Nutzer Skills mit einer Gruppe oder mit allen teilen, erscheinen sie hier.",
+        "enabled": "Nutzer dürfen eigene Skills erstellen",
+        "everyone": "Alle",
+        "inactive": "inaktiv",
+        "intro": "Skills, die Nutzer mit einer Gruppe oder mit allen geteilt haben. Sie können sie bearbeiten, neu freigeben, löschen oder zu einem globalen Skill machen; private Skills und Skills, die nur mit einzelnen Nutzern geteilt sind, werden nicht aufgeführt.",
+        "maxFiles": "Dateien pro Skill",
+        "maxPerUser": "Skills pro Nutzer (0 = unbegrenzt)",
+        "maxSizeKB": "Maximale Größe pro Skill (KB)",
+        "maxVersions": "Aufbewahrte Versionen pro Skill",
+        "owner": "Besitzer",
+        "promote": "Übernehmen",
+        "promoteHelp": "Eine Kopie wird zu einem globalen Skill, abgelegt in contents/skills. Welche Apps ihn anbieten und welche Gruppen ihn verwenden dürfen, wird wie bei jedem anderen globalen Skill konfiguriert. Der Nutzer-Skill selbst bleibt unverändert.",
+        "promoteName": "Name des globalen Skills",
+        "promoteNameHint": "Kleinbuchstaben, Ziffern und Bindestriche. Darf nicht bereits von einem anderen globalen Skill verwendet werden.",
+        "promoteTitle": "Als globalen Skill übernehmen",
+        "promoted": "Als globaler Skill {{name}} übernommen",
+        "promotedTo": "Übernommen als {{name}}",
+        "restrictHelp": "Lassen Sie alles leer, damit alle breit teilen dürfen. Das Teilen mit bestimmten Nutzern ist davon nicht betroffen.",
+        "restrictTitle": "Nur Mitglieder dieser Gruppen dürfen mit Gruppen oder allen teilen",
+        "saved": "Gespeichert",
+        "settingsTitle": "Einstellungen für Nutzer-Skills",
+        "sharedWith": "Geteilt mit",
+        "sharingTitle": "Nutzer dürfen Skills teilen mit",
+        "storageDown": "Der Speicher-Provider ist nicht verfügbar, daher können Nutzer derzeit keine Skills speichern.",
+        "subtitle": "Skills, die Ihre Nutzer geschrieben und mit Gruppen oder allen geteilt haben",
+        "title": "Nutzer-Skills",
+        "truncated": "Es werden nur die ersten Skills angezeigt",
+        "updated": "Zuletzt geändert",
+        "userCount": "{{count}} Nutzer"
+      }
+    },
     "scheduledTasks": {
       "all": "Alle",
       "allTasks": "Alle Aufgaben",
@@ -5565,6 +5618,7 @@
     "navigation": "Navigation",
     "newChat": "Neuer Chat",
     "prompts": "Prompts",
+    "library": "Bibliothek",
     "browseApps": "Alle Apps durchsuchen",
     "apps": "Apps",
     "recents": "Letzte",
@@ -6023,7 +6077,9 @@
       "mine": "Meine Prompts",
       "recent": "Zuletzt verwendet",
       "shared": "Mit mir geteilt",
-      "skills": "Skills"
+      "skills": "Skills",
+      "mySkills": "Meine Skills",
+      "sharedSkills": "Geteilte Skills"
     },
     "history": {
       "current": "aktuell",
@@ -6075,6 +6131,142 @@
       "preview": "Vorschau",
       "required": "Dieses Feld ist erforderlich",
       "subtitle": "Füllen Sie die Angaben für diesen Prompt aus"
+    }
+  },
+  "library": {
+    "empty": {
+      "mine": "Sie haben noch keine Prompts oder Skills.",
+      "none": "Nichts gefunden",
+      "shared": "Bisher hat niemand einen Prompt oder Skill mit Ihnen geteilt."
+    },
+    "filters": {
+      "mine": "Meine"
+    },
+    "new": {
+      "label": "Neu"
+    },
+    "searchLabel": "Bibliothek durchsuchen",
+    "searchPlaceholder": "Prompts und Skills durchsuchen...",
+    "subtitle": "Prompts als Ausgangspunkt und Skills, denen der Assistent folgt. Tippen Sie / in einem Chat, um sie zu verwenden.",
+    "title": "Bibliothek",
+    "types": {
+      "all": "Alle",
+      "label": "Typ",
+      "prompts": "Prompts",
+      "skills": "Skills"
+    }
+  },
+  "skills": {
+    "actions": {
+      "copyLink": "Link kopieren",
+      "copyToMine": "In meine Skills kopieren",
+      "details": "Details",
+      "detailsNamed": "Skill {{name}} anzeigen",
+      "duplicate": "Duplizieren",
+      "history": "Verlauf",
+      "new": "Neuer Skill",
+      "share": "Teilen"
+    },
+    "badge": "Skill",
+    "delete": {
+      "message": "„{{name}}“ und sein Verlauf werden für Sie und alle, mit denen der Skill geteilt ist, gelöscht.",
+      "title": "Skill löschen?"
+    },
+    "details": {
+      "copiedFrom": "Kopiert von {{name}}",
+      "files": "Dateien",
+      "instructions": "Anweisungen",
+      "promotedTo": "Als globaler Skill {{name}} übernommen"
+    },
+    "editor": {
+      "addFile": "Datei hinzufügen",
+      "body": "Anweisungen",
+      "bodyHint": "Markdown. Das Modell liest diese Anweisungen, wenn es den Skill verwendet; verweisen Sie auf Dateien über ihren Pfad, z. B. references/vorlage.md.",
+      "bodyPlaceholder": "# Wochenbericht\n\n1. Frage nach den Höhepunkten der Woche.\n2. …",
+      "characterCount": "{{count}} / {{max}}",
+      "chooseFolder": "Ordner…",
+      "createTitle": "Neuer Skill",
+      "description": "Beschreibung",
+      "descriptionHint": "Beschreiben Sie, was der Skill tut und wann er verwendet werden soll.",
+      "descriptionPlaceholder": "Erstellt den wöchentlichen Teambericht aus Stichpunkten. Verwenden, wenn nach einem Wochenbericht oder einer Statusübersicht gefragt wird.",
+      "editTitle": "Skill bearbeiten",
+      "fileContent": "Inhalt von {{path}}",
+      "fileCount": "{{count}} von {{max}} Dateien",
+      "fileFolder": "Ordner",
+      "fileName": "Dateiname",
+      "fileNamePlaceholder": "vorlage.md",
+      "files": "Dateien",
+      "filesHint": "Optionale Textdateien, die das Modell bei Bedarf liest: Referenzen, Vorlagen, Beispiele.",
+      "fixErrors": "Bitte korrigieren Sie die markierten Felder.",
+      "name": "Name",
+      "nameHint": "Kleinbuchstaben, Ziffern und Bindestriche. Das Modell sieht diesen Namen.",
+      "namePlaceholder": "z. B. wochenbericht",
+      "removeFile": "{{path}} entfernen",
+      "removeFileShort": "Datei entfernen",
+      "saving": "Wird gespeichert…",
+      "size": "Größe: {{size}} KB von {{max}} KB",
+      "tooLarge": "Zu groß: Kürzen Sie die Anweisungen oder entfernen Sie Dateien.",
+      "tooManyFiles": "Ein Skill kann höchstens {{max}} Dateien haben."
+    },
+    "empty": {
+      "global": "Für Sie sind keine globalen Skills verfügbar.",
+      "mine": "Sie haben noch keine Skills. Erstellen Sie einen oder kopieren Sie einen globalen Skill.",
+      "none": "Keine Skills gefunden",
+      "shared": "Bisher hat niemand einen Skill mit Ihnen geteilt."
+    },
+    "errors": {
+      "accessChanged": "Ihr Zugriff auf diesen Skill hat sich geändert. Laden Sie die Seite neu, um zu sehen, was Sie jetzt tun dürfen.",
+      "conflict": "Jemand anderes hat diesen Skill inzwischen geändert. Schließen Sie den Editor und öffnen Sie ihn erneut, um die neueste Version zu sehen.",
+      "disabled": "Persönliche Skills sind deaktiviert.",
+      "forbidden": "Sie dürfen das mit diesem Skill nicht tun.",
+      "generic": "Etwas ist schiefgelaufen. Bitte versuchen Sie es erneut.",
+      "limit": "Sie haben die maximale Anzahl an Skills erreicht. Löschen Sie einen, um Platz zu schaffen.",
+      "limitCount": "Sie haben das Maximum von {{limit}} Skills erreicht. Löschen Sie einen, um Platz zu schaffen.",
+      "nameTaken": "Es gibt bereits einen globalen Skill mit diesem Namen. Wählen Sie einen anderen Namen.",
+      "notAllowed": "Melden Sie sich an, um eigene Skills anzulegen.",
+      "shareNotAllowed": "Sie dürfen Skills nicht mit diesem Personenkreis teilen.",
+      "tooLarge": "Dieser Skill ist zu groß. Kürzen Sie die Anweisungen oder entfernen Sie Dateien.",
+      "unavailable": "Ihre Skills sind gerade nicht verfügbar. Bitte versuchen Sie es später erneut."
+    },
+    "filters": {
+      "mine": "Meine Skills"
+    },
+    "history": {
+      "current": "aktuell",
+      "restore": "Diese Version wiederherstellen",
+      "restoredFrom": "Wiederhergestellt aus Version {{revision}}",
+      "revision": "Version {{revision}}",
+      "title": "Versionsverlauf",
+      "versions": "Versionen"
+    },
+    "list": {
+      "fileCount": "{{count}} Datei(en)",
+      "searchPlaceholder": "Skills durchsuchen..."
+    },
+    "notices": {
+      "copied": "In Ihre Skills kopiert",
+      "deleted": "Skill gelöscht",
+      "duplicated": "Skill dupliziert",
+      "restored": "Version wiederhergestellt",
+      "saved": "Skill gespeichert",
+      "shared": "Freigabe aktualisiert"
+    },
+    "share": {
+      "help": "„Darf verwenden“ erlaubt, den Skill in Chats zu verwenden und zu duplizieren. „Darf bearbeiten“ erlaubt zusätzlich, ihn zu ändern und weiter zu teilen.",
+      "private": "Nur Sie – dieser Skill ist privat",
+      "title": "Skill teilen"
+    },
+    "validation": {
+      "doubleHyphen": "Verwenden Sie nur einfache Bindestriche (kein „--“).",
+      "duplicate": "Eine andere Datei hat diesen Namen.",
+      "extension": "Erlaubte Dateitypen: {{extensions}}",
+      "fileNamePattern": "Beginnen Sie mit einem Buchstaben oder einer Ziffer und verwenden Sie danach nur Buchstaben, Ziffern, Punkte, Bindestriche und Unterstriche.",
+      "fileNameRequired": "Geben Sie einen Dateinamen ein.",
+      "folder": "Wählen Sie einen Ordner.",
+      "invalid": "Ungültiger Wert",
+      "namePattern": "Verwenden Sie Kleinbuchstaben, Ziffern und Bindestriche; Anfang und Ende müssen ein Buchstabe oder eine Ziffer sein.",
+      "required": "Erforderlich",
+      "tooLong": "Zu lang"
     }
   },
   "scheduledTasks": {

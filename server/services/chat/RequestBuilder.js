@@ -338,7 +338,7 @@ class RequestBuilder {
     websearchEnabled,
     imageAspectRatio,
     imageQuality,
-    requestedSkill,
+    requestedSkills,
     documentIds,
     processMessageTemplates,
     user,
@@ -542,7 +542,7 @@ class RequestBuilder {
         user,
         chatId,
         modelName,
-        requestedSkill
+        requestedSkills
       );
       // The raw file/image data of the last user message, next to its rendered
       // content: workflow tools receive the structured file object for their

@@ -2,10 +2,9 @@ import path from 'path';
 import fs from 'fs';
 import { atomicWriteJSON } from './atomicWrite.js';
 import logger from './logger.js';
-import { getRootDir } from '../pathUtils.js';
-import config from '../config.js';
+import { getContentsPath } from './contentsPath.js';
 
-const STORE_PATH = path.join(getRootDir(), config.CONTENTS_DIR, 'data', 'oauth-consent.json');
+const STORE_PATH = getContentsPath('data', 'oauth-consent.json');
 
 /**
  * Load the consent store from disk.

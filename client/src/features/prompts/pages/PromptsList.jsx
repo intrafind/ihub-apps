@@ -1,24 +1,69 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router-dom';
-import { fetchPrompts } from '../../../api';
+import { fetchPrompts, fetchSkills, fetchUserSkills } from '../../../api';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 import Icon from '../../../shared/components/Icon';
 import PromptModal from '../components/PromptModal';
 import { PromptScopeBadge } from '../components/PromptMeta';
+import LibraryNewMenu from '../components/LibraryNewMenu';
 import usePromptActions from '../hooks/usePromptActions';
 import usePromptPreferences from '../hooks/usePromptPreferences';
+import SkillCard from '../../skills/components/SkillCard';
+import SkillDetailsModal from '../../skills/components/SkillDetailsModal';
+import useSkillActions from '../../skills/hooks/useSkillActions';
+import { skillErrorMessage } from '../../skills/utils/skillErrors';
+import { pickerSkillScope } from '../../skills/utils/skillPicker';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import { highlightVariables } from '../../../utils/highlightVariables';
 import { useUIConfig } from '../../../shared/contexts/UIConfigContext';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
 import { useAuth } from '../../../shared/contexts/AuthContext';
+import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
 
 const ITEMS_PER_PAGE = 9;
 
 /** The scope filters, in the order they are offered. */
 const SCOPE_FILTERS = ['all', 'mine', 'shared', 'global', 'favorites'];
 
+/**
+ * The kinds of items the library holds, in the order the type switch offers
+ * them (`?type=`). `all` shows every kind; each other entry names the item
+ * `_type` it shows and whether it can be favorited. Another kind of item
+ * (e.g. integrations) is one more entry here, plus its loader and its card.
+ */
+const ITEM_TYPES = [
+  { id: 'all' },
+  { id: 'prompts', itemType: 'prompt', favorites: true },
+  { id: 'skills', itemType: 'skill', favorites: false }
+];
+
+/**
+ * The global skills of `GET /api/skills` as library entries. That list also
+ * carries the caller's personal skills; those come with more detail from
+ * `/api/user-skills` and are left out here.
+ *
+ * @param {Object[]} raw - The `/api/skills` list.
+ * @returns {Object[]}
+ */
+function toGlobalSkillEntries(raw) {
+  return (Array.isArray(raw) ? raw : [])
+    .filter(skill => skill?.name && pickerSkillScope(skill) === 'global')
+    .map(skill => ({
+      ...skill,
+      _type: 'skill',
+      id: skill.id || skill.name,
+      scope: 'global',
+      description: skill.description || ''
+    }));
+}
+
+/**
+ * The library at `/prompts`: prompts and — with the `skills` feature —
+ * skills, each the caller's own, shared with them, or global. A type switch
+ * (`?type=all|prompts|skills`) narrows the kind, the scope filter
+ * (`?filter=`) the origin; `?id=` opens a prompt, `?skill=` a skill.
+ */
 function PromptsList() {
   const { t, i18n } = useTranslation();
   const [rawPrompts, setRawPrompts] = useState([]);
@@ -27,12 +72,17 @@ function PromptsList() {
   const [searchTerm, setSearchTerm] = useState('');
   const [page, setPage] = useState(0);
   const [selectedId, setSelectedId] = useState(null);
+  const [selectedSkillId, setSelectedSkillId] = useState(null);
+  const [globalSkills, setGlobalSkills] = useState([]);
+  const [personalSkills, setPersonalSkills] = useState([]);
+  const [skillsError, setSkillsError] = useState(null);
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [copyStatus, setCopyStatus] = useState({});
   const [searchParams, setSearchParams] = useSearchParams();
   const { uiConfig } = useUIConfig();
   const { platformConfig } = usePlatformConfig();
   const { isAuthenticated } = useAuth();
+  const featureFlags = useFeatureFlags();
   const {
     favorites: favoritePromptIds,
     recents: recentPromptIds,
@@ -40,8 +90,36 @@ function PromptsList() {
   } = usePromptPreferences();
 
   const userPromptsEnabled = isAuthenticated && platformConfig?.userPrompts?.enabled === true;
+  // Skills join the library with the skills feature; creating and changing
+  // them needs personal skills enabled for a signed-in user.
+  const skillsAvailable = featureFlags.isEnabled('skills', false);
+  const userSkillsEnabled =
+    skillsAvailable && isAuthenticated && platformConfig?.userSkills?.enabled === true;
+
+  // The kinds on offer: without skills the library is the prompt list it was.
+  const itemTypes = ITEM_TYPES.filter(type => type.id !== 'skills' || skillsAvailable);
+  const showTypeSwitch = itemTypes.length > 2;
+  const requestedType = searchParams.get('type');
+  const typeFilter =
+    showTypeSwitch && itemTypes.some(type => type.id === requestedType) ? requestedType : 'all';
+  const shownTypes = itemTypes.filter(
+    type => type.itemType && (typeFilter === 'all' || type.id === typeFilter)
+  );
+  const shownItemTypes = shownTypes.map(type => type.itemType);
+  const showsPrompts = shownItemTypes.includes('prompt');
+  const showsSkills = shownItemTypes.includes('skill');
+
+  // Mine/Shared exist for a kind its user may keep; Favorites only for kinds
+  // that can be favorited (prompts, not skills).
+  const visibleFilters = SCOPE_FILTERS.filter(filter => {
+    if (filter === 'mine' || filter === 'shared') {
+      return (showsPrompts && userPromptsEnabled) || (showsSkills && userSkillsEnabled);
+    }
+    if (filter === 'favorites') return shownTypes.some(type => type.favorites);
+    return true;
+  });
   const requestedFilter = searchParams.get('filter');
-  const scopeFilter = SCOPE_FILTERS.includes(requestedFilter) ? requestedFilter : 'all';
+  const scopeFilter = visibleFilters.includes(requestedFilter) ? requestedFilter : 'all';
 
   const sortConfig = useMemo(() => {
     const defaultSortConfig = { enabled: true, default: 'relevance' };
@@ -87,16 +165,66 @@ function PromptsList() {
     onChanged: useCallback(() => loadPrompts({ fresh: true }), [loadPrompts])
   });
 
+  const loadSkills = useCallback(
+    async ({ fresh = false } = {}) => {
+      if (!skillsAvailable) {
+        setGlobalSkills([]);
+        setPersonalSkills([]);
+        return;
+      }
+      const [globalResult, personalResult] = await Promise.allSettled([
+        fetchSkills(undefined, { skipCache: fresh }),
+        userSkillsEnabled ? fetchUserSkills('all') : Promise.resolve([])
+      ]);
+      if (globalResult.status === 'fulfilled') {
+        setGlobalSkills(toGlobalSkillEntries(globalResult.value));
+      } else {
+        console.error('Error loading skills:', globalResult.reason);
+      }
+      if (personalResult.status === 'fulfilled') {
+        const list = Array.isArray(personalResult.value) ? personalResult.value : [];
+        setPersonalSkills(
+          list.map(skill => ({
+            ...skill,
+            _type: 'skill',
+            scope: skill.scope || 'mine',
+            description: skill.description || ''
+          }))
+        );
+      } else {
+        console.error('Error loading personal skills:', personalResult.reason);
+      }
+      const failed = [globalResult, personalResult].find(result => result.status === 'rejected');
+      setSkillsError(failed ? skillErrorMessage(failed.reason, t) : null);
+    },
+    [skillsAvailable, userSkillsEnabled, t]
+  );
+
+  useEffect(() => {
+    loadSkills();
+  }, [loadSkills]);
+
+  const skillActions = useSkillActions({
+    onChanged: useCallback(() => loadSkills({ fresh: true }), [loadSkills])
+  });
+
   const prompts = useMemo(
     () =>
       rawPrompts.map(p => ({
         ...p,
+        _type: 'prompt',
         scope: p.scope || 'global',
         name: getLocalizedContent(p.name, i18n.language),
         prompt: getLocalizedContent(p.prompt, i18n.language),
         description: getLocalizedContent(p.description, i18n.language)
       })),
     [rawPrompts, i18n.language]
+  );
+
+  // Personal skills (newest first, as the server sends them), then global ones.
+  const skills = useMemo(
+    () => [...personalSkills, ...globalSkills],
+    [personalSkills, globalSkills]
   );
 
   // Only display categories that contain at least one prompt
@@ -123,37 +251,48 @@ function PromptsList() {
   }, [prompts, searchParams]);
 
   const selectedPrompt = prompts.find(p => p.id === selectedId) || null;
+  // A picked card wins; otherwise a `?skill=` link opens that skill.
+  const openSkillId = selectedSkillId ?? searchParams.get('skill');
+  const selectedSkill = skills.find(skill => skill.id === openSkillId) || null;
 
   const filteredPrompts = useMemo(() => {
-    let filtered = prompts;
+    let filtered = [...(showsPrompts ? prompts : []), ...(showsSkills ? skills : [])];
 
     if (scopeFilter === 'favorites') {
       const favs = new Set(favoritePromptIds);
-      filtered = filtered.filter(p => favs.has(p.id));
+      filtered = filtered.filter(p => p._type === 'prompt' && favs.has(p.id));
     } else if (scopeFilter !== 'all') {
       filtered = filtered.filter(p => p.scope === scopeFilter);
     }
 
-    // Filter by category if enabled
+    // Filter by category if enabled (prompts have categories, skills do not)
     if (categoriesConfig.enabled && selectedCategory !== 'all') {
-      filtered = filtered.filter(p => (p.category || 'creative') === selectedCategory);
+      filtered = filtered.filter(
+        p => p._type === 'prompt' && (p.category || 'creative') === selectedCategory
+      );
     }
 
     // Filter by search term
     if (searchTerm) {
       const term = searchTerm.toLowerCase();
-      filtered = filtered.filter(
-        p =>
-          p.name.toLowerCase().includes(term) ||
-          p.prompt.toLowerCase().includes(term) ||
-          (p.description && p.description.toLowerCase().includes(term)) ||
-          (p.owner?.name && p.owner.name.toLowerCase().includes(term))
+      filtered = filtered.filter(p =>
+        p._type === 'skill'
+          ? [p.name, p.displayName, p.description, p.owner?.name].some(
+              value => typeof value === 'string' && value.toLowerCase().includes(term)
+            )
+          : p.name.toLowerCase().includes(term) ||
+            p.prompt.toLowerCase().includes(term) ||
+            (p.description && p.description.toLowerCase().includes(term)) ||
+            (p.owner?.name && p.owner.name.toLowerCase().includes(term))
       );
     }
 
     return filtered;
   }, [
     prompts,
+    skills,
+    showsPrompts,
+    showsSkills,
     scopeFilter,
     favoritePromptIds,
     searchTerm,
@@ -166,14 +305,17 @@ function PromptsList() {
 
     const favs = new Set(favoritePromptIds);
     const recents = new Set(recentPromptIds);
+    // Favorites and recents are prompt ids; a skill never ranks by them.
+    const isFav = item => item._type === 'prompt' && favs.has(item.id);
+    const isRecent = item => item._type === 'prompt' && recents.has(item.id);
     const sortByRelevance = (a, b) => {
-      const aFav = favs.has(a.id);
-      const bFav = favs.has(b.id);
+      const aFav = isFav(a);
+      const bFav = isFav(b);
       if (aFav && !bFav) return -1;
       if (!aFav && bFav) return 1;
 
-      const aRecent = recents.has(a.id);
-      const bRecent = recents.has(b.id);
+      const aRecent = isRecent(a);
+      const bRecent = isRecent(b);
       if (aRecent && !bRecent) return -1;
       if (!aRecent && bRecent) return 1;
       if (aRecent && bRecent) {
@@ -229,13 +371,28 @@ function PromptsList() {
     setPage(0);
   };
 
+  const setTypeFilter = type => {
+    setSearchParams(
+      prev => {
+        const next = new URLSearchParams(prev);
+        if (type === 'all') next.delete('type');
+        else next.set('type', type);
+        return next;
+      },
+      { replace: true }
+    );
+    setPage(0);
+  };
+
   const closeDetails = () => {
     setSelectedId(null);
-    if (searchParams.get('id')) {
+    setSelectedSkillId(null);
+    if (searchParams.get('id') || searchParams.get('skill')) {
       setSearchParams(
         prev => {
           const next = new URLSearchParams(prev);
           next.delete('id');
+          next.delete('skill');
           return next;
         },
         { replace: true }
@@ -260,16 +417,39 @@ function PromptsList() {
     setPage(0); // Reset to first page when category changes
   };
 
+  // "My prompts" when only prompts show, "Mine" once skills are in the list.
   const filterLabels = {
     all: t('prompts.filters.all', 'All'),
-    mine: t('prompts.filters.mine', 'My prompts'),
+    mine: showsSkills
+      ? showsPrompts
+        ? t('library.filters.mine', 'Mine')
+        : t('skills.filters.mine', 'My skills')
+      : t('prompts.filters.mine', 'My prompts'),
     shared: t('prompts.filters.shared', 'Shared with me'),
     global: t('prompts.filters.global', 'Global'),
     favorites: t('prompts.filters.favorites', 'Favorites')
   };
-  const visibleFilters = SCOPE_FILTERS.filter(
-    filter => userPromptsEnabled || (filter !== 'mine' && filter !== 'shared')
-  );
+  const typeLabels = {
+    all: t('library.types.all', 'All'),
+    prompts: t('library.types.prompts', 'Prompts'),
+    skills: t('library.types.skills', 'Skills')
+  };
+  const newEntries = [
+    userPromptsEnabled && {
+      id: 'prompt',
+      icon: 'clipboard',
+      label: t('prompts.actions.new', 'New prompt'),
+      onSelect: () => actions.create()
+    },
+    userSkillsEnabled && {
+      id: 'skill',
+      icon: 'sparkles',
+      label: t('skills.actions.new', 'New skill'),
+      onSelect: () => skillActions.create()
+    }
+  ].filter(Boolean);
+  // The empty "Mine" view offers to create what it shows (entry ids are item types).
+  const newEntriesForType = newEntries.filter(entry => shownItemTypes.includes(entry.id));
 
   if (loading) {
     return <LoadingSpinner message={t('app.loading')} />;
@@ -289,23 +469,44 @@ function PromptsList() {
     );
   }
 
-  const emptyMessage =
-    scopeFilter === 'mine' && !searchTerm
-      ? t(
+  const emptyMessages = showsSkills
+    ? showsPrompts
+      ? {
+          mine: t('library.empty.mine', 'You have no prompts or skills yet.'),
+          shared: t('library.empty.shared', 'Nobody has shared a prompt or skill with you yet.'),
+          none: t('library.empty.none', 'Nothing found')
+        }
+      : {
+          mine: t(
+            'skills.empty.mine',
+            'You have no skills yet. Create one, or copy a global skill.'
+          ),
+          shared: t('skills.empty.shared', 'Nobody has shared a skill with you yet.'),
+          global: t('skills.empty.global', 'No global skills are available to you.'),
+          none: t('skills.empty.none', 'No skills found')
+        }
+    : {
+        mine: t(
           'prompts.empty.mine',
           'You have no prompts yet. Create one, or save a chat message as a prompt.'
-        )
-      : scopeFilter === 'shared' && !searchTerm
-        ? t('prompts.empty.shared', 'Nobody has shared a prompt with you yet.')
-        : t('pages.promptsList.noPrompts', 'No prompts found');
+        ),
+        shared: t('prompts.empty.shared', 'Nobody has shared a prompt with you yet.'),
+        none: t('pages.promptsList.noPrompts', 'No prompts found')
+      };
+  const emptyMessage = (!searchTerm && emptyMessages[scopeFilter]) || emptyMessages.none;
 
   return (
     <div className="py-8 flex flex-col items-center px-4">
       <h1 className="text-3xl font-bold mb-2 text-gray-900 dark:text-gray-100">
-        {t('pages.promptsList.title', 'Prompts')}
+        {showTypeSwitch ? t('library.title', 'Library') : t('pages.promptsList.title', 'Prompts')}
       </h1>
-      <p className="text-gray-600 dark:text-gray-400 mb-6">
-        {t('pages.promptsList.subtitle', 'Browse available prompts')}
+      <p className="text-gray-600 dark:text-gray-400 mb-6 text-center">
+        {showTypeSwitch
+          ? t(
+              'library.subtitle',
+              'Prompts to start from and skills the assistant follows. Type / in a chat to use them.'
+            )
+          : t('pages.promptsList.subtitle', 'Browse available prompts')}
       </p>
 
       {actions.notice && (
@@ -329,6 +530,36 @@ function PromptsList() {
         </div>
       )}
 
+      {skillActions.notice && (
+        <div
+          role="status"
+          className={`mb-4 w-full max-w-xl flex items-center justify-between gap-3 rounded-md px-4 py-2 text-sm ${
+            skillActions.notice.type === 'error'
+              ? 'bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-300'
+              : 'bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300'
+          }`}
+        >
+          <span>{skillActions.notice.text}</span>
+          <button
+            type="button"
+            onClick={skillActions.clearNotice}
+            aria-label={t('common.close', 'Close')}
+            className="opacity-70 hover:opacity-100"
+          >
+            <Icon name="x" size="sm" />
+          </button>
+        </div>
+      )}
+
+      {skillsError && showsSkills && (
+        <div
+          role="alert"
+          className="mb-4 w-full max-w-xl rounded-md px-4 py-2 text-sm bg-amber-50 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300"
+        >
+          {skillsError}
+        </div>
+      )}
+
       <div className="w-full max-w-md sm:max-w-lg lg:max-w-2xl mb-6">
         <div className="flex flex-col sm:flex-row items-stretch gap-4">
           <div className="relative grow">
@@ -338,7 +569,14 @@ function PromptsList() {
             <input
               type="text"
               className="block w-full pl-10 pr-10 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-              placeholder={t('pages.promptsList.searchPlaceholder', 'Search prompts...')}
+              placeholder={
+                showsSkills
+                  ? showsPrompts
+                    ? t('library.searchPlaceholder', 'Search prompts and skills...')
+                    : t('skills.list.searchPlaceholder', 'Search skills...')
+                  : t('pages.promptsList.searchPlaceholder', 'Search prompts...')
+              }
+              aria-label={t('library.searchLabel', 'Search the library')}
               value={searchTerm}
               onChange={handleSearchChange}
               autoComplete="off"
@@ -378,18 +616,35 @@ function PromptsList() {
               </select>
             </div>
           )}
-          {userPromptsEnabled && (
-            <button
-              type="button"
-              onClick={() => actions.create()}
-              className="shrink-0 inline-flex items-center justify-center gap-1.5 px-4 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
-            >
-              <Icon name="plus" size="sm" />
-              {t('prompts.actions.new', 'New prompt')}
-            </button>
-          )}
+          <LibraryNewMenu entries={newEntries} />
         </div>
       </div>
+
+      {/* Item type switch: prompts, skills — data-driven, see ITEM_TYPES */}
+      {showTypeSwitch && (
+        <div
+          className="inline-flex rounded-lg border border-gray-300 dark:border-gray-600 overflow-hidden mb-3"
+          role="tablist"
+          aria-label={t('library.types.label', 'Type')}
+        >
+          {itemTypes.map(type => (
+            <button
+              key={type.id}
+              type="button"
+              role="tab"
+              aria-selected={typeFilter === type.id}
+              onClick={() => setTypeFilter(type.id)}
+              className={`px-4 py-1.5 text-sm font-medium transition-colors ${
+                typeFilter === type.id
+                  ? 'bg-gray-900 text-white dark:bg-gray-100 dark:text-gray-900'
+                  : 'text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700'
+              }`}
+            >
+              {typeLabels[type.id] || type.id}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Scope filter */}
       <div
@@ -416,7 +671,7 @@ function PromptsList() {
       </div>
 
       {/* Category filter */}
-      {categoriesConfig.enabled && (
+      {categoriesConfig.enabled && showsPrompts && (
         <div className="flex flex-wrap gap-2 mb-6 justify-center">
           {availableCategories.map(category => (
             <button
@@ -440,25 +695,32 @@ function PromptsList() {
       {filteredPrompts.length === 0 ? (
         <div className="text-center">
           <p className="text-gray-500 dark:text-gray-400">{emptyMessage}</p>
-          {userPromptsEnabled && scopeFilter === 'mine' && !searchTerm && (
-            <button
-              type="button"
-              onClick={() => actions.create()}
-              className="mt-4 inline-flex items-center gap-1.5 px-4 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
-            >
-              <Icon name="plus" size="sm" />
-              {t('prompts.actions.new', 'New prompt')}
-            </button>
+          {scopeFilter === 'mine' && !searchTerm && newEntriesForType.length > 0 && (
+            <div className="mt-4 flex justify-center">
+              <LibraryNewMenu entries={newEntriesForType} />
+            </div>
           )}
         </div>
       ) : (
         <>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 max-w-6xl mx-auto w-full">
             {pagePrompts.map(p => {
+              if (p._type === 'skill') {
+                return (
+                  <SkillCard
+                    key={`skill:${p.id}`}
+                    skill={p}
+                    userSkillsEnabled={userSkillsEnabled}
+                    onOpen={skill => setSelectedSkillId(skill.id)}
+                    onDuplicate={skillActions.duplicate}
+                    onEdit={skillActions.edit}
+                  />
+                );
+              }
               const isFavorite = favoritePromptIds.includes(p.id);
               return (
                 <div
-                  key={p.id}
+                  key={`prompt:${p.id}`}
                   data-testid="prompt-card"
                   data-prompt-id={p.id}
                   className="group relative bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-xs hover:shadow-md hover:border-indigo-300 dark:hover:border-indigo-600 transition-all duration-200 transform hover:-translate-y-0.5 cursor-pointer"
@@ -663,7 +925,19 @@ function PromptsList() {
           t={t}
         />
       )}
+      {selectedSkill && (
+        <SkillDetailsModal
+          skill={selectedSkill}
+          onClose={closeDetails}
+          onEdit={userSkillsEnabled ? withClose(skillActions.edit) : undefined}
+          onShare={userSkillsEnabled ? withClose(skillActions.share) : undefined}
+          onDuplicate={userSkillsEnabled ? withClose(skillActions.duplicate) : undefined}
+          onHistory={userSkillsEnabled ? withClose(skillActions.showHistory) : undefined}
+          onDelete={userSkillsEnabled ? withClose(skillActions.remove) : undefined}
+        />
+      )}
       {actions.dialogs}
+      {skillActions.dialogs}
     </div>
   );
 }

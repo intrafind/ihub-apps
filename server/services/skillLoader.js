@@ -1,9 +1,9 @@
 import { promises as fs } from 'fs';
 import path from 'path';
 import { getRootDir } from '../pathUtils.js';
-import config from '../config.js';
 import logger from '../utils/logger.js';
 import { parseFrontMatter } from '../utils/frontMatter.js';
+import { getContentsPath } from '../utils/contentsPath.js';
 import { resolveAndValidatePath, resolveAndValidateRealPath } from '../utils/pathSecurity.js';
 
 // Agent Skills spec constraints
@@ -40,11 +40,7 @@ function validateSkillName(name) {
  * @returns {string} Absolute path to skills directory
  */
 function getSkillsDirectory(customDir) {
-  const rootDir = getRootDir();
-  const contentsDir = config.CONTENTS_DIR || 'contents';
-  return customDir
-    ? path.resolve(rootDir, customDir)
-    : path.resolve(rootDir, contentsDir, 'skills');
+  return customDir ? path.resolve(getRootDir(), customDir) : getContentsPath('skills');
 }
 
 /**
@@ -226,7 +222,7 @@ export async function loadSkillsMetadata(customDir) {
  * Get the full content (body) of a skill's SKILL.md
  * @param {string} skillName - Skill name/directory
  * @param {string} [customDir] - Optional custom skills directory
- * @returns {Promise<{ body: string, references: string[], scripts: string[], assets: string[] } | null>}
+ * @returns {Promise<{ body: string, description: string, frontmatter: object, references: string[], scripts: string[], assets: string[] } | null>}
  */
 export async function getSkillContent(skillName, customDir) {
   // Validate skill name to prevent path traversal and enforce spec
@@ -273,6 +269,8 @@ export async function getSkillContent(skillName, customDir) {
 
   return {
     body: parsed.body,
+    description:
+      typeof parsed.frontmatter?.description === 'string' ? parsed.frontmatter.description : '',
     frontmatter: parsed.frontmatter,
     references,
     scripts,

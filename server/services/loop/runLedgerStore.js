@@ -48,7 +48,6 @@ import { promises as fs, createReadStream } from 'fs';
 import { createInterface } from 'readline';
 import { createHash } from 'crypto';
 import path from 'path';
-import { getRootDir } from '../../pathUtils.js';
 import config from '../../config.js';
 import logger from '../../utils/logger.js';
 import { createJsonlAppender } from '../../utils/jsonlAppender.js';
@@ -58,6 +57,7 @@ import { LockTimeoutError } from '../../storage/errors.js';
 import { getStorage } from '../../storage/bootstrap.js';
 import { RunSummaryRepository, getRunSummaryRepository } from '../runtime/RunSummaryRepository.js';
 import { RUN_LOG_EVENTS } from '../../../shared/runEvents.js';
+import { getContentsPath } from '../../utils/contentsPath.js';
 
 const COMPONENT = 'RunLedgerStore';
 
@@ -301,8 +301,7 @@ export class RunLedgerStore {
     runSummaries = null,
     resolveProvider = getStorage
   } = {}) {
-    this._baseDir =
-      baseDir || path.join(getRootDir(), config.CONTENTS_DIR, config.DATA_DIR, 'run-log');
+    this._baseDir = baseDir || getContentsPath(config.DATA_DIR, 'run-log');
     this._injectedLogs = logs;
     this._injectedDocuments = documents;
     this._injectedLocks = locks;

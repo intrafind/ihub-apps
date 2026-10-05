@@ -13,8 +13,8 @@
  * @module utils/configFileLocation
  */
 import path from 'path';
-import serverConfig from '../config.js';
 import { getRootDir } from '../pathUtils.js';
+import { getContentsPath } from './contentsPath.js';
 
 /**
  * Resolve a configured configuration file path.
@@ -44,7 +44,7 @@ import { getRootDir } from '../pathUtils.js';
  */
 export function locateConfigFile(configuredPath) {
   const rootDir = getRootDir();
-  const contentsDir = path.join(rootDir, serverConfig.CONTENTS_DIR);
+  const contentsDir = getContentsPath();
   const fullPath = path.isAbsolute(configuredPath)
     ? configuredPath
     : path.join(rootDir, configuredPath);

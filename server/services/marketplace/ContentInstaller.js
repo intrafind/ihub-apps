@@ -32,8 +32,6 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import configStore from '../../services/config/ConfigStore.js';
 import { isValidId, resolveAndValidatePath } from '../../utils/pathSecurity.js';
-import { getRootDir } from '../../pathUtils.js';
-import config from '../../config.js';
 import registryService from './RegistryService.js';
 import { getLocalContentIds } from './localContent.js';
 import logger from '../../utils/logger.js';
@@ -42,6 +40,7 @@ import { modelConfigSchema } from '../../validators/modelConfigSchema.js';
 import { promptConfigSchema } from '../../validators/promptConfigSchema.js';
 import { workflowConfigSchema } from '../../validators/workflowConfigSchema.js';
 import { preserveStoredRecords } from '../provenance/records.js';
+import { getContentsPath } from '../../utils/contentsPath.js';
 
 const COMPONENT = 'ContentInstaller';
 
@@ -51,7 +50,7 @@ const COMPONENT = 'ContentInstaller';
  * @returns {string}
  */
 function getContentsDir() {
-  return path.join(getRootDir(), config.CONTENTS_DIR);
+  return getContentsPath();
 }
 
 /**

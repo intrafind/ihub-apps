@@ -2,10 +2,9 @@ import path from 'path';
 import { promises as fs } from 'fs';
 import { atomicWriteJSON } from './atomicWrite.js';
 import logger from './logger.js';
-import { getRootDir } from '../pathUtils.js';
-import config from '../config.js';
 import { compareVersions, normalizeVersion } from './releaseNotes.js';
 import { getAppVersion } from './versionHelper.js';
+import { getContentsPath } from './contentsPath.js';
 
 /**
  * Which version this installation ran before the one it is running now.
@@ -30,7 +29,7 @@ import { getAppVersion } from './versionHelper.js';
  * @module installedVersionStore
  */
 
-const STORE_PATH = path.join(getRootDir(), config.CONTENTS_DIR, 'data', 'installed-version.json');
+const STORE_PATH = getContentsPath('data', 'installed-version.json');
 
 const EMPTY_RECORD = Object.freeze({
   version: null,

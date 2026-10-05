@@ -10,6 +10,8 @@ import { scheduledTasksClientConfig } from '../../services/scheduler/tasks/taskP
 import { userPromptsClientConfig } from '../../services/prompts/userPromptSettings.js';
 import { getUserPromptRepository } from '../../services/prompts/UserPromptRepository.js';
 import registerPromptRoutes from '../promptRoutes.js';
+import { getUserSkillRepository } from '../../services/skills/UserSkillRepository.js';
+import { userSkillsClientConfig } from '../../services/skills/userSkillSettings.js';
 import crypto from 'crypto';
 import logger from '../../utils/logger.js';
 import { sendInternalError, sendFailedOperationError } from '../../utils/responseHelpers.js';
@@ -824,6 +826,12 @@ export default function registerDataRoutes(app) {
         // the audiences they may share with. The server enforces the same.
         userPrompts: userPromptsClientConfig(configCache.getFeatures(), platform, {
           storageAvailable: getUserPromptRepository().isAvailable()
+        }),
+        // User skills: whether users may keep and share skills of their own
+        // (the `skills` feature, `platform.userSkills` and the storage
+        // provider) and the limits the editor shows. The server enforces them.
+        userSkills: userSkillsClientConfig(configCache.getFeatures(), platform, {
+          storageAvailable: getUserSkillRepository().isAvailable()
         }),
         rateLimit: platform.rateLimit,
         swagger: platform.swagger

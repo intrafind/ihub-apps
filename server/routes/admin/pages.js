@@ -1,6 +1,3 @@
-import { join } from 'path';
-import { getRootDir } from '../../pathUtils.js';
-import serverConfig from '../../config.js';
 import configStore from '../../services/config/ConfigStore.js';
 import configCache from '../../configCache.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
@@ -11,6 +8,7 @@ import {
   resolveAndValidatePath
 } from '../../utils/pathSecurity.js';
 import logger from '../../utils/logger.js';
+import { getContentsPath } from '../../utils/contentsPath.js';
 import {
   sendInternalError,
   sendNotFound,
@@ -40,7 +38,7 @@ const UI_FILE = 'config/ui.json';
  * @returns {Promise<boolean>} True when the path is contained
  */
 async function isContainedPagePath(relPath) {
-  const contentsDir = join(getRootDir(), serverConfig.CONTENTS_DIR);
+  const contentsDir = getContentsPath();
   return (await resolveAndValidatePath(relPath, contentsDir)) !== null;
 }
 
