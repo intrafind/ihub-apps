@@ -191,31 +191,64 @@ export function getUpdateStatus() {
 }
 
 function setState(updates) {
-  updateState = { ...updateState, ...updates };
+  updateState = { ...updateState, ...updates, updatedAt: Date.now() };
 }
 
 /**
  * The update runs on the cluster worker that received the admin's request,
  * and only that worker's `updateState` moves; a status poll reaching another
  * worker used to report `idle` and 0% and never showed a download error.
- * Every worker answers with its own state, and the poll takes the one that is
- * busy.
+ * Every worker answers with its own state, and the poll picks among them
+ * with {@link pickUpdateState}.
  */
 const UPDATE_STATUS_CHANNEL = 'update:status';
 respond(UPDATE_STATUS_CHANNEL, () => ({ state: updateState }));
 
+/** States in which an update operation is still running. */
+const ACTIVE_UPDATE_STATUSES = new Set([
+  'checking',
+  'downloading',
+  'extracting',
+  'staging',
+  'applying',
+  'restarting'
+]);
+
 /**
- * {@link getUpdateStatus}, showing an update in progress on another worker.
+ * The state a status poll should show, out of every worker's.
+ *
+ * An operation that is still running wins: only one runs at a time (the update
+ * lock), and its progress is what the admin is waiting for. Otherwise the most
+ * recent outcome wins. "Not idle" alone does not do: an `error` stays in the
+ * state of the worker that failed until that worker runs another operation,
+ * so it would hide a later success on another worker, or this worker's own
+ * old failure would hide a download running elsewhere.
+ *
+ * @param {Array<Object>} states - Worker update states; `updatedAt` is absent
+ *   on a worker that has never run an operation
+ * @returns {Object|undefined} The state to show
+ */
+export function pickUpdateState(states) {
+  const newest = list =>
+    list.reduce((best, state) => ((state.updatedAt || 0) > (best.updatedAt || 0) ? state : best));
+  const known = states.filter(Boolean);
+  if (known.length === 0) return undefined;
+  const active = known.filter(state => ACTIVE_UPDATE_STATUSES.has(state.status));
+  return newest(active.length > 0 ? active : known);
+}
+
+/**
+ * {@link getUpdateStatus}, showing the update operation of whichever worker ran it.
  */
 export async function getUpdateStatusAnywhere() {
   const local = getUpdateStatus();
-  if (local.status !== 'idle' || !isClusterBusActive()) return local;
+  if (!isClusterBusActive()) return local;
   const replies = await gather(UPDATE_STATUS_CHANNEL, null, {
     expected: Math.max(0, (Number(config.WORKERS) || 1) - 1),
     timeoutMs: 500
   });
-  const busy = replies.find(reply => reply?.state && reply.state.status !== 'idle');
-  return busy ? { ...local, ...busy.state } : local;
+  const shown = pickUpdateState([updateState, ...replies.map(reply => reply?.state)]);
+  return shown === updateState ? local : { ...local, ...shown };
 }
 
 /**
