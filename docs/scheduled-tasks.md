@@ -9,6 +9,8 @@ other conversation — and continued, if the owner wants to follow up.
 
 The feature ships as a **preview** and is off by default.
 
+![The Scheduled tasks page with three tasks, their schedules, next and last runs](assets/screenshots/scheduled-tasks.png)
+
 ## Enabling
 
 All of these have to hold before anyone sees the feature:
@@ -63,6 +65,8 @@ restart.
 ## Creating a task
 
 There are three ways in, and all of them end on the same form:
+
+![The task form: name, app, model, instructions, schedule with a preview of the next runs, notifications](assets/screenshots/scheduled-task-new.png)
 
 - **Scheduled tasks → New task** (`/tasks/new`). Name, app, model (the app's
   default unless the app allows choosing), the app's variables, instructions,
@@ -136,6 +140,8 @@ Each run starts a **new durable chat** in the task's app, titled
 runId, taskName }`. The chat shows a banner — "Scheduled run of <task> ·
 <time>" with a link back to the task — and can be continued like any chat.
 
+![The chat of a scheduled run with its banner](assets/screenshots/scheduled-task-run-chat.png)
+
 A run that finished while nobody was watching is **unread**: the chat carries
 the usual unseen dot in *Recents* and the chat list, the **Scheduled tasks**
 entry in the sidebar counts the unseen runs, and a toast announces it on the
@@ -148,6 +154,8 @@ and *never*.
 The task page lists every run, newest first: status, trigger, scheduled and
 start time, duration, the reason for anything but a success, and a link to the
 chat.
+
+![A task page: instructions, schedule with the next runs, allowed tools and run history](assets/screenshots/scheduled-task-detail.png)
 
 | Status              | Meaning                                                                 |
 | ------------------- | ----------------------------------------------------------------------- |
@@ -269,6 +277,8 @@ time zone whenever `schedule_task` or `update_scheduled_task` is on, so
 **Admin → Scheduled Tasks** (`/admin/scheduled-tasks`) lists every user's tasks
 with owner, schedule, status, last run and consecutive failures, shows which
 of the feature's conditions currently hold, and edits the platform limits.
+
+![Admin scheduled tasks: feature status, limits and every user's tasks](assets/screenshots/admin-scheduled-tasks.png)
 `GET /api/admin/scheduled-tasks` also reports which worker runs the scheduler
 and what it has queued. An admin can **pause**, **disable** (the owner cannot resume
 it) or **delete** any task and read its run history. An admin never runs a task
