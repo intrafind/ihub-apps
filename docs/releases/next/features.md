@@ -34,3 +34,17 @@ readable when a user has connected many AI clients such as several Claude Code i
 - The note that an issued access token stays valid for a while after disconnecting now appears
   in the disconnect confirmation, where it matters, and the "More integrations coming soon"
   placeholder is gone.
+
+## Skills: Create a Skill With AI
+
+Users can describe a skill in a chat instead of writing it. **New → Create skill with AI** in the
+library opens a chat with the **skill-builder** skill, which asks a few questions and drafts the
+skill. **Save as skill** under the answer opens the skill editor with the name, description,
+instructions and reference files filled in, ready to review and save.
+
+- `skill-builder` now ships with iHub as a global skill and is assigned to the **Chat** app, also
+  on existing installations. The entry is offered when the Agent Skills feature and user skills
+  are on and the skill is granted to the user's groups.
+- **Save as skill** appears under any answer that contains a drafted `SKILL.md`, in every app.
+- To hide the entry, remove `skill-builder` from the Chat app under **Admin → Apps**; assign it to
+  other apps to offer it there.

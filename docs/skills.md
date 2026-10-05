@@ -48,8 +48,30 @@ editor has:
   `.csv`, `.json`, `.yaml`). The model reads them when the instructions point to them. Scripts
   are never run.
 
-The marketplace skill **Skill Builder** interviews a user about a task and writes a skill they
-can paste into the editor.
+### Create a skill with AI
+
+Users who would rather describe a skill than write one start from **New → Create skill with
+AI** in the library:
+
+1. A new chat opens with `/skill-builder ` in the input. The user describes the task the skill
+   should handle (or pastes a prompt, Gem or custom GPT instructions to convert) and sends it.
+2. The **skill-builder** skill asks a few questions, then drafts the skill: a `SKILL.md` with
+   name, description and instructions in a code block, and any reference files in code blocks of
+   their own, labelled with their path.
+3. **Save as skill** under that answer opens the skill editor with everything filled in. The
+   user reviews it and saves; the skill is then one of their own skills, used with `/name`.
+   Asking for changes in the chat gives a new draft, with its own **Save as skill**.
+
+**Save as skill** appears under every answer that contains a skill in this form, in any app.
+The editor checks the draft like a skill typed by hand, and the limits under
+[Settings](#settings) apply.
+
+`skill-builder` is a global skill that ships with iHub (from the marketplace): it is copied into
+`contents/skills/skill-builder/` on startup and assigned to the **Chat** app. **Create skill with
+AI** is offered to signed-in users who may keep skills of their own, when `skill-builder` is
+granted to their groups and assigned to a chat app they can use. With several such apps, the
+start page's chat app wins, then favorites and the app order. Admins assign it to other apps
+under **Admin → Apps**, or remove it from Chat to hide the entry.
 
 ### Skills from the marketplace
 

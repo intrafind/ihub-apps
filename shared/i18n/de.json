@@ -556,6 +556,8 @@
     "imageNotStored": "Dieses Bild konnte nicht gespeichert werden und ist nicht mehr verfügbar.",
     "loadingImage": "Bild wird geladen…",
     "saveAsPrompt": "Als Prompt speichern",
+    "saveAsSkill": "Als Skill speichern",
+    "saveAsSkillNamed": "Als Skill speichern: {{name}}",
     "generatedFiles": {
       "pages_one": "{{count}} Seite",
       "pages_other": "{{count}} Seiten",
@@ -5088,7 +5090,8 @@
       "history": "Verlauf",
       "new": "Neuer Skill",
       "share": "Teilen",
-      "fromMarketplace": "Skill aus dem Marktplatz"
+      "fromMarketplace": "Skill aus dem Marktplatz",
+      "createWithAi": "Skill mit KI erstellen"
     },
     "badge": "Skill",
     "delete": {
@@ -5181,7 +5184,8 @@
       "saved": "Skill gespeichert",
       "shared": "Freigabe aktualisiert",
       "addedFromMarketplace": "„{{name}}“ wurde Ihren Skills hinzugefügt. Geben Sie /{{name}} in einem Chat ein, um ihn zu nutzen.",
-      "filesLeftOut": "{{count}} Datei(en) wurden weggelassen: Ihre Skills enthalten nur Textdateien innerhalb der Größengrenzen."
+      "filesLeftOut": "{{count}} Datei(en) wurden weggelassen: Ihre Skills enthalten nur Textdateien innerhalb der Größengrenzen.",
+      "savedFromChat": "In Ihren Skills gespeichert. Geben Sie /{{name}} in einem Chat ein, um ihn zu nutzen."
     },
     "share": {
       "help": "„Darf verwenden“ erlaubt, den Skill in Chats zu verwenden und zu duplizieren. „Darf bearbeiten“ erlaubt zusätzlich, ihn zu ändern und weiter zu teilen.",

@@ -12,6 +12,7 @@ import usePromptPreferences from '../hooks/usePromptPreferences';
 import SkillCard from '../../skills/components/SkillCard';
 import SkillDetailsModal from '../../skills/components/SkillDetailsModal';
 import useSkillActions from '../../skills/hooks/useSkillActions';
+import useSkillBuilder from '../../skills/hooks/useSkillBuilder';
 import { skillErrorMessage } from '../../skills/utils/skillErrors';
 import { pickerSkillScope } from '../../skills/utils/skillPicker';
 import { getLocalizedContent } from '../../../utils/localizeContent';
@@ -211,6 +212,9 @@ function PromptsList() {
   const skillActions = useSkillActions({
     onChanged: useCallback(() => loadSkills({ fresh: true }), [loadSkills])
   });
+  // "Create skill with AI": a chat with the global skill-builder skill, where
+  // the user describes the skill and saves the drafted SKILL.md as a skill.
+  const skillBuilder = useSkillBuilder({ enabled: userSkillsEnabled, globalSkills });
 
   const prompts = useMemo(
     () =>
@@ -450,6 +454,13 @@ function PromptsList() {
       icon: 'sparkles',
       label: t('skills.actions.new', 'New skill'),
       onSelect: () => skillActions.create()
+    },
+    skillBuilder.app && {
+      id: 'skill-ai',
+      itemType: 'skill',
+      icon: 'chat-bubble',
+      label: t('skills.actions.createWithAi', 'Create skill with AI'),
+      onSelect: skillBuilder.start
     },
     skillMarketplaceEnabled && {
       id: 'skill-marketplace',

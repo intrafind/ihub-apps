@@ -163,6 +163,8 @@ const NO_SEARCH_PARAMS = new URLSearchParams();
 // Loaded on first use: "Save as prompt" is one click among many, and the
 // editor brings the apps list and the icon picker with it.
 const PromptEditorModal = lazyWithRetry(() => import('../../prompts/components/PromptEditorModal'));
+// Loaded on first use too: "Save as skill" only shows under a drafted skill.
+const SkillEditorModal = lazyWithRetry(() => import('../../skills/components/SkillEditorModal'));
 
 /**
  * The chat page of an app.
@@ -247,6 +249,23 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
       userPromptsEnabled ? text => setPromptDraft({ prompt: text, appId: app?.id || null }) : null,
     [userPromptsEnabled, app?.id]
   );
+  // "Save as skill" on an answer that drafts a skill (e.g. from the
+  // skill-builder skill): the skill editor opens filled in. Offered to a
+  // signed-in user when the installation lets users keep skills (the server's
+  // `userSkills.enabled` already includes the skills feature).
+  const userSkillsEnabled =
+    platformConfig?.userSkills?.enabled === true && auth?.isAuthenticated === true;
+  const [skillDraft, setSkillDraft] = useState(null);
+  const [savedSkillName, setSavedSkillName] = useState(null);
+  const handleSaveAsSkill = useMemo(
+    () => (userSkillsEnabled ? draft => setSkillDraft(draft) : null),
+    [userSkillsEnabled]
+  );
+  useEffect(() => {
+    if (!savedSkillName) return undefined;
+    const timer = setTimeout(() => setSavedSkillName(null), 5000);
+    return () => clearTimeout(timer);
+  }, [savedSkillName]);
 
   // Compare mode state
   // Check both platform-wide feature flag AND app-level setting
@@ -2828,6 +2847,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
                         imagesPersisted={serverBackedChat}
                         onOpenInCanvas={handleOpenInCanvas}
                         onSaveAsPrompt={handleSaveAsPrompt}
+                        onSaveAsSkill={handleSaveAsSkill}
                         canvasEnabled={app?.features?.canvas === true}
                         requiredIntegrations={requiredIntegrations}
                         onConnectIntegration={connectIntegration}
@@ -2881,6 +2901,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
                         imagesPersisted={serverBackedChat}
                         onOpenInCanvas={handleOpenInCanvas}
                         onSaveAsPrompt={handleSaveAsPrompt}
+                        onSaveAsSkill={handleSaveAsSkill}
                         canvasEnabled={app?.features?.canvas === true}
                         requiredIntegrations={requiredIntegrations}
                         onConnectIntegration={connectIntegration}
@@ -2933,6 +2954,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
                     showCenteredInput={shouldCenterInput}
                     onOpenInCanvas={handleOpenInCanvas}
                     onSaveAsPrompt={handleSaveAsPrompt}
+                    onSaveAsSkill={handleSaveAsSkill}
                     canvasEnabled={app?.features?.canvas === true}
                     requiredIntegrations={requiredIntegrations}
                     onConnectIntegration={connectIntegration}
@@ -2968,6 +2990,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
                   showCenteredInput={shouldCenterInput}
                   onOpenInCanvas={handleOpenInCanvas}
                   onSaveAsPrompt={handleSaveAsPrompt}
+                  onSaveAsSkill={handleSaveAsSkill}
                   canvasEnabled={app?.features?.canvas === true}
                   requiredIntegrations={requiredIntegrations}
                   onConnectIntegration={connectIntegration}
@@ -3019,6 +3042,29 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
           className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 rounded-md bg-gray-900 text-white text-sm px-4 py-2 shadow-lg"
         >
           {t('prompts.notices.savedToLibrary', 'Saved to your prompts')}
+        </div>
+      )}
+      {skillDraft && (
+        <Suspense fallback={null}>
+          <SkillEditorModal
+            initial={skillDraft}
+            onClose={() => setSkillDraft(null)}
+            onSaved={saved => {
+              setSkillDraft(null);
+              setSavedSkillName(saved?.name || skillDraft.name);
+            }}
+          />
+        </Suspense>
+      )}
+      {savedSkillName && (
+        <div
+          role="status"
+          className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 rounded-md bg-gray-900 text-white text-sm px-4 py-2 shadow-lg"
+        >
+          {t('skills.notices.savedFromChat', {
+            defaultValue: 'Saved to your skills. Type /{{name}} in a chat to use it.',
+            name: savedSkillName
+          })}
         </div>
       )}
       {showShare && (

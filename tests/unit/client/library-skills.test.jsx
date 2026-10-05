@@ -69,6 +69,14 @@ jest.mock('../../../client/src/features/skills/components/SkillDetailsModal', ()
   <div role="dialog">{`details:${skill.id}`}</div>
 ));
 jest.mock('../../../client/src/features/prompts/components/PromptModal', () => () => null);
+let mockApps = [];
+jest.mock('../../../client/src/shared/hooks/useApps', () => () => ({ apps: mockApps }));
+jest.mock('../../../client/src/shared/hooks/useFavorites', () => () => ({ favorites: [] }));
+const mockNavigate = jest.fn();
+jest.mock('react-router-dom', () => ({
+  ...jest.requireActual('react-router-dom'),
+  useNavigate: () => mockNavigate
+}));
 
 import { fetchPrompts, fetchSkills, fetchUserSkills } from '../../../client/src/api';
 import PromptsList from '../../../client/src/features/prompts/pages/PromptsList';
@@ -103,6 +111,7 @@ const renderLibrary = (entry = '/prompts') =>
 beforeEach(() => {
   jest.clearAllMocks();
   mockSkillsFeature = true;
+  mockApps = [];
   mockPlatformConfig = { userPrompts: { enabled: true }, userSkills: { enabled: true } };
   fetchPrompts.mockResolvedValue(PROMPTS);
   fetchSkills.mockResolvedValue(PICKER);
@@ -169,6 +178,46 @@ test('New is a menu with New prompt and New skill', async () => {
   fireEvent.click(screen.getByRole('menuitem', { name: 'New skill' }));
   expect(mockSkillActions.create).toHaveBeenCalled();
   expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+});
+
+const SKILL_BUILDER = {
+  id: 'skill-builder',
+  name: 'skill-builder',
+  description: 'Interviews the user and drafts a skill',
+  scope: 'global'
+};
+
+test('New offers Create skill with AI, opening an app that has the skill-builder skill', async () => {
+  fetchSkills.mockResolvedValue([...PICKER, SKILL_BUILDER]);
+  mockApps = [
+    { id: 'translator', skills: [] },
+    { id: 'chat', skills: ['skill-builder'] }
+  ];
+  renderLibrary();
+  await waitFor(() => expect(screen.getAllByTestId('skill-card')).toHaveLength(3));
+  fireEvent.click(screen.getByRole('button', { name: 'New' }));
+  expect(screen.getAllByRole('menuitem').map(item => item.textContent)).toEqual([
+    'New prompt',
+    'New skill',
+    'Create skill with AI'
+  ]);
+  fireEvent.click(screen.getByRole('menuitem', { name: 'Create skill with AI' }));
+  expect(mockNavigate).toHaveBeenCalledWith('/apps/chat?prefill=%2Fskill-builder+');
+});
+
+test('Create skill with AI needs the skill granted, an app with it and personal skills', async () => {
+  mockApps = [{ id: 'chat', skills: ['skill-builder'] }];
+  const { unmount } = renderLibrary();
+  await waitFor(() => expect(screen.getAllByTestId('skill-card')).toHaveLength(2));
+  fireEvent.click(screen.getByRole('button', { name: 'New' }));
+  expect(screen.queryByRole('menuitem', { name: 'Create skill with AI' })).not.toBeInTheDocument();
+  unmount();
+
+  fetchSkills.mockResolvedValue([...PICKER, SKILL_BUILDER]);
+  mockPlatformConfig = { userPrompts: { enabled: true }, userSkills: { enabled: false } };
+  renderLibrary();
+  await waitFor(() => expect(screen.getAllByTestId('skill-card')).toHaveLength(2));
+  expect(screen.getByRole('button', { name: 'New prompt' })).not.toHaveAttribute('aria-haspopup');
 });
 
 test('a skill card opens its details; ?skill= links open them too', async () => {

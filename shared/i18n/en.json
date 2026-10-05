@@ -3751,6 +3751,8 @@
     "imageNotStored": "This image could not be stored and is no longer available.",
     "loadingImage": "Loading image…",
     "saveAsPrompt": "Save as prompt",
+    "saveAsSkill": "Save as skill",
+    "saveAsSkillNamed": "Save as skill: {{name}}",
     "generatedFiles": {
       "pages_one": "{{count}} page",
       "pages_other": "{{count}} pages",
@@ -5123,7 +5125,8 @@
       "history": "History",
       "new": "New skill",
       "share": "Share",
-      "fromMarketplace": "Skill from the marketplace"
+      "fromMarketplace": "Skill from the marketplace",
+      "createWithAi": "Create skill with AI"
     },
     "badge": "Skill",
     "delete": {
@@ -5216,7 +5219,8 @@
       "saved": "Skill saved",
       "shared": "Sharing updated",
       "addedFromMarketplace": "Added “{{name}}” to your skills. Type /{{name}} in a chat to use it.",
-      "filesLeftOut": "{{count}} file(s) were left out: your skills hold text files only, within the size limits."
+      "filesLeftOut": "{{count}} file(s) were left out: your skills hold text files only, within the size limits.",
+      "savedFromChat": "Saved to your skills. Type /{{name}} in a chat to use it."
     },
     "share": {
       "help": "“Can use” lets people use the skill in chats and duplicate it. “Can edit” also lets them change it and share it further.",

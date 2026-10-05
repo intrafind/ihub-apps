@@ -70,7 +70,9 @@ function ChatMessageList({
   // The chat's enabled tools, for a message's "Schedule this…" — see ChatMessage.
   scheduleEnabledTools = null,
   // "Save as prompt" on the user's messages — see ChatMessage.
-  onSaveAsPrompt = null
+  onSaveAsPrompt = null,
+  // "Save as skill" on answers that draft a skill — see ChatMessage.
+  onSaveAsSkill = null
 }) {
   const { t } = useTranslation();
   const chatContainerRef = useRef(null);
@@ -233,6 +235,7 @@ function ChatMessageList({
                 mcpAppHost={mcpAppHost}
                 scheduleEnabledTools={scheduleEnabledTools}
                 onSaveAsPrompt={onSaveAsPrompt}
+                onSaveAsSkill={onSaveAsSkill}
               />
             </div>
           </div>
