@@ -681,6 +681,8 @@ Administrators can override the automatically generated placeholder for each var
 
 By default the variables sit in a panel next to the chat, and the `prompt` template is filled in again for every message the user sends. With `startForm`, a new chat instead opens with the variables as a form, in place of the chat input:
 
+![The Email Composer starting with a form: email type, recipient, subject, tone, instructions, message and attachments](assets/screenshots/start-form.png)
+
 ```json
 "startForm": {
   "enabled": true,
@@ -706,6 +708,8 @@ A new chat, or clearing the chat, shows the form again. Starter prompts and `aut
 - **Outlook add-in and browser extension**: the task pane and the side panel open the app with the same form; the email or page stays in view and goes along with the message.
 
 Admins switch it on under **Admin → Apps → (app) → Variables → Start chats with a form**, where the button label is edited per language like the app's other texts.
+
+![App editor: Variables section with "Start chats with a form" and the send button label](assets/screenshots/admin-app-editor-start-form.png)
 
 #### Settings Configuration
 
