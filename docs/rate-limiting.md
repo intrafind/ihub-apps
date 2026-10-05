@@ -168,6 +168,14 @@ prefix (`/ihub/api/auth/local/login`) counts against the same limiter as one wit
 
 All rate limiters inherit from the `default` configuration. You only need to specify the options you want to override for each type. Empty configurations (`{}`) will use the default settings.
 
+### Several worker processes
+
+iHub runs several worker processes (`WORKERS`, 4 by default) and spreads connections across them.
+
+- **Auth API and OAuth API** limits count across all workers: the primary process holds the counters and every worker asks it. A limit of 30 means 30 attempts per window, whichever worker each attempt reaches. If the primary does not answer within half a second, a worker counts on its own for that request.
+- **Public, admin, inference and default** limits count per worker, so a client can make up to `WORKERS ×` the configured number of requests per window. Size them accordingly, or enforce them at the ingress.
+- Several iHub replicas (pods) each count on their own, for every limiter.
+
 ## Implementation Details
 
 The rate limiters are implemented in `server/middleware/rateLimiting.js` using a factory pattern that creates configured limiters based on platform settings. They are applied in `server/middleware/setup.js` during application initialization.

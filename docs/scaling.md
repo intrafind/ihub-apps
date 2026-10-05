@@ -287,9 +287,11 @@ pending-finish backfill) and configuration invalidation (see
 unchanged, and round-robin routing means requests from one user now spread across
 workers rather than landing on one:
 
-- **Rate-limit counters are per worker.** With `WORKERS=N` the effective limit
-  for a given key is up to `N ×` the configured value. Size limits accordingly,
-  or enforce them at the ingress. See [rate limiting](rate-limiting.md).
+- **Most rate-limit counters are per worker.** With `WORKERS=N` the effective
+  limit for a given key is up to `N ×` the configured value. Size limits
+  accordingly, or enforce them at the ingress. The Auth API and OAuth API
+  limiters, which guard credentials, count across all workers. See
+  [rate limiting](rate-limiting.md#several-worker-processes).
 - **Voice connection caps are per worker** — see
   [below](#realtime-voice-websocket-and-workers).
 - **Workflow engine state** is file-persisted with an in-process cache, so a
