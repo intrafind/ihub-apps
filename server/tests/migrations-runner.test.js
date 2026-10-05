@@ -568,15 +568,16 @@ describe('Migration Runner', () => {
       expect(history.migrations[1].file).toBe('V144__remove_app_wizard_fields.js');
     });
 
-    it.each(['141', '142', '143', '145', '146', '147', '148', '152'])(
-      'moves an EU AI Act entry recorded at V%s to V153 so it no longer blocks main',
+    it.each(['141', '142', '143', '145', '146', '147', '148', '152', '153'])(
+      'moves an EU AI Act entry recorded at V%s to V154 so it no longer blocks main',
       oldVersion => {
         // A dev install that ran the branch while it held that number recorded
         // it; main's provider plain names (V141), text-to-speech (V142),
         // short-link allowlist (V145), local sign-in lockout (V146), proxy-auth
-        // trusted sources (V147), Translator system prompt (V148) and user
-        // skills settings (V152) migrations hold those numbers now, and V143
-        // sorts below main's app wizard field cleanup (V144).
+        // trusted sources (V147), Translator system prompt (V148), user skills
+        // settings (V152) and workflow code node removal (V153) migrations hold
+        // those numbers now, and V143 sorts below main's app wizard field
+        // cleanup (V144).
         const history = {
           schemaVersion: '1.0',
           migrations: [
@@ -598,8 +599,8 @@ describe('Migration Runner', () => {
         };
 
         expect(reconcileRenamedMigrations(history)).toBe(true);
-        expect(history.migrations[0].version).toBe('153');
-        expect(history.migrations[0].file).toBe('V153__add_ai_transparency.js');
+        expect(history.migrations[0].version).toBe('154');
+        expect(history.migrations[0].file).toBe('V154__add_ai_transparency.js');
         expect(history.migrations[1].version).toBe('140');
       }
     );
@@ -644,6 +645,20 @@ describe('Migration Runner', () => {
 
       expect(reconcileRenamedMigrations(history)).toBe(false);
       expect(history.migrations).toEqual([userSkills]);
+    });
+
+    it("leaves main's V153 workflow entry alone when reconciling the EU AI Act V153", () => {
+      const workflows = {
+        version: '153',
+        description: 'replace_workflow_code_accumulator',
+        file: 'V153__replace_workflow_code_accumulator.js',
+        checksum: 'abc123',
+        status: 'success'
+      };
+      const history = { schemaVersion: '1.0', migrations: [{ ...workflows }] };
+
+      expect(reconcileRenamedMigrations(history)).toBe(false);
+      expect(history.migrations).toEqual([workflows]);
     });
 
     it('is a no-op on a fresh install with no matching history entries', () => {

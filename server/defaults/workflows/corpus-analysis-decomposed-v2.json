@@ -135,7 +135,7 @@
     },
     {
       "id": "accumulate-corpus",
-      "type": "code",
+      "type": "transform",
       "name": {
         "en": "Accumulate corpus across sub-questions",
         "de": "Korpus über Teilfragen akkumulieren"
@@ -146,31 +146,7 @@
       },
       "config": {
         "chatVisible": false,
-        "code": "const prev = data._corpusAll; const prevArr = Array.isArray(prev) ? prev : (prev && Array.isArray(prev.result) ? prev.result : []); [...prevArr, ...(data._corpus || [])];",
-        "outputVariable": "_corpusAllRaw",
-        "timeout": 5000
-      },
-      "parentId": "per-subquestion"
-    },
-    {
-      "id": "unwrap-corpus-accumulator",
-      "type": "transform",
-      "name": {
-        "en": "Unwrap accumulator",
-        "de": "Akkumulator auspacken"
-      },
-      "position": {
-        "x": 60,
-        "y": 750
-      },
-      "config": {
-        "chatVisible": false,
-        "operations": [
-          {
-            "copy": "_corpusAllRaw.result",
-            "to": "_corpusAll"
-          }
-        ]
+        "operations": [{ "append": "_corpus", "to": "_corpusAll" }]
       },
       "parentId": "per-subquestion"
     },
@@ -402,13 +378,8 @@
       "target": "accumulate-corpus"
     },
     {
-      "id": "e-accumulate-corpus-unwrap-corpus-accumulator",
+      "id": "e-accumulate-corpus-analyse-documents",
       "source": "accumulate-corpus",
-      "target": "unwrap-corpus-accumulator"
-    },
-    {
-      "id": "e-unwrap-corpus-accumulator-analyse-documents",
-      "source": "unwrap-corpus-accumulator",
       "target": "analyse-documents"
     },
     {
