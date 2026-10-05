@@ -64,7 +64,7 @@
     "pdfmake": "^0.3.11",
     "playwright": "^1.63.0",
     "pngjs": "^7.0.0",
-    "proxy-addr": "^2.0.7",
+    "proxy-addr": "^2.0.8",
     "selenium-webdriver": "^4.49.0",
     "swagger-jsdoc": "^6.3.0",
     "swagger-ui-express": "^5.0.1",
@@ -82,7 +82,7 @@
     "babel-jest": "^30.5.2",
     "jest": "^30.5.2",
     "nodemon": "^3.1.14",
-    "supertest": "^7.3.0"
+    "supertest": "^7.3.1"
   },
   "overrides": {
     "js-yaml@^3.0.0": "^3.15.2",
