@@ -8,9 +8,12 @@ import {
 } from './realtimeTranscriptionCore';
 
 /**
- * Realtime speech recognition that streams microphone audio to the iHub server
- * over a WebSocket. iHub proxies the audio to a vLLM realtime endpoint (Voxtral)
- * and streams transcription text back. The browser never talks to vLLM directly.
+ * Dictation with a transcription model: streams microphone audio to the iHub
+ * server over a WebSocket, naming the model (Voxtral on vLLM or Mistral, Gemini
+ * Transcribe Live, Gemini Transcribe, …). iHub proxies the audio to the model's
+ * endpoint and streams the text back; the browser never talks to it directly.
+ * A batch model (Gemini Transcribe) sends no text while the user speaks: its
+ * transcript arrives in one piece after `stop()`.
  *
  * Mirrors the duck-typed interface `useVoiceRecognition` expects: the caller sets
  * `continuous`, `interimResults`, `lang`, then assigns `onstart/onresult/onerror/
@@ -30,9 +33,15 @@ const SILENCE_HANG_MS = 1200; // stop after this much trailing silence
 // frame before tearing down anyway. Must exceed the server's post-stop settle
 // window (2.5 s), which is when `done` normally arrives.
 const STOP_TEARDOWN_FALLBACK_MS = 3000;
+// A batch model transcribes the whole recording after `stop`, so `done` comes
+// later — generous last resort: twice the recording plus a minute, never under
+// two minutes (as for the record button).
+const batchTeardownFallbackMs = recordedMs => Math.max(120_000, recordedMs * 2 + 60_000);
 
-class VllmRealtimeRecognition {
-  constructor() {
+class ModelSpeechRecognition {
+  /** @param {string} modelId Transcription model the audio is transcribed with. */
+  constructor(modelId) {
+    this.modelId = modelId;
     this.continuous = false;
     this.interimResults = true;
     this.lang = 'en-US';
@@ -53,6 +62,9 @@ class VllmRealtimeRecognition {
     this._speechStarted = false;
     this._silenceTimer = null;
     this._teardownTimer = null;
+    // The provider mode the server reports in `ready` ('stream' | 'batch').
+    this._mode = null;
+    this._startedAt = 0;
   }
 
   async start() {
@@ -60,6 +72,8 @@ class VllmRealtimeRecognition {
     this._transcript = createTranscriptAssembler();
     this._finalEmitted = false;
     this._speechStarted = false;
+    this._mode = null;
+    this._startedAt = Date.now();
 
     try {
       this._mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -92,7 +106,7 @@ class VllmRealtimeRecognition {
         this.#onAudioFrame(frame, rate)
       );
     } catch (err) {
-      console.error('Realtime STT capture error:', err);
+      console.error('Dictation capture error:', err);
       this.#emitError('audio-capture');
       this.#cleanup();
       return;
@@ -118,8 +132,13 @@ class VllmRealtimeRecognition {
     }
     this.#stopCapture();
     // Completion normally arrives as the server's {type:'done'} frame (after
-    // its post-stop settle); this timer is only the fallback when it doesn't.
-    this._teardownTimer = setTimeout(() => this.#cleanup(), STOP_TEARDOWN_FALLBACK_MS);
+    // its post-stop settle, or once a batch model has transcribed); this timer
+    // is only the fallback when it doesn't.
+    const fallbackMs =
+      this._mode === 'batch'
+        ? batchTeardownFallbackMs(Date.now() - this._startedAt)
+        : STOP_TEARDOWN_FALLBACK_MS;
+    this._teardownTimer = setTimeout(() => this.#cleanup(), fallbackMs);
   }
 
   // --- WebSocket ---
@@ -140,7 +159,7 @@ class VllmRealtimeRecognition {
 
       ws.onopen = () => {
         opened = true;
-        ws.send(JSON.stringify({ type: 'start', lang: this.lang }));
+        ws.send(JSON.stringify({ type: 'start', modelId: this.modelId, lang: this.lang }));
         resolve();
       };
 
@@ -178,7 +197,9 @@ class VllmRealtimeRecognition {
   #handleServerMessage(msg) {
     switch (msg.type) {
       case 'ready':
-        // Upstream connected; audio already flowing is fine.
+        // Upstream connected; audio already flowing is fine (the server holds
+        // what arrives before this).
+        this._mode = msg.mode || 'stream';
         break;
       case 'delta':
         // Incremental token(s) for the current utterance.
@@ -303,4 +324,4 @@ function computeRms(samples) {
   return Math.sqrt(sum / samples.length);
 }
 
-export default VllmRealtimeRecognition;
+export default ModelSpeechRecognition;

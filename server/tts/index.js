@@ -28,10 +28,12 @@
  */
 import configCache from '../configCache.js';
 import mistralTtsProvider from './mistralTtsProvider.js';
+import googleTtsProvider from './googleTtsProvider.js';
 import { toSpeechText, splitSpeechText } from './speechText.js';
 
 const providers = {
-  mistral: mistralTtsProvider
+  mistral: mistralTtsProvider,
+  google: googleTtsProvider
 };
 
 /** Encoding of every byte `/api/voice/speech` streams. */

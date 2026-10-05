@@ -20,7 +20,9 @@ import {
   transformSourceCitations
 } from '../../../client/src/utils/sourceCitationTransformer';
 import StreamingMarkdown from '../../../client/src/features/chat/components/StreamingMarkdown';
-import AnswerSources from '../../../client/src/features/chat/components/AnswerSources';
+import AnswerSources, {
+  CitedSources
+} from '../../../client/src/features/chat/components/AnswerSources';
 import ModelSelector from '../../../client/src/features/chat/components/ModelSelector';
 import {
   _resetSourcesStore,
@@ -299,10 +301,14 @@ describe('AnswerSources', () => {
     expect(within(cited).getByText('truncated')).toBeInTheDocument();
   });
 
+  // A source's card in the open panel (the cited list under the answer names
+  // the same sources).
+  const cardOf = title => within(screen.getByRole('dialog')).getByText(title).closest('li');
+
   test('a document card shows where it lives, its passages and its menu', () => {
     renderSources();
     fireEvent.click(screen.getByRole('button', { name: /Searched for/ }));
-    const card = screen.getByText('Supplier contract ACME').closest('li');
+    const card = cardOf('Supplier contract ACME');
     expect(within(card).getByText('SharePoint')).toBeInTheDocument();
     expect(within(card).getByText('acme.pdf')).toBeInTheDocument();
     // The first passage is the excerpt; all of them fold out.
@@ -321,7 +327,7 @@ describe('AnswerSources', () => {
   test('hovering a card highlights the passages that cite it', () => {
     renderSources();
     fireEvent.click(screen.getByRole('button', { name: /Searched for/ }));
-    const card = screen.getByText('Docs').closest('li');
+    const card = cardOf('Docs');
     fireEvent.mouseEnter(card);
     expect(currentCitationHighlight()).toEqual({ messageKey: 'msg-1', n: 2 });
     fireEvent.mouseLeave(card);
@@ -331,7 +337,7 @@ describe('AnswerSources', () => {
   test('closes with Escape, but a menu takes the first Escape', () => {
     renderSources();
     fireEvent.click(screen.getByRole('button', { name: /Searched for/ }));
-    const card = screen.getByText('Supplier contract ACME').closest('li');
+    const card = cardOf('Supplier contract ACME');
     fireEvent.click(within(card).getByTitle('Actions'));
     fireEvent.keyDown(document, { key: 'Escape' });
     expect(within(card).queryByText('Download')).toBeNull();
@@ -370,6 +376,98 @@ describe('AnswerSources', () => {
     } finally {
       window.matchMedia = original;
     }
+  });
+
+  // The entry above the answer and the cited list at its end, as ChatMessage renders them.
+  const renderWithCited = (set = sources, content = answer) => {
+    const view = resolveCitations(content, set);
+    return render(
+      <>
+        <AnswerSources messageKey="msg-1" sources={set} citations={view} />
+        <CitedSources messageKey="msg-1" sources={view.cited} />
+      </>
+    );
+  };
+
+  test('the entry itself lists no sources; the cited list does', () => {
+    renderSources();
+    expect(screen.queryByRole('list', { name: 'Cited in this answer' })).not.toBeInTheDocument();
+  });
+
+  test('lists the cited sources at the end of the answer, not the ones only considered', () => {
+    renderWithCited();
+    const list = screen.getByRole('list', { name: 'Cited in this answer' });
+    const rows = within(list).getAllByRole('listitem');
+    expect(rows.map(row => row.textContent)).toEqual([
+      expect.stringContaining('Langdock | The Platform for AI Adoption'),
+      expect.stringContaining('Docs'),
+      expect.stringContaining('Supplier contract ACME')
+    ]);
+    expect(within(list).queryByText('Langdock | Y Combinator')).not.toBeInTheDocument();
+    expect(within(list).queryByText('Board minutes')).not.toBeInTheDocument();
+    // Numbered like the badges; a page's title is its link, a document says where it lives.
+    expect(within(rows[0]).getByRole('button', { name: /source 1/ })).toHaveTextContent('1');
+    const link = within(rows[1]).getByRole('link');
+    expect(link).toHaveAttribute('href', 'https://docs.langdock.com/');
+    expect(link).toHaveAttribute('target', '_blank');
+    expect(within(rows[2]).getByText('SharePoint')).toBeInTheDocument();
+    // Nothing opens until asked.
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  test("a cited source's number opens the panel on its card; hover highlights its badges", () => {
+    let open;
+    function Probe() {
+      open = useSourcesState().open;
+      return null;
+    }
+    renderWithCited();
+    render(<Probe />);
+    const row = within(screen.getByRole('list', { name: 'Cited in this answer' }))
+      .getByText('Docs')
+      .closest('li');
+    fireEvent.mouseEnter(row);
+    expect(currentCitationHighlight()).toEqual({ messageKey: 'msg-1', n: 2 });
+    fireEvent.mouseLeave(row);
+    expect(currentCitationHighlight()).toBeNull();
+    fireEvent.click(within(row).getByRole('button', { name: /source 2/ }));
+    expect(open).toEqual({ messageKey: 'msg-1', focus: 2 });
+    expect(screen.getByRole('dialog', { name: 'Sources' })).toBeInTheDocument();
+  });
+
+  test('a source without a link opens the panel from its title', () => {
+    const items = [{ ...minutes, markers: ['r:1'] }];
+    const content = 'See the minutes <cite type="r">1</cite>.';
+    renderWithCited({ queries: [], items }, content);
+    const list = screen.getByRole('list', { name: 'Cited in this answer' });
+    expect(within(list).queryByRole('link')).not.toBeInTheDocument();
+    fireEvent.click(within(list).getByRole('button', { name: 'Board minutes' }));
+    expect(screen.getByRole('dialog', { name: 'Sources' })).toBeInTheDocument();
+  });
+
+  test('a long list folds after five', () => {
+    const many = Array.from({ length: 7 }, (_, i) => ({
+      id: `url:site${i}.example`,
+      provider: 'web',
+      kind: 'page',
+      url: `https://site${i}.example/`,
+      title: `Site ${i}`,
+      private: false
+    }));
+    const content = many.map((source, i) => `Claim ${i} [${i + 1}](${source.url}).`).join(' ');
+    renderWithCited({ queries: [], items: many }, content);
+    expect(screen.getByRole('button', { name: /sources.sourcesCount:7/ })).toBeInTheDocument();
+    const list = screen.getByRole('list', { name: 'Cited in this answer' });
+    expect(within(list).getAllByRole('listitem')).toHaveLength(5);
+    fireEvent.click(screen.getByRole('button', { name: 'sources.showMoreCited:2' }));
+    expect(within(list).getAllByRole('listitem')).toHaveLength(7);
+    fireEvent.click(screen.getByRole('button', { name: 'Show fewer' }));
+    expect(within(list).getAllByRole('listitem')).toHaveLength(5);
+  });
+
+  test('nothing cited, no list', () => {
+    const { container } = render(<CitedSources messageKey="m" sources={[]} />);
+    expect(container).toBeEmptyDOMElement();
   });
 
   test('an answer that found nothing shows no entry', () => {

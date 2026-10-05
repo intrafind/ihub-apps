@@ -1,16 +1,47 @@
 import parseNumberOrUndefined from '../../utils/parseNumberOrUndefined';
 import { usePlatformConfig } from '../../../../shared/contexts/PlatformConfigContext';
+import { getLocalizedContent } from '../../../../utils/localizeContent';
 import {
+  fromDictationValue,
   getPlatformDefaultService,
-  getSpeechServiceLabel
+  getSpeechServiceLabel,
+  toDictationValue
 } from '../../../voice/utils/speechService';
 
-function InputModeSection({ app, onChange, t }) {
+/**
+ * @param {object} props
+ * @param {Array} [props.transcriptionModels] Enabled transcription models: each
+ *   one can take the app's voice input.
+ */
+function InputModeSection({ app, onChange, t, transcriptionModels = [], currentLanguage }) {
   const { platformConfig } = usePlatformConfig();
   const handleInputChange = (field, value) => {
     onChange({ ...app, [field]: value });
   };
-  const speechService = app.settings?.speechRecognition?.service || 'default';
+  const recognition = app.settings?.speechRecognition || {};
+  const speechService = recognition.service || 'default';
+  const selectedModelId = speechService === 'model' ? recognition.modelId || '' : '';
+  const selectedModelMissing =
+    !!selectedModelId && !transcriptionModels.some(m => m.id === selectedModelId);
+  const modelName = id =>
+    getLocalizedContent(transcriptionModels.find(m => m.id === id)?.name, currentLanguage) || id;
+  const platformDefault = getPlatformDefaultService(platformConfig?.speech);
+  const platformDefaultLabel =
+    platformDefault.service === 'model'
+      ? modelName(platformDefault.modelId)
+      : getSpeechServiceLabel(platformDefault.service, t);
+
+  const handleServiceChange = value => {
+    const { service, modelId } =
+      value === 'default' || value === 'custom'
+        ? { service: value, modelId: '' }
+        : fromDictationValue(value);
+    const { modelId: _previousModel, ...rest } = recognition;
+    handleInputChange('settings', {
+      ...app.settings,
+      speechRecognition: { ...rest, service, ...(service === 'model' ? { modelId } : {}) }
+    });
+  };
 
   return (
     <div className="bg-white dark:bg-gray-800 shadow-sm px-4 py-5 sm:rounded-lg sm:p-6">
@@ -136,33 +167,42 @@ function InputModeSection({ app, onChange, t }) {
                 {t('admin.apps.edit.speechRecognitionService', 'Speech Recognition Service')}
               </label>
               <select
-                value={speechService}
-                onChange={e =>
-                  handleInputChange('settings', {
-                    ...app.settings,
-                    speechRecognition: {
-                      ...app.settings?.speechRecognition,
-                      service: e.target.value
-                    }
-                  })
+                value={
+                  speechService === 'model'
+                    ? toDictationValue({ service: 'model', modelId: selectedModelId })
+                    : speechService
                 }
+                onChange={e => handleServiceChange(e.target.value)}
                 className="mt-1 block w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
               >
                 <option value="default">
                   {t('admin.apps.edit.platformDefaultService', 'Platform default ({{service}})', {
-                    service: getSpeechServiceLabel(
-                      getPlatformDefaultService(platformConfig?.speech),
-                      t
-                    )
+                    service: platformDefaultLabel
                   })}
                 </option>
                 <option value="browser">
                   {t('admin.apps.edit.browserService', 'Browser (Web Speech API)')}
                 </option>
                 <option value="azure">{t('admin.apps.edit.azureService', 'Azure Speech')}</option>
-                <option value="vllm-realtime">
-                  {t('admin.apps.edit.vllmRealtimeService', 'vLLM Realtime (server-proxied)')}
-                </option>
+                {(transcriptionModels.length > 0 || selectedModelMissing) && (
+                  <optgroup label={t('admin.voiceInput.services.models', 'Transcription models')}>
+                    {transcriptionModels.map(m => (
+                      <option
+                        key={m.id}
+                        value={toDictationValue({ service: 'model', modelId: m.id })}
+                      >
+                        {modelName(m.id)}
+                      </option>
+                    ))}
+                    {selectedModelMissing && (
+                      <option
+                        value={toDictationValue({ service: 'model', modelId: selectedModelId })}
+                      >
+                        {selectedModelId}
+                      </option>
+                    )}
+                  </optgroup>
+                )}
                 <option value="custom">
                   {t('admin.apps.edit.customService', 'Custom Service')}
                 </option>
@@ -175,12 +215,23 @@ function InputModeSection({ app, onChange, t }) {
                   )}
                 </p>
               )}
-              {speechService === 'vllm-realtime' && (
-                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                  {t(
-                    'admin.apps.edit.vllmRealtimeHint',
-                    'Streams microphone audio to the iHub server, which proxies it to the vLLM realtime endpoint configured in platform.json (speech.realtime).'
-                  )}
+              {speechService === 'model' && (
+                <p
+                  className={`mt-1 text-xs ${
+                    selectedModelMissing
+                      ? 'text-amber-600 dark:text-amber-400'
+                      : 'text-gray-500 dark:text-gray-400'
+                  }`}
+                >
+                  {selectedModelMissing
+                    ? t(
+                        'admin.apps.edit.dictationModelUnavailable',
+                        'This model is disabled or no longer exists, so voice input fails in this app.'
+                      )
+                    : t(
+                        'admin.apps.edit.dictationModelHint',
+                        'The microphone streams through the iHub server to this transcription model. Users need access to the model through their groups.'
+                      )}
                 </p>
               )}
             </div>

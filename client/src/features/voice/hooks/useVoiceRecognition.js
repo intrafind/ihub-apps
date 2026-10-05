@@ -142,11 +142,11 @@ const useVoiceRecognition = ({ app, inputRef, onSpeechResult, onCommand, disable
 
     try {
       // The app's own service, or the platform default (Admin → Voice Input).
-      const service = resolveSpeechService(app, platformConfig);
+      const { service, modelId } = resolveSpeechService(app, platformConfig);
 
       // The browser Web Speech API is only required for the 'browser' service.
-      // Azure and the iHub-proxied vLLM realtime service capture audio directly
-      // and don't depend on window.SpeechRecognition.
+      // Azure and transcription models (streamed through iHub) capture audio
+      // directly and don't depend on window.SpeechRecognition.
       if (service === 'browser' && !isBrowserSpeechSupported()) {
         showError(
           t('voiceInput.error.notSupported', 'Speech recognition not supported in this browser')
@@ -172,6 +172,7 @@ const useVoiceRecognition = ({ app, inputRef, onSpeechResult, onCommand, disable
       // Azure prefers the per-app host and falls back to the platform-level host
       // configured in Admin → Voice Input (platform.speech.azure.host).
       const recognition = createSpeechRecognizer(service, {
+        modelId,
         host: app?.settings?.speechRecognition?.host,
         speech: platformConfig?.speech
       });
@@ -179,7 +180,7 @@ const useVoiceRecognition = ({ app, inputRef, onSpeechResult, onCommand, disable
       recognition.continuous = microphoneMode === 'manual';
       recognition.interimResults = true;
       recognition.lang = toRecognitionLang(i18n.language);
-      // The Azure and vLLM realtime services emit results as { text, isFinal }
+      // The Azure and model services emit results as { text, isFinal }
       // objects rather than the browser SpeechRecognition event shape. They mark
       // themselves with `usesTextEventShape`.
       const usesTextEventShape = recognition.usesTextEventShape === true;
@@ -201,7 +202,7 @@ const useVoiceRecognition = ({ app, inputRef, onSpeechResult, onCommand, disable
         }
       }
 
-      // Some services (vLLM realtime) end asynchronously: after stop() the old
+      // Some services (transcription models) end asynchronously: after stop() the old
       // instance's final result / onend can arrive up to a few seconds later.
       // If the user restarted dictation in that window, those stale events must
       // not touch the CURRENT session's state or the input field.

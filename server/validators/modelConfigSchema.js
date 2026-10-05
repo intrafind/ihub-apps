@@ -286,7 +286,7 @@ export const TRANSCRIPTION_ONLY_PROVIDERS = ['vllm-realtime', 'google-live', 'go
 
 // Providers with a text-to-speech implementation in server/tts/. A `tts` model
 // on any other provider could never be played, so it fails validation.
-export const TTS_PROVIDERS = ['mistral'];
+export const TTS_PROVIDERS = ['mistral', 'google'];
 
 // Cross-field validation. Kept as a superRefine on top of the base object so
 // `knownModelKeys` can still be derived from `baseModelConfigSchema.shape`

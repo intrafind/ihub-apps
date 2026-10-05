@@ -35,9 +35,9 @@ const transcriptionError = (code, message, partialText) =>
  * it is captured, and the running transcript is reported on every delta, so
  * the caller can grow a message while the user is still speaking.
  *
- * Unlike dictation (`vllmRealtimeRecognitionService.js`, the platform backend,
- * voice-activity auto-stop) the session names a transcription model and runs
- * until the caller stops it. Unlike `transcribeAudioBuffer()` nothing is
+ * Unlike dictation (`modelRecognitionService.js`: text into the input field,
+ * voice-activity auto-stop) the session runs until the caller stops it and
+ * its transcript becomes the message. Unlike `transcribeAudioBuffer()` nothing is
  * buffered client-side beyond the few frames captured before the upstream is
  * ready. A batch model (google-transcribe) reports no deltas: its transcript
  * arrives in one piece after `stop()`.

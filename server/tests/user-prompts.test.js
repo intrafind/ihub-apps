@@ -604,6 +604,45 @@ describe('sharing', () => {
     assert.ok(!all.body.groups.some(group => group.id === 'anonymous'));
     assert.ok(all.body.groups.some(group => group.id === 'engineers'));
   });
+
+  it('offers at most ten groups, whatever the directory holds', async () => {
+    const original = configCache.getGroups().data;
+    const many = Object.fromEntries(
+      Array.from({ length: 40 }, (_, i) => {
+        const id = `team-${String(i).padStart(2, '0')}`;
+        return [id, { id, name: `Team ${i}`, permissions: { apps: ['*'] } }];
+      })
+    );
+    configCache.setCacheEntry(
+      'config/groups.json',
+      resolveGroupInheritance({ groups: { ...original.groups, ...many } })
+    );
+    try {
+      const res = await drive(route.targets, { user: ADA, query: { q: 'team' } });
+      assert.equal(res.statusCode, 200);
+      assert.equal(res.body.groups.length, 10);
+      assert.ok(res.body.groups.every(group => group.id.startsWith('team-')));
+      const narrow = await drive(route.targets, { user: ADA, query: { q: 'team 3' } });
+      assert.deepEqual(
+        narrow.body.groups.map(group => group.id),
+        [
+          'team-03',
+          'team-30',
+          'team-31',
+          'team-32',
+          'team-33',
+          'team-34',
+          'team-35',
+          'team-36',
+          'team-37',
+          'team-38'
+        ],
+        'a narrower search finds the rest'
+      );
+    } finally {
+      configCache.setCacheEntry('config/groups.json', original);
+    }
+  });
 });
 
 describe('ownership', () => {

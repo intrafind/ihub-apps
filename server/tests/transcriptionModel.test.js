@@ -4,7 +4,7 @@
  * Covers the first-class `modelType: 'transcription'` schema changes, the
  * transcription provider registry, and the model-aware upstream resolution used
  * by the realtime WebSocket proxy (permission enforcement, modelType/enabled
- * checks, and the platform.speech.realtime dictation fallback).
+ * checks, and that every session — dictation included — must name a model).
  */
 import { modelConfigSchema } from '../validators/modelConfigSchema.js';
 import { appConfigSchema } from '../validators/appConfigSchema.js';
@@ -173,16 +173,7 @@ describe('resolveTranscriptionUpstream / hasEnabledTranscriptionModel', () => {
 
   beforeEach(() => {
     configCache.setCacheEntry('config/models.json', [baseModel, chatModel, disabledModel]);
-    configCache.setCacheEntry('config/platform.json', {
-      speech: {
-        realtime: {
-          enabled: true,
-          url: 'ws://platform-dictation:8080/v1/realtime',
-          model: 'platform-model',
-          apiKey: ''
-        }
-      }
-    });
+    configCache.setCacheEntry('config/platform.json', { speech: {} });
   });
 
   afterAll(() => {
@@ -255,17 +246,8 @@ describe('resolveTranscriptionUpstream / hasEnabledTranscriptionModel', () => {
     expect(r.error).toMatch(/disabled/i);
   });
 
-  test('falls back to the platform dictation backend when no modelId is given', async () => {
+  test('without a modelId there is nothing to resolve: dictation names its model too', async () => {
     const r = await resolveTranscriptionUpstream({ user: wildcard });
-    expect(r.ok).toBe(true);
-    expect(r.upstream.url).toBe('ws://platform-dictation:8080/v1/realtime');
-    expect(r.upstream.model).toBe('platform-model');
-  });
-
-  test('returns an error when neither a modelId nor platform realtime is configured', async () => {
-    configCache.setCacheEntry('config/platform.json', { speech: { realtime: { enabled: false } } });
-    const r = await resolveTranscriptionUpstream({ user: wildcard });
-    expect(r.ok).toBe(false);
-    expect(r.error).toMatch(/not configured/i);
+    expect(r).toEqual({ ok: false, code: 'no-model', error: 'No transcription model selected' });
   });
 });
