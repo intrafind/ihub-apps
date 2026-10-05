@@ -65,6 +65,9 @@ describe('ConnectedAppsCard', () => {
 
     expect(toggle).toHaveAttribute('aria-expanded', 'true');
     expect(screen.getByText('Run iHub tools on your behalf')).toBeInTheDocument();
+    // The toggle points at the list it opens.
+    const details = document.getElementById(toggle.getAttribute('aria-controls'));
+    expect(details).toContainElement(screen.getByText('Run iHub tools on your behalf'));
   });
 
   test('lists the most recently used connection first', () => {

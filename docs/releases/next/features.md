@@ -7,6 +7,9 @@ readable when a user has connected many AI clients such as several Claude Code i
 
 - Each connected app is a single row with its last use, connection date and number of permissions;
   the permission list opens when the row is clicked.
+- Apps connected before iHub stored display names now show the application's registered name
+  instead of a technical client ID such as `client_claude_code_ihub_1eef9d16`. This applies to
+  the admin connections list too.
 - Connected apps are listed by most recent use. The five most recent show by default, the rest
   behind **Show all**, and a search box appears once there are more than five.
 - The personal API key endpoints are folded behind an **Endpoints** toggle below the keys.

@@ -171,10 +171,10 @@ export default function ConnectedAppsCard({ connections = [], busy = false, onDi
                 </p>
               ) : (
                 <ul className="mt-4 divide-y divide-gray-200 dark:divide-gray-700 border border-gray-200 dark:border-gray-700 rounded-md">
-                  {visible.map((connection, index) => {
+                  {visible.map(connection => {
                     const key = connectionKey(connection);
                     const isOpen = !!expanded[key];
-                    const detailsId = `${listId}-scopes-${index}`;
+                    const detailsId = `${listId}-scopes-${encodeURIComponent(key)}`;
                     const granted = formatDate(connection.grantedAt, locale);
                     const lastUsed = formatDate(connection.lastUsedAt, locale);
                     const meta = [

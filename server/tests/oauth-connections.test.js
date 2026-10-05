@@ -86,6 +86,7 @@ const SERVICE = 'client_reporting_a1b2c3d4';
 function resetStores() {
   const dataDir = path.join(state.rootDir, 'contents', 'data');
   fs.rmSync(dataDir, { recursive: true, force: true });
+  fs.rmSync(path.join(state.rootDir, 'contents', 'config'), { recursive: true, force: true });
   state.platform = {
     oauth: {
       enabled: { authz: true, clients: true },
@@ -107,6 +108,33 @@ async function seedConnection(clientId, userId, options = {}) {
   const token = generateRefreshToken();
   await storeRefreshToken(token, { clientId, userId, scopes: options.scopes || ['openid'] });
   return token;
+}
+
+/** A consent entry as written before the display snapshots existed. */
+function writeLegacyConsent(clientId, userId) {
+  const dataDir = path.join(state.rootDir, 'contents', 'data');
+  fs.mkdirSync(dataDir, { recursive: true });
+  fs.writeFileSync(
+    path.join(dataDir, 'oauth-consent.json'),
+    JSON.stringify({
+      consents: {
+        [`${clientId}:${userId}`]: {
+          clientId,
+          userId,
+          scopes: ['openid'],
+          grantedAt: '2026-01-01T00:00:00.000Z',
+          expiresAt: '2099-01-01T00:00:00.000Z'
+        }
+      }
+    })
+  );
+}
+
+/** The stored OAuth client records, at the default `oauth.clientsFile`. */
+function writeClients(clients) {
+  const configDir = path.join(state.rootDir, 'contents', 'config');
+  fs.mkdirSync(configDir, { recursive: true });
+  fs.writeFileSync(path.join(configDir, 'oauth-clients.json'), JSON.stringify({ clients }));
 }
 
 function adminApp() {
@@ -166,6 +194,27 @@ describe('consent store snapshots', () => {
     expect(connection.clientName).toBe('legacy_client');
     expect(connection.clientKind).toBe('stored');
     expect(connection.lastUsedAt).toBeNull();
+  });
+
+  test('names a pre-snapshot grant after its stored client record', async () => {
+    // A dynamically registered client whose consent predates the snapshots:
+    // its id alone reads like client_claude_code_ihub_1eef9d16.
+    writeLegacyConsent(SERVICE, 'bob');
+    writeClients({ [SERVICE]: { clientId: SERVICE, name: 'Claude Code (ihub)' } });
+
+    expect(listConnectionsForUser('bob')[0].clientName).toBe('Claude Code (ihub)');
+    expect(listConnections({ userId: 'bob' }).connections[0].clientName).toBe('Claude Code (ihub)');
+
+    state.user = { id: 'bob', authMode: 'local' };
+    const res = await request(userApp()).get('/api/integrations/connections');
+    expect(res.body.connections[0].clientName).toBe('Claude Code (ihub)');
+  });
+
+  test('a snapshot name wins over the client record', async () => {
+    await seedConnection(SERVICE, 'alice', { clientName: 'Reporting' });
+    writeClients({ [SERVICE]: { clientId: SERVICE, name: 'Renamed later' } });
+
+    expect(listConnectionsForUser('alice')[0].clientName).toBe('Reporting');
   });
 
   test('re-consenting does not reset the usage clock', async () => {
