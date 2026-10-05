@@ -249,7 +249,9 @@ class Office365Service {
           component: 'Office365Service',
           error: errorData
         });
-        throw new Error('Failed to exchange authorization code for tokens');
+        const exchangeError = new Error('Failed to exchange authorization code for tokens');
+        exchangeError.code = errorData.error;
+        throw exchangeError;
       }
 
       const tokens = await response.json();

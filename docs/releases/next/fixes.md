@@ -64,3 +64,20 @@ page instead.
   expired.
 - On installations served under a subpath (for example `/ihub/`), the return address must also
   lie under that path.
+
+## Integrations: Connecting Office 365, Google Drive, Jira or Nextcloud Works Reliably
+
+Connecting an integration failed at random with an "invalid state" error on servers running
+more than one worker process, which is the default: the sign-in started on one worker and
+Microsoft, Google, Atlassian or Nextcloud sent the user back to another worker that did not know
+about it. Any worker can now finish the sign-in.
+
+When connecting still fails, Settings → Integrations now explains why instead of showing a
+technical code such as `callback_failed`, and a declined consent returns users to the page they
+started from.
+
+- Declined consent or required admin approval: asks the user to have an administrator grant
+  consent for the app.
+- Expired or wrong client secret in the Entra app registration: tells the user to contact their
+  administrator. The server log contains the Microsoft error (for example `AADSTS7000222`).
+- An expired or unverifiable sign-in asks the user to try again.

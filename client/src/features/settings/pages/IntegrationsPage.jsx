@@ -27,6 +27,15 @@ const MCP_ERROR_CODES = [
   'public_url_mismatch'
 ];
 
+/** Cloud storage callback error codes with a dedicated, readable message. */
+const CLOUD_ERROR_CODES = [
+  'access_denied',
+  'invalid_client',
+  'invalid_state',
+  'session_expired',
+  'callback_failed'
+];
+
 export default function IntegrationsPage() {
   const { t, i18n } = useTranslation();
   const lang = i18n.language;
@@ -116,10 +125,12 @@ export default function IntegrationsPage() {
       } else if (error) {
         setMessage({
           type: 'error',
-          text: t('integrations.page.cloud.connectionFailed', {
-            name: provider.displayName,
-            message: decodeURIComponent(error)
-          })
+          text: CLOUD_ERROR_CODES.includes(error)
+            ? t(`integrations.page.cloud.errors.${error}`, { name: provider.displayName })
+            : t('integrations.page.cloud.connectionFailed', {
+                name: provider.displayName,
+                message: decodeURIComponent(error)
+              })
         });
         navigate('/settings/integrations', { replace: true });
       }

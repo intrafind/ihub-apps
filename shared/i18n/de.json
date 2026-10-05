@@ -3969,7 +3969,14 @@
         "connected": "{{name}}-Konto erfolgreich verbunden! Sie können jetzt Dateien aus {{name}} auswählen.",
         "connectionFailed": "{{name}}-Verbindung fehlgeschlagen: {{message}}",
         "disconnected": "{{name}}-Konto erfolgreich getrennt",
-        "disconnectFailed": "Trennen von {{name}} fehlgeschlagen: {{message}}"
+        "disconnectFailed": "Trennen von {{name}} fehlgeschlagen: {{message}}",
+        "errors": {
+          "access_denied": "{{name}} wurde nicht verbunden, da der Zugriff nicht erteilt wurde. Falls Microsoft eine Administratorgenehmigung verlangt hat, bitten Sie Ihren Administrator, der App die Zustimmung zu erteilen, und versuchen Sie es erneut.",
+          "invalid_client": "{{name}} konnte nicht verbunden werden, da die Integration fehlerhaft konfiguriert ist (z. B. ein abgelaufenes Client-Secret). Bitte wenden Sie sich an Ihren Administrator.",
+          "invalid_state": "Die Anmeldung bei {{name}} konnte nicht überprüft werden. Bitte versuchen Sie es erneut.",
+          "session_expired": "Die Anmeldung bei {{name}} hat zu lange gedauert und ist abgelaufen. Bitte versuchen Sie es erneut.",
+          "callback_failed": "{{name}} konnte nicht verbunden werden. Bitte versuchen Sie es erneut oder wenden Sie sich an Ihren Administrator, falls das Problem weiterhin besteht."
+        }
       },
       "office": {
         "available": "Verfügbar",
