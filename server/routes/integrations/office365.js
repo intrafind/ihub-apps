@@ -25,6 +25,9 @@ import { buildContentDisposition } from '../../utils/safeContentDisposition.js';
 
 const router = express.Router();
 
+/** Picker source id → the provider's `sources` toggle that enables it. */
+const SOURCE_SETTINGS = { personal: 'personalDrive', sharepoint: 'followedSites', teams: 'teams' };
+
 /**
  * Validate an identifier used in Office 365 / Microsoft Graph URLs.
  * Restricts characters and length to reduce risk when interpolated into URLs.
@@ -297,8 +300,11 @@ router.get('/sources', authRequired, async (req, res) => {
       return sendAuthRequired(res);
     }
 
-    // Return static source categories (no Graph API calls)
-    const sources = [
+    // Static source categories (no Graph API calls), limited to the sources
+    // the admin enabled for this provider.
+    const providerId = typeof req.query.providerId === 'string' ? req.query.providerId : undefined;
+    const enabled = Office365Service.getEnabledSources(providerId);
+    const allSources = [
       {
         id: 'personal',
         name: 'OneDrive',
@@ -318,6 +324,7 @@ router.get('/sources', authRequired, async (req, res) => {
         icon: 'user-group'
       }
     ];
+    const sources = allSources.filter(source => enabled[SOURCE_SETTINGS[source.id]]);
 
     res.json({
       success: true,
@@ -346,6 +353,14 @@ router.get('/drives/:source', authRequired, async (req, res) => {
     const { source } = req.params;
     const providerId = typeof req.query.providerId === 'string' ? req.query.providerId : undefined;
     let drives = [];
+
+    // Sources the admin switched off are not offered, and the sign-in did not
+    // ask for their permissions either.
+    const enabled = Office365Service.getEnabledSources(providerId);
+    const sourceSetting = SOURCE_SETTINGS[source];
+    if (sourceSetting && !enabled[sourceSetting]) {
+      return sendErrorResponse(res, 403, 'This source is not enabled for this provider');
+    }
 
     switch (source) {
       case 'personal':
