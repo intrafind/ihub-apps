@@ -164,6 +164,25 @@ describe('V152 replace_workflow_code_accumulator', () => {
     assert.deepEqual(workflow.edges, before.edges);
   });
 
+  it('keeps the unwrap step when another node also leads into it', async () => {
+    const before = shippedBefore();
+    before.nodes.splice(1, 0, { id: 'validate', type: 'transform', config: { operations: [] } });
+    before.edges.push({ id: 'e10', source: 'validate', target: 'unwrap-corpus-accumulator' });
+    const dir = await freshDir({ 'extra-input.json': before });
+    await up(makeCtx(dir));
+    const workflow = await readWorkflow(dir, 'extra-input.json');
+
+    assert.ok(workflow.nodes.some(node => node.id === 'unwrap-corpus-accumulator'));
+    assert.deepEqual(
+      workflow.nodes.find(node => node.id === 'accumulate-corpus').config.operations,
+      [
+        { append: '_corpus', to: '_corpusAll' },
+        { copy: '_corpusAll', to: '_corpusAllRaw.result' }
+      ]
+    );
+    assert.deepEqual(workflow.edges, before.edges);
+  });
+
   it('also writes the old result variable when the unwrap step was removed', async () => {
     const before = shippedBefore();
     before.nodes.splice(2, 1);

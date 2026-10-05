@@ -73,9 +73,14 @@ export function replaceAccumulator(workflow) {
     unwrap?.type === 'transform' &&
     JSON.stringify(unwrap.config?.operations) ===
       JSON.stringify([{ copy: '_corpusAllRaw.result', to: '_corpusAll' }]);
+  // Another edge into the unwrap step would point at a missing node once it is removed.
+  const unwrapHasOtherInputs = (workflow.edges || []).some(
+    edge => edge.target === UNWRAP_ID && edge.source !== ACCUMULATOR_ID
+  );
+  const removeUnwrap = unwrapIsShipped && !unwrapHasOtherInputs;
 
   const operations = [{ append: '_corpus', to: '_corpusAll' }];
-  if (!unwrapIsShipped) {
+  if (!removeUnwrap) {
     operations.push({ copy: '_corpusAll', to: '_corpusAllRaw.result' });
   }
   accumulator.type = 'transform';
@@ -86,7 +91,7 @@ export function replaceAccumulator(workflow) {
     operations
   };
 
-  if (unwrapIsShipped) {
+  if (removeUnwrap) {
     removeNode(workflow, UNWRAP_ID);
     workflow.edges = (workflow.edges || [])
       .filter(edge => !(edge.source === ACCUMULATOR_ID && edge.target === UNWRAP_ID))
