@@ -19,3 +19,10 @@ The Office 365 file picker offered SharePoint Sites and Microsoft Teams even whe
 had switched these sources off for the provider. It now lists only the enabled sources and refuses
 to load a disabled one. Opening OneDrive also no longer asks the user to choose between their files
 and a hidden system library ("PersonalCacheLibrary"); it goes straight to their OneDrive files.
+
+## PDF Skill: The Download Card Appears Below the Answer
+
+When the model created a PDF with the `pdf` skill, the chat showed the `create_pdf` tool call and
+the model's description of the document, but no download card. In a stored chat, the card appeared
+only after reloading the page. In a chat that is not stored, the PDF could not be downloaded at
+all. The card now appears as soon as the PDF is created.
