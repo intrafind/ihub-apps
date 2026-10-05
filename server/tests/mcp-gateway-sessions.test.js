@@ -73,7 +73,46 @@ jest.unstable_mockModule('@modelcontextprotocol/sdk/server/streamableHttp.js', (
   StreamableHTTPServerTransport: FakeStreamableHTTPServerTransport
 }));
 
-const { default: registerMcpServerRoutes } = await import('../routes/mcpServer.js');
+// Cluster bus stand-in. `remote` holds `<kind>:<key>` entries that another
+// worker owns; publishes and requests are recorded, and subscribe/respond
+// handlers are captured so a test can play the owning worker.
+const bus = {
+  remote: new Set(),
+  published: [],
+  requests: [],
+  reply: null,
+  handlers: new Map()
+};
+
+jest.unstable_mockModule('../clusterBus.js', () => ({
+  isClusterBusActive: () => false,
+  respondInPrimary: () => () => {},
+  gather: async () => [],
+  createPresenceMap: () => new Map(),
+  hasRemote: (kind, key) => bus.remote.has(`${kind}:${key}`),
+  publish: jest.fn((type, payload, route) => {
+    bus.published.push({ type, payload, route });
+    return true;
+  }),
+  subscribe: jest.fn((type, handler) => {
+    bus.handlers.set(type, handler);
+    return () => {};
+  }),
+  respond: jest.fn((type, handler) => {
+    bus.handlers.set(type, handler);
+    return () => {};
+  }),
+  request: jest.fn(async (type, payload, options) => {
+    bus.requests.push({ type, payload, options });
+    return bus.reply;
+  })
+}));
+
+const {
+  default: registerMcpServerRoutes,
+  mintGatewaySessionId,
+  isSessionIssuedTo
+} = await import('../routes/mcpServer.js');
 
 function makeApp() {
   const app = express();
@@ -97,6 +136,10 @@ describe('MCP gateway session handling', () => {
     buildMcpServer.mockReset();
     transports.length = 0;
     platform.mcpServer.transports.streamableHttp.stateless = false;
+    bus.remote.clear();
+    bus.published.length = 0;
+    bus.requests.length = 0;
+    bus.reply = null;
   });
 
   it('answers 404 Session not found for an unknown session id', async () => {
@@ -239,5 +282,176 @@ describe('MCP gateway session handling', () => {
       .delete('/mcp')
       .set('mcp-session-id', '66666666-6666-6666-6666-666666666666');
     expect(res.status).toBe(204);
+  });
+
+  // ---- cluster mode: the session lives on another worker -------------------
+  // Workers receive connections round-robin, so a client's follow-up request
+  // usually reaches a worker that did not handle its initialize.
+
+  it('issues session ids bound to the user who opened the session', async () => {
+    buildMcpServer.mockResolvedValue({ connect: jest.fn(), close: jest.fn() });
+    await request(makeApp())
+      .post('/mcp')
+      .set('Accept', 'application/json, text/event-stream')
+      .send(INITIALIZE);
+
+    const issued = transports[0].options.sessionIdGenerator();
+    expect(issued).toMatch(/^[\x21-\x7e]+$/); // visible ASCII, as the spec requires
+    expect(isSessionIssuedTo(issued, 'user-1')).toBe(true);
+    expect(isSessionIssuedTo(issued, 'someone-else')).toBe(false);
+    expect(transports[0].options.sessionIdGenerator()).not.toBe(issued);
+  });
+
+  it('serves a POST for a session held by another worker, statelessly', async () => {
+    const sessionId = mintGatewaySessionId('user-1');
+    bus.remote.add(`mcp-session:${sessionId}`);
+    const close = jest.fn();
+    buildMcpServer.mockResolvedValue({ connect: jest.fn(), close });
+
+    const res = await request(makeApp())
+      .post('/mcp')
+      .set('Accept', 'application/json, text/event-stream')
+      .set('mcp-session-id', sessionId)
+      .send({ jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} });
+
+    expect(res.status).toBe(200);
+    expect(transports).toHaveLength(1);
+    expect(transports[0].options.sessionIdGenerator).toBeUndefined();
+    expect(close).toHaveBeenCalled();
+    // The owner hears the session is still in use, so it does not idle out.
+    expect(bus.published).toContainEqual({
+      type: 'mcp-session:touch',
+      payload: { sessionId },
+      route: { kind: 'mcp-session', key: sessionId }
+    });
+  });
+
+  it('declines the push stream for a session held by another worker with 405', async () => {
+    const sessionId = mintGatewaySessionId('user-1');
+    bus.remote.add(`mcp-session:${sessionId}`);
+    const close = jest.fn();
+    buildMcpServer.mockResolvedValue({ connect: jest.fn(), close });
+
+    const res = await request(makeApp())
+      .get('/mcp')
+      .set('Accept', 'text/event-stream')
+      .set('mcp-session-id', sessionId);
+
+    expect(res.status).toBe(405);
+    expect(close).toHaveBeenCalled();
+  });
+
+  it('forwards DELETE for a session held by another worker to its owner', async () => {
+    const sessionId = mintGatewaySessionId('user-1');
+    bus.remote.add(`mcp-session:${sessionId}`);
+
+    const res = await request(makeApp()).delete('/mcp').set('mcp-session-id', sessionId);
+
+    expect(res.status).toBe(204);
+    expect(bus.published).toContainEqual({
+      type: 'mcp-session:terminate',
+      payload: { sessionId, userId: 'user-1' },
+      route: { kind: 'mcp-session', key: sessionId }
+    });
+  });
+
+  it('refuses another user’s session held by another worker, without serving or touching it', async () => {
+    const sessionId = mintGatewaySessionId('someone-else');
+    bus.remote.add(`mcp-session:${sessionId}`);
+    buildMcpServer.mockResolvedValue({ connect: jest.fn(), close: jest.fn() });
+    const app = makeApp();
+
+    const post = await request(app)
+      .post('/mcp')
+      .set('Accept', 'application/json, text/event-stream')
+      .set('mcp-session-id', sessionId)
+      .send({ jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} });
+    const get = await request(app)
+      .get('/mcp')
+      .set('Accept', 'text/event-stream')
+      .set('mcp-session-id', sessionId);
+    const del = await request(app).delete('/mcp').set('mcp-session-id', sessionId);
+
+    expect([post.status, get.status, del.status]).toEqual([403, 403, 403]);
+    expect(buildMcpServer).not.toHaveBeenCalled();
+    expect(bus.published).toEqual([]);
+  });
+
+  it('refuses a held session id that carries no user binding', async () => {
+    const sessionId = '77777777-7777-7777-7777-777777777777';
+    bus.remote.add(`mcp-session:${sessionId}`);
+
+    const res = await request(makeApp())
+      .post('/mcp')
+      .set('Accept', 'application/json, text/event-stream')
+      .set('mcp-session-id', sessionId)
+      .send({ jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} });
+
+    expect(res.status).toBe(403);
+    expect(bus.published).toEqual([]);
+  });
+
+  it('as the owner, closes a session terminated elsewhere only for its own user', async () => {
+    const close = jest.fn();
+    buildMcpServer.mockResolvedValue({ connect: jest.fn(), close });
+    nextSessionId = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
+    const app = makeApp();
+    await request(app)
+      .post('/mcp')
+      .set('Accept', 'application/json, text/event-stream')
+      .send(INITIALIZE);
+    const terminate = bus.handlers.get('mcp-session:terminate');
+
+    terminate({ sessionId: nextSessionId, userId: 'someone-else' });
+    expect(close).not.toHaveBeenCalled();
+
+    terminate({ sessionId: nextSessionId, userId: 'user-1' });
+    await new Promise(resolve => setImmediate(resolve));
+    expect(close).toHaveBeenCalled();
+  });
+
+  it('relays a legacy SSE message to the worker holding the stream', async () => {
+    const sessionId = 'sse-on-worker-2';
+    bus.remote.add(`mcp-sse-session:${sessionId}`);
+    bus.reply = { status: 202 };
+    const message = { jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} };
+
+    const res = await request(makeApp())
+      .post(`/mcp/messages?sessionId=${sessionId}`)
+      .set('Authorization', 'Bearer secret-token')
+      .send(message);
+
+    expect(res.status).toBe(202);
+    expect(bus.requests).toHaveLength(1);
+    const [relayed] = bus.requests;
+    expect(relayed.type).toBe('mcp-sse:message');
+    expect(relayed.options.route).toEqual({ kind: 'mcp-sse-session', key: sessionId });
+    expect(relayed.payload).toMatchObject({ sessionId, userId: 'user-1', body: message });
+    // Credentials never cross to the other worker.
+    expect(relayed.payload.headers.authorization).toBeUndefined();
+  });
+
+  it('passes on the owner refusing a relayed SSE message for another user', async () => {
+    const sessionId = 'sse-of-someone-else';
+    bus.remote.add(`mcp-sse-session:${sessionId}`);
+    bus.reply = { status: 403 };
+
+    const res = await request(makeApp())
+      .post(`/mcp/messages?sessionId=${sessionId}`)
+      .send({ jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} });
+
+    expect(res.status).toBe(403);
+  });
+
+  it('answers 404 when the worker holding the SSE stream does not reply', async () => {
+    const sessionId = 'sse-gone';
+    bus.remote.add(`mcp-sse-session:${sessionId}`);
+    bus.reply = null;
+
+    const res = await request(makeApp())
+      .post(`/mcp/messages?sessionId=${sessionId}`)
+      .send({ jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} });
+
+    expect(res.status).toBe(404);
   });
 });

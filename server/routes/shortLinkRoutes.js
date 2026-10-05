@@ -178,7 +178,16 @@ export default function registerShortLinkRoutes(app) {
         });
         return res.status(404).send('Not found');
       }
-      await recordUsage(link.code);
+      // Counting the visit must not stand between the user and the link.
+      try {
+        await recordUsage(link.code);
+      } catch (error) {
+        logger.warn('Could not record short link usage', {
+          component: 'ShortLinkRoutes',
+          code: link.code,
+          error: error.message
+        });
+      }
       res.redirect(link.url);
     } catch (error) {
       logger.error('Error redirecting short link', { component: 'ShortLinkRoutes', error });

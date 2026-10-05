@@ -1,5 +1,6 @@
 import rateLimit from 'express-rate-limit';
 import { recordRateLimitHit } from '../telemetry/metrics.js';
+import { ClusterRateLimitStore } from '../utils/clusterRateLimitStore.js';
 
 /**
  * Rate limiting middleware configuration for API protection
@@ -80,11 +81,19 @@ export function isReadOnlyAuthRequest(req) {
  *   exempts a request from this limiter entirely
  * @returns {Function} Express rate limiter middleware
  */
-function createRateLimiter(config = {}, defaults = {}, type = 'API', skip = undefined) {
+function createRateLimiter(
+  config = {},
+  defaults = {},
+  type = 'API',
+  skip = undefined,
+  { shared = false } = {}
+) {
   const finalConfig = { ...defaults, ...config };
 
   return rateLimit({
     ...(skip ? { skip } : {}),
+    // Counted across all cluster workers, so the limit means what it says.
+    ...(shared ? { store: new ClusterRateLimitStore(type) } : {}),
     windowMs: finalConfig.windowMs || 1 * 60 * 1000, // 1 minute default
     limit: finalConfig.limit || 500, // 500 requests default
     message: finalConfig.message || {
@@ -175,8 +184,12 @@ export function createRateLimiters(platformConfig = {}) {
     publicApiLimiter: createRateLimiter(publicApiConfig, {}, 'public API'),
     // Read-only auth endpoints skip the strict credential limiter; they are
     // still bounded by the public API limiter mounted on the same path.
-    authApiLimiter: createRateLimiter(authApiConfig, {}, 'authentication', isReadOnlyAuthRequest),
+    authApiLimiter: createRateLimiter(authApiConfig, {}, 'authentication', isReadOnlyAuthRequest, {
+      shared: true
+    }),
     inferenceApiLimiter: createRateLimiter(inferenceApiConfig, {}, 'inference API'),
-    oauthApiLimiter: createRateLimiter(oauthApiConfig, {}, 'OAuth API')
+    oauthApiLimiter: createRateLimiter(oauthApiConfig, {}, 'OAuth API', undefined, {
+      shared: true
+    })
   };
 }

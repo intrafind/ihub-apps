@@ -1,45 +1,26 @@
 import { jest } from '@jest/globals';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 
 /**
- * Unit tests for shortLinkManager.js after its port onto the shared
- * debouncedJsonStore (server/utils/debouncedJsonStore.js). Disk I/O is
- * mocked so tests run against an in-memory links object only; one test
- * exercises the debounced save path end-to-end via fake timers.
+ * Unit tests for shortLinkManager.js on the shared JSON file
+ * (server/utils/sharedJsonFile.js): every change is a locked
+ * read-modify-write of the file on disk, so they run against a real file in a
+ * temporary contents directory. Another cluster worker is simulated by
+ * writing that file directly.
  */
 
-let fileContents = null;
+const contentsDir = fs.mkdtempSync(path.join(os.tmpdir(), 'shortlinks-'));
+const dataFile = path.join(contentsDir, 'data', 'shortlinks.json');
 
-jest.unstable_mockModule('fs/promises', () => ({
-  default: {
-    readFile: jest.fn(async () => {
-      if (fileContents === null) {
-        const error = new Error('ENOENT');
-        error.code = 'ENOENT';
-        throw error;
-      }
-      return fileContents;
-    }),
-    mkdir: jest.fn(async () => {})
-  }
-}));
-
-// debouncedJsonStore saves via atomicWriteJSON (write-temp-then-rename), which
-// internally imports { promises as fs } from 'fs' rather than 'fs/promises' —
-// mock the utility directly so tests never touch the real filesystem.
-jest.unstable_mockModule('../utils/atomicWrite.js', () => ({
-  atomicWriteJSON: jest.fn(async (_file, data) => {
-    fileContents = JSON.stringify(data, null, 2);
-  })
+jest.unstable_mockModule('../utils/contentsPath.js', () => ({
+  getContentsPath: (...segments) => path.join(contentsDir, ...segments)
 }));
 
 jest.unstable_mockModule('../utils/logger.js', () => ({
   default: { error: () => {}, warn: () => {}, info: () => {}, debug: () => {} }
 }));
-
-// The module registers a real periodic setInterval on import; fake timers
-// keep that handle from holding the process open and let tests drive the
-// debounced save deterministically.
-jest.useFakeTimers();
 
 const {
   createLink,
@@ -55,12 +36,10 @@ const {
 } = await import('../shortLinkManager.js');
 
 afterAll(() => {
-  jest.useRealTimers();
+  fs.rmSync(contentsDir, { recursive: true, force: true });
 });
 
-beforeEach(() => {
-  fileContents = null;
-});
+const readFile = () => JSON.parse(fs.readFileSync(dataFile, 'utf8'));
 
 describe('createLink', () => {
   it('generates a unique code and builds a url from appId when none is given', async () => {
@@ -232,29 +211,21 @@ describe('isLinkExpired', () => {
   });
 });
 
-describe('cross-worker visibility (reload on miss)', () => {
-  // Settle any dirty state left by earlier tests before each case: findByCode
-  // flushes local writes before it reloads, and a stale in-flight flush would
-  // silently overwrite the "remote worker" fileContents this suite injects
-  // below, rather than the reload actually being exercised.
-  beforeEach(async () => {
-    await jest.advanceTimersByTimeAsync(10000);
-  });
-
-  function simulateRemoteWorkerWrote(link) {
-    const known = fileContents ? JSON.parse(fileContents).links : [];
-    fileContents = JSON.stringify(
-      { links: [...known, link], lastUpdated: new Date().toISOString() },
-      null,
-      2
-    );
+describe('cross-worker visibility', () => {
+  /** Another worker changing the file, as it would: a whole new file. */
+  function simulateRemoteWorkerWrote(mutate) {
+    const data = fs.existsSync(dataFile) ? readFile() : { links: [] };
+    mutate(data);
+    const tmp = `${dataFile}.remote`;
+    fs.writeFileSync(tmp, JSON.stringify(data, null, 2));
+    fs.renameSync(tmp, dataFile);
   }
 
-  it('getLink finds a code that only exists on disk, written by another worker', async () => {
-    const remoteLink = {
-      code: 'remote-only-code',
+  function remoteLink(code) {
+    return {
+      code,
       appId: 'remote-app',
-      userId: 'remote-user',
+      ownerId: 'remote-user',
       path: null,
       params: null,
       url: '/apps/remote-app',
@@ -263,31 +234,45 @@ describe('cross-worker visibility (reload on miss)', () => {
       usage: 0,
       expiresAt: null
     };
-    expect(await getLink(remoteLink.code)).toBeUndefined();
-    simulateRemoteWorkerWrote(remoteLink);
+  }
 
-    expect(await getLink(remoteLink.code)).toEqual(remoteLink);
+  it('getLink finds a code another worker created', async () => {
+    const link = remoteLink('remote-only-code');
+    expect(await getLink(link.code)).toBeUndefined();
+    simulateRemoteWorkerWrote(data => data.links.push(link));
+
+    expect(await getLink(link.code)).toEqual(link);
   });
 
   it('recordUsage finds and updates a code created by another worker', async () => {
-    const remoteLink = {
-      code: 'remote-only-code-2',
-      appId: 'remote-app',
-      userId: 'remote-user',
-      path: null,
-      params: null,
-      url: '/apps/remote-app',
-      includeParams: false,
-      createdAt: new Date().toISOString(),
-      usage: 0,
-      expiresAt: null
-    };
-    simulateRemoteWorkerWrote(remoteLink);
+    const link = remoteLink('remote-only-code-2');
+    simulateRemoteWorkerWrote(data => data.links.push(link));
 
-    const updated = await recordUsage(remoteLink.code);
-    expect(updated).toMatchObject({ code: remoteLink.code, usage: 1 });
-    // Now resolved locally too, without a further reload.
-    expect(await getLink(remoteLink.code)).toMatchObject({ usage: 1 });
+    const updated = await recordUsage(link.code);
+    expect(updated).toMatchObject({ code: link.code, usage: 1 });
+    expect(await getLink(link.code)).toMatchObject({ usage: 1 });
+  });
+
+  it('a change here keeps a link another worker created meanwhile', async () => {
+    const mine = await createLink({ appId: 'mine', ownerId: 'u1' });
+    const theirs = remoteLink('created-elsewhere');
+    simulateRemoteWorkerWrote(data => data.links.push(theirs));
+
+    await updateLink(mine.code, { appId: 'mine-2' });
+
+    const codes = readFile().links.map(l => l.code);
+    expect(codes).toEqual(expect.arrayContaining([mine.code, theirs.code]));
+  });
+
+  it('a link deleted by another worker is gone here too, and stays gone', async () => {
+    const link = await createLink({ appId: 'doomed', ownerId: 'u1' });
+    simulateRemoteWorkerWrote(data => {
+      data.links = data.links.filter(l => l.code !== link.code);
+    });
+
+    expect(await getLink(link.code)).toBeUndefined();
+    await createLink({ appId: 'unrelated', ownerId: 'u1' });
+    expect(readFile().links.some(l => l.code === link.code)).toBe(false);
   });
 
   it('a code that truly does not exist anywhere still reports missing', async () => {
@@ -296,15 +281,9 @@ describe('cross-worker visibility (reload on miss)', () => {
   });
 });
 
-describe('debounced save', () => {
-  it('persists the link to disk once the debounce interval elapses', async () => {
+describe('saving', () => {
+  it('writes a new link to disk right away', async () => {
     const link = await createLink({ appId: 'a1', ownerId: 'u1' });
-    expect(fileContents).toBeNull();
-
-    await jest.advanceTimersByTimeAsync(10000);
-
-    expect(fileContents).not.toBeNull();
-    const saved = JSON.parse(fileContents);
-    expect(saved.links.some(l => l.code === link.code)).toBe(true);
+    expect(readFile().links.some(l => l.code === link.code)).toBe(true);
   });
 });

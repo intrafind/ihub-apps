@@ -17,7 +17,7 @@
  *
  * @module utils/oauthClientResolver
  */
-import { findCimdClientPolicy, findClientById, loadOAuthClients } from './oauthClientManager.js';
+import { findCimdClientPolicy, findClientByIdFresh } from './oauthClientManager.js';
 import {
   clientIdHost,
   fetchClientMetadata,
@@ -180,7 +180,9 @@ export async function resolveOAuthClient(clientId, platform = {}, options = {}) 
   const clientsFilePath = clientsFileFor(platform);
 
   if (!isClientIdUrl(clientId)) {
-    const clientsConfig = loadOAuthClients(clientsFilePath);
+    // Fresh on a miss: a client registered on another worker moments ago is
+    // not in this worker's cached copy yet.
+    const { clientsConfig, client: stored } = await findClientByIdFresh(clientsFilePath, clientId);
     if (clientsConfig?.metadata?.error) {
       return {
         ok: false,
@@ -188,7 +190,6 @@ export async function resolveOAuthClient(clientId, platform = {}, options = {}) 
         reason: 'OAuth client store unavailable'
       };
     }
-    const stored = findClientById(clientsConfig, clientId);
     if (!stored) {
       return { ok: false, error: 'invalid_client', reason: 'unknown client_id' };
     }

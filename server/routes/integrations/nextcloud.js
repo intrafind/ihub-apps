@@ -2,7 +2,6 @@
 // Handles OAuth2 flow for Nextcloud file access authentication.
 
 import express from 'express';
-import crypto from 'crypto';
 import NextcloudService from '../../services/integrations/NextcloudService.js';
 import { authOptional, authRequired } from '../../middleware/authRequired.js';
 import { requireFeature } from '../../featureRegistry.js';
@@ -15,6 +14,12 @@ import {
   sendErrorResponse
 } from '../../utils/responseHelpers.js';
 import { isValidReturnUrl } from '../../utils/oauthReturnUrl.js';
+import {
+  DEFAULT_INTEGRATION_RETURN_URL,
+  issueIntegrationOAuthState,
+  verifyIntegrationOAuthState,
+  withQueryParam
+} from '../../utils/integrationOAuthState.js';
 import { buildContentDisposition } from '../../utils/safeContentDisposition.js';
 
 const router = express.Router();
@@ -56,10 +61,6 @@ router.get('/auth', authRequired, nextcloudAuthLimiter, async (req, res) => {
       return sendBadRequest(res, 'providerId query parameter is required');
     }
 
-    if (!req.session) {
-      return sendErrorResponse(res, 500, 'Session not available');
-    }
-
     // authRequired lets the anonymous principal through when anonymous
     // access is allowed, and does not guarantee req.user.id is truthy.
     // Refuse to start an OAuth flow without a signed-in user id — otherwise
@@ -68,19 +69,18 @@ router.get('/auth', authRequired, nextcloudAuthLimiter, async (req, res) => {
       return sendAuthRequired(res);
     }
 
-    const state = crypto.randomBytes(32).toString('hex');
     const validatedReturnUrl = isValidReturnUrl(returnUrl, req)
       ? returnUrl
-      : '/settings/integrations';
+      : DEFAULT_INTEGRATION_RETURN_URL;
 
-    const sessionKey = `oauth_nextcloud_${providerId}`;
-    req.session[sessionKey] = {
-      state,
+    // Signed, self-contained state instead of a session: the callback may
+    // land on another cluster worker (see utils/integrationOAuthState.js).
+    const state = issueIntegrationOAuthState({
+      service: 'nextcloud',
       providerId,
       userId: req.user.id,
-      returnUrl: validatedReturnUrl,
-      timestamp: Date.now()
-    };
+      returnUrl: validatedReturnUrl
+    });
 
     const authUrl = NextcloudService.generateAuthUrl(providerId, state, req);
 
@@ -101,9 +101,11 @@ router.get('/auth', authRequired, nextcloudAuthLimiter, async (req, res) => {
  * GET /api/integrations/nextcloud/:providerId/callback
  */
 router.get('/:providerId/callback', authOptional, async (req, res) => {
+  const { providerId } = req.params;
+  const verified = verifyIntegrationOAuthState(req, { service: 'nextcloud', providerId });
+  const { returnUrl } = verified;
   try {
-    const { code, state, error: oauthError } = req.query;
-    const { providerId } = req.params;
+    const { code, error: oauthError } = req.query;
 
     if (oauthError) {
       logger.error('Nextcloud OAuth error', {
@@ -111,62 +113,28 @@ router.get('/:providerId/callback', authOptional, async (req, res) => {
         error: oauthError,
         providerId
       });
-      return res.redirect('/settings/integrations?nextcloud_error=oauth_failed');
+      const errorCode = oauthError === 'access_denied' ? 'access_denied' : 'oauth_failed';
+      return res.redirect(withQueryParam(returnUrl, 'nextcloud_error', errorCode));
     }
 
-    // Some IdP edge cases (consent denied without `error`, or a manual
-    // hit on the callback URL) can land here with no `code`. Surface a
-    // stable error code instead of throwing inside `exchangeCodeForTokens`
-    // and leaking the raw error into the redirect URL.
+    if (!verified.ok) {
+      logger.error('Invalid Nextcloud OAuth state parameter', {
+        component: 'Nextcloud',
+        providerId,
+        reason: verified.error
+      });
+      return res.redirect(withQueryParam(returnUrl, 'nextcloud_error', verified.error));
+    }
+
     if (!code) {
       logger.error('Nextcloud OAuth callback missing code', {
         component: 'Nextcloud',
         providerId
       });
-      return res.redirect('/settings/integrations?nextcloud_error=missing_code');
+      return res.redirect(withQueryParam(returnUrl, 'nextcloud_error', 'missing_code'));
     }
 
-    if (!req.session) {
-      logger.error('No session available for Nextcloud OAuth callback', {
-        component: 'Nextcloud',
-        providerId
-      });
-      return res.redirect('/settings/integrations?nextcloud_error=no_session');
-    }
-
-    const sessionKey = `oauth_nextcloud_${providerId}`;
-    const storedAuth = req.session[sessionKey];
-
-    const returnUrl = storedAuth?.returnUrl || '/settings/integrations';
-    const separator = returnUrl.includes('?') ? '&' : '?';
-
-    if (!storedAuth || storedAuth.state !== state) {
-      logger.error('Invalid Nextcloud OAuth state parameter', {
-        component: 'Nextcloud',
-        providerId
-      });
-      return res.redirect(`${returnUrl}${separator}nextcloud_error=invalid_state`);
-    }
-
-    if (storedAuth.providerId !== providerId) {
-      logger.error('Provider ID mismatch in Nextcloud OAuth callback', {
-        component: 'Nextcloud',
-        urlProviderId: providerId,
-        sessionProviderId: storedAuth.providerId
-      });
-      return res.redirect(`${returnUrl}${separator}nextcloud_error=provider_mismatch`);
-    }
-
-    // 15-minute session timeout for the OAuth handshake
-    if (Date.now() - storedAuth.timestamp > 15 * 60 * 1000) {
-      logger.error('Nextcloud OAuth session expired', {
-        component: 'Nextcloud',
-        providerId
-      });
-      return res.redirect(`${returnUrl}${separator}nextcloud_error=session_expired`);
-    }
-
-    const tokens = await NextcloudService.exchangeCodeForTokens(storedAuth.providerId, code, req);
+    const tokens = await NextcloudService.exchangeCodeForTokens(providerId, code, req);
 
     if (!tokens.refreshToken) {
       logger.warn(
@@ -175,34 +143,24 @@ router.get('/:providerId/callback', authOptional, async (req, res) => {
       );
     }
 
-    await NextcloudService.storeUserTokens(storedAuth.userId, tokens);
-    delete req.session[sessionKey];
+    await NextcloudService.storeUserTokens(verified.userId, tokens);
 
     logger.info('Nextcloud OAuth completed', {
       component: 'Nextcloud',
-      userId: storedAuth.userId,
-      providerId: storedAuth.providerId
+      userId: verified.userId,
+      providerId
     });
 
-    res.redirect(`${returnUrl}${separator}nextcloud_connected=true`);
+    res.redirect(withQueryParam(returnUrl, 'nextcloud_connected', 'true'));
   } catch (error) {
     logger.error('Error handling Nextcloud OAuth callback', {
       component: 'Nextcloud',
       error: error.message,
-      providerId: req.params.providerId
+      providerId
     });
-
-    let catchReturnUrl = '/settings/integrations';
-    if (req.session) {
-      const catchKey = `oauth_nextcloud_${req.params.providerId}`;
-      catchReturnUrl = req.session[catchKey]?.returnUrl || catchReturnUrl;
-      delete req.session[catchKey];
-    }
-    const catchSeparator = catchReturnUrl.includes('?') ? '&' : '?';
     // Use a stable error code rather than echoing `error.message` —
-    // some upstream errors interpolate user-influenced strings, and
-    // we don't want those landing in the redirect URL.
-    res.redirect(`${catchReturnUrl}${catchSeparator}nextcloud_error=callback_failed`);
+    // some upstream errors interpolate user-influenced strings.
+    res.redirect(withQueryParam(returnUrl, 'nextcloud_error', 'callback_failed'));
   }
 });
 

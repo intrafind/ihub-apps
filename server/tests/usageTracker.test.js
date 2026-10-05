@@ -1,39 +1,28 @@
 import { jest } from '@jest/globals';
 
 /**
- * Unit tests for usageTracker.js — focused on the request/response collapse
- * (recordChatMessage) and the shared rating helpers (computeAverageRating /
- * applyRating) added to deduplicate what used to be three copies of the same
- * rating math. Disk I/O and dynamic config imports are mocked so tests run
- * against an in-memory usage object only.
+ * Unit tests for usageTracker.js — the request/response collapse
+ * (recordChatMessage), the shared rating helpers (computeAverageRating /
+ * applyRating), and how a worker's counts are added to the usage.json every
+ * worker shares. The shared file is an in-memory string here.
  */
 
+// usage.json, as every worker sees it on disk.
 let fileContents = null;
 
-jest.unstable_mockModule('fs/promises', () => ({
-  default: {
-    readFile: jest.fn(async () => {
-      if (fileContents === null) {
-        const error = new Error('ENOENT');
-        error.code = 'ENOENT';
-        throw error;
+jest.unstable_mockModule('../utils/sharedJsonFile.js', () => ({
+  createSharedJsonFile: ({ createDefault }) => {
+    const readFile = () => (fileContents === null ? createDefault() : JSON.parse(fileContents));
+    return {
+      read: async () => readFile(),
+      update: async mutate => {
+        const data = readFile();
+        const result = await mutate(data);
+        fileContents = JSON.stringify(data, null, 2);
+        return result;
       }
-      return fileContents;
-    }),
-    writeFile: jest.fn(async (_file, data) => {
-      fileContents = data;
-    }),
-    mkdir: jest.fn(async () => {})
+    };
   }
-}));
-
-// debouncedJsonStore saves via atomicWriteJSON (write-temp-then-rename), which
-// internally imports { promises as fs } from 'fs' rather than 'fs/promises' —
-// mock the utility directly so tests never touch the real filesystem.
-jest.unstable_mockModule('../utils/atomicWrite.js', () => ({
-  atomicWriteJSON: jest.fn(async (_file, data) => {
-    fileContents = JSON.stringify(data, null, 2);
-  })
 }));
 
 jest.unstable_mockModule('../featureRegistry.js', () => ({
@@ -68,8 +57,15 @@ jest.unstable_mockModule('../utils/logger.js', () => ({
   default: { error: () => {}, warn: () => {}, info: () => {}, debug: () => {} }
 }));
 
-const { recordChatRequest, recordChatResponse, recordFeedback, getUsage, resetUsage } =
+// The flush to usage.json is timed; fake timers let tests drive it.
+jest.useFakeTimers();
+
+const { recordChatRequest, recordChatResponse, recordFeedback, getUsage, resetUsage, flushUsage } =
   await import('../usageTracker.js');
+
+afterAll(() => {
+  jest.useRealTimers();
+});
 
 beforeEach(async () => {
   fileContents = null;
@@ -183,6 +179,79 @@ describe('recordFeedback', () => {
     expect(usage.feedback.bad).toBe(0);
     expect(usage.feedback.total).toBe(0);
     expect(usage.feedback.perUser.u1.good).toBe(1);
+  });
+});
+
+describe('several workers', () => {
+  it('adds this worker’s counts to what other workers flushed, losing neither', async () => {
+    await recordChatRequest({ userId: 'u1', appId: 'a1', modelId: 'm1', tokens: 10 });
+
+    // Another worker flushed its own counts meanwhile.
+    const onDisk = JSON.parse(fileContents);
+    onDisk.messages.total += 5;
+    onDisk.messages.perApp.a1 = (onDisk.messages.perApp.a1 || 0) + 5;
+    onDisk.feedback.ratings[4] += 1;
+    onDisk.feedback.total += 1;
+    fileContents = JSON.stringify(onDisk);
+
+    await recordFeedback({ userId: 'u1', appId: 'a1', modelId: 'm1', rating: 2 });
+    const usage = await getUsage();
+    expect(usage.messages.total).toBe(6);
+    expect(usage.messages.perApp.a1).toBe(6);
+    expect(usage.feedback.total).toBe(2);
+    expect(usage.feedback.averageRating).toBe(3);
+
+    // And once flushed, the file holds the sum.
+    await jest.advanceTimersByTimeAsync(10000);
+    const flushed = JSON.parse(fileContents);
+    expect(flushed.messages.total).toBe(6);
+    expect(flushed.feedback.averageRating).toBe(3);
+  });
+
+  it('drops counts gathered before another worker reset the usage', async () => {
+    await recordChatRequest({ userId: 'u1', appId: 'a1', modelId: 'm1', tokens: 10 });
+
+    // Another worker resets: the file is cleared and stamped.
+    await jest.advanceTimersByTimeAsync(5);
+    const cleared = JSON.parse(fileContents);
+    cleared.messages = { total: 0, perUser: {}, perApp: {}, perModel: {} };
+    cleared.lastReset = new Date(Date.now() + 1).toISOString();
+    fileContents = JSON.stringify(cleared);
+
+    expect((await getUsage()).messages.total).toBe(0);
+    await jest.advanceTimersByTimeAsync(10000);
+    expect(JSON.parse(fileContents).messages.total).toBe(0);
+
+    // Counted after the reset is kept.
+    await recordChatRequest({ userId: 'u1', appId: 'a1', modelId: 'm1', tokens: 10 });
+    await jest.advanceTimersByTimeAsync(10000);
+    expect(JSON.parse(fileContents).messages.total).toBe(1);
+  });
+
+  it('a usage.json without lastReset still takes this worker’s counts', async () => {
+    const legacy = JSON.parse(fileContents);
+    delete legacy.lastReset;
+    fileContents = JSON.stringify(legacy);
+
+    await recordChatRequest({ userId: 'u1', appId: 'a1', modelId: 'm1', tokens: 10 });
+    await jest.advanceTimersByTimeAsync(10000);
+
+    expect(JSON.parse(fileContents).messages.total).toBe(1);
+  });
+
+  it('flushUsage writes pending counts right away', async () => {
+    await recordChatRequest({ userId: 'u1', appId: 'a1', modelId: 'm1', tokens: 10 });
+    await flushUsage();
+    expect(JSON.parse(fileContents).messages.total).toBe(1);
+  });
+
+  it('a reset is not undone by counts recorded before it', async () => {
+    await recordChatRequest({ userId: 'u1', appId: 'a1', modelId: 'm1', tokens: 10 });
+    await resetUsage();
+    await jest.advanceTimersByTimeAsync(10000);
+
+    expect(JSON.parse(fileContents).messages.total).toBe(0);
+    expect((await getUsage()).messages.total).toBe(0);
   });
 });
 

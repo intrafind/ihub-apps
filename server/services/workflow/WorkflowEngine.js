@@ -176,6 +176,9 @@ export class WorkflowEngine {
     // A presence map: every worker knows which one holds a running execution's
     // abort controller, so a cancellation landing elsewhere can be relayed.
     this.abortControllers = this._bus.createPresenceMap(EXECUTION_PRESENCE_KIND);
+    // An execution holds an abort controller exactly while it runs here; for
+    // any other, the state manager checks the checkpoint for newer state.
+    this.stateManager.setLocalRunCheck?.(executionId => this.abortControllers.has(executionId));
     this._unsubscribeCancel = this._bus.subscribe(EXECUTION_CANCEL_CHANNEL, message =>
       this._onRemoteCancel(message)
     );
