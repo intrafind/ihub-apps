@@ -4,6 +4,7 @@ const OP_TYPES = [
   { value: 'set', label: 'Set' },
   { value: 'copy', label: 'Copy' },
   { value: 'push', label: 'Push' },
+  { value: 'append', label: 'Append All' },
   { value: 'increment', label: 'Increment' },
   { value: 'merge', label: 'Merge' },
   { value: 'arrayGet', label: 'Array Get' },
@@ -49,6 +50,11 @@ const OP_FIELDS = {
     primaryLabel: 'Item Path',
     primaryPlaceholder: 'e.g. currentResearch',
     fields: [{ key: 'to', label: 'Array Path', placeholder: 'e.g. findings' }]
+  },
+  append: {
+    primaryLabel: 'Source Array',
+    primaryPlaceholder: 'e.g. _corpus',
+    fields: [{ key: 'to', label: 'Target Array', placeholder: 'e.g. _corpusAll' }]
   },
   increment: {
     primaryLabel: 'Variable',
