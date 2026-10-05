@@ -11,7 +11,7 @@ import {
   downloadUpdate,
   applyUpdate,
   rollback,
-  getUpdateStatus,
+  getUpdateStatusAnywhere,
   isBinaryInstallation,
   isContainerInstallation,
   checkDiskSpace,
@@ -28,8 +28,9 @@ export default function registerAdminUpdateRoutes(app) {
    * GET /api/admin/update/status
    * Returns the current update status and capabilities
    */
-  app.get(buildServerPath('/api/admin/update/status'), adminAuth, (req, res) => {
-    res.json(getUpdateStatus());
+  app.get(buildServerPath('/api/admin/update/status'), adminAuth, async (req, res) => {
+    // The update may be running on another cluster worker.
+    res.json(await getUpdateStatusAnywhere());
   });
 
   /**

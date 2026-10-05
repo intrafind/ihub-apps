@@ -27,6 +27,8 @@ import {
   refreshVersionCheck
 } from './versionCheckService.js';
 import logger from '../utils/logger.js';
+import config from '../config.js';
+import { gather, isClusterBusActive, respond } from '../clusterBus.js';
 
 const execAsync = promisify(execFile);
 
@@ -190,6 +192,30 @@ export function getUpdateStatus() {
 
 function setState(updates) {
   updateState = { ...updateState, ...updates };
+}
+
+/**
+ * The update runs on the cluster worker that received the admin's request,
+ * and only that worker's `updateState` moves; a status poll reaching another
+ * worker used to report `idle` and 0% and never showed a download error.
+ * Every worker answers with its own state, and the poll takes the one that is
+ * busy.
+ */
+const UPDATE_STATUS_CHANNEL = 'update:status';
+respond(UPDATE_STATUS_CHANNEL, () => ({ state: updateState }));
+
+/**
+ * {@link getUpdateStatus}, showing an update in progress on another worker.
+ */
+export async function getUpdateStatusAnywhere() {
+  const local = getUpdateStatus();
+  if (local.status !== 'idle' || !isClusterBusActive()) return local;
+  const replies = await gather(UPDATE_STATUS_CHANNEL, null, {
+    expected: Math.max(0, (Number(config.WORKERS) || 1) - 1),
+    timeoutMs: 500
+  });
+  const busy = replies.find(reply => reply?.state && reply.state.status !== 'idle');
+  return busy ? { ...local, ...busy.state } : local;
 }
 
 /**
