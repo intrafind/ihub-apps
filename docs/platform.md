@@ -66,10 +66,9 @@ The optional `platform.json` file controls global platform behavior and is locat
 Controls platform feature flags and capabilities.
 
 - **export** (boolean) – Enables or disables all export functionality including JSON, JSONL, Markdown, HTML, and PDF exports for chat conversations and canvas content. When disabled, all export buttons and menus are hidden across the platform. Default: `true`
-- **pdfExport** (boolean) – Enables or disables PDF export functionality specifically. Only applies when `export` is also enabled. Default: `true`
 - **usageTracking** (boolean) – Enables or disables recording of usage statistics in `contents/data/usage.json`. Default: `true`
 
-**Note:** The `export` feature flag acts as a master switch for all export functionality. The `pdfExport` flag provides granular control over PDF exports specifically, but requires `export` to be enabled to take effect.
+**Note:** The `export` feature flag acts as a master switch for chat and canvas exports, PDF included.
 
 ### **globalPromptVariables**
 
@@ -348,17 +347,15 @@ For backward compatibility, configurations without the `variables` field will co
 - Date and time formatting follows the user's locale setting automatically
 
 ### **pdfExport**
-Configuration for PDF export functionality.
+Defaults for PDF exports. PDFs are rendered on the server (see [PDF Generation & System Skills](pdf-generation.md#server-side-pdf-export)); chat PDF export requires the `export` feature flag.
 
-**Important:** PDF export functionality requires both the `export` feature flag and the `pdfExport` feature flag to be enabled. The general `export` flag controls all export functionality, while `pdfExport` specifically controls the PDF export option.
-
-- **defaultTemplate** (string) – Default template to use for PDF exports. Default: `"default"`
-- **watermark** (object) – Watermark configuration
-  - **enabled** (boolean) – Enable/disable watermark
+- **defaultTemplate** (string) – Template the export dialog starts with: `"default"`, `"professional"` or `"minimal"`. Default: `"default"`
+- **watermark** (object) – The export dialog's default watermark, also applied when a request sends none
+  - **enabled** (boolean) – Start with a watermark (`false` starts with an empty text)
   - **text** (string) – Watermark text
-  - **position** (string) – Position (e.g., "bottom-right")
+  - **position** (string) – `"bottom-right"`, `"bottom-left"` or `"bottom-center"`
   - **opacity** (number) – Opacity level (0.0-1.0)
-- **templates** (object) – Available PDF export templates with name and description
+- **templates** (object) – Names and descriptions of the available templates
 
 ### **shortLinks**
 Where short links (feature `shortLinks`) may redirect.

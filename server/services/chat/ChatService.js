@@ -568,6 +568,10 @@ class ChatService {
     // Scheduled-task proposals the scheduling tools made, stored with the
     // answer so the confirmation card is still there when the chat reopens.
     const scheduledTaskProposals = [];
+    // Files the turn's tools generated (a PDF from `create_pdf`), with their
+    // bytes, stored with the answer as `document` artifacts of the chat so the
+    // download card is still there when the chat reopens.
+    const generatedFiles = [];
     const turnSeam = chatTurnSeam({
       chatId,
       buildLogData: log,
@@ -594,7 +598,8 @@ class ChatService {
         logInteraction: this.logInteraction,
         mcpAppViews,
         mcpAuthPrompts,
-        scheduledTaskProposals
+        scheduledTaskProposals,
+        generatedFiles
       }),
       ...(Array.isArray(extraSeams) ? extraSeams.filter(Boolean) : []),
       questionSeam(
@@ -715,6 +720,7 @@ class ChatService {
         mcpAppViews,
         mcpAuthPrompts,
         scheduledTaskProposals,
+        generatedFiles,
         promptSources,
         takePendingCall: () => turnSeam.takePendingCall(),
         structured: outputSeam
@@ -822,6 +828,7 @@ class ChatService {
     mcpAppViews = [],
     mcpAuthPrompts = [],
     scheduledTaskProposals = [],
+    generatedFiles = [],
     promptSources = [],
     takePendingCall = () => null,
     structured = null
@@ -846,6 +853,7 @@ class ChatService {
       mcpApps: mcpAppViews,
       mcpAuthRequired: mcpAuthPrompts,
       scheduledTaskProposals,
+      generatedFiles,
       // Everything the turn found — web pages, documents, records — and the
       // passages they back, which the sources panel draws again on reopen.
       sources: result.sources || null

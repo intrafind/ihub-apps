@@ -1,8 +1,10 @@
 # Artifacts
 
 An **artifact** is content a run produced that is worth keeping in its own
-right: the image a chat turn generated, and — as producers adopt the store —
-the report a workflow wrote or the output an agent produced.
+right: the image a chat turn generated, the file a system skill tool generated
+in it (a PDF from the [`pdf` skill](pdf-generation.md#generated-files), kind
+`document`), and — as producers adopt the store — the report a workflow wrote
+or the output an agent produced.
 
 It is deliberately not a chat concept. A chat turn is one producer among
 several, and "what did this produce" is the same question whether the thing

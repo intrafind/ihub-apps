@@ -4,6 +4,7 @@ import { useFilterState } from '../hooks/useFilterState';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import AdminUserSkillsTab from '../components/AdminUserSkillsTab';
+import SystemSkillBadge from '../components/SystemSkillBadge';
 import {
   deleteSkill,
   exportSkill,
@@ -424,8 +425,9 @@ function AdminSkillsPage() {
                                   </div>
                                 </div>
                                 <div className="ml-4">
-                                  <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                                  <div className="text-sm font-medium text-gray-900 dark:text-gray-100 flex items-center gap-2">
                                     {skill.displayName || skill.name}
+                                    {skill.isSystem && <SystemSkillBadge />}
                                   </div>
                                   <div className="text-sm text-gray-500 dark:text-gray-400">
                                     {skill.name}
@@ -471,27 +473,29 @@ function AdminSkillsPage() {
                             <td className="px-6 py-4 text-right text-sm font-medium">
                               <div className="flex items-center justify-end space-x-2">
                                 {/* Toggle enabled/disabled */}
-                                <button
-                                  onClick={e => {
-                                    e.stopPropagation();
-                                    handleToggleSkill(skill.name);
-                                  }}
-                                  className={`p-2 rounded-full ${
-                                    skill.enabled !== false
-                                      ? 'text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30'
-                                      : 'text-green-600 hover:bg-green-50 dark:hover:bg-green-900/30'
-                                  }`}
-                                  title={
-                                    skill.enabled !== false
-                                      ? t('admin.skills.disable', 'Disable')
-                                      : t('admin.skills.enable', 'Enable')
-                                  }
-                                >
-                                  <Icon
-                                    name={skill.enabled !== false ? 'eye-slash' : 'eye'}
-                                    className="h-4 w-4"
-                                  />
-                                </button>
+                                {!skill.isSystem && (
+                                  <button
+                                    onClick={e => {
+                                      e.stopPropagation();
+                                      handleToggleSkill(skill.name);
+                                    }}
+                                    className={`p-2 rounded-full ${
+                                      skill.enabled !== false
+                                        ? 'text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30'
+                                        : 'text-green-600 hover:bg-green-50 dark:hover:bg-green-900/30'
+                                    }`}
+                                    title={
+                                      skill.enabled !== false
+                                        ? t('admin.skills.disable', 'Disable')
+                                        : t('admin.skills.enable', 'Enable')
+                                    }
+                                  >
+                                    <Icon
+                                      name={skill.enabled !== false ? 'eye-slash' : 'eye'}
+                                      className="h-4 w-4"
+                                    />
+                                  </button>
+                                )}
 
                                 {/* Export */}
                                 <button
@@ -512,22 +516,31 @@ function AdminSkillsPage() {
                                     navigate(`/admin/skills/${skill.name}`);
                                   }}
                                   className="p-2 text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 rounded-full"
-                                  title={t('admin.skills.edit', 'Edit')}
+                                  title={
+                                    skill.isSystem
+                                      ? t('admin.skills.view', 'View')
+                                      : t('admin.skills.edit', 'Edit')
+                                  }
                                 >
-                                  <Icon name="pencil" className="h-4 w-4" />
+                                  <Icon
+                                    name={skill.isSystem ? 'eye' : 'pencil'}
+                                    className="h-4 w-4"
+                                  />
                                 </button>
 
-                                {/* Delete */}
-                                <button
-                                  onClick={e => {
-                                    e.stopPropagation();
-                                    handleDeleteSkill(skill.name);
-                                  }}
-                                  className="p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-full"
-                                  title={t('admin.skills.delete', 'Delete')}
-                                >
-                                  <Icon name="trash" className="h-4 w-4" />
-                                </button>
+                                {/* Delete (system skills ship with iHub and cannot be removed) */}
+                                {!skill.isSystem && (
+                                  <button
+                                    onClick={e => {
+                                      e.stopPropagation();
+                                      handleDeleteSkill(skill.name);
+                                    }}
+                                    className="p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-full"
+                                    title={t('admin.skills.delete', 'Delete')}
+                                  >
+                                    <Icon name="trash" className="h-4 w-4" />
+                                  </button>
+                                )}
                               </div>
                             </td>
                           </tr>

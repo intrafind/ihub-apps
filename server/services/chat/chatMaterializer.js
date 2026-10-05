@@ -17,6 +17,7 @@
 import { boundStoredViews } from '../mcp/mcpApps.js';
 import { boundStoredSources } from './chatSources.js';
 import { boundStoredProposals } from '../scheduler/tasks/proposals.js';
+import { generatedFilesOf } from '../../../shared/generatedFiles.js';
 import { boundStoredActivity, takeRunActivity } from './runActivity.js';
 import { insertSupportMarkers } from '../../../shared/sources/index.js';
 
@@ -134,7 +135,9 @@ export async function storeGeneratedArtifacts({ chatId, runId, artifacts, store,
     // keeps raw bytes, so the cap is measured on the decoded size — the same
     // number a viewer sees and the same number the store records.
     const bytes = Buffer.byteLength(artifact.data, 'base64');
-    const refused = { kind, mimeType, bytes };
+    // A refused file keeps its name, so the card can still say which one.
+    const name = typeof artifact.name === 'string' && artifact.name ? artifact.name : null;
+    const refused = { kind, mimeType, bytes, ...(name ? { name } : {}) };
     if (maxPerBatch > 0 && stored >= maxPerBatch) {
       descriptors.push({ ...refused, unavailable: 'too-many' });
       continue;
@@ -432,13 +435,23 @@ export async function settleAssistantTurn({
     //
     // The loop reports generated pictures on `summary.images`; they are stored
     // as artifacts of kind `image`, which is the vocabulary the stored message
-    // and the artifact endpoints use.
+    // and the artifact endpoints use. Files a system skill tool generated (a
+    // PDF from `create_pdf`) come on `summary.generatedFiles` and are stored
+    // as artifacts of kind `document`.
     const artifacts = pausedWithoutAnswer
       ? []
       : await storeGeneratedArtifacts({
           chatId,
           runId,
-          artifacts: (summary?.images || []).map(image => ({ ...image, kind: 'image' })),
+          artifacts: [
+            ...(summary?.images || []).map(image => ({ ...image, kind: 'image' })),
+            ...generatedFilesOf(summary?.generatedFiles).map(file => ({
+              kind: 'document',
+              mimeType: file.mimeType,
+              data: file.data,
+              name: file.name
+            }))
+          ],
           // Through the chat's own store rather than the shared getter: one
           // place decides where a chat's artifacts live, and it is the
           // repository this turn is already writing through.

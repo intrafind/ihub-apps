@@ -3,6 +3,7 @@ import { createSourceManager } from './sources/index.js';
 import {
   getAssignedSkillIds,
   getUsablePersonalSkills,
+  getUsableSkills,
   loadUsableSkill
 } from './services/skillAccess.js';
 import { actionTracker } from './actionTracker.js';
@@ -18,6 +19,11 @@ import { isStaanSearchConfigured } from './services/search/staanApiKey.js';
 import logger from './utils/logger.js';
 import { getLocalizedString } from './utils/localize.js';
 import { filterSchedulingTools } from './services/scheduler/tasks/toolGate.js';
+import {
+  isSystemSkillTool,
+  runSystemSkillTool,
+  systemSkillToolsFor
+} from './services/systemSkillTools.js';
 
 /**
  * Build JSON Schema parameters from a workflow's start node inputVariables
@@ -697,6 +703,9 @@ export async function getToolsForApp(app, language = null, context = {}) {
 
   // Add skill activation tools if the skills feature is enabled and the app
   // has skills configured, or the user has skills of their own to use here.
+  // A system skill (e.g. `pdf`) also brings built-in tools (`create_pdf`):
+  // they come with the usable global skills — the set the prompt lists.
+  const appSkills = await getUsableSkills({ skillIds: app.skills, user: context.user });
   if (
     isFeatureEnabled('skills', configCache.getFeatures()) &&
     ((Array.isArray(app.skills) && app.skills.length > 0) ||
@@ -750,6 +759,9 @@ export async function getToolsForApp(app, language = null, context = {}) {
         required: ['skill_name', 'file_path']
       }
     });
+
+    const skillTools = systemSkillToolsFor(appSkills, { language: lang, model: context.model });
+    appTools = appTools.concat(skillTools.filter(t => !appTools.some(a => a.id === t.id)));
   }
 
   // The scheduling tools are listed by the apps that offer them, but only
@@ -876,6 +888,23 @@ export async function runTool(toolId, params = {}, options = {}) {
       return `Resource '${filePath}' not found in skill '${skillName}' or access denied.`;
     }
     return content;
+  }
+
+  // Built-in tools of system skills (`create_pdf`, …). They are offered only
+  // through a skill the app enables (see getToolsForApp); here a direct call
+  // is checked against the user's skill permissions as well.
+  if (isSystemSkillTool(toolId)) {
+    const { data: userSkills } = await configCache.getSkillsForUser(
+      params.user,
+      configCache.getPlatform() || {}
+    );
+    const provided = userSkills.some(
+      skill => skill.isSystem && skill.providedTools?.includes(toolId)
+    );
+    if (!isFeatureEnabled('skills', configCache.getFeatures()) || !provided) {
+      throw new Error(`Tool ${toolId} is not available`);
+    }
+    return await runSystemSkillTool(toolId, params);
   }
 
   // App-as-tool (`app__<appId>`): invoke another iHub app through the shared

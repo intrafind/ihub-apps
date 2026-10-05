@@ -15,6 +15,8 @@ import {
   getSkillResource,
   getSkillsDirectory,
   getSkillPath,
+  getSystemSkillsDirectory,
+  isSystemSkill,
   listSkillFiles,
   validateSkillDirectory,
   validateSkillName
@@ -217,6 +219,15 @@ export default function registerAdminSkillsRoutes(app) {
       try {
         if (!validateIdForPath(req.params.name, 'skill', res)) return;
 
+        // System skills ship with iHub; they are not an installation's to remove.
+        if (isSystemSkill(req.params.name)) {
+          return sendErrorResponse(
+            res,
+            403,
+            `'${req.params.name}' is a system skill and cannot be deleted`
+          );
+        }
+
         const skillsDir = getSkillsDirectory();
         const skillPathResolved = await resolveAndValidatePath(req.params.name, skillsDir);
         if (!skillPathResolved) {
@@ -292,7 +303,9 @@ export default function registerAdminSkillsRoutes(app) {
         const skillName = req.params.name;
         if (!validateIdForPath(skillName, 'skill', res)) return;
 
-        const skillsRoot = getSkillsDirectory();
+        const skillsRoot = isSystemSkill(skillName)
+          ? getSystemSkillsDirectory()
+          : getSkillsDirectory();
         const resolvedSkillPath = await resolveAndValidatePath(skillName, skillsRoot);
         if (!resolvedSkillPath || path.basename(resolvedSkillPath) !== skillName) {
           logger.warn('Skill export blocked for invalid path', {
@@ -377,6 +390,15 @@ export default function registerAdminSkillsRoutes(app) {
         const nameValidation = validateSkillName(skillName);
         if (!nameValidation.valid) {
           return sendBadRequest(res, nameValidation.error);
+        }
+
+        // A system skill's name is reserved, overwrite or not.
+        if (isSystemSkill(skillName)) {
+          return sendErrorResponse(
+            res,
+            409,
+            `'${skillName}' is the name of a system skill. Rename the skill directory to import it.`
+          );
         }
 
         const targetPath = getSkillPath(skillName);
@@ -561,6 +583,15 @@ export default function registerAdminSkillsRoutes(app) {
         const name = parsed.data.name || skill.name;
         const nameValidation = validateSkillName(name);
         if (!nameValidation.valid) return sendBadRequest(res, nameValidation.error);
+        // A system skill's name is reserved.
+        if (isSystemSkill(name)) {
+          return sendErrorResponse(
+            res,
+            409,
+            `'${name}' is the name of a system skill. Promote the skill under another name.`,
+            { details: { code: 'SKILL_NAME_RESERVED' } }
+          );
+        }
 
         targetPath = await resolveAndValidatePath(name, getSkillsDirectory());
         if (!targetPath) return sendBadRequest(res, 'Invalid skill name');

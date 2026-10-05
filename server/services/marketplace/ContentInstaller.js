@@ -34,6 +34,7 @@ import configStore from '../../services/config/ConfigStore.js';
 import { isValidId, resolveAndValidatePath } from '../../utils/pathSecurity.js';
 import registryService from './RegistryService.js';
 import { getLocalContentIds } from './localContent.js';
+import { isSystemSkill } from '../skillLoader.js';
 import logger from '../../utils/logger.js';
 import { appConfigSchema } from '../../validators/appConfigSchema.js';
 import { modelConfigSchema } from '../../validators/modelConfigSchema.js';
@@ -385,6 +386,12 @@ class ContentInstaller {
       );
     }
 
+    // A system skill ships with iHub and its name is reserved; a marketplace
+    // skill of the same name would be ignored by the skill loader anyway.
+    if (type === 'skill' && isSystemSkill(name)) {
+      throw new Error(`skill '${name}' is a system skill of iHub and cannot be installed over`);
+    }
+
     // Prevent re-installing an already-installed item
     const installations = await readInstallations();
     const key = `${type}:${name}`;
@@ -592,6 +599,9 @@ class ContentInstaller {
    * @returns {Promise<void>}
    */
   async _writeContent(type, name, content, typeConfig) {
+    if (type === 'skill' && isSystemSkill(name)) {
+      throw new Error(`skill '${name}' is a system skill of iHub and cannot be replaced`);
+    }
     if (type === 'skill') {
       const skillDir = path.join(getContentsDir(), typeConfig.dir, name);
       await fs.mkdir(skillDir, { recursive: true });

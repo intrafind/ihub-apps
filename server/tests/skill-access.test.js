@@ -95,7 +95,8 @@ describe('getSkillsForUser', () => {
 
   test('a wildcard grant sees every skill', async () => {
     const { data } = await configCache.getSkillsForUser(userWith(['*']));
-    assert.deepEqual(names(data), ['alpha', 'beta', 'gamma']);
+    // The installed skills, and the system skills iHub ships (`pdf`).
+    assert.deepEqual(names(data), ['alpha', 'beta', 'gamma', 'pdf']);
   });
 
   test('a named grant sees only that skill', async () => {

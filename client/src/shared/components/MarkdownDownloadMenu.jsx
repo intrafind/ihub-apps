@@ -1,12 +1,17 @@
 import { useEffect, useRef, useState } from 'react';
-import { exportAsMarkdown, exportAsHTML, printAsPDF, exportAsDOCX } from '../utils/markdownExports';
+import {
+  exportAsMarkdown,
+  exportAsHTML,
+  exportAsPDF,
+  exportAsDOCX
+} from '../utils/markdownExports';
 
 /**
  * Compact ⬇ Download ▾ dropdown that operates on an in-memory markdown
  * string (no server round-trip). Used by the workflow execution page and
  * any other surface that already has the rendered report in memory.
  *
- * Renders four format options: Markdown / HTML / PDF (via print dialog) /
+ * Renders four format options: Markdown / HTML / PDF (rendered on the server) /
  * Word (.docx). While a conversion is in flight the trigger shows a
  * spinner-y placeholder so the user knows the click registered.
  *
@@ -77,10 +82,10 @@ function MarkdownDownloadMenu({ content, name, size = 'sm', onError }) {
           </button>
           <button
             type="button"
-            onClick={() => run(() => printAsPDF(content, name))}
+            onClick={() => run(() => exportAsPDF(content, name))}
             className="block w-full text-left px-3 py-1.5 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 dark:text-gray-200"
           >
-            PDF (via print dialog)
+            PDF (.pdf)
           </button>
           <button
             type="button"

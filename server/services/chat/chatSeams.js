@@ -18,6 +18,8 @@ import defaultRunLog from '../loop/RunLog.js';
 import { buildQuestionPrompt } from '../loop/questionPrompt.js';
 import { buildViewDescriptor, findEmbeddedView, toViewToolResult } from '../mcp/mcpApps.js';
 import { isSchedulingToolDef, proposalOf } from '../scheduler/tasks/proposals.js';
+import { generatedFilesOf } from '../../../shared/generatedFiles.js';
+import { heldGeneratedFileData } from '../documents/generatedFiles.js';
 
 /**
  * A clarification nobody answers expires after a day, so abandoned chats do
@@ -280,7 +282,8 @@ export function chatToolSeam({
   logInteraction,
   mcpAppViews = null,
   mcpAuthPrompts = null,
-  scheduledTaskProposals = null
+  scheduledTaskProposals = null,
+  generatedFiles = null
 }) {
   const recordView = view => {
     if (Array.isArray(mcpAppViews)) mcpAppViews.push(view);
@@ -396,6 +399,17 @@ export function chatToolSeam({
       if (scheduledTaskProposal && Array.isArray(scheduledTaskProposals)) {
         scheduledTaskProposals.push(scheduledTaskProposal);
       }
+      // Only the built-in tools of system skills hand the user a file (a
+      // download card); the same field on any other tool's result is ignored.
+      // The result names the file without its bytes, so the model never sees
+      // them: they were held for this turn, and go to the client here and to
+      // the stored answer (as a `document` artifact) through `generatedFiles`.
+      const files = info.toolDef?.isSystemSkillTool
+        ? generatedFilesOf(outcome.rawResult?.files)
+            .map(file => ({ ...file, data: heldGeneratedFileData(file.id, { chatId }) }))
+            .filter(file => file.data)
+        : [];
+      if (files.length && Array.isArray(generatedFiles)) generatedFiles.push(...files);
       emit(ctx, SSE_V2_EVENTS.TOOL_COMPLETED, {
         step: ctx.iteration,
         callId: callIdOf(info),
@@ -406,7 +420,8 @@ export function chatToolSeam({
         ...(outcome.knowledgeSource ? { knowledgeSource: outcome.knowledgeSource } : {}),
         ...(mcpApp ? { mcpApp } : {}),
         ...(authRequired ? { authRequired } : {}),
-        ...(scheduledTaskProposal ? { scheduledTaskProposal } : {})
+        ...(scheduledTaskProposal ? { scheduledTaskProposal } : {}),
+        ...(files.length ? { files } : {})
       });
       await logInteraction(
         'tool_usage',

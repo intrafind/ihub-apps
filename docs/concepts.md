@@ -76,6 +76,8 @@ Skills are the right tool for **complex, multi-step procedures and rules that ar
 
 Example — a story or article generator: model the interview, the structuring, and the actual drafting as separate skills, and let the app compose them. Each step stays readable, testable, and reusable in other apps.
 
+iHub also ships **system skills**: read-only skills delivered with iHub that bring their own tools. One example is `pdf`, which lets the model create PDF documents. Enable them per app like any other skill. See [PDF Generation & System Skills](pdf-generation.md).
+
 ### Decision guide
 
 | Situation                                                          | Use                |

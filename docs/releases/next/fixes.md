@@ -1,5 +1,17 @@
 # Fixes — Unreleased
 
+## PDF Exports Download a Real PDF File
+
+Chat export as PDF often produced a blank page, most visibly in the Outlook add-in and the browser
+extension, and always went through the browser's print dialog. Chat exports, single-message
+downloads, workflow result downloads and agent artifact downloads now render the PDF on the server
+and download it directly.
+
+- The export dialog's templates (Default, Professional, Minimal) and watermark settings apply to
+  the file.
+- The dialog now starts from the platform's PDF defaults (`pdfExport.defaultTemplate` and
+  `pdfExport.watermark`).
+
 ## An Absolute Contents Directory Is Used Where It Points
 
 When the `CONTENTS_DIR` environment variable held an absolute path (for example

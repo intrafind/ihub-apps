@@ -619,9 +619,16 @@ contents/skills/
     └── assets/           # Optional: supporting assets
 ```
 
+### System skills
+
+Skills shipped with iHub live in `server/systemSkills/<name>/`. They are read-only: never copied into `contents/`, and not editable or deletable in the admin UI. Their names are reserved; a same-named `contents/skills/<name>` is ignored. A system skill's `allowed-tools` names built-in tools from `server/services/systemSkillTools.js`, and those tools come with the skill when an app enables it. Installed skills cannot enable tools this way.
+
+The first system skill is `pdf` (`create_pdf`, `preview_pdf`). See [PDF Generation & System Skills](pdf-generation.md).
+
 ### Key Components
 
-- **`server/services/skillLoader.js`**: Loads, validates, and serves skill content. Enforces the Agent Skills specification (name pattern, description length, path traversal prevention).
+- **`server/services/skillLoader.js`**: Loads, validates, and serves skill content: system skills first (`server/systemSkills/`), then `contents/skills/`. Enforces the Agent Skills specification (name pattern, description length, path traversal prevention).
+- **`server/services/systemSkillTools.js`**: Registry of the built-in tools system skills provide (e.g. `create_pdf` for `pdf`).
 - **`server/utils/frontMatter.js`**: `parseFrontMatter()` splits `SKILL.md` files and marketplace content previews into front matter and body. It accepts YAML front matter only: a block that names another language after the opening `---` (e.g. `---json`) is rejected, and the skill is skipped with a log entry. It is the only module allowed to import `gray-matter` (enforced by ESLint).
 - **Authorization integration**: Skills are permission-controlled via group configuration using the `skills` permission key.
 

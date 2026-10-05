@@ -32,13 +32,14 @@ export default function registerSkillRoutes(app) {
         const { data: skills, etag } = await configCache.getSkillsForUser(req.user, platformConfig);
 
         // Return only safe metadata (no paths). Global skills go by name.
-        const safeSkills = skills.map(({ name, displayName, description, metadata }) => ({
+        const safeSkills = skills.map(({ name, displayName, description, metadata, isSystem }) => ({
           id: name,
           name,
           displayName,
           description,
           metadata,
-          scope: 'global'
+          scope: 'global',
+          isSystem: isSystem === true
         }));
 
         // The caller's own and shared user skills, for the `/` picker. They
