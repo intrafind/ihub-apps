@@ -4090,13 +4090,19 @@
         "title": "No Integrations Configured",
         "body": "Contact your administrator to enable external integrations."
       },
-      "comingSoon": {
-        "title": "More Integrations Coming Soon",
-        "body": "We're working on adding more integrations to enhance your AI applications"
+      "sections": {
+        "accounts": {
+          "title": "Your accounts",
+          "description": "Sign in to services so iHub can work with them on your behalf."
+        },
+        "access": {
+          "title": "Access to iHub",
+          "description": "Tools and applications that use iHub Apps as you."
+        }
       },
       "connections": {
         "title": "Connected apps",
-        "description": "Applications you have allowed to access iHub Apps as you. Disconnecting one makes it ask for your permission again.",
+        "description": "Applications you have allowed to access iHub Apps as you.",
         "empty": "You have not connected any applications yet.",
         "disconnect": "Disconnect",
         "disconnectTitle": "Disconnect application",
@@ -4106,6 +4112,12 @@
         "granted": "Connected {{date}}",
         "lastUsed": "Last used {{date}}",
         "tokenNote": "An access token the app already holds keeps working for up to {{minutes}} minutes after you disconnect. It cannot obtain a new one.",
+        "permissionCount_one": "{{count}} permission",
+        "permissionCount_other": "{{count}} permissions",
+        "search": "Search connected apps",
+        "noMatches": "No connected apps match \"{{query}}\".",
+        "showAll": "Show all {{count}}",
+        "showFewer": "Show fewer",
         "scopes": {
           "openid": "Verify your identity",
           "profile": "Access your name and profile information",
