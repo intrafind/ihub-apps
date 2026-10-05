@@ -19,9 +19,10 @@
  *     in one call when the client sends `stop`.
  *
  * Resource guards (a transcription session pins a GPU-backed upstream socket):
- *   - The upstream socket opens LAZILY on the first audio frame, not on connect,
- *     so an idle/abandoned browser socket never pins an upstream session.
- *   - A short no-audio grace timeout closes sockets that connect but never speak.
+ *   - The upstream socket opens only once the client names a model (`start`),
+ *     not on connect, and a short no-audio grace timeout closes sockets that
+ *     connect but never speak, so an abandoned browser socket can't pin an
+ *     upstream session for long.
  *   - Per-user and global concurrent-connection caps (ConnectionLimiter) bound
  *     the number of simultaneous upstream sessions one user (or the whole
  *     instance) can hold.
@@ -37,15 +38,18 @@
  *     bounds how LONG one connection can pin an upstream session.
  *
  * Browser <-> iHub protocol (iHub-defined, we own both ends):
- *   client -> server: JSON `{type:'start', modelId?, lang?}`, then binary PCM16
+ *   client -> server: JSON `{type:'start', modelId, lang?}`, then binary PCM16
  *                     frames, then JSON `{type:'stop'}`
- *   server -> client: JSON `{type:'ready', knowledgeSources:['audio']}` once
- *                     the backend is initialized,
+ *   server -> client: JSON `{type:'ready', mode, knowledgeSources:['audio']}`
+ *                     once the backend is initialized (`mode` is the provider's,
+ *                     'stream' or 'batch': a batch transcript only arrives after
+ *                     `stop`, so a client waits longer for it),
  *                     `{type:'delta', text}` (streaming), `{type:'final', text}`
  *                     per completed segment, `{type:'done'}` once the transcript
  *                     is complete after `stop`, `{type:'error', message}`
- *   The same protocol serves both provider modes, so the client does not know
- *   or care whether its audio was streamed upstream or transcribed in one call.
+ *   The same protocol serves both provider modes and every use — dictation
+ *   (the microphone button), live transcription (the record button) and file
+ *   transcription — so they share this one code path.
  */
 import { WebSocketServer, WebSocket } from 'ws';
 import configCache from '../configCache.js';
@@ -58,13 +62,12 @@ import {
 } from '../utils/authorization.js';
 import { buildApiPath } from '../utils/basePath.js';
 import { getTranscriptionProvider } from '../transcription/index.js';
-import vllmRealtimeProvider from '../transcription/vllmRealtimeProvider.js';
 
 // What a session produces is text transcribed from the user's audio: `ready`
 // says so, like `run/ended.knowledgeSources` does for a chat turn, so a
 // transcript shown as a chat answer is badged by what the server reported —
 // including a partial one, whose session never reaches `done`.
-const READY_FRAME = Object.freeze({ type: 'ready', knowledgeSources: ['audio'] });
+const readyFrame = mode => ({ type: 'ready', mode, knowledgeSources: ['audio'] });
 
 // Close cleanly if the browser stops sending audio and no transcription is
 // flowing. Keeps orphaned upstream sockets from lingering.
@@ -296,19 +299,8 @@ export function authenticateUpgrade(req, platform = configCache.getPlatform() ||
 }
 
 /**
- * Get the realtime speech config from the platform config, or null if disabled.
- */
-function getRealtimeConfig() {
-  const platform = configCache.getPlatform() || {};
-  const cfg = platform.speech?.realtime;
-  if (!cfg || cfg.enabled === false || !cfg.url) return null;
-  return cfg;
-}
-
-/**
  * True when at least one enabled `transcription` model is configured. Used by
- * the upgrade-time availability pre-check so model-based transcription is
- * reachable even when the platform-wide dictation backend is disabled.
+ * the upgrade-time availability pre-check: every session needs one.
  */
 export function hasEnabledTranscriptionModel() {
   const { data: models = [] } = configCache.getModels(); // enabled only
@@ -318,11 +310,10 @@ export function hasEnabledTranscriptionModel() {
 /**
  * Resolve the upstream connection for a transcription session.
  *
- * With a `modelId`, the model is looked up in the models cache, required to be
- * an enabled `transcription` model the user is permitted to use, and resolved
- * to concrete upstream details via the transcription provider registry. Without
- * a `modelId`, falls back to the platform-wide `platform.speech.realtime`
- * dictation backend (unchanged behavior).
+ * The model is looked up in the models cache, required to be an enabled
+ * `transcription` model the user is permitted to use, and resolved to concrete
+ * upstream details via the transcription provider registry. Dictation names
+ * its model like every other use: the one an app or Admin → Voice Input picks.
  *
  * A raw upstream URL is NEVER accepted from the client — only a server-resolved
  * model id — so the upstream URL/API key never reach the browser.
@@ -332,22 +323,8 @@ export function hasEnabledTranscriptionModel() {
  *   provider: Object } | { ok: false, code: string, error: string }>}
  */
 export async function resolveTranscriptionUpstream({ modelId, user } = {}) {
-  // No model id → platform-wide dictation backend (unchanged). The platform
-  // dictation backend is a vLLM realtime endpoint, so it speaks that protocol.
   if (!modelId) {
-    const cfg = getRealtimeConfig();
-    if (!cfg) {
-      return {
-        ok: false,
-        code: 'not-configured',
-        error: 'Realtime transcription is not configured'
-      };
-    }
-    return {
-      ok: true,
-      upstream: { url: cfg.url, apiKey: cfg.apiKey || '', model: cfg.model },
-      provider: vllmRealtimeProvider
-    };
+    return { ok: false, code: 'no-model', error: 'No transcription model selected' };
   }
 
   const { data: models = [] } = configCache.getModels(true);
@@ -467,14 +444,12 @@ function sendJson(ws, obj) {
  * limiter slot has already been acquired by the caller; this function owns
  * releasing it exactly once on teardown.
  *
- * Upstream config is resolved lazily — on the `{type:'start'}` frame (which may
- * carry a `modelId`) or, for clients that skip `start`, on the first audio
- * frame. This lets unknown/forbidden/disabled-model errors be answered with an
- * `{type:'error'}` frame before any audio flows. For dictation (no modelId) the
- * upstream socket still opens lazily on the first audio frame, so an idle
- * browser socket never pins an upstream GPU session; for model-based
- * transcription the socket opens as soon as config resolves so the client can
- * wait for `{type:'ready'}` and stream a whole buffer with backpressure.
+ * Upstream config is resolved on the `{type:'start'}` frame, which names the
+ * model. This lets unknown/forbidden/disabled-model errors be answered with an
+ * `{type:'error'}` frame before any audio flows. The upstream socket opens as
+ * soon as config resolves, so a client can wait for `{type:'ready'}` and stream
+ * a whole buffer with backpressure; audio sent before that is held (bounded).
+ * A client that streams audio without a `start` frame gets a `no-model` error.
  *
  * Everything upstream-specific — what to dial, which frames to send, how to
  * read the frames that come back, or (for a batch provider) the single
@@ -482,7 +457,7 @@ function sendJson(ws, obj) {
  * `server/transcription/index.js` for that contract.
  *
  * Terminology used here and in the docs: "transcription" is the feature,
- * "dictation" is the mic-to-input UX (no modelId), "realtime" is the transport.
+ * "dictation" is the mic-to-input UX, "realtime" is the transport.
  *
  * Exported for tests. `options.limiterKey` is the slot key (differs from
  * user.id for anonymous connections, which are keyed by client IP);
@@ -681,7 +656,7 @@ export function bridgeConnection(clientWs, user, limiter, options = {}) {
       model: cfg.model,
       trigger
     });
-    sendJson(clientWs, READY_FRAME);
+    sendJson(clientWs, readyFrame(provider.mode));
     // Flush any audio captured during the handshake.
     for (const chunk of pending) {
       sendJson(upstream, provider.audioFrame(chunk.toString('base64'), cfg));
@@ -919,16 +894,10 @@ export function bridgeConnection(clientWs, user, limiter, options = {}) {
     }
   };
 
-  // Resolve upstream config (once) and, when requested, open the upstream
-  // socket. `openImmediately` is true for model-based transcription (the client
-  // waits for {type:'ready'} before streaming) and false for dictation, where
-  // the upstream opens lazily on the first audio frame. Buffered audio forces an
-  // open even in the lazy case so a fast dictation client isn't stranded.
-  const resolveAndPrepare = async (modelId, { openImmediately } = {}) => {
-    if (cfg || resolvingCfg || upstream) {
-      if (cfg && !upstream && !isBatch() && (openImmediately || pending.length > 0)) openUpstream();
-      return;
-    }
+  // Resolve upstream config (once) and open the upstream socket. A second
+  // `start` while resolving or after is ignored.
+  const resolveAndPrepare = async modelId => {
+    if (cfg || resolvingCfg || upstream) return;
     resolvingCfg = true;
     let result;
     try {
@@ -958,7 +927,7 @@ export function bridgeConnection(clientWs, user, limiter, options = {}) {
       // audio is held here until `stop`. Audio captured while resolving moves
       // into the batch buffer so nothing is lost.
       upstreamReady = true;
-      sendJson(clientWs, READY_FRAME);
+      sendJson(clientWs, readyFrame(provider.mode));
       for (const chunk of pending) bufferBatchAudio(chunk);
       pending.length = 0;
       pendingBytes = 0;
@@ -966,7 +935,7 @@ export function bridgeConnection(clientWs, user, limiter, options = {}) {
       return;
     }
 
-    if (openImmediately || pending.length > 0) openUpstream();
+    openUpstream();
   };
 
   // --- iHub <- browser ---
@@ -981,12 +950,9 @@ export function bridgeConnection(clientWs, user, limiter, options = {}) {
           graceTimer = null;
         }
       }
-      // Open the upstream once config is known. A client that skips the `start`
-      // frame resolves against the platform dictation backend here.
-      if (!upstream && !isBatch()) {
-        if (cfg) openUpstream();
-        else if (!resolvingCfg) resolveAndPrepare(undefined, { openImmediately: true });
-      }
+      // A client that streams without a `start` frame named no model: this
+      // answers it with a `no-model` error.
+      if (!cfg && !resolvingCfg) resolveAndPrepare(undefined);
       const chunk = Buffer.from(data);
       if (isBatch()) {
         resetIdle();
@@ -1016,12 +982,10 @@ export function bridgeConnection(clientWs, user, limiter, options = {}) {
     }
     if (msg.type === 'start') {
       // Resolve upstream now so unknown/forbidden-model errors surface before
-      // audio flows. A modelId selects a first-class transcription model and
-      // opens the upstream immediately (client waits for {type:'ready'}); no
-      // modelId falls back to the platform dictation backend (lazy open).
-      // `msg.lang` is accepted but unused — Voxtral auto-detects the language;
-      // the field is kept in the protocol for future language-pinned backends.
-      resolveAndPrepare(msg.modelId, { openImmediately: msg.modelId != null });
+      // audio flows; the upstream opens as soon as the model resolves.
+      // `msg.lang` is accepted but unused — the models auto-detect the
+      // language; the field is kept for future language-pinned backends.
+      resolveAndPrepare(msg.modelId);
     } else if (msg.type === 'stop') {
       stopRequested = true;
       logger.info('Realtime STT: stop received', {
@@ -1210,10 +1174,9 @@ export function attachRealtimeTranscription(httpServer) {
       });
     }
 
-    // Available when either the platform dictation backend is enabled OR at
-    // least one enabled transcription model exists (model-based transcription
-    // does not require platform.speech.realtime).
-    if (!getRealtimeConfig() && !hasEnabledTranscriptionModel()) {
+    // Every session names a transcription model, so with none enabled there
+    // is nothing to bridge to.
+    if (!hasEnabledTranscriptionModel()) {
       socket.write('HTTP/1.1 503 Service Unavailable\r\n\r\n');
       socket.destroy();
       return;
@@ -1268,23 +1231,46 @@ export function attachRealtimeTranscription(httpServer) {
 }
 
 /**
- * Test connectivity to a vLLM realtime endpoint without streaming audio.
- * Opens a WebSocket, performs the session handshake, and reports whether the
- * endpoint is reachable and speaks the realtime protocol. Used by the admin
- * "Test connection" button.
+ * Test a transcription model's upstream without streaming speech — the "Test"
+ * action on Admin → Models. A streaming provider is dialled exactly like a
+ * session (same `connect` and `openFrames`) and passes once the upstream
+ * starts the session; a batch provider is sent one second of silence, which
+ * exercises the endpoint and the key.
  *
- * @param {{url?: string, model?: string, apiKey?: string}} cfg
- * @param {number} [timeoutMs=8000]
- * @returns {Promise<{ok: boolean, message: string}>}
+ * @param {Object} model - Transcription model config, as cached (keys decrypted).
+ * @param {{ timeoutMs?: number, createUpstream?: Function }} [options]
+ *   `createUpstream` injects the socket factory for tests.
+ * @returns {Promise<{ ok: boolean, message: string }>}
  */
-export function testRealtimeConnection(cfg = {}, timeoutMs = 8000) {
-  return new Promise(resolve => {
-    const url = (cfg.url || '').trim();
-    if (!/^wss?:\/\//i.test(url)) {
-      resolve({ ok: false, message: 'URL must start with ws:// or wss://' });
-      return;
-    }
+export async function testTranscriptionModel(
+  model,
+  { timeoutMs = 8000, createUpstream = (url, opts) => new WebSocket(url, opts) } = {}
+) {
+  const provider = getTranscriptionProvider(model?.provider);
+  if (!provider) {
+    return { ok: false, message: `Unsupported transcription provider: ${model?.provider}` };
+  }
+  const cfg = await provider.resolveUpstream(model);
+  if (!cfg?.url) return { ok: false, message: 'The model has no endpoint URL' };
 
+  if (provider.mode === 'batch') {
+    try {
+      await provider.transcribe({
+        cfg,
+        pcm: Buffer.alloc(TARGET_SAMPLE_RATE * 2),
+        sampleRate: TARGET_SAMPLE_RATE,
+        signal: AbortSignal.timeout(timeoutMs)
+      });
+      return { ok: true, message: 'Transcribed a second of silence' };
+    } catch (err) {
+      return { ok: false, message: `Transcription failed: ${err.message}` };
+    }
+  }
+  return testStreamingUpstream(provider, cfg, { timeoutMs, createUpstream });
+}
+
+function testStreamingUpstream(provider, cfg, { timeoutMs, createUpstream }) {
+  return new Promise(resolve => {
     let settled = false;
     let opened = false;
     let ws;
@@ -1303,18 +1289,21 @@ export function testRealtimeConnection(cfg = {}, timeoutMs = 8000) {
       resolve(result);
     };
 
+    // A provider without a guaranteed session frame (vLLM builds differ) may
+    // stay silent until audio arrives, so an open socket is a pass there.
     const timer = setTimeout(() => {
-      finish(
-        opened
-          ? { ok: true, message: 'Connected (handshake sent; no session frame received in time)' }
-          : { ok: false, message: `Connection timed out after ${timeoutMs}ms` }
-      );
+      if (!opened) {
+        finish({ ok: false, message: `Connection timed out after ${timeoutMs}ms` });
+      } else if (provider.readyFallbackMs > 0) {
+        finish({ ok: true, message: 'Connected (no session frame received in time)' });
+      } else {
+        finish({ ok: false, message: 'Connected, but the endpoint never started a session' });
+      }
     }, timeoutMs);
 
     try {
-      const headers = {};
-      if (cfg.apiKey) headers.Authorization = `Bearer ${cfg.apiKey}`;
-      ws = new WebSocket(url, { headers });
+      const dial = provider.connect(cfg);
+      ws = createUpstream(dial.url, dial.options || {});
     } catch (err) {
       finish({ ok: false, message: `Failed to open socket: ${err.message}` });
       return;
@@ -1322,7 +1311,7 @@ export function testRealtimeConnection(cfg = {}, timeoutMs = 8000) {
 
     ws.on('open', () => {
       opened = true;
-      sendJson(ws, { type: 'session.update', model: cfg.model });
+      for (const frame of provider.openFrames(cfg)) sendJson(ws, frame);
     });
 
     ws.on('message', data => {
@@ -1330,16 +1319,16 @@ export function testRealtimeConnection(cfg = {}, timeoutMs = 8000) {
       try {
         msg = JSON.parse(data.toString());
       } catch {
-        // Any parseable-or-not frame means the endpoint responded.
         finish({ ok: true, message: 'Connected — endpoint responded' });
         return;
       }
-      if (msg.type === 'error') {
-        finish({ ok: false, message: `Endpoint error: ${msg.error || 'unknown'}` });
-      } else {
-        // session.created / transcription.* / any control frame = healthy.
-        finish({ ok: true, message: `Connected — received "${msg.type}"` });
+      const event = provider.interpret(msg);
+      if (event.kind === 'error') {
+        finish({ ok: false, message: `Endpoint error: ${event.error || 'unknown'}` });
+      } else if (event.kind === 'session-ready') {
+        finish({ ok: true, message: 'Connected — the endpoint started a session' });
       }
+      // Anything else (acks, keepalives) — keep waiting for the session.
     });
 
     // The endpoint answered the upgrade with a plain HTTP response (redirect,
@@ -1347,15 +1336,24 @@ export function testRealtimeConnection(cfg = {}, timeoutMs = 8000) {
     // instead of ws's bare "Unexpected server response: 308". finish() closes
     // the still-CONNECTING socket, which aborts the request.
     ws.on('unexpected-response', (_req, res) => {
-      finish({ ok: false, message: diagnoseUnexpectedResponse(res, { url }) });
+      finish({ ok: false, message: diagnoseUnexpectedResponse(res, { url: cfg.url }) });
     });
 
     ws.on('error', err => {
       finish({ ok: false, message: `Connection failed: ${err.message}` });
     });
 
-    ws.on('close', () => {
-      if (!opened) finish({ ok: false, message: 'Connection closed before handshake' });
+    // Gemini Live reports a rejected key by closing with a reason.
+    ws.on('close', (code, reason) => {
+      if (!opened) {
+        finish({ ok: false, message: 'Connection closed before handshake' });
+        return;
+      }
+      const why = reason?.toString() || '';
+      finish({
+        ok: false,
+        message: `The endpoint closed the connection (${code}${why ? `: ${why}` : ''})`
+      });
     });
   });
 }

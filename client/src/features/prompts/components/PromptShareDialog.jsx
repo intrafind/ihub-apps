@@ -20,6 +20,10 @@ function TargetIcon({ type }) {
  * signed in, each as *can use* or *can edit*. Changes apply on save, and a
  * removed target loses the prompt right away.
  *
+ * People and groups are both added through the one search box: an
+ * installation can have hundreds of groups, so they are searched for, never
+ * listed in full, and both lists scroll instead of growing with the dialog.
+ *
  * @param {Object} props
  * @param {Object} props.prompt - The user prompt, with its `shares`.
  * @param {() => void} props.onClose
@@ -97,8 +101,19 @@ function PromptShareDialog({ prompt, onClose, onSaved }) {
     return share.name || share.id;
   };
 
-  const userResults = targets.users.filter(user => !present.has(`user:${user.id}`));
-  const groupResults = targets.groups.filter(group => !present.has(`group:${group.id}`));
+  // Results belong to a search; with an empty box nothing is offered. Groups
+  // are matched here too, so the previous search's groups do not show while
+  // the next one is on its way.
+  const needle = query.trim().toLowerCase();
+  const userResults = needle ? targets.users.filter(user => !present.has(`user:${user.id}`)) : [];
+  const groupResults = needle
+    ? targets.groups.filter(
+        group =>
+          !present.has(`group:${group.id}`) &&
+          (String(group.name).toLowerCase().includes(needle) ||
+            String(group.id).toLowerCase().includes(needle))
+      )
+    : [];
 
   return (
     <Modal isOpen onClose={onClose} maxWidthClassName="max-w-xl" initialFocusRef={searchRef}>
@@ -136,9 +151,9 @@ function PromptShareDialog({ prompt, onClose, onSaved }) {
               data-lpignore="true"
               data-1p-ignore="true"
             />
-            {(userResults.length > 0 || (query && groupResults.length > 0)) && (
+            {(userResults.length > 0 || groupResults.length > 0) && (
               <ul
-                className="mt-1 border border-gray-200 dark:border-gray-700 rounded-md max-h-48 overflow-y-auto divide-y divide-gray-100 dark:divide-gray-700"
+                className="mt-1 border border-gray-200 dark:border-gray-700 rounded-md max-h-48 overflow-y-auto overscroll-contain divide-y divide-gray-100 dark:divide-gray-700"
                 aria-label={t('prompts.share.results', 'Matching people and groups')}
               >
                 {userResults.map(user => (
@@ -158,49 +173,30 @@ function PromptShareDialog({ prompt, onClose, onSaved }) {
                     </button>
                   </li>
                 ))}
-                {query &&
-                  groupResults.map(group => (
-                    <li key={`group:${group.id}`}>
-                      <button
-                        type="button"
-                        onClick={() => add({ type: 'group', id: group.id, name: group.name })}
-                        className="w-full text-left px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-2"
-                      >
-                        <TargetIcon type="group" />
-                        <span className="text-sm text-gray-900 dark:text-gray-100">
-                          {group.name}
-                        </span>
-                        <span className="text-xs text-gray-500 dark:text-gray-400">
-                          {t('prompts.share.group', 'Group')}
-                        </span>
-                      </button>
-                    </li>
-                  ))}
+                {groupResults.map(group => (
+                  <li key={`group:${group.id}`}>
+                    <button
+                      type="button"
+                      onClick={() => add({ type: 'group', id: group.id, name: group.name })}
+                      className="w-full text-left px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-2"
+                    >
+                      <TargetIcon type="group" />
+                      <span className="text-sm text-gray-900 dark:text-gray-100 truncate">
+                        {group.name}
+                      </span>
+                      <span className="text-xs text-gray-500 dark:text-gray-400 shrink-0">
+                        {t('prompts.share.group', 'Group')}
+                      </span>
+                    </button>
+                  </li>
+                ))}
               </ul>
             )}
           </div>
         )}
 
-        <div className="flex flex-wrap gap-2">
-          {targets.allowed.group && !query && groupResults.length > 0 && (
-            <select
-              className={`${inputClass} w-auto`}
-              value=""
-              aria-label={t('prompts.share.addGroup', 'Add a group')}
-              onChange={e => {
-                const group = groupResults.find(g => g.id === e.target.value);
-                if (group) add({ type: 'group', id: group.id, name: group.name });
-              }}
-            >
-              <option value="">{t('prompts.share.addGroup', 'Add a group')}</option>
-              {groupResults.map(group => (
-                <option key={group.id} value={group.id}>
-                  {group.name}
-                </option>
-              ))}
-            </select>
-          )}
-          {targets.allowed.everyone && !everyoneShared && (
+        {targets.allowed.everyone && !everyoneShared && (
+          <div>
             <button
               type="button"
               onClick={() => add({ type: 'everyone', id: null })}
@@ -209,8 +205,8 @@ function PromptShareDialog({ prompt, onClose, onSaved }) {
               <Icon name="globe" size="sm" />
               {t('prompts.share.addEveryone', 'Share with everyone')}
             </button>
-          )}
-        </div>
+          </div>
+        )}
 
         <div>
           <div className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-2">
@@ -222,7 +218,7 @@ function PromptShareDialog({ prompt, onClose, onSaved }) {
               {t('prompts.share.private', 'Only you — this prompt is private')}
             </p>
           ) : (
-            <ul className="divide-y divide-gray-100 dark:divide-gray-700 border border-gray-200 dark:border-gray-700 rounded-md">
+            <ul className="max-h-64 overflow-y-auto overscroll-contain divide-y divide-gray-100 dark:divide-gray-700 border border-gray-200 dark:border-gray-700 rounded-md">
               {shares.map(share => {
                 const key = keyOf(share);
                 return (

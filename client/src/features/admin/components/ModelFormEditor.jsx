@@ -112,6 +112,44 @@ const MISTRAL_PRESET_VOICES = [
   'fr_marie_curious'
 ];
 
+// The prebuilt voices of Google's Gemini TTS models. They are multilingual:
+// the language is detected from the text.
+const GOOGLE_PRESET_VOICES = [
+  'Kore',
+  'Puck',
+  'Charon',
+  'Zephyr',
+  'Fenrir',
+  'Leda',
+  'Orus',
+  'Aoede',
+  'Callirrhoe',
+  'Autonoe',
+  'Enceladus',
+  'Iapetus',
+  'Umbriel',
+  'Algieba',
+  'Despina',
+  'Erinome',
+  'Algenib',
+  'Rasalgethi',
+  'Laomedeia',
+  'Achernar',
+  'Alnilam',
+  'Schedar',
+  'Gacrux',
+  'Pulcherrima',
+  'Achird',
+  'Zubenelgenubi',
+  'Vindemiatrix',
+  'Sadachbia',
+  'Sadaltager',
+  'Sulafat'
+];
+
+/** Preset voices offered as suggestions, by TTS provider. */
+const TTS_PRESET_VOICES = { mistral: MISTRAL_PRESET_VOICES, google: GOOGLE_PRESET_VOICES };
+
 const getEnvironmentVariableNames = model => {
   if (!model || !model.id || !model.provider) {
     return [];
@@ -609,9 +647,18 @@ function ModelFormEditor({
                       onChange={handleInputChange}
                       placeholder={
                         isTranscription
-                          ? t('admin.models.placeholders.realtimeUrl', 'ws://host:8080/v1/realtime')
+                          ? data.provider === 'mistral'
+                            ? 'wss://api.mistral.ai/v1/audio/transcriptions/realtime'
+                            : data.provider === 'openai' || data.provider === 'local'
+                              ? 'https://llm-server.llmhub.t-systems.net/v2/audio/transcriptions'
+                              : t(
+                                  'admin.models.placeholders.realtimeUrl',
+                                  'ws://host:8080/v1/realtime'
+                                )
                           : isTts
-                            ? 'https://api.mistral.ai/v1/audio/speech'
+                            ? data.provider === 'google'
+                              ? 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash-tts:streamGenerateContent'
+                              : 'https://api.mistral.ai/v1/audio/speech'
                             : t('admin.models.placeholders.apiUrl')
                       }
                       className={`mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-xs sm:text-sm border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md ${
@@ -623,7 +670,7 @@ function ModelFormEditor({
                       <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
                         {t(
                           'admin.models.hints.realtimeUrl',
-                          'WebSocket URL of the vLLM realtime endpoint. It stays server-side and never reaches the browser.'
+                          'Endpoint of the transcription service: a vLLM /v1/realtime WebSocket URL, an OpenAI-compatible /audio/transcriptions URL (Whisper with the OpenAI or Local provider), or the provider’s API. It stays server-side and never reaches the browser.'
                         )}
                       </p>
                     )}
@@ -658,21 +705,26 @@ function ModelFormEditor({
                       onChange={e =>
                         handleTtsChange('voice', e.target.value.replace(/[^\w-]/g, ''))
                       }
-                      placeholder="en_paul_neutral"
+                      placeholder={data.provider === 'google' ? 'Kore' : 'en_paul_neutral'}
                       className="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-xs sm:text-sm border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md"
                     />
-                    {data.provider === 'mistral' && (
+                    {TTS_PRESET_VOICES[data.provider] && (
                       <datalist id="ttsVoiceOptions">
-                        {MISTRAL_PRESET_VOICES.map(voice => (
+                        {TTS_PRESET_VOICES[data.provider].map(voice => (
                           <option key={voice} value={voice} />
                         ))}
                       </datalist>
                     )}
                     <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-                      {t(
-                        'admin.models.hints.ttsVoice',
-                        'Voice id of the provider: a Mistral preset such as en_paul_neutral, gb_jane_neutral or fr_marie_neutral, or the id of a voice saved in your Mistral account. Empty uses en_paul_neutral.'
-                      )}
+                      {data.provider === 'google'
+                        ? t(
+                            'admin.models.hints.ttsVoiceGoogle',
+                            'One of the prebuilt Gemini voices, such as Kore, Puck or Charon. Each speaks every language, which is detected from the text. Empty uses Kore.'
+                          )
+                        : t(
+                            'admin.models.hints.ttsVoice',
+                            'Voice id of the provider: a Mistral preset such as en_paul_neutral, gb_jane_neutral or fr_marie_neutral, or the id of a voice saved in your Mistral account. Empty uses en_paul_neutral.'
+                          )}
                     </p>
                   </div>
                 )}

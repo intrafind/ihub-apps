@@ -6,23 +6,25 @@ The iHub Apps admin UI is the primary interface for managing your platform. This
 
 ## Accessing the Admin UI
 
-Navigate to `/admin` in your browser. You must be logged in as a user with admin permissions (member of the `admin` group).
+Navigate to `/admin` in your browser. You must be logged in as a user with admin permissions (member of the `admins` group, or of a group with `adminAccess: true`). On a fresh installation that is the shipped `admin` account (`admin` / `password123`) — change its password before you open iHub to other people. While the login page shows the demo accounts and `admin` or `user` still has its shipped password, every admin page shows a warning.
 
 ---
 
 ## Navigation
 
-The admin UI uses a **collapsible left-rail sidebar** with seven sections. Click any section header to expand or collapse it.
+The admin UI uses a **collapsible left-rail sidebar** with these sections. Click a section header to expand or collapse it.
 
 | Section | What's inside |
 |---------|--------------|
 | **Overview** | Dashboard, What's New |
-| **AI Workspace** | Apps, Models, Prompts, Sources, Providers, Tools, Skills, Workflows |
+| **AI Workspace** | Apps, Models, Providers, Prompts, Tools, Skills, Sources, Workflows, Agents (Agent Factory), Marketplace |
 | **Access & Identity** | Users, Groups, Authentication, OAuth |
-| **Integrations** | All third-party integrations (Office 365, Google Drive, Jira, etc.) |
-| **Customization** | Pages, UI configuration, Short Links, Marketplace |
-| **Observability** | Usage Reports, Logging, Telemetry, System Resources, Audit Log, Workflow Executions, Agent Runs, Changelog |
-| **Platform** | Security, Backup & Restore, Updates, Advanced |
+| **Integrations** | Integrations (Jira, Office 365, Google Drive, Nextcloud, iFinder, Outlook add-in, browser extension, …), MCP servers, MCP gateway, A2A agents, Credentials |
+| **Customization** | UI Customization, Localization, Pages, Short Links |
+| **Observability** | Usage Reports, Feedback, Logging, Telemetry, System Resources, Chat History, Scheduled Tasks, Audit Log |
+| **Platform** | Features, Voice Input, Security, Backup & Restore, Updates, Advanced |
+
+Pages for features that are switched off (for example Marketplace, Workflows, Agents or Scheduled Tasks, see [Features](#features)) are not listed.
 
 **Collapsing the sidebar:** Click the chevron at the bottom of the sidebar to collapse it to icon-only mode. Hover over any icon to see its label. The collapse state is remembered across sessions.
 
@@ -74,11 +76,15 @@ The palette lets you:
 
 Results update as you type. Press `Enter` to navigate to the highlighted result, `Esc` to close.
 
+![Command palette](assets/screenshots/admin-command-palette.png)
+
 ---
 
 ## Overview Dashboard
 
 The dashboard (`/admin`) gives a real-time snapshot of your platform.
+
+![Admin dashboard with stat cards, quick actions, recent activity and platform status](assets/screenshots/admin-dashboard.png)
 
 **Stat cards:**
 - **Apps** — total configured apps
@@ -100,6 +106,8 @@ The dashboard (`/admin`) gives a real-time snapshot of your platform.
 
 **What's New** (`/admin/changelog`) is the in-product changelog. It lists every release that shipped something worth noting, newest first, and shows one release at a time.
 
+![What's New: the release tree and the contents of a release](assets/screenshots/admin-whats-new.png)
+
 - **Release list** (left): a tree — `5.x` holds `5.5.x` holds the releases — because an installation that has been running a while has more releases than a flat list can show. Only the groups worth opening start open: the one holding the release on screen and the one holding the installed release. Every other group stays shut behind a header that carries how many releases it holds and how many of them are new, so an upgrade spanning two series does not unfold into the long list the tree replaces. A series longer than ten releases lists the newest ten and offers the rest behind **Show N older**. The release you are running is marked **Installed**. Builds from the main branch additionally list **Unreleased** — changes that are not part of a tagged release yet.
 - **New since the upgrade**: iHub records which version it was running before the one it runs now, so every release an upgrade spanned is marked **New** — jump from 5.4.3 to 5.5.1 and all six releases in between are flagged, not just the one installed. A banner above the list names the jump. A fresh installation has nothing to compare against and shows no banner and no badges. The record lives in `contents/data/installed-version.json` and is written once per start.
 - **In this release**: a table of contents linking to every entry, grouped into **Breaking changes**, **New & improved** and **Fixes** — in that order, so what needs action comes first. Each section ends with a link back to the contents.
@@ -113,7 +121,9 @@ The content comes from `docs/releases/` in the repository and ships with every b
 
 Apps are the AI-powered tools your users interact with. Each app has its own system prompt, model preference, variables, and permissions.
 
-**To create an app:** Go to **AI Workspace → Apps** and click **New App**. You can start from a blank form, use a template, or upload a JSON file.
+![Apps administration list with categories, status, order and model](assets/screenshots/admin-apps.png)
+
+**To create an app:** Go to **AI Workspace → Apps** and click **Create App**. You can start from a blank form, use a template, upload a JSON file, or install one from the [Marketplace](#marketplace).
 
 **To edit an app:** Click the app name in the list, or use `Cmd+K` to search for it directly.
 
@@ -121,10 +131,15 @@ Apps are the AI-powered tools your users interact with. Each app has its own sys
 - **ID** — unique identifier, used in URLs. Cannot be changed after creation.
 - **Name / Description** — localized; enter values for each language you support.
 - **System prompt** — the instruction given to the AI model before the user's message.
-- **Preferred model** — override the platform default for this app.
-- **Token limit** — maximum tokens per request.
-- **Variables** — user-facing input fields shown before the chat starts (text, date, select, etc.).
+- **Preferred model** — override the platform default for this app; optionally restrict the selectable models or hide the model selector. Token limits come from the model (context window and output limit), not from the app.
+- **Variables** — user-facing input fields (text, date, select, etc.), shown beside the chat or as a start form (see below).
+- **Tools, sources, skills, workflows** — what the app may use beyond the model.
+- **Upload, transcription, web search, image generation** — per-app features users switch on in the chat input's **+** menu.
 - **Permissions** — which groups can access this app. The **Group access** card on the edit page shows the groups that already have access as chips, with a search box to grant more; every change saves immediately; see [Managing Groups](#managing-groups).
+
+**Start chats with a form:** In the **Variables** section, tick **Start chats with a form** to open every new chat with a form of the app's variables, a message field and — when uploads are on — a drop zone. **Send button label** sets the button text per language (default: **Start**). Sending the form fills the prompt template once and sends it as the first message; the conversation then continues without the template. See [App Configuration](apps.md).
+
+![App editor: the Variables section with "Start chats with a form"](assets/screenshots/admin-app-editor-start-form.png)
 
 **Enabling/disabling:** Use the toggle in the app list or the Enabled field on the edit page.
 
@@ -161,15 +176,35 @@ separate preview.
 
 Models define which AI providers and specific model versions are available on your platform.
 
-**To add a model:** Go to **AI Workspace → Models** and click **New Model** or upload a JSON file.
+![Model management list](assets/screenshots/admin-models.png)
+
+**To add a model:** Go to **AI Workspace → Models** and click **Add New Model**, upload a JSON file, install one from the [Marketplace](#marketplace), or use **Import from URL**.
 
 **Key fields:**
-- **Provider** — the API provider (OpenAI, Anthropic, Google, Mistral, or a custom OpenAI-compatible endpoint).
-- **Model ID** — the provider's model identifier (e.g. `gpt-4o`, `claude-opus-4-6`).
-- **Token limit** — the maximum context window for this model.
-- **Supports tools** — enable if the model supports function calling / tool use.
+- **Model type** — **Chat** (the default), **Transcription** (speech-to-text for recordings and uploads) or **Text-to-Speech** (read aloud). Only chat models appear in the chat's model selector.
+- **Provider** — the API the model speaks: OpenAI, OpenAI Responses, Anthropic, Google, Mistral, AWS Bedrock, local/vLLM, iAssistant, a transcription provider, or one of your [custom LLM providers](#managing-providers).
+- **Model ID** — the provider's model identifier (e.g. `gpt-5`, `claude-sonnet-5`, `gemini-flash-latest`).
+- **Context window / max output tokens** — the limits apps and chats work with.
+- **Capabilities** — tools, vision, thinking/reasoning, native web search, prompt caching, image generation.
+- **Hints** — a hint, info, warning or alert shown to users who pick the model (see [Model Hints](models.md#model-hints)).
+
+**Import from URL** reads an endpoint's model list — OpenAI, vLLM, LM Studio, LLM Hub and other OpenAI-compatible servers, Mistral, Anthropic or Google — and creates the models you pick. It asks which provider the models belong to and can create a new provider with its API key on the spot. See [Models → Importing Models from an Endpoint](models.md#importing-models-from-an-endpoint).
+
+![Import models from URL](assets/screenshots/admin-models-import.png)
 
 **Testing a model:** Use the **Test** button on the model list page to verify connectivity and authentication.
+
+---
+
+## Managing Providers
+
+**AI Workspace → Providers** holds the connections: API keys for the LLM providers (OpenAI, Anthropic, Google, Mistral, local, AWS Bedrock), the web search providers (Brave, Staan, Qwant) and other integrations. A model without a key of its own uses its provider's key, then the provider's environment variable (e.g. `GOOGLE_API_KEY`). Keys are stored encrypted and shown masked; **Test All** checks every configured key.
+
+![Provider credentials with status and linked models](assets/screenshots/admin-providers.png)
+
+**Create New Provider** adds an **LLM provider** for an endpoint of your own — for example a gateway such as T-Systems LLM Hub, or a self-hosted vLLM server. It has a name, an ID, the **API type** the endpoint speaks (OpenAI-compatible, vLLM, Mistral, …), an optional base URL and its API key. Its page lists the linked models and imports more; a provider that models still use cannot be deleted. See [Models → Custom LLM Providers](models.md#custom-llm-providers).
+
+![Create a new LLM provider](assets/screenshots/admin-provider-new.png)
 
 ---
 
@@ -212,12 +247,68 @@ Groups control what users can access. Go to **Access & Identity → Groups**.
 
 ---
 
+## Marketplace
+
+**AI Workspace → Marketplace** installs apps, models, prompts, skills and workflows from registries with one click, and keeps track of what it installed so it can be updated, uninstalled or detached later. The **iHub Official Marketplace** and **iHub Examples** registries are preconfigured; **Manage Registries** adds your own. The marketplace is a preview feature — switch it on under **Platform → Features**.
+
+![Admin marketplace](assets/screenshots/admin-marketplace.png)
+
+See [Marketplace](marketplace.md) for statuses, updates, private registries and the catalog format.
+
+---
+
+## Features
+
+**Platform → Features** switches platform features on and off — among them the preview features Agent Skills, Workflows, Marketplace, Integrations, Durable Chats (server-side chat history) and Scheduled Tasks, plus Prompt Library, Usage Tracking, Tools, Sources, Compare Mode, Chat Sharing, Short Links, Feedback and Export. The corresponding admin pages and user features appear or disappear with them.
+
+![Platform features with preview toggles](assets/screenshots/admin-features.png)
+
+---
+
+## Scheduled Tasks
+
+**Observability → Scheduled Tasks** shows whether the feature is running (feature flag, durable chats, platform switch), sets the limits — tasks per user, shortest interval, concurrent runs, catch-up window, approval timeout, retention — and lists every user's tasks with owner, schedule, status, last run and failures. Admins can pause, disable or delete a task and read its run history; a run always acts as its owner. Who may create tasks is the **Scheduled tasks** permission of a group.
+
+![Admin scheduled tasks: status, limits and all tasks](assets/screenshots/admin-scheduled-tasks.png)
+
+See [Scheduled Tasks](scheduled-tasks.md).
+
+---
+
+## Voice Input
+
+**Platform → Voice Input** configures speech for the whole platform:
+
+- **Defaults** — the dictation service of the microphone button (Browser, Azure Speech or vLLM Realtime) and the transcription model for recordings and audio/video uploads. Apps follow the defaults unless they choose a service or model of their own.
+- **vLLM Realtime** and **Azure Speech** — endpoints and keys, each with **Test connection**.
+- **Read aloud (text-to-speech)** — the play button on chat messages and its model, with a test field.
+- **Test voice input** — microphone check, live dictation and a record-and-transcribe test, run in your own browser against the saved configuration.
+
+<p align="center">
+  <img src="assets/screenshots/admin-voice-input.png" alt="Voice input defaults and vLLM realtime settings" width="49%">
+  <img src="assets/screenshots/admin-voice-input-test.png" alt="Read aloud settings and the voice input test panel" width="49%">
+</p>
+
+See [Realtime Voice & Transcription](voice-transcription.md) and [Read Aloud](text-to-speech.md).
+
+---
+
+## UI Customization
+
+**Customization → UI Customization** edits the header, the **Start Page**, the footer, assets (logo, icons), styles, content, error pages and the PWA settings. On **Start Page** you choose what `/` opens, whether users are greeted by name, the heading and subtitle, the default app whose chat input appears on the start page, the featured apps and how many app shortcuts the start page and the sidebar show. See [UI Configuration → Start Page](ui.md#start-page-configuration).
+
+![UI customization: start page configuration](assets/screenshots/admin-ui-start-page.png)
+
+---
+
 ## Usage Reports
 
 **Observability → Usage Reports** (`/admin/usage`) shows messages, tokens, feedback and magic-prompt
 use, all-time on **Overview**, **Users**, **Applications** and **Details**, and per day or month on
 **Timeline** (range 7 days to 12 months, from the hourly rollups — **Generate Report** refreshes
 them on demand).
+
+![Usage reports overview with prompt caching](assets/screenshots/admin-usage.png)
 
 **How tokens are counted.** Prompt tokens are the whole input of a model call, including tokens the
 provider served from its prompt cache; completion tokens are the whole output, including reasoning
@@ -273,6 +364,8 @@ ones; a counter the provider did not report is left empty.
 **Observability → System Resources** (`/admin/system-resources`) shows how much CPU, memory and disk space this installation uses. It is meant for single-host installations — one server or one container, with or without several workers. Deployments with several replicas should use [Telemetry & Observability](telemetry.md) instead, since each replica has its own disk.
 
 The page refreshes every 15 seconds while it is open.
+
+![System resources: disk space, host and server processes](assets/screenshots/admin-system-resources.png)
 
 **Disk space.** One entry per filesystem that holds a directory iHub writes to: the contents directory, its `data` and `uploads` directories, the log directory (when file logging is on) and the operating system's temp directory. Directories on the same disk share one entry, which lists them. Each entry shows free and total space and a status:
 

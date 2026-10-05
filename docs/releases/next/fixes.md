@@ -14,6 +14,18 @@ used the configured location.
   under the installation directory and move any configuration or data they want to keep into the
   configured location before upgrading.
 
+## Prompt Editor: Placeholders Are Typed, Not Inserted
+
+**Insert variable** in the prompt editor did not add the variable to the prompt text. The button
+is gone; a hint below the text explains that typing `{{mytext}}` adds a placeholder, which becomes
+a field to fill in when the prompt is used.
+
+## Sharing a Prompt: One Search for People and Groups
+
+The share dialog offered groups twice — in the search box and in a separate list — and with many
+groups the dialog kept growing. Groups are now found through the search box only, at most ten per
+search, and the results and the **Shared with** list scroll instead of growing.
+
 ## Skills and Marketplace Previews Read Front Matter as YAML Only
 
 The metadata block at the top of a `SKILL.md` file — its front matter — is now always read as

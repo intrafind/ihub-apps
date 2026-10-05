@@ -25,7 +25,7 @@ import { validateWithSchema, errorsToFieldErrors } from '../../../utils/schemaVa
 import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
 import AdminFormErrorSummary from './AdminFormErrorSummary';
 import { FormValidationProvider } from '../../../shared/contexts/formValidationContext';
-import { fetchTranscriptionModels } from '../../../api/endpoints/models';
+import useAdminTranscriptionModels from '../hooks/useAdminTranscriptionModels';
 import BasicInfoSection from './app-form/BasicInfoSection';
 import InputModeSection from './app-form/InputModeSection';
 import parseNumberOrUndefined from '../utils/parseNumberOrUndefined';
@@ -58,23 +58,8 @@ function AppFormEditor({
   // Tool ids sourced from MCP servers. Managed in a dedicated section and
   // excluded from the generic tools picker so they don't appear twice.
   const [mcpToolIds, setMcpToolIds] = useState([]);
-  // Transcription models (modelType: 'transcription') for the transcription
-  // section's model picker — fetched separately since the default models list
-  // is chat-only.
-  const [transcriptionModels, setTranscriptionModels] = useState([]);
+  const transcriptionModels = useAdminTranscriptionModels();
   const featureFlags = useFeatureFlags();
-
-  useEffect(() => {
-    let active = true;
-    fetchTranscriptionModels()
-      .then(models => {
-        if (active && Array.isArray(models)) setTranscriptionModels(models);
-      })
-      .catch(err => console.error('Failed to load transcription models:', err));
-    return () => {
-      active = false;
-    };
-  }, []);
 
   // Check if sources feature is enabled
   const isSourcesEnabled = featureFlags.isEnabled('sources', true);
@@ -312,7 +297,13 @@ function AppFormEditor({
             {/* Response Feedback */}
             <FeedbackSection app={app} onChange={onChange} />
 
-            <InputModeSection app={app} onChange={onChange} t={t} />
+            <InputModeSection
+              app={app}
+              onChange={onChange}
+              t={t}
+              transcriptionModels={transcriptionModels}
+              currentLanguage={currentLanguage}
+            />
 
             {/* Sources Configuration - Only show if sources feature is enabled */}
             {isSourcesEnabled && <SourcesConfigSection app={app} onChange={onChange} t={t} />}

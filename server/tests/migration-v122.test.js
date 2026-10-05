@@ -68,9 +68,12 @@ test('moves every shipped prompt to the new default and adds the upload section'
   for (const [file, fields] of Object.entries(SHIPPED)) {
     const defaults = readDefault(file);
     for (const field of Object.keys(fields)) {
+      // A field a later release dropped from the defaults is left for that
+      // release's migration (V148: the Translator's template).
+      const next = getPath(defaults, field);
       assert.deepEqual(
         getPath(ctx.files[file], field),
-        getPath(defaults, field),
+        next === undefined ? getPath(readShipped(file), field) : next,
         `${file} ${field}`
       );
     }
@@ -87,14 +90,14 @@ test('a fresh installation, already on the new defaults, is not touched', async 
 });
 
 test('leaves an admin-edited language and an existing upload section alone', async () => {
-  const translator = readShipped('apps/translator.json');
-  translator.prompt.en = 'My own: {{content}}';
-  translator.upload = { enabled: false };
-  const ctx = fakeCtx({ 'apps/translator.json': translator });
+  const summarizer = readShipped('apps/summarizer.json');
+  summarizer.prompt.en = 'My own: {{content}}';
+  summarizer.upload = { enabled: false };
+  const ctx = fakeCtx({ 'apps/summarizer.json': summarizer });
   await up(ctx);
-  const app = ctx.files['apps/translator.json'];
+  const app = ctx.files['apps/summarizer.json'];
   assert.equal(app.prompt.en, 'My own: {{content}}');
-  assert.equal(app.prompt.de, readDefault('apps/translator.json').prompt.de);
+  assert.equal(app.prompt.de, readDefault('apps/summarizer.json').prompt.de);
   assert.deepEqual(app.upload, { enabled: false });
 });
 

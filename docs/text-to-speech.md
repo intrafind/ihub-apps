@@ -5,8 +5,10 @@ message to a text-to-speech (TTS) model, and the audio starts playing while the
 model is still generating it. That is usually within a second, however long the
 answer is.
 
-The first supported provider is [Mistral Voxtral TTS](https://mistral.ai/news/voxtral-tts/)
-(`voxtral-mini-tts-latest`).
+Two providers are supported: [Mistral Voxtral TTS](https://mistral.ai/news/voxtral-tts/)
+(`voxtral-mini-tts-latest`) and Google's
+[Gemini TTS](https://ai.google.dev/gemini-api/docs/speech-generation) (`gemini-3.8-flash-tts`,
+and the faster, cheaper `gemini-3.8-flash-lite-tts`).
 
 ## Using it
 
@@ -35,6 +37,11 @@ The first supported provider is [Mistral Voxtral TTS](https://mistral.ai/news/vo
    of a key on the model you can use the `mistral` provider key from
    Admin → Providers, or the `MISTRAL_API_KEY` environment variable, the same
    keys the Mistral chat models use.
+
+   For Google, the models `gemini-3.8-flash-tts.json` and
+   `gemini-3.8-flash-lite-tts.json` ship the same way (migration `V150` adds
+   them to existing installations). They use the Google key of the Gemini chat
+   models: a key on the model, the `google` provider key, or `GOOGLE_API_KEY`.
 2. **Switch it on.** Open **Admin → Voice Input → Read aloud
    (text-to-speech)**. Tick **Show a read-aloud button on chat messages**,
    choose the model and save. The **Test** field on the same page speaks a
@@ -47,7 +54,17 @@ the app's configuration.
 
 ## Voices
 
-### Languages and accents
+### Gemini voices
+
+The Gemini TTS models have 30 prebuilt voices, such as `Kore` (the default),
+`Puck`, `Charon`, `Leda` or `Zephyr`; the model editor suggests all of them.
+**Every voice speaks every language** — Gemini detects the language from the
+text, across more than 100 languages — so one voice usually suffices. The
+**Voice** field also takes the id of a voice from Google's voice library or of
+a voice you designed with Google (`voice_…`); iHub does not list or create
+those, so the voice manager below is Mistral-only.
+
+### Languages and accents (Voxtral)
 
 Voxtral TTS speaks English, French, German, Spanish, Dutch, Portuguese,
 Italian, Hindi and Arabic. **Every voice reads every one of these
@@ -170,12 +187,12 @@ voices, and `DELETE /v1/audio/voices/<id>` deletes one. See Mistral's
 | Field | Meaning |
 | --- | --- |
 | `modelType` | `"tts"` marks a text-to-speech model. TTS models never show up in the chat model selector and are never picked as the default chat model. |
-| `provider` | `"mistral"`. A TTS model on any other provider fails validation. |
-| `url` | Optional. The speech endpoint; leave it out to use `https://api.mistral.ai/v1/audio/speech`. It stays on the server. |
-| `modelId` | Required. The provider's model id, `voxtral-mini-tts-latest` for Voxtral TTS. |
-| `tts.voice` | The voice id. Empty uses `en_paul_neutral`. |
+| `provider` | `"mistral"` or `"google"`. A TTS model on any other provider fails validation. |
+| `url` | Optional. The speech endpoint; it stays on the server. Mistral: leave it out to use `https://api.mistral.ai/v1/audio/speech`. Google: the model's `…/models/<model>:streamGenerateContent` URL, or the API base, under which `models/<modelId>` is used; iHub always streams with `?alt=sse`. |
+| `modelId` | Required. The provider's model id: `voxtral-mini-tts-latest`, `gemini-3.8-flash-tts` or `gemini-3.8-flash-lite-tts`. |
+| `tts.voice` | The voice id. Empty uses `en_paul_neutral` (Mistral) or `Kore` (Google). |
 | `tts.voices` | Optional. A voice id per language (`en`, `de`, `fr`, `es`, `it`, `nl`, `pt`, `hi`, `ar`), used for messages written in that language. |
-| `apiKey` | Optional. Stored encrypted. Without one, the `mistral` provider key or `MISTRAL_API_KEY` is used. |
+| `apiKey` | Optional. Stored encrypted. Without one, the provider key (`mistral` / `google`) or `MISTRAL_API_KEY` / `GOOGLE_API_KEY` is used. Google keys are sent in the `x-goog-api-key` header, never in the URL. |
 
 ### Platform (`contents/config/platform.json`)
 
