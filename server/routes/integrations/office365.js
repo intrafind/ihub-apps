@@ -36,7 +36,9 @@ function isValidGraphId(id) {
   const trimmed = id.trim();
   if (!trimmed || trimmed.length > 512) return false;
   // Allow common safe characters; disallow whitespace and URL control chars.
-  return /^[A-Za-z0-9._\-]+$/.test(trimmed);
+  // `!` is part of real Graph IDs: business drive IDs look like `b!Xk3…`,
+  // consumer item IDs like `ABC123!105`. It is a valid path character.
+  return /^[A-Za-z0-9._!\-]+$/.test(trimmed);
 }
 
 // Gate all Office 365 routes behind the integrations feature flag

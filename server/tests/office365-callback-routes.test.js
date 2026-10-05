@@ -172,6 +172,28 @@ check(
   badSecret === '/apps/chat?office365_error=invalid_client'
 );
 
+// Graph drive IDs contain `!` (e.g. `b!…` for OneDrive/SharePoint/Teams) and
+// must reach the service instead of being rejected with 400.
+const itemsHandler = handlerFor('/items');
+let listedDrive;
+Office365Service.listItems = async (userId, driveId) => {
+  listedDrive = driveId;
+  return [];
+};
+async function itemsStatus(driveId) {
+  let status = 200;
+  const res = {
+    status: code => ((status = code), res),
+    json: () => res
+  };
+  await itemsHandler({ query: { driveId, providerId: 'office365' }, user: { id: 'u1' } }, res);
+  return status;
+}
+const businessDriveId = 'b!Xk3pQ-7zLmN0aBcD_eF9gH1iJ2kL3mN4oP5qR6sT7uV8wX9yZ0';
+check('drive ID with ! is accepted', (await itemsStatus(businessDriveId)) === 200);
+check('drive ID with ! reaches the service', listedDrive === businessDriveId);
+check('drive ID with a slash is still rejected', (await itemsStatus('b!abc/../me')) === 400);
+
 if (failures > 0) {
   console.error(`\n❌ ${failures} Office 365 callback route check(s) failed`);
   process.exit(1);
