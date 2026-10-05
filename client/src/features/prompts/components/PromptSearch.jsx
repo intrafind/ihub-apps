@@ -79,7 +79,11 @@ function PromptSearch({
       try {
         const [rawPrompts, rawSkills] = await Promise.all([
           promptsEnabled ? fetchPrompts().catch(() => []) : Promise.resolve([]),
-          skillsEnabled ? fetchSkills().catch(() => []) : Promise.resolve([])
+          // Fresh on every open: another user's share or revocation, or a
+          // deleted skill, must show up without waiting for a cache to expire.
+          skillsEnabled
+            ? fetchSkills(undefined, { skipCache: true }).catch(() => [])
+            : Promise.resolve([])
         ]);
         if (!active) return;
         setPrompts(

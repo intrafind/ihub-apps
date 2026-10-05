@@ -54,6 +54,8 @@ const { default: registerSkillRoutes } = await import('../routes/skillRoutes.js'
 const { default: registerAdminSkillsRoutes, skillMarkdownFromUserSkill } =
   await import('../routes/admin/skills.js');
 const { getStorage, readFacet } = await import('../storage/bootstrap.js');
+const { PromptNodeExecutor } = await import('../services/workflow/executors/PromptNodeExecutor.js');
+const { ToolNodeExecutor } = await import('../services/workflow/executors/ToolNodeExecutor.js');
 
 const ADA = { id: 'user-ada', name: 'Ada Lovelace', groups: ['authenticated'] };
 const GRACE = { id: 'user-grace', name: 'Grace Hopper', groups: ['authenticated'] };
@@ -563,6 +565,28 @@ describe('in chat', () => {
     assert.doesNotMatch(body, /WEEKLY BODY/);
   });
 
+  it('offers and loads no user skills in workflow nodes, even with no skills of their own', async () => {
+    const skill = await create(ADA, { name: 'node-blocked' });
+    const ada = { ...ADA, permissions: { skills: new Set(['*']) } };
+    const tools = await new PromptNodeExecutor().getAgentTools([], 'en', { user: ada });
+    assert.ok(!tools.some(tool => tool.id === 'activate_skill'));
+    const emptyNode = await new PromptNodeExecutor().getAgentTools([], 'en', {
+      user: ada,
+      _skillIds: []
+    });
+    assert.ok(!emptyNode.some(tool => tool.id === 'activate_skill'));
+    const result = await new ToolNodeExecutor().execute(
+      {
+        id: 'activate',
+        type: 'tool',
+        config: { toolId: 'activate_skill', parameters: { skill_name: skill.id } }
+      },
+      { data: {} },
+      { user: ada, appConfig: app }
+    );
+    assert.doesNotMatch(JSON.stringify(result.output ?? result), /WEEKLY BODY/);
+  });
+
   it('shows the picker global and personal skills with their scope', async () => {
     const skill = await create(GRACE, { name: 'picker-skill' });
     const res = await drive(route.picker, { user: GRACE });
@@ -618,6 +642,25 @@ describe('admin', () => {
     });
     assert.equal(again.statusCode, 409);
     assert.equal(again.body.details?.code, 'SKILL_NAME_TAKEN');
+  });
+
+  it('lets only one of two concurrent promotions to the same name win', async () => {
+    const first = await create(ADA, { name: 'race-one' });
+    const second = await create(ADA, { name: 'race-two' });
+    const promote = skill =>
+      drive(route.promote, {
+        user: ROOT,
+        params: { skillId: skill.id },
+        body: { name: 'raced-skill' }
+      });
+    const results = await Promise.all([promote(first), promote(second)]);
+    assert.deepEqual(results.map(res => res.statusCode).sort(), [201, 409]);
+    const loser = results.find(res => res.statusCode === 409);
+    assert.equal(loser.body.details?.code, 'SKILL_NAME_TAKEN');
+    const validation = await validateSkillDirectory(
+      path.join(contentsDir, 'skills', 'raced-skill')
+    );
+    assert.ok(validation.valid, JSON.stringify(validation.errors));
   });
 
   it('writes frontmatter no description can break', () => {

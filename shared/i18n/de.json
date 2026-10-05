@@ -5141,7 +5141,7 @@
       "doubleHyphen": "Verwenden Sie nur einfache Bindestriche (kein „--“).",
       "duplicate": "Eine andere Datei hat diesen Namen.",
       "extension": "Erlaubte Dateitypen: {{extensions}}",
-      "fileNamePattern": "Verwenden Sie nur Buchstaben, Ziffern, Punkte, Bindestriche und Unterstriche.",
+      "fileNamePattern": "Beginnen Sie mit einem Buchstaben oder einer Ziffer und verwenden Sie danach nur Buchstaben, Ziffern, Punkte, Bindestriche und Unterstriche.",
       "fileNameRequired": "Geben Sie einen Dateinamen ein.",
       "folder": "Wählen Sie einen Ordner.",
       "invalid": "Ungültiger Wert",

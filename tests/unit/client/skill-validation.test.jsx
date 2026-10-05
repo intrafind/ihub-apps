@@ -76,7 +76,7 @@ describe('skill files', () => {
 
   test.each([
     ['references', 'template.md'],
-    ['assets', 'data.CSV'],
+    ['assets', 'data.csv'],
     ['scripts', 'run_me-2.yaml'],
     ['references', 'notes.txt'],
     ['assets', 'config.json'],
@@ -93,7 +93,10 @@ describe('skill files', () => {
     ['references', 'sub/dir.md', 'namePattern'],
     ['references', 'run.sh', 'extension'],
     ['references', 'template', 'extension'],
-    ['references', '.md', 'extension']
+    ['references', '.md', 'namePattern'],
+    ['references', '_notes.md', 'namePattern'],
+    ['assets', 'data.CSV', 'extension'],
+    ['references', `${'a'.repeat(190)}.md`, 'tooLong']
   ])('%s/%s is rejected as %s', (folder, fileName, code) => {
     expect(validateSkillFile(folder, fileName)).toBe(code);
   });

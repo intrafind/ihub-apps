@@ -20,11 +20,19 @@ export const SKILL_DESCRIPTION_MAX_LENGTH = 1024;
 /** The folders a skill file may live in. */
 export const SKILL_FILE_FOLDERS = ['references', 'assets', 'scripts'];
 
-/** A file name inside one of those folders. */
-export const SKILL_FILE_NAME_PATTERN = /^[A-Za-z0-9._-]+$/;
+/**
+ * A file name inside one of those folders. The file rules here mirror
+ * `SKILL_FILE_PATH_PATTERN` and the path length in
+ * `server/validators/userSkillSchema.js`, so a file the editor accepts also
+ * saves.
+ */
+export const SKILL_FILE_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 
-/** The text formats a skill file may have. */
+/** The text formats a skill file may have, in lowercase as the server requires. */
 export const SKILL_FILE_EXTENSIONS = ['.md', '.txt', '.csv', '.json', '.yaml', '.yml'];
+
+/** Longest allowed file path, folder included. */
+export const SKILL_FILE_PATH_MAX_LENGTH = 200;
 
 /** Limits used when the platform config does not name them. */
 export const DEFAULT_SKILL_LIMITS = { maxSkillSizeKB: 256, maxFilesPerSkill: 20 };
@@ -106,17 +114,17 @@ export function joinSkillFilePath(folder, fileName) {
  *
  * @param {string} folder - The chosen folder.
  * @param {string} fileName - The file name as typed.
- * @returns {null|'folder'|'nameRequired'|'namePattern'|'extension'}
+ * @returns {null|'folder'|'nameRequired'|'namePattern'|'extension'|'tooLong'}
  */
 export function validateSkillFile(folder, fileName) {
   if (!SKILL_FILE_FOLDERS.includes(folder)) return 'folder';
   const value = typeof fileName === 'string' ? fileName.trim() : '';
   if (!value) return 'nameRequired';
   if (!SKILL_FILE_NAME_PATTERN.test(value)) return 'namePattern';
-  const lower = value.toLowerCase();
-  if (!SKILL_FILE_EXTENSIONS.some(ext => lower.endsWith(ext) && lower.length > ext.length)) {
+  if (!SKILL_FILE_EXTENSIONS.some(ext => value.endsWith(ext) && value.length > ext.length)) {
     return 'extension';
   }
+  if (joinSkillFilePath(folder, value).length > SKILL_FILE_PATH_MAX_LENGTH) return 'tooLong';
   return null;
 }
 
@@ -229,7 +237,7 @@ export function skillValidationMessage(code, t) {
     case 'namePattern':
       return t(
         'skills.validation.fileNamePattern',
-        'Use letters, digits, dots, hyphens and underscores only.'
+        'Start with a letter or digit, then use letters, digits, dots, hyphens and underscores only.'
       );
     case 'extension':
       return t('skills.validation.extension', {

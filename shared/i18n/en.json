@@ -5176,7 +5176,7 @@
       "doubleHyphen": "Use single hyphens only (no “--”).",
       "duplicate": "Another file has this name.",
       "extension": "Allowed file types: {{extensions}}",
-      "fileNamePattern": "Use letters, digits, dots, hyphens and underscores only.",
+      "fileNamePattern": "Start with a letter or digit, then use letters, digits, dots, hyphens and underscores only.",
       "fileNameRequired": "Enter a file name.",
       "folder": "Choose a folder.",
       "invalid": "Invalid value",

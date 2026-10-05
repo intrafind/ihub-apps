@@ -347,17 +347,19 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
       // Auto-attach `activate_skill` / `read_skill_resource` whenever the
       // node has skills available (either on the profile or override on the
       // node config). Synthesizer nodes skip this — they're text-out only.
-      const nodeSkillIds = resolveNodeSkillIds(config, agentProfile) || [];
-      if (nodeSkillIds.length > 0 && config._isSynthesizer !== true) {
+      const nodeSkillIds =
+        config._isSynthesizer === true ? [] : resolveNodeSkillIds(config, agentProfile) || [];
+      // The node's skills, an empty list included: `getAgentTools` builds the
+      // skill tools from them, `runTool` only loads skills from this list, and
+      // its presence keeps users' own skills out of workflow nodes.
+      context = { ...context, _skillIds: nodeSkillIds };
+      if (nodeSkillIds.length > 0) {
         if (!configuredToolIds.includes('activate_skill')) {
           configuredToolIds.push('activate_skill');
         }
         if (!configuredToolIds.includes('read_skill_resource')) {
           configuredToolIds.push('read_skill_resource');
         }
-        // The node's skills: `getAgentTools` builds the skill tools from them
-        // and `runTool` only loads skills from this list.
-        context = { ...context, _skillIds: nodeSkillIds };
       }
 
       // Provider-native search resolution. The generic `webSearch` tool id
@@ -1326,12 +1328,14 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
    */
   async getAgentTools(toolIds, language, _context) {
     // Create a minimal app config for getToolsForApp
+    const skillIds = Array.isArray(_context._skillIds) ? _context._skillIds : [];
     const appConfig = {
       tools: toolIds,
       sources: _context.appConfig?.sources || [],
-      ...(Array.isArray(_context._skillIds) && _context._skillIds.length > 0
-        ? { skills: _context._skillIds }
-        : {})
+      // The node's list, an empty one included, marks this as a workflow node:
+      // `getToolsForApp` then offers no skill tools for users' own skills.
+      _skillIds: skillIds,
+      ...(skillIds.length > 0 ? { skills: skillIds } : {})
     };
 
     const toolContext = {

@@ -573,7 +573,18 @@ export default function registerAdminSkillsRoutes(app) {
           });
         }
 
-        await fs.mkdir(targetPath, { recursive: true });
+        // Claim the name with a non-recursive mkdir: of two promotions to the
+        // same name, only one creates the folder; the other gets EEXIST and
+        // leaves the winner's files alone.
+        await fs.mkdir(path.dirname(targetPath), { recursive: true });
+        try {
+          await fs.mkdir(targetPath);
+        } catch (err) {
+          if (err.code !== 'EEXIST') throw err;
+          return sendErrorResponse(res, 409, `A global skill named '${name}' already exists`, {
+            details: { code: 'SKILL_NAME_TAKEN' }
+          });
+        }
         created = true;
         const files = [
           { path: 'SKILL.md', content: skillMarkdownFromUserSkill(skill, name) },
