@@ -2,7 +2,8 @@
 
 **Date:** 2026-07-28
 **Trigger:** OAuth login for MCP clients failed with `invalid_grant: Authorization code is invalid or expired`
-**Status:** OAuth authorization code flow fixed; remaining findings open
+**Status:** OAuth authorization code flow fixed; most remaining findings fixed on 2026-10-05
+(see [Follow-up](#follow-up-2026-10-05)); a few low-impact ones open
 
 ## Root cause class
 
@@ -113,3 +114,53 @@ intra-request only.
 
 A general fix for several of these is a cluster-aware store abstraction (bus-backed now, Redis
 later for cross-pod), which `clusterBus.js` was already shaped to allow.
+
+## Follow-up (2026-10-05)
+
+Triggered by Office 365 failing to connect with `invalid state` on a 4-worker k3s deployment. The
+integration sign-ins were fixed with a signed OAuth state (`utils/integrationOAuthState.js`); a
+re-audit of `server/` then found the same class of bug in the places below. Every fix was checked
+on a real 4-worker cluster (fresh connection per request, so round-robin spreads them) and, where
+it applied, against the code before the fix.
+
+### Fixed
+
+| Finding | Fix | Before → after on 4 workers |
+| --- | --- | --- |
+| #2 OIDC session `MemoryStore` | `utils/oidcLoginState.js`: passport state store with an HMAC-signed state (provider, return URL, encrypted PKCE verifier, expiry), bound to the browser by an `oidcLoginNonce` cookie | 0/16 → 16/16 logins |
+| #3 Integration session `MemoryStore` | `utils/integrationOAuthState.js` (signed state bound to the signed-in user) | — |
+| `/api/oauth` session | `oauthParams` was written to `oauth.session` but read from `oidc.session`, so it never worked; removed — `returnUrl` already carries the authorize URL | — |
+| NTLM `ntlmRequested` in `app.session` | `ntlmRequested` cookie | — |
+| All of the above | No `express-session` left: `setup.js` mounts none, `express-session` and `memorystore` removed | — |
+| #1 MCP gateway `sessions` / `sseSessions` | Presence maps on the bus: a POST for a session another worker holds is served there statelessly, GET answers 405, DELETE is forwarded, legacy SSE messages are relayed to the stream's worker | follow-up calls 12/12 |
+| OAuth clients cache window (new) | `loadOAuthClientsFresh` / `findClientByIdFresh`: a miss (or a secret mismatch) re-reads the file once; writes start from the file | create client → token: 0/3 → 4/4 |
+| Workflow / agent stream events (new) | `actionTracker.watchRun()` + relay of `fire-sse` events to watching workers | streams seeing the end: 1/4 → 4/4 |
+| `StateManager.activeStates` stale forever (new) | for executions not running here, `get` takes a newer checkpoint (`updatedAt`) | status after completion: `paused` on 3/4 → `completed` on 4/4 |
+| Shared presence kinds (new, `clusterBus.js`) | the primary tells the first holder when a second joins and the last holder when it is alone again | needed for the relay above |
+| #6 `toolsService/jobStore.js` | job ownership on the bus; snapshots, cancel relay, gathered list; result written to `data/tool-jobs/` when clustered | — |
+| #4 `shortLinkManager.js` | `utils/sharedJsonFile.js`: locked read-modify-write of the file, reads re-validate by inode/mtime/size | — |
+| usage counters (`usageTracker.js`) | per-worker deltas added to `usage.json` under the lock; averages recomputed | — |
+| `refreshTokenStore.js` lost updates (new) | changes under a lock file; a redemption deletes only the entry it verified | 3 of 4 concurrency tests fail before |
+| #8 `ConversationStateManager` | `loadState` reads the store unless a local change is pending, and keeps the newer entry | — |
+| #7 rate limiters (auth, OAuth) | `utils/clusterRateLimitStore.js`: counters in the primary | 120/120 → 30/30 with a limit of 30 |
+| #11 `requestThrottler.js` | slots held by the primary when a limit is configured | concurrency 1: 6 at once → 1 |
+| #10 `updateService.js` | status gathered from every worker | — |
+
+#5 `ExecutionRegistry` and #9 `WorkflowEngine.abortControllers` had been fixed in between
+(storage-backed registry, `cancelAnywhere`).
+
+### Still open
+
+- General API rate limiters (public, admin, inference) still count per worker — documented in
+  `docs/rate-limiting.md`; a primary round trip on every request is not worth it.
+- Realtime voice caps, the per-chat clarification cap (`ChatService.clarificationCounts`) and the
+  personal API key cap (`personalApiKeyManager` owner locks) are per worker.
+- `mcpOAuthService.pendingRegistrations` single-flights outbound DCR per worker only, so two workers
+  can register twice.
+- `ChatRepository._ownerChats` (5 s memo) and `McpClientManager.userConnections` eviction are local:
+  a sidebar can lag 5 s, a pooled MCP connection lives until its idle timeout.
+- #12 audit log query flush, and the noisy migration lock at boot.
+- Everything here spans one process tree. Several pods behind a load balancer still need session
+  affinity for chat streaming and the MCP gateway (or `stateless: true`); the sign-in flows above are
+  stateless and work across pods.
+

@@ -99,3 +99,32 @@ about it. Any worker can now finish the sign-in.
 - iHub no longer sets the `oidc.session`, `integration.session`, `oauth.session` and
   `app.session` cookies. It sets a short-lived `oidcLoginNonce` cookie during an OIDC sign-in,
   and an `ntlmRequested` cookie after a Windows sign-in.
+
+## Servers With Several Workers: Requests Work Whichever Worker Receives Them
+
+iHub spreads requests over several worker processes (4 by default), and a follow-up request often
+reaches a different worker than the one that handled the first. Several features kept their state
+in one worker and failed, or showed stale data, on the others. They now work on every worker:
+
+- **MCP gateway:** MCP clients connected, then failed on their first tool call with
+  `404 Session not found` and reconnected in a loop.
+- **OAuth clients:** an MCP client that registered itself and immediately sent the user to sign in
+  was refused with `invalid_client`, as was a token requested right after creating a client in the
+  admin UI.
+- **OAuth refresh tokens:** connected apps occasionally had to be authorized again, because two
+  token refreshes at the same time overwrote each other.
+- **Workflows and agent runs:** the run page stopped updating, so progress, human checkpoints and
+  the end of the run did not appear, and a finished run kept showing as paused.
+- **OCR tool:** progress, download and cancel answered "Job not found", and the job list was
+  incomplete.
+- **Short links:** a new link could not be opened at first, and links disappeared or came back
+  after being deleted.
+- **Usage statistics:** counts were lost, and a reset was undone a few seconds later.
+- **iAssistant:** a conversation lost its context when consecutive questions reached different
+  workers.
+- **Admin update:** the progress of a running update showed as idle.
+- **Provider limits:** a model's `concurrency` and `requestDelayMs` applied per worker, so providers
+  rejected requests with "too many requests" despite a correct configuration.
+- **Sign-in and OAuth rate limits** now count across all workers. Before, each worker counted on
+  its own, which allowed several times the configured attempts. If legitimate sign-ins now hit the
+  limit, raise `rateLimit.authApi.limit`.

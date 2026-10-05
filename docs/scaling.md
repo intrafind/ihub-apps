@@ -282,10 +282,11 @@ workers per replica: each replica's bus is independent.
 ### Worker-local state
 
 The bus covers the chat path (SSE delivery, abort, workflow cancel and replay,
-pending-finish backfill) and configuration invalidation (see
-[Configuration changes](#configuration-changes)). Other worker-local state is
-unchanged, and round-robin routing means requests from one user now spread across
-workers rather than landing on one:
+pending-finish backfill), live workflow and agent-run streams, MCP gateway
+sessions, tool jobs (OCR), shared credential rate limits, provider throttling
+and configuration invalidation (see [Configuration changes](#configuration-changes)).
+Round-robin routing means requests from one user spread across workers rather
+than landing on one; what remains worker-local:
 
 - **Most rate-limit counters are per worker.** With `WORKERS=N` the effective
   limit for a given key is up to `N ×` the configured value. Size limits
@@ -294,10 +295,9 @@ workers rather than landing on one:
   [rate limiting](rate-limiting.md#several-worker-processes).
 - **Voice connection caps are per worker** — see
   [below](#realtime-voice-websocket-and-workers).
-- **Workflow engine state** is file-persisted with an in-process cache, so a
-  read from a worker that is not running the execution can be stale. The chat
-  paths route around this by asking the owning worker to act; direct admin reads
-  of a running execution can lag.
+- **Workflow engine state** is file-persisted with an in-process cache. A
+  worker that is not running an execution re-reads its checkpoint on every
+  read, so it can lag the running worker by at most one checkpoint.
 
 Sign-in flows keep no server-side session. OIDC login, connecting an integration
 (Office 365, Google Drive, Jira, Nextcloud), MCP server sign-in and the OAuth
@@ -307,7 +307,10 @@ that finishes a sign-in can land on any worker — or any pod.
 Any new feature needing cross-worker visibility should either use the bus
 (`publish`/`subscribe` plus a presence map), persist to the shared `contents/`
 directory, carry its state in a signed ticket or cookie, or stay strictly
-per-request. Do not add `express-session`: its store lives in one worker.
+per-request. Do not add `express-session`: its store lives in one worker. A JSON
+file that several workers change goes through `server/utils/sharedJsonFile.js`
+(locked read-modify-write); writing back a per-worker copy erases the other
+workers' changes.
 
 ### Session failover
 
