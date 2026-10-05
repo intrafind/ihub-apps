@@ -110,6 +110,70 @@ export function loadOAuthClients(clientsFilePath) {
   }
 }
 
+/** In-flight re-reads of a clients file, by cache key, so a burst shares one. */
+const freshReads = new Map();
+
+/**
+ * Load OAuth clients straight from the store, bypassing (and refreshing) the
+ * cached copy.
+ *
+ * Cluster workers each cache this file and hear about another worker's write
+ * over the config sync bus, which takes a few milliseconds. A client
+ * registered on one worker (DCR, the admin UI) is routinely used on another
+ * within that window — an MCP client registers and immediately sends the user
+ * to /authorize — and found missing there. Lookups that would fail on a miss
+ * call this once before failing, and writes call it so they modify the latest
+ * file rather than this worker's possibly stale copy.
+ *
+ * @param {string} clientsFilePath - Path to oauth-clients.json file
+ * @returns {Promise<Object>} OAuth clients configuration
+ */
+export async function loadOAuthClientsFresh(clientsFilePath) {
+  const { fullPath, cacheKey, relPath } = locateClientsFile(clientsFilePath);
+  let pending = freshReads.get(cacheKey);
+  if (!pending) {
+    pending = (async () => {
+      let data = null;
+      if (relPath) {
+        data = await configStore.readJson(relPath);
+      } else if (fs.existsSync(fullPath)) {
+        data = JSON.parse(await fs.promises.readFile(fullPath, 'utf8'));
+      }
+      if (data && typeof data === 'object' && data.clients && typeof data.clients === 'object') {
+        configCache.setCacheEntry(cacheKey, data);
+      }
+    })().finally(() => freshReads.delete(cacheKey));
+    freshReads.set(cacheKey, pending);
+  }
+  try {
+    await pending;
+  } catch (error) {
+    logger.warn('Could not re-read OAuth clients configuration; using cached copy', {
+      component: 'OAuthClientManager',
+      error: error?.message || String(error)
+    });
+  }
+  return loadOAuthClients(clientsFilePath);
+}
+
+/**
+ * Look up one client, re-reading the store once if this worker's cached copy
+ * does not have it (see {@link loadOAuthClientsFresh}).
+ *
+ * @param {string} clientsFilePath - Path to oauth-clients.json file
+ * @param {string} clientId - Client ID
+ * @returns {Promise<{clientsConfig: Object, client: Object|null}>}
+ */
+export async function findClientByIdFresh(clientsFilePath, clientId) {
+  let clientsConfig = loadOAuthClients(clientsFilePath);
+  let client = findClientById(clientsConfig, clientId);
+  if (!client && !clientsConfig?.metadata?.error) {
+    clientsConfig = await loadOAuthClientsFresh(clientsFilePath);
+    client = findClientById(clientsConfig, clientId);
+  }
+  return { clientsConfig, client };
+}
+
 /**
  * Save OAuth clients to the OAuth clients file
  * @param {Object} clientsConfig - OAuth clients configuration object
@@ -225,7 +289,7 @@ export function findClientById(clientsConfig, clientId) {
  * @returns {Promise<Object>} Created client with plain text secret (only time it's shown)
  */
 export async function createOAuthClient(clientData, clientsFilePath, createdBy) {
-  const clientsConfig = loadOAuthClients(clientsFilePath);
+  const clientsConfig = await loadOAuthClientsFresh(clientsFilePath);
 
   // Generate client ID from name and secret
   const clientId = generateClientId(clientData.name);
@@ -318,7 +382,7 @@ export async function updateOAuthClient(clientId, updates, clientsFilePath, upda
   if (clientId === '__proto__' || clientId === 'constructor' || clientId === 'prototype') {
     throw new Error(`Invalid client ID: ${clientId}`);
   }
-  const clientsConfig = loadOAuthClients(clientsFilePath);
+  const clientsConfig = await loadOAuthClientsFresh(clientsFilePath);
   const client = clientsConfig.clients[clientId];
 
   if (!client) {
@@ -381,7 +445,7 @@ export async function rotateClientSecret(clientId, clientsFilePath, rotatedBy) {
   if (clientId === '__proto__' || clientId === 'constructor' || clientId === 'prototype') {
     throw new Error(`Invalid client ID: ${clientId}`);
   }
-  const clientsConfig = loadOAuthClients(clientsFilePath);
+  const clientsConfig = await loadOAuthClientsFresh(clientsFilePath);
   const client = clientsConfig.clients[clientId];
 
   if (!client) {
@@ -421,7 +485,7 @@ export async function rotateClientSecret(clientId, clientsFilePath, rotatedBy) {
  * @returns {Promise<void>}
  */
 export async function deleteOAuthClient(clientId, clientsFilePath, deletedBy) {
-  const clientsConfig = loadOAuthClients(clientsFilePath);
+  const clientsConfig = await loadOAuthClientsFresh(clientsFilePath);
 
   if (!clientsConfig.clients[clientId]) {
     throw new Error(`OAuth client not found: ${clientId}`);
@@ -490,7 +554,7 @@ export function listPersonalClientsByOwner(clientsFilePath, ownerUserId) {
  * @returns {Promise<Object|null>} Updated client without secret, or null if not found
  */
 export async function updatePersonalClientOwner(clientId, owner, clientsFilePath) {
-  const clientsConfig = loadOAuthClients(clientsFilePath);
+  const clientsConfig = await loadOAuthClientsFresh(clientsFilePath);
   const client = Object.hasOwn(clientsConfig.clients || {}, clientId)
     ? clientsConfig.clients[clientId]
     : undefined;
@@ -518,20 +582,23 @@ export async function updatePersonalClientOwner(clientId, owner, clientsFilePath
  */
 export async function updateClientLastUsed(clientId, clientsFilePath) {
   try {
-    const clientsConfig = loadOAuthClients(clientsFilePath);
-    const client = Object.hasOwn(clientsConfig.clients, clientId)
-      ? clientsConfig.clients[clientId]
-      : undefined;
+    const isDue = config => {
+      const client = Object.hasOwn(config.clients || {}, clientId)
+        ? config.clients[clientId]
+        : undefined;
+      // Only update if it's been more than 1 minute since last update (reduce writes)
+      return client && (!client.lastUsed || Date.now() - new Date(client.lastUsed) > 60000)
+        ? client
+        : null;
+    };
 
-    if (!client) {
-      return; // Client doesn't exist, skip update
-    }
-
-    const now = new Date().toISOString();
-
-    // Only update if it's been more than 1 minute since last update (reduce writes)
-    if (!client.lastUsed || new Date(now) - new Date(client.lastUsed) > 60000) {
-      client.lastUsed = now;
+    // Decide on the cached copy, so a request that writes nothing reads
+    // nothing; re-read only when a write is due.
+    if (!isDue(loadOAuthClients(clientsFilePath))) return;
+    const clientsConfig = await loadOAuthClientsFresh(clientsFilePath);
+    const client = isDue(clientsConfig);
+    if (client) {
+      client.lastUsed = new Date().toISOString();
       await saveOAuthClients(clientsConfig, clientsFilePath, { announce: false });
     }
   } catch (error) {
@@ -552,11 +619,29 @@ export async function updateClientLastUsed(clientId, clientsFilePath) {
  * @returns {Promise<Object|null>} Client object if valid, null otherwise
  */
 export async function validateClientCredentials(clientId, clientSecret, clientsFilePath) {
-  const clientsConfig = loadOAuthClients(clientsFilePath);
-  const client = Object.hasOwn(clientsConfig.clients, clientId)
-    ? clientsConfig.clients[clientId]
-    : undefined;
+  const cached = ownClient(loadOAuthClients(clientsFilePath), clientId);
+  const result = await checkClientCredentials(cached, clientId, clientSecret, clientsFilePath);
+  if (result) return result;
 
+  // This worker's copy may predate a registration or secret rotation made on
+  // another worker moments ago. Re-read once, and check again only if the
+  // record actually changed — a wrong secret costs one bcrypt, not two.
+  const fresh = ownClient(await loadOAuthClientsFresh(clientsFilePath), clientId);
+  if (
+    !fresh ||
+    (cached && fresh.clientSecret === cached.clientSecret && fresh.active === cached.active)
+  ) {
+    return null;
+  }
+  return checkClientCredentials(fresh, clientId, clientSecret, clientsFilePath);
+}
+
+function ownClient(clientsConfig, clientId) {
+  const clients = clientsConfig?.clients || {};
+  return Object.hasOwn(clients, clientId) ? clients[clientId] : undefined;
+}
+
+async function checkClientCredentials(client, clientId, clientSecret, clientsFilePath) {
   if (!client) {
     logger.info('OAuth client not found', { component: 'OAuthClientManager', clientId });
     return null;
@@ -646,7 +731,7 @@ export function findDcrClientByFingerprint(clientsConfig, fingerprint) {
  */
 export async function recordDcrReRegistration(clientId, clientsFilePath) {
   try {
-    const clientsConfig = loadOAuthClients(clientsFilePath);
+    const clientsConfig = await loadOAuthClientsFresh(clientsFilePath);
     const client = Object.hasOwn(clientsConfig.clients || {}, clientId)
       ? clientsConfig.clients[clientId]
       : undefined;
@@ -683,7 +768,7 @@ export async function recordDcrReRegistration(clientId, clientsFilePath) {
  */
 export async function stampDcrFirstUser(clientId, user, clientsFilePath) {
   try {
-    const clientsConfig = loadOAuthClients(clientsFilePath);
+    const clientsConfig = await loadOAuthClientsFresh(clientsFilePath);
     const client = Object.hasOwn(clientsConfig.clients || {}, clientId)
       ? clientsConfig.clients[clientId]
       : undefined;
@@ -719,7 +804,7 @@ export async function stampDcrFirstUser(clientId, user, clientsFilePath) {
  * @returns {Promise<{deleted: number, clientIds: Array<string>}>} What was removed
  */
 export async function deleteUnusedDynamicClients(unusedForDays, clientsFilePath, deletedBy) {
-  const clientsConfig = loadOAuthClients(clientsFilePath);
+  const clientsConfig = await loadOAuthClientsFresh(clientsFilePath);
   const cutoff = Date.now() - unusedForDays * 24 * 60 * 60 * 1000;
   const clientIds = [];
 
@@ -824,7 +909,7 @@ export async function upsertCimdClientPolicy(
     throw new Error('A CIMD policy record requires an https client_id URL');
   }
 
-  const clientsConfig = loadOAuthClients(clientsFilePath);
+  const clientsConfig = await loadOAuthClientsFresh(clientsFilePath);
   if (clientsConfig?.metadata?.error) {
     throw new Error('OAuth client store unavailable');
   }

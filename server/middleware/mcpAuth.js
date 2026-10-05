@@ -1,9 +1,5 @@
 import { verifyOAuthToken, isCurrentKeyGeneration } from '../utils/oauthTokenService.js';
-import {
-  loadOAuthClients,
-  findClientById,
-  updateClientLastUsed
-} from '../utils/oauthClientManager.js';
+import { findClientByIdFresh, updateClientLastUsed } from '../utils/oauthClientManager.js';
 import { buildPolicyCimdClient } from '../utils/oauthClientResolver.js';
 import { isUserAllowedByGroups } from '../utils/oauthClientPolicy.js';
 import { isClientIdUrl } from '../utils/clientIdMetadata.js';
@@ -103,7 +99,10 @@ export default async function mcpAuth(req, res, next) {
     }
   } else {
     try {
-      const clientsConfig = loadOAuthClients(clientsFilePath);
+      // Fresh on a miss: the token may have been issued by another worker
+      // for a client this worker has not heard about yet.
+      const found = await findClientByIdFresh(clientsFilePath, decoded.client_id);
+      const clientsConfig = found.clientsConfig;
       if (clientsConfig?.metadata?.error) {
         logger.error('OAuth clients config unavailable for MCP auth', {
           component: 'McpAuth',
@@ -111,7 +110,7 @@ export default async function mcpAuth(req, res, next) {
         });
         return sendError(res, 503, 'service_unavailable', 'OAuth client store unavailable');
       }
-      client = findClientById(clientsConfig, decoded.client_id);
+      client = found.client;
     } catch (err) {
       logger.error('Failed to load OAuth clients for MCP auth', {
         component: 'McpAuth',
