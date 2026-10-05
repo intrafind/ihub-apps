@@ -14,7 +14,6 @@ import { createHash } from 'crypto';
 import { pathToFileURL } from 'url';
 import os from 'os';
 import { getRootDir } from '../pathUtils.js';
-import config from '../config.js';
 import { atomicWriteJSON, atomicCreateJSON } from '../utils/atomicWrite.js';
 import logger from '../utils/logger.js';
 import {
@@ -26,6 +25,7 @@ import {
   removeById,
   transformWhere
 } from './utils.js';
+import { getContentsPath } from '../utils/contentsPath.js';
 
 const HISTORY_FILE = '.migration-history.json';
 const LOCK_FILE = '.migration-lock';
@@ -92,6 +92,110 @@ export async function scanMigrationFiles(migrationsDir) {
  * the original number.
  */
 const RENAMED_MIGRATIONS = [
+  // The 5.5.30 follow-ups (Translator system prompt, Mistral transcription,
+  // Gemini TTS, dictation through transcription models) were written as
+  // V143-V146 and shifted up each time main took a number first: to V145-V148
+  // (app wizard field cleanup, V144), V146-V149 (short-link allowlist, V145),
+  // V147-V150 (local sign-in lockout, V146), V148-V151 (proxy auth trusted
+  // sources, V147). Every old number reconciles to the current one, keeping
+  // their order. Matching on the file keeps these rules off the history rows of
+  // main's V144-V147.
+  {
+    oldVersion: '143',
+    oldFile: 'V143__translator_task_in_system_prompt.js',
+    newVersion: '148',
+    newFile: 'V148__translator_task_in_system_prompt.js'
+  },
+  {
+    oldVersion: '145',
+    oldFile: 'V145__translator_task_in_system_prompt.js',
+    newVersion: '148',
+    newFile: 'V148__translator_task_in_system_prompt.js'
+  },
+  {
+    oldVersion: '146',
+    oldFile: 'V146__translator_task_in_system_prompt.js',
+    newVersion: '148',
+    newFile: 'V148__translator_task_in_system_prompt.js'
+  },
+  {
+    oldVersion: '147',
+    oldFile: 'V147__translator_task_in_system_prompt.js',
+    newVersion: '148',
+    newFile: 'V148__translator_task_in_system_prompt.js'
+  },
+  {
+    oldVersion: '144',
+    oldFile: 'V144__seed_mistral_realtime_transcription_model.js',
+    newVersion: '149',
+    newFile: 'V149__seed_mistral_realtime_transcription_model.js'
+  },
+  {
+    oldVersion: '146',
+    oldFile: 'V146__seed_mistral_realtime_transcription_model.js',
+    newVersion: '149',
+    newFile: 'V149__seed_mistral_realtime_transcription_model.js'
+  },
+  {
+    oldVersion: '147',
+    oldFile: 'V147__seed_mistral_realtime_transcription_model.js',
+    newVersion: '149',
+    newFile: 'V149__seed_mistral_realtime_transcription_model.js'
+  },
+  {
+    oldVersion: '148',
+    oldFile: 'V148__seed_mistral_realtime_transcription_model.js',
+    newVersion: '149',
+    newFile: 'V149__seed_mistral_realtime_transcription_model.js'
+  },
+  {
+    oldVersion: '145',
+    oldFile: 'V145__seed_google_tts_models.js',
+    newVersion: '150',
+    newFile: 'V150__seed_google_tts_models.js'
+  },
+  {
+    oldVersion: '147',
+    oldFile: 'V147__seed_google_tts_models.js',
+    newVersion: '150',
+    newFile: 'V150__seed_google_tts_models.js'
+  },
+  {
+    oldVersion: '148',
+    oldFile: 'V148__seed_google_tts_models.js',
+    newVersion: '150',
+    newFile: 'V150__seed_google_tts_models.js'
+  },
+  {
+    oldVersion: '149',
+    oldFile: 'V149__seed_google_tts_models.js',
+    newVersion: '150',
+    newFile: 'V150__seed_google_tts_models.js'
+  },
+  {
+    oldVersion: '146',
+    oldFile: 'V146__dictation_via_transcription_models.js',
+    newVersion: '151',
+    newFile: 'V151__dictation_via_transcription_models.js'
+  },
+  {
+    oldVersion: '148',
+    oldFile: 'V148__dictation_via_transcription_models.js',
+    newVersion: '151',
+    newFile: 'V151__dictation_via_transcription_models.js'
+  },
+  {
+    oldVersion: '149',
+    oldFile: 'V149__dictation_via_transcription_models.js',
+    newVersion: '151',
+    newFile: 'V151__dictation_via_transcription_models.js'
+  },
+  {
+    oldVersion: '150',
+    oldFile: 'V150__dictation_via_transcription_models.js',
+    newVersion: '151',
+    newFile: 'V151__dictation_via_transcription_models.js'
+  },
   {
     // The staan provider was renumbered twice while its branch was open: the
     // CIMD governance migrations took V112/V113 and the proxy-defaults fix took
@@ -245,6 +349,15 @@ const RENAMED_MIGRATIONS = [
     oldFile: 'V139__web_tools_filters_and_page_offset.js',
     newVersion: '140',
     newFile: 'V140__web_tools_filters_and_page_offset.js'
+  },
+  // The short-link host allowlist was written as V143, and the app wizard
+  // field cleanup took V144 on main first. It moved to V145; an install that
+  // ran the branch reconciles its V143 row instead of applying it again.
+  {
+    oldVersion: '143',
+    oldFile: 'V143__add_short_link_allowed_hosts.js',
+    newVersion: '145',
+    newFile: 'V145__add_short_link_allowed_hosts.js'
   }
 ];
 
@@ -518,7 +631,7 @@ async function loadMigrationConfig(contentsDir) {
  */
 export async function runConfigMigrations() {
   const rootDir = getRootDir();
-  const contentsDir = join(rootDir, config.CONTENTS_DIR);
+  const contentsDir = getContentsPath();
   const migrationsDir = join(rootDir, 'server', 'migrations');
   const defaultsDir = join(rootDir, 'server', 'defaults');
 

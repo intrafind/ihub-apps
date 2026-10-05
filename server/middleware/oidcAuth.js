@@ -13,6 +13,7 @@ import { getAuthCookieOptions } from '../utils/cookieSettings.js';
 import { setOidcLogoutHint } from '../utils/oidcLogoutHint.js';
 import { decodeIdTokenClaims } from '../utils/oidcIdToken.js';
 import { logAudit } from '../services/AuditLogService.js';
+import { createOidcStateStore } from '../utils/oidcLoginState.js';
 
 // Store configured providers
 const configuredProviders = new Map();
@@ -70,9 +71,10 @@ export function configureOidcProviders() {
           clientSecret,
           callbackURL: provider.callbackURL || `/api/auth/oidc/${provider.name}/callback`,
           scope: provider.scope || ['openid', 'profile', 'email'],
-          state: true,
+          // Signed, browser-bound state instead of passport's session store, so
+          // the callback verifies on whichever cluster worker receives it.
+          store: createOidcStateStore(provider.name),
           pkce: provider.pkce ?? true,
-          // Add custom state verification to handle development issues
           customHeaders: {},
           skipUserProfile: false // We'll fetch user info manually
         },
@@ -602,12 +604,10 @@ export function createOidcAuthHandler(providerName) {
       return res.status(404).json({ error: `OIDC provider '${providerName}' not found` });
     }
 
-    // Store return URL in session/state if provided. Sanitize first to prevent
-    // open redirects through the callback's `${returnUrl}?token=...` redirect.
+    // The return URL travels inside the signed state (utils/oidcLoginState.js).
+    // Sanitize first to prevent open redirects through the callback's
+    // `${returnUrl}?token=...` redirect.
     const sanitized = sanitizeReturnUrl(req.query.returnUrl, req);
-    if (sanitized && req.session) {
-      req.session.returnUrl = sanitized;
-    }
 
     // Pass callbackURL at request time so buildServerPath() can detect the base path
     // from X-Forwarded-Prefix header for subpath deployments
@@ -615,7 +615,9 @@ export function createOidcAuthHandler(providerName) {
       provider.callbackURL || buildServerPath(`/api/auth/oidc/${providerName}/callback`);
     passport.authenticate(provider.strategyName, {
       scope: provider.scope || ['openid', 'profile', 'email'],
-      callbackURL
+      callbackURL,
+      // An object (not a string) makes passport hand it to the state store.
+      state: sanitized ? { returnUrl: sanitized } : undefined
     })(req, res, next);
   };
 }
@@ -686,28 +688,22 @@ export function createOidcCallbackHandler(providerName) {
             {
               provider: providerName,
               requestQuery: req.query,
-              sessionID: req.sessionID,
               hasCookies: !!req.headers.cookie,
               cookieCount: req.headers.cookie?.split(';').length || 0
             },
             sessionId
           );
 
-          logger.error(
-            'OIDC callback: OAuth state verification failed, may be due to session issues',
-            {
-              component: 'OidcAuth',
-              error: err,
-              query: req.query,
-              sessionId: req.sessionID,
-              session: req.session,
-              // Names only, never the raw Cookie header: it carries the authToken
-              // JWT and (for providers with a logoutURL) the oidcLogoutHint ID
-              // token. Which cookies arrived is what actually diagnoses a state
-              // failure; their values never were.
-              cookieNames: Object.keys(req.cookies || {})
-            }
-          );
+          logger.error('OIDC callback: OAuth state verification failed', {
+            component: 'OidcAuth',
+            error: err,
+            query: req.query,
+            // Names only, never the raw Cookie header: it carries the authToken
+            // JWT and (for providers with a logoutURL) the oidcLogoutHint ID
+            // token. Which cookies arrived is what actually diagnoses a state
+            // failure; their values never were.
+            cookieNames: Object.keys(req.cookies || {})
+          });
         }
 
         // Redirect back to the app with error message instead of returning JSON
@@ -813,58 +809,10 @@ export function createOidcCallbackHandler(providerName) {
           }
         });
 
-        // Check if there's an OAuth authorization flow in progress
-        // If so, redirect back to the OAuth authorize endpoint to complete the flow
-        const oauthParams = req.session?.oauthParams;
-        if (oauthParams) {
-          // Build the OAuth authorize URL with original parameters
-          const oauthUrl = new URL(buildServerPath('/api/oauth/authorize'), 'http://dummy');
-          oauthUrl.searchParams.set('response_type', 'code');
-          oauthUrl.searchParams.set('client_id', oauthParams.client_id);
-          oauthUrl.searchParams.set('redirect_uri', oauthParams.redirect_uri);
-          if (oauthParams.scope) oauthUrl.searchParams.set('scope', oauthParams.scope);
-          if (oauthParams.state) oauthUrl.searchParams.set('state', oauthParams.state);
-          if (oauthParams.code_challenge) {
-            oauthUrl.searchParams.set('code_challenge', oauthParams.code_challenge);
-          }
-          if (oauthParams.code_challenge_method) {
-            oauthUrl.searchParams.set('code_challenge_method', oauthParams.code_challenge_method);
-          }
-          if (oauthParams.nonce) oauthUrl.searchParams.set('nonce', oauthParams.nonce);
-
-          const oauthRedirectPath = oauthUrl.pathname + oauthUrl.search;
-
-          authDebugService.log(
-            'oidc',
-            'info',
-            'oauth_flow_resume',
-            {
-              provider: providerName,
-              userId: user.id,
-              oauthClientId: oauthParams.client_id,
-              oauthRedirectUri: oauthParams.redirect_uri
-            },
-            sessionId
-          );
-
-          logger.info('[OIDC] Resuming OAuth authorization flow after OIDC authentication', {
-            component: 'OidcAuth',
-            provider: providerName,
-            userId: user.id,
-            oauthClientId: oauthParams.client_id
-          });
-
-          // Set HTTP-only cookie for authentication (needed for OAuth authorize endpoint)
-          res.cookie('authToken', token, getAuthCookieOptions(expiresIn * 1000, req));
-
-          return res.redirect(oauthRedirectPath);
-        }
-
-        // Get return URL - use base path for default
-        let returnUrl = req.session?.returnUrl || buildServerPath('/');
-        if (req.session) {
-          delete req.session.returnUrl;
-        }
+        // Return URL from the signed login state; an OAuth authorization flow
+        // that sent the user here comes back through it as well
+        // (/api/oauth/authorize?...). Default to the base path.
+        let returnUrl = info?.state?.returnUrl || buildServerPath('/');
 
         // In development, redirect to Vite dev server instead of backend
         const isDevelopment =

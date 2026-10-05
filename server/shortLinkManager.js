@@ -1,11 +1,9 @@
 import crypto from 'crypto';
-import path from 'path';
-import { getRootDir } from './pathUtils.js';
-import config from './config.js';
-import { createDebouncedJsonStore } from './utils/debouncedJsonStore.js';
+import { createSharedJsonFile } from './utils/sharedJsonFile.js';
+import { isAllowedShortLinkTarget } from './utils/shortLinkTarget.js';
+import { getContentsPath } from './utils/contentsPath.js';
 
-const contentsDir = config.CONTENTS_DIR;
-const dataFile = path.join(getRootDir(), contentsDir, 'data', 'shortlinks.json');
+const dataFile = getContentsPath('data', 'shortlinks.json');
 
 const now = () => new Date().toISOString();
 
@@ -13,14 +11,28 @@ function createDefault() {
   return { links: [], lastUpdated: now() };
 }
 
-const store = createDebouncedJsonStore({
+// Shared by every cluster worker: each change is made to the file on disk
+// under a lock, and reads see changes another worker made.
+const store = createSharedJsonFile({
   filePath: dataFile,
   createDefault,
-  component: 'ShortLinkManager',
-  onBeforeSave: data => {
-    data.lastUpdated = now();
-  }
+  component: 'ShortLinkManager'
 });
+
+/** Apply `mutate` to the links on disk and save, stamping lastUpdated. */
+function updateLinks(mutate) {
+  return store.update(data => {
+    if (!Array.isArray(data.links)) data.links = [];
+    const result = mutate(data);
+    data.lastUpdated = now();
+    return result;
+  });
+}
+
+async function readLinks() {
+  const data = await store.read();
+  return Array.isArray(data?.links) ? data.links : [];
+}
 
 export function isLinkExpired(link) {
   if (!link || !link.expiresAt) return false;
@@ -46,74 +58,94 @@ function generateCode(length = 6) {
   return code;
 }
 
-export async function createLink({
-  code,
-  appId,
-  userId,
-  path = null,
-  params = null,
-  url = null,
-  includeParams = false,
-  expiresAt = null
-}) {
-  const links = await store.load();
-  let finalCode = code;
-  if (finalCode) {
-    if (links.links.some(l => l.code === finalCode)) {
-      throw new Error('Code already exists');
-    }
-  } else {
-    do {
-      finalCode = generateCode();
-    } while (links.links.some(l => l.code === finalCode));
+/** A link's target could not be accepted (see utils/shortLinkTarget.js). */
+export class ShortLinkTargetError extends Error {
+  constructor(message = 'Short link target is not allowed') {
+    super(message);
+    this.name = 'ShortLinkTargetError';
+    this.code = 'SHORT_LINK_TARGET_NOT_ALLOWED';
   }
+}
 
-  let finalUrl = url;
-  if (!finalUrl) {
-    const basePath = path || (appId ? `/apps/${appId}` : '/');
-    const dummy = new URL('http://localhost');
-    dummy.pathname = basePath;
-    if (includeParams && params && typeof params === 'object') {
-      for (const [k, v] of Object.entries(params)) {
-        if (v !== undefined && v !== null && v !== '') {
-          dummy.searchParams.set(k, String(v));
-        }
+/** The fields a link's owner (or an admin) may change after creation. */
+const EDITABLE_FIELDS = ['appId', 'path', 'params', 'url', 'includeParams', 'expiresAt'];
+
+/**
+ * The target built from an app or path, plus the settings when included.
+ *
+ * @returns {string}
+ */
+function buildTarget({ appId, path, params, includeParams }) {
+  const basePath = path || (appId ? `/apps/${appId}` : '/');
+  const dummy = new URL('http://localhost');
+  dummy.pathname = basePath;
+  if (includeParams && params && typeof params === 'object') {
+    for (const [k, v] of Object.entries(params)) {
+      if (v !== undefined && v !== null && v !== '') {
+        dummy.searchParams.set(k, String(v));
       }
     }
-    finalUrl = dummy.pathname + (dummy.search ? `?${dummy.searchParams.toString()}` : '');
   }
-
-  const link = {
-    code: finalCode,
-    appId,
-    userId,
-    path,
-    params,
-    url: finalUrl,
-    includeParams,
-    createdAt: now(),
-    usage: 0,
-    expiresAt
-  };
-  links.links.push(link);
-  store.markDirty();
-  return link;
+  return dummy.pathname + (dummy.search ? `?${dummy.searchParams.toString()}` : '');
 }
 
 /**
- * Look up a link by code, reloading from disk once on a miss. Under
- * WORKERS > 1 the code may have been created by a different worker after
- * this process last loaded (or reloaded) the store — without this, that
- * worker's in-memory copy never learns about it and every request routed
- * here 404s forever, even though the link exists on disk. A genuine miss
- * (never existed, or was deleted) costs exactly one extra disk read.
+ * Create a link owned by `ownerId`.
+ *
+ * @param {Object} data
+ * @param {Object} [options]
+ * @param {string[]} [options.allowedHosts] - Hosts an absolute `url` may name
+ * @throws {ShortLinkTargetError} When the target is not allowed
  */
+export async function createLink(
+  {
+    code,
+    appId,
+    ownerId,
+    path = null,
+    params = null,
+    url = null,
+    includeParams = false,
+    expiresAt = null
+  },
+  { allowedHosts = [] } = {}
+) {
+  const finalUrl = url || buildTarget({ appId, path, params, includeParams });
+  if (!isAllowedShortLinkTarget(finalUrl, allowedHosts)) {
+    throw new ShortLinkTargetError();
+  }
+
+  return updateLinks(data => {
+    let finalCode = code;
+    if (finalCode) {
+      if (data.links.some(l => l.code === finalCode)) {
+        throw new Error('Code already exists');
+      }
+    } else {
+      do {
+        finalCode = generateCode();
+      } while (data.links.some(l => l.code === finalCode));
+    }
+
+    const link = {
+      code: finalCode,
+      appId,
+      ownerId,
+      path,
+      params,
+      url: finalUrl,
+      includeParams,
+      createdAt: now(),
+      usage: 0,
+      expiresAt
+    };
+    data.links.push(link);
+    return { ...link };
+  });
+}
+
 async function findByCode(code) {
-  const links = await store.load();
-  const local = links.links.find(l => l.code === code);
-  if (local) return local;
-  const fresh = await store.reload();
-  return fresh.links.find(l => l.code === code);
+  return (await readLinks()).find(l => l.code === code);
 }
 
 export async function getLink(code) {
@@ -125,39 +157,75 @@ export async function isCodeAvailable(code) {
 }
 
 export async function recordUsage(code) {
-  const link = await findByCode(code);
-  if (link) {
+  if (!(await findByCode(code))) return undefined;
+  return updateLinks(data => {
+    const link = data.links.find(l => l.code === code);
+    if (!link) return undefined;
     link.usage = (link.usage || 0) + 1;
     link.lastUsed = now();
-    store.markDirty();
-  }
-  return link;
+    return { ...link };
+  });
 }
 
 export async function deleteLink(code) {
-  const link = await findByCode(code);
-  if (!link) return false;
-  const links = await store.load();
-  const idx = links.links.indexOf(link);
-  if (idx !== -1) {
-    links.links.splice(idx, 1);
-    store.markDirty();
+  if (!(await findByCode(code))) return false;
+  return updateLinks(data => {
+    const idx = data.links.findIndex(l => l.code === code);
+    if (idx === -1) return false;
+    data.links.splice(idx, 1);
     return true;
+  });
+}
+
+/**
+ * Change a link's editable fields. Everything else in `data` — the code, the
+ * owner, usage counters — is ignored. A link left without a `url` gets one
+ * built from its app or path again.
+ *
+ * @param {string} code
+ * @param {Object} data
+ * @param {Object} [options]
+ * @param {string[]} [options.allowedHosts] - Hosts an absolute `url` may name
+ * @returns {Promise<Object|null>} The updated link, or null when there is none
+ * @throws {ShortLinkTargetError} When the resulting target is not allowed
+ */
+export async function updateLink(code, data, { allowedHosts = [] } = {}) {
+  if (!(await findByCode(code))) return null;
+  const changes = {};
+  for (const field of EDITABLE_FIELDS) {
+    if (data && Object.hasOwn(data, field)) changes[field] = data[field];
   }
-  return false;
+  if (Object.hasOwn(changes, 'includeParams')) {
+    changes.includeParams = changes.includeParams === true;
+  }
+  return updateLinks(stored => {
+    const link = stored.links.find(l => l.code === code);
+    if (!link) return null;
+    const next = { ...link, ...changes };
+    if (!next.url) next.url = buildTarget(next);
+    if (!isAllowedShortLinkTarget(next.url, allowedHosts)) {
+      throw new ShortLinkTargetError();
+    }
+    Object.assign(link, changes, { url: next.url });
+    return { ...link };
+  });
 }
 
-export async function updateLink(code, data) {
-  const link = await findByCode(code);
-  if (!link) return null;
-  Object.assign(link, data, { code });
-  store.markDirty();
-  return link;
+/**
+ * Whether `user` may see, change or delete `link`: its owner, or an admin.
+ * A link stored without an owner is managed by admins only.
+ *
+ * @param {Object} link
+ * @param {Object} user - `req.user`
+ * @param {boolean} isAdmin - Whether `user` is an admin
+ * @returns {boolean}
+ */
+export function canManageLink(link, user, isAdmin) {
+  if (isAdmin) return true;
+  return Boolean(link?.ownerId && user?.id && link.ownerId === user.id);
 }
 
-export async function searchLinks({ appId, userId } = {}) {
-  const links = await store.load();
-  return links.links.filter(l => (!appId || l.appId === appId) && (!userId || l.userId === userId));
+export async function searchLinks({ appId, ownerId } = {}) {
+  const links = await readLinks();
+  return links.filter(l => (!appId || l.appId === appId) && (!ownerId || l.ownerId === ownerId));
 }
-
-store.load();

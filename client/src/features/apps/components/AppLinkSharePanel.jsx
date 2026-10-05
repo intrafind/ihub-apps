@@ -8,14 +8,6 @@ import ShareLinkResult, { shareInputClass } from '../../chat/components/ShareLin
 /** Shortest custom code the form accepts. */
 const CODE_MIN_LENGTH = 5;
 
-const getUsername = () => {
-  try {
-    return localStorage.getItem('ihub_username') || 'anonymous';
-  } catch {
-    return 'anonymous';
-  }
-};
-
 /**
  * The absolute URL of a short link, including the deployment base path.
  *
@@ -95,7 +87,6 @@ function AppLinkSharePanel({ appId, appName, path, params }) {
         appId,
         path,
         params,
-        userId: getUsername(),
         includeParams,
         // Without a code the server picks a random one.
         ...(customCode ? { code: customCode } : {}),

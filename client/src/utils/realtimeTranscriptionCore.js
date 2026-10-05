@@ -1,10 +1,11 @@
 /**
- * Shared realtime-transcription primitives used by both the microphone dictation
- * service (`vllmRealtimeRecognitionService.js`) and the buffer-transcription
- * client (`transcribeAudioBuffer.js`).
+ * Shared realtime-transcription primitives used by the microphone dictation
+ * service (`modelRecognitionService.js`), live transcription
+ * (`liveTranscription.js`) and the buffer-transcription client
+ * (`transcribeAudioBuffer.js`).
  *
  * All audio sent to the iHub `/api/voice/realtime` WebSocket must be mono PCM16
- * at 16 kHz — the format the upstream vLLM realtime API expects.
+ * at 16 kHz — the format the transcription providers are fed.
  */
 
 export const TARGET_SAMPLE_RATE = 16000;

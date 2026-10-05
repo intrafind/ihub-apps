@@ -1,9 +1,12 @@
 /**
- * Admin → Voice Input (issue #2622): platform-wide defaults and the test panel.
+ * Admin → Voice Input (issue #2622): what apps use for voice input,
+ * transcription and read aloud, and the test panel.
  *
- * - The defaults (dictation service, transcription model) are saved into
- *   platform.speech and pushed to the client-wide platform config.
- * - Azure gets a server-side "Test connection" like vLLM Realtime.
+ * - Voice input is the browser, Azure Speech or any enabled transcription
+ *   model; transcription is a model. Both are saved into platform.speech and
+ *   pushed to the client-wide platform config. Model endpoints live on the
+ *   models, so the page has no endpoint fields of its own.
+ * - Azure keeps its connection settings and a server-side "Test connection".
  * - The live dictation test and the record → transcribe test run the same
  *   recognizer / transcription path as a chat, against the SAVED config.
  *
@@ -50,13 +53,14 @@ jest.mock('react-i18next', () => ({
   useTranslation: () => ({ t, i18n: { language: 'en' } })
 }));
 
-// The vLLM realtime recognizer: interim text on start, the final on stop.
+// The transcription-model recognizer: interim text on start, the final on stop.
 const mockRecognizers = [];
-jest.mock('../../../client/src/utils/vllmRealtimeRecognitionService', () => ({
+jest.mock('../../../client/src/utils/modelRecognitionService', () => ({
   __esModule: true,
-  default: class FakeVllmRecognition {
+  default: class FakeModelRecognition {
     usesTextEventShape = true;
-    constructor() {
+    constructor(modelId) {
+      this.modelId = modelId;
       mockRecognizers.push(this);
     }
     async start() {
@@ -95,9 +99,10 @@ jest.mock('../../../client/src/utils/transcribeAudioBuffer', () => ({
 import AdminVoiceInputPage from '../../../client/src/features/admin/pages/AdminVoiceInputPage';
 
 const SAVED_SPEECH = {
-  defaultService: 'vllm-realtime',
+  defaultService: 'model',
+  dictation: { modelId: 'voxtral' },
   transcription: { defaultModelId: 'voxtral' },
-  realtime: { enabled: true, url: 'ws://vllm:8080/v1/realtime', model: 'm', apiKey: '' },
+  realtime: { maxConnections: 10 },
   azure: { enabled: false, host: '', region: 'westeurope', subscriptionKey: '***REDACTED***' }
 };
 
@@ -138,60 +143,94 @@ beforeEach(() => {
   });
 });
 
+const voiceInput = () => screen.getByLabelText('Speech recognition');
+const transcriptionModel = () => screen.getByLabelText('Model');
+const optionValues = select => [...select.querySelectorAll('option')].map(o => o.value);
+
 async function renderPage() {
   render(<AdminVoiceInputPage />);
-  await screen.findByLabelText('Dictation service (microphone button)');
+  await screen.findByLabelText('Speech recognition');
   // The admin model list has loaded once its models are offered.
   await screen.findAllByRole('option', { name: 'Gemini Transcribe' });
 }
 
-describe('defaults', () => {
-  test('shows the saved defaults and saves changed ones into platform.speech', async () => {
+describe('voice input and transcription', () => {
+  test('shows the saved choices and saves changed ones into platform.speech', async () => {
     await renderPage();
-    const service = screen.getByLabelText('Dictation service (microphone button)');
-    const model = screen.getByLabelText('Transcription model (recording)');
-    expect(service).toHaveValue('vllm-realtime');
-    await waitFor(() => expect(model).toHaveValue('voxtral'));
+    await waitFor(() => expect(voiceInput()).toHaveValue('model:voxtral'));
+    await waitFor(() => expect(transcriptionModel()).toHaveValue('voxtral'));
 
-    fireEvent.change(service, { target: { value: 'browser' } });
-    fireEvent.change(model, { target: { value: 'gemini-transcribe' } });
+    fireEvent.change(voiceInput(), { target: { value: 'browser' } });
+    fireEvent.change(transcriptionModel(), { target: { value: 'gemini-transcribe' } });
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Save' }));
     });
 
     await screen.findByText('Voice input settings saved.');
     expect(platformOnDisk.speech.defaultService).toBe('browser');
+    // The last model picked stays, so switching back is one click.
+    expect(platformOnDisk.speech.dictation).toEqual({ modelId: 'voxtral' });
     expect(platformOnDisk.speech.transcription).toEqual({ defaultModelId: 'gemini-transcribe' });
-    // Unrelated platform settings and the backends round-trip untouched.
+    // Unrelated platform settings and the connection limits round-trip untouched.
     expect(platformOnDisk.defaultLanguage).toBe('en');
-    expect(platformOnDisk.speech.realtime.url).toBe('ws://vllm:8080/v1/realtime');
+    expect(platformOnDisk.speech.realtime).toEqual({ maxConnections: 10 });
     // Chats and the app editor see the new defaults without a reload.
     expect(mockRefreshConfig).toHaveBeenCalled();
   });
 
-  test('offers every enabled transcription model, from the admin model list', async () => {
+  test('voice input can be any enabled transcription model', async () => {
     await renderPage();
-    const options = [
-      ...screen.getByLabelText('Transcription model (recording)').querySelectorAll('option')
-    ].map(o => o.value);
-    expect(options).toEqual(['', 'gemini-transcribe', 'voxtral']);
+    expect(optionValues(voiceInput())).toEqual([
+      'browser',
+      'azure',
+      'model:gemini-transcribe',
+      'model:voxtral'
+    ]);
+
+    fireEvent.change(voiceInput(), { target: { value: 'model:gemini-transcribe' } });
+    expect(screen.getByText(/The microphone streams through the iHub server/)).toBeInTheDocument();
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    });
+
+    await screen.findByText('Voice input settings saved.');
+    expect(platformOnDisk.speech.defaultService).toBe('model');
+    expect(platformOnDisk.speech.dictation).toEqual({ modelId: 'gemini-transcribe' });
+  });
+
+  test('has no endpoint fields: those live on the models', async () => {
+    await renderPage();
+    expect(screen.queryByLabelText('Realtime WebSocket URL')).not.toBeInTheDocument();
+    expect(screen.queryByText('vLLM Realtime (server-proxied)')).not.toBeInTheDocument();
+  });
+
+  test('offers every enabled transcription model for transcription, from the admin model list', async () => {
+    await renderPage();
+    expect(optionValues(transcriptionModel())).toEqual(['', 'gemini-transcribe', 'voxtral']);
     expect(mockMakeAdminApiCall).toHaveBeenCalledWith('/admin/models', { method: 'GET' });
   });
 
-  test('warns when the default backend is not enabled', async () => {
+  test('warns when Azure is picked but not enabled', async () => {
     await renderPage();
-    fireEvent.change(screen.getByLabelText('Dictation service (microphone button)'), {
-      target: { value: 'azure' }
-    });
+    fireEvent.change(voiceInput(), { target: { value: 'azure' } });
     expect(
       screen.getByText(/Azure Speech is not enabled below\. Until it is, apps that follow/)
+    ).toBeInTheDocument();
+  });
+
+  test('flags a voice input model that is no longer available', async () => {
+    platformOnDisk.speech.dictation.modelId = 'old-whisper';
+    await renderPage();
+    expect(voiceInput()).toHaveValue('model:old-whisper');
+    expect(
+      await screen.findByText(/no longer exists\. Until it is enabled, apps that follow/)
     ).toBeInTheDocument();
   });
 
   test('flags a default transcription model that is no longer available', async () => {
     platformOnDisk.speech.transcription.defaultModelId = 'deleted-model';
     await renderPage();
-    expect(await screen.findByText(/disabled or no longer exists/)).toBeInTheDocument();
+    expect(await screen.findByText(/so recording fails in apps/)).toBeInTheDocument();
   });
 });
 
@@ -220,14 +259,14 @@ describe('test panel', () => {
   test('points out that the tests run against the saved configuration', async () => {
     await renderPage();
     expect(screen.queryByText(/You have unsaved changes/)).not.toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText('Model'), { target: { value: 'other' } });
+    fireEvent.change(voiceInput(), { target: { value: 'browser' } });
     expect(screen.getByText(/You have unsaved changes/)).toBeInTheDocument();
   });
 
   test('live dictation: preselects the platform default and shows the transcript', async () => {
     await renderPage();
     const service = screen.getByLabelText('Service');
-    expect(service).toHaveValue('vllm-realtime');
+    await waitFor(() => expect(service).toHaveValue('model:voxtral'));
 
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Start dictation test' }));
@@ -235,6 +274,7 @@ describe('test panel', () => {
     expect(await screen.findByText('Listening: speak now.')).toBeInTheDocument();
     expect(screen.getByTestId('dictation-transcript')).toHaveTextContent('hello wor');
     expect(mockRecognizers).toHaveLength(1);
+    expect(mockRecognizers[0].modelId).toBe('voxtral');
     expect(mockRecognizers[0].continuous).toBe(true);
     expect(mockRecognizers[0].lang).toBe('en-US');
 

@@ -13,6 +13,12 @@ import {
   sendErrorResponse
 } from '../../utils/responseHelpers.js';
 import { isValidReturnUrl } from '../../utils/oauthReturnUrl.js';
+import {
+  DEFAULT_INTEGRATION_RETURN_URL,
+  issueIntegrationOAuthState,
+  verifyIntegrationOAuthState,
+  withQueryParam
+} from '../../utils/integrationOAuthState.js';
 
 const router = express.Router();
 
@@ -27,31 +33,13 @@ router.get('/auth', authRequired, async (req, res) => {
   try {
     const { returnUrl } = req.query;
 
-    logger.debug('🔍 JIRA Auth Debug:', {
-      hasUser: !!req.user,
-      userId: req.user?.id,
-      userGroups: req.user?.groups,
-      returnUrl,
-      hasSession: !!req.session,
-      cookies: Object.keys(req.cookies || {}),
-      authHeader: req.headers.authorization ? 'present' : 'missing'
-    });
-
-    // Check if session is available
-    if (!req.session) {
-      return sendErrorResponse(res, 500, 'Session not available');
-    }
-
-    // authRequired only rejects missing `req.user` or anonymous users;
-    // it does NOT guarantee req.user.id is truthy. Refuse to start an
-    // OAuth flow without a real user id — otherwise tokens would land
-    // under a shared sentinel key and could be read by another caller.
-    if (!req.user?.id) {
+    // authRequired lets the anonymous principal through when anonymous
+    // access is allowed, and does not guarantee req.user.id is truthy.
+    // Refuse to start an OAuth flow without a signed-in user id — otherwise
+    // tokens would land under a shared key and could be read by another caller.
+    if (!req.user?.id || req.user.id === 'anonymous') {
       return sendAuthRequired(res);
     }
-
-    // Generate state for CSRF protection
-    const state = crypto.randomBytes(32).toString('hex');
 
     // Generate PKCE parameters (may be ignored by Atlassian Cloud)
     const codeVerifier = crypto.randomBytes(32).toString('base64url');
@@ -61,23 +49,21 @@ router.get('/auth', authRequired, async (req, res) => {
     // off-site after the callback finishes.
     const validatedReturnUrl = isValidReturnUrl(returnUrl, req)
       ? returnUrl
-      : '/settings/integrations';
+      : DEFAULT_INTEGRATION_RETURN_URL;
 
-    // Store OAuth parameters in session with a consistent key
-    // Using oauth_jira key for consistency with Office 365 pattern
-    const sessionKey = 'oauth_jira';
-    req.session[sessionKey] = {
-      state,
-      codeVerifier,
+    // Signed, self-contained state instead of a session: the callback may
+    // land on another cluster worker (see utils/integrationOAuthState.js).
+    const state = issueIntegrationOAuthState({
+      service: 'jira',
       userId: req.user.id,
       returnUrl: validatedReturnUrl,
-      timestamp: Date.now()
-    };
+      codeVerifier
+    });
 
     // Generate authorization URL for Atlassian Cloud
     const authUrl = JiraService.generateAuthUrl(state, codeVerifier);
 
-    logger.info('Initiating JIRA OAuth', { component: 'Jira', userId: req.user?.id, authUrl });
+    logger.info('Initiating JIRA OAuth', { component: 'Jira', userId: req.user?.id });
 
     // Redirect to Atlassian OAuth consent screen
     res.redirect(authUrl);
@@ -91,51 +77,35 @@ router.get('/auth', authRequired, async (req, res) => {
  * GET /api/integrations/jira/callback
  */
 router.get('/callback', authOptional, async (req, res) => {
+  const verified = verifyIntegrationOAuthState(req, { service: 'jira' });
+  const { returnUrl } = verified;
   try {
-    const { code, state, error } = req.query;
+    const { code, error } = req.query;
 
-    // Use consistent session key
-    const sessionKey = 'oauth_jira';
-    const storedAuth = req.session?.[sessionKey];
-
-    // Get return URL early for error redirects
-    const returnUrl = storedAuth?.returnUrl || '/settings/integrations';
-    const separator = returnUrl.includes('?') ? '&' : '?';
-
-    // Check for OAuth errors
     if (error) {
       logger.error('JIRA OAuth error', { component: 'Jira', oauthError: error });
       // Stable error code rather than echoing the upstream error string.
-      return res.redirect(`${returnUrl}${separator}jira_error=oauth_failed`);
+      const errorCode = error === 'access_denied' ? 'access_denied' : 'oauth_failed';
+      return res.redirect(withQueryParam(returnUrl, 'jira_error', errorCode));
+    }
+
+    if (!verified.ok) {
+      logger.error('Invalid JIRA OAuth state parameter', {
+        component: 'Jira',
+        reason: verified.error
+      });
+      return res.redirect(withQueryParam(returnUrl, 'jira_error', verified.error));
     }
 
     // Surface a stable error code if the IdP returned no `code`
     // rather than failing inside `exchangeCodeForTokens`.
     if (!code) {
       logger.error('JIRA OAuth callback missing code', { component: 'Jira' });
-      return res.redirect(`${returnUrl}${separator}jira_error=missing_code`);
-    }
-
-    // Check if session is available
-    if (!req.session) {
-      logger.error('No session available for JIRA OAuth callback', { component: 'Jira' });
-      return res.redirect(`${returnUrl}${separator}jira_error=no_session`);
-    }
-
-    // Validate state parameter
-    if (!storedAuth || storedAuth.state !== state) {
-      logger.error('Invalid JIRA OAuth state parameter', { component: 'Jira' });
-      return res.redirect(`${returnUrl}${separator}jira_error=invalid_state`);
-    }
-
-    // Check session timeout (15 minutes)
-    if (Date.now() - storedAuth.timestamp > 15 * 60 * 1000) {
-      logger.error('JIRA OAuth session expired', { component: 'Jira' });
-      return res.redirect(`${returnUrl}${separator}jira_error=session_expired`);
+      return res.redirect(withQueryParam(returnUrl, 'jira_error', 'missing_code'));
     }
 
     // Exchange authorization code for tokens
-    const tokens = await JiraService.exchangeCodeForTokens(code, storedAuth.codeVerifier);
+    const tokens = await JiraService.exchangeCodeForTokens(code, verified.codeVerifier);
 
     // Verify we received a refresh token (required for long-term access)
     if (!tokens.refreshToken) {
@@ -159,36 +129,21 @@ router.get('/callback', authOptional, async (req, res) => {
     }
 
     // Store encrypted tokens for user
-    await JiraService.storeUserTokens(storedAuth.userId, tokens);
-
-    // Clear session data using the consistent key
-    delete req.session[sessionKey];
+    await JiraService.storeUserTokens(verified.userId, tokens);
 
     logger.info('JIRA OAuth completed', {
       component: 'Jira',
-      userId: storedAuth.userId,
+      userId: verified.userId,
       returnUrl
     });
 
-    // Redirect back to the original page with success
-    res.redirect(`${returnUrl}${separator}jira_connected=true`);
+    res.redirect(withQueryParam(returnUrl, 'jira_connected', 'true'));
   } catch (error) {
     logger.error('Error handling JIRA OAuth callback', { component: 'Jira', error });
-
-    // Get return URL from session (default to /settings/integrations)
-    const sessionKey = 'oauth_jira';
-    const returnUrl = req.session?.[sessionKey]?.returnUrl || '/settings/integrations';
-
-    // Clear session data on error
-    if (req.session && req.session[sessionKey]) {
-      delete req.session[sessionKey];
-    }
-
-    const separator = returnUrl.includes('?') ? '&' : '?';
     // Use a stable error code rather than echoing `error.message` —
     // some upstream errors interpolate user-influenced strings, and
     // we don't want those landing in the redirect URL.
-    res.redirect(`${returnUrl}${separator}jira_error=callback_failed`);
+    res.redirect(withQueryParam(returnUrl, 'jira_error', 'callback_failed'));
   }
 });
 
@@ -198,7 +153,7 @@ router.get('/callback', authOptional, async (req, res) => {
  */
 router.get('/status', authRequired, async (req, res) => {
   try {
-    if (!req.user?.id) {
+    if (!req.user?.id || req.user.id === 'anonymous') {
       return sendAuthRequired(res);
     }
 
@@ -255,7 +210,7 @@ router.get('/status', authRequired, async (req, res) => {
  */
 router.post('/disconnect', authRequired, async (req, res) => {
   try {
-    if (!req.user?.id) {
+    if (!req.user?.id || req.user.id === 'anonymous') {
       return sendAuthRequired(res);
     }
 
@@ -284,7 +239,7 @@ router.post('/disconnect', authRequired, async (req, res) => {
  */
 router.post('/refresh', authRequired, async (req, res) => {
   try {
-    if (!req.user?.id) {
+    if (!req.user?.id || req.user.id === 'anonymous') {
       return sendAuthRequired(res);
     }
 
@@ -339,7 +294,7 @@ router.get('/attachment/:attachmentId', authRequired, async (req, res) => {
     const { attachmentId } = req.params;
     const { download } = req.query;
 
-    if (!req.user?.id) {
+    if (!req.user?.id || req.user.id === 'anonymous') {
       return sendAuthRequired(res);
     }
 
@@ -380,7 +335,7 @@ router.get('/attachment/:attachmentId', authRequired, async (req, res) => {
  */
 router.get('/test', authRequired, async (req, res) => {
   try {
-    if (!req.user?.id) {
+    if (!req.user?.id || req.user.id === 'anonymous') {
       return sendAuthRequired(res);
     }
 

@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { generateMagicPrompt } from '../../api';
-import { FeatureFlags } from '../../../../shared/featureFlags.js';
 
 /**
  * Custom hook for magic prompt generation functionality.
@@ -23,13 +22,9 @@ export function useMagicPrompt() {
     try {
       setMagicLoading(true);
 
-      // Use FeatureFlags utility to get nested feature values
-      const featureFlags = new FeatureFlags();
-      const response = await generateMagicPrompt(input, {
-        prompt: featureFlags.getAppFeatureValue(app, 'magicPrompt.prompt', null),
-        modelId: featureFlags.getAppFeatureValue(app, 'magicPrompt.model', null),
-        appId
-      });
+      // The server reads the instruction and model from the app's
+      // `features.magicPrompt` configuration.
+      const response = await generateMagicPrompt(input, { appId: appId || app?.id });
 
       if (response && response.prompt) {
         setOriginalInput(input);

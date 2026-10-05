@@ -48,11 +48,10 @@
  */
 import { promises as fs } from 'fs';
 import path from 'path';
-import { getRootDir } from '../../pathUtils.js';
-import serverConfig from '../../config.js';
 import logger from '../../utils/logger.js';
 import { isValidId, resolveAndValidatePath } from '../../utils/pathSecurity.js';
 import { atomicCreateJSON, atomicWriteFile, atomicWriteJSON } from '../../utils/atomicWrite.js';
+import { withFileLock } from '../../utils/fileLock.js';
 import { getStorage } from '../../storage/bootstrap.js';
 import {
   CONFIG_NAMESPACES,
@@ -60,6 +59,7 @@ import {
   getRawNamespace,
   parseRawRelPath
 } from '../../storage/namespaces.js';
+import { getContentsPath } from '../../utils/contentsPath.js';
 
 const COMPONENT = 'ConfigStore';
 
@@ -85,7 +85,7 @@ let describedNamespaces = null;
  * @returns {string} Absolute path of the contents directory
  */
 function contentsDir() {
-  return path.join(getRootDir(), serverConfig.CONTENTS_DIR);
+  return getContentsPath();
 }
 
 /**
@@ -356,6 +356,41 @@ async function readFromDisk(relPath, kind) {
 }
 
 /**
+ * {@link ConfigStore#updateJson} on the contained filesystem path: the read,
+ * the change and the atomic write under a lock file next to the target.
+ *
+ * Unlike the lenient boot-path read, only a missing file reads as null here;
+ * an unreadable or malformed one throws, so the change never replaces data
+ * that is still there.
+ *
+ * @param {string} relPath - Path relative to `contents/`
+ * @param {(current: any|null) => any|Promise<any>} mutate - See updateJson
+ * @returns {Promise<{data: any|null, written: boolean}>}
+ */
+async function updateOnDisk(relPath, mutate) {
+  const filePath = await resolveConfigPath(relPath);
+  await fs.mkdir(path.dirname(filePath), { recursive: true });
+  return withFileLock(
+    `${filePath}.lock`,
+    async () => {
+      let current = null;
+      try {
+        current = JSON.parse(await fs.readFile(filePath, 'utf8'));
+      } catch (error) {
+        if (error.code !== 'ENOENT') {
+          throw new Error(`${relPath} exists but could not be read`, { cause: error });
+        }
+      }
+      const next = await mutate(current);
+      if (next === undefined) return { data: current, written: false };
+      await atomicWriteJSON(filePath, next);
+      return { data: next, written: true };
+    },
+    { component: COMPONENT }
+  );
+}
+
+/**
  * List the JSON file names of a directory under `contents/`.
  *
  * Only names the raw store would accept are returned, so a directory lists the
@@ -573,6 +608,79 @@ export class ConfigStore {
     const filePath = await resolveConfigPath(relPath);
     await fs.mkdir(path.dirname(filePath), { recursive: true });
     await atomicCreateJSON(filePath, data);
+  }
+
+  /**
+   * Read, change and write a JSON configuration file as one step, so that
+   * concurrent writers — cluster workers sharing `contents/` — cannot drop
+   * each other's changes.
+   *
+   * A `readJson` followed by a `writeJson` is last-write-wins: two workers
+   * that read the same body and each add a record both write, and the second
+   * write erases the first record. Here the write only lands on the body the
+   * change was computed from. On the document path that is the provider's
+   * etag compare-and-set (a provider only serves configuration when it
+   * declares conditional writes), retried with a fresh read on a conflict; on
+   * the filesystem path it is a lock file every worker honours.
+   *
+   * `mutate` may run more than once, so it must derive everything from the
+   * body it is handed and keep no effect of an earlier run.
+   *
+   * @param {string} relPath - Path relative to `contents/`
+   * @param {(current: any|null) => any|Promise<any>} mutate - Gets a private
+   *   copy of the current body (null when the file does not exist) and returns
+   *   the body to write, or `undefined` to leave the file as it is
+   * @param {Object} [options]
+   * @param {number} [options.attempts=16] - Conflicting writes tolerated before giving up
+   * @returns {Promise<{data: any|null, written: boolean}>} The body now stored
+   *   and whether this call wrote it
+   * @throws {Error} When the file exists but cannot be read or parsed (a
+   *   change computed from nothing would erase it), when `mutate` throws, or
+   *   with `code === 'ETAG_MISMATCH'` when every attempt met a conflicting write
+   */
+  async updateJson(relPath, mutate, { attempts = 16 } = {}) {
+    // Updates of one file from this process queue behind each other, so the
+    // compare-and-set below only ever races other processes — a handful of
+    // workers — rather than every request this worker is serving.
+    const queueKey = String(relPath);
+    const previous = this.#updateQueues.get(queueKey) || Promise.resolve();
+    const run = previous.then(() => this.#updateJsonNow(relPath, mutate, attempts));
+    const settled = run.catch(() => {});
+    this.#updateQueues.set(queueKey, settled);
+    settled.then(() => {
+      if (this.#updateQueues.get(queueKey) === settled) this.#updateQueues.delete(queueKey);
+    });
+    return run;
+  }
+
+  /** Updates of each file in flight in this process, by path. */
+  #updateQueues = new Map();
+
+  async #updateJsonNow(relPath, mutate, attempts) {
+    const location = parseRawRelPath(relPath);
+    const documents = location ? documentsFor(location.ns) : null;
+    if (!documents) return updateOnDisk(relPath, mutate);
+
+    for (let attempt = 1; ; attempt++) {
+      const document = await documents.get(location.ns, location.key);
+      if (!document && (await this.exists(relPath))) {
+        throw new Error(`${relPath} exists but could not be read`);
+      }
+      const current = document ? structuredClone(document.data ?? null) : null;
+      const next = await mutate(current);
+      if (next === undefined) return { data: current, written: false };
+      try {
+        await documents.put(location.ns, location.key, next, {
+          etag: document ? document.etag : null
+        });
+        return { data: next, written: true };
+      } catch (error) {
+        if (error?.code !== 'ETAG_MISMATCH' || attempt >= attempts) throw error;
+        // Another process wrote in between. Spread the retries so two workers
+        // that collided once do not collide again on the same tick.
+        await new Promise(resolve => setTimeout(resolve, Math.random() * 10 * attempt));
+      }
+    }
   }
 
   /**

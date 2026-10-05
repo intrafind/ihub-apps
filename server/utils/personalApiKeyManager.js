@@ -5,7 +5,7 @@ import {
   listPersonalClientsByOwner,
   loadOAuthClients,
   rotateClientSecret,
-  saveOAuthClients,
+  updateOAuthClients,
   updatePersonalClientOwner
 } from './oauthClientManager.js';
 import { generatePersonalApiKey, personalKeyGeneration } from './oauthTokenService.js';
@@ -387,35 +387,34 @@ function requireOwnedKey(clientsFilePath, keyId, user) {
  * copy of the key itself.
  */
 async function issueApiKey(client, expirationDays, clientsFilePath, config) {
-  const clientsConfig = loadOAuthClients(clientsFilePath);
+  let apiKey;
+  await updateOAuthClients(clientsFilePath, clientsConfig => {
+    // The key id reaches here from the request path, so look it up as an own
+    // property: a plain index would resolve `__proto__` to Object.prototype and
+    // the writes below would pollute it. Same guard the rest of the client store
+    // uses.
+    const stored = Object.hasOwn(clientsConfig.clients, client.clientId)
+      ? clientsConfig.clients[client.clientId]
+      : undefined;
 
-  // The key id reaches here from the request path, so look it up as an own
-  // property: a plain index would resolve `__proto__` to Object.prototype and
-  // the writes below would pollute it. Same guard the rest of the client store
-  // uses.
-  const stored = Object.hasOwn(clientsConfig.clients || {}, client.clientId)
-    ? clientsConfig.clients[client.clientId]
-    : undefined;
+    if (!stored) {
+      throw new PersonalKeyError('API key not found', 404);
+    }
 
-  if (!stored) {
-    throw new PersonalKeyError('API key not found', 404);
-  }
+    // Every issue is a new generation, which is what invalidates the credentials
+    // issued for the previous one.
+    const keyGeneration = personalKeyGeneration(stored) + 1;
 
-  // Every issue is a new generation, which is what invalidates the credentials
-  // issued for the previous one.
-  const keyGeneration = personalKeyGeneration(stored) + 1;
+    // Reconcile the grant list with the policy in force now. Without this, a key
+    // created while client credentials were disallowed would keep an empty grant
+    // list, and rotating it would show a client secret the token endpoint always
+    // rejects.
+    stored.grantTypes = config.allowClientCredentials ? ['client_credentials'] : [];
+    stored.metadata = { ...(stored.metadata || {}), keyGeneration };
 
-  // Reconcile the grant list with the policy in force now. Without this, a key
-  // created while client credentials were disallowed would keep an empty grant
-  // list, and rotating it would show a client secret the token endpoint always
-  // rejects.
-  stored.grantTypes = config.allowClientCredentials ? ['client_credentials'] : [];
-  stored.metadata = { ...(stored.metadata || {}), keyGeneration };
-
-  const apiKey = generatePersonalApiKey(stored, expirationDays);
-
-  stored.metadata.apiKeyExpiresAt = apiKey.expires_at;
-  await saveOAuthClients(clientsConfig, clientsFilePath);
+    apiKey = generatePersonalApiKey(stored, expirationDays);
+    stored.metadata.apiKeyExpiresAt = apiKey.expires_at;
+  });
 
   return apiKey;
 }
@@ -426,8 +425,8 @@ async function issueApiKey(client, expirationDays, clientsFilePath, config) {
  * Counting a user's keys and inserting a new one are two separate store
  * operations, so two requests arriving together could both find room under
  * `maxKeysPerUser`. Chaining per owner keeps the check and the insert from
- * interleaving. Across cluster workers the client store remains last-write-wins,
- * as it is for every other write to it.
+ * interleaving. This is per worker: two workers can still both find room, and
+ * then both inserts land, since each is its own atomic change of the store.
  */
 const ownerLocks = new Map();
 

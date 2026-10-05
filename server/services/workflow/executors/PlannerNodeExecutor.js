@@ -22,6 +22,7 @@ import { thinkingConfigToOptions } from '../thinkingOptions.js';
 import { SubWorkflowMaterializer } from '../SubWorkflowMaterializer.js';
 import { dedupeCitations } from '../citationUtils.js';
 import configCache from '../../../configCache.js';
+import { buildAvailableSkillsBlock, getUsableSkills } from '../../skillAccess.js';
 import { actionTracker } from '../../../actionTracker.js';
 import { resolveMaxOutputTokens } from '../../../../shared/outputTokens.js';
 
@@ -104,7 +105,7 @@ export class PlannerNodeExecutor extends BaseNodeExecutor {
 
         // Load each requested skill body and persist into state. The next
         // _generatePlan iteration will pick them up via _activatedSkills.
-        await this._activateSkillsIntoState(requested, state, context);
+        await this._activateSkillsIntoState(requested, state, context, config);
       }
 
       // Read the in-flight review round once, up front, so namespacing,
@@ -213,7 +214,7 @@ export class PlannerNodeExecutor extends BaseNodeExecutor {
         ? plan.skills_used.filter(s => typeof s === 'string')
         : [];
       if (skillsUsed.length > 0) {
-        await this._activateSkillsIntoState(skillsUsed, state, context);
+        await this._activateSkillsIntoState(skillsUsed, state, context, config);
       }
 
       // NOTE: task-id namespacing (`r{round}_` prefix for round ≥1) and
@@ -743,21 +744,11 @@ Hard rules for this extension plan:
       const skillIds =
         Array.isArray(config?.skills) && config.skills.length > 0 ? config.skills : [];
       if (skillIds.length > 0) {
-        const platform = configCache.getPlatform()?.data || {};
-        const filtered = await configCache.getSkillsForApp(
-          { skills: skillIds },
-          { id: context?.user?.profileId || 'planner', groups: [] },
-          platform
-        );
-        if (Array.isArray(filtered) && filtered.length > 0) {
+        // Filtered by the run's principal, as activation is.
+        const filtered = await getUsableSkills({ skillIds, user: context?.user });
+        if (filtered.length > 0) {
           availableSkillNames = filtered.map(s => s.name).filter(n => typeof n === 'string');
-          const entries = filtered
-            .map(
-              s =>
-                `  <skill>\n    <name>${s.name}</name>\n    <description>${s.description || ''}</description>\n  </skill>`
-            )
-            .join('\n');
-          skillsBlock = `\n\n<available_skills>\n${entries}\n</available_skills>`;
+          skillsBlock = `\n\n${buildAvailableSkillsBlock(filtered)}`;
         }
       }
       // If skills were already activated earlier in the run, fold their
@@ -1388,12 +1379,17 @@ Output rules:
    * detail UI (which renders `_activatedSkills` live) and for resume.
    *
    * Failures per skill are logged and skipped; one bad skill name does not
-   * abort the planner.
+   * abort the planner. Only skills on the planner's own list (`config.skills`)
+   * that the run's principal may use are loaded; any other name the plan
+   * returns is skipped like an unknown one.
    *
    * @private
    */
-  async _activateSkillsIntoState(skillNames, state, context) {
+  async _activateSkillsIntoState(skillNames, state, context, config) {
     if (!Array.isArray(skillNames) || skillNames.length === 0) return;
+    const usableNames = new Set(
+      (await getUsableSkills({ skillIds: config?.skills, user: context?.user })).map(s => s.name)
+    );
     const activated = { ...(state?.data?._activatedSkills || {}) };
     const { getSkillContent } = await import('../../skillLoader.js');
     const profileId = context?.user?.profileId;
@@ -1402,6 +1398,13 @@ Output rules:
     for (const name of skillNames) {
       if (typeof name !== 'string' || !name) continue;
       if (activated[name]) continue; // already activated this run
+      if (!usableNames.has(name)) {
+        this.logger.warn('Planner requested a skill that is not available to it', {
+          component: 'PlannerNodeExecutor',
+          skillName: name
+        });
+        continue;
+      }
       try {
         const content = await getSkillContent(name);
         if (!content || !content.body) {

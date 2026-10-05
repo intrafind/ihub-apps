@@ -17,7 +17,7 @@ import {
 import CustomResponseRenderer from '../../../shared/components/CustomResponseRenderer';
 import ClarificationCard from './ClarificationCard';
 import GeneratedImage from './GeneratedImage';
-import AnswerSources from './AnswerSources';
+import AnswerSources, { CitedSources } from './AnswerSources';
 import { resolveCitations } from '../../../../../shared/sources/index.js';
 import SearchStatusIndicator from './SearchStatusIndicator';
 import SearchSummary from './SearchSummary';
@@ -930,6 +930,18 @@ function ChatMessage({
         {!isUser && message.mcpAuthRequired?.length > 0 && (
           <McpConnectCards prompts={message.mcpAuthRequired} readOnly={readOnly} />
         )}
+        {/* Everything the answer found — web pages, documents, records —
+            behind "Searched for …" / "N sources" above it, opening the
+            sources panel with what it cites and what it only considered.
+            Shown while the answer streams too: its badges open the panel. */}
+        {!isUser && citationView && (
+          <AnswerSources
+            messageKey={messageKey}
+            sources={message.sources}
+            citations={citationView}
+            onOpenInApp={onOpenSourceInApp}
+          />
+        )}
         {renderContent()}
         {/* Files the answer's tools generated (a PDF from the pdf skill). */}
         {!isUser && message.generatedFiles?.length > 0 && (
@@ -1063,17 +1075,10 @@ function ChatMessage({
             with the other provenance. */}
         {!isUser && !message.loading && <SearchSummary summary={message.searchSummary} />}
 
-        {/* Everything the answer found — web pages, documents, records —
-            behind "Searched for …" / "N sources", opening the sources panel
-            with what it cites and what it only considered. Shown while the
-            answer streams too: its badges open the panel. */}
-        {!isUser && citationView && (
-          <AnswerSources
-            messageKey={messageKey}
-            sources={message.sources}
-            citations={citationView}
-            onOpenInApp={onOpenSourceInApp}
-          />
+        {/* The sources the finished answer cites, listed at its end. Not
+            while it streams, so the list does not grow under the text. */}
+        {!isUser && citationView && !message.loading && (
+          <CitedSources messageKey={messageKey} sources={citationView.cited} />
         )}
 
         {/* Workflow result attribution — handled by unified WorkflowStepIndicator above */}

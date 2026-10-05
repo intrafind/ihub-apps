@@ -3,10 +3,14 @@ import { useTranslation } from 'react-i18next';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import Icon from '../../../shared/components/Icon';
 import { useUIConfig } from '../../../shared/contexts/UIConfigContext';
+import { getHttpUrl } from '../../../utils/safeUrl';
 
 /**
  * IframeApp component
- * Handles iframe-type apps that embed external applications
+ * Handles iframe-type apps that embed external applications.
+ *
+ * Only `http:` and `https:` URLs are embedded or opened. Any other configured
+ * value (another scheme, an unparsable or empty URL) shows an error instead.
  */
 function IframeApp({ app }) {
   const { t, i18n } = useTranslation();
@@ -22,7 +26,9 @@ function IframeApp({ app }) {
   }, [resetHeaderColor]);
 
   const iframeConfig = app.iframeConfig || {};
-  const iframeUrl = iframeConfig.url || '';
+  // The URL actually embedded: the configured one, resolved, or null when it is
+  // not an http(s) URL.
+  const iframeUrl = getHttpUrl(iframeConfig.url || '');
   const allowFullscreen = iframeConfig.allowFullscreen !== false; // Default true
   const sandbox = iframeConfig.sandbox || ['allow-scripts', 'allow-same-origin', 'allow-forms'];
 
@@ -57,14 +63,12 @@ function IframeApp({ app }) {
     return (
       <div className="container mx-auto px-4 py-8 max-w-2xl">
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-8">
-          <div className="text-center">
+          <div className="text-center" role="alert">
             <Icon name="exclamation-circle" className="h-12 w-12 text-red-500 mx-auto mb-4" />
             <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
               {t('common.error')}
             </h2>
-            <p className="text-gray-600 dark:text-gray-300">
-              No iframe URL configured for this app.
-            </p>
+            <p className="text-gray-600 dark:text-gray-300">{t('pages.iframeApp.invalidUrl')}</p>
             <button
               onClick={() => window.history.back()}
               className="mt-4 px-6 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-900 dark:text-white font-medium rounded-md transition-colors"

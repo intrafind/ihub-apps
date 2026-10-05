@@ -1,7 +1,9 @@
 import fs from 'fs';
+import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import bcrypt from 'bcryptjs';
 import { atomicWriteJSON } from './atomicWrite.js';
+import { withFileLock } from './fileLock.js';
 import configStore from '../services/config/ConfigStore.js';
 import configCache from '../configCache.js';
 import { announceConfigChange } from '../configSync.js';
@@ -110,45 +112,163 @@ export function loadOAuthClients(clientsFilePath) {
   }
 }
 
+/** In-flight re-reads of a clients file, by cache key, so a burst shares one. */
+const freshReads = new Map();
+
 /**
- * Save OAuth clients to the OAuth clients file
- * @param {Object} clientsConfig - OAuth clients configuration object
+ * Load OAuth clients straight from the store, bypassing (and refreshing) the
+ * cached copy.
+ *
+ * Cluster workers each cache this file and hear about another worker's write
+ * over the config sync bus, which takes a few milliseconds. A client
+ * registered on one worker (DCR, the admin UI) is routinely used on another
+ * within that window — an MCP client registers and immediately sends the user
+ * to /authorize — and found missing there. Lookups that would fail on a miss
+ * call this once before failing, and writes call it so they modify the latest
+ * file rather than this worker's possibly stale copy.
+ *
  * @param {string} clientsFilePath - Path to oauth-clients.json file
+ * @returns {Promise<Object>} OAuth clients configuration
+ */
+export async function loadOAuthClientsFresh(clientsFilePath) {
+  const { fullPath, cacheKey, relPath } = locateClientsFile(clientsFilePath);
+  let pending = freshReads.get(cacheKey);
+  if (!pending) {
+    pending = (async () => {
+      let data = null;
+      if (relPath) {
+        data = await configStore.readJson(relPath);
+      } else if (fs.existsSync(fullPath)) {
+        // A clients file outside contents/ has no place in the store (see
+        // locateConfigFile); read it directly, as loadOAuthClients does.
+        data = JSON.parse(fs.readFileSync(fullPath, 'utf8'));
+      }
+      if (data && typeof data === 'object' && data.clients && typeof data.clients === 'object') {
+        configCache.setCacheEntry(cacheKey, data);
+      }
+    })().finally(() => freshReads.delete(cacheKey));
+    freshReads.set(cacheKey, pending);
+  }
+  try {
+    await pending;
+  } catch (error) {
+    logger.warn('Could not re-read OAuth clients configuration; using cached copy', {
+      component: 'OAuthClientManager',
+      error: error?.message || String(error)
+    });
+  }
+  return loadOAuthClients(clientsFilePath);
+}
+
+/**
+ * Look up one client, re-reading the store once if this worker's cached copy
+ * does not have it (see {@link loadOAuthClientsFresh}).
+ *
+ * @param {string} clientsFilePath - Path to oauth-clients.json file
+ * @param {string} clientId - Client ID
+ * @returns {Promise<{clientsConfig: Object, client: Object|null}>}
+ */
+export async function findClientByIdFresh(clientsFilePath, clientId) {
+  let clientsConfig = loadOAuthClients(clientsFilePath);
+  let client = findClientById(clientsConfig, clientId);
+  if (!client && !clientsConfig?.metadata?.error) {
+    clientsConfig = await loadOAuthClientsFresh(clientsFilePath);
+    client = findClientById(clientsConfig, clientId);
+  }
+  return { clientsConfig, client };
+}
+
+/**
+ * Change the clients file in one read-modify-write that writes from other
+ * cluster workers cannot interleave with.
+ *
+ * A fresh read followed by a write still loses a change: two workers that
+ * read the same file, each add a client and each write, keep only the second
+ * client. The configuration store applies the change to the
+ * body it reads and writes only if that body is still the stored one (see
+ * `ConfigStore.updateJson`); a clients file outside `contents/` is changed
+ * under a lock file instead.
+ *
+ * `change` edits the clients configuration in place. It runs again on the
+ * newer body when another worker wrote first, so it must derive everything it
+ * does from the body it is handed. It may return `false` to write nothing,
+ * and any throw leaves the file untouched.
+ *
+ * @param {string} clientsFilePath - Path to oauth-clients.json as configured
+ * @param {(clientsConfig: Object) => (boolean|void|Promise<boolean|void>)} change
  * @param {Object} [options]
  * @param {boolean} [options.announce=true] - Tell the other cluster workers to
  *   re-read the file. Pass false for writes that only record usage metadata, so
  *   a per-minute `lastUsed` touch does not make every worker reload the file.
+ * @returns {Promise<boolean>} Whether the file was written
  */
-export async function saveOAuthClients(clientsConfig, clientsFilePath, { announce = true } = {}) {
-  try {
-    const { fullPath, cacheKey, relPath } = locateClientsFile(clientsFilePath);
-
-    // Update metadata
-    if (!clientsConfig.metadata) {
-      clientsConfig.metadata = { version: '1.0.0' };
-    }
+export async function updateOAuthClients(clientsFilePath, change, { announce = true } = {}) {
+  const { fullPath, cacheKey, relPath } = locateClientsFile(clientsFilePath);
+  const apply = async current => {
+    const clientsConfig = normalizeClientsConfig(current);
+    if ((await change(clientsConfig)) === false) return undefined;
     clientsConfig.metadata.lastUpdated = new Date().toISOString();
+    return clientsConfig;
+  };
 
-    // Write to file atomically. The store writes what it is handed, so the
-    // hashed client secrets in here are stored exactly as generated.
-    if (relPath) {
-      await configStore.writeJson(relPath, clientsConfig);
-    } else {
-      await atomicWriteJSON(fullPath, clientsConfig);
-    }
+  const { data, written } = relPath
+    ? await configStore.updateJson(relPath, apply)
+    : await updateClientsFileOutsideContents(fullPath, apply);
 
-    configCache.setCacheEntry(cacheKey, clientsConfig);
-
-    // Otherwise a client registered on one worker cannot authenticate against
-    // the others until their cache TTL expires.
-    if (announce) announceConfigChange(cacheKey);
-  } catch (error) {
-    logger.error('Could not save OAuth clients configuration', {
-      component: 'OAuthClientManager',
-      error
-    });
-    throw error;
+  // Even when nothing was written, what was read is the newest copy there is.
+  if (data && typeof data === 'object' && data.clients && typeof data.clients === 'object') {
+    configCache.setCacheEntry(cacheKey, data);
   }
+  if (written && announce) announceConfigChange(cacheKey);
+  return written;
+}
+
+/**
+ * The clients configuration with its `clients` and `metadata` objects in
+ * place, as {@link loadOAuthClients} guarantees them. A missing file is an
+ * empty one; a body of the wrong shape is refused rather than replaced.
+ *
+ * @param {any|null} data - The stored body
+ * @returns {Object} The same object, completed
+ */
+function normalizeClientsConfig(data) {
+  if (data !== null && (typeof data !== 'object' || Array.isArray(data))) {
+    throw new Error('Invalid OAuth clients configuration format');
+  }
+  const clientsConfig = data || {};
+  if (!clientsConfig.clients || typeof clientsConfig.clients !== 'object') {
+    clientsConfig.clients = {};
+  }
+  if (!clientsConfig.metadata || typeof clientsConfig.metadata !== 'object') {
+    clientsConfig.metadata = { version: '1.0.0' };
+  }
+  return clientsConfig;
+}
+
+/**
+ * The read-modify-write of a clients file outside `contents/`, which has no
+ * place in the store (see locateConfigFile), under a lock file every worker
+ * honours. Only a missing file reads as empty: an unreadable or malformed one
+ * throws, so a change never replaces clients that are still there.
+ *
+ * @param {string} fullPath - Absolute path of the clients file
+ * @param {(current: any|null) => Promise<Object|undefined>} apply
+ * @returns {Promise<{data: any|null, written: boolean}>}
+ */
+async function updateClientsFileOutsideContents(fullPath, apply) {
+  await fs.promises.mkdir(path.dirname(fullPath), { recursive: true });
+  return withFileLock(
+    `${fullPath}.lock`,
+    async () => {
+      let current = null;
+      if (fs.existsSync(fullPath)) current = JSON.parse(fs.readFileSync(fullPath, 'utf8'));
+      const next = await apply(current);
+      if (next === undefined) return { data: current, written: false };
+      await atomicWriteJSON(fullPath, next);
+      return { data: next, written: true };
+    },
+    { component: 'OAuthClientManager' }
+  );
 }
 
 /**
@@ -225,8 +345,6 @@ export function findClientById(clientsConfig, clientId) {
  * @returns {Promise<Object>} Created client with plain text secret (only time it's shown)
  */
 export async function createOAuthClient(clientData, clientsFilePath, createdBy) {
-  const clientsConfig = loadOAuthClients(clientsFilePath);
-
   // Generate client ID from name and secret
   const clientId = generateClientId(clientData.name);
   const clientSecret = await generateClientSecret();
@@ -290,8 +408,9 @@ export async function createOAuthClient(clientData, clientsFilePath, createdBy) 
     ownerEmail: clientData.ownerEmail || null,
     ownerGroups: clientData.ownerGroups || []
   };
-  clientsConfig.clients[clientId] = newClient;
-  await saveOAuthClients(clientsConfig, clientsFilePath);
+  await updateOAuthClients(clientsFilePath, clientsConfig => {
+    clientsConfig.clients[clientId] = newClient;
+  });
 
   // Log client creation
   logger.info(
@@ -318,13 +437,6 @@ export async function updateOAuthClient(clientId, updates, clientsFilePath, upda
   if (clientId === '__proto__' || clientId === 'constructor' || clientId === 'prototype') {
     throw new Error(`Invalid client ID: ${clientId}`);
   }
-  const clientsConfig = loadOAuthClients(clientsFilePath);
-  const client = clientsConfig.clients[clientId];
-
-  if (!client) {
-    throw new Error(`OAuth client not found: ${clientId}`);
-  }
-
   // Apply updates (excluding clientId, clientSecret, id).
   // Authorization Code Flow fields (clientType, grantTypes, redirectUris,
   // postLogoutRedirectUris, consentRequired, trusted) are intentionally
@@ -348,16 +460,22 @@ export async function updateOAuthClient(clientId, updates, clientsFilePath, upda
     'trusted'
   ];
 
-  for (const key of allowedUpdates) {
-    if (updates[key] !== undefined) {
-      client[key] = updates[key];
+  let client;
+  await updateOAuthClients(clientsFilePath, clientsConfig => {
+    client = ownClient(clientsConfig, clientId);
+    if (!client) {
+      throw new Error(`OAuth client not found: ${clientId}`);
     }
-  }
 
-  client.updatedAt = new Date().toISOString();
-  client.updatedBy = updatedBy || 'system';
+    for (const key of allowedUpdates) {
+      if (updates[key] !== undefined) {
+        client[key] = updates[key];
+      }
+    }
 
-  await saveOAuthClients(clientsConfig, clientsFilePath);
+    client.updatedAt = new Date().toISOString();
+    client.updatedBy = updatedBy || 'system';
+  });
 
   // Log client update
   logger.info(
@@ -381,10 +499,7 @@ export async function rotateClientSecret(clientId, clientsFilePath, rotatedBy) {
   if (clientId === '__proto__' || clientId === 'constructor' || clientId === 'prototype') {
     throw new Error(`Invalid client ID: ${clientId}`);
   }
-  const clientsConfig = loadOAuthClients(clientsFilePath);
-  const client = clientsConfig.clients[clientId];
-
-  if (!client) {
+  if (!(await findClientByIdFresh(clientsFilePath, clientId)).client) {
     throw new Error(`OAuth client not found: ${clientId}`);
   }
 
@@ -392,12 +507,17 @@ export async function rotateClientSecret(clientId, clientsFilePath, rotatedBy) {
   const newSecret = await generateClientSecret();
   const hashedSecret = await hashClientSecret(newSecret);
 
-  // Update client
-  client.clientSecret = hashedSecret;
-  client.lastRotated = new Date().toISOString();
-  client.rotatedBy = rotatedBy || 'system';
-
-  await saveOAuthClients(clientsConfig, clientsFilePath);
+  let rotatedAt;
+  await updateOAuthClients(clientsFilePath, clientsConfig => {
+    const client = ownClient(clientsConfig, clientId);
+    if (!client) {
+      throw new Error(`OAuth client not found: ${clientId}`);
+    }
+    client.clientSecret = hashedSecret;
+    client.lastRotated = new Date().toISOString();
+    client.rotatedBy = rotatedBy || 'system';
+    rotatedAt = client.lastRotated;
+  });
 
   // Log secret rotation
   logger.info('OAuth secret rotated', {
@@ -409,7 +529,7 @@ export async function rotateClientSecret(clientId, clientsFilePath, rotatedBy) {
   return {
     clientId: clientId,
     clientSecret: newSecret, // Plain text secret
-    rotatedAt: client.lastRotated
+    rotatedAt
   };
 }
 
@@ -421,16 +541,15 @@ export async function rotateClientSecret(clientId, clientsFilePath, rotatedBy) {
  * @returns {Promise<void>}
  */
 export async function deleteOAuthClient(clientId, clientsFilePath, deletedBy) {
-  const clientsConfig = loadOAuthClients(clientsFilePath);
-
-  if (!clientsConfig.clients[clientId]) {
-    throw new Error(`OAuth client not found: ${clientId}`);
-  }
-
-  const clientName = clientsConfig.clients[clientId].name;
-  delete clientsConfig.clients[clientId];
-
-  await saveOAuthClients(clientsConfig, clientsFilePath);
+  let clientName;
+  await updateOAuthClients(clientsFilePath, clientsConfig => {
+    const client = ownClient(clientsConfig, clientId);
+    if (!client) {
+      throw new Error(`OAuth client not found: ${clientId}`);
+    }
+    clientName = client.name;
+    delete clientsConfig.clients[clientId];
+  });
 
   // Log client deletion
   logger.info('OAuth client deleted', {
@@ -490,24 +609,24 @@ export function listPersonalClientsByOwner(clientsFilePath, ownerUserId) {
  * @returns {Promise<Object|null>} Updated client without secret, or null if not found
  */
 export async function updatePersonalClientOwner(clientId, owner, clientsFilePath) {
-  const clientsConfig = loadOAuthClients(clientsFilePath);
-  const client = Object.hasOwn(clientsConfig.clients || {}, clientId)
-    ? clientsConfig.clients[clientId]
-    : undefined;
+  let updated = null;
+  await updateOAuthClients(clientsFilePath, clientsConfig => {
+    updated = null;
+    const client = ownClient(clientsConfig, clientId);
+    if (!client || client.personal !== true || client.ownerUserId !== owner?.id) {
+      return false;
+    }
 
-  if (!client || client.personal !== true || client.ownerUserId !== owner?.id) {
-    return null;
-  }
+    client.ownerUsername = owner.username || client.ownerUsername || null;
+    client.ownerName = owner.name || client.ownerName || null;
+    client.ownerEmail = owner.email || client.ownerEmail || null;
+    client.ownerGroups = Array.isArray(owner.groups) ? owner.groups : client.ownerGroups || [];
+    client.updatedAt = new Date().toISOString();
+    updated = client;
+  });
+  if (!updated) return null;
 
-  client.ownerUsername = owner.username || client.ownerUsername || null;
-  client.ownerName = owner.name || client.ownerName || null;
-  client.ownerEmail = owner.email || client.ownerEmail || null;
-  client.ownerGroups = Array.isArray(owner.groups) ? owner.groups : client.ownerGroups || [];
-  client.updatedAt = new Date().toISOString();
-
-  await saveOAuthClients(clientsConfig, clientsFilePath);
-
-  const { clientSecret: _clientSecret, ...clientWithoutSecret } = client;
+  const { clientSecret: _clientSecret, ...clientWithoutSecret } = updated;
   return clientWithoutSecret;
 }
 
@@ -518,22 +637,28 @@ export async function updatePersonalClientOwner(clientId, owner, clientsFilePath
  */
 export async function updateClientLastUsed(clientId, clientsFilePath) {
   try {
-    const clientsConfig = loadOAuthClients(clientsFilePath);
-    const client = Object.hasOwn(clientsConfig.clients, clientId)
-      ? clientsConfig.clients[clientId]
-      : undefined;
+    const isDue = config => {
+      const client = Object.hasOwn(config.clients || {}, clientId)
+        ? config.clients[clientId]
+        : undefined;
+      // Only update if it's been more than 1 minute since last update (reduce writes)
+      return client && (!client.lastUsed || Date.now() - new Date(client.lastUsed) > 60000)
+        ? client
+        : null;
+    };
 
-    if (!client) {
-      return; // Client doesn't exist, skip update
-    }
-
-    const now = new Date().toISOString();
-
-    // Only update if it's been more than 1 minute since last update (reduce writes)
-    if (!client.lastUsed || new Date(now) - new Date(client.lastUsed) > 60000) {
-      client.lastUsed = now;
-      await saveOAuthClients(clientsConfig, clientsFilePath, { announce: false });
-    }
+    // Decide on the cached copy, so a request that writes nothing reads
+    // nothing; read the store only when a write is due.
+    if (!isDue(loadOAuthClients(clientsFilePath))) return;
+    await updateOAuthClients(
+      clientsFilePath,
+      clientsConfig => {
+        const client = isDue(clientsConfig);
+        if (!client) return false;
+        client.lastUsed = new Date().toISOString();
+      },
+      { announce: false }
+    );
   } catch (error) {
     logger.error('OAuth failed to update last used for client', {
       component: 'OAuthClientManager',
@@ -552,11 +677,29 @@ export async function updateClientLastUsed(clientId, clientsFilePath) {
  * @returns {Promise<Object|null>} Client object if valid, null otherwise
  */
 export async function validateClientCredentials(clientId, clientSecret, clientsFilePath) {
-  const clientsConfig = loadOAuthClients(clientsFilePath);
-  const client = Object.hasOwn(clientsConfig.clients, clientId)
-    ? clientsConfig.clients[clientId]
-    : undefined;
+  const cached = ownClient(loadOAuthClients(clientsFilePath), clientId);
+  const result = await checkClientCredentials(cached, clientId, clientSecret, clientsFilePath);
+  if (result) return result;
 
+  // This worker's copy may predate a registration or secret rotation made on
+  // another worker moments ago. Re-read once, and check again only if the
+  // record actually changed — a wrong secret costs one bcrypt, not two.
+  const fresh = ownClient(await loadOAuthClientsFresh(clientsFilePath), clientId);
+  if (
+    !fresh ||
+    (cached && fresh.clientSecret === cached.clientSecret && fresh.active === cached.active)
+  ) {
+    return null;
+  }
+  return checkClientCredentials(fresh, clientId, clientSecret, clientsFilePath);
+}
+
+function ownClient(clientsConfig, clientId) {
+  const clients = clientsConfig?.clients || {};
+  return Object.hasOwn(clients, clientId) ? clients[clientId] : undefined;
+}
+
+async function checkClientCredentials(client, clientId, clientSecret, clientsFilePath) {
   if (!client) {
     logger.info('OAuth client not found', { component: 'OAuthClientManager', clientId });
     return null;
@@ -646,17 +789,18 @@ export function findDcrClientByFingerprint(clientsConfig, fingerprint) {
  */
 export async function recordDcrReRegistration(clientId, clientsFilePath) {
   try {
-    const clientsConfig = loadOAuthClients(clientsFilePath);
-    const client = Object.hasOwn(clientsConfig.clients || {}, clientId)
-      ? clientsConfig.clients[clientId]
-      : undefined;
-    if (!client) return;
+    await updateOAuthClients(
+      clientsFilePath,
+      clientsConfig => {
+        const client = ownClient(clientsConfig, clientId);
+        if (!client) return false;
 
-    client.metadata = client.metadata || {};
-    client.metadata.registrationCount = (client.metadata.registrationCount || 1) + 1;
-    client.metadata.lastRegisteredAt = new Date().toISOString();
-
-    await saveOAuthClients(clientsConfig, clientsFilePath, { announce: false });
+        client.metadata = client.metadata || {};
+        client.metadata.registrationCount = (client.metadata.registrationCount || 1) + 1;
+        client.metadata.lastRegisteredAt = new Date().toISOString();
+      },
+      { announce: false }
+    );
   } catch (error) {
     logger.error('OAuth failed to record repeat dynamic registration', {
       component: 'OAuthClientManager',
@@ -683,17 +827,18 @@ export async function recordDcrReRegistration(clientId, clientsFilePath) {
  */
 export async function stampDcrFirstUser(clientId, user, clientsFilePath) {
   try {
-    const clientsConfig = loadOAuthClients(clientsFilePath);
-    const client = Object.hasOwn(clientsConfig.clients || {}, clientId)
-      ? clientsConfig.clients[clientId]
-      : undefined;
-    if (!client || client.metadata?.dcr !== true || client.metadata?.firstUserId) return;
+    await updateOAuthClients(
+      clientsFilePath,
+      clientsConfig => {
+        const client = ownClient(clientsConfig, clientId);
+        if (!client || client.metadata?.dcr !== true || client.metadata?.firstUserId) return false;
 
-    client.metadata.firstUserId = user?.sub || '';
-    client.metadata.firstUserName = user?.name || user?.username || user?.sub || '';
-    client.metadata.firstConsentAt = new Date().toISOString();
-
-    await saveOAuthClients(clientsConfig, clientsFilePath, { announce: false });
+        client.metadata.firstUserId = user?.sub || '';
+        client.metadata.firstUserName = user?.name || user?.username || user?.sub || '';
+        client.metadata.firstConsentAt = new Date().toISOString();
+      },
+      { announce: false }
+    );
   } catch (error) {
     logger.error('OAuth failed to stamp first consenting user', {
       component: 'OAuthClientManager',
@@ -719,28 +864,30 @@ export async function stampDcrFirstUser(clientId, user, clientsFilePath) {
  * @returns {Promise<{deleted: number, clientIds: Array<string>}>} What was removed
  */
 export async function deleteUnusedDynamicClients(unusedForDays, clientsFilePath, deletedBy) {
-  const clientsConfig = loadOAuthClients(clientsFilePath);
   const cutoff = Date.now() - unusedForDays * 24 * 60 * 60 * 1000;
-  const clientIds = [];
+  let clientIds = [];
 
-  for (const [clientId, client] of Object.entries(clientsConfig.clients || {})) {
-    if (client?.metadata?.dcr !== true) continue;
+  await updateOAuthClients(clientsFilePath, clientsConfig => {
+    clientIds = [];
+    for (const [clientId, client] of Object.entries(clientsConfig.clients)) {
+      if (client?.metadata?.dcr !== true) continue;
 
-    const lastUsed = client.lastUsed ? new Date(client.lastUsed).getTime() : null;
-    // A record that was never used is judged by when it was registered, so a
-    // connection someone started minutes ago is not swept away mid-flow.
-    const reference = lastUsed ?? (client.createdAt ? new Date(client.createdAt).getTime() : 0);
-    if (Number.isFinite(reference) && reference < cutoff) {
-      clientIds.push(clientId);
+      const lastUsed = client.lastUsed ? new Date(client.lastUsed).getTime() : null;
+      // A record that was never used is judged by when it was registered, so a
+      // connection someone started minutes ago is not swept away mid-flow.
+      const reference = lastUsed ?? (client.createdAt ? new Date(client.createdAt).getTime() : 0);
+      if (Number.isFinite(reference) && reference < cutoff) {
+        clientIds.push(clientId);
+      }
     }
-  }
+    if (clientIds.length === 0) return false;
 
-  for (const clientId of clientIds) {
-    delete clientsConfig.clients[clientId];
-  }
+    for (const clientId of clientIds) {
+      delete clientsConfig.clients[clientId];
+    }
+  });
 
   if (clientIds.length > 0) {
-    await saveOAuthClients(clientsConfig, clientsFilePath);
     logger.info('OAuth unused dynamic clients removed', {
       component: 'OAuthClientManager',
       count: clientIds.length,
@@ -824,62 +971,65 @@ export async function upsertCimdClientPolicy(
     throw new Error('A CIMD policy record requires an https client_id URL');
   }
 
-  const clientsConfig = loadOAuthClients(clientsFilePath);
-  if (clientsConfig?.metadata?.error) {
-    throw new Error('OAuth client store unavailable');
-  }
+  // An unreadable store throws out of the update rather than reading as
+  // empty, so a policy write can never replace the clients it could not read.
+  let stored;
+  await updateOAuthClients(
+    clientsFilePath,
+    clientsConfig => {
+      const clients = clientsConfig.clients;
+      const existing = Object.hasOwn(clients, clientId) ? clients[clientId] : undefined;
+      const now = new Date().toISOString();
 
-  const clients = clientsConfig.clients || (clientsConfig.clients = {});
-  const existing = Object.hasOwn(clients, clientId) ? clients[clientId] : undefined;
-  const now = new Date().toISOString();
+      if (existing && existing.metadata?.cimd !== true) {
+        // A stored client that happens to be keyed by a URL is not a CIMD record
+        // and must not be reshaped into one by this path.
+        throw new Error(`Client ${clientId} is not a client-metadata-document client`);
+      }
 
-  if (existing && existing.metadata?.cimd !== true) {
-    // A stored client that happens to be keyed by a URL is not a CIMD record
-    // and must not be reshaped into one by this path.
-    throw new Error(`Client ${clientId} is not a client-metadata-document client`);
-  }
+      const record = existing || {
+        id: clientId,
+        clientId,
+        description: `Client metadata document at ${clientIdHost(clientId)}`,
+        // No secret, ever: CIMD clients authenticate with `none`.
+        clientSecret: null,
+        active: true,
+        approvalState: 'auto',
+        createdAt: now,
+        createdBy: savedBy || 'system',
+        lastUsed: null,
+        lastRotated: null,
+        metadata: { cimd: true, host: clientIdHost(clientId) },
+        clientType: 'public',
+        // Locked. Written once here so the record is a complete client object for
+        // anything that reads the store directly, and refused by every update.
+        consentRequired: true,
+        trusted: false,
+        personal: false
+      };
 
-  const record = existing || {
-    id: clientId,
-    clientId,
-    description: `Client metadata document at ${clientIdHost(clientId)}`,
-    // No secret, ever: CIMD clients authenticate with `none`.
-    clientSecret: null,
-    active: true,
-    approvalState: 'auto',
-    createdAt: now,
-    createdBy: savedBy || 'system',
-    lastUsed: null,
-    lastRotated: null,
-    metadata: { cimd: true, host: clientIdHost(clientId) },
-    clientType: 'public',
-    // Locked. Written once here so the record is a complete client object for
-    // anything that reads the store directly, and refused by every update.
-    consentRequired: true,
-    trusted: false,
-    personal: false
-  };
+      for (const field of CIMD_POLICY_FIELDS) {
+        if (patch[field] !== undefined) record[field] = patch[field];
+      }
 
-  for (const field of CIMD_POLICY_FIELDS) {
-    if (patch[field] !== undefined) record[field] = patch[field];
-  }
+      record.metadata = { ...(record.metadata || {}), cimd: true, host: clientIdHost(clientId) };
+      for (const field of CIMD_METADATA_FIELDS) {
+        if (patch.metadata?.[field] !== undefined) record.metadata[field] = patch.metadata[field];
+      }
 
-  record.metadata = { ...(record.metadata || {}), cimd: true, host: clientIdHost(clientId) };
-  for (const field of CIMD_METADATA_FIELDS) {
-    if (patch.metadata?.[field] !== undefined) record.metadata[field] = patch.metadata[field];
-  }
+      // Locked on every write, not merely on creation: the point of the lock is
+      // that no path can turn a self-declared client into a trusted one.
+      record.consentRequired = true;
+      record.trusted = false;
+      record.clientSecret = null;
 
-  // Locked on every write, not merely on creation: the point of the lock is
-  // that no path can turn a self-declared client into a trusted one.
-  record.consentRequired = true;
-  record.trusted = false;
-  record.clientSecret = null;
-
-  record.updatedAt = now;
-  record.updatedBy = savedBy || 'system';
-  clients[clientId] = record;
-
-  await saveOAuthClients(clientsConfig, clientsFilePath, { announce });
+      record.updatedAt = now;
+      record.updatedBy = savedBy || 'system';
+      clients[clientId] = record;
+      stored = record;
+    },
+    { announce }
+  );
 
   logger.info('[OAuth CIMD] Client policy saved', {
     component: 'OAuthClientManager',
@@ -888,7 +1038,7 @@ export async function upsertCimdClientPolicy(
     fields: Object.keys(patch).join(',')
   });
 
-  return { ...record };
+  return { ...stored };
 }
 
 /**

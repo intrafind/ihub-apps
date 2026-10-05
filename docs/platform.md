@@ -357,6 +357,35 @@ Defaults for PDF exports. PDFs are rendered on the server (see [PDF Generation &
   - **opacity** (number) – Opacity level (0.0-1.0)
 - **templates** (object) – Names and descriptions of the available templates
 
+### **shortLinks**
+Where short links (feature `shortLinks`) may redirect.
+
+```json
+{
+  "shortLinks": {
+    "allowedHosts": ["docs.example.com", "*.intrafind.io", ".local", "/(docs|wiki)\\.example\\.org/"]
+  }
+}
+```
+
+- **allowedHosts** (array) – Hosts a short link may redirect to with an absolute `http`/`https`
+  URL. Paths on this server (`/apps/chat`) are always allowed. Default: `[]` (paths on this server
+  only). The list is checked when a link is saved and again on every redirect, so removing a host
+  stops its links from redirecting. Each entry is one of:
+  - `docs.example.com` – exactly this host (case-insensitive).
+  - `*.intrafind.io` or `.intrafind.io` – any subdomain (`docs.intrafind.io`,
+    `a.b.intrafind.io`), but not `intrafind.io` itself; add the bare domain as its own entry if
+    needed. `.local` allows every `*.local` host. Same rules as `ssrf.allowedHosts`.
+  - `/…/` – a regular expression the whole hostname must match. It is anchored at both ends, so
+    `/intrafind\.io/` matches `intrafind.io` only. Hostnames are compared in lower case, and
+    internationalised names in their `xn--` form. Patterns longer than 194 characters and
+    patterns with nested quantifiers are rejected; an entry that is not a usable pattern matches
+    nothing and is logged as a warning.
+
+Short links belong to the signed-in user who creates them. Only that user and administrators can
+list, change or delete them; links saved before links had owners can be managed by administrators
+only.
+
 ### **Request Configuration**
 
 - **defaultLanguage** (string) – Fallback language code when requested language is unavailable. Default: `"en"`
@@ -533,6 +562,11 @@ Configuration for anonymous (unauthenticated) access.
 - **enabled** (boolean) – Allow anonymous access to the platform. Default: `true`
 - **defaultGroups** (array) – Groups assigned to anonymous users. Default: `["anonymous"]`
 
+Every request without a signed-in user is checked against the permissions of these groups — in
+the web app and on the API alike, including the OpenAI-compatible inference API, app and model
+details, the model test and Magic Prompt. Anonymous users never get admin or content-admin access,
+even when one of these groups grants it.
+
 ### **localAuth**
 Built-in username/password authentication.
 
@@ -540,14 +574,36 @@ Built-in username/password authentication.
 {
   "localAuth": {
     "enabled": true,
-    "showDemoAccounts": true
+    "showDemoAccounts": true,
+    "lockout": {
+      "enabled": true,
+      "maxAttempts": 5,
+      "durationMinutes": 15
+    }
   }
 }
 ```
 
 - **enabled** (boolean) – Enable local authentication. Default: `false`
 - **usersFile** (string) – Path to the users file, relative to the installation root or absolute. Default: `config/users.json` inside the contents directory (`contents/config/users.json`, or under `CONTENTS_DIR` when that is set). Leave it unset unless the file lives elsewhere.
-- **showDemoAccounts** (boolean) – Show demo accounts on login page. Default: `true`
+- **showDemoAccounts** (boolean) – Show demo accounts on login page. Default: `true`. While this is on
+  and a shipped demo account (`admin` or `user`) still has the password it ships with, every admin
+  page shows a warning that links to **Authentication** (to turn this off) and **Users** (to change
+  the passwords).
+- **lockout** (object) – Lock an account after repeated failed sign-ins.
+  - **enabled** (boolean) – Default: `true`
+  - **maxAttempts** (number) – Failed sign-ins within `durationMinutes` that lock the account.
+    Default: `5`
+  - **durationMinutes** (number) – How long the account stays locked, and the window failures are
+    counted in. Default: `15`
+
+  While an account is locked, `POST /api/auth/local/login` answers `429` with a `Retry-After` header
+  and does not check the password. A successful sign-in clears the count, and so does a new password
+  set under **Admin → Users**. Attempts still being checked count against the limit too, so sign-ins
+  sent in parallel cannot exceed it. A name without an account is counted the same way, so a lock
+  does not reveal whether an account exists. Counts are kept in memory and shared between the
+  workers of one server, so they reset on restart; separate servers (for example several pods)
+  count separately.
 
 ### **proxyAuth**
 Header-based authentication for reverse proxy setups.
@@ -559,6 +615,9 @@ Header-based authentication for reverse proxy setups.
     "allowSelfSignup": false,
     "userHeader": "X-Forwarded-User",
     "groupsHeader": "X-Forwarded-Groups",
+    "trustedProxies": ["10.0.0.5"],
+    "sharedSecretRef": "cred_proxy_secret",
+    "sharedSecretHeader": "X-Proxy-Secret",
     "jwtProviders": [
       {
         "name": "example-provider",
@@ -576,7 +635,29 @@ Header-based authentication for reverse proxy setups.
 - **allowSelfSignup** (boolean) – Allow automatic user creation. Default: `false`
 - **userHeader** (string) – Header containing user ID. Default: `"X-Forwarded-User"`
 - **groupsHeader** (string) – Header containing comma-separated groups. Default: `"X-Forwarded-Groups"`
+- **trustedProxies** (array) – Addresses or subnets the proxy connects from, in the syntax of
+  `trustProxy` (`"loopback"`, `"10.0.0.5"`, `"10.0.0.0/8"`). The address checked is the peer that
+  opened the connection. Default: `["loopback"]`, which covers a proxy on the same host or in the
+  same pod. Overridden by `PROXY_AUTH_TRUSTED_PROXIES` (comma-separated), which replaces the list —
+  include `loopback` there if you still need it.
+- **sharedSecretRef** (string) – A `secret` credential (Admin → Credentials) the proxy sends in
+  `sharedSecretHeader`. Overridden by `PROXY_AUTH_SHARED_SECRET`. If the credential is missing or
+  empty, no request is trusted until it is fixed.
+- **sharedSecretHeader** (string) – Header the proxy sends the shared secret in. Default:
+  `"X-Proxy-Secret"`. iHub removes it from every request, so it cannot be `Authorization`,
+  `Cookie`, `Host`, an `X-Forwarded-*` header, or the user, groups or a JWT provider header; a
+  save with such a name is refused.
 - **jwtProviders** (array) – JWT validation configuration for proxy auth
+
+The user, groups, `X-Forwarded-Name` and `X-Forwarded-Email` headers are used only on requests
+that come from a trusted proxy and/or carry the shared secret. When both `trustedProxies` and a
+shared secret are configured, both must match — so with the default list, a proxy on another host
+needs its address added, or an empty list (`[]`) to rely on the secret alone. When neither is
+configured, the headers are ignored and the server logs a warning. If something else on the same
+host or in the same pod forwards traffic to iHub over loopback (for example a service-mesh
+sidecar), configure the shared secret as well, so only requests that carry it are trusted. Make
+sure the proxy removes these headers from client requests before setting its own. Signed JWTs from
+`jwtProviders` are verified against their keys and do not depend on these settings.
 
 ### **oidcAuth**
 OpenID Connect provider configuration.

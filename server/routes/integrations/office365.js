@@ -15,6 +15,12 @@ import {
   sendErrorResponse
 } from '../../utils/responseHelpers.js';
 import { isValidReturnUrl } from '../../utils/oauthReturnUrl.js';
+import {
+  DEFAULT_INTEGRATION_RETURN_URL,
+  issueIntegrationOAuthState,
+  verifyIntegrationOAuthState,
+  withQueryParam
+} from '../../utils/integrationOAuthState.js';
 import { buildContentDisposition } from '../../utils/safeContentDisposition.js';
 
 const router = express.Router();
@@ -56,52 +62,31 @@ router.get('/auth', authRequired, office365AuthLimiter, async (req, res) => {
       return sendBadRequest(res, 'providerId query parameter is required');
     }
 
-    logger.debug('🔍 Office 365 Auth Debug:', {
-      component: 'Office 365',
-      hasUser: !!req.user,
-      userId: req.user?.id,
-      providerId,
-      returnUrl,
-      hasSession: !!req.session
-    });
-
-    // Check if session is available
-    if (!req.session) {
-      return sendErrorResponse(res, 500, 'Session not available');
-    }
-
-    // authRequired only rejects missing `req.user` or anonymous users;
-    // it does NOT guarantee req.user.id is truthy. Refuse to start an
-    // OAuth flow without a real user id — otherwise tokens would land
-    // under a shared sentinel key and could be read by another caller.
-    if (!req.user?.id) {
+    // authRequired lets the anonymous principal through when anonymous
+    // access is allowed, and does not guarantee req.user.id is truthy.
+    // Refuse to start an OAuth flow without a signed-in user id — otherwise
+    // tokens would land under a shared key and could be read by another caller.
+    if (!req.user?.id || req.user.id === 'anonymous') {
       return sendAuthRequired(res);
     }
 
-    // Generate state for CSRF protection
-    const state = crypto.randomBytes(32).toString('hex');
-
-    // Generate PKCE parameters
     const codeVerifier = crypto.randomBytes(32).toString('base64url');
 
     // Validate returnUrl to prevent open redirects
     const validatedReturnUrl = isValidReturnUrl(returnUrl, req)
       ? returnUrl
-      : '/settings/integrations';
+      : DEFAULT_INTEGRATION_RETURN_URL;
 
-    // Store OAuth parameters in session with provider-specific key
-    // This allows multiple Office 365 providers to have concurrent OAuth flows
-    const sessionKey = `oauth_office365_${providerId}`;
-    req.session[sessionKey] = {
-      state,
-      codeVerifier,
+    // Signed, self-contained state instead of a session: the callback may
+    // land on another cluster worker (see utils/integrationOAuthState.js).
+    const state = issueIntegrationOAuthState({
+      service: 'office365',
       providerId,
       userId: req.user.id,
       returnUrl: validatedReturnUrl,
-      timestamp: Date.now()
-    };
+      codeVerifier
+    });
 
-    // Generate authorization URL (pass request for auto-detection)
     const authUrl = Office365Service.generateAuthUrl(providerId, state, codeVerifier, req);
 
     logger.info('Initiating Office 365 OAuth', {
@@ -122,82 +107,47 @@ router.get('/auth', authRequired, office365AuthLimiter, async (req, res) => {
  * GET /api/integrations/office365/:providerId/callback
  */
 router.get('/:providerId/callback', authOptional, async (req, res) => {
+  const { providerId } = req.params;
+  const verified = verifyIntegrationOAuthState(req, { service: 'office365', providerId });
+  const { returnUrl } = verified;
   try {
-    const { code, state, error: oauthError } = req.query;
-    const { providerId } = req.params;
+    const { code, error: oauthError } = req.query;
 
-    // Check for OAuth errors
+    // Only stable codes go into the URL — never the raw IdP error text.
     if (oauthError) {
       logger.error('❌ Office 365 OAuth error:', {
         component: 'Office 365',
         error: oauthError,
         providerId
       });
-      // Redirect with a generic error code to avoid exposing raw error details in the URL
-      return res.redirect('/settings/integrations?office365_error=oauth_failed');
+      const errorCode = oauthError === 'access_denied' ? 'access_denied' : 'oauth_failed';
+      return res.redirect(withQueryParam(returnUrl, 'office365_error', errorCode));
+    }
+
+    if (!verified.ok) {
+      logger.error('❌ Invalid Office 365 OAuth state parameter', {
+        component: 'Office 365',
+        providerId,
+        reason: verified.error
+      });
+      return res.redirect(withQueryParam(returnUrl, 'office365_error', verified.error));
     }
 
     // Some IdP edge cases (consent denied without `error`, or a manual
-    // hit on the callback URL) can land here with no `code`. Surface a
-    // stable error code instead of throwing inside `exchangeCodeForTokens`
-    // and leaking the raw error into the redirect URL.
+    // hit on the callback URL) can land here with no `code`.
     if (!code) {
       logger.error('❌ Office 365 OAuth callback missing code', {
         component: 'Office 365',
         providerId
       });
-      return res.redirect('/settings/integrations?office365_error=missing_code');
-    }
-
-    // Check if session is available
-    if (!req.session) {
-      logger.error('❌ No session available for Office 365 OAuth callback', {
-        component: 'Office 365',
-        providerId
-      });
-      return res.redirect('/settings/integrations?office365_error=no_session');
-    }
-
-    // Validate state parameter
-    const sessionKey = `oauth_office365_${providerId}`;
-    const storedAuth = req.session[sessionKey];
-
-    // Extract returnUrl early for use in all redirects
-    const returnUrl = storedAuth?.returnUrl || '/settings/integrations';
-    const separator = returnUrl.includes('?') ? '&' : '?';
-
-    if (!storedAuth || storedAuth.state !== state) {
-      logger.error('❌ Invalid Office 365 OAuth state parameter', {
-        component: 'Office 365',
-        providerId
-      });
-      return res.redirect(`${returnUrl}${separator}office365_error=invalid_state`);
-    }
-
-    // Verify providerId matches
-    if (storedAuth.providerId !== providerId) {
-      logger.error('❌ Provider ID mismatch in Office 365 OAuth callback', {
-        component: 'Office 365',
-        urlProviderId: providerId,
-        sessionProviderId: storedAuth.providerId
-      });
-      return res.redirect(`${returnUrl}${separator}office365_error=provider_mismatch`);
-    }
-
-    // Check session timeout (15 minutes)
-    if (Date.now() - storedAuth.timestamp > 15 * 60 * 1000) {
-      logger.error('❌ Office 365 OAuth session expired', {
-        component: 'Office 365',
-        providerId
-      });
-      return res.redirect(`${returnUrl}${separator}office365_error=session_expired`);
+      return res.redirect(withQueryParam(returnUrl, 'office365_error', 'missing_code'));
     }
 
     // Exchange authorization code for tokens (pass request for auto-detection)
     const tokens = await Office365Service.exchangeCodeForTokens(
-      storedAuth.providerId,
+      providerId,
       code,
-      storedAuth.codeVerifier,
+      verified.codeVerifier,
       req
     );
 
@@ -213,40 +163,25 @@ router.get('/:providerId/callback', authOptional, async (req, res) => {
       );
     }
 
-    // Store encrypted tokens for user
-    await Office365Service.storeUserTokens(storedAuth.userId, tokens);
-
-    // Clear session data
-    delete req.session[sessionKey];
+    await Office365Service.storeUserTokens(verified.userId, tokens);
 
     logger.info('Office 365 OAuth completed', {
       component: 'Office 365',
-      userId: storedAuth.userId,
-      providerId: storedAuth.providerId
+      userId: verified.userId,
+      providerId
     });
 
-    // Redirect back to the original page with success
-    res.redirect(`${returnUrl}${separator}office365_connected=true`);
+    res.redirect(withQueryParam(returnUrl, 'office365_connected', 'true'));
   } catch (error) {
     logger.error('❌ Error handling Office 365 OAuth callback:', {
       component: 'Office 365',
       error: error.message,
-      providerId: req.params.providerId
+      providerId
     });
-
-    // Try to get returnUrl from session before clearing
-    let catchReturnUrl = '/settings/integrations';
-    if (req.session) {
-      const catchKey = `oauth_office365_${req.params.providerId}`;
-      catchReturnUrl = req.session[catchKey]?.returnUrl || catchReturnUrl;
-      delete req.session[catchKey];
-    }
-
-    const catchSeparator = catchReturnUrl.includes('?') ? '&' : '?';
-    // Use a stable error code rather than echoing `error.message` —
-    // some upstream errors interpolate user-influenced strings, and
-    // we don't want those landing in the redirect URL.
-    res.redirect(`${catchReturnUrl}${catchSeparator}office365_error=callback_failed`);
+    // Stable error codes only — some upstream errors interpolate
+    // user-influenced strings. invalid_client = expired/wrong client secret.
+    const errorCode = error.code === 'invalid_client' ? 'invalid_client' : 'callback_failed';
+    res.redirect(withQueryParam(returnUrl, 'office365_error', errorCode));
   }
 });
 
@@ -256,7 +191,7 @@ router.get('/:providerId/callback', authOptional, async (req, res) => {
  */
 router.get('/status', authRequired, async (req, res) => {
   try {
-    if (!req.user?.id) {
+    if (!req.user?.id || req.user.id === 'anonymous') {
       return sendAuthRequired(res);
     }
 
@@ -318,7 +253,7 @@ router.get('/status', authRequired, async (req, res) => {
  */
 router.post('/disconnect', authRequired, async (req, res) => {
   try {
-    if (!req.user?.id) {
+    if (!req.user?.id || req.user.id === 'anonymous') {
       return sendAuthRequired(res);
     }
 
@@ -356,7 +291,7 @@ router.post('/disconnect', authRequired, async (req, res) => {
  */
 router.get('/sources', authRequired, async (req, res) => {
   try {
-    if (!req.user?.id) {
+    if (!req.user?.id || req.user.id === 'anonymous') {
       return sendAuthRequired(res);
     }
 
@@ -402,7 +337,7 @@ router.get('/sources', authRequired, async (req, res) => {
  */
 router.get('/drives/:source', authRequired, async (req, res) => {
   try {
-    if (!req.user?.id) {
+    if (!req.user?.id || req.user.id === 'anonymous') {
       return sendAuthRequired(res);
     }
 
@@ -449,7 +384,7 @@ router.get('/drives/:source', authRequired, async (req, res) => {
  */
 router.get('/items', authRequired, async (req, res) => {
   try {
-    if (!req.user?.id) {
+    if (!req.user?.id || req.user.id === 'anonymous') {
       return sendAuthRequired(res);
     }
 
@@ -499,7 +434,7 @@ router.get('/items', authRequired, async (req, res) => {
  */
 router.get('/download', authRequired, async (req, res) => {
   try {
-    if (!req.user?.id) {
+    if (!req.user?.id || req.user.id === 'anonymous') {
       return sendAuthRequired(res);
     }
 

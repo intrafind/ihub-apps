@@ -254,6 +254,33 @@ test('argument repair: glued objects and unquoted fragments still reach the tool
   assert.deepEqual(seen, [{ query: 'a', maxResults: 3 }, { url: 'https://x' }, {}]);
 });
 
+test('history replays tool calls with the JSON arguments they ran with (no `""`)', async () => {
+  const { loop, requests } = makeLoop([
+    toolTurn([
+      { name: 'webSearch', args: '' },
+      { name: 'webSearch' },
+      { name: 'webContentExtractor', args: '{"url":"a"}{"b":1}' }
+    ]),
+    textTurn('done')
+  ]);
+  await loop.run({
+    model,
+    messages: baseMessages,
+    tools: [searchTool, fetchTool],
+    executeTool: okTool
+  });
+  const replayed = requests[1].request.body.messages.find(m => m.tool_calls).tool_calls;
+  assert.deepEqual(
+    replayed.map(c => c.function.arguments),
+    ['{}', '{}', '{"url":"a","b":1}'],
+    'no-argument calls replay as {}, repaired calls as repaired, defaults stay out'
+  );
+  assert.deepEqual(
+    replayed.map(c => c.id),
+    ['call_1', 'call_2', 'call_3']
+  );
+});
+
 test('hallucinated tool → error envelope for the model, seam notified, no executor call', async () => {
   const hallucinated = [];
   const { loop } = makeLoop([toolTurn([{ name: 'make_coffee', args: {} }]), textTurn('ok')], {

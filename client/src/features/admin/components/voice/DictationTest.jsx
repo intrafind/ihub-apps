@@ -1,15 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Icon from '../../../../shared/components/Icon';
+import { getLocalizedContent } from '../../../../utils/localizeContent';
 import {
   RECOGNITION_LOCALES,
-  SPEECH_SERVICES,
   createSpeechRecognizer,
+  fromDictationValue,
   getPlatformDefaultService,
   getRecognitionErrorMessage,
   getSpeechServiceLabel,
   isBrowserSpeechSupported,
-  isSpeechServiceEnabled,
   parseRecognitionResult,
+  toDictationValue,
   toRecognitionLang
 } from '../../../voice/utils/speechService';
 
@@ -26,11 +27,13 @@ const BUSY = ['starting', 'listening', 'stopping'];
  *
  * @param {object} props
  * @param {object} props.speech Saved speech config in the public client shape.
+ * @param {Array|null} props.models Enabled transcription models (null while loading).
  * @param {Function} props.t
  * @param {string} props.language UI language, preselects the recognition locale.
  */
-function DictationTest({ speech, t, language }) {
-  const [service, setService] = useState(() => getPlatformDefaultService(speech));
+function DictationTest({ speech, models, t, language }) {
+  const [choice, setChoice] = useState(() => toDictationValue(getPlatformDefaultService(speech)));
+  const { service, modelId } = fromDictationValue(choice);
   const [lang, setLang] = useState(() => toRecognitionLang(language));
   const [mode, setMode] = useState('manual');
   const [status, setStatus] = useState('idle');
@@ -83,7 +86,7 @@ function DictationTest({ speech, t, language }) {
 
     let recognition;
     try {
-      recognition = createSpeechRecognizer(service, { speech });
+      recognition = createSpeechRecognizer(service, { modelId, speech });
     } catch (err) {
       fail(err.message);
       return;
@@ -165,7 +168,11 @@ function DictationTest({ speech, t, language }) {
   };
 
   const busy = BUSY.includes(status);
-  const serviceDisabled = !isSpeechServiceEnabled(service, speech);
+  const modelMissing =
+    service === 'model' && Array.isArray(models) && !models.some(m => m.id === modelId);
+  const serviceDisabled = (service === 'azure' && !speech?.azure?.enabled) || modelMissing;
+  const modelName = id =>
+    getLocalizedContent((models || []).find(m => m.id === id)?.name, language) || id;
   const noSpeech = status === 'done' && !finalText && !interim;
 
   const statusText = {
@@ -196,19 +203,32 @@ function DictationTest({ speech, t, language }) {
           </label>
           <select
             id="voice-test-service"
-            value={service}
+            value={choice}
             disabled={busy}
-            onChange={e => setService(e.target.value)}
+            onChange={e => setChoice(e.target.value)}
             className={selectClass}
           >
-            {SPEECH_SERVICES.map(value => (
-              <option key={value} value={value}>
-                {getSpeechServiceLabel(value, t)}
-                {!isSpeechServiceEnabled(value, speech)
-                  ? ` (${t('admin.voiceInput.notEnabled', 'not enabled')})`
-                  : ''}
-              </option>
-            ))}
+            <option value="browser">{getSpeechServiceLabel('browser', t)}</option>
+            <option value="azure">
+              {getSpeechServiceLabel('azure', t)}
+              {!speech?.azure?.enabled
+                ? ` (${t('admin.voiceInput.notEnabled', 'not enabled')})`
+                : ''}
+            </option>
+            {((models || []).length > 0 || modelMissing) && (
+              <optgroup label={t('admin.voiceInput.services.models', 'Transcription models')}>
+                {(models || []).map(m => (
+                  <option key={m.id} value={toDictationValue({ service: 'model', modelId: m.id })}>
+                    {modelName(m.id)}
+                  </option>
+                ))}
+                {modelMissing && (
+                  <option value={choice}>
+                    {modelId} ({t('admin.voiceInput.notEnabled', 'not enabled')})
+                  </option>
+                )}
+              </optgroup>
+            )}
           </select>
         </div>
         <div>

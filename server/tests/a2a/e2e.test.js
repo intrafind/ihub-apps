@@ -69,7 +69,14 @@ jest.unstable_mockModule('../../storage/bootstrap.js', () => ({
 }));
 jest.unstable_mockModule('../../clusterBus.js', () => ({
   publish: jest.fn(() => false),
-  subscribe: jest.fn(() => () => {})
+  subscribe: jest.fn(() => () => {}),
+  request: jest.fn(async () => null),
+  respond: jest.fn(() => () => {}),
+  createPresenceMap: () => new Map(),
+  hasRemote: () => false,
+  isClusterBusActive: () => false,
+  respondInPrimary: () => () => {},
+  gather: async () => []
 }));
 // The outbound client's credential store: the API key profile holds "good".
 jest.unstable_mockModule('../../services/CredentialService.js', () => ({

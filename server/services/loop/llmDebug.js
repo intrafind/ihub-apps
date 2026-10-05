@@ -13,8 +13,7 @@
  */
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { getRootDir } from '../../pathUtils.js';
-import config from '../../config.js';
+import { getContentsPath } from '../../utils/contentsPath.js';
 
 export function isDumpAllEnabled() {
   return process.env.LLM_DEBUG_DUMP_ALL === '1';
@@ -38,7 +37,7 @@ function redactHeaders(headers) {
  * @returns {Promise<string>} absolute path of the written file
  */
 export async function dumpRequest(request, model, bucket, extra = {}) {
-  const dir = path.join(getRootDir(), config.CONTENTS_DIR, 'data', 'debug', `llm-${bucket}`);
+  const dir = getContentsPath('data', 'debug', `llm-${bucket}`);
   await mkdir(dir, { recursive: true });
   const ts = new Date().toISOString().replace(/[:.]/g, '-');
   const safeModelId = String(model?.id || 'unknown').replace(/[^a-zA-Z0-9_-]+/g, '_');

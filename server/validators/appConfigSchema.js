@@ -6,6 +6,7 @@ import {
   LANGUAGE_CODE_PATTERN,
   VARIABLE_NAME_PATTERN
 } from '../../shared/validationPatterns.js';
+import { zHttpUrl } from './common.js';
 
 // Localized string schema - matches client pattern for language codes
 const localizedStringSchema = z.record(
@@ -132,11 +133,13 @@ const settingsSchema = z
     speechRecognition: z
       .object({
         // 'default' follows the platform default (platform.speech.defaultService);
-        // 'browser' pins the browser Web Speech API.
+        // 'browser' pins the browser Web Speech API; 'model' streams the
+        // microphone through iHub to the transcription model `modelId`.
         service: z
-          .enum(['default', 'browser', 'azure', 'custom', 'vllm-realtime'])
+          .enum(['default', 'browser', 'azure', 'custom', 'model'])
           .optional()
           .prefault('default'),
+        modelId: z.string().optional(),
         host: z.string().url().optional()
       })
       .optional()
@@ -339,14 +342,16 @@ const sourceReferenceSchema = z.string().min(1, 'Source reference ID cannot be e
 
 // Redirect app configuration schema
 const redirectConfigSchema = z.object({
-  url: z.string().url('Redirect URL must be a valid URL'),
+  // Navigated to by the client, so only http(s) is accepted.
+  url: zHttpUrl('Redirect URL'),
   openInNewTab: z.boolean().optional().prefault(true),
   showWarning: z.boolean().optional().prefault(true)
 });
 
 // Iframe app configuration schema
 const iframeConfigSchema = z.object({
-  url: z.string().url('Iframe URL must be a valid URL'),
+  // Loaded as the iframe's src by the client, so only http(s) is accepted.
+  url: zHttpUrl('Iframe URL'),
   allowFullscreen: z.boolean().optional().prefault(true),
   sandbox: z
     .array(z.string())
@@ -473,7 +478,9 @@ const baseAppConfigSchema = z.object({
   skillSettings: z
     .object({
       autoActivate: z.boolean().optional(),
-      maxActiveSkills: z.number().min(1).max(10).optional()
+      maxActiveSkills: z.number().min(1).max(10).optional(),
+      // false keeps users' own and shared skills out of this app
+      allowPersonal: z.boolean().optional()
     })
     .optional(),
   outputSchema: z.union([z.object({}).passthrough(), z.string()]).optional(),

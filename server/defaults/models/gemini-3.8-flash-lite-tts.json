@@ -1,0 +1,20 @@
+{
+  "id": "gemini-3.8-flash-lite-tts",
+  "modelId": "gemini-3.8-flash-lite-tts",
+  "name": {
+    "en": "Gemini 3.8 Flash-Lite TTS (Read aloud)",
+    "de": "Gemini 3.8 Flash-Lite TTS (Vorlesen)"
+  },
+  "description": {
+    "en": "Google's fast, cost-efficient Gemini text-to-speech model. Reads chat messages aloud, streaming the audio as it is generated, and detects the language by itself. Uses the Google API key.",
+    "de": "Googles schnelles, kostengünstiges Gemini-Sprachausgabemodell. Liest Chat-Nachrichten vor, streamt das Audio, während es erzeugt wird, und erkennt die Sprache selbst. Verwendet den Google-API-Schlüssel."
+  },
+  "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash-lite-tts:streamGenerateContent",
+  "provider": "google",
+  "modelType": "tts",
+  "tts": {
+    "voice": "Kore"
+  },
+  "enabled": false,
+  "default": false
+}

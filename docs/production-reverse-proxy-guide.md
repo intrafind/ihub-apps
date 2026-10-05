@@ -97,6 +97,12 @@ PORT=3001 npm start
 > **Tip:** If your proxy uses a custom header instead of `X-Forwarded-Prefix`, set
 > `BASE_PATH_HEADER` to the header name (e.g., `export BASE_PATH_HEADER=x-custom-prefix`).
 
+The header is used only when the request comes from a proxy that `trustProxy` in `platform.json`
+trusts (see [rate limiting](rate-limiting.md#proxy-hops-and-the-rate-limit-key)). With a hop count
+such as the default `1`, any peer counts as trusted. To accept the header from your proxy only, list
+its address instead, for example `"trustProxy": "10.0.0.5"` or `"trustProxy": "loopback"` when the
+proxy runs on the same host. With `"trustProxy": false` the header is ignored.
+
 ## Nginx Configuration
 
 ### Production Nginx Configuration (nginx.conf)
@@ -578,20 +584,33 @@ add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsaf
 
 ### Proxy Authentication Headers
 
-If using proxy authentication, ensure your reverse proxy sets the correct headers:
+If using proxy authentication, the proxy must set the identity headers itself and replace whatever
+a client sent in them. Never copy a request header (`$http_…`) into them: the client controls it.
 
 ```nginx
 location /ihub/ {
     # ... other proxy settings ...
-    
-    # Authentication headers
-    proxy_set_header X-Forwarded-User $remote_user;
-    proxy_set_header X-Forwarded-Groups $http_x_user_groups;
-    
+
+    # Identity headers: set by the proxy, replacing anything the client sent.
+    # $remote_user comes from the proxy's own authentication (auth_basic,
+    # auth_request, …); set the groups the same way, or send an empty value.
+    proxy_set_header X-Forwarded-User   $remote_user;
+    proxy_set_header X-Forwarded-Groups "";
+    proxy_set_header X-Forwarded-Name   "";
+    proxy_set_header X-Forwarded-Email  "";
+
+    # Shared secret iHub checks (proxyAuth.sharedSecretRef / PROXY_AUTH_SHARED_SECRET)
+    proxy_set_header X-Proxy-Secret "change-me";
+
     # Strip client-provided auth headers for security
     proxy_set_header Authorization "";
 }
 ```
+
+iHub uses these headers only from a trusted proxy and/or with the shared secret. By default,
+`proxyAuth.trustedProxies` is `["loopback"]`, which covers a proxy on the same host or in the same
+pod. For a proxy elsewhere, add the address it connects from, configure a shared secret, or both —
+see [platform configuration](platform.md#proxyauth).
 
 ### JWT Authentication
 

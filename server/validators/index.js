@@ -41,9 +41,9 @@ export const feedbackSchema = {
 };
 
 export const magicPromptSchema = {
+  // The instruction is resolved on the server from the app's configuration.
   body: z.object({
     input: z.string().min(1),
-    prompt: z.string().optional(),
     modelId: z.string().optional(),
     appId: z.string().optional()
   })
@@ -88,7 +88,7 @@ export const chatPostSchema = {
     websearchEnabled: z.boolean().optional(),
     imageAspectRatio: z.string().optional(),
     imageQuality: z.string().optional(),
-    requestedSkill: z.string().optional(),
+    requestedSkills: z.array(z.string().max(64)).max(10).optional(),
     documentIds: z.array(z.string()).optional(),
     /**
      * MCP Apps: the latest `ui/update-model-context` of each open view, handed

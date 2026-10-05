@@ -9,6 +9,7 @@ import {
   uninstallMarketplaceItem,
   detachMarketplaceItem
 } from '../../../../api/adminApi';
+import MarketplaceModelReviewNotice from './MarketplaceModelReviewNotice';
 
 /**
  * Flatten a potentially nested YAML frontmatter object to dot-path key/value pairs.
@@ -74,7 +75,9 @@ function MarketplaceItemDetail({ item: initialItem, onClose, onAction }) {
   const lang = i18n.language?.split('-')[0] || 'en';
   const displayName = item?.displayName?.[lang] || item?.displayName?.en || item?.name;
   const description = item?.description?.[lang] || item?.description?.en || '';
-  const isInstalled = item?.installationStatus === 'installed';
+  // An item with a newer version available is installed too
+  const hasUpdate = item?.installationStatus === 'update-available';
+  const isInstalled = item?.installationStatus === 'installed' || hasUpdate;
   // Present on this instance, but not installed from the marketplace
   const isLocal = item?.installationStatus === 'local';
 
@@ -212,6 +215,15 @@ function MarketplaceItemDetail({ item: initialItem, onClose, onAction }) {
               {actionLoading === 'install' ? '...' : t('admin.marketplace.install', 'Install')}
             </button>
           )}
+          {hasUpdate && (
+            <button
+              onClick={() => handleAction('update')}
+              disabled={!!actionLoading}
+              className="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 disabled:opacity-50 text-sm font-medium"
+            >
+              {actionLoading === 'update' ? '...' : t('admin.marketplace.update', 'Update')}
+            </button>
+          )}
           {isInstalled && (
             <>
               {item?.type === 'skill' && (
@@ -242,6 +254,8 @@ function MarketplaceItemDetail({ item: initialItem, onClose, onAction }) {
             </>
           )}
         </div>
+
+        {item?.type === 'model' && <MarketplaceModelReviewNotice className="mx-6 mt-3" />}
 
         {/* Why a local item cannot simply be installed */}
         {isLocal && !confirmAction && (
@@ -391,7 +405,18 @@ function MarketplaceItemDetail({ item: initialItem, onClose, onAction }) {
                     <span className="text-gray-500 dark:text-gray-400">
                       {t('admin.marketplace.detail.license', 'License')}
                     </span>
-                    <span className="text-gray-900 dark:text-white">{item.license}</span>
+                    {/^https?:\/\//i.test(item.licenseUrl || '') ? (
+                      <a
+                        href={item.licenseUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-600 dark:text-blue-400 hover:underline text-right"
+                      >
+                        {item.license}
+                      </a>
+                    ) : (
+                      <span className="text-gray-900 dark:text-white">{item.license}</span>
+                    )}
                   </div>
                 )}
                 {item?.installation && (

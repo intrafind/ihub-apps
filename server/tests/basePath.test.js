@@ -12,10 +12,17 @@
 import { runWithContext } from '../utils/requestContext.js';
 import { getBasePath, basePathDetectionMiddleware } from '../utils/basePath.js';
 
+// The header is only used from a peer the app's `trust proxy` setting trusts.
+const trustingApp = { get: setting => (setting === 'trust proxy fn' ? () => true : undefined) };
+
 function runRequest(prefix) {
   return new Promise(resolve => {
     runWithContext({}, () => {
-      const req = { headers: prefix ? { 'x-forwarded-prefix': prefix } : {} };
+      const req = {
+        app: trustingApp,
+        socket: { remoteAddress: '127.0.0.1' },
+        headers: prefix ? { 'x-forwarded-prefix': prefix } : {}
+      };
       basePathDetectionMiddleware(req, {}, async () => {
         // Simulate async work happening between middleware and handler,
         // giving a concurrent request the chance to interleave.

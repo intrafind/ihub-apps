@@ -1,6 +1,10 @@
 import configCache from '../configCache.js';
-import { enhanceUserWithPermissions, isAnonymousAccessAllowed } from '../utils/authorization.js';
-import { authRequired, appAccessRequired } from '../middleware/authRequired.js';
+import {
+  canUserAccessResource,
+  enhanceUserWithPermissions,
+  isAnonymousAccessAllowed
+} from '../utils/authorization.js';
+import { authRequired } from '../middleware/authRequired.js';
 import { buildServerPath, getRelativeRequestPath } from '../utils/basePath.js';
 import { findByIdCaseInsensitive } from '../utils/resourceLookup.js';
 import { getStorage, isStorageReady } from '../storage/bootstrap.js';
@@ -334,49 +338,39 @@ export default function registerGeneralRoutes(app, { getLocalizedError }) {
     }
   });
 
-  app.get(
-    buildServerPath('/api/apps/:appId'),
-    authRequired,
-    appAccessRequired,
-    async (req, res) => {
-      try {
-        const { appId } = req.params;
-        const platform = configCache.getPlatform() || {};
-        const defaultLang = platform?.defaultLanguage || 'en';
-        const language = req.headers['accept-language']?.split(',')[0] || defaultLang;
+  // No appAccessRequired here: it answers 403, while this route gives one
+  // answer (404) for an app that does not exist and one the caller may not use.
+  app.get(buildServerPath('/api/apps/:appId'), authRequired, async (req, res) => {
+    try {
+      const { appId } = req.params;
+      const platform = configCache.getPlatform() || {};
+      const defaultLang = platform?.defaultLanguage || 'en';
+      const language = req.headers['accept-language']?.split(',')[0] || defaultLang;
 
-        // Try to get apps from cache first
-        const { data: apps } = configCache.getApps();
+      // Try to get apps from cache first
+      const { data: apps } = configCache.getApps();
 
-        if (!apps) {
-          return sendFailedOperationError(
-            res,
-            'load apps configuration',
-            new Error('apps is null')
-          );
-        }
-        const appData = findByIdCaseInsensitive(apps, appId);
-        if (!appData) {
-          const errorMessage = await getLocalizedError('appNotFound', {}, language);
-          return sendErrorResponse(res, 404, errorMessage);
-        }
-
-        // Check if user has permission to access this app
-        if (req.user && req.user.permissions) {
-          const allowedApps = req.user.permissions.apps || new Set();
-          if (!allowedApps.has('*') && !allowedApps.has(appData.id)) {
-            const errorMessage = await getLocalizedError('appNotFound', {}, language);
-            return sendErrorResponse(res, 404, errorMessage);
-          }
-        }
-
-        // Whether web search can work for this app, per model (the model
-        // picker marks the models it works with).
-        const websearchAvailability = await describeWebSearchAvailability(appData);
-        res.json(websearchAvailability ? { ...appData, websearchAvailability } : appData);
-      } catch (error) {
-        return sendInternalError(res, error, 'fetch app details');
+      if (!apps) {
+        return sendFailedOperationError(res, 'load apps configuration', new Error('apps is null'));
       }
+      const appData = findByIdCaseInsensitive(apps, appId);
+      if (!appData) {
+        const errorMessage = await getLocalizedError('appNotFound', {}, language);
+        return sendErrorResponse(res, 404, errorMessage);
+      }
+
+      // Fails closed: without a principal carrying permissions nothing is granted.
+      if (!canUserAccessResource(req.user, 'apps', appData.id)) {
+        const errorMessage = await getLocalizedError('appNotFound', {}, language);
+        return sendErrorResponse(res, 404, errorMessage);
+      }
+
+      // Whether web search can work for this app, per model (the model
+      // picker marks the models it works with).
+      const websearchAvailability = await describeWebSearchAvailability(appData);
+      res.json(websearchAvailability ? { ...appData, websearchAvailability } : appData);
+    } catch (error) {
+      return sendInternalError(res, error, 'fetch app details');
     }
-  );
+  });
 }

@@ -7,7 +7,7 @@ import { validateAndPersistExternalUser } from '../utils/userManager.js';
 import { getLdapProviderByName, lookupLdapGroupsForUser } from './ldapAuth.js';
 import logger from '../utils/logger.js';
 import authDebugService from '../utils/authDebugService.js';
-import { getAuthCookieOptions } from '../utils/cookieSettings.js';
+import { getAuthCookieOptions, getClearAuthCookieOptions } from '../utils/cookieSettings.js';
 import { clearOidcLogoutHint } from '../utils/oidcLogoutHint.js';
 
 /**
@@ -451,6 +451,31 @@ function hasMultipleAuthProviders(platform) {
 }
 
 /**
+ * Cookie that records "this browser chose NTLM". With several auth providers
+ * NTLM only negotiates once the user picked it, and this keeps that choice for
+ * later requests (e.g. to renew silently after the JWT expires) until logout.
+ * A cookie rather than a server-side session, so every cluster worker sees the
+ * same answer — and a logout handled by one worker ends it on all of them.
+ * Not a credential: `?ntlm=true` opts a request in just the same.
+ */
+export const NTLM_REQUESTED_COOKIE = 'ntlmRequested';
+const NTLM_REQUESTED_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+
+/** Remember that this browser explicitly chose NTLM. */
+export function markNtlmRequested(res, req) {
+  res.cookie(
+    NTLM_REQUESTED_COOKIE,
+    '1',
+    getAuthCookieOptions(NTLM_REQUESTED_MAX_AGE_MS, req, { path: '/' })
+  );
+}
+
+/** Forget the NTLM choice, so the next visit does not sign in automatically. */
+export function clearNtlmRequested(res, req) {
+  res.clearCookie(NTLM_REQUESTED_COOKIE, getClearAuthCookieOptions(req, { path: '/' }));
+}
+
+/**
  * NTLM authentication middleware - self-contained like other auth middlewares
  * Handles both express-ntlm initialization and user processing
  * @param {Object} req - Express request object
@@ -513,7 +538,7 @@ export function ntlmAuthMiddleware(req, res, next) {
   // When multiple auth providers are configured, NTLM should only activate when explicitly requested
   // This prevents automatic NTLM SSO from blocking access to local/LDAP login
   const multipleProviders = hasMultipleAuthProviders(platform);
-  const ntlmRequested = req.query.ntlm === 'true' || req.session?.ntlmRequested === true;
+  const ntlmRequested = req.query.ntlm === 'true' || req.cookies?.[NTLM_REQUESTED_COOKIE] === '1';
 
   // Check if this is the NTLM login endpoint - use exact path matching for security
   const isNtlmLoginEndpoint =

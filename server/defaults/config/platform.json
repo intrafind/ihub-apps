@@ -1,18 +1,15 @@
 {
   "speech": {
     "defaultService": "browser",
+    "dictation": {
+      "modelId": ""
+    },
     "transcription": {
       "defaultModelId": ""
     },
     "tts": {
       "enabled": false,
       "defaultModelId": ""
-    },
-    "realtime": {
-      "enabled": false,
-      "url": "ws://localhost:8080/v1/realtime",
-      "model": "mistralai/Voxtral-Mini-4B-Realtime-2602",
-      "apiKey": ""
     },
     "azure": {
       "enabled": false,
@@ -206,11 +203,18 @@
     "defaultGroups": ["anonymous"]
   },
   "proxyAuth": {
-    "enabled": false
+    "enabled": false,
+    "trustedProxies": ["loopback"],
+    "sharedSecretHeader": "X-Proxy-Secret"
   },
   "localAuth": {
     "enabled": true,
-    "showDemoAccounts": true
+    "showDemoAccounts": true,
+    "lockout": {
+      "enabled": true,
+      "maxAttempts": 5,
+      "durationMinutes": 15
+    }
   },
   "swagger": {
     "enabled": true,
@@ -437,6 +441,19 @@
       "restrictToGroups": []
     }
   },
+  "userSkills": {
+    "enabled": true,
+    "maxSkillsPerUser": 50,
+    "maxVersions": 50,
+    "maxSkillSizeKB": 256,
+    "maxFilesPerSkill": 20,
+    "sharing": {
+      "allowUsers": true,
+      "allowGroups": true,
+      "allowEveryone": true,
+      "restrictToGroups": []
+    }
+  },
   "artifacts": {
     "enabled": true,
     "maxBytes": 10485760,
@@ -445,6 +462,9 @@
   "workflowState": {
     "retentionDays": 30,
     "cleanupEnabled": true
+  },
+  "shortLinks": {
+    "allowedHosts": []
   },
   "scheduledTasks": {
     "enabled": true,

@@ -3,9 +3,9 @@ import path from 'path';
 import fs from 'fs';
 import bcrypt from 'bcryptjs';
 import { atomicWriteJSON } from './atomicWrite.js';
+import { withFileLock } from './fileLock.js';
 import logger from './logger.js';
-import { getRootDir } from '../pathUtils.js';
-import config from '../config.js';
+import { getContentsPath } from './contentsPath.js';
 
 /**
  * File-backed refresh token store for OAuth 2.0 token rotation.
@@ -26,12 +26,22 @@ import config from '../config.js';
  * @module refreshTokenStore
  */
 
-const STORE_PATH = path.join(
-  getRootDir(),
-  config.CONTENTS_DIR,
-  'data',
-  'oauth-refresh-tokens.json'
-);
+const STORE_PATH = getContentsPath('data', 'oauth-refresh-tokens.json');
+
+/**
+ * Every change is a read-modify-write of the whole file, and cluster workers
+ * make them concurrently: without a lock two rotations overwrote each other —
+ * a freshly issued token vanished (the client's next refresh failed with
+ * `invalid_grant`) or a consumed one came back — and two workers could both
+ * redeem the same token. Changes run under this lock file, on a fresh read;
+ * bcrypt work stays outside it.
+ */
+const LOCK_PATH = `${STORE_PATH}.lock`;
+
+async function withStoreLock(fn) {
+  await fs.promises.mkdir(path.dirname(STORE_PATH), { recursive: true });
+  return withFileLock(LOCK_PATH, fn, { component: 'RefreshTokenStore' });
+}
 
 /** Default refresh token lifetime in days. */
 const TOKEN_TTL_DAYS = 30;
@@ -125,28 +135,30 @@ export function generateRefreshToken() {
  * @returns {Promise<void>}
  */
 export async function storeRefreshToken(token, data, ttlDays = TOKEN_TTL_DAYS) {
-  const store = loadStore();
   const tokenHash = tokenIndexKey(token);
   const bcryptHash = await bcrypt.hash(token, 10);
   const expiresAt = new Date(Date.now() + ttlDays * 24 * 60 * 60 * 1000).toISOString();
 
-  store.tokens[tokenHash] = {
-    bcryptHash,
-    expiresAt,
-    ...data,
-    createdAt: new Date().toISOString()
-  };
+  await withStoreLock(async () => {
+    const store = loadStore();
+    store.tokens[tokenHash] = {
+      bcryptHash,
+      expiresAt,
+      ...data,
+      createdAt: new Date().toISOString()
+    };
 
-  // Lazy cleanup: remove expired entries while the store is open to prevent
-  // unbounded file growth on high-volume deployments.
-  const now = Date.now();
-  for (const [key, entry] of Object.entries(store.tokens)) {
-    if (new Date(entry.expiresAt).getTime() < now) {
-      delete store.tokens[key];
+    // Lazy cleanup: remove expired entries while the store is open to prevent
+    // unbounded file growth on high-volume deployments.
+    const now = Date.now();
+    for (const [key, entry] of Object.entries(store.tokens)) {
+      if (new Date(entry.expiresAt).getTime() < now) {
+        delete store.tokens[key];
+      }
     }
-  }
 
-  await saveStore(store);
+    await saveStore(store);
+  });
   logger.info('Refresh token stored', {
     component: 'RefreshTokenStore',
     clientId: data.clientId,
@@ -183,8 +195,12 @@ export async function consumeRefreshToken(token) {
   // Check expiry before bcrypt to short-circuit the (expensive) hash comparison.
   if (new Date(entry.expiresAt).getTime() < Date.now()) {
     logger.warn('Token expired', { component: 'RefreshTokenStore' });
-    delete store.tokens[tokenHash];
-    await saveStore(store);
+    await withStoreLock(async () => {
+      const current = loadStore();
+      if (!current.tokens[tokenHash]) return;
+      delete current.tokens[tokenHash];
+      await saveStore(current);
+    });
     return null;
   }
 
@@ -195,9 +211,20 @@ export async function consumeRefreshToken(token) {
     return null;
   }
 
-  // Delete the entry (single-use rotation).
-  delete store.tokens[tokenHash];
-  await saveStore(store);
+  // Delete the entry (single-use rotation). Under the lock and only if it is
+  // still the entry just verified: of two concurrent redemptions, on this
+  // worker or another, exactly one finds it.
+  const consumed = await withStoreLock(async () => {
+    const current = loadStore();
+    if (current.tokens[tokenHash]?.bcryptHash !== entry.bcryptHash) return false;
+    delete current.tokens[tokenHash];
+    await saveStore(current);
+    return true;
+  });
+  if (!consumed) {
+    logger.warn('Token already redeemed', { component: 'RefreshTokenStore' });
+    return null;
+  }
 
   // Strip the internal bcrypt hash before returning to callers.
   const { bcryptHash: _, ...data } = entry;
@@ -215,17 +242,20 @@ export async function consumeRefreshToken(token) {
  *   the token was not present in the store.
  */
 export async function revokeRefreshToken(token) {
-  const store = loadStore();
   const tokenHash = tokenIndexKey(token);
-
-  if (!store.tokens[tokenHash]) {
+  if (!loadStore().tokens[tokenHash]) {
     return false;
   }
 
-  delete store.tokens[tokenHash];
-  await saveStore(store);
-  logger.info('Token revoked', { component: 'RefreshTokenStore' });
-  return true;
+  const revoked = await withStoreLock(async () => {
+    const store = loadStore();
+    if (!store.tokens[tokenHash]) return false;
+    delete store.tokens[tokenHash];
+    await saveStore(store);
+    return true;
+  });
+  if (revoked) logger.info('Token revoked', { component: 'RefreshTokenStore' });
+  return revoked;
 }
 
 /**
@@ -248,17 +278,24 @@ export async function revokeRefreshToken(token) {
 export async function revokeRefreshTokensFor(clientId, userId) {
   if (!clientId || !userId) return 0;
 
-  const store = loadStore();
-  const doomed = Object.entries(store.tokens || {})
-    .filter(([, entry]) => entry?.clientId === clientId && entry?.userId === userId)
-    .map(([key]) => key);
+  const doomedIn = store =>
+    Object.entries(store.tokens || {})
+      .filter(([, entry]) => entry?.clientId === clientId && entry?.userId === userId)
+      .map(([key]) => key);
 
+  if (doomedIn(loadStore()).length === 0) return 0;
+
+  const doomed = await withStoreLock(async () => {
+    const store = loadStore();
+    const keys = doomedIn(store);
+    if (keys.length === 0) return keys;
+    for (const key of keys) {
+      delete store.tokens[key];
+    }
+    await saveStore(store);
+    return keys;
+  });
   if (doomed.length === 0) return 0;
-
-  for (const key of doomed) {
-    delete store.tokens[key];
-  }
-  await saveStore(store);
 
   logger.info('Refresh tokens revoked for connection', {
     component: 'RefreshTokenStore',

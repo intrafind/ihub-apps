@@ -51,7 +51,7 @@ function AdminShortLinks() {
       setLoading(true);
       const params = new URLSearchParams();
       if (appIdFilter) params.set('appId', appIdFilter);
-      if (userFilter) params.set('userId', userFilter);
+      if (userFilter) params.set('ownerId', userFilter);
       const response = await makeAdminApiCall(`/shortlinks?${params.toString()}`);
       setLinks(response.data);
     } catch (e) {
@@ -114,11 +114,11 @@ function AdminShortLinks() {
       )
     },
     {
-      key: 'userId',
+      key: 'ownerId',
       header: t('admin.shortlinks.userId', 'User ID'),
       sortable: true,
       hideBelow: 'lg',
-      render: l => l.userId || '-'
+      render: l => l.ownerId || '-'
     },
     {
       key: 'usage',

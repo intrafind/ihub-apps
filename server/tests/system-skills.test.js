@@ -151,7 +151,10 @@ describe('tools of system skills', () => {
 
   it('are not offered when the user may not use the skill or the feature is off', async () => {
     const app = { id: 'writer', skills: ['pdf'] };
-    assert.deepEqual(await getToolsForApp(app, 'en', { user: userWith('notes') }), []);
+    // The activation tools follow the app's skill list; the skill's own tools
+    // need the user to be allowed the skill.
+    const ids = (await getToolsForApp(app, 'en', { user: userWith('notes') })).map(t => t.id);
+    assert.ok(!ids.includes('create_pdf') && !ids.includes('preview_pdf'), ids.join(', '));
     configCache.getFeatures = () => ({ skills: false });
     try {
       assert.deepEqual(await getToolsForApp(app, 'en', { user: userWith('*') }), []);

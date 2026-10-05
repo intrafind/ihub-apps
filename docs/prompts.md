@@ -169,6 +169,8 @@ Write a {{tone}} email to {{recipient}} about {{topic}}.
 
 When a user picks this prompt (from the library, from `/` in the chat, or with **Use in chat** in the details), a dialog asks for **tone**, **recipient**, and **topic**, checks required fields, and shows a live preview of the final text. The final text is **inserted into the chat input, not sent**, so the user can still edit it. **Copy** uses the same dialog and copies the final text instead.
 
+![The variables dialog of a prompt with a live preview](assets/screenshots/prompt-variables.png)
+
 Placeholders fall into three groups:
 
 | Placeholder | What happens |
@@ -186,6 +188,8 @@ What the user types into a field goes into the text as typed; one field's value 
 > **Upgrading:** Prompts used `[content]` before. Migration `V136` rewrites every `[content]` in `contents/prompts/*.json` (and in a legacy `config/prompts.json`) to `{{content}}`. `[content]` is no longer recognized.
 
 ## User Prompts
+
+![The prompt library with global prompts, own prompts and a prompt shared by a colleague](assets/screenshots/prompt-library.png)
 
 Any signed-in user can create prompts on `/prompts` (**New prompt**) or from a chat: hovering a message you sent shows **Save as prompt**, which opens the editor with that text.
 

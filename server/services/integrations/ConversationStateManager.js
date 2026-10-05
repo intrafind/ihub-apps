@@ -111,6 +111,8 @@ export class ConversationStateManager {
     this._writeDebounceMs = writeDebounceMs;
     /** Chats whose cached entry has not reached the store yet. @type {Set<string>} */
     this._dirty = new Set();
+    /** Chats whose write is in flight. @type {Set<string>} */
+    this._writing = new Set();
     this._writeTimer = null;
     /** Cursor carried between expiry sweeps so each tick continues the scan. */
     this._sweepCursor = null;
@@ -197,16 +199,30 @@ export class ConversationStateManager {
    */
   async loadState(chatId, { ownerId = null } = {}) {
     const cached = this.getState(chatId);
-    if (cached) return this._ownedOrNull(cached, ownerId, chatId);
+    // A change made here and not written yet is the newest there is.
+    if (cached && this._hasPendingWrite(chatId)) return this._ownedOrNull(cached, ownerId, chatId);
     if (!chatId) return null;
 
     const documents = this._store();
-    if (!documents) return null;
+    if (!documents) return cached ? this._ownedOrNull(cached, ownerId, chatId) : null;
 
+    // Otherwise read the store even with a cached entry: the previous turn may
+    // have run on another cluster worker, and threading onto this worker's
+    // older parent id would fork the remote conversation.
     try {
       const doc = await documents.get(INTEGRATION_CONVERSATIONS_NAMESPACE, chatId);
       const data = doc?.data;
-      if (!data || typeof data !== 'object') return null;
+      // Nothing stored (a write that failed here, say): keep what this
+      // worker has, as before.
+      if (!data || typeof data !== 'object') {
+        return cached ? this._ownedOrNull(cached, ownerId, chatId) : null;
+      }
+      const storedIsOlder =
+        cached && (Number(data.updatedAt) || 0) < (Number(cached.updatedAt) || 0);
+      if (cached && (this._hasPendingWrite(chatId) || storedIsOlder)) {
+        // Changed here while the read was in flight, or the store lags.
+        return this._ownedOrNull(cached, ownerId, chatId);
+      }
 
       // The document's own `createdAt` is carried across overwrites by the
       // store, so it dates the conversation even if a caller ever omits the
@@ -230,7 +246,7 @@ export class ConversationStateManager {
         chatId,
         error: error.message
       });
-      return null;
+      return cached ? this._ownedOrNull(cached, ownerId, chatId) : null;
     }
   }
 
@@ -327,6 +343,11 @@ export class ConversationStateManager {
    * @param {string} chatId
    * @returns {void}
    */
+  /** Whether this worker holds a change to the chat not yet in the store. */
+  _hasPendingWrite(chatId) {
+    return this._dirty.has(chatId) || this._writing.has(chatId);
+  }
+
   _markDirty(chatId) {
     if (!chatId) return;
     this._dirty.add(chatId);
@@ -358,6 +379,7 @@ export class ConversationStateManager {
 
     const pending = [...this._dirty];
     this._dirty.clear();
+    for (const chatId of pending) this._writing.add(chatId);
 
     for (const chatId of pending) {
       const entry = this.states.get(chatId);
@@ -380,6 +402,8 @@ export class ConversationStateManager {
           chatId,
           error: error.message
         });
+      } finally {
+        this._writing.delete(chatId);
       }
     }
   }

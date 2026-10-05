@@ -226,7 +226,14 @@ export function loadGroupsConfiguration() {
 
   try {
     const contentsDir = process.env.CONTENTS_DIR || 'contents';
-    const configPath = path.join(__dirname, '../..', contentsDir, 'config/groups.json');
+    // The same root as pathUtils.getRootDir(), spelled out for the same reason
+    // as CONTENTS_DIR above: that module imports server/config.js.
+    const isPackaged = process.pkg !== undefined || process.env.APP_ROOT_DIR !== undefined;
+    const rootDir = isPackaged
+      ? process.env.APP_ROOT_DIR || path.dirname(process.execPath)
+      : path.resolve(__dirname, '../..');
+    // resolve, not join: CONTENTS_DIR may be absolute (see utils/contentsPath.js)
+    const configPath = path.resolve(rootDir, contentsDir, 'config/groups.json');
     const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
 
     // Resolve group inheritance
@@ -619,6 +626,9 @@ export function getDefaultAnonymousGroups(platform) {
   return ['anonymous'];
 }
 
+/** The id of the principal built for requests without a signed-in user. */
+export const ANONYMOUS_PRINCIPAL_ID = 'anonymous';
+
 /**
  * Enhance user object with permissions
  * @param {Object} user - User object from request
@@ -635,10 +645,11 @@ export function enhanceUserWithPermissions(user, authConfig, platform) {
       defaultGroups
     });
     user = {
-      id: 'anonymous',
+      id: ANONYMOUS_PRINCIPAL_ID,
       name: 'Anonymous',
       email: null,
-      groups: defaultGroups
+      // A copy, so nothing downstream can change the platform config's array.
+      groups: [...defaultGroups]
     };
   }
 
@@ -649,7 +660,7 @@ export function enhanceUserWithPermissions(user, authConfig, platform) {
       component: 'Authorization',
       defaultGroups
     });
-    user.groups = defaultGroups;
+    user.groups = [...defaultGroups];
   }
 
   // Handle external groups mapping and merging with internal groups
@@ -721,6 +732,15 @@ export function enhanceUserWithPermissions(user, authConfig, platform) {
     user.isOAuthClient || isOAuthDelegated || user.isAgent === true
       ? false
       : hasAdminAccess(user.groups) || user.permissions.adminAccess;
+
+  // The anonymous principal is never an administrator, whatever groups
+  // `anonymousAuth.defaultGroups` lists: adminAuth and contentAdminAuth already
+  // refuse it, and checks that read these flags directly must agree.
+  if (user.id === ANONYMOUS_PRINCIPAL_ID) {
+    user.isAdmin = false;
+    user.permissions.adminAccess = false;
+    user.permissions.contentAdmin = false;
+  }
 
   logger.debug('User enhancement complete', {
     component: 'Authorization',

@@ -4,6 +4,13 @@ import configCache from '../configCache.js';
 import { createSourceManager } from '../sources/index.js';
 import SourceResolutionService from './SourceResolutionService.js';
 import { isFeatureEnabled } from '../featureRegistry.js';
+import {
+  buildAvailableSkillsBlock,
+  lastUserText,
+  listSkillsForPrompt,
+  loadUsableSkill,
+  resolveSkillsForTurn
+} from './skillAccess.js';
 import logger from '../utils/logger.js';
 
 /**
@@ -249,6 +256,7 @@ class PromptService {
    * @param {Object} user - User object
    * @param {string} chatId - Chat identifier
    * @param {string} modelName - Model name
+   * @param {string[]} [requestedSkills] - Skills to pre-activate (slash command)
    * @returns {Array} Processed messages array
    */
   async processMessageTemplates(
@@ -261,7 +269,7 @@ class PromptService {
     user = null,
     chatId = null,
     modelName = null,
-    requestedSkill = null
+    requestedSkills = null
   ) {
     const defaultLang = configCache.getPlatform()?.defaultLanguage || 'en';
     const lang = language || defaultLang;
@@ -467,72 +475,55 @@ class PromptService {
         throw new Error(`Failed to process sources: ${error.message}`);
       }
 
-      // Inject available skills metadata for progressive disclosure
-      if (
-        isFeatureEnabled('skills', configCache.getFeatures()) &&
-        app.skills &&
-        Array.isArray(app.skills) &&
-        app.skills.length > 0
-      ) {
+      // Skills: list the usable skills (name + description) so the model can
+      // activate one, and pre-load the ones the user invoked with `/name` in
+      // the message (or the request names in `requestedSkills`). Both only ever hold skills this app and this user may use:
+      // the app's assigned, granted global skills and the user's own and
+      // shared user skills (unless the app opts out of those).
+      if (isFeatureEnabled('skills', configCache.getFeatures())) {
         try {
-          const platformConfig = configCache.getPlatform() || {};
-          const appSkills = await configCache.getSkillsForApp(app, user, platformConfig);
-
-          if (appSkills.length > 0) {
-            const skillEntries = appSkills
-              .map(
-                skill =>
-                  `  <skill>\n    <name>${skill.name}</name>\n    <description>${skill.description}</description>\n  </skill>`
-              )
-              .join('\n');
-            const skillsBlock = `\n\n<available_skills>\n${skillEntries}\n</available_skills>`;
-            systemPrompt += skillsBlock;
-
+          const listed = await listSkillsForPrompt({ app, user });
+          if (listed.length > 0) {
+            systemPrompt += `\n\n${buildAvailableSkillsBlock(listed)}`;
             logger.info('Injected skills into system prompt for app', {
               component: 'PromptService',
-              skillCount: appSkills.length,
+              skillCount: listed.length,
               appId: app.id
+            });
+          }
+
+          // Skills the request names, then the ones the user's message
+          // invokes with `/name` — the same in chat, scheduled tasks and API.
+          const activeSkills = await resolveSkillsForTurn({
+            requested: requestedSkills,
+            text: lastUserText(messages),
+            app,
+            user
+          });
+          const blocks = [];
+          for (const entry of activeSkills) {
+            const skill = await loadUsableSkill(entry.name, { skillIds: app.skills, app, user });
+            if (!skill) continue;
+            let block = `<active_skill name="${skill.name}">\n${skill.body}\n</active_skill>`;
+            if (skill.resources.length > 0) {
+              block += `\nAvailable skill resources: ${skill.resources.join(', ')}`;
+            }
+            blocks.push(block);
+          }
+          if (blocks.length > 1) {
+            systemPrompt +=
+              '\n\nSeveral skills are active. Follow all of them; where they conflict, the skill listed first decides, unless a skill states its own precedence.';
+          }
+          if (blocks.length > 0) {
+            systemPrompt += `\n\n${blocks.join('\n\n')}`;
+            logger.info('Pre-activated skills for this turn', {
+              component: 'PromptService',
+              skills: activeSkills.map(skill => skill.name)
             });
           }
         } catch (error) {
           logger.error('Error loading skills for system prompt', {
             component: 'PromptService',
-            error
-          });
-        }
-      }
-
-      // Pre-activate a specific skill when requested via slash command
-      if (requestedSkill && isFeatureEnabled('skills', configCache.getFeatures())) {
-        try {
-          const { getSkillContent } = await import('./skillLoader.js');
-          // Only a skill the app offers this user can be pre-activated.
-          const offered = await configCache.getSkillsForApp(
-            app,
-            user,
-            configCache.getPlatform() || {}
-          );
-          const content = offered.some(skill => skill.name === requestedSkill)
-            ? await getSkillContent(requestedSkill)
-            : null;
-          if (content) {
-            const skillBlock = `\n\n<active_skill name="${requestedSkill}">\n${content.body}\n</active_skill>`;
-            systemPrompt += skillBlock;
-
-            const allResources = [...content.references, ...content.scripts, ...content.assets];
-            if (allResources.length > 0) {
-              systemPrompt += `\nAvailable skill resources: ${allResources.join(', ')}`;
-            }
-
-            logger.info('Pre-activated skill via slash command', {
-              component: 'PromptService',
-              requestedSkill
-            });
-          }
-        } catch (error) {
-          logger.error('Error pre-activating skill', {
-            component: 'PromptService',
-            requestedSkill,
             error
           });
         }

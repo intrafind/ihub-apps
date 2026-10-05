@@ -3,7 +3,6 @@ import configCache from '../../configCache.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { reconfigureOidcProviders } from '../../middleware/oidcAuth.js';
 import tokenStorageService from '../../services/TokenStorageService.js';
-import { testRealtimeConnection } from '../../websocket/realtimeTranscription.js';
 import { issueAzureSpeechToken } from '../../services/azureSpeechToken.js';
 import { buildServerPath } from '../../utils/basePath.js';
 import logger from '../../utils/logger.js';
@@ -11,6 +10,7 @@ import { sendInternalError, sendBadRequest } from '../../utils/responseHelpers.j
 import { isValidLanguageCode } from '../../utils/pathSecurity.js';
 import { logAudit } from '../../services/AuditLogService.js';
 import { saveSnapshot } from '../../services/ChangeHistoryService.js';
+import { sharedSecretHeaderProblem } from '../../utils/proxyAuthTrust.js';
 
 /** The platform configuration, as a path relative to `contents/`. */
 const PLATFORM_FILE = 'config/platform.json';
@@ -230,17 +230,6 @@ export default function registerAdminConfigRoutes(app) {
         };
       }
 
-      // Sanitize the realtime speech API key (server-side secret).
-      if (sanitizedConfig.speech?.realtime?.apiKey) {
-        sanitizedConfig.speech = {
-          ...sanitizedConfig.speech,
-          realtime: {
-            ...sanitizedConfig.speech.realtime,
-            apiKey: sanitizeSecret(sanitizedConfig.speech.realtime.apiKey)
-          }
-        };
-      }
-
       // Sanitize the Azure Speech subscription key (server-side secret).
       if (sanitizedConfig.speech?.azure?.subscriptionKey) {
         sanitizedConfig.speech = {
@@ -291,6 +280,14 @@ export default function registerAdminConfigRoutes(app) {
         !isValidLanguageCode(newConfig.defaultLanguage)
       ) {
         return sendBadRequest(res, 'defaultLanguage must be a valid language code, e.g. "en"');
+      }
+
+      // The shared secret header is removed from every request, so it must not
+      // be one that sign-in or request handling reads.
+      const secretHeaderProblem =
+        newConfig.proxyAuth && sharedSecretHeaderProblem(newConfig.proxyAuth);
+      if (secretHeaderProblem) {
+        return sendBadRequest(res, `proxyAuth.sharedSecretHeader ${secretHeaderProblem}`);
       }
 
       // Load existing config to preserve other fields and track changes.
@@ -371,19 +368,8 @@ export default function registerAdminConfigRoutes(app) {
       // plain config values — they pass through the merge above unchanged and
       // require no encrypt/restore handling here.
 
-      // Realtime speech API key: restore if the client sent the redacted
+      // Azure Speech subscription key: restore if the client sent the redacted
       // placeholder, otherwise encrypt the newly provided secret at rest.
-      if (newConfig.speech?.realtime && Object.hasOwn(newConfig.speech.realtime, 'apiKey')) {
-        if (!mergedConfig.speech) mergedConfig.speech = {};
-        if (!mergedConfig.speech.realtime) mergedConfig.speech.realtime = {};
-        const restored = restoreSecretIfRedacted(
-          newConfig.speech.realtime.apiKey,
-          existingConfig.speech?.realtime?.apiKey
-        );
-        mergedConfig.speech.realtime.apiKey = encryptSecretIfNeeded(restored);
-      }
-
-      // Azure Speech subscription key: same restore-or-encrypt handling.
       if (newConfig.speech?.azure && Object.hasOwn(newConfig.speech.azure, 'subscriptionKey')) {
         if (!mergedConfig.speech) mergedConfig.speech = {};
         if (!mergedConfig.speech.azure) mergedConfig.speech.azure = {};
@@ -499,38 +485,6 @@ export default function registerAdminConfigRoutes(app) {
       });
     } catch (error) {
       return sendInternalError(res, error, 'update platform configuration');
-    }
-  });
-
-  /**
-   * Test connectivity to the vLLM realtime speech endpoint.
-   * Accepts optional { url, model, apiKey } to test unsaved form values. When
-   * the apiKey is omitted, blank, or the redacted placeholder, the saved
-   * (decrypted) key from the platform cache is used so the secret is never sent
-   * to the browser.
-   */
-  app.post(buildServerPath('/api/admin/voice/realtime/test'), adminAuth, async (req, res) => {
-    try {
-      const body = req.body || {};
-      const saved = (configCache.getPlatform() || {}).speech?.realtime || {};
-
-      const url = (body.url ?? saved.url ?? '').trim();
-      const model = body.model ?? saved.model ?? '';
-
-      // Resolve the API key without leaking the stored secret.
-      let apiKey = body.apiKey;
-      if (!apiKey || apiKey === '***REDACTED***' || isEnvVarPlaceholder(apiKey)) {
-        apiKey = saved.apiKey || ''; // already decrypted by configCache
-      }
-
-      if (!url) {
-        return res.json({ ok: false, message: 'No realtime URL configured' });
-      }
-
-      const result = await testRealtimeConnection({ url, model, apiKey });
-      return res.json(result);
-    } catch (error) {
-      return sendInternalError(res, error, 'test realtime speech connection');
     }
   });
 

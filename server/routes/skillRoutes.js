@@ -6,6 +6,7 @@ import { getSkillContent, getSkillResource } from '../services/skillLoader.js';
 import { validateIdForPath } from '../utils/pathSecurity.js';
 import { requireFeature } from '../featureRegistry.js';
 import { sendInternalError, sendNotFound, sendBadRequest } from '../utils/responseHelpers.js';
+import { getUsablePersonalSkills } from '../services/skillAccess.js';
 
 export default function registerSkillRoutes(app) {
   /**
@@ -30,18 +31,35 @@ export default function registerSkillRoutes(app) {
 
         const { data: skills, etag } = await configCache.getSkillsForUser(req.user, platformConfig);
 
-        if (etag) {
-          res.setHeader('ETag', etag);
-        }
-
-        // Return only safe metadata (no paths)
+        // Return only safe metadata (no paths). Global skills go by name.
         const safeSkills = skills.map(({ name, displayName, description, metadata, isSystem }) => ({
+          id: name,
           name,
           displayName,
           description,
           metadata,
+          scope: 'global',
           isSystem: isSystem === true
         }));
+
+        // The caller's own and shared user skills, for the `/` picker. They
+        // change with every save, so the list is not cached when it has any.
+        const personal = await getUsablePersonalSkills({ user: req.user });
+        if (personal.length > 0) {
+          res.setHeader('Cache-Control', 'private, no-store');
+          for (const skill of personal) {
+            safeSkills.push({
+              id: skill.id,
+              name: skill.name,
+              displayName: skill.name,
+              description: skill.description || '',
+              scope: String(skill.ownerId) === String(req.user.id) ? 'mine' : 'shared',
+              owner: { name: skill.ownerName || '' }
+            });
+          }
+        } else if (etag) {
+          res.setHeader('ETag', etag);
+        }
 
         res.json(safeSkills);
       } catch (error) {

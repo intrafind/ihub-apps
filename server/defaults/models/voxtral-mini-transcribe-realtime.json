@@ -1,0 +1,17 @@
+{
+  "id": "voxtral-mini-transcribe-realtime",
+  "modelId": "voxtral-mini-transcribe-realtime-2602",
+  "name": {
+    "en": "Voxtral Mini Transcribe Realtime (Mistral)",
+    "de": "Voxtral Mini Transcribe Realtime (Mistral)"
+  },
+  "description": {
+    "en": "Mistral's hosted Voxtral realtime speech-to-text. Streams the transcript while the audio is still arriving and detects the language by itself. Uses the Mistral API key and sends the audio to Mistral; Voxtral Mini (Transcription) is the self-hosted alternative on vLLM.",
+    "de": "Mistrals gehostete Voxtral-Echtzeit-Spracherkennung. Liefert das Transkript, während das Audio noch eintrifft, und erkennt die Sprache selbst. Verwendet den Mistral-API-Schlüssel und sendet das Audio an Mistral; Voxtral Mini (Transkription) ist die selbst gehostete Alternative auf vLLM."
+  },
+  "url": "wss://api.mistral.ai/v1/audio/transcriptions/realtime",
+  "provider": "mistral",
+  "modelType": "transcription",
+  "enabled": false,
+  "default": false
+}

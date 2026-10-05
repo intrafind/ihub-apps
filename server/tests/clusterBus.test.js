@@ -166,9 +166,13 @@ async function runPrimary() {
     check('a third worker sees a shared key held elsewhere', () =>
       assert.strictEqual(shared[2].hasRemote, true)
     );
-    check('a holder does not mirror itself as remote', () =>
-      assert.strictEqual(shared[0].hasRemote, false)
-    );
+    check('a holder sees a shared key another worker also holds', () => {
+      // Worker 0 announced first, so it got no sync of its own; it has to be
+      // told that worker 1 joined it, or a run watched on both is never
+      // relayed out of worker 0.
+      assert.strictEqual(shared[0].hasRemote, true);
+      assert.strictEqual(shared[1].hasRemote, true);
+    });
 
     await ask(workers[1], { step: 'unshare', key: 'chat-shared' });
     await settle();
@@ -184,6 +188,10 @@ async function runPrimary() {
       assert.strictEqual(shared[2].held, true, 'worker 2 never held it and must still see it');
       assert.strictEqual(shared[1].local, false, 'worker 1 really did let go locally');
       assert.strictEqual(shared[2].local, false);
+    });
+    check('the last remaining holder no longer sees it held elsewhere', () => {
+      assert.strictEqual(shared[0].hasRemote, false, 'only worker 0 holds it now');
+      assert.strictEqual(shared[1].hasRemote, true, 'worker 0 still holds it');
     });
 
     await ask(workers[0], { step: 'unshare', key: 'chat-shared' });

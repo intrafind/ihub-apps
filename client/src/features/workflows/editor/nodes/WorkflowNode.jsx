@@ -48,8 +48,6 @@ function nodeSummary(type, cfg) {
       return cfg.toolId || cfg.tool || '';
     case 'http':
       return cfg.url ? `${cfg.method || 'GET'} ${cfg.url}` : '';
-    case 'code':
-      return (cfg.code || '').split('\n')[0];
     case 'human':
       return localizedText(cfg.message);
     case 'progress':

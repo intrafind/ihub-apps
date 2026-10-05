@@ -63,8 +63,10 @@ const catalogItemSchema = z.object({
   source: catalogSourceSchema,
   /** Icon identifier (e.g. emoji, icon name, or URL) */
   icon: z.string().optional(),
-  /** SPDX license identifier (e.g. "MIT", "Apache-2.0") */
+  /** SPDX license identifier (e.g. "MIT", "Apache-2.0") or the name of a custom license */
   license: z.string().optional(),
+  /** Link to the full license text; the admin marketplace shows `license` as a link to it */
+  licenseUrl: z.string().url().optional(),
   /** Minimum iHub server version required to use this item */
   minVersion: z.string().optional()
 });

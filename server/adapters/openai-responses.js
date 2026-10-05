@@ -3,7 +3,7 @@
  * Uses the new /v1/responses endpoint instead of /v1/chat/completions
  * Reference: https://platform.openai.com/docs/api-reference/responses
  */
-import { convertToolsFromGeneric } from './toolCalling/index.js';
+import { convertToolsFromGeneric, serializeToolArguments } from './toolCalling/index.js';
 import { BaseAdapter } from './BaseAdapter.js';
 import logger from '../utils/logger.js';
 
@@ -37,7 +37,7 @@ class OpenAIResponsesAdapterClass extends BaseAdapter {
           type: 'function_call',
           call_id: toolCall.id,
           name: toolCall.function?.name || toolCall.name,
-          arguments: toolCall.function?.arguments || toolCall.arguments || '{}'
+          arguments: serializeToolArguments(toolCall.function?.arguments || toolCall.arguments)
         }));
       }
 

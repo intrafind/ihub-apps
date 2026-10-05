@@ -627,9 +627,10 @@ The first system skill is `pdf` (`create_pdf`, `preview_pdf`). See [PDF Generati
 
 ### Key Components
 
-- **`server/services/skillLoader.js`**: Loads, validates, and serves skill content: system skills first, then `contents/skills/`. Enforces the Agent Skills specification (name pattern, description length, path traversal prevention).
-- **`server/services/systemSkillTools.js`**: Registry of the built-in tools system skills provide.
-- **Authorization integration**: Skills are permission-controlled via group configuration using the `skills` permission key. `activate_skill` and `read_skill_resource` only load skills the app enables and the user may use.
+- **`server/services/skillLoader.js`**: Loads, validates, and serves skill content: system skills first (`server/systemSkills/`), then `contents/skills/`. Enforces the Agent Skills specification (name pattern, description length, path traversal prevention).
+- **`server/services/systemSkillTools.js`**: Registry of the built-in tools system skills provide (e.g. `create_pdf` for `pdf`).
+- **`server/utils/frontMatter.js`**: `parseFrontMatter()` splits `SKILL.md` files and marketplace content previews into front matter and body. It accepts YAML front matter only: a block that names another language after the opening `---` (e.g. `---json`) is rejected, and the skill is skipped with a log entry. It is the only module allowed to import `gray-matter` (enforced by ESLint).
+- **Authorization integration**: Skills are permission-controlled via group configuration using the `skills` permission key.
 
 ### Skill Metadata (SKILL.md frontmatter)
 

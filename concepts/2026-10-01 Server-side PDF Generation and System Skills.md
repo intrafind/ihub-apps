@@ -78,8 +78,10 @@ front for exports).
   `server/services/systemSkillTools.js`, which come with the skill when an app enables it. Installed
   skills cannot enable tools. The usual gates apply: the `skills` feature, the app's `skills` and
   the user's `permissions.skills`.
-- Skill access is now checked: `activate_skill`, `read_skill_resource` and slash-command
-  pre-activation only load a skill the app enables and the user may use.
+- System skills go through the same access check as every other skill
+  (`server/services/skillAccess.js`): loaded only where the app or agent node lists them and the
+  user's groups grant them. Their tools are offered under the same condition, and a user skill
+  cannot be promoted to a system skill's name.
 
 ### Generated files: the path generated images already take
 

@@ -36,7 +36,7 @@ Further system skills for Word, PowerPoint and Excel documents are planned on th
 
 ### Skill access checks
 
-Skill activation checks access. `activate_skill` and `read_skill_resource` only load a skill that the app enables and the user may use. The same check covers pre-activating a skill with a slash command. Workflow and agent nodes keep choosing their skills on the node or profile.
+System skills go through the same access check as every other skill (`server/services/skillAccess.js`): `activate_skill`, `read_skill_resource`, `requestedSkills` and `/name` only load a skill that the app (or agent node) lists and the user's groups grant. The tools a system skill brings (`create_pdf`, `preview_pdf`) are offered under the same condition.
 
 ## The `pdf` skill
 

@@ -20,9 +20,8 @@ import { existsSync, readFileSync, rmSync, writeFileSync, renameSync, mkdirSync 
 import os from 'os';
 import path from 'path';
 import { randomUUID } from 'crypto';
-import { getRootDir } from '../../../pathUtils.js';
-import config from '../../../config.js';
 import logger from '../../../utils/logger.js';
+import { getContentsPath } from '../../../utils/contentsPath.js';
 
 const LOCK_TTL_MS = 30_000;
 const HEARTBEAT_MS = 10_000;
@@ -34,7 +33,7 @@ let heartbeatTimer = null;
 let owner = false;
 
 function defaultLockPath() {
-  return path.join(getRootDir(), config.CONTENTS_DIR, 'data', 'agent-scheduler.lock');
+  return getContentsPath('data', 'agent-scheduler.lock');
 }
 
 function isProcessAlive(pid) {

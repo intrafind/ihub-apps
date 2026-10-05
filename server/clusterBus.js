@@ -192,6 +192,43 @@ export function initPrimaryBus({ getWorkers }) {
     return held instanceof Set ? [...held] : [held];
   };
 
+  /** Deliver a bus message to one worker, if it is still alive. */
+  const sendTo = (workerId, message) => {
+    const target = getWorkers().find(w => w && w.id === workerId && !w.isDead?.());
+    if (!target) return;
+    try {
+      target.send({ [ENVELOPE]: true, ...message });
+    } catch (error) {
+      logger.warn({
+        component: 'ClusterBus',
+        message: 'Failed to send message to worker',
+        workerPid: target.process?.pid,
+        error: error.message
+      });
+    }
+  };
+
+  /**
+   * Keep the one holder of a shared key whose answer just changed in step.
+   *
+   * A mirror answers "does a worker *other than me* hold this". When a second
+   * worker takes a shared key, every mirror already says yes except the first
+   * holder's, which had no one else to count; when holders drop back to one,
+   * that last holder is the only mirror that must flip back to no. Without
+   * this the first holder never learns that anyone joined it — a run watched
+   * by two workers was only relayed when the producer was not the first one.
+   */
+  const syncSoleHolder = (kind, key, soleHolder, { owned, changedBy }) => {
+    sendTo(soleHolder, {
+      kind: MSG_PRESENCE_SYNC,
+      ownKind: kind,
+      key,
+      owned,
+      owner: changedBy,
+      shared: true
+    });
+  };
+
   const broadcast = (message, exceptWorkerId = null) => {
     for (const worker of getWorkers()) {
       if (!worker || worker.isDead?.()) continue;
@@ -317,15 +354,29 @@ export function initPrimaryBus({ getWorkers }) {
           if (message.owned) {
             const held = owners || new Set();
             bucket.set(message.key, held);
-            const isFirst = held.size === 0;
+            if (held.has(worker.id)) break;
+            const previous = [...held];
             held.add(worker.id);
-            // Already announced by whoever got here first; the mirrors are
-            // right as they stand.
-            if (!isFirst) break;
+            // Already announced by whoever got here first, so every other
+            // mirror is right — except a lone first holder's, which now has
+            // someone else to count.
+            if (previous.length === 1) {
+              syncSoleHolder(message.ownKind, message.key, previous[0], {
+                owned: true,
+                changedBy: worker.id
+              });
+            }
+            if (previous.length > 0) break;
           } else {
             if (!owners || !owners.delete(worker.id)) break;
             // Somebody else still holds it. This is the case the exclusive
-            // rule got wrong.
+            // rule got wrong. The one remaining holder is now alone.
+            if (owners.size === 1) {
+              syncSoleHolder(message.ownKind, message.key, [...owners][0], {
+                owned: false,
+                changedBy: worker.id
+              });
+            }
             if (owners.size > 0) break;
             bucket.delete(message.key);
             broadcastExcept = null;
@@ -388,7 +439,11 @@ export function initPrimaryBus({ getWorkers }) {
         if (held instanceof Set) {
           // Only this worker's share goes; a key another worker also holds
           // stays held, which is the whole point of a shared kind.
-          if (!held.delete(worker.id) || held.size > 0) continue;
+          if (!held.delete(worker.id)) continue;
+          if (held.size === 1) {
+            syncSoleHolder(kind, key, [...held][0], { owned: false, changedBy: worker.id });
+          }
+          if (held.size > 0) continue;
           bucket.delete(key);
         } else {
           if (held !== worker.id) continue;

@@ -15,6 +15,7 @@ import {
   canAttachSource,
   copySourceLink,
   downloadSource,
+  hasHttpUrl,
   isSourceAttachSupported,
   openSource,
   sourceActionsOf
@@ -37,11 +38,16 @@ const DocumentPreviewModal = lazy(
 
 const PASSAGE_TRUNCATE_LENGTH = 200;
 
+/** Cited sources listed under the answer before the rest fold away. */
+const CITED_LIST_LIMIT = 5;
+
 /**
  * Everything an answer found — web pages, documents, records, whichever
- * integration found them (`shared/sources`) — behind one entry under the
+ * integration found them (`shared/sources`) — behind one entry above the
  * answer: "Searched for “…”" or "N sources", with the sources' icons. It opens
  * the sources panel, a side panel on desktop and a bottom sheet on phones.
+ *
+ * At the answer's end, `CitedSources` lists what it cites like footnotes.
  *
  * The panel lists what the answer cites, numbered like its inline badges, and
  * what was found without being cited. Every card offers the actions its
@@ -71,8 +77,10 @@ function AnswerSources({ messageKey, sources, citations, onOpenInApp = null }) {
   const stack = [...cited, ...considered].slice(0, 4);
   const more = total - stack.length;
 
+  const highlighted = highlight?.messageKey === messageKey ? highlight.n : null;
+
   return (
-    <div className="mt-2">
+    <div className="mb-2">
       <button
         ref={triggerRef}
         type="button"
@@ -113,12 +121,142 @@ function AnswerSources({ messageKey, sources, citations, onOpenInApp = null }) {
           cited={cited}
           considered={considered}
           focus={open.focus}
-          highlight={highlight?.messageKey === messageKey ? highlight.n : null}
+          highlight={highlighted}
           returnFocusRef={triggerRef}
           onOpenInApp={onOpenInApp}
         />
       )}
     </div>
+  );
+}
+
+/**
+ * The sources an answer cites, at its end like footnotes: number, icon, title
+ * and where it lives. The title opens a source with a link; the number (and
+ * the title of one without a link) shows it in the sources panel, where its
+ * passages and actions are. Long lists fold after a few entries. What was only
+ * considered stays in the panel.
+ *
+ * @param {Object} props
+ * @param {string} props.messageKey - The answer's id
+ * @param {Object[]} props.sources - The cited sources, numbered (`resolveCitations().cited`)
+ */
+export function CitedSources({ messageKey, sources }) {
+  const { t } = useTranslation();
+  const headingId = useId();
+  const { highlight: current } = useSourcesState();
+  const [showAll, setShowAll] = useState(false);
+  if (!sources?.length) return null;
+  const highlight = current?.messageKey === messageKey ? current.n : null;
+  const shown = showAll ? sources : sources.slice(0, CITED_LIST_LIMIT);
+  const folded = sources.length - CITED_LIST_LIMIT;
+
+  return (
+    <div className="mt-3 border-t border-gray-200 pt-2 dark:border-gray-700">
+      <h4
+        id={headingId}
+        className="mb-1 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400"
+      >
+        {t('sources.cited', 'Cited in this answer')}
+      </h4>
+      <ol aria-labelledby={headingId} className="space-y-0.5">
+        {shown.map(source => (
+          <CitedSourceRow
+            key={source.id}
+            source={source}
+            messageKey={messageKey}
+            active={source.n === highlight}
+          />
+        ))}
+      </ol>
+      {folded > 0 && (
+        <button
+          type="button"
+          onClick={() => setShowAll(all => !all)}
+          aria-expanded={showAll}
+          className="mt-1 inline-flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
+        >
+          {showAll
+            ? t('sources.showFewer', 'Show fewer')
+            : t('sources.showMoreCited', { count: folded })}
+          <Icon
+            name="chevron-down"
+            size="xs"
+            className={`transition-transform ${showAll ? 'rotate-180' : ''}`}
+          />
+        </button>
+      )}
+    </div>
+  );
+}
+
+/** One cited source under the answer. Hover and focus highlight its badges. */
+function CitedSourceRow({ source, messageKey, active }) {
+  const { t } = useTranslation();
+  const site = siteOf(source);
+  const title = source.title || site || source.url || t('sources.untitled', 'Untitled');
+  const where = site || source.fileName || '';
+  const showInPanel = () => openSources(messageKey, source.n);
+  const titleClass =
+    'min-w-0 truncate text-left text-gray-800 hover:text-indigo-600 hover:underline dark:text-gray-200 dark:hover:text-indigo-300';
+
+  return (
+    <li
+      className={`-mx-1 flex min-w-0 items-center gap-2 rounded-md px-1 py-0.5 text-sm transition-colors ${
+        active ? 'bg-indigo-50 dark:bg-indigo-900/30' : ''
+      }`}
+      onMouseEnter={() => highlightCitation(messageKey, source.n)}
+      onMouseLeave={() => releaseCitation(messageKey, source.n)}
+      onFocus={() => highlightCitation(messageKey, source.n)}
+      onBlur={event => {
+        if (!event.currentTarget.contains(event.relatedTarget)) {
+          releaseCitation(messageKey, source.n);
+        }
+      }}
+    >
+      <button
+        type="button"
+        onClick={showInPanel}
+        className="inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-indigo-100 px-1 text-[10px] font-semibold text-indigo-700 hover:bg-indigo-600 hover:text-white dark:bg-indigo-900/60 dark:text-indigo-200 dark:hover:bg-indigo-500"
+        aria-label={t('sources.showInPanel', 'Show source {{n}} in the sources panel', {
+          n: source.n
+        })}
+        title={t('sources.showInPanel', 'Show source {{n}} in the sources panel', {
+          n: source.n
+        })}
+      >
+        {source.n}
+      </button>
+      <SourceIcon source={source} className="h-4 w-4" />
+      {hasHttpUrl(source) ? (
+        // A real link (middle click, copy link address), but a plain click
+        // opens it through the host (`openSource`), as on the card. Where the
+        // host cannot open it, the panel shows the source and its actions.
+        <a
+          href={source.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={event => {
+            if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+            event.preventDefault();
+            if (!openSource(source).ok) showInPanel();
+          }}
+          className={titleClass}
+        >
+          {title}
+          <span className="sr-only"> {t('sources.opensInNewTab', '(opens in a new tab)')}</span>
+        </a>
+      ) : (
+        <button type="button" onClick={showInPanel} className={titleClass}>
+          {title}
+        </button>
+      )}
+      {where && where !== title && (
+        <span className="max-w-[40%] shrink-0 truncate text-xs text-gray-500 dark:text-gray-400">
+          {where}
+        </span>
+      )}
+    </li>
   );
 }
 

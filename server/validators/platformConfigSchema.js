@@ -291,6 +291,20 @@ export const platformConfigSchema = z
         allowSelfSignup: z.boolean().prefault(false),
         userHeader: z.string().prefault('X-Forwarded-User'),
         groupsHeader: z.string().prefault('X-Forwarded-Groups'),
+        // Where the identity headers may come from (utils/proxyAuthTrust.js):
+        // addresses/subnets of trusted proxies, in `trust proxy` syntax, and/or
+        // a shared secret the proxy sends in `sharedSecretHeader` (a credential
+        // store reference). Without either, the headers are ignored. The list
+        // defaults to the local host, so a proxy in the same pod works.
+        trustedProxies: z.array(z.string()).prefault(['loopback']),
+        sharedSecretRef: z.string().optional(),
+        // Checked further on save and at runtime (sharedSecretHeaderProblem):
+        // the header is removed from every request, so it must not be one that
+        // sign-in or request handling reads.
+        sharedSecretHeader: z
+          .string()
+          .regex(/^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/, 'Must be a valid HTTP header name')
+          .prefault('X-Proxy-Secret'),
         jwtProviders: z.array(jwtProviderSchema).prefault([]),
         // Name of an entry in `ldapAuth.providers` to query for the user's
         // group memberships after the proxy has identified them. When set,
@@ -309,7 +323,16 @@ export const platformConfigSchema = z
         // follows CONTENTS_DIR — see localUsersFile() in utils/contentsPath.js.
         usersFile: z.string().optional(),
         sessionTimeoutMinutes: z.number().min(1).prefault(480),
-        showDemoAccounts: z.boolean().prefault(true)
+        showDemoAccounts: z.boolean().prefault(true),
+        // Repeated failed sign-ins lock the account for a while; see
+        // utils/loginLockout.js.
+        lockout: z
+          .object({
+            enabled: z.boolean().prefault(true),
+            maxAttempts: z.number().int().min(1).prefault(5),
+            durationMinutes: z.number().int().min(1).prefault(15)
+          })
+          .prefault({})
       })
       .prefault({}),
     oidcAuth: z
@@ -471,6 +494,30 @@ export const platformConfigSchema = z
       })
       .passthrough()
       .prefault({}),
+    // User skills: skills signed-in users write themselves (instructions plus
+    // text files) and share with users, groups or everyone. Stored through the
+    // storage abstraction; `maxSkillsPerUser` of zero or less means no limit.
+    // When `sharing.restrictToGroups` names groups, only their members may
+    // share with groups or with everyone.
+    userSkills: z
+      .object({
+        enabled: z.boolean().prefault(true),
+        maxSkillsPerUser: z.number().prefault(50),
+        maxVersions: z.number().prefault(50),
+        maxSkillSizeKB: z.number().prefault(256),
+        maxFilesPerSkill: z.number().prefault(20),
+        sharing: z
+          .object({
+            allowUsers: z.boolean().prefault(true),
+            allowGroups: z.boolean().prefault(true),
+            allowEveryone: z.boolean().prefault(true),
+            restrictToGroups: z.array(z.string()).prefault([])
+          })
+          .passthrough()
+          .prefault({})
+      })
+      .passthrough()
+      .prefault({}),
     // Artifacts: what a run produced that is worth keeping in its own right —
     // a chat turn's generated image today, a workflow's report or an agent's
     // output next. One store for every producer, so this block is not under
@@ -497,6 +544,20 @@ export const platformConfigSchema = z
       .object({
         retentionDays: z.number().prefault(30),
         cleanupEnabled: z.boolean().prefault(true)
+      })
+      .passthrough()
+      .prefault({}),
+    // Short links (feature `shortLinks`): an absolute http(s) target's host must
+    // match one of these entries; paths on this server are always allowed.
+    // Matching lives in utils/shortLinkTarget.js.
+    shortLinks: z
+      .object({
+        allowedHosts: z
+          .array(z.string())
+          .prefault([])
+          .describe(
+            'Hosts a short link may redirect to with an absolute URL: exact hostnames (docs.example.com), subdomain patterns (*.example.com or .example.com, not the domain itself), or /regex/ entries matched against the whole hostname. Paths on this server are always allowed.'
+          )
       })
       .passthrough()
       .prefault({}),
@@ -554,15 +615,23 @@ export const platformConfigSchema = z
       })
       .passthrough()
       .prefault({}),
-    // Realtime speech-to-text: the browser streams mic audio to iHub over a
-    // WebSocket and iHub proxies it to a vLLM realtime endpoint (e.g. Voxtral
-    // on /v1/realtime). The url/apiKey stay server-side. Apps opt in with
-    // settings.speechRecognition.service = 'vllm-realtime'.
+    // Voice: dictation (the microphone button), transcription (record/upload)
+    // and read aloud. Transcription and TTS endpoints and keys live on their
+    // models (Admin → Models); this block only picks which ones are used.
     speech: z
       .object({
         // Dictation service for every app whose settings.speechRecognition.service
         // is "default" (or unset). Apps can still pin a service of their own.
-        defaultService: z.enum(['browser', 'azure', 'vllm-realtime']).prefault('browser'),
+        // "model" streams the microphone through iHub to dictation.modelId.
+        defaultService: z.enum(['browser', 'azure', 'model']).prefault('browser'),
+        dictation: z
+          .object({
+            // A `modelType: "transcription"` model; used when defaultService
+            // is "model".
+            modelId: z.string().prefault('')
+          })
+          .passthrough()
+          .prefault({}),
         // Record/upload transcription: the model used when an app enables
         // transcription but sets no transcription.modelId of its own.
         transcription: z
@@ -585,19 +654,17 @@ export const platformConfigSchema = z
           })
           .passthrough()
           .prefault({}),
+        // Resource guards for the transcription WebSocket proxy, which every
+        // model-based dictation and transcription session runs through (each
+        // pins an upstream session). Optional; sane defaults applied in code.
         realtime: z
           .object({
-            enabled: z.boolean().prefault(false),
-            url: z.string().prefault(''),
-            model: z.string().prefault(''),
-            // Optional. Supports plaintext, ${ENV_VAR} placeholders, and
-            // ENC[...] encrypted values (decrypted by configCache on load).
-            apiKey: z.string().prefault(''),
-            // Resource guards for the WS proxy (each session pins a GPU-backed
-            // upstream socket). Optional; sane defaults applied in code.
             maxConnections: z.number().int().positive().optional(),
             maxConnectionsPerUser: z.number().int().positive().optional(),
-            maxFrameBytes: z.number().int().positive().optional()
+            maxFrameBytes: z.number().int().positive().optional(),
+            maxSessionSeconds: z.number().int().positive().optional(),
+            maxBufferedAudioBytes: z.number().int().positive().optional(),
+            maxBufferedAudioBytesTotal: z.number().int().positive().optional()
           })
           .passthrough()
           .prefault({}),

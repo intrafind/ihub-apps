@@ -603,19 +603,26 @@ export class AgentLoop {
           break;
         }
 
+        const repairs = toolCalls.map(call => repairToolArguments(call.function.arguments));
         const assistantMessage = {
           role: 'assistant',
           content: result.content || null,
-          tool_calls: toolCalls
+          // Replay the arguments the tools run with, as JSON. A call without
+          // arguments streams `''` and broken JSON gets repaired; strict
+          // OpenAI-compatible servers (Ollama) reject either in history.
+          tool_calls: toolCalls.map((call, i) => ({
+            ...call,
+            function: { ...call.function, arguments: JSON.stringify(repairs[i].args) }
+          }))
         };
         if (result.thoughtSignatures?.length)
           assistantMessage.thoughtSignatures = result.thoughtSignatures;
         ctx.messages.push(assistantMessage);
 
         // ── execute the tool calls (segment planner → batches) ──────────
-        const resolved = toolCalls.map(call => {
+        const resolved = toolCalls.map((call, i) => {
           const toolDef = matchTool(call.function.name, tools);
-          const repair = repairToolArguments(call.function.arguments);
+          const repair = repairs[i];
           const args = applyParameterDefaults(repair.args, toolDef);
           return { call, toolDef, args, argsRepaired: repair.repaired };
         });
