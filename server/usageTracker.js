@@ -2,7 +2,8 @@ import { recordTokenUsage } from './telemetry.js';
 import { recordMagicPromptUsage, recordFeedbackEvent } from './telemetry/metrics.js';
 import { resolveUserId } from './services/UserFingerprint.js';
 import { logUsageEvent } from './services/UsageEventLog.js';
-import { createDebouncedJsonStore } from './utils/debouncedJsonStore.js';
+import { createSharedJsonFile } from './utils/sharedJsonFile.js';
+import logger from './utils/logger.js';
 import { estimateTokens as estimateTokensShared } from '../shared/tokenEstimator.js';
 import { getContentsPath } from './utils/contentsPath.js';
 
@@ -12,7 +13,6 @@ const now = () => new Date().toISOString();
 let trackingEnabled = true;
 let trackingMode = 'pseudonymous';
 let configLoaded = false;
-let migrationChecked = false;
 
 /**
  * Prompt-cache and reasoning counters, kept under `tokens`. Subsets of the
@@ -66,14 +66,91 @@ function createDefaultUsage() {
   };
 }
 
-const store = createDebouncedJsonStore({
+/**
+ * Every cluster worker records usage, and each used to write its whole copy of
+ * usage.json back, erasing what the others had counted since — and undoing an
+ * admin's reset with the next save of a worker that still had the old numbers.
+ *
+ * Now each worker counts into `pending`, a usage object of zeros, and adds it
+ * to the file on disk under a lock (see utils/sharedJsonFile.js). Counters
+ * add up correctly whichever worker writes first; averages are recomputed
+ * from the merged rating counts.
+ */
+const usageFile = createSharedJsonFile({
   filePath: dataFile,
   createDefault: createDefaultUsage,
-  component: 'UsageTracker',
-  onBeforeSave: data => {
-    data.lastUpdated = now();
-  }
+  component: 'UsageTracker'
 });
+
+const FLUSH_INTERVAL_MS = 10000;
+
+/** What this worker counted since its last flush. */
+let pending = createDefaultUsage();
+let pendingDirty = false;
+let flushTimer = null;
+
+const UNSAFE_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+
+/**
+ * Add every counter in `delta` to `target`, creating buckets `target` lacks
+ * (a usage.json written before they existed). Strings (timestamps) and the
+ * derived `averageRating` are left alone.
+ */
+function addCounters(target, delta) {
+  for (const [key, value] of Object.entries(delta)) {
+    if (UNSAFE_KEYS.has(key) || key === 'averageRating') continue;
+    if (typeof value === 'number') {
+      target[key] = (typeof target[key] === 'number' ? target[key] : 0) + value;
+    } else if (value && typeof value === 'object') {
+      if (!target[key] || typeof target[key] !== 'object') target[key] = {};
+      addCounters(target[key], value);
+    }
+  }
+}
+
+/** Recompute each feedback bucket's average from its (merged) rating counts. */
+function recomputeAverages(usage) {
+  const feedback = usage.feedback;
+  if (!feedback) return;
+  const buckets = [feedback];
+  for (const key of ['perUser', 'perApp', 'perModel']) {
+    buckets.push(...Object.values(feedback[key] || {}));
+  }
+  for (const bucket of buckets) {
+    if (bucket?.ratings) bucket.averageRating = computeAverageRating(bucket.ratings);
+  }
+}
+
+function scheduleFlush() {
+  if (flushTimer) return;
+  flushTimer = setTimeout(() => {
+    flushTimer = null;
+    flushPending();
+  }, FLUSH_INTERVAL_MS);
+  flushTimer.unref?.();
+}
+
+/** Add this worker's counts to usage.json. */
+async function flushPending() {
+  if (!pendingDirty) return;
+  const delta = pending;
+  pending = createDefaultUsage();
+  pendingDirty = false;
+  try {
+    await usageFile.update(data => {
+      normalizeUsage(data);
+      addCounters(data, delta);
+      recomputeAverages(data);
+      data.lastUpdated = now();
+    });
+  } catch (error) {
+    // Keep the counts for the next attempt rather than losing them.
+    addCounters(pending, delta);
+    pendingDirty = true;
+    scheduleFlush();
+    logger.error('Failed to save usage data', { component: 'UsageTracker', error });
+  }
+}
 
 async function loadConfig() {
   if (configLoaded) return;
@@ -134,33 +211,31 @@ function migrateLegacyFeedback(feedbackObj) {
   return needsMigration;
 }
 
-async function loadUsage() {
-  const data = await store.load();
-  if (!migrationChecked) {
-    migrationChecked = true;
-    data.lastUpdated = data.lastUpdated || now();
-    data.lastReset = data.lastReset || now();
-
-    if (data.feedback) {
-      let changed = migrateLegacyFeedback(data.feedback);
-
-      // Migrate all nested feedback objects (perUser, perApp, perModel)
-      ['perUser', 'perApp', 'perModel'].forEach(key => {
-        if (data.feedback[key]) {
-          Object.keys(data.feedback[key]).forEach(id => {
-            if (migrateLegacyFeedback(data.feedback[key][id])) changed = true;
-          });
-        }
-      });
-
-      // Mark as migrated by saving immediately
-      if (changed) {
-        store.markDirty();
-        await store.flush();
+/** Bring a usage object read from disk up to the current feedback format. */
+function normalizeUsage(data) {
+  data.lastUpdated = data.lastUpdated || now();
+  data.lastReset = data.lastReset || now();
+  if (data.feedback) {
+    migrateLegacyFeedback(data.feedback);
+    // Migrate all nested feedback objects (perUser, perApp, perModel)
+    ['perUser', 'perApp', 'perModel'].forEach(key => {
+      if (data.feedback[key]) {
+        Object.keys(data.feedback[key]).forEach(id => {
+          migrateLegacyFeedback(data.feedback[key][id]);
+        });
       }
-    }
+    });
   }
-  return data;
+}
+
+/** The counters this worker records into; added to usage.json on flush. */
+function loadUsage() {
+  return pending;
+}
+
+function markDirty() {
+  pendingDirty = true;
+  scheduleFlush();
 }
 
 function inc(map, key, amount) {
@@ -256,7 +331,7 @@ async function recordChatMessage({
   if (!trackingEnabled) return;
   const resolvedUser =
     trackingMode === 'identified' && user?.id ? user.id : await resolveUserId(userId, trackingMode);
-  const data = await loadUsage();
+  const data = loadUsage();
   data.messages.total += 1;
   inc(data.messages.perUser, resolvedUser, 1);
   inc(data.messages.perApp, appId, 1);
@@ -301,7 +376,7 @@ async function recordChatMessage({
     ...(webSearchRequests > 0 ? { webSearchRequests } : {}),
     tokenSource
   });
-  store.markDirty();
+  markDirty();
 }
 
 export async function recordChatRequest(args) {
@@ -317,7 +392,7 @@ export async function recordFeedback({ userId, appId, modelId, rating, user }) {
   if (!trackingEnabled) return;
   const resolvedUser =
     trackingMode === 'identified' && user?.id ? user.id : await resolveUserId(userId, trackingMode);
-  const data = await loadUsage();
+  const data = loadUsage();
 
   applyRating(data.feedback, rating);
 
@@ -332,7 +407,7 @@ export async function recordFeedback({ userId, appId, modelId, rating, user }) {
     modelId,
     rating
   });
-  store.markDirty();
+  markDirty();
 }
 
 export async function recordMagicPrompt({
@@ -347,7 +422,7 @@ export async function recordMagicPrompt({
   if (!trackingEnabled) return;
   const resolvedUser =
     trackingMode === 'identified' && user?.id ? user.id : await resolveUserId(userId, trackingMode);
-  const data = await loadUsage();
+  const data = loadUsage();
   data.magicPrompt.total += 1;
   inc(data.magicPrompt.perUser, resolvedUser, 1);
   inc(data.magicPrompt.perApp, appId, 1);
@@ -375,20 +450,18 @@ export async function recordMagicPrompt({
     tokenSource: 'estimate'
   });
 
-  store.markDirty();
+  markDirty();
 }
 
 export async function getUsage() {
   await loadConfig();
-  // Force a fresh read rather than serving whatever this worker's process
-  // happened to have cached since it started: under WORKERS > 1 every
-  // worker accumulates its own view, so an admin's request landing on a
-  // different worker each time would otherwise see numbers frozen at
-  // whatever that worker first loaded. Low-frequency admin read, so the
-  // extra disk round trip is not a concern the way it would be on the
-  // per-message recording path below.
-  await store.reload();
-  return loadUsage();
+  // The file as every worker has flushed it, plus what this worker counted
+  // since its last flush.
+  const usage = structuredClone(await usageFile.read());
+  normalizeUsage(usage);
+  addCounters(usage, pending);
+  recomputeAverages(usage);
+  return usage;
 }
 
 export async function isTrackingEnabled() {
@@ -403,9 +476,10 @@ export async function getTrackingMode() {
 
 export async function resetUsage() {
   await loadConfig();
-  const fresh = createDefaultUsage();
-  fresh.lastReset = now();
-  store.replace(fresh);
-  migrationChecked = true;
-  await store.flush();
+  pending = createDefaultUsage();
+  pendingDirty = false;
+  await usageFile.update(data => {
+    for (const key of Object.keys(data)) delete data[key];
+    Object.assign(data, createDefaultUsage(), { lastReset: now() });
+  });
 }

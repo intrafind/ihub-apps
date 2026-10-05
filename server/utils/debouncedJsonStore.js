@@ -8,8 +8,10 @@ import logger from './logger.js';
  * flag, a debounced save with an unref'd periodic safety-net flush, and
  * atomic writes so a crash mid-write can't corrupt the file.
  *
- * Shared by usageTracker.js and shortLinkManager.js, which both load one
- * JSON object, mutate it in place, and debounce-save it back to disk.
+ * Used by InteractionService for its legacy file layout: it loads one JSON
+ * object, mutates it in place, and debounce-saves it back to disk. Each
+ * process keeps and writes back its own copy, so a file several cluster
+ * workers change needs `sharedJsonFile.js` instead.
  *
  * @param {Object} options
  * @param {string} options.filePath - Absolute path to the JSON file

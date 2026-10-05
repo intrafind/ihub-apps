@@ -1,5 +1,5 @@
 import crypto from 'crypto';
-import { createDebouncedJsonStore } from './utils/debouncedJsonStore.js';
+import { createSharedJsonFile } from './utils/sharedJsonFile.js';
 import { isAllowedShortLinkTarget } from './utils/shortLinkTarget.js';
 import { getContentsPath } from './utils/contentsPath.js';
 
@@ -11,14 +11,28 @@ function createDefault() {
   return { links: [], lastUpdated: now() };
 }
 
-const store = createDebouncedJsonStore({
+// Shared by every cluster worker: each change is made to the file on disk
+// under a lock, and reads see changes another worker made.
+const store = createSharedJsonFile({
   filePath: dataFile,
   createDefault,
-  component: 'ShortLinkManager',
-  onBeforeSave: data => {
-    data.lastUpdated = now();
-  }
+  component: 'ShortLinkManager'
 });
+
+/** Apply `mutate` to the links on disk and save, stamping lastUpdated. */
+function updateLinks(mutate) {
+  return store.update(data => {
+    if (!Array.isArray(data.links)) data.links = [];
+    const result = mutate(data);
+    data.lastUpdated = now();
+    return result;
+  });
+}
+
+async function readLinks() {
+  const data = await store.read();
+  return Array.isArray(data?.links) ? data.links : [];
+}
 
 export function isLinkExpired(link) {
   if (!link || !link.expiresAt) return false;
@@ -101,49 +115,37 @@ export async function createLink(
     throw new ShortLinkTargetError();
   }
 
-  const links = await store.load();
-  let finalCode = code;
-  if (finalCode) {
-    if (links.links.some(l => l.code === finalCode)) {
-      throw new Error('Code already exists');
+  return updateLinks(data => {
+    let finalCode = code;
+    if (finalCode) {
+      if (data.links.some(l => l.code === finalCode)) {
+        throw new Error('Code already exists');
+      }
+    } else {
+      do {
+        finalCode = generateCode();
+      } while (data.links.some(l => l.code === finalCode));
     }
-  } else {
-    do {
-      finalCode = generateCode();
-    } while (links.links.some(l => l.code === finalCode));
-  }
 
-  const link = {
-    code: finalCode,
-    appId,
-    ownerId,
-    path,
-    params,
-    url: finalUrl,
-    includeParams,
-    createdAt: now(),
-    usage: 0,
-    expiresAt
-  };
-  links.links.push(link);
-  store.markDirty();
-  return link;
+    const link = {
+      code: finalCode,
+      appId,
+      ownerId,
+      path,
+      params,
+      url: finalUrl,
+      includeParams,
+      createdAt: now(),
+      usage: 0,
+      expiresAt
+    };
+    data.links.push(link);
+    return { ...link };
+  });
 }
 
-/**
- * Look up a link by code, reloading from disk once on a miss. Under
- * WORKERS > 1 the code may have been created by a different worker after
- * this process last loaded (or reloaded) the store — without this, that
- * worker's in-memory copy never learns about it and every request routed
- * here 404s forever, even though the link exists on disk. A genuine miss
- * (never existed, or was deleted) costs exactly one extra disk read.
- */
 async function findByCode(code) {
-  const links = await store.load();
-  const local = links.links.find(l => l.code === code);
-  if (local) return local;
-  const fresh = await store.reload();
-  return fresh.links.find(l => l.code === code);
+  return (await readLinks()).find(l => l.code === code);
 }
 
 export async function getLink(code) {
@@ -155,26 +157,24 @@ export async function isCodeAvailable(code) {
 }
 
 export async function recordUsage(code) {
-  const link = await findByCode(code);
-  if (link) {
+  if (!(await findByCode(code))) return undefined;
+  return updateLinks(data => {
+    const link = data.links.find(l => l.code === code);
+    if (!link) return undefined;
     link.usage = (link.usage || 0) + 1;
     link.lastUsed = now();
-    store.markDirty();
-  }
-  return link;
+    return { ...link };
+  });
 }
 
 export async function deleteLink(code) {
-  const link = await findByCode(code);
-  if (!link) return false;
-  const links = await store.load();
-  const idx = links.links.indexOf(link);
-  if (idx !== -1) {
-    links.links.splice(idx, 1);
-    store.markDirty();
+  if (!(await findByCode(code))) return false;
+  return updateLinks(data => {
+    const idx = data.links.findIndex(l => l.code === code);
+    if (idx === -1) return false;
+    data.links.splice(idx, 1);
     return true;
-  }
-  return false;
+  });
 }
 
 /**
@@ -190,8 +190,7 @@ export async function deleteLink(code) {
  * @throws {ShortLinkTargetError} When the resulting target is not allowed
  */
 export async function updateLink(code, data, { allowedHosts = [] } = {}) {
-  const link = await findByCode(code);
-  if (!link) return null;
+  if (!(await findByCode(code))) return null;
   const changes = {};
   for (const field of EDITABLE_FIELDS) {
     if (data && Object.hasOwn(data, field)) changes[field] = data[field];
@@ -199,14 +198,17 @@ export async function updateLink(code, data, { allowedHosts = [] } = {}) {
   if (Object.hasOwn(changes, 'includeParams')) {
     changes.includeParams = changes.includeParams === true;
   }
-  const next = { ...link, ...changes };
-  if (!next.url) next.url = buildTarget(next);
-  if (!isAllowedShortLinkTarget(next.url, allowedHosts)) {
-    throw new ShortLinkTargetError();
-  }
-  Object.assign(link, changes, { url: next.url });
-  store.markDirty();
-  return link;
+  return updateLinks(stored => {
+    const link = stored.links.find(l => l.code === code);
+    if (!link) return null;
+    const next = { ...link, ...changes };
+    if (!next.url) next.url = buildTarget(next);
+    if (!isAllowedShortLinkTarget(next.url, allowedHosts)) {
+      throw new ShortLinkTargetError();
+    }
+    Object.assign(link, changes, { url: next.url });
+    return { ...link };
+  });
 }
 
 /**
@@ -224,10 +226,6 @@ export function canManageLink(link, user, isAdmin) {
 }
 
 export async function searchLinks({ appId, ownerId } = {}) {
-  const links = await store.load();
-  return links.links.filter(
-    l => (!appId || l.appId === appId) && (!ownerId || l.ownerId === ownerId)
-  );
+  const links = await readLinks();
+  return links.filter(l => (!appId || l.appId === appId) && (!ownerId || l.ownerId === ownerId));
 }
-
-store.load();
