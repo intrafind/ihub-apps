@@ -32,10 +32,6 @@ jest.unstable_mockModule('../middleware/oidcAuth.js', () => ({
   reconfigureOidcProviders: () => {}
 }));
 
-jest.unstable_mockModule('../websocket/realtimeTranscription.js', () => ({
-  testRealtimeConnection: async () => ({ ok: true })
-}));
-
 jest.unstable_mockModule('../services/azureSpeechToken.js', () => ({
   issueAzureSpeechToken: async cfg => {
     state.tokenCalls.push(cfg);

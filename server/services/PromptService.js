@@ -4,6 +4,12 @@ import configCache from '../configCache.js';
 import { createSourceManager } from '../sources/index.js';
 import SourceResolutionService from './SourceResolutionService.js';
 import { isFeatureEnabled } from '../featureRegistry.js';
+import {
+  buildAvailableSkillsBlock,
+  getUsableSkills,
+  resolveRequestedSkills
+} from './skillAccess.js';
+import { getSkillContent } from './skillLoader.js';
 import logger from '../utils/logger.js';
 
 /**
@@ -249,6 +255,7 @@ class PromptService {
    * @param {Object} user - User object
    * @param {string} chatId - Chat identifier
    * @param {string} modelName - Model name
+   * @param {string[]} [requestedSkills] - Skills to pre-activate (slash command)
    * @returns {Array} Processed messages array
    */
   async processMessageTemplates(
@@ -261,7 +268,7 @@ class PromptService {
     user = null,
     chatId = null,
     modelName = null,
-    requestedSkill = null
+    requestedSkills = null
   ) {
     const defaultLang = configCache.getPlatform()?.defaultLanguage || 'en';
     const lang = language || defaultLang;
@@ -467,64 +474,52 @@ class PromptService {
         throw new Error(`Failed to process sources: ${error.message}`);
       }
 
-      // Inject available skills metadata for progressive disclosure
+      // Skills: list the app's usable skills (name + description) so the model
+      // can activate one, and pre-load the ones the user picked with a slash
+      // command. Both lists only ever hold skills assigned to the app and
+      // granted to the user.
       if (
         isFeatureEnabled('skills', configCache.getFeatures()) &&
-        app.skills &&
         Array.isArray(app.skills) &&
         app.skills.length > 0
       ) {
         try {
-          const platformConfig = configCache.getPlatform() || {};
-          const appSkills = await configCache.getSkillsForApp(app, user, platformConfig);
-
+          const appSkills = await getUsableSkills({ skillIds: app.skills, user });
           if (appSkills.length > 0) {
-            const skillEntries = appSkills
-              .map(
-                skill =>
-                  `  <skill>\n    <name>${skill.name}</name>\n    <description>${skill.description}</description>\n  </skill>`
-              )
-              .join('\n');
-            const skillsBlock = `\n\n<available_skills>\n${skillEntries}\n</available_skills>`;
-            systemPrompt += skillsBlock;
-
+            systemPrompt += `\n\n${buildAvailableSkillsBlock(appSkills)}`;
             logger.info('Injected skills into system prompt for app', {
               component: 'PromptService',
               skillCount: appSkills.length,
               appId: app.id
             });
           }
-        } catch (error) {
-          logger.error('Error loading skills for system prompt', {
-            component: 'PromptService',
-            error
-          });
-        }
-      }
 
-      // Pre-activate a specific skill when requested via slash command
-      if (requestedSkill && isFeatureEnabled('skills', configCache.getFeatures())) {
-        try {
-          const { getSkillContent } = await import('./skillLoader.js');
-          const content = await getSkillContent(requestedSkill);
-          if (content) {
-            const skillBlock = `\n\n<active_skill name="${requestedSkill}">\n${content.body}\n</active_skill>`;
-            systemPrompt += skillBlock;
-
-            const allResources = [...content.references, ...content.scripts, ...content.assets];
-            if (allResources.length > 0) {
-              systemPrompt += `\nAvailable skill resources: ${allResources.join(', ')}`;
+          const activeSkills = await resolveRequestedSkills(requestedSkills, { app, user });
+          const blocks = [];
+          for (const skill of activeSkills) {
+            const content = await getSkillContent(skill.name);
+            if (!content) continue;
+            let block = `<active_skill name="${skill.name}">\n${content.body}\n</active_skill>`;
+            const resources = [...content.references, ...content.scripts, ...content.assets];
+            if (resources.length > 0) {
+              block += `\nAvailable skill resources: ${resources.join(', ')}`;
             }
-
-            logger.info('Pre-activated skill via slash command', {
+            blocks.push(block);
+          }
+          if (blocks.length > 1) {
+            systemPrompt +=
+              '\n\nSeveral skills are active. Follow all of them; where they conflict, the skill listed first decides, unless a skill states its own precedence.';
+          }
+          if (blocks.length > 0) {
+            systemPrompt += `\n\n${blocks.join('\n\n')}`;
+            logger.info('Pre-activated skills via slash command', {
               component: 'PromptService',
-              requestedSkill
+              skills: activeSkills.map(skill => skill.name)
             });
           }
         } catch (error) {
-          logger.error('Error pre-activating skill', {
+          logger.error('Error loading skills for system prompt', {
             component: 'PromptService',
-            requestedSkill,
             error
           });
         }

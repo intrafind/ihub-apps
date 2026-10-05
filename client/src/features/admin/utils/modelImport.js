@@ -12,6 +12,7 @@
 import {
   BUILT_IN_LLM_PROVIDERS,
   CUSTOM_PROVIDER_API_TYPES,
+  TRANSCRIPTION_API_TYPES,
   getProviderApiType
 } from '../../../../../shared/llmProviders.js';
 
@@ -177,6 +178,13 @@ export function buildImportedModelConfig(
   // custom provider is always stored (the server applies the same rule).
   if (providerId && !BUILT_IN_LLM_PROVIDERS.includes(providerId)) {
     config.providerId = providerId;
+  }
+  // Whisper and co. on an OpenAI-compatible endpoint: a transcription model,
+  // called on the audio API (the URL discovery built) and offered for voice
+  // input and transcription. Chat settings mean nothing to it.
+  if (entry.type === 'transcription' && TRANSCRIPTION_API_TYPES.includes(apiType)) {
+    config.modelType = 'transcription';
+    return config;
   }
   if (entry.contextWindow) config.contextWindow = entry.contextWindow;
   if (entry.maxOutputTokens) config.maxOutputTokens = entry.maxOutputTokens;

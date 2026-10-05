@@ -41,6 +41,7 @@ import { readMemoryBodyForPrompt } from '../../../agents/memory/memoryFile.js';
 import { getAppAsTools, stripAppToolsForAgent } from '../../chat/appToolsGateway.js';
 import { writeArtifactDirect } from '../../../agents/runtime/artifactStore.js';
 import { isFeatureEnabled } from '../../../featureRegistry.js';
+import { buildAvailableSkillsBlock, getUsableSkills } from '../../skillAccess.js';
 import { resolveMaxOutputTokens } from '../../../../shared/outputTokens.js';
 
 // Bound on the {{previousTaskResults}} digest baked into a per-task worker's
@@ -77,6 +78,23 @@ const PROMPT_NODE_WORKER_TASK_BODY_CHARS = 2000;
  * @property {string} [outputVariable] - State variable to store the result
  * @property {boolean} [includeHistory] - Include previous messages in context
  */
+
+/**
+ * The skills a prompt node may use. A `skills` array on the node decides,
+ * an empty one included: a custom workflow sets `skills: []` to give a node
+ * no skills. Only a node without the field falls back to the agent profile.
+ * Embedded workflows copy the profile's list onto every node, so for them
+ * both answers agree.
+ *
+ * @param {Object} [config] - Node config
+ * @param {Object} [profile] - Agent profile
+ * @returns {string[]|null} Skill ids, or null when neither sets a list
+ */
+export function resolveNodeSkillIds(config, profile) {
+  if (Array.isArray(config?.skills)) return config.skills;
+  if (Array.isArray(profile?.skills)) return profile.skills;
+  return null;
+}
 
 /**
  * Executor for agent nodes.
@@ -276,7 +294,12 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
       // metadata or the activate_skill tool — they don't decide WHAT to do.
       if (earlyAgentProfile) {
         try {
-          const skillsBlock = await this._buildSkillsBlock(earlyAgentProfile, config, state);
+          const skillsBlock = await this._buildSkillsBlock(
+            earlyAgentProfile,
+            config,
+            state,
+            context
+          );
           if (skillsBlock) {
             context = { ...context, _agentSkillsBlock: skillsBlock };
           }
@@ -324,12 +347,7 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
       // Auto-attach `activate_skill` / `read_skill_resource` whenever the
       // node has skills available (either on the profile or override on the
       // node config). Synthesizer nodes skip this — they're text-out only.
-      const nodeSkillIds =
-        Array.isArray(config.skills) && config.skills.length > 0
-          ? config.skills
-          : Array.isArray(agentProfile?.skills) && agentProfile.skills.length > 0
-            ? agentProfile.skills
-            : [];
+      const nodeSkillIds = resolveNodeSkillIds(config, agentProfile) || [];
       if (nodeSkillIds.length > 0 && config._isSynthesizer !== true) {
         if (!configuredToolIds.includes('activate_skill')) {
           configuredToolIds.push('activate_skill');
@@ -337,6 +355,9 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
         if (!configuredToolIds.includes('read_skill_resource')) {
           configuredToolIds.push('read_skill_resource');
         }
+        // The node's skills: `getAgentTools` builds the skill tools from them
+        // and `runTool` only loads skills from this list.
+        context = { ...context, _skillIds: nodeSkillIds };
       }
 
       // Provider-native search resolution. The generic `webSearch` tool id
@@ -1307,7 +1328,10 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
     // Create a minimal app config for getToolsForApp
     const appConfig = {
       tools: toolIds,
-      sources: _context.appConfig?.sources || []
+      sources: _context.appConfig?.sources || [],
+      ...(Array.isArray(_context._skillIds) && _context._skillIds.length > 0
+        ? { skills: _context._skillIds }
+        : {})
     };
 
     const toolContext = {
@@ -1923,7 +1947,9 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
       const enrichedAppConfig = {
         ...(appConfig || {}),
         ...(agentProfile ? { _agentProfile: agentProfile } : {}),
-        ...(context._workflowState ? { _workflowState: context._workflowState } : {})
+        ...(context._workflowState ? { _workflowState: context._workflowState } : {}),
+        // Skill tools check against the node's skills, not the parent app's.
+        ...(Array.isArray(context._skillIds) ? { _skillIds: context._skillIds } : {})
       };
 
       const toolCallStartMs = Date.now();
@@ -2078,14 +2104,10 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
    * @private
    * @returns {Promise<string|null>}
    */
-  async _buildSkillsBlock(profile, config, state) {
+  async _buildSkillsBlock(profile, config, state, context) {
     const isSynthesizer = config?._isSynthesizer === true;
-    const skillIds =
-      (Array.isArray(config?.skills) && config.skills.length > 0
-        ? config.skills
-        : Array.isArray(profile?.skills) && profile.skills.length > 0
-          ? profile.skills
-          : null) || null;
+    const nodeSkills = resolveNodeSkillIds(config, profile);
+    const skillIds = nodeSkills && nodeSkills.length > 0 ? nodeSkills : null;
 
     const activated =
       state?.data?._activatedSkills && typeof state.data._activatedSkills === 'object'
@@ -2099,23 +2121,12 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
     // <available_skills>: only for non-synthesizer nodes that have a catalog.
     if (skillIds && !isSynthesizer) {
       try {
-        const platform = configCache.getPlatform()?.data || {};
-        // Profile is duck-typed against `getSkillsForApp`'s expected shape
-        // (just needs `.skills` array). Permission filtering is by user.
-        const filtered = await configCache.getSkillsForApp(
-          { skills: skillIds },
-          { id: profile?.id || 'agent', groups: profile?.serviceAccount?.groups || [] },
-          platform
-        );
-        if (Array.isArray(filtered) && filtered.length > 0) {
-          const entries = filtered
-            .map(
-              s =>
-                `  <skill>\n    <name>${s.name}</name>\n    <description>${s.description || ''}</description>\n  </skill>`
-            )
-            .join('\n');
+        // Filtered by the run's principal (the agent's service account, or
+        // the user a workflow runs for), as `activate_skill` checks it.
+        const filtered = await getUsableSkills({ skillIds, user: context?.user });
+        if (filtered.length > 0) {
           parts.push(
-            `<available_skills>\n${entries}\n</available_skills>\n\nWhen a skill's description matches the current work, call activate_skill({skill_name: "..."}) to load its full instructions. The skill body will then guide HOW to perform the task.`
+            `${buildAvailableSkillsBlock(filtered)}\n\nWhen a skill's description matches the current work, call activate_skill({skill_name: "..."}) to load its full instructions. The skill body will then guide HOW to perform the task.`
           );
         }
       } catch (err) {

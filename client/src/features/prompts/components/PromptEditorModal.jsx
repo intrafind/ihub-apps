@@ -12,7 +12,6 @@ import { promptErrorMessage } from '../utils/promptErrors';
 import {
   BUILTIN_AUTO_VARIABLES,
   CONTENT_VARIABLE,
-  VARIABLE_NAME_PATTERN,
   VARIABLE_TYPES,
   extractVariableNames,
   humanizeVariableName,
@@ -64,6 +63,11 @@ const isDescribed = variable => Object.keys(cleanVariable(variable)).length > 1;
  * the prompt is used. Each can optionally be described — label, help text,
  * type, default, required, options.
  *
+ * A prompt is for any app unless it is bound to one: an unbound prompt opens
+ * in the default app from the prompt library; a bound one opens in its app and
+ * comes first in that app's prompt search. Every prompt is offered in every
+ * app's prompt search either way.
+ *
  * @param {Object} props
  * @param {Object} [props.prompt] - The user prompt being edited; omitted to create one.
  * @param {Object} [props.initial] - Prefill for a new prompt (`{ prompt, name, appId }`),
@@ -85,6 +89,8 @@ function PromptEditorModal({ prompt, initial = {}, onClose, onSaved }) {
   const [icon, setIcon] = useState(source.icon || '');
   const [category, setCategory] = useState(source.category || '');
   const [appId, setAppId] = useState(source.appId || '');
+  // 'any' — for every app; 'app' — bound to `appId`.
+  const [appScope, setAppScope] = useState(source.appId ? 'app' : 'any');
   const [metadata, setMetadata] = useState(() => {
     const map = {};
     for (const variable of Array.isArray(source.variables) ? source.variables : []) {
@@ -103,17 +109,9 @@ function PromptEditorModal({ prompt, initial = {}, onClose, onSaved }) {
   });
   const [autoNames, setAutoNames] = useState(BUILTIN_AUTO_VARIABLES);
   const [expanded, setExpanded] = useState(null);
-  const [newVariable, setNewVariable] = useState('');
-  const [showInsert, setShowInsert] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
-  const textRef = useRef(null);
   const nameRef = useRef(null);
-  const newVariableRef = useRef(null);
-
-  useEffect(() => {
-    if (showInsert) newVariableRef.current?.focus();
-  }, [showInsert]);
 
   useEffect(() => {
     let active = true;
@@ -134,34 +132,10 @@ function PromptEditorModal({ prompt, initial = {}, onClose, onSaved }) {
   const categories = (uiConfig?.promptsList?.categories?.list || []).filter(c => c.id !== 'all');
   const chatApps = (apps || []).filter(app => (app?.type || 'chat') === 'chat');
 
-  const insertAtCursor = snippet => {
-    const el = textRef.current;
-    const start = el?.selectionStart ?? text.length;
-    const end = el?.selectionEnd ?? text.length;
-    const next = text.slice(0, start) + snippet + text.slice(end);
-    setText(next);
-    requestAnimationFrame(() => {
-      if (!el) return;
-      el.focus();
-      el.setSelectionRange(start + snippet.length, start + snippet.length);
-    });
-  };
-
-  const addVariable = () => {
-    const variable = newVariable.trim().replace(/\s+/g, '_');
-    if (!VARIABLE_NAME_PATTERN.test(variable)) {
-      setError(
-        t(
-          'prompts.editor.invalidVariable',
-          'A variable name starts with a letter and uses only letters, digits, _ and -'
-        )
-      );
-      return;
-    }
-    setError(null);
-    insertAtCursor(`{{${variable}}}`);
-    setNewVariable('');
-    setShowInsert(false);
+  const chooseScope = scope => {
+    setAppScope(scope);
+    // Binding to an app picks one right away, so the choice is never empty.
+    if (scope === 'app' && !appId && chatApps.length > 0) setAppId(chatApps[0].id);
   };
 
   const updateMeta = (variableName, patch) =>
@@ -174,6 +148,12 @@ function PromptEditorModal({ prompt, initial = {}, onClose, onSaved }) {
     event.preventDefault();
     if (!name.trim() || !text.trim()) {
       setError(t('prompts.editor.requiredFields', 'Name and prompt text are required'));
+      return;
+    }
+    if (appScope === 'app' && !appId) {
+      setError(
+        t('prompts.editor.appRequired', 'Choose an app, or make the prompt available in any app')
+      );
       return;
     }
     setSaving(true);
@@ -189,7 +169,7 @@ function PromptEditorModal({ prompt, initial = {}, onClose, onSaved }) {
       prompt: text,
       icon: icon || null,
       category: category || null,
-      appId: appId || null,
+      appId: appScope === 'app' ? appId || null : null,
       variables
     };
     try {
@@ -393,68 +373,91 @@ function PromptEditorModal({ prompt, initial = {}, onClose, onSaved }) {
             />
           </div>
 
-          <div>
-            <div className="flex items-center justify-between mb-1">
-              <label htmlFor="prompt-editor-text" className={labelClass}>
-                {t('prompts.editor.text', 'Prompt')}
-                <span className="text-red-500 ml-0.5">*</span>
-              </label>
-              <button
-                type="button"
-                onClick={() => setShowInsert(open => !open)}
-                className="text-sm text-indigo-600 dark:text-indigo-400 hover:underline inline-flex items-center gap-1"
-              >
-                <Icon name="plus" size="sm" />
-                {t('prompts.editor.insertVariable', 'Insert variable')}
-              </button>
-            </div>
-            {showInsert && (
-              <div className="flex gap-2 mb-2">
+          <fieldset>
+            <legend className={labelClass}>{t('prompts.editor.useWith', 'Use with')}</legend>
+            <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
+              <label className="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
                 <input
-                  className={inputClass}
-                  value={newVariable}
-                  onChange={e => setNewVariable(e.target.value)}
-                  onKeyDown={e => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      addVariable();
-                    }
-                  }}
-                  placeholder={t(
-                    'prompts.editor.variableNamePlaceholder',
-                    'Variable name, e.g. recipient'
-                  )}
-                  aria-label={t('prompts.editor.variableName', 'Variable name')}
-                  ref={newVariableRef}
+                  type="radio"
+                  name="prompt-editor-app-scope"
+                  className="h-4 w-4 border-gray-300 text-indigo-600"
+                  checked={appScope === 'any'}
+                  onChange={() => chooseScope('any')}
                 />
-                <button
-                  type="button"
-                  onClick={addVariable}
-                  className="px-3 py-2 text-sm rounded-md bg-indigo-600 text-white hover:bg-indigo-700"
+                {t('prompts.editor.anyApp', 'Any app')}
+              </label>
+              <label className="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+                <input
+                  type="radio"
+                  name="prompt-editor-app-scope"
+                  className="h-4 w-4 border-gray-300 text-indigo-600"
+                  checked={appScope === 'app'}
+                  onChange={() => chooseScope('app')}
+                />
+                {t('prompts.editor.specificApp', 'A specific app')}
+              </label>
+              {appScope === 'app' && (
+                <select
+                  id="prompt-editor-app"
+                  className={`${inputClass} w-auto min-w-[12rem] flex-1 sm:flex-none`}
+                  value={appId}
+                  onChange={e => setAppId(e.target.value)}
+                  aria-label={t('prompts.editor.app', 'App')}
                 >
-                  {t('prompts.editor.insert', 'Insert')}
-                </button>
-              </div>
-            )}
+                  {appId && !chatApps.some(app => app.id === appId) && (
+                    <option value={appId}>{appId}</option>
+                  )}
+                  {chatApps.map(app => (
+                    <option key={app.id} value={app.id}>
+                      {getLocalizedContent(app.name, lang)}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              {appScope === 'app'
+                ? t(
+                    'prompts.editor.specificAppHelp',
+                    'Opens in this app from the prompt library, and comes first in its prompt search.'
+                  )
+                : t(
+                    'prompts.editor.anyAppHelp',
+                    'For every app: the prompt library opens it in your default app.'
+                  )}
+            </p>
+          </fieldset>
+
+          <div>
+            <label htmlFor="prompt-editor-text" className={labelClass}>
+              {t('prompts.editor.text', 'Prompt')}
+              <span className="text-red-500 ml-0.5">*</span>
+            </label>
             <textarea
               id="prompt-editor-text"
-              ref={textRef}
               className={`${inputClass} font-mono`}
               rows={8}
               value={text}
               onChange={e => setText(e.target.value)}
               maxLength={20000}
+              aria-describedby="prompt-editor-text-help"
               placeholder={t('prompts.editor.textPlaceholder', {
                 defaultValue: 'Write a {{tone}} email to {{recipient}} about {{topic}}.',
                 skipInterpolation: true
               })}
             />
-            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-              {t('prompts.editor.textHelp', {
-                defaultValue:
-                  'Use {{name}} for anything to ask for when the prompt is used. {{content}} marks where your own text goes; {{user_name}}, {{date}} and the other global variables fill in by themselves.',
-                skipInterpolation: true
-              })}
+            <p
+              id="prompt-editor-text-help"
+              className="mt-1 flex items-start gap-1.5 text-xs text-gray-500 dark:text-gray-400"
+            >
+              <Icon name="information-circle" size="sm" className="shrink-0 mt-px" />
+              <span>
+                {t('prompts.editor.textHelp', {
+                  defaultValue:
+                    'Add a placeholder by typing {{mytext}} — each one becomes a field to fill in when the prompt is used. {{content}} marks where your own text goes; {{user_name}}, {{date}} and the other global variables fill in by themselves.',
+                  skipInterpolation: true
+                })}
+              </span>
             </p>
           </div>
 
@@ -514,49 +517,26 @@ function PromptEditorModal({ prompt, initial = {}, onClose, onSaved }) {
             </div>
           )}
 
-          <div className="grid gap-4 sm:grid-cols-2">
-            {categories.length > 0 && (
-              <div>
-                <label htmlFor="prompt-editor-category" className={labelClass}>
-                  {t('prompts.editor.category', 'Category')}
-                </label>
-                <select
-                  id="prompt-editor-category"
-                  className={inputClass}
-                  value={category}
-                  onChange={e => setCategory(e.target.value)}
-                >
-                  <option value="">{t('prompts.editor.noCategory', 'No category')}</option>
-                  {categories.map(c => (
-                    <option key={c.id} value={c.id}>
-                      {getLocalizedContent(c.name, lang)}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
-            <div>
-              <label htmlFor="prompt-editor-app" className={labelClass}>
-                {t('prompts.editor.app', 'Open in app')}
+          {categories.length > 0 && (
+            <div className="sm:w-1/2">
+              <label htmlFor="prompt-editor-category" className={labelClass}>
+                {t('prompts.editor.category', 'Category')}
               </label>
               <select
-                id="prompt-editor-app"
+                id="prompt-editor-category"
                 className={inputClass}
-                value={appId}
-                onChange={e => setAppId(e.target.value)}
+                value={category}
+                onChange={e => setCategory(e.target.value)}
               >
-                <option value="">{t('prompts.editor.defaultApp', 'Default app')}</option>
-                {appId && !chatApps.some(app => app.id === appId) && (
-                  <option value={appId}>{appId}</option>
-                )}
-                {chatApps.map(app => (
-                  <option key={app.id} value={app.id}>
-                    {getLocalizedContent(app.name, lang)}
+                <option value="">{t('prompts.editor.noCategory', 'No category')}</option>
+                {categories.map(c => (
+                  <option key={c.id} value={c.id}>
+                    {getLocalizedContent(c.name, lang)}
                   </option>
                 ))}
               </select>
             </div>
-          </div>
+          )}
 
           {error && (
             <p className="text-sm text-red-600 dark:text-red-400" role="alert">

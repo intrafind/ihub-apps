@@ -20,6 +20,7 @@ import { httpFetch } from '../utils/httpConfig.js';
 import { getReadableStream } from '../utils/streamUtils.js';
 import { expandEnvVars, resolveApiKey } from '../transcription/credentials.js';
 import { selectVoice } from './language.js';
+import { TtsUpstreamError } from './errors.js';
 
 export const DEFAULT_URL = 'https://api.mistral.ai/v1/audio/speech';
 export const DEFAULT_MODEL = 'voxtral-mini-tts-latest';
@@ -33,14 +34,7 @@ const REQUEST_TIMEOUT_MS = 180_000;
 /** Longest the stream may go silent before the request is given up on. */
 const IDLE_TIMEOUT_MS = 30_000;
 
-/** An upstream failure, with the HTTP status when the upstream answered. */
-export class TtsUpstreamError extends Error {
-  constructor(message, { status } = {}) {
-    super(message);
-    this.name = 'TtsUpstreamError';
-    this.status = status;
-  }
-}
+export { TtsUpstreamError };
 
 /**
  * @param {Object} model - The TTS model config as stored in cache.
