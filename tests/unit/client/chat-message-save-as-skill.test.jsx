@@ -74,6 +74,10 @@ const DRAFT_ANSWER = [
   '```'
 ].join('\n');
 
+/**
+ * Render one message (an answer with a draft by default) and return the
+ * `onSaveAsSkill` handler it was given.
+ */
 function renderAnswer({ content = DRAFT_ANSWER, onSaveAsSkill = jest.fn(), ...message } = {}) {
   render(
     <ChatMessage

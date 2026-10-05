@@ -20,10 +20,22 @@ const APP_FILE = 'apps/chat.json';
 
 export const SKILL_NAME = 'skill-builder';
 
+/**
+ * Run only where the shipped Chat app exists.
+ *
+ * @param {Object} ctx - Migration context.
+ * @returns {Promise<boolean>}
+ */
 export async function precondition(ctx) {
   return await ctx.fileExists(APP_FILE);
 }
 
+/**
+ * Append `skill-builder` to the Chat app's skills unless it is already there.
+ *
+ * @param {Object} ctx - Migration context.
+ * @returns {Promise<void>}
+ */
 export async function up(ctx) {
   const app = await ctx.readJson(APP_FILE);
   if (!app || typeof app !== 'object' || Array.isArray(app)) {

@@ -29,6 +29,7 @@ const defaultsDir = path.join(path.dirname(fileURLToPath(import.meta.url)), '..'
 
 let baseDir;
 
+/** A migration context over a scratch contents directory. */
 function makeCtx(dir) {
   return {
     fileExists: async rel =>
@@ -46,6 +47,12 @@ function makeCtx(dir) {
   };
 }
 
+/**
+ * A scratch contents directory holding `apps/chat.json` (none for `null`).
+ *
+ * @param {Object|null} chatApp - The Chat app config to write.
+ * @returns {Promise<Object>} A migration context over it.
+ */
 async function seed(chatApp) {
   const dir = await fs.mkdtemp(path.join(baseDir, 'v155-'));
   await fs.mkdir(path.join(dir, 'apps'), { recursive: true });

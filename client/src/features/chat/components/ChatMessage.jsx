@@ -70,6 +70,13 @@ import GeneratedFiles from './GeneratedFiles';
 import { findSkillDraft } from '../../skills/utils/skillDraft';
 import './ChatMessage.css';
 
+/**
+ * One message of a chat transcript — the user's or an answer — with its
+ * actions (copy, edit, feedback, "Save as prompt", "Save as skill", …).
+ * Every chat surface renders messages through it: main chat, compare mode,
+ * canvas, the Office add-in and shared transcripts. The props are documented
+ * where they are destructured.
+ */
 function ChatMessage({
   message,
   outputFormat = 'markdown',
