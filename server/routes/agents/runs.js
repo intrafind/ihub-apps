@@ -538,13 +538,19 @@ export default function registerAgentRunRoutes(app) {
       if (!validateIdForPath(runId, 'run', res)) return;
       if (!(await authorizeRunAccess(req, res, runId))) return;
 
+      // The run may execute on another cluster worker; watching relays its
+      // events here.
+      const stopWatching = actionTracker.watchRun(runId);
       const channel = createSseChannel({
         req,
         res,
         id: runId,
         map: agentClients,
         component: 'AgentRuns',
-        onClose: () => actionTracker.off('fire-sse', handleEvent)
+        onClose: () => {
+          actionTracker.off('fire-sse', handleEvent);
+          stopWatching();
+        }
       });
 
       const connected = buildEnvelope({

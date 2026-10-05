@@ -12,6 +12,38 @@
  * verbatim — the wire dialect is SSE v2 only.
  */
 import { EventEmitter } from 'events';
+import { createPresenceMap, hasRemote, publish, subscribe } from './clusterBus.js';
+
+/**
+ * ## Across cluster workers
+ *
+ * A run executes on the worker that started (or resumed) it, but the browser
+ * watching it — the stream GET, the chat that launched it — is often attached
+ * to another worker. A consumer therefore declares which run it watches with
+ * {@link ActionTracker#watchRun}; that is announced over the cluster bus, and a
+ * `fire-sse` event for a run watched elsewhere is relayed there and emitted on
+ * that worker's tracker as if it had been produced locally. Outside cluster
+ * mode none of this does anything.
+ */
+const RUN_WATCH_PRESENCE = 'run-watch';
+const RELAY_CHANNEL = 'action-tracker:fire-sse';
+
+/**
+ * runId → number of local watchers. Shared, because two browser tabs on two
+ * workers can watch the same run; each must get its events.
+ */
+const watchedRuns = createPresenceMap(RUN_WATCH_PRESENCE, { shared: true });
+
+/** Errors do not survive JSON serialisation; keep what consumers read. */
+function toWire(payload) {
+  return JSON.parse(
+    JSON.stringify(payload, (_key, value) =>
+      value instanceof Error
+        ? { name: value.name, message: value.message, code: value.code }
+        : value
+    )
+  );
+}
 
 export class ActionTracker extends EventEmitter {
   constructor() {
@@ -21,6 +53,54 @@ export class ActionTracker extends EventEmitter {
     // default 10-listener warning threshold without leaking.
     this.setMaxListeners(0);
   }
+
+  emit(eventName, ...args) {
+    const handled = super.emit(eventName, ...args);
+    if (eventName === 'fire-sse') this._relayToWatchers(args[0]);
+    return handled;
+  }
+
+  /**
+   * Receive `fire-sse` events for `runId` on this worker even when the run
+   * executes on another one. Call alongside `on('fire-sse', …)`.
+   *
+   * @param {string} runId - Execution / run id the events carry as `chatId`
+   *   or `executionId`.
+   * @returns {() => void} Stop watching; safe to call more than once.
+   */
+  watchRun(runId) {
+    if (typeof runId !== 'string' || !runId) return () => {};
+    watchedRuns.set(runId, (watchedRuns.get(runId) || 0) + 1);
+    let released = false;
+    return () => {
+      if (released) return;
+      released = true;
+      const remaining = (watchedRuns.get(runId) || 1) - 1;
+      if (remaining > 0) watchedRuns.set(runId, remaining);
+      else watchedRuns.delete(runId);
+    };
+  }
+
+  _relayToWatchers(payload) {
+    if (!payload || typeof payload !== 'object') return;
+    for (const runId of new Set([payload.chatId, payload.executionId])) {
+      if (typeof runId !== 'string' || !hasRemote(RUN_WATCH_PRESENCE, runId)) continue;
+      let wire;
+      try {
+        wire = toWire(payload);
+      } catch {
+        return; // not serialisable (a cycle); nothing a remote watcher could use
+      }
+      publish(RELAY_CHANNEL, { payload: wire }, { kind: RUN_WATCH_PRESENCE, key: runId });
+      return; // one relay reaches every watching worker
+    }
+  }
 }
 
 export const actionTracker = new ActionTracker();
+
+// Events relayed from the worker running the run: emit locally only, so they
+// are never relayed back out.
+subscribe(RELAY_CHANNEL, ({ payload } = {}) => {
+  if (payload) EventEmitter.prototype.emit.call(actionTracker, 'fire-sse', payload);
+});
