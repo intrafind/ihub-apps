@@ -121,6 +121,46 @@ async function runPrimary() {
     assert.ok(received.some(e => e.marker === 'producer-watched-first'));
   });
 
+  await check('a sub-workflow’s events reach the watchers of the run that spawned it', async () => {
+    // The stream watches the parent and only learns the child ids from the
+    // events themselves; the child's first events must not depend on that.
+    await ask(watcher, { step: 'watch', runId: 'parent-run' });
+    await settle();
+    const spawn = (parent, child, marker) => ({
+      event: 'workflow.subworkflow.start',
+      chatId: parent,
+      executionId: child,
+      parentExecutionId: parent,
+      marker
+    });
+    for (const payload of [
+      spawn('parent-run', 'child-1', 'child-spawned'),
+      { event: 'workflow.node.start', chatId: 'child-1', marker: 'child-node' },
+      spawn('child-1', 'grandchild-1', 'grandchild-spawned'),
+      { event: 'workflow.node.start', chatId: 'grandchild-1', marker: 'grandchild-node' }
+    ]) {
+      await ask(runner, { step: 'emitRaw', payload });
+    }
+    await settle();
+    const { received } = await ask(watcher, { step: 'received' });
+    const markers = received.map(e => e.marker);
+    for (const marker of ['child-spawned', 'child-node', 'grandchild-spawned', 'grandchild-node']) {
+      assert.strictEqual(markers.filter(m => m === marker).length, 1, `${marker} not seen once`);
+    }
+  });
+
+  await check('a child watched both directly and through its parent arrives once', async () => {
+    await ask(watcher, { step: 'watch', runId: 'child-1' });
+    await settle();
+    await ask(runner, {
+      step: 'emitRaw',
+      payload: { event: 'workflow.node.end', chatId: 'child-1', marker: 'child-watched-twice' }
+    });
+    await settle();
+    const { received } = await ask(watcher, { step: 'received' });
+    assert.strictEqual(received.filter(e => e.marker === 'child-watched-twice').length, 1);
+  });
+
   for (const worker of workers) worker.kill();
   if (failed) {
     console.error('\n❌ run event relay tests failed');
@@ -159,6 +199,9 @@ async function runWorker() {
           marker: msg.marker,
           error: new Error('node failed')
         });
+        return reply({});
+      case 'emitRaw':
+        actionTracker.emit('fire-sse', msg.payload);
         return reply({});
       case 'received':
         return reply({ received: received.filter(e => e.chatId !== 'run-unwatched') });

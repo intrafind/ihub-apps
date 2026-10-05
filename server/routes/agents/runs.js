@@ -538,9 +538,24 @@ export default function registerAgentRunRoutes(app) {
       if (!validateIdForPath(runId, 'run', res)) return;
       if (!(await authorizeRunAccess(req, res, runId))) return;
 
-      // The run may execute on another cluster worker; watching relays its
-      // events here.
-      const stopWatching = actionTracker.watchRun(runId);
+      // Track this run and any descendant sub-workflow executionIds. The
+      // planner spawns a child workflow whose events fire with
+      // `chatId = childExecutionId` (not the parent runId) — without this
+      // bookkeeping the UI sees only the parent's start/planner/end nodes and
+      // none of the task work done in the sub-workflow.
+      //
+      // The run may execute on another cluster worker; watching each id relays
+      // its events here.
+      const trackedIds = new Set();
+      const watches = [];
+      let closed = false;
+      const track = id => {
+        if (closed || typeof id !== 'string' || !id || trackedIds.has(id)) return;
+        trackedIds.add(id);
+        watches.push(actionTracker.watchRun(id));
+      };
+      track(runId);
+
       const channel = createSseChannel({
         req,
         res,
@@ -548,8 +563,9 @@ export default function registerAgentRunRoutes(app) {
         map: agentClients,
         component: 'AgentRuns',
         onClose: () => {
+          closed = true;
           actionTracker.off('fire-sse', handleEvent);
-          stopWatching();
+          for (const stopWatching of watches) stopWatching();
         }
       });
 
@@ -571,13 +587,6 @@ export default function registerAgentRunRoutes(app) {
       // Event prefixes we forward to the client.
       const forwardedPrefixes = ['workflow.', 'agent.'];
 
-      // Track this run and any descendant sub-workflow executionIds. The
-      // planner spawns a child workflow whose events fire with
-      // `chatId = childExecutionId` (not the parent runId) — without this
-      // bookkeeping the UI sees only the parent's start/planner/end nodes and
-      // none of the task work done in the sub-workflow.
-      const trackedIds = new Set([runId]);
-
       // Seed from existing state in case the SSE client connects after some
       // child workflows have already been spawned.
       (async () => {
@@ -585,7 +594,7 @@ export default function registerAgentRunRoutes(app) {
           const state = await getEngine().getState(runId);
           const seed = ids => {
             if (Array.isArray(ids)) {
-              for (const id of ids) trackedIds.add(id);
+              for (const id of ids) track(id);
             }
           };
           seed(state?.data?._childExecutionIds);
@@ -611,7 +620,7 @@ export default function registerAgentRunRoutes(app) {
         // Auto-track new child executions as they're spawned mid-run.
         if (eventType === 'workflow.subworkflow.start') {
           const childId = eventData.data?.executionId || eventData.executionId;
-          if (childId) trackedIds.add(childId);
+          if (childId) track(childId);
         }
 
         const matchesRun =

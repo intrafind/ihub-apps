@@ -24,6 +24,13 @@ import { createPresenceMap, hasRemote, publish, subscribe } from './clusterBus.j
  * `fire-sse` event for a run watched elsewhere is relayed there and emitted on
  * that worker's tracker as if it had been produced locally. Outside cluster
  * mode none of this does anything.
+ *
+ * A sub-workflow's events carry its own execution id, while the browser
+ * watches the run that spawned it. The worker running both remembers which
+ * run spawned which child (from `workflow.subworkflow.start`), so a child's
+ * events reach the parent's watchers from the first one on — a watch the
+ * stream registers for the child once it hears of it would arrive too late
+ * for the events in between.
  */
 const RUN_WATCH_PRESENCE = 'run-watch';
 const RELAY_CHANNEL = 'action-tracker:fire-sse';
@@ -33,6 +40,38 @@ const RELAY_CHANNEL = 'action-tracker:fire-sse';
  * workers can watch the same run; each must get its events.
  */
 const watchedRuns = createPresenceMap(RUN_WATCH_PRESENCE, { shared: true });
+
+/** child execution id → the run that spawned it, for runs on this worker. */
+const parentOfRun = new Map();
+
+/** Children remembered at most; the oldest are forgotten first. */
+const MAX_REMEMBERED_CHILDREN = 10_000;
+
+/** Levels of sub-workflow nesting followed up to a watched run. */
+const MAX_ANCESTRY_DEPTH = 8;
+
+function rememberChild(childId, parentId) {
+  if (typeof childId !== 'string' || typeof parentId !== 'string' || childId === parentId) return;
+  parentOfRun.delete(childId);
+  parentOfRun.set(childId, parentId);
+  if (parentOfRun.size > MAX_REMEMBERED_CHILDREN) {
+    parentOfRun.delete(parentOfRun.keys().next().value);
+  }
+}
+
+/** The run ids an event belongs to: its own, then the runs that spawned it. */
+function runIdsOf(payload) {
+  const ids = new Set();
+  for (const id of [payload.chatId, payload.executionId]) {
+    let current = id;
+    for (let depth = 0; typeof current === 'string' && depth <= MAX_ANCESTRY_DEPTH; depth++) {
+      if (ids.has(current)) break;
+      ids.add(current);
+      current = parentOfRun.get(current);
+    }
+  }
+  return ids;
+}
 
 /** Errors do not survive JSON serialisation; keep what consumers read. */
 function toWire(payload) {
@@ -83,8 +122,11 @@ export class ActionTracker extends EventEmitter {
 
   _relayToWatchers(payload) {
     if (!payload || typeof payload !== 'object') return;
-    for (const runId of new Set([payload.chatId, payload.executionId])) {
-      if (typeof runId !== 'string' || !hasRemote(RUN_WATCH_PRESENCE, runId)) continue;
+    if (payload.event === 'workflow.subworkflow.start') {
+      rememberChild(payload.executionId, payload.parentExecutionId ?? payload.chatId);
+    }
+    for (const runId of runIdsOf(payload)) {
+      if (!hasRemote(RUN_WATCH_PRESENCE, runId)) continue;
       let wire;
       try {
         wire = toWire(payload);
