@@ -109,6 +109,19 @@ describe('ChatMessage "Save as skill"', () => {
     expect(screen.queryByText('Save as skill')).not.toBeInTheDocument();
   });
 
+  it('is not offered on an answer that was cancelled or cut off', () => {
+    renderAnswer({ cancelled: true });
+    renderAnswer({ finishReason: 'length' });
+    renderAnswer({ finishReason: 'connection_closed' });
+    renderAnswer({ finishReason: 'error' });
+    expect(screen.queryByText('Save as skill')).not.toBeInTheDocument();
+  });
+
+  it('is offered on an answer that finished normally', () => {
+    renderAnswer({ finishReason: 'stop' });
+    expect(screen.getByText('Save as skill')).toBeInTheDocument();
+  });
+
   it('is not offered on the user’s own message or without the handler', () => {
     renderAnswer({ role: 'user' });
     renderAnswer({ onSaveAsSkill: null });

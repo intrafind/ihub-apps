@@ -35,8 +35,8 @@ user owns it or it is shared with them, and the app does not set
 ## User Skills
 
 Any signed-in user can create skills of their own in the library (`/prompts`, **New → New
-skill**), or start from a ready-made one in the [marketplace](#skills-from-the-marketplace). The
-editor has:
+skill**), let the assistant draft one ([Create a skill with AI](#create-a-skill-with-ai)), or
+start from a ready-made one in the [marketplace](#skills-from-the-marketplace). The editor has:
 
 - **Name** — lowercase letters, digits and hyphens, starting and ending with a letter or digit,
   at most 64 characters.
@@ -50,28 +50,54 @@ editor has:
 
 ### Create a skill with AI
 
-Users who would rather describe a skill than write one start from **New → Create skill with
-AI** in the library:
+Users who would rather describe a skill than write one let the assistant draft it. The
+**skill-builder** skill interviews them and writes the skill; one click turns the draft into a
+skill of their own.
 
-1. A new chat opens with `/skill-builder ` in the input. The user describes the task the skill
-   should handle (or pastes a prompt, Gem or custom GPT instructions to convert) and sends it.
-2. The **skill-builder** skill asks a few questions, then drafts the skill: a `SKILL.md` with
-   name, description and instructions in a code block, and any reference files in code blocks of
-   their own, labelled with their path.
-3. **Save as skill** under that answer opens the skill editor with everything filled in. The
-   user reviews it and saves; the skill is then one of their own skills, used with `/name`.
-   Asking for changes in the chat gives a new draft, with its own **Save as skill**.
+**1. Start from the library.** **New → Create skill with AI** in the library (`/prompts`).
 
-**Save as skill** appears under every answer that contains a skill in this form, in any app.
-The editor checks the draft like a skill typed by hand, and the limits under
-[Settings](#settings) apply.
+![The library's New menu with "Create skill with AI" below "New prompt" and "New skill"](assets/screenshots/skills-create-with-ai-menu.png)
 
-`skill-builder` is a global skill that ships with iHub (from the marketplace): it is copied into
-`contents/skills/skill-builder/` on startup and assigned to the **Chat** app. **Create skill with
-AI** is offered to signed-in users who may keep skills of their own, when `skill-builder` is
-granted to their groups and assigned to a chat app they can use. With several such apps, the
-start page's chat app wins, then favorites and the app order. Admins assign it to other apps
-under **Admin → Apps**, or remove it from Chat to hide the entry.
+**2. Describe the skill.** A new chat opens with `/skill-builder ` already in the input. Add what
+the skill should do and send it. Pasting an existing prompt, Gem or custom GPT instructions
+works too: skill-builder converts them.
+
+![A new chat in the Chat app with "/skill-builder" followed by the user's description in the input](assets/screenshots/skills-create-with-ai-start.png)
+
+**3. Answer its questions, get the draft.** skill-builder asks what it needs to know (the
+result, the steps, the rules), then drafts the skill: a `SKILL.md` with name, description and
+instructions in one code block, and any reference files in code blocks of their own, labelled
+with their path. Ask for changes in the chat to get a revised draft.
+
+![The answer of skill-builder with the drafted SKILL.md: frontmatter with name and description, then the instructions](assets/screenshots/skills-create-with-ai-draft.png)
+
+**4. Save as skill.** Under the draft, **Save as skill** opens the skill editor.
+
+![The end of the answer: a reference file, test prompts and the Save as skill button](assets/screenshots/skills-create-with-ai-save.png)
+
+**5. Review and save.** Name, description, instructions and reference files are filled in. The
+editor checks the draft like a skill typed by hand, and the limits under [Settings](#settings)
+apply. After **Save**, the skill is one of the user's own skills: private until shared, and used
+with `/name` in any chat.
+
+![The skill editor filled in from the draft: name weekly-status-report, the description and the instructions](assets/screenshots/skills-save-as-skill-editor.png)
+
+**Save as skill** appears under every finished answer that contains a skill in this form, in
+any app, not only after **Create skill with AI**. It is not offered on an answer that was
+cancelled or cut off, because the draft may be incomplete.
+
+#### For admins
+
+`skill-builder` is a global skill that ships with iHub, taken from the marketplace (its
+hand-over is adapted to **Save as skill**). It is copied into `contents/skills/skill-builder/`
+on startup and assigned to the **Chat** app, on new installations by the defaults and on
+existing ones by a migration.
+
+**Create skill with AI** is offered to signed-in users who may keep skills of their own, when
+`skill-builder` is granted to their groups (`permissions.skills`) and assigned to a chat app they
+can use. With several such apps, the start page's chat app wins, then favorites and the app
+order. Admins assign it to other apps under **Admin → Apps**. To hide the entry, remove it from
+every chat app it is assigned to (on a new installation, that is Chat).
 
 ### Skills from the marketplace
 

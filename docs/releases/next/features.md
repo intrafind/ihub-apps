@@ -45,6 +45,7 @@ instructions and reference files filled in, ready to review and save.
 - `skill-builder` now ships with iHub as a global skill and is assigned to the **Chat** app, also
   on existing installations. The entry is offered when the Agent Skills feature and user skills
   are on and the skill is granted to the user's groups.
-- **Save as skill** appears under any answer that contains a drafted `SKILL.md`, in every app.
-- To hide the entry, remove `skill-builder` from the Chat app under **Admin → Apps**; assign it to
-  other apps to offer it there.
+- **Save as skill** appears under any finished answer that contains a drafted `SKILL.md`, in every
+  app.
+- To hide the entry, remove `skill-builder` from every chat app it is assigned to under
+  **Admin → Apps** (on a new installation, that is Chat); assign it to other apps to offer it there.

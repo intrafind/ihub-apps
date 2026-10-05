@@ -70,6 +70,9 @@ import GeneratedFiles from './GeneratedFiles';
 import { findSkillDraft } from '../../skills/utils/skillDraft';
 import './ChatMessage.css';
 
+/** How an answer ends when it stopped before it was complete. */
+const INTERRUPTED_FINISH_REASONS = new Set(['length', 'connection_closed', 'error']);
+
 /**
  * One message of a chat transcript — the user's or an answer — with its
  * actions (copy, edit, feedback, "Save as prompt", "Save as skill", …).
@@ -175,13 +178,17 @@ function ChatMessage({
     [citationView, messageKey]
   );
   // The skill a finished answer drafts, for "Save as skill" — only read once
-  // the answer is complete, and only where the button can be offered.
+  // the answer is complete, and only where the button can be offered. An
+  // answer that was cancelled or cut off may hold half a skill, so it offers
+  // nothing.
+  const interrupted =
+    message.cancelled === true || INTERRUPTED_FINISH_REASONS.has(message.finishReason);
   const skillDraft = useMemo(
     () =>
-      onSaveAsSkill && !isUser && !isError && !readOnly && !message.loading
+      onSaveAsSkill && !isUser && !isError && !readOnly && !message.loading && !interrupted
         ? findSkillDraft(answerText)
         : null,
-    [onSaveAsSkill, isUser, isError, readOnly, message.loading, answerText]
+    [onSaveAsSkill, isUser, isError, readOnly, message.loading, interrupted, answerText]
   );
   const hasVariables = message.variables && Object.keys(message.variables).length > 0;
   const [isEditing, setIsEditing] = useState(false);
