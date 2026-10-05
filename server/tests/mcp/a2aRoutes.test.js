@@ -72,7 +72,10 @@ jest.unstable_mockModule('../../clusterBus.js', () => ({
   request: jest.fn(async () => null),
   respond: jest.fn(() => () => {}),
   createPresenceMap: () => new Map(),
-  hasRemote: () => false
+  hasRemote: () => false,
+  isClusterBusActive: () => false,
+  respondInPrimary: () => () => {},
+  gather: async () => []
 }));
 
 const { default: registerMcpServerRoutes } = await import('../../routes/mcpServer.js');

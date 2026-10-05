@@ -85,6 +85,9 @@ const bus = {
 };
 
 jest.unstable_mockModule('../clusterBus.js', () => ({
+  isClusterBusActive: () => false,
+  respondInPrimary: () => () => {},
+  gather: async () => [],
   createPresenceMap: () => new Map(),
   hasRemote: (kind, key) => bus.remote.has(`${kind}:${key}`),
   publish: jest.fn((type, payload, route) => {
