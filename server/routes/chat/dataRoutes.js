@@ -17,6 +17,22 @@ import logger from '../../utils/logger.js';
 import { sendInternalError, sendFailedOperationError } from '../../utils/responseHelpers.js';
 
 /**
+ * The default dictation model as the client sees it: its id, and whether it is
+ * an enabled transcription model right now.
+ *
+ * @param {{ modelId?: string }} [dictation] `platform.speech.dictation`
+ * @returns {{ modelId: string, available: boolean }}
+ */
+export function dictationClientConfig(dictation) {
+  const modelId = dictation?.modelId || '';
+  const { data: models = [] } = configCache.getModels(); // enabled only
+  return {
+    modelId,
+    available: !!modelId && models.some(m => m.id === modelId && m.modelType === 'transcription')
+  };
+}
+
+/**
  * @swagger
  * components:
  *   schemas:
@@ -834,8 +850,11 @@ export default function registerDataRoutes(app) {
             }
           : undefined,
         // Speech-to-text: expose only non-secret fields the client needs.
-        // The vLLM realtime URL/apiKey stay server-side (the browser connects to
-        // iHub, not vLLM); only whether it's enabled is surfaced. Azure host is
+        // Transcription endpoints stay on their models, server-side (the
+        // browser connects to iHub, never to them). dictation.available says
+        // whether the default dictation model is an enabled transcription
+        // model, so apps that follow the default fall back to the browser
+        // instead of failing on a disabled one. Azure host is
         // not a secret and lets the client fall back to a platform default.
         // keyConfigured tells the client whether to fetch a token at all: without
         // a key (on-prem container, air-gapped) it connects to the host directly.
@@ -855,9 +874,7 @@ export default function registerDataRoutes(app) {
                     defaultModelId: platform.speech.tts.defaultModelId || ''
                   }
                 : undefined,
-              realtime: platform.speech.realtime
-                ? { enabled: platform.speech.realtime.enabled }
-                : undefined,
+              dictation: dictationClientConfig(platform.speech.dictation),
               azure: platform.speech.azure
                 ? {
                     enabled: platform.speech.azure.enabled,

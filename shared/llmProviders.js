@@ -37,6 +37,14 @@ export const CUSTOM_PROVIDER_API_TYPES = Object.freeze([
 ]);
 
 /**
+ * API types whose speech-to-text models iHub can run: they speak the OpenAI
+ * audio API (`/audio/transcriptions`), served by
+ * server/transcription/openaiTranscribeProvider.js. Model import turns a
+ * listed Whisper-style model of these types into a transcription model.
+ */
+export const TRANSCRIPTION_API_TYPES = Object.freeze(['openai', 'local']);
+
+/**
  * Every value a model's `provider` (API type) can take. Mirrors the `provider`
  * enum of server/validators/modelConfigSchema.js; a test keeps them equal.
  *

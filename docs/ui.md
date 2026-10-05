@@ -422,8 +422,12 @@ image-generation settings and Magic Prompt — each shown only when the app (and
 feature flag) enables it. The toggles open in the state already chosen for that app in the
 current session, and whatever is picked applies to the first message when it is sent in the app.
 
+![The start page: greeting, the default app's chat input, featured apps and recent chats](assets/screenshots/start-page.png)
+
 The `startPage` section configures it. It can be edited under **Admin → UI Customization →
 Start Page**; existing installations receive the defaults through a configuration migration.
+
+![Admin → UI Customization → Start Page](assets/screenshots/admin-ui-start-page.png)
 
 ```json
 "startPage": {

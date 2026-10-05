@@ -29,19 +29,6 @@ export const fetchModels = async (options = {}) => {
   );
 };
 
-// Fetch transcription models (modelType: 'transcription'). The public /models
-// endpoint returns chat models by default; `?type=transcription` returns the
-// permitted transcription models (sanitized — no url/apiKey). Not cached to
-// avoid colliding with the chat models list cache key.
-export const fetchTranscriptionModels = async () => {
-  return handleApiResponse(
-    () => apiClient.get('/models', { params: { type: 'transcription' } }),
-    null,
-    null,
-    false
-  );
-};
-
 // Fetch text-to-speech models (modelType: 'tts') this user may use, for read
 // aloud. Same sanitized shape as the transcription list; not cached under the
 // chat models key.

@@ -1,5 +1,5 @@
 /**
- * Migration V148 — Seed the platform `userSkills` section
+ * Migration V152 — Seed the platform `userSkills` section
  *
  * Signed-in users can keep skills of their own and share them, the same way
  * they keep prompts. These are the settings it reads, and what
@@ -23,7 +23,7 @@
  * effect while the `skills` feature is on.
  */
 
-export const version = '148';
+export const version = '152';
 export const description = 'add_user_skills_settings';
 
 export const USER_SKILLS_DEFAULTS = Object.freeze({

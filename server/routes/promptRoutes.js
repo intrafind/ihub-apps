@@ -77,7 +77,7 @@ import {
 /** Scopes `GET /api/prompts?scope=` accepts. */
 export const LIST_SCOPES = Object.freeze(['all', 'global', 'mine', 'shared', 'favorites']);
 
-/** Users one share-target lookup returns, and the query length it needs. */
+/** Users and groups one share-target lookup returns, and the query length users need. */
 const LOOKUP_LIMIT = 10;
 const LOOKUP_MIN_CHARS = 2;
 const LOOKUP_MAX_CHARS = 100;
@@ -660,7 +660,9 @@ export default function registerPromptRoutes(app) {
    *         name: q
    *         schema:
    *           type: string
-   *         description: Search text; users need at least two characters.
+   *         description: |
+   *           Search text; users need at least two characters. At most ten
+   *           users and ten groups are returned.
    */
   app.get(buildServerPath('/api/prompts/share-targets'), ...gate, authenticatedOnly, (req, res) => {
     try {
@@ -704,7 +706,10 @@ export default function registerPromptRoutes(app) {
             group =>
               !q || group.name.toLowerCase().includes(q) || group.id.toLowerCase().includes(q)
           )
-          .sort((a, b) => a.name.localeCompare(b.name));
+          .sort((a, b) => a.name.localeCompare(b.name))
+          // Capped like users: with many groups the dialog offers what matches
+          // the search, never the whole directory.
+          .slice(0, LOOKUP_LIMIT);
       }
       res.json({ allowed, users, groups });
     } catch (error) {
