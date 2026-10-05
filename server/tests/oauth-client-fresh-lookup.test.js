@@ -49,6 +49,14 @@ jest.unstable_mockModule('../services/config/ConfigStore.js', () => ({
     },
     writeJson: async (_relPath, data) => {
       state.disk = structuredClone(data);
+    },
+    // The store's compare-and-set is covered by config-store-update.test.js;
+    // here it only has to apply the change to the shared file.
+    updateJson: async (_relPath, mutate) => {
+      const next = await mutate(state.disk ? structuredClone(state.disk) : null);
+      if (next === undefined) return { data: structuredClone(state.disk), written: false };
+      state.disk = structuredClone(next);
+      return { data: next, written: true };
     }
   }
 }));

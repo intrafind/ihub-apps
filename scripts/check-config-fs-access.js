@@ -175,7 +175,8 @@ const CONTRACT_EXCLUSIONS = [
     symbol: /^readFileSync$/,
     reason:
       'Same synchronous cache-miss fallback as userManager.js, for oauth.clientsFile; also the ' +
-      're-read in loadOAuthClientsFresh() of a clients file outside contents/, which has no ' +
+      're-read in loadOAuthClientsFresh() and the locked read-modify-write in ' +
+      'updateClientsFileOutsideContents() of a clients file outside contents/, which has no ' +
       'place in the store.'
   },
   {

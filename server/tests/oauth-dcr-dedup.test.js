@@ -47,6 +47,12 @@ jest.unstable_mockModule('../services/config/ConfigStore.js', () => ({
   default: {
     writeJson: async (_relPath, data) => {
       state.store = data;
+    },
+    updateJson: async (_relPath, mutate) => {
+      const next = await mutate(structuredClone(state.store));
+      if (next === undefined) return { data: state.store, written: false };
+      state.store = next;
+      return { data: next, written: true };
     }
   }
 }));
