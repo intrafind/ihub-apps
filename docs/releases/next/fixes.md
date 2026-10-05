@@ -110,11 +110,13 @@ in one worker and failed, or showed stale data, on the others. They now work on 
   `404 Session not found` and reconnected in a loop.
 - **OAuth clients:** an MCP client that registered itself and immediately sent the user to sign in
   was refused with `invalid_client`, as was a token requested right after creating a client in the
-  admin UI.
+  admin UI. Clients registered or changed at the same moment on different workers could also
+  disappear.
 - **OAuth refresh tokens:** connected apps occasionally had to be authorized again, because two
   token refreshes at the same time overwrote each other.
-- **Workflows and agent runs:** the run page stopped updating, so progress, human checkpoints and
-  the end of the run did not appear, and a finished run kept showing as paused.
+- **Workflows and agent runs:** the run page stopped updating, so progress, human checkpoints, the
+  work of an agent's sub-tasks and the end of the run did not appear, and a finished run kept
+  showing as paused.
 - **OCR tool:** progress, download and cancel answered "Job not found", and the job list was
   incomplete.
 - **Short links:** a new link could not be opened at first, and links disappeared or came back
@@ -122,7 +124,8 @@ in one worker and failed, or showed stale data, on the others. They now work on 
 - **Usage statistics:** counts were lost, and a reset was undone a few seconds later.
 - **iAssistant:** a conversation lost its context when consecutive questions reached different
   workers.
-- **Admin update:** the progress of a running update showed as idle.
+- **Admin update:** the progress of a running update showed as idle, and an earlier failure could
+  hide it.
 - **Provider limits:** a model's `concurrency` and `requestDelayMs` applied per worker, so providers
   rejected requests with "too many requests" despite a correct configuration.
 - **Sign-in and OAuth rate limits** now count across all workers. Before, each worker counted on
