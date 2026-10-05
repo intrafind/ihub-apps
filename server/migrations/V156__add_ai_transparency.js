@@ -1,4 +1,4 @@
-export const version = '155';
+export const version = '156';
 export const description = 'add_ai_transparency';
 
 /**
