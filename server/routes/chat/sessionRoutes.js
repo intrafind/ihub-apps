@@ -1,4 +1,5 @@
 import configCache from '../../configCache.js';
+import { resolveRequestedSkills } from '../../services/skillAccess.js';
 import { appendMcpAppContext } from '../../services/mcp/mcpAppContext.js';
 import { sendLLMError } from '../../services/loop/llmHttpErrors.js';
 import { logInteraction, trackSession } from '../../utils.js';
@@ -319,9 +320,12 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
    *           type: string
    *           description: Quality level for image generation
    *           example: "High"
-   *         requestedSkill:
-   *           type: string
-   *           description: Slash-command skill to activate
+   *         requestedSkills:
+   *           type: array
+   *           maxItems: 10
+   *           items:
+   *             type: string
+   *           description: Skills to pre-activate for this turn (slash command). Only skills assigned to the app and granted to the user are activated, up to the app's skillSettings.maxActiveSkills (default 3).
    *         documentIds:
    *           type: array
    *           items:
@@ -726,7 +730,7 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
     prep,
     buildLogData,
     messageId,
-    activatedSkill = null,
+    activatedSkills = [],
     streaming,
     res,
     chatId,
@@ -742,7 +746,7 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
       prep,
       chatId,
       messageId,
-      activatedSkill,
+      activatedSkills,
       streaming,
       buildLogData,
       timeoutMs: DEFAULT_TIMEOUT,
@@ -898,7 +902,7 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
           websearchEnabled,
           imageAspectRatio,
           imageQuality,
-          requestedSkill,
+          requestedSkills,
           documentIds,
           replaceFromMessageId,
           ephemeral,
@@ -1318,7 +1322,7 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
             websearchEnabled,
             imageAspectRatio,
             imageQuality,
-            requestedSkill,
+            requestedSkills,
             documentIds,
             user: req.user,
             chatId
@@ -1387,7 +1391,7 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
             websearchEnabled,
             imageAspectRatio,
             imageQuality,
-            requestedSkill,
+            requestedSkills,
             documentIds,
             user: req.user,
             chatId
@@ -1406,22 +1410,23 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
           appendMcpAppContext(prep.data.llmMessages, mcpAppContext);
           llmMessages = prep.data.llmMessages;
 
-          // A skill pre-activated via slash command is announced on the turn's run.
-          let activatedSkill = null;
-          if (requestedSkill) {
-            const { data: skills = [] } = configCache.getSkills();
-            const skillMeta = skills.find(s => s.name === requestedSkill);
-            activatedSkill = {
-              skillName: requestedSkill,
-              description: skillMeta?.description || ''
-            };
-          }
+          // Skills pre-activated via slash command are announced on the turn's
+          // run: the same usable subset PromptService loaded, never a name the
+          // app or the user's groups don't allow.
+          const activatedSkills = bypassAppPrompts
+            ? []
+            : (
+                await resolveRequestedSkills(requestedSkills, {
+                  app: prep.data.app,
+                  user: req.user
+                })
+              ).map(skill => ({ skillName: skill.name, description: skill.description || '' }));
 
           await processChatRequest({
             prep: prep.data,
             buildLogData,
             messageId,
-            activatedSkill,
+            activatedSkills,
             streaming: true,
             res: null,
             chatId,

@@ -60,10 +60,18 @@ beforeAll(async () => {
   });
 });
 
-const user = { id: 'u1' };
+// As mcpAuth hands it over: expanded by enhanceUserWithPermissions.
+const user = { id: 'u1', permissions: { skills: new Set(['*']) } };
 const expose = { resources: true };
 
 describe('skill sub-resources', () => {
+  it('lists no skills for a principal without a skill grant', async () => {
+    for (const principal of [{ id: 'u2' }, { id: 'u3', permissions: { skills: new Set() } }]) {
+      const resources = await listMcpResources({ user: principal, platform: {}, expose });
+      expect(resources.some(r => r.uri.startsWith('ihub://skill/'))).toBe(false);
+    }
+  });
+
   it('lists the skill itself and every file it bundles', async () => {
     const resources = await listMcpResources({ user, platform: {}, expose });
     const uris = resources.map(r => r.uri);
