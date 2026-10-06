@@ -2,7 +2,7 @@
 
 import { createPopoutEndpoint } from './officePopoutBridge';
 import { setOfficeRemote, updateOfficeRemoteState } from './officeRemote';
-import { POPOUT_READ_TIMEOUT_MS } from './officePopout';
+import { POPOUT_READ_TIMEOUT_MS, isOwnOrigin } from './officePopout';
 
 /**
  * The popped-out chat's end of the bridge to the task pane (the pane's end is
@@ -30,8 +30,13 @@ const SLOW_METHODS = new Set(['readItemContext', 'readMailContext', 'runMailActi
  *   somewhere else, or the pane is gone.
  */
 export async function connectPopoutToPane() {
+  // The chat panel's current state, for the pane taking the chat back.
+  let stateProvider = null;
   const endpoint = createPopoutEndpoint({
     send: message => Office.context.ui.messageParent(message),
+    handlers: {
+      collectState: () => (typeof stateProvider === 'function' ? stateProvider() : null)
+    },
     onEvent: (name, payload) => {
       if (name !== 'itemchanged') return;
       // The synchronous answers first, so whoever reacts to the event reads
@@ -44,7 +49,9 @@ export async function connectPopoutToPane() {
   await new Promise((resolve, reject) => {
     Office.context.ui.addHandlerAsync(
       Office.EventType.DialogParentMessageReceived,
-      arg => endpoint.receive(arg?.message),
+      arg => {
+        if (isOwnOrigin(arg?.origin)) endpoint.receive(arg?.message);
+      },
       result => {
         if (result?.status === Office.AsyncResultStatus.Failed) reject(result.error);
         else resolve();
@@ -79,6 +86,11 @@ export async function connectPopoutToPane() {
         }
       }),
     report: state => endpoint.emit('chatState', state),
+    // The chat panel registers how to read its state right now (null when it
+    // is not on screen).
+    provideState: provider => {
+      stateProvider = provider;
+    },
     reportPinned: pinnedEmails => endpoint.emit('pinnedEmails', pinnedEmails),
     signedOut: () => endpoint.emit('signedOut')
   };

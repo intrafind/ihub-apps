@@ -47,8 +47,15 @@ const CLAIM_TIMEOUT_MS = 3000;
 /** How long a parked chat waits to be claimed. */
 export const HANDOFF_TTL_MS = 10 * 60 * 1000;
 
-/** Records one worker holds at most — each is up to a couple of megabytes. */
+/** Records one worker holds at most. */
 export const MAX_HANDOFFS_PER_WORKER = 500;
+
+/**
+ * Serialized bytes one worker holds at most, across all records. A record
+ * may be megabytes (the email rides along), so the count alone would let a
+ * few hundred users park gigabytes; past the budget the oldest records go.
+ */
+export const MAX_HANDOFF_BYTES_PER_WORKER = 128 * 1024 * 1024;
 
 /** Records one user holds at most; older ones make room for newer. */
 export const MAX_HANDOFFS_PER_USER = 5;
@@ -60,7 +67,7 @@ const SECRET_BYTES = 32;
 /**
  * Records parked on this worker, keyed by handle.
  *
- * @type {Map<string, { secret: string, ownerId: string, data: Object, expiresAt: number, createdAt: number }>}
+ * @type {Map<string, { secret: string, ownerId: string, data: Object, bytes: number, expiresAt: number, createdAt: number }>}
  */
 const handoffs = createPresenceMap(PRESENCE_KIND);
 
@@ -86,16 +93,27 @@ export function cleanup(now = Date.now()) {
   }
 }
 
-function makeRoom(ownerId) {
+function heldBytes() {
+  let total = 0;
+  for (const entry of handoffs.values()) total += entry.bytes || 0;
+  return total;
+}
+
+function makeRoom(ownerId, bytes) {
   cleanup();
   const own = [...handoffs.entries()]
     .filter(([, entry]) => entry.ownerId === ownerId)
     .sort((a, b) => a[1].createdAt - b[1].createdAt);
   while (own.length >= MAX_HANDOFFS_PER_USER) handoffs.delete(own.shift()[0]);
-  if (handoffs.size < MAX_HANDOFFS_PER_WORKER) return;
   const oldest = [...handoffs.entries()].sort((a, b) => a[1].createdAt - b[1].createdAt);
-  while (handoffs.size >= MAX_HANDOFFS_PER_WORKER && oldest.length > 0) {
-    handoffs.delete(oldest.shift()[0]);
+  let total = heldBytes();
+  while (
+    oldest.length > 0 &&
+    (handoffs.size >= MAX_HANDOFFS_PER_WORKER || total + bytes > MAX_HANDOFF_BYTES_PER_WORKER)
+  ) {
+    const [handle, entry] = oldest.shift();
+    handoffs.delete(handle);
+    total -= entry.bytes || 0;
   }
 }
 
@@ -104,15 +122,20 @@ function makeRoom(ownerId) {
  *
  * @param {string} ownerId - `req.user.id` of the user handing the chat off.
  * @param {Object} data - What the web app continues with (already validated).
+ * @param {number} [bytes] - Its serialized size, for the worker's byte budget.
  * @returns {{ token: string, expiresAt: number }}
  */
-export function parkHandoff(ownerId, data) {
-  makeRoom(ownerId);
+export function parkHandoff(
+  ownerId,
+  data,
+  bytes = Buffer.byteLength(JSON.stringify(data), 'utf8')
+) {
+  makeRoom(ownerId, bytes);
   const handle = crypto.randomBytes(HANDLE_BYTES).toString('hex');
   const secret = crypto.randomBytes(SECRET_BYTES).toString('hex');
   const now = Date.now();
   const expiresAt = now + HANDOFF_TTL_MS;
-  handoffs.set(handle, { secret, ownerId, data, expiresAt, createdAt: now });
+  handoffs.set(handle, { secret, ownerId, data, bytes, expiresAt, createdAt: now });
   return { token: `${handle}.${secret}`, expiresAt };
 }
 

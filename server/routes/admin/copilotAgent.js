@@ -56,13 +56,22 @@ import {
  */
 
 const COMPONENT = 'AdminCopilotAgent';
+const PLATFORM_FILE = 'config/platform.json';
 
-async function savePlatformConfig(updates) {
-  const existing = configCache.getPlatform() || {};
-  const merged = { ...existing, ...updates };
-  await configStore.writeJson('config/platform.json', merged);
-  await configCache.refreshCacheEntry('config/platform.json');
-  return merged;
+/**
+ * Change platform.json as stored — not as cached. The cache holds the
+ * resolved configuration (`${VAR}` placeholders filled in, environment
+ * overrides applied, secrets decrypted); writing that back would store
+ * secrets in plain text and freeze the overrides into the file.
+ *
+ * @param {(stored: Object) => void} mutate - Changes the stored config in place.
+ * @returns {Promise<void>}
+ */
+async function updateStoredPlatform(mutate) {
+  const stored = (await configStore.readJsonStrict(PLATFORM_FILE)) || {};
+  mutate(stored);
+  await configStore.writeJson(PLATFORM_FILE, stored);
+  await configCache.refreshCacheEntry(PLATFORM_FILE);
 }
 
 function readSettings(platform) {
@@ -76,12 +85,13 @@ function trimTrailingSlashes(url) {
 }
 
 /**
- * The gateway URL Copilot calls: the gateway's configured public URL when
- * there is one (as its own discovery documents use), else this request's.
+ * The one public address everything in the package and the registration is
+ * built from — the gateway, the OAuth endpoints, the developer links: the
+ * gateway's configured Public URL when there is one (as its own discovery
+ * documents use), else this request's. One base, so they never name two hosts.
  */
-function resolveMcpUrl(req, platform) {
-  const base = trimTrailingSlashes(platform?.mcpServer?.publicUrl || buildPublicBaseUrl(req));
-  return `${base}/mcp`;
+function resolvePublicBase(req, platform) {
+  return trimTrailingSlashes(platform?.mcpServer?.publicUrl || buildPublicBaseUrl(req));
 }
 
 /** The Copilot OAuth client, or null when there is none (never enabled, or deleted by hand). */
@@ -151,14 +161,17 @@ export default function registerAdminCopilotAgentRoutes(app) {
   app.get(buildServerPath('/api/admin/copilot-agent/status'), adminAuth, (req, res) => {
     const platform = configCache.getPlatform() || {};
     const settings = readSettings(platform);
-    const baseUrl = trimTrailingSlashes(buildPublicBaseUrl(req));
-    const mcpUrl = resolveMcpUrl(req, platform);
+    const baseUrl = resolvePublicBase(req, platform);
+    const mcpUrl = `${baseUrl}/mcp`;
     const found = findCopilotClient(platform);
     const prerequisites = {
       mcpGateway: platform.mcpServer?.enabled === true,
       oauthServer: platform.oauth?.enabled?.authz === true,
       appsExposed: platform.mcpServer?.expose?.apps !== false,
-      oauthClient: !!found && found.client.active !== false
+      oauthClient: !!found && found.client.active !== false,
+      // Copilot calls only HTTPS addresses. Behind a proxy that does not send
+      // X-Forwarded-Proto the derived address is http://; the Public URL fixes it.
+      publicHttps: baseUrl.startsWith('https://')
     };
 
     res.json({
@@ -244,20 +257,20 @@ export default function registerAdminCopilotAgentRoutes(app) {
 
       const appId = isGuid(settings.appId) ? settings.appId : randomUUID();
 
-      await savePlatformConfig({
-        oauth: {
-          ...(platform.oauth || {}),
-          enabled: { ...(platform.oauth?.enabled || {}), authz: true, clients: true },
+      await updateStoredPlatform(stored => {
+        stored.oauth = {
+          ...(stored.oauth || {}),
+          enabled: { ...(stored.oauth?.enabled || {}), authz: true, clients: true },
           authorizationCodeEnabled: true,
           refreshTokenEnabled: true
-        },
-        mcpServer: { ...(platform.mcpServer || {}), enabled: true },
-        copilotAgent: {
-          ...settings,
+        };
+        stored.mcpServer = { ...(stored.mcpServer || {}), enabled: true };
+        stored.copilotAgent = {
+          ...readSettings(stored),
           enabled: true,
           appId,
           oauthClientId
-        }
+        };
       });
 
       logAudit({
@@ -296,13 +309,13 @@ export default function registerAdminCopilotAgentRoutes(app) {
    */
   app.post(buildServerPath('/api/admin/copilot-agent/disable'), adminAuth, async (req, res) => {
     try {
-      const platform = configCache.getPlatform() || {};
-      const settings = readSettings(platform);
-      const found = findCopilotClient(platform);
+      const found = findCopilotClient(configCache.getPlatform() || {});
       if (found && found.client.active !== false) {
         await updateOAuthClient(found.clientId, { active: false }, found.clientsFile, req.user?.id);
       }
-      await savePlatformConfig({ copilotAgent: { ...settings, enabled: false } });
+      await updateStoredPlatform(stored => {
+        stored.copilotAgent = { ...readSettings(stored), enabled: false };
+      });
       logAudit({
         req,
         action: 'update',
@@ -366,9 +379,9 @@ export default function registerAdminCopilotAgentRoutes(app) {
     try {
       const result = validateCopilotAgentConfig(req.body);
       if (result.error) return sendBadRequest(res, result.error);
-      const platform = configCache.getPlatform() || {};
-      const settings = { ...readSettings(platform), ...result.value };
-      await savePlatformConfig({ copilotAgent: settings });
+      await updateStoredPlatform(stored => {
+        stored.copilotAgent = { ...readSettings(stored), ...result.value };
+      });
       logAudit({
         req,
         action: 'update',
@@ -466,8 +479,8 @@ export default function registerAdminCopilotAgentRoutes(app) {
 
       const manifests = buildCopilotAgentManifests({
         config: settings,
-        baseUrl: trimTrailingSlashes(buildPublicBaseUrl(req)),
-        mcpUrl: resolveMcpUrl(req, platform),
+        baseUrl: resolvePublicBase(req, platform),
+        mcpUrl: `${resolvePublicBase(req, platform)}/mcp`,
         version: copilotPackageVersion()
       });
       const zip = await buildPackageZip({ manifests, icons: await readPackageIcons() });

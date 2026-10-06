@@ -82,6 +82,18 @@ export function openExternalUrl(url) {
 }
 
 /**
+ * Whether a `true` from {@link openExternalUrlSettled} means the user sees the
+ * page. Not in a popped-out chat: the pane behind it opens the browser
+ * without a click of its own, which a browser may refuse without telling
+ * anyone. Callers show the address as well when this is false.
+ *
+ * @returns {boolean}
+ */
+export function canConfirmExternalOpen() {
+  return !getOfficeRemote();
+}
+
+/**
  * {@link openExternalUrl}, resolving once the host has settled the hand-off.
  *
  * The difference is the extension side panel: `chrome.tabs.create` (MV3)
@@ -104,20 +116,24 @@ export async function openExternalUrlSettled(url) {
  *
  * @param {string} url
  * @returns {boolean|Promise<boolean>} A promise only while the extension's tab
- *   is being created; it never rejects.
+ *   is being created, or while the pane behind a popped-out chat answers; it
+ *   never rejects.
  */
 function handOffExternalUrl(url) {
   if (!url) return false;
 
   // A popped-out chat runs in an Office dialog, where only `messageParent`
-  // works; the pane behind it opens the browser instead. The hand-off is the
-  // message, so a pane that is gone is not reported back here.
+  // works; the pane behind it opens the browser instead, and answers whether
+  // its host took the URL. A pane that is gone counts as not opened.
   const remote = getOfficeRemote();
   if (remote) {
-    remote.call('openUrl', { url }).catch(error => {
-      console.warn('[popout] the pane could not open the browser', error);
-    });
-    return true;
+    return remote.call('openUrl', { url }).then(
+      result => result?.ok !== false,
+      error => {
+        console.warn('[popout] the pane could not open the browser', error);
+        return false;
+      }
+    );
   }
 
   const host = detectExternalNavigationHost();

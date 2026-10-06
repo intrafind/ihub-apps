@@ -11,8 +11,23 @@ It is a *declarative agent* with one action: iHub's [MCP gateway](mcp-integratio
 ## What you need
 
 - **Microsoft 365 Copilot** for the users who should get the agent. Agents with actions also work in Copilot Chat; check Microsoft's current licensing for your tenant.
-- **A public HTTPS address for iHub** that Microsoft's cloud can reach — Copilot calls the gateway from Microsoft's servers, not from the user's machine.
+- **A public HTTPS address for iHub** that Microsoft's cloud can reach — Copilot calls the gateway from Microsoft's servers, not from the user's machine. See [What has to be reachable](#what-has-to-be-reachable).
 - **Admin access** to iHub, to the [Teams Developer Portal](https://dev.teams.microsoft.com/tools) of your tenant, and to the Microsoft 365 admin center (a role that can upload custom agents or apps).
+
+### What has to be reachable
+
+Unlike the Outlook add-in — which runs on the user's device and only needs iHub to be reachable from there, so an internal address on the company network or VPN is enough — the Copilot agent is driven from Microsoft's cloud. Two parts of the flow come from Microsoft's servers, one from the user's browser:
+
+| Who calls | Path (under iHub's base path) | Must be reachable from |
+|---|---|---|
+| Copilot, for every tool call | `/mcp` | **the internet** (Microsoft's cloud) |
+| Microsoft's token service, to exchange the sign-in code and refresh tokens | `/api/oauth/token` | **the internet** (Microsoft's cloud) |
+| The user's browser, when Copilot asks them to sign in | `/api/oauth/authorize`, `/api/oauth/authorize/decision`, iHub's sign-in page and whatever identity provider iHub uses | the user's browser — an internal address works for users on the company network or VPN |
+
+- The address must use **HTTPS with a publicly trusted certificate** — an internal CA is not trusted by Microsoft's servers. Admin → Microsoft 365 Copilot warns when iHub's public address is plain `http://`.
+- A reverse proxy or WAF in front of iHub can publish just the two server-to-server paths (`/mcp`, `/api/oauth/token`) to the internet and keep the rest internal. Neither hands out anything without credentials: `/mcp` accepts only iHub-issued OAuth tokens with the `mcp:*` scopes, and the token endpoint issues tokens only for a valid sign-in code (with the agent client's secret) or a valid refresh token.
+- To our knowledge Microsoft publishes no dedicated address range for these calls; check Microsoft's current documentation before relying on an IP allow-list to limit who can reach them.
+- Set the gateway's **Public URL** (Admin → MCP gateway) to the address Microsoft should use; the registration values, the package and the gateway's own discovery documents all follow it.
 
 ---
 
@@ -50,7 +65,7 @@ Copilot signs users in to iHub through an OAuth client registration in the Teams
 
 3. Save. The portal shows an **OAuth client registration ID**. Paste it into **OAuth client registration ID** on the iHub page and save.
 
-The gateway's address is its **Public URL** (Admin → MCP gateway) when one is set, otherwise the address the admin page was opened with — set the Public URL when iHub sits behind a reverse proxy.
+Every address on the page and in the package — the gateway, the OAuth endpoints, the links in the app manifest — is built from the gateway's **Public URL** (Admin → MCP gateway) when one is set, otherwise from the address the admin page was opened with. Set the Public URL when iHub sits behind a reverse proxy or is reached under a different name from outside.
 
 ---
 

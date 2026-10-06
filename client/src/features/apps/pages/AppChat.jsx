@@ -696,7 +696,12 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
   // back on screen through the hydration below. Incognito switches it off for
   // this chat; anonymous viewers and installations without the capability never
   // had it, and keep exactly the behaviour they have today.
-  const serverBackedChat = chatPersistence && !ephemeral;
+  // A chat handed over from the Outlook pane (below) was not stored there and
+  // has no server-side history to continue from, so it carries its history
+  // itself, like any chat that is not stored — whatever this viewer's chats
+  // usually are. Only that chat: the next one is stored again as usual.
+  const [handedOffChatId, setHandedOffChatId] = useState(null);
+  const serverBackedChat = chatPersistence && !ephemeral && chatId !== handedOffChatId;
   // `chatPersistence` answers false until the platform config and the auth
   // status have both landed, so an early false is "not known yet", not "no".
   // The startup state has to wait it out, or a persisted chat greets the user
@@ -764,22 +769,42 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
   // hence the pending ref, applied by the effect that follows the chat id.
   const handoffToken = searchParams.get('handoff');
   const handoffClaimedRef = useRef(null);
+  const handoffSignInNoticeRef = useRef(null);
   const pendingHandoffRef = useRef(null);
+  // Only the user who handed the chat over can claim it. A visitor who is not
+  // signed in (anonymous access) is asked to sign in first; the address keeps
+  // the token, so it is claimed on the way back from the sign-in.
+  const handoffSignedIn = auth ? auth.isAuthenticated === true : true;
   useEffect(() => {
     if (embedded || !handoffToken || !app || modelsLoading || chatModeResolving) return;
+    if (!handoffSignedIn) {
+      if (handoffSignInNoticeRef.current === handoffToken) return;
+      handoffSignInNoticeRef.current = handoffToken;
+      addSystemMessage(
+        t('pages.appChat.handoff.signIn', 'Sign in to continue the chat you opened from Outlook.'),
+        true
+      );
+      return;
+    }
     if (handoffClaimedRef.current === handoffToken) return;
     handoffClaimedRef.current = handoffToken;
-    // Single-use: a reload must not try it again.
-    const newSearch = new URLSearchParams(searchParams);
-    newSearch.delete('handoff');
-    const query = newSearch.toString();
-    navigate(`${window.location.pathname}${query ? `?${query}` : ''}`, { replace: true });
+    // Single-use: once the server has answered for good, a reload must not
+    // try it again. A failure that may pass (offline, a server error) keeps
+    // the token in the address, so a reload retries.
+    const dropTokenFromAddress = () => {
+      const newSearch = new URLSearchParams(window.location.search);
+      newSearch.delete('handoff');
+      const query = newSearch.toString();
+      navigate(`${window.location.pathname}${query ? `?${query}` : ''}`, { replace: true });
+    };
 
     claimChatHandoff(handoffToken)
       .then(handoff => {
+        dropTokenFromAddress();
         const handedMessages = Array.isArray(handoff?.messages) ? handoff.messages : [];
         if (handedMessages.length === 0) return;
         const nextChatId = startNewChat();
+        setHandedOffChatId(nextChatId);
         if (handoff.variables && typeof handoff.variables === 'object') {
           setVariables(v => ({ ...v, ...handoff.variables }));
         }
@@ -792,21 +817,28 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
         };
       })
       .catch(error => {
+        const status = error?.status;
+        if (status === 403 || status === 404) dropTokenFromAddress();
         addSystemMessage(
-          error?.status === 403
+          status === 403
             ? t(
                 'pages.appChat.handoff.otherUser',
                 'This chat was opened from Outlook by another account. Sign in with that account to continue it.'
               )
-            : t(
-                'pages.appChat.handoff.expired',
-                'The chat from Outlook could not be opened: the link has expired or was already used. Choose "Open in web app" in Outlook again.'
-              ),
+            : status === 404
+              ? t(
+                  'pages.appChat.handoff.expired',
+                  'The chat from Outlook could not be opened: the link has expired or was already used. Choose "Open in web app" in Outlook again.'
+                )
+              : t(
+                  'pages.appChat.handoff.failed',
+                  'The chat from Outlook could not be opened right now. Reload the page to try again.'
+                ),
           true
         );
       });
     // eslint-disable-next-line @eslint-react/exhaustive-deps
-  }, [handoffToken, app, modelsLoading, chatModeResolving, embedded]);
+  }, [handoffToken, app, modelsLoading, chatModeResolving, embedded, handoffSignedIn]);
   useEffect(() => {
     const pending = pendingHandoffRef.current;
     if (!pending || pending.chatId !== chatId) return;

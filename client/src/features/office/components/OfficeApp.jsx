@@ -221,6 +221,9 @@ const OfficeApp = () => {
   const [popoutError, setPopoutError] = React.useState(null);
   const popoutRef = React.useRef(null);
   const popoutStateRef = React.useRef(null);
+  // Set the moment the button is pressed, before Office answers: a second
+  // press while the window opens must not start a second one.
+  const popoutOpeningRef = React.useRef(false);
   // Bumped to mount the chat panel afresh when a chat comes back from the
   // window: the panel reads its chat only when it mounts.
   const [chatPanelKey, setChatPanelKey] = React.useState(0);
@@ -250,7 +253,7 @@ const OfficeApp = () => {
     setSessionError('Your session has expired. Please log in again.');
     navigate('/', { replace: true });
     // After the tokens are gone, so the window's chat is not reopened.
-    popoutRef.current?.close();
+    popoutRef.current?.close({ collect: false });
   }, [navigate, popoutChild]);
 
   React.useEffect(() => {
@@ -300,7 +303,7 @@ const OfficeApp = () => {
     setSelectedApp(null);
     setSessionError(null);
     navigate('/', { replace: true });
-    popoutRef.current?.close();
+    popoutRef.current?.close({ collect: false });
   }, [navigate, popoutChild]);
 
   // A chat coming back from the pop-out window, as it was there.
@@ -322,7 +325,8 @@ const OfficeApp = () => {
   // closes, however it closes.
   const handlePopOut = React.useCallback(
     async chatState => {
-      if (popoutRef.current) return;
+      if (popoutRef.current || popoutOpeningRef.current) return;
+      popoutOpeningRef.current = true;
       popoutStateRef.current = chatState;
       setPopoutError(null);
       try {
@@ -361,6 +365,8 @@ const OfficeApp = () => {
         popoutRef.current = null;
         popoutStateRef.current = null;
         setPopoutError(describePopoutError(error, t));
+      } finally {
+        popoutOpeningRef.current = false;
       }
     },
     [config, authData, handleLogout, resumeFromPopout, t]

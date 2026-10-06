@@ -40,7 +40,11 @@ import {
   buildWebChatUrl,
   buildWebHandoffUrl
 } from '../utilities/officeChatHistory';
-import { openExternalUrlSettled } from '../../../utils/externalNavigation';
+import {
+  canConfirmExternalOpen,
+  detectExternalNavigationHost,
+  openExternalUrlSettled
+} from '../../../utils/externalNavigation';
 import usePinnedEmails from '../hooks/usePinnedEmails';
 import { consumePendingChatStart } from '../../chat/startChatHandoff';
 import { getLocalizedContent } from '../../../utils/localizeContent';
@@ -58,8 +62,10 @@ import { chatMessagesStorageKey } from '../../chat/utils/chatMessagesStorage';
 import './OfficeChatPanel.css';
 
 // How long the popped-out chat waits for a quiet moment before telling the
-// pane what it looks like now (a streaming answer changes it constantly).
+// pane what it looks like now — and, while an answer streams and there is no
+// quiet moment, how long it goes without telling it at most.
 const POPOUT_REPORT_DEBOUNCE_MS = 500;
+const POPOUT_REPORT_MAX_WAIT_MS = 2000;
 
 function buildParamsFromApp(app) {
   const params = { language: officeLocale };
@@ -793,12 +799,18 @@ function OfficeChatPanel({
   const popoutChild = popout?.role === 'child' ? popout : null;
   const reportPopoutState = popoutChild?.report;
   const reportPopoutPinned = popoutChild?.reportPinned;
+  const providePopoutState = popoutChild?.provideState;
   const currentChatId = chatIdRef.current;
+  const lastPopoutReportRef = useRef(0);
   useEffect(() => {
     if (!reportPopoutState) return undefined;
+    const overdue = Date.now() - lastPopoutReportRef.current >= POPOUT_REPORT_MAX_WAIT_MS;
     const timer = setTimeout(
-      () => reportPopoutState(buildPopoutChatStateRef.current()),
-      POPOUT_REPORT_DEBOUNCE_MS
+      () => {
+        lastPopoutReportRef.current = Date.now();
+        reportPopoutState(buildPopoutChatStateRef.current());
+      },
+      overdue ? 0 : POPOUT_REPORT_DEBOUNCE_MS
     );
     return () => clearTimeout(timer);
   }, [
@@ -812,6 +824,16 @@ function OfficeChatPanel({
   useEffect(() => {
     reportPopoutPinned?.(pinnedEmails);
   }, [reportPopoutPinned, pinnedEmails]);
+  // And the pane can ask for the chat as it is this moment, when it takes the
+  // chat back without the window's say-so ("Show the chat here instead").
+  useEffect(() => {
+    if (!providePopoutState) return undefined;
+    providePopoutState(() => ({
+      ...buildPopoutChatStateRef.current(),
+      pinnedEmails: pinnedEmailsRef.current
+    }));
+    return () => providePopoutState(null);
+  }, [providePopoutState]);
 
   if (!authData) return null;
   if (!selectedApp) return <Navigate to={homePath} replace />;
@@ -867,7 +889,11 @@ function OfficeChatPanel({
     if (!url) return;
     dismissMailNotice();
     setWebNotice(null);
-    if (!(await openExternalUrlSettled(url))) setWebNotice({ chatId, url });
+    // From the popped-out window the pane opens the browser, and cannot tell
+    // whether it did — so the address is shown either way.
+    if (!(await openExternalUrlSettled(url)) || !canConfirmExternalOpen()) {
+      setWebNotice({ chatId, url });
+    }
   };
 
   // A chat that is not stored — durable chats off, or an `ephemeral` app —
@@ -895,7 +921,15 @@ function OfficeChatPanel({
         variables: appPromptVariables
       });
       const url = buildWebHandoffUrl(officeConfig?.baseUrl, appId, token);
-      if (url && !(await openExternalUrlSettled(url))) setWebNotice({ chatId, url });
+      if (!url) return;
+      // The browser opens after a round trip to the server, which a browser
+      // may no longer count as the user's click — and Outlook cannot say
+      // whether it opened. The link works once, so the address is shown
+      // unless the host confirmed the tab.
+      const opened = await openExternalUrlSettled(url);
+      if (!opened || !canConfirmExternalOpen() || detectExternalNavigationHost() === 'office') {
+        setWebNotice({ chatId, url });
+      }
     } catch (error) {
       setWebNotice({
         chatId,

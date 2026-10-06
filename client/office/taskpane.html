@@ -87,7 +87,12 @@
           }
           params.delete('lang');
           params.delete('theme');
-          window.history.replaceState(null, '', window.location.pathname + '?' + params.toString());
+          // Keep the fragment: Office on the web may pass its own state there.
+          window.history.replaceState(
+            null,
+            '',
+            window.location.pathname + '?' + params.toString() + window.location.hash
+          );
         } catch (e) {
           // Storage or history unavailable: the window uses its own defaults.
         }

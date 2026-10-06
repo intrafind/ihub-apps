@@ -405,7 +405,9 @@
       },
       "handoff": {
         "otherUser": "This chat was opened from Outlook by another account. Sign in with that account to continue it.",
-        "expired": "The chat from Outlook could not be opened: the link has expired or was already used. Choose \"Open in web app\" in Outlook again."
+        "expired": "The chat from Outlook could not be opened: the link has expired or was already used. Choose \"Open in web app\" in Outlook again.",
+        "signIn": "Sign in to continue the chat you opened from Outlook.",
+        "failed": "The chat from Outlook could not be opened right now. Reload the page to try again."
       }
     },
     "authRequired": {
@@ -3571,7 +3573,9 @@
       "step3Desc": "Upload the package in the Microsoft 365 admin center under Copilot → Agents → Upload custom agent, then choose who gets it. Every download has a new version, so download again and re-upload after changing the settings.",
       "needsReferenceId": "Save the OAuth client registration ID from step 1 first.",
       "downloading": "Building…",
-      "download": "Download agent package"
+      "download": "Download agent package",
+      "prereqHttps": "iHub's public address uses HTTPS",
+      "prereqHttpsOff": "iHub's public address is not HTTPS, and Copilot only calls HTTPS addresses — set the MCP gateway's Public URL (or forward X-Forwarded-Proto from the proxy)"
     }
   },
   "cloudStorage": {

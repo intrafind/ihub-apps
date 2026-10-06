@@ -54,6 +54,26 @@ const ITEM_CHANGED_DEBOUNCE_MS = 150;
 /** Office's error code for a dialog the user closed with its X. */
 export const DIALOG_CLOSED_BY_USER = 12006;
 
+/** How long taking the chat back waits for the window's latest state. */
+const COLLECT_TIMEOUT_MS = 2000;
+
+/**
+ * Whether a dialog message comes from this add-in's own pages. Hosts without
+ * the Dialog Origin 1.1 requirement set report no origin, and have nothing
+ * else to check against.
+ *
+ * @param {string|undefined} origin
+ * @returns {boolean}
+ */
+export function isOwnOrigin(origin) {
+  if (typeof origin !== 'string' || origin === '') return true;
+  try {
+    return origin === window.location.origin;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Whether this page is the popped-out chat rather than the task pane.
  *
@@ -138,8 +158,9 @@ export function readPaneOutlookState() {
  *   whenever it changes — what the pane takes back on close.
  * @param {(pinnedEmails: object[]) => void} [options.onPinnedEmails]
  * @param {(reason: 'closed'|'docked'|'signedOut'|'error', error?: any) => void} options.onClosed
- * @returns {Promise<{ close: () => void }>} Resolves once the dialog is open;
- *   rejects when Office refused to open it.
+ * @returns {Promise<{ close: (options?: { collect?: boolean }) => Promise<void> }>}
+ *   Resolves once the dialog is open; rejects when Office refused to open it.
+ *   `close` asks the window for its latest state first, unless `collect` is false.
  */
 export function openChatPopout({ url, getInit, onChatState, onPinnedEmails, onClosed }) {
   return new Promise((resolve, reject) => {
@@ -214,13 +235,33 @@ export function openChatPopout({ url, getInit, onChatState, onPinnedEmails, onCl
             onEvent
           });
           dialog.addEventHandler(Office.EventType.DialogMessageReceived, arg => {
+            // The dialog may navigate elsewhere; only our own page may ask
+            // the pane to touch the mailbox. Hosts without Dialog Origin 1.1
+            // report no origin.
+            if (!isOwnOrigin(arg?.origin)) return;
             endpoint?.receive(arg?.message);
           });
           dialog.addEventHandler(Office.EventType.DialogEventReceived, arg => {
             finish(arg?.error === DIALOG_CLOSED_BY_USER ? 'closed' : 'error', arg);
           });
           document.addEventListener('ihub:itemchanged', onItemChanged);
-          resolve({ close: () => finish('docked') });
+          resolve({
+            // Ask the window for the chat as it is right now, so taking it
+            // back loses nothing sent since its last report — then close.
+            close: async ({ collect = true } = {}) => {
+              if (collect && endpoint && !closed) {
+                try {
+                  const state = await endpoint.request('collectState', null, {
+                    timeoutMs: COLLECT_TIMEOUT_MS
+                  });
+                  if (state) onChatState?.(state);
+                } catch {
+                  // The window did not answer; its last report stands.
+                }
+              }
+              finish('docked');
+            }
+          });
         }
       );
     } catch (error) {

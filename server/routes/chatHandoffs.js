@@ -93,10 +93,11 @@ export function normalizeHandoff(body) {
   }
 
   const value = { appId, messages: normalized, variables: normalizedVariables };
-  if (Buffer.byteLength(JSON.stringify(value), 'utf8') > MAX_HANDOFF_BYTES) {
+  const bytes = Buffer.byteLength(JSON.stringify(value), 'utf8');
+  if (bytes > MAX_HANDOFF_BYTES) {
     return { error: 'The chat is too large to hand off', tooLarge: true };
   }
-  return { value };
+  return { value, bytes };
 }
 
 export default function registerChatHandoffRoutes(app) {
@@ -110,7 +111,7 @@ export default function registerChatHandoffRoutes(app) {
       }
       return sendBadRequest(res, result.error);
     }
-    const { token, expiresAt } = parkHandoff(req.user.id, result.value);
+    const { token, expiresAt } = parkHandoff(req.user.id, result.value, result.bytes);
     logger.info('Chat parked for hand-off', {
       component: 'ChatHandoff',
       appId: result.value.appId,

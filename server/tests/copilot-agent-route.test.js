@@ -26,7 +26,10 @@ import yauzl from 'yauzl';
 
 const state = {};
 const reset = () => {
+  // `platform` is platform.json as stored; the cache adds what only exists
+  // at runtime (resolved environment variables, decrypted secrets).
   state.platform = { oauth: { enabled: { authz: false } }, mcpServer: { enabled: false } };
+  state.cacheExtra = {};
   state.clients = {};
   state.created = [];
   state.updates = [];
@@ -43,13 +46,14 @@ jest.unstable_mockModule('../middleware/adminAuth.js', () => ({
 
 jest.unstable_mockModule('../configCache.js', () => ({
   default: {
-    getPlatform: () => state.platform,
+    getPlatform: () => ({ ...state.platform, ...state.cacheExtra }),
     refreshCacheEntry: async () => {}
   }
 }));
 
 jest.unstable_mockModule('../services/config/ConfigStore.js', () => ({
   default: {
+    readJsonStrict: async () => JSON.parse(JSON.stringify(state.platform)),
     writeJson: async (_file, data) => {
       state.platform = data;
     }
@@ -158,6 +162,15 @@ describe('enable', () => {
     );
   });
 
+  test('writes platform.json as stored, never the resolved cache', async () => {
+    state.cacheExtra = { speech: { azure: { key: 'decrypted-secret' } } };
+    await post('/api/admin/copilot-agent/enable');
+    await put('/api/admin/copilot-agent/config', { name: 'Contoso AI' });
+    await post('/api/admin/copilot-agent/disable');
+    expect(state.platform).not.toHaveProperty('speech');
+    expect(JSON.stringify(state.platform)).not.toContain('decrypted-secret');
+  });
+
   test('enabling again keeps the client, its secret and the app id', async () => {
     await post('/api/admin/copilot-agent/enable');
     const appId = state.platform.copilotAgent.appId;
@@ -233,7 +246,9 @@ describe('status', () => {
       mcpGateway: true,
       oauthServer: true,
       appsExposed: true,
-      oauthClient: true
+      oauthClient: true,
+      // Plain http here: Copilot would refuse it, the page says so.
+      publicHttps: false
     });
     expect(res.body.packageReady).toBe(false); // no registration ID yet
     expect(res.body.registration).toMatchObject({
@@ -260,6 +275,18 @@ describe('package.zip', () => {
     expect(res.body.details.code).toBe('COPILOT_REFERENCE_ID_MISSING');
   });
 
+  test('the registration, the gateway and the links all use the configured Public URL', async () => {
+    await post('/api/admin/copilot-agent/enable');
+    state.platform.mcpServer.publicUrl = 'https://ihub.contoso.com/ihub/';
+    const res = await get('/api/admin/copilot-agent/status');
+    expect(res.body.prerequisites.publicHttps).toBe(true);
+    expect(res.body.registration).toMatchObject({
+      baseUrl: 'https://ihub.contoso.com/ihub/mcp',
+      authorizationEndpoint: 'https://ihub.contoso.com/ihub/api/oauth/authorize',
+      tokenEndpoint: 'https://ihub.contoso.com/ihub/api/oauth/token'
+    });
+  });
+
   test('is a flat zip of the manifests and icons, pointing at the public gateway', async () => {
     await post('/api/admin/copilot-agent/enable');
     await put('/api/admin/copilot-agent/config', { oauthReferenceId: 'ref-123' });
@@ -280,6 +307,7 @@ describe('package.zip', () => {
     ]);
     const manifest = JSON.parse(files['manifest.json']);
     expect(manifest.id).toBe(state.platform.copilotAgent.appId);
+    expect(manifest.developer.websiteUrl).toBe('https://ihub.contoso.com');
     expect(manifest.copilotAgents.declarativeAgents[0].file).toBe('declarativeAgent.json');
 
     const agent = JSON.parse(files['declarativeAgent.json']);

@@ -27,7 +27,8 @@ jest.mock('../../../client/src/utils/runtimeBasePath', () => ({
 const {
   createPopoutEndpoint,
   BRIDGE_TIMEOUT_MESSAGE,
-  BRIDGE_CLOSED_MESSAGE
+  BRIDGE_CLOSED_MESSAGE,
+  PARTIAL_TTL_MS
 } = require('../../../client/src/features/office/utilities/officePopoutBridge');
 
 /** Two endpoints wired to each other, the way messageChild / messageParent do. */
@@ -119,6 +120,24 @@ describe('officePopoutBridge', () => {
     });
     const ctx = await dialog.request('readItemContext');
     expect(ctx.attachments[0].content).toBe(attachment);
+  });
+
+  test('parts of a message whose sender went away are dropped after a while', () => {
+    jest.useFakeTimers();
+    try {
+      const parts = [];
+      const received = jest.fn();
+      const sender = createPopoutEndpoint({ send: m => parts.push(m), chunkSize: 2048 });
+      const receiver = createPopoutEndpoint({ send: () => {}, onEvent: received, chunkSize: 2048 });
+      sender.emit('chatState', { transcript: 'y'.repeat(6000) });
+      receiver.receive(parts[0]);
+      jest.advanceTimersByTime(PARTIAL_TTL_MS + 1);
+      // The stale beginning is gone, so the late rest cannot complete it.
+      parts.slice(1).forEach(part => receiver.receive(part));
+      expect(received).not.toHaveBeenCalled();
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   test("other senders' messages and garbage are ignored", () => {
@@ -256,13 +275,26 @@ describe('the popped-out chat routes Outlook through the pane', () => {
     });
   });
 
-  test('a URL is opened by the pane: the dialog has no openBrowserWindow', () => {
+  test('a URL is opened by the pane: the dialog has no openBrowserWindow', async () => {
     const remote = { state: { mailbox: true }, call: jest.fn(() => Promise.resolve({ ok: true })) };
     const { navigation } = load(remote);
-    expect(navigation.openExternalUrl('https://ihub.example.com/apps/mail')).toBe(true);
+    await expect(
+      navigation.openExternalUrlSettled('https://ihub.example.com/apps/mail')
+    ).resolves.toBe(true);
     expect(remote.call).toHaveBeenCalledWith('openUrl', {
       url: 'https://ihub.example.com/apps/mail'
     });
+    // The pane opens it without a click of its own: nobody can confirm it.
+    expect(navigation.canConfirmExternalOpen()).toBe(false);
+  });
+
+  test("the pane's answer counts: refused or gone is not opened", async () => {
+    const refused = load({ state: {}, call: jest.fn(async () => ({ ok: false })) });
+    await expect(refused.navigation.openExternalUrlSettled('https://x.example')).resolves.toBe(
+      false
+    );
+    const gone = load({ state: {}, call: jest.fn(() => Promise.reject(new Error('gone'))) });
+    await expect(gone.navigation.openExternalUrlSettled('https://x.example')).resolves.toBe(false);
   });
 
   test('the dialog never refreshes the token itself: the pane does and hands it over', async () => {
@@ -286,6 +318,14 @@ describe('the popped-out chat routes Outlook through the pane', () => {
 });
 
 describe('the pane side', () => {
+  test("only the add-in's own pages may talk to the pane", () => {
+    const { isOwnOrigin } = popout();
+    expect(isOwnOrigin(window.location.origin)).toBe(true);
+    expect(isOwnOrigin('https://evil.example')).toBe(false);
+    // Hosts without Dialog Origin 1.1 report none.
+    expect(isOwnOrigin(undefined)).toBe(true);
+  });
+
   afterEach(() => {
     delete global.Office;
   });

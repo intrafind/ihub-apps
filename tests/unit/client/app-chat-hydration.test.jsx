@@ -700,6 +700,59 @@ describe('a chat handed over from the Outlook pane', () => {
     );
   });
 
+  test('a viewer whose chats are stored continues it unstored, history and all', async () => {
+    // The pane did not store this chat (an ephemeral app, say); the store has
+    // no history for it, so the browser carries it like a chat that is not stored.
+    mockCapability.persistence = true;
+    claimChatHandoff.mockResolvedValue(HANDOFF);
+
+    renderChat({ path: '/apps/acme?handoff=tok.secret' });
+
+    await waitFor(() =>
+      expect(screen.getAllByTestId('transcript')[0]).toHaveTextContent(
+        'Summarize this email|It is about Q3.'
+      )
+    );
+    expect(fetchChat).not.toHaveBeenCalled();
+    const stored = Object.keys(sessionStorage).filter(key =>
+      key.startsWith('ai_hub_chat_messages_')
+    );
+    expect(stored).toHaveLength(1);
+    expect(JSON.parse(sessionStorage.getItem(stored[0]))[0]).toMatchObject({
+      content: 'Summarize this email',
+      hostContext: { email: { subject: 'Q3' } }
+    });
+    // Not pinned to a stored chat's address, which a reload would ask the store for.
+    expect(screen.getByTestId('location')).toHaveTextContent('/apps/acme');
+    expect(screen.getByTestId('location')).not.toHaveTextContent('/c/');
+  });
+
+  test('a failure that may pass says so and keeps the link for a reload', async () => {
+    claimChatHandoff.mockRejectedValue(Object.assign(new Error('down'), { status: 503 }));
+    renderChat({ path: '/apps/acme?handoff=tok.secret' });
+    await waitFor(() =>
+      expect(screen.getAllByTestId('transcript')[0]).toHaveTextContent('Reload the page')
+    );
+  });
+
+  test('a visitor who is not signed in is asked to sign in, and nothing is claimed', async () => {
+    const { AuthContext } = require('../../../client/src/shared/contexts/authContextValue');
+    window.history.replaceState({}, '', '/apps/acme?handoff=tok.secret');
+    render(
+      <AuthContext.Provider value={{ isAuthenticated: false }}>
+        <MemoryRouter initialEntries={['/apps/acme?handoff=tok.secret']}>
+          <Routes>
+            <Route path="/apps/:appId" element={<AppChat preloadedApp={APP} />} />
+          </Routes>
+        </MemoryRouter>
+      </AuthContext.Provider>
+    );
+    await waitFor(() =>
+      expect(screen.getAllByTestId('transcript')[0]).toHaveTextContent('Sign in to continue')
+    );
+    expect(claimChatHandoff).not.toHaveBeenCalled();
+  });
+
   test("someone else's hand-off says whose it is", async () => {
     claimChatHandoff.mockRejectedValue(Object.assign(new Error('not yours'), { status: 403 }));
     renderChat({ path: '/apps/acme?handoff=other.token' });

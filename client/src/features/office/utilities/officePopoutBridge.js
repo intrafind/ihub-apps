@@ -38,6 +38,9 @@ export const DEFAULT_REQUEST_TIMEOUT_MS = 60 * 1000;
 /** Error message of a call the other side did not answer in time. */
 export const BRIDGE_TIMEOUT_MESSAGE = 'The Outlook pane did not answer.';
 
+/** A chunked message whose parts stop arriving is dropped after this long. */
+export const PARTIAL_TTL_MS = 2 * 60 * 1000;
+
 /** Error message of a call made after the endpoint was disposed. */
 export const BRIDGE_CLOSED_MESSAGE = 'The connection to the Outlook pane is closed.';
 
@@ -167,9 +170,14 @@ export function createPopoutEndpoint({
     }
     const { cid, i, n, d } = envelope;
     if (typeof cid !== 'string' || !Number.isInteger(i) || !Number.isInteger(n) || n < 1) return;
+    // Parts of a message whose sender went away never complete; drop them.
+    const now = Date.now();
+    for (const [id, pending] of partials) {
+      if (now - pending.startedAt > PARTIAL_TTL_MS) partials.delete(id);
+    }
     let entry = partials.get(cid);
     if (!entry) {
-      entry = { parts: new Array(n), received: 0 };
+      entry = { parts: new Array(n), received: 0, startedAt: now };
       partials.set(cid, entry);
     }
     if (i < 0 || i >= entry.parts.length || entry.parts[i] !== undefined) return;

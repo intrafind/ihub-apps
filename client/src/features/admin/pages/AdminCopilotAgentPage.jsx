@@ -347,6 +347,14 @@ function AdminCopilotAgentPage() {
                       {t('admin.copilotAgent.gatewaySettings', 'Gateway settings')}
                     </Link>
                   </Prerequisite>
+                  <Prerequisite ok={prerequisites.publicHttps}>
+                    {prerequisites.publicHttps
+                      ? t('admin.copilotAgent.prereqHttps', "iHub's public address uses HTTPS")
+                      : t(
+                          'admin.copilotAgent.prereqHttpsOff',
+                          "iHub's public address is not HTTPS, and Copilot only calls HTTPS addresses — set the MCP gateway's Public URL (or forward X-Forwarded-Proto from the proxy)"
+                        )}
+                  </Prerequisite>
                   <Prerequisite ok={prerequisites.appsExposed}>
                     {prerequisites.appsExposed
                       ? t('admin.copilotAgent.prereqApps', 'The gateway offers iHub apps as tools')

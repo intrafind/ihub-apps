@@ -15,6 +15,7 @@ import registerChatHandoffRoutes, {
 } from '../routes/chatHandoffs.js';
 import {
   HANDOFF_TTL_MS,
+  MAX_HANDOFF_BYTES_PER_WORKER,
   MAX_HANDOFFS_PER_USER,
   claimHandoff,
   cleanup,
@@ -154,6 +155,17 @@ describe('chat hand-off store', () => {
       (await claimHandoff(tokens.at(-1), 'user-busy')).data.appId,
       `a${MAX_HANDOFFS_PER_USER}`
     );
+  });
+
+  it('a worker holds a bounded number of bytes, dropping the oldest records first', async () => {
+    const half = MAX_HANDOFF_BYTES_PER_WORKER / 2;
+    const first = parkHandoff('user-big-1', { appId: 'one', messages: transcript }, half);
+    const second = parkHandoff('user-big-2', { appId: 'two', messages: transcript }, half);
+    // The budget is full; the next record, however small, pushes the oldest out.
+    const third = parkHandoff('user-big-3', { appId: 'three', messages: transcript }, 10);
+    assert.deepEqual(await claimHandoff(first.token, 'user-big-1'), { error: 'notFound' });
+    assert.equal((await claimHandoff(second.token, 'user-big-2')).data.appId, 'two');
+    assert.equal((await claimHandoff(third.token, 'user-big-3')).data.appId, 'three');
   });
 
   it('malformed tokens are simply not found', async () => {
