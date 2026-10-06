@@ -358,12 +358,12 @@ describe('shared/sources', () => {
         }
       }),
       extractToolSources({
-        toolId: 'webContentExtractor',
+        toolId: 'read_url',
         args: { url: 'https://docs.langdock.com/' },
         result: { url: 'https://docs.langdock.com/', content: 'text', wordCount: 812 }
       }),
       extractToolSources({
-        toolId: 'webContentExtractor',
+        toolId: 'read_url',
         args: { url: 'https://blocked.example/' },
         result: { error: true },
         failed: true

@@ -2913,7 +2913,7 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
    * Recognised tool result shapes:
    *   - Array of `{ url, title?, snippet? }` (typical webSearch)
    *   - `{ results: [{ url, ... }, ...] }` (search wrappers)
-   *   - `{ url, content, ... }` (webContentExtractor and similar)
+   *   - `{ url, content, ... }` (read_url and similar)
    *   - `{ items: [...] }` / `{ sources: [...] }` (other variants)
    *
    * Tools whose IDs match the citation-producing allowlist below are
@@ -2965,7 +2965,7 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
       if (Array.isArray(result.results)) harvest(result.results);
       if (Array.isArray(result.items)) harvest(result.items);
       if (Array.isArray(result.sources)) harvest(result.sources);
-      // Single-doc results like webContentExtractor: { url, content, ... }
+      // Single-doc results like read_url: { url, content, ... }
       if (typeof result.url === 'string') {
         push({
           url: result.url,
@@ -3190,7 +3190,7 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
    * citation capture to skip irrelevant tool calls (memory writes, task
    * creation, etc.) so the ledger stays clean.
    *
-   * Both web tools (webSearch, webContentExtractor) and configured
+   * Both web tools (webSearch, read_url) and configured
    * knowledge-base lookups (`source_*`) qualify — when an agent consults
    * one of its configured sources, the document URL becomes a citation
    * just like a web search result.
@@ -3206,7 +3206,7 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
     // produced ZERO citations — its result URLs were silently dropped. The
     // harvest below guards on a url field, so a non-search tool that happens to
     // match contributes nothing anyway.
-    if (id.includes('search') || id === 'webcontentextractor') return true;
+    if (id.includes('search') || id === 'read_url') return true;
     if (id.startsWith('source_')) return true;
     // Native provider search (Google, Anthropic) doesn't appear in the tool
     // call loop — it rides alongside the assistant message as grounding

@@ -40,7 +40,7 @@ const llmClient = fakeLlmClient(async ({ messages }) => {
   if (turn <= 2) {
     return {
       content: '',
-      toolCalls: [{ id: `c${turn}`, function: { name: 'webContentExtractor', arguments: '{}' } }],
+      toolCalls: [{ id: `c${turn}`, function: { name: 'read_url', arguments: '{}' } }],
       usage: { promptTokens: Math.round(promptChars / 4), completionTokens: 10 }
     };
   }
@@ -85,8 +85,8 @@ const response = await executor.executeLLMWithTools({
   messages,
   tools: [
     {
-      id: 'webContentExtractor',
-      name: 'webContentExtractor',
+      id: 'read_url',
+      name: 'read_url',
       parameters: { type: 'object', properties: {} }
     }
   ],

@@ -116,7 +116,7 @@ describe('toolKind', () => {
   test('classifies search, fetch and other tools', () => {
     expect(toolKind('braveSearch')).toBe('search');
     expect(toolKind('source_handbook')).toBe('search');
-    expect(toolKind('webContentExtractor')).toBe('fetch');
+    expect(toolKind('read_url')).toBe('fetch');
     expect(toolKind('jira')).toBe('tool');
   });
 });
@@ -205,7 +205,7 @@ describe('buildToolActivity', () => {
       env(3, 'tool/progress', { phase: 'search', data: { query: 'berlin weather' } }),
       env(4, 'tool/progress', {
         phase: 'fetch.loading',
-        toolId: 'webContentExtractor',
+        toolId: 'read_url',
         data: { url: 'https://weather.example/berlin', status: 'loading' }
       })
     ]);
@@ -526,8 +526,8 @@ describe('page reader rows (issue #2520)', () => {
     env(seq, 'tool/started', {
       step: 1,
       callId,
-      toolId: 'webContentExtractor',
-      name: 'webContentExtractor',
+      toolId: 'read_url',
+      name: 'read_url',
       args: { url },
       execution: 'server'
     });
@@ -539,14 +539,14 @@ describe('page reader rows (issue #2520)', () => {
       env(3, 'tool/completed', {
         step: 1,
         callId: 'r1',
-        toolId: 'webContentExtractor',
-        name: 'webContentExtractor',
+        toolId: 'read_url',
+        name: 'read_url',
         resultPreview: '…'
       }),
       env(4, 'sources/added', {
         step: 1,
         callId: 'r1',
-        toolId: 'webContentExtractor',
+        toolId: 'read_url',
         items: [
           {
             id: 'url:docs.example.com/guide',
@@ -575,8 +575,8 @@ describe('page reader rows (issue #2520)', () => {
       env(3, 'tool/completed', {
         step: 1,
         callId: 'r1',
-        toolId: 'webContentExtractor',
-        name: 'webContentExtractor',
+        toolId: 'read_url',
+        name: 'read_url',
         resultPreview: { limitReached: true, code: 'PAGE_READ_LIMIT_REACHED', maxPageReads: 5 }
       }),
       ended(4)

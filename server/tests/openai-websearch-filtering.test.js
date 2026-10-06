@@ -45,8 +45,8 @@ const tools1 = [
     parameters: { type: 'object', properties: { query: { type: 'string' } } }
   },
   {
-    id: 'webContentExtractor',
-    name: 'webContentExtractor',
+    id: 'read_url',
+    name: 'read_url',
     description: 'Extract web content',
     parameters: { type: 'object', properties: { url: { type: 'string' } } }
   }
@@ -56,12 +56,12 @@ const result1 = convertGenericToolsToOpenAI(tools1);
 const hasResponsesTool1 = result1.some(t => t.function.name === 'exampleResponsesTool');
 const hasEnhanced1 = result1.some(t => t.function.name === 'enhancedWebSearch');
 const hasBrave1 = result1.some(t => t.function.name === 'braveSearch');
-const hasExtractor1 = result1.some(t => t.function.name === 'webContentExtractor');
+const hasExtractor1 = result1.some(t => t.function.name === 'read_url');
 
 assert.ok(!hasResponsesTool1, 'Should NOT include the openai-responses-restricted tool');
 assert.ok(hasEnhanced1, 'Should include enhancedWebSearch (universal tool)');
 assert.ok(hasBrave1, 'Should include braveSearch (universal tool)');
-assert.ok(hasExtractor1, 'Should include webContentExtractor (universal tool)');
+assert.ok(hasExtractor1, 'Should include read_url (universal tool)');
 console.log('✓ Test 1 passed\n');
 
 // Test 2: OpenAI Converter - should include openai-specific tools
@@ -87,8 +87,8 @@ const tools2 = [
     parameters: { type: 'object', properties: { query: { type: 'string' } } }
   },
   {
-    id: 'webContentExtractor',
-    name: 'webContentExtractor',
+    id: 'read_url',
+    name: 'read_url',
     description: 'Extract web content',
     parameters: { type: 'object', properties: { url: { type: 'string' } } }
   }
@@ -98,12 +98,12 @@ const result2 = convertGenericToolsToOpenAI(tools2);
 const hasOpenaiTool2 = result2.some(t => t.function.name === 'myOpenaiTool');
 const hasEnhanced2 = result2.some(t => t.function.name === 'enhancedWebSearch');
 const hasBrave2 = result2.some(t => t.function.name === 'braveSearch');
-const hasExtractor2 = result2.some(t => t.function.name === 'webContentExtractor');
+const hasExtractor2 = result2.some(t => t.function.name === 'read_url');
 
 assert.ok(hasOpenaiTool2, 'Should include openai-specific tools');
 assert.ok(hasEnhanced2, 'Should include enhancedWebSearch (universal tool)');
 assert.ok(hasBrave2, 'Should include braveSearch (universal tool)');
-assert.ok(hasExtractor2, 'Should include webContentExtractor (universal tool)');
+assert.ok(hasExtractor2, 'Should include read_url (universal tool)');
 console.log('✓ Test 2 passed\n');
 
 // Test 3: OpenAI Converter - should filter out a google-restricted tool regardless
@@ -160,8 +160,8 @@ const tools4 = [
     parameters: { type: 'object', properties: { query: { type: 'string' } } }
   },
   {
-    id: 'webContentExtractor',
-    name: 'webContentExtractor',
+    id: 'read_url',
+    name: 'read_url',
     description: 'Extract web content',
     parameters: { type: 'object', properties: { url: { type: 'string' } } }
   }
@@ -171,12 +171,12 @@ const result4 = convertGenericToolsToOpenaiResponses(tools4);
 const hasResponsesTool4 = result4.some(t => t.name === 'exampleResponsesTool');
 const hasEnhanced4 = result4.some(t => t.name === 'enhancedWebSearch');
 const hasBrave4 = result4.some(t => t.name === 'braveSearch');
-const hasExtractor4 = result4.some(t => t.name === 'webContentExtractor');
+const hasExtractor4 = result4.some(t => t.name === 'read_url');
 
 assert.ok(hasResponsesTool4, 'Should include its own provider tool as a regular function tool');
 assert.ok(hasEnhanced4, 'Should include enhancedWebSearch (universal tool)');
 assert.ok(hasBrave4, 'Should include braveSearch (universal tool)');
-assert.ok(hasExtractor4, 'Should include webContentExtractor (universal tool)');
+assert.ok(hasExtractor4, 'Should include read_url (universal tool)');
 console.log('✓ Test 4 passed\n');
 
 // Test 5: OpenAI Responses Converter - universal tools included with no provider tool present

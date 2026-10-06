@@ -77,7 +77,7 @@
           "en": "Task:\n{{#if currentInboxItem.text}}{{currentInboxItem.text}}{{/if}}{{#if task}}{{task}}{{/if}}\n\n{{#if verificationResult.feedback}}A previous adversarial review did NOT pass. Below is YOUR OWN previous draft — REVISE it: keep everything that is correct and well-sourced, and fix every gap listed. Do NOT start over from scratch, and do NOT drop content that was already good.\n\n=== YOUR PREVIOUS DRAFT ===\n{{draft}}\n=== END PREVIOUS DRAFT ===\n\nGaps you MUST fix (verify each against a real source before changing it):\n{{verificationResult.feedback}}{{/if}}",
           "de": "Aufgabe:\n{{#if currentInboxItem.text}}{{currentInboxItem.text}}{{/if}}{{#if task}}{{task}}{{/if}}\n\n{{#if verificationResult.feedback}}Eine vorherige Prüfung wurde NICHT bestanden. Unten steht IHR EIGENER vorheriger Entwurf — ÜBERARBEITEN Sie ihn: Behalten Sie alles Korrekte und gut Belegte und beheben Sie jede aufgeführte Lücke. Beginnen Sie NICHT von vorne und verwerfen Sie keine bereits guten Inhalte.\n\n=== IHR VORHERIGER ENTWURF ===\n{{draft}}\n=== ENDE VORHERIGER ENTWURF ===\n\nZu behebende Lücken (prüfen Sie jede gegen eine echte Quelle, bevor Sie sie ändern):\n{{verificationResult.feedback}}{{/if}}"
         },
-        "tools": ["braveSearch", "webContentExtractor"],
+        "tools": ["braveSearch", "read_url"],
         "outputVariable": "draft",
         "_persistAsArtifact": true
       }
@@ -95,7 +95,7 @@
       },
       "config": {
         "mode": "adversarial",
-        "tools": ["braveSearch", "webContentExtractor"],
+        "tools": ["braveSearch", "read_url"],
         "maxToolRounds": 6,
         "maxRetries": 6,
         "stallLimit": 2,

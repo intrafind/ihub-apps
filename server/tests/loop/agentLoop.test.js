@@ -124,7 +124,7 @@ const searchTool = {
   readOnly: true
 };
 const fetchTool = {
-  id: 'webContentExtractor',
+  id: 'read_url',
   description: 'fetch',
   parameters: { type: 'object', properties: { url: { type: 'string' } } }
 };
@@ -162,7 +162,7 @@ test('degenerate: caller-executed toolset terminates with parsed tool calls and 
     [
       toolTurn([
         { name: 'webSearch', args: { query: 'berlin' } },
-        { name: 'webContentExtractor', args: '{"url":"x"}{"a":1}' }
+        { name: 'read_url', args: '{"url":"x"}{"a":1}' }
       ])
     ],
     { seams }
@@ -186,7 +186,7 @@ test('degenerate: caller-executed toolset terminates with parsed tool calls and 
     result.toolCalls.map(c => [c.name, c.arguments]),
     [
       ['webSearch', { query: 'berlin' }],
-      ['webContentExtractor', { url: 'x', a: 1 }]
+      ['read_url', { url: 'x', a: 1 }]
     ]
   );
   assert.equal(result.toolCalls[0].id, 'call_1');
@@ -236,8 +236,8 @@ test('argument repair: glued objects and unquoted fragments still reach the tool
   const { loop } = makeLoop([
     toolTurn([
       { name: 'webSearch', args: '{"query":"a"}{"maxResults":3}' },
-      { name: 'webContentExtractor', args: '"url":"https://x"' },
-      { name: 'webContentExtractor', args: 'not json at all' }
+      { name: 'read_url', args: '"url":"https://x"' },
+      { name: 'read_url', args: 'not json at all' }
     ]),
     textTurn('done')
   ]);
@@ -259,7 +259,7 @@ test('history replays tool calls with the JSON arguments they ran with (no `""`)
     toolTurn([
       { name: 'webSearch', args: '' },
       { name: 'webSearch' },
-      { name: 'webContentExtractor', args: '{"url":"a"}{"b":1}' }
+      { name: 'read_url', args: '{"url":"a"}{"b":1}' }
     ]),
     textTurn('done')
   ]);
@@ -495,11 +495,11 @@ test('circuit breaker: two rate-limit failures disable the tool, nudge forbids i
 
 test('circuit breaker: three consecutive failures trip; a success resets the streak', async () => {
   const { loop } = makeLoop([
-    toolTurn([{ name: 'webContentExtractor', args: { url: '1' } }]),
-    toolTurn([{ name: 'webContentExtractor', args: { url: '2' } }]),
-    toolTurn([{ name: 'webContentExtractor', args: { url: '3' } }]),
-    toolTurn([{ name: 'webContentExtractor', args: { url: '4' } }]),
-    toolTurn([{ name: 'webContentExtractor', args: { url: '5' } }]),
+    toolTurn([{ name: 'read_url', args: { url: '1' } }]),
+    toolTurn([{ name: 'read_url', args: { url: '2' } }]),
+    toolTurn([{ name: 'read_url', args: { url: '3' } }]),
+    toolTurn([{ name: 'read_url', args: { url: '4' } }]),
+    toolTurn([{ name: 'read_url', args: { url: '5' } }]),
     textTurn('done')
   ]);
   let n = 0;
@@ -518,9 +518,9 @@ test('circuit breaker: three consecutive failures trip; a success resets the str
   assert.equal(result.content, 'done');
 
   const { loop: trip } = makeLoop([
-    toolTurn([{ name: 'webContentExtractor', args: { url: '1' } }]),
-    toolTurn([{ name: 'webContentExtractor', args: { url: '2' } }]),
-    toolTurn([{ name: 'webContentExtractor', args: { url: '3' } }]),
+    toolTurn([{ name: 'read_url', args: { url: '1' } }]),
+    toolTurn([{ name: 'read_url', args: { url: '2' } }]),
+    toolTurn([{ name: 'read_url', args: { url: '3' } }]),
     textTurn('done')
   ]);
   const r2 = await trip.run({
@@ -529,7 +529,7 @@ test('circuit breaker: three consecutive failures trip; a success resets the str
     tools: [fetchTool, searchTool],
     executeTool: async () => ({ error: true, message: 'HTTP 404 not found' })
   });
-  assert.deepEqual(r2.disabledTools, ['webContentExtractor']);
+  assert.deepEqual(r2.disabledTools, ['read_url']);
   const nudge = r2.messages.filter(m => m._nudge)[0].content;
   assert.match(nudge, /failed 3× in a row/);
   assert.equal(r2.budgetExhausted, false, 'search tool still alive, no forced finish');
@@ -557,9 +557,9 @@ test('abort mid-batch: remaining calls get synthetic results, no further model c
   const controller = new AbortController();
   const { loop, requests } = makeLoop([
     toolTurn([
-      { name: 'webContentExtractor', args: { url: 'a' } },
-      { name: 'webContentExtractor', args: { url: 'a' } },
-      { name: 'webContentExtractor', args: { url: 'a' } }
+      { name: 'read_url', args: { url: 'a' } },
+      { name: 'read_url', args: { url: 'a' } },
+      { name: 'read_url', args: { url: 'a' } }
     ]),
     textTurn('never')
   ]);
@@ -759,9 +759,9 @@ test('proactive compaction bounds the prompt across tool rounds', async () => {
   let largestPrompt = 0;
   const { loop } = makeLoop(
     [
-      toolTurn([{ name: 'webContentExtractor', args: { url: '1' } }]),
-      toolTurn([{ name: 'webContentExtractor', args: { url: '2' } }]),
-      toolTurn([{ name: 'webContentExtractor', args: { url: '3' } }]),
+      toolTurn([{ name: 'read_url', args: { url: '1' } }]),
+      toolTurn([{ name: 'read_url', args: { url: '2' } }]),
+      toolTurn([{ name: 'read_url', args: { url: '3' } }]),
       textTurn('final')
     ],
     {
@@ -794,7 +794,7 @@ test('reactive recovery: a context-window error microcompacts and retries once w
   const HUGE = 'z'.repeat(5000);
   let calls = 0;
   const { loop } = makeLoop([
-    toolTurn([{ name: 'webContentExtractor', args: { url: '1' } }]),
+    toolTurn([{ name: 'read_url', args: { url: '1' } }]),
     () => {
       calls += 1;
       return textResponse(
@@ -856,7 +856,7 @@ test('structured output: Anthropic-style synthetic json tool is lifted into cont
 
 test('image lift seam: an image in the tool result becomes a vision tool message', async () => {
   const { loop } = makeLoop(
-    [toolTurn([{ name: 'webContentExtractor', args: { url: 'img' } }]), textTurn('nice picture')],
+    [toolTurn([{ name: 'read_url', args: { url: 'img' } }]), textTurn('nice picture')],
     {
       seams: [imageLiftSeam]
     }
@@ -1202,7 +1202,7 @@ test('sources: every tool call, adapter chunk and provider search is collected, 
     [
       toolTurn([
         { id: 'c1', name: 'webSearch', args: { query: 'berlin' } },
-        { id: 'c2', name: 'webContentExtractor', args: { url: 'https://weather.example/berlin' } }
+        { id: 'c2', name: 'read_url', args: { url: 'https://weather.example/berlin' } }
       ])
     ],
     { runLog }
@@ -1211,7 +1211,7 @@ test('sources: every tool call, adapter chunk and provider search is collected, 
   const channel = { onSources: frame => frames.push(frame) };
   const toolResults = {
     webSearch: { results: [{ url: 'https://weather.example/berlin', title: 'Weather' }] },
-    webContentExtractor: { url: 'https://weather.example/berlin', content: 'Sunny', wordCount: 1 }
+    read_url: { url: 'https://weather.example/berlin', content: 'Sunny', wordCount: 1 }
   };
   const first = await loop.run({
     runId,
@@ -1228,7 +1228,7 @@ test('sources: every tool call, adapter chunk and provider search is collected, 
     frames.map(f => [f.callId, f.toolId, f.items.map(i => i.id)]),
     [
       ['c1', 'webSearch', ['url:weather.example/berlin']],
-      ['c2', 'webContentExtractor', ['url:weather.example/berlin']]
+      ['c2', 'read_url', ['url:weather.example/berlin']]
     ]
   );
   assert.deepEqual(first.sources.items, [

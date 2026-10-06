@@ -13,7 +13,7 @@ logger.info('══════════════════════�
 // Simulating tools as they appear after localization in German
 const toolsAfterLocalization = [
   {
-    id: 'webContentExtractor',
+    id: 'read_url',
     name: 'Web-Inhalts-Extraktor',
     description:
       'Extrahieren Sie saubere, lesbare Inhalte von einer URL. Dies können Inhalte wie PDFs oder Webseiten sein, wobei Werbung, Kopfzeilen, Fußzeilen und andere Nicht-Inhaltselemente entfernt werden.',

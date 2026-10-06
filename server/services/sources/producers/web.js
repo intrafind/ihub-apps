@@ -10,7 +10,7 @@
  *     (`tools/lib/searchWithExtraction.js`)
  *   - `{ items: [...] }` / `{ sources: [...] }`
  *   - a single fetched page `{ url, title?, content, wordCount?, truncated?, incomplete? }`
- *     (`webContentExtractor`)
+ *     (`read_url`)
  *
  * What the platform's own web search returned is public — it is on the open
  * web. "Own" is the shipped Brave, Qwant and Staan scripts, decided by the
@@ -26,7 +26,7 @@
  */
 
 /** Tool id of the page reader. */
-export const PAGE_READER_TOOL_ID = 'webcontentextractor';
+export const PAGE_READER_TOOL_ID = 'read_url';
 
 /**
  * Web search tools: the script-backed ones (`braveSearch`, `staanSearch`,

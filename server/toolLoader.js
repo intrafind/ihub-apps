@@ -331,7 +331,7 @@ export const NATIVE_WEB_SEARCH_FALLBACK_TOOL_ID = 'braveSearch';
  * open a result (or a URL the user gave it) in full instead of relying on the
  * search tool's short automatic excerpts.
  */
-export const WEB_CONTENT_EXTRACTOR_TOOL_ID = 'webContentExtractor';
+export const READ_URL_TOOL_ID = 'read_url';
 
 /** Script-backed search tool for each `websearch.provider` value. */
 export const WEBSEARCH_TOOL_IDS = Object.freeze({
@@ -538,7 +538,7 @@ export async function resolveNativeWebSearchFallbackTools(directive, { app, lang
  * @returns {Object[]} The search tool, followed by the page reader when available
  */
 function withPageReader(searchTool, allTools) {
-  const reader = allTools.find(t => t.id === WEB_CONTENT_EXTRACTOR_TOOL_ID);
+  const reader = allTools.find(t => t.id === READ_URL_TOOL_ID);
   return reader ? [searchTool, reader] : [searchTool];
 }
 
@@ -569,7 +569,7 @@ function resolveWebsearchTool(app, modelProvider, allTools, websearchEnabled, mo
   const native = resolveAppNativeWebSearch(app, modelProvider, websearchEnabled, model);
   if (native) {
     if (!NATIVE_SEARCH_WITH_PAGE_READER.has(native.provider)) return [];
-    const reader = allTools.find(t => t.id === WEB_CONTENT_EXTRACTOR_TOOL_ID);
+    const reader = allTools.find(t => t.id === READ_URL_TOOL_ID);
     return reader ? [reader] : [];
   }
 

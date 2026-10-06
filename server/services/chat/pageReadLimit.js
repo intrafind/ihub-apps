@@ -1,7 +1,7 @@
 /**
  * The per-turn cap on page reads (`websearch.maxPageReads`).
  *
- * The page reader (`webContentExtractor`) is offered next to every web search
+ * The page reader (`read_url`) is offered next to every web search
  * tool, and nothing but the chat's round cap bounded how often one answer
  * could call it — each call lands up to 50 000 characters in the context. The
  * gate counts the reader's calls in one chat turn and, past the cap, answers
@@ -19,8 +19,8 @@
 /** Page reads one answer may make when the app sets no `websearch.maxPageReads`. */
 export const DEFAULT_MAX_PAGE_READS = 5;
 
-/** Tool id of the page reader (see `toolLoader.WEB_CONTENT_EXTRACTOR_TOOL_ID`). */
-const PAGE_READER_TOOL_ID = 'webcontentextractor';
+/** Tool id of the page reader (see `toolLoader.READ_URL_TOOL_ID`). */
+const PAGE_READER_TOOL_ID = 'read_url';
 
 /** Code on the result of a read the cap refused. */
 export const PAGE_READ_LIMIT_CODE = 'PAGE_READ_LIMIT_REACHED';

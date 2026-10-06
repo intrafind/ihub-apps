@@ -27,8 +27,8 @@
     }
   },
   {
-    "id": "webContentExtractor",
-    "name": "webContentExtractor",
+    "id": "read_url",
+    "name": "read_url",
     "title": {
       "en": "Web Content Extractor",
       "de": "Web-Inhalts-Extraktor"

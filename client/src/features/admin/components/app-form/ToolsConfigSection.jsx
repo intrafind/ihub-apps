@@ -24,7 +24,7 @@ function ToolsConfigSection({ selectedTools, onToolsChange, mcpToolIds }) {
               'qwantSearch',
               'staanSearch',
               'enhancedWebSearch',
-              'webContentExtractor',
+              'read_url',
               ...mcpToolIds
             ]}
           />

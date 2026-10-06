@@ -34,7 +34,7 @@ const HIDDEN_TOOL_IDS = new Set(['activate_skill', 'ask_user']);
  */
 export function toolKind(toolId) {
   const id = String(toolId || '').toLowerCase();
-  if (id === 'webcontentextractor' || id === 'ifinder_getcontent') return 'fetch';
+  if (id === 'read_url' || id === 'ifinder_getcontent') return 'fetch';
   if (id.includes('search') || id.startsWith('source_')) return 'search';
   return 'tool';
 }
