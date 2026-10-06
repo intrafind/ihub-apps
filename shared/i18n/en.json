@@ -5093,6 +5093,10 @@
     }
   },
   "library": {
+    "categories": {
+      "all": "All categories",
+      "label": "Category"
+    },
     "empty": {
       "mine": "You have no prompts or skills yet.",
       "none": "Nothing found",

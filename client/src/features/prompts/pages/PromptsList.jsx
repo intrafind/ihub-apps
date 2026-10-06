@@ -60,6 +60,43 @@ function toGlobalSkillEntries(raw) {
 }
 
 /**
+ * One group of the library's filter bar: mutually exclusive options shown as a
+ * segmented control (a `tablist`, labelled by `label`).
+ *
+ * @param {Object} props
+ * @param {string} props.label - Accessible name of the group.
+ * @param {Array<{id: string, label: string}>} props.options - The options, in order.
+ * @param {string} props.value - The selected option's id.
+ * @param {(id: string) => void} props.onChange - Called with the picked option's id.
+ */
+function SegmentedControl({ label, options, value, onChange }) {
+  return (
+    <div
+      role="tablist"
+      aria-label={label}
+      className="inline-flex max-w-full flex-wrap justify-center gap-1 rounded-lg bg-gray-100 p-1 dark:bg-gray-800"
+    >
+      {options.map(option => (
+        <button
+          key={option.id}
+          type="button"
+          role="tab"
+          aria-selected={value === option.id}
+          onClick={() => onChange(option.id)}
+          className={`h-8 shrink-0 whitespace-nowrap rounded-md px-3 text-sm font-medium transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-500 ${
+            value === option.id
+              ? 'bg-white text-indigo-700 shadow-xs dark:bg-gray-600 dark:text-white'
+              : 'text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white'
+          }`}
+        >
+          {option.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/**
  * The library at `/prompts`: prompts and — with the `skills` feature —
  * skills, each the caller's own, shared with them, or global. A type switch
  * (`?type=all|prompts|skills`) narrows the kind, the scope filter
@@ -235,14 +272,14 @@ function PromptsList() {
     [personalSkills, globalSkills]
   );
 
-  // Only display categories that contain at least one prompt
+  // Only offer categories that contain at least one prompt; "All categories"
+  // is always the dropdown's first option.
   const availableCategories = useMemo(() => {
     if (!categoriesConfig.enabled) return [];
     const usedCategories = new Set(prompts.map(p => p.category || 'creative'));
-    return categoriesConfig.list.filter(category => {
-      if (category.id === 'all') return categoriesConfig.showAll;
-      return usedCategories.has(category.id);
-    });
+    return categoriesConfig.list.filter(
+      category => category.id !== 'all' && usedCategories.has(category.id)
+    );
   }, [categoriesConfig, prompts]);
 
   useEffect(() => {
@@ -437,6 +474,11 @@ function PromptsList() {
     global: t('prompts.filters.global', 'Global'),
     favorites: t('prompts.filters.favorites', 'Favorites')
   };
+  // Categories belong to prompts; skills have none.
+  const showCategoryFilter =
+    categoriesConfig.enabled && showsPrompts && availableCategories.length > 0;
+  const selectedCategoryConfig =
+    availableCategories.find(category => category.id === selectedCategory) || null;
   const typeLabels = {
     all: t('library.types.all', 'All'),
     prompts: t('library.types.prompts', 'Prompts'),
@@ -594,137 +636,109 @@ function PromptsList() {
         </div>
       )}
 
-      <div className="w-full max-w-md sm:max-w-lg lg:max-w-2xl mb-6">
-        <div className="flex flex-col sm:flex-row items-stretch gap-4">
-          <div className="relative grow">
-            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-              <Icon name="search" className="h-5 w-5 text-gray-400" />
-            </div>
-            <input
-              type="text"
-              className="block w-full pl-10 pr-10 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-              placeholder={
-                showsSkills
-                  ? showsPrompts
-                    ? t('library.searchPlaceholder', 'Search prompts and skills...')
-                    : t('skills.list.searchPlaceholder', 'Search skills...')
-                  : t('pages.promptsList.searchPlaceholder', 'Search prompts...')
-              }
-              aria-label={t('library.searchLabel', 'Search the library')}
-              value={searchTerm}
-              onChange={handleSearchChange}
-              autoComplete="off"
-              data-lpignore="true"
-              data-1p-ignore="true"
-            />
-            {searchTerm && (
-              <button
-                type="button"
-                onClick={() => {
-                  setSearchTerm('');
-                  setPage(0);
-                }}
-                className="absolute inset-y-0 right-0 pr-4 flex items-center text-gray-400 hover:text-gray-600"
-                aria-label={t('common.clear', 'Clear')}
-              >
-                <Icon name="x" className="w-5 h-5" />
-              </button>
-            )}
+      {/* Toolbar: search, sort and "New" share one height */}
+      <div className="w-full max-w-2xl mb-4 flex flex-wrap sm:flex-nowrap gap-3">
+        <div className="relative w-full sm:w-auto sm:flex-1">
+          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+            <Icon name="search" className="h-5 w-5 text-gray-400" />
           </div>
-          {sortConfig.enabled && (
-            <div className="shrink-0">
-              <select
-                className="h-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-lg py-2 px-3 w-full sm:w-auto"
-                value={sortMethod}
-                aria-label={t('pages.promptsList.sort.label', 'Sort by')}
-                onChange={e => {
-                  setSortMethod(e.target.value);
-                  setPage(0);
-                }}
-              >
-                <option value="relevance">
-                  {t('pages.promptsList.sort.relevance', 'Relevance')}
-                </option>
-                <option value="nameAsc">{t('pages.promptsList.sort.nameAsc', 'Name A-Z')}</option>
-                <option value="nameDesc">{t('pages.promptsList.sort.nameDesc', 'Name Z-A')}</option>
-              </select>
-            </div>
-          )}
-          <LibraryNewMenu entries={newEntries} />
-        </div>
-      </div>
-
-      {/* Item type switch: prompts, skills — data-driven, see ITEM_TYPES */}
-      {showTypeSwitch && (
-        <div
-          className="inline-flex rounded-lg border border-gray-300 dark:border-gray-600 overflow-hidden mb-3"
-          role="tablist"
-          aria-label={t('library.types.label', 'Type')}
-        >
-          {itemTypes.map(type => (
+          <input
+            type="text"
+            className="block h-10 w-full pl-10 pr-10 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+            placeholder={
+              showsSkills
+                ? showsPrompts
+                  ? t('library.searchPlaceholder', 'Search prompts and skills...')
+                  : t('skills.list.searchPlaceholder', 'Search skills...')
+                : t('pages.promptsList.searchPlaceholder', 'Search prompts...')
+            }
+            aria-label={t('library.searchLabel', 'Search the library')}
+            value={searchTerm}
+            onChange={handleSearchChange}
+            autoComplete="off"
+            data-lpignore="true"
+            data-1p-ignore="true"
+          />
+          {searchTerm && (
             <button
-              key={type.id}
               type="button"
-              role="tab"
-              aria-selected={typeFilter === type.id}
-              onClick={() => setTypeFilter(type.id)}
-              className={`px-4 py-1.5 text-sm font-medium transition-colors ${
-                typeFilter === type.id
-                  ? 'bg-gray-900 text-white dark:bg-gray-100 dark:text-gray-900'
-                  : 'text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700'
-              }`}
+              onClick={() => {
+                setSearchTerm('');
+                setPage(0);
+              }}
+              className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600"
+              aria-label={t('common.clear', 'Clear')}
             >
-              {typeLabels[type.id] || type.id}
+              <Icon name="x" className="w-5 h-5" />
             </button>
-          ))}
+          )}
         </div>
-      )}
-
-      {/* Scope filter */}
-      <div
-        className="flex flex-wrap gap-2 mb-4 justify-center"
-        role="tablist"
-        aria-label={t('prompts.filters.label', 'Show')}
-      >
-        {visibleFilters.map(filter => (
-          <button
-            key={filter}
-            type="button"
-            role="tab"
-            aria-selected={scopeFilter === filter}
-            onClick={() => setScopeFilter(filter)}
-            className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
-              scopeFilter === filter
-                ? 'bg-indigo-600 text-white border-indigo-600'
-                : 'text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700'
-            }`}
+        {sortConfig.enabled && (
+          <select
+            className="h-10 flex-1 sm:flex-none border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-lg px-3 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+            value={sortMethod}
+            aria-label={t('pages.promptsList.sort.label', 'Sort by')}
+            onChange={e => {
+              setSortMethod(e.target.value);
+              setPage(0);
+            }}
           >
-            {filterLabels[filter]}
-          </button>
-        ))}
+            <option value="relevance">{t('pages.promptsList.sort.relevance', 'Relevance')}</option>
+            <option value="nameAsc">{t('pages.promptsList.sort.nameAsc', 'Name A-Z')}</option>
+            <option value="nameDesc">{t('pages.promptsList.sort.nameDesc', 'Name Z-A')}</option>
+          </select>
+        )}
+        <LibraryNewMenu entries={newEntries} />
       </div>
 
-      {/* Category filter */}
-      {categoriesConfig.enabled && showsPrompts && (
-        <div className="flex flex-wrap gap-2 mb-6 justify-center">
-          {availableCategories.map(category => (
-            <button
-              key={category.id}
-              onClick={() => handleCategorySelect(category.id)}
-              className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${
-                selectedCategory === category.id
-                  ? 'text-white shadow-lg transform scale-105'
-                  : 'text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700'
+      {/* Filter bar: item type (see ITEM_TYPES), scope and category in one row */}
+      <div className="w-full max-w-6xl mb-6 flex flex-wrap items-center justify-center gap-3">
+        {showTypeSwitch && (
+          <SegmentedControl
+            label={t('library.types.label', 'Type')}
+            options={itemTypes.map(type => ({
+              id: type.id,
+              label: typeLabels[type.id] || type.id
+            }))}
+            value={typeFilter}
+            onChange={setTypeFilter}
+          />
+        )}
+        <SegmentedControl
+          label={t('prompts.filters.label', 'Show')}
+          options={visibleFilters.map(filter => ({ id: filter, label: filterLabels[filter] }))}
+          value={scopeFilter}
+          onChange={setScopeFilter}
+        />
+        {showCategoryFilter && (
+          <div className="relative max-w-full">
+            {selectedCategoryConfig && (
+              <span
+                aria-hidden="true"
+                className="absolute left-3 top-1/2 -translate-y-1/2 h-2.5 w-2.5 rounded-full pointer-events-none"
+                style={{ backgroundColor: selectedCategoryConfig.color || '#6B7280' }}
+              />
+            )}
+            <select
+              className={`h-10 max-w-full rounded-lg border-0 bg-gray-100 dark:bg-gray-800 pr-3 text-sm font-medium focus:ring-2 focus:ring-indigo-500 ${
+                selectedCategoryConfig
+                  ? 'pl-7 text-indigo-700 dark:text-white'
+                  : 'pl-3 text-gray-600 dark:text-gray-300'
               }`}
-              style={{
-                backgroundColor: selectedCategory === category.id ? category.color : undefined
-              }}
+              value={selectedCategory}
+              aria-label={t('library.categories.label', 'Category')}
+              onChange={e => handleCategorySelect(e.target.value)}
             >
-              {getLocalizedContent(category.name, i18n.language)}
-            </button>
-          ))}
-        </div>
-      )}
+              <option value="all">{t('library.categories.all', 'All categories')}</option>
+              {availableCategories.map(category => (
+                <option key={category.id} value={category.id}>
+                  {getLocalizedContent(category.name, i18n.language)}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+      </div>
 
       {showSkillsGetStarted && (
         <div
