@@ -581,9 +581,10 @@ describe('Migration Runner', () => {
       '154',
       '155',
       '156',
-      '157'
+      '157',
+      '158'
     ])(
-      'moves an EU AI Act entry recorded at V%s to V158 so it no longer blocks main',
+      'moves an EU AI Act entry recorded at V%s to V160 so it no longer blocks main',
       oldVersion => {
         // A dev install that ran the branch while it held that number recorded
         // it; main's provider plain names (V141), text-to-speech (V142),
@@ -591,8 +592,9 @@ describe('Migration Runner', () => {
         // trusted sources (V147), Translator system prompt (V148), user skills
         // settings (V152), workflow code node removal (V153), user skills
         // marketplace (V154), skill builder (V155), skills catalog token budget
-        // (V156) and read_url tool rename (V157) migrations hold those numbers
-        // now, and V143 sorts below main's app wizard field cleanup (V144).
+        // (V156), read_url tool rename (V157) and Copilot agent config (V158)
+        // migrations hold those numbers now, and V143 sorts below main's app
+        // wizard field cleanup (V144).
         const history = {
           schemaVersion: '1.0',
           migrations: [
@@ -614,8 +616,8 @@ describe('Migration Runner', () => {
         };
 
         expect(reconcileRenamedMigrations(history)).toBe(true);
-        expect(history.migrations[0].version).toBe('158');
-        expect(history.migrations[0].file).toBe('V158__add_ai_transparency.js');
+        expect(history.migrations[0].version).toBe('160');
+        expect(history.migrations[0].file).toBe('V160__add_ai_transparency.js');
         expect(history.migrations[1].version).toBe('140');
       }
     );
@@ -730,6 +732,20 @@ describe('Migration Runner', () => {
 
       expect(reconcileRenamedMigrations(history)).toBe(false);
       expect(history.migrations).toEqual([readUrl]);
+    });
+
+    it("leaves main's V158 Copilot agent entry alone when reconciling the EU AI Act V158", () => {
+      const copilotAgent = {
+        version: '158',
+        description: 'add_copilot_agent_config',
+        file: 'V158__add_copilot_agent_config.js',
+        checksum: 'abc123',
+        status: 'success'
+      };
+      const history = { schemaVersion: '1.0', migrations: [{ ...copilotAgent }] };
+
+      expect(reconcileRenamedMigrations(history)).toBe(false);
+      expect(history.migrations).toEqual([copilotAgent]);
     });
 
     it('is a no-op on a fresh install with no matching history entries', () => {
