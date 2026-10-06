@@ -128,6 +128,9 @@ function copyProps(source, target, spec, ctx, kind) {
 function applyCommon(source, target, ctx, kind) {
   copyProps(source, target, TEXT_PROPS, ctx, kind);
   copyProps(source, target, LAYOUT_PROPS, ctx, kind);
+  // `headlineLevel` may move a heading to the next page (see
+  // `buildDocument.js`); inside a column, box or cell that would split it.
+  if (ctx.containerDepth > 0) delete target.headlineLevel;
   if (source.font !== undefined) target.font = resolveFontFamily(source.font, ctx.theme.font);
   const link = source.link !== undefined ? safeLink(source.link) : undefined;
   if (link) target.link = link;

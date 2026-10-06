@@ -13,8 +13,10 @@ import os from 'node:os';
 import path from 'node:path';
 import { PDFDocument } from 'pdf-lib';
 import { PNG } from 'pngjs';
+import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs';
 
 import { markdownToContent } from '../services/documents/pdf/markdownToPdfmake.js';
+import { buildDocument } from '../services/documents/pdf/buildDocument.js';
 import { sanitizeBlocks } from '../services/documents/pdf/sanitizeBlocks.js';
 import { printableRuns } from '../services/documents/pdf/glyphs.js';
 import { isColor, resolveTheme } from '../services/documents/pdf/themes.js';
@@ -64,6 +66,28 @@ function pdfText(buffer) {
   return buffer.toString('latin1');
 }
 
+/** A thematic break (`---`): a one-cell rule table holding an empty 1 pt line. */
+const isRule = node => node?.table?.body?.[0]?.[0]?.fontSize === 1;
+
+/** The text lines of each page of a PDF, top to bottom. */
+async function pageLines(buffer) {
+  const task = pdfjs.getDocument({ data: new Uint8Array(buffer), isEvalSupported: false });
+  const doc = await task.promise;
+  const pages = [];
+  for (let n = 1; n <= doc.numPages; n++) {
+    const { items } = await (await doc.getPage(n)).getTextContent();
+    const lines = new Map();
+    for (const item of items) {
+      if (!item.str.trim()) continue;
+      const y = Math.round(item.transform[5]);
+      lines.set(y, (lines.get(y) || '') + item.str);
+    }
+    pages.push([...lines.entries()].sort((a, b) => b[0] - a[0]).map(([, text]) => text));
+  }
+  await task.destroy();
+  return pages;
+}
+
 describe('markdown conversion', () => {
   it('maps headings, lists, tables, code and breaks to pdfmake nodes', () => {
     const content = markdownToContent(
@@ -107,6 +131,51 @@ describe('markdown conversion', () => {
       links.map(l => l.link),
       ['https://example.com']
     );
+  });
+
+  it('leaves out a first heading that only repeats the printed title', () => {
+    const markdown = '# Spotlight Pages **Concept**\n\n## Overview\n\nText.';
+    const texts = (options, md = markdown) =>
+      collectText(markdownToContent(md, ctx(), options)).join('|');
+    assert.doesNotMatch(
+      texts({ body: true, title: 'Spotlight pages concept' }),
+      /Spotlight/,
+      'case and formatting do not matter'
+    );
+    assert.match(texts({ body: true, title: 'Another title' }), /Spotlight/);
+    assert.match(texts({ body: true }), /Spotlight/, 'no title printed above the body');
+    assert.match(texts({}), /Spotlight/, 'a layout block keeps its heading');
+    assert.match(
+      texts({ body: true, title: 'Overview' }, 'Intro.\n\n# Overview'),
+      /Overview/,
+      'only a heading that opens the body'
+    );
+  });
+
+  it('leaves out rules that would double a heading rule or end the body', () => {
+    const markdown =
+      '---\n\nIntro\n\n---\n\n## Section\n\n---\n\nText\n\n---\n\n---\n\nMore\n\n---\n';
+    const rules = (theme, options = { body: true }) =>
+      markdownToContent(markdown, ctx({ theme: resolveTheme(theme) }), options).filter(isRule)
+        .length;
+    assert.equal(rules('default'), 1, 'only the rule between "Text" and "More"');
+    assert.equal(rules('minimal'), 3, 'a heading without a rule keeps the rules around it');
+    assert.equal(rules('default', {}), 6, 'layout blocks keep every rule');
+  });
+
+  it('marks only headings in the document flow for the keep-with-next rule', () => {
+    const flow = markdownToContent('## Top\n\n- item\n\n  ### In a list', ctx());
+    assert.equal(flow[0].headlineLevel, 2);
+    assert.equal(flow[0].table.body[0][0].headlineLevel, 2, 'the ruled heading text as well');
+    assert.equal(collectText(flow[1]).includes('In a list'), true);
+    assert.equal(JSON.stringify(flow[1]).includes('headlineLevel'), false);
+    const boxed = markdownToContent('## In a box', ctx({ containerDepth: 1 }));
+    assert.equal(boxed[0].headlineLevel, undefined);
+    const blocks = sanitizeBlocks(
+      [{ columns: [{ text: 'Column heading', headlineLevel: 2 }] }],
+      ctx()
+    );
+    assert.equal(JSON.stringify(blocks).includes('headlineLevel'), false);
   });
 
   it('renders images only from PNG/JPEG data URIs, at their natural size', () => {
@@ -276,6 +345,60 @@ describe('rendering', () => {
     assert.equal(doc.getTitle(), 'Größenbericht');
     assert.equal(doc.getAuthor(), 'iHub');
     assert.doesNotMatch(pdfText(buffer), /\/EmbeddedFile/);
+  });
+
+  it('prints the title once when the Markdown opens with it', () => {
+    const { docDefinition } = buildDocument({
+      title: 'Spotlight Pages Concept',
+      theme: 'professional',
+      markdown: '# Spotlight Pages Concept\n\n---\n\n## Overview\n\nText.'
+    });
+    const titles = collectText(docDefinition.content).filter(t => t === 'Spotlight Pages Concept');
+    assert.equal(titles.length, 1);
+    assert.equal(docDefinition.content.filter(isRule).length, 0);
+    // With a cover page the title is on its own page; the body keeps its heading.
+    const withCover = buildDocument({
+      title: 'Spotlight Pages Concept',
+      coverPage: true,
+      markdown: '# Spotlight Pages Concept\n\nText.'
+    });
+    assert.equal(
+      collectText(withCover.docDefinition.content).filter(t => t === 'Spotlight Pages Concept')
+        .length,
+      2
+    );
+  });
+
+  it('keeps a heading with at least two lines of what follows it', async () => {
+    // Push a heading down the first page step by step, with a running header,
+    // footer and corner watermark on every page: on whichever page the heading
+    // lands, at least two lines of its paragraph follow it there.
+    const paragraph = 'Lorem ipsum dolor sit amet, consectetur adipiscing elit. '.repeat(12);
+    const outcomes = new Set();
+    for (let offset = 0; offset <= 240; offset += 8) {
+      const { buffer } = await renderPdfSpec({
+        title: 'Keep with next',
+        header: '{title}',
+        footer: 'Internal',
+        watermark: { text: 'Draft', position: 'bottom-right' },
+        blocks: [
+          { text: 'Spacer', margin: [0, 200, 0, 0] },
+          { text: 'Spacer', margin: [0, 200, 0, 0] },
+          { text: 'Intro', margin: [0, offset, 0, 0] },
+          { markdown: `## Next section\n\n${paragraph}` }
+        ]
+      });
+      const pages = await pageLines(buffer);
+      const page = pages.findIndex(lines => lines.includes('Next section'));
+      const lines = pages[page];
+      const following = lines.slice(lines.indexOf('Next section') + 1);
+      assert.ok(
+        following.filter(line => line.includes('Lorem')).length >= 2,
+        `offset ${offset}: the heading on page ${page + 1} is followed by ${following.join(' / ')}`
+      );
+      outcomes.add(page);
+    }
+    assert.deepEqual([...outcomes].sort(), [0, 1], 'the sweep crosses the page end');
   });
 
   it('never embeds a local file an SVG points at', async () => {
