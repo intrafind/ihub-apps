@@ -41,7 +41,7 @@ import { readMemoryBodyForPrompt } from '../../../agents/memory/memoryFile.js';
 import { getAppAsTools, stripAppToolsForAgent } from '../../chat/appToolsGateway.js';
 import { writeArtifactDirect } from '../../../agents/runtime/artifactStore.js';
 import { isFeatureEnabled } from '../../../featureRegistry.js';
-import { buildAvailableSkillsBlock, getUsableSkills } from '../../skillAccess.js';
+import { describeSkillCatalog } from '../../skillAccess.js';
 import { resolveMaxOutputTokens } from '../../../../shared/outputTokens.js';
 
 // Bound on the {{previousTaskResults}} digest baked into a per-task worker's
@@ -2126,12 +2126,14 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
     if (skillIds && !isSynthesizer) {
       try {
         // Filtered by the run's principal (the agent's service account, or
-        // the user a workflow runs for), as `activate_skill` checks it.
-        const filtered = await getUsableSkills({ skillIds, user: context?.user });
-        if (filtered.length > 0) {
-          parts.push(
-            `${buildAvailableSkillsBlock(filtered)}\n\nWhen a skill's description matches the current work, call activate_skill({skill_name: "..."}) to load its full instructions. The skill body will then guide HOW to perform the task.`
-          );
+        // the user a workflow runs for), as `activate_skill` checks it; the
+        // same list, within the same budget, as the node's skill tools offer.
+        const catalog = await describeSkillCatalog({
+          app: { _skillIds: skillIds },
+          user: context?.user
+        });
+        if (catalog.text) {
+          parts.push(`${catalog.text}\n\nThe skill body will then guide HOW to perform the task.`);
         }
       } catch (err) {
         this.logger.warn('Failed to render available_skills block', {

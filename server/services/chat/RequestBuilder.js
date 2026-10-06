@@ -5,6 +5,7 @@ import {
   resolveAppNativeWebSearch,
   WEB_CONTENT_EXTRACTOR_TOOL_ID
 } from '../../toolLoader.js';
+import { prepareActiveSkills } from '../skillAccess.js';
 import ErrorHandler from '../../utils/ErrorHandler.js';
 import ApiKeyVerifier from '../../utils/ApiKeyVerifier.js';
 import { filterResourcesByPermissions } from '../../utils/authorization.js';
@@ -531,6 +532,32 @@ class RequestBuilder {
       // Get model name for global prompt variables
       const modelName = model?.name || model?.id || resolvedModelId;
 
+      // The skills this turn runs with: named in the request or the message,
+      // or activated earlier in the chat. Resolved once, here, because the
+      // system prompt carries them and the skill tools need to know them.
+      // A skill that cannot be loaded never fails the turn: it runs without.
+      let preparedSkills = { skills: [], text: '' };
+      if (!bypassAppPrompts) {
+        try {
+          preparedSkills = await prepareActiveSkills({
+            messages,
+            requested: requestedSkills,
+            app,
+            user,
+            contextWindow: model.contextWindow
+          });
+        } catch (error) {
+          logger.error('Error resolving the active skills', { component: 'RequestBuilder', error });
+        }
+      }
+      const activeSkills = preparedSkills.skills;
+      // The app as this turn's tools see it: `activate_skill` answers for a
+      // skill already in the system prompt without loading it a second time.
+      const turnApp =
+        activeSkills.length > 0
+          ? { ...app, _activeSkills: activeSkills.map(({ name, full }) => ({ name, full })) }
+          : app;
+
       let llmMessages = await processMessageTemplates(
         messages,
         bypassAppPrompts ? null : app,
@@ -541,7 +568,8 @@ class RequestBuilder {
         user,
         chatId,
         modelName,
-        requestedSkills
+        requestedSkills,
+        preparedSkills
       );
       // The raw file/image data of the last user message, next to its rendered
       // content: workflow tools receive the structured file object for their
@@ -591,7 +619,8 @@ class RequestBuilder {
         enabledTools,
         modelProvider: model.provider,
         model,
-        websearchEnabled
+        websearchEnabled,
+        activeSkills
       };
       const tools = await getToolsForApp(app, language, context);
       const nativeWebSearch = resolveAppNativeWebSearch(
@@ -660,13 +689,14 @@ class RequestBuilder {
         imageConfig,
         user,
         chatId,
-        appConfig: documentIds ? { ...app, documentIds } : app
+        appConfig: documentIds ? { ...turnApp, documentIds } : turnApp
       };
 
       return {
         success: true,
         data: {
-          app,
+          app: turnApp,
+          activeSkills,
           model,
           llmMessages,
           tools,

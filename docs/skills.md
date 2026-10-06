@@ -16,6 +16,9 @@ There are two kinds:
 
 - **Automatically:** the model sees the name and description of every skill it may use in the
   current app and loads a skill's full instructions when a request matches.
+- **For the rest of the chat:** a skill stays active once it is loaded, whether you named it or
+  the model chose it. Later messages are answered with its instructions without naming it again,
+  so an interview skill keeps asking its questions. Start a new chat to drop it.
 - **With `/name` in the message:** writing `/skill-name` at the start of the message or after a
   space loads that skill's instructions for the message, for example
   `/newsletter-composer draft this week's issue from my notes`. Several skills can be combined
@@ -31,6 +34,48 @@ A skill is loaded only when the current app and user may use it. For a global sk
 installed, listed in the app's `skills`, and granted to the user's groups. For a user skill: the
 user owns it or it is shared with them, and the app does not set
 `skillSettings.allowPersonal: false`. Agents use only the global skills on their profile.
+
+## How skills reach the model
+
+Skills are loaded on demand, as in Claude, ChatGPT and Gemini, so that many skills cost little
+context:
+
+1. **The list.** Every turn, the system prompt lists the skills the model may start in this app:
+   name and description. The list stays the same from message to message.
+2. **The instructions.** When a request matches a description, the model calls `activate_skill`
+   and receives the skill's instructions. A skill named with `/name` (or `requestedSkills`) is
+   loaded up front.
+3. **The files.** When the instructions point to a reference file, the model reads it with
+   `read_skill_resource`.
+
+From the next turn on, the system prompt carries every active skill's instructions, so the model
+does not need to load them again; asking for an active skill again returns a short note. Access is
+checked again on every turn: a skill whose grant, assignment or share was removed is no longer
+active. At most `skillSettings.maxActiveSkills` (default 3) skills are active at once — the ones
+named in the current message first, then the most recently activated ones.
+
+Limits in `platform.json` (see [Skills configuration](platform.md#skills-configuration)):
+
+| Setting | Default | What happens over the limit |
+| ------- | ------- | --------------------------- |
+| `skills.maxCatalogTokens` | `3000` | The list shortens the descriptions, then lists only names. The model gets a `find_skill` tool to search the skills by keywords and read their full descriptions |
+| `skills.maxSkillBodyTokens` | `5000` | An active skill longer than this stays active with its description only; the model reads its instructions with `activate_skill` when it needs them. All active skills together take at most a quarter of the model's context window |
+
+### Skills only users start
+
+A global skill whose `SKILL.md` frontmatter sets `disable-model-invocation: true` (the field
+Claude Code uses) is not offered to the model: it is left out of the list, the model cannot load it
+on its own, and agents do not use it. Users start it with `/name`, after which it is active like
+any other skill. Use it for skills that should only run when someone asks for them, such as a
+skill that sends or publishes something.
+
+```markdown
+---
+name: send-newsletter
+description: Send the approved newsletter to the mailing list.
+disable-model-invocation: true
+---
+```
 
 ## User Skills
 

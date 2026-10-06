@@ -1,5 +1,4 @@
 import configCache from '../../configCache.js';
-import { lastUserText, resolveSkillsForTurn } from '../../services/skillAccess.js';
 import { appendMcpAppContext } from '../../services/mcp/mcpAppContext.js';
 import { sendLLMError } from '../../services/loop/llmHttpErrors.js';
 import { logInteraction, trackSession } from '../../utils.js';
@@ -96,12 +95,42 @@ function emitFailedRun(chatId, { kind = 'chat', messageId, code, message, refs =
  * blank message outright.
  *
  * @param {Array<Object>} stored - Messages as `ChatRepository` returns them.
- * @returns {Array<{role: string, content: string}>}
+ * @returns {Array<{role: string, content: string, activeSkills?: Array<Object>}>} An answer
+ *   keeps the skills it activated (`activity.activeSkills`), so they stay active.
  */
-function historyForPrompt(stored) {
+export function historyForPrompt(stored) {
   return stored
     .filter(entry => entry?.role && typeof entry.content === 'string' && entry.content.trim())
-    .map(entry => ({ role: entry.role, content: entry.content }));
+    .map(entry => {
+      // The skills an answer activated stay active in the chat; the request
+      // builder reads them from here and re-checks access every turn.
+      const skills = entry.role === 'assistant' ? entry.activity?.activeSkills : null;
+      return {
+        role: entry.role,
+        content: entry.content,
+        ...(Array.isArray(skills) && skills.length > 0 ? { activeSkills: skills } : {})
+      };
+    });
+}
+
+/**
+ * The skills a turn announces as activated on its run: the ones it activates
+ * itself (named in the request or the message), not the ones still active
+ * from earlier turns.
+ *
+ * @param {Array<{name: string, displayName: string, description?: string, origin: string}>} [skills]
+ *   `activeSkills` of the prepared request
+ * @returns {Array<{skillName: string, skillId: string, activatedBy: 'user', description: string}>}
+ */
+export function announcedSkills(skills) {
+  return (Array.isArray(skills) ? skills : [])
+    .filter(skill => skill.origin !== 'chat')
+    .map(skill => ({
+      skillName: skill.displayName,
+      skillId: skill.name,
+      activatedBy: 'user',
+      description: skill.description || ''
+    }));
 }
 
 /**
@@ -1358,6 +1387,7 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
             prep: prep.data,
             buildLogData,
             messageId,
+            activatedSkills: announcedSkills(prep.data.activeSkills),
             streaming: false,
             res,
             chatId,
@@ -1410,22 +1440,12 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
           appendMcpAppContext(prep.data.llmMessages, mcpAppContext);
           llmMessages = prep.data.llmMessages;
 
-          // Skills pre-activated for this turn (`/name` in the message, or
-          // `requestedSkills`) are announced on the run: the same usable subset
-          // PromptService loaded, never a skill the app or the user may not use.
-          const activatedSkills = bypassAppPrompts
-            ? []
-            : (
-                await resolveSkillsForTurn({
-                  requested: requestedSkills,
-                  text: lastUserText(messages),
-                  app: prep.data.app,
-                  user: req.user
-                })
-              ).map(skill => ({
-                skillName: skill.displayName,
-                description: skill.description || ''
-              }));
+          // Skills this turn activates (`/name` in the message, or
+          // `requestedSkills`) are announced on the run: the usable subset the
+          // request builder put in the system prompt, never a skill the app or
+          // the user may not use. Skills still active from earlier turns were
+          // announced when they were activated.
+          const activatedSkills = announcedSkills(prep.data.activeSkills);
 
           await processChatRequest({
             prep: prep.data,
