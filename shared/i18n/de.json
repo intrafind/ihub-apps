@@ -3130,7 +3130,8 @@
         "disabled": "Diese App ist deaktiviert und kann daher nicht im Chat geöffnet werden. Aktivieren und speichern Sie sie, um sie zu testen."
       },
       "status": {
-        "disabled": "Deaktiviert"
+        "disabled": "Deaktiviert",
+        "hiddenUntilFeature": "Für Nutzer ausgeblendet, bis {{features}} eingeschaltet ist"
       }
     },
     "features": {

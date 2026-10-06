@@ -1,0 +1,72 @@
+{
+  "id": "skill-builder",
+  "order": 2,
+  "category": "utility",
+  "name": {
+    "en": "Skill Builder",
+    "de": "Skill-Builder"
+  },
+  "description": {
+    "en": "Turn a task you keep repeating into a skill: describe it, answer a few questions, save the draft.",
+    "de": "Machen Sie aus einer wiederkehrenden Aufgabe einen Skill: beschreiben, ein paar Fragen beantworten, Entwurf speichern."
+  },
+  "color": "#9333EA",
+  "icon": "sparkles",
+  "system": {
+    "en": "You help users turn tasks they repeat into iHub skills. Follow the skill-builder skill for the whole conversation: interview the user, draft the skill, and hand over the draft so they can save it with Save as skill.",
+    "de": "Du hilfst Nutzern, wiederkehrende Aufgaben in iHub-Skills zu verwandeln. Folge während des gesamten Gesprächs dem Skill skill-builder: Befrage den Nutzer, entwirf den Skill und übergib den Entwurf so, dass er ihn mit „Als Skill speichern“ übernehmen kann."
+  },
+  "greeting": {
+    "en": {
+      "title": "✨ Build a skill",
+      "subtitle": "Describe a task you keep repeating, or paste a prompt, Gem or custom GPT instructions. I'll ask a few questions and draft a skill you can save."
+    },
+    "de": {
+      "title": "✨ Skill erstellen",
+      "subtitle": "Beschreiben Sie eine Aufgabe, die Sie immer wieder erledigen, oder fügen Sie einen Prompt, ein Gem oder Anweisungen eines Custom GPT ein. Ich stelle ein paar Fragen und entwerfe einen Skill, den Sie speichern können."
+    }
+  },
+  "starterPrompts": [
+    {
+      "title": {
+        "en": "Capture a task I repeat",
+        "de": "Wiederkehrende Aufgabe festhalten"
+      },
+      "message": {
+        "en": "I keep doing the same task again and again and want to turn it into a skill. Ask me what you need to know.",
+        "de": "Ich erledige immer wieder dieselbe Aufgabe und möchte daraus einen Skill machen. Frag mich, was du wissen musst."
+      }
+    },
+    {
+      "title": {
+        "en": "Convert a prompt",
+        "de": "Prompt umwandeln"
+      },
+      "message": {
+        "en": "Turn this prompt into a skill:\n\n",
+        "de": "Mach aus diesem Prompt einen Skill:\n\n"
+      }
+    },
+    {
+      "title": {
+        "en": "Review a skill",
+        "de": "Skill prüfen"
+      },
+      "message": {
+        "en": "Review this SKILL.md and suggest improvements:\n\n",
+        "de": "Prüfe diese SKILL.md und schlage Verbesserungen vor:\n\n"
+      }
+    }
+  ],
+  "preferredOutputFormat": "markdown",
+  "preferredStyle": "normal",
+  "preferredTemperature": 0.5,
+  "sendChatHistory": true,
+  "skills": ["skill-builder"],
+  "skillSettings": {
+    "autoActivate": true,
+    "allowPersonal": false
+  },
+  "requiredFeatures": ["skills"],
+  "enabled": true
+}

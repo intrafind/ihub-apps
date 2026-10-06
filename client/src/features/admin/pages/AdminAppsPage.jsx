@@ -16,6 +16,7 @@ import {
 } from '../../../api/adminApi';
 import { fetchUIConfig } from '../../../api';
 import { buildPath } from '../../../utils/runtimeBasePath';
+import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import ReorderableList from '../components/ReorderableList';
 import { DataTable, SearchInput, FilterSelect } from '../components/data-table';
@@ -41,10 +42,28 @@ function AppNameCell({ app, currentLanguage }) {
   );
 }
 
+/**
+ * The features an app requires (`requiredFeatures`) that are off, by name.
+ * While one is off, users do not get the app, even though it is enabled.
+ *
+ * @param {Object} app - App config.
+ * @param {Object[]} [features] - Resolved features from the platform config.
+ * @param {string} language - Current language.
+ * @returns {string[]} Names of the required features that are off.
+ */
+function missingRequiredFeatures(app, features, language) {
+  if (!Array.isArray(app.requiredFeatures) || !Array.isArray(features)) return [];
+  return app.requiredFeatures
+    .map(id => features.find(feature => feature.id === id))
+    .filter(feature => feature && feature.enabled === false)
+    .map(feature => getLocalizedContent(feature.name, language) || feature.id);
+}
+
 function AdminAppsPage() {
   const { t, i18n } = useTranslation();
   const currentLanguage = i18n.language;
   const navigate = useNavigate();
+  const { platformConfig } = usePlatformConfig();
   const [apps, setApps] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -296,19 +315,34 @@ function AdminAppsPage() {
       header: t('admin.apps.table.status', 'Status'),
       sortable: true,
       sortAccessor: app => (app.enabled ? 1 : 0),
-      render: app => (
-        <span
-          className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-            app.enabled
-              ? 'bg-green-100 dark:bg-green-900/50 text-green-800 dark:text-green-300'
-              : 'bg-red-100 dark:bg-red-900/50 text-red-800 dark:text-red-300'
-          }`}
-        >
-          {app.enabled
-            ? t('admin.apps.status.enabled', 'Enabled')
-            : t('admin.apps.status.disabled', 'Disabled')}
-        </span>
-      )
+      render: app => {
+        const missing = app.enabled
+          ? missingRequiredFeatures(app, platformConfig?.features, currentLanguage)
+          : [];
+        return (
+          <div className="flex flex-col items-start gap-1">
+            <span
+              className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                app.enabled
+                  ? 'bg-green-100 dark:bg-green-900/50 text-green-800 dark:text-green-300'
+                  : 'bg-red-100 dark:bg-red-900/50 text-red-800 dark:text-red-300'
+              }`}
+            >
+              {app.enabled
+                ? t('admin.apps.status.enabled', 'Enabled')
+                : t('admin.apps.status.disabled', 'Disabled')}
+            </span>
+            {missing.length > 0 && (
+              <span className="text-xs text-amber-700 dark:text-amber-400">
+                {t('admin.apps.status.hiddenUntilFeature', {
+                  defaultValue: 'Hidden from users until {{features}} is on',
+                  features: missing.join(', ')
+                })}
+              </span>
+            )}
+          </div>
+        );
+      }
     },
     {
       key: 'order',

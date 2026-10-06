@@ -2863,7 +2863,8 @@
         "disabled": "This app is disabled, so it cannot be opened in the chat. Enable it and save to test it."
       },
       "status": {
-        "disabled": "Disabled"
+        "disabled": "Disabled",
+        "hiddenUntilFeature": "Hidden from users until {{features}} is on"
       }
     },
     "features": {

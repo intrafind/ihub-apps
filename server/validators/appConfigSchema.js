@@ -488,6 +488,9 @@ const baseAppConfigSchema = z.object({
   rendererConfig: z.object({}).passthrough().optional(),
   category: z.string().optional(),
   enabled: z.boolean().optional().prefault(true),
+  // Feature ids (Admin → Features) the app needs; while one is off, users do
+  // not get the app at all, as if it were disabled.
+  requiredFeatures: z.array(z.string()).optional(),
 
   // Tool-specific configurations
   iassistant: iAssistantConfigSchema,

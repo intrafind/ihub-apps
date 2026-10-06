@@ -335,6 +335,82 @@ describe('/name in the prompt', () => {
       ['gamma', 'alpha']
     );
   });
+
+  test('autoActivate pre-activates the app skills on every turn, after the picked ones', async () => {
+    const app = {
+      id: 'app',
+      system: { en: 'SYSTEM' },
+      skills: ['alpha', 'beta'],
+      skillSettings: { autoActivate: true }
+    };
+    // No `/name` anywhere in the chat: the app's skills are active anyway.
+    const [system] = await PromptService.processMessageTemplates(
+      [
+        { role: 'user', content: 'Hi' },
+        { role: 'assistant', content: 'What do you need?' },
+        { role: 'user', content: 'A weekly report' }
+      ],
+      app,
+      null,
+      null,
+      'en',
+      null,
+      userWith(['*']),
+      null,
+      null,
+      null
+    );
+    assert.match(system.content, /<active_skill name="alpha">\nALPHA BODY/);
+    assert.match(system.content, /<active_skill name="beta">\nBETA BODY/);
+
+    const resolved = await skillAccess.resolveSkillsForTurn({
+      text: '/gamma /beta',
+      app: { ...app, skills: ['alpha', 'beta', 'gamma'] },
+      user: userWith(['*'])
+    });
+    assert.deepEqual(
+      resolved.map(s => [s.name, s.origin]),
+      [
+        ['gamma', 'message'],
+        ['beta', 'message'],
+        ['alpha', 'app']
+      ]
+    );
+
+    // Once an earlier turn ran it, it is carried over, not announced again.
+    const later = await skillAccess.resolveSkillsForTurn({
+      earlier: [{ name: 'alpha', by: 'user' }],
+      app,
+      user: userWith(['*'])
+    });
+    assert.deepEqual(
+      later.map(s => [s.name, s.origin]),
+      [
+        ['alpha', 'chat'],
+        ['beta', 'app']
+      ]
+    );
+  });
+
+  test('autoActivate only loads skills granted to the user', async () => {
+    const resolved = await skillAccess.resolveSkillsForTurn({
+      app: { id: 'app', skills: ['alpha', 'beta'], skillSettings: { autoActivate: true } },
+      user: userWith(['alpha'])
+    });
+    assert.deepEqual(
+      resolved.map(s => s.name),
+      ['alpha']
+    );
+  });
+
+  test('without autoActivate a turn without `/name` activates nothing', async () => {
+    const resolved = await skillAccess.resolveSkillsForTurn({
+      text: 'A weekly report',
+      app: { id: 'app', skills: ['alpha'] },
+      user: userWith(['*'])
+    });
+    assert.deepEqual(resolved, []);
+  });
 });
 
 describe('agent planner', () => {

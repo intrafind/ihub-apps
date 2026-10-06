@@ -23,6 +23,7 @@ import tokenStorageService from './services/TokenStorageService.js';
 import { SECRET_FIELDS_BY_TYPE } from './validators/credentialSchema.js';
 import logger from './utils/logger.js';
 import { getLocalizedString } from './utils/localize.js';
+import { areAppFeaturesEnabled } from './featureRegistry.js';
 import { findByIdCaseInsensitive } from './utils/resourceLookup.js';
 import { isToolSelected } from './utils/toolSelection.js';
 import { resolveEnvVarsInObject } from './utils/envVars.js';
@@ -991,11 +992,24 @@ class ConfigCache {
       return apps;
     }
 
-    // Filter to only enabled apps
-    return {
-      data: apps.data.filter(app => app.enabled !== false),
-      etag: apps.etag
-    };
+    // Only enabled apps whose required features are all on. The ETag changes
+    // with the apps a feature hides: features.json has its own ETag, and a
+    // client holding the old list must not get a 304 once the feature flips.
+    const features = this.getFeatures();
+    const enabled = apps.data.filter(app => app.enabled !== false);
+    const available = enabled.filter(app => areAppFeaturesEnabled(app, features));
+    if (available.length === enabled.length) {
+      return { data: available, etag: apps.etag };
+    }
+    const hiddenIds = enabled
+      .filter(app => !areAppFeaturesEnabled(app, features))
+      .map(app => app.id)
+      .sort();
+    const hiddenHash = createHash('md5')
+      .update(JSON.stringify(hiddenIds))
+      .digest('hex')
+      .substring(0, 8);
+    return { data: available, etag: `${apps.etag}-f${hiddenHash}` };
   }
 
   /**

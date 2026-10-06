@@ -256,6 +256,19 @@ export function isFeatureEnabled(featureId, featureConfig = {}) {
 }
 
 /**
+ * Whether every feature an app lists in `requiredFeatures` is on. An app whose
+ * features are not all on is unavailable to users, like a disabled app.
+ *
+ * @param {Object} app - App config
+ * @param {Object} featureConfig - Saved feature flags from features.json
+ * @returns {boolean} True if the app requires no feature that is off
+ */
+export function areAppFeaturesEnabled(app, featureConfig = {}) {
+  const required = Array.isArray(app?.requiredFeatures) ? app.requiredFeatures : [];
+  return required.every(featureId => isFeatureEnabled(featureId, featureConfig));
+}
+
+/**
  * Express middleware factory that gates a route behind a feature flag.
  * Returns 403 with code FEATURE_DISABLED when the feature is off.
  *
