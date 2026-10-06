@@ -44,7 +44,8 @@ function AppNameCell({ app, currentLanguage }) {
 
 /**
  * The features an app requires (`requiredFeatures`) that are off, by name.
- * While one is off, users do not get the app, even though it is enabled.
+ * While one is off, users do not get the app, even though it is enabled. An
+ * id no feature has (a typo) counts as off and is shown as it is.
  *
  * @param {Object} app - App config.
  * @param {Object[]} [features] - Resolved features from the platform config.
@@ -53,10 +54,12 @@ function AppNameCell({ app, currentLanguage }) {
  */
 function missingRequiredFeatures(app, features, language) {
   if (!Array.isArray(app.requiredFeatures) || !Array.isArray(features)) return [];
-  return app.requiredFeatures
-    .map(id => features.find(feature => feature.id === id))
-    .filter(feature => feature && feature.enabled === false)
-    .map(feature => getLocalizedContent(feature.name, language) || feature.id);
+  return app.requiredFeatures.flatMap(id => {
+    const feature = features.find(entry => entry.id === id);
+    if (!feature) return [id];
+    if (feature.enabled !== false) return [];
+    return [getLocalizedContent(feature.name, language) || feature.id];
+  });
 }
 
 function AdminAppsPage() {
@@ -366,15 +369,26 @@ function AdminAppsPage() {
       // apps aren't served to the chat UI, so there is nothing to open.
       id: 'open',
       label: t('admin.apps.openApp', 'Open app'),
-      title: app =>
-        app.enabled === false
-          ? t('admin.apps.openDisabledHint', 'Enable the app to open it')
-          : t('admin.apps.openAppHint', 'Open the app in a new tab'),
+      title: app => {
+        if (app.enabled === false) {
+          return t('admin.apps.openDisabledHint', 'Enable the app to open it');
+        }
+        const missing = missingRequiredFeatures(app, platformConfig?.features, currentLanguage);
+        return missing.length > 0
+          ? t('admin.apps.openMissingFeaturesHint', {
+              defaultValue: 'Turn on {{features}} to open it',
+              features: missing.join(', ')
+            })
+          : t('admin.apps.openAppHint', 'Open the app in a new tab');
+      },
       icon: 'external-link',
       priority: 'primary',
       href: app => buildPath(`/apps/${encodeURIComponent(app.id)}`),
       target: '_blank',
-      disabled: app => app.enabled === false
+      // Users (and so the chat UI) do not get an app whose features are off.
+      disabled: app =>
+        app.enabled === false ||
+        missingRequiredFeatures(app, platformConfig?.features, currentLanguage).length > 0
     },
     {
       id: 'edit',

@@ -1009,7 +1009,11 @@ class ConfigCache {
       .update(JSON.stringify(hiddenIds))
       .digest('hex')
       .substring(0, 8);
-    return { data: available, etag: `${apps.etag}-f${hiddenHash}` };
+    const etag =
+      typeof apps.etag === 'string' && apps.etag.endsWith('"')
+        ? `${apps.etag.slice(0, -1)}-f${hiddenHash}"`
+        : `${apps.etag}-f${hiddenHash}`;
+    return { data: available, etag };
   }
 
   /**

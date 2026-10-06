@@ -12,6 +12,12 @@ import { fileURLToPath } from 'node:url';
 import configCache from '../configCache.js';
 import { areAppFeaturesEnabled } from '../featureRegistry.js';
 import { getAppAsTools } from '../services/chat/appToolsGateway.js';
+import { appConfigSchema } from '../validators/appConfigSchema.js';
+
+const SHIPPED_APP = path.join(
+  path.dirname(fileURLToPath(import.meta.url)),
+  '../defaults/apps/skill-builder.json'
+);
 
 const APPS = [
   { id: 'chat', enabled: true },
@@ -26,7 +32,7 @@ const APPS = [
  */
 function serve(features) {
   mock.method(configCache, 'get', key =>
-    key === 'config/apps.json' ? { data: APPS, etag: 'apps-etag' } : null
+    key === 'config/apps.json' ? { data: APPS, etag: '"apps-etag"' } : null
   );
   mock.method(configCache, 'getFeatures', () => features);
 }
@@ -50,6 +56,20 @@ describe('areAppFeaturesEnabled', () => {
     assert.equal(areAppFeaturesEnabled(app, { skills: true, workflows: false }), false);
     assert.equal(areAppFeaturesEnabled(app, { skills: true, workflows: true }), true);
   });
+
+  it('counts a feature id the registry does not know as off', () => {
+    const app = { id: 'x', requiredFeatures: ['skils'] };
+    assert.equal(areAppFeaturesEnabled(app, { skils: true }), false);
+  });
+
+  it('is validated against the registry in the app schema', async () => {
+    const base = JSON.parse(await fs.readFile(SHIPPED_APP, 'utf8'));
+    const ok = appConfigSchema.safeParse({ ...base, requiredFeatures: ['skills'] });
+    assert.equal(ok.success, true, JSON.stringify(ok.error?.issues));
+    const typo = appConfigSchema.safeParse({ ...base, requiredFeatures: ['skils'] });
+    assert.equal(typo.success, false);
+    assert.deepEqual(typo.error.issues[0].path, ['requiredFeatures', 0]);
+  });
 });
 
 describe('configCache.getApps with requiredFeatures', () => {
@@ -64,8 +84,9 @@ describe('configCache.getApps with requiredFeatures', () => {
       data.map(app => app.id),
       ['chat']
     );
-    assert.notEqual(etag, 'apps-etag', 'the ETag tells the filtered list apart');
-    assert.match(etag, /^apps-etag-f[0-9a-f]{8}$/);
+    assert.notEqual(etag, '"apps-etag"', 'the ETag tells the filtered list apart');
+    // Still one quoted entity tag
+    assert.match(etag, /^"apps-etag-f[0-9a-f]{8}"$/);
   });
 
   it('serves the app, under the plain ETag, once the feature is on', () => {
@@ -75,7 +96,7 @@ describe('configCache.getApps with requiredFeatures', () => {
       data.map(app => app.id),
       ['chat', 'skill-builder']
     );
-    assert.equal(etag, 'apps-etag');
+    assert.equal(etag, '"apps-etag"');
   });
 
   it('still hands admins every app', () => {
@@ -95,7 +116,7 @@ describe('configCache.getApps with requiredFeatures', () => {
       data.map(app => app.id),
       ['chat']
     );
-    assert.notEqual(etag, 'apps-etag');
+    assert.notEqual(etag, '"apps-etag"');
   });
 });
 
@@ -113,11 +134,7 @@ describe('app-as-tool with requiredFeatures', () => {
 
 describe('the shipped Skill Builder app', () => {
   it('runs the skill-builder skill and needs the skills feature', async () => {
-    const file = path.join(
-      path.dirname(fileURLToPath(import.meta.url)),
-      '../defaults/apps/skill-builder.json'
-    );
-    const app = JSON.parse(await fs.readFile(file, 'utf8'));
+    const app = JSON.parse(await fs.readFile(SHIPPED_APP, 'utf8'));
     assert.equal(app.id, 'skill-builder');
     assert.deepEqual(app.skills, ['skill-builder']);
     assert.equal(app.skillSettings.autoActivate, true);

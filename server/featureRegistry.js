@@ -255,9 +255,13 @@ export function isFeatureEnabled(featureId, featureConfig = {}) {
   return featureConfig[featureId] ?? entry.default;
 }
 
+/** The ids of all registered features. */
+export const FEATURE_IDS = featureRegistry.map(f => f.id);
+
 /**
  * Whether every feature an app lists in `requiredFeatures` is on. An app whose
- * features are not all on is unavailable to users, like a disabled app.
+ * features are not all on is unavailable to users, like a disabled app. An id
+ * the registry does not know (a typo) counts as off, so the app stays hidden.
  *
  * @param {Object} app - App config
  * @param {Object} featureConfig - Saved feature flags from features.json
@@ -265,7 +269,9 @@ export function isFeatureEnabled(featureId, featureConfig = {}) {
  */
 export function areAppFeaturesEnabled(app, featureConfig = {}) {
   const required = Array.isArray(app?.requiredFeatures) ? app.requiredFeatures : [];
-  return required.every(featureId => isFeatureEnabled(featureId, featureConfig));
+  return required.every(
+    featureId => FEATURE_IDS.includes(featureId) && isFeatureEnabled(featureId, featureConfig)
+  );
 }
 
 /**

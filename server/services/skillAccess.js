@@ -616,22 +616,27 @@ export async function resolveSkillsForTurn({ requested = [], text = '', earlier 
     seen.add(entry.name);
     resolved.push(entry);
   };
-  for (const name of explicit) add(byId(name), 'requested');
-  for (const name of tokens) add(byName(name), 'message');
-  // A skill of the user's own by the same name, picked with `/name`, stands in
-  // for the app's; one already active in the chat is not announced again.
-  for (const name of automatic) {
-    if (resolved.some(entry => entry.displayName === name)) continue;
-    const earlierToo = refs.some(ref => ref.id === name || ref.name === name);
-    add(globalByName.get(name), earlierToo ? 'chat' : 'app');
-  }
+  // The skills earlier turns keep active, newest first. The model cannot start
+  // a skill only users may start; a record saying it did (made before the
+  // skill changed, or sent by a client) keeps none active.
+  const carried = [];
   for (const ref of refs) {
     const skill = ref.id ? byId(ref.id) : byName(ref.name);
-    // The model cannot start a skill only users may start; a record saying it
-    // did (made before the skill changed, or sent by a client) keeps none active.
-    if (ref.by !== 'user' && !isModelInvocable(skill)) continue;
-    add(skill, 'chat');
+    if (!skill || (ref.by !== 'user' && !isModelInvocable(skill))) continue;
+    carried.push(skill);
   }
+  for (const name of explicit) add(byId(name), 'requested');
+  for (const name of tokens) add(byName(name), 'message');
+  // A skill of the user's own by the same name, picked with `/name` now or in
+  // an earlier turn, stands in for the app's; one already active in the chat
+  // is not announced again.
+  for (const name of automatic) {
+    if (resolved.some(entry => entry.displayName === name)) continue;
+    const earlier = carried.find(skill => skill.name === name);
+    if (earlier && isUserSkillId(earlier.id)) continue;
+    add(globalByName.get(name), earlier ? 'chat' : 'app');
+  }
+  for (const skill of carried) add(skill, 'chat');
   return resolved;
 }
 

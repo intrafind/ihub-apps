@@ -475,7 +475,7 @@ These optional fields work for all app types:
 | `enabled` | Boolean | `true` | Whether the app is enabled |
 | `order` | Number | - | Display order in the apps browser, the start page and the sidebar. Editable by drag and drop under Admin → Apps → Reorder |
 | `category` | String | - | App category for grouping |
-| `requiredFeatures` | Array | - | Feature ids (Admin → Features) the app needs, e.g. `["skills"]`. While one of them is off, users do not get the app at all, as if it were disabled; Admin → Apps still lists it, marked as hidden |
+| `requiredFeatures` | Array | - | Feature ids (Admin → Features) the app needs, e.g. `["skills"]`. While one of them is off, users do not get the app at all, as if it were disabled; Admin → Apps still lists it, marked as hidden. Only ids of existing features are accepted; an unknown id counts as off |
 
 ### Chat-Specific Fields Not Used in Redirect/Iframe Apps
 
@@ -989,7 +989,7 @@ The `skills` array specifies which skill identifiers are available for an app. S
 | Property                       | Type    | Default | Description                                                                         |
 | ------------------------------ | ------- | ------- | ----------------------------------------------------------------------------------- |
 | `skills`                       | Array   | -       | Array of skill identifier strings. Each string must match a skill defined in the skills directory |
-| `skillSettings.autoActivate`   | Boolean | `false` | Run the app's `skills` on every turn, without `/name` and without waiting for the model to activate them — for an app built around a skill, like the shipped Skill Builder. They come after the skills the request or message names and count towards `maxActiveSkills`; only skills granted to the user are loaded |
+| `skillSettings.autoActivate`   | Boolean | `false` | Run the app's `skills` on every turn, without `/name` and without waiting for the model to activate them — for an app built around a skill, like the shipped Skill Builder. They come after the skills the request or message names and count towards `maxActiveSkills`; only skills granted to the user are loaded. This includes skills only users may start (`disable-model-invocation: true`): assigning them with `autoActivate` is the admin starting them. A user's own skill of the same name, picked with `/name`, takes the app skill's place |
 | `skillSettings.maxActiveSkills`| Number  | `3`     | Maximum number of skills active at once in a turn (1-10): the ones the request or message names with `/`, then the ones still active from earlier in the chat, newest first. Further skills are left out |
 | `skillSettings.allowPersonal`  | Boolean | `true`  | Offer users' own and shared [user skills](skills.md#user-skills) in this app. Set `false` to allow only the global skills listed in `skills` |
 
