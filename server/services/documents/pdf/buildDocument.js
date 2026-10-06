@@ -57,8 +57,22 @@ const CORNER_WATERMARKS = {
   'bottom-right': 'right'
 };
 
-/** Largest document (in layout nodes) that gets the orphan-heading rule. */
-const ORPHAN_RULE_MAX_NODES = 4000;
+/**
+ * Work the orphan-heading rule may add, in layout nodes times extra layout
+ * passes. pdfmake lays the whole document out again for every break the rule
+ * asks for, so a long document gets fewer breaks (a very long one none),
+ * which keeps the extra time to a few seconds.
+ */
+const ORPHAN_RULE_BUDGET = 16000;
+
+/**
+ * Style name of everything drawn around the text (header, footer, corner
+ * watermark), so the orphan-heading rule can tell it from the content.
+ */
+const DECORATION_STYLE = 'pageDecoration';
+
+/** Lines of the following block a heading needs below it on its page. */
+const KEEP_WITH_HEADING_LINES = 2;
 
 const LABELS = {
   en: { page: 'Page {page} of {pages}', contents: 'Contents' },
@@ -103,6 +117,51 @@ function pageSetup(page = {}) {
 
 function fillTemplate(template, values) {
   return template.replace(/\{(page|pages|title|date)\}/g, (_, key) => String(values[key] ?? ''));
+}
+
+function isDecoration(nodeInfo) {
+  const style = nodeInfo?.style;
+  return Array.isArray(style) ? style.includes(DECORATION_STYLE) : style === DECORATION_STYLE;
+}
+
+/**
+ * pdfmake's `pageBreakBefore`: never leave a heading at the bottom of a page
+ * without at least the start of what it introduces.
+ *
+ * A heading moves to the next page when nothing but headings follows it on
+ * its page, or when the block after it starts so low that fewer than
+ * {@link KEEP_WITH_HEADING_LINES} lines of it stay with the heading. A
+ * heading drawn with a rule is a table holding the heading text; both carry
+ * `headlineLevel`, so headings are skipped when looking around one and the
+ * two always decide alike.
+ *
+ * @param {Object} theme
+ * @param {number} [maxBreaks] - Breaks to ask for at most (each one costs a
+ *   layout pass); later headings stay where they are.
+ * @returns {Function}
+ */
+export function keepHeadingsWithContent(theme, maxBreaks = Infinity) {
+  // pdfkit draws a DejaVu line at about 1.17 em, times the line height.
+  const minKeep = KEEP_WITH_HEADING_LINES * theme.baseFontSize * theme.lineHeight * 1.2;
+  const isContent = nodeInfo => !isDecoration(nodeInfo) && !nodeInfo.headlineLevel;
+  let breaks = 0;
+  const strandedAtPageEnd = nodes => {
+    const next = nodes.getFollowingNodesOnPage().find(isContent);
+    if (!next) return nodes.getNodesOnNextPage().some(isContent);
+    const start = next.startPosition;
+    if (next.pageNumbers?.length < 2 || !start?.pageInnerHeight) return false;
+    return start.pageInnerHeight * (1 - start.verticalRatio) < minKeep;
+  };
+  return (currentNode, nodes) => {
+    if (breaks >= maxBreaks) return false;
+    if (!currentNode.headlineLevel || currentNode.pageNumbers?.length !== 1) return false;
+    if (!strandedAtPageEnd(nodes)) return false;
+    // A heading that already starts its page stays there; moving it would
+    // only leave an empty page behind.
+    if (!nodes.getPreviousNodesOnPage().some(isContent)) return false;
+    breaks += 1;
+    return true;
+  };
 }
 
 /** Table layouts shared by every document, in pdfmake's function form. */
@@ -327,9 +386,18 @@ export function buildDocument(spec, { svgImageCallback } = {}) {
   ctx.imageNames = new Map(Object.entries(images));
   const styles = { ...themeStyles(theme), ...sanitizeStyles(spec.styles, ctx) };
 
+  const hasCover = Boolean(spec.coverPage);
+  // The title is printed right above the body (no cover page, no contents).
+  const titleOnTop = !hasCover && !tocRequested && str(spec.title) && spec.showTitle !== false;
+
   const body = [];
   if (typeof spec.markdown === 'string' && spec.markdown.trim()) {
-    body.push(...markdownToContent(spec.markdown, ctx));
+    body.push(
+      ...markdownToContent(spec.markdown, ctx, {
+        body: true,
+        title: titleOnTop ? str(spec.title) : undefined
+      })
+    );
   }
   if (spec.blocks !== undefined) body.push(...sanitizeBlocks(spec.blocks, ctx));
   if (!body.length) {
@@ -337,13 +405,12 @@ export function buildDocument(spec, { svgImageCallback } = {}) {
   }
 
   const content = [];
-  const hasCover = Boolean(spec.coverPage);
   if (hasCover) content.push(...coverPage(spec, theme, setup));
   if (tocRequested) {
     const tocTitle = str(spec.toc?.title, 200) || labels.contents;
     content.push({ toc: { title: { text: tocTitle, style: 'tocTitle' } } });
     content.push({ text: '', pageBreak: 'after' });
-  } else if (!hasCover && str(spec.title) && spec.showTitle !== false) {
+  } else if (titleOnTop) {
     content.push({
       text: str(spec.title),
       style: 'title',
@@ -374,6 +441,7 @@ export function buildDocument(spec, { svgImageCallback } = {}) {
       ? null
       : printableString(str(spec.footer, 300) || '', theme.font);
   const pageNumbers = spec.pageNumbers !== false;
+  const orphanBreaks = Math.floor(ORPHAN_RULE_BUDGET / Math.max(ctx.nodeCount, 1));
   const decoColor = theme.muted;
   const decoSize = Math.max(7, theme.baseFontSize - 2.5);
 
@@ -396,21 +464,13 @@ export function buildDocument(spec, { svgImageCallback } = {}) {
       lineHeight: theme.lineHeight,
       color: theme.text
     },
-    styles,
+    styles: { ...styles, [DECORATION_STYLE]: { fontSize: decoSize, color: decoColor } },
     images,
     content,
     maxPagesNumber: MAX_PAGES,
-    // Never leave a heading alone at the bottom of a page. pdfmake lays the
-    // whole document out again for every break this adds, so very large
-    // documents go without it.
-    ...(ctx.nodeCount <= ORPHAN_RULE_MAX_NODES
-      ? {
-          pageBreakBefore: (currentNode, followingNodesOnPage) =>
-            Boolean(currentNode.headlineLevel) &&
-            currentNode.pageNumbers?.length === 1 &&
-            followingNodesOnPage.length === 0
-        }
-      : {}),
+    // Never leave a heading alone at the bottom of a page, within the
+    // budget for the layout passes that costs.
+    ...(orphanBreaks > 0 ? { pageBreakBefore: keepHeadingsWithContent(theme, orphanBreaks) } : {}),
     header: headerText
       ? (currentPage, pageCount) =>
           currentPage < firstDecoratedPage
@@ -423,8 +483,7 @@ export function buildDocument(spec, { svgImageCallback } = {}) {
                   date
                 }),
                 alignment: 'left',
-                fontSize: decoSize,
-                color: decoColor,
+                style: DECORATION_STYLE,
                 margin: [
                   setup.margins[0],
                   Math.max(14, setup.margins[1] / 2 - 6),
@@ -439,13 +498,19 @@ export function buildDocument(spec, { svgImageCallback } = {}) {
       const values = { page: currentPage, pages: pageCount, title, date };
       return {
         columns: [
-          footerText ? { text: fillTemplate(footerText, values), alignment: 'left' } : { text: '' },
+          footerText
+            ? { text: fillTemplate(footerText, values), alignment: 'left', style: DECORATION_STYLE }
+            : { text: '' },
           pageNumbers
-            ? { text: fillTemplate(labels.page, values), alignment: 'right', width: 'auto' }
+            ? {
+                text: fillTemplate(labels.page, values),
+                alignment: 'right',
+                width: 'auto',
+                style: DECORATION_STYLE
+              }
             : { text: '', width: 'auto' }
         ],
-        fontSize: decoSize,
-        color: decoColor,
+        style: DECORATION_STYLE,
         margin: [setup.margins[0], Math.max(12, setup.margins[3] / 2 - 4), setup.margins[2], 0]
       };
     }
@@ -460,6 +525,7 @@ export function buildDocument(spec, { svgImageCallback } = {}) {
     const opacity = clampNumber(watermark.opacity, 0.05, 1) ?? 0.5;
     docDefinition.background = (currentPage, pageSize) => ({
       text,
+      style: DECORATION_STYLE,
       font: DEFAULT_FONT,
       fontSize: decoSize,
       color: isColor(watermark.color) ? watermark.color : theme.muted,

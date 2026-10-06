@@ -342,12 +342,21 @@ function quoteNode(ctx, token, depth) {
   };
 }
 
-function headingNode(ctx, token) {
+/** Whether a heading is drawn with a rule under it (see `headingNode`). */
+function hasHeadingRule(ctx, level) {
+  return Boolean(ctx.theme.headingRule) && level <= 2 && !(ctx.containerDepth > 0);
+}
+
+function headingNode(ctx, token, depth = 0) {
   const runs = inlineRuns(token.tokens, ctx);
   const level = Math.min(Math.max(token.depth, 1), 6);
+  // `headlineLevel` drives the rule that keeps a heading with what follows it
+  // (see `buildDocument.js`). It is only set in the document flow: a page
+  // break inside a list item, a quote or a table cell would tear that apart.
+  const inFlow = depth === 0 && !(ctx.containerDepth > 0);
   const node = textNode(runs.length ? runs : [{ text: '' }], {
     style: `h${level}`,
-    headlineLevel: level
+    ...(inFlow ? { headlineLevel: level } : {})
   });
   if (ctx.tocDepth && level <= ctx.tocDepth) {
     node.tocItem = true;
@@ -355,7 +364,7 @@ function headingNode(ctx, token) {
     node.tocMargin = [(level - 1) * 12, level === 1 ? 4 : 1, 0, 0];
   }
   // Inside columns, boxes and table cells a rule would only add noise.
-  if (!ctx.theme.headingRule || level > 2 || ctx.containerDepth > 0) return node;
+  if (!hasHeadingRule(ctx, level)) return node;
   // A rule under the two top heading levels: the bottom border of a one-cell
   // table, so it is exactly as wide as whatever holds the heading.
   return {
@@ -367,7 +376,7 @@ function headingNode(ctx, token) {
         paddingBottom: 3
       }
     },
-    headlineLevel: level,
+    ...(inFlow ? { headlineLevel: level } : {}),
     margin: level === 1 ? [0, 14, 0, 8] : [0, 12, 0, 6]
   };
 }
@@ -403,7 +412,7 @@ export function blockNodes(tokens, ctx, depth = 0, options = {}) {
       case 'def':
         break;
       case 'heading':
-        nodes.push(headingNode(ctx, token));
+        nodes.push(headingNode(ctx, token, depth));
         break;
       case 'paragraph': {
         if (isPageBreakParagraph(token)) {
@@ -473,6 +482,66 @@ export function blockNodes(tokens, ctx, depth = 0, options = {}) {
   return nodes;
 }
 
+/** The plain text of inline tokens, without any formatting. */
+function plainText(tokens) {
+  return (tokens || [])
+    .map(token => {
+      if (token.tokens?.length) return plainText(token.tokens);
+      if (token.type === 'html') return '';
+      return decodeEntities(token.text ?? '');
+    })
+    .join('');
+}
+
+/** Text compared without case, punctuation, symbols or extra spaces. */
+function comparable(text) {
+  return String(text)
+    .normalize('NFKC')
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, ' ')
+    .trim();
+}
+
+/**
+ * Tidy the top level of a document body for print.
+ *
+ * - A first heading that only repeats the title printed above it is left
+ *   out. Markdown written for the screen (and the models) usually opens with
+ *   `# <title>`, which would put the title on the page twice.
+ * - A rule (`---`) at the start or the end, after another rule, or next to a
+ *   heading that draws its own rule is left out. Screen Markdown separates
+ *   its sections with rules; on paper they double the heading rules.
+ *
+ * @param {Array} tokens - Top-level tokens from the lexer.
+ * @param {Object} ctx
+ * @param {string} [title] - The title printed above the body, if any.
+ * @returns {Array}
+ */
+function tidyBody(tokens, ctx, title) {
+  const blocks = tokens.filter(token => token.type !== 'space');
+  const first = blocks.find(token => token.type !== 'hr');
+  if (
+    title &&
+    first?.type === 'heading' &&
+    first.depth <= 2 &&
+    comparable(plainText(first.tokens)) === comparable(title)
+  ) {
+    blocks.splice(blocks.indexOf(first), 1);
+  }
+  const ruledHeading = token => token?.type === 'heading' && hasHeadingRule(ctx, token.depth);
+  const out = [];
+  for (const token of blocks) {
+    const previous = out[out.length - 1];
+    if (token.type === 'hr' && (!previous || previous.type === 'hr' || ruledHeading(previous))) {
+      continue;
+    }
+    if (ruledHeading(token) && previous?.type === 'hr') out.pop();
+    out.push(token);
+  }
+  while (out[out.length - 1]?.type === 'hr') out.pop();
+  return out;
+}
+
 /**
  * Convert a Markdown string to pdfmake content.
  *
@@ -480,13 +549,17 @@ export function blockNodes(tokens, ctx, depth = 0, options = {}) {
  * @param {Object} ctx - Conversion context: `theme`, `contentWidth`,
  *   `contentHeight`, optional `tocDepth`, `breaks` (single newlines are line
  *   breaks, as in chat) and a `warnings` array.
+ * @param {Object} [options]
+ * @param {boolean} [options.body] - The Markdown is the document body (not a
+ *   layout block): tidy it for print (see `tidyBody`).
+ * @param {string} [options.title] - With `body`: the title printed above it.
  * @returns {Array<Object>}
  */
-export function markdownToContent(markdown, ctx) {
+export function markdownToContent(markdown, ctx, { body = false, title } = {}) {
   const text = String(markdown ?? '');
   if (text.length > LIMITS.maxMarkdownChars) {
     throw new Error('Markdown content is too long to render as one document.');
   }
   const tokens = new Lexer({ gfm: true, breaks: Boolean(ctx.breaks) }).lex(text);
-  return blockNodes(tokens, ctx);
+  return blockNodes(body ? tidyBody(tokens, ctx, title) : tokens, ctx);
 }

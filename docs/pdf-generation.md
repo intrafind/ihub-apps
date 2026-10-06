@@ -116,6 +116,10 @@ The PDF export is the base the planned signed exports build on (EU AI Act conten
   - [pdf-lib](https://pdf-lib.js.org/) re-reads every result as a validity check.
   - pdfium (WASM) renders the page previews.
   - No Python, no Chromium and no system packages are needed, so it works in the Alpine Docker image and in the single-binary build.
+- **Print layout:** Markdown written for the screen is tidied for paper.
+  - A first heading that only repeats the printed title is left out, so the title is not printed twice. With a cover page or a table of contents the title is not above the body, and the heading stays.
+  - Horizontal rules (`---`) at the start or end of the body, doubled rules, and rules next to a heading that draws its own rule are left out.
+  - A heading never ends a page. It moves to the next page when fewer than two lines of what follows it would stay with it. Every such move lays the document out again, so a very long document gets fewer of them.
 - **Isolation:** each document is laid out and rendered in its own **worker thread**:
   - 45-second time budget (90 seconds for exports)
   - 512 MB memory cap
