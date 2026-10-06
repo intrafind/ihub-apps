@@ -228,6 +228,13 @@ const NON_CONFIG_SITES = [
       'manifest is read from the shipped browser-extension/ directory.'
   },
   {
+    path: 'server/routes/admin/copilotAgent.js',
+    arg: /\biconsDir\b/,
+    reason:
+      'The Copilot agent package icons are the shipped client/public/icons/ files (public/icons/ ' +
+      'in a build), zipped into the package as bytes — application assets, not configuration.'
+  },
+  {
     path: 'server/routes/admin/usage.js',
     arg: /\bfeedbackFile\b/,
     reason: 'contents/data/feedback.jsonl is runtime data under the provider dataDir, not config.'
