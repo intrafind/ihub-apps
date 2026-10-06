@@ -402,7 +402,7 @@ The `appsList.categories` section enables a category filter bar on the apps list
 | `list[].name`      | Object  | Localized display name for the category button. |
 | `list[].color`     | String  | Hex color used for the category badge and button accent. |
 
-The same `categories` structure is also available under `promptsList.categories` and follows identical rules for the prompts library.
+The same `categories` structure is also available under `promptsList.categories` for the prompts library. There the categories are offered as a "Category" dropdown in the library's filter bar: it always starts with "All categories" (so `showAll` has no effect), lists only categories that contain a prompt, and shows the selected category's `color` as a dot.
 
 ### Start Page Configuration
 

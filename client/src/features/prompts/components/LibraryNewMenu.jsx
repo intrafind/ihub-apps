@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 
 const primaryButton =
-  'shrink-0 inline-flex items-center justify-center gap-1.5 px-4 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700';
+  'shrink-0 inline-flex h-10 items-center justify-center gap-1.5 px-4 text-sm font-medium bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 whitespace-nowrap';
 
 /**
  * The library's "New" action. One kind of item to create: a plain button

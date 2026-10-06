@@ -5058,6 +5058,10 @@
     }
   },
   "library": {
+    "categories": {
+      "all": "Alle Kategorien",
+      "label": "Kategorie"
+    },
     "empty": {
       "mine": "Sie haben noch keine Prompts oder Skills.",
       "none": "Nichts gefunden",
