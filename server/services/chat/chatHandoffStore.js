@@ -151,16 +151,19 @@ function claimLocal(handle, secret, claimantId) {
     handoffs.delete(handle);
     return { error: 'notFound' };
   }
+  if (entry.ownerId !== claimantId) {
+    // Someone else's browser opened the link (a shared machine, a forwarded
+    // URL, an edited one). Not theirs to read — and, whatever secret they
+    // send, not theirs to destroy either. Checked before the secret for that
+    // reason: the handle alone is in the link they have.
+    return { error: 'notOwner' };
+  }
   if (!secretsMatch(secret, entry.secret)) {
-    // A valid handle with the wrong secret is not an honest mistake.
+    // The owner, with a valid handle and the wrong secret: not an honest
+    // mistake, so the record goes.
     handoffs.delete(handle);
     logger.warn('Chat hand-off secret mismatch - discarding it', { component: 'ChatHandoff' });
     return { error: 'notFound' };
-  }
-  if (entry.ownerId !== claimantId) {
-    // Someone else's browser opened the link (a shared machine, a forwarded
-    // URL). Not theirs to read — and not theirs to destroy either.
-    return { error: 'notOwner' };
   }
   handoffs.delete(handle);
   return { data: entry.data };

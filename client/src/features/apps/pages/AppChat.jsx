@@ -1078,15 +1078,21 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
     // would race, and the loser would silently win on a slow network. An
     // embedded chat is always new.
     if (embedded || ephemeral || serverBackedChat) return;
+    // A chat handed over from Outlook brings its own transcript: the
+    // conversation this tab had for the app must not land on top of it.
+    if (handoffToken || pendingHandoffRef.current || chatId === handedOffChatId) return;
 
     const existingConversationId = getConversationId(appId);
     if (!existingConversationId) return;
 
     conversationResumed.current = true;
 
+    const requestedChatId = chatId;
     (async () => {
       try {
         const result = await getConversationMessages(appId, existingConversationId, { chatId });
+        // The chat may have changed meanwhile (a new chat, a hand-off).
+        if (currentChatIdRef.current !== requestedChatId) return;
         const serverMessages = result?.messages || result;
         if (Array.isArray(serverMessages) && serverMessages.length > 0) {
           loadServerMessages(serverMessages);
@@ -1105,7 +1111,9 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
     loadServerMessages,
     ephemeral,
     serverBackedChat,
-    embedded
+    embedded,
+    handoffToken,
+    handedOffChatId
   ]);
 
   // Auto-send message if send=true query parameter is present
@@ -1252,10 +1260,15 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
   // The latest values the delayed send below has to re-check. Hydration can
   // land inside those 300 ms, and the timer closes over nothing else.
   const autoStartGateRef = useRef(null);
+  // A hand-off from Outlook is the chat's start: nothing may auto-start while
+  // it is being claimed (the token stays in the address until it settles) or
+  // until its transcript is on screen.
+  const handoffInProgress = Boolean(handoffToken) || pendingHandoffRef.current !== null;
   autoStartGateRef.current = {
     hydrating,
     chatModeResolving,
-    messageCount: messages.length
+    messageCount: messages.length,
+    handoffInProgress
   };
 
   useEffect(() => {
@@ -1271,6 +1284,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
       // single time the user opens that chat from the history.
       !hydrating &&
       !chatModeResolving &&
+      !handoffInProgress &&
       !processing && // Not currently processing
       !autoStartTriggered.current && // Haven't triggered yet
       selectedModel && // Model is selected
@@ -1286,7 +1300,12 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
         // Re-check: the stored transcript may have landed while this timer
         // was pending, and this was never a new chat after all.
         const gate = autoStartGateRef.current;
-        if (gate.hydrating || gate.chatModeResolving || gate.messageCount > 0) {
+        if (
+          gate.hydrating ||
+          gate.chatModeResolving ||
+          gate.handoffInProgress ||
+          gate.messageCount > 0
+        ) {
           debugLog('Auto-start abandoned: the chat is not empty after all');
           return;
         }
@@ -1360,6 +1379,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
     messages.length,
     hydrating,
     chatModeResolving,
+    handoffInProgress,
     processing,
     appId,
     selectedModel,

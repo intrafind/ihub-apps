@@ -214,6 +214,30 @@ function AdminCopilotAgentPage() {
     }
   };
 
+  // Step 1's own save: the registration ID only, never step 2's unsaved edits.
+  const handleSaveReferenceId = async () => {
+    try {
+      setSaving(true);
+      setMessage(null);
+      await makeAdminApiCall('/admin/copilot-agent/config', {
+        method: 'PUT',
+        body: { oauthReferenceId: referenceId }
+      });
+      const res = await makeAdminApiCall('/admin/copilot-agent/status', { method: 'GET' });
+      setStatus(res.data);
+      setMessage({ type: 'success', text: t('admin.copilotAgent.saved', 'Settings saved') });
+    } catch (err) {
+      setMessage({
+        type: 'error',
+        text:
+          t('admin.copilotAgent.saveError', 'Failed to save the settings: ') +
+          (err?.originalMessage || err?.message || '')
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleDownload = async () => {
     try {
       setDownloading(true);
@@ -481,7 +505,7 @@ function AdminCopilotAgentPage() {
                       />
                       <button
                         type="button"
-                        onClick={handleSave}
+                        onClick={handleSaveReferenceId}
                         disabled={saving || referenceId.trim() === savedReferenceId}
                         className={SECONDARY_BUTTON}
                       >

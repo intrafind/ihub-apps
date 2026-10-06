@@ -753,6 +753,36 @@ describe('a chat handed over from the Outlook pane', () => {
     expect(claimChatHandoff).not.toHaveBeenCalled();
   });
 
+  test('an app that starts by itself waits for the hand-off instead of sending a blank turn', async () => {
+    jest.useFakeTimers();
+    try {
+      let settle;
+      claimChatHandoff.mockReturnValue(
+        new Promise(resolve => {
+          settle = resolve;
+        })
+      );
+      renderChat({ path: '/apps/acme?handoff=tok.secret', app: { ...APP, autoStart: true } });
+
+      // The claim is slow; the auto-start timer has long passed.
+      await act(async () => {
+        jest.advanceTimersByTime(2000);
+      });
+      expect(mockStreams).toEqual([]);
+
+      await act(async () => {
+        settle(HANDOFF);
+      });
+      await act(async () => {
+        jest.advanceTimersByTime(2000);
+      });
+      expect(screen.getAllByTestId('transcript')[0]).toHaveTextContent('Summarize this email');
+      expect(mockStreams).toEqual([]);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
   test("someone else's hand-off says whose it is", async () => {
     claimChatHandoff.mockRejectedValue(Object.assign(new Error('not yours'), { status: 403 }));
     renderChat({ path: '/apps/acme?handoff=other.token' });

@@ -131,7 +131,16 @@ describe('chat hand-off store', () => {
     assert.equal((await claimHandoff(token, ADA.id)).data.appId, 'a');
   });
 
-  it('a guessed secret burns the hand-off', async () => {
+  it("somebody else's wrong secret does not destroy the owner's hand-off", async () => {
+    const { token } = parkHandoff(ADA.id, { appId: 'a', messages: transcript });
+    const [handle] = token.split('.');
+    assert.deepEqual(await claimHandoff(`${handle}.${'0'.repeat(64)}`, GRACE.id), {
+      error: 'notOwner'
+    });
+    assert.equal((await claimHandoff(token, ADA.id)).data.appId, 'a');
+  });
+
+  it("the owner's wrong secret burns the hand-off", async () => {
     const { token } = parkHandoff(ADA.id, { appId: 'a', messages: transcript });
     const [handle] = token.split('.');
     assert.deepEqual(await claimHandoff(`${handle}.${'0'.repeat(64)}`, ADA.id), {
