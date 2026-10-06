@@ -143,20 +143,25 @@ test('a longer id and the implementation file name are left alone', async () => 
   assert.deepEqual(ctx.files['apps/chat.json'].tools, ['webContentExtractorPro']);
 });
 
-test('a pre-existing read_url tool of the admin’s own is not clobbered', async () => {
-  // An admin already has a custom tool named read_url (a different script), and
-  // the old page reader still present. The collision is left for the admin.
+test('a read_url collision leaves the reader and every reference on the old id', async () => {
+  // An admin already has a custom tool named read_url (a different script), with
+  // the old page reader still present. The migration makes no change at all, so
+  // apps keep pointing at the page reader (webContentExtractor) rather than the
+  // unrelated read_url tool.
   const custom = { id: 'read_url', name: { en: 'My URL tool' }, script: 'myUrlTool.js' };
   const ctx = fakeCtx({
     'tools/read_url.json': structuredClone(custom),
     'tools/webContentExtractor.json': {
       id: 'webContentExtractor',
       script: 'webContentExtractor.js'
-    }
+    },
+    'apps/chat.json': { id: 'chat', tools: ['braveSearch', 'webContentExtractor'] }
   });
   await up(ctx);
   assert.deepEqual(ctx.files['tools/read_url.json'], custom);
   assert.equal('tools/webContentExtractor.json' in ctx.files, true);
+  // The reference rewrite is skipped — apps still resolve to the page reader.
+  assert.deepEqual(ctx.files['apps/chat.json'].tools, ['braveSearch', 'webContentExtractor']);
   assert.ok(ctx.logs.some(m => /collision/i.test(m)));
 });
 

@@ -9,7 +9,9 @@ parameters and its display name ("Web Page Reader") are unchanged.
 
 A migration renames it automatically on startup: the tool definition, every reference to it in app,
 workflow and agent tool lists, and the id where an app's instructions name it in a prompt. No admin
-action is needed for configuration stored in iHub.
+action is needed for configuration stored in iHub. (In the rare case that a different tool of your
+own already uses the id `read_url`, the migration makes no change at all — the page reader keeps the
+`webContentExtractor` id and keeps working — until you rename your tool to clear the clash.)
 
 **Before upgrading:** If anything outside iHub's own configuration refers to the tool by id — an API
 client that enables tools by id, or an external automation — update `webContentExtractor` to
