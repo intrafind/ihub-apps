@@ -81,7 +81,7 @@ Eligibility to execute is a property of **where the skill comes from**, not what
 
 | Tier | Source | Execute? |
 |---|---|---|
-| **0 — System** | Shipped in `server/systemSkills/` (e.g. `pdf`), code-reviewed, part of the build | Yes — via reviewed first-party helpers (already how `pdf` works) |
+| **0 — System** | Shipped in `server/systemSkills/` (e.g. `pdf`), code-reviewed, part of the build | Reviewed first-party **helper calls** only (already how `pdf` works) — not bundled-script execution. Any bundled script would need the same admin opt-in + sandbox as Tier 1 |
 | **1 — Admin global** | `contents/skills/<name>/`, installed by an admin from a vetted source | Only behind an **explicit per-skill admin opt-in** + sandbox (§4.3) |
 | **2 — Marketplace** | Third-party registries | **Never auto-execute.** Must be promoted to a reviewed Tier-1 global skill and opted in first |
 | **3 — User / personal** | Authored by any signed-in user | **Never execute.** Computation stays on tools |
@@ -123,9 +123,12 @@ Runtime choices, layered:
 
 `allowed-tools` already means iHub tool ids (§2); reusing it for "may run shell / may reach the
 network" would be ambiguous. Use the spec's `compatibility` (free text, intended for "required
-system packages, network access needs") for human/admin review, and a reserved
-`metadata.ihub.execution` namespace for the machine-checked capability request (runtime, declared
-network hosts, declared packages). The admin opt-in is the gate; the declaration only *informs* it.
+system packages, network access needs") for human/admin review, and a reserved `ihub.execution`
+metadata key whose value is a JSON-encoded string (for example
+`ihub.execution: '{"runtime":"deno","networkHosts":[],"packages":[]}'`) for the machine-checked
+capability request (runtime, declared network hosts, declared packages). Encoding it as a string
+keeps the spec's string-valued `metadata` shape (a map of string keys to string values) — a nested
+YAML object would violate it. The admin opt-in is the gate; the declaration only *informs* it.
 
 ### 4.5 The cheaper alternative, stated plainly
 
