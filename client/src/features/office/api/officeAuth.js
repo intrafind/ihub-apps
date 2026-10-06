@@ -4,6 +4,8 @@
  * All OAuth URLs are derived from OfficeConfigContext at runtime (no build-time env vars).
  */
 
+import { getOfficeRemote } from '../utilities/officeRemote';
+
 export const OFFICE_TOKEN_KEY = 'office_ihubtoken';
 export const OFFICE_REFRESH_TOKEN_KEY = 'office_ihub_refresh_token';
 export const OFFICE_PKCE_VERIFIER_KEY = 'office_ihub_pkce_code_verifier';
@@ -164,6 +166,16 @@ export const exchangeAuthCodeForToken = async (config, { code, codeVerifier }) =
 // ---------------------------------------------------------------------------
 
 export const refreshAccessToken = async config => {
+  // A popped-out chat never refreshes on its own: the pane does, so the two
+  // windows never spend the same refresh token twice, and hands over the
+  // result. A pane that cannot refresh has signed out — so is this window.
+  const remote = getOfficeRemote();
+  if (remote) {
+    const data = await remote.call('refreshToken');
+    storeTokenResponse(data);
+    return data;
+  }
+
   const refreshToken = getRefreshToken();
   if (!refreshToken) {
     throw new Error('No refresh token available.');

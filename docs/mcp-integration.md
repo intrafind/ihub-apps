@@ -676,6 +676,8 @@ key is accepted.
 
 ## Inbound — exposing iHub as an MCP server
 
+Microsoft 365 Copilot can use the gateway as an agent action: see [Microsoft 365 Copilot Agent](microsoft-365-copilot-agent.md), which sets up the gateway, the OAuth client and the agent package in one place.
+
 ### Enabling the gateway
 
 The gateway needs **two** things switched on (both on Admin → MCP gateway):

@@ -325,6 +325,16 @@
     "resolveSearchProfileFromProfile": true,
     "groundedOnly": false
   },
+  "copilotAgent": {
+    "enabled": false,
+    "appId": "",
+    "oauthClientId": "",
+    "oauthReferenceId": "",
+    "name": "iHub Apps",
+    "description": "Use your organization's iHub apps — assistants, writing aids and knowledge search — right in Microsoft 365 Copilot.",
+    "instructions": "",
+    "conversationStarters": []
+  },
   "officeIntegration": {
     "enabled": false,
     "oauthClientId": "",

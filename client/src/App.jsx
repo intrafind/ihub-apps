@@ -143,6 +143,9 @@ const AdminOfficeIntegrationPage = lazyWithRetry(
 const AdminBrowserExtensionPage = lazyWithRetry(
   () => import('./features/admin/pages/AdminBrowserExtensionPage')
 );
+const AdminCopilotAgentPage = lazyWithRetry(
+  () => import('./features/admin/pages/AdminCopilotAgentPage')
+);
 const AdminNextcloudEmbedPage = lazyWithRetry(
   () => import('./features/admin/pages/AdminNextcloudEmbedPage')
 );
@@ -740,6 +743,10 @@ function App() {
             <Route
               path="browser-extension"
               element={<LazyAdminRoute component={AdminBrowserExtensionPage} />}
+            />
+            <Route
+              path="copilot-agent"
+              element={<LazyAdminRoute component={AdminCopilotAgentPage} />}
             />
             <Route
               path="nextcloud-embed"

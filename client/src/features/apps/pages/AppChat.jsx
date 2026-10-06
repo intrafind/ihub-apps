@@ -9,7 +9,7 @@ import {
 } from '../../../utils/chatId';
 import { getConversationMessages } from '../../../api/endpoints/apps';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import { fetchAppDetails, fetchChat } from '../../../api';
+import { claimChatHandoff, fetchAppDetails, fetchChat } from '../../../api';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 import { useTranslation } from 'react-i18next';
 import { getLocalizedContent } from '../../../utils/localizeContent';
@@ -754,6 +754,65 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
   // Whether the user may pick the model: in the composer, or on the start form.
   const modelSelectionAllowed =
     app?.disallowModelSelection !== true && app?.settings?.model?.enabled !== false;
+
+  // A chat handed over from the Outlook pane ("Open in web app" on a chat that
+  // is not stored server-side, see server/routes/chatHandoffs.js): the pane
+  // parked its transcript and opened `/apps/:appId?handoff=<token>`. Claimed
+  // once the app and the chat mode are settled, and continued as a new chat,
+  // so the one this tab already had for the app is left as it was. The
+  // transcript lands after the switch to the new chat has cleared the screen —
+  // hence the pending ref, applied by the effect that follows the chat id.
+  const handoffToken = searchParams.get('handoff');
+  const handoffClaimedRef = useRef(null);
+  const pendingHandoffRef = useRef(null);
+  useEffect(() => {
+    if (embedded || !handoffToken || !app || modelsLoading || chatModeResolving) return;
+    if (handoffClaimedRef.current === handoffToken) return;
+    handoffClaimedRef.current = handoffToken;
+    // Single-use: a reload must not try it again.
+    const newSearch = new URLSearchParams(searchParams);
+    newSearch.delete('handoff');
+    const query = newSearch.toString();
+    navigate(`${window.location.pathname}${query ? `?${query}` : ''}`, { replace: true });
+
+    claimChatHandoff(handoffToken)
+      .then(handoff => {
+        const handedMessages = Array.isArray(handoff?.messages) ? handoff.messages : [];
+        if (handedMessages.length === 0) return;
+        const nextChatId = startNewChat();
+        if (handoff.variables && typeof handoff.variables === 'object') {
+          setVariables(v => ({ ...v, ...handoff.variables }));
+        }
+        pendingHandoffRef.current = {
+          chatId: nextChatId,
+          messages: handedMessages.map((message, index) => ({
+            ...message,
+            id: `handoff-${Date.now()}-${index}`
+          }))
+        };
+      })
+      .catch(error => {
+        addSystemMessage(
+          error?.status === 403
+            ? t(
+                'pages.appChat.handoff.otherUser',
+                'This chat was opened from Outlook by another account. Sign in with that account to continue it.'
+              )
+            : t(
+                'pages.appChat.handoff.expired',
+                'The chat from Outlook could not be opened: the link has expired or was already used. Choose "Open in web app" in Outlook again.'
+              ),
+          true
+        );
+      });
+    // eslint-disable-next-line @eslint-react/exhaustive-deps
+  }, [handoffToken, app, modelsLoading, chatModeResolving, embedded]);
+  useEffect(() => {
+    const pending = pendingHandoffRef.current;
+    if (!pending || pending.chatId !== chatId) return;
+    pendingHandoffRef.current = null;
+    loadServerMessages(pending.messages);
+  }, [chatId, loadServerMessages]);
 
   // What an MCP App view in this chat may do in the composer: post a follow-up
   // message (`ui/message`) the way a starter prompt with autoSend does.

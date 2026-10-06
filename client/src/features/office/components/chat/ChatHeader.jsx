@@ -15,7 +15,9 @@ const ChatHeader = ({
   menuItems = [],
   titleIcon,
   selectedApp,
-  onItemClick
+  onItemClick,
+  // Extra icon buttons left of "New chat": `{ key, icon, label, onClick, disabled }`.
+  actions = []
 }) => {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef(null);
@@ -71,6 +73,19 @@ const ChatHeader = ({
       </div>
 
       <div className="flex items-center gap-0.5 shrink-0">
+        {actions.map(({ key, icon: ActionIcon, label, onClick, disabled }) => (
+          <button
+            key={key}
+            type="button"
+            onClick={onClick}
+            disabled={disabled}
+            aria-label={label}
+            title={label}
+            className="rounded-full p-1 text-slate-600 hover:text-slate-900 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent dark:text-slate-300 dark:hover:text-white dark:hover:bg-slate-800"
+          >
+            <ActionIcon className="h-4 w-4" aria-hidden />
+          </button>
+        ))}
         {onWriteClick && (
           <button
             type="button"

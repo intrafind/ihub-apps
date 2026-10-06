@@ -1,5 +1,7 @@
 /* global Office */
 
+import { getOfficeRemote } from './officeRemote';
+
 /**
  * Requirement-set check that never throws.
  *
@@ -28,6 +30,9 @@ export function isRequirementSetSupported(set, version) {
 }
 
 export function isMailboxAvailable() {
+  // A popped-out chat has no mailbox of its own; the pane behind it does.
+  const remote = getOfficeRemote();
+  if (remote) return remote.state?.mailbox === true;
   try {
     return typeof Office !== 'undefined' && !!Office.context && !!Office.context.mailbox;
   } catch {
@@ -44,6 +49,8 @@ export function isMailboxAvailable() {
  * whenever the `ihub:itemchanged` event fires.
  */
 export function isOutlookAppointmentMode() {
+  const remote = getOfficeRemote();
+  if (remote) return remote.state?.isAppointment === true;
   if (!isMailboxAvailable()) return false;
   try {
     const itemType = String(Office.context.mailbox.item?.itemType || '').toLowerCase();

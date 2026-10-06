@@ -1,5 +1,7 @@
 /* global Office, chrome */
 
+import { getOfficeRemote } from '../features/office/utilities/officeRemote';
+
 /**
  * Host-aware "leave this surface" helpers: open a URL in the user's browser,
  * and save a file to disk.
@@ -12,6 +14,8 @@
  * own API for this:
  *
  *   - Outlook task pane    -> `Office.context.ui.openBrowserWindow(url)`
+ *   - Popped-out chat      -> the task pane behind it, which calls the above
+ *                             (an Office dialog has no `openBrowserWindow`)
  *   - Extension side panel -> `chrome.tabs.create({ url })`
  *   - Web app              -> `window.open(url, '_blank', 'noopener,noreferrer')`
  *
@@ -104,6 +108,17 @@ export async function openExternalUrlSettled(url) {
  */
 function handOffExternalUrl(url) {
   if (!url) return false;
+
+  // A popped-out chat runs in an Office dialog, where only `messageParent`
+  // works; the pane behind it opens the browser instead. The hand-off is the
+  // message, so a pane that is gone is not reported back here.
+  const remote = getOfficeRemote();
+  if (remote) {
+    remote.call('openUrl', { url }).catch(error => {
+      console.warn('[popout] the pane could not open the browser', error);
+    });
+    return true;
+  }
 
   const host = detectExternalNavigationHost();
 
