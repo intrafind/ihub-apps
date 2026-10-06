@@ -32,7 +32,8 @@ export async function processMessageTemplates(
   user = null,
   chatId = null,
   modelName = null,
-  requestedSkills = null
+  requestedSkills = null,
+  preparedSkills = null
 ) {
   return PromptService.processMessageTemplates(
     messages,
@@ -44,7 +45,8 @@ export async function processMessageTemplates(
     user,
     chatId,
     modelName,
-    requestedSkills
+    requestedSkills,
+    preparedSkills
   );
 }
 

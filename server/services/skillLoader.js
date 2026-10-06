@@ -83,6 +83,19 @@ export function parseAllowedTools(value) {
 }
 
 /**
+ * Whether a skill's frontmatter sets `disable-model-invocation: true` (the
+ * field Claude Code uses): only a user starts the skill, with `/name`. The
+ * model is not offered it and cannot load it on its own.
+ *
+ * @param {Object} [frontmatter]
+ * @returns {boolean}
+ */
+export function disablesModelInvocation(frontmatter) {
+  const value = frontmatter?.['disable-model-invocation'];
+  return value === true || value === 'true';
+}
+
+/**
  * Validate a skill name against the Agent Skills spec
  * @param {string} name - Skill name to validate
  * @returns {{ valid: boolean, error?: string }}
@@ -320,6 +333,8 @@ async function collectSkills(skillsDir, skills, { isSystem, create }) {
       // built-in tools that come with the skill when an app enables it. An
       // installed skill's list stays informational.
       providedTools: isSystem ? parseAllowedTools(fm['allowed-tools']) : [],
+      // false: only users start it with `/name`; it is not listed for the model.
+      modelInvocable: !disablesModelInvocation(fm),
       isSystem,
       path: skillPath,
       enabled: true // Default, can be overridden by skills.json

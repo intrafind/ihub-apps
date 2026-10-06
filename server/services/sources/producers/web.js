@@ -62,7 +62,8 @@ export function isWebSearchTool(toolId) {
 const BUILT_IN_WEB_SEARCH_SCRIPTS = new Set(['braveSearch.js', 'qwantSearch.js', 'staanSearch.js']);
 
 /** Tool ids `toolLoader.runTool` dispatches by id, before it looks at a script. */
-const DISPATCHED_BY_ID = /^(app__|workflow_|source_)|^(activate_skill|read_skill_resource)$/;
+const DISPATCHED_BY_ID =
+  /^(app__|workflow_|source_)|^(activate_skill|read_skill_resource|find_skill)$/;
 
 /**
  * Whether the call ran one of the platform's own web search scripts. Decided

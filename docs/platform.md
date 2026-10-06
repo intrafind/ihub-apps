@@ -1299,7 +1299,8 @@ Configures the skills system, which provides reusable AI behaviors that can be a
 ```json
 {
   "skills": {
-    "maxSkillBodyTokens": 5000
+    "maxSkillBodyTokens": 5000,
+    "maxCatalogTokens": 3000
   }
 }
 ```
@@ -1307,4 +1308,7 @@ Configures the skills system, which provides reusable AI behaviors that can be a
 | Field                | Type   | Default              | Description                                                                           |
 | -------------------- | ------ | -------------------- | ------------------------------------------------------------------------------------- |
 | `skillsDirectory`    | String | `skills` in the contents directory | Directory where skill definition files are stored, relative to the installation root. The default follows `CONTENTS_DIR`; leave it unset unless skills live elsewhere. |
-| `maxSkillBodyTokens` | Number | `5000`               | Maximum token count for the combined skill instructions injected into a conversation  |
+| `maxSkillBodyTokens` | Number | `5000`               | Maximum tokens of one active skill's instructions in the system prompt. A longer skill stays active with its description only, and the model reads its instructions with `activate_skill`. All active skills together also take at most a quarter of the model's context window |
+| `maxCatalogTokens`   | Number | `3000`               | Maximum tokens of the list of skills the model is offered (`<available_skills>`). Over it, descriptions are shortened, then left out, and the model searches the skills with the `find_skill` tool |
+
+See [How skills reach the model](skills.md#how-skills-reach-the-model).

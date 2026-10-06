@@ -22,7 +22,7 @@ import { thinkingConfigToOptions } from '../thinkingOptions.js';
 import { SubWorkflowMaterializer } from '../SubWorkflowMaterializer.js';
 import { dedupeCitations } from '../citationUtils.js';
 import configCache from '../../../configCache.js';
-import { buildAvailableSkillsBlock, getUsableSkills } from '../../skillAccess.js';
+import { buildAvailableSkillsBlock, getUsableSkills, isModelInvocable } from '../../skillAccess.js';
 import { actionTracker } from '../../../actionTracker.js';
 import { resolveMaxOutputTokens } from '../../../../shared/outputTokens.js';
 
@@ -744,8 +744,11 @@ Hard rules for this extension plan:
       const skillIds =
         Array.isArray(config?.skills) && config.skills.length > 0 ? config.skills : [];
       if (skillIds.length > 0) {
-        // Filtered by the run's principal, as activation is.
-        const filtered = await getUsableSkills({ skillIds, user: context?.user });
+        // Filtered by the run's principal, as activation is. A skill only
+        // users may start (`disable-model-invocation`) is not offered.
+        const filtered = (await getUsableSkills({ skillIds, user: context?.user })).filter(
+          isModelInvocable
+        );
         if (filtered.length > 0) {
           availableSkillNames = filtered.map(s => s.name).filter(n => typeof n === 'string');
           skillsBlock = `\n\n${buildAvailableSkillsBlock(filtered)}`;
@@ -1388,7 +1391,9 @@ Output rules:
   async _activateSkillsIntoState(skillNames, state, context, config) {
     if (!Array.isArray(skillNames) || skillNames.length === 0) return;
     const usableNames = new Set(
-      (await getUsableSkills({ skillIds: config?.skills, user: context?.user })).map(s => s.name)
+      (await getUsableSkills({ skillIds: config?.skills, user: context?.user }))
+        .filter(isModelInvocable)
+        .map(s => s.name)
     );
     const activated = { ...(state?.data?._activatedSkills || {}) };
     const { getSkillContent } = await import('../../skillLoader.js');
