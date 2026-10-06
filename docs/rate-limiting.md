@@ -8,7 +8,7 @@ Rate limiting has been implemented using the `express-rate-limit` package to pro
 
 ## Rate Limiting Types
 
-The system supports six different types of rate limiters, each configurable through the platform configuration:
+The system supports seven different types of rate limiters, each configurable through the platform configuration and in **Admin → Security → Rate limits** (see [Changing the limits](#changing-the-limits)):
 
 ### 1. Public API Rate Limiter
 - **Default Limit**: 500 requests per 1 minute per IP address
@@ -72,9 +72,36 @@ The system supports six different types of rate limiters, each configurable thro
 - **Purpose**: Base configuration that other limiters inherit from
 
 ### 6. OAuth API Rate Limiter
-- **Default Limit**: 50 requests per 15 minutes per IP address (strict)
-- **Applied to**: OAuth token and authorization endpoints:
-  - `/api/oauth/*` (all OAuth routes)
+- **Default Limit**: 300 requests per minute per IP address, every request counted
+- **Applied to**: every endpoint of iHub's OAuth server, `/api/oauth/*`: the consent screen,
+  token exchanges and refreshes, introspection, revocation, user info and client registration
+- **Sized for real traffic.** Two kinds of callers share one address with many users:
+  - browsers behind a corporate NAT address open the consent screen;
+  - a server-side client exchanges and refreshes the tokens of all its users from a few
+    addresses. Microsoft 365 Copilot ([guide](microsoft-365-copilot-agent.md)) refreshes each
+    user's token about once an hour (the client's token lifetime, 60 minutes by default) from
+    Microsoft's servers.
+
+  300 per minute covers several thousand active users. Raise it for more. Guessing secrets is the
+  next limiter's job, so this one can be generous.
+- Earlier releases allowed 50 requests per 15 minutes. Migration `V159` raises that value
+  where it was never changed; a value an admin set stays.
+
+### 7. OAuth Token API Rate Limiter
+- **Default Limit**: 30 **failed** requests per 15 minutes per IP address
+  (`skipSuccessfulRequests: true`)
+- **Applied to**: the OAuth endpoints that check a client secret:
+  - `POST /api/oauth/token`
+  - `POST /api/oauth/introspect`
+
+  Both share one budget per address.
+- **Why only failed requests count:** each call compares a client secret with bcrypt, which is
+  deliberately slow. Counting failures stops secret guessing, and the CPU it burns, after 30
+  attempts. A client that authenticates correctly is never counted, however many tokens it
+  requests. Once an address has spent the budget, every request from it gets `429` until the
+  window ends, including requests with the right secret.
+- It replaces a fixed limit of 20 requests per 15 minutes on the token endpoint, which counted
+  successful requests too and could not be changed.
 
 ## Configuration
 
@@ -111,15 +138,21 @@ Rate limiting is fully configurable through the `platform.json` configuration fi
       "limit": 500
     },
     "oauthApi": {
+      "windowMs": 60000,
+      "limit": 300,
+      "skipFailedRequests": false
+    },
+    "oauthTokenApi": {
       "windowMs": 900000,
-      "limit": 50,
+      "limit": 30,
+      "skipSuccessfulRequests": true,
       "skipFailedRequests": false
     }
   }
 }
 ```
 
-> **Note**: The `limit` values shown above are example overrides. The built-in defaults (500 req/min for most types, 50 req/15 min for auth/oauth) apply when no `rateLimit` section is present in `platform.json`.
+> **Note**: The `limit` values shown above are example overrides. The built-in defaults apply when no `rateLimit` section is present in `platform.json`: 500 req/min for most types, 50 req/15 min for auth, 300 req/min for OAuth, and 30 failed req/15 min for the OAuth token endpoints.
 
 ### Configuration Options
 
@@ -132,6 +165,25 @@ Each rate limiter supports the following configuration options:
 - `skipSuccessfulRequests`: Don't count successful requests (default: false)
 - `skipFailedRequests`: Don't count failed requests (default: varies by type)
 - `message`: Custom error message when limit exceeded
+
+### Changing the limits
+
+**Admin → Security → Rate limits** lists every limiter except `default`. For each one you set:
+
+- **Requests:** the limit, from 1 to 1,000,000;
+- **Per (minutes):** the window, from one second to 1,440 minutes;
+- **Which requests count:** all requests, failed requests only (`skipSuccessfulRequests`), or
+  successful requests only (`skipFailedRequests`). A request failed when its response status is
+  400 or higher.
+
+The page saves to `rateLimit` in `platform.json` and keeps the other fields of each section, such
+as `message`. The limiters are built when the server starts, so **changes apply after a restart**.
+Until then the page says that a restart is due and shows, for each changed limiter, the values the
+server is still running with.
+
+Environment variables override `platform.json`, for example
+`IHUB_PLATFORM__RATE_LIMIT__OAUTH_API__LIMIT=1000` (see
+[environment variables](environment-variables.md)).
 
 ### Proxy hops and the rate-limit key
 
@@ -172,7 +224,7 @@ All rate limiters inherit from the `default` configuration. You only need to spe
 
 iHub runs several worker processes (`WORKERS`, 4 by default) and spreads connections across them.
 
-- **Auth API and OAuth API** limits count across all workers: the primary process holds the counters and every worker asks it. A limit of 30 means 30 attempts per window, whichever worker each attempt reaches. If the primary does not answer within half a second, a worker counts on its own for that request.
+- **Auth API, OAuth API and OAuth token API** limits count across all workers: the primary process holds the counters and every worker asks it. A limit of 30 means 30 attempts per window, whichever worker each attempt reaches. If the primary does not answer within half a second, a worker counts on its own for that request.
 - **Public, admin, inference and default** limits count per worker, so a client can make up to `WORKERS ×` the configured number of requests per window. Size them accordingly, or enforce them at the ingress.
 - Several iHub replicas (pods) each count on their own, for every limiter.
 

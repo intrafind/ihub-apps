@@ -504,7 +504,9 @@ export function setupMiddleware(app, platformConfig = {}) {
   // Admin API rate limiter for administrative endpoints (most restrictive)
   app.use(buildApiPath('/admin'), rateLimiters.adminApiLimiter);
 
-  // OAuth API rate limiter for authorization/token endpoints (protect against brute force)
+  // OAuth rate limiters, two layers like /api/auth: this one bounds the volume
+  // per address; the token limiter (mounted by routes/oauth.js) counts the
+  // failed calls to the endpoints that check a client secret.
   app.use(buildApiPath('/oauth'), rateLimiters.oauthApiLimiter);
 
   // No server-side sessions: requests from one browser are spread across

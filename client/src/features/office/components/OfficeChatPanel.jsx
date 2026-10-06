@@ -2,6 +2,7 @@ import { useState, useRef, useCallback, useEffect, useMemo, useReducer } from 'r
 import { useNavigate, Navigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { v4 as uuidv4 } from 'uuid';
+import { ArrowsPointingInIcon, ArrowsPointingOutIcon } from '@heroicons/react/24/outline';
 import Icon from '../../../shared/components/Icon';
 import ChatMessageList from '../../chat/components/ChatMessageList';
 import ChatInput from '../../chat/components/ChatInput';
@@ -34,8 +35,16 @@ import {
   combineStarterPromptWithTypedText
 } from '../utilities/officeStarterPrompts';
 import { OFFICE_APPS_PAGE_PATH } from '../utilities/officeStartPage';
-import { buildWebChatUrl } from '../utilities/officeChatHistory';
-import { openExternalUrlSettled } from '../../../utils/externalNavigation';
+import {
+  buildHandoffMessages,
+  buildWebChatUrl,
+  buildWebHandoffUrl
+} from '../utilities/officeChatHistory';
+import {
+  canConfirmExternalOpen,
+  detectExternalNavigationHost,
+  openExternalUrlSettled
+} from '../../../utils/externalNavigation';
 import usePinnedEmails from '../hooks/usePinnedEmails';
 import { consumePendingChatStart } from '../../chat/startChatHandoff';
 import { getLocalizedContent } from '../../../utils/localizeContent';
@@ -46,10 +55,17 @@ import {
   resolveVariableValues
 } from '../../chat/utils/startForm';
 import { officeLocale } from '../utilities/officeLocale';
-import { fetchApps } from '../../../api';
+import { createChatHandoff, fetchApps } from '../../../api';
 import { useOfficeConfig } from '../contexts/OfficeConfigContext';
 import { useEmbeddedHost } from '../contexts/EmbeddedHostContext';
+import { chatMessagesStorageKey } from '../../chat/utils/chatMessagesStorage';
 import './OfficeChatPanel.css';
+
+// How long the popped-out chat waits for a quiet moment before telling the
+// pane what it looks like now — and, while an answer streams and there is no
+// quiet moment, how long it goes without telling it at most.
+const POPOUT_REPORT_DEBOUNCE_MS = 500;
+const POPOUT_REPORT_MAX_WAIT_MS = 2000;
 
 function buildParamsFromApp(app) {
   const params = { language: officeLocale };
@@ -69,7 +85,19 @@ function buildParamsFromApp(app) {
  *   server-side (durable chats). Fixed for the panel's lifetime: the pane only
  *   mounts it once that is known.
  * @param {string|null} [props.openChatId] - A stored chat to open instead of a
- *   new one — the history page hands it over.
+ *   new one — the history page hands it over. Also the chat the pop-out window
+ *   hands back (or the pane hands to it), stored or not: a chat that is not
+ *   stored brings its transcript along in session storage.
+ * @param {{ variables?: object, inputValue?: string, pinnedEmails?: object[] }|null} [props.restoredChat] -
+ *   What the chat had besides its transcript when it moved between the pane
+ *   and the pop-out window.
+ * @param {{ role: 'pane', open: (state: object) => void, error?: string|null,
+ *       dismissError?: () => void }
+ *   | { role: 'child', dock: (state: object) => void, report: (state: object) => void,
+ *       reportPinned: (pinnedEmails: object[]) => void }|null} [props.popout] -
+ *   Moving the chat into a larger window and back. `pane` offers to pop the
+ *   chat out (and reports when the window could not be opened); `child` is
+ *   the popped-out chat, which offers to go back.
  * @param {(options: { returnChatId: string|null }) => void} [props.onOpenHistory] -
  *   Go to the chat history; `returnChatId` is the chat to come back to.
  */
@@ -81,6 +109,8 @@ function OfficeChatPanel({
   homePath = OFFICE_APPS_PAGE_PATH,
   chatPersistence = false,
   openChatId = null,
+  restoredChat = null,
+  popout = null,
   onOpenHistory
 }) {
   const { t } = useTranslation();
@@ -161,8 +191,17 @@ function OfficeChatPanel({
 
   const uploadConfig = fileUploadHandler.createUploadConfig(selectedApp, currentModel);
 
-  const [inputValue, setInputValue] = useState('');
+  const [inputValue, setInputValue] = useState(() =>
+    typeof restoredChat?.inputValue === 'string' ? restoredChat.inputValue : ''
+  );
   const [appPromptVariables, setAppPromptVariables] = useState({});
+  // The variables a chat moved between the pane and the pop-out window had —
+  // applied once, over the app's defaults, by the app-change effect below.
+  const restoredVariablesRef = useRef(
+    restoredChat?.variables && typeof restoredChat.variables === 'object'
+      ? restoredChat.variables
+      : null
+  );
   const [isSelectorOpen, setIsSelectorOpen] = useState(false);
   const [isVariablesOpen, setIsVariablesOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -179,7 +218,7 @@ function OfficeChatPanel({
     unpin: handleUnpin,
     clearPinned: handleClearPinned,
     addEmailsLoading
-  } = usePinnedEmails();
+  } = usePinnedEmails(restoredChat?.pinnedEmails);
 
   // The host item as the adapter will send it, for the live token estimate.
   // Mirrors what useOfficeChatAdapter sends — the snapshot override already
@@ -265,7 +304,12 @@ function OfficeChatPanel({
       setIsVariablesOpen(false);
       return;
     }
-    const initial = buildInitialVariablesMap(selectedApp.variables);
+    const restoredVariables = restoredVariablesRef.current;
+    restoredVariablesRef.current = null;
+    const initial = {
+      ...buildInitialVariablesMap(selectedApp.variables),
+      ...(restoredVariables || {})
+    };
     setAppPromptVariables(initial);
     const defs = getValidVariableDefinitions(selectedApp.variables);
     const missingRequired = defs.some(
@@ -407,9 +451,12 @@ function OfficeChatPanel({
   } = mailActions;
 
   // Outcome of the last "Open in web app" that could not hand the chat to the
-  // browser: `{ chatId, url }`. It shares the notice strip with the answer
-  // actions, and whichever ran last owns it.
+  // browser: `{ chatId, url }`, or `{ chatId, error }` when a chat that is not
+  // stored could not be parked for the browser. It shares the notice strip
+  // with the answer actions, and whichever ran last owns it.
   const [webNotice, setWebNotice] = useState(null);
+  // A chat that is not stored is being parked for the browser.
+  const [handingOff, setHandingOff] = useState(false);
 
   const runAnswerAction = useCallback(
     (actionId, content) => {
@@ -714,6 +761,105 @@ function OfficeChatPanel({
     [selectedApp?.variables]
   );
 
+  // The chat as it moves between the pane and the pop-out window: which chat,
+  // its transcript when it is not stored (the store has it otherwise — and an
+  // answer still streaming into a stored chat is followed live on arrival),
+  // and what the user set up or typed but did not send yet.
+  const buildPopoutChatState = () => {
+    const chatId = chatIdRef.current;
+    let transcript = null;
+    if (!chatStored) {
+      try {
+        transcript = sessionStorage.getItem(chatMessagesStorageKey(chatId));
+      } catch {
+        // No session storage: the chat moves without its transcript.
+      }
+    }
+    return {
+      app: selectedApp,
+      chatId,
+      // Nothing sent yet: the other window starts a new chat of its own rather
+      // than asking the store for one it has never heard of.
+      fresh: freshChatIdsRef.current.has(chatId),
+      chatStored,
+      transcript,
+      variables: appPromptVariables,
+      inputValue
+    };
+  };
+  const buildPopoutChatStateRef = useRef(buildPopoutChatState);
+  useEffect(() => {
+    buildPopoutChatStateRef.current = buildPopoutChatState;
+  });
+
+  // The popped-out chat keeps the pane up to date, so the pane can take it
+  // back however the window closes — including with its X, which gives the
+  // window no chance to say goodbye. Attachments of collected emails are
+  // megabytes, so they go separately and only when the collection changes.
+  const popoutChild = popout?.role === 'child' ? popout : null;
+  const reportPopoutState = popoutChild?.report;
+  const reportPopoutPinned = popoutChild?.reportPinned;
+  const providePopoutState = popoutChild?.provideState;
+  const currentChatId = chatIdRef.current;
+  const lastPopoutReportRef = useRef(0);
+  // A change the debounce is still holding back.
+  const popoutReportPendingRef = useRef(false);
+  useEffect(() => {
+    if (!reportPopoutState) return undefined;
+    popoutReportPendingRef.current = true;
+    const overdue = Date.now() - lastPopoutReportRef.current >= POPOUT_REPORT_MAX_WAIT_MS;
+    const timer = setTimeout(
+      () => {
+        popoutReportPendingRef.current = false;
+        lastPopoutReportRef.current = Date.now();
+        reportPopoutState(buildPopoutChatStateRef.current());
+      },
+      overdue ? 0 : POPOUT_REPORT_DEBOUNCE_MS
+    );
+    return () => clearTimeout(timer);
+  }, [
+    reportPopoutState,
+    currentChatId,
+    adapter.messages,
+    appPromptVariables,
+    inputValue,
+    selectedApp?.id
+  ]);
+  // The window's X gives no warning, but the page still unloads: send what
+  // the debounce is holding back, so text typed just before closing is not
+  // lost. Best effort — the host may already be tearing the window down.
+  useEffect(() => {
+    if (!reportPopoutState) return undefined;
+    const flush = () => {
+      if (!popoutReportPendingRef.current) return;
+      popoutReportPendingRef.current = false;
+      try {
+        reportPopoutState(buildPopoutChatStateRef.current());
+      } catch {
+        // The bridge is gone with the window.
+      }
+    };
+    window.addEventListener('pagehide', flush);
+    window.addEventListener('beforeunload', flush);
+    return () => {
+      window.removeEventListener('pagehide', flush);
+      window.removeEventListener('beforeunload', flush);
+    };
+  }, [reportPopoutState]);
+  useEffect(() => {
+    reportPopoutPinned?.(pinnedEmails);
+  }, [reportPopoutPinned, pinnedEmails]);
+  // And the pane can ask for the chat as it is this moment, when it takes the
+  // chat back without the window's say-so ("Show the chat here instead").
+  useEffect(() => {
+    if (!providePopoutState) return undefined;
+    providePopoutState(() => ({
+      ...buildPopoutChatStateRef.current(),
+      pinnedEmails: pinnedEmailsRef.current
+    }));
+    return () => providePopoutState(null);
+  }, [providePopoutState]);
+
   if (!authData) return null;
   if (!selectedApp) return <Navigate to={homePath} replace />;
 
@@ -768,7 +914,61 @@ function OfficeChatPanel({
     if (!url) return;
     dismissMailNotice();
     setWebNotice(null);
-    if (!(await openExternalUrlSettled(url))) setWebNotice({ chatId, url });
+    // From the popped-out window the pane opens the browser, and cannot tell
+    // whether it did — so the address is shown either way.
+    if (!(await openExternalUrlSettled(url)) || !canConfirmExternalOpen()) {
+      setWebNotice({ chatId, url });
+    }
+  };
+
+  // A chat that is not stored — durable chats off, or an `ephemeral` app —
+  // lives only in this pane, which the browser cannot read. It is parked on
+  // the server for a few minutes instead (single-use, for this user only) and
+  // the browser opens the app with it, where it continues as a new chat. The
+  // open email goes along, as the next message here would have sent it.
+  const canHandOff =
+    !chatStored &&
+    !handingOff &&
+    !adapter.processing &&
+    adapter.messages.some(message => message.role === 'user' && !message.isGreeting);
+  const handleHandOffToWeb = async () => {
+    const chatId = chatIdRef.current;
+    const appId = selectedApp?.id;
+    const messages = buildHandoffMessages(adapter.messages, estimateHostContext);
+    if (!appId || messages.length === 0) return;
+    dismissMailNotice();
+    setWebNotice(null);
+    setHandingOff(true);
+    try {
+      const { token } = await createChatHandoff({
+        appId,
+        messages,
+        variables: appPromptVariables
+      });
+      const url = buildWebHandoffUrl(officeConfig?.baseUrl, appId, token);
+      if (!url) return;
+      // The browser opens after a round trip to the server, which a browser
+      // may no longer count as the user's click — and Outlook cannot say
+      // whether it opened. The link works once, so the address is shown
+      // unless the host confirmed the tab.
+      const opened = await openExternalUrlSettled(url);
+      if (!opened || !canConfirmExternalOpen() || detectExternalNavigationHost() === 'office') {
+        setWebNotice({ chatId, url });
+      }
+    } catch (error) {
+      setWebNotice({
+        chatId,
+        error:
+          error?.status === 413
+            ? t(
+                'office.openInWeb.tooLarge',
+                'This chat is too large to open in the web app. Start a new chat there instead.'
+              )
+            : t('office.openInWeb.failed', 'The chat could not be opened in the web app.')
+      });
+    } finally {
+      setHandingOff(false);
+    }
   };
 
   const menuItems = [
@@ -793,16 +993,17 @@ function OfficeChatPanel({
           }
         ]
       : []),
-    // Wherever this chat is stored. Disabled — not hidden — until the server
-    // has its first turn, so the entry does not appear out of nowhere once the
-    // first answer starts.
-    ...(chatStored && officeConfig?.baseUrl
+    // A stored chat opens by its id; one that is not stored is handed over.
+    // Disabled — not hidden — until there is something to continue (a stored
+    // chat: until the server has its first turn), so the entry does not appear
+    // out of nowhere once the first answer starts.
+    ...(officeConfig?.baseUrl
       ? [
           {
             key: 'openInWeb',
             label: t('office.menu.openInWeb', 'Open in web app'),
-            disabled: !chatInStore,
-            onClick: handleOpenInWeb
+            disabled: chatStored ? !chatInStore : !canHandOff,
+            onClick: chatStored ? handleOpenInWeb : handleHandOffToWeb
           }
         ]
       : []),
@@ -814,25 +1015,52 @@ function OfficeChatPanel({
     { key: 'logout', label: t('office.menu.logout', 'Logout'), onClick: onLogout }
   ];
 
+  // Moving the chat to the larger window and back. Not while an answer is
+  // being written: the request belongs to the window that sent it, and a chat
+  // that is not stored would lose the rest of that answer.
+  const popoutAction =
+    popout?.role === 'pane' && typeof popout.open === 'function'
+      ? {
+          key: 'popout',
+          icon: ArrowsPointingOutIcon,
+          label: t('office.popout.open', 'Open in a larger window'),
+          disabled: adapter.processing,
+          onClick: () => popout.open({ ...buildPopoutChatState(), pinnedEmails })
+        }
+      : popoutChild
+        ? {
+            key: 'dock',
+            icon: ArrowsPointingInIcon,
+            label: t('office.popout.dock', 'Back to the Outlook pane'),
+            disabled: adapter.processing,
+            onClick: () => popoutChild.dock({ ...buildPopoutChatState(), pinnedEmails })
+          }
+        : null;
+
   const hasMessages = adapter.messages.length > 0;
 
   // One strip for the outcome of whichever ran last: an answer action or "Open
   // in web app". The address belongs to one chat, so it goes once that chat is
   // left. The host call cannot always tell a blocked window from an opened one,
   // so the fallback does not claim that nothing opened.
-  const webNoticeUrl = webNotice?.chatId === chatIdRef.current ? webNotice.url : null;
-  const notice = webNoticeUrl
+  const webNoticeForChat = webNotice?.chatId === chatIdRef.current ? webNotice : null;
+  const notice = webNoticeForChat?.url
     ? {
         tone: 'info',
         message: t(
           'office.openInWeb.fallback',
           'If the chat did not open in your browser, open this address:'
         ),
-        url: webNoticeUrl
+        url: webNoticeForChat.url
       }
-    : mailActions.notice;
+    : webNoticeForChat?.error
+      ? { tone: 'error', message: webNoticeForChat.error }
+      : popout?.error
+        ? { tone: 'error', message: popout.error }
+        : mailActions.notice;
   const dismissNotice = () => {
     setWebNotice(null);
+    popout?.dismissError?.();
     dismissMailNotice();
   };
 
@@ -852,6 +1080,7 @@ function OfficeChatPanel({
                 : t('office.startPage.backToStart', 'Back to start page')
             }
             menuItems={menuItems}
+            actions={popoutAction ? [popoutAction] : []}
           />
 
           <div className="flex-1 flex flex-col min-h-0">

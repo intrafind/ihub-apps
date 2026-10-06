@@ -24,8 +24,12 @@ const headerFields = src => ({
   dateTimeCreated: src.dateTimeCreated ?? null
 });
 
-export default function usePinnedEmails() {
-  const [pinnedEmails, setPinnedEmails] = useState([]);
+export default function usePinnedEmails(initialPinnedEmails = null) {
+  // A chat taken over from another window (the pane's pop-out) comes with the
+  // emails collected there.
+  const [pinnedEmails, setPinnedEmails] = useState(() =>
+    Array.isArray(initialPinnedEmails) ? initialPinnedEmails : []
+  );
   const [addEmailsLoading, setAddEmailsLoading] = useState(false);
 
   const addEmails = useCallback(async () => {

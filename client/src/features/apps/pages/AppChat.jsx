@@ -9,7 +9,7 @@ import {
 } from '../../../utils/chatId';
 import { getConversationMessages } from '../../../api/endpoints/apps';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import { fetchAppDetails, fetchChat } from '../../../api';
+import { claimChatHandoff, fetchAppDetails, fetchChat } from '../../../api';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 import { useTranslation } from 'react-i18next';
 import { getLocalizedContent } from '../../../utils/localizeContent';
@@ -696,7 +696,12 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
   // back on screen through the hydration below. Incognito switches it off for
   // this chat; anonymous viewers and installations without the capability never
   // had it, and keep exactly the behaviour they have today.
-  const serverBackedChat = chatPersistence && !ephemeral;
+  // A chat handed over from the Outlook pane (below) was not stored there and
+  // has no server-side history to continue from, so it carries its history
+  // itself, like any chat that is not stored — whatever this viewer's chats
+  // usually are. Only that chat: the next one is stored again as usual.
+  const [handedOffChatId, setHandedOffChatId] = useState(null);
+  const serverBackedChat = chatPersistence && !ephemeral && chatId !== handedOffChatId;
   // `chatPersistence` answers false until the platform config and the auth
   // status have both landed, so an early false is "not known yet", not "no".
   // The startup state has to wait it out, or a persisted chat greets the user
@@ -754,6 +759,92 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
   // Whether the user may pick the model: in the composer, or on the start form.
   const modelSelectionAllowed =
     app?.disallowModelSelection !== true && app?.settings?.model?.enabled !== false;
+
+  // A chat handed over from the Outlook pane ("Open in web app" on a chat that
+  // is not stored server-side, see server/routes/chatHandoffs.js): the pane
+  // parked its transcript and opened `/apps/:appId?handoff=<token>`. Claimed
+  // once the app and the chat mode are settled, and continued as a new chat,
+  // so the one this tab already had for the app is left as it was. The
+  // transcript lands after the switch to the new chat has cleared the screen —
+  // hence the pending ref, applied by the effect that follows the chat id.
+  const handoffToken = searchParams.get('handoff');
+  const handoffClaimedRef = useRef(null);
+  const handoffSignInNoticeRef = useRef(null);
+  const pendingHandoffRef = useRef(null);
+  // Only the user who handed the chat over can claim it. A visitor who is not
+  // signed in (anonymous access) is asked to sign in first; the address keeps
+  // the token, so it is claimed on the way back from the sign-in.
+  const handoffSignedIn = auth ? auth.isAuthenticated === true : true;
+  useEffect(() => {
+    if (embedded || !handoffToken || !app || modelsLoading || chatModeResolving) return;
+    if (!handoffSignedIn) {
+      if (handoffSignInNoticeRef.current === handoffToken) return;
+      handoffSignInNoticeRef.current = handoffToken;
+      addSystemMessage(
+        t('pages.appChat.handoff.signIn', 'Sign in to continue the chat you opened from Outlook.'),
+        true
+      );
+      return;
+    }
+    if (handoffClaimedRef.current === handoffToken) return;
+    handoffClaimedRef.current = handoffToken;
+    // Single-use: once the server has answered for good, a reload must not
+    // try it again. A failure that may pass (offline, a server error) keeps
+    // the token in the address, so a reload retries.
+    const dropTokenFromAddress = () => {
+      const newSearch = new URLSearchParams(window.location.search);
+      newSearch.delete('handoff');
+      const query = newSearch.toString();
+      navigate(`${window.location.pathname}${query ? `?${query}` : ''}`, { replace: true });
+    };
+
+    claimChatHandoff(handoffToken)
+      .then(handoff => {
+        dropTokenFromAddress();
+        const handedMessages = Array.isArray(handoff?.messages) ? handoff.messages : [];
+        if (handedMessages.length === 0) return;
+        const nextChatId = startNewChat();
+        setHandedOffChatId(nextChatId);
+        if (handoff.variables && typeof handoff.variables === 'object') {
+          setVariables(v => ({ ...v, ...handoff.variables }));
+        }
+        pendingHandoffRef.current = {
+          chatId: nextChatId,
+          messages: handedMessages.map((message, index) => ({
+            ...message,
+            id: `handoff-${Date.now()}-${index}`
+          }))
+        };
+      })
+      .catch(error => {
+        const status = error?.status;
+        if (status === 403 || status === 404) dropTokenFromAddress();
+        addSystemMessage(
+          status === 403
+            ? t(
+                'pages.appChat.handoff.otherUser',
+                'This chat was opened from Outlook by another account. Sign in with that account to continue it.'
+              )
+            : status === 404
+              ? t(
+                  'pages.appChat.handoff.expired',
+                  'The chat from Outlook could not be opened: the link has expired or was already used. Choose "Open in web app" in Outlook again.'
+                )
+              : t(
+                  'pages.appChat.handoff.failed',
+                  'The chat from Outlook could not be opened right now. Reload the page to try again.'
+                ),
+          true
+        );
+      });
+    // eslint-disable-next-line @eslint-react/exhaustive-deps
+  }, [handoffToken, app, modelsLoading, chatModeResolving, embedded, handoffSignedIn]);
+  useEffect(() => {
+    const pending = pendingHandoffRef.current;
+    if (!pending || pending.chatId !== chatId) return;
+    pendingHandoffRef.current = null;
+    loadServerMessages(pending.messages);
+  }, [chatId, loadServerMessages]);
 
   // What an MCP App view in this chat may do in the composer: post a follow-up
   // message (`ui/message`) the way a starter prompt with autoSend does.
@@ -987,15 +1078,21 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
     // would race, and the loser would silently win on a slow network. An
     // embedded chat is always new.
     if (embedded || ephemeral || serverBackedChat) return;
+    // A chat handed over from Outlook brings its own transcript: the
+    // conversation this tab had for the app must not land on top of it.
+    if (handoffToken || pendingHandoffRef.current || chatId === handedOffChatId) return;
 
     const existingConversationId = getConversationId(appId);
     if (!existingConversationId) return;
 
     conversationResumed.current = true;
 
+    const requestedChatId = chatId;
     (async () => {
       try {
         const result = await getConversationMessages(appId, existingConversationId, { chatId });
+        // The chat may have changed meanwhile (a new chat, a hand-off).
+        if (currentChatIdRef.current !== requestedChatId) return;
         const serverMessages = result?.messages || result;
         if (Array.isArray(serverMessages) && serverMessages.length > 0) {
           loadServerMessages(serverMessages);
@@ -1014,7 +1111,9 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
     loadServerMessages,
     ephemeral,
     serverBackedChat,
-    embedded
+    embedded,
+    handoffToken,
+    handedOffChatId
   ]);
 
   // Auto-send message if send=true query parameter is present
@@ -1161,10 +1260,15 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
   // The latest values the delayed send below has to re-check. Hydration can
   // land inside those 300 ms, and the timer closes over nothing else.
   const autoStartGateRef = useRef(null);
+  // A hand-off from Outlook is the chat's start: nothing may auto-start while
+  // it is being claimed (the token stays in the address until it settles) or
+  // until its transcript is on screen.
+  const handoffInProgress = Boolean(handoffToken) || pendingHandoffRef.current !== null;
   autoStartGateRef.current = {
     hydrating,
     chatModeResolving,
-    messageCount: messages.length
+    messageCount: messages.length,
+    handoffInProgress
   };
 
   useEffect(() => {
@@ -1180,6 +1284,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
       // single time the user opens that chat from the history.
       !hydrating &&
       !chatModeResolving &&
+      !handoffInProgress &&
       !processing && // Not currently processing
       !autoStartTriggered.current && // Haven't triggered yet
       selectedModel && // Model is selected
@@ -1195,7 +1300,12 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
         // Re-check: the stored transcript may have landed while this timer
         // was pending, and this was never a new chat after all.
         const gate = autoStartGateRef.current;
-        if (gate.hydrating || gate.chatModeResolving || gate.messageCount > 0) {
+        if (
+          gate.hydrating ||
+          gate.chatModeResolving ||
+          gate.handoffInProgress ||
+          gate.messageCount > 0
+        ) {
           debugLog('Auto-start abandoned: the chat is not empty after all');
           return;
         }
@@ -1269,6 +1379,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
     messages.length,
     hydrating,
     chatModeResolving,
+    handoffInProgress,
     processing,
     appId,
     selectedModel,

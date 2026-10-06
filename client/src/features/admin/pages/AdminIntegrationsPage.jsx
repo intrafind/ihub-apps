@@ -65,6 +65,8 @@ function AdminIntegrationsPage() {
         return platform.features?.browserExtension ? 'connected' : 'available';
       case 'nextcloudEmbed':
         return platform.nextcloudEmbed?.enabled ? 'connected' : 'available';
+      case 'copilotAgent':
+        return platform.copilotAgent?.enabled ? 'connected' : 'available';
       default:
         return 'available';
     }
@@ -99,6 +101,19 @@ function AdminIntegrationsPage() {
       color: 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400',
       href: '/admin/browser-extension',
       status: statusFor('browserExtension'),
+      category: productivity
+    },
+    {
+      id: 'copilot-agent',
+      title: t('admin.integrations.cards.copilotAgent.title', 'Microsoft 365 Copilot'),
+      description: t(
+        'admin.integrations.cards.copilotAgent.description',
+        "Make iHub an agent in Microsoft 365 Copilot. Copilot runs iHub's apps through the MCP gateway, signed in with the user's iHub account."
+      ),
+      icon: 'sparkles',
+      color: 'bg-violet-100 dark:bg-violet-900/40 text-violet-600 dark:text-violet-400',
+      href: '/admin/copilot-agent',
+      status: statusFor('copilotAgent'),
       category: productivity
     },
     {

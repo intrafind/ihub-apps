@@ -211,7 +211,9 @@
       "openInWeb": "In der Web-App öffnen"
     },
     "openInWeb": {
-      "fallback": "Falls sich der Chat nicht im Browser geöffnet hat, öffnen Sie diese Adresse:"
+      "fallback": "Falls sich der Chat nicht im Browser geöffnet hat, öffnen Sie diese Adresse:",
+      "tooLarge": "Dieser Chat ist zu groß, um ihn in der Web-App zu öffnen. Beginnen Sie dort stattdessen einen neuen Chat.",
+      "failed": "Der Chat konnte nicht in der Web-App geöffnet werden."
     },
     "startPage": {
       "openApp": "App öffnen",
@@ -230,6 +232,16 @@
       "loadingChat": "Chat wird geladen…",
       "retry": "Erneut versuchen",
       "noneAvailable": "Keiner Ihrer letzten Chats gehört zu einer hier verfügbaren App."
+    },
+    "popout": {
+      "open": "In größerem Fenster öffnen",
+      "dock": "Zurück in den Outlook-Bereich",
+      "openTitle": "Der Chat ist in einem größeren Fenster geöffnet",
+      "keepPaneOpen": "Lassen Sie diesen Bereich geöffnet: Das Fenster liest und schreibt Ihre E-Mails über ihn. Heften Sie den Bereich an, damit er beim Wechsel zu einer anderen E-Mail geöffnet bleibt.",
+      "bringBack": "Chat stattdessen hier anzeigen",
+      "blocked": "Das größere Fenster wurde blockiert. Erlauben Sie Pop-ups für Outlook und versuchen Sie es erneut.",
+      "alreadyOpen": "Das größere Fenster ist bereits geöffnet.",
+      "failed": "Das größere Fenster konnte nicht geöffnet werden."
     }
   },
   "pages": {
@@ -403,6 +415,12 @@
         "message": "Nachricht",
         "attachments": "Anhänge",
         "dropZone": "Dateien hierher ziehen oder zum Auswählen klicken"
+      },
+      "handoff": {
+        "otherUser": "Dieser Chat wurde in Outlook von einem anderen Konto geöffnet. Melden Sie sich mit diesem Konto an, um ihn fortzusetzen.",
+        "expired": "Der Chat aus Outlook konnte nicht geöffnet werden: Der Link ist abgelaufen oder wurde bereits verwendet. Wählen Sie in Outlook erneut „In der Web-App öffnen“.",
+        "signIn": "Melden Sie sich an, um den Chat fortzusetzen, den Sie aus Outlook geöffnet haben.",
+        "failed": "Der Chat aus Outlook konnte gerade nicht geöffnet werden. Laden Sie die Seite neu, um es erneut zu versuchen."
       }
     }
   },
@@ -2314,14 +2332,62 @@
       }
     },
     "security": {
-      "description": "SSL, CORS, Cookie-Einstellungen, ausgehender Proxy und Verschlüsselung",
+      "description": "SSL, CORS, Cookie-Einstellungen, Ratenbegrenzung, ausgehender Proxy und Verschlüsselung",
       "sections": {
         "ssl": "SSL / TLS",
         "cookies": "Cookies",
         "cors": "CORS",
         "ssrf": "SSRF-Allowlist",
         "proxy": "Ausgehender Proxy",
-        "encryption": "Wert-Verschlüsselung"
+        "encryption": "Wert-Verschlüsselung",
+        "rateLimits": "Ratenbegrenzung"
+      },
+      "rateLimits": {
+        "title": "Ratenbegrenzung",
+        "description": "Wie viele Anfragen eine Client-Adresse senden darf, bevor sie \"429 Too Many Requests\" erhält. Änderungen gelten nach einem Neustart des Servers.",
+        "restartRequired": "Die gespeicherten Grenzen weichen von denen ab, mit denen der Server läuft. Starten Sie den Server neu, um sie anzuwenden.",
+        "runningNow": "Aktuell aktiv: {{limit}} pro {{minutes}} Min., {{counts}}",
+        "limit": "Anfragen",
+        "window": "Pro (Minuten)",
+        "countsLabel": "Welche Anfragen zählen",
+        "counts": {
+          "all": "Alle Anfragen",
+          "failed": "Nur fehlgeschlagene",
+          "successful": "Nur erfolgreiche"
+        },
+        "perAddress": "Die Grenzen zählen pro Client-Adresse. Hinter einem Reverse Proxy die Anzahl der Proxy-Hops einstellen (trustProxy in platform.json), sonst teilen sich alle Benutzer die Adresse des Proxys und einen Zähler.",
+        "save": "Ratenbegrenzung speichern",
+        "saving": "Wird gespeichert...",
+        "saved": "Ratenbegrenzung gespeichert. Starten Sie den Server neu, um sie anzuwenden.",
+        "saveError": "Die Ratenbegrenzung konnte nicht gespeichert werden",
+        "loadError": "Die Ratenbegrenzung konnte nicht geladen werden",
+        "invalid": "{{name}}: Geben Sie eine ganze Zahl von 1 bis 1.000.000 Anfragen und einen Zeitraum von einer Sekunde bis 1.440 Minuten ein.",
+        "limiters": {
+          "publicApi": {
+            "name": "Web-App-API",
+            "description": "Apps, Chats, Modelle, Werkzeuge und die übrigen Endpunkte, die die Web-App aufruft."
+          },
+          "adminApi": {
+            "name": "Admin-API",
+            "description": "Alles unter /api/admin."
+          },
+          "authApi": {
+            "name": "Anmeldung",
+            "description": "Anmeldung per Passwort, LDAP, NTLM und Teams. Statusabfragen und SSO-Weiterleitungen zählen nicht."
+          },
+          "oauthApi": {
+            "name": "OAuth-Server",
+            "description": "Jede Anfrage unter /api/oauth: Zustimmungsseiten, Token-Austausch und -Erneuerung, Client-Registrierung. Microsoft 365 Copilot sendet die Token-Anfragen aller seiner Benutzer von wenigen Microsoft-Adressen."
+          },
+          "oauthTokenApi": {
+            "name": "OAuth-Client-Secrets",
+            "description": "Token- und Introspection-Aufrufe, die ein Client-Secret prüfen. Werden nur fehlgeschlagene Anfragen gezählt, wird das Erraten von Secrets gestoppt, ohne Clients zu bremsen, die sich korrekt anmelden."
+          },
+          "inferenceApi": {
+            "name": "Inference-API",
+            "description": "/api/inference und Vorlesen."
+          }
+        }
       }
     },
     "tools": {
@@ -3216,6 +3282,10 @@
         "nextcloudEmbed": {
           "title": "Nextcloud-Embed",
           "description": "iHub innerhalb von Nextcloud einbetten. Nutzer starten Chats aus Nextcloud Files mit vorausgewählten Dokumenten — analog zum Outlook-Add-in."
+        },
+        "copilotAgent": {
+          "title": "Microsoft 365 Copilot",
+          "description": "Machen Sie iHub zu einem Agenten in Microsoft 365 Copilot. Copilot führt die iHub-Apps über das MCP-Gateway aus, angemeldet mit dem iHub-Konto des Benutzers."
         }
       }
     },
@@ -3756,6 +3826,72 @@
         "value": "{{free}} frei",
         "valueTitle": "{{percent}} von {{total}} belegt"
       }
+    },
+    "copilotAgent": {
+      "copied": "Kopiert",
+      "copy": "Kopieren",
+      "loadError": "Die Einstellungen des Copilot-Agenten konnten nicht geladen werden",
+      "disabled": "Copilot-Agent deaktiviert. Copilot kann sich nicht mehr bei iHub anmelden.",
+      "enabled": "Copilot-Agent aktiviert. Registrieren Sie als Nächstes die Anmeldung im Teams Developer Portal.",
+      "toggleError": "Der Copilot-Agent konnte nicht geändert werden: ",
+      "rotateTitle": "Neues Client-Secret ausstellen",
+      "rotateConfirm": "Das aktuelle Secret ist sofort ungültig, und Copilot kann niemanden anmelden, bis Sie das neue im Teams Developer Portal eingetragen haben. Fortfahren?",
+      "rotateError": "Es konnte kein neues Secret ausgestellt werden: ",
+      "saved": "Einstellungen gespeichert",
+      "saveError": "Die Einstellungen konnten nicht gespeichert werden: ",
+      "downloadError": "Das Paket konnte nicht erstellt werden: ",
+      "title": "Microsoft 365 Copilot",
+      "description": "Machen Sie iHub zu einem Agenten in Microsoft 365 Copilot. Benutzer wählen ihn in Copilot Chat oder im Copilot-Bereich von Outlook, Teams und Word aus, und Copilot führt die iHub-Apps für sie aus – angemeldet mit ihrem eigenen iHub-Konto.",
+      "statusTitle": "Status der Integration",
+      "statusEnabled": "Aktiviert. Copilot meldet Benutzer mit dem OAuth-Client unten an und ruft das MCP-Gateway auf.",
+      "statusDisabled": "Beim Aktivieren wird der OAuth-Client erstellt, mit dem Copilot Benutzer anmeldet, und der OAuth-Server und das MCP-Gateway von iHub werden eingeschaltet, die der Agent benötigt.",
+      "disable": "Deaktivieren",
+      "enable": "Aktivieren",
+      "prereqClient": "OAuth-Client",
+      "prereqOauth": "OAuth-Autorisierungsserver",
+      "prereqGateway": "MCP-Gateway",
+      "gatewaySettings": "Gateway-Einstellungen",
+      "prereqApps": "Das Gateway stellt iHub-Apps als Tools bereit",
+      "prereqAppsOff": "Das Gateway stellt keine iHub-Apps bereit – schalten Sie „Apps“ bei den bereitgestellten Funktionen des Gateways ein",
+      "secretLabel": "Client-Secret",
+      "secretHint": "Wird nur jetzt angezeigt. Tragen Sie es im Teams Developer Portal als Client-Secret ein (Schritt 1).",
+      "step1Title": "1. Anmeldung im Teams Developer Portal registrieren",
+      "step1Desc": "Öffnen Sie im Teams Developer Portal Tools → OAuth client registration und registrieren Sie einen Client mit diesen Werten. Setzen Sie „Restrict usage by app“ auf „Any Teams app“ und lassen Sie PKCE eingeschaltet.",
+      "openPortal": "Teams Developer Portal öffnen",
+      "fieldBaseUrl": "Base URL",
+      "fieldBaseUrlHint": "Die Adresse des MCP-Gateways. Sie muss genau mit der Adresse im Paket übereinstimmen.",
+      "fieldClientId": "Client ID",
+      "fieldSecret": "Client-Secret",
+      "fieldSecretDesc": "wird einmal beim Aktivieren des Agenten angezeigt. Verloren?",
+      "rotate": "Neues Secret ausstellen",
+      "fieldAuthorize": "Authorization endpoint",
+      "fieldToken": "Token endpoint",
+      "fieldRefresh": "Refresh endpoint",
+      "fieldScope": "Scope",
+      "fieldRedirect": "Redirect-URI (bereits erlaubt)",
+      "referenceId": "OAuth client registration ID",
+      "referenceIdHint": "Das Portal zeigt diese ID nach dem Speichern der Registrierung an. Das Paket benötigt sie.",
+      "step2Title": "2. Agenten beschreiben",
+      "name": "Name",
+      "agentDescription": "Beschreibung",
+      "instructions": "Anweisungen",
+      "instructionsHint": "Was Copilot über iHub mitgeteilt wird. Leer lassen, um die Standardanweisungen von iHub zu verwenden, die als Platzhalter angezeigt werden.",
+      "starters": "Gesprächseinstiege",
+      "startersHint": "Vorschläge, die Copilot beim Öffnen des Agenten anzeigt. Bis zu 12.",
+      "starterTitle": "Titel",
+      "starterText": "Prompt",
+      "removeStarter": "Entfernen",
+      "addStarter": "Einstieg hinzufügen",
+      "saving": "Wird gespeichert…",
+      "save": "Speichern",
+      "step3Title": "3. Agenten in Microsoft 365 hochladen",
+      "step3Desc": "Laden Sie das Paket im Microsoft 365 Admin Center unter Copilot → Agents → Upload custom agent hoch und legen Sie fest, wer es erhält. Jeder Download hat eine neue Version: Nach Änderungen an den Einstellungen erneut herunterladen und hochladen.",
+      "needsReferenceId": "Speichern Sie zuerst die OAuth client registration ID aus Schritt 1.",
+      "needsHttps": "Copilot ruft nur HTTPS-Adressen auf. Setzen Sie zuerst die öffentliche URL des MCP-Gateways auf die HTTPS-Adresse von iHub.",
+      "downloading": "Wird erstellt…",
+      "download": "Agentenpaket herunterladen",
+      "prereqHttps": "Die öffentliche Adresse von iHub verwendet HTTPS",
+      "prereqHttpsOff": "Die öffentliche Adresse von iHub ist kein HTTPS, und Copilot ruft nur HTTPS-Adressen auf – setzen Sie die Public URL des MCP-Gateways (oder leiten Sie X-Forwarded-Proto im Proxy weiter)"
     }
   },
   "cloudStorage": {

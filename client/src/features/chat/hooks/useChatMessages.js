@@ -2,6 +2,7 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { debugLog } from '../../../utils/debugLog';
 import { generatedFilesFromArtifacts } from '../../../../../shared/generatedFiles.js';
 import { storedSourceSet } from '../../../../../shared/sources/index.js';
+import { chatMessagesStorageKey } from '../utils/chatMessagesStorage';
 
 /**
  * The provenance fields a stored answer's `activity` restores onto the message
@@ -73,6 +74,12 @@ export function transformStoredMessage(msg) {
 
   if (msg.ts) message.ts = msg.ts;
   if (msg.runId) message.runId = msg.runId;
+  // The email (or meeting) a chat handed over from the Outlook pane was about.
+  // The store never keeps one; a hand-off does, so that a chat that is not
+  // stored sends it back with its history and the model still has the email.
+  if (msg.role === 'user' && msg.hostContext && typeof msg.hostContext === 'object') {
+    message.hostContext = msg.hostContext;
+  }
   if (msg.usage) message.usage = msg.usage;
   if (msg.finishReason) message.finishReason = msg.finishReason;
   if (Array.isArray(msg.attachments) && msg.attachments.length > 0) {
@@ -190,7 +197,7 @@ function transformConversationMessage(msg) {
  */
 function useChatMessages(chatId = 'default', { ephemeral = false, serverBacked = false } = {}) {
   // Use sessionStorage for persistence during page refreshes
-  const storageKey = `ai_hub_chat_messages_${chatId}`;
+  const storageKey = chatMessagesStorageKey(chatId);
 
   // The browser copy exists only for the mode that has no other home for the
   // transcript. Ephemeral wants no copy at all; server-backed has the store.
@@ -325,7 +332,7 @@ function useChatMessages(chatId = 'default', { ephemeral = false, serverBacked =
         return;
       }
       // Load messages for the new chatId
-      const newStorageKey = `ai_hub_chat_messages_${chatId}`;
+      const newStorageKey = chatMessagesStorageKey(chatId);
       try {
         const storedMessages = sessionStorage.getItem(newStorageKey);
         const newMessages = storedMessages ? JSON.parse(storedMessages) : [];

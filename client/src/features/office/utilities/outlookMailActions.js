@@ -50,6 +50,7 @@
 
 import { marked } from 'marked';
 import { isMailboxAvailable } from './officeCapabilities';
+import { getOfficeRemote } from './officeRemote';
 import { describeOfficeError, logOfficeError } from './officeLog';
 import {
   MAIL_ACTION_ANSWER,
@@ -98,6 +99,9 @@ const escapeHtml = value =>
  */
 export function detectOutlookMode(item) {
   if (item === undefined) {
+    // A popped-out chat asks about the pane's item, which the pane described.
+    const remote = getOfficeRemote();
+    if (remote) return remote.state?.mode ?? null;
     if (!isMailboxAvailable()) return null;
     try {
       item = Office.context.mailbox.item;
@@ -502,6 +506,21 @@ async function runNew(html, plainText) {
  * @returns {Promise<{ ok: boolean, action: string, notice?: object|null, message?: string, clipboard?: boolean }>}
  */
 export async function runOutlookMailAction(action, markdownText, options = {}) {
+  // A popped-out chat has no item to act on; the pane runs the action on its
+  // own and answers with the same result shape.
+  const remote = getOfficeRemote();
+  if (remote) {
+    try {
+      return await remote.call('runMailAction', {
+        action,
+        markdown: String(markdownText ?? ''),
+        options
+      });
+    } catch (error) {
+      return failed(action, `Outlook could not run this action. ${error?.message || ''}`.trim());
+    }
+  }
+
   if (!isMailboxAvailable()) {
     return failed(action, 'This action is only available when the add-in is open in Outlook.');
   }

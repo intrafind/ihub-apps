@@ -130,3 +130,51 @@ export function buildWebChatUrl(baseUrl, appId, chatId) {
   const base = baseUrl.trim().replace(/\/+$/, '');
   return `${base}/apps/${encodeURIComponent(appId)}/c/${encodeURIComponent(chatId)}`;
 }
+
+/**
+ * The transcript a chat that is not stored hands to the web app ("Open in web
+ * app", see `server/routes/chatHandoffs.js`): the user's and the assistant's
+ * words, in order, without what only the pane can show — the greeting, a
+ * transcript still being recorded, an answer still being written, attachment
+ * bytes.
+ *
+ * The email the chat is about goes along as the first user message's host
+ * context, exactly as the pane would send it with the next message — the
+ * email body is not part of the transcript (it goes to the model per turn),
+ * so without it the browser would continue a discussion of an email it never
+ * saw.
+ *
+ * @param {object[]} messages - The chat's messages, as `useAppChat` holds them.
+ * @param {object|null} [hostContext] - `buildHostContext(...)` for the open email.
+ * @returns {{ role: 'user'|'assistant', content: string, hostContext?: object }[]}
+ */
+export function buildHandoffMessages(messages, hostContext = null) {
+  const out = [];
+  for (const message of Array.isArray(messages) ? messages : []) {
+    if (!message || (message.role !== 'user' && message.role !== 'assistant')) continue;
+    if (message.isGreeting || message.isLiveTranscript || message.loading) continue;
+    const content = typeof message.content === 'string' ? message.content : '';
+    if (!content.trim()) continue;
+    out.push({ role: message.role, content });
+  }
+  if (hostContext && typeof hostContext === 'object') {
+    const first = out.find(message => message.role === 'user');
+    if (first) first.hostContext = hostContext;
+  }
+  return out;
+}
+
+/**
+ * The web app's address that continues a handed-off chat: the app's own page,
+ * which claims the hand-off and opens it as a new chat.
+ *
+ * @param {string} baseUrl - Public base URL, e.g. `https://ihub.example.com/ihub`.
+ * @param {string} appId - App the chat belongs to.
+ * @param {string} token - From `createChatHandoff`.
+ * @returns {string|null} Absolute URL, or null when any part is missing.
+ */
+export function buildWebHandoffUrl(baseUrl, appId, token) {
+  if (typeof baseUrl !== 'string' || !baseUrl.trim() || !appId || !token) return null;
+  const base = baseUrl.trim().replace(/\/+$/, '');
+  return `${base}/apps/${encodeURIComponent(appId)}?handoff=${encodeURIComponent(token)}`;
+}

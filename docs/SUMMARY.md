@@ -71,6 +71,7 @@
     - [Nextcloud Embed Plugin](nextcloud-embed.md)
     - [Outlook Add-in Rollout](outlook-add-in.md)
     - [Browser Extension](browser-extension.md)
+    - [Microsoft 365 Copilot Agent](microsoft-365-copilot-agent.md)
     - [Audio File Support](audio-file-support.md)
     - [Audio Extraction](audio-extraction.md)
     - [Audio UI Guide](AUDIO_UI_GUIDE.md)

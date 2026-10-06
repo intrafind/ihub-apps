@@ -190,7 +190,9 @@
       "openInWeb": "Open in web app"
     },
     "openInWeb": {
-      "fallback": "If the chat did not open in your browser, open this address:"
+      "fallback": "If the chat did not open in your browser, open this address:",
+      "tooLarge": "This chat is too large to open in the web app. Start a new chat there instead.",
+      "failed": "The chat could not be opened in the web app."
     },
     "startPage": {
       "openApp": "Open app",
@@ -209,6 +211,16 @@
       "loadingChat": "Loading chat…",
       "retry": "Try again",
       "noneAvailable": "None of your latest chats is in an app available here."
+    },
+    "popout": {
+      "open": "Open in a larger window",
+      "dock": "Back to the Outlook pane",
+      "openTitle": "The chat is open in a larger window",
+      "keepPaneOpen": "Keep this pane open: the window reads and writes your emails through it. Pin the pane so it stays open when you select another email.",
+      "bringBack": "Show the chat here instead",
+      "blocked": "The larger window was blocked. Allow pop-ups for Outlook and try again.",
+      "alreadyOpen": "The larger window is already open.",
+      "failed": "The larger window could not be opened."
     }
   },
   "pages": {
@@ -390,6 +402,12 @@
         "message": "Message",
         "attachments": "Attachments",
         "dropZone": "Drag and drop files here, or click to browse"
+      },
+      "handoff": {
+        "otherUser": "This chat was opened from Outlook by another account. Sign in with that account to continue it.",
+        "expired": "The chat from Outlook could not be opened: the link has expired or was already used. Choose \"Open in web app\" in Outlook again.",
+        "signIn": "Sign in to continue the chat you opened from Outlook.",
+        "failed": "The chat from Outlook could not be opened right now. Reload the page to try again."
       }
     },
     "authRequired": {
@@ -2047,14 +2065,62 @@
       }
     },
     "security": {
-      "description": "SSL, CORS, cookie settings, outbound proxy, and encryption configuration",
+      "description": "SSL, CORS, cookie settings, rate limits, outbound proxy, and encryption configuration",
       "sections": {
         "ssl": "SSL / TLS",
         "cookies": "Cookies",
         "cors": "CORS",
         "ssrf": "SSRF Allowlist",
         "proxy": "Outbound Proxy",
-        "encryption": "Value Encryption"
+        "encryption": "Value Encryption",
+        "rateLimits": "Rate Limits"
+      },
+      "rateLimits": {
+        "title": "Rate limits",
+        "description": "How many requests one client address may send before it gets \"429 Too Many Requests\". Changes apply after a server restart.",
+        "restartRequired": "The saved limits differ from the ones the server is running with. Restart the server to apply them.",
+        "runningNow": "Running now: {{limit}} per {{minutes}} min, {{counts}}",
+        "limit": "Requests",
+        "window": "Per (minutes)",
+        "countsLabel": "Which requests count",
+        "counts": {
+          "all": "All requests",
+          "failed": "Failed only",
+          "successful": "Successful only"
+        },
+        "perAddress": "Limits count per client address. Behind a reverse proxy, set the number of proxy hops (trustProxy in platform.json); otherwise every user shares the proxy's address and one counter.",
+        "save": "Save rate limits",
+        "saving": "Saving...",
+        "saved": "Rate limits saved. Restart the server to apply them.",
+        "saveError": "Failed to save the rate limits",
+        "loadError": "Failed to load the rate limits",
+        "invalid": "{{name}}: enter a whole number of requests from 1 to 1,000,000 and a period from one second to 1,440 minutes.",
+        "limiters": {
+          "publicApi": {
+            "name": "Web app API",
+            "description": "Apps, chats, models, tools and the other endpoints the web app calls."
+          },
+          "adminApi": {
+            "name": "Admin API",
+            "description": "Everything under /api/admin."
+          },
+          "authApi": {
+            "name": "Sign-in",
+            "description": "Password, LDAP, NTLM and Teams sign-in. Status checks and SSO redirects are not counted."
+          },
+          "oauthApi": {
+            "name": "OAuth server",
+            "description": "Every request under /api/oauth: consent screens, token exchanges and refreshes, client registration. Microsoft 365 Copilot sends the token requests of all its users from a few Microsoft addresses."
+          },
+          "oauthTokenApi": {
+            "name": "OAuth client secrets",
+            "description": "Token and introspection calls, which check a client secret. Counting only failed requests stops secret guessing without slowing down clients that sign in correctly."
+          },
+          "inferenceApi": {
+            "name": "Inference API",
+            "description": "/api/inference and read aloud."
+          }
+        }
       }
     },
     "tools": {
@@ -2949,6 +3015,10 @@
         "nextcloudEmbed": {
           "title": "Nextcloud Embed",
           "description": "Embed iHub inside Nextcloud. Users start a chat from Nextcloud Files with documents pre-attached, similar to the Outlook add-in."
+        },
+        "copilotAgent": {
+          "title": "Microsoft 365 Copilot",
+          "description": "Make iHub an agent in Microsoft 365 Copilot. Copilot runs iHub's apps through the MCP gateway, signed in with the user's iHub account."
         }
       }
     },
@@ -3489,6 +3559,72 @@
         "value": "{{free}} free",
         "valueTitle": "{{percent}} of {{total}} used"
       }
+    },
+    "copilotAgent": {
+      "copied": "Copied",
+      "copy": "Copy",
+      "loadError": "Failed to load the Copilot agent settings",
+      "disabled": "Copilot agent disabled. Copilot can no longer sign in to iHub.",
+      "enabled": "Copilot agent enabled. Register the sign-in in the Teams Developer Portal next.",
+      "toggleError": "Failed to update the Copilot agent: ",
+      "rotateTitle": "Issue a new client secret",
+      "rotateConfirm": "The current secret stops working at once, and Copilot cannot sign anyone in until you enter the new one in the Teams Developer Portal. Continue?",
+      "rotateError": "Failed to issue a new secret: ",
+      "saved": "Settings saved",
+      "saveError": "Failed to save the settings: ",
+      "downloadError": "Failed to build the package: ",
+      "title": "Microsoft 365 Copilot",
+      "description": "Make iHub an agent in Microsoft 365 Copilot. Users pick it in Copilot Chat or in Copilot's pane in Outlook, Teams and Word, and Copilot runs iHub's apps for them — signed in with their own iHub account.",
+      "statusTitle": "Integration status",
+      "statusEnabled": "Enabled. Copilot signs users in with the OAuth client below and calls the MCP gateway.",
+      "statusDisabled": "Enabling creates the OAuth client Copilot signs users in with, and turns on iHub's OAuth server and MCP gateway, which the agent needs.",
+      "disable": "Disable",
+      "enable": "Enable",
+      "prereqClient": "OAuth client",
+      "prereqOauth": "OAuth authorization server",
+      "prereqGateway": "MCP gateway",
+      "gatewaySettings": "Gateway settings",
+      "prereqApps": "The gateway offers iHub apps as tools",
+      "prereqAppsOff": "The gateway does not offer iHub apps — turn on \"Apps\" under the gateway's exposed capabilities",
+      "secretLabel": "Client secret",
+      "secretHint": "Shown only now. Enter it as the client secret in the Teams Developer Portal (step 1).",
+      "step1Title": "1. Register the sign-in in the Teams Developer Portal",
+      "step1Desc": "In the Teams Developer Portal, open Tools → OAuth client registration and register a client with these values. Set \"Restrict usage by app\" to \"Any Teams app\" and keep PKCE on.",
+      "openPortal": "Open the Teams Developer Portal",
+      "fieldBaseUrl": "Base URL",
+      "fieldBaseUrlHint": "The MCP gateway's address. It must match the address in the package exactly.",
+      "fieldClientId": "Client ID",
+      "fieldSecret": "Client secret",
+      "fieldSecretDesc": "shown once when the agent is enabled. Lost it?",
+      "rotate": "Issue a new secret",
+      "fieldAuthorize": "Authorization endpoint",
+      "fieldToken": "Token endpoint",
+      "fieldRefresh": "Refresh endpoint",
+      "fieldScope": "Scope",
+      "fieldRedirect": "Redirect URI (already allowed)",
+      "referenceId": "OAuth client registration ID",
+      "referenceIdHint": "The portal shows this ID after saving the registration. The package needs it.",
+      "step2Title": "2. Describe the agent",
+      "name": "Name",
+      "agentDescription": "Description",
+      "instructions": "Instructions",
+      "instructionsHint": "What Copilot is told about iHub. Leave empty to use iHub's default instructions, shown as the placeholder.",
+      "starters": "Conversation starters",
+      "startersHint": "Suggestions Copilot shows when the agent is opened. Up to 12.",
+      "starterTitle": "Title",
+      "starterText": "Prompt",
+      "removeStarter": "Remove",
+      "addStarter": "Add starter",
+      "saving": "Saving…",
+      "save": "Save",
+      "step3Title": "3. Upload the agent to Microsoft 365",
+      "step3Desc": "Upload the package in the Microsoft 365 admin center under Copilot → Agents → Upload custom agent, then choose who gets it. Every download has a new version, so download again and re-upload after changing the settings.",
+      "needsReferenceId": "Save the OAuth client registration ID from step 1 first.",
+      "needsHttps": "Copilot only calls HTTPS addresses. Set the MCP gateway Public URL to the HTTPS address of iHub first.",
+      "downloading": "Building…",
+      "download": "Download agent package",
+      "prereqHttps": "iHub's public address uses HTTPS",
+      "prereqHttpsOff": "iHub's public address is not HTTPS, and Copilot only calls HTTPS addresses — set the MCP gateway's Public URL (or forward X-Forwarded-Proto from the proxy)"
     }
   },
   "cloudStorage": {

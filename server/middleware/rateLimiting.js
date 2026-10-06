@@ -121,12 +121,62 @@ function createRateLimiter(
 }
 
 /**
- * Create all rate limiters based on platform configuration
- * @param {Object} platformConfig - Platform configuration object
- * @returns {Object} Object containing all rate limiters
+ * The limiters an admin can tune, in the order Admin → Security lists them.
+ * Each one is a key of `rateLimit` in platform.json; `default` is the base the
+ * others inherit from and is not a limiter of its own.
  */
-export function createRateLimiters(platformConfig = {}) {
-  const rateLimitConfig = platformConfig.rateLimit || {};
+export const RATE_LIMITER_KEYS = Object.freeze([
+  'publicApi',
+  'adminApi',
+  'authApi',
+  'oauthApi',
+  'oauthTokenApi',
+  'inferenceApi'
+]);
+
+/**
+ * What each limiter falls back to when platform.json does not set a value,
+ * layered over `rateLimit.default`.
+ */
+const LIMITER_FALLBACKS = Object.freeze({
+  // Admin API configuration
+  adminApi: { limit: 500, skipFailedRequests: false },
+  // Public API configuration - same as default
+  publicApi: {},
+  // Auth API configuration - more restrictive for authentication
+  authApi: { limit: 50, windowMs: 15 * 60 * 1000, skipFailedRequests: false },
+  // OAuth API - every request under /api/oauth, browsers and servers alike.
+  // Sized for real traffic: the consent screen is opened from browsers that
+  // often share one NAT address, and a server-side client such as Microsoft
+  // 365 Copilot exchanges and refreshes every one of its users' tokens from a
+  // handful of addresses. Credential guessing is the token limiter's job.
+  oauthApi: { limit: 300, windowMs: 60 * 1000, skipFailedRequests: false },
+  // OAuth token API - the token and introspection endpoints, which check a
+  // client secret with bcrypt on every call. Only failed requests count, so a
+  // client that authenticates correctly is never slowed down, while guessing
+  // secrets (and burning CPU on bcrypt doing it) stops after a few attempts.
+  oauthTokenApi: {
+    limit: 30,
+    windowMs: 15 * 60 * 1000,
+    skipSuccessfulRequests: true,
+    skipFailedRequests: false
+  },
+  // Inference API configuration - balanced for AI inference
+  inferenceApi: { limit: 500, windowMs: 1 * 60 * 1000 }
+});
+
+/**
+ * Resolve the settings every limiter runs with: built-in fallbacks, then
+ * `rateLimit.default`, then the limiter's own section of platform.json.
+ * Exported for the admin page, which shows both the saved settings and the
+ * ones the server started with.
+ *
+ * @param {Object} platformConfig - Platform configuration object
+ * @returns {Record<string, {windowMs: number, limit: number, standardHeaders: boolean,
+ *   legacyHeaders: boolean, skipSuccessfulRequests: boolean, skipFailedRequests: boolean}>}
+ */
+export function resolveRateLimitConfigs(platformConfig = {}) {
+  const rateLimitConfig = platformConfig?.rateLimit || {};
 
   // Default configuration that all rate limiters inherit from
   const defaultConfig = {
@@ -139,57 +189,52 @@ export function createRateLimiters(platformConfig = {}) {
     ...rateLimitConfig.default
   };
 
-  // Admin API configuration - more restrictive by default
-  const adminApiConfig = {
-    ...defaultConfig,
-    limit: 500, // More restrictive for admin endpoints
-    skipFailedRequests: false, // Don't skip failed requests for admin endpoints
-    ...rateLimitConfig.adminApi
-  };
+  return Object.fromEntries(
+    RATE_LIMITER_KEYS.map(key => [
+      key,
+      { ...defaultConfig, ...LIMITER_FALLBACKS[key], ...rateLimitConfig[key] }
+    ])
+  );
+}
 
-  // Public API configuration - same as default
-  const publicApiConfig = {
-    ...defaultConfig,
-    ...rateLimitConfig.publicApi
-  };
-
-  // Auth API configuration - more restrictive for authentication
-  const authApiConfig = {
-    ...defaultConfig,
-    limit: 50, // More restrictive for auth endpoints
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    skipFailedRequests: false, // Don't skip failed requests for auth
-    ...rateLimitConfig.authApi
-  };
-
-  // Inference API configuration - balanced for AI inference
-  const inferenceApiConfig = {
-    ...defaultConfig,
-    limit: 500, // Moderate limit for inference
-    windowMs: 1 * 60 * 1000, // 1 minute
-    ...rateLimitConfig.inferenceApi
-  };
-
-  // OAuth API configuration - protect token/authorize endpoints from brute force
-  const oauthApiConfig = {
-    ...defaultConfig,
-    limit: 50, // Stricter: 50 requests per 15 min for token endpoint
-    windowMs: 15 * 60 * 1000,
-    skipFailedRequests: false,
-    ...rateLimitConfig.oauthApi
-  };
+/**
+ * Create all rate limiters based on platform configuration
+ * @param {Object} platformConfig - Platform configuration object
+ * @returns {Object} Object containing all rate limiters
+ */
+export function createRateLimiters(platformConfig = {}) {
+  const configs = resolveRateLimitConfigs(platformConfig);
 
   return {
-    adminApiLimiter: createRateLimiter(adminApiConfig, {}, 'admin API'),
-    publicApiLimiter: createRateLimiter(publicApiConfig, {}, 'public API'),
+    adminApiLimiter: createRateLimiter(configs.adminApi, {}, 'admin API'),
+    publicApiLimiter: createRateLimiter(configs.publicApi, {}, 'public API'),
     // Read-only auth endpoints skip the strict credential limiter; they are
     // still bounded by the public API limiter mounted on the same path.
-    authApiLimiter: createRateLimiter(authApiConfig, {}, 'authentication', isReadOnlyAuthRequest, {
-      shared: true
-    }),
-    inferenceApiLimiter: createRateLimiter(inferenceApiConfig, {}, 'inference API'),
-    oauthApiLimiter: createRateLimiter(oauthApiConfig, {}, 'OAuth API', undefined, {
+    authApiLimiter: createRateLimiter(
+      configs.authApi,
+      {},
+      'authentication',
+      isReadOnlyAuthRequest,
+      {
+        shared: true
+      }
+    ),
+    inferenceApiLimiter: createRateLimiter(configs.inferenceApi, {}, 'inference API'),
+    oauthApiLimiter: createRateLimiter(configs.oauthApi, {}, 'OAuth API', undefined, {
       shared: true
     })
   };
+}
+
+/**
+ * The limiter for the OAuth endpoints that check a client secret (`/token` and
+ * `/introspect`). The routes mount it themselves (routes/oauth.js), one
+ * instance for both, so a guess at either endpoint spends the same budget.
+ *
+ * @param {Object} platformConfig - Platform configuration object
+ * @returns {Function} Express rate limiter middleware
+ */
+export function createOAuthTokenLimiter(platformConfig = {}) {
+  const { oauthTokenApi } = resolveRateLimitConfigs(platformConfig);
+  return createRateLimiter(oauthTokenApi, {}, 'OAuth token', undefined, { shared: true });
 }

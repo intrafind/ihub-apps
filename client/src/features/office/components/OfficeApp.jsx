@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { ArrowsPointingOutIcon } from '@heroicons/react/24/outline';
 import OfficeLogin from './OfficeLogin';
 import OfficeChatPanel from './OfficeChatPanel';
 import OfficeStartPage from './OfficeStartPage';
@@ -12,7 +13,11 @@ import AppListPanel from '../../../shared/components/AppListPanel';
 import { officeLocale } from '../utilities/officeLocale';
 import { useOfficeFavoriteApps } from '../utilities/officeFavorites';
 import { useOfficeConfig } from '../contexts/OfficeConfigContext';
+import { useEmbeddedHost } from '../contexts/EmbeddedHostContext';
 import useOfficeChatPersistence from '../hooks/useOfficeChatPersistence';
+import { getStoredThemePreference } from '../utilities/officeTheme';
+import { buildPopoutUrl, isPopoutSupported, openChatPopout } from '../utilities/officePopout';
+import { popoutChatRouteState, seedPopoutTranscript } from '../utilities/officePopoutChat';
 import {
   OFFICE_APPS_PAGE_PATH,
   OFFICE_CHAT_PATH,
@@ -26,12 +31,14 @@ import {
   storeTokenResponse,
   clearTokens,
   fetchUserInfo,
+  getAccessToken,
+  getRefreshToken,
   OFFICE_TOKEN_KEY,
   setOnSessionExpired
 } from '../api/officeAuth';
 
-const OFFICE_USER_KEY = 'office_ihubuser';
-const OFFICE_APP_KEY = 'office_ihubselectedapp';
+export const OFFICE_USER_KEY = 'office_ihubuser';
+export const OFFICE_APP_KEY = 'office_ihubselectedapp';
 
 function getStoredAuth() {
   try {
@@ -54,7 +61,7 @@ function getStoredSelectedApp() {
   }
 }
 
-function storeSelectedApp(app) {
+export function storeSelectedApp(app) {
   try {
     if (app) {
       sessionStorage.setItem(OFFICE_APP_KEY, JSON.stringify(app));
@@ -64,6 +71,50 @@ function storeSelectedApp(app) {
   } catch {
     // ignore
   }
+}
+
+/** Office's dialog errors a user can do something about. */
+function describePopoutError(error, t) {
+  const code = error?.code;
+  if (code === 12009 || code === 12011) {
+    return t(
+      'office.popout.blocked',
+      'The larger window was blocked. Allow pop-ups for Outlook and try again.'
+    );
+  }
+  if (code === 12007) {
+    return t('office.popout.alreadyOpen', 'The larger window is already open.');
+  }
+  return t('office.popout.failed', 'The larger window could not be opened.');
+}
+
+/**
+ * What the pane shows while its chat is in the pop-out window. The pane has
+ * to stay open meanwhile: the window reaches Outlook through it.
+ */
+function PopoutPlaceholder({ onBringBack }) {
+  const { t } = useTranslation();
+  return (
+    <div className="office-task-pane h-screen w-full flex flex-col items-center justify-center gap-3 p-6 text-center bg-white dark:bg-slate-900">
+      <ArrowsPointingOutIcon className="h-8 w-8 text-slate-400 dark:text-slate-500" aria-hidden />
+      <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">
+        {t('office.popout.openTitle', 'The chat is open in a larger window')}
+      </p>
+      <p className="text-xs leading-relaxed text-slate-500 dark:text-slate-400">
+        {t(
+          'office.popout.keepPaneOpen',
+          'Keep this pane open: the window reads and writes your emails through it. Pin the pane so it stays open when you select another email.'
+        )}
+      </p>
+      <button
+        type="button"
+        onClick={onBringBack}
+        className="mt-1 rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800"
+      >
+        {t('office.popout.bringBack', 'Show the chat here instead')}
+      </button>
+    </div>
+  );
 }
 
 /**
@@ -160,6 +211,22 @@ const OfficeApp = () => {
   const [authData, setAuthData] = React.useState(getStoredAuth);
   const [selectedApp, setSelectedApp] = React.useState(getStoredSelectedApp);
   const [sessionError, setSessionError] = React.useState(null);
+  // The popped-out chat (see officePopout.js) renders this same tree in an
+  // Office dialog; its sign-in belongs to the pane behind it.
+  const embeddedHost = useEmbeddedHost();
+  const popoutChild = embeddedHost.popout?.role === 'child' ? embeddedHost.popout : null;
+  // The pane side of the pop-out: whether the chat is out in the window right
+  // now, the window's handle, and the chat as the window last reported it.
+  const [popoutOpen, setPopoutOpen] = React.useState(false);
+  const [popoutError, setPopoutError] = React.useState(null);
+  const popoutRef = React.useRef(null);
+  const popoutStateRef = React.useRef(null);
+  // Set the moment the button is pressed, before Office answers: a second
+  // press while the window opens must not start a second one.
+  const popoutOpeningRef = React.useRef(false);
+  // Bumped to mount the chat panel afresh when a chat comes back from the
+  // window: the panel reads its chat only when it mounts.
+  const [chatPanelKey, setChatPanelKey] = React.useState(0);
   // Durable chats: with them on, the pane's chats are stored like the web
   // app's, and the history lists both.
   const chatPersistence = useOfficeChatPersistence(!!authData);
@@ -172,6 +239,12 @@ const OfficeApp = () => {
   const startPageIsHome = homePath === OFFICE_START_PAGE_PATH;
 
   const handleSessionExpired = React.useCallback(() => {
+    // The popped-out chat refreshes through the pane, so the pane has signed
+    // out already: hand the chat back and let the pane ask for a sign-in.
+    if (popoutChild) {
+      popoutChild.signedOut();
+      return;
+    }
     clearTokens();
     localStorage.removeItem(OFFICE_USER_KEY);
     storeSelectedApp(null);
@@ -179,7 +252,9 @@ const OfficeApp = () => {
     setSelectedApp(null);
     setSessionError('Your session has expired. Please log in again.');
     navigate('/', { replace: true });
-  }, [navigate]);
+    // After the tokens are gone, so the window's chat is not reopened.
+    popoutRef.current?.close({ collect: false });
+  }, [navigate, popoutChild]);
 
   React.useEffect(() => {
     setOnSessionExpired(handleSessionExpired);
@@ -215,6 +290,12 @@ const OfficeApp = () => {
   );
 
   const handleLogout = React.useCallback(() => {
+    // One sign-in for both windows: signing out in the popped-out chat signs
+    // the pane out, which closes the window.
+    if (popoutChild) {
+      popoutChild.signedOut();
+      return;
+    }
     clearTokens();
     localStorage.removeItem(OFFICE_USER_KEY);
     storeSelectedApp(null);
@@ -222,7 +303,85 @@ const OfficeApp = () => {
     setSelectedApp(null);
     setSessionError(null);
     navigate('/', { replace: true });
-  }, [navigate]);
+    popoutRef.current?.close({ collect: false });
+  }, [navigate, popoutChild]);
+
+  // A chat coming back from the pop-out window, as it was there.
+  const resumeFromPopout = React.useCallback(
+    state => {
+      if (!state?.app) return;
+      seedPopoutTranscript(state);
+      storeSelectedApp(state.app);
+      setSelectedApp(state.app);
+      setChatPanelKey(key => key + 1);
+      navigate(OFFICE_CHAT_PATH, { replace: true, state: popoutChatRouteState(state) });
+    },
+    [navigate]
+  );
+
+  // Pop the chat out (see officePopout.js). The panel stays until the window
+  // is up — a window that does not open leaves the chat where it was — and
+  // then gives way to the placeholder; the chat comes back when the window
+  // closes, however it closes.
+  const handlePopOut = React.useCallback(
+    async chatState => {
+      if (popoutRef.current || popoutOpeningRef.current) return;
+      popoutOpeningRef.current = true;
+      popoutStateRef.current = chatState;
+      setPopoutError(null);
+      try {
+        popoutRef.current = await openChatPopout({
+          url: buildPopoutUrl({ language: officeLocale, theme: getStoredThemePreference() }),
+          // Read when the window asks — again after it reloads, so it then
+          // gets the chat as it last reported it.
+          getInit: () => ({
+            config,
+            user: authData?.user ?? null,
+            tokens: { access_token: getAccessToken(), refresh_token: getRefreshToken() },
+            chat: popoutStateRef.current
+          }),
+          onChatState: state => {
+            popoutStateRef.current = { ...popoutStateRef.current, ...state };
+          },
+          onPinnedEmails: pinnedEmails => {
+            popoutStateRef.current = { ...popoutStateRef.current, pinnedEmails };
+          },
+          onClosed: reason => {
+            const last = popoutStateRef.current;
+            popoutRef.current = null;
+            popoutStateRef.current = null;
+            setPopoutOpen(false);
+            if (reason === 'signedOut') {
+              handleLogout();
+              return;
+            }
+            // Signed out while the window was open: nothing to go back to.
+            if (!getAccessToken()) return;
+            resumeFromPopout(last);
+          }
+        });
+        setPopoutOpen(true);
+      } catch (error) {
+        popoutRef.current = null;
+        popoutStateRef.current = null;
+        setPopoutError(describePopoutError(error, t));
+      } finally {
+        popoutOpeningRef.current = false;
+      }
+    },
+    [config, authData, handleLogout, resumeFromPopout, t]
+  );
+  const popoutSupported = !popoutChild && !!authData && isPopoutSupported();
+  const panelPopout = React.useMemo(() => {
+    if (popoutChild) return popoutChild;
+    if (!popoutSupported) return null;
+    return {
+      role: 'pane',
+      open: handlePopOut,
+      error: popoutError,
+      dismissError: () => setPopoutError(null)
+    };
+  }, [popoutChild, popoutSupported, handlePopOut, popoutError]);
 
   const handleAppSelect = React.useCallback(
     app => {
@@ -303,6 +462,7 @@ const OfficeApp = () => {
     <PaneLoading />
   ) : (
     <OfficeChatPanel
+      key={chatPanelKey}
       authData={authData}
       selectedApp={selectedApp}
       setSelectedApp={handleSetSelectedApp}
@@ -310,6 +470,8 @@ const OfficeApp = () => {
       homePath={homePath}
       chatPersistence={historyEnabled}
       openChatId={location.state?.chatId ?? null}
+      restoredChat={location.state?.restoredChat ?? null}
+      popout={panelPopout}
       onOpenHistory={historyEnabled ? handleOpenHistory : undefined}
     />
   );
@@ -359,6 +521,10 @@ const OfficeApp = () => {
     // Durable chats are off (or were turned off): there is no history.
     <Navigate to={homePath} replace />
   );
+
+  if (popoutOpen) {
+    return <PopoutPlaceholder onBringBack={() => popoutRef.current?.close()} />;
+  }
 
   return (
     <Routes>

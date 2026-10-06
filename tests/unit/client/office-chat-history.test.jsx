@@ -44,7 +44,9 @@ const {
   filterOfficeChats,
   groupOfficeChats,
   formatOfficeChatTime,
-  officeChatsKey
+  officeChatsKey,
+  buildHandoffMessages,
+  buildWebHandoffUrl
 } = require('../../../client/src/features/office/utilities/officeChatHistory');
 const OfficeChatHistoryPage =
   require('../../../client/src/features/office/components/chat-history').default;
@@ -278,5 +280,47 @@ describe('<OfficeChatHistoryPage />', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('Your chats could not be loaded');
     fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
     await waitFor(() => expect(screen.getByText('Reply to ACME')).toBeInTheDocument());
+  });
+});
+
+describe('handing a chat that is not stored to the web app', () => {
+  test("only the user's and the assistant's words, in order", () => {
+    expect(
+      buildHandoffMessages([
+        { id: 'g', role: 'assistant', content: 'Hello!', isGreeting: true },
+        { id: 'u1', role: 'user', content: 'Summarize', imageData: [{ base64: 'AAA' }] },
+        { id: 'a1', role: 'assistant', content: 'Done.' },
+        { id: 's', role: 'system', content: 'Something failed' },
+        { id: 'a2', role: 'assistant', content: '', error: true },
+        { id: 'u2', role: 'user', content: 'Shorter please' },
+        { id: 'a3', role: 'assistant', content: 'Still typ', loading: true }
+      ])
+    ).toEqual([
+      { role: 'user', content: 'Summarize' },
+      { role: 'assistant', content: 'Done.' },
+      { role: 'user', content: 'Shorter please' }
+    ]);
+  });
+
+  test('the email the chat is about rides on the first user message', () => {
+    const hostContext = { email: { subject: 'Q3' } };
+    const messages = buildHandoffMessages(
+      [
+        { role: 'user', content: 'Summarize' },
+        { role: 'assistant', content: 'Done.' },
+        { role: 'user', content: 'Again' }
+      ],
+      hostContext
+    );
+    expect(messages[0].hostContext).toBe(hostContext);
+    expect(messages[2]).not.toHaveProperty('hostContext');
+  });
+
+  test("the app's own page, with the token", () => {
+    expect(buildWebHandoffUrl('https://ihub.example.com/ihub/', 'mail', 'h.s')).toBe(
+      'https://ihub.example.com/ihub/apps/mail?handoff=h.s'
+    );
+    expect(buildWebHandoffUrl('', 'mail', 'h.s')).toBeNull();
+    expect(buildWebHandoffUrl('https://ihub.example.com', 'mail', '')).toBeNull();
   });
 });

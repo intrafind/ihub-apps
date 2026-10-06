@@ -17,7 +17,8 @@ import '@testing-library/jest-dom';
  * - the chat panel's side: which chat it opens, when it waits, and the way to
  *   the history,
  * - "Open in web app" (issue #2591): a stored chat continues in the browser at
- *   the web app's own chat route.
+ *   the web app's own chat route; one that is not stored is handed over
+ *   through a one-time server-side hand-off.
  */
 
 jest.mock('react-i18next', () => ({
@@ -43,9 +44,11 @@ jest.mock('../../../client/src/utils/runtimeBasePath', () => ({
 
 const mockFetchChat = jest.fn();
 const mockFetchPlatformConfig = jest.fn();
+const mockCreateChatHandoff = jest.fn();
 jest.mock('../../../client/src/api', () => ({
   fetchApps: jest.fn(() => Promise.resolve([])),
   fetchChat: (...args) => mockFetchChat(...args),
+  createChatHandoff: (...args) => mockCreateChatHandoff(...args),
   fetchPlatformConfig: (...args) => mockFetchPlatformConfig(...args)
 }));
 
@@ -95,6 +98,11 @@ beforeEach(() => {
   mockInvalidateChatsCache.mockReset();
   mockOpenExternalUrl.mockReset();
   mockOpenExternalUrl.mockResolvedValue(true);
+  mockCreateChatHandoff.mockReset();
+  mockCreateChatHandoff.mockResolvedValue({
+    token: 'tok.secret',
+    expiresAt: '2026-10-06T10:10:00Z'
+  });
 });
 
 describe('buildWebChatUrl', () => {
@@ -523,6 +531,45 @@ describe('<OfficeChatPanel /> with durable chats', () => {
     expect(onOpenHistory).toHaveBeenLastCalledWith({ returnChatId: fresh.chatId });
   });
 
+  test('a popped-out chat sends the change the debounce holds back when its window closes', () => {
+    jest.useFakeTimers();
+    try {
+      const report = jest.fn();
+      renderPanel({
+        popout: {
+          role: 'child',
+          report,
+          reportPinned: jest.fn(),
+          provideState: jest.fn(),
+          dock: jest.fn(),
+          signedOut: jest.fn()
+        }
+      });
+      act(() => jest.advanceTimersByTime(0));
+      report.mockClear();
+
+      fireEvent.change(screen.getByLabelText('message'), { target: { value: 'Half a thought' } });
+      // Typing is reported half a second later...
+      expect(report).not.toHaveBeenCalled();
+      // ...but the window's X does not wait for it.
+      act(() => {
+        window.dispatchEvent(new Event('pagehide'));
+      });
+      expect(report).toHaveBeenCalledTimes(1);
+      expect(report.mock.calls[0][0]).toMatchObject({ inputValue: 'Half a thought' });
+
+      // Nothing held back, nothing sent.
+      act(() => jest.advanceTimersByTime(1000));
+      report.mockClear();
+      act(() => {
+        window.dispatchEvent(new Event('pagehide'));
+      });
+      expect(report).not.toHaveBeenCalled();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
   test('an ephemeral app stays out of the store, like in the web app', () => {
     const { onOpenHistory } = renderPanel({ selectedApp: { ...app, ephemeral: true } });
     expect(lastAdapterCall()).toMatchObject({ serverBacked: false });
@@ -595,7 +642,9 @@ describe('<OfficeChatPanel /> with durable chats', () => {
     await waitFor(() =>
       expect(screen.queryByRole('button', { name: 'Chat history' })).not.toBeInTheDocument()
     );
-    expect(screen.queryByText('Open in web app')).not.toBeInTheDocument();
+    // Offered, greyed out until there is something to hand over.
+    expect(screen.getByText('Open in web app')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Open in web app' })).not.toBeInTheDocument();
   });
 
   describe('Open in web app', () => {
@@ -701,11 +750,56 @@ describe('<OfficeChatPanel /> with durable chats', () => {
       expect(screen.queryByRole('status')).not.toBeInTheDocument();
     });
 
-    test('an ephemeral app offers no way to the web app: its chat is not stored', () => {
-      renderPanel({ openChatId: 'stored-1', selectedApp: { ...app, ephemeral: true } });
+    const sendFirstMessage = () => {
+      fireEvent.change(screen.getByLabelText('message'), { target: { value: 'Draft a reply' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    };
+
+    test('a chat that is not stored is handed over: parked once, opened with its token', async () => {
+      renderPanel({ chatPersistence: false, onOpenHistory: undefined });
+      sendFirstMessage();
+      await openInWeb();
+
+      expect(mockCreateChatHandoff).toHaveBeenCalledTimes(1);
+      expect(mockCreateChatHandoff).toHaveBeenCalledWith({
+        appId: 'mail',
+        messages: [
+          { role: 'user', content: 'Draft a reply' },
+          { role: 'assistant', content: 'Answer' }
+        ],
+        variables: {}
+      });
+      expect(mockOpenExternalUrl).toHaveBeenCalledWith(
+        'https://ihub.example.com/ihub/apps/mail?handoff=tok.secret'
+      );
+      expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    });
+
+    test("an ephemeral app's chat is handed over too: it is not stored", async () => {
+      renderPanel({ selectedApp: { ...app, ephemeral: true } });
       openMenu();
       expect(screen.getByRole('button', { name: 'Chat history' })).toBeInTheDocument();
-      expect(screen.queryByText('Open in web app')).not.toBeInTheDocument();
+      expect(webEntry()).not.toBeInTheDocument();
+      openMenu();
+
+      sendFirstMessage();
+      await openInWeb();
+      expect(mockCreateChatHandoff).toHaveBeenCalledTimes(1);
+      expect(mockOpenExternalUrl).toHaveBeenCalledWith(
+        'https://ihub.example.com/ihub/apps/mail?handoff=tok.secret'
+      );
+    });
+
+    test('a hand-off the server refuses says so instead of opening anything', async () => {
+      mockCreateChatHandoff.mockRejectedValue(Object.assign(new Error('too big'), { status: 413 }));
+      renderPanel({ chatPersistence: false, onOpenHistory: undefined });
+      sendFirstMessage();
+      await openInWeb();
+
+      expect(mockOpenExternalUrl).not.toHaveBeenCalled();
+      expect(screen.getByRole('alert')).toHaveTextContent(
+        'This chat is too large to open in the web app.'
+      );
     });
   });
 });

@@ -4,6 +4,7 @@ import { isMailboxAvailable, isRequirementSetSupported } from './officeCapabilit
 import { detectOutlookMode } from './outlookMailActions';
 import { OUTLOOK_COMPOSE_MODE } from './officeMailAction';
 import { describeOfficeError, logOfficeError } from './officeLog';
+import { getOfficeRemote } from './officeRemote';
 
 /**
  * Putting a document the assistant found on the mail the user is writing.
@@ -38,6 +39,8 @@ export const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024;
  * @returns {boolean}
  */
 export function isOutlookAttachmentHost() {
+  const remote = getOfficeRemote();
+  if (remote) return remote.state?.attachHost === true;
   return isMailboxAvailable() && isRequirementSetSupported('Mailbox', '1.8');
 }
 
@@ -52,6 +55,8 @@ export function isOutlookAttachmentHost() {
  * @returns {boolean}
  */
 export function canAttachFileToOutlookItem() {
+  const remote = getOfficeRemote();
+  if (remote) return remote.state?.canAttach === true;
   if (!isOutlookAttachmentHost()) return false;
   if (detectOutlookMode() !== OUTLOOK_COMPOSE_MODE) return false;
   try {
@@ -70,6 +75,15 @@ export function canAttachFileToOutlookItem() {
  * @returns {Promise<{ok: true}|{ok: false, reason: 'notComposing'|'failed', message?: string}>}
  */
 export function attachFileToOutlookItem({ base64, filename }) {
+  // A popped-out chat hands the bytes to the pane, which owns the draft.
+  const remote = getOfficeRemote();
+  if (remote) {
+    if (!canAttachFileToOutlookItem())
+      return Promise.resolve({ ok: false, reason: 'notComposing' });
+    return remote
+      .call('attachFile', { base64, filename })
+      .catch(error => ({ ok: false, reason: 'failed', message: error?.message || String(error) }));
+  }
   if (!canAttachFileToOutlookItem()) {
     return Promise.resolve({ ok: false, reason: 'notComposing' });
   }

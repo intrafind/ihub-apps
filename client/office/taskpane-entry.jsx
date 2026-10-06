@@ -7,11 +7,22 @@ import './office.css';
 import '../src/i18n/i18n';
 import { OfficeConfigContext } from '../src/features/office/contexts/OfficeConfigContext';
 import { EmbeddedHostProvider } from '../src/features/office/contexts/EmbeddedHostContext';
-import OfficeApp from '../src/features/office/components/OfficeApp';
+import OfficeApp, {
+  OFFICE_USER_KEY,
+  storeSelectedApp
+} from '../src/features/office/components/OfficeApp';
+import {
+  popoutChatRouteState,
+  seedPopoutTranscript
+} from '../src/features/office/utilities/officePopoutChat';
 import { installOfficeAuthInterceptor } from '../src/features/office/api/officeAuthBridge';
+import { storeTokenResponse } from '../src/features/office/api/officeAuth';
 import { openOfficeAuthDialog } from '../src/features/office/utilities/officeAuthDialog';
 import { fetchCurrentOutlookItemContext } from '../src/features/office/utilities/outlookMailContext';
 import { initOfficeTheme } from '../src/features/office/utilities/officeTheme';
+import { isPopoutPage } from '../src/features/office/utilities/officePopout';
+import { connectPopoutToPane } from '../src/features/office/utilities/officePopoutChild';
+import { OFFICE_CHAT_PATH } from '../src/features/office/utilities/officeStartPage';
 
 /**
  * Derive the base path from the current URL so the config fetch works
@@ -30,8 +41,111 @@ function detectBasePath() {
 // OfficeThemeChanged event available for "auto" mode.
 initOfficeTheme();
 
+/**
+ * The Outlook host adapter: popup-window auth dialog + Outlook mailbox context.
+ *
+ * No `contextToggles` are declared (issue #1467). The body /
+ * attachments filters that used to live in the chat input's `+` menu
+ * are now owned by OfficeMailContextBanner — the "Include body"
+ * checkbox sits on the email card and each attachment ships with its
+ * own X button, so the duplicated menu toggles only confused users.
+ * The browser-extension side panel still declares its own `pageText`
+ * toggle in sidepanel-entry.jsx; that surface keeps working unchanged.
+ *
+ * @param {string|null} officeHost - `Office.context.host`, e.g. "Outlook".
+ * @param {object} [popout] - Set in the popped-out chat (officePopoutChild.js).
+ */
+function buildOutlookHost(officeHost, popout) {
+  const isOutlookHost = officeHost === 'Outlook';
+  const insertLabelKey = isOutlookHost ? 'office.insertIntoEmail' : 'office.insertIntoDocument';
+  return {
+    kind: 'office',
+    loginSubtitle: 'iHub Apps for Outlook',
+    runAuthDialog: openOfficeAuthDialog,
+    // Unified reader dispatches between mail and appointment items by
+    // inspecting `Office.context.mailbox.item.itemType`. Existing mail
+    // surfaces get the same payload as before plus `itemKind: 'message'`;
+    // calendar surfaces receive the appointment shape (subject, start,
+    // end, organizer, attendees, location, body). In the popped-out chat it
+    // asks the pane, which has the item.
+    readMessageContext: fetchCurrentOutlookItemContext,
+    // In the Office taskpane the "insert this response into the document /
+    // email" button is the whole reason the user opened the add-in, so it
+    // gets promoted to a labelled primary button beneath each assistant
+    // message instead of the small icon used in the main web app.
+    // See issue #1450.
+    insertAction: {
+      variant: 'primary',
+      labelKey: insertLabelKey
+    },
+    ...(popout ? { popout } : {})
+  };
+}
+
+function renderOfficeApp(rootEl, { config, host, initialEntries }) {
+  const root = createRoot(rootEl);
+  root.render(
+    // eslint-disable-next-line @eslint-react/no-context-provider
+    <OfficeConfigContext.Provider value={config}>
+      <EmbeddedHostProvider value={host}>
+        <MemoryRouter initialEntries={initialEntries}>
+          <OfficeApp />
+        </MemoryRouter>
+      </EmbeddedHostProvider>
+    </OfficeConfigContext.Provider>
+  );
+}
+
+function showStartupError(rootEl, message) {
+  if (!rootEl) return;
+  rootEl.textContent = message;
+  rootEl.style.cssText = 'padding:16px;font-family:sans-serif;color:#b91c1c;';
+}
+
+/**
+ * The chat popped out of the pane into an Office dialog (officePopout.js).
+ * It signs in with the pane's tokens, opens the chat the pane handed over and
+ * reaches Outlook through the pane from then on.
+ */
+async function startPopout(rootEl) {
+  let connection;
+  try {
+    connection = await connectPopoutToPane();
+  } catch (err) {
+    showStartupError(
+      rootEl,
+      `This window lost its connection to Outlook. Close it and open the chat again from the Outlook pane. (${err?.message || err})`
+    );
+    return;
+  }
+  const { init, popout } = connection;
+
+  storeTokenResponse(init.tokens);
+  try {
+    if (init.user) localStorage.setItem(OFFICE_USER_KEY, JSON.stringify(init.user));
+  } catch {
+    // The chat still works; the settings dialog shows no name.
+  }
+  storeSelectedApp(init.chat?.app ?? null);
+  seedPopoutTranscript(init.chat);
+  installOfficeAuthInterceptor(init.config);
+
+  renderOfficeApp(rootEl, {
+    config: init.config,
+    // Only Outlook pops its chat out.
+    host: buildOutlookHost('Outlook', popout),
+    initialEntries: [{ pathname: OFFICE_CHAT_PATH, state: popoutChatRouteState(init.chat) }]
+  });
+}
+
 Office.onReady(async () => {
   initOfficeTheme();
+
+  const rootEl = document.getElementById('office-root');
+  if (isPopoutPage()) {
+    await startPopout(rootEl);
+    return;
+  }
 
   const basePath = detectBasePath();
 
@@ -43,11 +157,10 @@ Office.onReady(async () => {
     }
     config = await res.json();
   } catch (err) {
-    const rootEl = document.getElementById('office-root');
-    if (rootEl) {
-      rootEl.textContent = `Failed to load add-in configuration. Please contact your administrator. (${err.message})`;
-      rootEl.style.cssText = 'padding:16px;font-family:sans-serif;color:#b91c1c;';
-    }
+    showStartupError(
+      rootEl,
+      `Failed to load add-in configuration. Please contact your administrator. (${err.message})`
+    );
     return;
   }
 
@@ -68,7 +181,6 @@ Office.onReady(async () => {
     );
   }
 
-  const rootEl = document.getElementById('office-root');
   if (!rootEl) return;
 
   // Detect which Office host is running this add-in so we can pick host-aware
@@ -86,48 +198,6 @@ Office.onReady(async () => {
     if (Office.context?.mailbox) return 'Outlook';
     return null;
   })();
-  const isOutlookHost = officeHost === 'Outlook';
-  const insertLabelKey = isOutlookHost ? 'office.insertIntoEmail' : 'office.insertIntoDocument';
 
-  // Outlook host adapter: popup-window auth dialog + Outlook mailbox context.
-  //
-  // No `contextToggles` are declared (issue #1467). The body /
-  // attachments filters that used to live in the chat input's `+` menu
-  // are now owned by OfficeMailContextBanner — the "Include body"
-  // checkbox sits on the email card and each attachment ships with its
-  // own X button, so the duplicated menu toggles only confused users.
-  // The browser-extension side panel still declares its own `pageText`
-  // toggle in sidepanel-entry.jsx; that surface keeps working unchanged.
-  const outlookHost = {
-    kind: 'office',
-    loginSubtitle: 'iHub Apps for Outlook',
-    runAuthDialog: openOfficeAuthDialog,
-    // Unified reader dispatches between mail and appointment items by
-    // inspecting `Office.context.mailbox.item.itemType`. Existing mail
-    // surfaces get the same payload as before plus `itemKind: 'message'`;
-    // calendar surfaces receive the appointment shape (subject, start,
-    // end, organizer, attendees, location, body).
-    readMessageContext: fetchCurrentOutlookItemContext,
-    // In the Office taskpane the "insert this response into the document /
-    // email" button is the whole reason the user opened the add-in, so it
-    // gets promoted to a labelled primary button beneath each assistant
-    // message instead of the small icon used in the main web app.
-    // See issue #1450.
-    insertAction: {
-      variant: 'primary',
-      labelKey: insertLabelKey
-    }
-  };
-
-  const root = createRoot(rootEl);
-  root.render(
-    // eslint-disable-next-line @eslint-react/no-context-provider
-    <OfficeConfigContext.Provider value={config}>
-      <EmbeddedHostProvider value={outlookHost}>
-        <MemoryRouter>
-          <OfficeApp />
-        </MemoryRouter>
-      </EmbeddedHostProvider>
-    </OfficeConfigContext.Provider>
-  );
+  renderOfficeApp(rootEl, { config, host: buildOutlookHost(officeHost) });
 });

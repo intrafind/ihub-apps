@@ -68,6 +68,37 @@
       })();
     </script>
 
+    <!-- The chat popped out of the pane (?popout=1, see officePopout.js) brings
+         the pane's language and theme along: the window may not share the
+         pane's storage (Outlook on the web partitions the pane's). Applied
+         once and dropped from the address, so a change made later in the
+         window's own settings survives a reload. Runs before Office.js, which
+         removes the history API. -->
+    <script type="text/javascript">
+      (function () {
+        try {
+          var params = new URLSearchParams(window.location.search);
+          if (params.get('popout') !== '1') return;
+          var lang = params.get('lang');
+          if (lang && /^[a-z]{2}$/.test(lang)) localStorage.setItem('office_ihub_language', lang);
+          var theme = params.get('theme');
+          if (theme === 'light' || theme === 'dark' || theme === 'auto') {
+            localStorage.setItem('office_ihub_theme', theme);
+          }
+          params.delete('lang');
+          params.delete('theme');
+          // Keep the fragment: Office on the web may pass its own state there.
+          window.history.replaceState(
+            null,
+            '',
+            window.location.pathname + '?' + params.toString() + window.location.hash
+          );
+        } catch (e) {
+          // Storage or history unavailable: the window uses its own defaults.
+        }
+      })();
+    </script>
+
     <!-- Cache history API before Office.js removes it -->
     <script type="text/javascript">
       window._historyCache = {

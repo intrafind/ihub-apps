@@ -5,6 +5,7 @@ import {
   isOutlookAppointmentItemAvailable
 } from './outlookCalendarContext';
 import { readMailboxUserProfile, readMessageHeaders } from './outlookItemFields';
+import { getOfficeRemote } from './officeRemote';
 
 function getLiveItem() {
   try {
@@ -137,6 +138,9 @@ function getSubjectAsync(item) {
  * strip, chat adapter) can pick the right banner / prompt formatter.
  */
 export async function fetchCurrentOutlookItemContext() {
+  // A popped-out chat reads the item through the pane it came from.
+  const remote = getOfficeRemote();
+  if (remote) return remote.call('readItemContext');
   const itemType = getCurrentOutlookItemType();
   if (itemType === 'appointment' || isOutlookAppointmentItemAvailable()) {
     return fetchCurrentAppointmentContext();
@@ -158,6 +162,8 @@ const SNAPSHOT_RETRY_DELAY_MS = 200;
 const INVALID_ATTACHMENT_ID_RE = /does not exist|InvalidAttachmentId|not part of this item/i;
 
 export async function fetchCurrentMailContext() {
+  const remote = getOfficeRemote();
+  if (remote) return remote.call('readMailContext');
   for (let attempt = 0; attempt < MAX_SNAPSHOT_ATTEMPTS; attempt++) {
     // Capture the item exactly once per attempt. Every read below goes
     // against this capture so one snapshot can never mix two emails.

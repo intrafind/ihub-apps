@@ -44,6 +44,7 @@ jest.mock('../../../client/src/api', () => ({
   __esModule: true,
   fetchAppDetails: jest.fn(),
   fetchChat: jest.fn(),
+  claimChatHandoff: jest.fn(),
   sendAppChatMessage: jest.fn().mockResolvedValue({})
 }));
 jest.mock('../../../client/src/api/endpoints/apps', () => ({
@@ -273,7 +274,7 @@ jest.mock('../../../client/src/features/chat/components/ChatInput', () => ({
 }));
 
 const AppChat = require('../../../client/src/features/apps/pages/AppChat').default;
-const { fetchChat } = require('../../../client/src/api');
+const { fetchChat, claimChatHandoff } = require('../../../client/src/api');
 
 const APP = {
   id: 'acme',
@@ -625,5 +626,168 @@ describe('an app that starts the conversation by itself', () => {
     } finally {
       jest.useRealTimers();
     }
+  });
+});
+
+describe('a chat handed over from the Outlook pane', () => {
+  // "Open in web app" on a chat that is not stored: the pane parked it and
+  // opened the app with `?handoff=<token>` (server/routes/chatHandoffs.js).
+  const HANDOFF = {
+    appId: 'acme',
+    messages: [
+      { role: 'user', content: 'Summarize this email', hostContext: { email: { subject: 'Q3' } } },
+      { role: 'assistant', content: 'It is about Q3.' }
+    ],
+    variables: null
+  };
+
+  beforeEach(() => {
+    mockCapability.persistence = false;
+    claimChatHandoff.mockReset();
+    sessionStorage.clear();
+  });
+
+  test('is claimed once and continues as a new chat, leaving the one this tab had alone', async () => {
+    sessionStorage.setItem('ai_hub_chat_id_acme', 'chat-earlier');
+    sessionStorage.setItem(
+      'ai_hub_chat_messages_chat-earlier',
+      JSON.stringify([{ id: 'e1', role: 'user', content: 'earlier question' }])
+    );
+    claimChatHandoff.mockResolvedValue(HANDOFF);
+
+    renderChat({ path: '/apps/acme?handoff=tok.secret' });
+
+    await waitFor(() =>
+      expect(screen.getAllByTestId('transcript')[0]).toHaveTextContent(
+        'Summarize this email|It is about Q3.'
+      )
+    );
+    expect(claimChatHandoff).toHaveBeenCalledTimes(1);
+    expect(claimChatHandoff).toHaveBeenCalledWith('tok.secret');
+
+    const newChatId = sessionStorage.getItem('ai_hub_chat_id_acme');
+    expect(newChatId).not.toBe('chat-earlier');
+    const stored = JSON.parse(sessionStorage.getItem(`ai_hub_chat_messages_${newChatId}`));
+    // The email the chat was about goes back to the model with the history.
+    expect(stored[0]).toMatchObject({
+      role: 'user',
+      content: 'Summarize this email',
+      hostContext: { email: { subject: 'Q3' } }
+    });
+    expect(JSON.parse(sessionStorage.getItem('ai_hub_chat_messages_chat-earlier'))).toHaveLength(1);
+  });
+
+  test('in incognito the transcript is shown without being kept', async () => {
+    mockSettings.initialEphemeral = true;
+    claimChatHandoff.mockResolvedValue(HANDOFF);
+
+    renderChat({ path: '/apps/acme?handoff=tok.secret' });
+
+    await waitFor(() =>
+      expect(screen.getAllByTestId('transcript')[0]).toHaveTextContent(
+        'Summarize this email|It is about Q3.'
+      )
+    );
+  });
+
+  test('a link that expired or was already used says so', async () => {
+    claimChatHandoff.mockRejectedValue(Object.assign(new Error('gone'), { status: 404 }));
+    renderChat({ path: '/apps/acme?handoff=tok.secret' });
+    await waitFor(() =>
+      expect(screen.getAllByTestId('transcript')[0]).toHaveTextContent(
+        'the link has expired or was already used'
+      )
+    );
+  });
+
+  test('a viewer whose chats are stored continues it unstored, history and all', async () => {
+    // The pane did not store this chat (an ephemeral app, say); the store has
+    // no history for it, so the browser carries it like a chat that is not stored.
+    mockCapability.persistence = true;
+    claimChatHandoff.mockResolvedValue(HANDOFF);
+
+    renderChat({ path: '/apps/acme?handoff=tok.secret' });
+
+    await waitFor(() =>
+      expect(screen.getAllByTestId('transcript')[0]).toHaveTextContent(
+        'Summarize this email|It is about Q3.'
+      )
+    );
+    expect(fetchChat).not.toHaveBeenCalled();
+    const stored = Object.keys(sessionStorage).filter(key =>
+      key.startsWith('ai_hub_chat_messages_')
+    );
+    expect(stored).toHaveLength(1);
+    expect(JSON.parse(sessionStorage.getItem(stored[0]))[0]).toMatchObject({
+      content: 'Summarize this email',
+      hostContext: { email: { subject: 'Q3' } }
+    });
+    // Not pinned to a stored chat's address, which a reload would ask the store for.
+    expect(screen.getByTestId('location')).toHaveTextContent('/apps/acme');
+    expect(screen.getByTestId('location')).not.toHaveTextContent('/c/');
+  });
+
+  test('a failure that may pass says so and keeps the link for a reload', async () => {
+    claimChatHandoff.mockRejectedValue(Object.assign(new Error('down'), { status: 503 }));
+    renderChat({ path: '/apps/acme?handoff=tok.secret' });
+    await waitFor(() =>
+      expect(screen.getAllByTestId('transcript')[0]).toHaveTextContent('Reload the page')
+    );
+  });
+
+  test('a visitor who is not signed in is asked to sign in, and nothing is claimed', async () => {
+    const { AuthContext } = require('../../../client/src/shared/contexts/authContextValue');
+    window.history.replaceState({}, '', '/apps/acme?handoff=tok.secret');
+    render(
+      <AuthContext.Provider value={{ isAuthenticated: false }}>
+        <MemoryRouter initialEntries={['/apps/acme?handoff=tok.secret']}>
+          <Routes>
+            <Route path="/apps/:appId" element={<AppChat preloadedApp={APP} />} />
+          </Routes>
+        </MemoryRouter>
+      </AuthContext.Provider>
+    );
+    await waitFor(() =>
+      expect(screen.getAllByTestId('transcript')[0]).toHaveTextContent('Sign in to continue')
+    );
+    expect(claimChatHandoff).not.toHaveBeenCalled();
+  });
+
+  test('an app that starts by itself waits for the hand-off instead of sending a blank turn', async () => {
+    jest.useFakeTimers();
+    try {
+      let settle;
+      claimChatHandoff.mockReturnValue(
+        new Promise(resolve => {
+          settle = resolve;
+        })
+      );
+      renderChat({ path: '/apps/acme?handoff=tok.secret', app: { ...APP, autoStart: true } });
+
+      // The claim is slow; the auto-start timer has long passed.
+      await act(async () => {
+        jest.advanceTimersByTime(2000);
+      });
+      expect(mockStreams).toEqual([]);
+
+      await act(async () => {
+        settle(HANDOFF);
+      });
+      await act(async () => {
+        jest.advanceTimersByTime(2000);
+      });
+      expect(screen.getAllByTestId('transcript')[0]).toHaveTextContent('Summarize this email');
+      expect(mockStreams).toEqual([]);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  test("someone else's hand-off says whose it is", async () => {
+    claimChatHandoff.mockRejectedValue(Object.assign(new Error('not yours'), { status: 403 }));
+    renderChat({ path: '/apps/acme?handoff=other.token' });
+    await waitFor(() =>
+      expect(screen.getAllByTestId('transcript')[0]).toHaveTextContent('another account')
+    );
   });
 });

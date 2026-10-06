@@ -246,8 +246,14 @@
       "skipFailedRequests": false
     },
     "oauthApi": {
+      "windowMs": 60000,
+      "limit": 300,
+      "skipFailedRequests": false
+    },
+    "oauthTokenApi": {
       "windowMs": 900000,
-      "limit": 50,
+      "limit": 30,
+      "skipSuccessfulRequests": true,
       "skipFailedRequests": false
     },
     "inferenceApi": {
@@ -324,6 +330,16 @@
     "defaultSearchProfile": "searchprofile-standard",
     "resolveSearchProfileFromProfile": true,
     "groundedOnly": false
+  },
+  "copilotAgent": {
+    "enabled": false,
+    "appId": "",
+    "oauthClientId": "",
+    "oauthReferenceId": "",
+    "name": "iHub Apps",
+    "description": "Use your organization's iHub apps — assistants, writing aids and knowledge search — right in Microsoft 365 Copilot.",
+    "instructions": "",
+    "conversationStarters": []
   },
   "officeIntegration": {
     "enabled": false,
