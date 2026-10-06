@@ -29,7 +29,7 @@
  */
 
 import configCache from '../../configCache.js';
-import { isFeatureEnabled } from '../../featureRegistry.js';
+import { areAppFeaturesEnabled, isFeatureEnabled } from '../../featureRegistry.js';
 import logger from '../../utils/logger.js';
 import ChatService from './ChatService.js';
 import { getLocalizedString } from '../../utils/localize.js';
@@ -124,7 +124,7 @@ export async function getAppAsTools(appIds, language = 'en', { user } = {}) {
       logger.warn('App-as-tool: app not found', { component: 'AppToolsGateway', appId });
       continue;
     }
-    if (app.enabled === false) continue;
+    if (app.enabled === false || !areAppFeaturesEnabled(app, configCache.getFeatures())) continue;
     if (user && !isAppInvocationAllowed(user, app.id)) {
       logger.info('App-as-tool: app filtered by user permissions', {
         component: 'AppToolsGateway',
@@ -219,7 +219,7 @@ export async function invokeAppTool({
   if (!app) {
     return { error: true, message: `App ${appId} not found` };
   }
-  if (app.enabled === false) {
+  if (app.enabled === false || !areAppFeaturesEnabled(app, configCache.getFeatures())) {
     return { error: true, message: `App ${appId} is disabled` };
   }
 

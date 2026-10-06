@@ -99,13 +99,16 @@ Users who would rather describe a skill than write one let the assistant draft i
 **skill-builder** skill interviews them and writes the skill; one click turns the draft into a
 skill of their own.
 
-**1. Start from the library.** **New → Create skill with AI** in the library (`/prompts`).
+**1. Start from the library.** **New → Create skill with AI** in the library (`/prompts`), or open
+the **Skill Builder** app.
 
 ![The library's New menu with "Create skill with AI" below "New prompt" and "New skill"](assets/screenshots/skills-create-with-ai-menu.png)
 
-**2. Describe the skill.** A new chat opens with `/skill-builder ` already in the input. Add what
-the skill should do and send it. Pasting an existing prompt, Gem or custom GPT instructions
-works too: skill-builder converts them.
+**2. Describe the skill.** A new chat opens in the Skill Builder app, which runs skill-builder from
+the first message on. Describe what the skill should do and send it, or pick one of its starter
+prompts. Pasting an existing prompt, Gem or custom GPT instructions works too: skill-builder
+converts them. Where the Skill Builder app is not available, the chat opens in another app that
+has the skill, with `/skill-builder ` already in the input.
 
 ![A new chat in the Chat app with "/skill-builder" followed by the user's description in the input](assets/screenshots/skills-create-with-ai-start.png)
 
@@ -138,11 +141,24 @@ hand-over is adapted to **Save as skill**). It is copied into `contents/skills/s
 on startup and assigned to the **Chat** app, on new installations by the defaults and on
 existing ones by a migration.
 
+iHub also ships the **Skill Builder** app (`contents/apps/skill-builder.json`), copied into
+existing installations on startup like any default file they do not have yet. It is a chat app
+built around the skill:
+
+- `skills: ["skill-builder"]` with `skillSettings.autoActivate: true`, so the skill runs from the
+  first message on, and `allowPersonal: false`, so users' own skills stay out of the way.
+- `requiredFeatures: ["skills"]`: users only get the app while **Agent Skills** is on. Until
+  then, **Admin → Apps** lists it as hidden from users.
+- Like any app, it is available to the groups whose `permissions.apps` include it (`*` on a new
+  installation, except for anonymous users). To take it away, disable it: a deleted default app
+  file is copied back on the next start.
+
 **Create skill with AI** is offered to signed-in users who may keep skills of their own, when
 `skill-builder` is granted to their groups (`permissions.skills`) and assigned to a chat app they
-can use. With several such apps, the start page's chat app wins, then favorites and the app
-order. Admins assign it to other apps under **Admin → Apps**. To hide the entry, remove it from
-every chat app it is assigned to (on a new installation, that is Chat).
+can use. An app that auto-activates the skill, like Skill Builder, wins; otherwise the start
+page's chat app, then favorites and the app order. Admins assign the skill to other apps under
+**Admin → Apps**. To hide the entry, remove the skill from every chat app it is assigned to (on
+a new installation, Chat and Skill Builder), or disable those apps.
 
 ### Skills from the marketplace
 

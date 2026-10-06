@@ -31,3 +31,21 @@ same height, and all filters sit together in one row instead of stacked lanes.
   configured color as a dot. The dropdown always offers "All categories", so
   `promptsList.categories.showAll` no longer has an effect on the library.
 - On phones, sort and "New" share a row and the filters wrap instead of scrolling out of view.
+
+## Skills: Skill Builder App
+
+iHub now ships a **Skill Builder** app. Users describe a task they keep repeating, or paste a
+prompt, Gem or custom GPT instructions, answer a few questions and save the drafted skill with
+**Save as skill**. Admins no longer need to create an app and assign the **skill-builder** skill
+for **New → Create skill with AI** in the library to work.
+
+- The app runs **skill-builder** from the first message on, so users do not have to type
+  `/skill-builder`. **Create skill with AI** opens it directly.
+- Existing installations get the app on upgrade; an app of your own saved under the id
+  `skill-builder` is kept as it is. It is available to the groups whose app permissions include
+  it. To take it away, disable it under **Admin → Apps**.
+- Users only see the app while **Agent Skills** is on under **Admin → Features**. Until then,
+  **Admin → Apps** lists it as hidden from users.
+- New app settings, also for other apps: `requiredFeatures` hides an app from users while one of
+  the listed features is off, and `skillSettings.autoActivate: true` runs the app's skills on
+  every message without `/name`.

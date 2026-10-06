@@ -8,10 +8,36 @@ import { pickDefaultChatApp } from '../../../utils/homePage';
 /** The global skill that interviews the user and drafts a SKILL.md (shipped with iHub). */
 export const SKILL_BUILDER_NAME = 'skill-builder';
 
+/** How many skills a turn runs at most, as the server caps them (skillAccess.js). */
+const DEFAULT_MAX_ACTIVE_SKILLS = 3;
+const MAX_ACTIVE_SKILLS_LIMIT = 10;
+
+/**
+ * Whether `app` is built around the skill-builder skill: it runs the skill on
+ * every turn (`skillSettings.autoActivate`), like the shipped Skill Builder
+ * app, so a chat there needs no `/skill-builder` to start. The server
+ * auto-activates the app's skills in order up to `maxActiveSkills`, so the
+ * skill has to be within that many.
+ *
+ * @param {Object} app
+ * @returns {boolean}
+ */
+export function runsSkillBuilder(app) {
+  if (app?.skillSettings?.autoActivate !== true || !Array.isArray(app?.skills)) return false;
+  const configured = app.skillSettings.maxActiveSkills;
+  const cap =
+    Number.isInteger(configured) && configured >= 1
+      ? Math.min(configured, MAX_ACTIVE_SKILLS_LIMIT)
+      : DEFAULT_MAX_ACTIVE_SKILLS;
+  const index = app.skills.indexOf(SKILL_BUILDER_NAME);
+  return index >= 0 && index < cap;
+}
+
 /**
  * The chat app "Create skill with AI" opens: a chat app the user may use that
  * has the `skill-builder` skill assigned, while the skill is granted to them.
- * Among several, the start page's choice wins (configured default app, then
+ * An app built around the skill ({@link runsSkillBuilder}) comes first; among
+ * several, the start page's choice wins (configured default app, then
  * favorites, featured apps and order).
  *
  * @param {Object[]} apps - Apps the user may use.
@@ -29,13 +55,18 @@ export function findSkillBuilderApp(apps, globalSkills, { favoriteAppIds = [], u
   const candidates = (Array.isArray(apps) ? apps : []).filter(
     app => Array.isArray(app?.skills) && app.skills.includes(SKILL_BUILDER_NAME)
   );
-  return pickDefaultChatApp(candidates, favoriteAppIds, uiConfig);
+  const dedicated = candidates.filter(runsSkillBuilder);
+  return (
+    pickDefaultChatApp(dedicated, favoriteAppIds, uiConfig) ||
+    pickDefaultChatApp(candidates, favoriteAppIds, uiConfig)
+  );
 }
 
 /**
- * "Create skill with AI": open a chat with `/skill-builder ` in the input, so
- * the user describes the skill they want and the skill-builder skill drafts
- * it. The answer's "Save as skill" then takes the draft into the editor.
+ * "Create skill with AI": open a chat where the skill-builder skill drafts the
+ * skill the user describes — the app built around it as it is, any other app
+ * with `/skill-builder ` in the input. The answer's "Save as skill" then takes
+ * the draft into the editor.
  *
  * @param {Object} options
  * @param {boolean} options.enabled - Whether the user may keep skills of their own.
@@ -56,8 +87,13 @@ export default function useSkillBuilder({ enabled, globalSkills }) {
 
   const start = useCallback(() => {
     if (!app) return;
+    const path = `/apps/${encodeURIComponent(app.id)}`;
+    if (runsSkillBuilder(app)) {
+      navigate(path);
+      return;
+    }
     const params = new URLSearchParams({ prefill: `/${SKILL_BUILDER_NAME} ` });
-    navigate(`/apps/${encodeURIComponent(app.id)}?${params}`);
+    navigate(`${path}?${params}`);
   }, [app, navigate]);
 
   return { app, start };

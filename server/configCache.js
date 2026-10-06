@@ -23,6 +23,7 @@ import tokenStorageService from './services/TokenStorageService.js';
 import { SECRET_FIELDS_BY_TYPE } from './validators/credentialSchema.js';
 import logger from './utils/logger.js';
 import { getLocalizedString } from './utils/localize.js';
+import { areAppFeaturesEnabled } from './featureRegistry.js';
 import { findByIdCaseInsensitive } from './utils/resourceLookup.js';
 import { isToolSelected } from './utils/toolSelection.js';
 import { resolveEnvVarsInObject } from './utils/envVars.js';
@@ -34,6 +35,21 @@ export { resolveEnvVarsInObject };
 /**
  * Decrypt a single value if it has the ENC[...] format
  */
+/**
+ * An ETag for a variant of a cached list: `suffix` goes inside the quotes, so
+ * `"abc"` becomes `"abc-suffix"` — still one valid entity tag.
+ *
+ * @param {string} etag - The list's ETag
+ * @param {string} suffix - What tells the variant apart
+ * @returns {string}
+ */
+function etagWithSuffix(etag, suffix) {
+  if (typeof etag === 'string' && etag.length > 1 && etag.endsWith('"')) {
+    return `${etag.slice(0, -1)}-${suffix}"`;
+  }
+  return `${etag}-${suffix}`;
+}
+
 function decryptIfEncrypted(value) {
   if (!value || typeof value !== 'string') return value;
   if (tokenStorageService.isEncrypted(value)) {
@@ -991,11 +1007,24 @@ class ConfigCache {
       return apps;
     }
 
-    // Filter to only enabled apps
-    return {
-      data: apps.data.filter(app => app.enabled !== false),
-      etag: apps.etag
-    };
+    // Only enabled apps whose required features are all on. The ETag changes
+    // with the apps a feature hides: features.json has its own ETag, and a
+    // client holding the old list must not get a 304 once the feature flips.
+    const features = this.getFeatures();
+    const enabled = apps.data.filter(app => app.enabled !== false);
+    const available = enabled.filter(app => areAppFeaturesEnabled(app, features));
+    if (available.length === enabled.length) {
+      return { data: available, etag: apps.etag };
+    }
+    const hiddenIds = enabled
+      .filter(app => !areAppFeaturesEnabled(app, features))
+      .map(app => app.id)
+      .sort();
+    const hiddenHash = createHash('md5')
+      .update(JSON.stringify(hiddenIds))
+      .digest('hex')
+      .substring(0, 8);
+    return { data: available, etag: etagWithSuffix(apps.etag, `f${hiddenHash}`) };
   }
 
   /**
@@ -1706,7 +1735,7 @@ class ConfigCache {
         .update(JSON.stringify(appIds))
         .digest('hex')
         .substring(0, 8);
-      userSpecificEtag = `${appsEtag}-${contentHash}`;
+      userSpecificEtag = etagWithSuffix(appsEtag, contentHash);
     }
 
     return { data: apps, etag: userSpecificEtag };

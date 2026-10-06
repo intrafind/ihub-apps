@@ -564,6 +564,38 @@ describe('in chat', () => {
     );
   });
 
+  it("keeps the user's own namesake, picked earlier, ahead of an auto-activated skill", async () => {
+    const mine = await create(ROOT, { name: 'brand-voice', body: 'ROOT BRAND' });
+    const root = { ...ROOT, permissions: { skills: new Set(['*']) } };
+    const auto = { ...app, skillSettings: { autoActivate: true, maxActiveSkills: 1 } };
+    // A later turn: the user named their own brand-voice in an earlier one.
+    const resolved = await skillAccess.resolveSkillsForTurn({
+      earlier: [{ name: 'brand-voice', by: 'user' }],
+      app: auto,
+      user: root
+    });
+    assert.deepEqual(
+      resolved.map(entry => [entry.name, entry.origin]),
+      [[mine.id, 'chat']]
+    );
+    // An answer records it by its id: the same.
+    const byId = await skillAccess.resolveSkillsForTurn({
+      earlier: [{ id: mine.id, by: 'user' }],
+      app: auto,
+      user: root
+    });
+    assert.deepEqual(
+      byId.map(entry => [entry.name, entry.origin]),
+      [[mine.id, 'chat']]
+    );
+    // Without it, the app's global skill is the one auto-activated.
+    const fresh = await skillAccess.resolveSkillsForTurn({ app: auto, user: root });
+    assert.deepEqual(
+      fresh.map(entry => [entry.name, entry.origin]),
+      [['brand-voice', 'app']]
+    );
+  });
+
   it('keeps user skills out of apps that opt out and out of agent nodes', async () => {
     const skill = await create(ADA, { name: 'opt-out' });
     const ada = { ...ADA, permissions: { skills: new Set(['*']) } };

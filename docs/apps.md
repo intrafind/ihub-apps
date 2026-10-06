@@ -475,6 +475,7 @@ These optional fields work for all app types:
 | `enabled` | Boolean | `true` | Whether the app is enabled |
 | `order` | Number | - | Display order in the apps browser, the start page and the sidebar. Editable by drag and drop under Admin → Apps → Reorder |
 | `category` | String | - | App category for grouping |
+| `requiredFeatures` | Array | - | Feature ids (Admin → Features) the app needs, e.g. `["skills"]`. While one of them is off, users do not get the app at all, as if it were disabled; Admin → Apps still lists it, marked as hidden. Only ids of existing features are accepted; an unknown id counts as off |
 
 ### Chat-Specific Fields Not Used in Redirect/Iframe Apps
 
@@ -530,6 +531,7 @@ Each app is defined with the following essential properties:
 | `type`                  | String  | Optional. App type: `"chat"` (default), `"redirect"`, or `"iframe"`                                                     |
 | `order`                 | Number  | Optional. Display order in the apps browser, the start page and the sidebar. Editable by drag and drop under Admin → Apps → Reorder |
 | `enabled`               | Boolean | Optional. Whether the app is enabled. Default: `true`                                                                    |
+| `requiredFeatures`      | Array   | Optional. Feature ids the app needs (e.g. `["skills"]`). While one is off, users do not get the app, as if it were disabled |
 | `category`              | String  | Optional. Category label for grouping apps in the UI                                                                     |
 | `preferredModel`        | String  | Optional. Default AI model to use with this app. If omitted, uses the model marked as default in `models.json`          |
 | `preferredOutputFormat` | String  | Optional. Format for AI responses (`markdown`, `text`, `json`, `html`)                                                   |
@@ -980,7 +982,6 @@ The `skills` array specifies which skill identifiers are available for an app. S
 ```json
 "skills": ["summarizer", "translator", "code-reviewer"],
 "skillSettings": {
-  "autoActivate": true,
   "maxActiveSkills": 3
 }
 ```
@@ -988,8 +989,8 @@ The `skills` array specifies which skill identifiers are available for an app. S
 | Property                       | Type    | Default | Description                                                                         |
 | ------------------------------ | ------- | ------- | ----------------------------------------------------------------------------------- |
 | `skills`                       | Array   | -       | Array of skill identifier strings. Each string must match a skill defined in the skills directory |
-| `skillSettings.autoActivate`   | Boolean | -       | Reserved; not used yet                                                              |
-| `skillSettings.maxActiveSkills`| Number  | `3`     | Maximum number of skills active at once in a turn (1-10): the ones the request or message names with `/`, then the ones still active from earlier in the chat, newest first. Further skills are left out |
+| `skillSettings.autoActivate`   | Boolean | `false` | Run the app's `skills` on every turn, without `/name` and without waiting for the model to activate them — for an app built around a skill, like the shipped Skill Builder. They come after the skills the request or message names and count towards `maxActiveSkills`; only skills granted to the user are loaded. This includes skills only users may start (`disable-model-invocation: true`): assigning them with `autoActivate` is the admin starting them. A user's own skill of the same name, picked with `/name`, takes the app skill's place |
+| `skillSettings.maxActiveSkills`| Number  | `3`     | Maximum number of skills active at once in a turn (1-10): the ones the request or message names with `/`, then the app's own skills when `autoActivate` is on, then the ones still active from earlier in the chat, newest first. Further skills are left out |
 | `skillSettings.allowPersonal`  | Boolean | `true`  | Offer users' own and shared [user skills](skills.md#user-skills) in this app. Set `false` to allow only the global skills listed in `skills` |
 
 A global skill is only ever loaded for an app when three things hold: it is installed, it is listed in the app's `skills`, and the user's groups grant it (`permissions.skills` in `groups.json`). [User skills](skills.md#user-skills) are the user's own and shared skills; they are offered in every app unless `skillSettings.allowPersonal` is `false`. This applies to every way a skill gets loaded: the model calling `activate_skill` or `read_skill_resource`, the user picking skills with `/` (sent as `requestedSkills`), and agents. An empty `permissions.skills` grants no skills. Agent runs check skills against the agent's service-account groups and the skills listed on the agent profile.

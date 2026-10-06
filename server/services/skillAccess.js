@@ -528,13 +528,28 @@ export function earlierSkillRefs(messages) {
 }
 
 /**
+ * The global skills an app activates on every turn: its `skills`, when it
+ * sets `skillSettings.autoActivate`. Agent nodes (`_skillIds`) never do.
+ *
+ * @param {Object} [app] - App config
+ * @returns {string[]}
+ */
+function autoActivatedSkillIds(app) {
+  if (app?._skillIds || app?.skillSettings?.autoActivate !== true) return [];
+  return Array.isArray(app.skills) ? app.skills.filter(name => typeof name === 'string') : [];
+}
+
+/**
  * The skills a turn runs with, reduced to those usable in `app` for `user`,
  * in order:
  *
  * 1. the ones the request names explicitly (`requestedSkills`: global names
  *    or `usk_…` ids) — origin `requested`;
  * 2. the ones the user's message invokes with `/name` — origin `message`;
- * 3. the ones earlier turns of the chat activated, newest first
+ * 3. the app's own `skills`, when it sets `skillSettings.autoActivate` — an
+ *    app built around a skill (such as Skill Builder) runs it from the first
+ *    message on — origin `app`, or `chat` once an earlier turn activated it;
+ * 4. the ones earlier turns of the chat activated, newest first
  *    ({@link earlierSkillRefs}) — origin `chat`. A skill stays active for the
  *    rest of a chat, whether a user named it or the model activated it. One
  *    the model activated is dropped once only users may start it.
@@ -555,14 +570,20 @@ export function earlierSkillRefs(messages) {
  * @param {Object} options.app - App config
  * @param {Object} options.user - Expanded user
  * @returns {Promise<Array<{name: string, displayName: string, description: string,
- *   origin: 'requested'|'message'|'chat'}>>}
+ *   origin: 'requested'|'message'|'app'|'chat'}>>}
  *   `name` is what `loadUsableSkill` takes: the global name or the `usk_…` id
  */
 export async function resolveSkillsForTurn({ requested = [], text = '', earlier = [], app, user }) {
   const explicit = Array.isArray(requested) ? requested.filter(n => typeof n === 'string') : [];
   const tokens = skillTokensIn(text);
   const refs = Array.isArray(earlier) ? earlier : [];
-  if (!app || (explicit.length === 0 && tokens.length === 0 && refs.length === 0)) return [];
+  const automatic = autoActivatedSkillIds(app);
+  if (
+    !app ||
+    (explicit.length === 0 && tokens.length === 0 && automatic.length === 0 && refs.length === 0)
+  ) {
+    return [];
+  }
 
   const global = await getUsableSkills({ skillIds: app.skills, user });
   const globalByName = new Map(global.map(skill => [skill.name, skill]));
@@ -595,15 +616,27 @@ export async function resolveSkillsForTurn({ requested = [], text = '', earlier 
     seen.add(entry.name);
     resolved.push(entry);
   };
-  for (const name of explicit) add(byId(name), 'requested');
-  for (const name of tokens) add(byName(name), 'message');
+  // The skills earlier turns keep active, newest first. The model cannot start
+  // a skill only users may start; a record saying it did (made before the
+  // skill changed, or sent by a client) keeps none active.
+  const carried = [];
   for (const ref of refs) {
     const skill = ref.id ? byId(ref.id) : byName(ref.name);
-    // The model cannot start a skill only users may start; a record saying it
-    // did (made before the skill changed, or sent by a client) keeps none active.
-    if (ref.by !== 'user' && !isModelInvocable(skill)) continue;
-    add(skill, 'chat');
+    if (!skill || (ref.by !== 'user' && !isModelInvocable(skill))) continue;
+    carried.push(skill);
   }
+  for (const name of explicit) add(byId(name), 'requested');
+  for (const name of tokens) add(byName(name), 'message');
+  // A skill of the user's own by the same name, picked with `/name` now or in
+  // an earlier turn, stands in for the app's; one already active in the chat
+  // is not announced again.
+  for (const name of automatic) {
+    if (resolved.some(entry => entry.displayName === name)) continue;
+    const earlier = carried.find(skill => skill.name === name);
+    if (earlier && isUserSkillId(earlier.id)) continue;
+    add(globalByName.get(name), earlier ? 'chat' : 'app');
+  }
+  for (const skill of carried) add(skill, 'chat');
   return resolved;
 }
 

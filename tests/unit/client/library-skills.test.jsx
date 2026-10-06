@@ -205,6 +205,19 @@ test('New offers Create skill with AI, opening an app that has the skill-builder
   expect(mockNavigate).toHaveBeenCalledWith('/apps/chat?prefill=%2Fskill-builder+');
 });
 
+test('Create skill with AI opens the Skill Builder app as it is', async () => {
+  fetchSkills.mockResolvedValue([...PICKER, SKILL_BUILDER]);
+  mockApps = [
+    { id: 'chat', skills: ['skill-builder'] },
+    { id: 'skill-builder', skills: ['skill-builder'], skillSettings: { autoActivate: true } }
+  ];
+  renderLibrary();
+  await waitFor(() => expect(screen.getAllByTestId('skill-card')).toHaveLength(3));
+  fireEvent.click(screen.getByRole('button', { name: 'New' }));
+  fireEvent.click(screen.getByRole('menuitem', { name: 'Create skill with AI' }));
+  expect(mockNavigate).toHaveBeenCalledWith('/apps/skill-builder');
+});
+
 test('Create skill with AI needs the skill granted, an app with it and personal skills', async () => {
   mockApps = [{ id: 'chat', skills: ['skill-builder'] }];
   const { unmount } = renderLibrary();

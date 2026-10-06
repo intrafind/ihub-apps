@@ -7,6 +7,7 @@ import {
   VARIABLE_NAME_PATTERN
 } from '../../shared/validationPatterns.js';
 import { zHttpUrl } from './common.js';
+import { FEATURE_IDS } from '../featureRegistry.js';
 
 // Localized string schema - matches client pattern for language codes
 const localizedStringSchema = z.record(
@@ -488,6 +489,9 @@ const baseAppConfigSchema = z.object({
   rendererConfig: z.object({}).passthrough().optional(),
   category: z.string().optional(),
   enabled: z.boolean().optional().prefault(true),
+  // Feature ids (Admin → Features) the app needs; while one is off, users do
+  // not get the app at all, as if it were disabled.
+  requiredFeatures: z.array(z.enum(FEATURE_IDS)).optional(),
 
   // Tool-specific configurations
   iassistant: iAssistantConfigSchema,

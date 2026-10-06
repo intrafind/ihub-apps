@@ -14,7 +14,10 @@ jest.mock('../../../client/src/shared/hooks/useFavorites', () => () => ({ favori
 jest.mock('../../../client/src/shared/contexts/UIConfigContext', () => ({
   useUIConfig: () => ({ uiConfig: {} })
 }));
-import { findSkillBuilderApp } from '../../../client/src/features/skills/hooks/useSkillBuilder';
+import {
+  findSkillBuilderApp,
+  runsSkillBuilder
+} from '../../../client/src/features/skills/hooks/useSkillBuilder';
 
 const SKILL_MD = [
   '---',
@@ -168,5 +171,31 @@ describe('findSkillBuilderApp', () => {
   test('is null when the skill is not granted or no app has it', () => {
     expect(findSkillBuilderApp(apps, [{ name: 'brand-voice' }])).toBeNull();
     expect(findSkillBuilderApp([apps[0]], skills)).toBeNull();
+  });
+
+  test('prefers an app built around the skill over the start page app', () => {
+    const builder = {
+      id: 'skill-builder',
+      order: 9,
+      skills: ['skill-builder'],
+      skillSettings: { autoActivate: true }
+    };
+    const uiConfig = { startPage: { defaultAppId: 'chat' } };
+    expect(findSkillBuilderApp([...apps, builder], skills, { uiConfig })?.id).toBe('skill-builder');
+    expect(runsSkillBuilder(builder)).toBe(true);
+    expect(runsSkillBuilder(apps[2])).toBe(false);
+  });
+
+  test('does not count on auto-activation past the active-skills cap', () => {
+    const skillsList = ['a', 'b', 'c', 'skill-builder'];
+    expect(runsSkillBuilder({ skills: skillsList, skillSettings: { autoActivate: true } })).toBe(
+      false
+    );
+    expect(
+      runsSkillBuilder({
+        skills: skillsList,
+        skillSettings: { autoActivate: true, maxActiveSkills: 4 }
+      })
+    ).toBe(true);
   });
 });
