@@ -2,7 +2,7 @@
  * Unit tests for server/utils/toolSelection.js — how an app's `tools` (and a
  * chat's `enabledTools`) select tool definitions.
  */
-import { isToolSelected } from '../../../server/utils/toolSelection.js';
+import { isInteractiveTool, isToolSelected } from '../../../server/utils/toolSelection.js';
 
 describe('isToolSelected', () => {
   const drawioTool = { id: 'create_diagram', _mcp: { serverId: 'drawio' } };
@@ -31,5 +31,25 @@ describe('isToolSelected', () => {
   test('handles missing input', () => {
     expect(isToolSelected(null, ['x'])).toBe(false);
     expect(isToolSelected({ id: 'x' }, undefined)).toBe(false);
+  });
+});
+
+describe('isInteractiveTool', () => {
+  test('flags ask_user by id', () => {
+    expect(isInteractiveTool({ id: 'ask_user' })).toBe(true);
+  });
+
+  test('flags any tool marked requiresUserInput', () => {
+    expect(isInteractiveTool({ id: 'custom_prompt', requiresUserInput: true })).toBe(true);
+  });
+
+  test('does not flag an ordinary tool', () => {
+    expect(isInteractiveTool({ id: 'braveSearch' })).toBe(false);
+    expect(isInteractiveTool({ id: 'braveSearch', requiresUserInput: false })).toBe(false);
+  });
+
+  test('handles missing input', () => {
+    expect(isInteractiveTool(null)).toBe(false);
+    expect(isInteractiveTool(undefined)).toBe(false);
   });
 });

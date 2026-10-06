@@ -14,6 +14,19 @@ the bottom of a page while its text started on the next one.
   Very long documents get this for their first headings only, to keep rendering fast.
 - Workflow result and agent artifact PDF downloads get the same layout rules.
 
+## Assistant Can Always Ask Clarifying Questions
+
+Apps that let the assistant ask the user a question (the `ask_user` tool) showed it as a toggle in
+the chat **+** menu, titled "Ask User for Clarification". Turning it off — or an older saved
+selection that never had it on — stopped the assistant from asking, so apps like **Skill Builder**
+kept re-thinking instead of pausing for an answer, and the question never appeared.
+
+- The clarification channel is now a system capability: the assistant keeps it whenever the app
+  offers it, regardless of which tools are switched on for the chat.
+- It no longer appears as a toggle in the chat **+** menu, where switching it off could only take
+  away the assistant's ability to ask. Genuine tools (web search, MCP servers, sources) are still
+  listed there.
+  
 ## Skills Read Their Reference Files Reliably
 
 A skill whose instructions pointed at a bundled file (for example `references/brand-guidelines.md`)
