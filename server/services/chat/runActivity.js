@@ -477,7 +477,7 @@ export function boundStoredActivity(activity) {
 /**
  * Tools whose hits are public pages: what they found is on the open web, not
  * behind the owner's permissions. Provider-run web search (`native`) is too.
- * The page reader (`webContentExtractor`) is not: hosts on the SSL whitelist
+ * The page reader (`read_url`) is not: hosts on the SSL whitelist
  * bypass its private-address guard, so a page it read may be an intranet one.
  */
 const PUBLIC_WEB_TOOLS = new Set(['bravesearch', 'qwantsearch', 'staansearch']);

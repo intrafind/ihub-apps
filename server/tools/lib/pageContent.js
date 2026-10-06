@@ -3,7 +3,7 @@ import { Readability } from '@mozilla/readability';
 import TurndownService from 'turndown';
 
 /**
- * What the page reader (`webContentExtractor`) makes of a fetched page: the
+ * What the page reader (`read_url`) makes of a fetched page: the
  * main content as Markdown, the page's metadata, and one window of the text
  * at a time.
  *

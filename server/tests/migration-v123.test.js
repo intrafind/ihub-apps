@@ -14,9 +14,12 @@ import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { up, precondition, version } from '../migrations/V123__web_page_reader_entry_point.js';
 
+// The page reader's shipped default now ships as read_url.json (its id was
+// renamed from webContentExtractor to read_url by V157); its content — the
+// script and parameters V123 cares about — is otherwise unchanged.
 const SHIPPED = JSON.parse(
   await readFile(
-    fileURLToPath(new URL('../defaults/tools/webContentExtractor.json', import.meta.url)),
+    fileURLToPath(new URL('../defaults/tools/read_url.json', import.meta.url)),
     'utf-8'
   )
 );

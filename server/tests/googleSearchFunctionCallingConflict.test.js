@@ -33,8 +33,8 @@ logger.info('✓ Test 1: google_search only works correctly');
 // Test 2: Only function tools should work
 const functionToolsOnly = [
   {
-    id: 'webContentExtractor',
-    name: 'webContentExtractor',
+    id: 'read_url',
+    name: 'read_url',
     description: 'Extract content from a web page',
     parameters: { type: 'object', properties: { url: { type: 'string' } } }
   }
@@ -84,7 +84,7 @@ assert.ok(
   'Warning should mention Google API limitation'
 );
 assert.ok(
-  warnMeta?.skippedTools?.includes('webContentExtractor'),
+  warnMeta?.skippedTools?.includes('read_url'),
   'Warning metadata should mention the skipped tool name'
 );
 logger.info('✓ Test 3: google_search takes priority over function tools with warning');

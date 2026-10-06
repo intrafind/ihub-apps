@@ -111,7 +111,7 @@ test('web: extracted pages are read or not readable; one sighting per page', () 
 });
 
 test('web: a page the reader read is private, with words read and truncation', () => {
-  const [page] = extract('webContentExtractor', {
+  const [page] = extract('read_url', {
     url: 'https://intranet.example/long',
     title: 'Long page',
     content: 'Some words here',
@@ -133,7 +133,7 @@ test('web: a page the reader read is private, with words read and truncation', (
 test('web: a failed page read is still a page the turn tried', () => {
   assert.deepEqual(
     extractToolSources({
-      toolId: 'webContentExtractor',
+      toolId: 'read_url',
       args: { url: 'https://down.example/' },
       result: { error: true },
       failed: true

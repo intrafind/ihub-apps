@@ -310,8 +310,8 @@ const webSearchTool = {
   parameters: { type: 'object', properties: { query: { type: 'string' } } }
 };
 const fetchTool = {
-  id: 'webContentExtractor',
-  name: 'webContentExtractor',
+  id: 'read_url',
+  name: 'read_url',
   description: 'fetch a page',
   parameters: { type: 'object', properties: { url: { type: 'string' } } }
 };
@@ -1550,10 +1550,7 @@ test('image lift: a tool result carrying imageData reaches the model as "Retriev
     imageData: { type: 'image', base64: 'AAAA', format: 'image/png', filename: 'a.png' }
   };
   const { service, requests } = makeService(
-    [
-      toolTurn([{ name: 'webContentExtractor', args: { url: 'https://x/a.png' } }]),
-      textTurn('A cat.')
-    ],
+    [toolTurn([{ name: 'read_url', args: { url: 'https://x/a.png' } }]), textTurn('A cat.')],
     { runTool: async () => imageResult }
   );
 
@@ -1909,7 +1906,7 @@ test('ordinary tools carry no MCP App view', async t => {
 test('page reads past websearch.maxPageReads are answered by the gate, not fetched', async t => {
   const chatId = newChatId('page-reads');
   const frames = captureFrames(t, chatId);
-  const read = url => ({ name: 'webContentExtractor', args: { url } });
+  const read = url => ({ name: 'read_url', args: { url } });
   const { service, runTool } = makeService(
     [
       toolTurn([read('https://a.example/'), read('https://b.example/')]),
@@ -1943,7 +1940,7 @@ test('the page read cap defaults to 5 and counts only the page reader', async t 
   captureFrames(t, chatId);
   const calls = [
     ...Array.from({ length: 6 }, (_, i) => ({
-      name: 'webContentExtractor',
+      name: 'read_url',
       args: { url: `https://p${i}.example/` }
     })),
     { name: 'webSearch', args: { query: 'still allowed' } }
@@ -1956,7 +1953,7 @@ test('the page read cap defaults to 5 and counts only the page reader', async t 
     prep: makePrep({ app: { id: 'app1' }, tools: [fetchTool, webSearchTool] })
   });
   const ids = runTool.calls.map(([id]) => id);
-  assert.equal(ids.filter(id => id === 'webContentExtractor').length, 5);
+  assert.equal(ids.filter(id => id === 'read_url').length, 5);
   assert.equal(ids.filter(id => id === 'webSearch').length, 1);
 });
 

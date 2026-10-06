@@ -128,7 +128,7 @@ async function run() {
   console.log('\n🧪 repeated 404s (any error) trip the breaker after the streak\n');
   {
     // The wf-exec-64d14c07 pivot: braveSearch dies, the model fabricates URLs
-    // and webContentExtractor 404s every round to the cap. A 404 is per-item so
+    // and read_url 404s every round to the cap. A 404 is per-item so
     // it is NOT rate-limited, but failing 3× IN A ROW is futile → disable it.
     const { executor } = makeExecutor({
       error: true,

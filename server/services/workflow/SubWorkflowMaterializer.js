@@ -145,7 +145,7 @@ export class SubWorkflowMaterializer {
       const hasSearchLikeTool = effectiveTools.some(t => {
         if (typeof t !== 'string') return false;
         const id = t.toLowerCase();
-        return id === 'websearch' || id === 'webcontentextractor' || id.startsWith('source_');
+        return id === 'websearch' || id === 'read_url' || id.startsWith('source_');
       });
       if (hasSearchLikeTool) {
         promptParts.push(

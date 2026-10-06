@@ -64,7 +64,7 @@ reducer, `client/src/shared/run/runReducer.js`.
 | `search.status`                | iAssistant conversation adapter             | provider payload                                        |
 | `grounding`                    | Google Search grounding                     | grounding metadata                                      |
 | `search`                       | Brave web search                            | `{ query, provider }`                                   |
-| `fetch.loading` / `fetch.parsing` / `fetch.extracting` | `webContentExtractor`   | `{ url, status, type? }`                                |
+| `fetch.loading` / `fetch.parsing` / `fetch.extracting` | `read_url`   | `{ url, status, type? }`                                |
 | `ifinder_search` / `ifinder_content` / `ifinder_download` | iFinder tools        | `{ query? \| documentId, searchProfile, … }`             |
 | `agent.*`                      | agent runtime (workflow / agent streams)    | the former internal event payload (task queue, plan, artifacts, inbox, memory, skills, hallucinated tools …) |
 

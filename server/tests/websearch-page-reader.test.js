@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * The page reader (`webContentExtractor`) offered next to the script-backed
+ * The page reader (`read_url`) offered next to the script-backed
  * search tool.
  *
  * Without it the model can search but can't open a page: all it sees of a
@@ -22,7 +22,7 @@ import mcpClientManager from '../services/mcp/McpClientManager.js';
 import {
   getToolsForApp,
   resolveNativeWebSearchFallbackTools,
-  WEB_CONTENT_EXTRACTOR_TOOL_ID
+  READ_URL_TOOL_ID
 } from '../toolLoader.js';
 import * as extractorModule from '../tools/webContentExtractor.js';
 
@@ -33,7 +33,7 @@ async function readDefaultTool(id) {
 }
 
 const qwant = await readDefaultTool('qwantSearch');
-const reader = await readDefaultTool(WEB_CONTENT_EXTRACTOR_TOOL_ID);
+const reader = await readDefaultTool(READ_URL_TOOL_ID);
 
 let tools = [];
 configCache.getTools = () => ({ data: tools });
@@ -56,7 +56,7 @@ describe('page reader alongside web search', () => {
 
   it('is offered next to the search tool when web search is on', async () => {
     const offered = await getToolsForApp(webApp(), 'en', { modelProvider: 'mistral' });
-    assert.deepEqual(ids(offered), ['qwantSearch', WEB_CONTENT_EXTRACTOR_TOOL_ID]);
+    assert.deepEqual(ids(offered), ['qwantSearch', READ_URL_TOOL_ID]);
   });
 
   it('is not offered when the user turned web search off', async () => {
@@ -71,7 +71,7 @@ describe('page reader alongside web search', () => {
     const app = webApp({ websearch: { ...webApp().websearch, useNativeSearch: true } });
     for (const modelProvider of ['anthropic', 'openai-responses']) {
       const offered = await getToolsForApp(app, 'en', { modelProvider });
-      assert.deepEqual(ids(offered), [WEB_CONTENT_EXTRACTOR_TOOL_ID], modelProvider);
+      assert.deepEqual(ids(offered), [READ_URL_TOOL_ID], modelProvider);
     }
   });
 
@@ -89,10 +89,10 @@ describe('page reader alongside web search', () => {
   });
 
   it('is offered once when the app also lists it in tools', async () => {
-    const offered = await getToolsForApp(webApp({ tools: [WEB_CONTENT_EXTRACTOR_TOOL_ID] }), 'en', {
+    const offered = await getToolsForApp(webApp({ tools: [READ_URL_TOOL_ID] }), 'en', {
       modelProvider: 'mistral'
     });
-    assert.deepEqual(ids(offered), [WEB_CONTENT_EXTRACTOR_TOOL_ID, 'qwantSearch']);
+    assert.deepEqual(ids(offered), [READ_URL_TOOL_ID, 'qwantSearch']);
   });
 
   it('is left out when it is not installed or disabled', async () => {
@@ -106,11 +106,11 @@ describe('page reader alongside web search', () => {
       { provider: 'anthropic', fallback: 'braveSearch' },
       { app: webApp(), language: 'en' }
     );
-    assert.deepEqual(ids(offered), ['qwantSearch', WEB_CONTENT_EXTRACTOR_TOOL_ID]);
+    assert.deepEqual(ids(offered), ['qwantSearch', READ_URL_TOOL_ID]);
   });
 });
 
-describe('default webContentExtractor definition', () => {
+describe('default read_url definition', () => {
   it('points at an exported function of its script', () => {
     assert.equal(reader.script, 'webContentExtractor.js');
     assert.equal(typeof extractorModule[reader.method], 'function');

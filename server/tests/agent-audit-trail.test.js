@@ -40,7 +40,7 @@ async function run() {
       toolCalls: [
         { name: 'braveSearch', args: 'a'.repeat(1000), result: 'r'.repeat(1000), durationMs: 50 },
         {
-          name: 'webContentExtractor',
+          name: 'read_url',
           args: 'a'.repeat(1000),
           result: 'r'.repeat(1000),
           durationMs: 90
@@ -127,10 +127,7 @@ async function run() {
     const p = new PromptNodeExecutor({ llmClient: {}, chatService: {} });
     check('braveSearch → citation-producing', p._isCitationProducingTool('braveSearch') === true);
     check('webSearch → citation-producing', p._isCitationProducingTool('webSearch') === true);
-    check(
-      'webContentExtractor → citation-producing',
-      p._isCitationProducingTool('webContentExtractor') === true
-    );
+    check('read_url → citation-producing', p._isCitationProducingTool('read_url') === true);
     check(
       'source_ lookups → citation-producing',
       p._isCitationProducingTool('source_kb1') === true

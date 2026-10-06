@@ -1,5 +1,5 @@
 /**
- * SSRF regression tests for #1693: `webContentExtractor` only validated the
+ * SSRF regression tests for #1693: `read_url` only validated the
  * *initial* hostname before fetching, then let redirects (and DNS rebinding)
  * bypass the check entirely. These tests assert every redirect hop is
  * re-validated against the SSRF guard and that DNS is pinned to the addresses
@@ -46,16 +46,16 @@ function redirectResponse(location) {
   };
 }
 
-describe('webContentExtractor SSRF guard', () => {
-  let webContentExtractor;
+describe('read_url SSRF guard', () => {
+  let read_url;
 
   beforeEach(async () => {
     jest.resetAllMocks();
-    ({ default: webContentExtractor } = await import('../tools/webContentExtractor.js'));
+    ({ default: read_url } = await import('../tools/webContentExtractor.js'));
   });
 
   test('blocks a private IP literal before ever fetching', async () => {
-    await expect(webContentExtractor({ url: 'http://127.0.0.1/' })).rejects.toMatchObject({
+    await expect(read_url({ url: 'http://127.0.0.1/' })).rejects.toMatchObject({
       message: expect.stringContaining('private/internal IP addresses')
     });
     expect(throttledFetchMock).not.toHaveBeenCalled();
@@ -63,7 +63,7 @@ describe('webContentExtractor SSRF guard', () => {
 
   test('blocks the AWS/GCP/Azure metadata address', async () => {
     await expect(
-      webContentExtractor({ url: 'http://169.254.169.254/latest/meta-data' })
+      read_url({ url: 'http://169.254.169.254/latest/meta-data' })
     ).rejects.toMatchObject({
       message: expect.stringContaining('private/internal IP addresses')
     });
@@ -75,7 +75,7 @@ describe('webContentExtractor SSRF guard', () => {
       .mockResolvedValueOnce(redirectResponse('http://93.184.216.34/final'))
       .mockResolvedValueOnce(htmlResponse());
 
-    const result = await webContentExtractor({ url: 'http://93.184.216.34/start' });
+    const result = await read_url({ url: 'http://93.184.216.34/start' });
 
     expect(result.content).toContain('hello');
     expect(throttledFetchMock).toHaveBeenCalledTimes(2);
@@ -86,7 +86,7 @@ describe('webContentExtractor SSRF guard', () => {
       redirectResponse('http://169.254.169.254/latest/meta-data')
     );
 
-    await expect(webContentExtractor({ url: 'http://93.184.216.34/start' })).rejects.toMatchObject({
+    await expect(read_url({ url: 'http://93.184.216.34/start' })).rejects.toMatchObject({
       message: expect.stringContaining('private/internal IP addresses')
     });
 
@@ -102,7 +102,7 @@ describe('webContentExtractor SSRF guard', () => {
     // test above using the pinned-lookup code path.
     throttledFetchMock.mockResolvedValueOnce(redirectResponse('http://[::ffff:a9fe:a9fe]/'));
 
-    await expect(webContentExtractor({ url: 'http://93.184.216.34/start' })).rejects.toMatchObject({
+    await expect(read_url({ url: 'http://93.184.216.34/start' })).rejects.toMatchObject({
       message: expect.stringContaining('private/internal IP addresses')
     });
     expect(throttledFetchMock).toHaveBeenCalledTimes(1);
@@ -114,7 +114,7 @@ describe('webContentExtractor SSRF guard', () => {
       throttledFetchMock.mockResolvedValueOnce(redirectResponse(`http://93.184.216.${i}/hop`));
     }
 
-    await expect(webContentExtractor({ url: 'http://93.184.216.0/start' })).rejects.toMatchObject({
+    await expect(read_url({ url: 'http://93.184.216.0/start' })).rejects.toMatchObject({
       message: expect.stringContaining('Too many redirects')
     });
 
@@ -125,7 +125,7 @@ describe('webContentExtractor SSRF guard', () => {
   test('rejects non-http(s) redirect targets', async () => {
     throttledFetchMock.mockResolvedValueOnce(redirectResponse('file:///etc/passwd'));
 
-    await expect(webContentExtractor({ url: 'http://93.184.216.34/start' })).rejects.toMatchObject({
+    await expect(read_url({ url: 'http://93.184.216.34/start' })).rejects.toMatchObject({
       message: expect.stringContaining('Only HTTP and HTTPS URLs are supported')
     });
     expect(throttledFetchMock).toHaveBeenCalledTimes(1);

@@ -78,9 +78,15 @@ async function scratch(name) {
   return fs.mkdtemp(path.join(baseDir, `${name}-`));
 }
 
+// V157 renamed the page reader's tool id (and its shipped file) from
+// webContentExtractor to read_url. NEW_PARAMETERS still keys it by the
+// migration-era id, so map it to the current shipped filename here.
+const SHIPPED_FILE = { webContentExtractor: 'read_url' };
+
 async function readDefault(id) {
+  const file = SHIPPED_FILE[id] || id;
   return JSON.parse(
-    await fs.readFile(new URL(`../defaults/tools/${id}.json`, import.meta.url), 'utf8')
+    await fs.readFile(new URL(`../defaults/tools/${file}.json`, import.meta.url), 'utf8')
   );
 }
 

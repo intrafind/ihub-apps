@@ -459,7 +459,7 @@ graph TB
 #### URLHandler
 - **Purpose**: Fetch content from web URLs
 - **Features**: Web content extraction, fallback mechanisms
-- **Integration**: Uses webContentExtractor tool for intelligent content parsing
+- **Integration**: Uses read_url tool for intelligent content parsing
 - **Error Handling**: Graceful degradation when external tools unavailable
 
 #### IFinderHandler
