@@ -23,6 +23,22 @@ import AppSidebar from './AppSidebar';
 import IHubLogo from './IHubLogo';
 import BrandTitle from './BrandTitle';
 
+/**
+ * The application shell that wraps every routed page via `<Outlet />`.
+ *
+ * Renders one of three layouts depending on the route and host: the sidebar
+ * layout (`AppSidebar` plus an independently scrolling content pane) for app
+ * and standard pages, the admin layout, or the embedded/legacy header layout
+ * for Teams, Office and other embeds. It also owns the mobile sidebar drawer,
+ * applies integration settings from the URL (header, footer, sidebar,
+ * language), and renders the shared footer, disclaimer and smart search.
+ *
+ * The root is a full-height `overflow-hidden` box (except on the classic
+ * `min-h-screen` pages, which scroll the document); only inner regions scroll,
+ * so the shell chrome never scrolls away.
+ *
+ * @returns {JSX.Element} The app shell around the current route's content.
+ */
 function Layout() {
   const { t, i18n } = useTranslation();
   const currentLanguage = i18n.language;
@@ -172,9 +188,16 @@ function Layout() {
       </footer>
     ) : null;
 
+  // `relative` makes the full-height shell a containing block, so an
+  // absolutely-positioned descendant (an `sr-only` label or an overlay deep
+  // inside a tall, scrolled message) is clipped by the `overflow-hidden` shell
+  // instead of resolving against `<html>` and stretching the document — which
+  // gave the whole page a scrollbar and let the app chrome scroll away once an
+  // answer with sources finished. Harmless on the `min-h-screen` branch, which
+  // has no clipping and is meant to scroll the document.
   return (
     <div
-      className={`flex flex-col w-full bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 transition-colors duration-200 ${showSidebar || isAdminRoute || isAppPage ? 'h-shell overflow-hidden' : 'min-h-screen'}`}
+      className={`relative flex flex-col w-full bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 transition-colors duration-200 ${showSidebar || isAdminRoute || isAppPage ? 'h-shell overflow-hidden' : 'min-h-screen'}`}
     >
       <a
         href="#main-content"
