@@ -266,7 +266,7 @@ Agents and workflows keep their own budgets.
 
 Apps that previously used websearch tool IDs in their `tools` array are automatically migrated on server startup (Migration V025). The migration:
 
-- Detects apps with `braveSearch`, `enhancedWebSearch`, `googleSearch`, `webSearch`, or `read_url` in their `tools` array
+- Detects apps with `braveSearch`, `enhancedWebSearch`, `googleSearch`, `webSearch`, or `webContentExtractor` in their `tools` array
 - Infers the provider and content extraction settings from the tools used
 - Creates a unified `websearch` configuration object
 - Removes the deprecated tool IDs from the `tools` array

@@ -143,26 +143,23 @@ test('a longer id and the implementation file name are left alone', async () => 
   assert.deepEqual(ctx.files['apps/chat.json'].tools, ['webContentExtractorPro']);
 });
 
-test('a read_url collision leaves the reader and every reference on the old id', async () => {
+test('a read_url collision fails the migration and changes nothing', async () => {
   // An admin already has a custom tool named read_url (a different script), with
-  // the old page reader still present. The migration makes no change at all, so
-  // apps keep pointing at the page reader (webContentExtractor) rather than the
-  // unrelated read_url tool.
+  // the old page reader still present. The migration must fail rather than
+  // half-rename (the runtime knows the reader only by the new id), and it must
+  // leave every file untouched so the retry on the next start is clean.
   const custom = { id: 'read_url', name: { en: 'My URL tool' }, script: 'myUrlTool.js' };
+  const reader = { id: 'webContentExtractor', script: 'webContentExtractor.js' };
+  const app = { id: 'chat', tools: ['braveSearch', 'webContentExtractor'] };
   const ctx = fakeCtx({
     'tools/read_url.json': structuredClone(custom),
-    'tools/webContentExtractor.json': {
-      id: 'webContentExtractor',
-      script: 'webContentExtractor.js'
-    },
-    'apps/chat.json': { id: 'chat', tools: ['braveSearch', 'webContentExtractor'] }
+    'tools/webContentExtractor.json': structuredClone(reader),
+    'apps/chat.json': structuredClone(app)
   });
-  await up(ctx);
+  await assert.rejects(up(ctx), /read_url/);
   assert.deepEqual(ctx.files['tools/read_url.json'], custom);
-  assert.equal('tools/webContentExtractor.json' in ctx.files, true);
-  // The reference rewrite is skipped — apps still resolve to the page reader.
-  assert.deepEqual(ctx.files['apps/chat.json'].tools, ['braveSearch', 'webContentExtractor']);
-  assert.ok(ctx.logs.some(m => /collision/i.test(m)));
+  assert.deepEqual(ctx.files['tools/webContentExtractor.json'], reader);
+  assert.deepEqual(ctx.files['apps/chat.json'], app);
 });
 
 test('the legacy config/tools.json entry is renamed too', async () => {

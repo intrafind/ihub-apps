@@ -23,10 +23,11 @@
  * flag, tuned parameters), so we write it over the fresh default and delete the
  * old file, leaving exactly one `read_url.json` with the admin's settings. The
  * one exception is a pre-existing `read_url.json` that is a different tool (an
- * admin's own, by the same brand-new id): that collision blocks the rename, and
- * the migration then makes no change at all — the reader and every reference to
- * it stay on `webContentExtractor`, so it keeps working — until the admin clears
- * the clash.
+ * admin's own, by the same brand-new id): the runtime recognises the reader
+ * only by the new id, so a half-rename would orphan it and mis-offer the
+ * clashing tool. Rather than record that broken state as done, the migration
+ * fails (and, by default, halts startup); recorded as failed, not applied, it
+ * re-runs and completes on the next start once the admin has cleared the clash.
  */
 
 export const version = '157';
@@ -89,37 +90,42 @@ export async function precondition(ctx) {
 }
 
 /**
+ * The error thrown when a different tool already uses `read_url`. The runtime
+ * recognises the page reader only by the new id, so the rename cannot be done
+ * partially: failing (and, by default, halting startup) forces the admin to
+ * clear the clash. Because the migration is recorded as failed, not applied, it
+ * re-runs and completes on the next start once the clash is gone — far better
+ * than a half-rename that orphans the reader and mis-offers the clashing tool.
+ *
+ * @returns {Error}
+ */
+function readUrlCollisionError() {
+  return new Error(
+    `Cannot rename the web page reader to '${NEW_ID}': a different tool already uses that id. ` +
+      `Rename or remove that tool, then restart — this migration completes on the next run.`
+  );
+}
+
+/**
  * Rename the tool definition itself: the per-file definition in
  * `contents/tools/`, and a legacy aggregate `config/tools.json` if one survived
- * from before V068.
+ * from before V068. Throws {@link readUrlCollisionError} when a different tool
+ * already holds `read_url`, before making any change.
  *
  * @param {Object} ctx
- * @returns {Promise<boolean>} true when a name clash blocked the rename — a
- *   different tool already holds `read_url`, so the page reader keeps its old id
- *   and the caller must leave the references on the old id too, or apps would
- *   point at that unrelated tool instead of the reader.
  */
 async function renameToolDefinition(ctx) {
-  let collided = false;
   const target = `tools/${NEW_ID}.json`;
   for (const file of await ctx.listFiles('tools', '*.json')) {
     if (file === `${NEW_ID}.json`) continue; // the target itself, handled below
     const tool = await ctx.readJson(`tools/${file}`);
     if (!tool || typeof tool !== 'object' || tool.id !== OLD_ID) continue;
     // If read_url.json already holds a *different* tool — an admin's own tool
-    // that happens to use this brand-new id — do not clobber it. Leave the page
-    // reader under its old id (and, via the caller, its references too) for the
-    // admin to resolve. The reader's own default is recognised by its script;
-    // only that is safe to overwrite.
+    // that happens to use this brand-new id — do not clobber it. The reader's
+    // own default is recognised by its script; anything else is a real clash.
     if (await ctx.fileExists(target)) {
       const existing = await ctx.readJson(target);
-      if (existing && existing.script !== READER_SCRIPT) {
-        ctx.warn(
-          `tools/${target} already belongs to another tool; leaving the page reader as ${OLD_ID}. Resolve the read_url id collision manually.`
-        );
-        collided = true;
-        continue;
-      }
+      if (existing && existing.script !== READER_SCRIPT) throw readUrlCollisionError();
     }
     tool.id = NEW_ID;
     // Write the admin's definition to read_url.json, overwriting the fresh
@@ -138,36 +144,28 @@ async function renameToolDefinition(ctx) {
     if (Array.isArray(tools)) {
       // The same clash, in one file: a different entry already uses read_url.
       const clash = tools.some(t => t && t.id === NEW_ID && t.script !== READER_SCRIPT);
-      if (clash && tools.some(t => t && t.id === OLD_ID)) {
-        ctx.warn(
-          `config/tools.json already has a different ${NEW_ID} tool; leaving the page reader as ${OLD_ID}. Resolve the collision manually.`
-        );
-        collided = true;
-      } else {
-        let changed = false;
-        for (const tool of tools) {
-          if (tool && tool.id === OLD_ID) {
-            tool.id = NEW_ID;
-            changed = true;
-          }
+      if (clash && tools.some(t => t && t.id === OLD_ID)) throw readUrlCollisionError();
+      let changed = false;
+      for (const tool of tools) {
+        if (tool && tool.id === OLD_ID) {
+          tool.id = NEW_ID;
+          changed = true;
         }
-        if (changed) {
-          await ctx.writeJson('config/tools.json', tools);
-          ctx.log(`Renamed ${OLD_ID} → ${NEW_ID} in legacy config/tools.json`);
-        }
+      }
+      if (changed) {
+        await ctx.writeJson('config/tools.json', tools);
+        ctx.log(`Renamed ${OLD_ID} → ${NEW_ID} in legacy config/tools.json`);
       }
     }
   }
-
-  return collided;
 }
 
 export async function up(ctx) {
-  // When a name clash blocks renaming the page reader's definition, make no
-  // other change either: the reader keeps the old id, and every reference stays
-  // on it, so apps still resolve to the reader (consistent, and still working
-  // under webContentExtractor) rather than to the unrelated read_url tool.
-  if (await renameToolDefinition(ctx)) return;
+  // Rename the definition first. A name clash with a different read_url tool
+  // throws here, before any change: the references below are only rewritten
+  // once the reader actually holds the new id, so apps never point at the
+  // unrelated tool.
+  await renameToolDefinition(ctx);
 
   for (const dir of ['apps', 'workflows', 'agents']) {
     for (const file of await ctx.listFiles(dir, '*.json')) {
