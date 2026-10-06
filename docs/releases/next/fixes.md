@@ -24,4 +24,5 @@ made it look intermittent.
 - The full-height app shell is now a positioning context, so hidden helper elements inside a tall,
   scrolled answer (such as screen-reader-only labels on citation badges) can no longer stretch the
   document and give the page its own scrollbar.
-- Only the message list and the sources panel scroll; the sidebar, header and composer stay put.
+- The app chrome (sidebar, header and composer) stays in place; the message list, the sources panel
+  and the other inner regions keep their own scrolling.

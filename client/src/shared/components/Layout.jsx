@@ -23,6 +23,22 @@ import AppSidebar from './AppSidebar';
 import IHubLogo from './IHubLogo';
 import BrandTitle from './BrandTitle';
 
+/**
+ * The application shell that wraps every routed page via `<Outlet />`.
+ *
+ * Renders one of three layouts depending on the route and host: the sidebar
+ * layout (`AppSidebar` plus an independently scrolling content pane) for app
+ * and standard pages, the admin layout, or the embedded/legacy header layout
+ * for Teams, Office and other embeds. It also owns the mobile sidebar drawer,
+ * applies integration settings from the URL (header, footer, sidebar,
+ * language), and renders the shared footer, disclaimer and smart search.
+ *
+ * The root is a full-height `overflow-hidden` box (except on the classic
+ * `min-h-screen` pages, which scroll the document); only inner regions scroll,
+ * so the shell chrome never scrolls away.
+ *
+ * @returns {JSX.Element} The app shell around the current route's content.
+ */
 function Layout() {
   const { t, i18n } = useTranslation();
   const currentLanguage = i18n.language;
