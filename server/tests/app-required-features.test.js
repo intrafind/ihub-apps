@@ -118,6 +118,13 @@ describe('configCache.getApps with requiredFeatures', () => {
     );
     assert.notEqual(etag, '"apps-etag"');
   });
+
+  it('keeps a user-specific ETag one quoted entity tag', async () => {
+    serve({ skills: false });
+    const user = { id: 'u1', permissions: { apps: new Set(['skill-builder']) } };
+    const { etag } = await configCache.getAppsForUser(user, {});
+    assert.match(etag, /^"apps-etag-f[0-9a-f]{8}-[0-9a-f]{8}"$/);
+  });
 });
 
 describe('app-as-tool with requiredFeatures', () => {

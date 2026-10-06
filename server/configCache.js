@@ -35,6 +35,21 @@ export { resolveEnvVarsInObject };
 /**
  * Decrypt a single value if it has the ENC[...] format
  */
+/**
+ * An ETag for a variant of a cached list: `suffix` goes inside the quotes, so
+ * `"abc"` becomes `"abc-suffix"` — still one valid entity tag.
+ *
+ * @param {string} etag - The list's ETag
+ * @param {string} suffix - What tells the variant apart
+ * @returns {string}
+ */
+function etagWithSuffix(etag, suffix) {
+  if (typeof etag === 'string' && etag.length > 1 && etag.endsWith('"')) {
+    return `${etag.slice(0, -1)}-${suffix}"`;
+  }
+  return `${etag}-${suffix}`;
+}
+
 function decryptIfEncrypted(value) {
   if (!value || typeof value !== 'string') return value;
   if (tokenStorageService.isEncrypted(value)) {
@@ -1009,11 +1024,7 @@ class ConfigCache {
       .update(JSON.stringify(hiddenIds))
       .digest('hex')
       .substring(0, 8);
-    const etag =
-      typeof apps.etag === 'string' && apps.etag.endsWith('"')
-        ? `${apps.etag.slice(0, -1)}-f${hiddenHash}"`
-        : `${apps.etag}-f${hiddenHash}`;
-    return { data: available, etag };
+    return { data: available, etag: etagWithSuffix(apps.etag, `f${hiddenHash}`) };
   }
 
   /**
@@ -1724,7 +1735,7 @@ class ConfigCache {
         .update(JSON.stringify(appIds))
         .digest('hex')
         .substring(0, 8);
-      userSpecificEtag = `${appsEtag}-${contentHash}`;
+      userSpecificEtag = etagWithSuffix(appsEtag, contentHash);
     }
 
     return { data: apps, etag: userSpecificEtag };

@@ -185,4 +185,17 @@ describe('findSkillBuilderApp', () => {
     expect(runsSkillBuilder(builder)).toBe(true);
     expect(runsSkillBuilder(apps[2])).toBe(false);
   });
+
+  test('does not count on auto-activation past the active-skills cap', () => {
+    const skillsList = ['a', 'b', 'c', 'skill-builder'];
+    expect(runsSkillBuilder({ skills: skillsList, skillSettings: { autoActivate: true } })).toBe(
+      false
+    );
+    expect(
+      runsSkillBuilder({
+        skills: skillsList,
+        skillSettings: { autoActivate: true, maxActiveSkills: 4 }
+      })
+    ).toBe(true);
+  });
 });

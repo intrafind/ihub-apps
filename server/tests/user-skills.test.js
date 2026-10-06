@@ -578,6 +578,16 @@ describe('in chat', () => {
       resolved.map(entry => [entry.name, entry.origin]),
       [[mine.id, 'chat']]
     );
+    // An answer records it by its id: the same.
+    const byId = await skillAccess.resolveSkillsForTurn({
+      earlier: [{ id: mine.id, by: 'user' }],
+      app: auto,
+      user: root
+    });
+    assert.deepEqual(
+      byId.map(entry => [entry.name, entry.origin]),
+      [[mine.id, 'chat']]
+    );
     // Without it, the app's global skill is the one auto-activated.
     const fresh = await skillAccess.resolveSkillsForTurn({ app: auto, user: root });
     assert.deepEqual(

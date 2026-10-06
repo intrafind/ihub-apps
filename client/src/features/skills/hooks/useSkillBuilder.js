@@ -8,20 +8,29 @@ import { pickDefaultChatApp } from '../../../utils/homePage';
 /** The global skill that interviews the user and drafts a SKILL.md (shipped with iHub). */
 export const SKILL_BUILDER_NAME = 'skill-builder';
 
+/** How many skills a turn runs at most, as the server caps them (skillAccess.js). */
+const DEFAULT_MAX_ACTIVE_SKILLS = 3;
+const MAX_ACTIVE_SKILLS_LIMIT = 10;
+
 /**
  * Whether `app` is built around the skill-builder skill: it runs the skill on
  * every turn (`skillSettings.autoActivate`), like the shipped Skill Builder
- * app, so a chat there needs no `/skill-builder` to start.
+ * app, so a chat there needs no `/skill-builder` to start. The server
+ * auto-activates the app's skills in order up to `maxActiveSkills`, so the
+ * skill has to be within that many.
  *
  * @param {Object} app
  * @returns {boolean}
  */
 export function runsSkillBuilder(app) {
-  return (
-    app?.skillSettings?.autoActivate === true &&
-    Array.isArray(app?.skills) &&
-    app.skills.includes(SKILL_BUILDER_NAME)
-  );
+  if (app?.skillSettings?.autoActivate !== true || !Array.isArray(app?.skills)) return false;
+  const configured = app.skillSettings.maxActiveSkills;
+  const cap =
+    Number.isInteger(configured) && configured >= 1
+      ? Math.min(configured, MAX_ACTIVE_SKILLS_LIMIT)
+      : DEFAULT_MAX_ACTIVE_SKILLS;
+  const index = app.skills.indexOf(SKILL_BUILDER_NAME);
+  return index >= 0 && index < cap;
 }
 
 /**
