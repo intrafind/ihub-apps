@@ -41,7 +41,7 @@ import { readMemoryBodyForPrompt } from '../../../agents/memory/memoryFile.js';
 import { getAppAsTools, stripAppToolsForAgent } from '../../chat/appToolsGateway.js';
 import { writeArtifactDirect } from '../../../agents/runtime/artifactStore.js';
 import { isFeatureEnabled } from '../../../featureRegistry.js';
-import { describeSkillCatalog } from '../../skillAccess.js';
+import { describeSkillCatalog, renderActiveSkillBlock } from '../../skillAccess.js';
 import { resolveMaxOutputTokens } from '../../../../shared/outputTokens.js';
 
 // Bound on the {{previousTaskResults}} digest baked into a per-task worker's
@@ -2152,7 +2152,8 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
           const entry = activated[name];
           const body = typeof entry === 'string' ? entry : entry?.body || '';
           if (!body) return '';
-          return `<active_skill name="${name}">\n${body}\n</active_skill>`;
+          const resources = typeof entry === 'object' ? entry?.resources || [] : [];
+          return renderActiveSkillBlock({ name, body, resources });
         })
         .filter(Boolean);
       if (blocks.length > 0) {

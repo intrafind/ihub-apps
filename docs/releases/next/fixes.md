@@ -23,4 +23,5 @@ path and got back `> Invalid URL`, because a skill-relative path is not a web ad
 - The note that lists a skill's bundled files now names the `read_skill_resource` tool and the
   skill to pass, and states that these files are neither web pages nor local files — so the model
   reads them with the right tool instead of a web or URL tool.
-- This applies both when a skill is activated and when it stays active across later messages.
+- This applies when a skill is activated, when it stays active across later messages, and in agent
+  runs where the skill was activated by the planner or an earlier step.

@@ -673,19 +673,27 @@ export function maxSkillBodyTokensFor(platform) {
   return Number.isFinite(value) && value > 0 ? value : DEFAULT_MAX_SKILL_BODY_TOKENS;
 }
 
-/** The `<active_skill>` block with a skill's full instructions. */
-function activeSkillBlock(skill) {
-  let block = `<active_skill name="${escapeXml(skill.name)}">\n${skill.body}\n</active_skill>`;
-  if (skill.resources.length > 0) {
-    // Name the tool and the skill_name to pass, and rule out the web/file
-    // tools. A bundled file is a skill-relative path, not a URL, so handing
-    // one to a web page reader fails with "Invalid URL"; the model must reach
-    // these through read_skill_resource.
-    block += `\nThis skill bundles these files: ${skill.resources.join(
+/**
+ * The `<active_skill>` block with a skill's full instructions, plus — when the
+ * skill bundles files — the note that points the model at `read_skill_resource`
+ * for them. Exported so the chat system prompt and the agent workflow
+ * renderers (planner, task workers, synthesizer) carry the same guidance from
+ * one place: a bundled file is a skill-relative path, not a URL, so handing one
+ * to the web page reader fails with "Invalid URL"; it must be read through
+ * `read_skill_resource`. "another … tool" keeps `read_skill_resource` itself —
+ * which reads a referenced file — out of the prohibition.
+ *
+ * @param {{name: string, body?: string, resources?: string[]}} skill
+ * @returns {string}
+ */
+export function renderActiveSkillBlock({ name, body = '', resources = [] }) {
+  let block = `<active_skill name="${escapeXml(name)}">\n${body}\n</active_skill>`;
+  if (Array.isArray(resources) && resources.length > 0) {
+    block += `\nThis skill bundles these files: ${resources.join(
       ', '
     )}. They are not web pages or local files — read one with the read_skill_resource tool (skill_name "${escapeXml(
-      skill.name
-    )}", file_path the path listed above), never with a web, URL or file-reading tool.`;
+      name
+    )}", file_path the path listed above), never with another web, URL or file-reading tool.`;
   }
   return block;
 }
@@ -751,7 +759,7 @@ export async function prepareActiveSkills({
     const full = tokens <= perSkill && used + tokens <= total;
     if (full) used += tokens;
     skills.push({ ...entry, full });
-    blocks.push(full ? activeSkillBlock(skill) : deferredSkillBlock(skill));
+    blocks.push(full ? renderActiveSkillBlock(skill) : deferredSkillBlock(skill));
   }
   if (blocks.length === 0) return none;
   const precedence =

@@ -901,6 +901,10 @@ export async function runTool(toolId, params = {}, options = {}) {
       workflowState.data._activatedSkills[skillName] = {
         body: skill.body,
         description: skill.description,
+        // Persist the bundled-file paths so later workflow nodes render the
+        // read_skill_resource hint in their <active_skill> block, not just the
+        // body — the tool is exposed to them, the guidance must travel with it.
+        resources: skill.resources,
         activatedAt: new Date().toISOString(),
         activatedBy: params.user?.isAgent ? `agent:${params.user.profileId || 'unknown'}` : 'llm'
       };
@@ -923,7 +927,7 @@ export async function runTool(toolId, params = {}, options = {}) {
     // a web page reader given "references/x.md" fails with "Invalid URL", so
     // steer the model to read_skill_resource explicitly.
     if (skill.resources.length > 0) {
-      result += `\n\n---\nThis skill bundles these files. Read one with the read_skill_resource tool (skill_name "${skill.name}", file_path the path below), never with a web, URL or file-reading tool:\n${skill.resources
+      result += `\n\n---\nThis skill bundles these files. Read one with the read_skill_resource tool (skill_name "${skill.name}", file_path the path below), never with another web, URL or file-reading tool:\n${skill.resources
         .map(r => `- ${r}`)
         .join('\n')}`;
     }
