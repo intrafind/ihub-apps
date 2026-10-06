@@ -224,6 +224,18 @@ describe('skill tools', () => {
     assert.ok(tool(tools, 'find_skill'));
   });
 
+  test('activate_skill points bundled files at read_skill_resource', async () => {
+    const result = await runTool('activate_skill', {
+      appConfig: app,
+      user: userWith(['*']),
+      skill_name: 'alpha'
+    });
+    assert.match(result, /ALPHA BODY/);
+    assert.match(result, /read_skill_resource tool \(skill_name "alpha"/);
+    assert.match(result, /never with another web, URL or file-reading tool/);
+    assert.match(result, /- references\/notes\.md/);
+  });
+
   test('find_skill searches the listed skills only', async () => {
     const params = { appConfig: app, user: userWith(['*']) };
     const found = await runTool('find_skill', { ...params, query: 'newsletter' });
@@ -231,6 +243,25 @@ describe('skill tools', () => {
     assert.doesNotMatch(found, /manual/);
     assert.match(await runTool('find_skill', { ...params, query: 'astronomy' }), /No skill/);
     assert.match(await runTool('find_skill', { ...params, query: ' ' }), /keywords/);
+  });
+});
+
+describe('renderActiveSkillBlock', () => {
+  test('points bundled files at read_skill_resource, ruling out other tools', () => {
+    const block = skillAccess.renderActiveSkillBlock({
+      name: 'alpha',
+      body: 'ALPHA BODY',
+      resources: ['references/notes.md', 'scripts/extract.py']
+    });
+    assert.match(block, /<active_skill name="alpha">\nALPHA BODY\n<\/active_skill>/);
+    assert.match(block, /references\/notes\.md, scripts\/extract\.py/);
+    assert.match(block, /read_skill_resource tool \(skill_name "alpha"/);
+    assert.match(block, /never with another web, URL or file-reading tool/);
+  });
+
+  test('adds nothing when the skill bundles no files', () => {
+    const block = skillAccess.renderActiveSkillBlock({ name: 'beta', body: 'BETA BODY' });
+    assert.equal(block, '<active_skill name="beta">\nBETA BODY\n</active_skill>');
   });
 });
 
@@ -268,6 +299,9 @@ describe('a skill only users may start', () => {
       { skills: ['manual', 'alpha'] }
     );
     assert.deepEqual(Object.keys(state.data._activatedSkills), ['alpha']);
+    // The planner persists the skill's bundled-file paths too, so a later node
+    // renders the read_skill_resource hint, not just the body.
+    assert.deepEqual(state.data._activatedSkills.alpha.resources, ['references/notes.md']);
   });
 });
 
@@ -313,6 +347,20 @@ describe('skills stay active across a chat', () => {
       user('make it shorter')
     ]);
     assert.match(system, /<active_skill name="alpha">\nALPHA BODY/);
+  });
+
+  test('an active skill tells the model to read its files with read_skill_resource', async () => {
+    const system = await systemPromptFor([
+      user('/alpha draft it'),
+      answer('Here is a draft'),
+      user('use the notes')
+    ]);
+    // The bundled file is listed, pointed at the read_skill_resource tool with
+    // the skill name to pass, and ruled out of the web/file tools so the model
+    // does not hand a skill-relative path to the Web Page Reader.
+    assert.match(system, /references\/notes\.md/);
+    assert.match(system, /read_skill_resource tool \(skill_name "alpha"/);
+    assert.match(system, /never with another web, URL or file-reading tool/);
   });
 
   test('a skill the model activated stays active in later turns', async () => {
