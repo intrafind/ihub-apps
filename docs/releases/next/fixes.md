@@ -13,3 +13,15 @@ the bottom of a page while its text started on the next one.
 - A heading now moves to the next page when fewer than two lines of its text would stay with it.
   Very long documents get this for their first headings only, to keep rendering fast.
 - Workflow result and agent artifact PDF downloads get the same layout rules.
+
+## The Whole Page Could Scroll the App Away After an Answer With Sources
+
+On the chat, once an answer that cited sources finished and jumped back to the top, the entire page
+gained a scrollbar: scrolling it pushed the sidebar and the app header off-screen instead of
+scrolling only the message list. Short answers and answers without sources were unaffected, which
+made it look intermittent.
+
+- The full-height app shell is now a positioning context, so hidden helper elements inside a tall,
+  scrolled answer (such as screen-reader-only labels on citation badges) can no longer stretch the
+  document and give the page its own scrollbar.
+- Only the message list and the sources panel scroll; the sidebar, header and composer stay put.

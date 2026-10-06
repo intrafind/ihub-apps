@@ -172,9 +172,16 @@ function Layout() {
       </footer>
     ) : null;
 
+  // `relative` makes the full-height shell a containing block, so an
+  // absolutely-positioned descendant (an `sr-only` label or an overlay deep
+  // inside a tall, scrolled message) is clipped by the `overflow-hidden` shell
+  // instead of resolving against `<html>` and stretching the document — which
+  // gave the whole page a scrollbar and let the app chrome scroll away once an
+  // answer with sources finished. Harmless on the `min-h-screen` branch, which
+  // has no clipping and is meant to scroll the document.
   return (
     <div
-      className={`flex flex-col w-full bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 transition-colors duration-200 ${showSidebar || isAdminRoute || isAppPage ? 'h-shell overflow-hidden' : 'min-h-screen'}`}
+      className={`relative flex flex-col w-full bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 transition-colors duration-200 ${showSidebar || isAdminRoute || isAppPage ? 'h-shell overflow-hidden' : 'min-h-screen'}`}
     >
       <a
         href="#main-content"
