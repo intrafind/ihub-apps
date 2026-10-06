@@ -110,17 +110,54 @@ test('the id is renamed in app, workflow and agent tool lists', async () => {
   assert.deepEqual(ctx.files['agents/researcher.json'].tools, ['read_url']);
 });
 
-test('a free-text field that merely mentions the id is left alone', async () => {
+test('the id is renamed where a prompt names it, keeping the surrounding prose', async () => {
   const ctx = fakeCtx({
     'apps/chat.json': {
       id: 'chat',
-      system: { en: 'Use the webContentExtractor tool.' },
+      system: {
+        en: 'Use the webContentExtractor tool to open URLs.',
+        de: 'Nutze webContentExtractor.'
+      },
       tools: ['webContentExtractor']
     }
   });
   await up(ctx);
-  assert.equal(ctx.files['apps/chat.json'].system.en, 'Use the webContentExtractor tool.');
+  assert.equal(ctx.files['apps/chat.json'].system.en, 'Use the read_url tool to open URLs.');
+  assert.equal(ctx.files['apps/chat.json'].system.de, 'Nutze read_url.');
   assert.deepEqual(ctx.files['apps/chat.json'].tools, ['read_url']);
+});
+
+test('a longer id and the implementation file name are left alone', async () => {
+  const ctx = fakeCtx({
+    'apps/chat.json': {
+      id: 'chat',
+      system: { en: 'See server/tools/webContentExtractor.js for details.' },
+      tools: ['webContentExtractorPro']
+    }
+  });
+  await up(ctx);
+  assert.equal(
+    ctx.files['apps/chat.json'].system.en,
+    'See server/tools/webContentExtractor.js for details.'
+  );
+  assert.deepEqual(ctx.files['apps/chat.json'].tools, ['webContentExtractorPro']);
+});
+
+test('a pre-existing read_url tool of the admin’s own is not clobbered', async () => {
+  // An admin already has a custom tool named read_url (a different script), and
+  // the old page reader still present. The collision is left for the admin.
+  const custom = { id: 'read_url', name: { en: 'My URL tool' }, script: 'myUrlTool.js' };
+  const ctx = fakeCtx({
+    'tools/read_url.json': structuredClone(custom),
+    'tools/webContentExtractor.json': {
+      id: 'webContentExtractor',
+      script: 'webContentExtractor.js'
+    }
+  });
+  await up(ctx);
+  assert.deepEqual(ctx.files['tools/read_url.json'], custom);
+  assert.equal('tools/webContentExtractor.json' in ctx.files, true);
+  assert.ok(ctx.logs.some(m => /collision/i.test(m)));
 });
 
 test('the legacy config/tools.json entry is renamed too', async () => {
