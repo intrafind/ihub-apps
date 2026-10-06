@@ -49,3 +49,8 @@ for **New → Create skill with AI** in the library to work.
 - New app settings, also for other apps: `requiredFeatures` hides an app from users while one of
   the listed features is off, and `skillSettings.autoActivate: true` runs the app's skills on
   every message without `/name`.
+- The interview now wraps up after a couple of rounds and writes a full draft instead of asking
+  on indefinitely, asks closed questions (who it is for, the format, the language) as clickable
+  choices, and flags up front when a task needs more than a skill can do on its own (generating a
+  PowerPoint or other binary file, running code), offering what it can still produce — the slide
+  content as text, or a brand-styled PDF.

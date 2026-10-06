@@ -62,6 +62,7 @@
   "preferredStyle": "normal",
   "preferredTemperature": 0.5,
   "sendChatHistory": true,
+  "tools": ["ask_user"],
   "skills": ["skill-builder"],
   "skillSettings": {
     "autoActivate": true,

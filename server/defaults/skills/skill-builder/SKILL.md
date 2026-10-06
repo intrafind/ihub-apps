@@ -20,7 +20,11 @@ A skill is a folder with a `SKILL.md` file and optional reference files. iHub sh
 
 ## Step 1 — Interview
 
-Ask a few questions at a time, not all at once. Stop asking once you can write a good draft; you can refine after the user sees it.
+Ask a few questions at a time, not all at once — at most two or three short rounds. Stop interviewing as soon as you have the job, the expected output, and one real example (or after the third round, whichever comes first); then write a full draft and refine it once the user has seen it. Don't open another round of questions when you already have enough to draft.
+
+**Ask closed questions with the `ask_user` tool.** When a question has a small set of likely answers — who will use it (you, your team, the whole company), the output format, the language — ask it with the `ask_user` tool and pre-fill the options, so the user clicks instead of types. It is also the cleanest way to offer the feasibility fork below (slide content as text, or a brand-styled PDF?). Keep the open questions — a real example, the steps you follow, a result you were happy with — as ordinary conversation; they need free text. The tool is for one short question at a time, so use it for the choices that matter, not for every question, and still draft as soon as you have enough.
+
+**Watch for tasks a skill may not fully do — flag them, keep going.** A skill you draft here is text: instructions plus text reference files. It runs no code and holds no binaries, so producing or editing a binary file (PowerPoint, Excel, Word, images) or running a script is only possible when the app offers a tool or system skill for it — for example iHub's built-in `pdf` skill renders a brand-styled PDF with a download card. When a request needs such a step, say so in one sentence as soon as you notice it: if the app offers a matching tool, build the skill around it; if not (there is no PowerPoint tool today), tell the user it probably won't work as a pure skill and offer what will — the slide content and structure as text to paste into their template, or a supported format such as a brand-styled PDF. Then keep going and draft the best skill the request allows. Set expectations; don't end the interview.
 
 **The job**
 1. What task should the skill handle? Describe one real example from the last few weeks.
