@@ -668,6 +668,14 @@ function AdminCopilotAgentPage() {
                       )}
                     </p>
                   )}
+                  {!prerequisites.publicHttps && (
+                    <p className="mb-3 text-sm text-amber-700 dark:text-amber-400">
+                      {t(
+                        'admin.copilotAgent.needsHttps',
+                        'Copilot only calls HTTPS addresses. Set the MCP gateway Public URL to the HTTPS address of iHub first.'
+                      )}
+                    </p>
+                  )}
                   <button
                     type="button"
                     onClick={handleDownload}

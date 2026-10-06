@@ -31,6 +31,7 @@ const reset = () => {
   state.platform = { oauth: { enabled: { authz: false } }, mcpServer: { enabled: false } };
   state.cacheExtra = {};
   state.clients = {};
+  state.clientsError = null;
   state.created = [];
   state.updates = [];
   state.audit = [];
@@ -67,7 +68,11 @@ jest.unstable_mockModule('../utils/oauthClientManager.js', () => ({
     state.created.push(data);
     return { ...client, clientSecret: 'plain-secret' };
   },
-  loadOAuthClients: () => ({ clients: state.clients }),
+  // An unreadable store comes back empty, with the error in its metadata.
+  loadOAuthClients: () =>
+    state.clientsError
+      ? { clients: {}, metadata: { error: state.clientsError } }
+      : { clients: state.clients },
   findClientById: (config, id) => (config.clients[id] ? { ...config.clients[id] } : null),
   updateOAuthClient: async (id, updates) => {
     state.updates.push({ id, updates });
@@ -183,6 +188,28 @@ describe('enable', () => {
     expect(state.clients.client_copilot.active).toBe(true);
     expect(state.platform.copilotAgent.appId).toBe(appId);
   });
+
+  test('a replacement client drops the old Teams registration ID', async () => {
+    await post('/api/admin/copilot-agent/enable');
+    await put('/api/admin/copilot-agent/config', { oauthReferenceId: 'ref-old' });
+    // The client was deleted by hand; the registration names its id.
+    delete state.clients.client_copilot;
+
+    const res = await post('/api/admin/copilot-agent/enable');
+    expect(res.status).toBe(200);
+    expect(res.body.clientSecret).toBe('plain-secret');
+    expect(state.created).toHaveLength(2);
+    expect(state.platform.copilotAgent.oauthReferenceId).toBe('');
+  });
+
+  test('an unreadable client store fails instead of creating a second client', async () => {
+    await post('/api/admin/copilot-agent/enable');
+    state.clientsError = 'EACCES';
+
+    const res = await post('/api/admin/copilot-agent/enable');
+    expect(res.status).toBe(500);
+    expect(state.created).toHaveLength(1);
+  });
 });
 
 describe('disable', () => {
@@ -194,6 +221,16 @@ describe('disable', () => {
     expect(state.clients.client_copilot.active).toBe(false);
     expect(state.platform.copilotAgent.enabled).toBe(false);
     expect(state.platform.mcpServer.enabled).toBe(true);
+  });
+
+  test('an unreadable client store fails instead of reporting the client off', async () => {
+    await post('/api/admin/copilot-agent/enable');
+    state.clientsError = 'EACCES';
+
+    const res = await post('/api/admin/copilot-agent/disable');
+    expect(res.status).toBe(500);
+    expect(state.platform.copilotAgent.enabled).toBe(true);
+    expect(state.updates.filter(u => u.updates.active === false)).toHaveLength(0);
   });
 });
 
@@ -261,6 +298,15 @@ describe('status', () => {
     });
     expect(res.body.registration.scope).toContain('mcp:apps:invoke');
   });
+
+  test('forwarded headers from an untrusted peer do not move the addresses', async () => {
+    await post('/api/admin/copilot-agent/enable');
+    const res = await get('/api/admin/copilot-agent/status')
+      .set('X-Forwarded-Host', 'evil.example')
+      .set('X-Forwarded-Proto', 'https');
+    expect(res.body.registration.baseUrl).toBe(`http://${HOST}/mcp`);
+    expect(res.body.prerequisites.publicHttps).toBe(false);
+  });
 });
 
 describe('package.zip', () => {
@@ -273,6 +319,20 @@ describe('package.zip', () => {
     res = await get('/api/admin/copilot-agent/package.zip');
     expect(res.status).toBe(409);
     expect(res.body.details.code).toBe('COPILOT_REFERENCE_ID_MISSING');
+  });
+
+  test('is refused while iHub is reached over plain http', async () => {
+    await post('/api/admin/copilot-agent/enable');
+    await put('/api/admin/copilot-agent/config', { oauthReferenceId: 'ref-123' });
+
+    const status = await get('/api/admin/copilot-agent/status');
+    expect(status.body.packageReady).toBe(false);
+    const res = await get('/api/admin/copilot-agent/package.zip');
+    expect(res.status).toBe(409);
+    expect(res.body.details.code).toBe('COPILOT_PUBLIC_HTTPS_REQUIRED');
+
+    state.platform.mcpServer.publicUrl = 'https://ihub.contoso.com/';
+    expect((await get('/api/admin/copilot-agent/status')).body.packageReady).toBe(true);
   });
 
   test('the registration, the gateway and the links all use the configured Public URL', async () => {

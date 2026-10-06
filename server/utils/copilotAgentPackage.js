@@ -122,16 +122,21 @@ const clip = (value, max) => {
 };
 
 /**
- * The package version for a download made at `date`: `year.month.DDHHmm`
+ * The package version for a download made at `date`: `year.month.DDHHmmss`
  * (UTC). Microsoft 365 wants a higher version on every re-upload of the same
  * app, and the package is built on demand, so a timestamp does that without
- * anyone having to remember to bump it.
+ * anyone having to remember to bump it. Down to the second, so downloading,
+ * changing a setting and downloading again still gives a higher version.
  *
  * @param {Date} [date]
- * @returns {string} e.g. `2026.10.61530` for 6 October 2026, 15:30 UTC
+ * @returns {string} e.g. `2026.10.6153000` for 6 October 2026, 15:30:00 UTC
  */
 export function copilotPackageVersion(date = new Date()) {
-  const patch = date.getUTCDate() * 10000 + date.getUTCHours() * 100 + date.getUTCMinutes();
+  const patch =
+    date.getUTCDate() * 1000000 +
+    date.getUTCHours() * 10000 +
+    date.getUTCMinutes() * 100 +
+    date.getUTCSeconds();
   return `${date.getUTCFullYear()}.${date.getUTCMonth() + 1}.${patch}`;
 }
 

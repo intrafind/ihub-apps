@@ -24,7 +24,7 @@ Unlike the Outlook add-in — which runs on the user's device and only needs iHu
 | Microsoft's token service, to exchange the sign-in code and refresh tokens | `/api/oauth/token` | **the internet** (Microsoft's cloud) |
 | The user's browser, when Copilot asks them to sign in | `/api/oauth/authorize`, `/api/oauth/authorize/decision`, iHub's sign-in page and whatever identity provider iHub uses | the user's browser — an internal address works for users on the company network or VPN |
 
-- The address must use **HTTPS with a publicly trusted certificate** — an internal CA is not trusted by Microsoft's servers. Admin → Microsoft 365 Copilot warns when iHub's public address is plain `http://`.
+- The address must use **HTTPS with a publicly trusted certificate** — an internal CA is not trusted by Microsoft's servers. Admin → Microsoft 365 Copilot does not build the package while iHub's public address is plain `http://`; set the MCP gateway's **Public URL** to the HTTPS address. Without a Public URL the address comes from the request, and `X-Forwarded-Proto` / `X-Forwarded-Host` count only from a proxy that [`trustProxy`](rate-limiting.md#proxy-hops-and-the-rate-limit-key) trusts.
 - A reverse proxy or WAF in front of iHub can publish just the two server-to-server paths (`/mcp`, `/api/oauth/token`) to the internet and keep the rest internal. Neither hands out anything without credentials: `/mcp` accepts only iHub-issued OAuth tokens with the `mcp:*` scopes, and the token endpoint issues tokens only for a valid sign-in code (with the agent client's secret) or a valid refresh token.
 - To our knowledge Microsoft publishes no dedicated address range for these calls; check Microsoft's current documentation before relying on an IP allow-list to limit who can reach them.
 - Set the gateway's **Public URL** (Admin → MCP gateway) to the address Microsoft should use; the registration values, the package and the gateway's own discovery documents all follow it.
@@ -90,7 +90,7 @@ Every address on the page and in the package — the gateway, the OAuth endpoint
 
 Upload it in the **Microsoft 365 admin center** → **Copilot** → **Agents** → **Upload custom agent**, and choose who gets it. For a first test, a user may also side-load it in Teams (Apps → Manage your apps → Upload an app) when the Teams setup policy allows uploading custom apps.
 
-Every download carries a new version (`year.month.DDHHmm`, UTC), because Microsoft 365 wants a higher version on every re-upload. After changing the name, description, instructions, starters or the registration ID, download again and upload the new package over the old one. Apps added or changed in iHub need no new package.
+Every download carries a new version (`year.month.DDHHmmss`, UTC), because Microsoft 365 wants a higher version on every re-upload. After changing the name, description, instructions, starters or the registration ID, download again and upload the new package over the old one. Apps added or changed in iHub need no new package.
 
 ---
 
@@ -105,7 +105,7 @@ The first time a user uses the agent, Copilot asks them to sign in: iHub's sign-
 
 ## Disabling
 
-**Disable** deactivates the agent's OAuth client: Copilot's tokens stop working at once and the agent's calls fail with *unauthorized*. The gateway stays on — other MCP clients may use it; turn it off under Admin → MCP gateway if nothing else needs it. Remove the agent from the Microsoft 365 admin center as well, so users stop seeing it. **Enable** again reactivates the same client, secret and app id: the Teams registration and the uploaded package keep working.
+**Disable** deactivates the agent's OAuth client: Copilot's tokens stop working at once and the agent's calls fail with *unauthorized*. The gateway stays on — other MCP clients may use it; turn it off under Admin → MCP gateway if nothing else needs it. Remove the agent from the Microsoft 365 admin center as well, so users stop seeing it. **Enable** again reactivates the same client, secret and app id: the Teams registration and the uploaded package keep working. If the client was deleted, **Enable** creates a new one with a new secret and clears the registration ID: register the new client in the Teams Developer Portal (step 2) and download the package again.
 
 ---
 

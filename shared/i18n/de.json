@@ -3887,6 +3887,7 @@
       "step3Title": "3. Agenten in Microsoft 365 hochladen",
       "step3Desc": "Laden Sie das Paket im Microsoft 365 Admin Center unter Copilot → Agents → Upload custom agent hoch und legen Sie fest, wer es erhält. Jeder Download hat eine neue Version: Nach Änderungen an den Einstellungen erneut herunterladen und hochladen.",
       "needsReferenceId": "Speichern Sie zuerst die OAuth client registration ID aus Schritt 1.",
+      "needsHttps": "Copilot ruft nur HTTPS-Adressen auf. Setzen Sie zuerst die öffentliche URL des MCP-Gateways auf die HTTPS-Adresse von iHub.",
       "downloading": "Wird erstellt…",
       "download": "Agentenpaket herunterladen",
       "prereqHttps": "Die öffentliche Adresse von iHub verwendet HTTPS",

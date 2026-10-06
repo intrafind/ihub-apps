@@ -7,7 +7,7 @@ import configCache from '../../configCache.js';
 import { getRootDir } from '../../pathUtils.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
-import { buildPublicBaseUrl } from '../../utils/publicBaseUrl.js';
+import { resolveMcpPublicBase } from '../../services/mcp/mcpOAuthPublicUrl.js';
 import { oauthClientsFile } from '../../utils/contentsPath.js';
 import {
   createOAuthClient,
@@ -89,23 +89,35 @@ function trimTrailingSlashes(url) {
  * built from — the gateway, the OAuth endpoints, the developer links: the
  * gateway's configured Public URL when there is one (as its own discovery
  * documents use), else this request's. One base, so they never name two hosts.
+ *
+ * The request's address is Express's `req.protocol` and `req.host`, which
+ * honour `X-Forwarded-Proto` / `X-Forwarded-Host` only from a proxy that
+ * `trustProxy` trusts — a forged header cannot move the package elsewhere.
  */
 function resolvePublicBase(req, platform) {
-  return trimTrailingSlashes(platform?.mcpServer?.publicUrl || buildPublicBaseUrl(req));
+  const configured = platform?.mcpServer?.publicUrl;
+  if (typeof configured === 'string' && /^https?:\/\//.test(configured.trim())) {
+    return trimTrailingSlashes(configured.trim());
+  }
+  return trimTrailingSlashes(resolveMcpPublicBase(req) || '');
 }
 
-/** The Copilot OAuth client, or null when there is none (never enabled, or deleted by hand). */
+/**
+ * The Copilot OAuth client, or null when there is none (never enabled, or
+ * deleted by hand). Throws when the client store cannot be read: that is not
+ * the same as a missing client — Enable would create a second one, and
+ * Disable would report success while the client stayed active.
+ */
 function findCopilotClient(platform) {
   const clientId = platform?.copilotAgent?.oauthClientId;
   if (!clientId) return null;
-  try {
-    const clientsFile = oauthClientsFile(platform?.oauth || {});
-    const client = findClientById(loadOAuthClients(clientsFile), clientId);
-    return client ? { clientId, client, clientsFile } : null;
-  } catch (error) {
-    logger.warn('Could not read the Copilot OAuth client', { component: COMPONENT, error });
-    return null;
+  const clientsFile = oauthClientsFile(platform?.oauth || {});
+  const clients = loadOAuthClients(clientsFile);
+  if (clients?.metadata?.error) {
+    throw new Error(`The OAuth client store could not be read: ${clients.metadata.error}`);
   }
+  const client = findClientById(clients, clientId);
+  return client ? { clientId, client, clientsFile } : null;
 }
 
 /**
@@ -159,11 +171,16 @@ export default function registerAdminCopilotAgentRoutes(app) {
    *         description: Copilot agent status
    */
   app.get(buildServerPath('/api/admin/copilot-agent/status'), adminAuth, (req, res) => {
+    let found;
+    try {
+      found = findCopilotClient(configCache.getPlatform() || {});
+    } catch (error) {
+      return sendInternalError(res, error, 'read the Copilot agent status');
+    }
     const platform = configCache.getPlatform() || {};
     const settings = readSettings(platform);
     const baseUrl = resolvePublicBase(req, platform);
     const mcpUrl = `${baseUrl}/mcp`;
-    const found = findCopilotClient(platform);
     const prerequisites = {
       mcpGateway: platform.mcpServer?.enabled === true,
       oauthServer: platform.oauth?.enabled?.authz === true,
@@ -195,7 +212,8 @@ export default function registerAdminCopilotAgentRoutes(app) {
         settings.enabled === true &&
         isGuid(settings.appId) &&
         !!settings.oauthReferenceId &&
-        prerequisites.oauthClient,
+        prerequisites.oauthClient &&
+        prerequisites.publicHttps,
       limits: LIMITS
     });
   });
@@ -269,7 +287,10 @@ export default function registerAdminCopilotAgentRoutes(app) {
           ...readSettings(stored),
           enabled: true,
           appId,
-          oauthClientId
+          oauthClientId,
+          // A Teams registration names the client it was made for: a new
+          // client needs a new registration.
+          ...(clientSecret ? { oauthReferenceId: '' } : {})
         };
       });
 
@@ -457,7 +478,7 @@ export default function registerAdminCopilotAgentRoutes(app) {
    *         content:
    *           application/zip: {}
    *       409:
-   *         description: The agent is not enabled, or the OAuth client registration ID is missing
+   *         description: The agent is not enabled, the OAuth client registration ID is missing, or the public address is not HTTPS
    */
   app.get(buildServerPath('/api/admin/copilot-agent/package.zip'), adminAuth, async (req, res) => {
     try {
@@ -477,10 +498,22 @@ export default function registerAdminCopilotAgentRoutes(app) {
         );
       }
 
+      // Copilot calls only HTTPS addresses; a package naming http:// would
+      // install and then fail on every call.
+      const baseUrl = resolvePublicBase(req, platform);
+      if (!baseUrl.startsWith('https://')) {
+        return sendErrorResponse(
+          res,
+          409,
+          'Copilot needs an HTTPS address. Set the MCP gateway Public URL to the HTTPS address of iHub first.',
+          { details: { code: 'COPILOT_PUBLIC_HTTPS_REQUIRED' } }
+        );
+      }
+
       const manifests = buildCopilotAgentManifests({
         config: settings,
-        baseUrl: resolvePublicBase(req, platform),
-        mcpUrl: `${resolvePublicBase(req, platform)}/mcp`,
+        baseUrl,
+        mcpUrl: `${baseUrl}/mcp`,
         version: copilotPackageVersion()
       });
       const zip = await buildPackageZip({ manifests, icons: await readPackageIcons() });

@@ -27,18 +27,22 @@ const build = (config = {}) =>
     config: { appId: APP_ID, oauthReferenceId: 'ref-1', ...config },
     baseUrl: 'https://ihub.example.com/ihub',
     mcpUrl: 'https://ihub.example.com/ihub/mcp',
-    version: '2026.10.61530'
+    version: '2026.10.6153000'
   });
 
 describe('copilotPackageVersion', () => {
-  it('is year.month.DDHHmm in UTC', () => {
-    assert.equal(copilotPackageVersion(new Date('2026-10-06T15:30:00Z')), '2026.10.61530');
-    assert.equal(copilotPackageVersion(new Date('2026-01-31T00:05:00Z')), '2026.1.310005');
+  it('is year.month.DDHHmmss in UTC', () => {
+    assert.equal(copilotPackageVersion(new Date('2026-10-06T15:30:00Z')), '2026.10.6153000');
+    assert.equal(copilotPackageVersion(new Date('2026-01-31T00:05:09Z')), '2026.1.31000509');
   });
 
-  it('grows with every minute, across days and months', () => {
+  it('grows with every second, across minutes, days and months', () => {
     const versions = [
-      '2026-10-09T23:59:00Z',
+      '2026-10-06T15:30:00Z',
+      '2026-10-06T15:30:01Z',
+      '2026-10-06T15:30:59Z',
+      '2026-10-06T15:31:00Z',
+      '2026-10-09T23:59:59Z',
       '2026-10-10T00:00:00Z',
       '2026-10-31T23:59:00Z',
       '2026-11-01T00:00:00Z',
@@ -59,7 +63,7 @@ describe('buildCopilotAgentManifests', () => {
     assert.equal(manifest.manifestVersion, '1.30');
     assert.match(manifest.$schema, /teams\/v1\.30\//);
     assert.equal(manifest.id, APP_ID.toLowerCase());
-    assert.equal(manifest.version, '2026.10.61530');
+    assert.equal(manifest.version, '2026.10.6153000');
     assert.equal(declarativeAgent.version, 'v1.8');
     assert.equal(plugin.schema_version, 'v2.4');
   });

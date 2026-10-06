@@ -802,11 +802,15 @@ function OfficeChatPanel({
   const providePopoutState = popoutChild?.provideState;
   const currentChatId = chatIdRef.current;
   const lastPopoutReportRef = useRef(0);
+  // A change the debounce is still holding back.
+  const popoutReportPendingRef = useRef(false);
   useEffect(() => {
     if (!reportPopoutState) return undefined;
+    popoutReportPendingRef.current = true;
     const overdue = Date.now() - lastPopoutReportRef.current >= POPOUT_REPORT_MAX_WAIT_MS;
     const timer = setTimeout(
       () => {
+        popoutReportPendingRef.current = false;
         lastPopoutReportRef.current = Date.now();
         reportPopoutState(buildPopoutChatStateRef.current());
       },
@@ -821,6 +825,27 @@ function OfficeChatPanel({
     inputValue,
     selectedApp?.id
   ]);
+  // The window's X gives no warning, but the page still unloads: send what
+  // the debounce is holding back, so text typed just before closing is not
+  // lost. Best effort — the host may already be tearing the window down.
+  useEffect(() => {
+    if (!reportPopoutState) return undefined;
+    const flush = () => {
+      if (!popoutReportPendingRef.current) return;
+      popoutReportPendingRef.current = false;
+      try {
+        reportPopoutState(buildPopoutChatStateRef.current());
+      } catch {
+        // The bridge is gone with the window.
+      }
+    };
+    window.addEventListener('pagehide', flush);
+    window.addEventListener('beforeunload', flush);
+    return () => {
+      window.removeEventListener('pagehide', flush);
+      window.removeEventListener('beforeunload', flush);
+    };
+  }, [reportPopoutState]);
   useEffect(() => {
     reportPopoutPinned?.(pinnedEmails);
   }, [reportPopoutPinned, pinnedEmails]);

@@ -531,6 +531,45 @@ describe('<OfficeChatPanel /> with durable chats', () => {
     expect(onOpenHistory).toHaveBeenLastCalledWith({ returnChatId: fresh.chatId });
   });
 
+  test('a popped-out chat sends the change the debounce holds back when its window closes', () => {
+    jest.useFakeTimers();
+    try {
+      const report = jest.fn();
+      renderPanel({
+        popout: {
+          role: 'child',
+          report,
+          reportPinned: jest.fn(),
+          provideState: jest.fn(),
+          dock: jest.fn(),
+          signedOut: jest.fn()
+        }
+      });
+      act(() => jest.advanceTimersByTime(0));
+      report.mockClear();
+
+      fireEvent.change(screen.getByLabelText('message'), { target: { value: 'Half a thought' } });
+      // Typing is reported half a second later...
+      expect(report).not.toHaveBeenCalled();
+      // ...but the window's X does not wait for it.
+      act(() => {
+        window.dispatchEvent(new Event('pagehide'));
+      });
+      expect(report).toHaveBeenCalledTimes(1);
+      expect(report.mock.calls[0][0]).toMatchObject({ inputValue: 'Half a thought' });
+
+      // Nothing held back, nothing sent.
+      act(() => jest.advanceTimersByTime(1000));
+      report.mockClear();
+      act(() => {
+        window.dispatchEvent(new Event('pagehide'));
+      });
+      expect(report).not.toHaveBeenCalled();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
   test('an ephemeral app stays out of the store, like in the web app', () => {
     const { onOpenHistory } = renderPanel({ selectedApp: { ...app, ephemeral: true } });
     expect(lastAdapterCall()).toMatchObject({ serverBacked: false });
