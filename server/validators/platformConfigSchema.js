@@ -132,6 +132,7 @@ const rateLimitSchema = z.object({
   publicApi: rateLimitConfigSchema.partial().prefault({}),
   authApi: rateLimitConfigSchema.partial().prefault({}),
   oauthApi: rateLimitConfigSchema.partial().prefault({}),
+  oauthTokenApi: rateLimitConfigSchema.partial().prefault({}),
   inferenceApi: rateLimitConfigSchema.partial().prefault({})
 });
 

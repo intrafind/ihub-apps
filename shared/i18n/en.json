@@ -2065,14 +2065,62 @@
       }
     },
     "security": {
-      "description": "SSL, CORS, cookie settings, outbound proxy, and encryption configuration",
+      "description": "SSL, CORS, cookie settings, rate limits, outbound proxy, and encryption configuration",
       "sections": {
         "ssl": "SSL / TLS",
         "cookies": "Cookies",
         "cors": "CORS",
         "ssrf": "SSRF Allowlist",
         "proxy": "Outbound Proxy",
-        "encryption": "Value Encryption"
+        "encryption": "Value Encryption",
+        "rateLimits": "Rate Limits"
+      },
+      "rateLimits": {
+        "title": "Rate limits",
+        "description": "How many requests one client address may send before it gets \"429 Too Many Requests\". Changes apply after a server restart.",
+        "restartRequired": "The saved limits differ from the ones the server is running with. Restart the server to apply them.",
+        "runningNow": "Running now: {{limit}} per {{minutes}} min, {{counts}}",
+        "limit": "Requests",
+        "window": "Per (minutes)",
+        "countsLabel": "Which requests count",
+        "counts": {
+          "all": "All requests",
+          "failed": "Failed only",
+          "successful": "Successful only"
+        },
+        "perAddress": "Limits count per client address. Behind a reverse proxy, set the number of proxy hops (trustProxy in platform.json); otherwise every user shares the proxy's address and one counter.",
+        "save": "Save rate limits",
+        "saving": "Saving...",
+        "saved": "Rate limits saved. Restart the server to apply them.",
+        "saveError": "Failed to save the rate limits",
+        "loadError": "Failed to load the rate limits",
+        "invalid": "{{name}}: enter a whole number of requests from 1 to 1,000,000 and a period from one second to 1,440 minutes.",
+        "limiters": {
+          "publicApi": {
+            "name": "Web app API",
+            "description": "Apps, chats, models, tools and the other endpoints the web app calls."
+          },
+          "adminApi": {
+            "name": "Admin API",
+            "description": "Everything under /api/admin."
+          },
+          "authApi": {
+            "name": "Sign-in",
+            "description": "Password, LDAP, NTLM and Teams sign-in. Status checks and SSO redirects are not counted."
+          },
+          "oauthApi": {
+            "name": "OAuth server",
+            "description": "Every request under /api/oauth: consent screens, token exchanges and refreshes, client registration. Microsoft 365 Copilot sends the token requests of all its users from a few Microsoft addresses."
+          },
+          "oauthTokenApi": {
+            "name": "OAuth client secrets",
+            "description": "Token and introspection calls, which check a client secret. Counting only failed requests stops secret guessing without slowing down clients that sign in correctly."
+          },
+          "inferenceApi": {
+            "name": "Inference API",
+            "description": "/api/inference and read aloud."
+          }
+        }
       }
     },
     "tools": {

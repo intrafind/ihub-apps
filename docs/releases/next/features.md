@@ -37,3 +37,19 @@ iHub account and limited to the apps their groups allow.
   the Microsoft 365 admin center.
 - Copilot discovers iHub's apps at runtime, so apps added or changed later need no new package.
 - Off by default; see `docs/microsoft-365-copilot-agent.md`.
+
+## Rate Limits in the Admin UI, and OAuth Limits Sized for Real Traffic
+
+Admins can now change every rate limit under **Admin → Security → Rate limits**: how many requests
+one address may send, per how many minutes, and whether all, only failed or only successful
+requests count. Changes apply after a server restart, and the page says when one is due.
+
+- The OAuth server (`/api/oauth`) now allows 300 requests per minute per address instead of 50
+  per 15 minutes. Browsers behind one corporate NAT address and server-side clients such as
+  Microsoft 365 Copilot, which refreshes all its users' tokens from a few Microsoft addresses, are
+  no longer throttled. Installations that kept the old default are moved to the new one; values
+  an admin set stay.
+- The token and introspection endpoints have their own limit, `rateLimit.oauthTokenApi`, of 30
+  failed requests per 15 minutes. Wrong client secrets are stopped quickly, and clients that
+  authenticate correctly are never counted. It replaces a fixed limit of 20 requests per 15
+  minutes on the token endpoint that could not be changed.

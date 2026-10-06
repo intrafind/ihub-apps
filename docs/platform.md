@@ -947,8 +947,14 @@ iHub Apps enforces rate limits per route category to protect against abuse and e
       "skipFailedRequests": false
     },
     "oauthApi": {
+      "windowMs": 60000,
+      "limit": 300,
+      "skipFailedRequests": false
+    },
+    "oauthTokenApi": {
       "windowMs": 900000,
-      "limit": 50,
+      "limit": 30,
+      "skipSuccessfulRequests": true,
       "skipFailedRequests": false
     },
     "inferenceApi": {
@@ -967,8 +973,9 @@ iHub Apps enforces rate limits per route category to protect against abuse and e
 | `adminApi`     | `/api/admin/**` admin endpoints        | 60 s           | 100           |
 | `publicApi`    | Public read-only endpoints             | 60 s           | 500           |
 | `authApi`      | `/api/auth/**` login/logout/token      | 900 s (15 min) | 30            |
-| `oauthApi`     | `/api/oauth/**` OAuth server endpoints | 900 s (15 min) | 50            |
-| `inferenceApi` | `/api/chat/**` AI inference calls      | 60 s           | 500           |
+| `oauthApi`     | `/api/oauth/**` OAuth server endpoints | 60 s           | 300           |
+| `oauthTokenApi` | `POST /api/oauth/token` and `/introspect`, failed requests only | 900 s (15 min) | 30 |
+| `inferenceApi` | `/api/inference/**` and read aloud     | 60 s           | 500           |
 
 ### Rate Limit Configuration Fields
 
@@ -983,6 +990,9 @@ Each category accepts the following fields. Partial overrides inherit unset valu
 | `legacyHeaders`          | Boolean | `false` | Include legacy `X-RateLimit-*` headers                                          |
 | `skipSuccessfulRequests` | Boolean | `false` | Do not count successful (2xx) responses against the limit                       |
 | `skipFailedRequests`     | Boolean | `false` | Do not count failed (4xx/5xx) responses against the limit                       |
+
+Admins can change every category except `default` under **Admin → Security → Rate limits**.
+Rate limits apply after a server restart.
 
 For more information see [Rate Limiting](rate-limiting.md).
 

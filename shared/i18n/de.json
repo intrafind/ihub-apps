@@ -2332,14 +2332,62 @@
       }
     },
     "security": {
-      "description": "SSL, CORS, Cookie-Einstellungen, ausgehender Proxy und Verschlüsselung",
+      "description": "SSL, CORS, Cookie-Einstellungen, Ratenbegrenzung, ausgehender Proxy und Verschlüsselung",
       "sections": {
         "ssl": "SSL / TLS",
         "cookies": "Cookies",
         "cors": "CORS",
         "ssrf": "SSRF-Allowlist",
         "proxy": "Ausgehender Proxy",
-        "encryption": "Wert-Verschlüsselung"
+        "encryption": "Wert-Verschlüsselung",
+        "rateLimits": "Ratenbegrenzung"
+      },
+      "rateLimits": {
+        "title": "Ratenbegrenzung",
+        "description": "Wie viele Anfragen eine Client-Adresse senden darf, bevor sie \"429 Too Many Requests\" erhält. Änderungen gelten nach einem Neustart des Servers.",
+        "restartRequired": "Die gespeicherten Grenzen weichen von denen ab, mit denen der Server läuft. Starten Sie den Server neu, um sie anzuwenden.",
+        "runningNow": "Aktuell aktiv: {{limit}} pro {{minutes}} Min., {{counts}}",
+        "limit": "Anfragen",
+        "window": "Pro (Minuten)",
+        "countsLabel": "Welche Anfragen zählen",
+        "counts": {
+          "all": "Alle Anfragen",
+          "failed": "Nur fehlgeschlagene",
+          "successful": "Nur erfolgreiche"
+        },
+        "perAddress": "Die Grenzen zählen pro Client-Adresse. Hinter einem Reverse Proxy die Anzahl der Proxy-Hops einstellen (trustProxy in platform.json), sonst teilen sich alle Benutzer die Adresse des Proxys und einen Zähler.",
+        "save": "Ratenbegrenzung speichern",
+        "saving": "Wird gespeichert...",
+        "saved": "Ratenbegrenzung gespeichert. Starten Sie den Server neu, um sie anzuwenden.",
+        "saveError": "Die Ratenbegrenzung konnte nicht gespeichert werden",
+        "loadError": "Die Ratenbegrenzung konnte nicht geladen werden",
+        "invalid": "{{name}}: Geben Sie eine ganze Zahl von 1 bis 1.000.000 Anfragen und einen Zeitraum von einer Sekunde bis 1.440 Minuten ein.",
+        "limiters": {
+          "publicApi": {
+            "name": "Web-App-API",
+            "description": "Apps, Chats, Modelle, Werkzeuge und die übrigen Endpunkte, die die Web-App aufruft."
+          },
+          "adminApi": {
+            "name": "Admin-API",
+            "description": "Alles unter /api/admin."
+          },
+          "authApi": {
+            "name": "Anmeldung",
+            "description": "Anmeldung per Passwort, LDAP, NTLM und Teams. Statusabfragen und SSO-Weiterleitungen zählen nicht."
+          },
+          "oauthApi": {
+            "name": "OAuth-Server",
+            "description": "Jede Anfrage unter /api/oauth: Zustimmungsseiten, Token-Austausch und -Erneuerung, Client-Registrierung. Microsoft 365 Copilot sendet die Token-Anfragen aller seiner Benutzer von wenigen Microsoft-Adressen."
+          },
+          "oauthTokenApi": {
+            "name": "OAuth-Client-Secrets",
+            "description": "Token- und Introspection-Aufrufe, die ein Client-Secret prüfen. Werden nur fehlgeschlagene Anfragen gezählt, wird das Erraten von Secrets gestoppt, ohne Clients zu bremsen, die sich korrekt anmelden."
+          },
+          "inferenceApi": {
+            "name": "Inference-API",
+            "description": "/api/inference und Vorlesen."
+          }
+        }
       }
     },
     "tools": {

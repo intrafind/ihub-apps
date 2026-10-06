@@ -6,6 +6,7 @@ import CorsConfig from '../components/CorsConfig';
 import SsrfConfig from '../components/SsrfConfig';
 import ProxyConfig from '../components/ProxyConfig';
 import CookieSettingsConfig from '../components/CookieSettingsConfig';
+import RateLimitConfig from '../components/RateLimitConfig';
 import AdminSettingsPage from '../components/AdminSettingsPage';
 import { makeAdminApiCall } from '../../../api/adminApi';
 
@@ -263,7 +264,7 @@ function AdminSecurityPage() {
       title={t('admin.nav.security', 'Security')}
       description={t(
         'admin.security.description',
-        'SSL, CORS, cookie settings, outbound proxy, and encryption configuration'
+        'SSL, CORS, cookie settings, rate limits, outbound proxy, and encryption configuration'
       )}
       sections={[
         {
@@ -280,6 +281,11 @@ function AdminSecurityPage() {
           id: 'cors',
           label: t('admin.security.sections.cors', 'CORS'),
           children: <CorsConfig />
+        },
+        {
+          id: 'rateLimits',
+          label: t('admin.security.sections.rateLimits', 'Rate Limits'),
+          children: <RateLimitConfig />
         },
         {
           id: 'ssrf',

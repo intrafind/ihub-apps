@@ -246,8 +246,14 @@
       "skipFailedRequests": false
     },
     "oauthApi": {
+      "windowMs": 60000,
+      "limit": 300,
+      "skipFailedRequests": false
+    },
+    "oauthTokenApi": {
       "windowMs": 900000,
-      "limit": 50,
+      "limit": 30,
+      "skipSuccessfulRequests": true,
       "skipFailedRequests": false
     },
     "inferenceApi": {

@@ -17,6 +17,7 @@ import { buildServerPath } from '../utils/basePath.js';
 import { touchConsentLastUsed } from '../utils/consentStore.js';
 import configCache from '../configCache.js';
 import logger from '../utils/logger.js';
+import { createOAuthTokenLimiter } from '../middleware/rateLimiting.js';
 import { consumeCode } from '../utils/authorizationCodeStore.js';
 import { localUsersFile, oauthClientsFile } from '../utils/contentsPath.js';
 import { verifyCodeChallenge } from '../utils/pkceUtils.js';
@@ -131,21 +132,13 @@ function extractBasicCredentials(req) {
   }
 }
 
-import rateLimit from 'express-rate-limit';
-
-// Mitigates brute-force / resource-exhaustion attacks: each request to the
-// token endpoint triggers an expensive bcrypt client-secret comparison, so an
-// unauthenticated flood can exhaust CPU. Limit per-IP independently of any
-// broader shared limiter.
-const oauthTokenLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  limit: 20,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: 'Too many token requests from this IP, please try again later.' }
-});
-
 export default function registerOAuthRoutes(app) {
+  // Both endpoints check a client secret with bcrypt. Every failed call counts
+  // against `rateLimit.oauthTokenApi`, which stops secret guessing (and the CPU
+  // it burns) without slowing down clients that authenticate correctly.
+  // Built from the boot-time config, like the other limiters.
+  const tokenLimiter = createOAuthTokenLimiter(app.get('platform') || configCache.getPlatform());
+
   /**
    * @swagger
    * /api/oauth/token:
@@ -207,7 +200,7 @@ export default function registerOAuthRoutes(app) {
    *       403:
    *         description: Client suspended
    */
-  app.post(buildServerPath('/api/oauth/token'), oauthTokenLimiter, async (req, res) => {
+  app.post(buildServerPath('/api/oauth/token'), tokenLimiter, async (req, res) => {
     try {
       const platform = configCache.getPlatform() || {};
       const oauthConfig = platform.oauth || {};
@@ -725,7 +718,7 @@ export default function registerOAuthRoutes(app) {
    *       400:
    *         description: Invalid request
    */
-  app.post(buildServerPath('/api/oauth/introspect'), async (req, res) => {
+  app.post(buildServerPath('/api/oauth/introspect'), tokenLimiter, async (req, res) => {
     try {
       const platform = configCache.getPlatform() || {};
       const oauthConfig = platform.oauth || {};
