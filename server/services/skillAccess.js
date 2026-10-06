@@ -677,7 +677,15 @@ export function maxSkillBodyTokensFor(platform) {
 function activeSkillBlock(skill) {
   let block = `<active_skill name="${escapeXml(skill.name)}">\n${skill.body}\n</active_skill>`;
   if (skill.resources.length > 0) {
-    block += `\nAvailable skill resources: ${skill.resources.join(', ')}`;
+    // Name the tool and the skill_name to pass, and rule out the web/file
+    // tools. A bundled file is a skill-relative path, not a URL, so handing
+    // one to a web page reader fails with "Invalid URL"; the model must reach
+    // these through read_skill_resource.
+    block += `\nThis skill bundles these files: ${skill.resources.join(
+      ', '
+    )}. They are not web pages or local files — read one with the read_skill_resource tool (skill_name "${escapeXml(
+      skill.name
+    )}", file_path the path listed above), never with a web, URL or file-reading tool.`;
   }
   return block;
 }
