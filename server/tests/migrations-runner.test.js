@@ -568,17 +568,31 @@ describe('Migration Runner', () => {
       expect(history.migrations[1].file).toBe('V144__remove_app_wizard_fields.js');
     });
 
-    it.each(['141', '142', '143', '145', '146', '147', '148', '152', '153', '154', '155', '156'])(
-      'moves an EU AI Act entry recorded at V%s to V157 so it no longer blocks main',
+    it.each([
+      '141',
+      '142',
+      '143',
+      '145',
+      '146',
+      '147',
+      '148',
+      '152',
+      '153',
+      '154',
+      '155',
+      '156',
+      '157'
+    ])(
+      'moves an EU AI Act entry recorded at V%s to V158 so it no longer blocks main',
       oldVersion => {
         // A dev install that ran the branch while it held that number recorded
         // it; main's provider plain names (V141), text-to-speech (V142),
         // short-link allowlist (V145), local sign-in lockout (V146), proxy-auth
         // trusted sources (V147), Translator system prompt (V148), user skills
         // settings (V152), workflow code node removal (V153), user skills
-        // marketplace (V154), skill builder (V155) and skills catalog token
-        // budget (V156) migrations hold those numbers now, and V143 sorts below
-        // main's app wizard field cleanup (V144).
+        // marketplace (V154), skill builder (V155), skills catalog token budget
+        // (V156) and read_url tool rename (V157) migrations hold those numbers
+        // now, and V143 sorts below main's app wizard field cleanup (V144).
         const history = {
           schemaVersion: '1.0',
           migrations: [
@@ -600,8 +614,8 @@ describe('Migration Runner', () => {
         };
 
         expect(reconcileRenamedMigrations(history)).toBe(true);
-        expect(history.migrations[0].version).toBe('157');
-        expect(history.migrations[0].file).toBe('V157__add_ai_transparency.js');
+        expect(history.migrations[0].version).toBe('158');
+        expect(history.migrations[0].file).toBe('V158__add_ai_transparency.js');
         expect(history.migrations[1].version).toBe('140');
       }
     );
@@ -702,6 +716,20 @@ describe('Migration Runner', () => {
 
       expect(reconcileRenamedMigrations(history)).toBe(false);
       expect(history.migrations).toEqual([skillsBudget]);
+    });
+
+    it("leaves main's V157 read_url entry alone when reconciling the EU AI Act V157", () => {
+      const readUrl = {
+        version: '157',
+        description: 'rename_web_page_reader_tool_to_read_url',
+        file: 'V157__rename_web_page_reader_tool_to_read_url.js',
+        checksum: 'abc123',
+        status: 'success'
+      };
+      const history = { schemaVersion: '1.0', migrations: [{ ...readUrl }] };
+
+      expect(reconcileRenamedMigrations(history)).toBe(false);
+      expect(history.migrations).toEqual([readUrl]);
     });
 
     it('is a no-op on a fresh install with no matching history entries', () => {
