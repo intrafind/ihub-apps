@@ -1,10 +1,6 @@
 import configCache from '../../configCache.js';
 import { isFeatureEnabled } from '../../featureRegistry.js';
-import {
-  getToolsForApp,
-  resolveAppNativeWebSearch,
-  WEB_CONTENT_EXTRACTOR_TOOL_ID
-} from '../../toolLoader.js';
+import { getToolsForApp, resolveAppNativeWebSearch, READ_URL_TOOL_ID } from '../../toolLoader.js';
 import { prepareActiveSkills } from '../skillAccess.js';
 import ErrorHandler from '../../utils/ErrorHandler.js';
 import ApiKeyVerifier from '../../utils/ApiKeyVerifier.js';
@@ -183,7 +179,7 @@ export const WEB_SEARCH_CITATION_GUIDANCE =
  */
 export const WEB_SEARCH_READER_CITATION_GUIDANCE =
   'Citing pages you read: your web search cites its own results for you. When a statement ' +
-  'relies on a page you opened with the webContentExtractor page reader, cite it right after ' +
+  'relies on a page you opened with the read_url page reader, cite it right after ' +
   "the statement as a Markdown link to that page's URL whose text is a number, for example " +
   '[1](https://example.com/page). Cite only pages the page reader returned, and do not add a ' +
   'separate list of sources at the end — the chat shows them next to the answer.';
@@ -195,7 +191,7 @@ export const WEB_SEARCH_NAMED_SITE_GUIDANCE =
 
 /** When the user pastes URLs and the page reader is available, read them. */
 export const WEB_SEARCH_PASTED_URL_GUIDANCE =
-  'When the user gives you URLs, open them with the webContentExtractor page reader instead ' +
+  'When the user gives you URLs, open them with the read_url page reader instead ' +
   'of searching for them. When a page reader result says it is truncated and you need more, ' +
   'call it again with the offset it gives.';
 
@@ -647,7 +643,7 @@ class RequestBuilder {
       // How to cite, search a named site and read pasted URLs.
       appendWebSearchSourceGuidance(llmMessages, app, websearchEnabled, {
         native: Boolean(nativeWebSearch),
-        pageReader: tools.some(t => t.id === WEB_CONTENT_EXTRACTOR_TOOL_ID)
+        pageReader: tools.some(t => t.id === READ_URL_TOOL_ID)
       });
 
       // Build imageConfig if image generation is supported and parameters are provided

@@ -12,7 +12,7 @@ logger.info('🧪 Testing Anthropic Tool Name Validation Fix\n');
 // Test Case 1: Tool with localized name containing spaces and special characters
 logger.info('Test 1: Tool with localized name (spaces and special characters)');
 const localizedTool = {
-  id: 'webContentExtractor',
+  id: 'read_url',
   name: 'Web-Inhalts-Extraktor', // German localized name with hyphen
   description: 'Extract clean, readable content from a URL',
   parameters: {
@@ -30,10 +30,10 @@ const localizedTool = {
 const anthropicToolsLocalized = convertGenericToolsToAnthropic([localizedTool]);
 assert.strictEqual(
   anthropicToolsLocalized[0].name,
-  'webContentExtractor',
+  'read_url',
   'Tool name should use ID instead of localized name'
 );
-logger.info('✓ Localized tool name correctly uses ID: webContentExtractor\n');
+logger.info('✓ Localized tool name correctly uses ID: read_url\n');
 
 // Test Case 2: Tool with English name containing spaces
 logger.info('Test 2: Tool with name containing spaces');
@@ -105,7 +105,7 @@ const multipleTools = [
     parameters: { type: 'object', properties: {} }
   },
   {
-    id: 'webContentExtractor',
+    id: 'read_url',
     name: 'Web-Inhalts-Extraktor',
     description: 'Extract content from a web page',
     parameters: { type: 'object', properties: {} }
@@ -121,7 +121,7 @@ const multipleTools = [
 const convertedMultiple = convertGenericToolsToAnthropic(multipleTools);
 assert.strictEqual(convertedMultiple.length, 3, 'Should convert all tools');
 assert.strictEqual(convertedMultiple[0].name, 'braveSearch', 'First tool should use ID');
-assert.strictEqual(convertedMultiple[1].name, 'webContentExtractor', 'Second tool should use ID');
+assert.strictEqual(convertedMultiple[1].name, 'read_url', 'Second tool should use ID');
 assert.strictEqual(convertedMultiple[2].name, 'deepResearch', 'Third tool should use ID');
 logger.info('✓ Multiple tools batch conversion successful\n');
 

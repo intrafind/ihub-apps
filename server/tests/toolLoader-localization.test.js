@@ -55,18 +55,18 @@ describe('Tool Localization', () => {
 
     if (tools.length > 0) {
       // Find a tool with parameters
-      const webContentExtractor = tools.find(t => t.id === 'webContentExtractor');
+      const read_url = tools.find(t => t.id === 'read_url');
 
-      if (webContentExtractor) {
+      if (read_url) {
         // Check that tool-level description is localized
         assert.strictEqual(
-          typeof webContentExtractor.description,
+          typeof read_url.description,
           'string',
           'Tool description should be a string when language is null'
         );
 
         // Check nested parameter descriptions are also localized
-        const urlParam = webContentExtractor.parameters?.properties?.url;
+        const urlParam = read_url.parameters?.properties?.url;
         if (urlParam?.description) {
           assert.strictEqual(
             typeof urlParam.description,

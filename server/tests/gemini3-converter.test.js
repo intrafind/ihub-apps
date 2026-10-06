@@ -84,7 +84,7 @@ const multipleToolCallsResponse = JSON.stringify({
           },
           {
             functionCall: {
-              name: 'webContentExtractor',
+              name: 'read_url',
               args: { url: 'https://example.com' }
             }
           }

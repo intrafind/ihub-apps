@@ -41,7 +41,7 @@ const chunk1 = await convertGoogleResponseToGeneric(
   STREAM_ID
 );
 const chunk2 = await convertGoogleResponseToGeneric(
-  chunkWithFunctionCall('webContentExtractor', { url: 'https://example.com' }),
+  chunkWithFunctionCall('read_url', { url: 'https://example.com' }),
   STREAM_ID
 );
 
@@ -78,7 +78,7 @@ for (const call of collectedToolCalls) {
   );
 }
 assert.strictEqual(collectedToolCalls[0].function.name, 'webSearch');
-assert.strictEqual(collectedToolCalls[1].function.name, 'webContentExtractor');
+assert.strictEqual(collectedToolCalls[1].function.name, 'read_url');
 logger.info('✓ Test 2 passed\n');
 
 // Test 3: once the stream completes, state is cleared so a new stream reusing the

@@ -362,8 +362,8 @@ describe('recording what a turn did', () => {
     stream.emit(SSE_V2_EVENTS.TOOL_STARTED, {
       step: 0,
       callId: 'c1',
-      toolId: 'webContentExtractor',
-      name: 'webContentExtractor',
+      toolId: 'read_url',
+      name: 'read_url',
       args: { url: 'https://example.org' }
     });
     // No run/ended: the run was superseded or failed around the call.
@@ -597,8 +597,8 @@ describe('what a share carries of the activity', () => {
             // private-address guard: the page may be an intranet one.
             id: 'p',
             kind: 'fetch',
-            toolId: 'webContentExtractor',
-            name: 'webContentExtractor',
+            toolId: 'read_url',
+            name: 'read_url',
             status: 'completed',
             url: 'https://intranet.corp/hr/salaries',
             title: 'Salary bands 2027',

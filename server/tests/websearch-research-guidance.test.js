@@ -164,7 +164,7 @@ test('native search gets no citation format — the provider reports its citatio
 test('native search with the page reader is told to cite the pages it reads', () => {
   const guidance = buildWebSearchSourceGuidance({ native: true, pageReader: true });
   assert.ok(guidance.includes(WEB_SEARCH_READER_CITATION_GUIDANCE));
-  assert.match(guidance, /page you opened with the webContentExtractor page reader/);
+  assert.match(guidance, /page you opened with the read_url page reader/);
   assert.match(guidance, /\[1\]\(https:\/\/example\.com\/page\)/);
   // Not the full format: the provider already cites its own search results.
   assert.ok(!guidance.includes(WEB_SEARCH_CITATION_GUIDANCE));

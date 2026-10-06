@@ -21,7 +21,7 @@ iHub Apps provides a unified web search system that automatically selects the be
 
 | Tool | Purpose |
 |------|---------|
-| **webContentExtractor** | Open a web page or PDF by URL and read its main content as Markdown (offered automatically with web search) |
+| **read_url** | Open a web page or PDF by URL and read its main content as Markdown (offered automatically with web search) |
 | **playwrightScreenshot** | Capture screenshots or PDFs using Playwright |
 | **seleniumScreenshot** | Capture screenshots or PDFs using Selenium |
 | **deepResearch** | Iterative multi-round web research |
@@ -68,7 +68,7 @@ Add a `websearch` object to your app configuration:
 | `enabledByDefault` | Boolean | `false` | Whether web search is active by default (users can toggle it in the chat) |
 | `maxSearches` | Number | `5` | Cap on provider-run searches per model call when native search is used (sent to Anthropic as `max_uses`; 1-50). Anthropic bills each search separately |
 | `researchGuidance` | Boolean or String | `true` | Guidance added to the system prompt when web search is on, telling the model to research in several steps. `true` uses the built-in text, `false` turns it off, a string replaces the built-in text. See [Multi-Step Research](#multi-step-research) |
-| `maxPageReads` | Number | `5` | Cap on pages the model opens with the page reader (`webContentExtractor`) in one chat answer (1-50). Pages the search tool fetches for its own excerpts (`extractContent`) do not count. See [Page read limit](#page-read-limit) |
+| `maxPageReads` | Number | `5` | Cap on pages the model opens with the page reader (`read_url`) in one chat answer (1-50). Pages the search tool fetches for its own excerpts (`extractContent`) do not count. See [Page read limit](#page-read-limit) |
 
 ### How Provider Resolution Works
 
@@ -102,7 +102,7 @@ The system automatically selects the best search tool at runtime based on the mo
 
 Whenever one of these script-backed search tools is offered — including when a
 provider turns native search down and the loop falls back to it — the page
-reader [`webContentExtractor`](#web-content-extractor-webcontentextractor) is
+reader [`read_url`](#web-content-extractor-read_url) is
 offered next to it. The search tool's automatic extraction only copies a short
 excerpt of the top results (`contentMaxLength` each); the page reader lets the
 model open one specific result, or a URL the user pasted, and read it in full.
@@ -152,7 +152,7 @@ adds a short research instruction to the end of the system prompt:
 - run several searches with different wording (and in another language where that helps);
 - search again with more precise terms when results are thin or disagree;
 - open the most relevant pages and read them in full when the search excerpts are not enough
-  (with script-backed search through the page reader, `webContentExtractor`);
+  (with script-backed search through the page reader, `read_url`);
 - check key claims against more than one source;
 - combine the findings into one answer with the source URLs;
 - stop once the question is answered, without searching for things the model already knows.
@@ -266,7 +266,7 @@ Agents and workflows keep their own budgets.
 
 Apps that previously used websearch tool IDs in their `tools` array are automatically migrated on server startup (Migration V025). The migration:
 
-- Detects apps with `braveSearch`, `enhancedWebSearch`, `googleSearch`, `webSearch`, or `webContentExtractor` in their `tools` array
+- Detects apps with `braveSearch`, `enhancedWebSearch`, `googleSearch`, `webSearch`, or `read_url` in their `tools` array
 - Infers the provider and content extraction settings from the tools used
 - Creates a unified `websearch` configuration object
 - Removes the deprecated tool IDs from the `tools` array
@@ -544,7 +544,7 @@ Google Search grounding, OpenAI Web Search, and Anthropic Web Search are **not**
 
 None of these take any parameters — they're automatically enabled when `websearch.useNativeSearch` is on and the app's model supports them (Anthropic additionally receives the app's search cap as `max_uses`). Search queries, results and citations are surfaced as grounding metadata, which powers the "Grounding" answer-source badge and the [sources panel and inline citations](#sources-and-citations). For OpenAI this includes streamed answers: the `url_citation` annotations and `web_search_call` items of the stream are read into the grounding metadata (before, only a non-streamed response's annotations were parsed, and nothing read them).
 
-### Web Content Extractor (`webContentExtractor`)
+### Web Content Extractor (`read_url`)
 
 **Purpose**: Open a web page or PDF by URL and return its main content as Markdown, without headers, footers, navigation, ads and other non-content elements.
 
@@ -554,7 +554,7 @@ None of these take any parameters — they're automatically enabled when `websea
 - `maxLength` (integer, optional): Most characters returned per call (default: 10000, clamped to 500-50,000)
 - `offset` (integer, optional): Character offset to start reading at — the previous result's `nextOffset`, to read on in a long page (default: 0)
 
-**Availability**: Shipped as `contents/tools/webContentExtractor.json` and offered automatically next to the script-backed search tool whenever an app has `websearch.enabled`, and next to Anthropic and OpenAI native search (see [How Provider Resolution Works](#how-provider-resolution-works)). An app or workflow can also list it in `tools` directly; it is only offered once. Disable the tool to stop offering it. In chats, `websearch.maxPageReads` caps how often one answer may call it (see [Page Read Limit](#page-read-limit)).
+**Availability**: Shipped as `contents/tools/read_url.json` and offered automatically next to the script-backed search tool whenever an app has `websearch.enabled`, and next to Anthropic and OpenAI native search (see [How Provider Resolution Works](#how-provider-resolution-works)). An app or workflow can also list it in `tools` directly; it is only offered once. Disable the tool to stop offering it. In chats, `websearch.maxPageReads` caps how often one answer may call it (see [Page Read Limit](#page-read-limit)).
 
 **Certificates**: The model cannot switch certificate checking off. Invalid certificates are accepted only when the platform's `ssl.ignoreInvalidCertificates` setting allows it; domains in the SSL whitelist also bypass the SSRF check below.
 

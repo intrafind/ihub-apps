@@ -49,8 +49,8 @@ const testTools = [
     parameters: { type: 'object', properties: { query: { type: 'string' } } }
   },
   {
-    id: 'webContentExtractor',
-    name: 'webContentExtractor',
+    id: 'read_url',
+    name: 'read_url',
     description: 'Extract web content (universal tool)',
     parameters: { type: 'object', properties: { url: { type: 'string' } } }
   }
@@ -70,10 +70,7 @@ assert.ok(
   'OpenAI should NOT include exampleOpenAIResponsesTool'
 );
 assert.ok(openaiToolNames.includes('braveSearch'), 'OpenAI should include braveSearch (universal)');
-assert.ok(
-  openaiToolNames.includes('webContentExtractor'),
-  'OpenAI should include webContentExtractor (universal)'
-);
+assert.ok(openaiToolNames.includes('read_url'), 'OpenAI should include read_url (universal)');
 console.log('✓ Test 1 passed - OpenAI filters both provider-restricted tools\n');
 
 // Test 2: OpenAI Responses Converter - includes its own provider tool, filters Google's
@@ -91,10 +88,7 @@ assert.ok(
   responsesToolNames.includes('exampleOpenAIResponsesTool'),
   'OpenAI Responses should include its own provider tool as a regular function tool'
 );
-assert.ok(
-  responsesToolNames.includes('webContentExtractor'),
-  'OpenAI Responses should include webContentExtractor'
-);
+assert.ok(responsesToolNames.includes('read_url'), 'OpenAI Responses should include read_url');
 console.log('✓ Test 2 passed\n');
 
 // Test 3: Google Converter - includes its own provider tool, filters OpenAI Responses'
@@ -115,8 +109,7 @@ assert.ok(
   'Google should NOT include exampleOpenAIResponsesTool'
 );
 assert.ok(
-  googleFunctionNames.includes('braveSearch') &&
-    googleFunctionNames.includes('webContentExtractor'),
+  googleFunctionNames.includes('braveSearch') && googleFunctionNames.includes('read_url'),
   'Google should include universal tools alongside its own provider tool'
 );
 console.log('✓ Test 3 passed\n');
@@ -135,10 +128,7 @@ assert.ok(
   'vLLM should NOT include exampleOpenAIResponsesTool'
 );
 assert.ok(vllmToolNames.includes('braveSearch'), 'vLLM should include braveSearch (universal)');
-assert.ok(
-  vllmToolNames.includes('webContentExtractor'),
-  'vLLM should include webContentExtractor (universal)'
-);
+assert.ok(vllmToolNames.includes('read_url'), 'vLLM should include read_url (universal)');
 console.log('✓ Test 4 passed\n');
 
 // Test 5: Mistral Converter - should filter out both provider-restricted tools
@@ -158,10 +148,7 @@ assert.ok(
   mistralToolNames.includes('braveSearch'),
   'Mistral should include braveSearch (universal)'
 );
-assert.ok(
-  mistralToolNames.includes('webContentExtractor'),
-  'Mistral should include webContentExtractor (universal)'
-);
+assert.ok(mistralToolNames.includes('read_url'), 'Mistral should include read_url (universal)');
 console.log('✓ Test 5 passed\n');
 
 // Test 6: Anthropic Converter - should filter out both provider-restricted tools
@@ -181,10 +168,7 @@ assert.ok(
   anthropicToolNames.includes('braveSearch'),
   'Anthropic should include braveSearch (universal)'
 );
-assert.ok(
-  anthropicToolNames.includes('webContentExtractor'),
-  'Anthropic should include webContentExtractor (universal)'
-);
+assert.ok(anthropicToolNames.includes('read_url'), 'Anthropic should include read_url (universal)');
 console.log('✓ Test 6 passed\n');
 
 console.log('✅ All tests passed! All converters properly filter provider-specific tools.\n');

@@ -111,7 +111,7 @@ async function fetchPage(validUrl, { sslConfig, shouldIgnoreSSL, acceptLanguage 
     );
 
     try {
-      response = await throttledFetch('webContentExtractor', hopUrl.toString(), enhancedOptions);
+      response = await throttledFetch('read_url', hopUrl.toString(), enhancedOptions);
     } finally {
       clearTimeout(timeoutId);
     }
@@ -288,7 +288,7 @@ export default async function webContentExtractor({
   const progress = (status, extra = {}) =>
     emitToolProgress(chatId, {
       phase: `fetch.${status}`,
-      toolId: 'webContentExtractor',
+      toolId: 'read_url',
       message: status === 'loading' ? 'Fetching content' : undefined,
       data: { url: url || uri || link, status, ...extra }
     });
