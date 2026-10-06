@@ -2,6 +2,23 @@
 const A2A_TOOL_PREFIX = 'a2a__';
 
 /**
+ * Whether a tool is an interactive clarification channel — `ask_user`, or any
+ * tool flagged `requiresUserInput`. The agent loop drives these to pause a turn
+ * and ask the user a question (see `services/loop/seams/questionSeam.js`); they
+ * are a system capability, not a user-selectable app capability. So they stay
+ * available whatever a chat's `enabledTools` narrowing says (an app that lists
+ * one in `app.tools` always keeps it) and are hidden from the end-user tools
+ * menu, where a toggle for them would only let a user disable the model's
+ * ability to ask — the exact failure that makes an interview loop.
+ *
+ * @param {{id?: string, requiresUserInput?: boolean}} [tool] - Tool definition
+ * @returns {boolean}
+ */
+export function isInteractiveTool(tool) {
+  return Boolean(tool) && (tool.id === 'ask_user' || tool.requiresUserInput === true);
+}
+
+/**
  * The reference that selects every skill of a remote A2A agent whatever else
  * uses its id: `a2a__<agentId>`.
  *

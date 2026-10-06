@@ -26,6 +26,26 @@ Add `"ask_user"` to your app's tools array:
 }
 ```
 
+### A system channel, not a selectable tool
+
+`ask_user` — and any tool flagged `requiresUserInput` — is an **interactive
+clarification channel** the agent loop drives to pause a turn and ask the user a
+question (see the [agent loop docs](agent-loop.md)). It is treated as a system
+capability, not a user-selectable one:
+
+- **Always available when the app grants it.** Once an app lists it in `tools`,
+  the model keeps it regardless of a chat's per-turn tool narrowing
+  (`enabledTools`). A user cannot switch it off, and a stale saved selection
+  that predates it cannot strip it — otherwise the model would lose its only way
+  to ask, and an interview would loop instead of pausing for the user.
+- **Hidden from the chat tools menu.** It never appears as a toggle in the `+`
+  actions menu, where a switch for it could only disable the model's ability to
+  ask. Only genuine capabilities (web search, MCP servers, source and workflow
+  tools) are listed there.
+
+No configuration is needed for this — listing `ask_user` (or any
+`requiresUserInput` tool) in the app's `tools` is enough.
+
 ## Tool Parameters
 
 | Parameter | Type | Required | Default | Description |

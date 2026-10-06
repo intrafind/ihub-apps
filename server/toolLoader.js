@@ -13,7 +13,7 @@ import { actionTracker } from './actionTracker.js';
 import { emitToolProgress } from './services/loop/RunStream.js';
 import { isFeatureEnabled } from './featureRegistry.js';
 import { isValidId } from './utils/pathSecurity.js';
-import { isToolSelected } from './utils/toolSelection.js';
+import { isInteractiveTool, isToolSelected } from './utils/toolSelection.js';
 import mcpClientManager from './services/mcp/McpClientManager.js';
 import a2aClientManager from './services/a2a/A2aClientManager.js';
 import { markAgentIdConflicts } from './services/a2a/a2aTools.js';
@@ -600,13 +600,20 @@ export async function getToolsForApp(app, language = null, context = {}) {
   if (Array.isArray(app.tools) && app.tools.length > 0) {
     appTools = allTools.filter(t => isToolSelected(t, app.tools));
 
-    // Filter by enabledTools if provided in context
+    // Filter by enabledTools if provided in context. Interactive clarification
+    // tools (`ask_user`, anything `requiresUserInput`) are a system channel the
+    // loop drives, not a user-selectable capability, so an app that grants one
+    // keeps it whatever the chat's narrowing says — otherwise disabling it (or
+    // a stale saved selection that predates it) strips the model's only way to
+    // ask a question, and the interview loops instead of pausing for the user.
     if (
       context.enabledTools !== undefined &&
       context.enabledTools !== null &&
       Array.isArray(context.enabledTools)
     ) {
-      appTools = appTools.filter(t => isToolSelected(t, context.enabledTools));
+      appTools = appTools.filter(
+        t => isInteractiveTool(t) || isToolSelected(t, context.enabledTools)
+      );
     }
   }
 
@@ -901,6 +908,10 @@ export async function runTool(toolId, params = {}, options = {}) {
       workflowState.data._activatedSkills[skillName] = {
         body: skill.body,
         description: skill.description,
+        // Persist the bundled-file paths so later workflow nodes render the
+        // read_skill_resource hint in their <active_skill> block, not just the
+        // body — the tool is exposed to them, the guidance must travel with it.
+        resources: skill.resources,
         activatedAt: new Date().toISOString(),
         activatedBy: params.user?.isAgent ? `agent:${params.user.profileId || 'unknown'}` : 'llm'
       };
@@ -918,9 +929,14 @@ export async function runTool(toolId, params = {}, options = {}) {
     }
 
     let result = skill.body;
-    // Include list of available resources if any exist
+    // List the files the skill bundles, and name the tool and skill_name to
+    // read them with. These are skill-relative paths, not URLs or local files:
+    // a web page reader given "references/x.md" fails with "Invalid URL", so
+    // steer the model to read_skill_resource explicitly.
     if (skill.resources.length > 0) {
-      result += `\n\n---\nAvailable resources you can read with read_skill_resource:\n${skill.resources.map(r => `- ${r}`).join('\n')}`;
+      result += `\n\n---\nThis skill bundles these files. Read one with the read_skill_resource tool (skill_name "${skill.name}", file_path the path below), never with another web, URL or file-reading tool:\n${skill.resources
+        .map(r => `- ${r}`)
+        .join('\n')}`;
     }
     return result;
   }
