@@ -22,7 +22,12 @@ import { thinkingConfigToOptions } from '../thinkingOptions.js';
 import { SubWorkflowMaterializer } from '../SubWorkflowMaterializer.js';
 import { dedupeCitations } from '../citationUtils.js';
 import configCache from '../../../configCache.js';
-import { buildAvailableSkillsBlock, getUsableSkills, isModelInvocable } from '../../skillAccess.js';
+import {
+  buildAvailableSkillsBlock,
+  getUsableSkills,
+  isModelInvocable,
+  renderActiveSkillBlock
+} from '../../skillAccess.js';
 import { actionTracker } from '../../../actionTracker.js';
 import { resolveMaxOutputTokens } from '../../../../shared/outputTokens.js';
 
@@ -762,7 +767,9 @@ Hard rules for this extension plan:
         const blocks = Object.entries(activated)
           .map(([name, entry]) => {
             const body = typeof entry === 'string' ? entry : entry?.body || '';
-            return body ? `<active_skill name="${name}">\n${body}\n</active_skill>` : '';
+            if (!body) return '';
+            const resources = typeof entry === 'object' ? entry?.resources || [] : [];
+            return renderActiveSkillBlock({ name, body, resources });
           })
           .filter(Boolean);
         if (blocks.length > 0) {
@@ -1422,6 +1429,13 @@ Output rules:
         activated[name] = {
           body: content.body,
           description: content.description || '',
+          // Carry the bundled-file paths so the <active_skill> block rendered
+          // for later nodes points at read_skill_resource, not just the body.
+          resources: [
+            ...(content.references || []),
+            ...(content.scripts || []),
+            ...(content.assets || [])
+          ],
           activatedAt: new Date().toISOString(),
           activatedBy: 'planner'
         };
