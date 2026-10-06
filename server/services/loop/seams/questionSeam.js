@@ -16,6 +16,8 @@
  * @module services/loop/seams/questionSeam
  */
 
+import { isInteractiveTool } from '../../../utils/toolSelection.js';
+
 /**
  * Tools that ask the user (today `ask_user`, or anything flagged
  * `requiresUserInput`) are `interactive` for the question seam. Every caller
@@ -25,9 +27,7 @@
  */
 export function markInteractiveTools(tools) {
   return (Array.isArray(tools) ? tools : []).map(tool =>
-    tool && (tool.id === 'ask_user' || tool.requiresUserInput === true) && tool.interactive !== true
-      ? { ...tool, interactive: true }
-      : tool
+    isInteractiveTool(tool) && tool.interactive !== true ? { ...tool, interactive: true } : tool
   );
 }
 

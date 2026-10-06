@@ -129,7 +129,19 @@ function ChatInputActionsMenu({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const { grouped, individual } = groupToolsByMcpServer(app?.tools, availableTools, name =>
+  // Interactive clarification tools (`ask_user`, anything `requiresUserInput`)
+  // are a system channel the agent loop drives, not a user-selectable
+  // capability: the model always has them when the app grants them (the server
+  // keeps them whatever `enabledTools` says — see getToolsForApp). They never
+  // appear in this menu, because a toggle here could only strip the model's
+  // ability to ask the user a question, which is exactly the failure it was
+  // mistaken for.
+  const isInteractiveToolRef = toolId =>
+    toolId === 'ask_user' ||
+    availableTools.find(tool => tool.id === toolId)?.requiresUserInput === true;
+  const selectableToolRefs = (app?.tools || []).filter(id => !isInteractiveToolRef(id));
+
+  const { grouped, individual } = groupToolsByMcpServer(selectableToolRefs, availableTools, name =>
     getLocalizedContent(name, i18n.language)
   );
 
@@ -163,7 +175,7 @@ function ChatInputActionsMenu({
     }
   };
 
-  const hasTools = app?.tools && app.tools.length > 0 && enabledTools !== null;
+  const hasTools = selectableToolRefs.length > 0 && enabledTools !== null;
   // The references the menu shows: one toggle per MCP server plus plain tools.
   const menuToolRefs = [...grouped.flatMap(g => g.matchedTools), ...individual];
   const toolCount = menuToolRefs.length;

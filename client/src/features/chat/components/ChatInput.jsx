@@ -369,8 +369,14 @@ function ChatInput({
   );
 
   // Calculate if single-action optimization is active in ChatInputActionsMenu
-  // This logic mirrors the calculation in ChatInputActionsMenu.jsx
-  const hasTools = app?.tools && app.tools.length > 0;
+  // This logic mirrors the calculation in ChatInputActionsMenu.jsx. Interactive
+  // clarification tools (`ask_user`) are a system channel, never shown as a
+  // selectable tool there, so they must not count as a tool action here either
+  // — otherwise an app whose only tool is `ask_user` would suppress the
+  // single-action optimization for its one real quick action. Only the
+  // well-known `ask_user` id is knowable without the fetched tool metadata; any
+  // `requiresUserInput` tool is filtered out for real inside the menu.
+  const hasTools = Array.isArray(app?.tools) && app.tools.some(id => id !== 'ask_user');
   // Local upload (paper-clip + dropzone) is independent from cloud storage
   // upload, which is rendered as separate entries in the actions menu.
   const localUploadEnabled = uploadConfig?.localUploadEnabled === true;
