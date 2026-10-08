@@ -157,7 +157,7 @@ export class VerifierNodeExecutor extends BaseNodeExecutor {
             {
               stateUpdates: {
                 verificationResult: {
-                  ...(state?.data?.verificationResult || {}),
+                  ...state?.data?.verificationResult,
                   passed: true,
                   verdict: 'PARTIAL',
                   feedback: 'Accepted after gaps stalled',
@@ -213,7 +213,7 @@ export class VerifierNodeExecutor extends BaseNodeExecutor {
             stateUpdates: {
               _verificationOutcome: 'not_passed',
               verificationResult: {
-                ...(state?.data?.verificationResult || {}),
+                ...state?.data?.verificationResult,
                 passed: false,
                 verdict: 'FAIL',
                 feedback: lastFeedback,
@@ -385,7 +385,7 @@ export class VerifierNodeExecutor extends BaseNodeExecutor {
         verificationResult: { passed, score, feedback, verdict, failures, mode, conclusive },
         [retryKey]: needsRevision ? currentRetries + 1 : 0,
         _taskTimings: {
-          ...(state?.data?._taskTimings || {}),
+          ...state?.data?._taskTimings,
           [node.id]: { startedAt: startedAt.toISOString(), completedAt: completedAtIso, durationMs }
         }
       };

@@ -61,7 +61,7 @@ export default function TaskEditorPage() {
   const limits = useScheduledTaskLimits();
 
   const incoming = location.state || {};
-  const [draft, setDraft] = useState(() => ({ ...emptyDraft(), ...(incoming.draft || {}) }));
+  const [draft, setDraft] = useState(() => ({ ...emptyDraft(), ...incoming.draft }));
   const [scheduleForm, setScheduleForm] = useState(() =>
     scheduleToForm(incoming.draft?.schedule || emptyDraft().schedule, browserTimezone())
   );
@@ -148,7 +148,7 @@ export default function TaskEditorPage() {
       notify: !enabled && prev.notify === 'changes' ? 'always' : prev.notify
     }));
   const setVariable = (name, value) =>
-    setDraft(prev => ({ ...prev, variables: { ...(prev.variables || {}), [name]: value } }));
+    setDraft(prev => ({ ...prev, variables: { ...prev.variables, [name]: value } }));
 
   async function handleSubmit(event) {
     event.preventDefault();

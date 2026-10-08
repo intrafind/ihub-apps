@@ -24,7 +24,7 @@
  * @module services/mcp/mcpAppSandboxPage
  */
 
-const PROXY_SCRIPT = String.raw`(function () {
+const PROXY_SCRIPT = `(function () {
   'use strict';
   var PROXY_READY = 'ui/notifications/sandbox-proxy-ready';
   var RESOURCE_READY = 'ui/notifications/sandbox-resource-ready';

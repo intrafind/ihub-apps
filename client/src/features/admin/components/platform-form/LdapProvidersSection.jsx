@@ -74,7 +74,7 @@ function LdapProvidersSection({ config, onChange, t, availableGroups = [] }) {
 
   const updateAttributeMapping = (index, field, rawValue) => {
     const providers = [...(config.ldapAuth?.providers || [])];
-    const mapping = { ...(providers[index]?.attributeMapping || {}) };
+    const mapping = { ...providers[index]?.attributeMapping };
     const attributes = rawValue
       .split(',')
       .map(entry => entry.trim())
@@ -270,7 +270,7 @@ function LdapProvidersSection({ config, onChange, t, availableGroups = [] }) {
                 placeholder="CONTOSO"
                 help={t(
                   'admin.auth.ldap.domainHelp',
-                  'NetBIOS/short domain name, used by integrations that identify users as DOMAIN\\username (iFinder). Leave empty for Active Directory to detect it from msDS-PrincipalName; required for other directories.'
+                  String.raw`NetBIOS/short domain name, used by integrations that identify users as DOMAIN\username (iFinder). Leave empty for Active Directory to detect it from msDS-PrincipalName; required for other directories.`
                 )}
               />
 

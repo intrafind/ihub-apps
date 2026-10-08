@@ -170,7 +170,7 @@ export default function registerAdminScheduledTaskRoutes(app) {
       const changed = [];
       for (const [key, value] of Object.entries(parsed.data)) {
         if (current[key] === value) continue;
-        platformConfig.scheduledTasks = { ...(platformConfig.scheduledTasks || {}), [key]: value };
+        platformConfig.scheduledTasks = { ...platformConfig.scheduledTasks, [key]: value };
         changed.push(`scheduledTasks.${key}`);
       }
       if (changed.length > 0) {

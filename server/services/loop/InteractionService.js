@@ -741,7 +741,7 @@ export class InteractionService extends EventEmitter {
   async raise(params) {
     await this._ensureLoaded();
     const nowIso = new Date(this._now()).toISOString();
-    const policy = { ...(params.policy || {}) };
+    const policy = { ...params.policy };
     if (!policy.expiresAt && policy.timeoutMs) {
       policy.expiresAt = new Date(this._now() + policy.timeoutMs).toISOString();
     }

@@ -198,7 +198,7 @@ function AdminAppEditPage() {
             mode: 'manual',
             showTranscript: true
           },
-          ...(data.inputMode || {})
+          ...data.inputMode
         },
         upload: {
           enabled: data.upload?.enabled || false,
@@ -237,7 +237,7 @@ function AdminAppEditPage() {
               'application/vnd.oasis.opendocument.presentation'
             ]
           },
-          ...(data.upload || {})
+          ...data.upload
         }
       };
 

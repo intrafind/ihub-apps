@@ -61,7 +61,7 @@ export function turnPrompt({ firstTurn, resolved, stored = null, historyReplayed
     applyTemplate: !historyReplayed,
     // Stored set first, then the defaults for anything it lacks (a variable
     // the app gained since).
-    variables: { ...resolved.variables, ...(stored || {}) },
+    variables: { ...resolved.variables, ...stored },
     storeVariables: false
   };
 }

@@ -1192,9 +1192,11 @@ class IFinderService {
       lines.push(`- Filterable: \`${fieldCatalog.filterable.slice(0, 25).join('`, `')}\``);
       lines.push(`- Facetable: \`${fieldCatalog.aggregatable.slice(0, 25).join('`, `')}\``);
       lines.push(`- Sortable: \`${fieldCatalog.sortable.slice(0, 25).join('`, `')}\``);
-      lines.push('');
-      lines.push('Call `getFields` for the full catalog with the exact name to use per purpose.');
-      lines.push('');
+      lines.push(
+        '',
+        'Call `getFields` for the full catalog with the exact name to use per purpose.',
+        ''
+      );
     }
 
     return lines.join('\n');

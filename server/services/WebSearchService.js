@@ -143,7 +143,7 @@ export const BRAVE_COUNTRIES = new Set([
 export function resolveBraveSearchParams(language) {
   if (!language || typeof language !== 'string') return {};
 
-  const normalized = language.trim().toLowerCase().replace(/_/g, '-');
+  const normalized = language.trim().toLowerCase().replaceAll('_', '-');
   const [lang, region] = normalized.split('-');
 
   const searchLang = BRAVE_SEARCH_LANGUAGES[normalized] || BRAVE_SEARCH_LANGUAGES[lang];

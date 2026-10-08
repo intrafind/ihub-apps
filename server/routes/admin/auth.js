@@ -314,7 +314,6 @@ export default function registerAdminAuthRoutes(app) {
 
       const sanitizedUsers = Object.fromEntries(
         Object.entries(usersData.users || {}).map(([id, user]) => {
-          // eslint-disable-next-line no-unused-vars
           const { passwordHash, ...userWithoutPasswordHash } = user;
           return [id, userWithoutPasswordHash];
         })
@@ -442,7 +441,7 @@ export default function registerAdminAuthRoutes(app) {
       }
 
       // Create new user
-      const userId = `user_${uuidv4().replace(/-/g, '_')}`;
+      const userId = `user_${uuidv4().replaceAll('-', '_')}`;
 
       const newUser = {
         id: userId,
@@ -620,7 +619,7 @@ export default function registerAdminAuthRoutes(app) {
       });
 
       // Return user without password hash
-      // eslint-disable-next-line no-unused-vars
+
       const { passwordHash, ...userResponse } = user;
       res.json({ user: userResponse });
     } catch (error) {

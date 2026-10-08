@@ -110,7 +110,8 @@ function svgLength(value) {
 export function svgSize(svg) {
   const root = /<svg\b[^>]*>/i.exec(svg)?.[0];
   if (!root) return null;
-  const attr = name => new RegExp(`\\s${name}\\s*=\\s*["']([^"']*)["']`, 'i').exec(root)?.[1];
+  const attr = name =>
+    new RegExp(String.raw`\s${name}\s*=\s*["']([^"']*)["']`, 'i').exec(root)?.[1];
   const width = svgLength(attr('width'));
   const height = svgLength(attr('height'));
   if (width && height) return { width, height };

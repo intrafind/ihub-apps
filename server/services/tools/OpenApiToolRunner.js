@@ -363,7 +363,7 @@ async function buildRequest(tool, params) {
   // Substitute path params.
   let resolvedPath = path;
   const query = new URLSearchParams();
-  const headers = { ...(tool.openapi.headers || {}) };
+  const headers = { ...tool.openapi.headers };
   let body;
   const bodyObj = {};
 

@@ -555,7 +555,7 @@ export class BaseNodeExecutor {
     let out = text;
     for (const [key, value] of Object.entries(vars)) {
       if (value === null || value === undefined || value === '') continue;
-      out = out.replace(new RegExp(`\\{\\{${key}\\}\\}`, 'g'), String(value));
+      out = out.replace(new RegExp(String.raw`\{\{${key}\}\}`, 'g'), String(value));
     }
     return out;
   }

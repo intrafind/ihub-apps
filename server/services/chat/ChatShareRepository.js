@@ -588,7 +588,7 @@ export class ChatShareRepository {
         ...(Array.isArray(share.views) ? share.views : []),
         { at, userId: recordAs ?? null }
       ];
-      const recipientViews = { ...(share.recipientViews || {}) };
+      const recipientViews = { ...share.recipientViews };
       if (viewerId && share.mode === 'users' && share.recipients?.includes(viewerId)) {
         const previous = recipientViews[viewerId] || { count: 0, lastViewedAt: null };
         recipientViews[viewerId] = { count: (Number(previous.count) || 0) + 1, lastViewedAt: at };

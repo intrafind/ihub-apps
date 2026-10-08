@@ -464,7 +464,7 @@ export function applyDagreLayout(nodes, edges) {
       if (size) {
         next.width = size.width;
         next.height = size.height;
-        next.style = { ...(node.style || {}), width: size.width, height: size.height };
+        next.style = { ...node.style, width: size.width, height: size.height };
       }
     }
     return next;

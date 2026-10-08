@@ -264,7 +264,9 @@ export async function fetchItemContent(registryId, type, name) {
 
   // GitHub Contents API wraps file content in base64
   if (responseData && responseData.content && responseData.encoding === 'base64') {
-    const decoded = Buffer.from(responseData.content.replace(/\n/g, ''), 'base64').toString('utf8');
+    const decoded = Buffer.from(responseData.content.replaceAll('\n', ''), 'base64').toString(
+      'utf8'
+    );
     try {
       return { item, content: JSON.parse(decoded) };
     } catch {

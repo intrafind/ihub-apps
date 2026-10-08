@@ -66,15 +66,15 @@ const downloadBlob = (blob, filename) => {
 export const slugifyForFilename = (text, maxChars = 40) => {
   if (!text || typeof text !== 'string') return '';
   return text
-    .replace(/```[\s\S]*?```/g, ' ') // drop fenced code
-    .replace(/`[^`]*`/g, ' ') // drop inline code
-    .replace(/!\[[^\]]*\]\([^)]*\)/g, ' ') // drop images
-    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1') // unwrap links
-    .replace(/[*_~#>]/g, ' ') // drop markdown markers
+    .replaceAll(/```[\s\S]*?```/g, ' ') // drop fenced code
+    .replaceAll(/`[^`]*`/g, ' ') // drop inline code
+    .replaceAll(/!\[[^\]]*\]\([^)]*\)/g, ' ') // drop images
+    .replaceAll(/\[([^\]]+)\]\([^)]*\)/g, '$1') // unwrap links
+    .replaceAll(/[*_~#>]/g, ' ') // drop markdown markers
     .normalize('NFKD')
-    .replace(/[̀-ͯ]/g, '') // strip accents
-    .replace(/[^a-zA-Z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
+    .replaceAll(/[̀-ͯ]/g, '') // strip accents
+    .replaceAll(/[^a-zA-Z0-9]+/g, '-')
+    .replaceAll(/^-+|-+$/g, '')
     .toLowerCase()
     .slice(0, maxChars)
     .replace(/-+$/, '');
@@ -159,10 +159,10 @@ export const buildChatExportTitle = ({
     : null;
   if (firstUser?.content) {
     const topic = firstUser.content
-      .replace(/```[\s\S]*?```/g, ' ')
-      .replace(/`[^`]*`/g, ' ')
-      .replace(/[*_~#>]/g, ' ')
-      .replace(/\s+/g, ' ')
+      .replaceAll(/```[\s\S]*?```/g, ' ')
+      .replaceAll(/`[^`]*`/g, ' ')
+      .replaceAll(/[*_~#>]/g, ' ')
+      .replaceAll(/\s+/g, ' ')
       .trim()
       .slice(0, 60);
     if (topic) return `${app} — ${topic} (${dateStr})`;
@@ -726,8 +726,10 @@ export const exportToXLSX = async (
   // Add settings section if available
   const settingsRows = getExportSettingsRows(settings);
   if (settingsRows.length > 0) {
-    data.push([{ value: '', columnSpan: 3 }, null, null]);
-    data.push([{ value: 'Settings', ...headerStyle, columnSpan: 3 }, null, null]);
+    data.push(
+      [{ value: '', columnSpan: 3 }, null, null],
+      [{ value: 'Settings', ...headerStyle, columnSpan: 3 }, null, null]
+    );
     settingsRows.forEach(([label, value]) => {
       data.push([{ value: label }, { value: sanitizeForSpreadsheet(value), columnSpan: 2 }, null]);
     });
@@ -770,7 +772,7 @@ export const exportToCSV = async (
     const stringValue = sanitizeForSpreadsheet(value);
     // Escape quotes and wrap in quotes if contains comma, quote, or newline
     if (/[",\r\n]/.test(stringValue)) {
-      return `"${stringValue.replace(/"/g, '""')}"`;
+      return `"${stringValue.replaceAll('"', '""')}"`;
     }
     return stringValue;
   };

@@ -198,7 +198,7 @@ export class PlannerNodeExecutor extends BaseNodeExecutor {
         await stateManager.update(state.executionId, {
           data: {
             _stepLogs: {
-              ...(state?.data?._stepLogs || {}),
+              ...state?.data?._stepLogs,
               [plannerLogKey]: stepLog
             }
           }
@@ -283,7 +283,7 @@ export class PlannerNodeExecutor extends BaseNodeExecutor {
         typeof parentDeadline === 'number' ? parentDeadline - Date.now() - 5_000 : 30 * 60 * 1000
       );
       workflowDef.config = {
-        ...(workflowDef.config || {}),
+        ...workflowDef.config,
         maxExecutionTime: remainingMs
       };
 
@@ -370,19 +370,19 @@ export class PlannerNodeExecutor extends BaseNodeExecutor {
             const partial = {};
             if (failedChildData._taskResults && typeof failedChildData._taskResults === 'object') {
               partial._taskResults = {
-                ...(state?.data?._taskResults || {}),
+                ...state?.data?._taskResults,
                 ...failedChildData._taskResults
               };
             }
             if (failedChildData._stepLogs && typeof failedChildData._stepLogs === 'object') {
               partial._stepLogs = {
-                ...(state?.data?._stepLogs || {}),
+                ...state?.data?._stepLogs,
                 ...failedChildData._stepLogs
               };
             }
             if (failedChildData._taskTimings && typeof failedChildData._taskTimings === 'object') {
               partial._taskTimings = {
-                ...(state?.data?._taskTimings || {}),
+                ...state?.data?._taskTimings,
                 ...failedChildData._taskTimings
               };
             }
@@ -436,7 +436,7 @@ export class PlannerNodeExecutor extends BaseNodeExecutor {
             ? childData._taskTimings
             : {};
         bubbledUpdates._taskTimings = {
-          ...(state?.data?._taskTimings || {}),
+          ...state?.data?._taskTimings,
           ...childTimings,
           [node.id]: {
             startedAt: planningStartedAt.toISOString(),
@@ -452,7 +452,7 @@ export class PlannerNodeExecutor extends BaseNodeExecutor {
         // { taskId, nodeId, title, content, model, completedAt }.
         if (childData._taskResults && typeof childData._taskResults === 'object') {
           bubbledUpdates._taskResults = {
-            ...(state?.data?._taskResults || {}),
+            ...state?.data?._taskResults,
             ...childData._taskResults
           };
         }
@@ -462,7 +462,7 @@ export class PlannerNodeExecutor extends BaseNodeExecutor {
         // parent state.
         if (childData._activatedSkills && typeof childData._activatedSkills === 'object') {
           bubbledUpdates._activatedSkills = {
-            ...(state?.data?._activatedSkills || {}),
+            ...state?.data?._activatedSkills,
             ...childData._activatedSkills
           };
         }
@@ -472,7 +472,7 @@ export class PlannerNodeExecutor extends BaseNodeExecutor {
         // happened inside the child sub-workflow.
         if (childData._stepLogs && typeof childData._stepLogs === 'object') {
           bubbledUpdates._stepLogs = {
-            ...(state?.data?._stepLogs || {}),
+            ...state?.data?._stepLogs,
             ...childData._stepLogs
           };
         }
@@ -512,7 +512,7 @@ export class PlannerNodeExecutor extends BaseNodeExecutor {
             merged.push(a);
           }
           bubbledUpdates._agent = {
-            ...(state?.data?._agent || {}),
+            ...state?.data?._agent,
             artifacts: merged
           };
         }
@@ -599,7 +599,7 @@ export class PlannerNodeExecutor extends BaseNodeExecutor {
         await stateManager.update(state.executionId, {
           data: {
             _stepLogs: {
-              ...(state?.data?._stepLogs || {}),
+              ...state?.data?._stepLogs,
               [failureLogKey]: partialStepLog
             }
           }
@@ -1402,7 +1402,7 @@ Output rules:
         .filter(isModelInvocable)
         .map(s => s.name)
     );
-    const activated = { ...(state?.data?._activatedSkills || {}) };
+    const activated = { ...state?.data?._activatedSkills };
     const { getSkillContent } = await import('../../skillLoader.js');
     const profileId = context?.user?.profileId;
     const chatId = context?.chatId || state?.executionId;

@@ -44,8 +44,7 @@ const DIACRITICS_REG_EXP = /\p{M}+/gu;
 // order"). Keep the escapes when syncing this file.
 const SYLLABLES_REG_EXP = /[\uAC00-\uD7AF\uFA6C\uFACF-\uFAD1\uFAD5-\uFAD7]+/g;
 const SYLLABLES_LENGTHS = new Map();
-const FIRST_CHAR_SYLLABLES_REG_EXP =
-  '[\\u1100-\\u1112\\ud7a4-\\ud7af\\ud84a\\ud84c\\ud850\\ud854\\ud857\\ud85f]';
+const FIRST_CHAR_SYLLABLES_REG_EXP = String.raw`[\u1100-\u1112\ud7a4-\ud7af\ud84a\ud84c\ud850\ud854\ud857\ud85f]`;
 const NFKC_CHARS_TO_NORMALIZE = new Map();
 let noSyllablesRegExp = null;
 let withSyllablesRegExp = null;
@@ -82,10 +81,10 @@ function normalize(text) {
   } else {
     const replace = Object.keys(CHARACTERS_TO_NORMALIZE).join('');
     const toNormalizeWithNFKC = '①-⑳' + 'Ⓐ-⓿' + '㉄-㊿' + '㋐-㋾' + '＀-￯';
-    const CJK = '(?:\\p{Ideographic}|[぀-ヿ])';
-    const regexp = `([${replace}])|([${toNormalizeWithNFKC}])|(\\p{M}+(?:-\\n)?)|(\\S-\\n)|(${CJK}\\n)|(\\n)`;
+    const CJK = String.raw`(?:\p{Ideographic}|[぀-ヿ])`;
+    const regexp = String.raw`([${replace}])|([${toNormalizeWithNFKC}])|(\p{M}+(?:-\n)?)|(\S-\n)|(${CJK}\n)|(\n)`;
     if (syllablePositions.length === 0) {
-      normalizationRegex = noSyllablesRegExp = new RegExp(`${regexp}|(\\u0000)`, 'gum');
+      normalizationRegex = noSyllablesRegExp = new RegExp(String.raw`${regexp}|(\u0000)`, 'gum');
     } else {
       normalizationRegex = withSyllablesRegExp = new RegExp(
         `${regexp}|(${FIRST_CHAR_SYLLABLES_REG_EXP})`,

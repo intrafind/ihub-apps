@@ -421,7 +421,7 @@ function applyChatPatch(chat, patch) {
   if ('settings' in patch) {
     const incoming = normalizeChatSettings(patch.settings);
     const existing = normalizeChatSettings(chat.settings);
-    const merged = { ...(existing || {}), ...(incoming || {}) };
+    const merged = { ...existing, ...incoming };
     next.settings = Object.keys(merged).length > 0 ? merged : null;
   } else {
     next.settings = normalizeChatSettings(chat.settings);

@@ -59,7 +59,7 @@ async function safeExtractZip(zipBuffer, targetDir) {
   const zip = await JSZip.loadAsync(zipBuffer);
 
   for (const [relativePath, zipEntry] of Object.entries(zip.files)) {
-    const normalised = path.normalize(relativePath).replace(/\\/g, '/');
+    const normalised = path.normalize(relativePath).replaceAll('\\', '/');
     const destPath = await resolveAndValidatePath(normalised, targetDir);
     if (!destPath) {
       throw new Error(`Zip path escapes target directory: ${relativePath}`);
@@ -516,7 +516,7 @@ export default function registerAdminSkillsRoutes(app) {
       platformConfig.userSkills = {
         ...stored,
         ...rest,
-        sharing: { ...(stored.sharing || {}), ...(sharing || {}) }
+        sharing: { ...stored.sharing, ...sharing }
       };
       await configStore.writeJson('config/platform.json', platformConfig);
       await configCache.refreshCacheEntry('config/platform.json');

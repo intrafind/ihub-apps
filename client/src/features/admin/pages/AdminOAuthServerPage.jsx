@@ -60,7 +60,7 @@ function AdminOAuthServerPage() {
           consentMemoryDays: data.oauth.consentMemoryDays ?? 90,
           personalKeys: {
             ...prev.personalKeys,
-            ...(data.oauth.personalKeys || {})
+            ...data.oauth.personalKeys
           }
         }));
       }
@@ -120,7 +120,7 @@ function AdminOAuthServerPage() {
       const updatedConfig = {
         ...platformConfig,
         oauth: {
-          ...(platformConfig.oauth || {}),
+          ...platformConfig.oauth,
           enabled: {
             authz: newStatus,
             clients: platformConfig.oauth?.enabled?.clients ?? false
@@ -178,7 +178,7 @@ function AdminOAuthServerPage() {
           consentRequired: oauthConfig.consentRequired,
           consentMemoryDays: oauthConfig.consentMemoryDays,
           personalKeys: {
-            ...(currentPlatformConfig.oauth?.personalKeys || {}),
+            ...currentPlatformConfig.oauth?.personalKeys,
             ...oauthConfig.personalKeys
           }
         }

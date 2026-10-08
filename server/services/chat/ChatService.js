@@ -166,7 +166,7 @@ export function withAppPrompt(messages, variables, promptTemplate) {
     i === lastUser
       ? {
           ...m,
-          variables: { ...(m.variables || {}), ...(variables || {}) },
+          variables: { ...m.variables, ...variables },
           ...(m.promptTemplate ? {} : { promptTemplate: promptTemplate || null })
         }
       : m

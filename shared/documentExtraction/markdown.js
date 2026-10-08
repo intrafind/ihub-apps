@@ -23,7 +23,7 @@ const footnoteLabel = (kind, number) => (kind === 'end' ? `[^e${number}]` : `[^$
  * run quadratically (a document with a very long run of spaces would stall the tab).
  */
 const replaceNewlineRuns = (text, replacement) =>
-  text.replace(/\s+/g, run => (run.includes('\n') ? replacement : run));
+  text.replaceAll(/\s+/g, run => (run.includes('\n') ? replacement : run));
 
 /** `text` with a trailing run of line breaks reduced to one (linear, unlike a `\n+$` pattern). */
 const singleTrailingNewline = text => {
@@ -50,7 +50,7 @@ function cellMarkdown(service, cell) {
       .map(row =>
         Array.from(row.children)
           .filter(c => c.nodeName === 'TD' || c.nodeName === 'TH')
-          .map(c => c.textContent.replace(/\s+/g, ' ').trim())
+          .map(c => c.textContent.replaceAll(/\s+/g, ' ').trim())
           .filter(Boolean)
           .join(' / ')
       )
@@ -65,12 +65,12 @@ function cellMarkdown(service, cell) {
     heading.parentNode.replaceChild(paragraph, heading);
   }
   const text = replaceNewlineRuns(service.turndown(clone.innerHTML || ''), '<br>')
-    .replace(/^(<br>)+|(<br>)+$/g, '')
+    .replaceAll(/^(<br>)+|(<br>)+$/g, '')
     .trim();
   // A pipe ends the cell, so it is escaped. Backslashes are doubled first — only in a cell that
   // needs the escape — because a backslash in front of a pipe would escape the escape (`\|` in
   // the text must come out as `\\\|`, not `\\|`, which is a backslash and a column delimiter).
-  return text.includes('|') ? text.replace(/\\/g, '\\\\').replace(/\|/g, '\\|') : text;
+  return text.includes('|') ? text.replaceAll('\\', '\\\\').replaceAll('|', String.raw`\|`) : text;
 }
 
 /**
@@ -140,7 +140,7 @@ export function createDocumentMarkdownConverter(TurndownService) {
   service.addRule('image', {
     filter: 'img',
     replacement: (_content, node) => {
-      const alt = (node.getAttribute('alt') || '').replace(/\s+/g, ' ').trim();
+      const alt = (node.getAttribute('alt') || '').replaceAll(/\s+/g, ' ').trim();
       return alt ? `[Image: ${alt}]` : '';
     }
   });
@@ -150,11 +150,11 @@ export function createDocumentMarkdownConverter(TurndownService) {
   service.addRule('link', {
     filter: node => node.nodeName === 'A' && Boolean(node.getAttribute('href')),
     replacement: (content, node) => {
-      const text = content.replace(/\s+/g, ' ').trim();
+      const text = content.replaceAll(/\s+/g, ' ').trim();
       if (!text) return '';
       const href = node.getAttribute('href').trim();
       if (href.startsWith('#') || /^javascript:/i.test(href)) return content;
-      const destination = href.replace(
+      const destination = href.replaceAll(
         /[()\\\s]/g,
         char => `%${char.charCodeAt(0).toString(16).toUpperCase().padStart(2, '0')}`
       );
@@ -204,7 +204,7 @@ export function createDocumentMarkdownConverter(TurndownService) {
   service.addRule('listItem', {
     filter: 'li',
     replacement: (content, node, options) => {
-      const text = singleTrailingNewline(content.replace(/^\n+/, '')).replace(/\n/g, '\n  ');
+      const text = singleTrailingNewline(content.replace(/^\n+/, '')).replaceAll('\n', '\n  ');
       const parent = node.parentNode;
       let prefix = `${options.bulletListMarker} `;
       if (parent?.nodeName === 'OL') {
@@ -272,12 +272,12 @@ export function htmlToMarkdown(service, html, DOMParserCtor) {
  */
 export function normalizeMarkdown(markdown) {
   return String(markdown || '')
-    .replace(/\r\n?/g, '\n')
-    .replace(/\u00AD/g, '')
-    .replace(/\u2011/g, '-')
+    .replaceAll(/\r\n?/g, '\n')
+    .replaceAll('\u00AD', '')
+    .replaceAll('\u2011', '-')
     .split('\n')
     .map(stripTrailingBlanks)
     .join('\n')
-    .replace(/\n{3,}/g, '\n\n')
+    .replaceAll(/\n{3,}/g, '\n\n')
     .trim();
 }

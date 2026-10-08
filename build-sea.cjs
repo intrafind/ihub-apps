@@ -556,14 +556,14 @@ exit /b %EXIT_CODE%
     // Windows service files: WinSW XML config + install/uninstall helper scripts.
     // WinSW (https://github.com/winsw/winsw) is downloaded at BUILD time via curl
     // and bundled in the zip — no internet access is required on the target server.
-    const winswXml = `<?xml version="1.0" encoding="UTF-8"?>
+    const winswXml = String.raw`<?xml version="1.0" encoding="UTF-8"?>
 <service>
   <id>ihub-apps</id>
   <name>iHub Apps</name>
   <description>iHub Apps AI Platform - serves AI-powered applications on port 3000</description>
-  <executable>%BASE%\\node.exe</executable>
-  <arguments>"%BASE%\\launcher.cjs"</arguments>
-  <logpath>%BASE%\\logs</logpath>
+  <executable>%BASE%\node.exe</executable>
+  <arguments>"%BASE%\launcher.cjs"</arguments>
+  <logpath>%BASE%\logs</logpath>
   <log mode="roll-by-size">
     <sizeThreshold>10240</sizeThreshold>
     <keepFiles>8</keepFiles>

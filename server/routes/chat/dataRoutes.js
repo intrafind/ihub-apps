@@ -369,7 +369,7 @@ export default function registerDataRoutes(app) {
    */
   app.get(buildServerPath('/api/translations/:lang'), async (req, res) => {
     const originalLang = req.params.lang;
-    let requestId = `${Date.now()}-${crypto.randomUUID().replace(/-/g, '').substring(0, 9)}`;
+    let requestId = `${Date.now()}-${crypto.randomUUID().replaceAll('-', '').substring(0, 9)}`;
 
     try {
       logger.info('Translation request', {

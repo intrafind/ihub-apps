@@ -502,14 +502,12 @@ const UnifiedResponseProcessor = {
 
 // Test the unified response processor
 const mockStreamChunks = {
-  openai:
-    'data: {"choices":[{"delta":{"tool_calls":[{"id":"call_1","function":{"name":"search","arguments":"{\\"query\\":\\"AI news\\"}"}}]}}]}',
+  openai: String.raw`data: {"choices":[{"delta":{"tool_calls":[{"id":"call_1","function":{"name":"search","arguments":"{\"query\":\"AI news\"}"}}]}}]}`,
   anthropic:
     'data: {"type":"content_block_delta","delta":{"type":"tool_use","id":"call_1","name":"search","input":{"query":"AI news"}}}',
   google:
     'data: {"candidates":[{"content":{"parts":[{"functionCall":{"name":"search","args":{"query":"AI news"}}}]}}]}',
-  mistral:
-    'data: {"choices":[{"delta":{"tool_calls":[{"id":"call_1","function":{"name":"search","arguments":"{\\"query\\":\\"AI news\\"}"}}]}}]}'
+  mistral: String.raw`data: {"choices":[{"delta":{"tool_calls":[{"id":"call_1","function":{"name":"search","arguments":"{\"query\":\"AI news\"}"}}]}}]}`
 };
 
 logger.info('✅ Unified Response Processing Test:');

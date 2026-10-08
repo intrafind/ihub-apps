@@ -263,7 +263,7 @@ export function extractUiResource(readResult, uri) {
 
   const mimeType = String(entry.mimeType || '')
     .toLowerCase()
-    .replace(/\s+/g, '');
+    .replaceAll(/\s+/g, '');
   if (mimeType !== MCP_APP_MIME_TYPE) {
     throw new Error(`UI resource ${uri} has unsupported MIME type "${entry.mimeType || ''}"`);
   }
@@ -303,12 +303,12 @@ export function extractUiResource(readResult, uri) {
  */
 export function isEmbeddedViewMimeType(mimeType) {
   if (typeof mimeType !== 'string') return false;
-  const [type, ...params] = mimeType.toLowerCase().replace(/\s+/g, '').split(';');
+  const [type, ...params] = mimeType.toLowerCase().replaceAll(/\s+/g, '').split(';');
   if (type !== 'text/html') return false;
   return params.every(param => {
     const [name, value] = param.split('=');
     if (name === 'charset') return true;
-    return name === 'profile' && value?.replace(/"/g, '') === 'mcp-app';
+    return name === 'profile' && value?.replaceAll('"', '') === 'mcp-app';
   });
 }
 

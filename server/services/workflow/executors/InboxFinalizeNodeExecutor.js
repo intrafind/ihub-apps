@@ -133,7 +133,7 @@ export class InboxFinalizeNodeExecutor extends BaseNodeExecutor {
       // a still-open/seeded task on a successful run.
       const finalizeStateUpdates = {
         _taskTimings: {
-          ...(state?.data?._taskTimings || {}),
+          ...state?.data?._taskTimings,
           [node.id]: {
             startedAt: startedAt.toISOString(),
             completedAt: completedAtIso,
@@ -141,7 +141,7 @@ export class InboxFinalizeNodeExecutor extends BaseNodeExecutor {
           }
         },
         _stepLogs: {
-          ...(state?.data?._stepLogs || {}),
+          ...state?.data?._stepLogs,
           [node.id]: stepLog
         }
       };

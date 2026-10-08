@@ -242,7 +242,7 @@ export async function invokeAppTool({
   delete variables.message;
 
   // Mark the principal so nested calls strip further app__ tools.
-  const nestedUser = { ...(user || {}), isInvokedViaAppAsTool: true };
+  const nestedUser = { ...user, isInvokedViaAppAsTool: true };
 
   logger.info('Invoking app via App-as-tool gateway', {
     component: 'AppToolsGateway',

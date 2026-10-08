@@ -308,7 +308,7 @@ function OfficeChatPanel({
     restoredVariablesRef.current = null;
     const initial = {
       ...buildInitialVariablesMap(selectedApp.variables),
-      ...(restoredVariables || {})
+      ...restoredVariables
     };
     setAppPromptVariables(initial);
     const defs = getValidVariableDefinitions(selectedApp.variables);
@@ -1332,7 +1332,7 @@ function OfficeChatPanel({
                   }
                   hostContextFlags={hostContextFlags}
                   onHostContextFlagChange={(key, value) =>
-                    setHostContextFlags(prev => ({ ...(prev || {}), [key]: value }))
+                    setHostContextFlags(prev => ({ ...prev, [key]: value }))
                   }
                   clarificationPending={adapter.clarificationPending}
                   // Conversation so far + the app's history setting, so the

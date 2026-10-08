@@ -116,7 +116,7 @@ export const STAAN_DEFAULT_MARKET = 'en-us';
 export function resolveStaanMarket(language) {
   if (!language || typeof language !== 'string') return STAAN_DEFAULT_MARKET;
 
-  const normalized = language.trim().toLowerCase().replace(/_/g, '-');
+  const normalized = language.trim().toLowerCase().replaceAll('_', '-');
   if (!normalized) return STAAN_DEFAULT_MARKET;
 
   const [lang, region] = normalized.split('-');

@@ -12,7 +12,7 @@ function WebSearchSection({ app, onChange }) {
     onChange({
       ...app,
       websearch: {
-        ...(app.websearch || {}),
+        ...app.websearch,
         ...updates
       }
     });

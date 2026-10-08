@@ -64,7 +64,7 @@ function stripStandaloneBlockLines(s) {
   // the trailing newline so the directive line itself doesn't render as a
   // blank line. Leading newline (i.e. the previous line's terminator) is
   // preserved so author whitespace before the block is intact.
-  return s.replace(
+  return s.replaceAll(
     /(^|\n)[ \t]*(\{\{[#/](?:each|if|unless)(?:\s[^}]*)?\}\})[ \t]*\n/g,
     (_match, leading, directive) => `${leading}${directive}`
   );
@@ -94,13 +94,13 @@ function renderIf(template, context, depth) {
 
 function renderVars(template, context) {
   // {{@index}} first — won't match the regex below (starts with @).
-  let result = template.replace(/\{\{@index\}\}/g, () => {
+  let result = template.replaceAll('{{@index}}', () => {
     const v = context['@index'];
     return v === undefined || v === null ? '' : String(v);
   });
   // Then `{{path}}` — exclude block opens (`#`), block closes (`/`), and `@`-prefixed
   // identifiers like {{@index}} handled above.
-  result = result.replace(/\{\{([^#/@}][^}]*)\}\}/g, (_match, expr) => {
+  result = result.replaceAll(/\{\{([^#/@}][^}]*)\}\}/g, (_match, expr) => {
     const trimmed = expr.trim();
     const value = getPath(trimmed, context);
     return value === undefined || value === null ? '' : stringify(value);
@@ -117,7 +117,7 @@ function replaceBlock(input, openTag, closeTag, transform) {
   let result = input;
   let safety = 0;
   while (safety++ < 200) {
-    const startRe = new RegExp(`\\{\\{${escapeRe(openTag)}\\s+([^}]+)\\}\\}`);
+    const startRe = new RegExp(String.raw`\{\{${escapeRe(openTag)}\s+([^}]+)\}\}`);
     const startMatch = result.match(startRe);
     if (!startMatch) break;
 
@@ -128,8 +128,8 @@ function replaceBlock(input, openTag, closeTag, transform) {
 
     let depth = 1;
     let cursor = bodyStart;
-    const openRe = new RegExp(`\\{\\{${escapeRe(openTag)}\\s+[^}]+\\}\\}`, 'g');
-    const closeRe = new RegExp(`\\{\\{${escapeRe(closeTag)}\\}\\}`, 'g');
+    const openRe = new RegExp(String.raw`\{\{${escapeRe(openTag)}\s+[^}]+\}\}`, 'g');
+    const closeRe = new RegExp(String.raw`\{\{${escapeRe(closeTag)}\}\}`, 'g');
 
     let replaced = false;
     while (depth > 0 && cursor < result.length) {
@@ -193,7 +193,7 @@ function stringify(value) {
 }
 
 function escapeRe(s) {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return s.replace(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`);
 }
 
 export default renderTemplate;

@@ -161,7 +161,7 @@ const getEnvironmentVariableNames = model => {
 
   // Priority 1: Model-specific environment variable
   // e.g., GPT_4_AZURE1_API_KEY for model id "gpt-4-azure1"
-  const modelSpecificVar = `${model.id.toUpperCase().replace(/-/g, '_')}_API_KEY`;
+  const modelSpecificVar = `${model.id.toUpperCase().replaceAll('-', '_')}_API_KEY`;
   envVars.push(modelSpecificVar);
 
   // Priority 2: Provider-specific environment variable. A model linked to a
@@ -338,7 +338,7 @@ function ModelFormEditor({
   const handleConfigChange = (key, value) => {
     onChange({
       ...data,
-      config: { ...(data.config || {}), [key]: value }
+      config: { ...data.config, [key]: value }
     });
   };
 
@@ -346,7 +346,7 @@ function ModelFormEditor({
   // empty `{}` would fail validation: turning reasoning off drops the key
   // entirely rather than leaving `{ enabled: false }` behind.
   const handleThinkingChange = (key, value) => {
-    const next = { ...(data.thinking || {}), [key]: value };
+    const next = { ...data.thinking, [key]: value };
     if (key === 'enabled' && !value) {
       const { thinking: _dropped, ...rest } = data;
       onChange(rest);
@@ -368,7 +368,7 @@ function ModelFormEditor({
   const isChat = !isTranscription && !isTts;
 
   const handleTtsChange = (key, value) => {
-    const next = { ...(data.tts || {}) };
+    const next = { ...data.tts };
     if (value === '' || value === null || value === undefined) delete next[key];
     else next[key] = value;
     onChange({ ...data, tts: next });
@@ -379,7 +379,7 @@ function ModelFormEditor({
   // contain before they reach the model data.
   const ttsVoiceEntries = Object.entries(data.tts?.voices || {});
   const setTtsVoices = entries => {
-    const next = { ...(data.tts || {}) };
+    const next = { ...data.tts };
     if (entries.length) next.voices = Object.fromEntries(entries);
     else delete next.voices;
     onChange({ ...data, tts: next });
@@ -391,12 +391,12 @@ function ModelFormEditor({
   };
   // From the voices panel: a voice for the whole model, or for one language.
   const handleUseVoice = (voiceId, language) => {
-    const id = String(voiceId).replace(/[^\w-]/g, '');
+    const id = String(voiceId).replaceAll(/[^\w-]/g, '');
     if (!language) {
       handleTtsChange('voice', id);
       return;
     }
-    const code = String(language).replace(/[^a-z]/g, '');
+    const code = String(language).replaceAll(/[^a-z]/g, '');
     const exists = ttsVoiceEntries.some(([entry]) => entry === code);
     setTtsVoices(
       exists
@@ -708,7 +708,7 @@ function ModelFormEditor({
                       value={data.tts?.voice || ''}
                       // Voice ids are slugs or UUIDs: keep only what one can contain.
                       onChange={e =>
-                        handleTtsChange('voice', e.target.value.replace(/[^\w-]/g, ''))
+                        handleTtsChange('voice', e.target.value.replaceAll(/[^\w-]/g, ''))
                       }
                       placeholder={data.provider === 'google' ? 'Kore' : 'en_paul_neutral'}
                       className="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-xs sm:text-sm border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md"
@@ -751,7 +751,7 @@ function ModelFormEditor({
                           aria-label={t('admin.models.fields.ttsVoiceLanguage', 'Language')}
                           value={code}
                           onChange={e => {
-                            const next = e.target.value.replace(/[^a-z]/g, '');
+                            const next = e.target.value.replaceAll(/[^a-z]/g, '');
                             setTtsVoices(
                               ttsVoiceEntries.map(([entry, id]) => [
                                 entry === code ? next : entry,
@@ -777,7 +777,7 @@ function ModelFormEditor({
                           aria-label={t('admin.models.fields.ttsVoice', 'Voice')}
                           value={voice}
                           onChange={e => {
-                            const next = e.target.value.replace(/[^\w-]/g, '');
+                            const next = e.target.value.replaceAll(/[^\w-]/g, '');
                             setTtsVoices(
                               ttsVoiceEntries.map(([entry, id]) => [
                                 entry,
@@ -1431,7 +1431,7 @@ function ModelFormEditor({
                               checked={data.nativeWebSearch?.enabled !== false}
                               onChange={e =>
                                 handleChange('nativeWebSearch', {
-                                  ...(data.nativeWebSearch || {}),
+                                  ...data.nativeWebSearch,
                                   enabled: e.target.checked
                                 })
                               }
@@ -1469,7 +1469,7 @@ function ModelFormEditor({
                                   value={data.nativeWebSearch?.toolVersion || 'web_search_20250305'}
                                   onChange={e =>
                                     handleChange('nativeWebSearch', {
-                                      ...(data.nativeWebSearch || {}),
+                                      ...data.nativeWebSearch,
                                       toolVersion: e.target.value
                                     })
                                   }
@@ -1516,7 +1516,7 @@ function ModelFormEditor({
                                     checked={data.nativeWebSearch?.dynamicFiltering === true}
                                     onChange={e =>
                                       handleChange('nativeWebSearch', {
-                                        ...(data.nativeWebSearch || {}),
+                                        ...data.nativeWebSearch,
                                         dynamicFiltering: e.target.checked
                                       })
                                     }
@@ -1567,7 +1567,7 @@ function ModelFormEditor({
                             value={data.imageGeneration?.aspectRatio || '1:1'}
                             onChange={e =>
                               handleChange('imageGeneration', {
-                                ...(data.imageGeneration || {}),
+                                ...data.imageGeneration,
                                 aspectRatio: e.target.value
                               })
                             }
@@ -1598,7 +1598,7 @@ function ModelFormEditor({
                             value={data.imageGeneration?.quality || 'Medium'}
                             onChange={e =>
                               handleChange('imageGeneration', {
-                                ...(data.imageGeneration || {}),
+                                ...data.imageGeneration,
                                 quality: e.target.value
                               })
                             }
@@ -1629,7 +1629,7 @@ function ModelFormEditor({
                             value={data.imageGeneration?.maxReferenceImages || 14}
                             onChange={e =>
                               handleChange('imageGeneration', {
-                                ...(data.imageGeneration || {}),
+                                ...data.imageGeneration,
                                 maxReferenceImages: parseInt(e.target.value, 10)
                               })
                             }

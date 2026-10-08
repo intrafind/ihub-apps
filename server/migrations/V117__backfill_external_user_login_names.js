@@ -129,7 +129,7 @@ async function resolveUsersFilePath(ctx) {
 
   if (typeof configured !== 'string' || configured.trim() === '') return fallback;
 
-  const normalized = configured.replace(/\\/g, '/').replace(/^\.\//, '');
+  const normalized = configured.replaceAll('\\', '/').replace(/^\.\//, '');
   if (normalized.startsWith('contents/')) return normalized.slice('contents/'.length);
   if (normalized.startsWith('/') || /^[A-Za-z]:/.test(normalized)) return null;
   return normalized;

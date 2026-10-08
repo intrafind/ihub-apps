@@ -32,7 +32,7 @@
 import crypto from 'node:crypto';
 import { openAiErrorObject } from './errors.js';
 
-const hex = () => crypto.randomUUID().replace(/-/g, '');
+const hex = () => crypto.randomUUID().replaceAll('-', '');
 
 export const newResponseId = () => `resp_${hex()}`;
 const newMessageItemId = () => `msg_${hex()}`;

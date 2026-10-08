@@ -15,7 +15,7 @@ function VariablesSection({ app, onChange }) {
   const handleStartFormChange = (field, value) => {
     onChange({
       ...app,
-      startForm: { ...(app.startForm || {}), [field]: value }
+      startForm: { ...app.startForm, [field]: value }
     });
   };
 

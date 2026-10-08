@@ -557,7 +557,7 @@ function sanitizeReturnUrl(rawReturnUrl, req) {
   }
 
   // Normalize backslashes — '\evil.com' is parsed as '/evil.com' by some clients
-  let value = rawReturnUrl.replace(/\\/g, '/');
+  let value = rawReturnUrl.replaceAll('\\', '/');
 
   if (value.startsWith('//')) {
     // Protocol-relative — '//evil.com' resolves to https://evil.com

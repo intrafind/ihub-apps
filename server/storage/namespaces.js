@@ -292,7 +292,7 @@ export function parseRawRelPath(relPath) {
   // Windows separators and a leading `./` are both shapes callers pass; every
   // other oddity (absolute paths, `..`) falls out below because no declared
   // directory can match it.
-  const normalized = relPath.replace(/\\/g, '/').replace(/^\.\//, '');
+  const normalized = relPath.replaceAll('\\', '/').replace(/^\.\//, '');
   if (!normalized.endsWith(RAW_DOC_EXT)) return null;
   const lastSlash = normalized.lastIndexOf('/');
   if (lastSlash <= 0) return null;

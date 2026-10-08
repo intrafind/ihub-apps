@@ -29,11 +29,11 @@ const renderMarkdownForExport = content => {
 // must not be rendered as raw HTML.
 const escapeHtml = s =>
   String(s ?? '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
 
 // Apps
 export const fetchApps = async (options = {}) => {
@@ -672,13 +672,13 @@ const htmlToMarkdown = content => {
   if (!content) return '';
   // Simple HTML to markdown conversion
   return content
-    .replace(/<strong>(.*?)<\/strong>/g, '**$1**')
-    .replace(/<em>(.*?)<\/em>/g, '*$1*')
-    .replace(/<code>(.*?)<\/code>/g, '`$1`')
-    .replace(/<br\s*\/?>/g, '\n')
-    .replace(/<\/p><p>/g, '\n\n')
-    .replace(/<\/?p>/g, '')
-    .replace(/<\/?div>/g, '')
+    .replaceAll(/<strong>(.*?)<\/strong>/g, '**$1**')
+    .replaceAll(/<em>(.*?)<\/em>/g, '*$1*')
+    .replaceAll(/<code>(.*?)<\/code>/g, '`$1`')
+    .replaceAll(/<br\s*\/?>/g, '\n')
+    .replaceAll('</p><p>', '\n\n')
+    .replaceAll(/<\/?p>/g, '')
+    .replaceAll(/<\/?div>/g, '')
     .trim();
 };
 

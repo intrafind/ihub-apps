@@ -680,7 +680,7 @@ class GoogleDriveService {
   async listMyDriveFiles(userId, folderId = null, providerId) {
     try {
       const rawParentId = folderId || 'root';
-      const parentId = rawParentId.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+      const parentId = rawParentId.replaceAll('\\', '\\\\').replaceAll("'", String.raw`\'`);
       const params = {
         q: `'${parentId}' in parents and trashed=false`,
         fields:
@@ -746,7 +746,7 @@ class GoogleDriveService {
   async listSharedDriveFiles(userId, driveId, folderId = null, providerId) {
     try {
       const rawParentId = folderId || driveId;
-      const parentId = rawParentId.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+      const parentId = rawParentId.replaceAll('\\', '\\\\').replaceAll("'", String.raw`\'`);
       const params = {
         q: `'${parentId}' in parents and trashed=false`,
         corpora: 'drive',
@@ -811,7 +811,7 @@ class GoogleDriveService {
         return [];
       }
 
-      const escapedQuery = query.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+      const escapedQuery = query.replaceAll('\\', '\\\\').replaceAll("'", String.raw`\'`);
       const params = {
         q: `name contains '${escapedQuery}' and trashed=false`,
         fields:

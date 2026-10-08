@@ -164,10 +164,10 @@ export default function registerAdminRateLimitRoutes(app) {
       // The stored file, not the cache: the cache holds env overrides and
       // decrypted secrets, which must not be written back.
       const stored = (await configStore.readJsonStrict(PLATFORM_FILE)) || {};
-      const rateLimit = { ...(stored.rateLimit || {}) };
+      const rateLimit = { ...stored.rateLimit };
       for (const [key, { windowMs, limit, counts }] of changes) {
         rateLimit[key] = {
-          ...(rateLimit[key] || {}),
+          ...rateLimit[key],
           windowMs,
           limit,
           skipSuccessfulRequests: counts === 'failed',

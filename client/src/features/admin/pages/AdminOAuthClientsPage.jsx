@@ -73,7 +73,7 @@ function AdminOAuthClientsPage() {
       const updatedConfig = {
         ...platformConfig,
         oauth: {
-          ...(platformConfig.oauth || {}),
+          ...platformConfig.oauth,
           enabled: {
             authz: platformConfig.oauth?.enabled?.authz ?? false,
             clients: newStatus
@@ -233,8 +233,8 @@ function AdminOAuthClientsPage() {
     // The client id of a metadata-document client is a URL, so it cannot be a
     // path segment. base64url keeps it out of the path grammar entirely.
     btoa(String.fromCharCode(...new TextEncoder().encode(clientId)))
-      .replace(/\+/g, '-')
-      .replace(/\//g, '_')
+      .replaceAll('+', '-')
+      .replaceAll('/', '_')
       .replace(/=+$/, '');
 
   const patchCimdClient = async (client, patch, successKey, successFallback) => {

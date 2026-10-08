@@ -229,12 +229,12 @@ export default function registerAdminChatHistoryRoutes(app) {
       ]) {
         for (const [key, value] of Object.entries(patch || {})) {
           if (current[block][key] === value) continue;
-          platformConfig[block] = { ...(platformConfig[block] || {}), [key]: value };
+          platformConfig[block] = { ...platformConfig[block], [key]: value };
           changed.push(`${block}.${key}`);
         }
       }
       // The sharing form section is `platform.chats.sharing` on disk.
-      const nextSharing = { ...current.sharing, ...(sharing || {}) };
+      const nextSharing = { ...current.sharing, ...sharing };
       if (
         nextSharing.defaultExpiryDays > 0 &&
         nextSharing.maxExpiryDays > 0 &&
@@ -248,8 +248,8 @@ export default function registerAdminChatHistoryRoutes(app) {
       for (const [key, value] of Object.entries(sharing || {})) {
         if (current.sharing[key] === value) continue;
         platformConfig.chats = {
-          ...(platformConfig.chats || {}),
-          sharing: { ...(platformConfig.chats?.sharing || {}), [key]: value }
+          ...platformConfig.chats,
+          sharing: { ...platformConfig.chats?.sharing, [key]: value }
         };
         changed.push(`chats.sharing.${key}`);
       }

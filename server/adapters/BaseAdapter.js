@@ -282,7 +282,7 @@ export class BaseAdapter {
             if (held) {
               // The frame after the finish frame: the usage frame or `[DONE]`.
               if (result.metadata?.usage) {
-                held.metadata = { ...(held.metadata || {}), usage: result.metadata.usage };
+                held.metadata = { ...held.metadata, usage: result.metadata.usage };
               }
               yield held;
               return;

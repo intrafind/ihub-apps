@@ -509,7 +509,7 @@ function WorkflowExecutionPage() {
   // Short, stable identifier for filenames. Execution IDs are prefixed
   // `wf-exec-`, so slicing the raw ID yields the same suffix for every run.
   const shortExecId = state.executionId.replace(/^wf-exec-/, '').slice(0, 8) || state.executionId;
-  const workflowSlug = (state.workflowId || 'workflow').replace(/[^a-zA-Z0-9._-]/g, '_');
+  const workflowSlug = (state.workflowId || 'workflow').replaceAll(/[^a-zA-Z0-9._-]/g, '_');
 
   const workflowOutput = getDisplayableOutput(state.data);
   const workflowOutputKeys = Object.keys(workflowOutput);
@@ -651,7 +651,7 @@ function WorkflowExecutionPage() {
               className="w-4 h-4 text-gray-400 shrink-0"
             />
             <h4 className="font-medium text-gray-700 dark:text-gray-300 capitalize">
-              {key.replace(/_/g, ' ')}
+              {key.replaceAll('_', ' ')}
             </h4>
             <span className="text-xs text-gray-400 dark:text-gray-500">
               {value === null || value === undefined
@@ -1159,7 +1159,7 @@ function WorkflowExecutionPage() {
                 <div>
                   <div className="flex items-center justify-between mb-2">
                     <h4 className="font-medium text-gray-700 dark:text-gray-300 capitalize">
-                      {primaryOutputKey.replace(/_/g, ' ')}
+                      {primaryOutputKey.replaceAll('_', ' ')}
                     </h4>
                     {renderFieldActions(primaryOutputKey, workflowOutput[primaryOutputKey])}
                   </div>
@@ -1196,7 +1196,7 @@ function WorkflowExecutionPage() {
                           <div key={key}>
                             <div className="flex items-center justify-between mb-2">
                               <h4 className="font-medium text-gray-700 dark:text-gray-300 capitalize">
-                                {key.replace(/_/g, ' ')}
+                                {key.replaceAll('_', ' ')}
                               </h4>
                               {renderFieldActions(key, workflowOutput[key])}
                             </div>

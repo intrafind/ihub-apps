@@ -69,7 +69,7 @@ async function markSetupConfigured() {
   // config has to be turned back into the failure the caller maps onto a 500 —
   // recording "setup is done" against an empty object would drop the file.
   if (!platform) throw new Error(`Unable to read ${PLATFORM_FILE}`);
-  platform.setup = { ...(platform.setup || {}), configured: true };
+  platform.setup = { ...platform.setup, configured: true };
   await configStore.writeJson(PLATFORM_FILE, platform);
   await configCache.refreshCacheEntry(PLATFORM_FILE);
 }

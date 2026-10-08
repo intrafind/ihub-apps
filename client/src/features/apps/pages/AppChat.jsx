@@ -962,7 +962,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
         const storedModelId = result?.chat?.modelId;
         setChatSettings(
           stored || storedModelId
-            ? { ...(stored || {}), ...(storedModelId ? { modelId: storedModelId } : {}) }
+            ? { ...stored, ...(storedModelId ? { modelId: storedModelId } : {}) }
             : null
         );
         // The variables the chat was given, over the app's defaults: the

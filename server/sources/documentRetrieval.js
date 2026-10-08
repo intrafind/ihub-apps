@@ -140,10 +140,10 @@ export function tokenize(text) {
 export function slugify(text) {
   const slug = String(text ?? '')
     .normalize('NFKD')
-    .replace(/[̀-ͯ]/g, '')
+    .replaceAll(/[̀-ͯ]/g, '')
     .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
+    .replaceAll(/[^a-z0-9]+/g, '-')
+    .replaceAll(/^-+|-+$/g, '')
     .slice(0, 60)
     .replace(/-+$/, '');
   return slug || 'section';
@@ -153,8 +153,8 @@ export function slugify(text) {
 // are escaped wherever they are written out, never rendered as HTML.
 function cleanHeading(raw) {
   return raw
-    .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
-    .replace(/[*`]/g, '')
+    .replaceAll(/\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replaceAll(/[*`]/g, '')
     .trim();
 }
 
@@ -442,7 +442,7 @@ export function searchDocument(index, query) {
 }
 
 function escapeAttribute(value) {
-  return String(value).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+  return String(value).replaceAll('&', '&amp;').replaceAll('"', '&quot;').replaceAll('<', '&lt;');
 }
 
 function partId(section, part, partCount) {

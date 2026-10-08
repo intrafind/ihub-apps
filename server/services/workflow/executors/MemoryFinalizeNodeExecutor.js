@@ -89,7 +89,7 @@ export class MemoryFinalizeNodeExecutor extends BaseNodeExecutor {
         {
           stateUpdates: {
             _stepLogs: {
-              ...(state?.data?._stepLogs || {}),
+              ...state?.data?._stepLogs,
               [node.id]: {
                 nodeId: node.id,
                 kind: 'memory-finalize',
@@ -163,7 +163,7 @@ export class MemoryFinalizeNodeExecutor extends BaseNodeExecutor {
         {
           stateUpdates: {
             _stepLogs: {
-              ...(state?.data?._stepLogs || {}),
+              ...state?.data?._stepLogs,
               [node.id]: {
                 nodeId: node.id,
                 kind: 'memory-finalize',
@@ -281,7 +281,7 @@ export class MemoryFinalizeNodeExecutor extends BaseNodeExecutor {
           // Drain the queue once written — re-runs shouldn't double-write.
           _pendingMemoryUpdates: [],
           _taskTimings: {
-            ...(state?.data?._taskTimings || {}),
+            ...state?.data?._taskTimings,
             [node.id]: {
               startedAt: startedAt.toISOString(),
               completedAt: completedAtIso,
@@ -289,7 +289,7 @@ export class MemoryFinalizeNodeExecutor extends BaseNodeExecutor {
             }
           },
           _stepLogs: {
-            ...(state?.data?._stepLogs || {}),
+            ...state?.data?._stepLogs,
             [node.id]: stepLog
           }
         }

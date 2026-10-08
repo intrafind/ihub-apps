@@ -163,7 +163,7 @@ function AdminFeedbackPage() {
         const response = await makeAdminApiCall('/admin/configs/platform', { method: 'GET' });
         const platform = response.data || {};
         platform.features = {
-          ...(platform.features || {}),
+          ...platform.features,
           feedbackTracking: draft.storageEnabled
         };
         await makeAdminApiCall('/admin/configs/platform', { method: 'POST', body: platform });

@@ -203,7 +203,7 @@ export class McpServerConnection {
       // address has shifted to a private range.
       await assertSafeHost(url.hostname, this.security.allowedHosts, blockPrivateIps);
 
-      const requestInit = { headers: { ...(t.headers || {}), ...this._buildAuthHeaders(auth) } };
+      const requestInit = { headers: { ...t.headers, ...this._buildAuthHeaders(auth) } };
       const allowHosts = this.security.allowedHosts;
 
       // Use our DNS-pinned fetch as the SDK's underlying transport so the

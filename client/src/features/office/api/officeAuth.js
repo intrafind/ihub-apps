@@ -85,7 +85,7 @@ const sha256 = async plain => {
 
 const base64UrlEncode = buffer => {
   const base64 = window.btoa(String.fromCharCode.apply(null, buffer));
-  return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  return base64.replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/, '');
 };
 
 export const createPkceParams = async () => {
@@ -253,7 +253,7 @@ export async function refreshTokenOrExpireSession(config) {
 
 export async function authenticatedFetch(config, url, options = {}) {
   const token = getAccessToken();
-  const headers = { ...(options.headers ?? {}) };
+  const headers = { ...options.headers };
   if (token) {
     headers.Authorization = `Bearer ${token}`;
   }
@@ -270,7 +270,7 @@ export async function authenticatedFetch(config, url, options = {}) {
     }
 
     const newToken = getAccessToken();
-    const retryHeaders = { ...(options.headers ?? {}) };
+    const retryHeaders = { ...options.headers };
     if (newToken) {
       retryHeaders.Authorization = `Bearer ${newToken}`;
     }

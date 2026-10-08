@@ -31,7 +31,7 @@ function PwaCustomization({ config, onUpdate, t }) {
   const handleIconChange = (iconKey, value) => {
     onUpdate({
       ...pwa,
-      icons: { ...(pwa.icons || {}), [iconKey]: value }
+      icons: { ...pwa.icons, [iconKey]: value }
     });
   };
 

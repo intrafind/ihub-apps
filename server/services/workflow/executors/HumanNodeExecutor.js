@@ -105,7 +105,7 @@ export class HumanNodeExecutor extends BaseNodeExecutor {
         const value = this.resolveVariable(dataPath, state);
         if (value !== undefined) {
           // Use the path as key, or extract a simpler key
-          const key = dataPath.replace(/^\$\./, '').replace(/\./g, '_');
+          const key = dataPath.replace(/^\$\./, '').replaceAll('.', '_');
           checkpoint.displayData[key] = value;
         }
       }

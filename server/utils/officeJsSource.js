@@ -240,10 +240,10 @@ const OFFICE_JS_SCRIPT_SRC_PATTERN =
  */
 function escapeHtmlAttribute(value) {
   return String(value)
-    .replace(/&/g, '&amp;')
-    .replace(/"/g, '&quot;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
+    .replaceAll('&', '&amp;')
+    .replaceAll('"', '&quot;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;');
 }
 
 /**
@@ -256,7 +256,7 @@ function escapeHtmlAttribute(value) {
  */
 export function rewriteOfficeJsScriptSrc(html, scriptUrl) {
   if (typeof html !== 'string' || !scriptUrl) return html;
-  return html.replace(OFFICE_JS_SCRIPT_SRC_PATTERN, (_match, prefix, _url, suffix) => {
+  return html.replaceAll(OFFICE_JS_SCRIPT_SRC_PATTERN, (_match, prefix, _url, suffix) => {
     return `${prefix}${escapeHtmlAttribute(scriptUrl)}${suffix}`;
   });
 }

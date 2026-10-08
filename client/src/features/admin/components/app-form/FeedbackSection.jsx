@@ -13,7 +13,7 @@ function FeedbackSection({ app, onChange }) {
   const enabled = app.features?.feedback !== false;
 
   const handleChange = checked => {
-    const features = { ...(app.features || {}) };
+    const features = { ...app.features };
     if (checked) {
       delete features.feedback;
     } else {

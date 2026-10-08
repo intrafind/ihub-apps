@@ -341,7 +341,7 @@ export async function createOrUpdateExternalUser(externalUser, usersFilePath) {
     return { ...user, id: userId };
   } else {
     // Create new user
-    const userId = `user_${uuidv4().replace(/-/g, '_')}`;
+    const userId = `user_${uuidv4().replaceAll('-', '_')}`;
 
     const newUser = {
       id: userId,

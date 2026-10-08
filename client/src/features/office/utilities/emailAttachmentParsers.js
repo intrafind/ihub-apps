@@ -12,7 +12,7 @@
 function decodeBase64ToText(base64) {
   if (!base64) return '';
   try {
-    const binary = atob(base64.replace(/\s+/g, ''));
+    const binary = atob(base64.replaceAll(/\s+/g, ''));
     const bytes = new Uint8Array(binary.length);
     for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
     return new TextDecoder('utf-8').decode(bytes);
@@ -23,8 +23,8 @@ function decodeBase64ToText(base64) {
 
 function decodeQuotedPrintable(str) {
   return str
-    .replace(/=\r?\n/g, '') // soft line break — join wrapped lines
-    .replace(/=([0-9A-Fa-f]{2})/g, (_m, hex) => String.fromCharCode(parseInt(hex, 16)));
+    .replaceAll(/=\r?\n/g, '') // soft line break — join wrapped lines
+    .replaceAll(/=([0-9A-Fa-f]{2})/g, (_m, hex) => String.fromCharCode(parseInt(hex, 16)));
 }
 
 function decodeBodyByEncoding(body, encoding) {
@@ -38,9 +38,9 @@ function decodeBodyByEncoding(body, encoding) {
 // `=?UTF-8?B?RsO2cnN0ZXI=?=` or `=?UTF-8?Q?F=C3=B6rster?=`.
 function decodeMimeWords(str) {
   if (!str) return str;
-  return str.replace(/=\?[^?]+\?([BbQq])\?([^?]*)\?=\s*/g, (_m, enc, text) => {
+  return str.replaceAll(/=\?[^?]+\?([BbQq])\?([^?]*)\?=\s*/g, (_m, enc, text) => {
     if (enc.toUpperCase() === 'B') return decodeBase64ToText(text);
-    return decodeQuotedPrintable(text.replace(/_/g, ' '));
+    return decodeQuotedPrintable(text.replaceAll('_', ' '));
   });
 }
 
@@ -65,16 +65,16 @@ function stripHtmlToText(html) {
   let previous;
   do {
     previous = text;
-    text = text.replace(/<(script|style)\b[^>]*>[\s\S]*?<\/\1\s*>/gi, '');
+    text = text.replaceAll(/<(script|style)\b[^>]*>[\s\S]*?<\/\1\s*>/gi, '');
   } while (text !== previous);
 
   text = text
-    .replace(/<br\s*\/?>/gi, '\n')
-    .replace(/<\/(p|div|tr|li|h[1-6]|table|blockquote)>/gi, '\n');
+    .replaceAll(/<br\s*\/?>/gi, '\n')
+    .replaceAll(/<\/(p|div|tr|li|h[1-6]|table|blockquote)>/gi, '\n');
 
   do {
     previous = text;
-    text = text.replace(/<[^>]*>/g, '');
+    text = text.replaceAll(/<[^>]*>/g, '');
   } while (text !== previous);
 
   // Decode all named entities in one pass — resolving each match exactly
@@ -83,15 +83,15 @@ function stripHtmlToText(html) {
   // encodes a literal "&lt;" as "&amp;lt;" would, after an `&amp;` -> `&`
   // pass, read as "&lt;" and then get wrongly decoded to "<" by a later
   // pass, turning inert text into a live tag delimiter.
-  text = text.replace(
+  text = text.replaceAll(
     /&(nbsp|amp|lt|gt|quot|#39|apos);/gi,
     (match, name) => HTML_ENTITIES[name.toLowerCase()] ?? match
   );
 
   return text
-    .replace(/[ \t]+/g, ' ')
-    .replace(/ *\n */g, '\n')
-    .replace(/\n{3,}/g, '\n\n')
+    .replaceAll(/[ \t]+/g, ' ')
+    .replaceAll(/ *\n */g, '\n')
+    .replaceAll(/\n{3,}/g, '\n\n')
     .trim();
 }
 
@@ -102,7 +102,7 @@ function parseContentTypeHeader(value) {
   const params = {};
   for (const p of parts) {
     const m = p.match(/^([\w-]+)=(.*)$/);
-    if (m) params[m[1].toLowerCase()] = m[2].replace(/^"|"$/g, '');
+    if (m) params[m[1].toLowerCase()] = m[2].replaceAll(/^"|"$/g, '');
   }
   return { type, params };
 }
@@ -110,7 +110,7 @@ function parseContentTypeHeader(value) {
 // Unfolds RFC 5322 header continuation lines (indented lines are part of
 // the previous header) and returns a lowercase-keyed map.
 function parseEmailHeaders(headerBlock) {
-  const unfolded = headerBlock.replace(/\r\n/g, '\n').replace(/\n[ \t]+/g, ' ');
+  const unfolded = headerBlock.replaceAll('\r\n', '\n').replaceAll(/\n[ \t]+/g, ' ');
   const headers = {};
   for (const line of unfolded.split('\n')) {
     const m = line.match(/^([\w-]+):\s*(.*)$/);
@@ -178,7 +178,7 @@ export function parseEmlAttachment(base64Content) {
   const raw = decodeBase64ToText(base64Content);
   if (!raw) return null;
 
-  const normalized = raw.replace(/\r\n/g, '\n');
+  const normalized = raw.replaceAll('\r\n', '\n');
   const headerEnd = normalized.indexOf('\n\n');
   if (headerEnd === -1) return null;
 
@@ -202,10 +202,10 @@ export function parseEmlAttachment(base64Content) {
 
 function unescapeIcsText(value) {
   return value
-    .replace(/\\n/gi, '\n')
-    .replace(/\\,/g, ',')
-    .replace(/\\;/g, ';')
-    .replace(/\\\\/g, '\\');
+    .replaceAll(/\\n/gi, '\n')
+    .replaceAll('\\,', ',')
+    .replaceAll('\\;', ';')
+    .replaceAll('\\\\', '\\');
 }
 
 function formatIcsDate(value) {
@@ -220,7 +220,7 @@ function formatIcsParticipant(field) {
   if (!field) return '';
   const cnMatch = field.params.match(/CN=([^;]+)/i);
   const mailtoMatch = field.value.match(/mailto:(.+)$/i);
-  const name = cnMatch ? cnMatch[1].replace(/^"|"$/g, '') : '';
+  const name = cnMatch ? cnMatch[1].replaceAll(/^"|"$/g, '') : '';
   const email = mailtoMatch ? mailtoMatch[1] : field.value;
   if (name && email && name !== email) return `${name} <${email}>`;
   return name || email || '';
@@ -238,7 +238,7 @@ export function parseIcsAttachment(base64Content) {
 
   // RFC 5545 line folding: a line starting with a space/tab continues the
   // previous line.
-  const unfolded = raw.replace(/\r\n/g, '\n').replace(/\n[ \t]/g, '');
+  const unfolded = raw.replaceAll('\r\n', '\n').replaceAll(/\n[ \t]/g, '');
   const fields = {};
   for (const line of unfolded.split('\n')) {
     const m = line.match(/^([\w-]+)(;[^:]*)?:(.*)$/);

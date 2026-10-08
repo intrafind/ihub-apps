@@ -178,10 +178,10 @@ app.get('/callback', async (req, res) => {
   if (error) {
     const escapeHtml = s =>
       String(s)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;');
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;');
     return res
       .status(400)
       .send(`OAuth Error: ${escapeHtml(error)} - ${escapeHtml(error_description)}`);

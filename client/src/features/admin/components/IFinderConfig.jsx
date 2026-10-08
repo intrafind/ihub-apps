@@ -11,7 +11,7 @@ const ALGORITHM_OPTIONS = ['RS256', 'RS384', 'RS512', 'ES256', 'ES384', 'ES512']
 const JWT_SUBJECT_OPTIONS = [
   { value: 'email', label: 'Email address' },
   { value: 'username', label: 'Username' },
-  { value: 'domain\\username', label: 'Domain\\Username (NTLM-style)' },
+  { value: String.raw`domain\username`, label: String.raw`Domain\Username (NTLM-style)` },
   { value: 'custom', label: 'Custom template' }
 ];
 
@@ -791,7 +791,7 @@ function IFinderConfig() {
                   <p className="text-xs text-gray-500 dark:text-gray-400">
                     {t(
                       'admin.iFinder.diagnostics.userHelp',
-                      'Leave empty to test with your own account. Fill these in to check how the JWT subject is built for a specific user — for example whether iFinder expects DOMAIN\\username instead of an email address.'
+                      String.raw`Leave empty to test with your own account. Fill these in to check how the JWT subject is built for a specific user — for example whether iFinder expects DOMAIN\username instead of an email address.`
                     )}
                   </p>
 

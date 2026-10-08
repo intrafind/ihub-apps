@@ -562,7 +562,7 @@ export default function registerAdminLdapTestRoutes(app) {
           ),
           domain: domain
             ? `${domain}  (${resolved.domain ? 'configured' : 'detected from msDS-PrincipalName'})`
-            : 'none — integrations that identify users as DOMAIN\\username cannot work',
+            : String.raw`none — integrations that identify users as DOMAIN\username cannot work`,
           entry: presentableAttributes(entry)
         },
         hints: mapped.email

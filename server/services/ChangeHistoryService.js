@@ -30,7 +30,7 @@ export async function saveSnapshot({ resource, id, before, after, admin }) {
     await fs.mkdir(dir, { recursive: true });
 
     const ts = new Date().toISOString();
-    const safeTs = ts.replace(/:/g, '-'); // Filesystem-safe timestamp
+    const safeTs = ts.replaceAll(':', '-'); // Filesystem-safe timestamp
     const snapshot = { ts, admin, before, after };
 
     await fs.writeFile(join(dir, `${safeTs}.json`), JSON.stringify(snapshot, null, 2), 'utf8');

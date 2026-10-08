@@ -1064,7 +1064,7 @@ export async function failAwaitingRun(taskId, runId, interactionId, code, messag
     stored.status = 'failed';
     stored.finishedAt = new Date(now).toISOString();
     stored.reason = reasonOf(code, message, now);
-    stored.approval = { ...(stored.approval || {}), status: 'expired' };
+    stored.approval = { ...stored.approval, status: 'expired' };
     return stored;
   });
   if (!run || run.status !== 'failed') return;

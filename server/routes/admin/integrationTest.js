@@ -449,7 +449,7 @@ async function runJwtSteps(report, { user, iFinderConfig, userOverride, includeT
     generation.hints = [
       'Check the signing key: OIDC key pair mode needs an initialized iHub RSA key pair, private key mode needs IFINDER_PRIVATE_KEY or iFinder.privateKeyRef in PEM format.',
       'A subject that cannot be resolved also fails here — see the JWT Subject Field setting. Resolution is strict: the configured field is the only one read, so a user without that field fails instead of being sent under a different identifier.',
-      'For "domain\\username" the user needs a NetBIOS domain. NTLM takes it from the handshake; LDAP takes it from the "Domain" field on the provider, or detects it from the Active Directory msDS-PrincipalName attribute.'
+      String.raw`For "domain\username" the user needs a NetBIOS domain. NTLM takes it from the handshake; LDAP takes it from the "Domain" field on the provider, or detects it from the Active Directory msDS-PrincipalName attribute.`
     ];
     return null;
   }

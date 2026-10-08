@@ -167,7 +167,7 @@ export default function registerAdminCredentialsRoutes(app) {
         if (profile[field]) profile[field] = encryptIfNeeded(profile[field]);
       }
 
-      store.credentials = { ...(store.credentials || {}), [profile.id]: profile };
+      store.credentials = { ...store.credentials, [profile.id]: profile };
       await writeStore(store);
 
       await logAudit({

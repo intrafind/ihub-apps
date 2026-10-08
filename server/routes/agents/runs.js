@@ -64,7 +64,7 @@ export function applyNodeModels(workflow, nodeModels) {
   if (!workflow || !Array.isArray(workflow.nodes) || !nodeModels) return workflow;
   for (const node of workflow.nodes) {
     if (node && typeof node.id === 'string' && nodeModels[node.id]) {
-      node.config = { ...(node.config || {}), modelId: nodeModels[node.id] };
+      node.config = { ...node.config, modelId: nodeModels[node.id] };
     }
   }
   return workflow;
@@ -82,7 +82,7 @@ export function applyReviewSettings(workflow, resolved) {
   for (const node of workflow.nodes) {
     if (node?.type !== 'verifier') continue;
     node.config = {
-      ...(node.config || {}),
+      ...node.config,
       maxRetries: resolved.maxRetries,
       stallLimit: resolved.stallLimit,
       acceptPartial: resolved.acceptPartial,
@@ -292,7 +292,7 @@ export default function registerAgentRunRoutes(app) {
         // override per-node with its own `config.modelId`.
         const maxWallTimeSec = profile.budgets?.maxWallTimeSec ?? 600;
         workflow.config = {
-          ...(workflow.config || {}),
+          ...workflow.config,
           maxExecutionTime: maxWallTimeSec * 1000,
           ...(profile.preferredModel ? { defaultModelId: profile.preferredModel } : {})
         };
@@ -741,7 +741,7 @@ export default function registerAgentRunRoutes(app) {
         // was baked in when the run originally started.
         const maxWallTimeSec = profile.budgets?.maxWallTimeSec ?? 600;
         workflow.config = {
-          ...(workflow.config || {}),
+          ...workflow.config,
           maxExecutionTime: maxWallTimeSec * 1000,
           ...(profile.preferredModel ? { defaultModelId: profile.preferredModel } : {})
         };

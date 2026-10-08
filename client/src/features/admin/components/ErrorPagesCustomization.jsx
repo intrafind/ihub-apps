@@ -87,7 +87,7 @@ function ErrorPagesCustomization({ config, onUpdate, t }) {
   const updateField = (pageKey, fieldKey, value) => {
     onUpdate({
       [pageKey]: {
-        ...(errorPages[pageKey] || {}),
+        ...errorPages[pageKey],
         [fieldKey]: value
       }
     });

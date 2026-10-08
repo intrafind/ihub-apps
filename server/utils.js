@@ -26,8 +26,8 @@ function sanitizeForLog(input) {
   // - Control characters (\n, \r, \t, etc.) for log injection
   // - Backticks, dollar signs, backslashes for shell injection if logs are processed
   return input
-    .replace(/[\n\r\t\x00-\x1F\x7F]/g, '') // Remove control characters
-    .replace(/[`$\\]/g, '\\$&'); // Escape backticks, dollar signs, backslashes
+    .replaceAll(/[\n\r\t\x00-\x1F\x7F]/g, '') // Remove control characters
+    .replaceAll(/[`$\\]/g, String.raw`\$&`); // Escape backticks, dollar signs, backslashes
 }
 
 /**
@@ -173,7 +173,7 @@ export function inspectModelApiKey(model, { quiet = false } = {}) {
 
   // Third priority: a model-specific key in the environment
   // (e.g., GPT_4_AZURE1_API_KEY for model id "gpt-4-azure1")
-  const modelSpecificKeyName = `${String(model.id).toUpperCase().replace(/-/g, '_')}_API_KEY`;
+  const modelSpecificKeyName = `${String(model.id).toUpperCase().replaceAll('-', '_')}_API_KEY`;
   if (config[modelSpecificKeyName]) {
     log('info', 'Using environment variable API key', { envVar: modelSpecificKeyName });
     return ok(config[modelSpecificKeyName], 'env', modelSpecificKeyName);

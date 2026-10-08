@@ -163,7 +163,7 @@ export function useIntegrationAuth() {
           prev =>
             new Map(
               prev.set(integration, {
-                ...(prev.get(integration) || {}),
+                ...prev.get(integration),
                 connecting: true,
                 error: null
               })
@@ -195,7 +195,7 @@ export function useIntegrationAuth() {
           prev =>
             new Map(
               prev.set(integration, {
-                ...(prev.get(integration) || {}),
+                ...prev.get(integration),
                 connecting: false,
                 error: t(
                   `integrations.${integration}.connectionError`,
@@ -300,7 +300,7 @@ export function useIntegrationAuth() {
             prev =>
               new Map(
                 prev.set(integration, {
-                  ...(prev.get(integration) || {}),
+                  ...prev.get(integration),
                   error: t(
                     `integrations.${integration}.refreshError`,
                     'Failed to refresh tokens. Please try again.'
@@ -345,7 +345,7 @@ export function useIntegrationAuth() {
           prev =>
             new Map(
               prev.set(integration, {
-                ...(prev.get(integration) || {}),
+                ...prev.get(integration),
                 error: t(
                   `integrations.${integration}.disconnectError`,
                   'Failed to disconnect. Please try again.'
@@ -398,7 +398,7 @@ export function useIntegrationAuth() {
           prev =>
             new Map(
               prev.set(integration, {
-                ...(prev.get(integration) || {}),
+                ...prev.get(integration),
                 connecting: false,
                 error: t(`integrations.${integration}.authError`, `Authentication failed: ${error}`)
               })

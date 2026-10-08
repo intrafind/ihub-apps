@@ -410,7 +410,7 @@ async function issueApiKey(client, expirationDays, clientsFilePath, config) {
     // list, and rotating it would show a client secret the token endpoint always
     // rejects.
     stored.grantTypes = config.allowClientCredentials ? ['client_credentials'] : [];
-    stored.metadata = { ...(stored.metadata || {}), keyGeneration };
+    stored.metadata = { ...stored.metadata, keyGeneration };
 
     apiKey = generatePersonalApiKey(stored, expirationDays);
     stored.metadata.apiKeyExpiresAt = apiKey.expires_at;

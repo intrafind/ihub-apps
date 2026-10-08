@@ -311,7 +311,7 @@ export async function proxyAuth(req, res, next) {
   // admin trusts (proxyAuth.trustedProxies and/or the shared secret); any
   // client could set them otherwise. Signed JWTs below are verified on their own.
   const trust = checkProxyTrust(req, {
-    ...(platform.proxyAuth || {}),
+    ...platform.proxyAuth,
     userHeader: proxyCfg.userHeader,
     groupsHeader: proxyCfg.groupsHeader
   });

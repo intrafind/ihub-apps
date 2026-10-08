@@ -77,7 +77,7 @@ export function fencedBlocks(text) {
 
 /** Unescape a YAML double-quoted scalar. */
 function unescapeDoubleQuoted(value) {
-  return value.replace(/\\(u[0-9a-fA-F]{4}|.)/g, (_, escape) => {
+  return value.replaceAll(/\\(u[0-9a-fA-F]{4}|.)/g, (_, escape) => {
     if (escape[0] === 'u' && escape.length === 5) {
       return String.fromCharCode(parseInt(escape.slice(1), 16));
     }
@@ -93,7 +93,7 @@ function readQuoted(first, rest, quote) {
   const text = [first, ...rest.map(line => line.trim())].join(' ');
   if (quote === "'") {
     const match = /^'((?:[^']|'')*)'/.exec(text);
-    return match ? match[1].replace(/''/g, "'") : text.slice(1);
+    return match ? match[1].replaceAll("''", "'") : text.slice(1);
   }
   const match = /^"((?:[^"\\]|\\.)*)"/.exec(text);
   return unescapeDoubleQuoted(match ? match[1] : text.slice(1));
@@ -108,8 +108,8 @@ function readBlock(indicator, rest) {
   // Folded: a single line break becomes a space, an empty line a line break.
   return lines
     .join('\n')
-    .replace(/([^\n])\n(?=[^\n])/g, '$1 ')
-    .replace(/\n\n/g, '\n');
+    .replaceAll(/([^\n])\n(?=[^\n])/g, '$1 ')
+    .replaceAll('\n\n', '\n');
 }
 
 /** A plain scalar, possibly continued on indented lines, without a trailing comment. */
@@ -185,12 +185,12 @@ export function parseSkillMarkdown(text) {
 /** The path a code block is labelled with, or null. */
 function filePathOf(block) {
   for (const token of block.info.split(/\s+/)) {
-    const path = token.replace(/^(title|file|filename|path)=/i, '').replace(/^["']|["']$/g, '');
+    const path = token.replace(/^(title|file|filename|path)=/i, '').replaceAll(/^["']|["']$/g, '');
     if (SKILL_FILE_PATH.test(path)) return path;
   }
   const label = block.precedingLine
     .replace(/^[#>*\-\s]+/, '')
-    .replace(/[*_`]/g, '')
+    .replaceAll(/[*_`]/g, '')
     .replace(/:$/, '')
     .trim();
   const words = label.split(/\s+/);

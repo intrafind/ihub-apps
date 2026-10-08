@@ -52,8 +52,7 @@ function generateThemeCSS(theme) {
     }
   }
 
-  css.push('}');
-  css.push('');
+  css.push('}', '');
 
   // Dark mode variables
   css.push('[data-theme="dark"] {');
@@ -159,7 +158,7 @@ function darkenColor(hex, percent = 10) {
  */
 function sanitizeCSSName(name) {
   // Only allow alphanumeric, hyphens, and underscores
-  const sanitized = String(name).replace(/[^a-zA-Z0-9_-]/g, '');
+  const sanitized = String(name).replaceAll(/[^a-zA-Z0-9_-]/g, '');
   // Return null if sanitized name is empty
   return sanitized.length > 0 ? sanitized : null;
 }
@@ -172,9 +171,9 @@ function sanitizeCSSName(name) {
 function sanitizeCSSValue(value) {
   // Remove potentially dangerous characters and patterns
   return String(value)
-    .replace(/[;{}]/g, '') // Remove CSS structural characters
-    .replace(/\\/g, '') // Remove backslashes
-    .replace(/<|>/g, '') // Remove angle brackets
+    .replaceAll(/[;{}]/g, '') // Remove CSS structural characters
+    .replaceAll('\\', '') // Remove backslashes
+    .replaceAll(/<|>/g, '') // Remove angle brackets
     .trim();
 }
 

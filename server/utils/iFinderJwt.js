@@ -98,7 +98,7 @@ function getIFinderPrivateKey(iFinderConfig) {
 
   // Format the private key properly - replace escaped newlines with actual newlines
   if (typeof privateKey === 'string') {
-    privateKey = privateKey.replace(/\\n/g, '\n');
+    privateKey = privateKey.replaceAll(String.raw`\n`, '\n');
 
     // Ensure proper PEM format
     if (!privateKey.startsWith('-----BEGIN')) {
@@ -171,7 +171,7 @@ export function resolveJwtSubject(user, config) {
       }
       resolved = user.username;
       break;
-    case 'domain\\username': {
+    case String.raw`domain\username`: {
       const missing = [];
       if (!hasSubjectValue(user.domain)) missing.push('NetBIOS domain');
       if (!hasSubjectValue(user.username)) missing.push('username');
@@ -208,7 +208,7 @@ export function resolveJwtSubject(user, config) {
       // A placeholder with no value leaves a hole in the subject (`ROCHUS\\`),
       // which is just as wrong as the fallbacks above and equally invisible.
       const unresolved = [];
-      resolved = field.replace(/\$\{(?:user\.)?(\w+)\}/g, (_, key) => {
+      resolved = field.replaceAll(/\$\{(?:user\.)?(\w+)\}/g, (_, key) => {
         const value = user[key];
         if (!hasSubjectValue(value)) {
           unresolved.push(`user.${key}`);

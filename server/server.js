@@ -1033,7 +1033,7 @@ if (cluster.isPrimary && workerCount > 1) {
         // the resumed run trips MAX_EXECUTION_TIME shortly after recovery.
         const maxWallTimeSec = profile.budgets?.maxWallTimeSec ?? 600;
         definition.config = {
-          ...(definition.config || {}),
+          ...definition.config,
           maxExecutionTime: maxWallTimeSec * 1000,
           ...(profile.preferredModel ? { defaultModelId: profile.preferredModel } : {})
         };

@@ -45,12 +45,12 @@ const MCP_APP_PROFILE = 'mcp-app';
  */
 export function isViewHtmlMimeType(mimeType) {
   if (typeof mimeType !== 'string') return false;
-  const [type, ...params] = mimeType.toLowerCase().replace(/\s+/g, '').split(';');
+  const [type, ...params] = mimeType.toLowerCase().replaceAll(/\s+/g, '').split(';');
   if (type !== 'text/html') return false;
   return params.every(param => {
     const [name, value] = param.split('=');
     if (name === 'charset') return true;
-    return name === 'profile' && value?.replace(/"/g, '') === MCP_APP_PROFILE;
+    return name === 'profile' && value?.replaceAll('"', '') === MCP_APP_PROFILE;
   });
 }
 

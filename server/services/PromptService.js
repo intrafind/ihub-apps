@@ -20,7 +20,7 @@ const promptKnowledgeSources = new Map();
  * @returns {string}
  */
 function escapeRegExp(str) {
-  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return str.replace(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`);
 }
 
 /**
@@ -35,7 +35,7 @@ function escapeRegExp(str) {
  * @returns {string}
  */
 function replaceTemplateVar(text, key, value) {
-  return text.replace(new RegExp(`\\{\\{${escapeRegExp(key)}\\}\\}`, 'g'), () => value);
+  return text.replace(new RegExp(String.raw`\{\{${escapeRegExp(key)}\}\}`, 'g'), () => value);
 }
 
 /**
@@ -334,7 +334,7 @@ class PromptService {
           const strValue = typeof value === 'string' ? value : String(value || '');
           processedContent = replaceTemplateVar(processedContent, key, strValue);
         }
-        processedContent = processedContent.replace(/\{\{content\}\}/g, () => body);
+        processedContent = processedContent.replaceAll('{{content}}', () => body);
         // A template without {{content}} (in this language) still gets the
         // message, appended, so what the user sent is never lost.
         if (body.trim() && !processedContent.includes(body)) {

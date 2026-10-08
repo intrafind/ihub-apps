@@ -25,10 +25,10 @@ export const DEFAULT_PWA_CONFIG = {
 export function resolvePwaConfig(rawPwaConfig) {
   return {
     ...DEFAULT_PWA_CONFIG,
-    ...(rawPwaConfig || {}),
+    ...rawPwaConfig,
     icons: {
       ...DEFAULT_PWA_CONFIG.icons,
-      ...(rawPwaConfig?.icons || {})
+      ...rawPwaConfig?.icons
     }
   };
 }
@@ -48,10 +48,10 @@ export function computePwaETag(resolvedConfig) {
  */
 function escapeAttr(str) {
   return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/"/g, '&quot;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
+    .replaceAll('&', '&amp;')
+    .replaceAll('"', '&quot;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;');
 }
 
 /**

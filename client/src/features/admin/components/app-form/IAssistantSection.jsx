@@ -12,7 +12,7 @@ function IAssistantSection({ app, onChange }) {
     onChange({
       ...app,
       iassistant: {
-        ...(app.iassistant || {}),
+        ...app.iassistant,
         ...updates
       }
     });

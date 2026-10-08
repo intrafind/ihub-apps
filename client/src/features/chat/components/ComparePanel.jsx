@@ -88,7 +88,7 @@ const ComparePanel = forwardRef(function ComparePanel(
         if (!m) return;
         c.sendMessage({
           ...messageStructure,
-          params: { ...(messageStructure.params || {}), modelId: m }
+          params: { ...messageStructure.params, modelId: m }
         });
       },
       clear() {

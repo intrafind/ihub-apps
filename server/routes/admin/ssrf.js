@@ -104,7 +104,7 @@ export default function registerAdminSsrfRoutes(app) {
       const platformConfig = await configStore.readJson('config/platform.json');
       if (!platformConfig) throw new Error('Unable to read config/platform.json');
 
-      platformConfig.ssrf = { ...(platformConfig.ssrf || {}), allowedHosts: cleaned };
+      platformConfig.ssrf = { ...platformConfig.ssrf, allowedHosts: cleaned };
 
       await configStore.writeJson('config/platform.json', platformConfig);
       await configCache.refreshCacheEntry('config/platform.json');

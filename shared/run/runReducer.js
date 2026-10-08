@@ -275,7 +275,7 @@ export function reduceRunEvent(state, envelope) {
       run = {
         ...run,
         kind: data.kind || run.kind,
-        refs: { ...run.refs, ...(data.refs || {}) },
+        refs: { ...run.refs, ...data.refs },
         model: data.model || run.model,
         parentRunId: data.parentRunId || run.parentRunId,
         startedAt: run.startedAt || ts,
@@ -561,7 +561,7 @@ export function reduceRunEvent(state, envelope) {
       const { extra, ...rest } = data;
       run = {
         ...run,
-        meta: { ...run.meta, ...rest, extra: { ...(run.meta.extra || {}), ...(extra || {}) } }
+        meta: { ...run.meta, ...rest, extra: { ...run.meta.extra, ...extra } }
       };
       return withRun(next, run);
     }

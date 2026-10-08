@@ -138,7 +138,7 @@ export function buildCimdClient(metadata, cimdConfig, record = null) {
     lastUsed: record?.lastUsed || null,
     lastRotated: null,
     metadata: {
-      ...(record?.metadata || {}),
+      ...record?.metadata,
       cimd: true,
       host,
       clientUri: metadata.clientUri || ''

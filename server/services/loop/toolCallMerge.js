@@ -59,7 +59,7 @@ export function mergeToolCallDelta(collected, call) {
     else if (!existing.function.name && typeof call.name === 'string' && call.name) {
       existing.function.name = call.name;
     }
-    if (call.metadata) existing.metadata = { ...(existing.metadata || {}), ...call.metadata };
+    if (call.metadata) existing.metadata = { ...existing.metadata, ...call.metadata };
     if (incomingArgs) {
       const current = existing.function.arguments;
       if (call.complete === true) {

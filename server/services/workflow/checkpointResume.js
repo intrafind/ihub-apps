@@ -226,7 +226,7 @@ export async function resumeWorkflowFromAnswer(interaction, opts = {}) {
   registry.clearPendingCheckpoint(executionId);
 
   const branch = resumeResult.branch;
-  const humanResult = { branch, response, ...(resumeResult.output || {}) };
+  const humanResult = { branch, response, ...resumeResult.output };
   const nextNodes = engine.scheduler.getNextNodes(humanNode.id, humanResult, workflow, state);
 
   logger.info('Human checkpoint routing', {
@@ -244,11 +244,11 @@ export async function resumeWorkflowFromAnswer(interaction, opts = {}) {
     currentNodes: nextNodes,
     data: {
       ...state.data,
-      ...(resumeResult.stateUpdates || {}),
+      ...resumeResult.stateUpdates,
       // The human response, for edge condition evaluation.
       [`_humanResult_${humanNode.id}`]: humanResult,
       nodeResults: {
-        ...(state.data?.nodeResults || {}),
+        ...state.data?.nodeResults,
         [humanNode.id]: humanResult
       }
     }
@@ -301,7 +301,7 @@ async function resumeQuestion({
     data: {
       pendingCheckpoint: null,
       _questionAnswers: {
-        ...(state.data?._questionAnswers || {}),
+        ...state.data?._questionAnswers,
         [pending.id]: {
           value: answer.value ?? null,
           skipped: answer.skipped === true,

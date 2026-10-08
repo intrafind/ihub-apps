@@ -573,7 +573,10 @@ function ProxyConfig() {
                 addPattern();
               }
             }}
-            placeholder={t('admin.system.proxy.urlPatternPlaceholder', 'api\\.openai\\.com')}
+            placeholder={t(
+              'admin.system.proxy.urlPatternPlaceholder',
+              String.raw`api\.openai\.com`
+            )}
             className={`${inputClass} font-mono ${
               newPattern.trim() && !isValidRegex(newPattern.trim())
                 ? 'border-red-400 dark:border-red-500'

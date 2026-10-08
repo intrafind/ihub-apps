@@ -38,12 +38,12 @@ export function httpUrl(value) {
  */
 export function urlKey(url) {
   const href = httpUrl(
-    typeof url === 'string' ? url.replace(/%28/gi, '(').replace(/%29/gi, ')') : url
+    typeof url === 'string' ? url.replaceAll(/%28/gi, '(').replaceAll(/%29/gi, ')') : url
   );
   if (!href) return null;
   const parsed = new URL(href);
   const host = parsed.hostname.toLowerCase().replace(/^www\./, '');
-  let path = parsed.pathname.replace(/%28/gi, '(').replace(/%29/gi, ')');
+  let path = parsed.pathname.replaceAll(/%28/gi, '(').replaceAll(/%29/gi, ')');
   if (path.length > 1) path = path.replace(/\/+$/, '');
   if (path === '/') path = '';
   const params = [...parsed.searchParams.entries()].filter(([name]) => !TRACKING_PARAM.test(name));
@@ -74,5 +74,5 @@ export function hostOf(url) {
  * @returns {string}
  */
 export function markdownLinkUrl(url) {
-  return String(url).replace(/\(/g, '%28').replace(/\)/g, '%29').replace(/\s/g, '%20');
+  return String(url).replaceAll('(', '%28').replaceAll(')', '%29').replaceAll(/\s/g, '%20');
 }

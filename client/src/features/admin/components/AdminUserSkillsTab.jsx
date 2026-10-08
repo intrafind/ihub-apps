@@ -41,10 +41,10 @@ const DEFAULT_SETTINGS = {
  * @returns {Object}
  */
 function normalizeSettings(settings) {
-  const sharing = { ...DEFAULT_SETTINGS.sharing, ...(settings?.sharing || {}) };
+  const sharing = { ...DEFAULT_SETTINGS.sharing, ...settings?.sharing };
   return {
     ...DEFAULT_SETTINGS,
-    ...(settings || {}),
+    ...settings,
     sharing: {
       ...sharing,
       restrictToGroups: Array.isArray(sharing.restrictToGroups) ? sharing.restrictToGroups : []

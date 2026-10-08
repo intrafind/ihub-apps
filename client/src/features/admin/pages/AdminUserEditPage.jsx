@@ -29,7 +29,7 @@ function AdminUserEditPage() {
   const { blocker, markSaved } = useUnsavedChanges(initialData, user);
 
   // Generate a unique ID for new users
-  const generateUserId = () => `user_${crypto.randomUUID().replace(/-/g, '_')}`;
+  const generateUserId = () => `user_${crypto.randomUUID().replaceAll('-', '_')}`;
 
   useEffect(() => {
     void loadSchema();

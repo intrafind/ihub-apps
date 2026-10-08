@@ -1012,7 +1012,7 @@ export async function upsertCimdClientPolicy(
         if (patch[field] !== undefined) record[field] = patch[field];
       }
 
-      record.metadata = { ...(record.metadata || {}), cimd: true, host: clientIdHost(clientId) };
+      record.metadata = { ...record.metadata, cimd: true, host: clientIdHost(clientId) };
       for (const field of CIMD_METADATA_FIELDS) {
         if (patch.metadata?.[field] !== undefined) record.metadata[field] = patch.metadata[field];
       }

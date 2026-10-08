@@ -305,7 +305,7 @@ export async function executeTaskRun({ taskId, runId }, deps = {}) {
       if (stored.activeRun?.id !== runId && status !== 'awaiting_approval') {
         // The task moved on (deleted and re-created, or an admin intervened);
         // still record the last run.
-        stored.lastRun = { ...(stored.lastRun || {}), id: runId, status };
+        stored.lastRun = { ...stored.lastRun, id: runId, status };
         return stored;
       }
       applyRunOutcome(stored, ended, {

@@ -82,10 +82,10 @@ export const DEFAULT_FORWARD_LABELS = {
 
 const escapeHtml = value =>
   String(value ?? '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;');
 
 /**
  * Which Outlook surface the pane is attached to.
@@ -250,7 +250,7 @@ export function buildForwardBody({
   labels = DEFAULT_FORWARD_LABELS,
   maxChars = MAX_FORM_BODY_CHARS
 }) {
-  const l = { ...DEFAULT_FORWARD_LABELS, ...(labels || {}) };
+  const l = { ...DEFAULT_FORWARD_LABELS, ...labels };
   const rows = [
     [l.from, formatRecipients(original.from ? [original.from] : [])],
     [l.sent, formatSentAt(original.sentAt)],

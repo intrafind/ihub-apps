@@ -215,7 +215,7 @@ export class AgentLoop {
     const runBudget = request.state?.budget || { input: 0, output: 0, total: 0 };
     if (request.state) request.state.budget = runBudget;
 
-    const options = { ...(request.options || {}) };
+    const options = { ...request.options };
     const responseSchema = options.responseSchema;
     if (responseSchema && !options.responseFormat) options.responseFormat = 'json';
     let nativeWebSearch = options.nativeWebSearch ?? null;

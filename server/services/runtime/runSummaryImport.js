@@ -95,7 +95,7 @@ const LOCK_OPTIONS = { ttlMs: 300_000, waitMs: 1000 };
  * @returns {Object} The merged record.
  */
 function mergeIndexEntry(previous, entry) {
-  const merged = { ...(previous || {}), ...entry };
+  const merged = { ...previous, ...entry };
   merged.startedAt = previous?.startedAt || entry.ts;
   return merged;
 }
@@ -283,7 +283,7 @@ async function readExecutionRegistry(registryFile, log) {
  * @returns {Object} Merged summary input.
  */
 function mergeSources(fromIndex, fromRegistry) {
-  const merged = { ...(fromIndex || {}) };
+  const merged = { ...fromIndex };
   for (const [key, value] of Object.entries(fromRegistry)) {
     if (value === undefined || value === null) continue;
     merged[key] = value;

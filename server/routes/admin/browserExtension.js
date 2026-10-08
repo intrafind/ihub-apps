@@ -294,9 +294,9 @@ export default function registerAdminBrowserExtensionRoutes(app) {
 
       const oauthUpdates = {
         oauth: {
-          ...(platform?.oauth || {}),
+          ...platform?.oauth,
           enabled: {
-            ...(platform?.oauth?.enabled || {}),
+            ...platform?.oauth?.enabled,
             authz: true,
             clients: true
           },
@@ -349,7 +349,7 @@ export default function registerAdminBrowserExtensionRoutes(app) {
 
       await savePlatformConfig({
         browserExtension: {
-          ...(platform?.browserExtension || {}),
+          ...platform?.browserExtension,
           enabled: false
         }
       });

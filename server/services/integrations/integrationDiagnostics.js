@@ -128,7 +128,7 @@ const LOOPBACK_HOSTNAMES = new Set(['localhost', '127.0.0.1', '::1', '0.0.0.0', 
  */
 export function isPrivateAddress(host) {
   if (!host) return false;
-  const value = host.replace(/^\[|\]$/g, '').toLowerCase();
+  const value = host.replaceAll(/^\[|\]$/g, '').toLowerCase();
   if (/^10\./.test(value)) return true;
   if (/^192\.168\./.test(value)) return true;
   if (/^172\.(1[6-9]|2\d|3[01])\./.test(value)) return true;
@@ -183,7 +183,7 @@ export function inspectUrl(rawUrl, { remoteCallback = false } = {}) {
     errors.push(`Unsupported scheme "${parsed.protocol}". Use http:// or https://.`);
   }
 
-  const hostname = parsed.hostname.replace(/^\[|\]$/g, '');
+  const hostname = parsed.hostname.replaceAll(/^\[|\]$/g, '');
   const isIpLiteral = net.isIP(hostname) !== 0;
   const isLoopback = LOOPBACK_HOSTNAMES.has(hostname.toLowerCase());
   const isPrivate = isPrivateAddress(hostname);
@@ -484,7 +484,7 @@ export function redactHeaders(headers = {}) {
 }
 
 function shellQuote(value) {
-  return `'${String(value).replace(/'/g, `'\\''`)}'`;
+  return `'${String(value).replaceAll("'", String.raw`'\''`)}'`;
 }
 
 /**
@@ -657,9 +657,7 @@ export function describeHttpFailure({
       );
     }
     hints.push(
-      'Check the JWT Subject Field: iFinder has to know the subject as a user. An email where iFinder expects DOMAIN\\username (or vice versa) also produces a 401.'
-    );
-    hints.push(
+      String.raw`Check the JWT Subject Field: iFinder has to know the subject as a user. An email where iFinder expects DOMAIN\username (or vice versa) also produces a 401.`,
       'Verify the clock of the iHub server — a skew larger than the leeway of iFinder invalidates iat/exp.'
     );
   } else if (status === 403) {
