@@ -38,6 +38,37 @@ export function pageMarker(pageNumber, label) {
 /** Marker of a PDF page without a text layer inside a PDF that has text elsewhere. */
 export const noTextPageMarker = pageNumber => `[Page ${pageNumber}: no extractable text]`;
 
+/** Tracked changes and comments of a Word document, as CriticMarkup (opt-in per app). */
+export const INSERT_OPEN = '{++';
+export const INSERT_CLOSE = '++}';
+export const DELETE_OPEN = '{--';
+export const DELETE_CLOSE = '--}';
+export const COMMENT_OPEN = '{>>';
+export const COMMENT_CLOSE = '<<}';
+
+/** Longest comment text sent; a longer one is cut (a comment thread must not flood the prompt). */
+export const MAX_COMMENT_CHARS = 2000;
+
+/**
+ * A comment as it is written into the text: `{>>Author: text<<}`. The text comes from the file:
+ * whitespace (line breaks included) collapses to single spaces, and the closing sequence cannot
+ * occur inside, so a crafted comment cannot end the marker early.
+ *
+ * @param {{author?: string, text: string}} comment
+ * @returns {string}
+ */
+export function commentMarker({ author, text }) {
+  const clean = value =>
+    String(value ?? '')
+      .replace(/\s+/g, ' ')
+      .replace(/<<\}/g, '< <}')
+      .trim();
+  let body = clean(text);
+  if (body.length > MAX_COMMENT_CHARS) body = `${body.slice(0, MAX_COMMENT_CHARS).trimEnd()}…`;
+  const name = clean(author);
+  return `${COMMENT_OPEN}${name ? `${name}: ` : ''}${body}${COMMENT_CLOSE}`;
+}
+
 /** Prefixes of the header / footer block of a Word document. */
 export const HEADER_PREFIX = '[Header]';
 export const FOOTER_PREFIX = '[Footer]';

@@ -1,4 +1,5 @@
 import { processDocumentFile, resizeImageCanvas } from '../../upload/utils/fileProcessing';
+import { extractionOptionsOf } from '../../upload/utils/extractionOptions';
 import { sanitizeContentType, hasBase64Content } from './attachmentFormat';
 import { parseEmlAttachment, parseIcsAttachment } from './emailAttachmentParsers';
 
@@ -139,7 +140,7 @@ function base64ToFile(base64, name, contentType) {
 // - `url` (OneDrive/SharePoint share links) has no file bytes to read, so
 //   the link itself is sent as a reference instead of being dropped.
 // - anything else goes through the shared binary-document pipeline.
-async function buildFileEntryForAttachment(a) {
+async function buildFileEntryForAttachment(a, extractionOptions) {
   const format = String(a?.content?.format || '').toLowerCase();
   const cleanType =
     sanitizeContentType(a.contentType) || a.contentType || 'application/octet-stream';
@@ -199,7 +200,7 @@ async function buildFileEntryForAttachment(a) {
 
   try {
     const file = base64ToFile(a.content.content, a.name, cleanType);
-    const { content, pageImages } = await processDocumentFile(file);
+    const { content, pageImages } = await processDocumentFile(file, extractionOptions);
     return {
       source: 'local',
       origin: 'attachment',
@@ -220,7 +221,8 @@ async function buildFileEntryForAttachment(a) {
 
 // Processes non-image attachments into file data for the outgoing request.
 // Returns an array of { fileName, fileType, displayType, content?, pageImages? }.
-export async function buildFileDataFromMailAttachments(attachments) {
+// `fileUploadConfig` is the selected app's `upload.fileUpload` block (Word review marks).
+export async function buildFileDataFromMailAttachments(attachments, fileUploadConfig) {
   if (!attachments?.length) return null;
   const candidates = attachments
     .filter(a => !a?.isInline)
@@ -229,7 +231,10 @@ export async function buildFileDataFromMailAttachments(attachments) {
     .filter(a => a?.content?.content);
   if (!candidates.length) return null;
 
-  const results = await Promise.all(candidates.map(buildFileEntryForAttachment));
+  const extractionOptions = extractionOptionsOf(fileUploadConfig);
+  const results = await Promise.all(
+    candidates.map(attachment => buildFileEntryForAttachment(attachment, extractionOptions))
+  );
   const valid = results.filter(Boolean);
   return valid.length ? valid : null;
 }

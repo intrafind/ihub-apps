@@ -15,6 +15,7 @@ import {
   extractAudioFromVideo,
   loadMimetypesConfig
 } from '../utils/fileProcessing';
+import { extractionOptionsOf } from '../utils/extractionOptions';
 
 /**
  * Unified uploader component that handles both images and files in a single interface.
@@ -313,7 +314,7 @@ const UnifiedUploader = ({
     const isGenericText = ALLOW_GENERIC_TEXT && !isExplicitTextFile(file);
     const { content: processedContent, pageImages } = isGenericText
       ? await processGenericTextFile(file)
-      : await processDocumentFile(file);
+      : await processDocumentFile(file, extractionOptionsOf(fileConfig));
     const displayContent = processedContent || '';
     const previewContent =
       displayContent.length > 200 ? displayContent.substring(0, 200) + '...' : displayContent;

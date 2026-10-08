@@ -37,6 +37,34 @@ const UPLOAD_TYPE_CONFIGS = {
       'application/json',
       'application/pdf',
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    ],
+    // Word review marks sent to the model; both are off unless the app asks for them. The first
+    // option is the default and is not written to the app file.
+    selects: [
+      {
+        field: 'trackedChanges',
+        label: ['admin.apps.edit.trackedChanges', 'Word: tracked changes'],
+        help: [
+          'admin.apps.edit.trackedChangesHelp',
+          'How tracked changes in Word documents reach the model. Marked changes are written as {++added++} and {--removed--}.'
+        ],
+        options: [
+          ['accepted', 'admin.apps.edit.trackedChangesAccepted', 'Accepted view (changes applied)'],
+          ['markup', 'admin.apps.edit.trackedChangesMarkup', 'Mark insertions and deletions']
+        ]
+      },
+      {
+        field: 'comments',
+        label: ['admin.apps.edit.wordComments', 'Word: comments'],
+        help: [
+          'admin.apps.edit.wordCommentsHelp',
+          'Whether comments in Word documents reach the model. They are written as {>>Author: text<<} after the text they belong to.'
+        ],
+        options: [
+          ['ignore', 'admin.apps.edit.wordCommentsIgnore', 'Do not send comments'],
+          ['inline', 'admin.apps.edit.wordCommentsInline', 'Send comments with their text']
+        ]
+      }
     ]
   },
   audioUpload: {
@@ -108,6 +136,35 @@ function UploadTypeCard({ app, onChange, uploadKey, t, parseNumberOrUndefined })
               className="mt-1 block w-20 rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 text-xs"
             />
           </div>
+          {config.selects?.map(select => (
+            <div key={select.field}>
+              <label
+                htmlFor={`upload-${uploadKey}-${select.field}`}
+                className="block text-xs font-medium text-gray-700"
+              >
+                {t(...select.label)}
+              </label>
+              <select
+                id={`upload-${uploadKey}-${select.field}`}
+                value={typeConfig[select.field] || select.options[0][0]}
+                onChange={e =>
+                  // The default is not written into the app file.
+                  updateTypeConfig({
+                    [select.field]:
+                      e.target.value === select.options[0][0] ? undefined : e.target.value
+                  })
+                }
+                className="mt-1 block w-full max-w-sm rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 text-xs"
+              >
+                {select.options.map(([value, key, fallback]) => (
+                  <option key={value} value={value}>
+                    {t(key, fallback)}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1 text-xs text-gray-500">{t(...select.help)}</p>
+            </div>
+          ))}
           {config.extraToggle && (
             <div className="flex items-center">
               <input

@@ -23,6 +23,10 @@ heading by heading.
   from Word, LibreOffice, InDesign and others) give `#` headings and Markdown tables, otherwise the
   outline (bookmarks) or clearly larger type marks headings. Nothing is guessed when the picture is
   unclear, and no text is dropped or reordered
+- Apps for contract review and comparison can opt in to Word's review marks under **Admin → Apps →
+  Upload Configuration**: tracked changes as `{++added++}` / `{--removed--}` and comments as
+  `{>>Author: text<<}` after the text they belong to. Both are off by default — the model still
+  reads the accepted view without comments — and the settings only affect the app they are set in
 - Headers and footers of Word files (letterhead, document numbers, confidentiality notes) appear as
   `[Header] …` and `[Footer] …` lines before the text, without page numbers
 

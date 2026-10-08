@@ -14,6 +14,7 @@ import { readStyles } from './ooxml/styles.js';
 import { createNumbering } from './ooxml/numbering.js';
 import { addOutlineStyles, normalizeDocumentXml } from './ooxml/normalize.js';
 import { readHeaderFooterText } from './ooxml/headerFooter.js';
+import { normalizeReviewOptions, readComments } from './ooxml/review.js';
 import { FOOTER_PREFIX, HEADER_PREFIX } from './markers.js';
 import { createDocumentMarkdownConverter, htmlToMarkdown, normalizeMarkdown } from './markdown.js';
 
@@ -65,6 +66,10 @@ async function relationshipTargets(zip, DOMParserCtor, ownerPart, typeSuffixes) 
  * @param {Function} args.TurndownService - Turndown constructor
  * @param {typeof DOMParser} args.DOMParser
  * @param {typeof XMLSerializer} args.XMLSerializer
+ * @param {'accepted'|'markup'} [args.trackedChanges] - `markup` writes insertions and deletions as
+ *   `{++added++}` / `{--removed--}`; the default is the accepted view
+ * @param {'ignore'|'inline'} [args.comments] - `inline` writes comments as `{>>Author: text<<}`
+ *   after the text they belong to; the default leaves them out
  * @returns {Promise<string>} Markdown
  * @throws When the package cannot be read — the caller falls back to the legacy extraction
  */
@@ -74,8 +79,11 @@ export async function extractDocxMarkdown({
   mammoth,
   TurndownService,
   DOMParser: DOMParserCtor,
-  XMLSerializer: XMLSerializerCtor
+  XMLSerializer: XMLSerializerCtor,
+  trackedChanges,
+  comments
 }) {
+  const reviewOptions = normalizeReviewOptions({ trackedChanges, comments });
   const zip = await JSZip.loadAsync(arrayBuffer);
 
   // Part names come from the relationships; word/document.xml etc. are only the default.
@@ -86,7 +94,7 @@ export async function extractDocxMarkdown({
   const documentRelationships = await readRelationships(zip, DOMParserCtor, documentPart);
   const related = {};
   for (const rel of documentRelationships) {
-    for (const suffix of ['/styles', '/numbering', '/settings']) {
+    for (const suffix of ['/styles', '/numbering', '/settings', '/comments']) {
       if (rel.type.endsWith(suffix)) related[suffix] = rel.target;
     }
   }
@@ -124,11 +132,23 @@ export async function extractDocxMarkdown({
     // Malformed or unexpected header part: continue without headers and footers.
   }
 
+  // Comments are opt-in; a comments part that cannot be read costs the comments only.
+  let commentTexts = null;
+  if (reviewOptions.comments === 'inline') {
+    try {
+      const commentsDoc = related['/comments'] ? await readPart(related['/comments']) : null;
+      commentTexts = commentsDoc ? readComments(commentsDoc, xml) : new Map();
+    } catch {
+      commentTexts = new Map();
+    }
+  }
+
   const { outlineLevels } = normalizeDocumentXml(documentDoc, {
     xml,
     styles,
     numbering,
-    canAddOutlineStyles: !!stylesDoc
+    canAddOutlineStyles: !!stylesDoc,
+    review: { trackedChanges: reviewOptions.trackedChanges, comments: commentTexts }
   });
   if (stylesDoc && outlineLevels.size > 0) addOutlineStyles(stylesDoc, xml, outlineLevels);
 

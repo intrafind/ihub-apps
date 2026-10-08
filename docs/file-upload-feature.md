@@ -46,6 +46,8 @@ All upload types share a single `upload` object in the app configuration:
 | `enabled` | boolean | `false` | Enable document/file attachment |
 | `maxFileSizeMB` | number (1–100) | `5` | Maximum file size in megabytes |
 | `supportedFormats` | string[] | See below | MIME types accepted for upload |
+| `trackedChanges` | `"accepted"` \| `"markup"` | `"accepted"` | Word documents: `markup` writes tracked insertions and deletions into the text as `{++added++}` and `{--removed--}` (see [Tracked changes and comments](#tracked-changes-and-comments-opt-in)) |
+| `comments` | `"ignore"` \| `"inline"` | `"ignore"` | Word documents: `inline` writes comments as `{>>Author: text<<}` after the text they belong to |
 
 Default `supportedFormats` for `fileUpload`:
 
@@ -172,11 +174,26 @@ The model receives a document as text inside a `<content type="document" …>` b
 | Images | `[Image: alt text]` when the image has alt text, otherwise nothing — pictures are never sent as base64 data |
 | Explicit page break, page-break-before, new-page section break | `[Page break]` on its own line. Word does not store page numbers (it computes them when laying out), so Word files get no `[Page N]` markers |
 | Text that was moved with track changes | Appears once, at its new position |
-| Tracked deletions, comments | Not sent. Insertions count as text (the accepted view of the document) |
+| Tracked changes, comments | By default not sent: the text is the accepted view (insertions count, deletions are gone) and comments are left out. An app can opt in, see below |
 | Hidden text (Word's "Hidden" font attribute) | Not sent |
 | Soft hyphens, non-breaking hyphens | Soft hyphens are removed, non-breaking hyphens become `-` |
 
 Markdown characters in the document text are not escaped, so `1.`, `[1]` or `a_b` arrive exactly as typed. Text that happens to look like Markdown (`# not a heading`) stays as typed as well.
+
+#### Tracked changes and comments (opt-in)
+
+Documents that are reviewed in Word carry the review in two places: tracked changes (who added or removed what) and comments. The model sees neither by default, so a contract review would not know what the other side changed. An app can ask for them in its upload settings (Admin → Apps → Upload Configuration → *Word: tracked changes* / *Word: comments*, or `upload.fileUpload.trackedChanges` / `upload.fileUpload.comments`):
+
+| Setting | In the text |
+|---|---|
+| `trackedChanges: "markup"` | `{++inserted text++}` and `{--deleted text--}` ([CriticMarkup](https://criticmarkup.com/)); a replacement reads `{--old--}{++new++}`. A deleted paragraph or table row stays where it was, its text marked as deleted; moved text is a deletion where it was and an insertion where it is. Changes that only affect formatting are not marked. Deleted paragraphs take no number, so the numbers of the other paragraphs are the ones of the accepted view |
+| `comments: "inline"` | `{>>Author: comment<<}` right after the text the comment is attached to. Replies follow in order; the paragraphs of a comment are joined with a space, and a comment is cut after 2,000 characters |
+
+```text
+Der Preis {--100--}{++120++} Euro{>>Anna Beispiel: Mit dem Kunden abgestimmt<<}
+```
+
+Both settings only apply to Word documents and only while *Structured document extraction* is switched on. They are off unless an app sets them, and changing them does not affect other apps. The author of a tracked change and its date are not part of the text. Comments inside footnotes, headers and footers are not read. Prompts of such an app should say what the marks mean ("`{--…--}` is deleted, `{++…++}` is new text") when the task depends on them.
 
 #### Numbering
 

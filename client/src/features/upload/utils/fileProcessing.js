@@ -740,7 +740,7 @@ export const legacyDocxText = async arrayBuffer => {
 };
 
 // Process DOCX file
-export const processDocxFile = async file => {
+export const processDocxFile = async (file, options = {}) => {
   const arrayBuffer = await file.arrayBuffer();
 
   if (await isStructuredExtractionEnabled()) {
@@ -756,7 +756,9 @@ export const processDocxFile = async file => {
         mammoth,
         TurndownService,
         DOMParser,
-        XMLSerializer
+        XMLSerializer,
+        trackedChanges: options?.trackedChanges,
+        comments: options?.comments
       });
     } catch (error) {
       // Never make an upload fail that worked before: use the plain text extraction.
@@ -1079,8 +1081,10 @@ export const processOpenOfficeFile = async file => {
 };
 
 // Main document processing function
-// Returns { content, pageImages } where pageImages is set for image-based PDFs
-export const processDocumentFile = async file => {
+// Returns { content, pageImages } where pageImages is set for image-based PDFs.
+// `options` are the per-app extraction options of `upload.fileUpload` (Word documents only):
+// `trackedChanges: 'markup'` and `comments: 'inline'` — see docs/file-upload-feature.md.
+export const processDocumentFile = async (file, options = {}) => {
   let content = '';
   let pageImages;
 
@@ -1123,7 +1127,7 @@ export const processDocumentFile = async file => {
     file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
     fileExtension === '.docx'
   ) {
-    content = await processDocxFile(file);
+    content = await processDocxFile(file, options);
   } else if (
     file.type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
     file.type === 'application/vnd.ms-excel' ||
