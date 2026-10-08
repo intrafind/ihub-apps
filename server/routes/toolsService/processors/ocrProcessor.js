@@ -497,6 +497,22 @@ function findVisionModel(models, preferredModelId) {
   );
 }
 
+/**
+ * The API key a whole OCR job runs with, decided once.
+ *
+ * A model on a local server needs none. That has to stay a decision: handed on
+ * as `null`, every page call would look the key up again in the live
+ * configuration, so a model edited while the job runs could send a new key to
+ * the destination the job started with. An empty key is explicit — the model
+ * call neither looks anything up nor sends an Authorization header.
+ *
+ * @param {{state: string, apiKey: string|null}} resolution - From `resolveModelApiKey`
+ * @returns {string|null} The key, or '' for a model that runs without one
+ */
+export function ocrJobApiKey(resolution) {
+  return resolution.state === 'keyless' ? '' : resolution.apiKey;
+}
+
 // ─── Main job processor ──────────────────────────────────────────────────────
 
 /**
@@ -528,8 +544,6 @@ export async function processOcrJob(job) {
         return;
       }
 
-      // A local server may need no key: `apiKey` stays null and the request
-      // goes out without an Authorization header.
       const keyResolution = await resolveModelApiKey(model.id);
       if (keyResolution.state !== 'ok' && keyResolution.state !== 'keyless') {
         job.status = 'error';
@@ -540,7 +554,7 @@ export async function processOcrJob(job) {
         notifyClients(job);
         return;
       }
-      apiKey = keyResolution.apiKey;
+      apiKey = ocrJobApiKey(keyResolution);
 
       job.model = model.id;
     }
