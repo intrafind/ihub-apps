@@ -26,6 +26,21 @@ const BY_JWA = Object.fromEntries(
 const b64u = buf => Buffer.from(buf).toString('base64url');
 
 /**
+ * Order strings by UTF-16 code units, as RFC 8785 requires for object keys.
+ * This is the default `Array#sort` order, spelled out: a locale-aware compare
+ * would make the signed bytes depend on the server's locale.
+ *
+ * @param {string} a
+ * @param {string} b
+ * @returns {number}
+ */
+function compareCodeUnits(a, b) {
+  if (a < b) return -1;
+  if (a > b) return 1;
+  return 0;
+}
+
+/**
  * Canonical JSON (sorted keys) so a payload hashes the same everywhere.
  * @param {any} value
  * @returns {string}
@@ -35,7 +50,7 @@ export function canonicalJson(value) {
   if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
   const keys = Object.keys(value)
     .filter(k => value[k] !== undefined)
-    .sort();
+    .sort(compareCodeUnits);
   return `{${keys.map(k => `${JSON.stringify(k)}:${canonicalJson(value[k])}`).join(',')}}`;
 }
 

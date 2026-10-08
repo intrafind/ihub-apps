@@ -88,7 +88,7 @@ RUN mkdir -p /app/contents/ /app/logs && \
     chown -R ihub:ihub /app/contents /app/logs
 
 # Health check script (same as docker/Dockerfile)
-COPY --chown=ihub:ihub <<EOF /app/healthcheck.js
+COPY <<EOF /app/healthcheck.js
 import http from 'http';
 
 const options = {
@@ -109,8 +109,9 @@ request.on('timeout', () => {
 request.end();
 EOF
 
-COPY --chown=ihub:ihub docker/docker-entrypoint.sh /app/docker-entrypoint.sh
-RUN chmod +x /app/docker-entrypoint.sh
+# Root-owned, so the app user can run but not change it
+COPY docker/docker-entrypoint.sh /app/docker-entrypoint.sh
+RUN chmod 755 /app/docker-entrypoint.sh
 
 USER ihub
 

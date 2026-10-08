@@ -47,8 +47,8 @@ export const NON_CONFORMING_WHEN = Object.freeze({
 
 /**
  * Deep copy of plain JSON settings.
- * @param {Object} value
- * @returns {Object}
+ * @param {Object|undefined} value
+ * @returns {Object|undefined}
  */
 export function cloneSettings(value) {
   return value === undefined ? undefined : JSON.parse(JSON.stringify(value));

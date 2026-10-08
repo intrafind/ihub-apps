@@ -339,7 +339,7 @@ export async function buildComplianceReport({ req } = {}) {
       generator: { name: 'iHub Apps', version: getAppVersion() },
       installationId: status.installation.installationId,
       aiGenerated: false,
-      digitalSourceType: 'http://cv.iptc.org/newscodes/digitalsourcetype/softwareImage',
+      digitalSourceType: DIGITAL_SOURCE_TYPES.softwareImage,
       conforming: status.conforming,
       checklist: status.checklist.map(c => ({ id: c.id, status: c.status }))
     },

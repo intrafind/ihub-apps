@@ -37,8 +37,8 @@ export const REPORT_TYP = 'ihub-detection-report+jws';
 const AI_SOURCE_TYPES = new Set([
   DIGITAL_SOURCE_TYPES.trainedAlgorithmicMedia,
   DIGITAL_SOURCE_TYPES.compositeWithTrainedAlgorithmicMedia,
-  'http://c2pa.org/digitalsourcetype/trainedAlgorithmicData',
-  'http://cv.iptc.org/newscodes/digitalsourcetype/algorithmicMedia'
+  DIGITAL_SOURCE_TYPES.c2paTrainedAlgorithmicData,
+  DIGITAL_SOURCE_TYPES.algorithmicMedia
 ]);
 const MIN_TEXT_WATERMARK_TOKENS = 50;
 

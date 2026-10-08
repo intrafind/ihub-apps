@@ -163,7 +163,7 @@ function DetectionKeyGroupsPanel({ onChanged }) {
       document.getElementById(`eu-keygroup-${firstInvalid}`)?.focus();
       return;
     }
-    runDialogAction(async () => {
+    void runDialogAction(async () => {
       const body = buildKeyGroupBody(groupForm, { isNew });
       const { keyGroup } = isNew
         ? await createKeyGroup(body)
@@ -235,7 +235,7 @@ function DetectionKeyGroupsPanel({ onChanged }) {
       return;
     }
     if (errors.ids) return;
-    runDialogAction(async () => {
+    void runDialogAction(async () => {
       const bundle = await exportKeyBundle(selected, exportForm.passphrase);
       downloadJsonFile(keyBundleFileName(selected), bundle);
       setDialog(null);
@@ -286,7 +286,7 @@ function DetectionKeyGroupsPanel({ onChanged }) {
       document.getElementById('eu-keygroup-import-passphrase')?.focus();
       return;
     }
-    runDialogAction(async () => {
+    void runDialogAction(async () => {
       const { keyGroups } = await importKeyBundle(importForm.bundle, importForm.passphrase);
       setDialog(null);
       setImportForm(EMPTY_IMPORT_FORM);

@@ -32,6 +32,7 @@ import {
 import { signJws, verifyJws } from './jws.js';
 import { isC2paAvailable, readAsset, signAsset } from './c2pa.js';
 import { getAppVersion } from '../../../utils/versionHelper.js';
+import { DIGITAL_SOURCE_TYPES } from '../../../../shared/aiTransparency.js';
 import logger from '../../../utils/logger.js';
 
 const COMPONENT = 'SigningService';
@@ -315,8 +316,7 @@ class SigningService {
                 actions: [
                   {
                     action: 'c2pa.created',
-                    digitalSourceType:
-                      'http://cv.iptc.org/newscodes/digitalsourcetype/digitalCreation'
+                    digitalSourceType: DIGITAL_SOURCE_TYPES.digitalCreation
                   }
                 ]
               }

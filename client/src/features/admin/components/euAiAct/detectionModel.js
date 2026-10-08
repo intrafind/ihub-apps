@@ -129,7 +129,7 @@ function isHttpUrl(value) {
 /**
  * Validate the create/edit key-group form.
  *
- * @param {{ id?: string, detectorUrl?: string, contextWidth?: number|'' }} form
+ * @param {{ id?: string, detectorUrl?: string, contextWidth?: number|''|null }} form
  * @param {{ isNew: boolean }} options - `id` is only checked when creating
  * @returns {{ id?: 'required'|'idPattern', detectorUrl?: 'url', contextWidth?: 'contextWidth' }}
  */

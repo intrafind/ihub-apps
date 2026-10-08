@@ -164,7 +164,7 @@ function AdminModelsPage() {
           await run(justification);
           setPendingAcknowledgement(null);
           // The acknowledgement is stored with the models: reload to show it.
-          loadModels();
+          void loadModels();
         }
       });
     }

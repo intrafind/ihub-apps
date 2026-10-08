@@ -34,7 +34,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 
 // Invisible characters the text signpost adds; stripped before hashing so a
 // signposted copy hashes like the original.
-const SIGNPOST_CHARS_RE = /[﻿︀-️]|\uDB40[\uDD00-\uDDEF]/g;
+const SIGNPOST_CHARS_RE = /\uFEFF|[\uFE00-\uFE0F]|\uDB40[\uDD00-\uDDEF]/g;
 
 /**
  * Normalise text for hashing: NFC, LF line ends, no signpost characters,

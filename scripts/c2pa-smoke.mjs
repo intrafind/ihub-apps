@@ -12,6 +12,9 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const load = rel => import(pathToFileURL(path.join(root, 'server', rel)).href);
+const { DIGITAL_SOURCE_TYPES } = await import(
+  pathToFileURL(path.join(root, 'shared', 'aiTransparency.js')).href
+);
 
 const x509 = await load('services/provenance/signing/x509.js');
 const c2pa = await load('services/provenance/signing/c2pa.js');
@@ -42,8 +45,7 @@ const signed = await c2pa.signAsset(
           actions: [
             {
               action: 'c2pa.created',
-              digitalSourceType:
-                'http://cv.iptc.org/newscodes/digitalsourcetype/trainedAlgorithmicMedia'
+              digitalSourceType: DIGITAL_SOURCE_TYPES.trainedAlgorithmicMedia
             }
           ]
         }

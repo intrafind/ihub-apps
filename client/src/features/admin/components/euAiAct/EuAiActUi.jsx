@@ -379,7 +379,7 @@ export function TextField({
  * @param {string} props.label
  * @param {React.ReactNode} [props.hint]
  * @param {string} [props.error]
- * @param {number|''} props.value
+ * @param {number|''|null} [props.value] - unset until the settings load
  * @param {(value: number|'') => void} props.onChange
  * @param {number} [props.min]
  * @param {number} [props.max]

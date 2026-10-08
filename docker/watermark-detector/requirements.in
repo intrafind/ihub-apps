@@ -1,0 +1,6 @@
+fastapi>=0.115
+uvicorn[standard]>=0.30
+transformers>=4.45
+# vLLM with native watermarking (Gumbel-max, RFC #53916). Only the detection
+# primitives are used; no GPU is needed.
+vllm>=0.13

@@ -109,7 +109,7 @@ function DetectionTestPanel() {
         noValidate
         onSubmit={event => {
           event.preventDefault();
-          handleCheck();
+          void handleCheck();
         }}
         className="space-y-4"
       >

@@ -12,11 +12,21 @@
  * @module shared/aiTransparency
  */
 
-/** IPTC digital source types used in C2PA actions and XMP metadata. */
+/**
+ * Digital source types used in C2PA actions and XMP metadata. These are
+ * vocabulary identifiers that verifiers compare as exact strings, not URLs
+ * that are fetched: the IPTC and C2PA specifications define them with
+ * `http://`, so they must stay as written (hence NOSONAR on each).
+ */
 export const DIGITAL_SOURCE_TYPES = Object.freeze({
-  trainedAlgorithmicMedia: 'http://cv.iptc.org/newscodes/digitalsourcetype/trainedAlgorithmicMedia',
+  trainedAlgorithmicMedia: 'http://cv.iptc.org/newscodes/digitalsourcetype/trainedAlgorithmicMedia', // NOSONAR
   compositeWithTrainedAlgorithmicMedia:
-    'http://cv.iptc.org/newscodes/digitalsourcetype/compositeWithTrainedAlgorithmicMedia'
+    'http://cv.iptc.org/newscodes/digitalsourcetype/compositeWithTrainedAlgorithmicMedia', // NOSONAR
+  algorithmicMedia: 'http://cv.iptc.org/newscodes/digitalsourcetype/algorithmicMedia', // NOSONAR
+  digitalCreation: 'http://cv.iptc.org/newscodes/digitalsourcetype/digitalCreation', // NOSONAR
+  softwareImage: 'http://cv.iptc.org/newscodes/digitalsourcetype/softwareImage', // NOSONAR
+  // C2PA's own term for content generated from AI training data.
+  c2paTrainedAlgorithmicData: 'http://c2pa.org/digitalsourcetype/trainedAlgorithmicData' // NOSONAR
 });
 
 /** Art. 50(2) exemptions an admin may declare per app (guidelines §4.3, ¶87). */
@@ -329,9 +339,10 @@ export function defaultContentMarking(model) {
 /**
  * Whether a distortion-free watermark can embed anything at this temperature.
  * At temperature 0 (greedy decoding) the Gumbel-max scheme has no freedom, so
- * nothing is embedded (concept §5.1 "low-entropy output").
+ * nothing is embedded (concept §5.1 "low-entropy output"). The temperature may
+ * arrive as a string from a form or request body, or as `''` when unset.
  *
- * @param {number|null|undefined} temperature
+ * @param {number|string|null|undefined} temperature
  * @returns {boolean}
  */
 export function watermarkEmbedsAtTemperature(temperature) {

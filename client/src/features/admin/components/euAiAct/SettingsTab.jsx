@@ -323,7 +323,7 @@ function SettingsTab({ status, reload }) {
           noValidate
           onSubmit={e => {
             e.preventDefault();
-            handleSave();
+            void handleSave();
           }}
           aria-label={t('admin.euAiAct.settings.formLabel', 'EU AI Act settings')}
         >

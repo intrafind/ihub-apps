@@ -34,7 +34,11 @@ jobs:
           cache-dependency-path: server/package-lock.json
       - name: Install server dependencies
         working-directory: server
-        run: npm ci --omit=dev
+        # Lifecycle scripts stay off; only c2pa-node's postinstall runs, which
+        # downloads its prebuilt native binary.
+        run: |
+          npm ci --omit=dev --ignore-scripts
+          npm rebuild @contentauth/c2pa-node
       - name: Cache TrustMark models
         uses: actions/cache@v4
         with:
