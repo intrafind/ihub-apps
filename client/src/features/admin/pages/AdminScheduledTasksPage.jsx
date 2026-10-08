@@ -30,7 +30,9 @@ const NUMBER_SETTINGS = [
   ['runRetentionDays', 0, 3650],
   ['maxRunChatsPerTask', 0, 10000],
   ['maxInstructionLength', 100, 100000],
-  ['maxRunMinutes', 1, 30]
+  ['maxRunMinutes', 1, 30],
+  ['memoryMaxChars', 1000, 64000],
+  ['maxHistoryReadChars', 1000, 50000]
 ];
 
 const STATUS_FILTERS = ['', 'active', 'paused', 'completed', 'disabled'];
@@ -76,7 +78,7 @@ export default function AdminScheduledTasksPage() {
     setSaving(true);
     setNotice(null);
     try {
-      const body = { enabled: settings.enabled };
+      const body = { enabled: settings.enabled, memoryEnabled: settings.memoryEnabled !== false };
       for (const [key] of NUMBER_SETTINGS) body[key] = Number(settings[key]);
       const response = await makeAdminApiCall('/admin/scheduled-tasks/settings', {
         method: 'PUT',
@@ -125,6 +127,31 @@ export default function AdminScheduledTasksPage() {
     setBusy(task.id);
     try {
       await makeAdminApiCall(`/admin/scheduled-tasks/${encodeURIComponent(task.id)}`, {
+        method: 'DELETE'
+      });
+      await load();
+    } catch (err) {
+      setError(getAdminApiErrorMessage(err));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function clearMemory(task) {
+    if (
+      !window.confirm(
+        t(
+          'admin.scheduledTasks.memory.confirmClear',
+          'Clear the memory of "{{name}}" of {{owner}}? The owner loses these notes.',
+          { name: task.name, owner: task.owner?.name || task.ownerId }
+        )
+      )
+    ) {
+      return;
+    }
+    setBusy(task.id);
+    try {
+      await makeAdminApiCall(`/admin/scheduled-tasks/${encodeURIComponent(task.id)}/memory`, {
         method: 'DELETE'
       });
       await load();
@@ -277,6 +304,27 @@ export default function AdminScheduledTasksPage() {
                 </div>
               ))}
             </div>
+            <div>
+              <label className="inline-flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
+                <input
+                  id="st-memoryEnabled"
+                  type="checkbox"
+                  checked={settings.memoryEnabled !== false}
+                  aria-describedby="st-memoryEnabled-hint"
+                  onChange={e =>
+                    setSettings(prev => ({ ...prev, memoryEnabled: e.target.checked }))
+                  }
+                  className="rounded border-gray-300 text-indigo-600"
+                />
+                {t('admin.scheduledTasks.settings.memoryEnabled', 'Allow memory between runs')}
+              </label>
+              <p id="st-memoryEnabled-hint" className="mt-1 text-xs text-gray-500">
+                {t(
+                  'admin.scheduledTasks.memoryEnabledHint',
+                  'Off: runs neither read nor update the notes of a task (the notes are kept), and "Only when something changed" notifies after every run.'
+                )}
+              </p>
+            </div>
             <p className="text-xs text-gray-500">
               {t(
                 'admin.scheduledTasks.zeroHint',
@@ -343,6 +391,9 @@ export default function AdminScheduledTasksPage() {
                     <th className="py-2 pr-4">
                       {t('admin.scheduledTasks.columns.failures', 'Failures')}
                     </th>
+                    <th className="py-2 pr-4">
+                      {t('admin.scheduledTasks.columns.memory', 'Memory')}
+                    </th>
                     <th className="py-2" />
                   </tr>
                 </thead>
@@ -386,6 +437,35 @@ export default function AdminScheduledTasksPage() {
                       </td>
                       <td className="py-2 pr-4 text-gray-700 dark:text-gray-300">
                         {task.consecutiveFailures || 0}
+                      </td>
+                      <td className="py-2 pr-4 text-gray-700 dark:text-gray-300">
+                        {task.memorySummary ? (
+                          <div className="space-y-1">
+                            <div>
+                              {t(
+                                'admin.scheduledTasks.memory.summary',
+                                '{{chars}} chars · v{{version}} · {{updatedAt}}',
+                                {
+                                  chars: task.memorySummary.chars,
+                                  version: task.memorySummary.version,
+                                  updatedAt: formatDateTime(task.memorySummary.updatedAt, language)
+                                }
+                              )}
+                            </div>
+                            {task.memorySummary.chars > 0 && (
+                              <button
+                                type="button"
+                                className={`${button} text-red-600`}
+                                disabled={busy === task.id}
+                                onClick={() => clearMemory(task)}
+                              >
+                                {t('admin.scheduledTasks.memory.clear', 'Clear memory')}
+                              </button>
+                            )}
+                          </div>
+                        ) : (
+                          '—'
+                        )}
                       </td>
                       <td className="py-2 whitespace-nowrap space-x-1">
                         <button type="button" className={button} onClick={() => openRuns(task)}>
