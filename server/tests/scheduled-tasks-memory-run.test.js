@@ -57,10 +57,7 @@ async function newTask(extra = {}) {
 async function runTask(task, script, options = {}) {
   const queued = await tasks.requestRun(ada(), task.id);
   const chat = scriptedChatService(script, options);
-  const run = await executeTaskRun(
-    { taskId: task.id, runId: queued.id },
-    { chatService: chat.service }
-  );
+  const run = await executeTaskRun({ taskId: task.id, runId: queued.id }, chat.deps);
   return { run, queued, ...chat };
 }
 
@@ -146,14 +143,13 @@ describe('the first run of a task that keeps memory', () => {
   it('records what it read and offered', async () => {
     const task = await newTask();
     const { run } = await runTask(task, [openaiText(['ok'])]);
-    assert.deepEqual(run.memory, {
-      enabled: true,
-      versionRead: 0,
-      versionWritten: null,
-      changed: null,
-      compose: 'not_run',
-      toolsOffered: true
-    });
+    // The composer ran and handed back the notes it was shown: nothing to write.
+    assert.equal(run.memory.enabled, true);
+    assert.equal(run.memory.versionRead, 0);
+    assert.equal(run.memory.versionWritten, null);
+    assert.equal(run.memory.changed, true);
+    assert.equal(run.memory.compose, 'unchanged');
+    assert.equal(run.memory.toolsOffered, true);
     const fromStore = await tasks.getRun(ada(), task.id, run.id);
     assert.deepEqual(fromStore.memory, run.memory);
     await cleanup(ada());
@@ -468,10 +464,7 @@ describe('a run that does not complete', () => {
     const task = await newTask();
     const queued = await tasks.requestRun(user, task.id);
     const first = scriptedChatService([toolCall('dangerous')]);
-    const paused = await executeTaskRun(
-      { taskId: task.id, runId: queued.id },
-      { chatService: first.service }
-    );
+    const paused = await executeTaskRun({ taskId: task.id, runId: queued.id }, first.deps);
     assert.equal(paused.status, 'awaiting_approval');
     assert.equal(paused.memory.versionRead, 0);
     assert.match(systemOf(first.requests[0]), /Before you start the task:/);
@@ -481,10 +474,7 @@ describe('a run that does not complete', () => {
 
     await tasks.answerApproval(user, task.id, queued.id, { decision: 'approve' });
     const second = scriptedChatService([toolCall('dangerous'), openaiText(['Done.'])]);
-    const done = await executeTaskRun(
-      { taskId: task.id, runId: queued.id },
-      { chatService: second.service }
-    );
+    const done = await executeTaskRun({ taskId: task.id, runId: queued.id }, second.deps);
     assert.equal(done.status, 'succeeded');
     const system = systemOf(second.requests[0]);
     assert.equal(system.match(/<task_memory/g).length, 1, 'the block once');

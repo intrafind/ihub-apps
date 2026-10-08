@@ -39,6 +39,7 @@ import {
 } from '../../../sse.js';
 import config from '../../../config.js';
 import ChatService, { withAppPrompt } from '../../chat/ChatService.js';
+import llmClient from '../../loop/LLMClient.js';
 import { getChatRepository, normalizeChatSettings } from '../../chat/ChatRepository.js';
 import { isChatPersistenceConfigured } from '../../chat/chatPersistence.js';
 import interactionService from '../../loop/InteractionService.js';
@@ -61,6 +62,7 @@ import { scheduledRunSeams } from './runSeams.js';
 import { WITHHELD_IN_SCHEDULED_RUNS } from './toolGate.js';
 import { isMemoryOn } from './taskMemory.js';
 import { prepareRunMemory, settleMemoryMarker } from './runMemory.js';
+import { composeTaskMemory, ownerMessagesAfterPreviousRun, sumUsage } from './memoryComposer.js';
 import { announceTaskChanged } from './taskEvents.js';
 import { currentPolicy, deleteRunChat, toolsOfferedByApp } from './taskService.js';
 
@@ -255,6 +257,7 @@ export async function executeTaskRun({ taskId, runId }, deps = {}) {
   // marker is stored on the run however it ends.
   const memoryOn = isMemoryOn(task, { enabled: settings.memoryEnabled });
   let memory = null;
+  let memoryBefore = '';
   // This execution's fencing token. The run document carries it with a lease
   // this worker renews; a new scheduler owner recovers the run only once the
   // lease ran out, and a worker that finds its token gone writes nothing more.
@@ -473,6 +476,7 @@ export async function executeTaskRun({ taskId, runId }, deps = {}) {
       });
       for (const note of prepareMemory.notes) appendSystemNote(prepared.llmMessages, note);
       memory = prepareMemory.marker;
+      memoryBefore = prepareMemory.before;
     }
     await checkIntegrations(prepared.tools, user);
 
@@ -664,7 +668,60 @@ export async function executeTaskRun({ taskId, runId }, deps = {}) {
         { ledgerRunIds, usage: addUsage(run.usage), watched }
       );
     }
-    return finish('succeeded', null, { ledgerRunIds, usage: addUsage(run.usage), watched });
+    // The run is done and good. The notes are brought up to date by one more
+    // call that needs no tool, so this works on every model; it cannot change
+    // how the run ended.
+    let composedUsage = null;
+    if (memory && memory.compose !== 'skipped' && Number.isInteger(memory.versionRead)) {
+      const timezone = task.schedule?.timezone || 'UTC';
+      const composed = await composeTaskMemory({
+        llmClient: deps.llmClient || llmClient,
+        task,
+        run,
+        user,
+        model: prepared.model,
+        ledgerRunId,
+        instructions: resolveRunContext(
+          task.instructions,
+          runContextVariables(task, run, { now: startedAtMs, format: formatZonedIso })
+        ),
+        runTime: formatZonedIso(startedAtMs, timezone),
+        notesBefore: memoryBefore,
+        answer: outcome.content,
+        ownerMessages: await ownerMessagesAfterPreviousRun(user, {
+          taskId,
+          currentRunId: runId
+        }),
+        maxChars: settings.memoryMaxChars
+      });
+      composedUsage = composed.usage;
+      memory = {
+        ...memory,
+        changed: composed.changed,
+        compose: composed.compose,
+        ...(composed.usage ? { composeUsage: composed.usage } : {})
+      };
+      // The chat was marked unread when the answer landed, before anyone knew
+      // there was nothing new in it. Someone who asked to hear only about
+      // changes should not see an unread dot for a run that had none.
+      if (task.notify === 'changes' && composed.changed === false) {
+        await getChatRepository()
+          .clearUnseen(run.chatId)
+          .catch(error =>
+            logger.warn('Could not clear the unread mark of a run without changes', {
+              component: COMPONENT,
+              taskId,
+              runId,
+              error: error.message
+            })
+          );
+      }
+    }
+    return finish('succeeded', null, {
+      ledgerRunIds,
+      usage: sumUsage(addUsage(run.usage), composedUsage),
+      watched
+    });
   } catch (error) {
     const failure =
       error instanceof RunFailure

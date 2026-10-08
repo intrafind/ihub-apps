@@ -20,7 +20,7 @@ import { bootstrapStorage, shutdownStorageBootstrap } from '../../storage/bootst
 import { enhanceUserWithPermissions } from '../../utils/authorization.js';
 import interactionService from '../../services/loop/InteractionService.js';
 import * as tasks from '../../services/scheduler/tasks/taskService.js';
-import { makeClient, sseResponse, captureRunLog } from '../loop/helpers/llmFixtures.js';
+import { makeClient, sseResponse, openaiText, captureRunLog } from '../loop/helpers/llmFixtures.js';
 
 export const MODELS = [
   {
@@ -227,9 +227,41 @@ export function toolCall(name, args = {}, id = 'call_1') {
   ];
 }
 
+/** What the memory composer's system prompt starts with: how its calls are told from a turn's. */
+const COMPOSER_PROMPT_START = 'You maintain the notes of a scheduled task';
+
+/**
+ * A composer that leaves the notes as they are and says something changed:
+ * it hands back the notes it was shown. Most tests are about something else
+ * and only need the composer out of the way.
+ *
+ * @param {string} userMessage - The message the composer was given.
+ * @returns {string}
+ */
+export function echoComposer(userMessage) {
+  const section = name => {
+    const match = userMessage.match(new RegExp(`## ${name}[^\\n]*\\n([\\s\\S]*?)(?=\\n\\n## |$)`));
+    return match ? match[1].trim() : null;
+  };
+  const shown = section('Current notes') ?? section('Notes before this run') ?? '';
+  const notes = shown === '(none)' || shown === '(empty)' ? '' : shown;
+  return `<changed>yes</changed>\n<notes>\n${notes}\n</notes>`;
+}
+
+/** The reply a composer gives: whether something changed, and the notes. */
+export function composerReply(notes, changed = true) {
+  return `<changed>${changed ? 'yes' : 'no'}</changed>\n<notes>\n${notes}\n</notes>`;
+}
+
 /**
  * A ChatService over a scripted provider. Records what was sent and which
  * tools ran.
+ *
+ * The memory composer's calls go through the same client but are answered by
+ * `composer` (a function of the message it was given, or a fixed list of
+ * replies), not by the script, and are recorded in `composerRequests`, not in
+ * `requests`. Pass `deps` to `executeTaskRun`: it carries the client, so a
+ * composer call can never reach a real provider.
  *
  * @param {Array} script - One streamed response per model call.
  * @param {Object} [options]
@@ -237,15 +269,38 @@ export function toolCall(name, args = {}, id = 'call_1') {
  * @param {Object[]} [options.models]
  * @param {(toolId: string, params: Object) => Promise<Object>} [options.runTool] - Replaces the stub
  *   (pass the real `runTool` to run the real handlers).
+ * @param {((message: string, request: Object) => string|Object|Promise<string|Object>)|Array<string|Object>} [options.composer]
+ *   How the composer is answered; defaults to {@link echoComposer}. An array is used in order and
+ *   then fails, like an exhausted script.
  */
-export function scriptedChatService(script, { onRequest, models = MODELS, runTool } = {}) {
+export function scriptedChatService(
+  script,
+  { onRequest, models = MODELS, runTool, composer = echoComposer } = {}
+) {
   const queue = [...script];
   const requests = [];
+  const composerRequests = [];
   const ran = [];
+  const composerQueue = Array.isArray(composer) ? [...composer] : null;
   const { client } = makeClient({
     models,
     runLog: ledger.runLog,
     transport: async req => {
+      const messages = req.body?.messages || [];
+      if (String(messages[0]?.content || '').startsWith(COMPOSER_PROMPT_START)) {
+        composerRequests.push(req);
+        const message = messages[messages.length - 1].content;
+        let reply;
+        if (composerQueue) {
+          reply = composerQueue.shift();
+          if (reply === undefined) throw new Error('composer script exhausted');
+        } else {
+          reply = await composer(message, req);
+        }
+        // A reply is text, or `{ text, usage }` to report token usage as well.
+        const { text, usage } = typeof reply === 'string' ? { text: reply } : reply;
+        return sseResponse(openaiText([text], usage ? { usage } : {}));
+      }
       requests.push(req);
       await onRequest?.(req);
       const next = queue.shift();
@@ -270,7 +325,14 @@ export function scriptedChatService(script, { onRequest, models = MODELS, runToo
       }),
     telemetry: { recordChatCallStart: async () => ({}), recordChatCallEnd: async () => {} }
   });
-  return { service, requests, ran, client };
+  return {
+    service,
+    requests,
+    composerRequests,
+    ran,
+    client,
+    deps: { chatService: service, llmClient: client }
+  };
 }
 
 export function taskInput(extra = {}) {

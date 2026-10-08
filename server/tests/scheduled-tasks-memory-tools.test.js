@@ -58,10 +58,7 @@ async function newTask(extra = {}) {
 async function earlierRun(task, answer, { script, options } = {}) {
   const queued = await tasks.requestRun(ada(), task.id);
   const chat = scriptedChatService(script || [openaiText([answer])], options);
-  const run = await executeTaskRun(
-    { taskId: task.id, runId: queued.id },
-    { chatService: chat.service }
-  );
+  const run = await executeTaskRun({ taskId: task.id, runId: queued.id }, chat.deps);
   return run;
 }
 
@@ -96,7 +93,7 @@ describe('list_task_runs', () => {
     assert.equal(result.runs[0].status, 'succeeded');
     assert.equal(result.runs[0].trigger, 'manual');
     assert.equal(result.runs[0].hasChat, true);
-    assert.equal(result.runs[0].changed, null);
+    assert.equal(result.runs[0].changed, true, 'the verdict of the run that kept memory');
     assert.ok(result.runs[0].startedAt && result.runs[0].finishedAt);
     await cleanup(ada());
   });
@@ -214,20 +211,14 @@ describe('get_task_run', () => {
     const task = await newTask();
     const queued = await tasks.requestRun(ada(), task.id);
     const first = scriptedChatService([toolCall('dangerous')]);
-    const paused = await executeTaskRun(
-      { taskId: task.id, runId: queued.id },
-      { chatService: first.service }
-    );
+    const paused = await executeTaskRun({ taskId: task.id, runId: queued.id }, first.deps);
     assert.equal(paused.status, 'awaiting_approval');
     await tasks.answerApproval(ada(), task.id, queued.id, { decision: 'approve' });
     const second = scriptedChatService([
       toolCall('dangerous'),
       openaiText(['Done after approval.'])
     ]);
-    const done = await executeTaskRun(
-      { taskId: task.id, runId: queued.id },
-      { chatService: second.service }
-    );
+    const done = await executeTaskRun({ taskId: task.id, runId: queued.id }, second.deps);
     assert.equal(done.ledgerRunIds.length, 2, 'one ledger id per execution');
 
     const user = await asking(task);
@@ -699,10 +690,7 @@ describe('reading the past cannot fail the run that reads it', () => {
       ],
       { runTool }
     );
-    const run = await executeTaskRun(
-      { taskId: task.id, runId: queued.id },
-      { chatService: chat.service }
-    );
+    const run = await executeTaskRun({ taskId: task.id, runId: queued.id }, chat.deps);
     assert.equal(run.status, 'succeeded', JSON.stringify(run.reason));
     const toolReplies = chat.requests[2].body.messages.filter(message => message.role === 'tool');
     assert.equal(toolReplies.length, 2);

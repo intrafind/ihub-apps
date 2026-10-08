@@ -166,7 +166,8 @@ export async function addMemoryTools(prepared, language) {
  * @param {string} options.language
  * @param {boolean} options.continuation
  * @param {number} options.maxChars - How much of the notes goes into the prompt.
- * @returns {Promise<{notes: string[], marker: Object}>}
+ * @returns {Promise<{notes: string[], marker: Object, before: string}>} `before` is the notes as
+ *   the run starts, for the step that updates them afterwards.
  */
 export async function prepareRunMemory({ task, run, prepared, language, continuation, maxChars }) {
   const scope = { kind: MEMORY_SCOPE_TASK, taskId: task.id, ownerId: task.ownerId };
@@ -196,7 +197,8 @@ export async function prepareRunMemory({ task, run, prepared, language, continua
         changed: null,
         compose: 'not_run',
         toolsOffered
-      }
+      },
+      before: document.body || ''
     };
   } catch (error) {
     logger.warn('A scheduled run could not read its notes and runs without them', {
@@ -217,7 +219,8 @@ export async function prepareRunMemory({ task, run, prepared, language, continua
         changed: null,
         compose: 'skipped',
         toolsOffered: false
-      }
+      },
+      before: ''
     };
   }
 }
