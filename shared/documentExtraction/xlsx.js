@@ -73,7 +73,6 @@ export function extractXlsxText({ XLSX, workbook, limits = {} }) {
     const sheet = workbook.Sheets[name];
     if (!sheet || !sheet['!ref']) return;
     const range = XLSX.utils.decode_range(sheet['!ref']);
-    const totalRows = range.e.r - range.s.r + 1;
     const lastRow = Math.min(range.e.r, range.s.r + sheetRows - 1);
     fillVerticalMerges(XLSX, sheet, lastRow);
 
