@@ -15,6 +15,7 @@
 import { noTextPageMarker, pageMarker } from './markers.js';
 import {
   MAX_OUTLINE_ENTRIES,
+  MAX_OUTLINE_NODES,
   applyFontHeadings,
   applyOutlineHeadings,
   countHeadings,
@@ -188,13 +189,23 @@ export async function readOutline(pdf) {
   try {
     const outline = typeof pdf.getOutline === 'function' ? await pdf.getOutline() : null;
     if (!Array.isArray(outline)) return entries;
-    // Iterative, depth first: the outline of a hostile file may be very deep.
-    const stack = outline
-      .slice()
-      .reverse()
-      .map(item => ({ item, depth: 1 }));
-    while (stack.length > 0 && entries.length < MAX_OUTLINE_ENTRIES) {
-      const { item, depth } = stack.pop();
+    // Iterative, depth first, one frame per level: nothing is copied up front, and the nodes
+    // visited are counted whether they resolve or not (a hostile outline may be huge and deep).
+    const stack = [{ items: outline, next: 0, depth: 1 }];
+    let visited = 0;
+    while (
+      stack.length > 0 &&
+      entries.length < MAX_OUTLINE_ENTRIES &&
+      visited < MAX_OUTLINE_NODES
+    ) {
+      const frame = stack[stack.length - 1];
+      if (frame.next >= frame.items.length) {
+        stack.pop();
+        continue;
+      }
+      const item = frame.items[frame.next];
+      frame.next += 1;
+      visited += 1;
       if (!item || typeof item !== 'object') continue;
       try {
         let destination = item.dest;
@@ -203,16 +214,14 @@ export async function readOutline(pdf) {
           const target = destination[0];
           const pageIndex = Number.isInteger(target) ? target : await pdf.getPageIndex(target);
           if (Number.isInteger(pageIndex) && pageIndex >= 0 && pageIndex < pdf.numPages) {
-            entries.push({ title: item.title, depth, pageIndex });
+            entries.push({ title: item.title, depth: frame.depth, pageIndex });
           }
         }
       } catch {
         // An entry that does not resolve is skipped; its children may still be fine.
       }
-      if (Array.isArray(item.items)) {
-        for (let i = item.items.length - 1; i >= 0; i -= 1) {
-          stack.push({ item: item.items[i], depth: depth + 1 });
-        }
+      if (Array.isArray(item.items) && item.items.length > 0) {
+        stack.push({ items: item.items, next: 0, depth: frame.depth + 1 });
       }
     }
   } catch {
