@@ -20,6 +20,7 @@ import {
 import { buildPdfBytes } from './helpers/structuredPdf.js';
 import { DOCX_MIME, NUMBERED_HEADINGS, buildDocx, dataUrl, p } from './helpers/docxFile.js';
 import { PPTX_MIME, buildPptx, notesSlide, shape, slide } from './helpers/pptxFile.js';
+import { ODF_MIME, buildOdf, p as odfP } from './helpers/odfFile.js';
 
 const PDF = 'application/pdf';
 
@@ -205,6 +206,102 @@ describe('PowerPoint decks through the API', () => {
   });
 });
 
+describe('OpenDocument files through the API', () => {
+  const cell = text =>
+    `<table:table-cell office:value-type="string">${odfP(text)}</table:table-cell>`;
+  const row = (...cells) => `<table:table-row>${cells.map(cell).join('')}</table:table-row>`;
+  const sheet = `<table:table table:name="Preise">${row('Artikel', 'Preis')}${row('Schraube', '0.5')}</table:table>`;
+  const slides =
+    '<draw:page><draw:frame presentation:class="title"><draw:text-box>' +
+    odfP('Titelfolie') +
+    '</draw:text-box></draw:frame><draw:frame><draw:text-box>' +
+    odfP('Inhalt') +
+    '</draw:text-box></draw:frame>' +
+    '<presentation:notes><draw:frame><draw:text-box>' +
+    odfP('Geheim') +
+    '</draw:text-box></draw:frame></presentation:notes></draw:page>';
+
+  it('T-API-05: a .odt is accepted and read as Markdown', async () => {
+    const bytes = await buildOdf(
+      'text',
+      '<text:h text:outline-level="1">Vertrag</text:h>' + odfP('Gilt fuer alle.')
+    );
+    const file = await documentFromInlineFile(
+      { data: dataUrl(bytes, ODF_MIME.text), filename: 'vertrag.odt' },
+      'x'
+    );
+    assert.equal(file.fileType, ODF_MIME.text);
+    assert.equal(file.content, '# Vertrag\n\nGilt fuer alle.');
+  });
+
+  it('a .ods becomes tables and a .odp slides, without speaker notes', async () => {
+    const ods = await documentFromInlineFile(
+      {
+        data: dataUrl(await buildOdf('spreadsheet', sheet), ODF_MIME.spreadsheet),
+        filename: 'preise.ods'
+      },
+      'x'
+    );
+    assert.equal(
+      ods.content,
+      '[Sheet: Preise]\n| Artikel | Preis |\n| --- | --- |\n| Schraube | 0.5 |'
+    );
+    const odp = await documentFromInlineFile(
+      {
+        data: dataUrl(await buildOdf('presentation', slides), ODF_MIME.presentation),
+        filename: 'deck.odp'
+      },
+      'x'
+    );
+    assert.equal(odp.content, '[Slide 1]\n# Titelfolie\nInhalt');
+  });
+
+  it('the type comes from the file name when the request has none', async () => {
+    const bytes = await buildOdf('spreadsheet', sheet);
+    const file = await documentFromInlineFile(
+      { data: Buffer.from(bytes).toString('base64'), filename: 'Preise.ODS' },
+      'x'
+    );
+    assert.equal(file.fileType, ODF_MIME.spreadsheet);
+  });
+
+  it('a file without text is reported as such; a package that is no OpenDocument file is invalid', async () => {
+    await rejects(
+      documentFromInlineFile(
+        { data: dataUrl(await buildOdf('text', ''), ODF_MIME.text), filename: 'leer.odt' },
+        'x'
+      ),
+      { code: 'file_has_no_text' }
+    );
+    const zip = new JSZip();
+    zip.file('hello.txt', 'hi');
+    await rejects(
+      documentFromInlineFile(
+        {
+          data: dataUrl(await zip.generateAsync({ type: 'nodebuffer' }), ODF_MIME.text),
+          filename: 'x.odt'
+        },
+        'x'
+      ),
+      { code: 'invalid_file' }
+    );
+  });
+
+  it('with the admin switch off OpenDocument files are not accepted, as before', async () => {
+    setSwitch(false);
+    await rejects(
+      documentFromInlineFile(
+        {
+          data: dataUrl(await buildOdf('text', odfP('x')), ODF_MIME.text),
+          filename: 'a.odt'
+        },
+        'x'
+      ),
+      { code: 'unsupported_file_type' }
+    );
+  });
+});
+
 describe('limits for documents from strangers', () => {
   it('a package that would unpack to far more than it weighs is refused before it is read', async () => {
     // 60 MB of spaces compress to a few dozen kilobytes.
@@ -385,13 +482,13 @@ describe('what stays as it was', () => {
     assert.equal(file.content, 'Hallo');
   });
 
-  it('the message of an unsupported type names Word files', async () => {
+  it('the message of an unsupported type names the Office formats that are accepted', async () => {
     await assert.rejects(
       documentFromInlineFile(
         { data: 'data:application/zip;base64,UEsDBA==', filename: 'a.zip' },
         'x'
       ),
-      error => /Word/.test(error.message)
+      error => /Word/.test(error.message) && /OpenDocument/.test(error.message)
     );
   });
 });

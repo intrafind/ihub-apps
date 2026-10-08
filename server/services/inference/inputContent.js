@@ -29,8 +29,12 @@ import {
   DOCX_MIME,
   DocumentExtractionError,
   MAX_PDF_PAGES,
+  ODP_MIME,
+  ODS_MIME,
+  ODT_MIME,
   PPTX_MIME,
   extractDocxDocument,
+  extractOdfDocument,
   extractPdfDocument,
   extractPptxDocument,
   structuredExtractionEnabled
@@ -38,6 +42,21 @@ import {
 
 /** Longest document text taken from one file. */
 export const MAX_FILE_TEXT_CHARS = 500_000;
+
+/**
+ * Office documents read by the structured extraction (and only while it is on): the type they
+ * are sent with, what the error messages call them, and how they are read.
+ */
+const OFFICE_DOCUMENTS = new Map([
+  [DOCX_MIME, { label: 'Word', extension: '.docx', extract: extractDocxDocument }],
+  [PPTX_MIME, { label: 'PowerPoint', extension: '.pptx', extract: extractPptxDocument }],
+  [ODT_MIME, { label: 'OpenDocument text', extension: '.odt', extract: extractOdfDocument }],
+  [ODS_MIME, { label: 'OpenDocument spreadsheet', extension: '.ods', extract: extractOdfDocument }],
+  [ODP_MIME, { label: 'OpenDocument presentation', extension: '.odp', extract: extractOdfDocument }]
+]);
+const OFFICE_MIME_BY_EXTENSION = new Map(
+  [...OFFICE_DOCUMENTS].map(([mimeType, { extension }]) => [extension, mimeType])
+);
 
 /** MIME types read as UTF-8 text. */
 const TEXT_MIME_TYPES = new Set([
@@ -159,8 +178,8 @@ export async function documentFromInlineFile({ data, filename }, param) {
     mimeType =
       mimeFromName(fileName, TEXT_EXTENSIONS) ||
       (extension === '.pdf' ? 'application/pdf' : '') ||
-      (extension === '.docx' ? DOCX_MIME : '') ||
-      (extension === '.pptx' ? PPTX_MIME : '');
+      OFFICE_MIME_BY_EXTENSION.get(extension) ||
+      '';
   }
   const bytes = Buffer.from(parsed.base64, 'base64');
   if (bytes.length === 0) {
@@ -205,10 +224,10 @@ export async function documentFromInlineFile({ data, filename }, param) {
         { param }
       );
     }
-  } else if ((mimeType === DOCX_MIME || mimeType === PPTX_MIME) && structured) {
-    const isDeck = mimeType === PPTX_MIME;
+  } else if (OFFICE_DOCUMENTS.has(mimeType) && structured) {
+    const { label, extract } = OFFICE_DOCUMENTS.get(mimeType);
     try {
-      text = (await (isDeck ? extractPptxDocument(bytes) : extractDocxDocument(bytes))).trim();
+      text = (await extract(bytes)).trim();
     } catch (error) {
       if (!(error instanceof DocumentExtractionError)) throw error;
       throw new InferenceApiError(400, 'invalid_file', `${fileName}: ${error.message}`, { param });
@@ -217,7 +236,7 @@ export async function documentFromInlineFile({ data, filename }, param) {
       throw new InferenceApiError(
         400,
         'file_has_no_text',
-        `${fileName}: the ${isDeck ? 'PowerPoint' : 'Word'} document has no text`,
+        `${fileName}: the ${label} document has no text`,
         { param }
       );
     }
@@ -228,7 +247,9 @@ export async function documentFromInlineFile({ data, filename }, param) {
       400,
       'unsupported_file_type',
       `${fileName}: unsupported file type ${mimeType || '(unknown)'}. Send ${
-        structured ? 'PDF, Word (.docx), PowerPoint (.pptx)' : 'PDF'
+        structured
+          ? 'PDF, Word (.docx), PowerPoint (.pptx), OpenDocument (.odt, .ods, .odp)'
+          : 'PDF'
       } or text files, or images as input_image.`,
       { param }
     );

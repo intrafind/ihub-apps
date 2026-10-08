@@ -218,8 +218,8 @@ const uploadSchema = z
         // comments as {>>Author: text<<} after the text they belong to.
         trackedChanges: z.enum(['accepted', 'markup']).optional().prefault('accepted'),
         comments: z.enum(['ignore', 'inline']).optional().prefault('ignore'),
-        // PowerPoint (.pptx): `include` sends the speaker notes of a slide after its text as
-        // [Notes]. Off by default — notes are not what the audience sees.
+        // PowerPoint (.pptx) and OpenDocument (.odp) decks: `include` sends the speaker notes of a
+        // slide after its text as [Notes]. Off by default — notes are not what the audience sees.
         speakerNotes: z.enum(['ignore', 'include']).optional().prefault('ignore'),
         maxFileSizeMB: z.number().int().min(1).max(100).optional().prefault(5),
         supportedFormats: z

@@ -48,7 +48,7 @@ All upload types share a single `upload` object in the app configuration:
 | `supportedFormats` | string[] | See below | MIME types accepted for upload |
 | `trackedChanges` | `"accepted"` \| `"markup"` | `"accepted"` | Word documents: `markup` writes tracked insertions and deletions into the text as `{++added++}` and `{--removed--}` (see [Tracked changes and comments](#tracked-changes-and-comments-opt-in)) |
 | `comments` | `"ignore"` \| `"inline"` | `"ignore"` | Word documents: `inline` writes comments as `{>>Author: text<<}` after the text they belong to |
-| `speakerNotes` | `"ignore"` \| `"include"` | `"ignore"` | PowerPoint decks: `include` adds the speaker notes of a slide as `[Notes]` after its text (see [PowerPoint and spreadsheets](#powerpoint-and-spreadsheets)) |
+| `speakerNotes` | `"ignore"` \| `"include"` | `"ignore"` | PowerPoint and OpenDocument presentations: `include` adds the speaker notes of a slide as `[Notes]` after its text (see [PowerPoint and spreadsheets](#powerpoint-and-spreadsheets)) |
 
 Default `supportedFormats` for `fileUpload`:
 
@@ -113,9 +113,9 @@ Supported providers (configured at the platform level):
 | `.xls` | `application/vnd.ms-excel` | Cell content extracted via `xlsx`, as `.xlsx` |
 | `.pptx` | `application/vnd.openxmlformats-officedocument.presentationml.presentation` | Slide text extracted from the OOXML slides via `jszip`, in the order of the presentation, with titles and tables |
 | `.ppt` | `application/vnd.ms-powerpoint` | Not supported: the legacy binary format is rejected with "Unsupported file format" |
-| `.odt` | `application/vnd.oasis.opendocument.text` | XML text extracted via `jszip` |
-| `.ods` | `application/vnd.oasis.opendocument.spreadsheet` | XML text extracted via `jszip` |
-| `.odp` | `application/vnd.oasis.opendocument.presentation` | XML text extracted via `jszip` |
+| `.odt` | `application/vnd.oasis.opendocument.text` | Converted to Markdown via `jszip`: headings, lists with their numbers, tables, footnotes, links and page breaks are kept — see [OpenDocument files](#opendocument-files-odt-ods-odp) |
+| `.ods` | `application/vnd.oasis.opendocument.spreadsheet` | Sheets like `.xlsx`: a sheet with a header row becomes a Markdown table — see [OpenDocument files](#opendocument-files-odt-ods-odp) |
+| `.odp` | `application/vnd.oasis.opendocument.presentation` | Slides like `.pptx`, in the order of the file, with titles and tables — see [OpenDocument files](#opendocument-files-odt-ods-odp) |
 | `.msg` | `application/vnd.ms-outlook`, `application/x-msg` | Subject, sender/recipients (SMTP addresses preferred), date, attachment names, and body extracted via `@kenjiuno/msgreader`. Body falls back across plain text → HTML → compressed RTF, so HTML-only emails (e.g. newsletters) are read correctly |
 | `.eml` | `message/rfc822` | Read as-is (RFC 822 format) |
 
@@ -276,6 +276,21 @@ Revenue up 12 %
 
 Formulas show the value the spreadsheet last calculated, as before; cell formatting (bold, colours) is not sent.
 
+### OpenDocument files (.odt, .ods, .odp)
+
+LibreOffice and OpenOffice files are read like their Microsoft counterparts — the same Markdown and the same markers, so a prompt does not need to know which office suite the file came from. The kind of document is read from the file itself, not from its name.
+
+| In the file | In the text |
+|---|---|
+| Text (.odt): headings by outline level, paragraphs, tables, footnotes and endnotes, links, images with alt text, page breaks | As in a Word document: `#` … `######`, a blank line between paragraphs, Markdown tables (a table with header rows has a header row; merged cells keep every row complete), `[^1]` notes, `[text](https://…)`, `[Image: alt text]`, `[Page break]` |
+| Lists | `-` for bullets and the label Writer shows for numbered lists (`1.`, `a)`, `Teil I:`, `2.1`), nested with indentation. Numbers follow Writer's own counting: a list restarts unless it continues another one (`continue-list`, `continue-numbering`), start values, a level shown with its parents (`2.1.3`). Chapter numbers of the outline style and numbered headings inside lists are written in front of the heading |
+| Constructs whose counting is not certain (a list with a header item, a style override on a nested level or next to a start value, labels that mix levels of different list styles) | The item gets **no** number rather than a possibly wrong one — the numbers were compared with LibreOffice's own rendering of randomly generated documents, and every case that differed is left unnumbered |
+| Tracked changes | The accepted view: deleted text is not sent, inserted text is. (Review marks as in Word's opt-in are not available for OpenDocument files.) Hidden text and the automatic page number and page count are not sent |
+| Spreadsheets (.ods) | `[Sheet: name]`, a header row becomes a Markdown table, merged cells, hidden sheets (`(hidden)`) and the limits are the same as for Excel files (see above). A cell shows what the sheet showed when it was saved (`25.6%`, `15.01.2026`), cell comments are not part of the text. Empty rows and columns that the format stores as a repeat count cost nothing |
+| Presentations (.odp) | `[Slide N]` in the order of the file, a title placeholder as `# Title`, text of text boxes, shapes and groups in the order of the file, lists with their bullets, tables (the first row is the header when the table says so), hidden slides flagged `[Slide 3 (hidden)]`, speaker notes only for apps that opt in (`speakerNotes: "include"`). Slide numbers and dates are dropped |
+
+Text, spreadsheets and presentations from the OpenDocument family are also accepted through the [API](openai-compatible-api.md#documents).
+
 ### Admin switch
 
 **Admin → Features → Structured document extraction** (on by default) turns the structured extraction off and restores the plain text of before. Browsers read the setting when the page loads, so a change reaches users after a reload, at the latest after 30 minutes. If the structured extraction ever fails for a file, the plain text extraction is used instead and the upload still works; the browser console shows `structured extraction failed, using legacy`.
@@ -308,7 +323,7 @@ All file processing happens **client-side** before content is sent to the server
    - **DOCX** — Converted to Markdown: mammoth reads the Word file, an OOXML pass first fixes what mammoth drops (custom heading styles, page breaks, moved text, hidden text), Turndown writes the Markdown. With the admin switch off, mammoth's HTML is flattened to plain text as before.
    - **XLSX / XLS** — Cell content extracted via the xlsx library: a sheet with a header row as a Markdown table, other sheets tab-separated, rows and characters limited.
    - **PPTX** — Slide text extracted from the OOXML slides via jszip, in the order of the presentation, with the slide title as a heading and tables as Markdown. **PPT** (legacy binary) is rejected.
-   - **ODT / ODS / ODP** — XML parsed and text content extracted via jszip.
+   - **ODT / ODS / ODP** — `content.xml` read via jszip: Markdown for a text (headings, lists with Writer's numbers, tables), tables for a sheet, slides for a presentation. With the admin switch off, the text nodes of the XML as before.
    - **MSG** — Headers (subject, sender, recipients, date, attachment names) plus the body extracted via msgreader. The body is resolved across every format Outlook may store it in — plain text, HTML (`PidTagHtml`/`PidTagBodyHtml`), or compressed RTF — so HTML-only emails like newsletters extract their full content instead of just headers.
    - **EML** — Read as-is.
    - **Images** — Optionally resized to max 1024 px and converted to JPEG; TIFF images converted to PNG first.

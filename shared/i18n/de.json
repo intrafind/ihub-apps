@@ -3164,7 +3164,7 @@
         "wordCommentsIgnore": "Kommentare nicht senden",
         "wordCommentsInline": "Kommentare mit ihrem Text senden",
         "speakerNotes": "PowerPoint: Sprechernotizen",
-        "speakerNotesHelp": "Ob die Sprechernotizen von PowerPoint-Folien an das Modell gehen. Sie werden als [Notes] hinter dem Text ihrer Folie geschrieben.",
+        "speakerNotesHelp": "Ob die Sprechernotizen von PowerPoint- und OpenDocument-Folien an das Modell gehen. Sie werden als [Notes] hinter dem Text ihrer Folie geschrieben.",
         "speakerNotesIgnore": "Sprechernotizen nicht senden",
         "speakerNotesInclude": "Sprechernotizen senden",
         "extractAudioFromVideo": "Audiospur extrahieren (für Transkription / Audiomodelle)",
