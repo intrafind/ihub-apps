@@ -313,6 +313,18 @@ describe('watermark key groups', () => {
     await keyGroupService.remove('kdf-check');
   });
 
+  it('refuses a bundle whose GCM tag is truncated', async () => {
+    await keyGroupService.create({ id: 'short-tag', name: 'Short tag' });
+    const bundle = await keyGroupService.exportBundle(['short-tag'], 'correct horse battery');
+    await keyGroupService.remove('short-tag');
+    // GCM accepts a prefix of the real tag unless the length is pinned.
+    const tag = Buffer.from(bundle.tag, 'base64').subarray(0, 4).toString('base64');
+    await assert.rejects(
+      () => keyGroupService.importBundle({ ...bundle, tag }, 'correct horse battery'),
+      /Wrong passphrase or damaged bundle/
+    );
+  });
+
   it('refuses a bundle whose version collides with a different local key', async () => {
     await keyGroupService.create({ id: 'shared', name: 'Shared' });
     const theirs = await keyGroupService.exportBundle(['shared'], 'correct horse battery');

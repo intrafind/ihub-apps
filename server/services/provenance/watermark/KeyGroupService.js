@@ -44,6 +44,8 @@ const scryptAsync = promisify(crypto.scrypt);
 /** The only KDF parameters a bundle may carry: the ones exportBundle writes. */
 const BUNDLE_KDF = Object.freeze({ name: 'scrypt', N: 2 ** 15, r: 8, p: 1 });
 const SCRYPT_MAXMEM = 64 * 1024 * 1024;
+/** AES-GCM tag length of a bundle, in bytes (the full 128-bit tag). */
+const GCM_TAG_LENGTH = 16;
 
 function keyFingerprint(key) {
   return crypto.createHash('sha256').update(`ihub-wm:${key}`).digest('hex').slice(0, 16);
@@ -233,7 +235,7 @@ class KeyGroupService {
       p: BUNDLE_KDF.p,
       maxmem: SCRYPT_MAXMEM
     });
-    const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
+    const cipher = crypto.createCipheriv('aes-256-gcm', key, iv, { authTagLength: GCM_TAG_LENGTH });
     const ciphertext = Buffer.concat([cipher.update(plaintext, 'utf8'), cipher.final()]);
     return {
       format: BUNDLE_FORMAT,
@@ -279,10 +281,14 @@ class KeyGroupService {
         p: BUNDLE_KDF.p,
         maxmem: SCRYPT_MAXMEM
       });
+      // The tag length is pinned: GCM otherwise accepts a prefix of the tag.
       const decipher = crypto.createDecipheriv(
         'aes-256-gcm',
         key,
-        Buffer.from(bundle.iv, 'base64')
+        Buffer.from(bundle.iv, 'base64'),
+        {
+          authTagLength: GCM_TAG_LENGTH
+        }
       );
       decipher.setAuthTag(Buffer.from(bundle.tag, 'base64'));
       const plaintext = Buffer.concat([
