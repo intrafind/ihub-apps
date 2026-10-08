@@ -175,7 +175,13 @@ jobs:
           else
             VERSION="$RELEASE_TAG_INPUT"
           fi
-          echo "VERSION=$VERSION" >> $GITHUB_ENV
+          # The value is written to GITHUB_ENV below: reject anything that could add a line
+          # (a newline would define further environment variables for every later step).
+          if [[ ! "$VERSION" =~ ^[A-Za-z0-9._+-]*$ ]]; then
+            echo "::error::The release tag may only contain letters, digits, '.', '_', '+' and '-'"
+            exit 1
+          fi
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
           # Set versioned name for binary using shell variable (not ${{ env.VERSION }}
           # which would be empty because expressions are evaluated before the step runs)
           echo "VERSIONED_NAME=ihub-apps-$VERSION-${{ matrix.platform }}${{ matrix.binary_extension }}" >> $GITHUB_ENV
@@ -399,10 +405,16 @@ jobs:
           RELEASE_TAG_INPUT: ${{ github.event.inputs.release_tag }}
         run: |
           if [ "${{ github.event_name }}" == "release" ]; then
-            echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
+            VERSION="${GITHUB_REF#refs/tags/}"
           else
-            echo "VERSION=$RELEASE_TAG_INPUT" >> $GITHUB_ENV
+            VERSION="$RELEASE_TAG_INPUT"
           fi
+          # Written to GITHUB_ENV: reject anything that could add a line (see the build job).
+          if [[ ! "$VERSION" =~ ^[A-Za-z0-9._+-]*$ ]]; then
+            echo "::error::The release tag may only contain letters, digits, '.', '_', '+' and '-'"
+            exit 1
+          fi
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
         shell: bash
 
       - name: Setup GitHub CLI

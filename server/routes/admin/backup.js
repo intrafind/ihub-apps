@@ -33,15 +33,15 @@ const IMPORT_UPLOAD_DIR_PREFIX = 'ihub-import-';
 /**
  * Remove the private directory an import upload was stored in.
  *
- * Refuses anything that is not a direct child of the system temp directory
- * with the import prefix, so a caller handing in some other path can never turn
- * this into a recursive delete of a directory it did not create.
+ * `dir` is the directory this module created for the upload (recorded on the
+ * request when it was made), never a path taken from the request itself. It is
+ * still refused unless it is a direct child of the system temp directory with
+ * the import prefix, so this can never become a recursive delete of anything else.
  *
- * @param {string} uploadedFilePath - Path of the uploaded archive.
+ * @param {string} dir - Upload directory created by the upload storage below.
  * @returns {Promise<void>}
  */
-async function removeUploadDir(uploadedFilePath) {
-  const dir = path.dirname(uploadedFilePath);
+async function removeUploadDir(dir) {
   if (
     path.dirname(dir) !== os.tmpdir() ||
     !path.basename(dir).startsWith(IMPORT_UPLOAD_DIR_PREFIX)
@@ -505,8 +505,8 @@ export async function importConfig(req, res) {
       if (tempExtractPath) {
         await fs.rm(tempExtractPath, { recursive: true, force: true });
       }
-      if (tempZipPath) {
-        await removeUploadDir(tempZipPath);
+      if (req.importUploadDir) {
+        await removeUploadDir(req.importUploadDir);
       }
     } catch (error) {
       logger.warn('Could not clean up temporary files', { component: 'AdminBackup', error });
@@ -524,8 +524,11 @@ export default async function registerBackupRoutes(app) {
   // secrets included, so each upload gets a private (mode 0700) directory instead
   // of sharing the system temp directory with every other local user.
   const storage = multer.diskStorage({
-    destination: (_req, _file, cb) => {
-      fs.mkdtemp(path.join(os.tmpdir(), IMPORT_UPLOAD_DIR_PREFIX)).then(dir => cb(null, dir), cb);
+    destination: (req, _file, cb) => {
+      fs.mkdtemp(path.join(os.tmpdir(), IMPORT_UPLOAD_DIR_PREFIX)).then(dir => {
+        req.importUploadDir = dir;
+        cb(null, dir);
+      }, cb);
     }
   });
   const upload = multer({
