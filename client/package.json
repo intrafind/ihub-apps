@@ -49,10 +49,18 @@
     "utif2": "^4.1.0",
     "uuid": "^14.0.2",
     "write-excel-file": "^4.1.1",
-    "xlsx": "^0.18.5"
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
   },
   "overrides": {
-    "dompurify": "^3.4.0"
+    "dompurify": "^3.4.0",
+    "argparse": "^2.0.1",
+    "katex": "0.18.10",
+    "pptxgenjs": {
+      "image-size": "^2.0.4"
+    },
+    "@tailwindcss/typography": {
+      "postcss-selector-parser": "^7.1.6"
+    }
   },
   "devDependencies": {
     "@microsoft/office-js": "^1.1.110",
