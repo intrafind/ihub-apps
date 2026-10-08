@@ -164,7 +164,7 @@ The model receives a document as text inside a `<content type="document" …>` b
 | Headings: built-in `Heading 1–6`, custom heading styles and paragraphs that carry an outline level in Word | `#` … `######` (level 7–9 is shown as `######`) |
 | Paragraphs | Separated by a blank line (no more words glued across paragraphs) |
 | Lists | `1.` / `-` items, nested with indentation |
-| Tables | A Markdown table; the first row is the header. A merged cell spans its columns (text in the first, the others empty) or rows (text repeated in each row), so every row stays complete. A pipe character in a cell is escaped with a backslash; several paragraphs in a cell are joined with `<br>` |
+| Tables | A Markdown table; the first row is the header. A merged cell spans its columns (text in the first, the others empty) or rows (text repeated in each row), so every row stays complete. A pipe character in a cell is escaped with a backslash (backslashes in that cell are doubled); several paragraphs in a cell are joined with `<br>` |
 | Footnotes and endnotes | `[^1]` in the text, `[^1]: …` at the end (endnotes `[^e1]`) |
 | Links | `[text](https://…)`; links inside the document (table of contents) keep only their text |
 | Images | `[Image: alt text]` when the image has alt text, otherwise nothing — pictures are never sent as base64 data |
