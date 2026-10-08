@@ -66,6 +66,37 @@ export const cancelScheduledTaskRun = (taskId, runId) =>
   call(() => apiClient.post(`${task(taskId)}/runs/${encodeURIComponent(runId)}/cancel`));
 
 /**
+ * The notes a task keeps between runs, with their version and the limits.
+ * Readable while memory is switched off: the notes are kept.
+ *
+ * @param {string} taskId
+ * @returns {Promise<{enabled: boolean, platformEnabled: boolean, body: string, version: number,
+ *   chars: number, maxChars: number, updatedAt: string|null, updatedBy: string|null}>}
+ */
+export const fetchScheduledTaskMemory = taskId =>
+  call(() => apiClient.get(`${task(taskId)}/memory`));
+
+/**
+ * Replace a task's notes. A stale `expectedVersion` is a 409 `VERSION_CONFLICT`,
+ * notes over the limit a 400 `MEMORY_TOO_LONG`.
+ *
+ * @param {string} taskId
+ * @param {{content: string, expectedVersion?: number}} payload
+ * @returns {Promise<{version: number, chars: number, updatedAt: string}>}
+ */
+export const writeScheduledTaskMemory = (taskId, { content, expectedVersion }) =>
+  call(() => apiClient.put(`${task(taskId)}/memory`, { content, expectedVersion }));
+
+/**
+ * Clear a task's notes.
+ *
+ * @param {string} taskId
+ * @returns {Promise<{version: number}>}
+ */
+export const deleteScheduledTaskMemory = taskId =>
+  call(() => apiClient.delete(`${task(taskId)}/memory`));
+
+/**
  * Answer the approval a run waits for.
  *
  * @param {string} taskId
