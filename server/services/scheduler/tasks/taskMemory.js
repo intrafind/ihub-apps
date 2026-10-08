@@ -112,6 +112,9 @@ export async function writeTaskMemory(task, options = {}) {
   };
   try {
     await getScheduledTaskRepository().mutateTask(task.id, stored => {
+      // Two writers can finish their note writes in one order and reach this
+      // step in the other; the summary never goes back to an older version.
+      if ((stored.memorySummary?.version ?? -1) >= summary.version) return null;
       stored.memorySummary = summary;
       return stored;
     });

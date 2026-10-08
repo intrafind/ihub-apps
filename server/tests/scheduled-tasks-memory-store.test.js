@@ -198,6 +198,24 @@ describe('the summary on the task document', () => {
     await cleanup(ada());
   });
 
+  it('never goes back to an older version when summary updates arrive out of order', async () => {
+    const task = await newTask();
+    await writeTaskMemory(task, { content: 'first', updatedBy: 'owner' });
+
+    // A later write already landed its summary (version 5) when the summary of an
+    // earlier write (version 2) reaches the task document.
+    await getScheduledTaskRepository().mutateTask(task.id, stored => {
+      stored.memorySummary = { ...stored.memorySummary, version: 5, updatedBy: 'compose:later' };
+      return stored;
+    });
+    await writeTaskMemory(task, { content: 'second', updatedBy: 'run:earlier' });
+
+    const stored = await getScheduledTaskRepository().getTask(task.id);
+    assert.equal(stored.memorySummary.version, 5);
+    assert.equal(stored.memorySummary.updatedBy, 'compose:later');
+    await cleanup(ada());
+  });
+
   it('is absent until the first write', async () => {
     const task = await newTask();
     assert.equal(task.memorySummary, null);

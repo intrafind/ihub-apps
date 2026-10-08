@@ -930,8 +930,9 @@ session could push to one branch only. The commits keep the milestone order M0â€
 - **Clearing needs no permission.** Like deleting a task, clearing the notes works for an owner whose
   `scheduledTasks` permission was withdrawn; reading works too, editing does not.
 - **`memorySummary` can lag.** The summary on the task document is updated after the write, outside
-  the notes' lock, so a failed update or a race can leave it a version behind. The notes themselves
-  are always right; the client's "reload" hint is the only thing that depends on the summary.
+  the notes' lock, so a failed update can leave it a version behind (an update that arrives late
+  never replaces a newer one). The notes themselves are always right; the client's "reload" hint is
+  the only thing that depends on the summary.
 - **German.** The new German strings address the user as "Sie", like the rest of the task UI.
 
 ---
