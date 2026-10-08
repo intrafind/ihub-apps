@@ -29,7 +29,9 @@ heading by heading.
   reads the accepted view without comments — and the settings only affect the app they are set in
 - The OpenAI-compatible API reads files the same way: PDFs with page markers, headings and tables,
   and Word (`.docx`) files, which were refused before, as Markdown — so an integration that sends
-  contracts through the API sees what the chat sees
+  contracts through the API sees what the chat sees. The one difference: a scanned PDF without a
+  text layer is not read through page images as in the chat; the API answers `file_has_no_text`,
+  and the caller sends the pages as `input_image`
 - Headers and footers of Word files (letterhead, document numbers, confidentiality notes) appear as
   `[Header] …` and `[Footer] …` lines before the text, without page numbers
 
