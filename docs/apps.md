@@ -630,6 +630,29 @@ Details:
 - A PDF without a text layer is listed with `pages_as_images`; its pages are attached to the message as images.
 - Our tag names inside email text, documents, names and titles are HTML-escaped (`&lt;user_instruction&gt;`), so a forged tag cannot end a block early or add an instruction. Other angle brackets stay as they are. The typed text is not escaped, so a user can name a tag on purpose.
 - `{{…}}` placeholders and `$` sequences inside the material reach the model as written; `{{content}}` is filled last.
+
+##### Writing prompts that use document structure
+
+Uploaded documents keep their structure (admins can switch this off under **Admin → Features → Structured document extraction**, see [File Upload → Extracted text format](file-upload-feature.md#extracted-text-format)). A prompt can rely on it:
+
+| File | What the model reads |
+|---|---|
+| Word (.docx) | Markdown: `#` … `######` headings, the numbers Word shows in front of numbered headings and paragraphs (`2.1`, `a)`, `§ 3`), tables as Markdown tables, footnotes as `[^1]`, `[Page break]` where the author forced a new page (Word stores no page numbers, so pages cannot be cited), and `[Header] …` / `[Footer] …` lines before the text |
+| PDF | `[Page N]` before each page — `[Page 5 (printed: 3)]` when the page's printed number differs from its position —, one line per line of the page, `[Page 2: no extractable text]` for a page without a text layer. Headings are not marked |
+
+Tell the model what to align on, and how to cite. Without that, a comparison falls back to matching free-flowing text:
+
+```text
+Compare the two documents in <content> section by section.
+- Match sections by their number ("2.1", "§ 3") when they have one, otherwise by heading text.
+- For every difference name the section in both documents, quote the changed wording, and say
+  whether the second document adds, removes or changes something.
+- Cite PDF passages as "[Page N]" using the marker in the text; for Word documents cite the
+  section number. If a page is marked "no extractable text", say that it could not be read.
+- Ignore [Header] and [Footer] lines unless the task asks about them.
+```
+
+Two limits to keep in mind: numbers and headings in a PDF are plain text (a numbered clause appears as the line `2.1 Laufzeit …`), and the markers are fixed English words whatever the language of the document.
 - Global prompt variables such as `{{user_name}}` are expanded in the typed text of a message only when the app has no `prompt` template.
 
 #### Variables

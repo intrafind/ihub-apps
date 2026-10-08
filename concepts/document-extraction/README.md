@@ -78,7 +78,7 @@ The issue was written before the verification. The implementation plan supersede
 | 2 — numbering labels | Done (see below) | `shared/documentExtraction/ooxml/numbering.js` (counters), numbering step 3d in `ooxml/normalize.js`, wiring in `docx.js`; tests `tests/unit/client/docx-numbering-extraction.test.jsx` |
 | 3 — PDF pages | Done (see below) | `shared/documentExtraction/pdfText.js` (+ `markers.js`); wiring in `fileProcessing.js` (`extractPdfContent`, `legacyPdfText`); tests `tests/unit/client/pdf-structured-text.test.jsx`, `server/tests/document-extraction-pdf.test.js` (in `test:pdf`) |
 | 4 — headers/footers | Done (see below) | `shared/documentExtraction/ooxml/headerFooter.js`, wiring in `docx.js`; tests `tests/unit/client/docx-header-footer-extraction.test.jsx` |
-| 5 — prompt guidance | Not started | |
+| 5 — prompt guidance | Done | `docs/apps.md` → "Writing prompts that use document structure" (what each format looks like, an example comparison prompt that aligns on section numbers and cites `[Page N]`) |
 
 ### Decisions and findings from PR 1
 
