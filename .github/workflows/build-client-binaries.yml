@@ -37,6 +37,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Set up Node.js
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
@@ -83,16 +85,18 @@ jobs:
           cd server && npm ci && cd ..
 
       - name: Set version
+        env:
+          VERSION_TAG_INPUT: ${{ inputs.version_tag }}
         run: |
-          echo "VERSION=${{ inputs.version_tag }}" >> $GITHUB_ENV
+          echo "VERSION=$VERSION_TAG_INPUT" >> $GITHUB_ENV
           # Set versioned name for binary
-          echo "VERSIONED_NAME=ihub-apps-${{ env.VERSION }}-${{ matrix.platform }}${{ matrix.binary_extension }}" >> $GITHUB_ENV
+          echo "VERSIONED_NAME=ihub-apps-$VERSION_TAG_INPUT-${{ matrix.platform }}${{ matrix.binary_extension }}" >> $GITHUB_ENV
         shell: bash
 
       - name: Sync package.json version
         run: |
-          if [ -n "${{ env.VERSION }}" ]; then
-            node scripts/sync-release-version.js ${{ env.VERSION }}
+          if [ -n "$VERSION" ]; then
+            node scripts/sync-release-version.js "$VERSION"
           fi
         shell: bash
 

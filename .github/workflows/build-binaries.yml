@@ -27,12 +27,14 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Set up Node.js
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: '24'
-          cache: 'npm'
+          cache: 'npm' # zizmor: ignore[cache-poisoning] PR/push check only; release jobs restore no cache
 
       - name: Install mdBook
         uses: peaceiris/actions-mdbook@ee69d230fe19748b7abf22df32acaa93833fad08 # v2.0.0
@@ -52,7 +54,7 @@ jobs:
             ~/.cargo/registry/index/
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
-          key: ${{ runner.os }}-cargo-mdbook-${{ hashFiles('**/book.toml') }}
+          key: ${{ runner.os }}-cargo-mdbook-${{ hashFiles('**/book.toml') }} # zizmor: ignore[cache-poisoning] PR/push check only; release jobs restore no cache
           restore-keys: |
             ${{ runner.os }}-cargo-mdbook-
 
@@ -124,12 +126,14 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Set up Node.js
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
+          package-manager-cache: false
           node-version: '24'
-          cache: 'npm'
 
       - name: Install mdBook
         uses: peaceiris/actions-mdbook@ee69d230fe19748b7abf22df32acaa93833fad08 # v2.0.0
@@ -141,17 +145,8 @@ jobs:
           rustup toolchain install stable --profile minimal
           rustup default stable
 
-      - name: Cache Cargo binaries
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-          key: ${{ runner.os }}-cargo-mdbook-${{ hashFiles('**/book.toml') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-mdbook-
+      # No cache restore here: a cache written by a PR or push run must not
+      # feed binaries that get published (zizmor cache-poisoning).
 
       - name: Install mdbook-mermaid
         run: |
@@ -170,11 +165,13 @@ jobs:
           cd server && npm ci && cd ..
 
       - name: Set version
+        env:
+          RELEASE_TAG_INPUT: ${{ github.event.inputs.release_tag }}
         run: |
-          if [ "${{ github.event_name }}" == "release" ]; then
+          if [ "$GITHUB_EVENT_NAME" == "release" ]; then
             VERSION="${GITHUB_REF#refs/tags/}"
           else
-            VERSION="${{ github.event.inputs.release_tag }}"
+            VERSION="$RELEASE_TAG_INPUT"
           fi
           echo "VERSION=$VERSION" >> $GITHUB_ENV
           # Set versioned name for binary using shell variable (not ${{ env.VERSION }}
@@ -184,9 +181,9 @@ jobs:
 
       - name: Sync package.json version with release tag
         run: |
-          if [ -n "${{ env.VERSION }}" ]; then
-            echo "Syncing version with release tag: ${{ env.VERSION }}"
-            node scripts/sync-release-version.js ${{ env.VERSION }}
+          if [ -n "$VERSION" ]; then
+            echo "Syncing version with release tag: $VERSION"
+            node scripts/sync-release-version.js "$VERSION"
           fi
         shell: bash
 
@@ -194,8 +191,8 @@ jobs:
       # under this tag so the shipped binary's "What's New" lists the release by its number.
       - name: Publish unreleased release notes under the release tag
         run: |
-          if [ -n "${{ env.VERSION }}" ]; then
-            node scripts/finalize-release-notes.js "${{ env.VERSION }}"
+          if [ -n "$VERSION" ]; then
+            node scripts/finalize-release-notes.js "$VERSION"
           fi
         shell: bash
 
@@ -319,6 +316,7 @@ jobs:
       - name: Checkout default branch
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: true # pushes the version-bump branch below
           ref: ${{ github.event.repository.default_branch }}
           token: ${{ secrets.GITHUB_TOKEN }}
           # Full history and all tags: the release notes are read from the tag's commit.
@@ -327,8 +325,8 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
+          package-manager-cache: false
           node-version: '24'
-          cache: 'npm'
 
       - name: Install dependencies
         run: npm ci
@@ -340,19 +338,19 @@ jobs:
 
       - name: Sync version and publish release notes
         run: |
-          echo "Syncing version and publishing release notes for ${{ env.VERSION }}"
-          node scripts/sync-release-version.js "${{ env.VERSION }}" --commit
+          echo "Syncing version and publishing release notes for $VERSION"
+          node scripts/sync-release-version.js "$VERSION" --commit
           # Publish what docs/releases/next/ held at the tag under docs/releases/<version>/.
           # Entries merged to the branch since the tag stay in next/.
-          node scripts/finalize-release-notes.js "${{ env.VERSION }}" --from-ref "${{ env.VERSION }}" --commit
+          node scripts/finalize-release-notes.js "$VERSION" --from-ref "$VERSION" --commit
         shell: bash
 
       - name: Open a pull request with the version and release-notes commits
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BASE_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
-          BASE_BRANCH="${{ github.event.repository.default_branch }}"
-          RELEASE_BRANCH="release/${{ env.VERSION }}-version-bump"
+          RELEASE_BRANCH="release/$VERSION-version-bump"
 
           # Own branch, so a plain force-push is fine even if a previous attempt for the same
           # tag already pushed commits here.
@@ -362,11 +360,11 @@ jobs:
             echo "Updated existing PR: $PR_URL"
           else
             BODY=$(printf 'Automated version bump and published release notes for `%s`.\n\nOpened as a pull request because `%s` requires changes to go through one. Merging (or enabling auto-merge on) this PR brings them back onto `%s`.' \
-              "${{ env.VERSION }}" "$BASE_BRANCH" "$BASE_BRANCH")
+              "$VERSION" "$BASE_BRANCH" "$BASE_BRANCH")
             PR_URL=$(gh pr create \
               --base "$BASE_BRANCH" \
               --head "$RELEASE_BRANCH" \
-              --title "chore: update version to ${{ env.VERSION }} for release ${{ env.VERSION }}" \
+              --title "chore: update version to $VERSION for release $VERSION" \
               --body "$BODY")
             echo "Opened PR: $PR_URL"
           fi
@@ -376,7 +374,7 @@ jobs:
           if gh pr merge "$RELEASE_BRANCH" --auto --squash; then
             echo "Auto-merge enabled for $PR_URL"
           else
-            echo "::warning::Could not enable auto-merge on $PR_URL — merge it manually to land the ${{ env.VERSION }} version bump and release notes on $BASE_BRANCH."
+            echo "::warning::Could not enable auto-merge on $PR_URL — merge it manually to land the $VERSION version bump and release notes on $BASE_BRANCH."
           fi
         shell: bash
 
@@ -394,13 +392,17 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Set version for release job
+        env:
+          RELEASE_TAG_INPUT: ${{ github.event.inputs.release_tag }}
         run: |
-          if [ "${{ github.event_name }}" == "release" ]; then
+          if [ "$GITHUB_EVENT_NAME" == "release" ]; then
             echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
           else
-            echo "VERSION=${{ github.event.inputs.release_tag }}" >> $GITHUB_ENV
+            echo "VERSION=$RELEASE_TAG_INPUT" >> $GITHUB_ENV
           fi
         shell: bash
 
@@ -430,11 +432,11 @@ jobs:
 
       - name: Validate version
         run: |
-          if [ -z "${{ env.VERSION }}" ]; then
+          if [ -z "$VERSION" ]; then
             echo "❌ Error: VERSION is empty. For workflow_dispatch, provide a release_tag input (e.g. v1.2.3)."
             exit 1
           fi
-          echo "✅ Version: ${{ env.VERSION }}"
+          echo "✅ Version: $VERSION"
         shell: bash
 
       - name: Upload assets to release

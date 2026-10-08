@@ -1,0 +1,91 @@
+# Static analysis that reports to the repository's Security tab (code scanning)
+# alongside CodeQL, which runs through GitHub's default setup.
+#
+# - Semgrep: the OWASP Top 10 and CWE Top 25 rule packs plus Node.js, React
+#   and JavaScript rules. Every finding carries its CWE and OWASP category.
+# - zizmor: security audit of the GitHub Actions workflows (template
+#   injection, cache poisoning, credential persistence, permissions).
+#
+# Both upload SARIF and do not fail the job; GitHub shows new alerts on the
+# PR. To block merges on them, add a "Require code scanning results" rule to
+# the main branch ruleset (see docs/security.md#automated-security-checks).
+#
+# Fork PRs get a read-only token and cannot upload results, so they are
+# skipped; the scan runs again on main after merge.
+
+name: Code Scanning
+
+on:
+  pull_request:
+    branches: [main, develop]
+    types: [opened, synchronize, reopened]
+  push:
+    branches: [main]
+  schedule:
+    # Weekly, so new rules in the Semgrep packs reach unchanged code too.
+    - cron: '27 5 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: code-scanning-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  semgrep:
+    name: Semgrep (OWASP Top 10, CWE Top 25)
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      security-events: write
+    env:
+      SEMGREP_VERSION: 1.180.0
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install Semgrep
+        run: pipx install "semgrep==${SEMGREP_VERSION}"
+
+      - name: Run Semgrep
+        # Paths in .semgrepignore are skipped.
+        run: |
+          semgrep scan \
+            --metrics=off \
+            --config p/owasp-top-ten \
+            --config p/cwe-top-25 \
+            --config p/nodejs \
+            --config p/react \
+            --config p/javascript \
+            --sarif --output semgrep.sarif
+
+      - name: Upload results to code scanning
+        if: always() && hashFiles('semgrep.sarif') != ''
+        uses: github/codeql-action/upload-sarif@24c54180a607b1449ed407dd24f251e4e9147c8d # v4.38.3
+        with:
+          sarif_file: semgrep.sarif
+          category: semgrep
+
+  zizmor:
+    name: zizmor (workflow security)
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Run zizmor
+        uses: zizmorcore/zizmor-action@cc914d7f3750a2d13d75c7f184a1060aa0e9d482 # v0.6.4
+        with:
+          version: 1.30.1
