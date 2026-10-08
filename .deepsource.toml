@@ -1,0 +1,48 @@
+version = 1
+
+# Test code: DeepSource treats it differently from production code, which removes false
+# positives on fixtures, mocks and test-only globals.
+test_patterns = [
+  "tests/**",
+  "server/tests/**",
+  "**/*.test.js",
+  "**/*.test.jsx"
+]
+
+# Generated, vendored and documentation-only content (the same set ESLint ignores).
+exclude_patterns = [
+  "**/node_modules/**",
+  "dist/**",
+  "dist-bin/**",
+  "build/**",
+  "coverage/**",
+  "client/dist/**",
+  "browser-extension/extension/**",
+  "browser-extension/assets/**",
+  "docs/**",
+  "concepts/**",
+  "examples/**"
+]
+
+# Server, client, shared code and the tests are ES modules ("type": "module" in every
+# package.json). Without this DeepSource parses them as scripts and reports
+# "'import' and 'export' may appear only with 'sourceType: module'" on every file.
+[[analyzers]]
+name = "javascript"
+
+  [analyzers.meta]
+  environment = ["nodejs", "browser", "jest"]
+  module_system = "es-modules"
+  plugins = ["react"]
+
+[[analyzers]]
+name = "docker"
+
+  [analyzers.meta]
+  dockerfile_paths = ["docker/Dockerfile"]
+
+[[analyzers]]
+name = "shell"
+
+# Secrets detection is a team-wide setting in DeepSource (Settings > Code Review), not part of
+# this file.
