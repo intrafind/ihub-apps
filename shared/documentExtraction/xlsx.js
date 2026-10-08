@@ -10,50 +10,15 @@
  *
  * @module shared/documentExtraction/xlsx
  */
-import { markdownTableLines } from './markdown.js';
+import {
+  MAX_SHEET_ROWS,
+  MAX_WORKBOOK_CHARS,
+  SHEET_NOTICE_RESERVE,
+  looksLikeHeader,
+  renderSheets
+} from './sheets.js';
 
-/** Rows read from one sheet. */
-export const MAX_SHEET_ROWS = 2000;
-
-/** Characters of all sheets together; the next row that would go beyond is left out. */
-export const MAX_WORKBOOK_CHARS = 300000;
-
-/**
- * Once the rows have used the budget, a sheet still gets its title and the count of its rows
- * left out (the model should know the sheet exists) — up to this many characters more. Sheets
- * after that are only counted.
- */
-export const SHEET_NOTICE_RESERVE = 5000;
-
-// What a number, a percentage, a date or a time looks like as text: not a column name.
-const NUMBER_LIKE = /^[-+(]?[\d.,/:'’\s€$£%)-]+$/;
-
-/**
- * Whether the first row names the columns: at least two named columns, every cell filled with
- * text that is not a number or a date, and a row of data below. A cell that is the covered part
- * of a merged header (`covered`: column indexes) is empty by nature and does not count against
- * it — nor as a column: a title merged across the sheet is a title, not a header. A cell the
- * file stores as a number, date or time (`typed`: column indexes) is data, whatever text its
- * format makes of it.
- *
- * @param {string[][]} rows
- * @param {Set<number>} [covered]
- * @param {Set<number>} [typed]
- * @returns {boolean}
- */
-export function looksLikeHeader(rows, covered = new Set(), typed = new Set()) {
-  if (rows.length < 2) return false;
-  const first = rows[0];
-  if (first.filter((_, column) => !covered.has(column)).length < 2) return false;
-  return first.every((cell, column) => {
-    const text = cell.trim();
-    if (covered.has(column)) return text === '';
-    // A number, date or time stays one however it is formatted ("Oct 2026", "10 AM", "USD 10").
-    return text !== '' && !typed.has(column) && !NUMBER_LIKE.test(text);
-  });
-}
-
-const oneLine = text => String(text).replace(/\s+/g, ' ').trim();
+export { MAX_SHEET_ROWS, MAX_WORKBOOK_CHARS, SHEET_NOTICE_RESERVE, looksLikeHeader };
 
 /**
  * A cell that spans rows shows its text in each row (every row stays self-contained); one that
@@ -87,83 +52,42 @@ function withVerticalMerges(XLSX, sheet, lastRow) {
  */
 export function extractXlsxText({ XLSX, workbook, limits = {} }) {
   const sheetRows = limits.sheetRows ?? MAX_SHEET_ROWS;
-  let budget = limits.workbookChars ?? MAX_WORKBOOK_CHARS;
-  const blocks = [];
+  const sheets = [];
 
-  let leftOut = 0;
-  for (const [index, name] of workbook.SheetNames.entries()) {
+  workbook.SheetNames.forEach((name, index) => {
     const sheet = workbook.Sheets[name];
-    if (!sheet || !sheet['!ref']) continue;
-    // The budget is a bound: when the rows have used it, the sheets that follow get a title and
-    // a notice — within the reserve. A sheet whose title no longer fits ends the workbook; the
-    // sheets after it are only counted.
-    const hidden = workbook.Workbook?.Sheets?.[index]?.Hidden;
-    const title = `[Sheet: ${name}${hidden ? ' (hidden)' : ''}]`;
-    if (budget + SHEET_NOTICE_RESERVE < title.length + 1) {
-      leftOut = workbook.SheetNames.slice(index).filter(n => workbook.Sheets[n]?.['!ref']).length;
-      break;
-    }
-    const range = XLSX.utils.decode_range(sheet['!ref']);
-    const lastRow = Math.min(range.e.r, range.s.r + sheetRows - 1);
-    const rows = XLSX.utils
-      .sheet_to_json(withVerticalMerges(XLSX, sheet, lastRow), {
-        header: 1,
-        raw: false,
-        defval: '',
-        blankrows: false,
-        range: { s: range.s, e: { r: lastRow, c: range.e.c } }
-      })
-      .map(row => row.map(oneLine));
-    if (rows.length === 0) continue;
-
-    // Columns without anything in them, at the right, are not columns.
-    let width = 0;
-    for (const row of rows) {
-      for (let c = row.length - 1; c >= width; c -= 1) {
-        if (row[c] !== '') {
-          width = c + 1;
-          break;
+    if (!sheet || !sheet['!ref']) return;
+    sheets.push({
+      name,
+      hidden: !!workbook.Workbook?.Sheets?.[index]?.Hidden,
+      // Read when the renderer gets to the sheet: a workbook of thousands of sheets does not
+      // have all of them turned into rows for the few that fit the budget.
+      read: () => {
+        const range = XLSX.utils.decode_range(sheet['!ref']);
+        const lastRow = Math.min(range.e.r, range.s.r + sheetRows - 1);
+        const rows = XLSX.utils.sheet_to_json(withVerticalMerges(XLSX, sheet, lastRow), {
+          header: 1,
+          raw: false,
+          defval: '',
+          blankrows: false,
+          range: { s: range.s, e: { r: lastRow, c: range.e.c } }
+        });
+        // Columns that a merged cell of the first row covers: a title over several columns.
+        const covered = new Set();
+        for (const merge of sheet['!merges'] || []) {
+          if (merge.s.r === range.s.r) {
+            for (let c = merge.s.c + 1; c <= merge.e.c; c += 1) covered.add(c - range.s.c);
+          }
         }
+        // Columns whose first cell the file stores as a number, a date or a boolean.
+        const typed = new Set();
+        for (let c = 0; c <= range.e.c - range.s.c; c += 1) {
+          const cell = sheet[XLSX.utils.encode_cell({ r: range.s.r, c: range.s.c + c })];
+          if (cell && ['n', 'd', 'b'].includes(cell.t)) typed.add(c);
+        }
+        return { rows, covered, typed, rowsBeyond: Math.max(0, range.e.r - lastRow) };
       }
-    }
-    const grid = rows.map(row => row.slice(0, width));
-    // Columns that a merged cell of the first row covers: a title over several columns.
-    const covered = new Set();
-    for (const merge of sheet['!merges'] || []) {
-      if (merge.s.r === range.s.r) {
-        for (let c = merge.s.c + 1; c <= merge.e.c; c += 1) covered.add(c - range.s.c);
-      }
-    }
-    // Columns whose first cell the file stores as a number, a date or a boolean.
-    const typed = new Set();
-    for (let c = 0; c < width; c += 1) {
-      const cell = sheet[XLSX.utils.encode_cell({ r: range.s.r, c: range.s.c + c })];
-      if (cell && ['n', 'd', 'b'].includes(cell.t)) typed.add(c);
-    }
-    const header = looksLikeHeader(grid, covered, typed);
-    const lines = header ? markdownTableLines(grid, { header: true }) : grid.map(r => r.join('\t'));
-    // Every line is a row of the sheet, except the separator of a table (its second line).
-    const entries = lines.map((line, at) => ({ line, isRow: !(header && at === 1) }));
-
-    const out = [title];
-    budget -= title.length + 1;
-
-    let shown = 0;
-    for (const { line, isRow } of entries) {
-      if (budget < line.length + 1) break;
-      out.push(line);
-      budget -= line.length + 1;
-      if (isRow) shown += 1;
-    }
-    // Rows left out: those that were read but did not fit, and those beyond the row limit.
-    const omitted = grid.length - shown + Math.max(0, range.e.r - lastRow);
-    if (omitted > 0) {
-      const notice = `[… ${omitted}${shown === 0 ? '' : ' more'} rows omitted]`;
-      out.push(notice);
-      budget -= notice.length + 1;
-    }
-    blocks.push(out.join('\n'));
-  }
-  if (leftOut > 0) blocks.push(`[… ${leftOut} more sheets omitted]`);
-  return blocks.join('\n\n').trim();
+    });
+  });
+  return renderSheets(sheets, limits);
 }

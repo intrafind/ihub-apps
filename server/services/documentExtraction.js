@@ -2,14 +2,14 @@
  * Server adapter of the shared document extraction (concepts/document-extraction/, release 2,
  * WP-E).
  *
- * The browser turns uploaded Word and PDF files into text before it sends them; an API caller
+ * The browser turns uploaded Office and PDF files into text before it sends them; an API caller
  * sends the file itself, so the server does the same — with the same code
  * (`shared/documentExtraction/`), so a file reads the same through the API as through the chat:
  * Markdown with headings, numbers and tables, `[Page N]` markers. The shared modules take their
  * libraries as arguments; this file supplies the Node ones (jszip, mammoth, turndown, jsdom's
  * DOM, pdf.js' legacy build) and loads them on first use, so the server starts without them.
  *
- * A file from a stranger is not a file from the user's own browser: a Word file is a zip, and a
+ * A file from a stranger is not a file from the user's own browser: an Office file is a zip, and a
  * zip that unpacks to gigabytes must never reach the code that unpacks it. {@link
  * assertSafePackage} measures every entry first, with a decompression that stops at the limit.
  *
@@ -18,6 +18,7 @@
 import { inflateRaw } from 'node:zlib';
 import { promisify } from 'node:util';
 import { extractDocxMarkdown } from '../../shared/documentExtraction/docx.js';
+import { extractOdfText } from '../../shared/documentExtraction/odf.js';
 import { extractPdfText } from '../../shared/documentExtraction/pdfText.js';
 import { extractPptxText } from '../../shared/documentExtraction/pptx.js';
 import { isFeatureEnabled } from '../featureRegistry.js';
@@ -28,11 +29,14 @@ const inflateRawAsync = promisify(inflateRaw);
 export const DOCX_MIME = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 export const PPTX_MIME =
   'application/vnd.openxmlformats-officedocument.presentationml.presentation';
+export const ODT_MIME = 'application/vnd.oasis.opendocument.text';
+export const ODS_MIME = 'application/vnd.oasis.opendocument.spreadsheet';
+export const ODP_MIME = 'application/vnd.oasis.opendocument.presentation';
 
 /** PDF pages read from one file. */
 export const MAX_PDF_PAGES = 500;
 
-/** Limits of a Word package (a zip): parts, one part unpacked, all parts unpacked. */
+/** Limits of an Office package (a zip): parts, one part unpacked, all parts unpacked. */
 export const PACKAGE_LIMITS = {
   entries: 5000,
   partBytes: 30 * 1024 * 1024,
@@ -217,6 +221,32 @@ export async function extractPptxDocument(bytes, options = {}) {
     });
   } catch (error) {
     throw new DocumentExtractionError(`not a readable PowerPoint document (${error.message})`);
+  }
+}
+
+/**
+ * An OpenDocument file (.odt, .ods, .odp) as text: Markdown for a text, tables for a
+ * spreadsheet, slides for a presentation. The kind is read from the document, not from the type
+ * the caller claimed. Speaker notes only when asked for.
+ *
+ * @param {Buffer} bytes
+ * @param {{speakerNotes?: string}} [options]
+ * @returns {Promise<string>}
+ * @throws {DocumentExtractionError} When the file is not an OpenDocument file or is not safe to read
+ */
+export async function extractOdfDocument(bytes, options = {}) {
+  await assertSafePackage(bytes);
+  const [{ default: JSZip }, window] = await Promise.all([import('jszip'), loadDom()]);
+  const arrayBuffer = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+  try {
+    return await extractOdfText({
+      arrayBuffer,
+      JSZip,
+      DOMParser: window.DOMParser,
+      speakerNotes: options.speakerNotes
+    });
+  } catch (error) {
+    throw new DocumentExtractionError(`not a readable OpenDocument file (${error.message})`);
   }
 }
 

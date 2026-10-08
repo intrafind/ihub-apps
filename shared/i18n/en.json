@@ -2896,7 +2896,7 @@
         "wordCommentsIgnore": "Do not send comments",
         "wordCommentsInline": "Send comments with their text",
         "speakerNotes": "PowerPoint: speaker notes",
-        "speakerNotesHelp": "Whether the speaker notes of PowerPoint slides reach the model. They are written as [Notes] after the text of their slide.",
+        "speakerNotesHelp": "Whether the speaker notes of PowerPoint and OpenDocument slides reach the model. They are written as [Notes] after the text of their slide.",
         "speakerNotesIgnore": "Do not send speaker notes",
         "speakerNotesInclude": "Send speaker notes",
         "extractAudioFromVideo": "Extract audio track (for transcription / audio models)",

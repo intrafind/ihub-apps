@@ -42,6 +42,11 @@ heading by heading.
   said
 - Headers and footers of Word files (letterhead, document numbers, confidentiality notes) appear as
   `[Header] …` and `[Footer] …` lines before the text, without page numbers
+- LibreOffice and OpenOffice files read like their Microsoft counterparts: texts (.odt) with
+  headings, the list and chapter numbers Writer shows, tables, footnotes and links; spreadsheets
+  (.ods) as tables with the same limits as Excel; presentations (.odp) as slides, with speaker
+  notes for apps that opt in. Where the numbering of a list cannot be reproduced with certainty,
+  the item gets no number rather than a wrong one. The API accepts these files too
 
 Admins can switch this off under **Admin → Features → Structured document extraction** (on by
 default); the previous plain text extraction then applies after users reload the page. If the

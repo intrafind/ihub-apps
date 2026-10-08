@@ -70,7 +70,7 @@ const UPLOAD_TYPE_CONFIGS = {
         label: ['admin.apps.edit.speakerNotes', 'PowerPoint: speaker notes'],
         help: [
           'admin.apps.edit.speakerNotesHelp',
-          'Whether the speaker notes of PowerPoint slides reach the model. They are written as [Notes] after the text of their slide.'
+          'Whether the speaker notes of PowerPoint and OpenDocument slides reach the model. They are written as [Notes] after the text of their slide.'
         ],
         options: [
           ['ignore', 'admin.apps.edit.speakerNotesIgnore', 'Do not send speaker notes'],

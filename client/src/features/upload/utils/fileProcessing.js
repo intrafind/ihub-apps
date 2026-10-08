@@ -4,6 +4,7 @@ import { FeatureFlags } from '../../../../../shared/featureFlags.js';
 import { extractDocxMarkdown } from '../../../../../shared/documentExtraction/docx.js';
 import { extractPdfText } from '../../../../../shared/documentExtraction/pdfText.js';
 import { extractPptxText } from '../../../../../shared/documentExtraction/pptx.js';
+import { extractOdfText } from '../../../../../shared/documentExtraction/odf.js';
 import { extractXlsxText } from '../../../../../shared/documentExtraction/xlsx.js';
 import {
   MIN_REAL_TEXT_CHARS,
@@ -1085,9 +1086,10 @@ export const processGenericTextFile = async file => {
   return { content };
 };
 
-// Process OpenOffice/LibreOffice file
-export const processOpenOfficeFile = async file => {
-  const arrayBuffer = await file.arrayBuffer();
+// Text of an OpenOffice/LibreOffice file as it was before structured extraction existed: every
+// text node of content.xml, paragraphs on their own line. It stays unchanged as the fallback
+// and as the result when the admin switch is off.
+export const legacyOpenOfficeText = async arrayBuffer => {
   const JSZip = await loadJSZip();
   const zip = await JSZip.loadAsync(arrayBuffer);
 
@@ -1123,6 +1125,29 @@ export const processOpenOfficeFile = async file => {
   } else {
     throw new Error('Unable to extract content from OpenOffice document');
   }
+};
+
+// Process OpenOffice/LibreOffice file (.odt, .ods, .odp) — headings, lists with their numbers,
+// tables, footnotes, links; sheets as tables; slides (see shared/documentExtraction/odf.js)
+export const processOpenOfficeFile = async (file, options = {}) => {
+  const arrayBuffer = await file.arrayBuffer();
+
+  if (await isStructuredExtractionEnabled()) {
+    try {
+      const JSZip = await loadJSZip();
+      return await extractOdfText({
+        arrayBuffer,
+        JSZip,
+        DOMParser,
+        speakerNotes: options?.speakerNotes
+      });
+    } catch (error) {
+      // Never make an upload fail that worked before: use the plain text extraction.
+      console.warn('[fileProcessing] structured extraction failed, using legacy', error);
+    }
+  }
+
+  return legacyOpenOfficeText(arrayBuffer);
 };
 
 // Main document processing function
@@ -1207,7 +1232,7 @@ export const processDocumentFile = async (file, options = {}) => {
     fileExtension === '.ods' ||
     fileExtension === '.odp'
   ) {
-    content = await processOpenOfficeFile(file);
+    content = await processOpenOfficeFile(file, options);
   } else {
     // Default: read as text file
     content = await readTextFile(file);

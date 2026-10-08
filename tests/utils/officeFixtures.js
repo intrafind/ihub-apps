@@ -149,3 +149,75 @@ export const HEADING_STYLES = `
 export const HEADING_NUMBERING =
   `<w:abstractNum w:abstractNumId="0">${lvl(0, 'decimal', '%1.')}${lvl(1, 'decimal', '%1.%2')}</w:abstractNum>` +
   '<w:num w:numId="1"><w:abstractNumId w:val="0"/></w:num>';
+
+// ---------------------------------------------------------------------------------------------
+// OpenDocument
+
+const ODF_NS = {
+  office: 'urn:oasis:names:tc:opendocument:xmlns:office:1.0',
+  style: 'urn:oasis:names:tc:opendocument:xmlns:style:1.0',
+  text: 'urn:oasis:names:tc:opendocument:xmlns:text:1.0',
+  table: 'urn:oasis:names:tc:opendocument:xmlns:table:1.0',
+  draw: 'urn:oasis:names:tc:opendocument:xmlns:drawing:1.0',
+  presentation: 'urn:oasis:names:tc:opendocument:xmlns:presentation:1.0',
+  fo: 'urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0',
+  svg: 'urn:oasis:names:tc:opendocument:xmlns:svg-compatible:1.0',
+  xlink: 'http://www.w3.org/1999/xlink',
+  xml: 'http://www.w3.org/XML/1998/namespace' // NOSONAR — a namespace name, never requested
+};
+const ODF_NS_DECL = Object.entries(ODF_NS)
+  .filter(([prefix]) => prefix !== 'xml')
+  .map(([prefix, uri]) => `xmlns:${prefix}="${uri}"`)
+  .join(' ');
+
+export const ODF_MIME = {
+  text: 'application/vnd.oasis.opendocument.text',
+  spreadsheet: 'application/vnd.oasis.opendocument.spreadsheet',
+  presentation: 'application/vnd.oasis.opendocument.presentation'
+};
+
+/**
+ * A minimal OpenDocument package from raw XML: `body` is the content of office:text /
+ * office:spreadsheet / office:presentation, `automatic` the automatic styles of content.xml,
+ * `styles` the office:styles of styles.xml (named styles, list styles), `outline` an optional
+ * text:outline-style element for styles.xml. `type` is text, spreadsheet or presentation.
+ */
+export async function buildOdfFile(
+  {
+    type = 'text',
+    body,
+    automatic = '',
+    styles = '',
+    outline = '',
+    masterStyles = '',
+    noMimetype = false
+  },
+  name = `test.${{ text: 'odt', spreadsheet: 'ods', presentation: 'odp' }[type]}`
+) {
+  const zip = new JSZip();
+  if (!noMimetype) zip.file('mimetype', ODF_MIME[type], { compression: 'STORE' });
+  const xmlHead = '<?xml version="1.0" encoding="UTF-8"?>';
+  zip.file(
+    'META-INF/manifest.xml',
+    `${xmlHead}<manifest:manifest xmlns:manifest="urn:oasis:names:tc:opendocument:xmlns:manifest:1.0" manifest:version="1.2"/>`
+  );
+  zip.file(
+    'content.xml',
+    `${xmlHead}<office:document-content ${ODF_NS_DECL} office:version="1.2">` +
+      `<office:automatic-styles>${automatic}</office:automatic-styles>` +
+      `<office:body><office:${type}>${body}</office:${type}></office:body></office:document-content>`
+  );
+  zip.file(
+    'styles.xml',
+    `${xmlHead}<office:document-styles ${ODF_NS_DECL} office:version="1.2">` +
+      `<office:styles>${outline}${styles}</office:styles>${masterStyles}</office:document-styles>`
+  );
+  const arrayBuffer = await zip.generateAsync({ type: 'arraybuffer', mimeType: ODF_MIME[type] });
+  return makeFile(arrayBuffer, name, ODF_MIME[type]);
+}
+
+/** ODF paragraph / heading / span helpers. */
+export const odfP = (text, style = '') =>
+  `<text:p${style ? ` text:style-name="${style}"` : ''}>${text}</text:p>`;
+export const odfH = (text, level, style = '') =>
+  `<text:h${style ? ` text:style-name="${style}"` : ''} text:outline-level="${level}">${text}</text:h>`;
