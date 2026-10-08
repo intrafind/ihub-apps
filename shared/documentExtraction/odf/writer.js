@@ -179,8 +179,11 @@ export function createOdfReader({ contentDoc, stylesDoc }) {
     const after = [];
     const text = inline(el, after, depth + 1)
       .replace(/­/g, '')
-      .replace(/[ \t]*\n[ \t]*/g, '\n')
+      // Runs of spaces first (they are only spaces here: the text was collapsed), then the one
+      // space that may be left around a break. `[ \t]*\n[ \t]*` backtracks quadratically on a
+      // long run of spaces — a file can chain thousands of `text:s` elements.
       .replace(/ {2,}/g, ' ')
+      .replace(/ ?\n ?/g, '\n')
       .trim();
     const heading = is(el, 'text', 'h');
     let block = '';

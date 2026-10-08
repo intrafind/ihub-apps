@@ -428,6 +428,22 @@ describe('limits', () => {
     warn.mockRestore();
   });
 
+  it('a paragraph of a hundred thousand spaces is read in linear time (no regex that backtracks)', async () => {
+    // `text:s text:c="100"` writes a hundred spaces; a file from an API caller can chain thousands.
+    const body = p(`vorher${'<text:s text:c="100"/>'.repeat(1000)}nachher`);
+    const started = Date.now();
+    const text = await extract({ body });
+    expect(text).toBe('vorher nachher');
+    expect(Date.now() - started).toBeLessThan(1500);
+  });
+
+  it('spaces around a line break are removed, a break stays a break', async () => {
+    const body = p(
+      'eins <text:s text:c="3"/><text:line-break/> <text:s/>zwei<text:line-break/><text:line-break/>drei'
+    );
+    expect(await extract({ body })).toBe('eins\nzwei\n\ndrei');
+  });
+
   it('T-PERF-05: 3,000 paragraphs and a long list assemble quickly', async () => {
     const styles =
       '<text:list-style style:name="N"><text:list-level-style-number text:level="1" style:num-format="1" style:num-suffix="."/></text:list-style>';
