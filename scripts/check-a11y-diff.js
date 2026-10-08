@@ -19,7 +19,7 @@
  * Findings are printed as GitHub annotations, which show inline on the PR.
  */
 
-import { execFileSync } from 'child_process';
+import { execFileSync } from 'node:child_process';
 import { ESLint } from 'eslint';
 
 const base = process.argv[2] || 'origin/main';
@@ -30,8 +30,15 @@ if (!/^\w[\w./~^@{}-]*$/.test(base)) {
 }
 const LINTED = /^client\/.*\.(js|jsx)$/;
 
+/** Runs git with |args| (no shell) and returns its stdout. */
 function git(...args) {
   return execFileSync('git', args, { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+}
+
+/** Line numbers a zero-context hunk header ("@@ -a,b +c,d @@") adds or changes. */
+function hunkLines(header) {
+  const [, start, count = '1'] = /^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@/.exec(header);
+  return Array.from({ length: Number(count) }, (_, i) => Number(start) + i);
 }
 
 /** Lines added or changed per file, from a zero-context diff against the merge base. */
@@ -49,17 +56,12 @@ function changedLines() {
   const files = new Map();
   let current = null;
   for (const line of diff.split('\n')) {
-    const file = line.match(/^\+\+\+ b\/(.+)$/);
+    const file = /^\+\+\+ b\/(.+)$/.exec(line)?.[1];
     if (file) {
-      current = LINTED.test(file[1]) ? file[1] : null;
-      if (current) files.set(current, new Set());
-      continue;
-    }
-    const hunk = line.match(/^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@/);
-    if (hunk && current) {
-      const start = Number(hunk[1]);
-      const count = hunk[2] === undefined ? 1 : Number(hunk[2]);
-      for (let n = start; n < start + count; n++) files.get(current).add(n);
+      current = LINTED.test(file) ? new Set() : null;
+      if (current) files.set(file, current);
+    } else if (current && line.startsWith('@@ ')) {
+      for (const n of hunkLines(line)) current.add(n);
     }
   }
   return files;

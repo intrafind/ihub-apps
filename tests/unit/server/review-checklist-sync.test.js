@@ -10,6 +10,7 @@ import path from 'path';
 
 const repoRoot = path.resolve(__dirname, '../../..');
 
+/** The text between the checklist markers in |relPath|. */
 function checklistFrom(relPath) {
   const source = readFileSync(path.join(repoRoot, relPath), 'utf8');
   const match = source.match(/<!-- checklist:start -->([\s\S]*?)<!-- checklist:end -->/);

@@ -11,6 +11,7 @@ import path from 'path';
 
 const repoRoot = path.resolve(__dirname, '../../..');
 
+/** npm package names listed under allow-dependencies-licenses. */
 function exemptedPackages() {
   const config = readFileSync(path.join(repoRoot, '.github/dependency-review-config.yml'), 'utf8');
   const section = config.match(/^allow-dependencies-licenses:\n((?:\s+- .+\n?)+)/m);
@@ -18,6 +19,7 @@ function exemptedPackages() {
   return [...section[1].matchAll(/pkg:npm\/(\S+)/g)].map(m => decodeURIComponent(m[1]));
 }
 
+/** Names of the dependencies and devDependencies in the manifest at |relPath|. */
 function dependenciesOf(relPath) {
   const manifest = JSON.parse(readFileSync(path.join(repoRoot, relPath), 'utf8'));
   return Object.keys({ ...manifest.dependencies, ...manifest.devDependencies });

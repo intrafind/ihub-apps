@@ -32,6 +32,7 @@ const INTENTIONAL_EXCEPTIONS = [
   '/api/admin/auth/status' // Public endpoint to check auth requirements
 ];
 
+/** Every route registered in |filePath|, with whether an admin guard protects it. */
 function extractRoutes(filePath, fileName) {
   const content = readFileSync(filePath, 'utf-8');
   const routes = [];
@@ -39,15 +40,15 @@ function extractRoutes(filePath, fileName) {
   // Every app.METHOD(<path>, ...middleware, handler) registration, whatever
   // form the path takes: buildServerPath('...'), `${basePath}/...`, or a
   // variable such as `${base}/:id`. (?<![.\w]) skips req.app.get('platform').
-  const routeRegex = /(?<![.\w])app\.(get|post|put|delete|patch)\(\s*([^,]+),/g;
+  const routeRegex = /(?<![.\w])app\.(get|post|put|delete|patch)\(\s*([^,\s][^,]*),/g;
 
   let match;
   while ((match = routeRegex.exec(content)) !== null) {
     const method = match[1].toUpperCase();
     const pathArg = match[2].trim();
     const path =
-      pathArg.match(/^buildServerPath\(\s*['"]([^'"]+)['"]\s*\)$/)?.[1] ??
-      pathArg.match(/^`\$\{basePath\}([^`]+)`$/)?.[1] ??
+      /^buildServerPath\(\s*['"]([^'"]+)['"]\s*\)$/.exec(pathArg)?.[1] ??
+      /^`\$\{basePath\}([^`]+)`$/.exec(pathArg)?.[1] ??
       pathArg;
 
     const lineNumber = content.substring(0, match.index).split('\n').length;
@@ -72,6 +73,7 @@ function extractRoutes(filePath, fileName) {
   return routes;
 }
 
+/** Audits every admin route file, prints a report and exits 1 on an unguarded route. */
 function auditAdminRoutes() {
   console.log('🔍 Starting Admin Endpoints Security Audit\n');
   console.log('='.repeat(80));
