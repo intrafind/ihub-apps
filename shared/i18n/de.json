@@ -647,7 +647,8 @@
     "noModelIdProvided": "Kein Modell ausgewählt. Bitte wählen Sie ein KI-Modell, um fortzufahren.",
     "noModelsForUser": "Sie haben keine Berechtigung, auf KI-Modelle zuzugreifen. Bitte wenden Sie sich an Ihren Administrator, um Zugriff anzufordern.",
     "malformedModelResponse": "Das KI-Modell hat eine unvollständige Antwort zurückgegeben und es konnte keine Antwort generiert werden. Dies kann gelegentlich auftreten – bitte senden Sie Ihre Nachricht erneut.",
-    "outputValidationFailed": "Die Antwort des KI-Modells entsprach nicht dem geforderten Ausgabeformat."
+    "outputValidationFailed": "Die Antwort des KI-Modells entsprach nicht dem geforderten Ausgabeformat.",
+    "apiKeyUnreadable": "Der für das Modell {modelId} gespeicherte API-Schlüssel kann nicht entschlüsselt werden. Der Verschlüsselungsschlüssel des Servers ist nicht der, mit dem er gespeichert wurde. Ein Administrator muss den Schlüssel erneut eingeben (Admin › Modelle) oder als Umgebungsvariable bereitstellen."
   },
   "toolErrors": {
     "MISSING_URL": "URL-Parameter ist erforderlich.",
@@ -1204,7 +1205,8 @@
           "authenticationFailed": "Authentifizierung fehlgeschlagen",
           "modelNotFound": "Modell nicht gefunden",
           "rateLimitExceeded": "Ratenlimit überschritten",
-          "serverError": "Serverfehler"
+          "serverError": "Serverfehler",
+          "apiKeyUndecryptable": "Gespeicherter API-Schlüssel kann nicht entschlüsselt werden"
         }
       },
       "enable": "Aktivieren",
@@ -1216,7 +1218,8 @@
       "noModels": "Keine Modelle gefunden",
       "noModelsDesc": "Beginnen Sie mit der Erstellung eines neuen Modells.",
       "table": {
-        "status": "Status"
+        "status": "Status",
+        "apiKey": "API-Schlüssel"
       },
       "status": {
         "enabled": "Aktiviert",
@@ -1295,7 +1298,7 @@
       "hints": {
         "modelId": "Eindeutige Kennung für das Modell (kann nach der Erstellung nicht geändert werden)",
         "apiModelId": "Modellkennung, die von der API des Anbieters verwendet wird (z.B. gpt-4, claude-3-opus)",
-        "apiKey": "API-Schlüssel für dieses Modell. Wenn nicht angegeben, verwendet das System die Umgebungsvariable für den Anbieter. Schlüssel werden verschlüsselt gespeichert.",
+        "apiKey": "API-Schlüssel für dieses Modell. Wenn nicht angegeben, verwendet das System den Schlüssel des Anbieters oder die Umgebungsvariable. Ein lokaler Server (vLLM, LM Studio, Jan.ai, Ollama) braucht keinen Schlüssel – lassen Sie das Feld leer. Schlüssel werden verschlüsselt gespeichert.",
         "apiKeySet": "✓ API-Schlüssel ist für dieses Modell konfiguriert",
         "apiKeyEnvVars": "Umgebungsvariablen (in Prioritätsreihenfolge):\n{{envVars}}",
         "supportsVision": "Aktivieren, wenn dieses Modell Bildeingaben verarbeiten kann",
@@ -3783,7 +3786,8 @@
         "owner": "Eigentümer",
         "schedule": "Zeitplan",
         "status": "Status",
-        "task": "Aufgabe"
+        "task": "Aufgabe",
+        "memory": "Gedächtnis"
       },
       "confirmDelete": "„{{name}}“ von {{owner}} löschen?",
       "disable": "Deaktivieren",
@@ -3817,8 +3821,17 @@
         "runRetentionDays": "Laufprotokolle aufbewahren (Tage)",
         "maxRunChatsPerTask": "Behaltene Lauf-Chats pro Aufgabe",
         "maxInstructionLength": "Längste Anweisungen (Zeichen)",
-        "maxRunMinutes": "Längster Lauf (Minuten)"
-      }
+        "maxRunMinutes": "Längster Lauf (Minuten)",
+        "memoryEnabled": "Gedächtnis zwischen Läufen erlauben",
+        "memoryMaxChars": "Längste Notizen (Zeichen)",
+        "maxHistoryReadChars": "Längste frühere Antwort, die ein Lauf lesen darf (Zeichen)"
+      },
+      "memory": {
+        "summary": "{{chars}} Zeichen · v{{version}} · {{updatedAt}}",
+        "clear": "Gedächtnis leeren",
+        "confirmClear": "Das Gedächtnis von „{{name}}“ von {{owner}} leeren? Der Eigentümer verliert diese Notizen."
+      },
+      "memoryEnabledHint": "Aus: Läufe lesen und aktualisieren die Notizen einer Aufgabe nicht (die Notizen bleiben erhalten), und „Nur bei Änderungen“ benachrichtigt nach jedem Lauf."
     },
     "overview": {
       "storage": {
@@ -3892,6 +3905,20 @@
       "download": "Agentenpaket herunterladen",
       "prereqHttps": "Die öffentliche Adresse von iHub verwendet HTTPS",
       "prereqHttpsOff": "Die öffentliche Adresse von iHub ist kein HTTPS, und Copilot ruft nur HTTPS-Adressen auf – setzen Sie die Public URL des MCP-Gateways (oder leiten Sie X-Forwarded-Proto im Proxy weiter)"
+    },
+    "apiKeyStatus": {
+      "ok": "Schlüssel gefunden",
+      "keyless": "Kein Schlüssel nötig",
+      "keylessHint": "Es ist kein Schlüssel gesetzt, der Server wird ohne Authorization-Header aufgerufen.",
+      "undecryptable": "Gespeicherter Schlüssel nicht lesbar",
+      "undecryptableHint": "Ein Schlüssel ist gespeichert, aber dieser Server kann ihn nicht entschlüsseln: Der Verschlüsselungsschlüssel hat sich seit dem Speichern geändert. Geben Sie den Schlüssel erneut ein oder stellen Sie sicher, dass alle Instanzen denselben TOKEN_ENCRYPTION_KEY bzw. dieselbe contents/.encryption-key verwenden.",
+      "missing": "Kein API-Schlüssel",
+      "missingHint": "Geben Sie hier oder beim Anbieter einen Schlüssel ein oder setzen Sie ihn als Umgebungsvariable.",
+      "source": {
+        "env": "Umgebungsvariable {{envVar}}",
+        "provider": "beim Anbieter gespeichert",
+        "model": "beim Modell gespeichert"
+      }
     }
   },
   "cloudStorage": {
@@ -4583,7 +4610,8 @@
       "savingButton": "Wird gespeichert…",
       "skipLater": "Überspringen, später konfigurieren",
       "freeTierBadge": "Kostenlos",
-      "noApiKeyBadge": "Optionaler Schlüssel"
+      "noApiKeyBadge": "Optionaler Schlüssel",
+      "noKeyHint": "Noch keinen API-Schlüssel? Wählen Sie „Lokaler Anbieter“, wenn Sie einen eigenen Modellserver betreiben, oder überspringen Sie den Schritt und hinterlegen Sie später einen Schlüssel unter Admin › Anbieter."
     },
     "step3": {
       "title": "Alles bereit!",
@@ -4595,7 +4623,12 @@
       "nextStep3": "Teammitglieder einladen und Gruppen unter Admin › Teams konfigurieren",
       "nextStep4": "Einstellungen erkunden, um den Arbeitsbereich anzupassen",
       "goToApps": "Zu den Apps",
-      "goToAdmin": "Admin öffnen"
+      "goToAdmin": "Admin öffnen",
+      "keyCheck": {
+        "ready": "Einsatzbereite Modelle: {{count}}",
+        "blocked": "Aktivierte Modelle ohne nutzbaren API-Schlüssel: {{count}}.",
+        "fix": "Modelle prüfen"
+      }
     }
   },
   "apps": {
@@ -5442,7 +5475,8 @@
     "notify": {
       "always": "Nach jedem Lauf",
       "failure": "Nur wenn ein Lauf fehlschlägt",
-      "never": "Nie"
+      "never": "Nie",
+      "changes": "Nur bei Änderungen (und bei Fehlern)"
     },
     "openChat": "Chat öffnen",
     "openTask": "Aufgabe öffnen",
@@ -5481,7 +5515,9 @@
       "scheduled": "Geplant",
       "started": "Gestartet",
       "status": "Status",
-      "trigger": "Auslöser"
+      "trigger": "Auslöser",
+      "noChanges": "Keine Änderungen",
+      "memoryUpdated": "Gedächtnis aktualisiert"
     },
     "schedule": {
       "at": "Datum und Uhrzeit",
@@ -5549,7 +5585,7 @@
       "task_name": "der Name der Aufgabe"
     },
     "variablesHelp": "Verfügbare Variablen",
-    "variablesHelpText": "Läufe sehen einander nicht. Um nach „was sich seit dem letzten Mal geändert hat“ zu fragen, verwenden Sie die Zeit des letzten Laufs in den Anweisungen:",
+    "variablesHelpText": "Ohne „Zwischen Läufen merken“ sehen Läufe einander nicht. Um nach „was sich seit dem letzten Mal geändert hat“ zu fragen, verwenden Sie die Zeit des letzten Laufs in den Anweisungen:",
     "reasons": {
       "ABORTED": "Der Lauf wurde angehalten",
       "APP_NOT_ACCESSIBLE": "Sie haben keinen Zugriff mehr auf die App dieser Aufgabe",
@@ -5580,6 +5616,37 @@
       "TOO_MANY_APPROVALS": "Der Lauf hat zu oft um Freigabe gebeten",
       "TOO_MANY_FAILURES": "Nach zu vielen fehlgeschlagenen Läufen in Folge pausiert",
       "TOOL_NOT_AVAILABLE": "Die App bietet ein Werkzeug dieser Aufgabe nicht mehr an"
+    },
+    "memory": {
+      "title": "Gedächtnis",
+      "label": "Zwischen Läufen merken",
+      "help": "Die Aufgabe führt Notizen und aktualisiert sie nach jedem Lauf, damit der nächste Lauf weiß, was schon gemeldet wurde. Sie können die Notizen auf der Aufgabenseite lesen und bearbeiten. Ein Lauf kann außerdem frühere Läufe ansehen.",
+      "platformOff": "Ein Administrator hat das Gedächtnis für alle Aufgaben ausgeschaltet. Ihre Einstellung bleibt erhalten, wirkt aber vorerst nicht.",
+      "notifyNeedsMemory": "„Nur bei Änderungen“ benötigt „Zwischen Läufen merken“.",
+      "on": "An",
+      "off": "Aus",
+      "cardIntro": "Notizen, die diese Aufgabe zwischen den Läufen behält. Ein Lauf liest sie zu Beginn und aktualisiert sie am Ende.",
+      "offNotice": "Das Gedächtnis ist aus; diese Notizen bleiben erhalten, werden aber nicht verwendet.",
+      "platformOffNotice": "Das Gedächtnis ist für die gesamte Plattform ausgeschaltet; diese Notizen bleiben erhalten, werden aber nicht verwendet.",
+      "readOnlyNotice": "Sie dürfen geplante Aufgaben nicht bearbeiten, daher sind diese Notizen schreibgeschützt.",
+      "clearHint": "Wenn Sie geändert haben, was die Aufgabe tut, sollten Sie ihr Gedächtnis leeren.",
+      "tooLong": "Die Notizen sind zu lang ({{chars}} von {{max}} Zeichen). Kürzen Sie sie und speichern Sie erneut.",
+      "error": "Die Notizen konnten nicht gespeichert werden"
     }
+  },
+  "memoryEditor": {
+    "label": "Gedächtnis-Notizen",
+    "versionLine": "Version {{version}}",
+    "updatedAt": "aktualisiert {{at}}",
+    "updatedBy": "von {{by}}",
+    "size": "{{chars}} / {{max}} Zeichen",
+    "save": "Speichern",
+    "saving": "Speichern…",
+    "clear": "Leeren",
+    "clearConfirm": "Alle Notizen leeren? Das entfernt alles, was bisher geschrieben wurde.",
+    "reload": "Neu laden (meine Änderungen verwerfen)",
+    "keepEditing": "Weiter bearbeiten",
+    "versionConflict": "Konflikt: Das Gedächtnis wurde an anderer Stelle geändert. Neu laden, um den aktuellen Stand zu sehen.",
+    "staleNotice": "Die Notizen haben sich geändert, seit Sie mit dem Bearbeiten begonnen haben (ein Lauf hat sie evtl. aktualisiert)."
   }
 }

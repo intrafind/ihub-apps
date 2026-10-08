@@ -16,8 +16,14 @@ import {
   revokeScheduledTaskTool,
   runScheduledTaskNow
 } from '../../../api';
-import { RunStatusBadge, RunTriggerLabel, TaskStatusBadge } from '../components/TaskBadges';
+import {
+  RunMemoryBadges,
+  RunStatusBadge,
+  RunTriggerLabel,
+  TaskStatusBadge
+} from '../components/TaskBadges';
 import ApprovalControls from '../components/ApprovalControls';
+import TaskMemoryPanel from '../components/TaskMemoryPanel';
 import { useCanCreateScheduledTasks, useNow } from '../hooks/useScheduledTasks';
 import {
   errorMessage,
@@ -284,6 +290,14 @@ export default function TaskDetailPage() {
                   {t(`scheduledTasks.notify.${task.notify}`, task.notify)}
                 </dd>
               </div>
+              <div>
+                <dt className="text-gray-500">{t('scheduledTasks.memory.title', 'Memory')}</dt>
+                <dd className="text-gray-900 dark:text-gray-100">
+                  {task.memory?.enabled === true
+                    ? t('scheduledTasks.memory.on', 'On')
+                    : t('scheduledTasks.memory.off', 'Off')}
+                </dd>
+              </div>
               {task.variables && Object.keys(task.variables).length > 0 && (
                 <div>
                   <dt className="text-gray-500">
@@ -366,6 +380,10 @@ export default function TaskDetailPage() {
         </section>
 
         <section className={card}>
+          <TaskMemoryPanel task={task} readOnly={!canCreate} onChanged={load} />
+        </section>
+
+        <section className={card}>
           <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100">
             {t('scheduledTasks.runHistory', 'Run history')}
           </h2>
@@ -416,6 +434,7 @@ export default function TaskDetailPage() {
                           {formatDuration(run.durationMs) || '—'}
                         </td>
                         <td className="py-2 pr-4 text-gray-700 dark:text-gray-300 space-y-1">
+                          <RunMemoryBadges memory={run.memory} />
                           {run.reason?.message && (
                             <p
                               className={

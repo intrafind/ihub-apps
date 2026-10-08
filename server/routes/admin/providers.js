@@ -20,6 +20,7 @@ import {
   CUSTOM_PROVIDER_API_TYPES,
   getLinkedModels,
   getProviderApiType,
+  inspectProviderApiKey,
   isCustomLlmProvider,
   isReservedProviderId
 } from '../../services/llmProviders.js';
@@ -248,6 +249,27 @@ export default function registerAdminProvidersRoutes(app) {
       }
     }
   );
+
+  /**
+   * Whether each provider entry has a usable API key — see
+   * `GET /api/admin/models/_key-status`. The key itself is never returned.
+   */
+  app.get(buildServerPath('/api/admin/providers/_key-status'), adminAuth, async (req, res) => {
+    try {
+      const { data: providers } = configCache.getProviders(true);
+      // LLM providers only: other categories (web search, …) read their keys
+      // from places this check does not cover, so a verdict would mislead.
+      const statuses = Object.fromEntries(
+        providers
+          .filter(p => BUILT_IN_LLM_PROVIDERS.includes(p.id) || p.category === 'llm')
+          .map(provider => [provider.id, inspectProviderApiKey(provider)])
+      );
+      res.setHeader('Cache-Control', 'no-store');
+      res.json({ statuses });
+    } catch (error) {
+      return sendInternalError(res, error, 'read provider key status');
+    }
+  });
 
   app.get(buildServerPath('/api/admin/providers/:providerId'), adminAuth, async (req, res) => {
     try {

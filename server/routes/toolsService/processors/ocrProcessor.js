@@ -6,7 +6,7 @@ import { dirname, join } from 'path';
 import { PNG } from 'pngjs';
 import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs';
 import configCache from '../../../configCache.js';
-import { getApiKeyForModel } from '../../../utils.js';
+import { resolveModelApiKey } from '../../../utils.js';
 import llmClient from '../../../services/loop/LLMClient.js';
 import logger from '../../../utils/logger.js';
 import { completeJob, notifyClients } from '../jobStore.js';
@@ -497,6 +497,22 @@ function findVisionModel(models, preferredModelId) {
   );
 }
 
+/**
+ * The API key a whole OCR job runs with, decided once.
+ *
+ * A model on a local server needs none. That has to stay a decision: handed on
+ * as `null`, every page call would look the key up again in the live
+ * configuration, so a model edited while the job runs could send a new key to
+ * the destination the job started with. An empty key is explicit — the model
+ * call neither looks anything up nor sends an Authorization header.
+ *
+ * @param {{state: string, apiKey: string|null}} resolution - From `resolveModelApiKey`
+ * @returns {string|null} The key, or '' for a model that runs without one
+ */
+export function ocrJobApiKey(resolution) {
+  return resolution.state === 'keyless' ? '' : resolution.apiKey;
+}
+
 // ─── Main job processor ──────────────────────────────────────────────────────
 
 /**
@@ -528,13 +544,17 @@ export async function processOcrJob(job) {
         return;
       }
 
-      apiKey = await getApiKeyForModel(model.id);
-      if (!apiKey) {
+      const keyResolution = await resolveModelApiKey(model.id);
+      if (keyResolution.state !== 'ok' && keyResolution.state !== 'keyless') {
         job.status = 'error';
-        job.error = `No API key configured for model ${model.id}`;
+        job.error =
+          keyResolution.state === 'undecryptable'
+            ? `The API key stored for model ${model.id} cannot be decrypted. Enter it again in the admin UI.`
+            : `No API key configured for model ${model.id}`;
         notifyClients(job);
         return;
       }
+      apiKey = ocrJobApiKey(keyResolution);
 
       job.model = model.id;
     }

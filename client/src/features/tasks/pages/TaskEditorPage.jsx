@@ -40,6 +40,7 @@ function emptyDraft(defaultAppId) {
     variables: {},
     enabledTools: null,
     notify: 'always',
+    memory: { enabled: false },
     schedule: { type: 'daily', time: '08:00', timezone: browserTimezone() }
   };
 }
@@ -86,6 +87,7 @@ export default function TaskEditorPage() {
           variables: task.variables || {},
           enabledTools: task.enabledTools ?? null,
           notify: task.notify || 'always',
+          memory: { enabled: task.memory?.enabled === true },
           schedule: task.schedule
         });
         setScheduleForm(scheduleToForm(task.schedule, browserTimezone()));
@@ -134,8 +136,17 @@ export default function TaskEditorPage() {
   const toggleable = tools.filter(tool => tool.toggleable);
   const alwaysOn = tools.filter(tool => !tool.toggleable);
   const customTools = Array.isArray(draft.enabledTools);
+  const memoryOn = draft.memory?.enabled === true;
 
   const set = patch => setDraft(prev => ({ ...prev, ...patch }));
+  // "Only when something changed" needs the notes, so notify falls back to "After
+  // every run" when they are switched off.
+  const setMemory = enabled =>
+    setDraft(prev => ({
+      ...prev,
+      memory: { enabled },
+      notify: !enabled && prev.notify === 'changes' ? 'always' : prev.notify
+    }));
   const setVariable = (name, value) =>
     setDraft(prev => ({ ...prev, variables: { ...(prev.variables || {}), [name]: value } }));
 
@@ -153,6 +164,7 @@ export default function TaskEditorPage() {
       variables: draft.variables || {},
       enabledTools: customTools ? draft.enabledTools : null,
       notify: draft.notify,
+      memory: { enabled: memoryOn },
       schedule: formToSchedule(scheduleForm)
     };
     try {
@@ -373,7 +385,7 @@ export default function TaskEditorPage() {
               <p className="mt-1">
                 {t(
                   'scheduledTasks.variablesHelpText',
-                  'Runs do not see each other. To ask for "what changed since last time", use the time of the last run in the instructions:'
+                  'Without "Remember between runs", runs do not see each other. To ask for "what changed since last time", use the time of the last run in the instructions:'
                 )}
               </p>
               <ul className="mt-1 space-y-0.5 font-mono">
@@ -478,6 +490,37 @@ export default function TaskEditorPage() {
         </section>
 
         <section className={section}>
+          <div>
+            <label className="inline-flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
+              <input
+                id="task-memory"
+                type="checkbox"
+                className="rounded border-gray-300 text-indigo-600"
+                checked={memoryOn}
+                disabled={!limits.memoryEnabled}
+                aria-describedby="task-memory-help"
+                onChange={e => setMemory(e.target.checked)}
+              />
+              {t('scheduledTasks.memory.label', 'Remember between runs')}
+            </label>
+            <p
+              id="task-memory-help"
+              className="mt-1 text-xs text-gray-600 dark:text-gray-400 sm:max-w-xl"
+            >
+              {t(
+                'scheduledTasks.memory.help',
+                'The task keeps notes and updates them after each run, so the next run knows what was already reported. You can read and edit the notes on the task page. A run can also look at earlier runs.'
+              )}
+            </p>
+            {!limits.memoryEnabled && (
+              <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">
+                {t(
+                  'scheduledTasks.memory.platformOff',
+                  'An administrator has switched memory off for all tasks. Your setting is kept but has no effect for now.'
+                )}
+              </p>
+            )}
+          </div>
           <div className="sm:w-1/2">
             <label htmlFor="task-notify" className={label}>
               {t('scheduledTasks.fields.notify', 'Notify me')}
@@ -486,14 +529,30 @@ export default function TaskEditorPage() {
               id="task-notify"
               className={input}
               value={draft.notify}
+              aria-describedby={memoryOn ? undefined : 'task-notify-hint'}
               onChange={e => set({ notify: e.target.value })}
             >
               <option value="always">{t('scheduledTasks.notify.always', 'After every run')}</option>
               <option value="failure">
                 {t('scheduledTasks.notify.failure', 'Only when a run fails')}
               </option>
+              <option value="changes" disabled={!memoryOn}>
+                {t(
+                  'scheduledTasks.notify.changes',
+                  'Only when something changed (and on failures)'
+                )}
+              </option>
               <option value="never">{t('scheduledTasks.notify.never', 'Never')}</option>
             </select>
+            {!memoryOn && (
+              <p id="task-notify-hint" className="mt-1 text-xs text-gray-600 dark:text-gray-400">
+                {t(
+                  'scheduledTasks.memory.notifyNeedsMemory',
+                  '"Only when something changed" needs "Remember between runs".'
+                )}
+              </p>
+            )}
+            {errors.notify && <p className="mt-1 text-xs text-red-600">{errors.notify}</p>}
           </div>
         </section>
 
