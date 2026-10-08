@@ -130,6 +130,9 @@ Validated with a differential fuzz against LibreOffice (`soffice --convert-to tx
   `''`, because `RequestBuilder` only attaches page images for a file without content. Before,
   such a PDF (a scan with a page number in its text layer, or a one-line PDF) reached the model as
   its few characters only. **If rendering fails or yields no image, the text is kept** (a
-  deviation from the test plan row, which assumed rendering cannot fail).
+  deviation from the test plan row, which assumed rendering cannot fail). **The text is also kept
+  when it sits on a page beyond the five rendered ones** (`lastPageWithText`), otherwise a page 6
+  with a few lines would be lost; the images are then not attached (the file has content), as in
+  the plain text path before.
 - **Server-side extractors are untouched** (`inputContent.js`, `ocrProcessor.js`): release 2 (WP-E).
 - `attachDocumentPageImages` in `RequestBuilder.js` is exported for the T-DOWN-02 test; no behaviour change.

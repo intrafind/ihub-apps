@@ -5,6 +5,7 @@ import { extractDocxMarkdown } from '../../../../../shared/documentExtraction/do
 import { extractPdfText } from '../../../../../shared/documentExtraction/pdfText.js';
 import {
   MIN_REAL_TEXT_CHARS,
+  lastPageWithText,
   realTextLength
 } from '../../../../../shared/documentExtraction/markers.js';
 // Resolved by Vite at build time → copied to dist as a local asset.
@@ -1105,8 +1106,15 @@ export const processDocumentFile = async file => {
           `[fileProcessing] Rendered ${pageImages.length} PDF page(s) as images (${pageImages.reduce((sum, img) => sum + img.length, 0)} bytes total base64)`
         );
         // The images carry the page; the few characters of the text layer (a page number, a
-        // stamp) would only keep the images from being attached. Without images, keep the text.
-        if (extracted.structured && pageImages.length > 0) content = '';
+        // stamp) would only keep the images from being attached. Without images, keep the text
+        // — and keep it when it sits on a page that was not rendered.
+        if (
+          extracted.structured &&
+          pageImages.length > 0 &&
+          lastPageWithText(content) <= pageImages.length
+        ) {
+          content = '';
+        }
       } catch (e) {
         console.warn('PDF page rendering failed:', e);
       }

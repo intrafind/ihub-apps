@@ -210,7 +210,7 @@ Seite 1 von 3
 | Lines | One line of text per line of the page. Words are no longer separated by double spaces; a hyphen at the end of a line stays where it is (`re-` / `gelt`) |
 | A page without a text layer inside a PDF that has text elsewhere | `[Page 2: no extractable text]`, so a missing page is visible |
 | Running headers and footers (`Page 3 of 10`) | Kept as ordinary text |
-| Scanned PDF (no text, or less than 50 characters of real text — markers do not count) | No text; the first five pages are rendered as images for vision models, as before |
+| Scanned PDF (no text, or less than 50 characters of real text — markers do not count) | No text; the first five pages are rendered as images for vision models, as before. Text on a later page is kept instead, so it is not lost |
 
 Multi-column layouts are read in the order the PDF stores the text, which is not always the reading order. Headings are not detected in PDFs.
 
