@@ -4,7 +4,7 @@
  * Security Audit Script for Admin Endpoints
  *
  * This script scans all admin route files and verifies that:
- * 1. Every admin endpoint is guarded by an admin middleware (ADMIN_GUARD_PATTERN)
+ * 1. Every admin endpoint is guarded by an admin middleware (ADMIN_GUARDS)
  * 2. Documents any intentional exceptions
  * 3. Generates a comprehensive security audit report
  *
@@ -29,8 +29,9 @@ const ADMIN_ROUTES_DIR = process.argv[2]
 
 // Middleware that restricts a route to administrators. contentAdminAuth also
 // admits groups with the delegated contentAdmin permission (apps, prompts,
-// sources, skills) and rejects anonymous and machine principals.
-const ADMIN_GUARD_PATTERN = /\b(adminAuth|contentAdminAuth)\b/;
+// sources, skills) and rejects anonymous and machine principals. A route counts
+// as guarded only when one of them is passed as an argument of its own.
+const ADMIN_GUARDS = new Set(['adminAuth', 'contentAdminAuth']);
 
 // Known intentional exceptions (endpoints that should NOT have adminAuth)
 const INTENTIONAL_EXCEPTIONS = [
@@ -79,24 +80,32 @@ function callEnd(args, limit) {
 }
 
 /**
- * |code| with its comments and string contents blanked out, so a guard that is
- * commented out or only named in a string does not count.
+ * The top-level arguments in |args| (an argument list without its enclosing
+ * parentheses), trimmed and with comments removed.
  */
-function codeOnly(code) {
-  let out = '';
-  for (let i = 0; i < code.length; i++) {
-    const ch = code[i];
+function topLevelArguments(args) {
+  const parts = [];
+  let current = '';
+  let depth = 0;
+  for (let i = 0; i < args.length; i++) {
+    const ch = args[i];
     if (ch === "'" || ch === '"' || ch === '`') {
-      i = stringEnd(code, i);
-      out += `${ch}${ch}`;
-    } else if (code.startsWith('//', i) || code.startsWith('/*', i)) {
-      i = commentEnd(code, i);
-      out += ' ';
+      const end = stringEnd(args, i);
+      current += args.slice(i, end + 1);
+      i = end;
+    } else if (args.startsWith('//', i) || args.startsWith('/*', i)) {
+      i = commentEnd(args, i);
+    } else if (ch === ',' && depth === 0) {
+      parts.push(current.trim());
+      current = '';
     } else {
-      out += ch;
+      if ('([{'.includes(ch)) depth++;
+      else if (')]}'.includes(ch)) depth--;
+      current += ch;
     }
   }
-  return out;
+  parts.push(current.trim());
+  return parts;
 }
 
 /** Every route registered in |filePath|, with whether an admin guard protects it. */
@@ -130,7 +139,7 @@ function extractRoutes(filePath, fileName) {
       0,
       callEnd(rest, handlerStart === -1 ? rest.length : handlerStart)
     );
-    const hasAdminAuth = ADMIN_GUARD_PATTERN.test(codeOnly(middleware));
+    const hasAdminAuth = topLevelArguments(middleware).some(arg => ADMIN_GUARDS.has(arg));
 
     routes.push({
       file: fileName,

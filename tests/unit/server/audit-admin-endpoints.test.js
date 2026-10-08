@@ -68,8 +68,10 @@ describe('admin route audit', () => {
     }
   });
 
-  test('does not count a guard that is commented out or only named in a string', () => {
+  test('counts a guard only when it is passed as an argument of its own', () => {
     for (const route of [
+      "app.get(buildServerPath('/api/admin/a'), validate({ pattern: /adminAuth/ }), listThings);",
+      "app.get(buildServerPath('/api/admin/a'), wrap(adminAuth.optional), listThings);",
       "app.get(buildServerPath('/api/admin/a'), log('adminAuth skipped'), listThings);",
       "app.get(buildServerPath('/api/admin/a'), /* adminAuth */ listThings);",
       `app.get(
