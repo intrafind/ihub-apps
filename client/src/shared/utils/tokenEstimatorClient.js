@@ -11,6 +11,10 @@
  * The pure `computeContextUsage` math is re-exported from the dependency-free
  * shared helper so callers have a single import site.
  */
+import {
+  computeContextUsage,
+  conversationTokenFragments
+} from '../../../../shared/contextUsage.js';
 
 let countTokensFn = null;
 let loadPromise = null;
@@ -108,7 +112,4 @@ export function estimateTokensForFragmentsSync(fragments = []) {
   return total;
 }
 
-export {
-  computeContextUsage,
-  conversationTokenFragments
-} from '../../../../shared/contextUsage.js';
+export { computeContextUsage, conversationTokenFragments };
