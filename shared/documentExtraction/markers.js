@@ -63,3 +63,25 @@ export function realTextLength(text) {
   }
   return total;
 }
+
+const PAGE_START = /^\[Page (\d+)(?: \(printed: [^)\n]*\))?\]$/;
+
+/**
+ * Physical number of the last page that has real text (0 when there is none). A PDF with text on
+ * a page the fallback does not render must keep that text: the images alone would lose it.
+ *
+ * @param {string} text - Structured PDF text with page markers
+ * @returns {number}
+ */
+export function lastPageWithText(text) {
+  if (typeof text !== 'string') return 0;
+  let current = 0;
+  let last = 0;
+  for (const raw of text.split('\n')) {
+    const line = raw.trim();
+    const start = PAGE_START.exec(line);
+    if (start) current = Number(start[1]);
+    else if (line !== '' && !MARKER_LINE.test(line)) last = current;
+  }
+  return last;
+}
