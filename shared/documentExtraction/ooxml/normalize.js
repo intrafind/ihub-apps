@@ -125,12 +125,20 @@ export function normalizeDocumentXml(doc, { xml, styles, canAddOutlineStyles = t
       continue;
     }
 
+    // Text mammoth will output: `w:t` of visible runs. Field codes (`w:instrText`) and tracked
+    // deletions (`w:delText`) are in `textContent` but never in the result.
+    const hasAcceptedContent = visibleRuns.some(run =>
+      xml.all(run, 't').some(text => text.textContent.trim() !== '')
+    );
+
     // 3b. Page break before the paragraph (own property or paragraph style). Not before the
     // first content: a chapter that starts on page 1 is not a boundary between content.
     const pageBreakBefore =
       xml.toggle(xml.kid(pPr, 'pageBreakBefore')) ?? styles.resolve(styleId, 'pageBreakBefore');
-    if (pageBreakBefore && seenContent) para.parentNode.insertBefore(markerParagraph(), para);
-    if (para.textContent.trim()) seenContent = true;
+    if (pageBreakBefore && hasAcceptedContent && seenContent) {
+      para.parentNode.insertBefore(markerParagraph(), para);
+    }
+    if (hasAcceptedContent) seenContent = true;
 
     // 3c. Runs: soft hyphens out; w:cr is a line break; a page break must not glue words.
     for (const run of visibleRuns) {
@@ -143,8 +151,8 @@ export function normalizeDocumentXml(doc, { xml, styles, canAddOutlineStyles = t
           run.insertBefore(xml.create(doc, 'br'), child);
           run.insertBefore(textElement(PAGE_BREAK_MARKER), child);
           run.replaceChild(xml.create(doc, 'br'), child);
-        } else if (xml.isW(child, 't') && child.textContent.includes('­')) {
-          child.textContent = child.textContent.replace(/­/g, '');
+        } else if (xml.isW(child, 't') && child.textContent.includes('\u00AD')) {
+          child.textContent = child.textContent.replace(/\u00AD/g, '');
         }
       }
     }
@@ -152,7 +160,7 @@ export function normalizeDocumentXml(doc, { xml, styles, canAddOutlineStyles = t
     // 3d. Headings by outline level. mammoth maps built-in `heading 1–6` itself; every other
     // style with an outline level (corporate templates) and every paragraph with its own
     // outline level gets a synthetic style named `heading N`, which mammoth also maps.
-    if (canAddOutlineStyles) {
+    if (canAddOutlineStyles && hasAcceptedContent) {
       const directLevel = xml.val(xml.kid(pPr, 'outlineLvl'));
       const direct = directLevel === undefined ? undefined : Number(directLevel);
       const level = Number.isNaN(direct)

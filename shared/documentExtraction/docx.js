@@ -36,7 +36,7 @@ async function relationshipTargets(zip, DOMParserCtor, ownerPart, typeSuffixes) 
   const found = {};
   if (!relsFile) return found;
   const relsDoc = parseXml(DOMParserCtor, await relsFile.async('string'));
-  for (const rel of Array.from(relsDoc.getElementsByTagName('Relationship'))) {
+  for (const rel of Array.from(relsDoc.getElementsByTagNameNS('*', 'Relationship'))) {
     const type = rel.getAttribute('Type') || '';
     const suffix = typeSuffixes.find(s => type.endsWith(s));
     if (suffix && rel.getAttribute('TargetMode') !== 'External') {
