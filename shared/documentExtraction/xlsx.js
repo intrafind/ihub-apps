@@ -24,15 +24,23 @@ export { MAX_SHEET_ROWS, MAX_WORKBOOK_CHARS, SHEET_NOTICE_RESERVE, looksLikeHead
  * A cell that spans rows shows its text in each row (every row stays self-contained); one that
  * spans columns keeps it in the first column, the others are empty. Only the rows that are read
  * are filled, so a merge down a million rows costs nothing.
+ *
+ * The filled cells go into a copy of the sheet (made only when there is something to fill): the
+ * workbook belongs to the caller, who may read it again.
+ *
+ * @returns {Object} The sheet to read the rows from
  */
-function fillVerticalMerges(XLSX, sheet, lastRow) {
+function withVerticalMerges(XLSX, sheet, lastRow) {
+  let filled = sheet;
   for (const merge of sheet['!merges'] || []) {
     const origin = sheet[XLSX.utils.encode_cell(merge.s)];
     if (!origin) continue;
     for (let row = merge.s.r + 1; row <= Math.min(merge.e.r, lastRow); row += 1) {
-      sheet[XLSX.utils.encode_cell({ r: row, c: merge.s.c })] = { ...origin };
+      if (filled === sheet) filled = { ...sheet };
+      filled[XLSX.utils.encode_cell({ r: row, c: merge.s.c })] = { ...origin };
     }
   }
+  return filled;
 }
 
 /**
@@ -57,9 +65,7 @@ export function extractXlsxText({ XLSX, workbook, limits = {} }) {
       read: () => {
         const range = XLSX.utils.decode_range(sheet['!ref']);
         const lastRow = Math.min(range.e.r, range.s.r + sheetRows - 1);
-        fillVerticalMerges(XLSX, sheet, lastRow);
-
-        const rows = XLSX.utils.sheet_to_json(sheet, {
+        const rows = XLSX.utils.sheet_to_json(withVerticalMerges(XLSX, sheet, lastRow), {
           header: 1,
           raw: false,
           defval: '',
