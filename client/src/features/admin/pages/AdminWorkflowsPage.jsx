@@ -137,7 +137,7 @@ function AdminWorkflowsPage() {
       link.download = `workflow-${workflowId}.json`;
       document.body.appendChild(link);
       link.click();
-      document.body.removeChild(link);
+      link.remove();
       URL.revokeObjectURL(url);
     } catch (err) {
       setError(`Failed to download workflow config: ${getAdminApiErrorMessage(err)}`);

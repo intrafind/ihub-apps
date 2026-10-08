@@ -158,7 +158,7 @@ function AdminPromptsPage() {
       link.download = `prompt-${promptId}.json`;
       document.body.appendChild(link);
       link.click();
-      document.body.removeChild(link);
+      link.remove();
       URL.revokeObjectURL(url);
     } catch (err) {
       setError(`Failed to download prompt config: ${getAdminApiErrorMessage(err)}`);

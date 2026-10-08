@@ -244,7 +244,7 @@ function AdminAppsPage() {
       link.download = `app-${appId}.json`;
       document.body.appendChild(link);
       link.click();
-      document.body.removeChild(link);
+      link.remove();
       URL.revokeObjectURL(url);
     } catch (err) {
       setError(`Failed to download app config: ${getAdminApiErrorMessage(err)}`);

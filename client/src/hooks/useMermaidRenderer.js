@@ -609,7 +609,7 @@ export const useMermaidRenderer = ({ t }) => {
           a.style.display = 'none';
           document.body.appendChild(a);
           a.click();
-          document.body.removeChild(a);
+          a.remove();
           URL.revokeObjectURL(url);
           showMermaidButtonFeedback(button, 'Downloaded!', 'text-green-600', 'checkmark');
         } catch (err) {
@@ -702,7 +702,7 @@ export const useMermaidRenderer = ({ t }) => {
                   a.style.display = 'none';
                   document.body.appendChild(a);
                   a.click();
-                  document.body.removeChild(a);
+                  a.remove();
                   URL.revokeObjectURL(url);
                   showMermaidButtonFeedback(button, 'Downloaded!', 'text-green-600', 'checkmark');
                 } else {
@@ -1118,7 +1118,7 @@ export const useMermaidRenderer = ({ t }) => {
             document.removeEventListener('mouseup', mouseUpHandler);
             document.removeEventListener('keydown', escapeHandler);
             window.removeEventListener('resize', handleResize);
-            document.body.removeChild(modal);
+            modal.remove();
           }
         };
 

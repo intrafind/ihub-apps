@@ -58,7 +58,7 @@ const downloadBlob = (blob, filename) => {
   link.style.display = 'none';
   document.body.appendChild(link);
   link.click();
-  document.body.removeChild(link);
+  link.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 };
 
