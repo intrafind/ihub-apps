@@ -97,6 +97,27 @@ export function markTrackedChanges(doc, xml) {
       PROPERTY_PARENTS.has(element.parentNode.localName)
     );
 
+  const WRAPPABLE = new Set(['r', 'hyperlink', 'fldSimple', 'smartTag', 'sdt']);
+  /** Wraps the run content of every paragraph of `row` that carries no revision mark yet. */
+  const markRowContent = (row, name) => {
+    for (const paragraph of xml.all(row, 'p')) {
+      let wrapper = null;
+      for (const node of [...paragraph.childNodes]) {
+        const known = node.namespaceURI === xml.ns;
+        if (known && WRAPPABLE.has(node.localName)) {
+          if (!wrapper) {
+            wrapper = xml.create(doc, name);
+            paragraph.insertBefore(wrapper, node);
+          }
+          wrapper.appendChild(node);
+        } else if (!(known && node.localName === 'pPr')) {
+          // A revision mark that is already there (or anything else) ends the group.
+          wrapper = null;
+        }
+      }
+    }
+  };
+
   // Marks of whole paragraphs and rows.
   for (const props of xml.all(doc, 'pPr')) {
     const markProps = xml.kid(props, 'rPr');
@@ -106,9 +127,41 @@ export function markTrackedChanges(doc, xml) {
     }
   }
   for (const props of xml.all(doc, 'trPr')) {
-    const mark = xml.kid(props, 'del');
-    if (mark) props.removeChild(mark);
+    const row = props.parentNode;
+    for (const [name, wrapper] of [
+      ['del', 'del'],
+      ['ins', 'ins']
+    ]) {
+      const mark = xml.kid(props, name);
+      if (!mark) continue;
+      props.removeChild(mark);
+      // The row mark does not mark the cells: Word also wraps their runs, other writers do not.
+      // Whatever is not wrapped yet is wrapped here, so the row shows as deleted / inserted.
+      if (row) markRowContent(row, wrapper);
+    }
   }
+
+  /**
+   * The text inside a marker is the document's own: a closing sequence in it (also one split
+   * over several runs) would end the marker early, so it gets a space in front of its `}`.
+   */
+  const defuseClosings = container => {
+    const nodes = xml.all(container, 't');
+    const joined = nodes.map(node => node.textContent).join('');
+    const hits = [...joined.matchAll(/(?:--|\+\+|<<)\}/g)].map(hit => hit.index + 2).reverse();
+    for (const position of hits) {
+      let start = 0;
+      for (const node of nodes) {
+        const text = node.textContent;
+        if (position < start + text.length) {
+          const at = position - start;
+          node.textContent = `${text.slice(0, at)} ${text.slice(at)}`;
+          break;
+        }
+        start += text.length;
+      }
+    }
+  };
 
   /** Replaces `container` by its content, between the marker runs when there is text. */
   const unwrap = (container, open, close, dropIfBlank) => {
@@ -118,6 +171,7 @@ export function markTrackedChanges(doc, xml) {
       parent.removeChild(container);
       return;
     }
+    if (marked) defuseClosings(container);
     if (marked) parent.insertBefore(markerRun(open), container);
     while (container.firstChild) parent.insertBefore(container.firstChild, container);
     if (marked) parent.insertBefore(markerRun(close), container);
