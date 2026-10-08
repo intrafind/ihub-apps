@@ -22,7 +22,8 @@ const config = require('../../../client/src/api/endpoints/config');
 const {
   extractXlsxText,
   MAX_SHEET_ROWS,
-  MAX_WORKBOOK_CHARS
+  MAX_WORKBOOK_CHARS,
+  SHEET_NOTICE_RESERVE
 } = require('../../../shared/documentExtraction/xlsx.js');
 const { processDocumentFile } = require('../../../client/src/features/upload/utils/fileProcessing');
 const { makeFile } = require('../../utils/officeFixtures');
@@ -214,6 +215,38 @@ describe('size limits', () => {
     expect(lines).toHaveLength(1 + 1 + 1 + 9 + 1);
     expect(lines.at(-2)).toBe('| 9 | Zeile 9 |');
     expect(lines.at(-1)).toBe('[… 21 more rows omitted]');
+  });
+
+  it('the budget is a bound even for a workbook of many sheets: titles stop, the rest is counted', async () => {
+    const workbook = XLSX.utils.book_new();
+    for (let i = 0; i < 400; i += 1) {
+      XLSX.utils.book_append_sheet(
+        workbook,
+        XLSX.utils.aoa_to_sheet([
+          ['Nr', 'Text'],
+          [i, 'x'.repeat(40)]
+        ]),
+        `Sheet${i}`
+      );
+    }
+    const text = extractXlsxText({ XLSX, workbook, limits: { workbookChars: 100 } });
+    expect(text.length).toBeLessThan(100 + SHEET_NOTICE_RESERVE + 200);
+    expect(text.split('\n').at(-1)).toMatch(/^\[… \d+ more sheets omitted\]$/);
+    expect(text).toContain('[Sheet: Sheet0]');
+    expect(text).not.toContain('[Sheet: Sheet399]');
+  });
+
+  it('a number, date or time first row is data however its format prints it', async () => {
+    const sheet = XLSX.utils.aoa_to_sheet([
+      [45931, 'Betrag'],
+      ['a', 'b']
+    ]);
+    sheet.A1.z = 'mmm yyyy'; // prints as "Oct 2025": text that is no number to look at
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, sheet, 'S');
+    const text = extractXlsxText({ XLSX, workbook });
+    expect(text).not.toContain('| --- |');
+    expect(text).toContain('Oct 2025\tBetrag');
   });
 
   it('the character budget covers the whole workbook: later sheets say what was left out', async () => {

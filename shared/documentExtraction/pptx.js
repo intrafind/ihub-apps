@@ -177,8 +177,14 @@ export async function extractPptxText({
   );
   const presentationPart = mainTarget || DEFAULT_PRESENTATION_PART;
   let slides = [];
+  let isDeck = false;
   try {
     const presentation = await readPart(presentationPart);
+    // The main part of a PowerPoint file is a `p:presentation`; a Word file named .pptx has
+    // a document there.
+    isDeck =
+      presentation?.documentElement?.localName === 'presentation' &&
+      P_NS.has(presentation.documentElement.namespaceURI);
     const relationships = new Map(
       (await readRelationships(zip, DOMParserCtor, presentationPart)).map(rel => [rel.id, rel])
     );
@@ -189,6 +195,10 @@ export async function extractPptxText({
   } catch {
     slides = [];
   }
+  // A slide list none of whose entries resolves (the relationships are missing or empty) is no
+  // list: the file names still tell where the slides are. A list that resolves in part keeps
+  // its numbering; the entries that do not resolve are skipped below.
+  if (!slides.some(slide => slide.part)) slides = [];
   if (slides.length === 0) {
     slides = Object.keys(zip.files)
       .map(path => ({ part: path, match: /^ppt\/slides\/slide(\d+)\.xml$/.exec(path) }))
@@ -197,9 +207,10 @@ export async function extractPptxText({
       .sort((a, b) => a.number - b.number);
   }
 
-  // A package without a presentation part and without slides is no deck.
-  if (slides.length === 0 && !zip.file(presentationPart)) {
-    throw new Error(`${presentationPart} is missing`);
+  // A package without slides whose main part is no presentation (missing, unreadable, or the
+  // document of another Office format) is no deck.
+  if (slides.length === 0 && !isDeck) {
+    throw new Error(`${presentationPart} is not a presentation`);
   }
 
   const output = [];
