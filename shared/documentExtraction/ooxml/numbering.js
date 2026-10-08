@@ -103,17 +103,12 @@ export function createNumbering(numberingDoc, styles, xml) {
     pStyle: xml.val(xml.kid(lvl, 'pStyle'))
   });
 
-  const abstracts = new Map();
-  for (const abstract of xml.all(numberingDoc, 'abstractNum')) {
-    const id = xml.attr(abstract, 'abstractNumId');
-    if (id === undefined) continue;
-    const levels = new Map();
-    for (const lvl of xml.kids(abstract, 'lvl')) {
-      const ilvl = Number(xml.attr(lvl, 'ilvl'));
-      if (Number.isFinite(ilvl)) levels.set(ilvl, readLevel(lvl));
-    }
-    // Levels whose numbering restarts by a custom rule are not implemented; a level that
-    // refers to one in its text would show a wrong number as well.
+  /**
+   * What a set of levels allows. Levels whose numbering restarts by a custom rule are not
+   * implemented, and neither is a level whose label refers to one; a level can be linked to a
+   * paragraph style.
+   */
+  const analyseLevels = levels => {
     const unsupported = new Set(
       [...levels].filter(([, level]) => level.hasRestartRule).map(([ilvl]) => ilvl)
     );
@@ -134,10 +129,20 @@ export function createNumbering(numberingDoc, styles, xml) {
     }
     const levelOfStyle = new Map();
     for (const [ilvl, level] of levels) if (level.pStyle) levelOfStyle.set(level.pStyle, ilvl);
+    return { unsupported, levelOfStyle };
+  };
+
+  const abstracts = new Map();
+  for (const abstract of xml.all(numberingDoc, 'abstractNum')) {
+    const id = xml.attr(abstract, 'abstractNumId');
+    if (id === undefined) continue;
+    const levels = new Map();
+    for (const lvl of xml.kids(abstract, 'lvl')) {
+      const ilvl = Number(xml.attr(lvl, 'ilvl'));
+      if (Number.isFinite(ilvl)) levels.set(ilvl, readLevel(lvl));
+    }
     abstracts.set(id, {
       levels,
-      unsupported,
-      levelOfStyle,
       numStyleLink: xml.val(xml.kid(abstract, 'numStyleLink'))
     });
   }
@@ -170,6 +175,19 @@ export function createNumbering(numberingDoc, styles, xml) {
       : resolveAbstractId(linkedAbstractId, depth + 1);
   };
 
+  // The levels a list instance really has: its definition with the levels the instance
+  // overrides in full (`w:lvlOverride/w:lvl`).
+  const effectiveCache = new Map();
+  const effectiveLevels = (numId, num, abstract) => {
+    if (!effectiveCache.has(numId)) {
+      const levels = new Map(abstract.levels);
+      for (const [ilvl, override] of num.overrides)
+        if (override.level) levels.set(ilvl, override.level);
+      effectiveCache.set(numId, { levels, ...analyseLevels(levels) });
+    }
+    return effectiveCache.get(numId);
+  };
+
   // Counters per list definition: all `w:num` that share a definition continue each other.
   const state = new Map();
   const stateOf = abstractId => {
@@ -194,9 +212,10 @@ export function createNumbering(numberingDoc, styles, xml) {
     const abstract = abstracts.get(abstractId);
     if (!abstract) return { kind: 'unknown' };
 
-    const level = ilvl ?? abstract.levelOfStyle.get(styleId) ?? 0;
-    const levelOf = (num_, k) => num_.overrides.get(k)?.level ?? abstract.levels.get(k);
-    const current = levelOf(num, level);
+    const effective = effectiveLevels(numId, num, abstract);
+    const level = ilvl ?? effective.levelOfStyle.get(styleId) ?? 0;
+    const levelOf = k => effective.levels.get(k);
+    const current = levelOf(level);
     if (!current) return { kind: 'unsupported' };
 
     const { counters, seenLevels } = stateOf(abstractId);
@@ -210,19 +229,19 @@ export function createNumbering(numberingDoc, styles, xml) {
     }
     // A skipped higher level shows its start value; a deeper level starts over.
     for (let k = 0; k < level; k += 1) {
-      if (counters[k] === undefined) counters[k] = levelOf(num, k)?.start ?? 1;
+      if (counters[k] === undefined) counters[k] = levelOf(k)?.start ?? 1;
     }
     counters[level] = counters[level] === undefined ? current.start : counters[level] + 1;
     for (let deeper = level + 1; deeper < counters.length; deeper += 1)
       counters[deeper] = undefined;
 
-    if (abstract.unsupported.has(level)) return { kind: 'unsupported' };
+    if (effective.unsupported.has(level)) return { kind: 'unsupported' };
     if (current.numFmt === 'bullet') {
       // A bullet list stays a list for mammoth only when every level above is a bullet as well.
       // Under a numbered level (whose paragraph becomes plain text) mammoth would nest it in an
       // empty list item (`- - text`): a plain `-` paragraph is the better text.
       const inBulletList = Array.from({ length: level }, (_, k) => k).every(
-        k => levelOf(num, k)?.numFmt === 'bullet'
+        k => levelOf(k)?.numFmt === 'bullet'
       );
       return inBulletList ? { kind: 'bullet' } : { kind: 'label', text: '-' };
     }
@@ -230,7 +249,7 @@ export function createNumbering(numberingDoc, styles, xml) {
 
     const text = current.lvlText.replace(/%([1-9])/g, (_, digit) => {
       const k = Number(digit) - 1;
-      const shown = levelOf(num, k);
+      const shown = levelOf(k);
       const value = counters[k] ?? shown?.start ?? 1;
       // Legal numbering shows every level as an Arabic number: roman numerals, letters and
       // ordinals become plain decimals; a zero-padded number already is one.
