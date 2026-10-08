@@ -42,9 +42,10 @@ jobs:
           node-version: '24'
           cache: 'npm'
 
-      # ESLint and its plugins are root dev dependencies.
+      # ESLint and its plugins are root dev dependencies; none of them needs an
+      # install script, so dependency lifecycle scripts do not run here.
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --ignore-scripts
 
       - name: Lint changed lines with jsx-a11y
         env:

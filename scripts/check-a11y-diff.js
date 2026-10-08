@@ -23,6 +23,11 @@ import { execFileSync } from 'child_process';
 import { ESLint } from 'eslint';
 
 const base = process.argv[2] || 'origin/main';
+// A ref, never an option: git would read "--output=…" as one.
+if (!/^\w[\w./~^@{}-]*$/.test(base)) {
+  console.error(`Invalid base ref: ${base}`);
+  process.exit(2);
+}
 const LINTED = /^client\/.*\.(js|jsx)$/;
 
 function git(...args) {
@@ -36,6 +41,7 @@ function changedLines() {
     '--unified=0',
     '--diff-filter=ACMR',
     '--no-color',
+    '--end-of-options',
     `${base}...HEAD`,
     '--',
     'client'
@@ -69,12 +75,18 @@ const eslint = new ESLint();
 const results = await eslint.lintFiles([...files.keys()]);
 const isA11y = message => message.ruleId?.startsWith('jsx-a11y/');
 
-const mergeBase = git('merge-base', base, 'HEAD').trim();
+const mergeBase = git('merge-base', '--end-of-options', base, 'HEAD').trim();
 // Path of each changed file at the merge base (renames included; absent when added).
 const basePaths = new Map();
-for (const line of git('diff', '--name-status', '-M', `${base}...HEAD`, '--', 'client').split(
-  '\n'
-)) {
+for (const line of git(
+  'diff',
+  '--name-status',
+  '-M',
+  '--end-of-options',
+  `${base}...HEAD`,
+  '--',
+  'client'
+).split('\n')) {
   const [status, from, to] = line.split('\t');
   if (status?.startsWith('R')) basePaths.set(to, from);
   else if (status === 'M') basePaths.set(from, from);
@@ -85,7 +97,7 @@ async function baseCounts(file) {
   const counts = new Map();
   const basePath = basePaths.get(file);
   if (!basePath) return counts;
-  const source = git('show', `${mergeBase}:${basePath}`);
+  const source = git('show', '--end-of-options', `${mergeBase}:${basePath}`);
   const [result] = await eslint.lintText(source, { filePath: file });
   for (const message of result.messages.filter(isA11y)) {
     counts.set(message.ruleId, (counts.get(message.ruleId) ?? 0) + 1);

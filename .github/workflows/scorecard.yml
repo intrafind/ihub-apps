@@ -18,13 +18,21 @@ on:
   branch_protection_rule:
   workflow_dispatch:
 
-permissions: read-all
+permissions:
+  contents: read
 
 jobs:
   analysis:
     name: Scorecard analysis
     runs-on: ubuntu-latest
+    # Read access for the checks Scorecard grades (workflows, CI results,
+    # code review, branch protection), instead of read-all.
     permissions:
+      contents: read
+      actions: read
+      checks: read
+      issues: read
+      pull-requests: read
       security-events: write
       # Signs the results published to the Scorecard API.
       id-token: write
