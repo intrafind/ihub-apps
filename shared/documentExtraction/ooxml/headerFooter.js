@@ -14,7 +14,7 @@
 
 const R_NAMESPACES = [
   'http://schemas.openxmlformats.org/officeDocument/2006/relationships',
-  'http://purl.oclc.org/ooxml/officeDocument/relationships'
+  'http://purl.oclc.org/ooxml/officeDocument/relationships' // NOSONAR: an XML namespace name, never requested
 ];
 const MC_NS = 'http://schemas.openxmlformats.org/markup-compatibility/2006';
 
