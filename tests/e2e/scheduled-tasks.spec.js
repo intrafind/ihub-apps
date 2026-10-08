@@ -115,4 +115,99 @@ test.describe('Scheduled tasks', () => {
     });
     expect(create.status()).toBe(400);
   });
+
+  test.describe('memory', () => {
+    async function createTask(page, extra = {}) {
+      const response = await page.request.post('/api/scheduled-tasks', {
+        data: {
+          name: `E2E memory ${Date.now()}`,
+          appId: 'chat',
+          instructions: 'Say hello.',
+          schedule: { type: 'manual' },
+          ...extra
+        }
+      });
+      expect(response.status()).toBe(201);
+      const task = await response.json();
+      created.push(task.id);
+      return task;
+    }
+
+    test('keeps notes that the owner edits, with a version check and clearing', async ({
+      page
+    }) => {
+      const task = await createTask(page, { memory: { enabled: true } });
+      expect(task.memory.enabled).toBe(true);
+      const url = `/api/scheduled-tasks/${task.id}/memory`;
+
+      const empty = await (await page.request.get(url)).json();
+      expect(empty).toMatchObject({ body: '', version: 0, enabled: true });
+      expect(empty.maxChars).toBeGreaterThan(0);
+
+      const saved = await page.request.put(url, {
+        data: { content: '- reported v1.2', expectedVersion: 0 }
+      });
+      expect(saved.ok()).toBeTruthy();
+      const { version } = await saved.json();
+      expect(version).toBe(1);
+
+      // A write that started from an older version is refused, not merged.
+      const stale = await page.request.put(url, {
+        data: { content: 'overwrite', expectedVersion: 0 }
+      });
+      expect(stale.status()).toBe(409);
+      expect((await (await page.request.get(url)).json()).body).toBe('- reported v1.2\n');
+
+      const cleared = await page.request.delete(url);
+      expect(cleared.ok()).toBeTruthy();
+      expect((await (await page.request.get(url)).json()).body).toBe('');
+    });
+
+    test('shows an admin the size of the notes and never the notes', async ({ page }) => {
+      const task = await createTask(page, { memory: { enabled: true } });
+      const put = await page.request.put(`/api/scheduled-tasks/${task.id}/memory`, {
+        data: { content: 'private note', expectedVersion: 0 }
+      });
+      expect(put.ok()).toBeTruthy();
+
+      const response = await page.request.get(`/api/admin/scheduled-tasks/${task.id}/memory`);
+      expect(response.ok()).toBeTruthy();
+      const metadata = await response.json();
+      // The server ends the notes with a newline, like a file.
+      expect(metadata.chars).toBe('private note\n'.length);
+      expect(metadata.version).toBe(1);
+      expect(JSON.stringify(metadata)).not.toContain('private note');
+    });
+
+    test('refuses "only when something changed" for a task without memory', async ({ page }) => {
+      const response = await page.request.post('/api/scheduled-tasks', {
+        data: {
+          name: 'No memory',
+          appId: 'chat',
+          instructions: 'Say hello.',
+          schedule: { type: 'manual' },
+          notify: 'changes'
+        }
+      });
+      expect(response.status()).toBe(400);
+      const { details } = await response.json();
+      expect(details.map(detail => detail.code)).toContain('NOTIFY_CHANGES_NEEDS_MEMORY');
+    });
+
+    test('edits the notes from the Memory card on the task page', async ({ page }) => {
+      const task = await createTask(page, { memory: { enabled: true } });
+      await page.goto(`/tasks/${task.id}`);
+
+      const notes = page.getByRole('textbox', { name: 'Memory notes' });
+      await expect(notes).toBeVisible();
+      await notes.fill('- watermark: 2026-10-08');
+      await page.getByRole('button', { name: 'Save' }).click();
+      await expect(page.getByTestId('memory-version')).toContainText('Version 1');
+
+      await page.reload();
+      await expect(page.getByRole('textbox', { name: 'Memory notes' })).toHaveValue(
+        '- watermark: 2026-10-08\n'
+      );
+    });
+  });
 });

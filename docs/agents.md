@@ -157,6 +157,14 @@ failure on one path can never break the other.
 The legacy `write_memory` LLM tool stays auto-registered as an in-run
 escape hatch for compose flows that want to write mid-run.
 
+**Scheduled tasks use the same memory.** `read_memory` and `write_memory` are one
+implementation (`server/services/memory/memoryService.js`) with two scopes: an
+agent's memory file, and the notes of a [scheduled task](scheduled-tasks.md#memory-and-earlier-runs)
+that keeps memory between runs. The scope comes from who is calling (the agent
+profile, or the scheduled run), never from a tool argument, so a run cannot
+reach another task's notes or an agent's. An agent's memory still lives in its
+file; the admin editor for it is the same component the task page uses.
+
 ### Plan-and-review loop (`review.enabled`)
 
 Opt-in via:

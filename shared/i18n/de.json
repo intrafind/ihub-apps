@@ -3783,7 +3783,8 @@
         "owner": "Eigentümer",
         "schedule": "Zeitplan",
         "status": "Status",
-        "task": "Aufgabe"
+        "task": "Aufgabe",
+        "memory": "Gedächtnis"
       },
       "confirmDelete": "„{{name}}“ von {{owner}} löschen?",
       "disable": "Deaktivieren",
@@ -3817,8 +3818,17 @@
         "runRetentionDays": "Laufprotokolle aufbewahren (Tage)",
         "maxRunChatsPerTask": "Behaltene Lauf-Chats pro Aufgabe",
         "maxInstructionLength": "Längste Anweisungen (Zeichen)",
-        "maxRunMinutes": "Längster Lauf (Minuten)"
-      }
+        "maxRunMinutes": "Längster Lauf (Minuten)",
+        "memoryEnabled": "Gedächtnis zwischen Läufen erlauben",
+        "memoryMaxChars": "Längste Notizen (Zeichen)",
+        "maxHistoryReadChars": "Längste frühere Antwort, die ein Lauf lesen darf (Zeichen)"
+      },
+      "memory": {
+        "summary": "{{chars}} Zeichen · v{{version}} · {{updatedAt}}",
+        "clear": "Gedächtnis leeren",
+        "confirmClear": "Das Gedächtnis von „{{name}}“ von {{owner}} leeren? Der Eigentümer verliert diese Notizen."
+      },
+      "memoryEnabledHint": "Aus: Läufe lesen und aktualisieren die Notizen einer Aufgabe nicht (die Notizen bleiben erhalten), und „Nur bei Änderungen“ benachrichtigt nach jedem Lauf."
     },
     "overview": {
       "storage": {
@@ -5442,7 +5452,8 @@
     "notify": {
       "always": "Nach jedem Lauf",
       "failure": "Nur wenn ein Lauf fehlschlägt",
-      "never": "Nie"
+      "never": "Nie",
+      "changes": "Nur bei Änderungen (und bei Fehlern)"
     },
     "openChat": "Chat öffnen",
     "openTask": "Aufgabe öffnen",
@@ -5481,7 +5492,9 @@
       "scheduled": "Geplant",
       "started": "Gestartet",
       "status": "Status",
-      "trigger": "Auslöser"
+      "trigger": "Auslöser",
+      "noChanges": "Keine Änderungen",
+      "memoryUpdated": "Gedächtnis aktualisiert"
     },
     "schedule": {
       "at": "Datum und Uhrzeit",
@@ -5549,7 +5562,7 @@
       "task_name": "der Name der Aufgabe"
     },
     "variablesHelp": "Verfügbare Variablen",
-    "variablesHelpText": "Läufe sehen einander nicht. Um nach „was sich seit dem letzten Mal geändert hat“ zu fragen, verwenden Sie die Zeit des letzten Laufs in den Anweisungen:",
+    "variablesHelpText": "Ohne „Zwischen Läufen merken“ sehen Läufe einander nicht. Um nach „was sich seit dem letzten Mal geändert hat“ zu fragen, verwenden Sie die Zeit des letzten Laufs in den Anweisungen:",
     "reasons": {
       "ABORTED": "Der Lauf wurde angehalten",
       "APP_NOT_ACCESSIBLE": "Sie haben keinen Zugriff mehr auf die App dieser Aufgabe",
@@ -5580,6 +5593,37 @@
       "TOO_MANY_APPROVALS": "Der Lauf hat zu oft um Freigabe gebeten",
       "TOO_MANY_FAILURES": "Nach zu vielen fehlgeschlagenen Läufen in Folge pausiert",
       "TOOL_NOT_AVAILABLE": "Die App bietet ein Werkzeug dieser Aufgabe nicht mehr an"
+    },
+    "memory": {
+      "title": "Gedächtnis",
+      "label": "Zwischen Läufen merken",
+      "help": "Die Aufgabe führt Notizen und aktualisiert sie nach jedem Lauf, damit der nächste Lauf weiß, was schon gemeldet wurde. Sie können die Notizen auf der Aufgabenseite lesen und bearbeiten. Ein Lauf kann außerdem frühere Läufe ansehen.",
+      "platformOff": "Ein Administrator hat das Gedächtnis für alle Aufgaben ausgeschaltet. Ihre Einstellung bleibt erhalten, wirkt aber vorerst nicht.",
+      "notifyNeedsMemory": "„Nur bei Änderungen“ benötigt „Zwischen Läufen merken“.",
+      "on": "An",
+      "off": "Aus",
+      "cardIntro": "Notizen, die diese Aufgabe zwischen den Läufen behält. Ein Lauf liest sie zu Beginn und aktualisiert sie am Ende.",
+      "offNotice": "Das Gedächtnis ist aus; diese Notizen bleiben erhalten, werden aber nicht verwendet.",
+      "platformOffNotice": "Das Gedächtnis ist für die gesamte Plattform ausgeschaltet; diese Notizen bleiben erhalten, werden aber nicht verwendet.",
+      "readOnlyNotice": "Sie dürfen geplante Aufgaben nicht bearbeiten, daher sind diese Notizen schreibgeschützt.",
+      "clearHint": "Wenn Sie geändert haben, was die Aufgabe tut, sollten Sie ihr Gedächtnis leeren.",
+      "tooLong": "Die Notizen sind zu lang ({{chars}} von {{max}} Zeichen). Kürzen Sie sie und speichern Sie erneut.",
+      "error": "Die Notizen konnten nicht gespeichert werden"
     }
+  },
+  "memoryEditor": {
+    "label": "Gedächtnis-Notizen",
+    "versionLine": "Version {{version}}",
+    "updatedAt": "aktualisiert {{at}}",
+    "updatedBy": "von {{by}}",
+    "size": "{{chars}} / {{max}} Zeichen",
+    "save": "Speichern",
+    "saving": "Speichern…",
+    "clear": "Leeren",
+    "clearConfirm": "Alle Notizen leeren? Das entfernt alles, was bisher geschrieben wurde.",
+    "reload": "Neu laden (meine Änderungen verwerfen)",
+    "keepEditing": "Weiter bearbeiten",
+    "versionConflict": "Konflikt: Das Gedächtnis wurde an anderer Stelle geändert. Neu laden, um den aktuellen Stand zu sehen.",
+    "staleNotice": "Die Notizen haben sich geändert, seit Sie mit dem Bearbeiten begonnen haben (ein Lauf hat sie evtl. aktualisiert)."
   }
 }

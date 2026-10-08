@@ -215,6 +215,13 @@ export const RUNTIME_NAMESPACES = Object.freeze({
    * principal, so a task's history is a prefix listing.
    */
   scheduledTaskRuns: 'scheduled-task-runs',
+  /**
+   * The notes a scheduled task keeps between its runs — one document per
+   * task, keyed by the task id and owned by the task owner's principal id.
+   * The content lives only here, never on the task document, because the task
+   * document is returned to admins as it is.
+   */
+  scheduledTaskMemory: 'scheduled-task-memory',
   /** One-time import markers, shared by every runtime store that has one. */
   runtimeImports: 'runtime-imports'
 });
