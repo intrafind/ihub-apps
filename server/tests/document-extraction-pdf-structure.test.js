@@ -54,6 +54,25 @@ describe('headings and tables from the structure tree, on real pdf.js', () => {
     );
   });
 
+  it('the text of table cells counts toward the character limit, so a table-heavy PDF stops early', async () => {
+    const cell = 'x'.repeat(120);
+    const tablePage = [
+      {
+        header: true,
+        table: [
+          [cell, cell],
+          [cell, cell]
+        ]
+      }
+    ];
+    const pdf = await buildPdf([tablePage, tablePage, tablePage]);
+    const text = await extractPdfText(pdf, { maxChars: 300 });
+    assert.match(text, /\[Page 1\]/);
+    assert.doesNotMatch(text, /\[Page 2\]/);
+    // Without a limit all pages are read.
+    assert.match(await extractPdfText(pdf), /\[Page 3\]/);
+  });
+
   it('a heading of a later page and a table without header, page by page', async () => {
     const pdf = await buildPdf([
       [{ text: 'Seite eins', role: 'H1', size: 18 }],
