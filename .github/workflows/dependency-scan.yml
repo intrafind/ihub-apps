@@ -1,0 +1,40 @@
+# Full dependency vulnerability scan (SCA) of every lockfile in the repository
+# with OSV-Scanner, reported to the Security tab. Runs nightly, so advisories
+# published against dependencies we already ship show up without a code
+# change, and on pushes to main that touch dependencies.
+#
+# This is the backlog view and never fails the run. Pull requests are gated
+# by the dependency review in security.yml instead, which only looks at what
+# the PR changes. Replaces osv-scanner.yml, whose `--skip-git` argument is not
+# accepted by OSV-Scanner v2 and failed every run.
+
+name: Dependency Scan
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '**/package.json'
+      - '**/package-lock.json'
+      - '.github/workflows/dependency-scan.yml'
+  schedule:
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  osv-scanner:
+    name: OSV-Scanner
+    permissions:
+      # Required by the reusable workflow to upload SARIF to code scanning.
+      actions: read
+      contents: read
+      security-events: write
+    uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable.yml@a345acffa64b0eaede81a3d9aae6141214d9c8fc # v2.6.0
+    with:
+      scan-args: |-
+        -r
+        ./
+      fail-on-vuln: false

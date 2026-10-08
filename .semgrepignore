@@ -1,0 +1,22 @@
+# Paths the Semgrep job in .github/workflows/code-scanning.yml skips.
+# This file replaces Semgrep's built-in ignore list, so git-ignored paths
+# (node_modules, build output) are pulled in from .gitignore.
+:include .gitignore
+
+# Tests and fixtures contain deliberately insecure inputs.
+tests/
+server/tests/
+**/__tests__/
+*.test.js
+
+# Prose and design documents, not shipped code.
+docs/
+concepts/
+examples/
+
+# Generated or vendored code.
+*.min.js
+browser-extension/extension/
+browser-extension/assets/
+nextcloud-app/js/
+server/defaults/skills/skill-builder/

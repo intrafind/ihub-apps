@@ -1,0 +1,128 @@
+# Static analysis that reports to the repository's Security tab (code scanning)
+# alongside CodeQL, which runs through GitHub's default setup.
+#
+# - Semgrep: the OWASP Top 10 and CWE Top 25 rule packs plus Node.js, React
+#   and JavaScript rules. Every finding carries its CWE and OWASP category.
+# - zizmor: security audit of the GitHub Actions workflows (template
+#   injection, cache poisoning, credential persistence, permissions).
+#
+# Both upload SARIF and do not fail the job; GitHub shows new alerts on the
+# PR. To block merges on them, add a "Require code scanning results" rule to
+# the main branch ruleset (see docs/security.md#automated-security-checks).
+#
+# Pull requests from forks get a read-only token and cannot upload SARIF, so
+# both scanners report there as annotations on the PR instead (Semgrep only
+# for findings the PR introduces), still without failing the job.
+
+name: Code Scanning
+
+on:
+  pull_request:
+    branches: [main, develop]
+    types: [opened, synchronize, reopened]
+  push:
+    branches: [main]
+  schedule:
+    # Weekly, so new rules in the Semgrep packs reach unchanged code too.
+    - cron: '27 5 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: code-scanning-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  semgrep:
+    name: Semgrep (OWASP Top 10, CWE Top 25)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      security-events: write
+    env:
+      SEMGREP_VERSION: 1.180.0
+      FORK_PR: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          # A fork PR is scanned against its base commit, which needs history.
+          fetch-depth: ${{ env.FORK_PR == 'true' && '0' || '1' }}
+
+      - name: Install Semgrep
+        run: pipx install "semgrep==${SEMGREP_VERSION}"
+
+      - name: Run Semgrep
+        # Paths in .semgrepignore are skipped. A fork PR reports only the
+        # findings it introduces (--baseline-commit), since code scanning
+        # cannot diff them against main for it.
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          baseline=()
+          if [ "$FORK_PR" = "true" ]; then baseline=(--baseline-commit "$BASE_SHA"); fi
+          semgrep scan \
+            --metrics=off \
+            --config p/owasp-top-ten \
+            --config p/cwe-top-25 \
+            --config p/nodejs \
+            --config p/react \
+            --config p/javascript \
+            "${baseline[@]}" \
+            --sarif --output semgrep.sarif
+
+      - name: Upload results to code scanning
+        if: always() && env.FORK_PR != 'true' && hashFiles('semgrep.sarif') != ''
+        uses: github/codeql-action/upload-sarif@24c54180a607b1449ed407dd24f251e4e9147c8d # v4.38.3
+        with:
+          sarif_file: semgrep.sarif
+          category: semgrep
+
+      - name: Annotate findings (fork PRs)
+        if: always() && env.FORK_PR == 'true' && hashFiles('semgrep.sarif') != ''
+        # Workflow-command values are escaped, so file paths from the fork
+        # cannot start a command of their own.
+        run: |
+          jq -r '
+            def prop: gsub("%";"%25") | gsub("\r";"%0D") | gsub("\n";"%0A") | gsub(":";"%3A") | gsub(",";"%2C");
+            def data: gsub("%";"%25") | gsub("\r";"%0D") | gsub("\n";"%0A");
+            .runs[].results[]
+            | .locations[0].physicalLocation as $loc
+            | "::warning file=\($loc.artifactLocation.uri | prop),line=\($loc.region.startLine),title=\("Semgrep " + .ruleId | prop)::\(.message.text | data)"
+          ' semgrep.sarif
+          {
+            echo "### Semgrep: $(jq '[.runs[].results[]] | length' semgrep.sarif) finding(s) introduced by this pull request"
+            echo
+            echo "| Rule | Location |"
+            echo "| --- | --- |"
+            jq -r '.runs[].results[] | .locations[0].physicalLocation as $loc
+              | "| \(.ruleId) | \($loc.artifactLocation.uri | gsub("[|`\r\n]";"")):\($loc.region.startLine) |"' semgrep.sarif
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  zizmor:
+    name: zizmor (workflow security)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    env:
+      FORK_PR: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Run zizmor
+        uses: zizmorcore/zizmor-action@cc914d7f3750a2d13d75c7f184a1060aa0e9d482 # v0.6.4
+        # In annotation mode (fork PRs) zizmor exits non-zero on findings;
+        # the scan stays report-only, as it is with SARIF upload.
+        continue-on-error: ${{ env.FORK_PR == 'true' }}
+        with:
+          version: 1.30.1
+          advanced-security: ${{ env.FORK_PR != 'true' }}
+          annotations: ${{ env.FORK_PR == 'true' }}

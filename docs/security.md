@@ -14,7 +14,8 @@ iHub Apps implements a comprehensive security model designed to protect user dat
 7. [Deployment Security](#deployment-security)
 8. [Operational Security](#operational-security)
 9. [Security Checklist](#security-checklist)
-10. [Compliance & Standards](#compliance--standards)
+10. [Automated Security Checks](#automated-security-checks)
+11. [Compliance & Standards](#compliance--standards)
 
 ## Security Architecture Overview
 
@@ -958,6 +959,71 @@ npm outdated
 - [ ] Update incident response procedures
 - [ ] Review and update security policies
 - [ ] Rotate secrets and credentials
+
+## Automated Security Checks
+
+Every pull request is checked automatically for the OWASP Top 10 and CWE Top 25 (static analysis), vulnerable or unlicensed dependencies (software composition analysis), leaked secrets, workflow and supply-chain weaknesses, and WCAG 2.2 AA accessibility. Reviewers then work through [REVIEW.md](../REVIEW.md), which covers what scanners cannot see.
+
+| Check | Workflow | Runs on | Fails the check | Results |
+|---|---|---|---|---|
+| CodeQL (JavaScript/TypeScript, Actions) | GitHub default setup | PRs, `main` | — | Security tab |
+| Semgrep: OWASP Top 10, CWE Top 25, Node.js, React | `code-scanning.yml` | PRs, `main`, weekly | — | Security tab; on fork PRs, annotations for the findings the PR introduces |
+| zizmor: GitHub Actions and Dependabot config | `code-scanning.yml` | PRs, `main`, weekly | — | Security tab; annotations on fork PRs |
+| Dependency review: new dependencies with a high/critical advisory or a license outside the allow-list | `security.yml` | PRs | Yes | Job summary |
+| Secret scan (gitleaks) of the new commits | `security.yml` | PRs, `main` | Yes | Job log (redacted) |
+| Admin route audit (`npm run security:audit`) | `security.yml` | PRs, `main` | Yes | Job log |
+| Accessibility: axe-core scans and jsx-a11y on changed lines | `accessibility.yml` | PRs | Yes | Inline annotations, Playwright report |
+| Dependency scan (OSV-Scanner) of every lockfile | `dependency-scan.yml` | Nightly, `main` | — | Security tab |
+| OpenSSF Scorecard | `scorecard.yml` | Weekly, `main` | — | Security tab |
+| Container image scan (Trivy) | `docker-ci.yml` | Image builds | Critical findings | Security tab |
+| AI review against [REVIEW.md](../REVIEW.md) | Copilot code review, CodeRabbit | PRs | — | PR comments |
+
+A failing check only stops a merge when the branch ruleset requires it (see [Repository Settings](#repository-settings)). Security-tab results stop a merge through the ruleset's code scanning rule.
+
+### OWASP Top 10 and CWE Top 25 Coverage
+
+Every CodeQL and Semgrep alert lists the CWE it belongs to, and Semgrep alerts also name their OWASP Top 10:2025 category, so the Security tab can be filtered by either. Pattern-based analysis finds injection, cross-site scripting, weak cryptography and unsafe configuration well, but hardly sees broken access control (A01), the most common risk for this platform. That is covered by the admin route audit, the permission checks in `server/utils/authorization.js`, and the access-control section of [REVIEW.md](../REVIEW.md).
+
+### Pre-commit Hook
+
+`npm install` installs a Git pre-commit hook (`.husky/pre-commit`) that lints and formats the staged files and scans them for secrets. The secret scan needs [gitleaks](https://github.com/gitleaks/gitleaks) on your `PATH`:
+
+```bash
+brew install gitleaks          # macOS; for Linux and Windows use the release binaries
+git commit                     # runs lint-staged, then gitleaks on the staged changes
+git commit --no-verify         # skip once; CI runs the same secret scan
+```
+
+### Handling Findings
+
+| Finding | What to do |
+|---|---|
+| Dependency with an advisory | Upgrade it. If no fixed version exists and the risk is accepted, add the advisory's GHSA ID to `allow-ghsas` in `.github/dependency-review-config.yml` with a comment saying why. |
+| Dependency with a new license | Check the license is acceptable, then add it to `allow-licenses` in the same file. |
+| Secret | Rotate it first: deleting it from the branch does not remove it from Git history. A false positive gets a `gitleaks:allow` comment on its line or a pattern in `.gitleaks.toml`. |
+| Code scanning alert | Fix it, or dismiss it in the Security tab with the reason. |
+| Container CVE without a fix | Add it to `.trivyignore` with a reason and an expiry date. |
+| Accessibility violation | Fix it. See [Accessibility](accessibility.md#automated-tests) for the known-violation baseline. |
+
+### Repository Settings
+
+Some protections are repository settings, not files, and need a repository administrator:
+
+1. **Secret scanning and push protection** (Settings → Advanced Security): push protection rejects a push that contains a known secret format before it reaches GitHub.
+2. **CodeQL query suite** (Settings → Advanced Security → CodeQL analysis): switch the default setup to the **Extended** suite for the full security query set.
+3. **Dependabot alerts and security updates** (Settings → Advanced Security): `.github/dependabot.yml` only configures version updates.
+4. **Ruleset for `main`** (Settings → Rules → Rulesets): require the status checks *Dependency review*, *Secret scan*, *Admin route audit*, *axe-core*, *jsx-a11y (changed lines)*, *test-quick* and *Build Check*, and add *Require code scanning results* for CodeQL (high or higher), then for Semgrep and zizmor once their findings are triaged.
+5. **SHA-pinned actions** (Settings → Actions → General): require actions to be pinned to a full-length commit SHA. All workflows already are; Dependabot keeps the pins current.
+
+### Verifying a Release
+
+Release binaries, the Nextcloud plugin and the container image carry signed SLSA build provenance. Each release also lists CycloneDX SBOMs (`ihub-apps-<version>-{root,server,client}.cdx.json`) of the production dependencies the binaries ship, and the image carries its own SBOM.
+
+```bash
+gh attestation verify ihub-apps-v5.6.0-linux.tar.gz --repo intrafind/ihub-apps
+gh attestation verify oci://ghcr.io/intrafind/ihub-apps:5.6.0 --repo intrafind/ihub-apps
+docker buildx imagetools inspect ghcr.io/intrafind/ihub-apps:5.6.0 --format '{{ json .SBOM }}'
+```
 
 ## Compliance & Standards
 

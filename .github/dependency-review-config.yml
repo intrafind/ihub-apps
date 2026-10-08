@@ -1,0 +1,66 @@
+# Policy for actions/dependency-review-action (.github/workflows/security.yml).
+#
+# The check looks only at dependencies a pull request adds or changes, so the
+# existing backlog does not block unrelated PRs. To accept a specific advisory
+# after review, add its GHSA ID to allow-ghsas with a comment saying why.
+
+# Block a PR that introduces a dependency with a high or critical advisory.
+fail-on-severity: high
+# Dev dependencies run on developer machines and in CI with secrets, so they
+# count too, and so do dependencies GitHub cannot classify.
+fail-on-scopes:
+  - runtime
+  - development
+  - unknown
+
+# The licenses already in use across the root, client, server and
+# nextcloud-app lockfiles. A dependency under any other license fails the
+# check until someone decides it is acceptable and adds it here.
+allow-licenses:
+  - 0BSD
+  - Apache-2.0
+  - BlueOak-1.0.0
+  - BSD-2-Clause
+  - BSD-3-Clause
+  - CC-BY-3.0
+  - CC-BY-4.0
+  - CC0-1.0
+  - EPL-2.0
+  - ISC
+  - MIT
+  - MIT-0
+  - MPL-2.0
+  - Python-2.0
+  - Unlicense
+  - Zlib
+
+# nextcloud-app is a Nextcloud plugin and is itself AGPL-3.0-or-later; its
+# Nextcloud libraries are GPL/AGPL. They are allowed by name: the action
+# cannot tell which manifest adds a package, so the exception would also
+# cover one of these packages added to the root, client or server manifests.
+# tests/unit/server/copyleft-exemptions.test.js fails if any other manifest
+# depends on one of them.
+allow-dependencies-licenses:
+  - pkg:npm/%40nextcloud/auth
+  - pkg:npm/%40nextcloud/axios
+  - pkg:npm/%40nextcloud/browser-storage
+  - pkg:npm/%40nextcloud/capabilities
+  - pkg:npm/%40nextcloud/dialogs
+  - pkg:npm/%40nextcloud/event-bus
+  - pkg:npm/%40nextcloud/files
+  - pkg:npm/%40nextcloud/initial-state
+  - pkg:npm/%40nextcloud/l10n
+  - pkg:npm/%40nextcloud/logger
+  - pkg:npm/%40nextcloud/paths
+  - pkg:npm/%40nextcloud/router
+  - pkg:npm/%40nextcloud/sharing
+  - pkg:npm/%40nextcloud/typings
+  - pkg:npm/%40nextcloud/vite-config
+  - pkg:npm/%40nextcloud/vue
+  - pkg:npm/rollup-plugin-corejs
+
+# Show the OpenSSF Scorecard of newly added dependencies and warn on poorly
+# maintained ones (score below 3 of 10).
+show-openssf-scorecard: true
+warn-on-openssf-scorecard-level: 3
+show-patched-versions: true

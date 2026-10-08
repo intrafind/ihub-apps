@@ -4,3 +4,9 @@ reviews:
   auto_review:
     # Review draft pull requests too (CodeRabbit skips them by default).
     drafts: true
+knowledge_base:
+  code_guidelines:
+    # Review against the security and accessibility checklist in REVIEW.md, in
+    # addition to the CLAUDE.md / AGENTS.md / Copilot files read by default.
+    filePatterns:
+      - 'REVIEW.md'

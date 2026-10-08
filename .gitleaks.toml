@@ -1,0 +1,50 @@
+# Gitleaks configuration. Used by the pre-commit hook (.husky/pre-commit) and
+# by the "Secret scan" job in .github/workflows/security.yml, both of which
+# scan only new changes.
+#
+# A real secret that reaches a commit must be rotated: removing it from the
+# branch does not remove it from git history.
+#
+# A false positive can be silenced on its line with a `gitleaks:allow`
+# comment, or here when it is a recurring placeholder pattern.
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Placeholder and test values in docs, concepts, examples and tests"
+# A finding is skipped only when it is in one of these paths AND its secret
+# contains one of the words below. Elsewhere the words do not apply, so a
+# real key that happens to contain "test" (e.g. sk_test_...) is still caught.
+# This holds for `gitleaks git` (CI and the pre-commit hook); `gitleaks dir`
+# skips files matching these paths outright, so do not use it to audit them.
+condition = "AND"
+paths = [
+  '''^(docs|concepts|examples)/''',
+  '''(^|/)tests?/''',
+  '''\.test\.jsx?$''',
+]
+stopwords = [
+  "example",
+  "placeholder",
+  "your",
+  "dummy",
+  "fake",
+  "sample",
+  "changeme",
+  "test",
+  "invalid",
+  "xxxx",
+  "redacted",
+  "secret-12345",
+  "1234567890",
+  "abc123",
+  "whisper-",
+]
+
+[[allowlists]]
+description = "Truncated PEM blocks used as format examples in docs"
+regexTarget = "match"
+regexes = [
+  '''-----BEGIN[A-Z ]*PRIVATE KEY-----[\s\S]{0,120}\.\.\.''',
+]
