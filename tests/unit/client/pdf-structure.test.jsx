@@ -417,6 +417,42 @@ describe('outline', () => {
     expect(lines(text)).toEqual(['"a": 1', '}', '# Property Details', 'Text.']);
   });
 
+  it('a chapter label that looks like the start of the title still matches: Roman numerals, letters, multi-level numbers', () => {
+    const labelled = [
+      page([
+        plain('II Introduction'),
+        plain('Text.'),
+        plain('III Definitionen'),
+        plain('c) Leistungen'),
+        plain('10.1.1 Zahlung'),
+        plain('Ende.')
+      ])
+    ];
+    const outline = [
+      { title: 'Introduction', depth: 1, pageIndex: 0 },
+      { title: 'Definitionen', depth: 1, pageIndex: 0 },
+      { title: 'Leistungen', depth: 2, pageIndex: 0 },
+      { title: 'Zahlung', depth: 3, pageIndex: 0 }
+    ];
+    expect(lines(assemblePdfText(labelled, null, { outline }))).toEqual([
+      '# II Introduction',
+      'Text.',
+      '# III Definitionen',
+      '## c) Leistungen',
+      '### 10.1.1 Zahlung',
+      'Ende.'
+    ]);
+  });
+
+  it('a label never turns a line into a heading of another title', () => {
+    const other = [page([plain('II Einleitung der Parteien'), plain('Text.')])];
+    const outline = [{ title: 'Introduction', depth: 1, pageIndex: 0 }];
+    expect(lines(assemblePdfText(other, null, { outline }))).toEqual([
+      'II Einleitung der Parteien',
+      'Text.'
+    ]);
+  });
+
   it('the outline is not trusted when most entries are not found in the text', () => {
     const outline = [
       { title: 'Allgemeine Bestimmungen', depth: 1, pageIndex: 0 },
