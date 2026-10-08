@@ -20,7 +20,7 @@ export function jsonSchemaToZod(schema) {
   if (!schema || typeof schema !== 'object') return z.unknown();
 
   if (Array.isArray(schema.enum)) {
-    return z.enum(schema.enum.map(v => String(v)));
+    return z.enum(schema.enum.map(String));
   }
 
   const { type } = schema;

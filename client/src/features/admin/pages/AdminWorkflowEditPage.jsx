@@ -127,7 +127,7 @@ function AdminWorkflowEditPage() {
       if (isUnsafeKey(segment)) {
         return;
       }
-      if (!Object.prototype.hasOwnProperty.call(target, segment) || target[segment] == null) {
+      if (!Object.hasOwn(target, segment) || target[segment] == null) {
         target[segment] = {};
       }
       target = target[segment];

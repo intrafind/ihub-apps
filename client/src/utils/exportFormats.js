@@ -282,7 +282,7 @@ const parseMarkdown = content => {
         const headerCells = tableLines[0]
           .split('|')
           .map(cell => cell.trim())
-          .filter(cell => cell);
+          .filter(Boolean);
 
         // Check if second line is separator (contains dashes and pipes)
         const separatorLine = tableLines[1];
@@ -295,7 +295,7 @@ const parseMarkdown = content => {
             const rowCells = tableLines[j]
               .split('|')
               .map(cell => cell.trim())
-              .filter(cell => cell);
+              .filter(Boolean);
 
             if (rowCells.length > 0) {
               bodyRows.push(

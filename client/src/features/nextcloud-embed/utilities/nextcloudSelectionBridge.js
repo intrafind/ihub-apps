@@ -51,7 +51,7 @@ function sanitizePaths(value) {
     // like url-encoded `%2e%2e` arrive here as opaque string segments and
     // are forwarded to the server, which decodes and rejects them.
     const segments = path.split('/');
-    if (segments.some(seg => seg === '..')) return null;
+    if (segments.includes('..')) return null;
     out.push(path);
   }
   return out;

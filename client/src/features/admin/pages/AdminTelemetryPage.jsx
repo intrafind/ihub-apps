@@ -128,7 +128,7 @@ function AdminTelemetryPage() {
       for (let i = 0; i < segments.length - 1; i++) {
         const key = segments[i];
         if (
-          !Object.prototype.hasOwnProperty.call(cursor, key) ||
+          !Object.hasOwn(cursor, key) ||
           typeof cursor[key] !== 'object' ||
           cursor[key] === null
         ) {

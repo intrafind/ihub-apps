@@ -519,9 +519,7 @@ function ChatInput({
       const match = newVal.match(/@([\w.-]*)$/);
       if (match) {
         if (!showWorkflowSearch) setShowWorkflowSearch(true);
-      } else {
-        if (showWorkflowSearch) setShowWorkflowSearch(false);
-      }
+      } else if (showWorkflowSearch) setShowWorkflowSearch(false);
     }
   };
 

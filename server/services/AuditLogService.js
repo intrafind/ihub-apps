@@ -31,7 +31,7 @@ function isEmailShaped(value) {
   if (/\s/.test(value)) return false; // single linear test, no backtracking
   const at = value.indexOf('@');
   if (at <= 0) return false; // need a non-empty local part
-  if (value.indexOf('@', at + 1) !== -1) return false; // exactly one '@'
+  if (value.includes('@', at + 1)) return false; // exactly one '@'
   const domain = value.slice(at + 1);
   const dot = domain.indexOf('.');
   // dot must be present and neither leading nor trailing in the domain

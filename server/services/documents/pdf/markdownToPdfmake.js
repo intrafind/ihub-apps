@@ -196,7 +196,7 @@ export function inlineRuns(tokens, ctx, style = {}) {
           htmlStack.push(INLINE_HTML_TAGS[open[1].toLowerCase()]);
         } else if (close && INLINE_HTML_TAGS[close[1].toLowerCase()]) {
           htmlStack.pop();
-        } else if (!/^<!--/.test(raw)) {
+        } else if (!raw.startsWith('<!--')) {
           push(stripTags(raw));
         }
         break;

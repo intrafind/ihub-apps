@@ -15,7 +15,6 @@
  * even when the package is not installed (falls back to a chars/4 heuristic).
  */
 import { createRequire } from 'node:module';
-import { computeContextUsage } from './contextUsage.js';
 
 /** Chars/4 fallback when the real tokenizer is unavailable. */
 function heuristic(text) {
@@ -64,4 +63,5 @@ export function estimateTokensForFragments(fragments = []) {
 
 // Re-exported from the dependency-free helper so existing server/test imports
 // (`import { computeContextUsage } from 'shared/tokenEstimator.js'`) keep working.
-export { computeContextUsage };
+
+export { computeContextUsage } from './contextUsage.js';

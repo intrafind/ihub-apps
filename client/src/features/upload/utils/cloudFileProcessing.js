@@ -1,7 +1,7 @@
 import { processDocumentFile, getFileTypeDisplay, SUPPORTED_TEXT_FORMATS } from './fileProcessing';
 
-const IMAGE_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
-const AUDIO_TYPES = ['audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/flac', 'audio/ogg'];
+const IMAGE_TYPES = new Set(['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp']);
+const AUDIO_TYPES = new Set(['audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/flac', 'audio/ogg']);
 
 /**
  * Process a cloud-downloaded file into the same data shape as local uploads.
@@ -12,10 +12,10 @@ const AUDIO_TYPES = ['audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/flac', 'audi
 export async function processCloudFile(file, config = {}) {
   const mimeType = file.type;
 
-  if (IMAGE_TYPES.includes(mimeType)) {
+  if (IMAGE_TYPES.has(mimeType)) {
     return processCloudImage(file, config);
   }
-  if (AUDIO_TYPES.includes(mimeType)) {
+  if (AUDIO_TYPES.has(mimeType)) {
     return processCloudAudio(file);
   }
   // Document/text files
@@ -122,8 +122,8 @@ async function processCloudDocument(file) {
  */
 export function isCloudFileSupported(mimeType) {
   return (
-    IMAGE_TYPES.includes(mimeType) ||
-    AUDIO_TYPES.includes(mimeType) ||
+    IMAGE_TYPES.has(mimeType) ||
+    AUDIO_TYPES.has(mimeType) ||
     SUPPORTED_TEXT_FORMATS.includes(mimeType)
   );
 }

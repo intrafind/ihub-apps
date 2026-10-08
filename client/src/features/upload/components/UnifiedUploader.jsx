@@ -273,22 +273,22 @@ const UnifiedUploader = ({
 
   const processFile = async file => {
     // Check if image files are disabled
-    if (!isImageUploadEnabled && IMAGE_FORMATS.some(format => format === file.type)) {
+    if (!isImageUploadEnabled && IMAGE_FORMATS.includes(file.type)) {
       throw new Error('image-upload-disabled');
     }
 
     // Check if audio files are disabled
-    if (!isAudioUploadEnabled && AUDIO_FORMATS.some(format => format === file.type)) {
+    if (!isAudioUploadEnabled && AUDIO_FORMATS.includes(file.type)) {
       throw new Error('audio-upload-disabled');
     }
 
     // Check if video files are disabled
-    if (!isVideoUploadEnabled && VIDEO_FORMATS.some(format => format === file.type)) {
+    if (!isVideoUploadEnabled && VIDEO_FORMATS.includes(file.type)) {
       throw new Error('video-upload-disabled');
     }
 
     // Check if file upload is disabled
-    if (!isFileUploadEnabled && TEXT_FORMATS.some(format => format === file.type)) {
+    if (!isFileUploadEnabled && TEXT_FORMATS.includes(file.type)) {
       throw new Error('file-upload-disabled');
     }
 

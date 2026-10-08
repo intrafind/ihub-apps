@@ -26,7 +26,7 @@ import defaultLogger from '../../utils/logger.js';
 import { loopPoliciesSchema } from './contracts/loop.js';
 import { LLMError, LLM_ERROR_CODES, isLLMError, isAbortError } from './contracts/errors.js';
 import { RUN_LOG_EVENTS } from '../../../shared/runEvents.js';
-import { addUsage, normalizeUsage, usageToBudget } from './llmUsage.js';
+import { addUsage, normalizeUsage } from './llmUsage.js';
 import { repairToolArguments, applyParameterDefaults, matchTool } from './toolArgs.js';
 import { classifyToolResult, isCitationProducingTool } from './toolClassify.js';
 import { extractToolSources, finalizeSourceFrame } from '../sources/index.js';
@@ -1086,7 +1086,7 @@ function reset(map, key) {
   return m;
 }
 
-export { usageToBudget };
-
 const agentLoop = new AgentLoop();
 export default agentLoop;
+
+export { usageToBudget } from './llmUsage.js';

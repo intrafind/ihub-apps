@@ -200,7 +200,7 @@ async function runTests() {
     await cleanup();
 
     console.log('\n' + '='.repeat(60));
-    const passed = results.filter(r => r).length;
+    const passed = results.filter(Boolean).length;
     const total = results.length;
 
     if (passed === total) {

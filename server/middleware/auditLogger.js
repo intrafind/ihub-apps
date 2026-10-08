@@ -21,7 +21,7 @@ const METHOD_ACTION = {
 // Read/streaming/high-volume paths that should never be audited as mutations.
 // 'session' (POST /api/session/start) fires on every app load — auditing it
 // floods the log with noise. Login/logout have explicit logAudit() hooks.
-const EXCLUDED_SEGMENTS = [
+const EXCLUDED_SEGMENTS = new Set([
   'chat',
   'inference',
   'session',
@@ -31,7 +31,7 @@ const EXCLUDED_SEGMENTS = [
   'feedback',
   'translations',
   'pages'
-];
+]);
 
 const SENSITIVE_KEY_RE =
   /pass(word)?|pwd|secret|token|api[-_]?key|client[-_]?secret|credential|priv(ate)?[-_]?key|passphrase|signing|\bpin\b|\botp\b|\bmfa\b|salt|authoriz|cookie|bearer/i;
@@ -70,7 +70,7 @@ function isExcluded(req) {
   // shared segment like 'pages' would silently skip /api/admin/pages CRUD).
   if (path.includes('/api/admin/')) return false;
   const segments = path.split('/').filter(Boolean);
-  return segments.some(s => EXCLUDED_SEGMENTS.includes(s));
+  return segments.some(s => EXCLUDED_SEGMENTS.has(s));
 }
 
 export function redact(value) {

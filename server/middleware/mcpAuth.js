@@ -5,7 +5,7 @@ import { isUserAllowedByGroups } from '../utils/oauthClientPolicy.js';
 import { isClientIdUrl } from '../utils/clientIdMetadata.js';
 import { isPersonalKeyExpired, isPersonalKeysEnabled } from '../utils/personalApiKeyManager.js';
 import { enhanceUserWithPermissions } from '../utils/authorization.js';
-import { hasAnyScope, MCP_METHOD_SCOPES, MCP_SCOPES } from '../services/mcp/scopes.js';
+import { hasAnyScope, MCP_SCOPES } from '../services/mcp/scopes.js';
 import { buildServerPath } from '../utils/basePath.js';
 import configCache from '../configCache.js';
 import logger from '../utils/logger.js';
@@ -280,4 +280,4 @@ function sendError(res, status, error, description) {
   res.status(status).json({ error, error_description: description });
 }
 
-export { MCP_METHOD_SCOPES };
+export { MCP_METHOD_SCOPES } from '../services/mcp/scopes.js';

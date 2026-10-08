@@ -4,7 +4,7 @@ import Icon from '../../../shared/components/Icon';
 
 export default function FloatingToolbox({ onAction, isProcessing, hasSelection }) {
   const { t } = useTranslation();
-  const noSelectionActions = ['continue', 'summarize', 'outline'];
+  const noSelectionActions = new Set(['continue', 'summarize', 'outline']);
   const [expandedSection, setExpandedSection] = useState(null);
   const toolboxRef = useRef(null);
   const timeoutRef = useRef(null);
@@ -226,9 +226,7 @@ export default function FloatingToolbox({ onAction, isProcessing, hasSelection }
                     <button
                       key={tool.id}
                       onClick={() => handleToolAction(tool.id, tool.description)}
-                      disabled={
-                        isProcessing || (!hasSelection && !noSelectionActions.includes(tool.id))
-                      }
+                      disabled={isProcessing || (!hasSelection && !noSelectionActions.has(tool.id))}
                       className="w-full flex items-center gap-2 px-2 py-2 text-sm rounded-lg bg-gray-50 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                       title={tool.description}
                     >

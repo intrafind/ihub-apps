@@ -109,7 +109,7 @@ function htmlInputType(variableType) {
 function seedValuesFromProps(definitions, currentValues) {
   const next = {};
   for (const def of definitions) {
-    if (currentValues && Object.prototype.hasOwnProperty.call(currentValues, def.name)) {
+    if (currentValues && Object.hasOwn(currentValues, def.name)) {
       next[def.name] = String(currentValues[def.name] ?? '');
     } else {
       next[def.name] = initialValueForDefinition(def);

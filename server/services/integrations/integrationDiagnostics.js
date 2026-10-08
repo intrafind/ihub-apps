@@ -134,7 +134,7 @@ export function isPrivateAddress(host) {
   if (/^172\.(1[6-9]|2\d|3[01])\./.test(value)) return true;
   if (/^169\.254\./.test(value)) return true;
   if (/^f[cd][0-9a-f]{2}:/.test(value)) return true;
-  if (/^fe80:/.test(value)) return true;
+  if (value.startsWith('fe80:')) return true;
   return false;
 }
 

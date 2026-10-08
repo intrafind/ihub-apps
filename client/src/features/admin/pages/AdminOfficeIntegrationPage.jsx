@@ -11,7 +11,7 @@ import { buildApiUrl } from '../../../utils/runtimeBasePath';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 
 /** The values the task pane's landing view accepts; mirrored in server/utils/officeStartPage.js. */
-const START_PAGE_CHOICES = ['start', 'apps'];
+const START_PAGE_CHOICES = new Set(['start', 'apps']);
 
 /**
  * What the answer button in the task pane does by default; mirrored in
@@ -101,11 +101,11 @@ function ReachBadge({ state, label, detail }) {
  * this as `allowedApps` on the add-in's OAuth client (`['*']` for `all`); see
  * server/utils/officeAppAccess.js.
  */
-const APP_ACCESS_MODES = ['all', 'limited'];
+const APP_ACCESS_MODES = new Set(['all', 'limited']);
 const DEFAULT_APP_ACCESS = { mode: 'all', appIds: [] };
 
 const readAppAccess = value => ({
-  mode: APP_ACCESS_MODES.includes(value?.mode) ? value.mode : 'all',
+  mode: APP_ACCESS_MODES.has(value?.mode) ? value.mode : 'all',
   appIds: Array.isArray(value?.appIds)
     ? value.appIds.filter(id => typeof id === 'string' && id.length > 0)
     : []
@@ -121,7 +121,7 @@ const DEFAULT_START_PAGE = { defaultPage: 'start', defaultAppId: '', featuredApp
 
 // Only the known fields, each well-formed, whatever the server sent.
 const readStartPage = value => ({
-  defaultPage: START_PAGE_CHOICES.includes(value?.defaultPage) ? value.defaultPage : 'start',
+  defaultPage: START_PAGE_CHOICES.has(value?.defaultPage) ? value.defaultPage : 'start',
   defaultAppId: typeof value?.defaultAppId === 'string' ? value.defaultAppId : '',
   featuredAppIds: Array.isArray(value?.featuredAppIds)
     ? value.featuredAppIds.filter(id => typeof id === 'string' && id.length > 0)

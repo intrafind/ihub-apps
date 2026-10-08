@@ -18,7 +18,7 @@ const selectClass =
   'mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm disabled:opacity-60';
 const labelClass = 'block text-xs font-medium text-gray-700 dark:text-gray-300';
 
-const BUSY = ['starting', 'listening', 'stopping'];
+const BUSY = new Set(['starting', 'listening', 'stopping']);
 
 /**
  * Live (realtime) dictation test: runs the same recognizer the chat's
@@ -167,7 +167,7 @@ function DictationTest({ speech, models, t, language }) {
     }
   };
 
-  const busy = BUSY.includes(status);
+  const busy = BUSY.has(status);
   const modelMissing =
     service === 'model' && Array.isArray(models) && !models.some(m => m.id === modelId);
   const serviceDisabled = (service === 'azure' && !speech?.azure?.enabled) || modelMissing;

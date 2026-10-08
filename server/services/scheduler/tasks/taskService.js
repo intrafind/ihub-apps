@@ -47,12 +47,10 @@ import {
 } from './taskMemory.js';
 import {
   NOTIFY_MODES,
-  activeRunOf,
   applyRunOutcome,
   attachQueuedRun,
   holdTask,
   isFinalRunStatus,
-  lastRunOf,
   newRunDocument,
   newTaskDocument,
   reasonOf,
@@ -1440,4 +1438,5 @@ export async function adminClearTaskMemory(taskId) {
 }
 
 // Re-exported for the runner, which records outcomes the same way.
-export { applyRunOutcome, lastRunOf, activeRunOf };
+
+export { activeRunOf, lastRunOf, applyRunOutcome } from './taskModel.js';

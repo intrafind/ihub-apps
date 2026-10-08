@@ -7,13 +7,7 @@ import {
 import { emitToolProgress } from '../loop/RunStream.js';
 import { getLocalizedString } from '../../utils/localize.js';
 import logger from '../../utils/logger.js';
-import {
-  A2aClientContextStore,
-  MAX_REMEMBERED_CONTEXTS,
-  clientContextRef
-} from './a2aClientContextStore.js';
-
-export { MAX_REMEMBERED_CONTEXTS };
+import { A2aClientContextStore, clientContextRef } from './a2aClientContextStore.js';
 
 /** Conversations nobody continued are swept from storage this often. */
 const CONTEXT_SWEEP_INTERVAL_MS = 60 * 60 * 1000;
@@ -450,3 +444,5 @@ function connectionChanged(a, b) {
 
 const instance = new A2aClientManager();
 export default instance;
+
+export { MAX_REMEMBERED_CONTEXTS } from './a2aClientContextStore.js';

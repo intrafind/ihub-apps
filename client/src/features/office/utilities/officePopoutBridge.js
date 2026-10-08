@@ -114,9 +114,7 @@ export function createPopoutEndpoint({
   }
 
   async function answer(envelope) {
-    const handler = Object.prototype.hasOwnProperty.call(handlers, envelope.m)
-      ? handlers[envelope.m]
-      : null;
+    const handler = Object.hasOwn(handlers, envelope.m) ? handlers[envelope.m] : null;
     if (typeof handler !== 'function') {
       transmit({ t: 'res', id: envelope.id, ok: false, e: `Unknown method: ${envelope.m}` });
       return;

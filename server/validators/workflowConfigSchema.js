@@ -661,11 +661,13 @@ export const workflowConfigSchema = baseWorkflowConfigSchema
       // entry node deliberately has no incoming edge — execution enters the
       // body through the container, not through an edge.
       const nodesWithIncomingEdges = new Set(data.edges.map(edge => edge.target));
-      const startNodes = data.nodes.filter(node => node.type === 'start').map(node => node.id);
+      const startNodes = new Set(
+        data.nodes.filter(node => node.type === 'start').map(node => node.id)
+      );
 
       for (const node of data.nodes) {
         if (node.parentId) continue;
-        if (!startNodes.includes(node.id) && !nodesWithIncomingEdges.has(node.id)) {
+        if (!startNodes.has(node.id) && !nodesWithIncomingEdges.has(node.id)) {
           return false;
         }
       }

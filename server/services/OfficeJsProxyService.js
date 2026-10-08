@@ -82,7 +82,7 @@ export function isSafeOfficeJsAssetPath(relPath) {
 
   const filename = segments.at(-1);
   const extension = filename.slice(filename.lastIndexOf('.')).toLowerCase();
-  return Object.prototype.hasOwnProperty.call(CONTENT_TYPES, extension);
+  return Object.hasOwn(CONTENT_TYPES, extension);
 }
 
 /**

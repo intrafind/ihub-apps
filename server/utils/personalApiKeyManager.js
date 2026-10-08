@@ -47,12 +47,12 @@ const MAX_KEY_NAME_LENGTH = 60;
  * `authorization.js` states the same rule for the admin gate; both lists deny
  * the same principals for the same reason.
  */
-const DELEGATED_AUTH_MODES = [
+const DELEGATED_AUTH_MODES = new Set([
   'oauth_client_credentials',
   'oauth_static_api_key',
   'oauth_authorization_code',
   'oauth_personal_key'
-];
+]);
 
 /**
  * Resolve the effective personal-key configuration, applying defaults for
@@ -136,7 +136,7 @@ export function canUserManagePersonalKeys(user, platform = {}) {
 
   // Only an interactive session may manage credentials - see DELEGATED_AUTH_MODES.
   if (user.isOAuthClient || user.isAgent === true) return false;
-  if (DELEGATED_AUTH_MODES.includes(user.authMode)) return false;
+  if (DELEGATED_AUTH_MODES.has(user.authMode)) return false;
 
   const { allowedGroups } = getPersonalKeyConfig(platform);
   if (allowedGroups.length === 0) return true;

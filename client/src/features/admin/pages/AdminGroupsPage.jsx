@@ -6,7 +6,7 @@ import { makeAdminApiCall } from '../../../api/adminApi';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import { DataTable } from '../components/data-table';
 
-const PROTECTED_GROUP_IDS = ['admin', 'user', 'anonymous', 'authenticated'];
+const PROTECTED_GROUP_IDS = new Set(['admin', 'user', 'anonymous', 'authenticated']);
 
 function GroupCell({ group }) {
   return (
@@ -174,7 +174,7 @@ function AdminGroupsPage() {
       label: t('common.delete', 'Delete'),
       icon: 'trash',
       destructive: true,
-      hidden: g => PROTECTED_GROUP_IDS.includes(g.id),
+      hidden: g => PROTECTED_GROUP_IDS.has(g.id),
       onClick: g => handleDeleteGroup(g.id, g.name)
     }
   ];

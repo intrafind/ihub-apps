@@ -310,7 +310,7 @@ function CorsConfig() {
               methods: e.target.value
                 .split(',')
                 .map(m => m.trim().toUpperCase())
-                .filter(m => m)
+                .filter(Boolean)
             }))
           }
           className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100 text-sm"
@@ -341,7 +341,7 @@ function CorsConfig() {
               allowedHeaders: e.target.value
                 .split(',')
                 .map(h => h.trim())
-                .filter(h => h)
+                .filter(Boolean)
             }))
           }
           className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100 text-sm font-mono"

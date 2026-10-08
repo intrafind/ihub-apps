@@ -306,7 +306,7 @@ export class ChatShareRepository {
     }
     const snapshot = (Array.isArray(messages) ? messages : []).map(snapshotMessage);
     const recipientIds =
-      mode === 'users' ? [...new Set(recipients.map(id => String(id)).filter(Boolean))] : [];
+      mode === 'users' ? [...new Set(recipients.map(String).filter(Boolean))] : [];
 
     // A fresh id is free by construction; the create-only write below is the
     // guard against the astronomically unlikely collision.

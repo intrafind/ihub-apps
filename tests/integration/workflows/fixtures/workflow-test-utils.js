@@ -91,13 +91,13 @@ export function createTestEngine(modules) {
  */
 export async function waitForStatus(engine, executionId, targetStatus, maxWaitMs = 30000) {
   const startTime = Date.now();
-  const terminalStatuses = [
+  const terminalStatuses = new Set([
     WorkflowStatus.COMPLETED,
     WorkflowStatus.FAILED,
     WorkflowStatus.CANCELLED,
     'approved',
     'rejected'
-  ];
+  ]);
 
   while (Date.now() - startTime < maxWaitMs) {
     const state = await engine.getState(executionId);
@@ -111,7 +111,7 @@ export async function waitForStatus(engine, executionId, targetStatus, maxWaitMs
     }
 
     // If the workflow has entered a terminal state that isn't the target, fail
-    if (terminalStatuses.includes(state.status) && state.status !== targetStatus) {
+    if (terminalStatuses.has(state.status) && state.status !== targetStatus) {
       throw new Error(
         `Workflow reached terminal status '${state.status}' instead of '${targetStatus}'`
       );
@@ -136,14 +136,14 @@ export async function waitForStatus(engine, executionId, targetStatus, maxWaitMs
  */
 export async function waitForCompletion(engine, executionId, maxWaitMs = 60000) {
   const startTime = Date.now();
-  const terminalStatuses = [
+  const terminalStatuses = new Set([
     WorkflowStatus.COMPLETED,
     WorkflowStatus.FAILED,
     WorkflowStatus.CANCELLED,
     // Custom terminal statuses from end nodes
     'approved',
     'rejected'
-  ];
+  ]);
 
   while (Date.now() - startTime < maxWaitMs) {
     const state = await engine.getState(executionId);
@@ -152,7 +152,7 @@ export async function waitForCompletion(engine, executionId, maxWaitMs = 60000) 
       throw new Error(`Execution ${executionId} not found`);
     }
 
-    if (terminalStatuses.includes(state.status)) {
+    if (terminalStatuses.has(state.status)) {
       return state;
     }
 

@@ -1406,7 +1406,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
     const integrations = [];
 
     // Check for JIRA tools
-    if (app.tools.some(tool => tool === 'jira')) {
+    if (app.tools.includes('jira')) {
       integrations.push('jira');
     }
 

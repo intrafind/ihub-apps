@@ -1,5 +1,5 @@
 import { useContext, useReducer, useEffect, useCallback, useRef } from 'react';
-import { AuthContext, useOptionalAuth } from './authContextValue';
+import { AuthContext } from './authContextValue';
 import { apiClient } from '../../api/client.js';
 import { fetchAuthStatus, invalidateAuthStatusCache } from '../../api';
 import {
@@ -115,7 +115,6 @@ function returnUrlForProvider(returnUrl) {
 
 // Create context
 // The context object lives in its own module; see authContextValue.js.
-export { useOptionalAuth };
 
 // Auth provider component
 export function AuthProvider({ children }) {
@@ -737,3 +736,5 @@ export function useAuth() {
   }
   return context;
 }
+
+export { useOptionalAuth } from './authContextValue';

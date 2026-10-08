@@ -32,7 +32,7 @@ function sanitizeModelForPublic(model) {
 }
 
 /** Model types `GET /api/models?type=` lists. */
-const MODEL_TYPES = ['chat', 'transcription', 'tts'];
+const MODEL_TYPES = new Set(['chat', 'transcription', 'tts']);
 
 export default function registerModelRoutes(app, { getLocalizedError }) {
   /**
@@ -130,7 +130,7 @@ export default function registerModelRoutes(app, { getLocalizedError }) {
       // Unknown types are a 400, not a silent fallback to chat — otherwise a
       // future model type would silently return the wrong list.
       const requestedType = req.query.type ?? 'chat';
-      if (!MODEL_TYPES.includes(requestedType)) {
+      if (!MODEL_TYPES.has(requestedType)) {
         return res.status(400).json({ error: `Unknown model type: ${requestedType}` });
       }
       const typedModels = models.filter(m => (m.modelType || 'chat') === requestedType);

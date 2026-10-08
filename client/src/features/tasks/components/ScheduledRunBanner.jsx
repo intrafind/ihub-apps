@@ -8,7 +8,7 @@ import { formatDateTime, reasonText } from '../utils/taskFormat';
 import { RunStatusBadge } from './TaskBadges';
 import ApprovalControls from './ApprovalControls';
 
-const ACTIVE_STATUSES = ['queued', 'running'];
+const ACTIVE_STATUSES = new Set(['queued', 'running']);
 /** How often a run that is going, and one that waits for an answer, is re-read. */
 const ACTIVE_POLL_MS = 4000;
 const WAITING_POLL_MS = 15000;
@@ -42,7 +42,7 @@ export default function ScheduledRunBanner({ origin, onRunChanged }) {
   // Follow a run that is still going (queued after an approval, or running),
   // and — more slowly — one waiting for an approval: it may be answered on the
   // task page or in another tab, or time out.
-  const active = run && ACTIVE_STATUSES.includes(run.status);
+  const active = run && ACTIVE_STATUSES.has(run.status);
   const waiting = run?.status === 'awaiting_approval';
   useEffect(() => {
     if (!active && !waiting) return undefined;

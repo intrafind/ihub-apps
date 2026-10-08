@@ -60,22 +60,20 @@ const Uploader = ({
           };
         });
         setPreview(previews);
+      } else if (data.type === 'image') {
+        setPreview({
+          type: 'image',
+          url: data.base64,
+          fileName: data.fileName,
+          fileType: data.fileType
+        });
       } else {
-        if (data.type === 'image') {
-          setPreview({
-            type: 'image',
-            url: data.base64,
-            fileName: data.fileName,
-            fileType: data.fileType
-          });
-        } else {
-          setPreview({
-            type: data.type,
-            fileName: data.fileName,
-            fileType: data.fileType,
-            content: data.content
-          });
-        }
+        setPreview({
+          type: data.type,
+          fileName: data.fileName,
+          fileType: data.fileType,
+          content: data.content
+        });
       }
       setFileData(data);
     }

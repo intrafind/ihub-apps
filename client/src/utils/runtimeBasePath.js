@@ -63,7 +63,7 @@ export const detectBasePath = () => {
   // Split path into segments and find the first known route
   // This correctly handles paths like /admin/apps (route 'admin' at segment 0)
   // vs /ihub/admin/apps (route 'admin' at segment 1, base path is '/ihub')
-  const segments = cleanPath.split('/').filter(s => s); // Remove empty strings
+  const segments = cleanPath.split('/').filter(Boolean); // Remove empty strings
 
   // Find the index of the first segment that matches a known route
   let routeSegmentIndex = -1;

@@ -18,7 +18,7 @@ import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContex
 // Formats whose content can be copied to the clipboard as plain text. Binary
 // formats (pdf, docx, xlsx, pptx) and the styled HTML document can only be
 // downloaded, so the Copy button is disabled when one of those is selected.
-const COPYABLE_FORMATS = ['txt', 'markdown', 'json', 'jsonl'];
+const COPYABLE_FORMATS = new Set(['txt', 'markdown', 'json', 'jsonl']);
 
 function ExportDialog({
   isOpen,
@@ -82,7 +82,7 @@ function ExportDialog({
 
   if (!isOpen) return null;
 
-  const canCopySelectedFormat = COPYABLE_FORMATS.includes(selectedFormat);
+  const canCopySelectedFormat = COPYABLE_FORMATS.has(selectedFormat);
 
   const buildMeta = () => ({
     model: settings.model,

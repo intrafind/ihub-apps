@@ -9,7 +9,7 @@
  * ranges of the rendered text layer can be highlighted.
  */
 
-import { normalize, buildShadow, computePassageMatches } from './passageMatcher.js';
+import { normalize, buildShadow } from './passageMatcher.js';
 
 /**
  * Builds the page index the matcher expects from a pdf.js text content object.
@@ -105,4 +105,4 @@ export function flattenMatches(result) {
   return flat;
 }
 
-export { computePassageMatches };
+export { computePassageMatches } from './passageMatcher.js';

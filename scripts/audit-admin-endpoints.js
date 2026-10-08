@@ -20,9 +20,9 @@ const __dirname = dirname(__filename);
 const ADMIN_ROUTES_DIR = join(__dirname, '../server/routes/admin');
 
 // Known intentional exceptions (endpoints that should NOT have adminAuth)
-const INTENTIONAL_EXCEPTIONS = [
+const INTENTIONAL_EXCEPTIONS = new Set([
   '/api/admin/auth/status' // Public endpoint to check auth requirements
-];
+]);
 
 function extractRoutes(filePath, fileName) {
   const content = readFileSync(filePath, 'utf-8');
@@ -58,7 +58,7 @@ function extractRoutes(filePath, fileName) {
       path,
       lineNumber,
       hasAdminAuth,
-      isException: INTENTIONAL_EXCEPTIONS.includes(path)
+      isException: INTENTIONAL_EXCEPTIONS.has(path)
     });
   }
 
@@ -85,7 +85,7 @@ function extractRoutes(filePath, fileName) {
       path,
       lineNumber,
       hasAdminAuth,
-      isException: INTENTIONAL_EXCEPTIONS.includes(path)
+      isException: INTENTIONAL_EXCEPTIONS.has(path)
     });
   }
 

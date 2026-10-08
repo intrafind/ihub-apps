@@ -36,7 +36,16 @@ import { inspectModelApiKey } from '../../utils.js';
 /** Largest voice sample accepted (Mistral needs seconds, not minutes, of audio). */
 const MAX_VOICE_SAMPLE_BYTES = 10 * 1024 * 1024;
 /** Audio file types a voice sample may have. */
-const VOICE_SAMPLE_EXTENSIONS = ['wav', 'mp3', 'm4a', 'ogg', 'oga', 'opus', 'flac', 'webm'];
+const VOICE_SAMPLE_EXTENSIONS = new Set([
+  'wav',
+  'mp3',
+  'm4a',
+  'ogg',
+  'oga',
+  'opus',
+  'flac',
+  'webm'
+]);
 
 /**
  * The TTS model and its provider for a voices request, or an error response.
@@ -994,7 +1003,7 @@ export default function registerAdminModelsRoutes(app) {
       const safeName =
         typeof filename === 'string' ? filename.replace(/[^\w.-]/g, '_').slice(-100) : '';
       const extension = safeName.includes('.') ? safeName.split('.').pop().toLowerCase() : 'wav';
-      if (!VOICE_SAMPLE_EXTENSIONS.includes(extension)) {
+      if (!VOICE_SAMPLE_EXTENSIONS.has(extension)) {
         return res
           .status(400)
           .json({ error: 'Unsupported audio file type', code: 'invalid-audio' });

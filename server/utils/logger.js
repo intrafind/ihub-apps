@@ -33,11 +33,11 @@ const orderedJsonFormat = winston.format.printf(info => {
   }
 
   // 5. Add all other fields (except the ones we've already added)
-  const reservedFields = ['component', 'level', 'timestamp', 'message'];
+  const reservedFields = new Set(['component', 'level', 'timestamp', 'message']);
   Object.keys(info).forEach(key => {
     // Object.keys() skips symbol keys (winston's level/message/splat), so only the
     // string-keyed reserved fields need excluding.
-    if (!reservedFields.includes(key)) {
+    if (!reservedFields.has(key)) {
       orderedLog[key] = info[key];
     }
   });
@@ -428,7 +428,7 @@ function redactSensitiveData(data) {
 
   // List of sensitive field names (exact match or starts with pattern)
   // Only redact these if they contain string values, not objects
-  const exactSensitiveFields = [
+  const exactSensitiveFields = new Set([
     'apikey',
     'api_key',
     'apiKey',
@@ -461,7 +461,7 @@ function redactSensitiveData(data) {
     // `cookies: Object.keys(req.cookies)` array still logs the names.
     'cookie',
     'cookies'
-  ];
+  ]);
 
   const redacted = {};
 
@@ -470,7 +470,7 @@ function redactSensitiveData(data) {
     const lowerKey = key.toLowerCase();
 
     // Check if this is a sensitive field (exact match)
-    const isSensitive = exactSensitiveFields.includes(lowerKey);
+    const isSensitive = exactSensitiveFields.has(lowerKey);
 
     // Only redact if it's sensitive AND a string value (not a nested object)
     if (

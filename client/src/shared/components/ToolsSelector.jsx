@@ -93,7 +93,7 @@ function ToolsSelector({ selectedTools = [], onToolsChange, excludeToolIds = [] 
   return (
     <div className="space-y-3">
       {/* Selected Tools (excluded ids are managed elsewhere, e.g. MCP picker) */}
-      {selectedTools.filter(id => !excludeToolIds.includes(id)).length > 0 && (
+      {selectedTools.some(id => !excludeToolIds.includes(id)) && (
         <div className="flex flex-wrap gap-2">
           {selectedTools
             .filter(id => !excludeToolIds.includes(id))

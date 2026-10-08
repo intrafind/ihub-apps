@@ -13,7 +13,7 @@ import { buildApiUrl } from '../../../utils/runtimeBasePath';
 import { buildMcpConnectUrl } from '../../chat/mcpApps/mcpConnectUrl';
 
 /** Stable error codes of the MCP sign-in callback (server/routes/mcpOAuth.js). */
-const MCP_ERROR_CODES = [
+const MCP_ERROR_CODES = new Set([
   'oauth_failed',
   'missing_code',
   'invalid_state',
@@ -25,13 +25,13 @@ const MCP_ERROR_CODES = [
   'registration_failed',
   'issuer_mismatch',
   'public_url_mismatch'
-];
+]);
 
 /**
  * Integration sign-in callback error codes (Jira and cloud storage) with a
  * dedicated, readable message under `integrations.page.cloud.errors`.
  */
-const INTEGRATION_ERROR_CODES = [
+const INTEGRATION_ERROR_CODES = new Set([
   'access_denied',
   'invalid_client',
   'invalid_state',
@@ -39,7 +39,7 @@ const INTEGRATION_ERROR_CODES = [
   'oauth_failed',
   'missing_code',
   'callback_failed'
-];
+]);
 
 export default function IntegrationsPage() {
   const { t, i18n } = useTranslation();
@@ -90,7 +90,7 @@ export default function IntegrationsPage() {
       // eslint-disable-next-line @eslint-react/set-state-in-effect
       setMessage({
         type: 'error',
-        text: INTEGRATION_ERROR_CODES.includes(jiraError)
+        text: INTEGRATION_ERROR_CODES.has(jiraError)
           ? t(`integrations.page.cloud.errors.${jiraError}`, { name: 'JIRA' })
           : t('integrations.page.jira.connectionFailed', {
               message: decodeURIComponent(jiraError)
@@ -109,7 +109,7 @@ export default function IntegrationsPage() {
       setMessage({ type: 'success', mcp: { kind: 'connected', serverId: mcpConnected } });
       navigate('/settings/integrations', { replace: true });
     } else if (mcpError) {
-      const code = MCP_ERROR_CODES.includes(mcpError) ? mcpError : 'oauth_failed';
+      const code = MCP_ERROR_CODES.has(mcpError) ? mcpError : 'oauth_failed';
       // eslint-disable-next-line @eslint-react/set-state-in-effect
       setMessage({
         type: 'error',
@@ -132,7 +132,7 @@ export default function IntegrationsPage() {
       } else if (error) {
         setMessage({
           type: 'error',
-          text: INTEGRATION_ERROR_CODES.includes(error)
+          text: INTEGRATION_ERROR_CODES.has(error)
             ? t(`integrations.page.cloud.errors.${error}`, { name: provider.displayName })
             : t('integrations.page.cloud.connectionFailed', {
                 name: provider.displayName,
