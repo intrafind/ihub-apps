@@ -40,6 +40,18 @@ const toRoman = n => {
   return out;
 };
 
+/**
+ * Limits for values read from the document. A file is untrusted input: without them a few bytes
+ * ("level 2000000000", "start at 2000000000 in letters", a label text of two million
+ * characters) make the extraction loop or allocate until the tab dies.
+ */
+const MAX_LEVEL = 8; // Word has nine list levels, 0–8
+const MAX_START = 1000000; // a list can start at a year, not at a billion
+const MAX_LVL_TEXT_LENGTH = 200; // a real label is a few characters
+const MAX_LETTER_VALUE = 26 * 30; // letters repeat (`zzz`): beyond this a decimal is shown
+
+const isLevel = n => Number.isInteger(n) && n >= 0 && n <= MAX_LEVEL;
+
 /** a … z, aa … zz, aaa … (Word repeats the letter; it does not count in base 26). */
 const toLetters = n => {
   const letter = String.fromCharCode(97 + ((n - 1) % 26));
@@ -67,9 +79,11 @@ export function formatNumber(value, numFmt) {
     case 'decimalZero':
       return String(value).padStart(2, '0');
     case 'lowerLetter':
-      return value >= 1 ? toLetters(value) : String(value);
+      return value >= 1 && value <= MAX_LETTER_VALUE ? toLetters(value) : String(value);
     case 'upperLetter':
-      return value >= 1 ? toLetters(value).toUpperCase() : String(value);
+      return value >= 1 && value <= MAX_LETTER_VALUE
+        ? toLetters(value).toUpperCase()
+        : String(value);
     case 'lowerRoman':
       return value >= 1 && value < 4000 ? toRoman(value) : String(value);
     case 'upperRoman':
@@ -94,14 +108,21 @@ export function createNumbering(numberingDoc, styles, xml) {
     const n = raw === undefined ? NaN : Number(raw);
     return Number.isFinite(n) ? n : undefined;
   };
-  const readLevel = lvl => ({
-    start: intVal(xml.kid(lvl, 'start')) ?? 1,
-    numFmt: xml.val(xml.kid(lvl, 'numFmt')) ?? 'decimal',
-    lvlText: xml.val(xml.kid(lvl, 'lvlText')) ?? '',
-    isLgl: xml.toggle(xml.kid(lvl, 'isLgl')) === true,
-    hasRestartRule: !!xml.kid(lvl, 'lvlRestart'),
-    pStyle: xml.val(xml.kid(lvl, 'pStyle'))
-  });
+  const readLevel = lvl => {
+    const start = intVal(xml.kid(lvl, 'start'));
+    const lvlText = xml.val(xml.kid(lvl, 'lvlText')) ?? '';
+    return {
+      start: start ?? 1,
+      numFmt: xml.val(xml.kid(lvl, 'numFmt')) ?? 'decimal',
+      lvlText,
+      isLgl: xml.toggle(xml.kid(lvl, 'isLgl')) === true,
+      hasRestartRule: !!xml.kid(lvl, 'lvlRestart'),
+      pStyle: xml.val(xml.kid(lvl, 'pStyle')),
+      // Values no real list has: such a level gets no label.
+      outOfRange:
+        (start !== undefined && Math.abs(start) > MAX_START) || lvlText.length > MAX_LVL_TEXT_LENGTH
+    };
+  };
 
   /**
    * What a set of levels allows. Levels whose numbering restarts by a custom rule are not
@@ -110,7 +131,9 @@ export function createNumbering(numberingDoc, styles, xml) {
    */
   const analyseLevels = levels => {
     const unsupported = new Set(
-      [...levels].filter(([, level]) => level.hasRestartRule).map(([ilvl]) => ilvl)
+      [...levels]
+        .filter(([, level]) => level.hasRestartRule || level.outOfRange)
+        .map(([ilvl]) => ilvl)
     );
     let grew = unsupported.size > 0;
     while (grew) {
@@ -139,7 +162,7 @@ export function createNumbering(numberingDoc, styles, xml) {
     const levels = new Map();
     for (const lvl of xml.kids(abstract, 'lvl')) {
       const ilvl = Number(xml.attr(lvl, 'ilvl'));
-      if (Number.isFinite(ilvl)) levels.set(ilvl, readLevel(lvl));
+      if (isLevel(ilvl)) levels.set(ilvl, readLevel(lvl));
     }
     abstracts.set(id, {
       levels,
@@ -154,10 +177,12 @@ export function createNumbering(numberingDoc, styles, xml) {
     const overrides = new Map();
     for (const override of xml.kids(num, 'lvlOverride')) {
       const ilvl = Number(xml.attr(override, 'ilvl'));
-      if (!Number.isFinite(ilvl)) continue;
+      if (!isLevel(ilvl)) continue;
       const lvl = xml.kid(override, 'lvl');
+      const startOverride = intVal(xml.kid(override, 'startOverride'));
       overrides.set(ilvl, {
-        startOverride: intVal(xml.kid(override, 'startOverride')),
+        startOverride,
+        outOfRange: startOverride !== undefined && Math.abs(startOverride) > MAX_START,
         level: lvl ? readLevel(lvl) : undefined
       });
     }
@@ -212,8 +237,10 @@ export function createNumbering(numberingDoc, styles, xml) {
     const abstract = abstracts.get(abstractId);
     if (!abstract) return { kind: 'unknown' };
 
+    if (ilvl !== undefined && !isLevel(ilvl)) return { kind: 'unsupported' };
     const effective = effectiveLevels(numId, num, abstract);
     const level = ilvl ?? effective.levelOfStyle.get(styleId) ?? 0;
+    if (num.overrides.get(level)?.outOfRange) return { kind: 'unsupported' };
     const levelOf = k => effective.levels.get(k);
     const current = levelOf(level);
     if (!current) return { kind: 'unsupported' };
