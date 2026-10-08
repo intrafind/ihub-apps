@@ -110,6 +110,28 @@ describe('structured DOCX extraction', () => {
     });
   });
 
+  it('T-DOCX-06: an explicit body-text level on a built-in heading style makes it a plain paragraph', async () => {
+    const content = await extract({
+      styles: style('berschrift1', 'heading 1', '<w:outlineLvl w:val="0"/>'),
+      body:
+        p('Echte Ueberschrift', '<w:pStyle w:val="berschrift1"/>') +
+        p('Nur Text', '<w:pStyle w:val="berschrift1"/><w:outlineLvl w:val="9"/>')
+    });
+    expect(content).toBe('# Echte Ueberschrift\n\nNur Text');
+  });
+
+  it('T-DOCX-06: a paragraph with its own outline level is a heading in a package without a styles part', async () => {
+    const content = await extract({
+      styles: null,
+      body:
+        p('Kapitel', '<w:outlineLvl w:val="0"/>') +
+        p('Unterkapitel', '<w:outlineLvl w:val="1"/>') +
+        p('Text') +
+        p('Level neun', '<w:outlineLvl w:val="9"/>')
+    });
+    expect(content).toBe('# Kapitel\n\n## Unterkapitel\n\nText\n\nLevel neun');
+  });
+
   it('T-DOCX-14: packages without styles, numbering or content do not throw', async () => {
     expect(await extract({ styles: null, numbering: null, body: p('Eins') + p('Zwei') })).toBe(
       'Eins\n\nZwei'
