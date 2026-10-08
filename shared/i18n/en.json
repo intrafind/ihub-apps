@@ -3535,7 +3535,8 @@
         "schedule": "Schedule",
         "status": "Status",
         "lastRun": "Last run",
-        "failures": "Failures"
+        "failures": "Failures",
+        "memory": "Memory"
       },
       "runs": "Runs",
       "disable": "Disable",
@@ -3552,8 +3553,17 @@
         "runRetentionDays": "Keep run records (days)",
         "maxRunChatsPerTask": "Run chats kept per task",
         "maxInstructionLength": "Longest instructions (characters)",
-        "maxRunMinutes": "Longest run (minutes)"
-      }
+        "maxRunMinutes": "Longest run (minutes)",
+        "memoryEnabled": "Allow memory between runs",
+        "memoryMaxChars": "Longest notes (characters)",
+        "maxHistoryReadChars": "Longest earlier answer a run may read (characters)"
+      },
+      "memory": {
+        "summary": "{{chars}} chars · v{{version}} · {{updatedAt}}",
+        "clear": "Clear memory",
+        "confirmClear": "Clear the memory of \"{{name}}\" of {{owner}}? The owner loses these notes."
+      },
+      "memoryEnabledHint": "Off: runs neither read nor update the notes of a task (the notes are kept), and \"Only when something changed\" notifies after every run."
     },
     "overview": {
       "storage": {
@@ -5566,12 +5576,13 @@
     "newTitle": "New scheduled task",
     "editorIntro": "The instructions are sent to the app on every run, as you, with the tools and integrations you pick. Each run becomes its own chat.",
     "variablesHelp": "Variables you can use",
-    "variablesHelpText": "Runs do not see each other. To ask for \"what changed since last time\", use the time of the last run in the instructions:",
+    "variablesHelpText": "Without \"Remember between runs\", runs do not see each other. To ask for \"what changed since last time\", use the time of the last run in the instructions:",
     "needsApproval": "Asks for approval",
     "notify": {
       "always": "After every run",
       "failure": "Only when a run fails",
-      "never": "Never"
+      "never": "Never",
+      "changes": "Only when something changed (and on failures)"
     },
     "create": "Create task",
     "notFound": "Task not found",
@@ -5591,7 +5602,9 @@
       "scheduled": "Scheduled",
       "started": "Started",
       "duration": "Duration",
-      "result": "Result"
+      "result": "Result",
+      "noChanges": "No changes",
+      "memoryUpdated": "Memory updated"
     },
     "reconnect": "Reconnect",
     "chatRemoved": "Chat removed (older runs keep only their record)",
@@ -5638,6 +5651,37 @@
       "TOO_MANY_APPROVALS": "The run asked for approval too many times",
       "TOO_MANY_FAILURES": "Paused after too many failed runs in a row",
       "TOOL_NOT_AVAILABLE": "The app no longer offers a tool this task uses"
+    },
+    "memory": {
+      "title": "Memory",
+      "label": "Remember between runs",
+      "help": "The task keeps notes and updates them after each run, so the next run knows what was already reported. You can read and edit the notes on the task page. A run can also look at earlier runs.",
+      "platformOff": "An administrator has switched memory off for all tasks. Your setting is kept but has no effect for now.",
+      "notifyNeedsMemory": "\"Only when something changed\" needs \"Remember between runs\".",
+      "on": "On",
+      "off": "Off",
+      "cardIntro": "Notes this task keeps between runs. A run reads them at the start and updates them when it is done.",
+      "offNotice": "Memory is off; these notes are kept but not used.",
+      "platformOffNotice": "Memory is switched off for the whole platform; these notes are kept but not used.",
+      "readOnlyNotice": "You are not allowed to edit scheduled tasks, so these notes are read-only.",
+      "clearHint": "If you changed what the task does, consider clearing its memory.",
+      "tooLong": "The notes are too long ({{chars}} of {{max}} characters). Shorten them and save again.",
+      "error": "The notes could not be saved"
     }
+  },
+  "memoryEditor": {
+    "label": "Memory notes",
+    "versionLine": "Version {{version}}",
+    "updatedAt": "updated {{at}}",
+    "updatedBy": "by {{by}}",
+    "size": "{{chars}} / {{max}} characters",
+    "save": "Save",
+    "saving": "Saving…",
+    "clear": "Clear",
+    "clearConfirm": "Clear all notes? This removes everything written so far.",
+    "reload": "Reload (discard my edits)",
+    "keepEditing": "Keep editing",
+    "versionConflict": "Conflict: memory was modified elsewhere. Reload to see the latest.",
+    "staleNotice": "The notes changed since you started editing (a run may have updated them)."
   }
 }

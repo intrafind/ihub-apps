@@ -42,6 +42,43 @@ export function RunStatusBadge({ status }) {
   );
 }
 
+/**
+ * What a run did with the task's memory: "No changes" when it reported nothing
+ * new, "Memory updated" when it wrote the notes. Runs of tasks without memory
+ * (and runs from before the feature) carry no `memory` and show nothing.
+ *
+ * @param {Object} props
+ * @param {{changed?: boolean|null, compose?: string, versionRead?: number,
+ *   versionWritten?: number}} [props.memory] - The run's `memory` marker.
+ */
+export function RunMemoryBadges({ memory }) {
+  const { t } = useTranslation();
+  if (!memory) return null;
+  const unchanged = memory.changed === false;
+  const updated =
+    memory.compose === 'written' ||
+    (Number.isFinite(memory.versionWritten) &&
+      Number.isFinite(memory.versionRead) &&
+      memory.versionWritten > memory.versionRead);
+  if (!unchanged && !updated) return null;
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {unchanged && (
+        <span className={`${pill} bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300`}>
+          {t('scheduledTasks.runs.noChanges', 'No changes')}
+        </span>
+      )}
+      {updated && (
+        <span
+          className={`${pill} bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-300`}
+        >
+          {t('scheduledTasks.runs.memoryUpdated', 'Memory updated')}
+        </span>
+      )}
+    </div>
+  );
+}
+
 /** How a run was started. */
 export function RunTriggerLabel({ trigger }) {
   const { t } = useTranslation();
