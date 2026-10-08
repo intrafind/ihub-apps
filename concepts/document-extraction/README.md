@@ -150,7 +150,8 @@ Validated with a differential fuzz against LibreOffice (`soffice --convert-to tx
 - **Lines, not blocks:** one `[Header] …` / `[Footer] …` line per paragraph, table rows as cells
   joined with ` | `; identical lines appear once across all sections and types. Headers come
   first, then footers, then a blank line and the body.
-- **Never costs the body:** a malformed or unresolvable header part is skipped silently (shared
-  code has no logging); the body is extracted as before. The headers are read before the body
+- **Never costs the body or the other parts:** a malformed or unresolvable header part is skipped
+  silently (shared code has no logging) — only its own lines are lost; the other headers and
+  footers and the body are extracted as before. The headers are read before the body
   pass changes `sectPr` handling.
 - **Applicable test ID:** T-DOCX-25 (plus the cases above). Q-03 and the other open questions are unchanged.

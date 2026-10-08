@@ -222,9 +222,15 @@ export async function readHeaderFooterText({
   const partCache = new Map();
   const linesOfPart = async target => {
     if (!partCache.has(target)) {
-      const doc = await readPart(target);
-      const root = doc && doc.documentElement;
-      partCache.set(target, root ? blockLines(root).filter(Boolean) : []);
+      let lines = [];
+      try {
+        const doc = await readPart(target);
+        const root = doc && doc.documentElement;
+        if (root) lines = blockLines(root).filter(Boolean);
+      } catch {
+        // A part that is not valid XML costs its own lines only, not those of the other parts.
+      }
+      partCache.set(target, lines);
     }
     return partCache.get(target);
   };

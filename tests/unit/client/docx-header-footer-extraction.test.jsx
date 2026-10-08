@@ -245,8 +245,8 @@ describe('DOCX headers and footers', () => {
           '<w:titlePg/>'
         )
     });
-    // A broken header costs the headers, never the body.
-    expect(content).toBe('Text');
+    // A broken header costs its own lines only: the valid footer and the body stay.
+    expect(content).toBe('[Footer] Fußzeile\n\nText');
   });
 
   it('does not read text that a character or paragraph style hides', async () => {
