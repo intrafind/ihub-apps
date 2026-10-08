@@ -1,7 +1,7 @@
 import express from 'express';
-import crypto from 'crypto';
-import path from 'path';
-import { fileURLToPath } from 'url';
+import crypto from 'node:crypto';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import dotenv from 'dotenv';
 import rateLimit from 'express-rate-limit';
 

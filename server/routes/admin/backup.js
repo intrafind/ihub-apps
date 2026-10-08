@@ -1,7 +1,7 @@
-import path from 'path';
-import os from 'os';
-import fs from 'fs/promises';
-import { createWriteStream } from 'fs';
+import path from 'node:path';
+import os from 'node:os';
+import fs from 'node:fs/promises';
+import { createWriteStream } from 'node:fs';
 import { ZipArchive } from 'archiver';
 import yauzl from 'yauzl';
 import configCache from '../../configCache.js';

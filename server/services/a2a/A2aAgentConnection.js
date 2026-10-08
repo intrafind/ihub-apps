@@ -1,4 +1,4 @@
-import { randomUUID } from 'crypto';
+import { randomUUID } from 'node:crypto';
 import credentialService from '../CredentialService.js';
 import { safeFetch } from '../mcp/safeFetch.js';
 import { A2A_DEFAULT_API_KEY_HEADER } from '../../validators/a2aAgentConfigSchema.js';

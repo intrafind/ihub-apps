@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 
-import { spawn } from 'child_process';
-import { mkdir, rm } from 'fs/promises';
-import { randomUUID } from 'crypto';
-import { createServer } from 'net';
-import { join, dirname } from 'path';
-import { fileURLToPath } from 'url';
+import { spawn } from 'node:child_process';
+import { mkdir, rm } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
+import { createServer } from 'node:net';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);

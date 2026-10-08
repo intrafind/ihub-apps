@@ -16,7 +16,7 @@ import logger from '../utils/logger.js';
 import { runWithContext, setContext } from '../utils/requestContext.js';
 import activityTracker from '../telemetry/ActivityTracker.js';
 import { auditLogger } from './auditLogger.js';
-import { randomUUID } from 'crypto';
+import { randomUUID } from 'node:crypto';
 
 /**
  * Middleware to verify the Content-Length header before parsing the body.

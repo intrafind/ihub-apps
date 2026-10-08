@@ -14,9 +14,9 @@ process.on('unhandledRejection', reason => {
 });
 
 // Essential dependencies that should be available in the Node.js runtime
-const path = require('path');
-const url = require('url');
-require('fs');
+const path = require('node:path');
+const url = require('node:url');
+require('node:fs');
 
 async function startServer() {
   try {

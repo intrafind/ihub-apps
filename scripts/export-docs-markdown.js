@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 
-import { readFile, readdir, writeFile, mkdir } from 'fs/promises';
-import { join, dirname, resolve } from 'path';
-import { fileURLToPath } from 'url';
-import { existsSync } from 'fs';
+import { readFile, readdir, writeFile, mkdir } from 'node:fs/promises';
+import { join, dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { existsSync } from 'node:fs';
 import {
   RELEASE_SECTIONS,
   isReleaseVersionName,

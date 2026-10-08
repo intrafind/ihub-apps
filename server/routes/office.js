@@ -2,8 +2,8 @@
 // Serves the Office add-in HTML pages (taskpane, callback, commands) and static assets.
 // These pages live outside the main SPA and need their own dedicated routes.
 
-import path from 'path';
-import { readFileSync } from 'fs';
+import path from 'node:path';
+import { readFileSync } from 'node:fs';
 import express from 'express';
 import { buildServerPath } from '../utils/basePath.js';
 import { getRootDir } from '../pathUtils.js';

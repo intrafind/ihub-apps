@@ -1,5 +1,5 @@
 import express from 'express';
-import { createReadStream } from 'fs';
+import { createReadStream } from 'node:fs';
 import { authRequired } from '../../middleware/authRequired.js';
 import {
   canAccessJob,

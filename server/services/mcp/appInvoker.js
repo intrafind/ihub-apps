@@ -1,4 +1,4 @@
-import path from 'path';
+import path from 'node:path';
 import ChatService from '../chat/ChatService.js';
 import { isValidId } from '../../utils/pathSecurity.js';
 import configCache from '../../configCache.js';

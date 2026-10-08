@@ -1,6 +1,6 @@
-import crypto from 'crypto';
-import path from 'path';
-import fs from 'fs';
+import crypto from 'node:crypto';
+import path from 'node:path';
+import fs from 'node:fs';
 import bcrypt from 'bcryptjs';
 import { atomicWriteJSON } from './atomicWrite.js';
 import { withFileLock } from './fileLock.js';

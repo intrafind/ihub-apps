@@ -1,4 +1,4 @@
-import crypto from 'crypto';
+import crypto from 'node:crypto';
 import { validateClientCredentials } from '../utils/oauthClientManager.js';
 import { buildPolicyCimdClient, resolveOAuthClient } from '../utils/oauthClientResolver.js';
 import { intersectScopes, isUserAllowedByGroups } from '../utils/oauthClientPolicy.js';

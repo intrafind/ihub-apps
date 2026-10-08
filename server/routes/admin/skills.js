@@ -1,6 +1,6 @@
-import { promises as fs } from 'fs';
-import { existsSync } from 'fs';
-import path from 'path';
+import { promises as fs } from 'node:fs';
+import { existsSync } from 'node:fs';
+import path from 'node:path';
 import JSZip from 'jszip';
 import { ZipArchive } from 'archiver';
 import { adminAuth } from '../../middleware/adminAuth.js';

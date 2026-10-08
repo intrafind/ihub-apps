@@ -2,7 +2,7 @@
 // Handles OAuth2 PKCE flow for Google Workspace file access authentication
 
 import express from 'express';
-import crypto from 'crypto';
+import crypto from 'node:crypto';
 import GoogleDriveService from '../../services/integrations/GoogleDriveService.js';
 import { authOptional, authRequired } from '../../middleware/authRequired.js';
 import { requireFeature } from '../../featureRegistry.js';

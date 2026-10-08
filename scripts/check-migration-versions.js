@@ -33,9 +33,9 @@
  *   --head  ref holding the PR head (default: HEAD)
  */
 
-import { execFileSync } from 'child_process';
-import { appendFileSync } from 'fs';
-import { fileURLToPath } from 'url';
+import { execFileSync } from 'node:child_process';
+import { appendFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 
 export const MIGRATIONS_DIR = 'server/migrations';
 const MIGRATION_FILE_PATTERN = /^V(\d{3})__(.+)\.js$/;

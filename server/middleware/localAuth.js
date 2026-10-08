@@ -1,5 +1,5 @@
 import bcrypt from 'bcryptjs';
-import crypto from 'crypto';
+import crypto from 'node:crypto';
 import { enhanceUserGroups } from '../utils/authorization.js';
 import { generateJwt } from '../utils/tokenService.js';
 import {

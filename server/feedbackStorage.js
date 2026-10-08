@@ -1,4 +1,4 @@
-import fs from 'fs/promises';
+import fs from 'node:fs/promises';
 import { loadJson } from './configLoader.js';
 import logger from './utils/logger.js';
 import { createJsonlAppender } from './utils/jsonlAppender.js';

@@ -4,9 +4,9 @@
 import { uvThreadpoolSize } from './threadpool.js';
 import express from 'express';
 import dotenv from 'dotenv';
-import http from 'http';
-import https from 'https';
-import cluster from 'cluster';
+import http from 'node:http';
+import https from 'node:https';
+import cluster from 'node:cluster';
 import { loadJson } from './configLoader.js';
 import { getRootDir } from './pathUtils.js';
 import configCache from './configCache.js';
@@ -817,7 +817,7 @@ if (cluster.isPrimary && workerCount > 1) {
   if (config.SSL_KEY && config.SSL_CERT) {
     try {
       // Import synchronous file system operations for SSL cert loading
-      const fsSync = await import('fs');
+      const fsSync = await import('node:fs');
 
       // SSL configuration
       const httpsOptions = {

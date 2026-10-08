@@ -30,7 +30,7 @@
  *
  * @module utils/oidcLoginState
  */
-import crypto from 'crypto';
+import crypto from 'node:crypto';
 import tokenStorageService from '../services/TokenStorageService.js';
 import { resolveJwtSecret } from './tokenService.js';
 import { getAuthCookieOptions, getClearAuthCookieOptions } from './cookieSettings.js';

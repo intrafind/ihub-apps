@@ -11,7 +11,7 @@
  * (`services/loop/RunStream.js`). Nothing on this bus reaches a client
  * verbatim — the wire dialect is SSE v2 only.
  */
-import { EventEmitter } from 'events';
+import { EventEmitter } from 'node:events';
 import { createPresenceMap, hasRemote, publish, subscribe } from './clusterBus.js';
 
 /**

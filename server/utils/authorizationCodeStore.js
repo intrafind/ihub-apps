@@ -1,4 +1,4 @@
-import crypto from 'crypto';
+import crypto from 'node:crypto';
 import logger from './logger.js';
 import { createPresenceMap, hasRemote, request, respond } from '../clusterBus.js';
 

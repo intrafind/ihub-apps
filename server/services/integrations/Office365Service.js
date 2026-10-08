@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import crypto from 'crypto';
+import crypto from 'node:crypto';
 import tokenStorage from '../TokenStorageService.js';
 import { httpFetch } from '../../utils/httpConfig.js';
 import { getForwardedProto, getForwardedHost } from '../../utils/publicBaseUrl.js';

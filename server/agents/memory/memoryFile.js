@@ -9,8 +9,8 @@
  * version (if `expectedVersion` is omitted, last-write-wins).
  */
 
-import fs from 'fs/promises';
-import path from 'path';
+import fs from 'node:fs/promises';
+import path from 'node:path';
 import { getContentsPath } from '../../utils/contentsPath.js';
 import { atomicWriteFile } from '../../utils/atomicWrite.js';
 import { resolveAndValidatePath } from '../../utils/pathSecurity.js';

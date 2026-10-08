@@ -40,7 +40,7 @@
  *
  * @module services/chat/ChatShareRepository
  */
-import { createHash, randomBytes } from 'crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import logger from '../../utils/logger.js';
 import { isValidId } from '../../utils/pathSecurity.js';
 import { StorageError } from '../../storage/errors.js';

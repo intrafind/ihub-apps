@@ -12,7 +12,7 @@
  *
  * @module utils/configFileLocation
  */
-import path from 'path';
+import path from 'node:path';
 import { getRootDir } from '../pathUtils.js';
 import { getContentsPath } from './contentsPath.js';
 

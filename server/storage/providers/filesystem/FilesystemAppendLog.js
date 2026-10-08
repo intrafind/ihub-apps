@@ -27,10 +27,10 @@
  *
  * @module storage/providers/filesystem/FilesystemAppendLog
  */
-import { promises as fs, createReadStream } from 'fs';
-import { createInterface } from 'readline';
-import path from 'path';
-import crypto from 'crypto';
+import { promises as fs, createReadStream } from 'node:fs';
+import { createInterface } from 'node:readline';
+import path from 'node:path';
+import crypto from 'node:crypto';
 import logger from '../../../utils/logger.js';
 import { createJsonlAppender } from '../../../utils/jsonlAppender.js';
 import { atomicWriteFile } from '../../../utils/atomicWrite.js';

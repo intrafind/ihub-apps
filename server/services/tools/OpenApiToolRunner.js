@@ -1,5 +1,5 @@
-import { promises as fs } from 'fs';
-import { join, normalize, sep } from 'path';
+import { promises as fs } from 'node:fs';
+import { join, normalize, sep } from 'node:path';
 import SwaggerParser from '@apidevtools/swagger-parser';
 // js-yaml v5 is ESM-only with named exports — a default import throws
 // "does not provide an export named 'default'" at module load time.

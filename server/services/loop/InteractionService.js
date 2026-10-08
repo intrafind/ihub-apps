@@ -44,10 +44,10 @@
  *
  * @module services/loop/InteractionService
  */
-import { EventEmitter } from 'events';
-import { promises as fs } from 'fs';
-import path from 'path';
-import crypto from 'crypto';
+import { EventEmitter } from 'node:events';
+import { promises as fs } from 'node:fs';
+import path from 'node:path';
+import crypto from 'node:crypto';
 import { createDebouncedJsonStore } from '../../utils/debouncedJsonStore.js';
 import { tryCreateExclusive, readJsonMarker, removeIfExists } from '../../utils/fileLock.js';
 import { testRegexSafely, MAX_TESTED_INPUT_LENGTH } from '../../utils/safeRegex.js';

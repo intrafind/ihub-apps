@@ -30,9 +30,9 @@
  *   node scripts/check-config-fs-access.js --quiet  # only print on failure
  */
 
-import { readFileSync, readdirSync } from 'fs';
-import { join, relative, dirname, sep } from 'path';
-import { fileURLToPath } from 'url';
+import { readFileSync, readdirSync } from 'node:fs';
+import { join, relative, dirname, sep } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);

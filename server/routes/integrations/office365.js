@@ -2,7 +2,7 @@
 // Handles OAuth2 PKCE flow for Microsoft 365 file access authentication
 
 import express from 'express';
-import crypto from 'crypto';
+import crypto from 'node:crypto';
 import Office365Service from '../../services/integrations/Office365Service.js';
 import { authOptional, authRequired } from '../../middleware/authRequired.js';
 import { requireFeature } from '../../featureRegistry.js';

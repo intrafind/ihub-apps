@@ -14,7 +14,7 @@
  * The gpt-tokenizer package is loaded lazily so the server can still start
  * even when the package is not installed (falls back to a chars/4 heuristic).
  */
-import { createRequire } from 'module';
+import { createRequire } from 'node:module';
 import { computeContextUsage } from './contextUsage.js';
 
 /** Chars/4 fallback when the real tokenizer is unavailable. */

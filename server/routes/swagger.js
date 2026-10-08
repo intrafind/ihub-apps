@@ -2,8 +2,8 @@ import swaggerJSDoc from 'swagger-jsdoc';
 import swaggerUi from 'swagger-ui-express';
 import { authRequired } from '../middleware/authRequired.js';
 import { loadJson } from '../configLoader.js';
-import path from 'path';
-import { fileURLToPath } from 'url';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { buildServerPath } from '../utils/basePath.js';
 import logger from '../utils/logger.js';
 

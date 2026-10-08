@@ -26,10 +26,10 @@
  * on the default branch after the release. Safe to run by hand.
  */
 
-import { execFileSync } from 'child_process';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
-import { dirname, join, relative } from 'path';
-import { fileURLToPath } from 'url';
+import { execFileSync } from 'node:child_process';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { dirname, join, relative } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import {
   RELEASE_SECTIONS,
   UNRELEASED_VERSION,

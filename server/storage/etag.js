@@ -30,7 +30,7 @@
  *
  * @module storage/etag
  */
-import crypto from 'crypto';
+import crypto from 'node:crypto';
 import { canonicalJson } from './canonicalJson.js';
 
 /**

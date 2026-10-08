@@ -1,5 +1,5 @@
-import net from 'net';
-import tls from 'tls';
+import net from 'node:net';
+import tls from 'node:tls';
 import { authenticateResult, AUTH_RESULT_SUCCESS } from 'ldap-authentication';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';

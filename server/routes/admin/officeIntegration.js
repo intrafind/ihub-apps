@@ -32,7 +32,7 @@ import {
 import { probeOfficeJsUrl } from '../../services/OfficeJsProxyService.js';
 import { assertPublicTarget, createPinnedLookup } from '../../utils/ssrfGuard.js';
 import { oauthClientsFile } from '../../utils/contentsPath.js';
-import { randomUUID } from 'crypto';
+import { randomUUID } from 'node:crypto';
 import { LEGACY_OFFICE_ADDIN_ID, resolveOfficeAddinId } from '../../utils/officeAddinManifest.js';
 
 /**

@@ -5,10 +5,10 @@
  * Requires Node.js 20.0.0 or later
  */
 
-const fs = require('fs');
-const path = require('path');
-const { execSync } = require('child_process');
-const os = require('os');
+const fs = require('node:fs');
+const path = require('node:path');
+const { execSync } = require('node:child_process');
+const os = require('node:os');
 
 // Configuration
 const version = require('./package.json').version;

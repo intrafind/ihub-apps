@@ -1,4 +1,4 @@
-import { randomUUID } from 'crypto';
+import { randomUUID } from 'node:crypto';
 
 /**
  * Files a tool generated during a chat turn — a PDF from `create_pdf`, later

@@ -1,5 +1,5 @@
-import { join } from 'path';
-import { promises as fs } from 'fs';
+import { join } from 'node:path';
+import { promises as fs } from 'node:fs';
 import { ZipArchive } from 'archiver';
 import config from '../../config.js';
 import { getRootDir } from '../../pathUtils.js';

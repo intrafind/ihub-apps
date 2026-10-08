@@ -11,7 +11,7 @@
  *
  * @module services/a2a/a2aClientContextStore
  */
-import { createHash } from 'crypto';
+import { createHash } from 'node:crypto';
 import { getStorage, readFacet } from '../../storage/bootstrap.js';
 import { RUNTIME_NAMESPACES } from '../../storage/namespaces.js';
 import logger from '../../utils/logger.js';

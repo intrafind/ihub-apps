@@ -30,9 +30,9 @@
  *
  * @module storage/providers/filesystem/FilesystemStorageProvider
  */
-import { promises as fs } from 'fs';
-import path from 'path';
-import crypto from 'crypto';
+import { promises as fs } from 'node:fs';
+import path from 'node:path';
+import crypto from 'node:crypto';
 import serverConfig from '../../../config.js';
 import logger from '../../../utils/logger.js';
 import { StorageProvider } from '../../StorageProvider.js';

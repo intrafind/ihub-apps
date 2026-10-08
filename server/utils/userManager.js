@@ -1,4 +1,4 @@
-import fs from 'fs';
+import fs from 'node:fs';
 import bcrypt from 'bcryptjs';
 import { v4 as uuidv4 } from 'uuid';
 import { atomicWriteJSON } from './atomicWrite.js';

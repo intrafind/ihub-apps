@@ -46,7 +46,7 @@
  *
  * @module services/artifacts/ArtifactRepository
  */
-import { randomUUID } from 'crypto';
+import { randomUUID } from 'node:crypto';
 import logger from '../../utils/logger.js';
 import { isValidId } from '../../utils/pathSecurity.js';
 import { getStorage, readFacet } from '../../storage/bootstrap.js';

@@ -15,9 +15,9 @@ dotenv.config({ path: '.env' });
 import configCache from '../../../server/configCache.js';
 import { WorkflowEngine } from '../../../server/services/workflow/WorkflowEngine.js';
 import { StateManager } from '../../../server/services/workflow/StateManager.js';
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(__dirname, '../../..');

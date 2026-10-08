@@ -16,11 +16,11 @@
  * A non-zero exit code indicates at least one assertion failed.
  */
 
-import { strict as assert } from 'assert';
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
-import os from 'os';
+import { strict as assert } from 'node:assert';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import os from 'node:os';
 
 // Resolve the project root so relative source paths work regardless of cwd.
 const __filename = fileURLToPath(import.meta.url);

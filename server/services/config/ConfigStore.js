@@ -46,8 +46,8 @@
  *
  * @module services/config/ConfigStore
  */
-import { promises as fs } from 'fs';
-import path from 'path';
+import { promises as fs } from 'node:fs';
+import path from 'node:path';
 import logger from '../../utils/logger.js';
 import { isValidId, resolveAndValidatePath } from '../../utils/pathSecurity.js';
 import { atomicCreateJSON, atomicWriteFile, atomicWriteJSON } from '../../utils/atomicWrite.js';

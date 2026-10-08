@@ -2,9 +2,9 @@
 // Serves runtime configuration and generates the Office manifest XML
 
 import express from 'express';
-import { readFileSync } from 'fs';
-import { join, dirname } from 'path';
-import { fileURLToPath } from 'url';
+import { readFileSync } from 'node:fs';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { requireFeature } from '../../featureRegistry.js';
 import { buildPublicBaseUrl } from '../../utils/publicBaseUrl.js';
 import configCache from '../../configCache.js';

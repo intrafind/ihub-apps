@@ -13,7 +13,7 @@
  *
  * @module services/workflow/executionChat
  */
-import { randomUUID } from 'crypto';
+import { randomUUID } from 'node:crypto';
 import { newRunId } from '../loop/RunLog.js';
 import { materializeAssistantTurn, materializeUserTurn } from '../chat/chatMaterializer.js';
 import { getLocalizedString } from '../../utils/localize.js';

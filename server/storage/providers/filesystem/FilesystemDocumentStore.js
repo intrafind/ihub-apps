@@ -23,8 +23,8 @@
  *
  * @module storage/providers/filesystem/FilesystemDocumentStore
  */
-import { promises as fs } from 'fs';
-import path from 'path';
+import { promises as fs } from 'node:fs';
+import path from 'node:path';
 import { atomicCreateJSON, atomicWriteJSON } from '../../../utils/atomicWrite.js';
 import { withFileLock, removeIfExists, tryCreateExclusive } from '../../../utils/fileLock.js';
 import { isValidId } from '../../../utils/pathSecurity.js';

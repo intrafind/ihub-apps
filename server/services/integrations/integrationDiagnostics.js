@@ -12,9 +12,9 @@
  * about what to check. Nothing here is iFinder-specific, so the same primitives
  * back both integration tests.
  */
-import dns from 'dns';
-import net from 'net';
-import tls from 'tls';
+import dns from 'node:dns';
+import net from 'node:net';
+import tls from 'node:tls';
 import jwt from 'jsonwebtoken';
 import {
   describeProxyRouting,

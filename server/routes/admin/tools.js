@@ -1,7 +1,7 @@
-import { readFileSync, existsSync } from 'fs';
-import { promises as fs } from 'fs';
-import { join } from 'path';
-import { createHash } from 'crypto';
+import { readFileSync, existsSync } from 'node:fs';
+import { promises as fs } from 'node:fs';
+import { join } from 'node:path';
+import { createHash } from 'node:crypto';
 import { getRootDir } from '../../pathUtils.js';
 import configStore from '../../services/config/ConfigStore.js';
 import configCache from '../../configCache.js';

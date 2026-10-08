@@ -1,5 +1,5 @@
-import { createHash } from 'crypto';
-import { statSync, readFileSync } from 'fs';
+import { createHash } from 'node:crypto';
+import { statSync, readFileSync } from 'node:fs';
 import { getBasePath } from '../../utils/basePath.js';
 import logger from '../../utils/logger.js';
 

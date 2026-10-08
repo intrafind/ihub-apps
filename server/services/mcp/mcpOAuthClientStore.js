@@ -17,7 +17,7 @@
  *
  * @module services/mcp/mcpOAuthClientStore
  */
-import crypto from 'crypto';
+import crypto from 'node:crypto';
 import { getStorage, readFacet } from '../../storage/bootstrap.js';
 import { RUNTIME_NAMESPACES } from '../../storage/namespaces.js';
 import tokenStorageService from '../TokenStorageService.js';

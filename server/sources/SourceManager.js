@@ -640,7 +640,7 @@ class SourceManager {
    */
   async testFilesystemSource(config) {
     const { path: filePath, encoding = 'utf-8' } = config;
-    const fs = await import('fs');
+    const fs = await import('node:fs');
 
     try {
       if (!filePath) {

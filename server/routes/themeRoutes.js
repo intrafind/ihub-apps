@@ -11,7 +11,7 @@
  * - ETag based on theme configuration hash
  */
 
-import crypto from 'crypto';
+import crypto from 'node:crypto';
 import configCache from '../configCache.js';
 import { buildServerPath } from '../utils/basePath.js';
 import logger from '../utils/logger.js';

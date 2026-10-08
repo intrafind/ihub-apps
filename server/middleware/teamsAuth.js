@@ -1,5 +1,5 @@
 import jwt from 'jsonwebtoken';
-import { promisify } from 'util';
+import { promisify } from 'node:util';
 import configCache from '../configCache.js';
 import { enhanceUserGroups, mapExternalGroups } from '../utils/authorization.js';
 import { validateAndPersistExternalUser } from '../utils/userManager.js';

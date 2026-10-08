@@ -1,6 +1,6 @@
 import express from 'express';
 import { getContentsPath } from '../utils/contentsPath.js';
-import path from 'path';
+import path from 'node:path';
 import config from '../config.js';
 import { authRequired } from '../middleware/authRequired.js';
 import logger from '../utils/logger.js';

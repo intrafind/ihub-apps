@@ -2,7 +2,7 @@
 // Handles OAuth2 PKCE flow for JIRA authentication
 
 import express from 'express';
-import crypto from 'crypto';
+import crypto from 'node:crypto';
 import JiraService from '../../services/integrations/JiraService.js';
 import { authOptional, authRequired } from '../../middleware/authRequired.js';
 import { requireFeature } from '../../featureRegistry.js';

@@ -4,7 +4,7 @@
  * Downloads new versions from GitHub Releases, verifies checksums,
  * creates backups, swaps application files, and supports rollback.
  */
-import { promises as fs } from 'fs';
+import { promises as fs } from 'node:fs';
 import {
   createWriteStream,
   existsSync,
@@ -12,12 +12,12 @@ import {
   readdirSync,
   readFileSync,
   statSync
-} from 'fs';
-import { join } from 'path';
-import { createHash } from 'crypto';
-import { pipeline } from 'stream/promises';
-import { execFile } from 'child_process';
-import { promisify } from 'util';
+} from 'node:fs';
+import { join } from 'node:path';
+import { createHash } from 'node:crypto';
+import { pipeline } from 'node:stream/promises';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import { getRootDir } from '../pathUtils.js';
 import { getAppVersion } from '../utils/versionHelper.js';
 import { httpFetch } from '../utils/httpConfig.js';

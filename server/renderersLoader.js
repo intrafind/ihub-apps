@@ -1,6 +1,6 @@
-import { existsSync } from 'fs';
-import { promises as fs } from 'fs';
-import { join } from 'path';
+import { existsSync } from 'node:fs';
+import { promises as fs } from 'node:fs';
+import { join } from 'node:path';
 import { getRootDir } from './pathUtils.js';
 import { getContentsPath } from './utils/contentsPath.js';
 import logger from './utils/logger.js';

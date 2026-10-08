@@ -1,7 +1,7 @@
-import { promises as fs, createReadStream } from 'fs';
-import { createInterface } from 'readline';
-import { join } from 'path';
-import { randomUUID } from 'crypto';
+import { promises as fs, createReadStream } from 'node:fs';
+import { createInterface } from 'node:readline';
+import { join } from 'node:path';
+import { randomUUID } from 'node:crypto';
 import { getContentsPath } from '../utils/contentsPath.js';
 import logger from '../utils/logger.js';
 import configCache from '../configCache.js';

@@ -1,5 +1,5 @@
 import dotenv from 'dotenv';
-import path from 'path';
+import path from 'node:path';
 import { TextEncoder, TextDecoder } from 'node:util';
 import v8 from 'node:v8';
 

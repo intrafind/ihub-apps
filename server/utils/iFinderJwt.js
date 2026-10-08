@@ -1,5 +1,5 @@
 import jwt from 'jsonwebtoken';
-import crypto from 'crypto';
+import crypto from 'node:crypto';
 import config from '../config.js';
 import configCache from '../configCache.js';
 import tokenStorageService from '../services/TokenStorageService.js';

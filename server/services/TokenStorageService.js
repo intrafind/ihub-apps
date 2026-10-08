@@ -1,7 +1,7 @@
 import 'dotenv/config';
-import crypto from 'crypto';
-import fs from 'fs/promises';
-import path from 'path';
+import crypto from 'node:crypto';
+import fs from 'node:fs/promises';
+import path from 'node:path';
 import logger from '../utils/logger.js';
 import { getContentsPath } from '../utils/contentsPath.js';
 

@@ -1,5 +1,5 @@
-import path from 'path';
-import { randomUUID } from 'crypto';
+import path from 'node:path';
+import { randomUUID } from 'node:crypto';
 import configCache from '../../configCache.js';
 import { MCP_SCOPES } from './scopes.js';
 import { invokeApp } from './appInvoker.js';

@@ -32,10 +32,10 @@
  *
  * @module services/runtime/runSummaryImport
  */
-import path from 'path';
-import fs from 'fs/promises';
-import { createReadStream } from 'fs';
-import { createInterface } from 'readline';
+import path from 'node:path';
+import fs from 'node:fs/promises';
+import { createReadStream } from 'node:fs';
+import { createInterface } from 'node:readline';
 import config from '../../config.js';
 import logger from '../../utils/logger.js';
 import { getRunSummaryRepository, normalizeRunSummary } from './RunSummaryRepository.js';

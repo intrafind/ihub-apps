@@ -1,4 +1,4 @@
-import crypto from 'crypto';
+import crypto from 'node:crypto';
 
 /**
  * PKCE (Proof Key for Code Exchange) utilities – RFC 7636.

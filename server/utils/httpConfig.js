@@ -3,8 +3,8 @@
  * Provides centralized configuration for HTTP clients including SSL and proxy settings.
  * All outbound HTTP calls should use httpFetch() to ensure proxy/SSL configuration is applied.
  */
-import http from 'http';
-import https from 'https';
+import http from 'node:http';
+import https from 'node:https';
 import nodeFetch from 'node-fetch';
 import { HttpProxyAgent } from 'http-proxy-agent';
 import { HttpsProxyAgent } from 'https-proxy-agent';

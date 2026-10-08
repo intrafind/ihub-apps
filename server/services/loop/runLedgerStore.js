@@ -44,10 +44,10 @@
  *
  * @module services/loop/runLedgerStore
  */
-import { promises as fs, createReadStream } from 'fs';
-import { createInterface } from 'readline';
-import { createHash } from 'crypto';
-import path from 'path';
+import { promises as fs, createReadStream } from 'node:fs';
+import { createInterface } from 'node:readline';
+import { createHash } from 'node:crypto';
+import path from 'node:path';
 import config from '../../config.js';
 import logger from '../../utils/logger.js';
 import { createJsonlAppender } from '../../utils/jsonlAppender.js';

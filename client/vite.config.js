@@ -1,7 +1,7 @@
 import { defineConfig } from 'vite';
-import { resolve } from 'path';
-import fs from 'fs';
-import os from 'os';
+import { resolve } from 'node:path';
+import fs from 'node:fs';
+import os from 'node:os';
 import react from '@vitejs/plugin-react';
 import authGatePlugin from './vite-plugins/vite-plugin-auth-gate.js';
 

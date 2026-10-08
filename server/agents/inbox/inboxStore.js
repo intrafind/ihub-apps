@@ -16,8 +16,8 @@
  *   - [x] (P2) Triage Sentry  -- done by agent:todo-worker 2026-05-19T07:45Z
  */
 
-import fs from 'fs/promises';
-import path from 'path';
+import fs from 'node:fs/promises';
+import path from 'node:path';
 import { getContentsPath } from '../../utils/contentsPath.js';
 import { atomicWriteFile } from '../../utils/atomicWrite.js';
 import { resolveAndValidatePath } from '../../utils/pathSecurity.js';

@@ -10,7 +10,7 @@
  *   ./ihub-apps-v{version}-{platform} --update=rollback  # Rollback to previous version
  *   --force                                               # Skip confirmation prompt
  */
-import readline from 'readline';
+import readline from 'node:readline';
 import {
   checkForUpdate,
   downloadUpdate,

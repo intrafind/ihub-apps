@@ -1,6 +1,6 @@
-import fs from 'fs/promises';
-import crypto from 'crypto';
-import path from 'path';
+import fs from 'node:fs/promises';
+import crypto from 'node:crypto';
+import path from 'node:path';
 import { Builder } from 'selenium-webdriver';
 import chrome from 'selenium-webdriver/chrome.js';
 import { getRootDir } from '../pathUtils.js';

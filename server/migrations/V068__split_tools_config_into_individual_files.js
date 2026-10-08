@@ -13,8 +13,8 @@
  * their own file by an earlier build.
  */
 
-import fs from 'fs/promises';
-import path from 'path';
+import fs from 'node:fs/promises';
+import path from 'node:path';
 import { getRootDir } from '../pathUtils.js';
 import { isValidId } from '../utils/pathSecurity.js';
 

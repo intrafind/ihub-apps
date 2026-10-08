@@ -1,6 +1,6 @@
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js';
-import { createHash, randomUUID } from 'crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import express from 'express';
 import mcpAuth from '../middleware/mcpAuth.js';
 import { buildMcpServer } from '../services/mcp/McpServerService.js';

@@ -13,7 +13,7 @@ import registerPromptRoutes from '../promptRoutes.js';
 import { getUserSkillRepository } from '../../services/skills/UserSkillRepository.js';
 import { userSkillsClientConfig } from '../../services/skills/userSkillSettings.js';
 import { hasSyncedRegistry } from '../../services/skills/marketplaceSkills.js';
-import crypto from 'crypto';
+import crypto from 'node:crypto';
 import logger from '../../utils/logger.js';
 import { sendInternalError, sendFailedOperationError } from '../../utils/responseHelpers.js';
 

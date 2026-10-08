@@ -45,8 +45,8 @@
  *
  * @module services/workflow/WorkflowStateRepository
  */
-import fs from 'fs/promises';
-import path from 'path';
+import fs from 'node:fs/promises';
+import path from 'node:path';
 import logger from '../../utils/logger.js';
 import { atomicWriteJSON } from '../../utils/atomicWrite.js';
 import { isValidId } from '../../utils/pathSecurity.js';

@@ -11,7 +11,7 @@
  *
  * @module services/loop/runIdentity
  */
-import crypto from 'crypto';
+import crypto from 'node:crypto';
 import { fingerprint } from '../UserFingerprint.js';
 import { LEDGER_IDENTITY_MODES } from '../../../shared/runEvents.js';
 

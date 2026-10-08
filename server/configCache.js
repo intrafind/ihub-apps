@@ -17,7 +17,7 @@ import { getStorage } from './storage/bootstrap.js';
 import { getRawNamespace } from './storage/namespaces.js';
 import { loadSkillsMetadata } from './services/skillLoader.js';
 import { validateSourceConfig } from './validators/sourceConfigSchema.js';
-import { createHash } from 'crypto';
+import { createHash } from 'node:crypto';
 import ApiKeyVerifier from './utils/ApiKeyVerifier.js';
 import tokenStorageService from './services/TokenStorageService.js';
 import { SECRET_FIELDS_BY_TYPE } from './validators/credentialSchema.js';

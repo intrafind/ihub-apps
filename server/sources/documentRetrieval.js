@@ -16,7 +16,7 @@
  *
  * @module sources/documentRetrieval
  */
-import crypto from 'crypto';
+import crypto from 'node:crypto';
 import { estimateTokens } from '../../shared/tokenEstimator.js';
 
 /**

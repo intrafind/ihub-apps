@@ -5,8 +5,8 @@ import { getIFinderAuthorizationHeader } from '../../utils/iFinderJwt.js';
 import { isValidId } from '../../utils/pathSecurity.js';
 import configCache from '../../configCache.js';
 import authDebugService from '../../utils/authDebugService.js';
-import fs from 'fs';
-import path from 'path';
+import fs from 'node:fs';
+import path from 'node:path';
 import logger from '../../utils/logger.js';
 
 /**

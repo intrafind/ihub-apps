@@ -20,7 +20,7 @@
  * `/responses` and `/conversations` are registered from here too, so every
  * route of the API sits behind the same `authRequired` mount.
  */
-import crypto from 'crypto';
+import crypto from 'node:crypto';
 import { authRequired } from '../middleware/authRequired.js';
 import { filterResourcesByPermissions } from '../utils/authorization.js';
 import { getLocalizedError as defaultGetLocalizedError } from '../serverHelpers.js';

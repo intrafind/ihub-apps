@@ -1,4 +1,4 @@
-import crypto from 'crypto';
+import crypto from 'node:crypto';
 import configCache from '../configCache.js';
 import logger from './logger.js';
 

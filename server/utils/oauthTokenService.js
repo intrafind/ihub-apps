@@ -1,4 +1,4 @@
-import crypto from 'crypto';
+import crypto from 'node:crypto';
 import jwt from 'jsonwebtoken';
 import { verifyJwt, decodeJwt, getJwtAlgorithm, getJwtSigningKey } from './tokenService.js';
 import logger from './logger.js';

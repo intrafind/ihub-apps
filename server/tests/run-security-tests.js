@@ -6,9 +6,9 @@
  * Runs the authentication security test suite and reports results
  */
 
-import { spawn } from 'child_process';
-import { fileURLToPath } from 'url';
-import path from 'path';
+import { spawn } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+import path from 'node:path';
 import logger from '../utils/logger.js';
 
 const __filename = fileURLToPath(import.meta.url);

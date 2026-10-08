@@ -1,6 +1,6 @@
-import path from 'path';
-import { promises as fs } from 'fs';
-import { randomUUID } from 'crypto';
+import path from 'node:path';
+import { promises as fs } from 'node:fs';
+import { randomUUID } from 'node:crypto';
 import { ZipArchive } from 'archiver';
 import configStore from '../../services/config/ConfigStore.js';
 import configCache from '../../configCache.js';
