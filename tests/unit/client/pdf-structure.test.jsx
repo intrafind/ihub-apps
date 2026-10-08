@@ -18,7 +18,8 @@ const {
 const {
   indexStructTree,
   headingLevelOfRole,
-  pageBlocks
+  pageBlocks,
+  MAX_OUTLINE_NODES
 } = require('../../../shared/documentExtraction/pdfStructure');
 const { lastPageWithText, realTextLength } = require('../../../shared/documentExtraction/markers');
 
@@ -321,9 +322,36 @@ describe('tagged PDF: hostile and broken trees', () => {
     const children = Array.from({ length: 300000 }, () => ({ role: 'Span', children: [] }));
     children.push(el('H1', leaf('p1_mc0')));
     const tree = { role: 'Root', children: [{ role: 'Document', children }] };
-    const text = assemblePdfText([page([mc('p1_mc0', 'Kapitel')], tree)]);
     // Beyond the node limit the heading is simply not found; the text is there either way.
-    expect(text).toContain('Kapitel');
+    expect(indexStructTree(tree).headings).toBe(0);
+    expect(assemblePdfText([page([mc('p1_mc0', 'Kapitel')], tree)])).toContain('Kapitel');
+  });
+
+  it('the node limit holds while the children of one node are read, content ids included', () => {
+    // One element with far more children than the limit: they are not all queued first.
+    const children = Array.from({ length: 300000 }, (_, i) => leaf(`p1_mc${i}`));
+    const index = indexStructTree({ role: 'Root', children: [{ role: 'P', children }] });
+    expect(index.infoOf('p1_mc0')).toBeDefined();
+    expect(index.infoOf('p1_mc299999')).toBeUndefined();
+  });
+
+  it('a tree is read down to a fixed depth: a deep chain with text on every level stays fast', () => {
+    const chain = depth => {
+      let node = el('P', leaf(`p1_mc${depth}`));
+      for (let i = depth - 1; i >= 0; i -= 1) node = el('Sect', leaf(`p1_mc${i}`), node);
+      return { role: 'Root', children: [node] };
+    };
+    // Every text walks up to the root: without a depth limit this is quadratic (seconds here).
+    const started = Date.now();
+    const deep = indexStructTree(chain(20000));
+    expect(Date.now() - started).toBeLessThan(2000);
+    expect(deep.infoOf('p1_mc0')).toBeDefined();
+    expect(deep.infoOf('p1_mc20000')).toBeUndefined();
+
+    // A realistic tree is nowhere near the limit: a heading 30 levels down is still found.
+    let nested = el('H2', leaf('p1_mc0'));
+    for (let i = 0; i < 30; i += 1) nested = el('Sect', nested);
+    expect(indexStructTree({ role: 'Root', children: [nested] }).headings).toBe(1);
   });
 
   it('junk in the tree is ignored', () => {
@@ -550,6 +578,31 @@ describe('outline', () => {
       const wide = Array.from({ length: 5000 }, (_, i) => entry(`Eintrag ${i}`, [0]));
       expect((await readOutline(fakePdf(wide))).length).toBe(2000);
     });
+
+    it('is bounded by the nodes it visits, not only by the entries it keeps', async () => {
+      // Entries that lead nowhere (named destinations that do not exist) are never "kept", yet
+      // each one costs a lookup: the number of lookups has a limit of its own.
+      const lost = Array.from({ length: 100000 }, () => entry('Verloren', 'missing'));
+      const pdf = fakePdf(lost);
+      expect(await readOutline(pdf)).toEqual([]);
+      expect(pdf.getDestination.mock.calls.length).toBeLessThanOrEqual(MAX_OUTLINE_NODES);
+
+      let deepLost = entry('Ende', 'missing');
+      for (let i = 0; i < 50000; i += 1) deepLost = entry(`E${i}`, 'missing', deepLost);
+      const deepPdf = fakePdf([deepLost]);
+      expect(await readOutline(deepPdf)).toEqual([]);
+      expect(deepPdf.getDestination.mock.calls.length).toBeLessThanOrEqual(MAX_OUTLINE_NODES);
+    });
+
+    it('counts junk entries against the visit limit: the entry behind a very long run of them is cut', async () => {
+      // The limit counts the junk too, so the one real entry behind it is cut, not found late.
+      const junk = Array.from({ length: MAX_OUTLINE_NODES }, () => null);
+      const pdf = fakePdf([...junk, entry('Kapitel', [{ num: 21, gen: 0 }])]);
+      expect(await readOutline(pdf)).toEqual([]);
+      // Within the limit it is found, after the junk and in order.
+      const fewer = fakePdf([...junk.slice(0, 100), entry('Kapitel', [{ num: 21, gen: 0 }])]);
+      expect(await readOutline(fewer)).toEqual([{ title: 'Kapitel', depth: 1, pageIndex: 0 }]);
+    });
   });
 });
 
@@ -727,6 +780,24 @@ describe('font size heuristic', () => {
     ];
     const out = lines(assemblePdfText([page(items)]));
     expect(out.filter(line => line.startsWith('#'))).toEqual(['# Titel', '## Abschnitt']);
+  });
+
+  it('the body size is the one that promotes the least text, not the first one that looks clean', () => {
+    // 10 pt code (not marked as fixed-width) is the most frequent size; the 12 pt prose is a bit
+    // over 15 % of the text, so as "headings" of the 10 pt guess it would stay below the
+    // one-fifth limit — but taken as the body, only the 16 pt line is a heading.
+    const code = Array.from({ length: 40 }, () =>
+      plain('const value = computeSomething(argument, other);', { height: 10 })
+    );
+    const prose = Array.from({ length: 5 }, () =>
+      plain('Das ist der eigentliche Fliesstext des Dokuments mit mehreren Woertern und', {
+        height: 12
+      })
+    );
+    const items = [...code, ...prose, plain('Abschnitt', { height: 16 })];
+    const out = lines(assemblePdfText([page(items)]));
+    expect(out.filter(line => line.startsWith('#'))).toEqual(['# Abschnitt']);
+    expect(out).toHaveLength(items.length);
   });
 
   it('a numbered line a little larger than the body is a heading, an unnumbered one is not', () => {
