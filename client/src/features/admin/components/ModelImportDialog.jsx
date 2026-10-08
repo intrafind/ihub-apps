@@ -112,7 +112,7 @@ function ModelImportDialog({ onClose, onImported, existingModelIds, initialProvi
   // from fresh state; the provider list is loaded once per opening.
   useEffect(() => {
     let cancelled = false;
-    (async () => {
+    void (async () => {
       try {
         const response = await makeAdminApiCall('/admin/providers');
         if (cancelled) return;

@@ -127,11 +127,11 @@ export function PlatformConfigProvider({ children }) {
   };
 
   const refreshConfig = () => {
-    loadConfig();
+    void loadConfig();
   };
 
   useEffect(() => {
-    loadConfig();
+    void loadConfig();
   }, []);
 
   return (

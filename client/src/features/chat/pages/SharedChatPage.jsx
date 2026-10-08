@@ -263,7 +263,7 @@ export default function SharedChatPage() {
     }
     const { promise } = requestRef.current;
     let active = true;
-    (async () => {
+    void (async () => {
       try {
         const result = await promise;
         if (!active) return;

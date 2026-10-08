@@ -145,7 +145,7 @@ function GeneratedImage({ image, chatId, index, persisted = false, provenance = 
     if (!storedId || !chatId || !isVisible) return undefined;
     let url = null;
     let active = true;
-    (async () => {
+    void (async () => {
       try {
         const blob = await (customFetch || fetchChatArtifact)(chatId, storedId);
         // Revoked in the cleanup below — but only once it has been handed to

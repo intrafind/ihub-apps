@@ -139,7 +139,7 @@ function AdminModelsPage() {
   };
 
   useEffect(() => {
-    loadModels();
+    void loadModels();
   }, []);
 
   /**
@@ -247,7 +247,7 @@ function AdminModelsPage() {
       link.download = `model-${modelId}.json`;
       document.body.appendChild(link);
       link.click();
-      document.body.removeChild(link);
+      link.remove();
       URL.revokeObjectURL(url);
     } catch (err) {
       setError(`Failed to download model config: ${getAdminApiErrorMessage(err)}`);

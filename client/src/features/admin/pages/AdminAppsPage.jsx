@@ -66,8 +66,8 @@ function AdminAppsPage() {
   const [savingOrder, setSavingOrder] = useState(false);
 
   useEffect(() => {
-    loadApps();
-    loadUIConfig();
+    void loadApps();
+    void loadUIConfig();
   }, []);
 
   const loadUIConfig = async () => {
@@ -203,7 +203,7 @@ function AdminAppsPage() {
   const handleWizardClose = () => {
     setShowCreationWizard(false);
     setSelectedTemplate(null);
-    loadApps();
+    void loadApps();
   };
 
   const handleCloneApp = app => {
@@ -225,7 +225,7 @@ function AdminAppsPage() {
       link.download = `app-${appId}.json`;
       document.body.appendChild(link);
       link.click();
-      document.body.removeChild(link);
+      link.remove();
       URL.revokeObjectURL(url);
     } catch (err) {
       setError(`Failed to download app config: ${getAdminApiErrorMessage(err)}`);

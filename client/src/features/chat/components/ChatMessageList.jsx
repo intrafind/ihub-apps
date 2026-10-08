@@ -214,7 +214,7 @@ function ChatMessageList({
             )}
 
             {/* Message content */}
-            <div className={`max-w-[80%] ${message.role === 'user' ? '' : ''}`}>
+            <div className="max-w-[80%]">
               <ChatMessage
                 message={message}
                 outputFormat={outputFormat}
