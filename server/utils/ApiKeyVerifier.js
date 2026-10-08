@@ -1,7 +1,7 @@
 import { inspectModelApiKey, resolveModelApiKey } from '../utils.js';
 import ErrorHandler from './ErrorHandler.js';
 import configCache from '../configCache.js';
-import { allowsMissingApiKey } from '../services/llmProviders.js';
+import { providerEnvKeyName } from '../services/llmProviders.js';
 import logger from './logger.js';
 
 class ApiKeyVerifier {
@@ -105,39 +105,43 @@ class ApiKeyVerifier {
   }
 
   /**
-   * Validate API keys for enabled models only
-   * Now checks model config, provider config, and environment variables
+   * Validate API keys for enabled models only.
+   *
+   * Every model gets the verdict a chat request would: `inspectModelApiKey`
+   * resolves the model's own key, its provider's and the environment's, so
+   * start-up warnings cannot disagree with what happens on the first request,
+   * and one model's outcome never decides another's (a keyless server at a
+   * custom URL says nothing about an OpenAI model of the same API type).
+   *
    * @param {Array} models - Array of model configurations
-   * @returns {Object} Validation results with missing keys for enabled models
+   * @returns {Object} `{valid, missing, unreadable}`: `missing` maps a provider
+   *   to the enabled models that need a key and have none, `unreadable` lists
+   *   the enabled models whose stored key cannot be decrypted
    */
   async validateEnabledModelsApiKeys(models = null) {
     if (!models) {
-      models = configCache.getModels() || [];
+      models = configCache.getModels()?.data || [];
     }
 
     const enabledModels = models.filter(model => model.enabled);
-    const missingKeys = new Map();
-    const validKeys = new Set();
-    const checkedProviders = new Set(); // Track which providers we've already validated
+    const missingKeys = new Map(); // provider id → model ids
+    const unreadable = [];
 
-    // Get provider configurations
-    let providers = [];
-    try {
-      const providersData = configCache.getProviders(true);
-      providers = providersData?.data || [];
-    } catch (error) {
-      logger.error('Error loading provider configurations', {
-        component: 'ApiKeyVerifier',
-        error
-      });
+    for (const model of enabledModels) {
+      if (!model.provider) continue;
+
+      // Skip providers that don't need API keys
+      if (model.provider.toLowerCase() === 'iassistant-conversation') continue;
+
+      const { state, providerId } = inspectModelApiKey(model, { quiet: true });
+      if (state === 'undecryptable') {
+        unreadable.push(model.id);
+      } else if (state === 'missing') {
+        if (!missingKeys.has(providerId)) missingKeys.set(providerId, []);
+        missingKeys.get(providerId).push(model.id);
+      }
     }
 
-    // A stored key counts as configured below, but one that cannot be
-    // decrypted is not usable. Say so at boot rather than on the first chat.
-    const unreadable = enabledModels
-      .filter(model => model.provider && model.provider.toLowerCase() !== 'iassistant-conversation')
-      .filter(model => inspectModelApiKey(model, { quiet: true }).state === 'undecryptable')
-      .map(model => model.id);
     if (unreadable.length > 0) {
       logger.error(
         'Stored API keys cannot be decrypted: the server encryption key is not the one they were saved with. ' +
@@ -146,81 +150,13 @@ class ApiKeyVerifier {
       );
     }
 
-    for (const model of enabledModels) {
-      if (!model.provider) continue;
-
-      const provider = model.provider.toLowerCase();
-
-      // Skip providers that don't need API keys
-      if (provider === 'iassistant-conversation') {
-        validKeys.add(provider);
-        continue;
-      }
-
-      // Check if this specific model has an API key configured
-      if (model.apiKey) {
-        validKeys.add(provider);
-        continue;
-      }
-
-      // Check if we've already validated this provider
-      if (checkedProviders.has(provider)) {
-        // Use cached result
-        if (!validKeys.has(provider) && !missingKeys.has(provider)) {
-          if (!missingKeys.has(provider)) {
-            missingKeys.set(provider, []);
-          }
-          missingKeys.get(provider).push(model.id);
-        }
-        continue;
-      }
-
-      // Mark this provider as checked
-      checkedProviders.add(provider);
-
-      // Check provider-level API key in providers.json
-      const providerConfig = providers.find(p => p.id === provider);
-      if (providerConfig && providerConfig.apiKey) {
-        validKeys.add(provider);
-        continue;
-      }
-
-      // Check for model-specific environment variable
-      const modelSpecificKeyName = `${model.id.toUpperCase().replace(/-/g, '_')}_API_KEY`;
-      if (process.env[modelSpecificKeyName]) {
-        validKeys.add(provider);
-        continue;
-      }
-
-      // Check for provider-specific environment variable
-      const envVar = `${provider.toUpperCase()}_API_KEY`;
-      if (process.env[envVar]) {
-        validKeys.add(provider);
-        continue;
-      }
-
-      // A local server, or an OpenAI-compatible one at a custom URL, may need
-      // no key. The same rule decides it when a request is made.
-      if (allowsMissingApiKey(model)) {
-        validKeys.add(provider);
-        continue;
-      }
-
-      // No API key found through any method
-      if (!missingKeys.has(provider)) {
-        missingKeys.set(provider, []);
-      }
-      missingKeys.get(provider).push(model.id);
-    }
-
-    // Log results
     if (missingKeys.size > 0) {
       logger.warn('API key validation: missing keys detected', { component: 'ApiKeyVerifier' });
       for (const [provider, modelIds] of missingKeys) {
         logger.warn('Missing API key for provider', {
           component: 'ApiKeyVerifier',
           provider,
-          envVar: `${provider.toUpperCase()}_API_KEY`,
+          envVar: providerEnvKeyName(provider),
           modelIds
         });
       }
@@ -230,16 +166,20 @@ class ApiKeyVerifier {
           component: 'ApiKeyVerifier'
         }
       );
-      return { valid: false, missing: Object.fromEntries(missingKeys) };
-    } else if (enabledModels.length > 0) {
+    }
+
+    if (missingKeys.size > 0 || unreadable.length > 0) {
+      return { valid: false, missing: Object.fromEntries(missingKeys), unreadable };
+    }
+
+    if (enabledModels.length > 0) {
       logger.info('All API keys configured for enabled models', {
         component: 'ApiKeyVerifier',
         count: enabledModels.length
       });
-      return { valid: true, missing: {} };
     }
 
-    return { valid: true, missing: {} };
+    return { valid: true, missing: {}, unreadable: [] };
   }
 
   /**

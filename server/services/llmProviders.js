@@ -6,7 +6,7 @@
 
 import config from '../config.js';
 import tokenStorageService from './TokenStorageService.js';
-import { providerEnvKeyName } from '../../shared/llmProviders.js';
+import { getProviderApiType, providerEnvKeyName } from '../../shared/llmProviders.js';
 
 export {
   BUILT_IN_LLM_PROVIDERS,
@@ -69,7 +69,7 @@ export function inspectProviderApiKey(provider) {
   }
   if (config[envVar]) return { state: 'ok', source: 'env', envVar };
   if (unreadable) return { state: 'undecryptable', source: 'provider', envVar: null };
-  if (provider?.requiresApiKey === false || provider?.id === 'local') {
+  if (provider?.requiresApiKey === false || getProviderApiType(provider) === 'local') {
     return { state: 'keyless', source: 'none', envVar: null };
   }
   return { state: 'missing', source: 'none', envVar };

@@ -48,6 +48,7 @@ function reset() {
         apiKey: 'enc:bad-key',
         enabled: true
       },
+      { id: 'localgw', name: 'Local gateway', category: 'llm', apiType: 'local', enabled: true },
       { id: 'brave', name: 'Brave', category: 'websearch', enabled: true }
     ]
   };
@@ -313,7 +314,45 @@ describe('startup validation', () => {
       { id: 'loc', provider: 'local', enabled: true },
       { id: 'gpu', provider: 'openai', enabled: true, url: 'http://gpu01:8000/v1/chat/completions' }
     ]);
-    expect(result).toEqual({ valid: true, missing: {} });
+    expect(result).toEqual({ valid: true, missing: {}, unreadable: [] });
+  });
+
+  it('does not let a keyless model hide a missing key of another model of the same API type', async () => {
+    const gpu = { id: 'gpu', provider: 'openai', enabled: true, url: 'http://gpu01:8000/v1' };
+    const official = {
+      id: 'gpt',
+      provider: 'openai',
+      enabled: true,
+      url: 'https://api.openai.com/v1/chat/completions'
+    };
+    const verifier = new ApiKeyVerifier();
+
+    // Whichever of the two comes first.
+    for (const models of [
+      [gpu, official],
+      [official, gpu]
+    ]) {
+      const result = await verifier.validateEnabledModelsApiKeys(models);
+      expect(result).toEqual({ valid: false, missing: { openai: ['gpt'] }, unreadable: [] });
+    }
+  });
+
+  it('fails validation for a model whose only key cannot be decrypted', async () => {
+    addModel({ id: 'm1', provider: 'openai', apiKey: 'enc:bad-1', enabled: true });
+    const errorLog = jest.spyOn(logger, 'error').mockImplementation(() => {});
+
+    const result = await new ApiKeyVerifier().validateEnabledModelsApiKeys(modelsInStore());
+
+    errorLog.mockRestore();
+    expect(result).toEqual({ valid: false, missing: {}, unreadable: ['m1'] });
+  });
+
+  it('judges a model linked to a custom provider by that provider, not by its API type', async () => {
+    // ANTHROPIC_API_KEY is set, but a model linked to a provider takes only the provider's key.
+    const result = await new ApiKeyVerifier().validateEnabledModelsApiKeys([
+      { id: 'linked', provider: 'openai', providerId: 'sealed', enabled: true }
+    ]);
+    expect(result.missing).toEqual({ sealed: ['linked'] });
   });
 });
 
@@ -341,6 +380,19 @@ describe('GET /api/admin/models/_key-status', () => {
     });
     expect(JSON.stringify(res.body)).not.toContain('sk-secret-value');
   });
+
+  it('keeps a model whose id is a prototype property name', async () => {
+    // The admin API rejects such ids, but a hand-written model file can carry one.
+    addModel({ id: '__proto__', provider: 'local' });
+
+    const res = await request(app).get('/api/admin/models/_key-status');
+
+    expect(res.status).toBe(200);
+    expect(Object.keys(res.body.statuses)).toContain('__proto__');
+    expect(Object.getOwnPropertyDescriptor(res.body.statuses, '__proto__')?.value.state).toBe(
+      'keyless'
+    );
+  });
 });
 
 describe('GET /api/admin/providers/_key-status', () => {
@@ -360,6 +412,9 @@ describe('GET /api/admin/providers/_key-status', () => {
     });
     expect(res.body.statuses.sealed).toMatchObject({ state: 'missing', envVar: 'SEALED_API_KEY' });
     expect(res.body.statuses.local.state).toBe('keyless');
+    // A custom provider speaking the local API type runs its models without a
+    // key, so it must not read as "missing" next to them.
+    expect(res.body.statuses.localgw.state).toBe('keyless');
     expect(res.body.statuses.anthropic).toMatchObject({ state: 'ok', source: 'env' });
     expect(res.body.statuses.brave).toBeUndefined();
   });

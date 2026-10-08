@@ -220,6 +220,8 @@ function ModelFormEditor({
   const { t, i18n } = useTranslation();
   const [validationErrors, setValidationErrors] = useState({});
   const { statuses: keyStatuses } = useApiKeyStatus('models');
+  // What the server says about the saved key; a model not saved yet has none.
+  const keyStatus = isNewModel ? undefined : keyStatuses[data.id];
 
   // Validation function
   const validateModel = modelData => {
@@ -874,14 +876,14 @@ function ModelFormEditor({
                       'API key for this model. If not provided, the system will use the environment variable for the provider. Keys are stored encrypted.'
                     )}
                   </p>
-                  {data.apiKeySet && (
+                  {data.apiKeySet && !keyStatus && (
                     <p className="mt-2 text-sm text-blue-600 dark:text-blue-400">
                       {t('admin.models.hints.apiKeySet', '✓ API key is configured for this model')}
                     </p>
                   )}
-                  {!isNewModel && keyStatuses[data.id] && (
+                  {keyStatus && (
                     <div className="mt-3">
-                      <ApiKeyStatusBadge status={keyStatuses[data.id]} detailed />
+                      <ApiKeyStatusBadge status={keyStatus} detailed />
                     </div>
                   )}
                 </div>
