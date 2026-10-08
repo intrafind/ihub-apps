@@ -45,9 +45,13 @@ export const FOOTER_PREFIX = '[Footer]';
 const MARKER_LINE =
   /^\[(?:Page \d+(?: \(printed: [^)\n]*\))?(?:: no extractable text)?|Page break)\]$/;
 
+// Separator row of a Markdown table (`| --- | --- |`): structure, not text.
+const TABLE_SEPARATOR = /^\|(?:\s*:?-{3,}:?\s*\|)+$/;
+
 /**
- * Number of characters of real text: what is left when page markers, blank lines and the line
- * breaks between lines are not counted. The scanned-PDF check must use this instead of the raw
+ * Number of characters of real text: what is left when page markers, blank lines, the line
+ * breaks between lines and the Markdown the extraction adds (heading `#`, table pipes and
+ * separator rows) are not counted. The scanned-PDF check must use this instead of the raw
  * length: markers alone would make a scan look like text and silently disable the page-image
  * fallback, and so would the separators between many pages with a single character each.
  *
@@ -58,8 +62,11 @@ export function realTextLength(text) {
   if (typeof text !== 'string') return 0;
   let total = 0;
   for (const raw of text.split('\n')) {
-    const line = raw.trim();
-    if (!MARKER_LINE.test(line)) total += line.length;
+    let line = raw.trim();
+    if (MARKER_LINE.test(line) || TABLE_SEPARATOR.test(line)) continue;
+    if (line.startsWith('|')) line = line.replace(/\\?\|/g, ' ').replace(/\s+/g, ' ').trim();
+    else line = line.replace(/^#{1,6} /, '');
+    total += line.length;
   }
   return total;
 }
