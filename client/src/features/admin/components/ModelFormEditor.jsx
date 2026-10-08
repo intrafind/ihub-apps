@@ -159,7 +159,7 @@ const getEnvironmentVariableNames = model => {
 
   // Priority 1: Model-specific environment variable
   // e.g., GPT_4_AZURE1_API_KEY for model id "gpt-4-azure1"
-  const modelSpecificVar = `${model.id.toUpperCase().replaceAll('-', '_')}_API_KEY`;
+  const modelSpecificVar = `${model.id.toUpperCase().replace(/-/g, '_')}_API_KEY`;
   envVars.push(modelSpecificVar);
 
   // Priority 2: Provider-specific environment variable. A model linked to a
