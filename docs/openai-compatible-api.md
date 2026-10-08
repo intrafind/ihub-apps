@@ -223,7 +223,7 @@ Mistral `json_schema`, vLLM):
 | Field | Notes |
 | --- | --- |
 | `model` | **Required.** Model id or app (`app:<appId>[/<modelId>]`) |
-| `input` | **Required.** A string, or message items `{ role, content }` whose content parts are `input_text`, `input_image` (`image_url` as a `data:` URL) and `input_file` (`file_data` as a `data:` URL plus `filename`; PDF and text files — the text is extracted on the server). Earlier `assistant` messages (`output_text`) may be included. The last item must be a user message |
+| `input` | **Required.** A string, or message items `{ role, content }` whose content parts are `input_text`, `input_image` (`image_url` as a `data:` URL) and `input_file` (`file_data` as a `data:` URL plus `filename`; PDF, Word (`.docx`), PowerPoint (`.pptx`), OpenDocument (`.odt`, `.ods`, `.odp`) and text files — the text is extracted on the server, see [Documents](#documents)). Earlier `assistant` messages (`output_text`) may be included. The last item must be a user message |
 | `instructions` | System instructions — plain models only |
 | `prompt` | App variables — apps only |
 | `text.format` | `text`, `json_object` or `json_schema` — plain models only |
@@ -250,6 +250,24 @@ Streaming (`stream: true`) sends `event:`/`data:` pairs with a `sequence_number`
 `response.content_part.done`, `response.output_item.done`, and finally `response.completed`
 (carrying the final, validated response — the OpenAI SDKs take it as the final response) or
 `response.failed` (with `response.error`).
+
+### Documents
+
+Files travel inline (`input_file` in the Responses API, `file` content parts in Chat Completions): a `data:` URL or base64 with a `filename`. The server turns them into text the same way the chat upload does, so a file reads the same through the API as in the browser (see [File Upload → Extracted text format](file-upload-feature.md#extracted-text-format)):
+
+| File | What the model reads |
+| --- | --- |
+| PDF | `[Page N]` before each page (`[Page 5 (printed: 3)]` when the page's printed number differs), one line per line of the page, `#` headings and Markdown tables where the PDF is tagged or has an outline, `[Page 2: no extractable text]` for a page without text. At most 500 pages and 500,000 characters per file |
+| Word (`.docx`) | Markdown with `#` headings, the numbers Word shows in front of headings and list items, tables, footnotes, `[Page break]`, and `[Header]` / `[Footer]` lines. Tracked changes are applied and comments left out |
+| PowerPoint (`.pptx`) | `[Slide N]` in the order of the presentation (`[Slide 3 (hidden)]` for a hidden slide), titles as `# Title`, tables as Markdown tables. Speaker notes are not sent |
+| OpenDocument (`.odt`, `.ods`, `.odp`) | A text as Markdown (headings, the numbers Writer shows in front of list items and headings, tables, footnotes, `[Page break]`); a spreadsheet as `[Sheet: name]` tables with at most 2,000 rows per sheet and 300,000 characters per file; a presentation as `[Slide N]` blocks. Tracked changes are applied, speaker notes are not sent |
+| Text types | Read as UTF-8 |
+
+Excel files are not accepted through the API (`unsupported_file_type`): reading them needs the SheetJS library, which the server does not carry. Send the data as CSV or text.
+
+Errors, all `400`: `invalid_file` (not a readable PDF, Word, PowerPoint or OpenDocument file, empty data, or a package that is damaged or would unpack to an unreasonable size: more than 5,000 parts, 30 MB for one part or 100 MB in total), `file_has_no_text` (a scanned PDF or an empty Word, PowerPoint or OpenDocument file — send the pages as `input_image`) and `unsupported_file_type`.
+
+The admin switch **Structured document extraction** (Admin → Features) applies here as well: when it is off, PDFs are read as one run of words per page without markers and Word, PowerPoint and OpenDocument files are not accepted, as before.
 
 ### Conversations API
 

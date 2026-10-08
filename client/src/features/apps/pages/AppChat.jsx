@@ -57,6 +57,7 @@ import AIDisclaimerBanner from '../../chat/components/AIDisclaimerBanner';
 import { recordAppUsage } from '../../../utils/recentApps';
 import { saveAppSettings, loadAppSettings } from '../../../utils/appSettings';
 import { processDocumentFile, decodeAudioFileToBuffer } from '../../upload/utils/fileProcessing';
+import { extractionOptionsOf } from '../../upload/utils/extractionOptions';
 import { transcribeAudioBuffer } from '../../../utils/transcribeAudioBuffer';
 import { getTranscriptionErrorMessage } from '../../../utils/transcriptionErrors';
 import { startLiveTranscription } from '../../../utils/liveTranscription';
@@ -1212,7 +1213,10 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
         const file = await fetchSourceFile(source, prefillMessage || 'document');
 
         // Process through the same pipeline as uploaded files
-        const { content, pageImages } = await processDocumentFile(file);
+        const { content, pageImages } = await processDocumentFile(
+          file,
+          extractionOptionsOf(app?.upload?.fileUpload)
+        );
 
         const fileData = {
           type: 'document',

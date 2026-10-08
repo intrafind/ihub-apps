@@ -38,6 +38,37 @@ export function pageMarker(pageNumber, label) {
 /** Marker of a PDF page without a text layer inside a PDF that has text elsewhere. */
 export const noTextPageMarker = pageNumber => `[Page ${pageNumber}: no extractable text]`;
 
+/** Tracked changes and comments of a Word document, as CriticMarkup (opt-in per app). */
+export const INSERT_OPEN = '{++';
+export const INSERT_CLOSE = '++}';
+export const DELETE_OPEN = '{--';
+export const DELETE_CLOSE = '--}';
+export const COMMENT_OPEN = '{>>';
+export const COMMENT_CLOSE = '<<}';
+
+/** Longest comment text sent; a longer one is cut (a comment thread must not flood the prompt). */
+export const MAX_COMMENT_CHARS = 2000;
+
+/**
+ * A comment as it is written into the text: `{>>Author: text<<}`. The text comes from the file:
+ * whitespace (line breaks included) collapses to single spaces, and the closing sequence cannot
+ * occur inside, so a crafted comment cannot end the marker early.
+ *
+ * @param {{author?: string, text: string}} comment
+ * @returns {string}
+ */
+export function commentMarker({ author, text }) {
+  const clean = value =>
+    String(value ?? '')
+      .replace(/\s+/g, ' ')
+      .replace(/<<\}/g, '< <}')
+      .trim();
+  let body = clean(text);
+  if (body.length > MAX_COMMENT_CHARS) body = `${body.slice(0, MAX_COMMENT_CHARS).trimEnd()}…`;
+  const name = clean(author);
+  return `${COMMENT_OPEN}${name ? `${name}: ` : ''}${body}${COMMENT_CLOSE}`;
+}
+
 /** Prefixes of the header / footer block of a Word document. */
 export const HEADER_PREFIX = '[Header]';
 export const FOOTER_PREFIX = '[Footer]';
@@ -45,9 +76,13 @@ export const FOOTER_PREFIX = '[Footer]';
 const MARKER_LINE =
   /^\[(?:Page \d+(?: \(printed: [^)\n]*\))?(?:: no extractable text)?|Page break)\]$/;
 
+// Separator row of a Markdown table (`| --- | --- |`): structure, not text.
+const TABLE_SEPARATOR = /^\|(?:\s*:?-{3,}:?\s*\|)+$/;
+
 /**
- * Number of characters of real text: what is left when page markers, blank lines and the line
- * breaks between lines are not counted. The scanned-PDF check must use this instead of the raw
+ * Number of characters of real text: what is left when page markers, blank lines, the line
+ * breaks between lines and the Markdown the extraction adds (heading `#`, table pipes and
+ * separator rows) are not counted. The scanned-PDF check must use this instead of the raw
  * length: markers alone would make a scan look like text and silently disable the page-image
  * fallback, and so would the separators between many pages with a single character each.
  *
@@ -58,8 +93,11 @@ export function realTextLength(text) {
   if (typeof text !== 'string') return 0;
   let total = 0;
   for (const raw of text.split('\n')) {
-    const line = raw.trim();
-    if (!MARKER_LINE.test(line)) total += line.length;
+    let line = raw.trim();
+    if (MARKER_LINE.test(line) || TABLE_SEPARATOR.test(line)) continue;
+    if (line.startsWith('|')) line = line.replace(/\\?\|/g, ' ').replace(/\s+/g, ' ').trim();
+    else line = line.replace(/^#{1,6} /, '');
+    total += line.length;
   }
   return total;
 }
