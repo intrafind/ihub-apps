@@ -189,6 +189,24 @@ export function ScheduledTaskProposalCard({ proposal, chatId, readOnly = false }
             </dd>
           </>
         )}
+        {typeof summary.memory === 'boolean' && action !== 'delete' && (
+          <>
+            <dt className="text-gray-500">
+              {t('scheduledTasks.memory.label', 'Remember between runs')}
+            </dt>
+            <dd className="text-gray-900 dark:text-gray-100">
+              {summary.memory ? t('common.yes', 'Yes') : t('common.no', 'No')}
+            </dd>
+          </>
+        )}
+        {summary.notify === 'changes' && action !== 'delete' && (
+          <>
+            <dt className="text-gray-500">{t('scheduledTasks.fields.notify', 'Notify me')}</dt>
+            <dd className="text-gray-900 dark:text-gray-100">
+              {t('scheduledTasks.notify.changes', 'Only when something changed (and on failures)')}
+            </dd>
+          </>
+        )}
         {summary.instructions && (
           <>
             <dt className="text-gray-500">

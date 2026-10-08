@@ -565,7 +565,10 @@ export const platformConfigSchema = z
     // Scheduled tasks: prompts users save to run by themselves, gated by
     // features.scheduledTasks (and durable chats, since every run is a chat).
     // Zero turns off `maxTasksPerUser`, `maxConsecutiveFailures`,
-    // `runRetentionDays` and `maxRunChatsPerTask`.
+    // `runRetentionDays` and `maxRunChatsPerTask`. `memoryEnabled` switches the
+    // notes a task keeps between runs off for the whole installation (the notes
+    // are kept, runs do not use them); `memoryMaxChars` caps one task's notes
+    // and `maxHistoryReadChars` what one `get_task_run` call returns.
     scheduledTasks: z
       .object({
         enabled: z.boolean().prefault(true),
@@ -580,7 +583,10 @@ export const platformConfigSchema = z
         runRetentionDays: z.number().prefault(90),
         maxRunChatsPerTask: z.number().prefault(20),
         maxInstructionLength: z.number().prefault(8000),
-        maxRunMinutes: z.number().prefault(30)
+        maxRunMinutes: z.number().prefault(30),
+        memoryEnabled: z.boolean().prefault(true),
+        memoryMaxChars: z.number().prefault(8000),
+        maxHistoryReadChars: z.number().prefault(8000)
       })
       .passthrough()
       .prefault({}),

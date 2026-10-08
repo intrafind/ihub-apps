@@ -912,6 +912,35 @@ Two PRs. The first is a pure refactor with no user-visible change; the second is
 
 ---
 
+## As built (differences from this spec)
+
+Implemented on one branch and one PR (intrafind/ihub-apps#2755) instead of the two in §9, because the
+session could push to one branch only. The commits keep the milestone order M0–M6, so the refactor
+(M0–M1) can still be reviewed on its own.
+
+- **Message labels.** `get_task_run` with `include: 'conversation'` labels messages `from: 'run'` (the
+  run's own turn) or `from: 'followup'` (anything said in the chat afterwards), not `'owner'`: a
+  follow-up in a run chat can also be an assistant reply, so "owner" would be wrong for half of them.
+- **Composer format.** The post-run composer answers in plain text (`<changed>yes|no</changed>` and
+  `<notes>…</notes>`), not JSON, with a tolerant parser. Its outcomes are `written`, `unchanged`,
+  `too_long`, `conflict`, `failed`, `skipped` and `not_run`, stored on the run as `memory.compose`.
+- **Usage.** The composer call is added to the run's usage, so the run's cost includes it.
+- **Settings.** The three new settings are flat keys in `platform.scheduledTasks` (`memoryEnabled`,
+  `memoryMaxChars`, `maxHistoryReadChars`), like the existing ones, not a nested `memory` object.
+- **Clearing needs no permission.** Like deleting a task, clearing the notes works for an owner whose
+  `scheduledTasks` permission was withdrawn; reading works too, editing does not.
+- **`memorySummary` can lag.** The summary on the task document is updated after the write, outside
+  the notes' lock, so a failed update can leave it a version behind (an update that arrives late
+  never replaces a newer one). The notes themselves are always right; the client's "reload" hint is
+  the only thing that depends on the summary.
+- **Composer baseline and Stop.** The composer's baseline is the version the run read when it started,
+  not the version at the end: an owner or admin edit made anywhere during the run is kept (the run's
+  own `write_memory` updates do not count as an edit). The composer's model call registers itself for
+  the run's chat, so Stop reaches it and the run ends as cancelled.
+- **German.** The new German strings address the user as "Sie", like the rest of the task UI.
+
+---
+
 ## 11. Research: how others write and read agent memory
 
 The question was whether memory should be written by the model through a tool, or automatically after the run. The research was done on 2026-10-08.
