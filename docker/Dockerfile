@@ -12,13 +12,13 @@ FROM node:24-alpine AS dependencies
 # fixes that are already published in the Alpine repositories.
 RUN apk upgrade --no-cache && \
     apk add --update --no-cache \
-    dumb-init \
-    git \
-    python3 \
-    make \
-    g++ \
     curl \
-    musl-dev
+    dumb-init \
+    g++ \
+    git \
+    make \
+    musl-dev \
+    python3
 
 # Create app directory
 WORKDIR /app
@@ -90,10 +90,10 @@ ARG BUILDTIME=unknown
 RUN echo "Applying Alpine security patches (build ${BUILDTIME})" && \
     apk upgrade --no-cache && \
     apk add --update --no-cache \
-    dumb-init \
     curl \
-    tini \
-    netcat-openbsd
+    dumb-init \
+    netcat-openbsd \
+    tini
 
 # Drop the npm CLI that ships with the base image. The runtime only ever runs
 # `node` (entrypoint, healthcheck and CMD), while npm carries a large vendored
@@ -154,8 +154,9 @@ request.on('timeout', () => {
 request.end();
 EOF
 
-# Copy entrypoint script
-COPY --chown=ihub:ihub docker/docker-entrypoint.sh /app/docker-entrypoint.sh
+# Copy entrypoint script. Owned by root, not the runtime user: the process that
+# runs as ihub must not be able to rewrite the script it is started through.
+COPY --chown=root:root docker/docker-entrypoint.sh /app/docker-entrypoint.sh
 RUN chmod +x /app/docker-entrypoint.sh
 
 # Switch to non-root user

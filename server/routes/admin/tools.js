@@ -230,8 +230,8 @@ export default function registerAdminToolsRoutes(app) {
       // Workflows are managed as a dedicated app.workflows array (first-class
       // citizens), so they are intentionally NOT mixed into the tools list.
 
-      // Generate ETag for caching using MD5 hash (same as configCache)
-      const hash = createHash('md5');
+      // Generate ETag for caching from a content hash
+      const hash = createHash('sha256');
       hash.update(JSON.stringify(tools));
       const etag = `"${hash.digest('hex')}"`;
 

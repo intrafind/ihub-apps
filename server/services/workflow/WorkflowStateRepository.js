@@ -474,14 +474,32 @@ export class WorkflowStateRepository {
     return { items: [...found.values()], truncated };
   }
 
-  /** Legacy directory of one execution. @private */
+  /**
+   * Legacy directory of one execution, confined to the state directory.
+   *
+   * Every public entry point validates the id with {@link isStorableId}; this
+   * checks containment again at the filesystem sink so a future caller that
+   * forgets to validate cannot reach outside `stateDir`.
+   *
+   * @param {string} executionId - Execution identifier.
+   * @returns {string} Absolute directory path.
+   * @throws {Error} When the id does not name a direct child of `stateDir`.
+   * @private
+   */
   _legacyDir(executionId) {
-    return path.join(this.stateDir, executionId);
+    const root = path.resolve(this.stateDir);
+    const dir = path.resolve(root, String(executionId));
+    if (path.dirname(dir) !== root) {
+      throw new Error(
+        `Execution id does not resolve inside the workflow state directory: ${String(executionId).slice(0, 64)}`
+      );
+    }
+    return dir;
   }
 
   /** Legacy checkpoint file of one execution. @private */
   _legacyFile(executionId) {
-    return path.join(this.stateDir, executionId, LEGACY_STATE_FILE);
+    return path.join(this._legacyDir(executionId), LEGACY_STATE_FILE);
   }
 
   /**

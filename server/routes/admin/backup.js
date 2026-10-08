@@ -1,4 +1,5 @@
 import path from 'path';
+import os from 'os';
 import fs from 'fs/promises';
 import { createWriteStream } from 'fs';
 import { ZipArchive } from 'archiver';
@@ -21,6 +22,34 @@ import { getContentsPath } from '../../utils/contentsPath.js';
  * installation imports into another whatever each names its contents directory.
  */
 const ARCHIVE_CONTENTS_DIR = 'contents';
+
+/**
+ * Prefix of the per-upload directory an imported archive and its extracted
+ * contents live in. {@link removeUploadDir} only ever deletes directories
+ * carrying it.
+ */
+const IMPORT_UPLOAD_DIR_PREFIX = 'ihub-import-';
+
+/**
+ * Remove the private directory an import upload was stored in.
+ *
+ * Refuses anything that is not a direct child of the system temp directory
+ * with the import prefix, so a caller handing in some other path can never turn
+ * this into a recursive delete of a directory it did not create.
+ *
+ * @param {string} uploadedFilePath - Path of the uploaded archive.
+ * @returns {Promise<void>}
+ */
+async function removeUploadDir(uploadedFilePath) {
+  const dir = path.dirname(uploadedFilePath);
+  if (
+    path.dirname(dir) !== os.tmpdir() ||
+    !path.basename(dir).startsWith(IMPORT_UPLOAD_DIR_PREFIX)
+  ) {
+    return;
+  }
+  await fs.rm(dir, { recursive: true, force: true });
+}
 
 /**
  * Get all files recursively from a directory
@@ -476,6 +505,9 @@ export async function importConfig(req, res) {
       if (tempExtractPath) {
         await fs.rm(tempExtractPath, { recursive: true, force: true });
       }
+      if (tempZipPath) {
+        await removeUploadDir(tempZipPath);
+      }
     } catch (error) {
       logger.warn('Could not clean up temporary files', { component: 'AdminBackup', error });
     }
@@ -488,8 +520,16 @@ export async function importConfig(req, res) {
 export default async function registerBackupRoutes(app) {
   // Setup multer for file uploads
   const multer = (await import('multer')).default;
+  // The archive and the contents extracted from it hold the whole configuration,
+  // secrets included, so each upload gets a private (mode 0700) directory instead
+  // of sharing the system temp directory with every other local user.
+  const storage = multer.diskStorage({
+    destination: (_req, _file, cb) => {
+      fs.mkdtemp(path.join(os.tmpdir(), IMPORT_UPLOAD_DIR_PREFIX)).then(dir => cb(null, dir), cb);
+    }
+  });
   const upload = multer({
-    dest: '/tmp/',
+    storage,
     limits: {
       fileSize: 100 * 1024 * 1024 // 100MB limit
     },

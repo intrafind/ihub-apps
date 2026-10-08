@@ -40,7 +40,8 @@ jobs:
         run: npm run install:all
 
       - name: Install Playwright browsers
-        run: npx playwright install --with-deps chromium
+        # --no-install: use the Playwright version pinned by the lockfile, never fetch one on demand.
+        run: npx --no-install playwright install --with-deps chromium
 
       - name: Run accessibility test suite (axe-core, WCAG 2.2 AA)
         # The Playwright config auto-starts `npm run dev` before scanning.

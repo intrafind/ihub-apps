@@ -1455,7 +1455,9 @@ class IFinderService {
    */
   _ensureDownloadDirectory(downloadDir) {
     if (!fs.existsSync(downloadDir)) {
-      fs.mkdirSync(downloadDir, { recursive: true });
+      // Private to the server user: downloaded documents can be confidential and the
+      // default location sits in the shared temp directory.
+      fs.mkdirSync(downloadDir, { recursive: true, mode: 0o700 });
     }
   }
 

@@ -299,7 +299,7 @@ export function splitIntoParts(text, maxChars = MAX_PART_CHARS) {
 }
 
 function hashContent(content) {
-  return crypto.createHash('sha1').update(content).digest('hex');
+  return crypto.createHash('sha256').update(content).digest('hex');
 }
 
 /** Small insertion-ordered LRU on a Map. */

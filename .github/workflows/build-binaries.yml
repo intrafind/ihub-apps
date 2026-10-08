@@ -69,16 +69,9 @@ jobs:
 
       - name: Install dependencies
         run: |
-          npm ci
-          cd client && npm ci && cd ..
-          cd server && npm ci && cd ..
-
-      - name: Install client dependencies with uuid package
-        run: |
-          cd client
-          npm install
-          npm install uuid
-          cd ..
+          npm ci --ignore-scripts
+          cd client && npm ci --ignore-scripts && cd ..
+          cd server && npm ci --ignore-scripts && cd ..
 
       - name: Build client
         run: |
@@ -167,16 +160,20 @@ jobs:
 
       - name: Install dependencies
         run: |
-          npm ci
-          cd client && npm ci && npm install uuid && cd ..
-          cd server && npm ci && cd ..
+          npm ci --ignore-scripts
+          cd client && npm ci --ignore-scripts && cd ..
+          cd server && npm ci --ignore-scripts && cd ..
 
       - name: Set version
+        env:
+          # Passed through the environment, never interpolated into the script: the
+          # workflow_dispatch input is free text typed by whoever triggers the run.
+          RELEASE_TAG_INPUT: ${{ github.event.inputs.release_tag }}
         run: |
           if [ "${{ github.event_name }}" == "release" ]; then
             VERSION="${GITHUB_REF#refs/tags/}"
           else
-            VERSION="${{ github.event.inputs.release_tag }}"
+            VERSION="$RELEASE_TAG_INPUT"
           fi
           echo "VERSION=$VERSION" >> $GITHUB_ENV
           # Set versioned name for binary using shell variable (not ${{ env.VERSION }}
@@ -186,9 +183,9 @@ jobs:
 
       - name: Sync package.json version with release tag
         run: |
-          if [ -n "${{ env.VERSION }}" ]; then
-            echo "Syncing version with release tag: ${{ env.VERSION }}"
-            node scripts/sync-release-version.js ${{ env.VERSION }}
+          if [ -n "$VERSION" ]; then
+            echo "Syncing version with release tag: $VERSION"
+            node scripts/sync-release-version.js "$VERSION"
           fi
         shell: bash
 
@@ -196,8 +193,8 @@ jobs:
       # under this tag so the shipped binary's "What's New" lists the release by its number.
       - name: Publish unreleased release notes under the release tag
         run: |
-          if [ -n "${{ env.VERSION }}" ]; then
-            node scripts/finalize-release-notes.js "${{ env.VERSION }}"
+          if [ -n "$VERSION" ]; then
+            node scripts/finalize-release-notes.js "$VERSION"
           fi
         shell: bash
 
@@ -243,10 +240,10 @@ jobs:
           cd dist-bin
           # Create versioned archive name
           if [ "${{ matrix.os }}" == "windows-latest" ]; then
-            VERSIONED_ARCHIVE_NAME="ihub-apps-${{ env.VERSION }}-win"
+            VERSIONED_ARCHIVE_NAME="ihub-apps-${VERSION}-win"
             7z a -tzip ../$VERSIONED_ARCHIVE_NAME.zip .
           else
-            VERSIONED_ARCHIVE_NAME="ihub-apps-${{ env.VERSION }}-${{ matrix.platform }}"
+            VERSIONED_ARCHIVE_NAME="ihub-apps-${VERSION}-${{ matrix.platform }}"
             tar -czf ../$VERSIONED_ARCHIVE_NAME.tar.gz .
           fi
           echo "VERSIONED_ARCHIVE_NAME=$VERSIONED_ARCHIVE_NAME" >> $GITHUB_ENV
@@ -259,11 +256,11 @@ jobs:
           # These text files contain the entire binary archive encoded as base64
           # Customers can download the .txt file and decode it to get the original archive
           if [ "${{ matrix.os }}" == "windows-latest" ]; then
-            ARCHIVE_FILE="${{ env.VERSIONED_ARCHIVE_NAME }}.zip"
-            BASE64_FILE="${{ env.VERSIONED_ARCHIVE_NAME }}.zip.base64.txt"
+            ARCHIVE_FILE="${VERSIONED_ARCHIVE_NAME}.zip"
+            BASE64_FILE="${VERSIONED_ARCHIVE_NAME}.zip.base64.txt"
           else
-            ARCHIVE_FILE="${{ env.VERSIONED_ARCHIVE_NAME }}.tar.gz"
-            BASE64_FILE="${{ env.VERSIONED_ARCHIVE_NAME }}.tar.gz.base64.txt"
+            ARCHIVE_FILE="${VERSIONED_ARCHIVE_NAME}.tar.gz"
+            BASE64_FILE="${VERSIONED_ARCHIVE_NAME}.tar.gz.base64.txt"
           fi
           
           # Generate base64 encoded version
@@ -333,7 +330,7 @@ jobs:
           cache: 'npm'
 
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --ignore-scripts
 
       - name: Set version for commit job
         run: |
@@ -342,19 +339,19 @@ jobs:
 
       - name: Sync version and publish release notes
         run: |
-          echo "Syncing version and publishing release notes for ${{ env.VERSION }}"
-          node scripts/sync-release-version.js "${{ env.VERSION }}" --commit
+          echo "Syncing version and publishing release notes for $VERSION"
+          node scripts/sync-release-version.js "$VERSION" --commit
           # Publish what docs/releases/next/ held at the tag under docs/releases/<version>/.
           # Entries merged to the branch since the tag stay in next/.
-          node scripts/finalize-release-notes.js "${{ env.VERSION }}" --from-ref "${{ env.VERSION }}" --commit
+          node scripts/finalize-release-notes.js "$VERSION" --from-ref "$VERSION" --commit
         shell: bash
 
       - name: Open a pull request with the version and release-notes commits
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BASE_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
-          BASE_BRANCH="${{ github.event.repository.default_branch }}"
-          RELEASE_BRANCH="release/${{ env.VERSION }}-version-bump"
+          RELEASE_BRANCH="release/${VERSION}-version-bump"
 
           # Own branch, so a plain force-push is fine even if a previous attempt for the same
           # tag already pushed commits here.
@@ -364,11 +361,11 @@ jobs:
             echo "Updated existing PR: $PR_URL"
           else
             BODY=$(printf 'Automated version bump and published release notes for `%s`.\n\nOpened as a pull request because `%s` requires changes to go through one. Merging (or enabling auto-merge on) this PR brings them back onto `%s`.' \
-              "${{ env.VERSION }}" "$BASE_BRANCH" "$BASE_BRANCH")
+              "$VERSION" "$BASE_BRANCH" "$BASE_BRANCH")
             PR_URL=$(gh pr create \
               --base "$BASE_BRANCH" \
               --head "$RELEASE_BRANCH" \
-              --title "chore: update version to ${{ env.VERSION }} for release ${{ env.VERSION }}" \
+              --title "chore: update version to $VERSION for release $VERSION" \
               --body "$BODY")
             echo "Opened PR: $PR_URL"
           fi
@@ -378,7 +375,7 @@ jobs:
           if gh pr merge "$RELEASE_BRANCH" --auto --squash; then
             echo "Auto-merge enabled for $PR_URL"
           else
-            echo "::warning::Could not enable auto-merge on $PR_URL — merge it manually to land the ${{ env.VERSION }} version bump and release notes on $BASE_BRANCH."
+            echo "::warning::Could not enable auto-merge on $PR_URL — merge it manually to land the $VERSION version bump and release notes on $BASE_BRANCH."
           fi
         shell: bash
 
@@ -398,11 +395,13 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Set version for release job
+        env:
+          RELEASE_TAG_INPUT: ${{ github.event.inputs.release_tag }}
         run: |
           if [ "${{ github.event_name }}" == "release" ]; then
             echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
           else
-            echo "VERSION=${{ github.event.inputs.release_tag }}" >> $GITHUB_ENV
+            echo "VERSION=$RELEASE_TAG_INPUT" >> $GITHUB_ENV
           fi
         shell: bash
 
@@ -432,11 +431,11 @@ jobs:
 
       - name: Validate version
         run: |
-          if [ -z "${{ env.VERSION }}" ]; then
+          if [ -z "$VERSION" ]; then
             echo "❌ Error: VERSION is empty. For workflow_dispatch, provide a release_tag input (e.g. v1.2.3)."
             exit 1
           fi
-          echo "✅ Version: ${{ env.VERSION }}"
+          echo "✅ Version: $VERSION"
         shell: bash
 
       - name: Upload assets to release
