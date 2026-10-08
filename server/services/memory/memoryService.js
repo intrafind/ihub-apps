@@ -17,9 +17,11 @@
  * @module services/memory/memoryService
  */
 import memoryFile from '../../agents/memory/memoryFile.js';
+import { taskMemoryHandler } from '../scheduler/tasks/taskMemory.js';
 
 /** Scope kinds. */
 export const MEMORY_SCOPE_AGENT = 'agent';
+export { MEMORY_SCOPE_TASK } from '../scheduler/tasks/taskMemory.js';
 
 /**
  * @typedef {Object} MemoryDocument
@@ -81,8 +83,16 @@ const agentHandler = {
   }
 };
 
-/** @type {Map<string, MemoryScopeHandler>} */
-const handlers = new Map([[agentHandler.kind, agentHandler]]);
+/**
+ * Agents resolve first. A scheduled run's principal is never an agent, so the
+ * two cannot both match.
+ *
+ * @type {Map<string, MemoryScopeHandler>}
+ */
+const handlers = new Map([
+  [agentHandler.kind, agentHandler],
+  [taskMemoryHandler.kind, taskMemoryHandler]
+]);
 
 /**
  * Add a kind of scope. Called once per kind, at import time.

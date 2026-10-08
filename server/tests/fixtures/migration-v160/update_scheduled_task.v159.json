@@ -1,39 +1,42 @@
 {
-  "id": "schedule_task",
+  "id": "update_scheduled_task",
   "name": {
-    "en": "Schedule Task",
-    "de": "Aufgabe planen"
+    "en": "Update Scheduled Task",
+    "de": "Geplante Aufgabe ändern"
   },
   "description": {
-    "en": "Propose a scheduled task: a prompt that runs by itself as the user (once, on an interval, daily, weekdays, weekly, monthly, by cron, or only when started by hand). Each run is its own chat. Nothing is saved: the user reviews the task on a confirmation card and saves it there. Use it when the user asks for something to happen later or regularly, e.g. \"every weekday at 8:00, summarize my Jira tickets\".",
-    "de": "Eine geplante Aufgabe vorschlagen: ein Prompt, der von selbst als der Nutzer läuft (einmalig, im Intervall, täglich, werktags, wöchentlich, monatlich, per Cron oder nur manuell). Jeder Lauf ist ein eigener Chat. Es wird nichts gespeichert: Der Nutzer prüft die Aufgabe auf einer Bestätigungskarte und speichert sie dort. Verwenden, wenn der Nutzer etwas später oder regelmäßig erledigt haben möchte, z. B. „werktags um 8:00 meine Jira-Tickets zusammenfassen“."
+    "en": "Pause or resume a scheduled task, or propose changes to its name, instructions, schedule, app, tools or notifications. Pausing and resuming apply at once; every other change is shown to the user on a confirmation card and applied only when they save it. Inside a scheduled run, a task may only pause itself or change its own schedule.",
+    "de": "Eine geplante Aufgabe pausieren oder fortsetzen oder Änderungen an Name, Anweisungen, Zeitplan, App, Tools oder Benachrichtigungen vorschlagen. Pausieren und Fortsetzen gelten sofort; jede andere Änderung wird dem Nutzer auf einer Bestätigungskarte gezeigt und erst beim Speichern übernommen. In einem geplanten Lauf darf sich eine Aufgabe nur selbst pausieren oder ihren eigenen Zeitplan ändern."
   },
   "script": "scheduledTaskTools.js",
-  "method": "scheduleTask",
+  "method": "updateScheduledTask",
   "parameters": {
     "type": "object",
     "properties": {
+      "taskId": {
+        "type": "string",
+        "description": {
+          "en": "Id of the task (from list_scheduled_tasks)",
+          "de": "ID der Aufgabe (aus list_scheduled_tasks)"
+        }
+      },
+      "status": {
+        "type": "string",
+        "enum": ["active", "paused"],
+        "description": {
+          "en": "Pause or resume the task",
+          "de": "Aufgabe pausieren oder fortsetzen"
+        }
+      },
       "name": {
         "type": "string",
-        "maxLength": 120,
-        "description": {
-          "en": "Short name of the task",
-          "de": "Kurzer Name der Aufgabe"
-        }
-      },
-      "instructions": {
-        "type": "string",
-        "description": {
-          "en": "The prompt sent on every run, written as a complete instruction that makes sense without this conversation. It may use {{run_time}}, {{last_run_at}}, {{last_successful_run_at}}, {{run_number}} and {{task_name}}, e.g. \"tickets changed since {{last_successful_run_at}}\". When the user wants only what is new since the last run, set memory to true and tell the task to report only what is new or changed since its last run.",
-          "de": "Der Prompt, der bei jedem Lauf gesendet wird, als vollständige Anweisung, die ohne diese Unterhaltung verständlich ist. Er kann {{run_time}}, {{last_run_at}}, {{last_successful_run_at}}, {{run_number}} und {{task_name}} verwenden, z. B. „Tickets, die sich seit {{last_successful_run_at}} geändert haben“. Möchte der Nutzer nur das Neue seit dem letzten Lauf, memory auf true setzen und der Aufgabe sagen, nur Neues oder Geändertes seit ihrem letzten Lauf zu melden."
-        }
+        "maxLength": 120
       },
       "description": {
-        "type": "string",
-        "description": {
-          "en": "Optional one-line description",
-          "de": "Optionale einzeilige Beschreibung"
-        }
+        "type": "string"
+      },
+      "instructions": {
+        "type": "string"
       },
       "schedule": {
         "type": "object",
@@ -133,38 +136,19 @@
         "required": ["type"]
       },
       "appId": {
-        "type": "string",
-        "description": {
-          "en": "App the task runs with; defaults to the current app",
-          "de": "App, mit der die Aufgabe läuft; standardmäßig die aktuelle"
-        }
+        "type": "string"
       },
       "tools": {
         "type": "array",
         "items": {
           "type": "string"
-        },
-        "description": {
-          "en": "Optional subset of the app's tool ids; omit to use the app's defaults",
-          "de": "Optionale Teilmenge der Tool-IDs der App; weglassen für die Standards der App"
         }
       },
       "notify": {
         "type": "string",
-        "enum": ["always", "failure", "never", "changes"],
-        "description": {
-          "en": "When to notify the user: after every run (default), only on failure, never, or only when a run failed or reported something new (\"changes\", needs memory)",
-          "de": "Wann der Nutzer benachrichtigt wird: nach jedem Lauf (Standard), nur bei Fehlern, nie oder nur wenn ein Lauf fehlschlug oder Neues meldete („changes“, braucht memory)"
-        }
-      },
-      "memory": {
-        "type": "boolean",
-        "description": {
-          "en": "Let the task keep notes between runs (\"Remember between runs\"). Turn it on when the user wants only what is new or changed since the last run, or wants the task to continue earlier work; use it instead of relying on {{last_successful_run_at}}. The notes are updated automatically after each run and the user can read and edit them on the task page. Off by default.",
-          "de": "Die Aufgabe führt zwischen den Läufen Notizen („Zwischen Läufen merken“). Einschalten, wenn der Nutzer nur Neues oder Geändertes seit dem letzten Lauf möchte oder die Aufgabe frühere Arbeit fortsetzen soll; statt sich auf {{last_successful_run_at}} zu verlassen. Die Notizen werden nach jedem Lauf automatisch aktualisiert und der Nutzer kann sie auf der Aufgabenseite lesen und bearbeiten. Standardmäßig aus."
-        }
+        "enum": ["always", "failure", "never"]
       }
     },
-    "required": ["name", "instructions", "schedule"]
+    "required": ["taskId"]
   }
 }

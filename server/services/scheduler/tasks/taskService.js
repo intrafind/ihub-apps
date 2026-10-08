@@ -38,6 +38,7 @@ import {
   isTaskId,
   newTaskId
 } from './ScheduledTaskRepository.js';
+import { getTaskMemoryRepository } from './TaskMemoryRepository.js';
 import {
   NOTIFY_MODES,
   activeRunOf,
@@ -344,10 +345,24 @@ export async function validateTaskFields(
       : null
     : (previous?.websearchEnabled ?? null);
 
+  // Memory between runs: a boolean or `{ enabled }`. An edit that does not
+  // name it keeps what the task has.
+  out.memory = has('memory')
+    ? { enabled: (typeof body.memory === 'boolean' ? body.memory : body.memory?.enabled) === true }
+    : { enabled: previous?.memory?.enabled === true };
+
   out.notify = has('notify') ? body.notify : previous?.notify || 'always';
   if (!NOTIFY_MODES.includes(out.notify)) {
     errors.push(
       fieldError('notify', 'INVALID', `Notify must be one of ${NOTIFY_MODES.join(', ')}`)
+    );
+  } else if (out.notify === 'changes' && !out.memory.enabled) {
+    errors.push(
+      fieldError(
+        'notify',
+        'NOTIFY_CHANGES_NEEDS_MEMORY',
+        'Notifying only when something changed needs "Remember between runs"'
+      )
     );
   }
 
@@ -653,6 +668,8 @@ export async function duplicateTask(user, taskId, { language = 'en' } = {}) {
       variables: task.variables,
       enabledTools: task.enabledTools,
       websearchEnabled: task.websearchEnabled,
+      // The setting, not the notes: the copy starts with its own first run.
+      memory: task.memory,
       schedule: schedule.type === 'once' ? { type: 'manual' } : schedule,
       notify: task.notify
     },
@@ -730,6 +747,9 @@ async function removeTask(task, { deleteChats }) {
   await stopActiveRun(task, 'TASK_DELETED', 'The task was deleted');
   await repository.deleteTask(task.id);
   const runs = await repository.deleteRunsOfTask(task.id);
+  // The notes go with the task. A run that is still writing finds the task
+  // gone and its write is refused.
+  await getTaskMemoryRepository().delete(task.id);
   let chatsDeleted = 0;
   if (deleteChats) {
     for (const run of runs) {

@@ -53,7 +53,10 @@ const settingsBodySchema = z
     runRetentionDays: int(0, 3650),
     maxRunChatsPerTask: int(0, 10_000),
     maxInstructionLength: int(100, 100_000),
-    maxRunMinutes: int(1, 30)
+    maxRunMinutes: int(1, 30),
+    memoryEnabled: z.boolean(),
+    memoryMaxChars: int(1000, 64_000),
+    maxHistoryReadChars: int(1000, 50_000)
   })
   .partial()
   .strict();

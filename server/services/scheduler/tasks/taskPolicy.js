@@ -44,7 +44,10 @@ export const DEFAULT_SCHEDULED_TASK_SETTINGS = Object.freeze({
   runRetentionDays: 90,
   maxRunChatsPerTask: 20,
   maxInstructionLength: 8000,
-  maxRunMinutes: 30
+  maxRunMinutes: 30,
+  memoryEnabled: true,
+  memoryMaxChars: 8000,
+  maxHistoryReadChars: 8000
 });
 
 /** Bounds each numeric setting is clamped into. */
@@ -60,7 +63,9 @@ const SETTING_BOUNDS = Object.freeze({
   runRetentionDays: [0, 3650],
   maxRunChatsPerTask: [0, 10_000],
   maxInstructionLength: [100, 100_000],
-  maxRunMinutes: [1, 30]
+  maxRunMinutes: [1, 30],
+  memoryMaxChars: [1000, 64_000],
+  maxHistoryReadChars: [1000, 50_000]
 });
 
 function clampNumber(value, [min, max], fallback) {
@@ -75,12 +80,17 @@ function clampNumber(value, [min, max], fallback) {
  * `maxTasksPerUser`, `maxConsecutiveFailures`, `runRetentionDays` and
  * `maxRunChatsPerTask` accept 0 as "no limit" / "never".
  *
+ * The memory settings are flat keys like the rest: `memoryEnabled` switches
+ * memory between runs off for the whole installation (notes are kept, runs do
+ * not use them), `memoryMaxChars` caps one task's notes and
+ * `maxHistoryReadChars` caps what one `get_task_run` call returns.
+ *
  * @param {Object} [platformConfig]
  * @returns {typeof DEFAULT_SCHEDULED_TASK_SETTINGS}
  */
 export function scheduledTaskSettings(platformConfig) {
   const raw = platformConfig?.scheduledTasks || {};
-  const out = { enabled: raw.enabled !== false };
+  const out = { enabled: raw.enabled !== false, memoryEnabled: raw.memoryEnabled !== false };
   for (const [key, bounds] of Object.entries(SETTING_BOUNDS)) {
     out[key] = clampNumber(raw[key], bounds, DEFAULT_SCHEDULED_TASK_SETTINGS[key]);
   }
@@ -150,7 +160,8 @@ export function canUseScheduledTasks(user) {
  * @param {Object} [features]
  * @param {Object} [platformConfig]
  * @returns {{enabled: boolean, minIntervalMinutes?: number, staggerMinutes?: number,
- *   maxTasksPerUser?: number, maxInstructionLength?: number}}
+ *   maxTasksPerUser?: number, maxInstructionLength?: number, memoryEnabled?: boolean,
+ *   memoryMaxChars?: number}}
  */
 export function scheduledTasksClientConfig(features, platformConfig) {
   if (!isScheduledTasksConfigured(features, platformConfig)) return { enabled: false };
@@ -160,6 +171,8 @@ export function scheduledTasksClientConfig(features, platformConfig) {
     minIntervalMinutes: settings.minIntervalMinutes,
     staggerMinutes: settings.staggerMinutes,
     maxTasksPerUser: settings.maxTasksPerUser,
-    maxInstructionLength: settings.maxInstructionLength
+    maxInstructionLength: settings.maxInstructionLength,
+    memoryEnabled: settings.memoryEnabled,
+    memoryMaxChars: settings.memoryMaxChars
   };
 }
