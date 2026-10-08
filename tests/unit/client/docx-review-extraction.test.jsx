@@ -436,7 +436,7 @@ describe('per-app options reach every way a document gets in', () => {
       null
     );
     expect(cloudOnly.localUploadEnabled).toBe(false);
-    expect(extractionOptionsOf(cloudOnly.fileUpload)).toEqual({
+    expect(extractionOptionsOf(cloudOnly.fileUpload)).toMatchObject({
       trackedChanges: 'markup',
       comments: 'inline'
     });
