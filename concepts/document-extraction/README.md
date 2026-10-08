@@ -139,9 +139,10 @@ Validated with a differential fuzz against LibreOffice (`soffice --convert-to tx
 
 ### Decisions and findings from PR 4
 
-- **Visible text only (A3):** a first-page header is read only when its section has `w:titlePg`, an
-  even-page header only when `word/settings.xml` has `w:evenAndOddHeaders`; Word does not show
-  them otherwise (the plan had listed all three types unconditionally).
+- **Visible text only (A3):** a first-page header or footer is read only when its section has
+  `w:titlePg`, an even-page header or footer only when `word/settings.xml` has
+  `w:evenAndOddHeaders`; Word does not show them otherwise (the plan had listed all three types
+  unconditionally).
 - **Page-number fields** (`PAGE`, `NUMPAGES`, `SECTIONPAGES`, complex and `w:fldSimple`) lose their
   result. A paragraph that held such a field and keeps only pagination words afterwards ("Seite
   von", "Page of", "Pagina di", "第 页") disappears; any other remaining word keeps the line — a
@@ -157,4 +158,4 @@ Validated with a differential fuzz against LibreOffice (`soffice --convert-to tx
   silently (shared code has no logging) — only its own lines are lost; the other headers and
   footers and the body are extracted as before. The headers are read before the body
   pass changes `sectPr` handling.
-- **Applicable test ID:** T-DOCX-25 (plus the cases above). Q-03 and the other open questions are unchanged.
+- **Applicable test IDs:** T-DOCX-25, T-DOCX-26 (plus the cases above). Q-03 and the other open questions are unchanged.
