@@ -157,6 +157,9 @@ export function useFileUploadHandler() {
       // File-specific settings
       fileUpload: {
         enabled: fileUploadEnabled,
+        // Word review marks, opt-in per app (see extractionOptionsOf)
+        trackedChanges: fileConfig?.trackedChanges,
+        comments: fileConfig?.comments,
         maxFileSizeMB: fileConfig?.maxFileSizeMB || 5,
         supportedFormats: fileConfig?.supportedFormats || [
           'text/plain',
