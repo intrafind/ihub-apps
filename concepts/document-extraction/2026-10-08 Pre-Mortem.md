@@ -1,6 +1,6 @@
 # 02 — Pre-Mortem: "We shipped it, and it didn't work"
 
-Assume release 1 is out and the feedback is bad. Each scenario below names what users saw, why it happened, how likely it is given what we verified, and what prevents it. Every prevention has a test ID from `2026-10-08 Test Plan.md`.
+Assume release 1 is out and the feedback is bad. Each scenario below names what users saw, why it happened, how likely it is given what we verified, and what prevents it. Every prevention that code can check has a test ID from `2026-10-08 Test Plan.md`; the scope, documentation and release actions in section B are verified in review instead.
 
 Likelihood/impact: **H**igh / **M**edium / **L**ow.
 

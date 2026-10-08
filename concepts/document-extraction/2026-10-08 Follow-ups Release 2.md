@@ -113,7 +113,7 @@ XLSX (`processXlsxFile`):
 
 ## Sequencing
 
-1. Decide D1–D4 (maintainer call; D1 influences how Phases 1–4 of the issue are built).
+1. D1–D4 are decided (see `README.md`); release 1 builds the shared core this plan relies on.
 2. Issue Phases 1–4 (not part of this plan).
 3. **WP-F** — highest value for structure, independent of the DOCX decisions.
 4. **WP-B** (D3 gate) — builds on the OOXML pre-pass from release 1.
