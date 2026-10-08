@@ -269,6 +269,34 @@ describe('Word numbering in extracted text', () => {
     expect(content).toBe('1. Eins\n\nohne Neustart\n\nverweist darauf\n\n2. Zwei');
   });
 
+  it('a level that a list instance overrides in full follows the override: restart rule and style link', async () => {
+    const restartLevel =
+      '<w:lvl w:ilvl="1"><w:start w:val="1"/><w:numFmt w:val="decimal"/><w:lvlRestart w:val="0"/><w:lvlText w:val="%1.%2"/></w:lvl>';
+    const styledLevel =
+      '<w:lvl w:ilvl="1"><w:start w:val="1"/><w:numFmt w:val="lowerLetter"/><w:pStyle w:val="Unterpunkt"/><w:lvlText w:val="%2)"/></w:lvl>';
+    const content = await extract({
+      styles: heading('Unterpunkt', 'Unterpunkt'),
+      numbering:
+        abstractNum(0, lvl(0, 'decimal', '%1.') + lvl(1, 'decimal', '%1.%2')) +
+        // Instance 1 replaces level 1 by one with a custom restart rule: no label there.
+        `<w:num w:numId="1"><w:abstractNumId w:val="0"/><w:lvlOverride w:ilvl="1">${restartLevel}</w:lvlOverride></w:num>` +
+        // Instance 2 links level 1 to a paragraph style; the abstract definition does not.
+        `<w:num w:numId="2"><w:abstractNumId w:val="0"/><w:lvlOverride w:ilvl="1">${styledLevel}</w:lvlOverride></w:num>`,
+      body:
+        p('Eins', numPr(1, 0)) +
+        p('Unterpunkt ohne Nummer', numPr(1, 1)) +
+        p('Zwei', numPr(1, 0)) +
+        // A paragraph that only names the style and the list: level 1 comes from the override.
+        p(
+          'Gebundener Unterpunkt',
+          `<w:pStyle w:val="Unterpunkt"/><w:numPr><w:numId w:val="2"/></w:numPr>`
+        )
+    });
+    expect(content).toBe(
+      '1. Eins\n\nUnterpunkt ohne Nummer\n\n2. Zwei\n\na) Gebundener Unterpunkt'
+    );
+  });
+
   it("T-DOCX-13: a list that is defined by a numbering style uses that style's list", async () => {
     const content = await extract({
       styles:

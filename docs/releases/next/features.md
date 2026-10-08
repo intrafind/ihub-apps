@@ -14,8 +14,8 @@ heading by heading.
 - Hidden text is no longer sent to the model, and text that was moved with track changes appears
   once, at its new position
 - Chapter and list numbers from Word's numbering (`2.1`, `a)`, `(iii)`, `§ 3`) are written in front of
-  the text as Word shows them, so sections can be cited by number; a numbering Word feature that is
-  not supported leaves the paragraph without a number rather than with a wrong one
+  the text as Word shows them, so sections can be cited by number; a level with a custom restart
+  rule gets no number rather than a possibly wrong one
 - PDF files carry a `[Page N]` marker per page (with the printed page number when it differs, as
   in front matter numbered `i`, `ii`), keep their lines instead of one run of words, and flag
   pages without a text layer; scanned PDFs are still sent as page images
