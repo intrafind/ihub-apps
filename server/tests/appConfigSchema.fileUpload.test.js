@@ -1,5 +1,5 @@
 /**
- * Word review options of an app's file upload (concepts/document-extraction/, release 2, WP-B).
+ * Word review options and speaker notes of an app's file upload (concepts/document-extraction/, release 2, WP-B).
  *
  * Tracked changes and comments are opt-in per app: an app that does not mention them is
  * validated with the defaults `accepted` / `ignore`, which is what documents looked like before
@@ -24,6 +24,7 @@ describe('app file upload: Word review options', () => {
     expect(result.success).toBe(true);
     expect(result.data.upload.fileUpload.trackedChanges).toBe('accepted');
     expect(result.data.upload.fileUpload.comments).toBe('ignore');
+    expect(result.data.upload.fileUpload.speakerNotes).toBe('ignore');
   });
 
   test('an app without file upload settings is still valid', () => {
@@ -33,12 +34,20 @@ describe('app file upload: Word review options', () => {
 
   test('accept the opt-in values and keep them', () => {
     const result = appConfigSchema.safeParse(
-      app({ fileUpload: { enabled: true, trackedChanges: 'markup', comments: 'inline' } })
+      app({
+        fileUpload: {
+          enabled: true,
+          trackedChanges: 'markup',
+          comments: 'inline',
+          speakerNotes: 'include'
+        }
+      })
     );
 
     expect(result.success).toBe(true);
     expect(result.data.upload.fileUpload.trackedChanges).toBe('markup');
     expect(result.data.upload.fileUpload.comments).toBe('inline');
+    expect(result.data.upload.fileUpload.speakerNotes).toBe('include');
   });
 
   test('reject values that are not options', () => {
@@ -46,7 +55,9 @@ describe('app file upload: Word review options', () => {
       { trackedChanges: 'all' },
       { trackedChanges: true },
       { comments: 'yes' },
-      { comments: 1 }
+      { comments: 1 },
+      { speakerNotes: 'all' },
+      { speakerNotes: true }
     ]) {
       expect(appConfigSchema.safeParse(app({ fileUpload })).success).toBe(false);
     }

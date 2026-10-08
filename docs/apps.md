@@ -638,6 +638,8 @@ Uploaded documents keep their structure (admins can switch this off under **Admi
 | File | What the model reads |
 |---|---|
 | Word (.docx) | Markdown: `#` … `######` headings, the numbers Word shows in front of numbered headings and paragraphs (`2.1`, `a)`, `§ 3`), tables as Markdown tables, footnotes as `[^1]`, `[Page break]` where the author forced a new page (Word stores no page numbers, so pages cannot be cited), and `[Header] …` / `[Footer] …` lines before the text. Only for apps that opt in (`upload.fileUpload.trackedChanges` / `comments`): `{++added++}` / `{--removed--}` for tracked changes and `{>>Author: comment<<}` for comments |
+| PowerPoint (.pptx) | `[Slide N]` in the order of the presentation (`[Slide 3 (hidden)]` for a hidden slide), the slide title as `# Title`, tables as Markdown tables. Speaker notes (`[Notes]`) only for apps that opt in (`upload.fileUpload.speakerNotes`) |
+| Excel (.xlsx, .xls) | `[Sheet: name]`; a sheet with a header row as a Markdown table, other sheets tab-separated; merged cells filled so every row is complete; at most 2,000 rows per sheet and 300,000 characters per workbook, with a notice (`[… N more rows omitted]`) |
 | PDF | `[Page N]` before each page — `[Page 5 (printed: 3)]` when the page's printed number differs from its position —, one line per line of the page, `[Page 2: no extractable text]` for a page without a text layer. `#` headings come from the tags, from an outline (bookmarks) that matches the text, or from clearly larger type; otherwise headings are ordinary lines. Markdown tables only where the PDF is tagged — without tags, table rows are plain lines |
 
 Tell the model what to align on, and how to cite. Without that, a comparison falls back to matching free-flowing text:
@@ -998,6 +1000,7 @@ The `upload` property controls file and media upload capabilities:
 | `upload.fileUpload.supportedFormats`| Array   | See schema | Allowed MIME types for document uploads (plain text, CSV, PDF, Office formats, etc.)   |
 | `upload.fileUpload.trackedChanges`  | String  | `"accepted"` | `"markup"` sends tracked changes of Word documents as `{++added++}` / `{--removed--}`; `"accepted"` sends the accepted view |
 | `upload.fileUpload.comments`        | String  | `"ignore"` | `"inline"` sends Word comments as `{>>Author: text<<}` after the text they belong to      |
+| `upload.fileUpload.speakerNotes`    | String  | `"ignore"` | `"include"` sends the speaker notes of PowerPoint slides as `[Notes]` after the slide text |
 | `upload.cloudStorageUpload.enabled` | Boolean | `false`  | Enable the cloud storage file picker (requires cloud storage configured in platform.json)|
 
 #### Skill Settings

@@ -48,6 +48,7 @@ All upload types share a single `upload` object in the app configuration:
 | `supportedFormats` | string[] | See below | MIME types accepted for upload |
 | `trackedChanges` | `"accepted"` \| `"markup"` | `"accepted"` | Word documents: `markup` writes tracked insertions and deletions into the text as `{++added++}` and `{--removed--}` (see [Tracked changes and comments](#tracked-changes-and-comments-opt-in)) |
 | `comments` | `"ignore"` \| `"inline"` | `"ignore"` | Word documents: `inline` writes comments as `{>>Author: text<<}` after the text they belong to |
+| `speakerNotes` | `"ignore"` \| `"include"` | `"ignore"` | PowerPoint decks: `include` adds the speaker notes of a slide as `[Notes]` after its text (see [PowerPoint and spreadsheets](#powerpoint-and-spreadsheets)) |
 
 Default `supportedFormats` for `fileUpload`:
 
@@ -108,9 +109,9 @@ Supported providers (configured at the platform level):
 | any extension | `text/*` ("Any text file") | Read as text; rejected if the content is binary — see below |
 | `.pdf` | `application/pdf` | Text extracted via `pdfjs-dist` with `[Page N]` markers and real lines — see [Extracted text format](#extracted-text-format); falls back to rendering each page as an image |
 | `.docx` | `application/vnd.openxmlformats-officedocument.wordprocessingml.document` | Converted to Markdown via `mammoth`, `jszip` and `turndown`: headings, lists, tables, footnotes, links and page breaks are kept — see [Extracted text format](#extracted-text-format) |
-| `.xlsx` | `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet` | Cell content extracted via `xlsx` |
-| `.xls` | `application/vnd.ms-excel` | Cell content extracted via `xlsx` |
-| `.pptx` | `application/vnd.openxmlformats-officedocument.presentationml.presentation` | Slide text extracted from the OOXML slides via `jszip` |
+| `.xlsx` | `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet` | Cell content extracted via `xlsx`: a sheet with a header row becomes a Markdown table, see [PowerPoint and spreadsheets](#powerpoint-and-spreadsheets) |
+| `.xls` | `application/vnd.ms-excel` | Cell content extracted via `xlsx`, as `.xlsx` |
+| `.pptx` | `application/vnd.openxmlformats-officedocument.presentationml.presentation` | Slide text extracted from the OOXML slides via `jszip`, in the order of the presentation, with titles and tables |
 | `.ppt` | `application/vnd.ms-powerpoint` | Not supported: the legacy binary format is rejected with "Unsupported file format" |
 | `.odt` | `application/vnd.oasis.opendocument.text` | XML text extracted via `jszip` |
 | `.ods` | `application/vnd.oasis.opendocument.spreadsheet` | XML text extracted via `jszip` |
@@ -245,6 +246,36 @@ Heading levels from the outline and from the font size are relative (a document 
 
 Multi-column layouts are read in the order the PDF stores the text, which is not always the reading order.
 
+### PowerPoint and spreadsheets
+
+```text
+[Slide 1]
+# Quarterly report
+Revenue up 12 %
+
+| Region | Revenue |
+| --- | --- |
+| North | 1.2 M |
+
+[Slide 2 (hidden)]
+# Backup: assumptions
+```
+
+| In the file | In the text |
+|---|---|
+| Slides (.pptx) | `[Slide N]`, numbered as the presentation orders them (the file names only say in which order the slides were created, so a moved slide used to keep its old number). A deck without a slide list is read in the order of its file names, as before |
+| Hidden slides | Kept, flagged `[Slide 3 (hidden)]` — the author hid it from the slide show, not from the deck. Its number stays |
+| Slide title | `# Title`, first on the slide (title and centred-title placeholders) |
+| Tables on a slide | A Markdown table. A first row marked as header row gets the separator row; a table without one is written as rows only. A merged cell spans columns (text in the first, the others empty) or rows (text repeated) |
+| Line breaks inside a paragraph | A space (the words of two lines no longer run together). Automatic slide numbers and dates are dropped |
+| Speaker notes | **Not sent by default.** An app can opt in (`upload.fileUpload.speakerNotes: "include"`, Admin → Apps → Upload Configuration → *PowerPoint: speaker notes*): the notes follow their slide as `[Notes]` |
+| Sheets (.xlsx, .xls) | `[Sheet: name]` followed by the sheet. A sheet whose first row names the columns (at least two columns, text that is not a number or date, a row of data below; a title merged across the header columns counts) is a Markdown table; any other sheet stays tab-separated |
+| Merged cells in a sheet | A cell that spans rows shows its text in each row, so every row stays complete; one that spans columns keeps it in the first column |
+| Hidden sheets | Kept, flagged `[Sheet: name (hidden)]` |
+| Large sheets | At most 2,000 rows per sheet and 300,000 characters per workbook; what is left out is said: `[… 1500 more rows omitted]`, or `[… 800 rows omitted]` for a whole sheet. A spreadsheet's text can be far larger than its file, and the file size limit does not protect the context window |
+
+Formulas show the value the spreadsheet last calculated, as before; cell formatting (bold, colours) is not sent.
+
 ### Admin switch
 
 **Admin → Features → Structured document extraction** (on by default) turns the structured extraction off and restores the plain text of before. Browsers read the setting when the page loads, so a change reaches users after a reload, at the latest after 30 minutes. If the structured extraction ever fails for a file, the plain text extraction is used instead and the upload still works; the browser console shows `structured extraction failed, using legacy`.
@@ -275,8 +306,8 @@ All file processing happens **client-side** before content is sent to the server
    - **Text files** — Read directly as UTF-8 text.
    - **PDF** — Text extracted via PDF.js, page by page with a `[Page N]` marker, one line per line of the page, and headings and tables where the PDF marks them. If the extracted text is empty or minimal (less than 50 characters outside the markers, e.g. a scanned document), each page is rendered as an image instead.
    - **DOCX** — Converted to Markdown: mammoth reads the Word file, an OOXML pass first fixes what mammoth drops (custom heading styles, page breaks, moved text, hidden text), Turndown writes the Markdown. With the admin switch off, mammoth's HTML is flattened to plain text as before.
-   - **XLSX / XLS** — Cell content extracted as text via the xlsx library.
-   - **PPTX** — Slide text extracted from the OOXML slides via jszip. **PPT** (legacy binary) is rejected.
+   - **XLSX / XLS** — Cell content extracted via the xlsx library: a sheet with a header row as a Markdown table, other sheets tab-separated, rows and characters limited.
+   - **PPTX** — Slide text extracted from the OOXML slides via jszip, in the order of the presentation, with the slide title as a heading and tables as Markdown. **PPT** (legacy binary) is rejected.
    - **ODT / ODS / ODP** — XML parsed and text content extracted via jszip.
    - **MSG** — Headers (subject, sender, recipients, date, attachment names) plus the body extracted via msgreader. The body is resolved across every format Outlook may store it in — plain text, HTML (`PidTagHtml`/`PidTagBodyHtml`), or compressed RTF — so HTML-only emails like newsletters extract their full content instead of just headers.
    - **EML** — Read as-is.

@@ -20,6 +20,7 @@ import {
 } from '../services/inference/inputContent.js';
 import { buildPdfBytes } from './helpers/structuredPdf.js';
 import { DOCX_MIME, NUMBERED_HEADINGS, buildDocx, dataUrl, p } from './helpers/docxFile.js';
+import { PPTX_MIME, buildPptx, notesSlide, shape, slide } from './helpers/pptxFile.js';
 
 const PDF = 'application/pdf';
 
@@ -152,6 +153,68 @@ describe('Word documents through the API', () => {
     ]);
     assert.equal(responsesMessage.fileData[0].fileType, DOCX_MIME);
     assert.equal(responsesMessage.fileData[0].content, message.fileData[0].content);
+  });
+});
+
+describe('PowerPoint decks through the API', () => {
+  const deck = () =>
+    buildPptx(
+      [
+        slide([shape(['Zweite Folie'], 'title'), shape(['Punkt eins', 'Punkt zwei'], 'body')]),
+        slide([shape(['Titelfolie'], 'ctrTitle')], 'show="0"')
+      ],
+      [1, 0],
+      { 0: notesSlide(['Nur fuer den Vortragenden']) }
+    );
+
+  it('T-API-04: a .pptx is accepted; slides in the order of the presentation, titles as headings, hidden flagged, no notes', async () => {
+    const file = await documentFromInlineFile(
+      { data: dataUrl(await deck(), PPTX_MIME), filename: 'deck.pptx' },
+      'x'
+    );
+    assert.equal(file.fileType, PPTX_MIME);
+    assert.equal(
+      file.content,
+      '[Slide 1 (hidden)]\n# Titelfolie\n\n[Slide 2]\n# Zweite Folie\nPunkt eins\nPunkt zwei'
+    );
+  });
+
+  it('the type comes from the file name when the request has none', async () => {
+    const file = await documentFromInlineFile(
+      { data: Buffer.from(await deck()).toString('base64'), filename: 'Deck.PPTX' },
+      'x'
+    );
+    assert.equal(file.fileType, PPTX_MIME);
+  });
+
+  it('a deck without any text is reported as such; a package that is no deck is invalid', async () => {
+    const empty = await buildPptx([slide([])], [0]);
+    await rejects(
+      documentFromInlineFile({ data: dataUrl(empty, PPTX_MIME), filename: 'e.pptx' }, 'x'),
+      {
+        code: 'file_has_no_text'
+      }
+    );
+    const zip = new JSZip();
+    zip.file('hello.txt', 'hi');
+    await rejects(
+      documentFromInlineFile(
+        {
+          data: dataUrl(await zip.generateAsync({ type: 'nodebuffer' }), PPTX_MIME),
+          filename: 'x.pptx'
+        },
+        'x'
+      ),
+      { code: 'invalid_file' }
+    );
+  });
+
+  it('with the admin switch off a deck is not accepted, as before', async () => {
+    setSwitch(false);
+    await rejects(
+      documentFromInlineFile({ data: dataUrl(await deck(), PPTX_MIME), filename: 'd.pptx' }, 'x'),
+      { code: 'unsupported_file_type' }
+    );
   });
 });
 

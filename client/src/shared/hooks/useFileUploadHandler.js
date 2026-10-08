@@ -67,7 +67,11 @@ export function useFileUploadHandler() {
         cloudStorageUpload: { ...cloudStorageConfig, enabled: true },
         // Cloud picks are extracted like local uploads, so they follow the app's Word review
         // options too (see extractionOptionsOf)
-        fileUpload: { trackedChanges: fileConfig?.trackedChanges, comments: fileConfig?.comments }
+        fileUpload: {
+          trackedChanges: fileConfig?.trackedChanges,
+          comments: fileConfig?.comments,
+          speakerNotes: fileConfig?.speakerNotes
+        }
       };
     }
 
@@ -163,6 +167,7 @@ export function useFileUploadHandler() {
         // Word review marks, opt-in per app (see extractionOptionsOf)
         trackedChanges: fileConfig?.trackedChanges,
         comments: fileConfig?.comments,
+        speakerNotes: fileConfig?.speakerNotes,
         maxFileSizeMB: fileConfig?.maxFileSizeMB || 5,
         supportedFormats: fileConfig?.supportedFormats || [
           'text/plain',

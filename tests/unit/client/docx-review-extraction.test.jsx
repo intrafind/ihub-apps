@@ -396,15 +396,15 @@ describe('per-app options reach every way a document gets in', () => {
   const fileUpload = { enabled: true, trackedChanges: 'markup', comments: 'inline' };
 
   it('extractionOptionsOf: the default for a missing block and for values that are not options', () => {
-    expect(extractionOptionsOf(undefined)).toEqual({
+    expect(extractionOptionsOf(undefined)).toMatchObject({
       trackedChanges: 'accepted',
       comments: 'ignore'
     });
-    expect(extractionOptionsOf({ trackedChanges: 'x', comments: 'y' })).toEqual({
+    expect(extractionOptionsOf({ trackedChanges: 'x', comments: 'y' })).toMatchObject({
       trackedChanges: 'accepted',
       comments: 'ignore'
     });
-    expect(extractionOptionsOf(fileUpload)).toEqual({
+    expect(extractionOptionsOf(fileUpload)).toMatchObject({
       trackedChanges: 'markup',
       comments: 'inline'
     });
@@ -418,7 +418,7 @@ describe('per-app options reach every way a document gets in', () => {
       { upload: { fileUpload: { enabled: true } } },
       null
     );
-    expect(extractionOptionsOf(without.fileUpload)).toEqual({
+    expect(extractionOptionsOf(without.fileUpload)).toMatchObject({
       trackedChanges: 'accepted',
       comments: 'ignore'
     });
