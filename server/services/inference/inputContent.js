@@ -25,12 +25,17 @@
  */
 import path from 'node:path';
 import { InferenceApiError } from './errors.js';
+import {
+  DOCX_MIME,
+  DocumentExtractionError,
+  MAX_PDF_PAGES,
+  extractDocxDocument,
+  extractPdfDocument,
+  structuredExtractionEnabled
+} from '../documentExtraction.js';
 
 /** Longest document text taken from one file. */
 export const MAX_FILE_TEXT_CHARS = 500_000;
-
-/** PDF pages read from one file. */
-const MAX_PDF_PAGES = 500;
 
 /** MIME types read as UTF-8 text. */
 const TEXT_MIME_TYPES = new Set([
@@ -106,12 +111,13 @@ function isTextMime(mimeType) {
 }
 
 /**
- * The text of a PDF.
+ * The text of a PDF as it was before the structured extraction: the words of a page joined by
+ * spaces, no page markers. Used while the admin switch "Structured document extraction" is off.
  *
  * @param {Buffer} bytes
  * @returns {Promise<string>}
  */
-async function pdfText(bytes) {
+async function legacyPdfText(bytes) {
   const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
   const pdf = await pdfjs.getDocument({ data: new Uint8Array(bytes), verbosity: 0 }).promise;
   try {
@@ -147,9 +153,11 @@ export async function documentFromInlineFile({ data, filename }, param) {
   const fileName = typeof filename === 'string' && filename ? filename.slice(0, 255) : 'document';
   let mimeType = (parsed.mimeType || '').toLowerCase();
   if (!mimeType || mimeType === 'application/octet-stream') {
+    const extension = path.extname(fileName).toLowerCase();
     mimeType =
       mimeFromName(fileName, TEXT_EXTENSIONS) ||
-      (path.extname(fileName).toLowerCase() === '.pdf' ? 'application/pdf' : '');
+      (extension === '.pdf' ? 'application/pdf' : '') ||
+      (extension === '.docx' ? DOCX_MIME : '');
   }
   const bytes = Buffer.from(parsed.base64, 'base64');
   if (bytes.length === 0) {
@@ -163,10 +171,19 @@ export async function documentFromInlineFile({ data, filename }, param) {
     );
   }
 
+  // The admin switch decides between the structured extraction (shared with the browser) and
+  // the one of before: PDF text in one run, and no Word files.
+  const structured = structuredExtractionEnabled();
+
   let text;
   if (mimeType === 'application/pdf') {
     try {
-      text = await pdfText(bytes);
+      text = structured
+        ? await extractPdfDocument(bytes, {
+            maxPages: MAX_PDF_PAGES,
+            maxChars: MAX_FILE_TEXT_CHARS
+          })
+        : await legacyPdfText(bytes);
     } catch (error) {
       throw new InferenceApiError(
         400,
@@ -185,13 +202,30 @@ export async function documentFromInlineFile({ data, filename }, param) {
         { param }
       );
     }
+  } else if (mimeType === DOCX_MIME && structured) {
+    try {
+      text = (await extractDocxDocument(bytes)).trim();
+    } catch (error) {
+      if (!(error instanceof DocumentExtractionError)) throw error;
+      throw new InferenceApiError(400, 'invalid_file', `${fileName}: ${error.message}`, { param });
+    }
+    if (!text) {
+      throw new InferenceApiError(
+        400,
+        'file_has_no_text',
+        `${fileName}: the Word document has no text`,
+        { param }
+      );
+    }
   } else if (mimeType && isTextMime(mimeType)) {
     text = bytes.toString('utf8');
   } else {
     throw new InferenceApiError(
       400,
       'unsupported_file_type',
-      `${fileName}: unsupported file type ${mimeType || '(unknown)'}. Send PDF or text files, or images as input_image.`,
+      `${fileName}: unsupported file type ${mimeType || '(unknown)'}. Send ${
+        structured ? 'PDF, Word (.docx)' : 'PDF'
+      } or text files, or images as input_image.`,
       { param }
     );
   }

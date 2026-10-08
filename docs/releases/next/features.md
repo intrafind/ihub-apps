@@ -27,6 +27,9 @@ heading by heading.
   Upload Configuration**: tracked changes as `{++added++}` / `{--removed--}` and comments as
   `{>>Author: text<<}` after the text they belong to. Both are off by default — the model still
   reads the accepted view without comments — and the settings only affect the app they are set in
+- The OpenAI-compatible API reads files the same way: PDFs with page markers, headings and tables,
+  and Word (`.docx`) files, which were refused before, as Markdown — so an integration that sends
+  contracts through the API sees what the chat sees
 - Headers and footers of Word files (letterhead, document numbers, confidentiality notes) appear as
   `[Header] …` and `[Footer] …` lines before the text, without page numbers
 

@@ -544,7 +544,7 @@ What the API guarantees:
   still does not match is a `422 output_validation_failed` (a `response.failed` event when
   streaming) — never a success. Opt out with `?validate=false` or `"validate": false`.
 - App variables go in `prompt.variables` and are checked against the app's variable definitions.
-- Documents go in the input as files (`input_file` with a `data:` URL; PDF and text files).
+- Documents go in the input as files (`input_file` with a `data:` URL; PDF, Word and text files).
 
 The examples use the NDA Risk Analyzer (`nda-risk-analyzer`) and these variables:
 

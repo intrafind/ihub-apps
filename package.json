@@ -102,7 +102,7 @@
     "test:export-formats": "node client/src/utils/exportFormats.test.js",
     "test:feature-flags": "node shared/featureFlags.test.js && node --test server/tests/feedback-feature-gate.test.js server/tests/app-required-features.test.js server/tests/document-extraction-feature.test.js",
     "test:personal-api-keys": "node server/tests/personalApiKeys.test.js",
-    "test:inference": "node --test server/tests/inference-units.test.js server/tests/loop/inferenceApi.test.js",
+    "test:inference": "node --test server/tests/inference-units.test.js server/tests/loop/inferenceApi.test.js server/tests/document-extraction-api.test.js",
     "test:temporal": "node server/tests/agent-temporal-context.test.js && node server/tests/chat-temporal-context.test.js",
     "test:skills": "node --test server/tests/skill-access.test.js server/tests/skill-context.test.js server/tests/user-skills.test.js",
     "test:prompts": "node --test server/tests/prompt-variables.test.js server/tests/user-prompts.test.js && node server/tests/promptService.test.js && node --test server/tests/prompt-content-substitution.test.js && node --test server/tests/prompt-context-blocks.test.js && node server/tests/auto-source-addition.test.js && node --test server/tests/promptService-sources-dollar.test.js && node server/tests/empty-prompt-bug-validation.test.js && node --test server/tests/iassistantConversationAdapter.test.js && node --test server/tests/iassistantConversationTelemetry.test.js",
