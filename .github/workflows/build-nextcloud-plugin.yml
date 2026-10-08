@@ -78,3 +78,26 @@ jobs:
           tag_name: ${{ github.event.release.tag_name }}
           files: ihub_chat.tar.gz
           fail_on_unmatched_files: true
+
+  attest:
+    name: Attest release tarball
+    needs: build
+    # A separate job, so runs for pull requests never get signing permissions.
+    if: github.event_name == 'release' && github.event.release.tag_name != ''
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - name: Download plugin tarball
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: ihub_chat-${{ github.sha }}
+
+      # Signed SLSA build provenance, verifiable with
+      # `gh attestation verify ihub_chat.tar.gz --repo ${{ github.repository }}`.
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: ihub_chat.tar.gz

@@ -389,6 +389,9 @@ jobs:
       (github.event_name == 'release' || github.event_name == 'workflow_dispatch')
     permissions:
       contents: write
+      # Sign build-provenance attestations for the release assets.
+      id-token: write
+      attestations: write
     steps:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -438,6 +441,34 @@ jobs:
           fi
           echo "✅ Version: $VERSION"
         shell: bash
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          package-manager-cache: false
+          node-version: '24'
+
+      - name: Generate SBOMs (CycloneDX)
+        # The production dependencies the binaries ship: the server's runtime
+        # packages and the client packages compiled into the UI. Read from the
+        # lockfiles, so nothing needs installing.
+        run: |
+          mkdir -p ./artifacts/sbom
+          for part in root server client; do
+            dir=.
+            [ "$part" = root ] || dir="$part"
+            (cd "$dir" && npm sbom --package-lock-only --omit dev --sbom-format cyclonedx) \
+              > "./artifacts/sbom/ihub-apps-$VERSION-$part.cdx.json"
+          done
+          ls -l ./artifacts/sbom
+        shell: bash
+
+      # Signed SLSA build provenance for every asset, verifiable with
+      # `gh attestation verify <file> --repo ${{ github.repository }}`.
+      - name: Attest build provenance of the release assets
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: ./artifacts/**/*.*
 
       - name: Upload assets to release
         uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3

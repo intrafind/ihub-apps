@@ -41,6 +41,7 @@ jobs:
         id: check
         env:
           COMMENT_BODY: ${{ github.event.comment.body }}
+          COMMENT_AUTHOR_ASSOCIATION: ${{ github.event.comment.author_association }}
         run: |
           should_run=false
           
@@ -58,8 +59,13 @@ jobs:
           if [[ "${{ github.event_name }}" == "issue_comment" ]]; then
             # Use environment variable to safely handle multi-line comments
             echo "$COMMENT_BODY" > comment_body.txt
+            # Only people with write access may trigger a build: the job pushes
+            # images and signs attestations.
             if grep -q "@build docker images" comment_body.txt; then
-              should_run=true
+              case "$COMMENT_AUTHOR_ASSOCIATION" in
+                OWNER|MEMBER|COLLABORATOR) should_run=true ;;
+                *) echo "Ignoring build request from a $COMMENT_AUTHOR_ASSOCIATION (needs owner, member or collaborator)." ;;
+              esac
             fi
             rm -f comment_body.txt
           fi
@@ -82,6 +88,9 @@ jobs:
       contents: read
       packages: write
       security-events: write
+      # Sign the image's build-provenance attestation.
+      id-token: write
+      attestations: write
 
     outputs:
       image-digest: ${{ steps.build.outputs.digest }}
@@ -163,10 +172,22 @@ jobs:
           platforms: linux/amd64
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          # Attach an SBOM and full SLSA provenance to the image in the registry.
+          sbom: true
+          provenance: mode=max
           build-args: |
             BUILDTIME=${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.created'] }}
             VERSION=${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.version'] }}
             REVISION=${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.revision'] }}
+
+      # Signed provenance pushed next to the image, verifiable with
+      # `gh attestation verify oci://<image> --repo ${{ github.repository }}`.
+      - name: Attest image build provenance
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
 
       - name: Test container startup
         run: |
