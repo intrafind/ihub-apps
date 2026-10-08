@@ -50,7 +50,6 @@ const {
 
 const W = 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"';
 const COMMENTS_TYPE = 'application/vnd.openxmlformats-officedocument.wordprocessingml.comments+xml';
-const AUTHOR = 'w:id="1" w:author="Anna Beispiel" w:date="2026-01-01T10:00:00Z"';
 const ATTRS = (id, author = 'Anna Beispiel') =>
   `w:id="${id}" w:author="${author}" w:date="2026-01-01T10:00:00Z"`;
 
