@@ -5616,5 +5616,20 @@
       "TOO_MANY_FAILURES": "Paused after too many failed runs in a row",
       "TOOL_NOT_AVAILABLE": "The app no longer offers a tool this task uses"
     }
+  },
+  "memoryEditor": {
+    "label": "Memory notes",
+    "versionLine": "Version {{version}}",
+    "updatedAt": "updated {{at}}",
+    "updatedBy": "by {{by}}",
+    "size": "{{chars}} / {{max}} characters",
+    "save": "Save",
+    "saving": "Saving…",
+    "clear": "Clear",
+    "clearConfirm": "Clear all notes? This removes everything written so far.",
+    "reload": "Reload (discard my edits)",
+    "keepEditing": "Keep editing",
+    "versionConflict": "Conflict: memory was modified elsewhere. Reload to see the latest.",
+    "staleNotice": "The notes changed since you started editing (a run may have updated them)."
   }
 }
