@@ -10,22 +10,16 @@
  *
  * Exits non-zero when an unguarded endpoint is found, so CI can run it
  * (.github/workflows/security.yml).
- *
- * Usage: node scripts/audit-admin-endpoints.js [routes-dir]
- *   (default: server/routes/admin)
  */
 
-import { readFileSync, readdirSync } from 'fs';
-import { join, resolve } from 'path';
-import { fileURLToPath } from 'url';
-import { dirname } from 'path';
+import { readFileSync, readdirSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-const ADMIN_ROUTES_DIR = process.argv[2]
-  ? resolve(process.argv[2])
-  : join(__dirname, '../server/routes/admin');
+const ADMIN_ROUTES_DIR = join(__dirname, '../server/routes/admin');
 
 // Middleware that restricts a route to administrators. contentAdminAuth also
 // admits groups with the delegated contentAdmin permission (apps, prompts,
@@ -41,11 +35,11 @@ const INTENTIONAL_EXCEPTIONS = [
 /** Index of the quote that closes the string literal opening at |i|. */
 function stringEnd(source, i) {
   const quote = source[i];
-  for (let j = i + 1; j < source.length; j++) {
-    if (source[j] === '\\') j++;
-    else if (source[j] === quote) return j;
+  let j = i + 1;
+  while (j < source.length && source[j] !== quote) {
+    j += source[j] === '\\' ? 2 : 1;
   }
-  return source.length;
+  return Math.min(j, source.length);
 }
 
 /** Index of the last character of the // or /* comment opening at |i|. */
@@ -63,7 +57,8 @@ function commentEnd(source, i) {
  */
 function callEnd(args, limit) {
   let depth = 0;
-  for (let i = 0; i < limit; i++) {
+  let i = 0;
+  while (i < limit) {
     const ch = args[i];
     if (ch === "'" || ch === '"' || ch === '`') {
       i = stringEnd(args, i);
@@ -75,6 +70,7 @@ function callEnd(args, limit) {
       if (depth === 0) return i;
       depth--;
     }
+    i++;
   }
   return limit;
 }
@@ -87,7 +83,8 @@ function topLevelArguments(args) {
   const parts = [];
   let current = '';
   let depth = 0;
-  for (let i = 0; i < args.length; i++) {
+  let i = 0;
+  while (i < args.length) {
     const ch = args[i];
     if (ch === "'" || ch === '"' || ch === '`') {
       const end = stringEnd(args, i);
@@ -103,6 +100,7 @@ function topLevelArguments(args) {
       else if (')]}'.includes(ch)) depth--;
       current += ch;
     }
+    i++;
   }
   parts.push(current.trim());
   return parts;

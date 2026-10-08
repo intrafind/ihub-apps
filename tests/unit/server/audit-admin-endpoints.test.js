@@ -1,5 +1,5 @@
 import { execFileSync } from 'child_process';
-import { mkdtempSync, rmSync, writeFileSync } from 'fs';
+import { copyFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import path from 'path';
 
@@ -11,16 +11,26 @@ import path from 'path';
 
 const script = path.resolve(__dirname, '../../../scripts/audit-admin-endpoints.js');
 
-/** Runs the audit on a directory holding one route file with |source|. */
+/**
+ * Runs the audit on one route file with |source|. The script reads
+ * ../server/routes/admin next to itself, so a copy runs in a temporary tree.
+ */
 function audit(source) {
-  const dir = mkdtempSync(path.join(tmpdir(), 'admin-routes-'));
+  const root = mkdtempSync(path.join(tmpdir(), 'admin-audit-'));
   try {
-    writeFileSync(path.join(dir, 'routes.js'), source);
-    return { status: 0, output: execFileSync('node', [script, dir], { encoding: 'utf8' }) };
+    const routesDir = path.join(root, 'server/routes/admin');
+    mkdirSync(path.join(root, 'scripts'));
+    mkdirSync(routesDir, { recursive: true });
+    copyFileSync(script, path.join(root, 'scripts/audit.mjs'));
+    writeFileSync(path.join(routesDir, 'routes.js'), source);
+    const output = execFileSync('node', [path.join(root, 'scripts/audit.mjs')], {
+      encoding: 'utf8'
+    });
+    return { status: 0, output };
   } catch (error) {
     return { status: error.status, output: error.stdout };
   } finally {
-    rmSync(dir, { recursive: true, force: true });
+    rmSync(root, { recursive: true, force: true });
   }
 }
 

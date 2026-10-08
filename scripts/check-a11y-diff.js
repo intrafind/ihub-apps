@@ -122,9 +122,12 @@ async function baseCounts(file) {
   return counts;
 }
 
+const relativePath = result => result.filePath.slice(process.cwd().length + 1);
+const beforeCounts = await Promise.all(results.map(result => baseCounts(relativePath(result))));
+
 const findings = [];
-for (const result of results) {
-  const file = result.filePath.slice(process.cwd().length + 1);
+for (const [index, result] of results.entries()) {
+  const file = relativePath(result);
   const lines = files.get(file) ?? new Set();
   const messages = result.messages.filter(isA11y);
   for (const message of messages) {
@@ -133,7 +136,7 @@ for (const result of results) {
 
   // Rules that fire more often than at the merge base, beyond what the changed
   // lines explain: the change broke an element on an untouched line.
-  const before = await baseCounts(file);
+  const before = beforeCounts[index];
   for (const ruleId of new Set(messages.map(m => m.ruleId))) {
     const now = messages.filter(m => m.ruleId === ruleId);
     const onChangedLines = now.filter(m => lines.has(m.line)).length;
