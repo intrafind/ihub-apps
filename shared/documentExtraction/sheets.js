@@ -57,7 +57,10 @@ export const oneLine = text => String(text).replace(/\s+/g, ' ').trim();
  * @typedef {Object} SheetData
  * @property {string} name
  * @property {boolean} [hidden]
- * @property {string[][]} rows - The rows that were read, without the empty ones
+ * @property {() => SheetData} [read] - A sheet that is read only when the budget still has room
+ *   for it: `name` and `hidden` are enough to decide, the rest comes from `read()` (rows and the
+ *   fields below). Without it the sheet is already read, and `rows` is set.
+ * @property {string[][]} [rows] - The rows that were read, without the empty ones
  * @property {Set<number>} [covered] - Columns of the first row that a merged cell covers
  * @property {Set<number>} [typed] - Columns whose first cell the file stores as a number, a date,
  *   a time or a boolean (not as text)
@@ -75,16 +78,21 @@ export function renderSheets(sheets, limits = {}) {
   const blocks = [];
   let leftOut = 0;
 
-  for (const [at, sheet] of sheets.entries()) {
-    if (sheet.rows.length === 0) continue;
+  // A sheet that is not read yet counts as one with content: that is only known once it is read.
+  const hasContent = sheet => sheet.read !== undefined || sheet.rows.length > 0;
+
+  for (const [at, entry] of sheets.entries()) {
+    if (!hasContent(entry)) continue;
     // The budget is a bound: when the rows have used it, the sheets that follow get a title and
     // a notice — within the reserve. A sheet whose title no longer fits ends the workbook; the
-    // sheets after it are only counted.
-    const title = `[Sheet: ${sheet.name}${sheet.hidden ? ' (hidden)' : ''}]`;
+    // sheets after it are only counted, and not even read.
+    const title = `[Sheet: ${entry.name}${entry.hidden ? ' (hidden)' : ''}]`;
     if (budget + SHEET_NOTICE_RESERVE < title.length + 1) {
-      leftOut = sheets.slice(at).filter(other => other.rows.length > 0).length;
+      leftOut = sheets.slice(at).filter(hasContent).length;
       break;
     }
+    const sheet = entry.read ? { ...entry, ...entry.read() } : entry;
+    if (sheet.rows.length === 0) continue;
     const rows = sheet.rows.map(row => row.map(oneLine));
 
     // Columns without anything in them, at the right, are not columns.

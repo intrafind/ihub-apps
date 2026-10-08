@@ -229,11 +229,21 @@ describe('size limits', () => {
         `Sheet${i}`
       );
     }
-    const text = extractXlsxText({ XLSX, workbook, limits: { workbookChars: 100 } });
-    expect(text.length).toBeLessThan(100 + SHEET_NOTICE_RESERVE + 200);
-    expect(text.split('\n').at(-1)).toMatch(/^\[… \d+ more sheets omitted\]$/);
-    expect(text).toContain('[Sheet: Sheet0]');
-    expect(text).not.toContain('[Sheet: Sheet399]');
+    const toRows = jest.spyOn(XLSX.utils, 'sheet_to_json');
+    let text;
+    try {
+      text = extractXlsxText({ XLSX, workbook, limits: { workbookChars: 100 } });
+      expect(text.length).toBeLessThan(100 + SHEET_NOTICE_RESERVE + 200);
+      expect(text.split('\n').at(-1)).toMatch(/^\[… \d+ more sheets omitted\]$/);
+      expect(text).toContain('[Sheet: Sheet0]');
+      expect(text).not.toContain('[Sheet: Sheet399]');
+      // The sheets that are only counted are not turned into rows first.
+      const shown = text.split('\n').filter(line => line.startsWith('[Sheet: ')).length;
+      expect(shown).toBeLessThan(400);
+      expect(toRows).toHaveBeenCalledTimes(shown);
+    } finally {
+      toRows.mockRestore();
+    }
   });
 
   it('a number, date or time first row is data however its format prints it', async () => {
