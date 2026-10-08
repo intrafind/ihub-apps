@@ -19,10 +19,14 @@ function exemptedPackages() {
   return [...section[1].matchAll(/pkg:npm\/(\S+)/g)].map(m => decodeURIComponent(m[1]));
 }
 
-/** Names of the dependencies and devDependencies in the manifest at |relPath|. */
+/** Names of every dependency npm installs from the manifest at |relPath|. */
 function dependenciesOf(relPath) {
   const manifest = JSON.parse(readFileSync(path.join(repoRoot, relPath), 'utf8'));
-  return Object.keys({ ...manifest.dependencies, ...manifest.devDependencies });
+  return Object.keys({
+    ...manifest.dependencies,
+    ...manifest.devDependencies,
+    ...manifest.optionalDependencies
+  });
 }
 
 describe('copyleft license exemptions', () => {

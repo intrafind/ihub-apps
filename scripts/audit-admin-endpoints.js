@@ -10,17 +10,22 @@
  *
  * Exits non-zero when an unguarded endpoint is found, so CI can run it
  * (.github/workflows/security.yml).
+ *
+ * Usage: node scripts/audit-admin-endpoints.js [routes-dir]
+ *   (default: server/routes/admin)
  */
 
 import { readFileSync, readdirSync } from 'fs';
-import { join } from 'path';
+import { join, resolve } from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-const ADMIN_ROUTES_DIR = join(__dirname, '../server/routes/admin');
+const ADMIN_ROUTES_DIR = process.argv[2]
+  ? resolve(process.argv[2])
+  : join(__dirname, '../server/routes/admin');
 
 // Middleware that restricts a route to administrators. contentAdminAuth also
 // admits groups with the delegated contentAdmin permission (apps, prompts,
@@ -31,6 +36,31 @@ const ADMIN_GUARD_PATTERN = /\b(adminAuth|contentAdminAuth)\b/;
 const INTENTIONAL_EXCEPTIONS = [
   '/api/admin/auth/status' // Public endpoint to check auth requirements
 ];
+
+/**
+ * Index of the parenthesis that closes the call whose argument list |args|
+ * continues, searching only up to |limit|; |limit| if the call is still open
+ * there. Parentheses inside string literals do not count.
+ */
+function callEnd(args, limit) {
+  let depth = 0;
+  let quote = null;
+  for (let i = 0; i < limit; i++) {
+    const ch = args[i];
+    if (quote) {
+      if (ch === '\\') i++;
+      else if (ch === quote) quote = null;
+    } else if (ch === "'" || ch === '"' || ch === '`') {
+      quote = ch;
+    } else if (ch === '(') {
+      depth++;
+    } else if (ch === ')') {
+      if (depth === 0) return i;
+      depth--;
+    }
+  }
+  return limit;
+}
 
 /** Every route registered in |filePath|, with whether an admin guard protects it. */
 function extractRoutes(filePath, fileName) {
@@ -53,11 +83,16 @@ function extractRoutes(filePath, fileName) {
 
     const lineNumber = content.substring(0, match.index).split('\n').length;
 
-    // The middleware list runs from the path to the handler; only a guard
-    // named there protects the route (not one mentioned in a later comment).
+    // The middleware list runs from the path to the inline handler, or to the
+    // end of the call when the handler is a named function. Only a guard named
+    // there protects the route: not one in a later comment, and not one on the
+    // next route (which the inline-handler search would otherwise reach).
     const rest = content.slice(match.index + match[0].length);
     const handlerStart = rest.search(/(async\s*)?\(\s*req\b|(async\s+)?function\b/);
-    const middleware = handlerStart === -1 ? rest.slice(0, 500) : rest.slice(0, handlerStart);
+    const middleware = rest.slice(
+      0,
+      callEnd(rest, handlerStart === -1 ? rest.length : handlerStart)
+    );
     const hasAdminAuth = ADMIN_GUARD_PATTERN.test(middleware);
 
     routes.push({

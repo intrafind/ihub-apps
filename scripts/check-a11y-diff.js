@@ -30,9 +30,15 @@ if (!/^\w[\w./~^@{}-]*$/.test(base)) {
 }
 const LINTED = /^client\/.*\.(js|jsx)$/;
 
-/** Runs git with |args| (no shell) and returns its stdout. */
+/**
+ * Runs git with |args| (no shell) and returns its stdout. core.quotePath=false
+ * keeps non-ASCII paths unquoted in patch headers, so they match like any other.
+ */
 function git(...args) {
-  return execFileSync('git', args, { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+  return execFileSync('git', ['-c', 'core.quotePath=false', ...args], {
+    encoding: 'utf8',
+    maxBuffer: 64 * 1024 * 1024
+  });
 }
 
 /** Line numbers a zero-context hunk header ("@@ -a,b +c,d @@") adds or changes. */
@@ -56,7 +62,8 @@ function changedLines() {
   const files = new Map();
   let current = null;
   for (const line of diff.split('\n')) {
-    const file = /^\+\+\+ b\/(.+)$/.exec(line)?.[1];
+    // git ends the header with a tab when the path contains a space.
+    const file = /^\+\+\+ b\/(.+?)\t?$/.exec(line)?.[1];
     if (file) {
       current = LINTED.test(file) ? new Set() : null;
       if (current) files.set(file, current);
@@ -78,20 +85,28 @@ const results = await eslint.lintFiles([...files.keys()]);
 const isA11y = message => message.ruleId?.startsWith('jsx-a11y/');
 
 const mergeBase = git('merge-base', '--end-of-options', base, 'HEAD').trim();
-// Path of each changed file at the merge base (renames included; absent when added).
+// Path of each changed file at the merge base (renames included; absent when
+// added). -z output is "status NUL path [NUL new path] NUL", unquoted.
 const basePaths = new Map();
-for (const line of git(
+const nameStatus = git(
   'diff',
   '--name-status',
+  '-z',
   '-M',
   '--end-of-options',
   `${base}...HEAD`,
   '--',
   'client'
-).split('\n')) {
-  const [status, from, to] = line.split('\t');
-  if (status?.startsWith('R')) basePaths.set(to, from);
-  else if (status === 'M') basePaths.set(from, from);
+).split('\0');
+for (let i = 0; i < nameStatus.length - 1;) {
+  const status = nameStatus[i];
+  if (status.startsWith('R') || status.startsWith('C')) {
+    basePaths.set(nameStatus[i + 2], nameStatus[i + 1]);
+    i += 3;
+  } else {
+    if (status === 'M') basePaths.set(nameStatus[i + 1], nameStatus[i + 1]);
+    i += 2;
+  }
 }
 
 /** jsx-a11y findings per rule for |file| as it was at the merge base. */
