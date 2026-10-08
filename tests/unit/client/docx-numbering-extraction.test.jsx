@@ -424,6 +424,61 @@ describe('Word numbering in extracted text', () => {
     });
   });
 
+  describe('values from the document are bounded (a crafted file must not stall or exhaust the tab)', () => {
+    const started = () => Date.now();
+    const quick = since => expect(Date.now() - since).toBeLessThan(3000);
+
+    it("a list level far beyond Word's nine gets no label and costs nothing", async () => {
+      const since = started();
+      const content = await extract({
+        numbering:
+          abstractNum(0, lvl(0, 'decimal', '%1.') + lvl(2000000000, 'decimal', '%1.')) + num(1, 0),
+        body: p('eins', numPr(1, 0)) + p('tief', numPr(1, 2000000000)) + p('zwei', numPr(1, 0))
+      });
+      quick(since);
+      expect(content).toBe('1. eins\n\ntief\n\n2. zwei');
+    });
+
+    it('a start value no list has (letters from two billion) gets no label', async () => {
+      const since = started();
+      const content = await extract({
+        numbering: abstractNum(0, lvl(0, 'lowerLetter', '%1)', 2000000000)) + num(1, 0),
+        body: p('A', numPr(1, 0)) + p('B', numPr(1, 0))
+      });
+      quick(since);
+      expect(content).toBe('A\n\nB');
+    });
+
+    it('a huge start override gets no label either', async () => {
+      const since = started();
+      const content = await extract({
+        numbering:
+          abstractNum(0, lvl(0, 'upperLetter', '%1.')) + num(1, 0, startOverride(0, 2000000000)),
+        body: p('A', numPr(1, 0))
+      });
+      quick(since);
+      expect(content).toBe('A');
+    });
+
+    it('label text of two million characters is not expanded for every paragraph', async () => {
+      const since = started();
+      const content = await extract({
+        numbering: abstractNum(0, lvl(0, 'decimal', '%1'.repeat(2000000))) + num(1, 0),
+        body: Array.from({ length: 50 }, (_, n) => p(`x${n}`, numPr(1, 0))).join('')
+      });
+      quick(since);
+      expect(content.length).toBeLessThan(1000);
+      expect(content).toContain('x0\n\nx1');
+    });
+
+    it('large but real letter values become decimals instead of long strings of one letter', () => {
+      expect(formatNumber(26, 'lowerLetter')).toBe('z');
+      expect(formatNumber(780, 'lowerLetter')).toHaveLength(30);
+      expect(formatNumber(781, 'lowerLetter')).toBe('781');
+      expect(formatNumber(1000000, 'upperLetter')).toBe('1000000');
+    });
+  });
+
   it('T-DOCX-28: numbering in a Strict OOXML document', async () => {
     const content = await extract({
       strict: true,
