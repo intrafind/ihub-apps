@@ -139,7 +139,7 @@ function MarketplaceItemDetail({ item: initialItem, onClose, onAction }) {
   return (
     <div className="fixed inset-0 z-50 flex">
       {/* Transparent backdrop - clicking it closes the panel */}
-      <div role="presentation" className="flex-1 bg-black/40" onClick={onClose} />
+      <div aria-hidden="true" className="flex-1 bg-black/40" onClick={onClose} />
 
       {/* Detail panel */}
       <div className="w-full max-w-2xl bg-white dark:bg-gray-800 shadow-xl flex flex-col overflow-hidden">

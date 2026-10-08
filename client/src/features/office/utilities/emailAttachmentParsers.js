@@ -203,8 +203,8 @@ export function parseEmlAttachment(base64Content) {
 function unescapeIcsText(value) {
   return value
     .replaceAll(/\\n/gi, '\n')
-    .replaceAll('\\,', ',')
-    .replaceAll('\\;', ';')
+    .replaceAll(/\\,/g, ',')
+    .replaceAll(/\\;/g, ';')
     .replaceAll('\\\\', '\\');
 }
 

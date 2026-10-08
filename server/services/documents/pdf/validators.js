@@ -289,8 +289,9 @@ export const TRANSPARENT_PIXEL =
  * @returns {number|undefined}
  */
 export function clampNumber(value, min, max) {
-  const n =
-    typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : Number.NaN;
+  let n = Number.NaN;
+  if (typeof value === 'number') n = value;
+  else if (typeof value === 'string') n = Number(value);
   if (!Number.isFinite(n)) return undefined;
   return Math.min(max, Math.max(min, n));
 }

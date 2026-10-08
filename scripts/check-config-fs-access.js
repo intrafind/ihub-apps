@@ -334,6 +334,10 @@ const FS_MODULES = new Set(['fs', 'fs/promises', 'node:fs', 'node:fs/promises'])
 /** Directories never worth walking. */
 const SKIP_DIRS = new Set(['node_modules', '.git', 'dist', 'coverage', 'tests', '__tests__']);
 
+// Config directories as regex alternatives, a nested one ("agents/profiles") matching either
+// path separator. Built here so the pattern below does not nest template literals.
+const CONFIG_DIRS_ANY_SEPARATOR = CONFIG_DIRS.map(d => d.replace('/', String.raw`[/\\]`)).join('|');
+
 /**
  * A literal path into a configuration directory, e.g. `contents/apps` or
  * `join(root, CONTENTS_DIR, 'config', ...)`. Used only by the tree-wide rule,
@@ -345,7 +349,7 @@ const SKIP_DIRS = new Set(['node_modules', '.git', 'dist', 'coverage', 'tests', 
 const LITERAL_CONFIG_PATH = new RegExp(
   [
     // contents/config, contents/apps, contents/agents/profiles, ...
-    String.raw`contents[/\\](?:${CONFIG_DIRS.map(d => d.replace('/', String.raw`[/\\]`)).join('|')})\b`,
+    String.raw`contents[/\\](?:${CONFIG_DIRS_ANY_SEPARATOR})\b`,
     // join(..., 'contents', 'config', ...) and join(..., CONTENTS_DIR, 'apps', ...)
     `(?:['"\`]contents['"\`]|CONTENTS_DIR)\\s*,\\s*['"\`](?:${CONFIG_DIRS.map(d => d.split('/')[0]).join('|')})['"\`]`,
     // join(contentsDir, 'config', …) and `${contentsDir}/config/…` — the idiom
@@ -353,7 +357,7 @@ const LITERAL_CONFIG_PATH = new RegExp(
     // the one the header names as the regression to catch. Without it a config
     // write in a file outside CONFIG_OWNING_PATHS passed in silence.
     `contentsDir\\s*,\\s*['"\`](?:${CONFIG_DIRS.map(d => d.split('/')[0]).join('|')})['"\`]`,
-    String.raw`\$\{\s*contentsDir\s*\}[/\\](?:${CONFIG_DIRS.map(d => d.replace('/', String.raw`[/\\]`)).join('|')})\b`
+    String.raw`\$\{\s*contentsDir\s*\}[/\\](?:${CONFIG_DIRS_ANY_SEPARATOR})\b`
   ].join('|')
 );
 

@@ -173,7 +173,7 @@ function sanitizeCSSValue(value) {
   return String(value)
     .replaceAll(/[;{}]/g, '') // Remove CSS structural characters
     .replaceAll('\\', '') // Remove backslashes
-    .replaceAll(/<|>/g, '') // Remove angle brackets
+    .replaceAll(/[<>]/g, '') // Remove angle brackets
     .trim();
 }
 

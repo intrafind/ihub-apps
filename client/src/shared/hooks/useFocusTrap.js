@@ -100,7 +100,7 @@ export function useFocusTrap(
       }
 
       const firstElement = focusable[0];
-      const lastElement = focusable.at(-1);
+      const lastElement = focusable[focusable.length - 1];
 
       if (event.shiftKey) {
         // Shift+Tab: if on the first element, wrap to the last

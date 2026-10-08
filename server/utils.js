@@ -23,7 +23,7 @@ function sanitizeForLog(input) {
   // - Control characters (\n, \r, \t, etc.) for log injection
   // - Backticks, dollar signs, backslashes for shell injection if logs are processed
   return input
-    .replaceAll(/[\n\r\t\x00-\x1F\x7F]/g, '') // Remove control characters
+    .replaceAll(/[\x00-\x1F\x7F]/g, '') // Remove control characters
     .replaceAll(/[`$\\]/g, String.raw`\$&`); // Escape backticks, dollar signs, backslashes
 }
 
