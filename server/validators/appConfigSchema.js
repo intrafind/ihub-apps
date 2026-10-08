@@ -212,6 +212,15 @@ const uploadSchema = z
     fileUpload: z
       .object({
         enabled: z.boolean().optional().prefault(false),
+        // Word (.docx) review marks sent to the model — opt-in, so documents reach the model as
+        // the accepted view without comments unless the app asks. `markup` writes tracked
+        // insertions/deletions as CriticMarkup ({++added++} / {--removed--}), `inline` writes
+        // comments as {>>Author: text<<} after the text they belong to.
+        trackedChanges: z.enum(['accepted', 'markup']).optional().prefault('accepted'),
+        comments: z.enum(['ignore', 'inline']).optional().prefault('ignore'),
+        // PowerPoint (.pptx) and OpenDocument (.odp) decks: `include` sends the speaker notes of a
+        // slide after its text as [Notes]. Off by default — notes are not what the audience sees.
+        speakerNotes: z.enum(['ignore', 'include']).optional().prefault('ignore'),
         maxFileSizeMB: z.number().int().min(1).max(100).optional().prefault(5),
         supportedFormats: z
           .array(z.string())

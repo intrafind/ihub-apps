@@ -15,6 +15,7 @@
     "start": "cd server && node -r dotenv/config server.js dotenv_config_path=../.env",
     "// === INSTALLATION & CLEANUP ===": "",
     "install:all": "npm install && cd client && npm install && cd ../server && npm install",
+    "prepare": "husky || true",
     "clean": "npm run build:clean && rm -rf node_modules client/node_modules server/node_modules",
     "clean:install": "npm run clean && npm run install:all",
     "// === UTILITIES ===": "",
@@ -74,7 +75,7 @@
     "test:quick": "npm run lint:config-access && npm run test:unit && npm run test:pdf && npm run test:adapters && npm run test:cluster && npm run test:system-resources && npm run test:token-stats && npm run test:export-formats && npm run test:feature-flags && npm run test:personal-api-keys && npm run test:inference && npm run test:temporal && npm run test:prompts && npm run test:skills && npm run test:sources && npm run test:migrations && npm run test:loop && npm run test:tool-loading && npm run test:ifinder && npm run test:storage && npm run test:config-store && npm run test:chat && npm run test:scheduled-tasks && npm run test:memory && npm run test:runtime && npm run test:outbound-http && npm run test:model-test-messages && npm run test:websearch && npm run test:auth-identity && npm run test:auth-routes && npm run test:ldap && npm run test:oauth && npm run test:mcp && npm run test:a2a && npm run test:admin-config && npm run test:marketplace && npm run test:office-addin && npm run test:copilot-agent && npm run test:model-permissions && npm run test:anonymous-access && npm run test:short-links && npm run test:usage && npm run test:voice",
     "test:cluster": "node server/tests/sse-cluster-helpers.test.js && node server/tests/clusterBus.test.js && node server/tests/configSync.test.js && node server/tests/keyColdStartRace.test.js && node server/tests/authCodeCluster.test.js && node server/tests/consentTicket.test.js && node server/tests/oidcLoginState.test.js && node server/tests/office365-callback-routes.test.js && node server/tests/runEventRelayCluster.test.js && node --test server/tests/workflow-state-cross-worker.test.js && node server/tests/toolJobsCluster.test.js && node server/tests/clusterRateLimitStore.test.js && node server/tests/requestThrottlerCluster.test.js && node --test server/tests/update-status-cluster.test.js",
     "test:system-resources": "node --test server/tests/systemResources.test.js server/tests/storageMonitor.test.js",
-    "test:pdf": "node --test server/tests/pdf-engine.test.js server/tests/system-skills.test.js server/tests/document-extraction-pdf.test.js",
+    "test:pdf": "node --test server/tests/pdf-engine.test.js server/tests/system-skills.test.js server/tests/document-extraction-pdf.test.js server/tests/document-extraction-pdf-structure.test.js",
     "test:unit": "jest --config tests/config/jest.config.js tests/unit",
     "test:integration": "jest --config tests/config/jest.config.js tests/integration",
     "test:integration:ci": "jest --config tests/config/jest.config.js tests/integration --testPathIgnorePatterns=tests/integration/api/chat.test.js --testPathIgnorePatterns=tests/integration/models/model-integration.test.js",
@@ -102,7 +103,7 @@
     "test:export-formats": "node client/src/utils/exportFormats.test.js",
     "test:feature-flags": "node shared/featureFlags.test.js && node --test server/tests/feedback-feature-gate.test.js server/tests/app-required-features.test.js server/tests/document-extraction-feature.test.js",
     "test:personal-api-keys": "node server/tests/personalApiKeys.test.js",
-    "test:inference": "node --test server/tests/inference-units.test.js server/tests/loop/inferenceApi.test.js",
+    "test:inference": "node --test server/tests/inference-units.test.js server/tests/loop/inferenceApi.test.js server/tests/document-extraction-api.test.js",
     "test:temporal": "node server/tests/agent-temporal-context.test.js && node server/tests/chat-temporal-context.test.js",
     "test:skills": "node --test server/tests/skill-access.test.js server/tests/skill-context.test.js server/tests/user-skills.test.js",
     "test:prompts": "node --test server/tests/prompt-variables.test.js server/tests/user-prompts.test.js && node server/tests/promptService.test.js && node --test server/tests/prompt-content-substitution.test.js && node --test server/tests/prompt-context-blocks.test.js && node server/tests/auto-source-addition.test.js && node --test server/tests/promptService-sources-dollar.test.js && node server/tests/empty-prompt-bug-validation.test.js && node --test server/tests/iassistantConversationAdapter.test.js && node --test server/tests/iassistantConversationTelemetry.test.js",
@@ -128,7 +129,7 @@
     "test:office-addin": "node --test server/tests/office-start-page-config.test.js server/tests/office-mail-action-config.test.js server/tests/office-app-access.test.js && cd server && node --experimental-vm-modules node_modules/jest/bin/jest.js tests/office-integration-app-access-route.test.js",
     "test:copilot-agent": "node --test server/tests/copilot-agent-package.test.js && cd server && node --experimental-vm-modules node_modules/jest/bin/jest.js tests/copilot-agent-route.test.js",
     "test:voice": "cd server && node --experimental-vm-modules node_modules/jest/bin/jest.js tests/voice-azure-token-route.test.js tests/azureSpeechToken.test.js tests/voice-admin-azure-test-route.test.js tests/speech-platform-defaults.test.js tests/realtimeTranscription.test.js tests/textToSpeech.test.js tests/tts-speech-route.test.js tests/tts-voices-admin-route.test.js tests/admin-model-default-chat-only.test.js tests/mistralTranscriptionProvider.test.js tests/googleTtsProvider.test.js tests/transcription-model-test-route.test.js tests/openaiTranscriptionProvider.test.js tests/openaiTranscriptionTransport.test.js",
-    "test:admin-config": "cd server && node --experimental-vm-modules node_modules/jest/bin/jest.js tests/admin-changes-group-rollback.test.js tests/admin-platform-config-merge.test.js tests/admin-config-read-fails-closed.test.js tests/config-routing-conditional-writes.test.js tests/admin-content-access.test.js tests/admin-chat-history.test.js tests/llm-provider-links.test.js tests/api-key-resolution.test.js tests/admin-apps-schema-validation.test.js tests/appConfigSchema.urlSchemes.test.js",
+    "test:admin-config": "cd server && node --experimental-vm-modules node_modules/jest/bin/jest.js tests/admin-changes-group-rollback.test.js tests/admin-platform-config-merge.test.js tests/admin-config-read-fails-closed.test.js tests/config-routing-conditional-writes.test.js tests/admin-content-access.test.js tests/admin-chat-history.test.js tests/llm-provider-links.test.js tests/api-key-resolution.test.js tests/admin-apps-schema-validation.test.js tests/appConfigSchema.urlSchemes.test.js tests/appConfigSchema.fileUpload.test.js",
     "test:marketplace": "cd server && node --experimental-vm-modules node_modules/jest/bin/jest.js tests/ContentInstaller.skill-path-traversal.test.js tests/ContentInstaller.install-guards.test.js tests/appConfigSchema.variables.test.js tests/catalogSchema.licenseUrl.test.js tests/frontMatter.test.js",
     "test:model-permissions": "cd server && node --experimental-vm-modules node_modules/jest/bin/jest.js tests/model-permission-enforcement.test.js",
     "test:anonymous-access": "node --test server/tests/anonymous-principal.test.js",
@@ -193,12 +194,6 @@
     "eslint-plugin-jsx-a11y": {
       "eslint": "$eslint"
     }
-  },
-  "lint-staged": {
-    "*.{js,jsx}": [
-      "eslint --fix",
-      "prettier --write"
-    ]
   },
   "allowScripts": {
     "fsevents@2.3.3": true,

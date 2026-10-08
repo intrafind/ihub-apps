@@ -1,0 +1,56 @@
+# OpenSSF Scorecard: grades the repository's supply-chain practices (pinned
+# dependencies, branch protection, token permissions, signed releases, ...)
+# and reports what to improve to the Security tab. Results are also published
+# to the public Scorecard API for the README badge.
+#
+# Publishing results restricts this workflow: no top-level env or defaults,
+# no workflow-level write permissions, and the job may only use the actions
+# below. See https://github.com/ossf/scorecard-action#workflow-restrictions.
+
+name: Scorecard
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '43 4 * * 1'
+  # Re-grade when branch protection changes.
+  branch_protection_rule:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  analysis:
+    name: Scorecard analysis
+    runs-on: ubuntu-latest
+    # Read access for the checks Scorecard grades (workflows, CI results,
+    # code review, branch protection), instead of read-all.
+    permissions:
+      contents: read
+      actions: read
+      checks: read
+      issues: read
+      pull-requests: read
+      security-events: write
+      # Signs the results published to the Scorecard API.
+      id-token: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Run Scorecard
+        uses: ossf/scorecard-action@2d1146689b8cda280b9bc96326124645441f03bc # v2.4.4
+        with:
+          results_file: results.sarif
+          results_format: sarif
+          publish_results: true
+
+      - name: Upload results to code scanning
+        uses: github/codeql-action/upload-sarif@24c54180a607b1449ed407dd24f251e4e9147c8d # v4.38.3
+        with:
+          sarif_file: results.sarif
+          category: scorecard

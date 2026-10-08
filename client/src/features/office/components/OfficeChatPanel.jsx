@@ -164,7 +164,8 @@ function OfficeChatPanel({
     chatId: chatIdRef.current,
     onMessageAccepted: handleMessageAccepted,
     serverBacked: chatStored,
-    isFreshChat
+    isFreshChat,
+    fileUploadConfig: selectedApp?.upload?.fileUpload
   });
   // A stored chat is being fetched. A fresh one has nothing to wait for, so it
   // shows its greeting straight away.
@@ -254,7 +255,7 @@ function OfficeChatPanel({
     const extraction =
       attachmentsForEstimate.length === 0
         ? Promise.resolve(null)
-        : buildFileDataFromMailAttachments(attachmentsForEstimate);
+        : buildFileDataFromMailAttachments(attachmentsForEstimate, selectedApp?.upload?.fileUpload);
     extraction
       .then(files => {
         if (!stale) setAttachmentFiles(files);
@@ -265,7 +266,7 @@ function OfficeChatPanel({
     return () => {
       stale = true;
     };
-  }, [attachmentsForEstimate]);
+  }, [attachmentsForEstimate, selectedApp?.upload?.fileUpload]);
 
   // The blocks exactly as the server renders them, without the typed text
   // (ChatInput counts that separately).

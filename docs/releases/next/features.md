@@ -19,8 +19,34 @@ heading by heading.
 - PDF files carry a `[Page N]` marker per page (with the printed page number when it differs, as
   in front matter numbered `i`, `ii`), keep their lines instead of one run of words, and flag
   pages without a text layer; scanned PDFs are still sent as page images
+- PDF headings and tables are marked where the file tells where they are: tagged PDFs (exported
+  from Word, LibreOffice, InDesign and others) give `#` headings and Markdown tables, otherwise the
+  outline (bookmarks) or clearly larger type marks headings. Nothing is guessed when the picture is
+  unclear, and no text is dropped or reordered
+- Apps for contract review and comparison can opt in to Word's review marks under **Admin → Apps →
+  Upload Configuration**: tracked changes as `{++added++}` / `{--removed--}` and comments as
+  `{>>Author: text<<}` after the text they belong to. Both are off by default — the model still
+  reads the accepted view without comments — and the settings only affect the app they are set in
+- The OpenAI-compatible API reads files the same way: PDFs with page markers, headings and tables,
+  and Word (`.docx`) files, which were refused before, as Markdown — so an integration that sends
+  contracts through the API sees what the chat sees. The one difference: a scanned PDF without a
+  text layer is not read through page images as in the chat; the API answers `file_has_no_text`,
+  and the caller sends the pages as `input_image`
+- PowerPoint decks (.pptx) are read in the order of the presentation (a moved slide used to keep
+  its old number), with the slide title as a heading, tables as Markdown tables and hidden slides
+  flagged; speaker notes are sent only for apps that opt in (**Admin → Apps → Upload
+  Configuration → PowerPoint: speaker notes**). The API accepts decks too
+- Excel sheets with a header row become Markdown tables, merged cells keep every row complete and
+  hidden sheets are flagged. A spreadsheet can no longer fill the context window on its own: at
+  most 2,000 rows per sheet and 300,000 characters per workbook are sent, and what was left out is
+  said
 - Headers and footers of Word files (letterhead, document numbers, confidentiality notes) appear as
   `[Header] …` and `[Footer] …` lines before the text, without page numbers
+- LibreOffice and OpenOffice files read like their Microsoft counterparts: texts (.odt) with
+  headings, the list and chapter numbers Writer shows, tables, footnotes and links; spreadsheets
+  (.ods) as tables with the same limits as Excel; presentations (.odp) as slides, with speaker
+  notes for apps that opt in. Where the numbering of a list cannot be reproduced with certainty,
+  the item gets no number rather than a wrong one. The API accepts these files too
 
 Admins can switch this off under **Admin → Features → Structured document extraction** (on by
 default); the previous plain text extraction then applies after users reload the page. If the
@@ -85,3 +111,16 @@ Three controls could only be used with a mouse. They now work from the keyboard 
   or Space.
 
 Screen readers now announce these controls with their proper roles and selected state.
+
+## Signed Build Provenance and SBOMs for Releases
+
+Releases can now be checked before they are installed. Release binaries, the Nextcloud plugin and
+the container image on GHCR carry signed build provenance, which proves they were built by the
+iHub Apps release workflow from the tagged source. Each release also lists CycloneDX SBOMs of the
+dependencies it ships, for vulnerability and license tracking.
+
+- Check a download: `gh attestation verify <file> --repo intrafind/ihub-apps`.
+- Check the image:
+  `gh attestation verify oci://ghcr.io/intrafind/ihub-apps:<version> --repo intrafind/ihub-apps`.
+- The image carries its own SBOM, shown by `docker buildx imagetools inspect`.
+- Details: *Security → Automated Security Checks → Verifying a Release* in the documentation.

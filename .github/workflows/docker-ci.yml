@@ -41,6 +41,7 @@ jobs:
         id: check
         env:
           COMMENT_BODY: ${{ github.event.comment.body }}
+          COMMENT_AUTHOR_ASSOCIATION: ${{ github.event.comment.author_association }}
         run: |
           should_run=false
           
@@ -58,8 +59,13 @@ jobs:
           if [[ "${{ github.event_name }}" == "issue_comment" ]]; then
             # Use environment variable to safely handle multi-line comments
             echo "$COMMENT_BODY" > comment_body.txt
+            # Only people with write access may trigger a build: the job pushes
+            # images and signs attestations.
             if grep -q "@build docker images" comment_body.txt; then
-              should_run=true
+              case "$COMMENT_AUTHOR_ASSOCIATION" in
+                OWNER|MEMBER|COLLABORATOR) should_run=true ;;
+                *) echo "Ignoring build request from a $COMMENT_AUTHOR_ASSOCIATION (needs owner, member or collaborator)." ;;
+              esac
             fi
             rm -f comment_body.txt
           fi
@@ -82,6 +88,9 @@ jobs:
       contents: read
       packages: write
       security-events: write
+      # Sign the image's build-provenance attestation.
+      id-token: write
+      attestations: write
 
     outputs:
       image-digest: ${{ steps.build.outputs.digest }}
@@ -89,13 +98,16 @@ jobs:
       
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Set up Node.js (for version sync)
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
+          package-manager-cache: false
           node-version: '24'
-          cache: 'npm'
+          # No npm cache: this job publishes images (zizmor cache-poisoning).
 
       - name: Install dependencies for version sync
         run: npm ci --ignore-scripts
@@ -119,12 +131,12 @@ jobs:
         shell: bash
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
         with:
           platforms: linux/amd64
 
       - name: Log in to Container Registry
-        uses: docker/login-action@v4
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
@@ -132,7 +144,7 @@ jobs:
 
       - name: Extract metadata
         id: meta
-        uses: docker/metadata-action@v6
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
@@ -150,7 +162,7 @@ jobs:
 
       - name: Build and push Docker image
         id: build
-        uses: docker/build-push-action@v7
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
           file: ./docker/Dockerfile
@@ -160,10 +172,22 @@ jobs:
           platforms: linux/amd64
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          # Attach an SBOM and full SLSA provenance to the image in the registry.
+          sbom: true
+          provenance: mode=max
           build-args: |
             BUILDTIME=${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.created'] }}
             VERSION=${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.version'] }}
             REVISION=${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.revision'] }}
+
+      # Signed provenance pushed next to the image, verifiable with
+      # `gh attestation verify oci://<image> --repo ${{ github.repository }}`.
+      - name: Attest image build provenance
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
 
       - name: Test container startup
         run: |
@@ -200,17 +224,19 @@ jobs:
       # Needed so Trivy can read .trivyignore and so the SARIF upload can
       # associate the results with the scanned commit.
       - name: Checkout repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Log in to Container Registry
-        uses: docker/login-action@v4
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ needs.build-and-test.outputs.image-digest }}
           format: 'sarif'
@@ -219,14 +245,14 @@ jobs:
           trivyignores: '.trivyignore'
 
       - name: Upload Trivy scan results to GitHub Security
-        uses: github/codeql-action/upload-sarif@v4
+        uses: github/codeql-action/upload-sarif@24c54180a607b1449ed407dd24f251e4e9147c8d # v4.38.3
         if: always()
         continue-on-error: true  # Add this line
         with:
           sarif_file: 'trivy-results.sarif'          
 
       - name: Upload Trivy results as artifact
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: trivy-scan-results
           path: trivy-results.sarif

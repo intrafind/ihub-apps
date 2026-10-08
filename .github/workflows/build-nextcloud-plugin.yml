@@ -27,20 +27,22 @@ on:
 
 jobs:
   build:
-    name: Build & publish plugin
+    name: Build plugin
     runs-on: ubuntu-latest
     permissions:
-      contents: write  # required for softprops/action-gh-release on release events
+      contents: read
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Set up Node.js
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
+          package-manager-cache: false
           node-version: '24'
-          cache: 'npm'
-          cache-dependency-path: nextcloud-app/package-lock.json
+          # No npm cache: this job publishes release assets (zizmor cache-poisoning).
 
       - name: Install dependencies
         working-directory: nextcloud-app
@@ -62,16 +64,39 @@ jobs:
           fi
 
       - name: Upload build artifact
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ihub_chat-${{ github.sha }}
           path: ihub_chat.tar.gz
           retention-days: 30
           if-no-files-found: error
 
+  publish:
+    name: Attest & publish to release
+    needs: build
+    # A separate job, so runs for pull requests never get write or signing
+    # permissions, and the tarball reaches the release only once it is attested.
+    if: github.event_name == 'release' && github.event.release.tag_name != ''
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write  # softprops/action-gh-release
+      id-token: write
+      attestations: write
+    steps:
+      - name: Download plugin tarball
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: ihub_chat-${{ github.sha }}
+
+      # Signed SLSA build provenance, verifiable with
+      # `gh attestation verify ihub_chat.tar.gz --repo ${{ github.repository }}`.
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: ihub_chat.tar.gz
+
       - name: Attach to release
-        if: github.event_name == 'release' && github.event.release.tag_name != ''
-        uses: softprops/action-gh-release@v3
+        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
           tag_name: ${{ github.event.release.tag_name }}
           files: ihub_chat.tar.gz

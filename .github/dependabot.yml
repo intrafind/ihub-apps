@@ -1,3 +1,9 @@
+# Dependabot version updates. Security updates are configured in the repository
+# settings and ignore the cooldowns below.
+#
+# Cooldowns hold back a new release for a week (two for majors): hijacked
+# package versions are usually caught and pulled within days.
+#
 # To get started with Dependabot version updates, you'll need to specify which
 # package ecosystems to update and where the package manifests are located.
 # Please see the documentation for all configuration options:
@@ -13,10 +19,10 @@ updates:
       time: "06:00"
       timezone: "Europe/Berlin"
     cooldown:
-      default-days: 3
-      semver-major-days: 7
-      semver-minor-days: 5
-      semver-patch-days: 3
+      default-days: 7
+      semver-major-days: 14
+      semver-minor-days: 7
+      semver-patch-days: 7
     groups:
       all-patches:
         update-types:
@@ -33,10 +39,10 @@ updates:
       time: "06:00"
       timezone: "Europe/Berlin"
     cooldown:
-      default-days: 3
-      semver-major-days: 7
-      semver-minor-days: 5
-      semver-patch-days: 3
+      default-days: 7
+      semver-major-days: 14
+      semver-minor-days: 7
+      semver-patch-days: 7
     groups:
       all-patches:
         update-types:
@@ -53,10 +59,10 @@ updates:
       time: "06:00"
       timezone: "Europe/Berlin"
     cooldown:
-      default-days: 3
-      semver-major-days: 7
-      semver-minor-days: 5
-      semver-patch-days: 3
+      default-days: 7
+      semver-major-days: 14
+      semver-minor-days: 7
+      semver-patch-days: 7
     groups:
       all-patches:
         update-types:
@@ -73,10 +79,10 @@ updates:
       time: "06:00"
       timezone: "Europe/Berlin"
     cooldown:
-      default-days: 3
-      semver-major-days: 7
-      semver-minor-days: 5
-      semver-patch-days: 3
+      default-days: 7
+      semver-major-days: 14
+      semver-minor-days: 7
+      semver-patch-days: 7
     groups:
       all-patches:
         update-types:
@@ -93,7 +99,7 @@ updates:
       time: "06:00"
       timezone: "Europe/Berlin"
     cooldown:
-      default-days: 3
+      default-days: 7
     groups:
       all-patches:
         update-types:

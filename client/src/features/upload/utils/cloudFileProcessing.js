@@ -1,4 +1,5 @@
 import { processDocumentFile, getFileTypeDisplay, SUPPORTED_TEXT_FORMATS } from './fileProcessing';
+import { extractionOptionsOf } from './extractionOptions';
 
 const IMAGE_TYPES = new Set(['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp']);
 const AUDIO_TYPES = new Set(['audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/flac', 'audio/ogg']);
@@ -19,7 +20,7 @@ export async function processCloudFile(file, config = {}) {
     return processCloudAudio(file);
   }
   // Document/text files
-  return processCloudDocument(file);
+  return processCloudDocument(file, config?.fileUpload);
 }
 
 /**
@@ -95,13 +96,16 @@ async function processCloudAudio(file) {
 /**
  * Process cloud document: extract text content
  */
-async function processCloudDocument(file) {
+async function processCloudDocument(file, fileUploadConfig) {
   try {
     // processDocumentFile returns { content, pageImages } — destructure both
     // so `content` is the extracted text string (not the wrapper object).
     // Without this, the chat sends an object as content and the LLM gets
     // nothing usable.
-    const { content, pageImages } = await processDocumentFile(file);
+    const { content, pageImages } = await processDocumentFile(
+      file,
+      extractionOptionsOf(fileUploadConfig)
+    );
     return {
       type: 'document',
       content,

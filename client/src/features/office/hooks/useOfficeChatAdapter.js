@@ -66,6 +66,8 @@ function combineUploadData(manualData, mailData) {
  * @param {boolean} [options.serverBacked=false] - Whether the chat is stored server-side
  * @param {boolean} [options.isFreshChat=false] - Whether the pane minted this chat and has
  *   not sent anything in it yet, so there is nothing stored to fetch
+ * @param {Object} [options.fileUploadConfig] - The app's `upload.fileUpload` block; carries the
+ *   Word review options (tracked changes, comments) for mail attachments
  * @returns {Object} useAppChat's result with the enriched `sendMessage`, plus
  *   `storedChatSettings` and `storedChatVariables` — the settings and the app
  *   variables a reopened chat was last answered with.
@@ -76,7 +78,8 @@ function useOfficeChatAdapter({
   onMessageComplete,
   onMessageAccepted,
   serverBacked = false,
-  isFreshChat = false
+  isFreshChat = false,
+  fileUploadConfig
 }) {
   const chat = useAppChat({ appId, chatId, onMessageComplete, onMessageAccepted, serverBacked });
   const { chatSettings: storedChatSettings, chatVariables: storedChatVariables } =
@@ -143,7 +146,10 @@ function useOfficeChatAdapter({
         ? []
         : collectAttachmentsForSend(ctx.attachments, pinnedEmails, ctx.itemId ?? null);
       const hostImageData = await buildImageDataFromMailAttachments(mergedAttachments);
-      const hostFileData = await buildFileDataFromMailAttachments(mergedAttachments);
+      const hostFileData = await buildFileDataFromMailAttachments(
+        mergedAttachments,
+        fileUploadConfig
+      );
 
       const combinedImageData = combineUploadData(apiMessage.imageData, hostImageData);
       const combinedFileData = combineUploadData(apiMessage.fileData, hostFileData);
@@ -173,7 +179,7 @@ function useOfficeChatAdapter({
         messageMetadata
       });
     },
-    [chat, host]
+    [chat, host, fileUploadConfig]
   );
 
   return { ...chat, sendMessage, storedChatSettings, storedChatVariables };

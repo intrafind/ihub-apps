@@ -1,9 +1,16 @@
 # Accessibility CI — WCAG 2.2 AA
 #
-# Runs the axe-core accessibility test suite against the running application
-# on every pull request. Only critical and serious violations fail the build
-# (matching the policy in tests/e2e/accessibility.spec.js). See
-# docs/accessibility.md for the full compliance statement.
+# Two checks on every pull request:
+#
+# - axe-core: scans the running application, signed out and signed in as the
+#   default admin. Only critical and serious violations fail the build, and
+#   only beyond the elements already recorded for that page (KNOWN_VIOLATIONS
+#   in tests/e2e/accessibility.spec.js).
+# - jsx-a11y on changed lines: the eslint-plugin-jsx-a11y rules are warnings
+#   in the normal lint; here they fail the PR for lines it adds or changes
+#   (scripts/check-a11y-diff.js), with inline annotations.
+#
+# See docs/accessibility.md for the full compliance statement.
 
 name: Accessibility
 
@@ -17,6 +24,34 @@ permissions:
   contents: read
 
 jobs:
+  jsx-a11y-changed-lines:
+    name: jsx-a11y (changed lines)
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The merge base with the target branch is needed for the diff.
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      # ESLint and its plugins are root dev dependencies; none of them needs an
+      # install script, so dependency lifecycle scripts do not run here.
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Lint changed lines with jsx-a11y
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: node scripts/check-a11y-diff.js "origin/$BASE_REF"
+
   axe-core:
     runs-on: ubuntu-latest
 
@@ -28,10 +63,12 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Set up Node.js
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: '24'
           cache: 'npm'
@@ -49,7 +86,7 @@ jobs:
 
       - name: Upload Playwright report
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: a11y-playwright-report
           path: playwright-report/

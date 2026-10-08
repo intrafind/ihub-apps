@@ -46,6 +46,9 @@ All upload types share a single `upload` object in the app configuration:
 | `enabled` | boolean | `false` | Enable document/file attachment |
 | `maxFileSizeMB` | number (1–100) | `5` | Maximum file size in megabytes |
 | `supportedFormats` | string[] | See below | MIME types accepted for upload |
+| `trackedChanges` | `"accepted"` \| `"markup"` | `"accepted"` | Word documents: `markup` writes tracked insertions and deletions into the text as `{++added++}` and `{--removed--}` (see [Tracked changes and comments](#tracked-changes-and-comments-opt-in)) |
+| `comments` | `"ignore"` \| `"inline"` | `"ignore"` | Word documents: `inline` writes comments as `{>>Author: text<<}` after the text they belong to |
+| `speakerNotes` | `"ignore"` \| `"include"` | `"ignore"` | PowerPoint and OpenDocument presentations: `include` adds the speaker notes of a slide as `[Notes]` after its text (see [PowerPoint and spreadsheets](#powerpoint-and-spreadsheets)) |
 
 Default `supportedFormats` for `fileUpload`:
 
@@ -106,13 +109,13 @@ Supported providers (configured at the platform level):
 | any extension | `text/*` ("Any text file") | Read as text; rejected if the content is binary — see below |
 | `.pdf` | `application/pdf` | Text extracted via `pdfjs-dist` with `[Page N]` markers and real lines — see [Extracted text format](#extracted-text-format); falls back to rendering each page as an image |
 | `.docx` | `application/vnd.openxmlformats-officedocument.wordprocessingml.document` | Converted to Markdown via `mammoth`, `jszip` and `turndown`: headings, lists, tables, footnotes, links and page breaks are kept — see [Extracted text format](#extracted-text-format) |
-| `.xlsx` | `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet` | Cell content extracted via `xlsx` |
-| `.xls` | `application/vnd.ms-excel` | Cell content extracted via `xlsx` |
-| `.pptx` | `application/vnd.openxmlformats-officedocument.presentationml.presentation` | Slide text extracted from the OOXML slides via `jszip` |
+| `.xlsx` | `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet` | Cell content extracted via `xlsx`: a sheet with a header row becomes a Markdown table, see [PowerPoint and spreadsheets](#powerpoint-and-spreadsheets) |
+| `.xls` | `application/vnd.ms-excel` | Cell content extracted via `xlsx`, as `.xlsx` |
+| `.pptx` | `application/vnd.openxmlformats-officedocument.presentationml.presentation` | Slide text extracted from the OOXML slides via `jszip`, in the order of the presentation, with titles and tables |
 | `.ppt` | `application/vnd.ms-powerpoint` | Not supported: the legacy binary format is rejected with "Unsupported file format" |
-| `.odt` | `application/vnd.oasis.opendocument.text` | XML text extracted via `jszip` |
-| `.ods` | `application/vnd.oasis.opendocument.spreadsheet` | XML text extracted via `jszip` |
-| `.odp` | `application/vnd.oasis.opendocument.presentation` | XML text extracted via `jszip` |
+| `.odt` | `application/vnd.oasis.opendocument.text` | Converted to Markdown via `jszip`: headings, lists with their numbers, tables, footnotes, links and page breaks are kept — see [OpenDocument files](#opendocument-files-odt-ods-odp) |
+| `.ods` | `application/vnd.oasis.opendocument.spreadsheet` | Sheets like `.xlsx`: a sheet with a header row becomes a Markdown table — see [OpenDocument files](#opendocument-files-odt-ods-odp) |
+| `.odp` | `application/vnd.oasis.opendocument.presentation` | Slides like `.pptx`, in the order of the file, with titles and tables — see [OpenDocument files](#opendocument-files-odt-ods-odp) |
 | `.msg` | `application/vnd.ms-outlook`, `application/x-msg` | Subject, sender/recipients (SMTP addresses preferred), date, attachment names, and body extracted via `@kenjiuno/msgreader`. Body falls back across plain text → HTML → compressed RTF, so HTML-only emails (e.g. newsletters) are read correctly |
 | `.eml` | `message/rfc822` | Read as-is (RFC 822 format) |
 
@@ -172,11 +175,26 @@ The model receives a document as text inside a `<content type="document" …>` b
 | Images | `[Image: alt text]` when the image has alt text, otherwise nothing — pictures are never sent as base64 data |
 | Explicit page break, page-break-before, new-page section break | `[Page break]` on its own line. Word does not store page numbers (it computes them when laying out), so Word files get no `[Page N]` markers |
 | Text that was moved with track changes | Appears once, at its new position |
-| Tracked deletions, comments | Not sent. Insertions count as text (the accepted view of the document) |
+| Tracked changes, comments | By default not sent: the text is the accepted view (insertions count, deletions are gone) and comments are left out. An app can opt in, see below |
 | Hidden text (Word's "Hidden" font attribute) | Not sent |
 | Soft hyphens, non-breaking hyphens | Soft hyphens are removed, non-breaking hyphens become `-` |
 
 Markdown characters in the document text are not escaped, so `1.`, `[1]` or `a_b` arrive exactly as typed. Text that happens to look like Markdown (`# not a heading`) stays as typed as well.
+
+#### Tracked changes and comments (opt-in)
+
+Documents that are reviewed in Word carry the review in two places: tracked changes (who added or removed what) and comments. The model sees neither by default, so a contract review would not know what the other side changed. An app can ask for them in its upload settings (Admin → Apps → Upload Configuration → *Word: tracked changes* / *Word: comments*, or `upload.fileUpload.trackedChanges` / `upload.fileUpload.comments`):
+
+| Setting | In the text |
+|---|---|
+| `trackedChanges: "markup"` | `{++inserted text++}` and `{--deleted text--}` ([CriticMarkup](https://criticmarkup.com/)); a replacement reads `{--old--}{++new++}`. A deleted paragraph or table row stays where it was, its text marked as deleted; moved text is a deletion where it was and an insertion where it is. Changes that only affect formatting are not marked. Deleted paragraphs take no number, so the numbers of the other paragraphs are the ones of the accepted view |
+| `comments: "inline"` | `{>>Author: comment<<}` right after the text the comment is attached to. Replies follow in order; the paragraphs of a comment are joined with a space, and a comment is cut after 2,000 characters |
+
+```text
+Der Preis {--100--}{++120++} Euro{>>Anna Beispiel: Mit dem Kunden abgestimmt<<}
+```
+
+Both settings only apply to Word documents and only while *Structured document extraction* is switched on. They are off unless an app sets them, and changing them does not affect other apps. The author of a tracked change and its date are not part of the text. Comments inside footnotes, headers and footers are not read. Prompts of such an app should say what the marks mean ("`{--…--}` is deleted, `{++…++}` is new text") when the task depends on them.
 
 #### Numbering
 
@@ -191,12 +209,17 @@ Word does not store list and chapter numbers as text; it computes them when disp
 
 ```text
 [Page 1 (printed: i)]
-Inhaltsverzeichnis
+# Inhaltsverzeichnis
 
 [Page 2 (printed: 1)]
-1. Geltungsbereich
+## 1. Geltungsbereich
 Dieser Vertrag gilt für alle Parteien und re-
 gelt die Zusammenarbeit.
+
+| Feld | Typ |
+| --- | --- |
+| enabled | boolean |
+
 Seite 1 von 3
 
 [Page 3: no extractable text]
@@ -208,10 +231,65 @@ Seite 1 von 3
 | Printed page numbers (roman front matter, a cover that is not counted) | `[Page 2 (printed: 1)]` when the PDF defines page labels and the label differs from the physical number, so "see page 3" can be matched to what is printed on the page |
 | Lines | One line of text per line of the page. Words are no longer separated by double spaces; a hyphen at the end of a line stays where it is (`re-` / `gelt`) |
 | A page without a text layer inside a PDF that has text elsewhere | `[Page 2: no extractable text]`, so a missing page is visible |
+| Headings | `#` … `######`, **when the PDF tells where its headings are** (see below) |
+| Tables | A Markdown table when the PDF is tagged (see below); otherwise the cells of a row are one line |
 | Running headers and footers (`Page 3 of 10`) | Kept as ordinary text |
 | Scanned PDF (no text, or less than 50 characters of real text — markers do not count) | No text; the first five pages are rendered as images for vision models, as before. Text on a later page is kept instead, so it is not lost |
 
-Multi-column layouts are read in the order the PDF stores the text, which is not always the reading order. Headings are not detected in PDFs.
+**Where headings and tables come from.** A PDF has no headings of its own, so they are only marked where the file says so. The sources are tried in this order, and the first one that yields headings is used for the whole document:
+
+1. **Tags** — PDFs exported from Word, LibreOffice, InDesign and most other tools with "tagged PDF" / "accessible PDF" switched on carry `H1`…`H6` and table structure. Headings keep their level; tables become Markdown tables with the columns of the original (an empty cell stays an empty column; a table continued from the previous page starts without a header row). Cells that span columns or rows are not reported by the PDF, so the rows are padded to the widest row.
+2. **Outline** (bookmarks) — the entries of the outline are looked up as lines on the page they point to; the nesting depth is the heading level. The outline is only used when at least half of its entries are found in the text of their pages.
+3. **Font size** — a last resort for untagged PDFs without an outline: short lines that are clearly larger than the body text (at least 15 %; 5 % for a numbered line such as `2.1 Geltungsbereich`) become headings, the largest size is `#`. Nothing is marked when a clear picture is missing — large text that makes up a fifth of the document, more than four sizes, sentences that end in a period, lines that repeat on most pages (running headers), code in a fixed-width font. Headings set in bold at body size cannot be recognised this way; the model sees them as ordinary lines.
+
+Heading levels from the outline and from the font size are relative (a document that starts with a level 2 heading shows it as `#`); levels from tags are the ones in the file. No text is dropped or reordered: the structure only adds `#` and `|`.
+
+Multi-column layouts are read in the order the PDF stores the text, which is not always the reading order.
+
+### PowerPoint and spreadsheets
+
+```text
+[Slide 1]
+# Quarterly report
+Revenue up 12 %
+
+| Region | Revenue |
+| --- | --- |
+| North | 1.2 M |
+
+[Slide 2 (hidden)]
+# Backup: assumptions
+```
+
+| In the file | In the text |
+|---|---|
+| Slides (.pptx) | `[Slide N]`, numbered as the presentation orders them (the file names only say in which order the slides were created, so a moved slide used to keep its old number). A deck without a slide list is read in the order of its file names, as before |
+| Hidden slides | Kept, flagged `[Slide 3 (hidden)]` — the author hid it from the slide show, not from the deck. Its number stays |
+| Slide title | `# Title`, first on the slide (title and centred-title placeholders) |
+| Tables on a slide | A Markdown table. A first row marked as header row gets the separator row; a table without one is written as rows only. A merged cell spans columns (text in the first, the others empty) or rows (text repeated) |
+| Line breaks inside a paragraph | A space (the words of two lines no longer run together). Automatic slide numbers and dates are dropped |
+| Speaker notes | **Not sent by default.** An app can opt in (`upload.fileUpload.speakerNotes: "include"`, Admin → Apps → Upload Configuration → *PowerPoint: speaker notes*): the notes follow their slide as `[Notes]` |
+| Sheets (.xlsx, .xls) | `[Sheet: name]` followed by the sheet. A sheet whose first row names the columns (at least two columns, text that is not a number or date, a row of data below; a title merged across the header columns counts) is a Markdown table; any other sheet stays tab-separated |
+| Merged cells in a sheet | A cell that spans rows shows its text in each row, so every row stays complete; one that spans columns keeps it in the first column |
+| Hidden sheets | Kept, flagged `[Sheet: name (hidden)]` |
+| Large sheets | At most 2,000 rows per sheet and 300,000 characters per workbook; what is left out is said: `[… 1500 more rows omitted]`, or `[… 800 rows omitted]` for a whole sheet. A spreadsheet's text can be far larger than its file, and the file size limit does not protect the context window |
+
+Formulas show the value the spreadsheet last calculated, as before; cell formatting (bold, colours) is not sent.
+
+### OpenDocument files (.odt, .ods, .odp)
+
+LibreOffice and OpenOffice files are read like their Microsoft counterparts — the same Markdown and the same markers, so a prompt does not need to know which office suite the file came from. The kind of document is read from the file itself, not from its name.
+
+| In the file | In the text |
+|---|---|
+| Text (.odt): headings by outline level, paragraphs, tables, footnotes and endnotes, links, images with alt text, page breaks | As in a Word document: `#` … `######`, a blank line between paragraphs, Markdown tables (a table with header rows has a header row; merged cells keep every row complete), `[^1]` notes, `[text](https://…)`, `[Image: alt text]`, `[Page break]` |
+| Lists | `-` for bullets and the label Writer shows for numbered lists (`1.`, `a)`, `Teil I:`, `2.1`), nested with indentation. Numbers follow Writer's own counting: a list restarts unless it continues another one (`continue-list`, `continue-numbering`), start values, a level shown with its parents (`2.1.3`). Chapter numbers of the outline style and numbered headings inside lists are written in front of the heading |
+| Constructs whose counting is not certain (a list with a header item, a style override on a nested level or next to a start value, labels that mix levels of different list styles) | The item gets **no** number rather than a possibly wrong one — the numbers were compared with LibreOffice's own rendering of randomly generated documents, and every case that differed is left unnumbered |
+| Tracked changes | The accepted view: deleted text is not sent, inserted text is. (Review marks as in Word's opt-in are not available for OpenDocument files.) Hidden text and the automatic page number and page count are not sent |
+| Spreadsheets (.ods) | `[Sheet: name]`, a header row becomes a Markdown table, merged cells, hidden sheets (`(hidden)`) and the limits are the same as for Excel files (see above). A cell shows what the sheet showed when it was saved (`25.6%`, `15.01.2026`), cell comments are not part of the text. Empty rows and columns that the format stores as a repeat count cost nothing |
+| Presentations (.odp) | `[Slide N]` in the order of the file, a title placeholder as `# Title`, text of text boxes, shapes and groups in the order of the file, lists with their bullets, tables (the first row is the header when the table says so), hidden slides flagged `[Slide 3 (hidden)]`, speaker notes only for apps that opt in (`speakerNotes: "include"`). Slide numbers and dates are dropped |
+
+Text, spreadsheets and presentations from the OpenDocument family are also accepted through the [API](openai-compatible-api.md#documents).
 
 ### Admin switch
 
@@ -241,11 +319,11 @@ All file processing happens **client-side** before content is sent to the server
 2. **Validation** — MIME type and file size are checked against the app's upload configuration. File extension is used as a fallback when the browser reports an incorrect MIME type.
 3. **Processing** (type-specific):
    - **Text files** — Read directly as UTF-8 text.
-   - **PDF** — Text extracted via PDF.js, page by page with a `[Page N]` marker and one line per line of the page. If the extracted text is empty or minimal (less than 50 characters outside the markers, e.g. a scanned document), each page is rendered as an image instead.
+   - **PDF** — Text extracted via PDF.js, page by page with a `[Page N]` marker, one line per line of the page, and headings and tables where the PDF marks them. If the extracted text is empty or minimal (less than 50 characters outside the markers, e.g. a scanned document), each page is rendered as an image instead.
    - **DOCX** — Converted to Markdown: mammoth reads the Word file, an OOXML pass first fixes what mammoth drops (custom heading styles, page breaks, moved text, hidden text), Turndown writes the Markdown. With the admin switch off, mammoth's HTML is flattened to plain text as before.
-   - **XLSX / XLS** — Cell content extracted as text via the xlsx library.
-   - **PPTX** — Slide text extracted from the OOXML slides via jszip. **PPT** (legacy binary) is rejected.
-   - **ODT / ODS / ODP** — XML parsed and text content extracted via jszip.
+   - **XLSX / XLS** — Cell content extracted via the xlsx library: a sheet with a header row as a Markdown table, other sheets tab-separated, rows and characters limited.
+   - **PPTX** — Slide text extracted from the OOXML slides via jszip, in the order of the presentation, with the slide title as a heading and tables as Markdown. **PPT** (legacy binary) is rejected.
+   - **ODT / ODS / ODP** — `content.xml` read via jszip: Markdown for a text (headings, lists with Writer's numbers, tables), tables for a sheet, slides for a presentation. With the admin switch off, the text nodes of the XML as before.
    - **MSG** — Headers (subject, sender, recipients, date, attachment names) plus the body extracted via msgreader. The body is resolved across every format Outlook may store it in — plain text, HTML (`PidTagHtml`/`PidTagBodyHtml`), or compressed RTF — so HTML-only emails like newsletters extract their full content instead of just headers.
    - **EML** — Read as-is.
    - **Images** — Optionally resized to max 1024 px and converted to JPEG; TIFF images converted to PNG first.

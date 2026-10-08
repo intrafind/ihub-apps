@@ -131,10 +131,19 @@ The `test:a11y` command scans the following pages for WCAG 2.2 AA violations (ax
 | Page | Route | Notes |
 |---|---|---|
 | Home / Apps list | `/` | Main landing page (exercises header, nav, skip link, footer) |
+| Apps browser | `/apps` | |
 | Login | `/login` | Authentication page |
-| Admin | `/admin` | Skipped automatically if authentication is required |
+| Admin | `/admin` | Signed out: skipped automatically if authentication is required |
+| Chat app | `/apps/chat` | Signed in |
+| Prompt library | `/prompts` | Signed in |
+| Chat history | `/chats` | Signed in |
+| Admin overview, apps, models, users, groups | `/admin`, `/admin/apps`, `/admin/models`, `/admin/users`, `/admin/groups` | Signed in |
+
+Signed-in pages log in as the default local admin a fresh `contents/` ships (`admin` / `password123`). Set `TEST_ADMIN_USERNAME` and `TEST_ADMIN_PASSWORD` to run them against another environment.
 
 **Failure criteria:** Only **critical** and **serious** impact violations cause test failure. Moderate and minor violations are logged for awareness.
+
+**Known violations:** The signed-in pages had critical/serious violations when their scans were added (low-contrast secondary text, unlabelled inputs, nested interactive prompt cards). `KNOWN_VIOLATIONS` in `tests/e2e/accessibility.spec.js` records, per page, how many elements fail each of those rules on a fresh `contents/`. Up to that many are logged but do not fail the run; one more failing element, or any other rule, does. When fixes lower a count, the log says so: lower the number (or delete the entry at zero) so the fixed elements cannot regress unnoticed.
 
 **Continuous integration:** The `.github/workflows/accessibility.yml` workflow installs dependencies, boots the application, and runs `npm run test:a11y` against Chromium on every pull request targeting `main` or `develop`. The Playwright HTML report is uploaded as a build artifact.
 
@@ -151,6 +160,12 @@ npm run lint:fix
 ```
 
 The plugin's *recommended* ruleset is enabled, with each rule downgraded from `error` to **warn** so accessibility findings surface during development without blocking it. Rules the preset disables (e.g. the deprecated `label-has-for`) remain disabled, and per-rule option objects are preserved. Rules are promoted back to **error** incrementally as violations are remediated.
+
+**Changed lines are held to the rules.** On pull requests, the "jsx-a11y (changed lines)" job runs `scripts/check-a11y-diff.js`, which fails on any jsx-a11y finding on a line the PR adds or changes and annotates it inline. It also lints each changed file as it was before the PR, so a change that breaks an untouched line (deleting `onKeyDown` from a clickable `<div>` is reported on the `<div>` line) fails too. Existing warnings elsewhere in a touched file do not count, so new code is accessible while the backlog shrinks as code is edited. Run it locally before pushing:
+
+```bash
+node scripts/check-a11y-diff.js origin/main
+```
 
 > **Note on ESLint compatibility:** `eslint-plugin-jsx-a11y` declares an ESLint `<= 9` peer range, while this project runs ESLint 10. A `package.json` `overrides` entry (`"eslint-plugin-jsx-a11y": { "eslint": "$eslint" }`) reconciles the peer dependency; the plugin is fully functional with ESLint 10's flat config.
 

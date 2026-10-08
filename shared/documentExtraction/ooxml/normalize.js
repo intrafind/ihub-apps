@@ -13,6 +13,7 @@
  * @module shared/documentExtraction/ooxml/normalize
  */
 import { PAGE_BREAK_MARKER } from '../markers.js';
+import { inlineComments, markTrackedChanges } from './review.js';
 
 const XML_NS = 'http://www.w3.org/XML/1998/namespace';
 
@@ -33,13 +34,17 @@ export const outlineStyleId = level => `IHubOutline${level}`;
  * @param {ReturnType<import('./numbering.js').createNumbering>|null} [context.numbering] - List
  *   numbering model; when given, Word's list labels (`1.`, `1.1`, `a)`) become text
  * @param {boolean} [context.canAddOutlineStyles] - False when the package has no styles part
+ * @param {Object} [context.review] - Opt-in review marks: `trackedChanges: 'markup'` writes
+ *   insertions and deletions as CriticMarkup, `comments` (a Map from `readComments`) writes the
+ *   comments into the text
  * @returns {{ outlineLevels: Set<number> }} Markdown heading levels (1–6) that now reference a
  *   synthetic `IHubOutline{n}` style the caller must add to styles.xml
  */
 export function normalizeDocumentXml(
   doc,
-  { xml, styles, numbering = null, canAddOutlineStyles = true }
+  { xml, styles, numbering = null, canAddOutlineStyles = true, review = {} }
 ) {
+  const showChanges = review.trackedChanges === 'markup';
   const outlineLevels = new Set();
   const markerParagraphs = new Set();
 
@@ -55,6 +60,18 @@ export function normalizeDocumentXml(
     t.setAttributeNS(XML_NS, 'xml:space', 'preserve');
     t.textContent = text;
     return t;
+  };
+  // mammoth looks a list level up by (ilvl, numId); without an ilvl it falls back to the level a
+  // numbering definition links to the paragraph's style, and the paragraph would be listed
+  // anyway. Both values together point at "list 0", which does not exist.
+  const neutralizeList = (para, pPr) => {
+    const props = pPr || para.insertBefore(xml.create(doc, 'pPr'), para.firstChild);
+    let numPr = xml.kid(props, 'numPr');
+    if (numPr) while (numPr.firstChild) numPr.removeChild(numPr.firstChild);
+    else numPr = props.appendChild(xml.create(doc, 'numPr'));
+    for (const name of ['ilvl', 'numId']) {
+      numPr.appendChild(xml.create(doc, name)).setAttributeNS(xml.ns, 'w:val', '0');
+    }
   };
   const markerParagraph = () => {
     const para = xml.create(doc, 'p');
@@ -73,6 +90,11 @@ export function normalizeDocumentXml(
     const markProps = xml.kid(xml.kid(para, 'pPr'), 'rPr');
     if (xml.kid(markProps, 'del') || xml.kid(markProps, 'moveFrom')) goneParagraphs.add(para);
   }
+
+  // 0b. Review marks, when the app asked for them (before the accepted-view handling below,
+  // which then finds nothing to do).
+  if (showChanges) markTrackedChanges(doc, xml);
+  if (review.comments) inlineComments(doc, xml, review.comments);
 
   // 1. Moved text. mammoth drops both ends; keep the new position, drop the old one.
   for (const from of xml.all(doc, 'moveFrom')) from.parentNode?.removeChild(from);
@@ -176,7 +198,11 @@ export function normalizeDocumentXml(
     // neutralized, so mammoth neither lists the paragraph nor numbers it a second time.
     // Bullets stay with mammoth (a `-` list); without a result there is no label — a wrong
     // number is worse than none.
-    if (numbering && !goneParagraphs.has(para)) {
+    if (showChanges && goneParagraphs.has(para)) {
+      // A paragraph deleted by a tracked change is shown (as deleted text), but it is no list
+      // item: it takes no number, and its list properties must not make mammoth number it.
+      neutralizeList(para, pPr);
+    } else if (numbering && !goneParagraphs.has(para)) {
       const direct = xml.kid(pPr, 'numPr');
       const directNumId = xml.val(xml.kid(direct, 'numId'));
       const numId = directNumId ?? styles.resolve(styleId, 'numId');
@@ -197,16 +223,7 @@ export function normalizeDocumentXml(
             run.appendChild(textElement(`${result.text} `));
             para.insertBefore(run, pPr ? pPr.nextSibling : para.firstChild);
           }
-          const props = pPr || para.insertBefore(xml.create(doc, 'pPr'), para.firstChild);
-          let numPr = xml.kid(props, 'numPr');
-          if (numPr) while (numPr.firstChild) numPr.removeChild(numPr.firstChild);
-          else numPr = props.appendChild(xml.create(doc, 'numPr'));
-          // mammoth looks a list level up by (ilvl, numId); without an ilvl it falls back to the
-          // level a numbering definition links to the paragraph's style, and the paragraph would
-          // be listed anyway. Both values together point at "list 0", which does not exist.
-          for (const name of ['ilvl', 'numId']) {
-            numPr.appendChild(xml.create(doc, name)).setAttributeNS(xml.ns, 'w:val', '0');
-          }
+          neutralizeList(para, pPr);
         }
       }
     }

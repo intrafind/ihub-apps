@@ -64,6 +64,47 @@ function formatViolationSummary(violations) {
     .join('\n\n');
 }
 
+/**
+ * Scans the current page and fails on critical/serious violations, logging
+ * every violation for awareness.
+ *
+ * @param {import('@playwright/test').Page} page - Playwright page object
+ * @param {string} label - Page name used in logs and failure messages
+ * @param {Record<string, number>} [known] - axe rule → number of elements this
+ *   page is known to fail it on. Up to that many are logged but not failed;
+ *   one more element, or any other rule, fails the test.
+ */
+async function expectNoBlockingViolations(page, label, known = {}) {
+  const results = await createAxeScanner(page).analyze();
+  const blocking = getBlockingViolations(results.violations).filter(
+    v => v.nodes.length > (known[v.id] ?? 0)
+  );
+
+  if (results.violations.length > 0) {
+    console.log(
+      `[a11y] ${label} — ${results.violations.length} total violation(s):\n` +
+        formatViolationSummary(results.violations)
+    );
+  }
+
+  for (const [id, baseline] of Object.entries(known)) {
+    const now = results.violations.find(v => v.id === id)?.nodes.length ?? 0;
+    if (now < baseline) {
+      console.log(
+        `[a11y] ${label} — ${id} now fails on ${now} element(s), ${baseline} known. ` +
+          'Lower it in KNOWN_VIOLATIONS so the fixed ones cannot come back unnoticed.'
+      );
+    }
+  }
+
+  expect(
+    blocking,
+    `${label} has ${blocking.length} critical/serious a11y violation(s) beyond its known ` +
+      `ones (${JSON.stringify(known)}):\n` +
+      formatViolationSummary(blocking)
+  ).toEqual([]);
+}
+
 test.describe('Accessibility — WCAG 2.2 AA Compliance', () => {
   // "/" is the start page (greeting, default-app input, featured apps) and
   // "/apps" the apps browser; both are user-facing entry points.
@@ -165,4 +206,66 @@ test.describe('Accessibility — WCAG 2.2 AA Compliance', () => {
       ).toEqual([]);
     });
   });
+});
+
+// Most of the product sits behind a login: the chat UI, the prompt library and
+// the admin pages. These scans sign in as the default local admin that a fresh
+// contents/ ships (CLAUDE.md, "Default Local Admin"); override with
+// TEST_ADMIN_USERNAME / TEST_ADMIN_PASSWORD against other environments.
+test.describe('Accessibility — signed-in pages (WCAG 2.2 AA)', () => {
+  test.beforeEach(async ({ page }) => {
+    const credentials = {
+      username: process.env.TEST_ADMIN_USERNAME || 'admin',
+      password: process.env.TEST_ADMIN_PASSWORD || 'password123'
+    };
+    // The dev server is up before the API behind its proxy, which answers 502
+    // until then; keep trying while it starts.
+    await expect
+      .poll(
+        async () =>
+          (await page.request.post('/api/auth/local/login', { data: credentials })).status(),
+        { message: 'Admin login', timeout: 60_000, intervals: [1_000, 2_000] }
+      )
+      .toBe(200);
+  });
+
+  // Critical/serious violations these pages already had when the signed-in
+  // scans were added (October 2026), as axe rule → number of failing elements
+  // on a fresh contents/ (what CI runs). They are logged on every run; one more
+  // failing element, or any other rule, fails the test. When fixes lower a
+  // count, the log says so: lower the number, or delete the entry at zero.
+  //   color-contrast     - low-contrast secondary text (mostly text-gray-400)
+  //   label              - unlabelled file input / toggle checkbox
+  //   nested-interactive - prompt cards are buttons containing buttons
+  const KNOWN_VIOLATIONS = {
+    '/apps/chat': { 'color-contrast': 2 },
+    '/prompts': { 'color-contrast': 1, 'nested-interactive': 4 },
+    '/chats': { 'color-contrast': 1 },
+    '/admin': { 'color-contrast': 1 },
+    '/admin/apps': { label: 1 },
+    '/admin/models': { label: 1 },
+    '/admin/users': { 'color-contrast': 5, label: 2 },
+    '/admin/groups': { 'color-contrast': 8 }
+  };
+
+  for (const [label, path] of [
+    ['Chat app', '/apps/chat'],
+    ['Prompt library', '/prompts'],
+    ['Chat history', '/chats'],
+    ['Admin overview', '/admin'],
+    ['Admin apps', '/admin/apps'],
+    ['Admin models', '/admin/models'],
+    ['Admin users', '/admin/users'],
+    ['Admin groups', '/admin/groups']
+  ]) {
+    test(`${label} should not have critical or serious accessibility violations`, async ({
+      page
+    }) => {
+      await page.goto(path);
+      await page.waitForLoadState('networkidle');
+      expect(new URL(page.url()).pathname, `${label} redirected away from ${path}`).toBe(path);
+
+      await expectNoBlockingViolations(page, label, KNOWN_VIOLATIONS[path]);
+    });
+  }
 });
