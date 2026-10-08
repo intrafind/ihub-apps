@@ -7,10 +7,11 @@
 # Block a PR that introduces a dependency with a high or critical advisory.
 fail-on-severity: high
 # Dev dependencies run on developer machines and in CI with secrets, so they
-# count too.
+# count too, and so do dependencies GitHub cannot classify.
 fail-on-scopes:
   - runtime
   - development
+  - unknown
 
 # The licenses already in use across the root, client, server and
 # nextcloud-app lockfiles. A dependency under any other license fails the
@@ -34,8 +35,11 @@ allow-licenses:
   - Zlib
 
 # nextcloud-app is a Nextcloud plugin and is itself AGPL-3.0-or-later; its
-# Nextcloud libraries are GPL/AGPL. Those are allowed for that plugin only,
-# by name, so copyleft cannot reach the core platform unnoticed.
+# Nextcloud libraries are GPL/AGPL. They are allowed by name: the action
+# cannot tell which manifest adds a package, so the exception would also
+# cover one of these packages added to the root, client or server manifests.
+# tests/unit/server/copyleft-exemptions.test.js fails if any other manifest
+# depends on one of them.
 allow-dependencies-licenses:
   - pkg:npm/%40nextcloud/auth
   - pkg:npm/%40nextcloud/axios

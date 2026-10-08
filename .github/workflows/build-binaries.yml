@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       release_tag:
-        description: 'Release tag to attach binaries to (e.g., v1.0.0)'
+        description: 'Release tag to attach binaries to (e.g., v1.0.0); run the workflow from this tag'
         required: true
         default: ''
   push:
@@ -171,6 +171,12 @@ jobs:
           if [ "$GITHUB_EVENT_NAME" == "release" ]; then
             VERSION="${GITHUB_REF#refs/tags/}"
           else
+            # The binaries are named after release_tag and their provenance records the
+            # commit this run checked out, so both must be the tag.
+            if [ "$GITHUB_REF" != "refs/tags/$RELEASE_TAG_INPUT" ]; then
+              echo "::error::Run this workflow from the tag $RELEASE_TAG_INPUT (Use workflow from → Tags), not $GITHUB_REF, so the binaries are built from the source they are named after."
+              exit 1
+            fi
             VERSION="$RELEASE_TAG_INPUT"
           fi
           echo "VERSION=$VERSION" >> $GITHUB_ENV
@@ -316,7 +322,9 @@ jobs:
       - name: Checkout default branch
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          persist-credentials: true # pushes the version-bump branch below
+          # No credential is left in the git config while npm ci runs dependency
+          # scripts; the push below authenticates on its own.
+          persist-credentials: false
           ref: ${{ github.event.repository.default_branch }}
           token: ${{ secrets.GITHUB_TOKEN }}
           # Full history and all tags: the release notes are read from the tag's commit.
@@ -353,8 +361,12 @@ jobs:
           RELEASE_BRANCH="release/$VERSION-version-bump"
 
           # Own branch, so a plain force-push is fine even if a previous attempt for the same
-          # tag already pushed commits here.
-          git push --force origin "HEAD:refs/heads/$RELEASE_BRANCH"
+          # tag already pushed commits here. The token is passed to this push only.
+          auth_header="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
+          GIT_CONFIG_COUNT=1 \
+            GIT_CONFIG_KEY_0="http.https://github.com/.extraheader" \
+            GIT_CONFIG_VALUE_0="$auth_header" \
+            git push --force origin "HEAD:refs/heads/$RELEASE_BRANCH"
 
           if PR_URL=$(gh pr view "$RELEASE_BRANCH" --json url --jq .url 2>/dev/null); then
             echo "Updated existing PR: $PR_URL"

@@ -4,8 +4,8 @@
 #
 # - axe-core: scans the running application, signed out and signed in as the
 #   default admin. Only critical and serious violations fail the build, and
-#   only ones not already recorded for that page (KNOWN_VIOLATIONS in
-#   tests/e2e/accessibility.spec.js).
+#   only beyond the elements already recorded for that page (KNOWN_VIOLATIONS
+#   in tests/e2e/accessibility.spec.js).
 # - jsx-a11y on changed lines: the eslint-plugin-jsx-a11y rules are warnings
 #   in the normal lint; here they fail the PR for lines it adds or changes
 #   (scripts/check-a11y-diff.js), with inline annotations.

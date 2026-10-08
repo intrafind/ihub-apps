@@ -70,13 +70,14 @@ function formatViolationSummary(violations) {
  *
  * @param {import('@playwright/test').Page} page - Playwright page object
  * @param {string} label - Page name used in logs and failure messages
- * @param {string[]} [knownRuleIds] - axe rules this page is known to violate;
- *   logged but not failed, so only a new kind of violation fails the test
+ * @param {Record<string, number>} [known] - axe rule → number of elements this
+ *   page is known to fail it on. Up to that many are logged but not failed;
+ *   one more element, or any other rule, fails the test.
  */
-async function expectNoBlockingViolations(page, label, knownRuleIds = []) {
+async function expectNoBlockingViolations(page, label, known = {}) {
   const results = await createAxeScanner(page).analyze();
   const blocking = getBlockingViolations(results.violations).filter(
-    v => !knownRuleIds.includes(v.id)
+    v => v.nodes.length > (known[v.id] ?? 0)
   );
 
   if (results.violations.length > 0) {
@@ -86,17 +87,20 @@ async function expectNoBlockingViolations(page, label, knownRuleIds = []) {
     );
   }
 
-  const fixed = knownRuleIds.filter(id => !results.violations.some(v => v.id === id));
-  if (fixed.length > 0) {
-    console.log(
-      `[a11y] ${label} — known violation(s) no longer found: ${fixed.join(', ')}. ` +
-        'Remove them from KNOWN_VIOLATIONS so they cannot come back unnoticed.'
-    );
+  for (const [id, baseline] of Object.entries(known)) {
+    const now = results.violations.find(v => v.id === id)?.nodes.length ?? 0;
+    if (now < baseline) {
+      console.log(
+        `[a11y] ${label} — ${id} now fails on ${now} element(s), ${baseline} known. ` +
+          'Lower it in KNOWN_VIOLATIONS so the fixed ones cannot come back unnoticed.'
+      );
+    }
   }
 
   expect(
     blocking,
-    `${label} has ${blocking.length} critical/serious a11y violation(s):\n` +
+    `${label} has ${blocking.length} critical/serious a11y violation(s) beyond its known ` +
+      `ones (${JSON.stringify(known)}):\n` +
       formatViolationSummary(blocking)
   ).toEqual([]);
 }
@@ -210,31 +214,38 @@ test.describe('Accessibility — WCAG 2.2 AA Compliance', () => {
 // TEST_ADMIN_USERNAME / TEST_ADMIN_PASSWORD against other environments.
 test.describe('Accessibility — signed-in pages (WCAG 2.2 AA)', () => {
   test.beforeEach(async ({ page }) => {
-    const response = await page.request.post('/api/auth/local/login', {
-      data: {
-        username: process.env.TEST_ADMIN_USERNAME || 'admin',
-        password: process.env.TEST_ADMIN_PASSWORD || 'password123'
-      }
-    });
-    expect(response.ok(), `Admin login failed with HTTP ${response.status()}`).toBeTruthy();
+    const credentials = {
+      username: process.env.TEST_ADMIN_USERNAME || 'admin',
+      password: process.env.TEST_ADMIN_PASSWORD || 'password123'
+    };
+    // The dev server is up before the API behind its proxy, which answers 502
+    // until then; keep trying while it starts.
+    await expect
+      .poll(
+        async () =>
+          (await page.request.post('/api/auth/local/login', { data: credentials })).status(),
+        { message: 'Admin login', timeout: 60_000, intervals: [1_000, 2_000] }
+      )
+      .toBe(200);
   });
 
   // Critical/serious violations these pages already had when the signed-in
-  // scans were added (October 2026). They are logged on every run but only a
-  // new kind of violation fails the test. Fix them and delete the entry; the
-  // log says when one is gone.
+  // scans were added (October 2026), as axe rule → number of failing elements
+  // on a fresh contents/ (what CI runs). They are logged on every run; one more
+  // failing element, or any other rule, fails the test. When fixes lower a
+  // count, the log says so: lower the number, or delete the entry at zero.
   //   color-contrast     - low-contrast secondary text (mostly text-gray-400)
   //   label              - unlabelled file input / toggle checkbox
   //   nested-interactive - prompt cards are buttons containing buttons
   const KNOWN_VIOLATIONS = {
-    '/apps/chat': ['color-contrast'],
-    '/prompts': ['color-contrast', 'nested-interactive'],
-    '/chats': ['color-contrast'],
-    '/admin': ['color-contrast'],
-    '/admin/apps': ['label'],
-    '/admin/models': ['label'],
-    '/admin/users': ['color-contrast', 'label'],
-    '/admin/groups': ['color-contrast']
+    '/apps/chat': { 'color-contrast': 2 },
+    '/prompts': { 'color-contrast': 1, 'nested-interactive': 4 },
+    '/chats': { 'color-contrast': 1 },
+    '/admin': { 'color-contrast': 1 },
+    '/admin/apps': { label: 1 },
+    '/admin/models': { label: 1 },
+    '/admin/users': { 'color-contrast': 5, label: 2 },
+    '/admin/groups': { 'color-contrast': 8 }
   };
 
   for (const [label, path] of [

@@ -27,10 +27,10 @@ on:
 
 jobs:
   build:
-    name: Build & publish plugin
+    name: Build plugin
     runs-on: ubuntu-latest
     permissions:
-      contents: write  # required for softprops/action-gh-release on release events
+      contents: read
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -71,22 +71,15 @@ jobs:
           retention-days: 30
           if-no-files-found: error
 
-      - name: Attach to release
-        if: github.event_name == 'release' && github.event.release.tag_name != ''
-        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
-        with:
-          tag_name: ${{ github.event.release.tag_name }}
-          files: ihub_chat.tar.gz
-          fail_on_unmatched_files: true
-
-  attest:
-    name: Attest release tarball
+  publish:
+    name: Attest & publish to release
     needs: build
-    # A separate job, so runs for pull requests never get signing permissions.
+    # A separate job, so runs for pull requests never get write or signing
+    # permissions, and the tarball reaches the release only once it is attested.
     if: github.event_name == 'release' && github.event.release.tag_name != ''
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write  # softprops/action-gh-release
       id-token: write
       attestations: write
     steps:
@@ -101,3 +94,10 @@ jobs:
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-path: ihub_chat.tar.gz
+
+      - name: Attach to release
+        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
+        with:
+          tag_name: ${{ github.event.release.tag_name }}
+          files: ihub_chat.tar.gz
+          fail_on_unmatched_files: true

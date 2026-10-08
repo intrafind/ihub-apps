@@ -143,7 +143,7 @@ Signed-in pages log in as the default local admin a fresh `contents/` ships (`ad
 
 **Failure criteria:** Only **critical** and **serious** impact violations cause test failure. Moderate and minor violations are logged for awareness.
 
-**Known violations:** The signed-in pages had critical/serious violations when their scans were added (low-contrast secondary text, unlabelled inputs, nested interactive prompt cards). They are recorded per page in `KNOWN_VIOLATIONS` in `tests/e2e/accessibility.spec.js`: they are logged on every run but do not fail it, while any other rule failing on that page does. When a fix makes a known violation disappear, the log says so; delete its entry so it cannot return unnoticed.
+**Known violations:** The signed-in pages had critical/serious violations when their scans were added (low-contrast secondary text, unlabelled inputs, nested interactive prompt cards). `KNOWN_VIOLATIONS` in `tests/e2e/accessibility.spec.js` records, per page, how many elements fail each of those rules on a fresh `contents/`. Up to that many are logged but do not fail the run; one more failing element, or any other rule, does. When fixes lower a count, the log says so: lower the number (or delete the entry at zero) so the fixed elements cannot regress unnoticed.
 
 **Continuous integration:** The `.github/workflows/accessibility.yml` workflow installs dependencies, boots the application, and runs `npm run test:a11y` against Chromium on every pull request targeting `main` or `develop`. The Playwright HTML report is uploaded as a build artifact.
 
@@ -161,7 +161,7 @@ npm run lint:fix
 
 The plugin's *recommended* ruleset is enabled, with each rule downgraded from `error` to **warn** so accessibility findings surface during development without blocking it. Rules the preset disables (e.g. the deprecated `label-has-for`) remain disabled, and per-rule option objects are preserved. Rules are promoted back to **error** incrementally as violations are remediated.
 
-**Changed lines are held to the rules.** On pull requests, the "jsx-a11y (changed lines)" job runs `scripts/check-a11y-diff.js`, which fails on any jsx-a11y finding on a line the PR adds or changes and annotates it inline. Existing warnings elsewhere in a touched file do not count, so new code is accessible while the backlog shrinks as code is edited. Run it locally before pushing:
+**Changed lines are held to the rules.** On pull requests, the "jsx-a11y (changed lines)" job runs `scripts/check-a11y-diff.js`, which fails on any jsx-a11y finding on a line the PR adds or changes and annotates it inline. It also lints each changed file as it was before the PR, so a change that breaks an untouched line (deleting `onKeyDown` from a clickable `<div>` is reported on the `<div>` line) fails too. Existing warnings elsewhere in a touched file do not count, so new code is accessible while the backlog shrinks as code is edited. Run it locally before pushing:
 
 ```bash
 node scripts/check-a11y-diff.js origin/main

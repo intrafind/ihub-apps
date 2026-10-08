@@ -12,8 +12,18 @@
 useDefault = true
 
 [[allowlists]]
-description = "Placeholder and test values in docs, concepts and tests"
-# A finding is skipped when its secret contains one of these words.
+description = "Placeholder and test values in docs, concepts, examples and tests"
+# A finding is skipped only when it is in one of these paths AND its secret
+# contains one of the words below. Elsewhere the words do not apply, so a
+# real key that happens to contain "test" (e.g. sk_test_...) is still caught.
+# This holds for `gitleaks git` (CI and the pre-commit hook); `gitleaks dir`
+# skips files matching these paths outright, so do not use it to audit them.
+condition = "AND"
+paths = [
+  '''^(docs|concepts|examples)/''',
+  '''(^|/)tests?/''',
+  '''\.test\.jsx?$''',
+]
 stopwords = [
   "example",
   "placeholder",
