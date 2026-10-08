@@ -28,6 +28,7 @@ const {
 } = require('../../../shared/documentExtraction/pdfText');
 const {
   MIN_REAL_TEXT_CHARS,
+  lastPageWithText,
   pageMarker,
   realTextLength
 } = require('../../../shared/documentExtraction/markers');
@@ -224,13 +225,49 @@ describe('PDF upload', () => {
     expect(result.pageImages).toHaveLength(2);
   });
 
-  it('counts the characters, not the separators between pages: 20 pages with one character each are a scan', async () => {
+  it('counts the characters, not the separators between pages: one character on each of 20 pages is no text', async () => {
     const pages = Array.from({ length: 20 }, () => page(line('x')));
+    expect(realTextLength(assemblePdfText(pages, null))).toBe(20);
+    // 20 characters are below the threshold, so the first five pages are rendered. The text of
+    // pages 6-20 was not rendered and stays.
     const result = await upload(pages);
-    // 20 characters, whatever the markers and blank lines around them add up to.
-    expect(result.content).toBe('');
-    // The first five pages are rendered, as before.
     expect(result.pageImages).toHaveLength(5);
+    expect(result.content).toContain('[Page 20');
+  });
+
+  it('a scan with a stray character on each of the first five pages is images only', async () => {
+    const result = await upload([
+      ...Array.from({ length: 5 }, () => page(line('x'))),
+      ...Array.from({ length: 15 }, () => [])
+    ]);
+    expect(result.content).toBe('');
+    expect(result.pageImages).toHaveLength(5);
+  });
+
+  it('keeps the text that sits on a page which was not rendered', async () => {
+    // Six pages, only the last one has (short) text: the first five are rendered, page 6 is not.
+    const pages = [[], [], [], [], [], page(line('Anlage: Preisliste 2026'))];
+    const result = await upload(pages);
+    expect(result.pageImages).toHaveLength(5);
+    expect(result.content).toContain('[Page 6');
+    expect(result.content).toContain('Anlage: Preisliste 2026');
+  });
+
+  it('drops the short text of a rendered page: the image carries it', async () => {
+    const pages = [[], [], page(line('Stempel')), [], [], []];
+    const result = await upload(pages);
+    expect(result.pageImages).toHaveLength(5);
+    expect(result.content).toBe('');
+  });
+
+  it('lastPageWithText: the last page that has real text, 0 without', () => {
+    expect(lastPageWithText('')).toBe(0);
+    expect(lastPageWithText(undefined)).toBe(0);
+    expect(lastPageWithText('[Page 1]\n\n[Page 2: no extractable text]')).toBe(0);
+    expect(
+      lastPageWithText('[Page 1]\na\n\n[Page 2 (printed: ii)]\n\n\n[Page 3: no extractable text]')
+    ).toBe(1);
+    expect(lastPageWithText('[Page 1]\n\n[Page 2 (printed: ii)]\nb\n')).toBe(2);
   });
 
   it('keeps the short text when the pages cannot be rendered', async () => {
