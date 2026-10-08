@@ -1,6 +1,7 @@
-import { getApiKeyForModel } from '../utils.js';
+import { inspectModelApiKey, resolveModelApiKey } from '../utils.js';
 import ErrorHandler from './ErrorHandler.js';
 import configCache from '../configCache.js';
+import { allowsMissingApiKey } from '../services/llmProviders.js';
 import logger from './logger.js';
 
 class ApiKeyVerifier {
@@ -25,19 +26,44 @@ class ApiKeyVerifier {
     }
 
     try {
-      const apiKey = await getApiKeyForModel(model.id);
+      const resolution = await resolveModelApiKey(model.id);
 
-      if (!apiKey) {
+      if (resolution.state === 'ok') {
+        return { success: true, apiKey: resolution.apiKey };
+      }
+
+      // A server such as vLLM or LM Studio needs no key: the call goes out
+      // without an Authorization header rather than failing here.
+      if (resolution.state === 'keyless') {
+        return { success: true, apiKey: null };
+      }
+
+      if (resolution.state === 'undecryptable') {
+        // Not the same as "no key": the key is there, but this server cannot
+        // read it. Say so, because the fix is a different one.
         logger.error(
-          `API key not found for model: ${model.id} (${model.provider}). Please set ${model.provider.toUpperCase()}_API_KEY in your environment.`,
-          { component: 'ApiKeyVerifier' }
+          `The API key stored for model ${model.id} (${resolution.source}) cannot be decrypted. ` +
+            'The server encryption key differs from the one it was saved with — check TOKEN_ENCRYPTION_KEY ' +
+            'and contents/.encryption-key on every instance, or enter the key again in the admin UI.',
+          { component: 'ApiKeyVerifier', modelId: model.id, source: resolution.source }
         );
 
-        const error = await this.errorHandler.createApiKeyError(model.provider, lang);
+        const error = await this.errorHandler.createApiKeyUnreadableError(
+          model.provider,
+          model.id,
+          lang
+        );
         return { success: false, error };
       }
 
-      return { success: true, apiKey };
+      logger.error(
+        `API key not found for model: ${model.id} (${model.provider}). Set it on the model or its provider in the admin UI, ` +
+          `or set ${model.provider.toUpperCase()}_API_KEY in your environment.`,
+        { component: 'ApiKeyVerifier' }
+      );
+
+      const error = await this.errorHandler.createApiKeyError(model.provider, lang);
+      return { success: false, error };
     } catch (error) {
       logger.error('Error getting API key for model', {
         component: 'ApiKeyVerifier',
@@ -106,6 +132,20 @@ class ApiKeyVerifier {
       });
     }
 
+    // A stored key counts as configured below, but one that cannot be
+    // decrypted is not usable. Say so at boot rather than on the first chat.
+    const unreadable = enabledModels
+      .filter(model => model.provider && model.provider.toLowerCase() !== 'iassistant-conversation')
+      .filter(model => inspectModelApiKey(model, { quiet: true }).state === 'undecryptable')
+      .map(model => model.id);
+    if (unreadable.length > 0) {
+      logger.error(
+        'Stored API keys cannot be decrypted: the server encryption key is not the one they were saved with. ' +
+          'Check TOKEN_ENCRYPTION_KEY and contents/.encryption-key on every instance, or enter the keys again.',
+        { component: 'ApiKeyVerifier', modelIds: unreadable }
+      );
+    }
+
     for (const model of enabledModels) {
       if (!model.provider) continue;
 
@@ -159,11 +199,9 @@ class ApiKeyVerifier {
         continue;
       }
 
-      // Check if model has a custom URL (might be local provider that doesn't need API key)
-      if (model.url && provider === 'openai') {
-        // For OpenAI-compatible local providers with custom URLs,
-        // an API key might not be required or can be any value
-        // We'll still warn but with lower priority
+      // A local server, or an OpenAI-compatible one at a custom URL, may need
+      // no key. The same rule decides it when a request is made.
+      if (allowsMissingApiKey(model)) {
         validKeys.add(provider);
         continue;
       }

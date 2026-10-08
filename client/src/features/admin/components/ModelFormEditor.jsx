@@ -10,6 +10,8 @@ import {
 import Icon from '../../../shared/components/Icon';
 import { getAdminApiErrorMessage, makeAdminApiCall } from '../../../api/adminApi';
 import AdminFormErrorSummary from './AdminFormErrorSummary';
+import ApiKeyStatusBadge from './ApiKeyStatusBadge';
+import useApiKeyStatus from '../hooks/useApiKeyStatus';
 import TtsVoicesPanel, { TTS_LANGUAGES, languageName } from './tts/TtsVoicesPanel';
 import { FormValidationProvider } from '../../../shared/contexts/formValidationContext';
 import {
@@ -217,6 +219,7 @@ function ModelFormEditor({
 }) {
   const { t, i18n } = useTranslation();
   const [validationErrors, setValidationErrors] = useState({});
+  const { statuses: keyStatuses } = useApiKeyStatus('models');
 
   // Validation function
   const validateModel = modelData => {
@@ -875,6 +878,11 @@ function ModelFormEditor({
                     <p className="mt-2 text-sm text-blue-600 dark:text-blue-400">
                       {t('admin.models.hints.apiKeySet', '✓ API key is configured for this model')}
                     </p>
+                  )}
+                  {!isNewModel && keyStatuses[data.id] && (
+                    <div className="mt-3">
+                      <ApiKeyStatusBadge status={keyStatuses[data.id]} detailed />
+                    </div>
                   )}
                 </div>
               </div>

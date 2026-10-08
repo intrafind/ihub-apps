@@ -647,7 +647,8 @@
     "noModelIdProvided": "Kein Modell ausgewählt. Bitte wählen Sie ein KI-Modell, um fortzufahren.",
     "noModelsForUser": "Sie haben keine Berechtigung, auf KI-Modelle zuzugreifen. Bitte wenden Sie sich an Ihren Administrator, um Zugriff anzufordern.",
     "malformedModelResponse": "Das KI-Modell hat eine unvollständige Antwort zurückgegeben und es konnte keine Antwort generiert werden. Dies kann gelegentlich auftreten – bitte senden Sie Ihre Nachricht erneut.",
-    "outputValidationFailed": "Die Antwort des KI-Modells entsprach nicht dem geforderten Ausgabeformat."
+    "outputValidationFailed": "Die Antwort des KI-Modells entsprach nicht dem geforderten Ausgabeformat.",
+    "apiKeyUnreadable": "Der für das Modell {modelId} gespeicherte API-Schlüssel kann nicht entschlüsselt werden. Der Verschlüsselungsschlüssel des Servers ist nicht der, mit dem er gespeichert wurde. Ein Administrator muss den Schlüssel erneut eingeben (Admin › Modelle) oder als Umgebungsvariable bereitstellen."
   },
   "toolErrors": {
     "MISSING_URL": "URL-Parameter ist erforderlich.",
@@ -1204,7 +1205,8 @@
           "authenticationFailed": "Authentifizierung fehlgeschlagen",
           "modelNotFound": "Modell nicht gefunden",
           "rateLimitExceeded": "Ratenlimit überschritten",
-          "serverError": "Serverfehler"
+          "serverError": "Serverfehler",
+          "apiKeyUndecryptable": "Gespeicherter API-Schlüssel kann nicht entschlüsselt werden"
         }
       },
       "enable": "Aktivieren",
@@ -1216,7 +1218,8 @@
       "noModels": "Keine Modelle gefunden",
       "noModelsDesc": "Beginnen Sie mit der Erstellung eines neuen Modells.",
       "table": {
-        "status": "Status"
+        "status": "Status",
+        "apiKey": "API-Schlüssel"
       },
       "status": {
         "enabled": "Aktiviert",
@@ -1295,7 +1298,7 @@
       "hints": {
         "modelId": "Eindeutige Kennung für das Modell (kann nach der Erstellung nicht geändert werden)",
         "apiModelId": "Modellkennung, die von der API des Anbieters verwendet wird (z.B. gpt-4, claude-3-opus)",
-        "apiKey": "API-Schlüssel für dieses Modell. Wenn nicht angegeben, verwendet das System die Umgebungsvariable für den Anbieter. Schlüssel werden verschlüsselt gespeichert.",
+        "apiKey": "API-Schlüssel für dieses Modell. Wenn nicht angegeben, verwendet das System den Schlüssel des Anbieters oder die Umgebungsvariable. Ein lokaler Server (vLLM, LM Studio, Jan.ai, Ollama) braucht keinen Schlüssel – lassen Sie das Feld leer. Schlüssel werden verschlüsselt gespeichert.",
         "apiKeySet": "✓ API-Schlüssel ist für dieses Modell konfiguriert",
         "apiKeyEnvVars": "Umgebungsvariablen (in Prioritätsreihenfolge):\n{{envVars}}",
         "supportsVision": "Aktivieren, wenn dieses Modell Bildeingaben verarbeiten kann",
@@ -3892,6 +3895,20 @@
       "download": "Agentenpaket herunterladen",
       "prereqHttps": "Die öffentliche Adresse von iHub verwendet HTTPS",
       "prereqHttpsOff": "Die öffentliche Adresse von iHub ist kein HTTPS, und Copilot ruft nur HTTPS-Adressen auf – setzen Sie die Public URL des MCP-Gateways (oder leiten Sie X-Forwarded-Proto im Proxy weiter)"
+    },
+    "apiKeyStatus": {
+      "ok": "Schlüssel gefunden",
+      "keyless": "Kein Schlüssel nötig",
+      "keylessHint": "Es ist kein Schlüssel gesetzt, der Server wird ohne Authorization-Header aufgerufen.",
+      "undecryptable": "Gespeicherter Schlüssel nicht lesbar",
+      "undecryptableHint": "Ein Schlüssel ist gespeichert, aber dieser Server kann ihn nicht entschlüsseln: Der Verschlüsselungsschlüssel hat sich seit dem Speichern geändert. Geben Sie den Schlüssel erneut ein oder stellen Sie sicher, dass alle Instanzen denselben TOKEN_ENCRYPTION_KEY bzw. dieselbe contents/.encryption-key verwenden.",
+      "missing": "Kein API-Schlüssel",
+      "missingHint": "Geben Sie hier oder beim Anbieter einen Schlüssel ein oder setzen Sie ihn als Umgebungsvariable.",
+      "source": {
+        "env": "Umgebungsvariable {{envVar}}",
+        "provider": "beim Anbieter gespeichert",
+        "model": "beim Modell gespeichert"
+      }
     }
   },
   "cloudStorage": {
@@ -4583,7 +4600,8 @@
       "savingButton": "Wird gespeichert…",
       "skipLater": "Überspringen, später konfigurieren",
       "freeTierBadge": "Kostenlos",
-      "noApiKeyBadge": "Optionaler Schlüssel"
+      "noApiKeyBadge": "Optionaler Schlüssel",
+      "noKeyHint": "Noch keinen API-Schlüssel? Wählen Sie „Lokaler Anbieter“, wenn Sie einen eigenen Modellserver betreiben, oder überspringen Sie den Schritt und hinterlegen Sie später einen Schlüssel unter Admin › Anbieter."
     },
     "step3": {
       "title": "Alles bereit!",
@@ -4595,7 +4613,12 @@
       "nextStep3": "Teammitglieder einladen und Gruppen unter Admin › Teams konfigurieren",
       "nextStep4": "Einstellungen erkunden, um den Arbeitsbereich anzupassen",
       "goToApps": "Zu den Apps",
-      "goToAdmin": "Admin öffnen"
+      "goToAdmin": "Admin öffnen",
+      "keyCheck": {
+        "ready": "Einsatzbereite Modelle: {{count}}",
+        "blocked": "Aktivierte Modelle ohne nutzbaren API-Schlüssel: {{count}}.",
+        "fix": "Modelle prüfen"
+      }
     }
   },
   "apps": {

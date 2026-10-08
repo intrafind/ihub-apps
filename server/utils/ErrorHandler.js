@@ -108,6 +108,21 @@ class ErrorHandler {
     return new ApiKeyError(message, provider);
   }
 
+  /**
+   * A key is stored for the model (or its provider) but cannot be decrypted:
+   * the server's encryption key is not the one it was saved with. The code
+   * keeps the `API_KEY` prefix so everything that treats a missing key as a
+   * server-side configuration problem treats this the same way.
+   */
+  async createApiKeyUnreadableError(provider, modelId, language) {
+    const message = await this.getLocalizedError(
+      'apiKeyUnreadable',
+      { provider, modelId },
+      language
+    );
+    return new ApiKeyError(message, provider, 'API_KEY_UNDECRYPTABLE');
+  }
+
   async createModelError(modelId, provider, language) {
     const message = await this.getLocalizedError('modelNotFound', { modelId, provider }, language);
     return new ModelError(message, modelId, provider);

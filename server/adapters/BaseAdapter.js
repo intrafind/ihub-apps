@@ -95,16 +95,18 @@ export class BaseAdapter {
 
   /**
    * Create base request headers
-   * @param {string} apiKey - API key
+   * @param {string|null} apiKey - API key. Without one (a local server that
+   *   needs none) no Authorization header is sent: `Bearer null` would be
+   *   rejected by servers that do check the header.
    * @param {Object} additionalHeaders - Additional headers
    * @returns {Object} Headers object
    */
   createRequestHeaders(apiKey, additionalHeaders = {}) {
-    return {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiKey}`,
-      ...additionalHeaders
-    };
+    const headers = { 'Content-Type': 'application/json' };
+    if (apiKey !== null && apiKey !== undefined && apiKey !== '') {
+      headers.Authorization = `Bearer ${apiKey}`;
+    }
+    return { ...headers, ...additionalHeaders };
   }
 
   /**

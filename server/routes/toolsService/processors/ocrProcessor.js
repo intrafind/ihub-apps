@@ -6,7 +6,7 @@ import { dirname, join } from 'path';
 import { PNG } from 'pngjs';
 import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs';
 import configCache from '../../../configCache.js';
-import { getApiKeyForModel } from '../../../utils.js';
+import { resolveModelApiKey } from '../../../utils.js';
 import llmClient from '../../../services/loop/LLMClient.js';
 import logger from '../../../utils/logger.js';
 import { completeJob, notifyClients } from '../jobStore.js';
@@ -528,13 +528,19 @@ export async function processOcrJob(job) {
         return;
       }
 
-      apiKey = await getApiKeyForModel(model.id);
-      if (!apiKey) {
+      // A local server may need no key: `apiKey` stays null and the request
+      // goes out without an Authorization header.
+      const keyResolution = await resolveModelApiKey(model.id);
+      if (keyResolution.state !== 'ok' && keyResolution.state !== 'keyless') {
         job.status = 'error';
-        job.error = `No API key configured for model ${model.id}`;
+        job.error =
+          keyResolution.state === 'undecryptable'
+            ? `The API key stored for model ${model.id} cannot be decrypted. Enter it again in the admin UI.`
+            : `No API key configured for model ${model.id}`;
         notifyClients(job);
         return;
       }
+      apiKey = keyResolution.apiKey;
 
       job.model = model.id;
     }

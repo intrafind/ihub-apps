@@ -10,6 +10,7 @@ import { providerEnvKeyName } from '../../shared/llmProviders.js';
 
 export {
   BUILT_IN_LLM_PROVIDERS,
+  allowsMissingApiKey,
   CUSTOM_PROVIDER_API_TYPES,
   isCustomLlmProvider,
   getProviderApiType,
@@ -44,4 +45,32 @@ export function decryptProviderApiKey(provider) {
  */
 export function resolveProviderApiKey(provider) {
   return decryptProviderApiKey(provider) || config[providerEnvKeyName(provider?.id)] || null;
+}
+
+/**
+ * Whether a provider entry's key can be used, and where it comes from — for
+ * the admin UI, which has to tell "no key" from "a key the server cannot read"
+ * (stored under an encryption key this server does not have). Never returns
+ * the key itself.
+ *
+ * @param {Object} provider - Provider entry
+ * @returns {{state: 'ok'|'keyless'|'undecryptable'|'missing', source: 'provider'|'env'|'none', envVar: string|null}}
+ */
+export function inspectProviderApiKey(provider) {
+  const envVar = providerEnvKeyName(provider?.id);
+  let unreadable = false;
+
+  if (provider?.apiKey) {
+    try {
+      if (decryptProviderApiKey(provider)) return { state: 'ok', source: 'provider', envVar: null };
+    } catch {
+      unreadable = true;
+    }
+  }
+  if (config[envVar]) return { state: 'ok', source: 'env', envVar };
+  if (unreadable) return { state: 'undecryptable', source: 'provider', envVar: null };
+  if (provider?.requiresApiKey === false || provider?.id === 'local') {
+    return { state: 'keyless', source: 'none', envVar: null };
+  }
+  return { state: 'missing', source: 'none', envVar };
 }

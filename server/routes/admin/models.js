@@ -31,6 +31,7 @@ import {
   getProviderApiType,
   resolveProviderApiKey
 } from '../../services/llmProviders.js';
+import { inspectModelApiKey } from '../../utils.js';
 
 /** Largest voice sample accepted (Mistral needs seconds, not minutes, of audio). */
 const MAX_VOICE_SAMPLE_BYTES = 10 * 1024 * 1024;
@@ -171,6 +172,13 @@ function describeModelTestFailure(err) {
           'The model service took too long to respond. Please try again or check the service status.'
       };
     case LLM_ERROR_CODES.AUTH_FAILED:
+      if (err.providerCode === 'API_KEY_UNDECRYPTABLE') {
+        return {
+          userMessage: 'Stored API key cannot be decrypted',
+          messageKey: 'apiKeyUndecryptable',
+          errorMessage: err.message
+        };
+      }
       if (isMissingApiKeyError(err)) {
         return {
           userMessage: 'API key not configured',
@@ -442,6 +450,53 @@ export default function registerAdminModelsRoutes(app) {
         });
       }
       return sendInternalError(res, error, 'discover models');
+    }
+  });
+
+  /**
+   * @swagger
+   * /admin/models/_key-status:
+   *   get:
+   *     summary: Whether each chat model has a usable API key (Admin)
+   *     description: |
+   *       For every chat model, where its API key comes from and whether it can
+   *       be used. `state` is `ok` (a key is found), `keyless` (none, and the
+   *       model runs without one — local servers), `undecryptable` (a key is
+   *       stored but this server cannot decrypt it: the encryption key changed)
+   *       or `missing`. `source` is `model`, `provider`, `env` or `none`. The
+   *       key itself is never returned.
+   *     tags:
+   *       - Admin - Models
+   *     security:
+   *       - bearerAuth: []
+   *       - sessionAuth: []
+   *     responses:
+   *       200:
+   *         description: Key status by model id
+   *       401:
+   *         description: Admin authentication required
+   */
+  app.get(buildServerPath('/api/admin/models/_key-status'), adminAuth, async (req, res) => {
+    try {
+      const { data: models } = configCache.getModels(true);
+      const statuses = {};
+      for (const model of models) {
+        // Speech models resolve their credentials on their own path.
+        if (!isChatModel(model)) continue;
+        const enabled = model.enabled !== false;
+        if (model.provider === 'iassistant-conversation') {
+          statuses[model.id] = { state: 'keyless', source: 'none', envVar: null, enabled };
+          continue;
+        }
+        const { state, source, envVar } = inspectModelApiKey(model, { quiet: true });
+        statuses[model.id] = { state, source, envVar, enabled };
+      }
+      // Depends on providers and the environment as well as on the models, so
+      // it must not ride on the models' ETag.
+      res.setHeader('Cache-Control', 'no-store');
+      res.json({ statuses });
+    } catch (error) {
+      return sendInternalError(res, error, 'read model key status');
     }
   });
 
