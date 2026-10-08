@@ -165,10 +165,10 @@ describe('structured DOCX extraction', () => {
         )
       });
       const rows = content.split('\n').slice(2);
-      // One backslash before the pipe: doubled, then the pipe escape → three; two → five.
-      expect(rows[0]).toBe('| C:\\dir\\\\\\|x | plain \\ backslash |');
+      // In a cell with a pipe every backslash is doubled, then the pipe is escaped: `\|` → `\\\|`.
+      expect(rows[0]).toBe('| C:\\\\dir\\\\\\|x | plain \\ backslash |');
       expect(rows[1]).toBe('| a\\\\\\\\\\|b | c |');
-      // A backslash that does not touch a pipe stays as typed.
+      // A cell without a pipe keeps its backslashes as typed.
       expect(rows[0]).toContain('plain \\ backslash');
     });
   });
