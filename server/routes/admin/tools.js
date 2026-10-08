@@ -1,5 +1,4 @@
-import { readFileSync, existsSync } from 'node:fs';
-import { promises as fs } from 'node:fs';
+import { readFileSync, existsSync, promises as fs } from 'node:fs';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { getRootDir } from '../../pathUtils.js';

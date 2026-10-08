@@ -5,7 +5,7 @@ import { atomicWriteJSON } from './atomicWrite.js';
 import configStore from '../services/config/ConfigStore.js';
 import configCache from '../configCache.js';
 import { announceConfigChange } from '../configSync.js';
-import { mapExternalGroups, loadGroupsConfiguration } from './authorization.js';
+import { mapExternalGroups } from './authorization.js';
 import logger from './logger.js';
 import { ensureFirstUserIsAdmin } from './adminRescue.js';
 import { locateConfigFile } from './configFileLocation.js';

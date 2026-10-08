@@ -233,11 +233,6 @@ export default function SetupWizard() {
     navigate('/', { replace: true });
   };
 
-  const handleGoToAdmin = () => {
-    sessionStorage.removeItem('setup_wizard_step');
-    navigate('/admin', { replace: true });
-  };
-
   const progressWidth = `${(step / TOTAL_STEPS) * 100}%`;
 
   return (

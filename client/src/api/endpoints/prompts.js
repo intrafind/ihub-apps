@@ -1,7 +1,6 @@
 import { apiClient } from '../client';
 import { handleApiResponse } from '../utils/requestHandler';
-import { CACHE_KEYS, DEFAULT_CACHE_TTL } from '../../utils/cache';
-import cache from '../../utils/cache';
+import cache, { CACHE_KEYS, DEFAULT_CACHE_TTL } from '../../utils/cache';
 
 /**
  * The prompt library — one `/api/prompts` for global prompts (admin-curated

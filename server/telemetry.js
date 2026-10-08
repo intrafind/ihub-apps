@@ -3,7 +3,6 @@ import { resolveEnvVarsInObject } from './configCache.js';
 import { NodeSDK } from '@opentelemetry/sdk-node';
 import { getNodeAutoInstrumentations } from '@opentelemetry/auto-instrumentations-node';
 import { PrometheusExporter } from '@opentelemetry/exporter-prometheus';
-import { ConsoleSpanExporter } from '@opentelemetry/sdk-trace-node';
 import { PeriodicExportingMetricReader } from '@opentelemetry/sdk-metrics';
 import apiPkg from '@opentelemetry/api';
 const { diag, DiagConsoleLogger, DiagLogLevel, metrics: metricsApi } = apiPkg;

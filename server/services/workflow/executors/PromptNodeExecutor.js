@@ -1273,7 +1273,6 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
 
       // Extract the content between opening and closing tags
       const content = result.substring(afterOpenTag, closingIndex);
-      const fullMatch = result.substring(startIndex, closingIndex + 9);
 
       // Get the array to iterate over
       const array = this.getNestedValue(arrayPath, state.data || {});

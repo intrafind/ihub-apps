@@ -4,8 +4,8 @@
  * Downloads new versions from GitHub Releases, verifies checksums,
  * creates backups, swaps application files, and supports rollback.
  */
-import { promises as fs } from 'node:fs';
 import {
+  promises as fs,
   createWriteStream,
   existsSync,
   createReadStream,

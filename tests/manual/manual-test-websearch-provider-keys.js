@@ -14,8 +14,7 @@
  */
 
 import { promises as fs } from 'node:fs';
-import { join } from 'node:path';
-import path from 'node:path';
+import path, { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import configCache from '../../server/configCache.js';
 import tokenStorageService from '../../server/services/TokenStorageService.js';

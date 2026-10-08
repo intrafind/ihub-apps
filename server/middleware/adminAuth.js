@@ -1,4 +1,3 @@
-import configCache from '../configCache.js';
 import { isAdminEligiblePrincipal, loadGroupsConfiguration } from '../utils/authorization.js';
 import logger from '../utils/logger.js';
 

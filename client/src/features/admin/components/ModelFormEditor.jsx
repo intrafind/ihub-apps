@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { DEFAULT_LANGUAGE } from '../../../utils/localizeContent';
+import { DEFAULT_LANGUAGE, getLocalizedContent } from '../../../utils/localizeContent';
 import DynamicLanguageEditor from '../../../shared/components/DynamicLanguageEditor';
 import {
   validateWithSchema,
@@ -20,7 +20,6 @@ import {
 } from '../../../../../shared/promptCaching.js';
 import { DEFAULT_MAX_OUTPUT_TOKENS } from '../../../../../shared/outputTokens.js';
 import { isCustomLlmProvider, providerEnvKeyName } from '../../../../../shared/llmProviders.js';
-import { getLocalizedContent } from '../../../utils/localizeContent';
 import { apiTypeLabel } from '../utils/modelImport';
 
 /**

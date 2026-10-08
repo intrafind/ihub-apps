@@ -5,7 +5,6 @@ import config from '../config.js';
 import { authRequired } from '../middleware/authRequired.js';
 import logger from '../utils/logger.js';
 import {
-  buildServerPath,
   buildUploadsPath,
   buildDocsPath,
   getRelativeRequestPath,

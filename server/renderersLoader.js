@@ -1,5 +1,4 @@
-import { existsSync } from 'node:fs';
-import { promises as fs } from 'node:fs';
+import { existsSync, promises as fs } from 'node:fs';
 import { join } from 'node:path';
 import { getRootDir } from './pathUtils.js';
 import { getContentsPath } from './utils/contentsPath.js';

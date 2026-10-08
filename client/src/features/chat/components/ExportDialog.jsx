@@ -12,7 +12,6 @@ import {
 } from '../../../utils/exportFormats';
 import { useUIConfig } from '../../../shared/contexts/UIConfigContext';
 import { getLocalizedContent } from '../../../utils/localizeContent';
-import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
 
 // Formats whose content can be copied to the clipboard as plain text. Binary
@@ -31,7 +30,6 @@ function ExportDialog({
 }) {
   const { t, i18n } = useTranslation();
   const { uiConfig } = useUIConfig();
-  const featureFlags = useFeatureFlags();
   const currentLanguage = i18n.language || 'en';
 
   const [selectedFormat, setSelectedFormat] = useState('pdf');

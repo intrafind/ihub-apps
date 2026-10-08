@@ -20,7 +20,6 @@ import { strict as assert } from 'node:assert';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import os from 'node:os';
 
 // Resolve the project root so relative source paths work regardless of cwd.
 const __filename = fileURLToPath(import.meta.url);
