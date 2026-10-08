@@ -19,12 +19,15 @@ import { inflateRaw } from 'node:zlib';
 import { promisify } from 'node:util';
 import { extractDocxMarkdown } from '../../shared/documentExtraction/docx.js';
 import { extractPdfText } from '../../shared/documentExtraction/pdfText.js';
+import { extractPptxText } from '../../shared/documentExtraction/pptx.js';
 import { isFeatureEnabled } from '../featureRegistry.js';
 import configCache from '../configCache.js';
 
 const inflateRawAsync = promisify(inflateRaw);
 
 export const DOCX_MIME = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+export const PPTX_MIME =
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation';
 
 /** PDF pages read from one file. */
 export const MAX_PDF_PAGES = 500;
@@ -174,6 +177,31 @@ export async function extractDocxDocument(bytes, options = {}) {
     });
   } catch (error) {
     throw new DocumentExtractionError(`not a readable Word document (${error.message})`);
+  }
+}
+
+/**
+ * A PowerPoint deck as text: slides in the order of the presentation, titles as headings, tables
+ * as Markdown, hidden slides flagged. Speaker notes only when asked for.
+ *
+ * @param {Buffer} bytes
+ * @param {{speakerNotes?: string}} [options]
+ * @returns {Promise<string>}
+ * @throws {DocumentExtractionError} When the file is not a deck or is not safe to read
+ */
+export async function extractPptxDocument(bytes, options = {}) {
+  await assertSafePackage(bytes);
+  const [{ default: JSZip }, window] = await Promise.all([import('jszip'), loadDom()]);
+  const arrayBuffer = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+  try {
+    return await extractPptxText({
+      arrayBuffer,
+      JSZip,
+      DOMParser: window.DOMParser,
+      speakerNotes: options.speakerNotes
+    });
+  } catch (error) {
+    throw new DocumentExtractionError(`not a readable PowerPoint document (${error.message})`);
   }
 }
 

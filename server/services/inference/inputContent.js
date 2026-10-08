@@ -29,8 +29,10 @@ import {
   DOCX_MIME,
   DocumentExtractionError,
   MAX_PDF_PAGES,
+  PPTX_MIME,
   extractDocxDocument,
   extractPdfDocument,
+  extractPptxDocument,
   structuredExtractionEnabled
 } from '../documentExtraction.js';
 
@@ -157,7 +159,8 @@ export async function documentFromInlineFile({ data, filename }, param) {
     mimeType =
       mimeFromName(fileName, TEXT_EXTENSIONS) ||
       (extension === '.pdf' ? 'application/pdf' : '') ||
-      (extension === '.docx' ? DOCX_MIME : '');
+      (extension === '.docx' ? DOCX_MIME : '') ||
+      (extension === '.pptx' ? PPTX_MIME : '');
   }
   const bytes = Buffer.from(parsed.base64, 'base64');
   if (bytes.length === 0) {
@@ -202,9 +205,10 @@ export async function documentFromInlineFile({ data, filename }, param) {
         { param }
       );
     }
-  } else if (mimeType === DOCX_MIME && structured) {
+  } else if ((mimeType === DOCX_MIME || mimeType === PPTX_MIME) && structured) {
+    const isDeck = mimeType === PPTX_MIME;
     try {
-      text = (await extractDocxDocument(bytes)).trim();
+      text = (await (isDeck ? extractPptxDocument(bytes) : extractDocxDocument(bytes))).trim();
     } catch (error) {
       if (!(error instanceof DocumentExtractionError)) throw error;
       throw new InferenceApiError(400, 'invalid_file', `${fileName}: ${error.message}`, { param });
@@ -213,7 +217,7 @@ export async function documentFromInlineFile({ data, filename }, param) {
       throw new InferenceApiError(
         400,
         'file_has_no_text',
-        `${fileName}: the Word document has no text`,
+        `${fileName}: the ${isDeck ? 'PowerPoint' : 'Word'} document has no text`,
         { param }
       );
     }
@@ -224,7 +228,7 @@ export async function documentFromInlineFile({ data, filename }, param) {
       400,
       'unsupported_file_type',
       `${fileName}: unsupported file type ${mimeType || '(unknown)'}. Send ${
-        structured ? 'PDF, Word (.docx)' : 'PDF'
+        structured ? 'PDF, Word (.docx), PowerPoint (.pptx)' : 'PDF'
       } or text files, or images as input_image.`,
       { param }
     );

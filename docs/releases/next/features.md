@@ -30,6 +30,14 @@ heading by heading.
 - The OpenAI-compatible API reads files the same way: PDFs with page markers, headings and tables,
   and Word (`.docx`) files, which were refused before, as Markdown — so an integration that sends
   contracts through the API sees what the chat sees
+- PowerPoint decks (.pptx) are read in the order of the presentation (a moved slide used to keep
+  its old number), with the slide title as a heading, tables as Markdown tables and hidden slides
+  flagged; speaker notes are sent only for apps that opt in (**Admin → Apps → Upload
+  Configuration → PowerPoint: speaker notes**). The API accepts decks too
+- Excel sheets with a header row become Markdown tables, merged cells keep every row complete and
+  hidden sheets are flagged. A spreadsheet can no longer fill the context window on its own: at
+  most 2,000 rows per sheet and 300,000 characters per workbook are sent, and what was left out is
+  said
 - Headers and footers of Word files (letterhead, document numbers, confidentiality notes) appear as
   `[Header] …` and `[Footer] …` lines before the text, without page numbers
 

@@ -67,10 +67,39 @@ function cellMarkdown(service, cell) {
   const text = replaceNewlineRuns(service.turndown(clone.innerHTML || ''), '<br>')
     .replace(/^(<br>)+|(<br>)+$/g, '')
     .trim();
-  // A pipe ends the cell, so it is escaped. Backslashes are doubled first — only in a cell that
-  // needs the escape — because a backslash in front of a pipe would escape the escape (`\|` in
-  // the text must come out as `\\\|`, not `\\|`, which is a backslash and a column delimiter).
+  return escapeTableCell(text);
+}
+
+/**
+ * Text of one table cell as it goes between pipes. A pipe ends the cell, so it is escaped.
+ * Backslashes are doubled first — only in a cell that needs the escape — because a backslash in
+ * front of a pipe would escape the escape (`\|` in the text must come out as `\\\|`, not `\\|`,
+ * which is a backslash and a column delimiter).
+ *
+ * @param {string} text
+ * @returns {string}
+ */
+export function escapeTableCell(text) {
   return text.includes('|') ? text.replace(/\\/g, '\\\\').replace(/\|/g, '\\|') : text;
+}
+
+/**
+ * Lines of a Markdown table from a grid of cell texts, every row as wide as the widest.
+ *
+ * @param {string[][]} grid
+ * @param {{header?: boolean}} [options] - `header`: the first row is a header row and gets the
+ *   separator row (a table without a header row of its own is not given an invented one)
+ * @returns {string[]}
+ */
+export function markdownTableLines(grid, { header = true } = {}) {
+  let width = 0;
+  for (const row of grid) width = Math.max(width, row.length);
+  const lines = grid.map(row => {
+    const cells = Array.from({ length: width }, (_, i) => escapeTableCell(row[i] ?? ''));
+    return `| ${cells.join(' | ')} |`;
+  });
+  if (header && grid.length > 0) lines.splice(1, 0, `| ${Array(width).fill('---').join(' | ')} |`);
+  return lines;
 }
 
 /**

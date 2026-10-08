@@ -3,6 +3,8 @@ import { fetchMimetypesConfig, fetchPlatformConfig } from '../../../api/endpoint
 import { FeatureFlags } from '../../../../../shared/featureFlags.js';
 import { extractDocxMarkdown } from '../../../../../shared/documentExtraction/docx.js';
 import { extractPdfText } from '../../../../../shared/documentExtraction/pdfText.js';
+import { extractPptxText } from '../../../../../shared/documentExtraction/pptx.js';
+import { extractXlsxText } from '../../../../../shared/documentExtraction/xlsx.js';
 import {
   MIN_REAL_TEXT_CHARS,
   lastPageWithText,
@@ -769,9 +771,9 @@ export const processDocxFile = async (file, options = {}) => {
   return legacyDocxText(arrayBuffer);
 };
 
-// Process XLSX / XLS file — converts all sheets to tab-separated text
-export const processXlsxFile = async file => {
-  const arrayBuffer = await file.arrayBuffer();
+// Tab-separated text of every sheet: the extraction before structured extraction existed. It
+// stays unchanged as the fallback and as the result when the admin switch is off.
+export const legacyXlsxText = async arrayBuffer => {
   const XLSX = await loadXlsx();
   const workbook = XLSX.read(arrayBuffer, { type: 'array' });
 
@@ -784,6 +786,25 @@ export const processXlsxFile = async file => {
     }
   }
   return parts.join('\n\n').trim();
+};
+
+// Process XLSX / XLS file — a sheet with a header row as a Markdown table, merged cells filled,
+// hidden sheets flagged, rows and characters limited (see shared/documentExtraction/xlsx.js)
+export const processXlsxFile = async file => {
+  const arrayBuffer = await file.arrayBuffer();
+
+  if (await isStructuredExtractionEnabled()) {
+    try {
+      const XLSX = await loadXlsx();
+      const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+      return extractXlsxText({ XLSX, workbook });
+    } catch (error) {
+      // Never make an upload fail that worked before: use the plain text extraction.
+      console.warn('[fileProcessing] structured extraction failed, using legacy', error);
+    }
+  }
+
+  return legacyXlsxText(arrayBuffer);
 };
 
 // Map a Windows/MAPI code page number to a label TextDecoder understands.
@@ -970,12 +991,12 @@ export const processMsgFile = async file => {
 // under this namespace regardless of the prefix the producer chose.
 const DRAWINGML_NS = 'http://schemas.openxmlformats.org/drawingml/2006/main';
 
-// Process PPTX file — extracts the visible text of every slide from the OOXML
-// package (ppt/slides/slideN.xml). Without this handler PPTX fell through to
-// readTextFile, which decoded the raw ZIP container as text and shipped
-// hundreds of thousands of garbage tokens to the model.
-export const processPptxFile = async file => {
-  const arrayBuffer = await file.arrayBuffer();
+// Plain text of every slide from the OOXML package (ppt/slides/slideN.xml), slides in the order
+// of their file names, one line per paragraph: the extraction before structured extraction
+// existed. It stays unchanged as the fallback and as the result when the admin switch is off.
+// (Without any PPTX handler the file fell through to readTextFile, which decoded the raw ZIP
+// container as text and shipped hundreds of thousands of garbage tokens to the model.)
+export const legacyPptxText = async arrayBuffer => {
   const JSZip = await loadJSZip();
   const zip = await JSZip.loadAsync(arrayBuffer);
 
@@ -1009,6 +1030,30 @@ export const processPptxFile = async file => {
   }
 
   return slides.join('\n\n').trim();
+};
+
+// Process PPTX file — slides in the order of the presentation, the title as a heading, tables as
+// Markdown, hidden slides flagged; speaker notes only when the app asks for them
+// (see shared/documentExtraction/pptx.js)
+export const processPptxFile = async (file, options = {}) => {
+  const arrayBuffer = await file.arrayBuffer();
+
+  if (await isStructuredExtractionEnabled()) {
+    try {
+      const JSZip = await loadJSZip();
+      return await extractPptxText({
+        arrayBuffer,
+        JSZip,
+        DOMParser,
+        speakerNotes: options?.speakerNotes
+      });
+    } catch (error) {
+      // Never make an upload fail that worked before: use the plain text extraction.
+      console.warn('[fileProcessing] structured extraction failed, using legacy', error);
+    }
+  }
+
+  return legacyPptxText(arrayBuffer);
 };
 
 // Heuristic check that a string produced by reading a file "as text" is
@@ -1148,7 +1193,7 @@ export const processDocumentFile = async (file, options = {}) => {
     file.type === 'application/vnd.openxmlformats-officedocument.presentationml.presentation' ||
     fileExtension === '.pptx'
   ) {
-    content = await processPptxFile(file);
+    content = await processPptxFile(file, options);
   } else if (file.type === 'application/vnd.ms-powerpoint' || fileExtension === '.ppt') {
     // Legacy binary PowerPoint (OLE compound file) — no client-side extractor
     // exists. Reject instead of falling through to readTextFile, which would

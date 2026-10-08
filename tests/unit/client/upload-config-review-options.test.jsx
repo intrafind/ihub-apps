@@ -31,25 +31,32 @@ function renderSection(fileUpload) {
   return {
     onChange,
     tracked: screen.getByLabelText('Word: tracked changes'),
-    comments: screen.getByLabelText('Word: comments')
+    comments: screen.getByLabelText('Word: comments'),
+    notes: screen.getByLabelText('PowerPoint: speaker notes')
   };
 }
 
 describe('file upload: Word review options in the app editor', () => {
   it('show the defaults for an app that does not set them', () => {
-    const { tracked, comments } = renderSection({});
+    const { tracked, comments, notes } = renderSection({});
     expect(tracked).toHaveValue('accepted');
     expect(comments).toHaveValue('ignore');
+    expect(notes).toHaveValue('ignore');
   });
 
   it('show what the app has set', () => {
-    const { tracked, comments } = renderSection({ trackedChanges: 'markup', comments: 'inline' });
+    const { tracked, comments, notes } = renderSection({
+      trackedChanges: 'markup',
+      comments: 'inline',
+      speakerNotes: 'include'
+    });
     expect(tracked).toHaveValue('markup');
     expect(comments).toHaveValue('inline');
+    expect(notes).toHaveValue('include');
   });
 
   it('opt in by choosing the option', () => {
-    const { tracked, comments, onChange } = renderSection({});
+    const { tracked, comments, notes, onChange } = renderSection({});
     fireEvent.change(tracked, { target: { value: 'markup' } });
     expect(onChange).toHaveBeenLastCalledWith(
       'upload',
@@ -59,6 +66,8 @@ describe('file upload: Word review options in the app editor', () => {
     );
     fireEvent.change(comments, { target: { value: 'inline' } });
     expect(onChange.mock.calls.at(-1)[1].fileUpload.comments).toBe('inline');
+    fireEvent.change(notes, { target: { value: 'include' } });
+    expect(onChange.mock.calls.at(-1)[1].fileUpload.speakerNotes).toBe('include');
   });
 
   it('choosing the default again removes the key instead of writing it', () => {

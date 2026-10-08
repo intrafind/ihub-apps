@@ -160,6 +160,7 @@ export function useFileUploadHandler() {
         // Word review marks, opt-in per app (see extractionOptionsOf)
         trackedChanges: fileConfig?.trackedChanges,
         comments: fileConfig?.comments,
+        speakerNotes: fileConfig?.speakerNotes,
         maxFileSizeMB: fileConfig?.maxFileSizeMB || 5,
         supportedFormats: fileConfig?.supportedFormats || [
           'text/plain',

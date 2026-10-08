@@ -64,6 +64,18 @@ const UPLOAD_TYPE_CONFIGS = {
           ['ignore', 'admin.apps.edit.wordCommentsIgnore', 'Do not send comments'],
           ['inline', 'admin.apps.edit.wordCommentsInline', 'Send comments with their text']
         ]
+      },
+      {
+        field: 'speakerNotes',
+        label: ['admin.apps.edit.speakerNotes', 'PowerPoint: speaker notes'],
+        help: [
+          'admin.apps.edit.speakerNotesHelp',
+          'Whether the speaker notes of PowerPoint slides reach the model. They are written as [Notes] after the text of their slide.'
+        ],
+        options: [
+          ['ignore', 'admin.apps.edit.speakerNotesIgnore', 'Do not send speaker notes'],
+          ['include', 'admin.apps.edit.speakerNotesInclude', 'Send speaker notes']
+        ]
       }
     ]
   },
