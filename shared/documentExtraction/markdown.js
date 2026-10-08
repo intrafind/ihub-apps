@@ -42,12 +42,17 @@ function cellMarkdown(service, cell) {
     while (heading.firstChild) paragraph.appendChild(heading.firstChild);
     heading.parentNode.replaceChild(paragraph, heading);
   }
-  return service
-    .turndown(clone.innerHTML || '')
-    .replace(/\s*\n+\s*/g, '<br>')
-    .replace(/^(<br>)+|(<br>)+$/g, '')
-    .trim()
-    .replace(/\|/g, '\\|');
+  return (
+    service
+      .turndown(clone.innerHTML || '')
+      .replace(/\s*\n+\s*/g, '<br>')
+      .replace(/^(<br>)+|(<br>)+$/g, '')
+      .trim()
+      // A pipe ends the cell, so it is escaped. A backslash in front of it would escape the escape:
+      // double those first (`\|` in the text must come out as `\\\|`, not `\\|`).
+      .replace(/\\+(?=\|)/g, run => run + run)
+      .replace(/\|/g, '\\|')
+  );
 }
 
 /**

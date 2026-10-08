@@ -165,7 +165,7 @@ The model receives a document as text inside a `<content type="document" …>` b
 | Paragraphs | Separated by a blank line (no more words glued across paragraphs) |
 | Lists | `1.` / `-` items, nested with indentation |
 | Numbered paragraphs and headings (`1.`, `1.2.3`, `a)`, `(iii)`, `Article I`, `§ 3`) | The label Word shows is written in front of the text: `## 2.1 Scope`, `a) …`, `§ 3 …`. Labels follow Word's own counting: restarts, start-at values, skipped levels, lists that continue each other, and legal numbering. Chapter numbers are therefore part of the text and can be cited |
-| Tables | A Markdown table; the first row is the header. A merged cell spans its columns (text in the first, the others empty) or rows (text repeated in each row), so every row stays complete. A `|` in a cell is written `\|`; several paragraphs in a cell are joined with `<br>` |
+| Tables | A Markdown table; the first row is the header. A merged cell spans its columns (text in the first, the others empty) or rows (text repeated in each row), so every row stays complete. A pipe character in a cell is escaped with a backslash; several paragraphs in a cell are joined with `<br>` |
 | Footnotes and endnotes | `[^1]` in the text, `[^1]: …` at the end (endnotes `[^e1]`) |
 | Links | `[text](https://…)`; links inside the document (table of contents) keep only their text |
 | Images | `[Image: alt text]` when the image has alt text, otherwise nothing — pictures are never sent as base64 data |
