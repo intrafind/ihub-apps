@@ -498,4 +498,21 @@ describe('what a deleted task leaves behind', () => {
     assert.equal((await getTaskMemoryRepository().get(task.id)).version, 0);
     assert.equal((await owner('get', ada(), task.id)).statusCode, 404);
   });
+
+  it('is nothing even when the run history cannot be removed', async () => {
+    const task = await newTask();
+    await owner('put', ada(), task.id, { content: 'must not be orphaned' });
+    const repository = getScheduledTaskRepository();
+    const original = repository.deleteRunsOfTask;
+    repository.deleteRunsOfTask = async () => {
+      throw new Error('storage hiccup');
+    };
+    try {
+      await assert.rejects(() => tasks.deleteTask(ada(), task.id), /storage hiccup/);
+    } finally {
+      repository.deleteRunsOfTask = original;
+    }
+    // The task record is gone, so the notes would have no way to be reached.
+    assert.equal((await getTaskMemoryRepository().get(task.id)).version, 0);
+  });
 });

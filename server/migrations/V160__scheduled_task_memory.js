@@ -101,11 +101,14 @@ export async function precondition(ctx) {
   );
 }
 
-/** Replace a localized text only when it is still exactly what shipped before. */
+/**
+ * Replace a localized text only when its English and German are still exactly what shipped
+ * before. Other languages an admin added stay: the shipped ones are updated within the map.
+ */
 function replaceIfShipped(holder, key, previous, next) {
   const current = holder?.[key];
   if (current && current.en === previous.en && current.de === previous.de) {
-    holder[key] = { ...next };
+    holder[key] = { ...current, ...next };
     return true;
   }
   return false;

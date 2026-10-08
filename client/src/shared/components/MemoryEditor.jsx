@@ -85,12 +85,23 @@ export default function MemoryEditor({
   const requestIdRef = useRef(0);
   const dirtyRef = useRef(false);
   dirtyRef.current = body !== savedBody;
+  // A save or clear that finishes after the editor moved to other notes must not touch them.
+  const idRef = useRef(id);
+  idRef.current = id;
 
   // `preserveEdits`: an automatic reload, started while nothing was edited, must not
   // replace text the user typed while it was loading.
   const doLoad = useCallback(async ({ silent = false, preserveEdits = false } = {}) => {
     const mine = ++requestIdRef.current;
-    if (!silent) setLoading(true);
+    if (!silent) {
+      // A load that is not silent starts other notes (or the first ones): nothing of the
+      // previous notes' operations carries over.
+      setLoading(true);
+      setSaving(false);
+      setError(null);
+      setConflict(false);
+      setStale(false);
+    }
     try {
       const data = (await callbacksRef.current.load()) || {};
       if (mine !== requestIdRef.current) return;
@@ -135,17 +146,20 @@ export default function MemoryEditor({
   const overLimit = Number.isFinite(maxChars) && body.length > maxChars;
 
   async function handleSave() {
+    const savingFor = idRef.current;
     setSaving(true);
     setError(null);
     setConflict(false);
     try {
       const result = await callbacksRef.current.save({ content: body, expectedVersion: version });
+      if (idRef.current !== savingFor) return;
       setVersion(result?.version ?? version + 1);
       if (result?.updatedAt) setUpdatedAt(result.updatedAt);
       setSavedBody(body);
       setStale(false);
       if (onSaved) onSaved(result);
     } catch (err) {
+      if (idRef.current !== savingFor) return;
       if (isConflict(err)) {
         setConflict(true);
         setError(
@@ -158,7 +172,7 @@ export default function MemoryEditor({
         setError(formatError(err));
       }
     } finally {
-      setSaving(false);
+      if (idRef.current === savingFor) setSaving(false);
     }
   }
 
@@ -170,15 +184,18 @@ export default function MemoryEditor({
     ) {
       return;
     }
+    const clearingFor = idRef.current;
     setSaving(true);
     setError(null);
     try {
       await callbacksRef.current.clear();
+      if (idRef.current !== clearingFor) return;
       await doLoad({ silent: true });
     } catch (err) {
+      if (idRef.current !== clearingFor) return;
       setError(formatError(err));
     } finally {
-      setSaving(false);
+      if (idRef.current === clearingFor) setSaving(false);
     }
   }
 

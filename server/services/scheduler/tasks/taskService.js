@@ -752,10 +752,18 @@ async function removeTask(task, { deleteChats }) {
   const repository = getScheduledTaskRepository();
   await stopActiveRun(task, 'TASK_DELETED', 'The task was deleted');
   await repository.deleteTask(task.id);
-  const runs = await repository.deleteRunsOfTask(task.id);
-  // The notes go with the task. A run that is still writing finds the task
-  // gone and its write is refused.
+  // The notes go with the task even when the run history cannot be removed: once the task
+  // record is gone nobody could reach them to clear them. A run that is still writing finds
+  // the task gone and its write is refused.
+  let runs;
+  let runsError = null;
+  try {
+    runs = await repository.deleteRunsOfTask(task.id);
+  } catch (error) {
+    runsError = error;
+  }
   await getTaskMemoryRepository().delete(task.id);
+  if (runsError) throw runsError;
   let chatsDeleted = 0;
   if (deleteChats) {
     for (const run of runs) {

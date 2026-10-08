@@ -174,6 +174,94 @@ describe('MemoryEditor', () => {
     expect(screen.getByRole('status')).toHaveTextContent('The notes changed');
   });
 
+  describe('when the editor moves to other notes while an operation is running', () => {
+    const DOC_B = { body: 'notes of B\n', version: 7, updatedAt: '2026-10-07T08:00:00Z' };
+
+    it('a late save of the first notes does not touch the second', async () => {
+      let finishSave;
+      const save = jest.fn().mockReturnValue(
+        new Promise(resolve => {
+          finishSave = resolve;
+        })
+      );
+      const onSaved = jest.fn();
+      const { props, rerender } = setup({ id: 'a', save, onSaved });
+      await flush();
+      fireEvent.change(textarea(), { target: { value: 'edited A' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+      await flush();
+
+      rerender(
+        <MemoryEditor
+          {...props}
+          id="b"
+          load={jest.fn().mockResolvedValue(DOC_B)}
+          onSaved={onSaved}
+        />
+      );
+      await flush();
+      expect(textarea()).toHaveValue(DOC_B.body);
+
+      await act(async () => {
+        finishSave({ version: 4 });
+      });
+      expect(textarea()).toHaveValue(DOC_B.body);
+      expect(screen.getByTestId('memory-version')).toHaveTextContent('Version 7');
+      expect(onSaved).not.toHaveBeenCalled();
+      // B is not stuck in "saving" and can be saved on its own version.
+      fireEvent.change(textarea(), { target: { value: 'edited B' } });
+      expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
+    });
+
+    it('a late failure of the first notes shows no error on the second', async () => {
+      let failSave;
+      const save = jest.fn().mockReturnValue(
+        new Promise((_, reject) => {
+          failSave = reject;
+        })
+      );
+      const { props, rerender } = setup({ id: 'a', save });
+      await flush();
+      fireEvent.change(textarea(), { target: { value: 'edited A' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+      await flush();
+      rerender(<MemoryEditor {...props} id="b" load={jest.fn().mockResolvedValue(DOC_B)} />);
+      await flush();
+
+      await act(async () => {
+        failSave(new Error('A could not be saved'));
+      });
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    });
+
+    it('a late clear of the first notes does not reload or empty the second', async () => {
+      let finishClear;
+      const clear = jest.fn().mockReturnValue(
+        new Promise(resolve => {
+          finishClear = resolve;
+        })
+      );
+      const { props, rerender } = setup({ id: 'a', clear });
+      await flush();
+      jest.spyOn(window, 'confirm').mockReturnValueOnce(true);
+      fireEvent.click(screen.getByRole('button', { name: 'Clear' }));
+      await flush();
+
+      const loadB = jest.fn().mockResolvedValue(DOC_B);
+      rerender(<MemoryEditor {...props} id="b" load={loadB} clear={clear} />);
+      await flush();
+      expect(loadB).toHaveBeenCalledTimes(1);
+
+      await act(async () => {
+        finishClear({ version: 4 });
+      });
+      // The late clear of A does not reload B.
+      expect(loadB).toHaveBeenCalledTimes(1);
+      expect(textarea()).toHaveValue(DOC_B.body);
+      expect(screen.getByRole('button', { name: 'Clear' })).toBeEnabled();
+    });
+  });
+
   it('does not lose unsaved text when the page re-renders with new callbacks', async () => {
     const load = jest.fn().mockResolvedValue(DOC);
     const { rerender } = setup({ load });

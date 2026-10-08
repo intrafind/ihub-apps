@@ -505,6 +505,66 @@ describe('when the owner edits the notes while the composer works', () => {
   });
 });
 
+describe('when the owner edits the notes while the run itself is going', () => {
+  it("the owner's edit stays: the run's baseline is the notes as it started", async () => {
+    const task = await newTask();
+    const record = await stored(task.id);
+    await writeTaskMemory(record, { content: 'old notes', updatedBy: 'compose:earlier' });
+    const { run } = await runTask(task, [openaiText(['A report.'])], {
+      // The edit lands during the main model turn, before the composer starts.
+      onRequest: () =>
+        writeTaskMemory(record, { content: 'typed by the owner', updatedBy: 'owner' }),
+      composer: [composerReply('composer notes', true)]
+    });
+    assert.equal(run.status, 'succeeded');
+    assert.equal(run.memory.compose, 'conflict');
+    assert.equal(run.memory.changed, true, 'the verdict is still recorded');
+    assert.equal(run.memory.versionWritten, null, 'the run did not write');
+    const notes = await readTaskMemory(record);
+    assert.equal(notes.body, 'typed by the owner\n');
+    assert.equal(notes.updatedBy, 'owner');
+    await cleanup(ada());
+  });
+
+  it('an owner edit that needs a retry of the composer is not taken as the baseline either', async () => {
+    const task = await newTask();
+    const record = await stored(task.id);
+    const { run } = await runTask(task, [openaiText(['A report.'])], {
+      onRequest: () =>
+        writeTaskMemory(record, { content: 'typed by the owner', updatedBy: 'owner' }),
+      composer: [composerReply('x'.repeat(9000)), composerReply('short notes')]
+    });
+    assert.equal(run.memory.compose, 'conflict');
+    assert.equal((await readTaskMemory(record)).body, 'typed by the owner\n');
+    await cleanup(ada());
+  });
+});
+
+describe('when a run is stopped while the composer works', () => {
+  it('ends as cancelled and leaves the notes alone', async () => {
+    const user = ada();
+    const task = await newTask();
+    const record = await stored(task.id);
+    await writeTaskMemory(record, { content: 'precious notes', updatedBy: 'owner' });
+    const queued = await tasks.requestRun(user, task.id);
+    const chat = scriptedChatService([openaiText(['A report.'])], {
+      composer: async () => {
+        // The model turn is over; the owner presses Stop now.
+        await tasks.cancelRun(user, task.id, queued.id);
+        return composerReply('composer notes', true);
+      }
+    });
+    const run = await executeTaskRun({ taskId: task.id, runId: queued.id }, chat.deps);
+    assert.equal(run.status, 'cancelled');
+    assert.equal(run.reason.code, 'ABORTED');
+    assert.notEqual(run.memory.compose, 'written');
+    const notes = await readTaskMemory(record);
+    assert.equal(notes.body, 'precious notes\n');
+    assert.equal(notes.updatedBy, 'owner');
+    await cleanup(user);
+  });
+});
+
 describe('when a run does not complete', () => {
   it('a failed run is not given a composer', async () => {
     const task = await newTask();

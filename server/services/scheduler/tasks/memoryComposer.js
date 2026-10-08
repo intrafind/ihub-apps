@@ -248,6 +248,19 @@ function usageOf(result) {
 }
 
 /**
+ * Whether someone other than this run wrote the notes after the run read them.
+ *
+ * @param {{version: number, updatedBy: string|null}} current - The notes as they are now.
+ * @param {{id: string}} run
+ * @param {number|undefined} versionRead - The version the run started from.
+ * @returns {boolean}
+ */
+function editedByOthers(current, run, versionRead) {
+  if (!Number.isInteger(versionRead) || current.version <= versionRead) return false;
+  return current.updatedBy !== `run:${run.id}` && current.updatedBy !== `compose:${run.id}`;
+}
+
+/**
  * Update the notes of a task from the run that just succeeded.
  *
  * @param {Object} options
@@ -263,6 +276,9 @@ function usageOf(result) {
  * @param {string} options.answer - What the run answered.
  * @param {string} [options.ownerMessages] - See {@link ownerMessagesText}.
  * @param {number} options.maxChars - The size limit of the notes.
+ * @param {number} [options.versionRead] - The version of the notes the run started from. Notes
+ *   that someone other than this run changed since are left alone.
+ * @param {AbortSignal} [options.signal] - Aborted when the run is stopped meanwhile.
  * @returns {Promise<{compose: string, changed: boolean|null, usage: Object|null}>}
  */
 export async function composeTaskMemory({
@@ -277,7 +293,9 @@ export async function composeTaskMemory({
   notesBefore,
   answer,
   ownerMessages = '',
-  maxChars
+  maxChars,
+  versionRead,
+  signal
 }) {
   if (typeof answer !== 'string' || answer.trim() === '') {
     return { compose: 'skipped', changed: null, usage: null };
@@ -310,6 +328,7 @@ export async function composeTaskMemory({
         ],
         options: { temperature: 0.2, maxTokens: Math.ceil(maxChars / 3) + 300 },
         timeoutMs: COMPOSE_TIMEOUT_MS,
+        signal,
         telemetry: {
           kind: 'utility',
           purpose: 'scheduled-task-memory',
@@ -356,6 +375,11 @@ export async function composeTaskMemory({
     if (parsed.notes.trim() === current.body.trim()) {
       return { compose: 'unchanged', changed, usage };
     }
+    if (signal?.aborted) return { compose: 'skipped', changed: null, usage };
+    // The baseline is the notes as the run started, not as they are now: an owner or admin
+    // edit made while the run was going stays, whenever during the run it was made. What the
+    // run itself wrote (write_memory) is not an edit by someone else.
+    if (editedByOthers(current, run, versionRead)) return { compose: 'conflict', changed, usage };
     try {
       await writeTaskMemory(task, {
         mode: 'replace',

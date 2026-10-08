@@ -281,7 +281,9 @@ What a run with memory does:
 The notes are never wiped by the update: an answer that cannot be read, a model
 error or a result over the size limit (after one more try) leaves them as they
 were, and a run that fails does not touch them. When the owner edits the notes
-while a run is going, the owner's edit stays and the run's update is dropped.
+while a run is going — at any point of it, also during the update itself — the owner's edit
+stays and the run's update is dropped. A run that is stopped while its notes are being updated
+ends as cancelled and leaves them alone.
 The run's row on the task page says what happened (*Memory updated*, *No
 changes*).
 

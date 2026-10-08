@@ -33,6 +33,7 @@ import { getLocalizedError } from '../../../serverHelpers.js';
 import logger from '../../../utils/logger.js';
 import {
   abortChatRequest,
+  activeRequests,
   markChatDurable,
   clearChatDurable,
   hasChatClient
@@ -674,26 +675,40 @@ export async function executeTaskRun({ taskId, runId }, deps = {}) {
     let composedUsage = null;
     if (memory && memory.compose !== 'skipped' && Number.isInteger(memory.versionRead)) {
       const timezone = task.schedule?.timezone || 'UTC';
-      const composed = await composeTaskMemory({
-        llmClient: deps.llmClient || llmClient,
-        task,
-        run,
-        user,
-        model: prepared.model,
-        ledgerRunId,
-        instructions: resolveRunContext(
-          task.instructions,
-          runContextVariables(task, run, { now: startedAtMs, format: formatZonedIso })
-        ),
-        runTime: formatZonedIso(startedAtMs, timezone),
-        notesBefore: memoryBefore,
-        answer: outcome.content,
-        ownerMessages: await ownerMessagesAfterPreviousRun(user, {
-          taskId,
-          currentRunId: runId
-        }),
-        maxChars: settings.memoryMaxChars
-      });
+      // Stopping a run aborts whatever is registered for its chat. The turn has
+      // ended and unregistered itself, so the composer registers its own call:
+      // a run stopped now ends as cancelled, not as a success.
+      const composeAbort = new AbortController();
+      if (run.chatId) activeRequests.set(run.chatId, composeAbort);
+      let composed;
+      try {
+        composed = await composeTaskMemory({
+          llmClient: deps.llmClient || llmClient,
+          task,
+          run,
+          user,
+          model: prepared.model,
+          ledgerRunId,
+          instructions: resolveRunContext(
+            task.instructions,
+            runContextVariables(task, run, { now: startedAtMs, format: formatZonedIso })
+          ),
+          runTime: formatZonedIso(startedAtMs, timezone),
+          notesBefore: memoryBefore,
+          answer: outcome.content,
+          ownerMessages: await ownerMessagesAfterPreviousRun(user, {
+            taskId,
+            currentRunId: runId
+          }),
+          maxChars: settings.memoryMaxChars,
+          versionRead: memory.versionRead,
+          signal: composeAbort.signal
+        });
+      } finally {
+        if (run.chatId && activeRequests.get(run.chatId) === composeAbort) {
+          activeRequests.delete(run.chatId);
+        }
+      }
       composedUsage = composed.usage;
       memory = {
         ...memory,
@@ -701,6 +716,13 @@ export async function executeTaskRun({ taskId, runId }, deps = {}) {
         compose: composed.compose,
         ...(composed.usage ? { composeUsage: composed.usage } : {})
       };
+      if (composeAbort.signal.aborted) {
+        return finish('cancelled', reasonOf('ABORTED', 'The run was stopped', now()), {
+          ledgerRunIds,
+          usage: sumUsage(addUsage(run.usage), composedUsage),
+          watched
+        });
+      }
       // The chat was marked unread when the answer landed, before anyone knew
       // there was nothing new in it. Someone who asked to hear only about
       // changes should not see an unread dot for a run that had none.

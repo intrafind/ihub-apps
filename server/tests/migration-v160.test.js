@@ -194,6 +194,21 @@ describe('V160 — scheduled task memory', () => {
       assert.ok(props.notify.enum.includes('changes'));
     });
 
+    it('keeps a language the admin added next to the shipped text', async () => {
+      const dir = await scratch('schedule-translated');
+      const translated = shippedBefore('schedule_task');
+      translated.parameters.properties.instructions.description.fr = 'Notre texte français';
+      await seed(dir, { 'tools/schedule_task.json': translated });
+      const ctx = makeCtx(dir);
+      await up(ctx);
+
+      const { instructions } = (await ctx.readJson('tools/schedule_task.json')).parameters
+        .properties;
+      assert.equal(instructions.description.fr, 'Notre texte français');
+      assert.match(instructions.description.en, /set memory to true/, 'shipped text refreshed');
+      assert.match(instructions.description.de, /memory auf true/);
+    });
+
     it('keeps a memory parameter the admin already customised', async () => {
       const dir = await scratch('schedule-memory');
       const custom = shippedBefore('schedule_task');

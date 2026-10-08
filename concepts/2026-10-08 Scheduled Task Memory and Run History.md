@@ -933,6 +933,10 @@ session could push to one branch only. The commits keep the milestone order M0â€
   the notes' lock, so a failed update can leave it a version behind (an update that arrives late
   never replaces a newer one). The notes themselves are always right; the client's "reload" hint is
   the only thing that depends on the summary.
+- **Composer baseline and Stop.** The composer's baseline is the version the run read when it started,
+  not the version at the end: an owner or admin edit made anywhere during the run is kept (the run's
+  own `write_memory` updates do not count as an edit). The composer's model call registers itself for
+  the run's chat, so Stop reaches it and the run ends as cancelled.
 - **German.** The new German strings address the user as "Sie", like the rest of the task UI.
 
 ---
