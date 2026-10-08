@@ -14,7 +14,10 @@
  *   - `ask_user` is refused (`headless`), and tools that need approval pause
  *     the run (`runSeams.js`);
  *   - the chat carries `origin: { createdVia: 'scheduled-task', taskId, runId }`
- *     and is marked unread when nobody watched it finish.
+ *     and is marked unread when nobody watched it finish;
+ *   - a task that keeps memory gets its notes in the system prompt, an
+ *     instruction to read them and its earlier runs first, and (when the model
+ *     can call tools) the tools to do so (`runMemory.js`).
  *
  * A run that paused for an approval is continued in the same chat once the
  * owner approves: a short message records the approval, and the approved
@@ -56,6 +59,8 @@ import { resolveOwnerPrincipal } from './ownerPrincipal.js';
 import { checkTaskPrincipal, SCHEDULED_TASK_ORIGIN, SCHEDULED_TASK_SOURCE } from './taskPolicy.js';
 import { scheduledRunSeams } from './runSeams.js';
 import { WITHHELD_IN_SCHEDULED_RUNS } from './toolGate.js';
+import { isMemoryOn } from './taskMemory.js';
+import { prepareRunMemory, settleMemoryMarker } from './runMemory.js';
 import { announceTaskChanged } from './taskEvents.js';
 import { currentPolicy, deleteRunChat, toolsOfferedByApp } from './taskService.js';
 
@@ -246,6 +251,10 @@ export async function executeTaskRun({ taskId, runId }, deps = {}) {
 
   const continuation = run.continuation || null;
   const startedAtMs = now();
+  // Whether this run uses the task's notes, and what it says about them. The
+  // marker is stored on the run however it ends.
+  const memoryOn = isMemoryOn(task, { enabled: settings.memoryEnabled });
+  let memory = null;
   // This execution's fencing token. The run document carries it with a lease
   // this worker renews; a new scheduler owner recovers the run only once the
   // lease ran out, and a worker that finds its token gone writes nothing more.
@@ -260,6 +269,7 @@ export async function executeTaskRun({ taskId, runId }, deps = {}) {
     stopRenewal();
     const endedAt = now();
     let written = false;
+    const memoryMarker = memory ? await settleMemoryMarker(memory, task, runId) : null;
     const ended = await repository.mutateRun(taskId, runId, stored => {
       // Queued (it never started) or still ours: anything else means another
       // process settled this run — a recovery after this lease lapsed.
@@ -271,6 +281,7 @@ export async function executeTaskRun({ taskId, runId }, deps = {}) {
       return {
         ...stored,
         ...extra,
+        ...(memoryMarker ? { memory: memoryMarker } : {}),
         status,
         reason,
         finishedAt: status === 'awaiting_approval' ? null : new Date(endedAt).toISOString(),
@@ -451,6 +462,18 @@ export async function executeTaskRun({ taskId, runId }, deps = {}) {
       tool => !WITHHELD_IN_SCHEDULED_RUNS.has(tool?.id)
     );
     appendSystemNote(prepared.llmMessages, UNATTENDED_NOTE);
+    if (memoryOn) {
+      const prepareMemory = await prepareRunMemory({
+        task,
+        run,
+        prepared,
+        language,
+        continuation: Boolean(continuation),
+        maxChars: settings.memoryMaxChars
+      });
+      for (const note of prepareMemory.notes) appendSystemNote(prepared.llmMessages, note);
+      memory = prepareMemory.marker;
+    }
     await checkIntegrations(prepared.tools, user);
 
     const allowedTools = new Set((task.allowedTools || []).map(entry => entry.toolId));

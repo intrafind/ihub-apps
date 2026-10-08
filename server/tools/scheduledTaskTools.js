@@ -17,6 +17,11 @@
  * Inside a scheduled run (`user.scheduledRun`) a task may pause itself or
  * change its own schedule, and nothing else.
  *
+ * Two more tools exist only inside a run (`list_task_runs`, `get_task_run`):
+ * they read the earlier runs of the task that is running, and only when that
+ * task keeps memory. `executeTaskRun` adds them to the run's tool list; an app
+ * never offers them.
+ *
  * Every failure is returned as `{ error: true, code, message }` so the model
  * can explain it or correct its call.
  *
@@ -34,6 +39,8 @@ import {
 } from '../services/scheduler/schedule.js';
 import { getScheduledTaskRepository } from '../services/scheduler/tasks/ScheduledTaskRepository.js';
 import * as tasks from '../services/scheduler/tasks/taskService.js';
+import { MEMORY_SCOPE_TASK, resolveMemoryScope } from '../services/memory/memoryService.js';
+import { listEarlierRuns, readEarlierRun } from '../services/scheduler/tasks/runHistory.js';
 import { logAudit } from '../services/AuditLogService.js';
 
 /** Fields `update_scheduled_task` may change from inside a scheduled run. */
@@ -107,6 +114,7 @@ async function summarize(fields, { language, user, taskId, runCount = 0 }) {
     nextRunsFormatted: upcoming.map(slot => formatInstant(slot, zone, language)),
     tools: toolNames,
     notify: fields.notify || 'always',
+    memory: fields.memory?.enabled === true,
     staggerMinutes: settings.staggerMinutes
   };
 }
@@ -139,6 +147,7 @@ export async function scheduleTask(params = {}) {
       modelId: params.modelId || null,
       enabledTools: Array.isArray(params.tools) ? params.tools : null,
       notify: params.notify || 'always',
+      ...(typeof params.memory === 'boolean' ? { memory: params.memory } : {}),
       schedule: params.schedule || { type: 'manual' }
     };
     const fields = await tasks.validateTaskFields(draft, {
@@ -238,6 +247,7 @@ export async function updateScheduledTask(params = {}) {
       if (params[key] !== undefined && params[key] !== null) changes[key] = params[key];
     }
     if (Array.isArray(params.tools)) changes.enabledTools = params.tools;
+    if (typeof params.memory === 'boolean') changes.memory = params.memory;
     const status = params.status;
     if (status !== undefined && status !== 'active' && status !== 'paused') {
       return refuse('INVALID_STATUS', 'status must be active or paused');
@@ -409,10 +419,92 @@ export async function runScheduledTaskNow(params = {}) {
   }
 }
 
+const RUN_HISTORY_MESSAGES = {
+  RUN_NOT_FOUND: 'No earlier run of this task has that number, or it was removed.',
+  CURRENT_RUN: 'That is the run you are in. Ask for an earlier one.'
+};
+
+/**
+ * The run that is asking to read earlier runs, when it may: a scheduled run of
+ * a task that keeps memory. The task comes from the run's own principal, never
+ * from an argument.
+ *
+ * @returns {Promise<{taskId?: string, runId?: string, refusal?: Object}>}
+ */
+async function askingRun(user) {
+  const taskId = user?.scheduledRun?.taskId;
+  if (!taskId) {
+    return { refusal: refuse('NOT_AVAILABLE', 'Only a scheduled run can read earlier runs') };
+  }
+  const scope = await resolveMemoryScope(user);
+  if (scope?.kind !== MEMORY_SCOPE_TASK) {
+    return { refusal: refuse('NOT_AVAILABLE', 'This task does not keep notes between runs') };
+  }
+  return { taskId, runId: user.scheduledRun.runId };
+}
+
+/**
+ * The earlier runs of the task that is running, newest first.
+ *
+ * Everything sits under `runs`: a past run's reason can say "reconnect …", and
+ * a result with that at its top level would fail the run that merely looked.
+ *
+ * @param {Object} params - `limit` plus the trusted `user`.
+ * @returns {Promise<Object>}
+ */
+export async function listTaskRuns(params = {}) {
+  const asking = await askingRun(params.user);
+  if (asking.refusal) return asking.refusal;
+  const limit = Number.parseInt(params.limit, 10);
+  try {
+    const runs = await listEarlierRuns(params.user, asking.taskId, {
+      limit: Number.isFinite(limit) ? limit : undefined,
+      currentRunId: asking.runId
+    });
+    return { runs };
+  } catch (error) {
+    return failure(error);
+  }
+}
+
+/**
+ * What an earlier run of the task that is running answered, read from the
+ * run's own chat.
+ *
+ * @param {Object} params - `runNumber`, `include` plus the trusted `user`.
+ * @returns {Promise<Object>}
+ */
+export async function getTaskRun(params = {}) {
+  const asking = await askingRun(params.user);
+  if (asking.refusal) return asking.refusal;
+  const runNumber = Number(params.runNumber);
+  if (!Number.isInteger(runNumber) || runNumber < 1) {
+    return refuse('INVALID_ARGUMENT', 'runNumber must be a whole number from list_task_runs');
+  }
+  try {
+    const { settings } = tasks.currentPolicy();
+    const result = await readEarlierRun(params.user, {
+      taskId: asking.taskId,
+      currentRunId: asking.runId,
+      runNumber,
+      include: params.include === 'conversation' ? 'conversation' : 'answer',
+      maxChars: settings.maxHistoryReadChars
+    });
+    if (result.found === false) {
+      return { ...result, message: RUN_HISTORY_MESSAGES[result.code] || 'Run not found' };
+    }
+    return result;
+  } catch (error) {
+    return failure(error);
+  }
+}
+
 export default {
   scheduleTask,
   listScheduledTasks,
   updateScheduledTask,
   deleteScheduledTask,
-  runScheduledTaskNow
+  runScheduledTaskNow,
+  listTaskRuns,
+  getTaskRun
 };

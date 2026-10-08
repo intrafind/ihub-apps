@@ -91,7 +91,13 @@ export async function writeMemory(params = {}) {
       content,
       summary,
       expectedVersion,
-      updatedBy: params.user.id
+      // An agent's notes record the agent. A task's record the run that wrote
+      // them: a user id would put a person's identity into data the owner and
+      // an admin both look at.
+      updatedBy:
+        scope.kind === MEMORY_SCOPE_AGENT
+          ? params.user.id
+          : `run:${params.user.scheduledRun?.runId || 'unknown'}`
     });
     if (scope.kind === MEMORY_SCOPE_AGENT) {
       emit(
@@ -108,6 +114,16 @@ export async function writeMemory(params = {}) {
         code: 'VERSION_CONFLICT',
         message: err.message,
         currentVersion: err.currentVersion
+      };
+    }
+    if (err.code === 'MEMORY_TOO_LONG') {
+      // Returned, not thrown: the model can act on it by writing less.
+      return {
+        error: true,
+        code: 'MEMORY_TOO_LONG',
+        message: `${err.message}. Keep only what the next run needs and write the notes again with mode "replace".`,
+        chars: err.chars,
+        maxChars: err.maxChars
       };
     }
     throw err;

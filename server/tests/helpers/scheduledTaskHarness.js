@@ -31,6 +31,14 @@ export const MODELS = [
     autoDiscovery: false,
     supportsTools: true,
     default: true
+  },
+  {
+    id: 'nt',
+    provider: 'openai',
+    modelId: 'local-model',
+    url: 'https://u/v1/chat/completions',
+    autoDiscovery: false,
+    supportsTools: false
   }
 ];
 
@@ -55,6 +63,13 @@ export const APPS = [
     system: { en: 'You answer.' },
     preferredModel: 'oa',
     enabled: true
+  },
+  {
+    id: 'notools',
+    name: { en: 'No tools' },
+    system: { en: 'You answer without tools.' },
+    preferredModel: 'nt',
+    enabled: true
   }
 ];
 
@@ -63,7 +78,7 @@ export const GROUPS = {
     users: {
       id: 'users',
       permissions: {
-        apps: ['digest', 'plain'],
+        apps: ['digest', 'plain', 'notools'],
         models: ['*'],
         prompts: [],
         scheduledTasks: true
