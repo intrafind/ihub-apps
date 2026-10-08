@@ -23,6 +23,7 @@ const config = require('../../../client/src/api/endpoints/config');
 const { extractOdfText } = require('../../../shared/documentExtraction/odf.js');
 const { processDocumentFile } = require('../../../client/src/features/upload/utils/fileProcessing');
 const { buildOdfFile, odfP: p } = require('../../utils/officeFixtures');
+const { SHEET_NOTICE_RESERVE } = require('../../../shared/documentExtraction/sheets.js');
 
 beforeEach(() => {
   config.fetchPlatformConfig.mockReset();
@@ -240,6 +241,41 @@ describe('size limits', () => {
     const lines = (await extractWithLimits([body], { sheetRows: 5 })).split('\n');
     expect(lines.at(-1)).toBe('[… 96 more rows omitted]');
     expect(lines.filter(line => line === '| x | y |')).toHaveLength(4);
+  });
+
+  it('a large cell in a row that is repeated 2,000 times is not copied past the character budget', async () => {
+    const huge = 'x'.repeat(1_000_000);
+    const body = sheet('S', [
+      row(text('Nr'), text('Text')),
+      `<table:table-row table:number-rows-repeated="2000">${text('1')}${text(huge)}</table:table-row>`
+    ]);
+    const started = Date.now();
+    const output = await extractWithLimits([body], { workbookChars: 100000 });
+    expect(Date.now() - started).toBeLessThan(2000);
+    expect(output.length).toBeLessThan(110000);
+    // Everything that was not written is counted, copies included.
+    expect(output.split('\n').at(-1)).toMatch(/^\[… 2000 more rows omitted\]$/);
+  });
+
+  it('a first row of numbers, dates or times is data however the sheet prints it', async () => {
+    const body = sheet('S', [
+      row(number(45931, 'Oct 2026'), text('Betrag')),
+      row(text('a'), text('b'))
+    ]);
+    const output = await extractWithLimits([body], {});
+    expect(output).not.toContain('| --- |');
+    expect(output).toContain('Oct 2026\tBetrag');
+  });
+
+  it('the budget is a bound for many sheets: titles stop, the rest is counted', async () => {
+    const sheets = Array.from({ length: 400 }, (_, i) =>
+      sheet(`Sheet${i}`, [row(text('Nr'), text('Text')), row(number(i), text('x'.repeat(40)))])
+    );
+    const output = await extractWithLimits(sheets, { workbookChars: 100 });
+    expect(output.length).toBeLessThan(100 + SHEET_NOTICE_RESERVE + 200);
+    expect(output.split('\n').at(-1)).toMatch(/^\[… \d+ more sheets omitted\]$/);
+    expect(output).toContain('[Sheet: Sheet0]');
+    expect(output).not.toContain('[Sheet: Sheet399]');
   });
 
   it('the character budget covers the whole workbook: later sheets say what was left out', async () => {

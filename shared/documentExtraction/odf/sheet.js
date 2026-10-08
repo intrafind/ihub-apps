@@ -47,9 +47,13 @@ function cellHasContent(cell) {
   return kids(cell, 'text', 'p').some(paragraph => (paragraph.textContent || '').trim() !== '');
 }
 
-/** Cell texts of a row, and the cells that span several rows or columns. */
+/** Value types a cell can have other than text: what the file says is a number, date, … */
+const NOT_TEXT = new Set(['float', 'percentage', 'currency', 'date', 'time', 'boolean']);
+
+/** Cell texts of a row, the columns whose cell is not text, and the cells that span rows or columns. */
 function readRow(row, reader) {
   const cells = [];
+  const typed = [];
   const spans = [];
   let column = 0;
   let content = false;
@@ -62,7 +66,11 @@ function readRow(row, reader) {
       const text = cellText(cell, reader);
       if (text !== '') {
         content = true;
-        for (let i = 0; i < repeat && column + i < MAX_COLUMNS; i += 1) cells[column + i] = text;
+        const notText = NOT_TEXT.has(attr(cell, 'office', 'value-type'));
+        for (let i = 0; i < repeat && column + i < MAX_COLUMNS; i += 1) {
+          cells[column + i] = text;
+          if (notText) typed.push(column + i);
+        }
         if (column + repeat > MAX_COLUMNS) cut = true;
         const rowspan = countOf(cell, 'number-rows-spanned');
         const colspan = countOf(cell, 'number-columns-spanned');
@@ -73,7 +81,7 @@ function readRow(row, reader) {
     }
     column += repeat;
   }
-  return { cells, spans, content, cut };
+  return { cells, typed, spans, content, cut };
 }
 
 const rowHasContent = row => kids(row, 'table', 'table-cell').some(cell => cellHasContent(cell));
@@ -90,6 +98,7 @@ function readSheet(table, reader, { rowLimit, charLimit }) {
   let firstContent = -1;
   let lastContent = -1;
   let limitEnd = rowLimit; // the row limit counts from the first row with content
+  let firstTyped = []; // columns of the first row whose cell is not text
   let chars = 0;
   let reading = true;
   let cut = false;
@@ -103,7 +112,7 @@ function readSheet(table, reader, { rowLimit, charLimit }) {
       } else if (name === 'table-row') {
         const repeat = countOf(child, 'number-rows-repeated');
         if (reading) {
-          const { cells, spans: rowSpans, content, cut: rowCut } = readRow(child, reader);
+          const { cells, typed, spans: rowSpans, content, cut: rowCut } = readRow(child, reader);
           if (!content && firstContent < 0) {
             rowIndex += repeat; // empty rows above the data are not rows
             continue;
@@ -111,12 +120,21 @@ function readSheet(table, reader, { rowLimit, charLimit }) {
           if (firstContent < 0) {
             firstContent = rowIndex;
             limitEnd = rowIndex + rowLimit;
+            firstTyped = typed;
           }
-          const copies = Math.min(repeat, limitEnd - rowIndex); // the rows within the limit
+          // The rows within the row limit — and within the character limit: a row repeated many
+          // times is not copied beyond the copy that crosses it (the rest is counted as left
+          // out), so a small file cannot make the rendering work on gigabytes of repeated text.
+          const rowChars = content
+            ? cells.reduce((sum, text) => sum + (text?.length ?? 0) + 1, 0)
+            : 0;
+          const byChars =
+            rowChars > 0 ? Math.floor(Math.max(charLimit - chars, 0) / rowChars) + 1 : Infinity;
+          const copies = Math.min(repeat, limitEnd - rowIndex, byChars);
           if (content) {
             for (let i = 0; i < copies; i += 1) {
               rows[rowIndex + i] = cells.slice();
-              chars += cells.reduce((sum, text) => sum + (text?.length ?? 0) + 1, 0);
+              chars += rowChars;
             }
             for (const span of rowSpans) spans.push({ row: rowIndex, ...span });
             if (rowCut) cut = true;
@@ -161,9 +179,11 @@ function readSheet(table, reader, { rowLimit, charLimit }) {
       for (let c = span.column + 1; c < span.column + span.colspan; c += 1) covered.add(c - left);
     }
   }
+  const typed = new Set(firstTyped.filter(c => c >= left).map(c => c - left));
   return {
     rows: grid.map(({ cells }) => cells.slice(left)),
     covered,
+    typed,
     rowsBeyond: Math.max(0, lastContent + 1 - readTo),
     chars,
     cut
@@ -191,6 +211,7 @@ export function odsSheets({ spreadsheet, reader, styles, limits = {} }) {
       hidden: styles.tableHidden(attr(table, 'table', 'style-name')),
       rows: read.rows,
       covered: read.covered,
+      typed: read.typed,
       rowsBeyond: read.rowsBeyond,
       notices: read.cut ? [`[… columns beyond ${MAX_COLUMNS} omitted]`] : []
     });
