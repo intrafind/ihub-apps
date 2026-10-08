@@ -22,9 +22,10 @@ export const MAX_WORKBOOK_CHARS = 300000;
 const NUMBER_LIKE = /^[-+(]?[\d.,/:'’\s€$£%)-]+$/;
 
 /**
- * Whether the first row names the columns: at least two columns, every cell filled with text
- * that is not a number or a date, and a row of data below. A cell that is the covered part of a
- * merged header (`covered`: column indexes) is empty by nature and does not count against it.
+ * Whether the first row names the columns: at least two named columns, every cell filled with
+ * text that is not a number or a date, and a row of data below. A cell that is the covered part
+ * of a merged header (`covered`: column indexes) is empty by nature and does not count against
+ * it — nor as a column: a title merged across the sheet is a title, not a header.
  *
  * @param {string[][]} rows
  * @param {Set<number>} [covered]
@@ -33,7 +34,7 @@ const NUMBER_LIKE = /^[-+(]?[\d.,/:'’\s€$£%)-]+$/;
 export function looksLikeHeader(rows, covered = new Set()) {
   if (rows.length < 2) return false;
   const first = rows[0];
-  if (first.length < 2) return false;
+  if (first.filter((_, column) => !covered.has(column)).length < 2) return false;
   return first.every((cell, column) => {
     const text = cell.trim();
     return covered.has(column) ? text === '' : text !== '' && !NUMBER_LIKE.test(text);
