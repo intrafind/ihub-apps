@@ -78,6 +78,27 @@ function callEnd(args, limit) {
   return limit;
 }
 
+/**
+ * |code| with its comments and string contents blanked out, so a guard that is
+ * commented out or only named in a string does not count.
+ */
+function codeOnly(code) {
+  let out = '';
+  for (let i = 0; i < code.length; i++) {
+    const ch = code[i];
+    if (ch === "'" || ch === '"' || ch === '`') {
+      i = stringEnd(code, i);
+      out += `${ch}${ch}`;
+    } else if (code.startsWith('//', i) || code.startsWith('/*', i)) {
+      i = commentEnd(code, i);
+      out += ' ';
+    } else {
+      out += ch;
+    }
+  }
+  return out;
+}
+
 /** Every route registered in |filePath|, with whether an admin guard protects it. */
 function extractRoutes(filePath, fileName) {
   const content = readFileSync(filePath, 'utf-8');
@@ -109,7 +130,7 @@ function extractRoutes(filePath, fileName) {
       0,
       callEnd(rest, handlerStart === -1 ? rest.length : handlerStart)
     );
-    const hasAdminAuth = ADMIN_GUARD_PATTERN.test(middleware);
+    const hasAdminAuth = ADMIN_GUARD_PATTERN.test(codeOnly(middleware));
 
     routes.push({
       file: fileName,

@@ -68,6 +68,22 @@ describe('admin route audit', () => {
     }
   });
 
+  test('does not count a guard that is commented out or only named in a string', () => {
+    for (const route of [
+      "app.get(buildServerPath('/api/admin/a'), log('adminAuth skipped'), listThings);",
+      "app.get(buildServerPath('/api/admin/a'), /* adminAuth */ listThings);",
+      `app.get(
+        buildServerPath('/api/admin/a'),
+        // adminAuth,
+        listThings
+      );`
+    ]) {
+      const { status, output } = audit(route);
+      expect({ route, status }).toEqual({ route, status: 1 });
+      expect(output).toContain('[VULNERABILITY] GET /api/admin/a');
+    }
+  });
+
   test('reads a guard passed through a call in the middleware list', () => {
     const { status } = audit(`
       app.put(buildServerPath('/api/admin/a'), rateLimit({ window: '1m (x)' }), adminAuth, saveThing);
