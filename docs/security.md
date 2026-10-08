@@ -967,8 +967,8 @@ Every pull request is checked automatically for the OWASP Top 10 and CWE Top 25 
 | Check | Workflow | Runs on | Fails the check | Results |
 |---|---|---|---|---|
 | CodeQL (JavaScript/TypeScript, Actions) | GitHub default setup | PRs, `main` | — | Security tab |
-| Semgrep: OWASP Top 10, CWE Top 25, Node.js, React | `code-scanning.yml` | PRs, `main`, weekly | — | Security tab |
-| zizmor: GitHub Actions and Dependabot config | `code-scanning.yml` | PRs, `main`, weekly | — | Security tab |
+| Semgrep: OWASP Top 10, CWE Top 25, Node.js, React | `code-scanning.yml` | PRs, `main`, weekly | — | Security tab; on fork PRs, annotations for the findings the PR introduces |
+| zizmor: GitHub Actions and Dependabot config | `code-scanning.yml` | PRs, `main`, weekly | — | Security tab; annotations on fork PRs |
 | Dependency review: new dependencies with a high/critical advisory or a license outside the allow-list | `security.yml` | PRs | Yes | Job summary |
 | Secret scan (gitleaks) of the new commits | `security.yml` | PRs, `main` | Yes | Job log (redacted) |
 | Admin route audit (`npm run security:audit`) | `security.yml` | PRs, `main` | Yes | Job log |
