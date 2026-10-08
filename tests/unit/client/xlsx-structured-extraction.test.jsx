@@ -137,6 +137,23 @@ describe('sheets with a header row', () => {
       ].join('\n')
     );
   });
+
+  it('T-XLS-03: a title merged across the sheet is a title, not the header — the row below is not turned into a table body', async () => {
+    const file = book(
+      {
+        S: [
+          ['Bericht 2026', null, null],
+          ['Name', 'Betrag', 'Datum'],
+          ['a', 1, 'x']
+        ]
+      },
+      { merges: { S: ['A1:C1'] } }
+    );
+    const text = await extract(file);
+    expect(text).not.toContain('| --- |');
+    expect(text).toContain('Bericht 2026');
+    expect(text).toContain('Name\tBetrag\tDatum');
+  });
 });
 
 describe('sheets without a header row stay as before', () => {
