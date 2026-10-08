@@ -154,3 +154,20 @@ Validated with a differential fuzz against LibreOffice (`soffice --convert-to tx
   code has no logging); the body is extracted as before. The headers are read before the body
   pass changes `sectPr` handling.
 - **Applicable test ID:** T-DOCX-25 (plus the cases above). Q-03 and the other open questions are unchanged.
+
+### Checkpoint after PR 5 — text size, legacy vs. structured
+
+Characters of the extracted text for the repository's own documents (`docs/*.md` converted with pandoc to .docx and, through LibreOffice, to PDF), measured with the shipped code. Tokens follow characters only roughly: Markdown syntax (`|`, `---`, `#`) costs more per character than the whitespace it replaces.
+
+| File | Legacy | Structured | Change |
+|---|---:|---:|---:|
+| apps.docx | 58,722 | 62,861 | +7.0 % |
+| architecture.docx | 35,626 | 34,584 | −2.9 % |
+| file-upload-feature.docx | 17,174 | 18,738 | +9.1 % |
+| models.docx | 46,943 | 49,933 | +6.4 % |
+| apps.pdf (43 pages) | 66,477 | 60,420 | −9.1 % |
+| architecture.pdf (24 pages) | 37,889 | 33,609 | −11.3 % |
+| file-upload-feature.pdf (12 pages) | 19,196 | 17,686 | −7.9 % |
+| models.pdf (26 pages) | 52,360 | 48,153 | −8.0 % |
+
+Word: +6…9 % for table-heavy documents (Markdown tables, headings, numbering labels), slightly less where the legacy text carried glued table cells. PDF: −8…11 % — the doubled spaces of the old join are gone, the `[Page N]` markers cost about 10 characters per page. Very small documents grow in percent (a one-paragraph file with a header: 54 → 156 characters), not in absolute size.
