@@ -1,6 +1,6 @@
 # 02 — Pre-Mortem: "We shipped it, and it didn't work"
 
-Assume release 1 is out and the feedback is bad. Each scenario below names what users saw, why it happened, how likely it is given what we verified, and what prevents it. Every prevention has a test ID from `04-test-plan.md`.
+Assume release 1 is out and the feedback is bad. Each scenario below names what users saw, why it happened, how likely it is given what we verified, and what prevents it. Every prevention has a test ID from `2026-10-08 Test Plan.md`.
 
 Likelihood/impact: **H**igh / **M**edium / **L**ow.
 
@@ -39,12 +39,12 @@ Likelihood/impact: **H**igh / **M**edium / **L**ow.
 | PM-18 | Token usage grows and admins complain | Unmeasured so far — measure legacy vs. new character count on the golden corpus and put the number in the release note; the context-window warning already counts the content string (`shared/contextUsage.js`) |
 | PM-19 | Tests are green, production differs | jest uses the mammoth **browser** build only through a mapping; Vite resolves it via the `browser` field — keep one real browser check (manual QA M-01) and the `vite build` step in the DoD |
 | PM-20 | Two converters drift (web pages vs. documents) | Release 1 copies the needed rules from `pageContent.js` (with a pointer comment) and leaves the web reader untouched; release 2 consolidates into one factory with `server/tests/websearch-page-content.test.js` unchanged |
-| PM-21 | `shared/` import of `turndown` breaks the Vite or Node build | `shared/` stays dependency-free; libraries are injected by the client adapter (see `01-current-state.md` §4) |
+| PM-21 | `shared/` import of `turndown` breaks the Vite or Node build | `shared/` stays dependency-free; libraries are injected by the client adapter (see `2026-10-08 Current State.md` §4) |
 | PM-22 | Zip bomb / huge `document.xml` exhausts browser memory | Unchanged risk (mammoth already unzips everything); the pre-pass must not create extra copies of the whole XML string per paragraph. Upload size limit (5 MB default) remains the guard |
-| PM-23 | Literal document text that looks like Markdown (`# 1`, `| a | b |`, `---`) is misread | Accepted: the model treats it as text; no escaping on purpose (PM-03 is worse). Covered by T-DOCX-30 so the behavior is deliberate |
+| PM-23 | Literal document text that looks like Markdown (`# 1`, lines with pipe characters, `---`) is misread | Accepted: the model treats it as text; no escaping on purpose (PM-03 is worse). Covered by T-DOCX-30 so the behavior is deliberate |
 
 ## D. What would tell us early that it failed
 
-- Golden corpus diff in the PR (before/after output for 12–15 real documents, `04-test-plan.md` §5) reviewed by a human before merge.
+- Golden corpus diff in the PR (before/after output for 12–15 real documents, `2026-10-08 Test Plan.md` §5) reviewed by a human before merge.
 - `console.warn('[fileProcessing] structured extraction failed, using legacy', …)` visible in the browser console during manual QA — zero occurrences on the corpus is a merge criterion.
 - After release: ask Christoph and the `stellungnahmen-review` owners for a before/after on one real document each.

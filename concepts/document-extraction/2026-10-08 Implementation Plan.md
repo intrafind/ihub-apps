@@ -1,6 +1,6 @@
 # 05 — Implementation Plan (agent handoff, release 1)
 
-Read first: `README.md` (decisions), `01-current-state.md` (facts), `02-pre-mortem.md`, `03-edge-cases.md`, `04-test-plan.md`. This document says **what to build, in which order, and when you are done**.
+Read first: `README.md` (decisions), `2026-10-08 Current State.md` (facts), `2026-10-08 Pre-Mortem.md`, `2026-10-08 Edge Cases.md`, `2026-10-08 Test Plan.md`. This document says **what to build, in which order, and when you are done**.
 
 ## 0. Mission
 
@@ -14,7 +14,7 @@ Make the text that the browser extracts from uploaded **DOCX** and **PDF** files
 - Feature switch `structuredDocumentExtraction` (default on).
 - Docs and release note.
 
-### Out of scope (release 2, see `06-follow-ups-release-2.md`)
+### Out of scope (release 2, see `2026-10-08 Follow-ups Release 2.md`)
 
 Inference API (`server/services/inference/inputContent.js`), OCR tool, PDF heading detection, PPTX/XLSX/ODF, per-app options for comments / tracked changes / hidden text / speaker notes, DOCX page numbers (decision A4: never estimated).
 
@@ -22,7 +22,7 @@ Inference API (`server/services/inference/inputContent.js`), OCR tool, PDF headi
 
 1. **Never make an upload fail that works today.** All structured work runs inside one `try`; on any error `console.warn('[fileProcessing] structured extraction failed, using legacy', error)` and return the legacy result.
 2. **Switch off = byte-identical legacy output.** Keep the current `processDocxFile`/`processPdfFile` bodies as `legacyDocxText`/`legacyPdfText` and call them unchanged.
-3. **`shared/` stays dependency-free.** No bare imports in `shared/documentExtraction/**`; JSZip, mammoth, Turndown, `DOMParser`, `XMLSerializer` and pdf.js are passed in by the client adapter (see `01-current-state.md` §4).
+3. **`shared/` stays dependency-free.** No bare imports in `shared/documentExtraction/**`; JSZip, mammoth, Turndown, `DOMParser`, `XMLSerializer` and pdf.js are passed in by the client adapter (see `2026-10-08 Current State.md` §4).
 4. **No new npm dependencies.** Everything needed exists (`jszip`, `mammoth`, `turndown` in `client/`; `pdf-lib`, `pdfjs-dist` in `server/` for node tests). If you believe one is needed, stop and ask.
 5. **Do not touch** `server/tools/lib/pageContent.js` (web page reader), `server/services/inference/**`, `ocrProcessor.js`, `shared/promptContext.js` tag names. Copy the Turndown rules you need from `pageContent.js` with a comment pointing to it; consolidation is a release 2 cleanup.
 6. **Wrong is worse than missing.** When numbering semantics are unsupported or ambiguous, output no label for that paragraph.
@@ -31,7 +31,7 @@ Inference API (`server/services/inference/inputContent.js`), OCR tool, PDF headi
 ### Stop and ask a human when
 
 - legacy snapshot tests (T-DOCX-26 / T-PDF-09) cannot be made identical;
-- the golden corpus shows a numbering difference you cannot explain from `03-edge-cases.md`;
+- the golden corpus shows a numbering difference you cannot explain from `2026-10-08 Edge Cases.md`;
 - structured DOCX extraction is more than 2× slower than legacy on T-PERF-01;
 - any existing test outside the files you changed starts failing.
 
@@ -109,11 +109,11 @@ Each PR is independently releasable; the feature switch protects all of them.
 
 ### PR 1 — Switch, test infrastructure, DOCX structure without numbering (≈ 2–3 days)
 
-Files: `server/featureRegistry.js`; `tests/config/jest.config.js` (`'^mammoth$'` mapping); `tests/utils/officeFixtures.js` (from `04-test-plan.md` §2); `shared/documentExtraction/{markers,markdown,docx}.js`, `ooxml/{xml,styles,normalize}.js` (without labels); `client/src/features/upload/utils/fileProcessing.js`; `tests/unit/client/docx-structured-extraction.test.jsx`; `tests/unit/client/document-extraction-flag.test.jsx`; docs (`docs/file-upload-feature.md` DOCX row + new "Extracted text format" section + switch; fix PPTX/PPT rows), release note.
+Files: `server/featureRegistry.js`; `tests/config/jest.config.js` (`'^mammoth$'` mapping); `tests/utils/officeFixtures.js` (from `2026-10-08 Test Plan.md` §2); `shared/documentExtraction/{markers,markdown,docx}.js`, `ooxml/{xml,styles,normalize}.js` (without labels); `client/src/features/upload/utils/fileProcessing.js`; `tests/unit/client/docx-structured-extraction.test.jsx`; `tests/unit/client/document-extraction-flag.test.jsx`; docs (`docs/file-upload-feature.md` DOCX row + new "Extracted text format" section + switch; fix PPTX/PPT rows), release note.
 
 Tests: T-DOCX-01, 02, 05, 06, 14, 16–24, 26–30; T-FLAG-01…03; T-DOWN-01, T-DOWN-03.
 
-Done when: tests green; `npm run test:unit`; `cd client && npm run build` succeeds (proves `shared/` imports resolve in Vite); `timeout 10s node server/server.js || echo ok` boots; manual M-01, M-06, M-08 on two real DOCX files.
+Done when: tests green; `npm run test:unit`; `cd client && npm run build` succeeds (proves `shared/` imports resolve in Vite); the server stays up for 10 s (`timeout 10s node server/server.js; test $? -eq 124`); manual M-01, M-06, M-08 on two real DOCX files.
 
 ### PR 2 — Numbering labels (≈ 2–3 days)
 
@@ -148,7 +148,7 @@ npm run test:unit
 npm run test:pdf                            # PR 3
 cd client && npm run build                  # shared/ resolution in Vite
 npm run lint:fix && npm run format:fix
-timeout 10s node server/server.js || echo "Server startup check completed"
+timeout 10s node server/server.js; test $? -eq 124 && echo "Server stayed up"   # 124 = killed by timeout; any other code is a startup failure
 soffice --headless --convert-to "txt:Text (encoded):UTF8" --outdir /tmp/out file.docx   # numbering oracle (dev only)
 ```
 
@@ -247,7 +247,7 @@ for (const para of Array.from(doc.getElementsByTagNameNS(NS, 'p'))) {
 // then: XMLSerializer → zip → mammoth.convertToHtml → Turndown (escape disabled)
 ```
 
-Spike output for the fixture in `04-test-plan.md` style (German heading styles, `IF Kapitel`, lists):
+Spike output for the fixture in `2026-10-08 Test Plan.md` style (German heading styles, `IF Kapitel`, lists):
 
 ```
 Teil I Teil-Überschrift

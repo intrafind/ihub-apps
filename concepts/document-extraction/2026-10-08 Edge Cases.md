@@ -1,6 +1,6 @@
 # 03 — Edge Cases and Expected Behavior
 
-"Expected" is the behavior release 1 must implement. Where a choice was made without the user, it is marked **(default)** and listed in the README as overridable. Test IDs refer to `04-test-plan.md`.
+"Expected" is the behavior release 1 must implement. Where a choice was made without the user, it is marked **(default)** and listed in the README as overridable. Test IDs refer to `2026-10-08 Test Plan.md`.
 
 ## 1. DOCX — numbering
 
@@ -65,7 +65,7 @@ Word's rule of thumb that the implementation must follow: a paragraph is numbere
 | Text boxes / shapes | Appear after the paragraph that anchors them (mammoth) | T-DOCX-29 |
 | Content controls (`w:sdt`), fields (REF, DATE, cross-references) | Cached result text kept (mammoth) | T-DOCX-29 |
 | External hyperlink | `[text](url)` | T-DOCX-18 |
-| Text that looks like Markdown (`# x`, `| a |`, `---`, `*`) | Output literally, no escaping (deliberate, see PM-23) | T-DOCX-30 |
+| Text that looks like Markdown (`# x`, lines with pipe characters, `---`, `*`) | Output literally, no escaping (deliberate, see PM-23) | T-DOCX-30 |
 | Very long document (300+ pages) | Completes; time ≤ 2× legacy | T-PERF-01 |
 | Strict OOXML (`http://purl.oclc.org/ooxml/wordprocessingml/main`) | Pre-pass handles both namespaces or skips cleanly → legacy-equivalent text | T-DOCX-28 |
 | Missing `styles.xml` / `numbering.xml`; Google Docs, LibreOffice, python-docx exports | No crash; best-effort structure | T-DOCX-14, golden G-04 |
@@ -79,7 +79,7 @@ Word's rule of thumb that the implementation must follow: a paragraph is numbere
 | Simple table | GFM table; first row is the header row **(default)** | T-DOCX-16 |
 | `gridSpan` (colspan) | Text in the first spanned column, the others empty **(default)** | T-DOCX-16 |
 | `vMerge` (rowspan) | Text repeated in each spanned row **(default)** so every row is self-contained; columns never shift | T-DOCX-16 |
-| Pipe `|` in a cell | Escaped `\|` (only escape we do) | T-DOCX-16 |
+| Pipe character in a cell | Escaped with a backslash (the only escape we do) | T-DOCX-16 |
 | Multiple paragraphs / list in a cell | Joined with `<br>` **(default)** | T-DOCX-16 |
 | Nested table | Inner table flattened into the cell text | T-DOCX-16 |
 | Table used for layout (single cell, whole page) | Treated as a table (no heuristic) **(default)** | — |

@@ -39,7 +39,7 @@ server/services/workflow/executors/PromptNodeExecutor.js L946      "[File: name 
 | OpenAI-compatible inference API | `server/services/inference/inputContent.js` `pdfText()` L114, `documentFromInlineFile()` L142 | Own PDF extraction (same `join(' ')`); DOCX rejected with `unsupported_file_type`; `file_has_no_text` when PDF text is empty (L180) |
 | OCR tool (text-only / smart mode) | `server/routes/toolsService/processors/ocrProcessor.js` `analyzePdfPages()` L173 | Third copy of the same PDF text join |
 
-Release 1 changes only the browser path (decision A1). The two server paths are release 2 (`06-follow-ups-release-2.md`, WP-E).
+Release 1 changes only the browser path (decision A1). The two server paths are release 2 (`2026-10-08 Follow-ups Release 2.md`, WP-E).
 
 ## 2. What the model receives today (reproduced)
 
@@ -53,7 +53,7 @@ Release 1 changes only the browser path (decision A1). The two server paths are 
 | DOCX hidden text (`w:vanish`) | **included** (the model sees text the author hid) |
 | PDF, 3 pages, page 2 without text | `1. Geltungsbereich  Dieser Vertrag … re- gelt die Zusammenarbeit.  Seite 1 von 3\n\n2. Laufzeit …` — no page markers, page 2 invisible, line breaks become (double) spaces |
 
-The DOCX row was reproduced inside jest with the real code path (see `04-test-plan.md` §1), so it can serve as the first failing test.
+The DOCX row was reproduced inside jest with the real code path (see `2026-10-08 Test Plan.md` §1), so it can serve as the first failing test.
 
 ## 3. Library behavior that shapes the design
 

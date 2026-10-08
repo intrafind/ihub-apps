@@ -10,12 +10,12 @@ Uploaded Word and PDF files reach the model as flat text today: chapter numbers,
 
 | File | Purpose |
 |---|---|
-| [`01-current-state.md`](01-current-state.md) | Verified facts: data flow, every entry point, library behavior (mammoth, Turndown, pdf.js), constraints, gaps in the original issue |
-| [`02-pre-mortem.md`](02-pre-mortem.md) | "Shipped but it didn't work" — 24 failure scenarios with prevention and test IDs |
-| [`03-edge-cases.md`](03-edge-cases.md) | Expected behavior per edge case (numbering, styles, tables, PDF, switch) |
-| [`04-test-plan.md`](04-test-plan.md) | Test infrastructure findings, fixture helper (validated), test matrix, golden corpus, manual QA |
-| [`05-implementation-plan.md`](05-implementation-plan.md) | **Agent brief:** guardrails, module design, PR 1–5 with files, tests and done criteria, validated spike code |
-| [`06-follow-ups-release-2.md`](06-follow-ups-release-2.md) | Release 2: inference API, PDF headings, PPTX/XLSX/ODF, per-app options |
+| [`2026-10-08 Current State.md`](2026-10-08%20Current%20State.md) | Verified facts: data flow, every entry point, library behavior (mammoth, Turndown, pdf.js), constraints, gaps in the original issue |
+| [`2026-10-08 Pre-Mortem.md`](2026-10-08%20Pre-Mortem.md) | "Shipped but it didn't work" — 24 failure scenarios with prevention and test IDs |
+| [`2026-10-08 Edge Cases.md`](2026-10-08%20Edge%20Cases.md) | Expected behavior per edge case (numbering, styles, tables, PDF, switch) |
+| [`2026-10-08 Test Plan.md`](2026-10-08%20Test%20Plan.md) | Test infrastructure findings, fixture helper (validated), test matrix, golden corpus, manual QA |
+| [`2026-10-08 Implementation Plan.md`](2026-10-08%20Implementation%20Plan.md) | **Agent brief:** guardrails, module design, PR 1–5 with files, tests and done criteria, validated spike code |
+| [`2026-10-08 Follow-ups Release 2.md`](2026-10-08%20Follow-ups%20Release%202.md) | Release 2: inference API, PDF headings, PPTX/XLSX/ODF, per-app options |
 
 ## Decisions
 
@@ -52,7 +52,7 @@ The issue was written before the verification. The implementation plan supersede
 
 | ID | Question | Default until answered |
 |---|---|---|
-| Q-01 | Who provides the golden corpus (`04-test-plan.md` §5), and may anonymised files be committed to the public repo? | Daniel provides; files stay local, outputs go into the PR description |
+| Q-01 | Who provides the golden corpus (`2026-10-08 Test Plan.md` §5), and may anonymised files be committed to the public repo? | Daniel provides; files stay local, outputs go into the PR description |
 | Q-02 | Should hidden numbered paragraphs consume a number? Needs a check in Word (print view) | Not counted |
 | Q-03 | Many `[Page break]` markers when the Heading 1 style has "page break before" — acceptable? | Yes, emit them |
 | Q-04 | Strip running headers/footers from PDF page text? | Keep |
