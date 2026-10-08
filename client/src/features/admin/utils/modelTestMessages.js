@@ -16,6 +16,7 @@ const MODEL_TEST_MESSAGE_I18N_KEYS = {
   networkError: 'admin.models.testResults.messages.networkError',
   requestTimeout: 'admin.models.testResults.messages.requestTimeout',
   apiKeyNotConfigured: 'admin.models.testResults.messages.apiKeyNotConfigured',
+  apiKeyUndecryptable: 'admin.models.testResults.messages.apiKeyUndecryptable',
   accessDenied: 'admin.models.testResults.messages.accessDenied',
   authenticationFailed: 'admin.models.testResults.messages.authenticationFailed',
   modelNotFound: 'admin.models.testResults.messages.modelNotFound',

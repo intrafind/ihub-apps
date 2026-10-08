@@ -5,7 +5,10 @@ once next Tuesday, every two hours, on the last day of the month, or only when
 its owner presses **Run now**. It runs **as its owner**, against one of their
 apps, with that app's tools, integrations, sources, skills, workflows and
 apps-as-tools. Every run becomes its own chat, so the result is read like any
-other conversation — and continued, if the owner wants to follow up.
+other conversation — and continued, if the owner wants to follow up. A task can
+also **remember between runs**: it keeps notes, reads them and its earlier runs
+at the start of a run, and tells you only what is new
+([Memory and earlier runs](#memory-and-earlier-runs)).
 
 The feature ships as a **preview** and is off by default.
 
@@ -61,6 +64,9 @@ restart.
 | `maxRunChatsPerTask`       | `20`    | Run chats kept per task; older ones are deleted after each run           |
 | `maxInstructionLength`     | `8000`  | Characters in a task's instructions                                     |
 | `maxRunMinutes`            | `30`    | Wall-clock limit of one run                                             |
+| `memoryEnabled`            | `true`  | Switch for task memory across the installation: off, tasks run without notes (the notes are kept) |
+| `memoryMaxChars`           | `8000`  | Size limit of one task's notes, 1000–64000 characters                    |
+| `maxHistoryReadChars`      | `8000`  | How much of an earlier run's answer a run gets back from `get_task_run`, 1000–50000 |
 
 ## Creating a task
 
@@ -85,8 +91,10 @@ follow a [skill](skills.md), write `/skill-name` in the instructions, as in a
 chat message — for example `/inbox-triage Brief me on yesterday's mail.` The
 skill must be one the task's owner can use in the task's app.
 
-A run does not see earlier runs, so a prompt that wants "what changed since
-last time" uses the run variables:
+Without **Remember between runs**, a run does not see earlier runs, so a prompt
+that wants "what changed since last time" uses the run variables (with it, the
+task has [notes and earlier runs](#memory-and-earlier-runs) to compare
+against):
 
 | Variable                     | Value                                                        |
 | ---------------------------- | ------------------------------------------------------------ |
@@ -150,8 +158,9 @@ A run that finished while nobody was watching is **unread**: the chat carries
 the usual unseen dot in *Recents* and the chat list, the **Scheduled tasks**
 entry in the sidebar counts the unseen runs, and a toast announces it on the
 next page the owner opens. Opening the run's chat clears all of it. **Notify
-me** on the task chooses between *after every run*, *only when a run fails*
-and *never*.
+me** on the task chooses between *after every run*, *only when a run fails*,
+*only when something changed* and *never*. *Only when something changed* needs
+**Remember between runs**; see [Notify only when something changed](#notify-only-when-something-changed).
 
 ### Run history
 
@@ -236,6 +245,84 @@ the trigger `{ type: 'schedule', source: 'scheduled-task' }`.
   resumed task continues with its next future slot; it does not replay what
   it missed while paused.
 
+## Memory and earlier runs
+
+By default a run starts from nothing. Tick **Remember between runs** on the
+task form and the task gets **notes** that live between its runs, for a prompt
+like "what are the latest features of openwebui? summarize each" that should
+report only what is new since last week.
+
+The notes are plain markdown, stored for the task and its owner. They are the
+same memory that [agents](agents.md#memory-pipeline-memory-compose--memory-finalize)
+have: the same tools (`read_memory`, `write_memory`), the same version check
+on every write, the same editor for reading and editing them.
+
+What a run with memory does:
+
+1. **It starts with the notes.** They are added to the run's system prompt
+   (never to the stored chat) as data, not instructions, together with the
+   instruction to inform itself first: read the notes, call `list_task_runs`
+   and read the last successful run with `get_task_run` — what it reported and
+   anything the owner replied in that chat — and then report only what is new
+   or changed.
+2. **It can read earlier runs.** `list_task_runs` lists the earlier runs of
+   this task (newest first, default 5, at most 20) and `get_task_run` returns
+   what one of them answered, optionally with the conversation that followed
+   in its chat. Nothing is copied: the answer is read from the run's chat, so
+   a run whose chat was deleted or aged out says so. Only the task's own runs,
+   and only for its owner, can be read. Both tools exist only inside a run.
+3. **Its notes are updated after it.** When a run succeeds, one more model
+   call without tools rewrites the notes from the run's answer: what was
+   reported (as a compact watermark, not the report), open follow-ups, the
+   owner's preferences. The model does not have to remember to write them.
+   `write_memory` stays available in the run for something that must survive
+   even a failing run. The extra call is part of the run's usage.
+
+The notes are never wiped by the update: an answer that cannot be read, a model
+error or a result over the size limit (after one more try) leaves them as they
+were, and a run that fails does not touch them. When the owner edits the notes
+while a run is going — at any point of it, also during the update itself — the owner's edit
+stays and the run's update is dropped. A run that is stopped while its notes are being updated
+ends as cancelled and leaves them alone.
+The run's row on the task page says what happened (*Memory updated*, *No
+changes*).
+
+A model that cannot call tools — no tool support, or Gemini with Google
+search, which drops every function tool — still gets its notes and the
+instruction, and its notes are still updated afterwards.
+
+### Notify only when something changed
+
+With **Notify me → Only when something changed (and on failures)**, a run that
+the update found to report nothing new is marked as seen and creates no
+notification — a weekly "anything new?" task stays quiet on the weeks nothing
+happened. A failed run always notifies, and so does a run whose update could not
+tell (the owner is told rather than missing something). The option needs
+memory: the form disables it while **Remember between runs** is off, and the
+API refuses it (`NOTIFY_CHANGES_NEEDS_MEMORY`).
+
+### Keeping and clearing notes
+
+- **Reading and editing.** The owner reads and edits the notes in the *Memory*
+  card on the task page. A save carries the version it started from; if a run
+  changed the notes in the meantime the editor says so and lets the owner
+  reload or keep editing, instead of overwriting the run's update.
+- **Clearing.** *Clear* empties the notes. If you changed what the task does,
+  clear them so the task does not keep reporting as if nothing changed.
+  Someone who may no longer create tasks can still read and clear the notes
+  of tasks they own.
+- **Switching off** keeps the notes; they are just not used until memory is on
+  again. **Duplicating** a task copies the setting, not the notes; the copy
+  starts empty. **Deleting** the task deletes its notes.
+- **Admins** see only metadata (size, version, last update, who wrote last)
+  in Admin → Scheduled Tasks, and can clear the notes. They cannot read them.
+- **Size.** `memoryMaxChars` applies to every write. The notes in the prompt
+  are cut at the limit, with a marker, if a limit was lowered after they were
+  written.
+- **Scheduling tools.** A proposal card from `schedule_task` and
+  `update_scheduled_task` can carry `memory` and shows it; the model is told
+  that memory exists and is off by default.
+
 ## Approvals
 
 A tool whose definition sets `"requiresApproval": true` does not run
@@ -272,7 +359,9 @@ to users who may use scheduled tasks.
 Inside a scheduled run, `schedule_task`, `delete_scheduled_task` and
 `run_scheduled_task_now` are withheld — a task cannot multiply itself — and
 `update_scheduled_task` may only pause the task that is running or change its
-schedule (proposed, as always). The model is told the user's local time and
+schedule (proposed, as always). Two more tools exist only inside a run of a task
+that keeps memory: `list_task_runs` and `get_task_run`
+([Memory and earlier runs](#memory-and-earlier-runs)). The model is told the user's local time and
 time zone whenever `schedule_task` or `update_scheduled_task` is on, so
 "tomorrow at 9" lands where the user means it.
 
@@ -286,11 +375,14 @@ of the feature's conditions currently hold, and edits the platform limits.
 `GET /api/admin/scheduled-tasks` also reports which worker runs the scheduler
 and what it has queued. An admin can **pause**, **disable** (the owner cannot resume
 it) or **delete** any task and read its run history. An admin never runs a task
-or edits what it does — a run always acts as its owner.
+or edits what it does — a run always acts as its owner. For a task that keeps
+memory the list also shows the notes' size, version and last update; an admin
+can clear them but never read them.
 
 Every change is written to the audit log (Admin → Audit Log) with resource
 `scheduledTask`: create, update, delete, pause/resume (`toggle`), run now
-(`execute`), and the admin's pause/disable/delete and settings changes.
+(`execute`), and the admin's pause/disable/delete and settings changes. Edits and
+clears of a task's notes are logged as `scheduledTaskMemory`, without their content.
 
 ## Workflow schedule triggers use the same scheduler
 
@@ -326,9 +418,15 @@ tasks — an id that is not theirs is a 404.
 | `POST /:taskId/runs/:runId/cancel`             | Stop a queued, running or waiting run              |
 | `POST /:taskId/runs/:runId/approval`           | `{ decision: 'approve' \| 'reject', alwaysAllow }` |
 | `DELETE /:taskId/allowed-tools/:toolId`        | Revoke an *always allow*                           |
+| `GET /:taskId/memory`                          | The notes with `version`, `chars`, `updatedAt`, `updatedBy`, `maxChars` and `platformEnabled` |
+| `PUT /:taskId/memory`                          | `{ content, expectedVersion }`: replace the notes (`409 VERSION_CONFLICT`, `400 MEMORY_TOO_LONG`) |
+| `DELETE /:taskId/memory`                       | Clear the notes                                    |
 
 Admin routes are under `/api/admin/scheduled-tasks` (list, read, `PATCH
-{ status, reason }`, delete, runs, `PUT /settings`). The OpenAPI description is
+{ status, reason }`, delete, runs, `PUT /settings`, and `GET` · `DELETE
+/:taskId/memory` for the notes' metadata and clearing them). A task is created or
+changed with `memory: { enabled }`; the task carries `memorySummary` (size,
+version, last update and writer), never the notes. The OpenAPI description is
 at `/api/docs`.
 
 ## Operational notes and limits
@@ -341,6 +439,8 @@ at `/api/docs`.
   `scheduled-task-runs` namespaces of the [storage provider](storage.md) —
   `contents/data/scheduled-tasks/` and `contents/data/scheduled-task-runs/` on
   the filesystem provider.
+- **Notes** live in the `scheduled-task-memory` namespace, one document per
+  task, written under a lock with a version check.
 - **Run chats follow chat retention's age rule** but not `maxChatsPerUser`;
   they are capped per task instead — see [Retention](chat-persistence.md#retention).
 - **Deleting a task** keeps its run chats unless *delete chats* is ticked.
@@ -360,9 +460,15 @@ at `/api/docs`.
 | `server/services/scheduler/tasks/taskExecution.js`   | One run: owner principal, checks, the headless chat turn  |
 | `server/services/scheduler/tasks/taskService.js`     | Everything the routes and tools do to tasks               |
 | `server/services/scheduler/tasks/runSeams.js`        | The approval gate and the integration check               |
-| `server/tools/scheduledTaskTools.js`                 | The five scheduling tools                                 |
+| `server/services/memory/memoryService.js`            | Memory shared by agents and tasks: scope, read, write     |
+| `server/services/scheduler/tasks/TaskMemoryRepository.js`, `taskMemory.js` | Notes storage, limits and metadata |
+| `server/services/scheduler/tasks/runMemory.js`       | What a run is given: notes, instruction, tools            |
+| `server/services/scheduler/tasks/runHistory.js`      | Listing and reading earlier runs                          |
+| `server/services/scheduler/tasks/memoryComposer.js`  | The notes update after a run                              |
+| `server/tools/scheduledTaskTools.js`                 | The five scheduling tools and the two history tools       |
 | `server/routes/scheduledTasks.js`, `server/routes/admin/scheduledTasks.js` | The HTTP surface                    |
-| `client/src/features/tasks/`                         | `/tasks` pages, the form, proposal cards, banner, notifier |
+| `client/src/features/tasks/`                         | `/tasks` pages, the form, the Memory card, proposal cards, banner, notifier |
+| `client/src/shared/components/MemoryEditor.jsx`      | The notes editor shared with the admin agent memory page  |
 
 ```bash
 npm run test:scheduled-tasks

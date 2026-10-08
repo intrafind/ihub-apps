@@ -93,6 +93,42 @@ export function getProviderApiType(provider) {
   return null;
 }
 
+/**
+ * Hosts of the vendors' own endpoints. A model that calls one of them cannot
+ * run without a key, so a missing key there is a configuration error.
+ */
+const KEY_REQUIRED_HOSTS = Object.freeze(['api.openai.com']);
+
+/**
+ * Whether a model may be called without an API key.
+ *
+ * - `local` (vLLM, LM Studio, Jan.ai, Ollama): such servers usually have no
+ *   authentication, so a missing key is the normal case.
+ * - `openai` pointed at a server of its own (a gateway or an OpenAI-compatible
+ *   server at a custom `url`) and not linked to a custom provider entry: the
+ *   same kind of endpoint, reached through the OpenAI API type. Linked models
+ *   keep their key requirement — that provider exists to hold one.
+ *
+ * This only decides what happens when no key is found anywhere; a configured
+ * key is always sent.
+ *
+ * @param {Object} model - Model config (`provider`, `providerId`, `url`)
+ * @returns {boolean}
+ */
+export function allowsMissingApiKey(model) {
+  if (!model) return false;
+  if (model.provider === 'local') return true;
+  if (model.provider !== 'openai' || model.providerId || typeof model.url !== 'string') {
+    return false;
+  }
+  try {
+    const { hostname } = new URL(model.url);
+    return Boolean(hostname) && !KEY_REQUIRED_HOSTS.includes(hostname.toLowerCase());
+  } catch {
+    return false;
+  }
+}
+
 /** Id of the provider entry a model takes its API key from. */
 export function getModelProviderId(model) {
   return model?.providerId || model?.provider || null;
