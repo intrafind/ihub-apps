@@ -17,9 +17,9 @@ const TRANSITIONAL = {
   rel: 'http://schemas.openxmlformats.org/officeDocument/2006/relationships'
 };
 const STRICT = {
-  w: 'http://purl.oclc.org/ooxml/wordprocessingml/main',
-  r: 'http://purl.oclc.org/ooxml/officeDocument/relationships',
-  rel: 'http://purl.oclc.org/ooxml/officeDocument/relationships'
+  w: 'http://purl.oclc.org/ooxml/wordprocessingml/main', // NOSONAR
+  r: 'http://purl.oclc.org/ooxml/officeDocument/relationships', // NOSONAR
+  rel: 'http://purl.oclc.org/ooxml/officeDocument/relationships' // NOSONAR
 };
 
 /** jsdom's File may lack arrayBuffer(); the extractors only need name/type/arrayBuffer. */
@@ -67,8 +67,8 @@ export async function buildDocxFile(
   const ns = strict ? STRICT : TRANSITIONAL;
   const W_NS = `xmlns:w="${ns.w}" xmlns:r="${ns.r}"`;
   const zip = new JSZip();
-  const hasStyles = styles !== null;
-  const hasNumbering = numbering !== null;
+  const hasStyles = typeof styles === 'string';
+  const hasNumbering = typeof numbering === 'string';
   zip.file(
     '[Content_Types].xml',
     '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
