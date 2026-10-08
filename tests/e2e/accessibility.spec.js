@@ -232,7 +232,7 @@ test.describe('Accessibility — signed-in pages (WCAG 2.2 AA)', () => {
     '/chats': ['color-contrast'],
     '/admin': ['color-contrast'],
     '/admin/apps': ['label'],
-    '/admin/models': ['color-contrast', 'label'],
+    '/admin/models': ['label'],
     '/admin/users': ['color-contrast', 'label'],
     '/admin/groups': ['color-contrast']
   };
