@@ -2,7 +2,9 @@
 
 **Date:** 2026-10-08
 **Issue:** [#2751 — Document upload: preserve structure when extracting DOCX/PDF text](https://github.com/intrafind/ihub-apps/issues/2751) (Phase 5 "Optional / follow-ups" plus the optional PDF heading detection from Phase 3)
-**Status:** Plan — nothing implemented
+**Status:** Plan for release 2 — nothing implemented
+
+> **Updated 2026-10-08:** decisions D1–D4 below are resolved in [`README.md`](README.md). WP-A (headers/footers) moved into release 1 (PR 4 in `05-implementation-plan.md`); WP-B options must follow decision A3 (comments, deletions, hidden text and speaker notes only as opt-in per app); Phase 4 (DOCX page hints) was dropped (decision A4). Facts in "Verified findings" are extended in `01-current-state.md`.
 
 ## Context
 
