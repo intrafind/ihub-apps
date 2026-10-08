@@ -1,0 +1,8 @@
+# Findings gitleaks reports for commits that are already in history. Each line
+# is a fingerprint (commit:file:rule:line); new code uses a `gitleaks:allow`
+# comment on the line instead (see .gitleaks.toml and docs/security.md).
+#
+# EU AI Act PR: the PEM markers wrap a key generated at runtime by the test,
+# and the token is a dummy JWS ({"alg":"ES256"}.{"typ":"ihub"}."sig").
+01a234c661764bbc090143ca19fc8f7759c47b37:server/tests/ai-transparency-signing.test.js:private-key:220
+14e1c45f21e31654502eeef196ab808d04055aa2:tests/unit/client/verify-result.test.jsx:generic-api-key:101

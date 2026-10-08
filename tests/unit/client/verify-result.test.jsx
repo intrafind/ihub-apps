@@ -98,7 +98,7 @@ describe('uploads', () => {
 });
 
 describe('signed reports', () => {
-  const token = 'eyJhbGciOiJFUzI1NiJ9.eyJ0eXAiOiJpaHViIn0.c2ln';
+  const token = 'eyJhbGciOiJFUzI1NiJ9.eyJ0eXAiOiJpaHViIn0.c2ln'; // gitleaks:allow -- dummy JWS
 
   it('finds the token in a downloaded report, a JSON string or on its own', () => {
     const file = buildReportFileContent({ report: token, reportPayload: { v: 1 }, result: {} });

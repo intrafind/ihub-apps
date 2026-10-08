@@ -217,7 +217,7 @@ describe('JWS', () => {
     const { x509 } = x;
     const { ca, issue, alg } = await customerPki();
     const pkcs8 = async key =>
-      `-----BEGIN PRIVATE KEY-----\n${Buffer.from(await webcrypto.subtle.exportKey('pkcs8', key)).toString('base64')}\n-----END PRIVATE KEY-----\n`;
+      `-----BEGIN PRIVATE KEY-----\n${Buffer.from(await webcrypto.subtle.exportKey('pkcs8', key)).toString('base64')}\n-----END PRIVATE KEY-----\n`; // gitleaks:allow -- wraps a key generated at runtime
     const anchors = [ca.toString('pem')];
     const signedBy = async (chain, key) =>
       verifyJws(
