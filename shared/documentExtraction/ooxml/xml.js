@@ -8,7 +8,8 @@
  */
 
 export const W_NS_TRANSITIONAL = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
-export const W_NS_STRICT = 'http://purl.oclc.org/ooxml/wordprocessingml/main';
+// An XML namespace name, not an address that is ever requested.
+export const W_NS_STRICT = 'http://purl.oclc.org/ooxml/wordprocessingml/main'; // NOSONAR
 
 /**
  * Parse XML text; throws for malformed XML (the caller falls back to legacy extraction).
