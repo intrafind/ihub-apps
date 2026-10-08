@@ -557,11 +557,15 @@ function WorkflowExecutionPage() {
         value.length > 200);
     const fileBase = `${key}-${workflowSlug}-${shortExecId}`;
     return (
-      <div className="flex items-center gap-1.5" onClick={e => e.stopPropagation()}>
+      <div
+        role="presentation"
+        className="flex items-center gap-1.5"
+        onClick={e => e.stopPropagation()}
+      >
         <button
           onClick={e => {
             e.stopPropagation();
-            copyToClipboard(key, value);
+            void copyToClipboard(key, value);
           }}
           className="px-2 py-1 text-xs bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-sm hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors flex items-center gap-1"
           title={t('workflows.output.copyToClipboard', 'Copy to clipboard')}

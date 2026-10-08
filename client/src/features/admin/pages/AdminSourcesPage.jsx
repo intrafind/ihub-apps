@@ -61,7 +61,7 @@ function AdminSourcesPage() {
   const [tokenEstimates, setTokenEstimates] = useState({ sources: {} });
 
   useEffect(() => {
-    loadSources();
+    void loadSources();
   }, []);
 
   // Token estimates read every file source, so they load separately and
@@ -75,7 +75,7 @@ function AdminSourcesPage() {
   };
 
   const loadSources = async () => {
-    loadTokenEstimates();
+    void loadTokenEstimates();
     try {
       setLoading(true);
       setError(null);

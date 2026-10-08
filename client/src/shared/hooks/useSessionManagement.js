@@ -29,7 +29,7 @@ function useSessionManagement() {
       }
     };
 
-    logSession();
+    void logSession();
 
     // Set up session renewal timer
     const renewalTimer = setInterval(

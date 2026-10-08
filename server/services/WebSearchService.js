@@ -171,7 +171,7 @@ export const BRAVE_FRESHNESS = Object.freeze({ day: 'pd', week: 'pw', month: 'pm
  */
 function braveDate(value) {
   if (typeof value !== 'string' || !value.trim()) return undefined;
-  const text = /[zZ]|[+-]\d{2}:?\d{2}$/.test(value) ? value : `${value}Z`;
+  const text = /(?:[zZ]|[+-]\d{2}:?\d{2})$/.test(value) ? value : `${value}Z`;
   const date = new Date(text);
   return Number.isNaN(date.getTime()) ? undefined : date.toISOString();
 }

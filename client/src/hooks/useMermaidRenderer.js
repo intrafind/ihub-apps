@@ -159,7 +159,7 @@ export const useMermaidRenderer = ({ t }) => {
           mermaidReady = true;
 
           // Process any existing diagrams now that Mermaid is ready
-          initializeMermaidDiagrams();
+          void initializeMermaidDiagrams();
         } catch (err) {
           console.error('Failed to load or initialize Mermaid:', err);
         }
@@ -476,25 +476,25 @@ export const useMermaidRenderer = ({ t }) => {
 
     // Initial run with retry mechanism for diagrams that are already in the DOM
     const initialRun = () => {
-      initializeMermaidDiagrams();
+      void initializeMermaidDiagrams();
 
       // Retry after a delay to catch diagrams that might be rendered after initial mount
       timeouts.push(
         setTimeout(() => {
-          initializeMermaidDiagrams();
+          void initializeMermaidDiagrams();
         }, 500)
       );
 
       // One more retry for slower rendering
       timeouts.push(
         setTimeout(() => {
-          initializeMermaidDiagrams();
+          void initializeMermaidDiagrams();
         }, 1500)
       );
     };
 
     // Start loading Mermaid immediately
-    loadMermaid();
+    void loadMermaid();
 
     // Run initial processing (will be called again once Mermaid loads)
     initialRun();

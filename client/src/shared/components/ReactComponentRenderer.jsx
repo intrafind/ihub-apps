@@ -215,7 +215,7 @@ UserComponent;
       }
     };
 
-    compileJSX();
+    void compileJSX();
 
     return () => {
       isMounted = false;

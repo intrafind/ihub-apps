@@ -120,7 +120,7 @@ function FeedbackEntriesCard() {
   const pageSize = 20;
 
   useEffect(() => {
-    loadFeedback();
+    void loadFeedback();
   }, [page]);
 
   const loadFeedback = async () => {

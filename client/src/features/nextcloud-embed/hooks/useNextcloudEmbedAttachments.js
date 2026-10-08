@@ -253,7 +253,7 @@ export function useNextcloudEmbedAttachments(fileUploadHandler, app, currentMode
       }
     }
 
-    attach(getCurrentSelection());
+    void attach(getCurrentSelection());
     const unsubscribe = onSelectionChange(attach);
 
     function handleReset() {

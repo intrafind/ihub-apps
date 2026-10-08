@@ -33,7 +33,7 @@ function CookieSettingsConfig() {
       }
     };
 
-    fetchCookieSettings();
+    void fetchCookieSettings();
   }, [t]);
 
   const handleToggleDisableSecure = e => {

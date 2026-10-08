@@ -94,7 +94,7 @@ function AdminModelsPage() {
   };
 
   useEffect(() => {
-    loadModels();
+    void loadModels();
   }, []);
 
   const toggleModel = async modelId => {

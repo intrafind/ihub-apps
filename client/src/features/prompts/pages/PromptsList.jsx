@@ -905,7 +905,7 @@ function PromptsList() {
                       <button
                         onClick={e => {
                           e.stopPropagation();
-                          handleCopy(p);
+                          void handleCopy(p);
                         }}
                         className="px-3 py-1.5 text-xs border border-indigo-600 text-indigo-600 dark:border-indigo-400 dark:text-indigo-400 rounded-lg hover:bg-indigo-50 dark:hover:bg-indigo-900/40 transition-colors flex items-center justify-center gap-1"
                       >

@@ -36,7 +36,7 @@ export default function AdminAgentApprovalsPage() {
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    (async () => {
+    void (async () => {
       try {
         const body = await fetchPendingInteractions();
         const items = Array.isArray(body?.interactions) ? body.interactions : [];

@@ -48,7 +48,7 @@ export function useUpdateCheck({ enabled = true } = {}) {
       }
     };
 
-    run(1);
+    void run(1);
 
     return () => {
       cancelled = true;

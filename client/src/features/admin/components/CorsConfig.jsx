@@ -55,7 +55,7 @@ function CorsConfig() {
       }
     };
 
-    fetchCorsConfig();
+    void fetchCorsConfig();
   }, [t]);
 
   const handleAddOrigin = () => {

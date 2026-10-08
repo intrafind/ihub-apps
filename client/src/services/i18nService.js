@@ -60,7 +60,7 @@ class I18nService {
       // Set up language change listener with race condition protection
       i18n.on('languageChanged', newLanguage => {
         if (!this.languageChangeInProgress) {
-          this.loadFullTranslations(newLanguage);
+          void this.loadFullTranslations(newLanguage);
         }
         this.broadcastLanguageChange(newLanguage);
       });
@@ -68,7 +68,7 @@ class I18nService {
       this.isInitialized = true;
 
       // Load full setup asynchronously
-      this.initializeAsync();
+      void this.initializeAsync();
     } catch (error) {
       console.error('Failed to initialize i18n service synchronously:', error);
       this.isInitialized = true;
@@ -114,9 +114,16 @@ class I18nService {
 
     // Avoid bouncing the same change back onto the channel.
     this.suppressBroadcast = true;
-    this.changeLanguage(language).finally(() => {
-      this.suppressBroadcast = false;
-    });
+    this.changeLanguage(language)
+      .catch(error => {
+        console.warn(
+          '[i18n] Could not apply the language change from the intrafind channel:',
+          error
+        );
+      })
+      .finally(() => {
+        this.suppressBroadcast = false;
+      });
   }
 
   broadcastLanguageChange(language) {

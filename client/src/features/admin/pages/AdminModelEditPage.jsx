@@ -79,7 +79,7 @@ function AdminModelEditPage() {
     }
     loadAppsUsingModel();
     loadUsageData();
-    loadJsonSchema();
+    void loadJsonSchema();
   }, [modelId, isNewModel]); // eslint-disable-line @eslint-react/exhaustive-deps
 
   useEffect(() => {

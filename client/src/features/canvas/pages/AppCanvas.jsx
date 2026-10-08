@@ -345,7 +345,7 @@ export default function AppCanvas() {
       }
     };
 
-    loadApp();
+    void loadApp();
     return () => {
       isMounted = false;
     };
@@ -551,7 +551,7 @@ export default function AppCanvas() {
         }
       };
 
-      loadInitialContent();
+      void loadInitialContent();
     }
   }, [searchParams, appId, navigate, setContentWithConfirmation, t]);
 

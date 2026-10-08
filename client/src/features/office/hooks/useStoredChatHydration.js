@@ -73,7 +73,7 @@ export default function useStoredChatHydration({ chat, chatId, serverBacked, isF
     pendingRef.current = true;
 
     const owns = () => attemptRef.current === chatId;
-    (async () => {
+    void (async () => {
       try {
         const result = await fetchChat(chatId);
         if (!owns()) return;

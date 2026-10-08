@@ -60,7 +60,7 @@ function AdminSkillEditPage() {
   // ---------------------------------------------------------------------------
 
   useEffect(() => {
-    loadSkill();
+    void loadSkill();
   }, [skillName]); // eslint-disable-line @eslint-react/exhaustive-deps
 
   /**

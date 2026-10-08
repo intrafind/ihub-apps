@@ -193,7 +193,7 @@ export async function transcribeAudioBuffer(audioBuffer, opts = {}) {
           if (typeof onSources === 'function' && Array.isArray(msg.knowledgeSources)) {
             onSources(msg.knowledgeSources);
           }
-          streamAudio();
+          streamAudio().catch(err => fail('stream', err.message));
           break;
         case 'delta':
           transcript.applyDelta(msg.text);

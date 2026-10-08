@@ -30,7 +30,7 @@ function SsrfConfig() {
         setLoading(false);
       }
     };
-    fetchConfig();
+    void fetchConfig();
   }, [t]);
 
   const handleAddHost = () => {

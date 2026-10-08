@@ -400,7 +400,7 @@ export function startChatRetentionSweep({
 
   sweepTimer = setInterval(tick, intervalMs);
   if (typeof sweepTimer.unref === 'function') sweepTimer.unref();
-  tick();
+  void tick();
   return stopChatRetentionSweep;
 }
 

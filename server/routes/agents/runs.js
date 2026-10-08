@@ -589,7 +589,7 @@ export default function registerAgentRunRoutes(app) {
 
       // Seed from existing state in case the SSE client connects after some
       // child workflows have already been spawned.
-      (async () => {
+      void (async () => {
         try {
           const state = await getEngine().getState(runId);
           const seed = ids => {

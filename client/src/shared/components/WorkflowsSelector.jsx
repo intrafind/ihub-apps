@@ -35,7 +35,7 @@ function WorkflowsSelector({ selectedWorkflows = [], onWorkflowsChange }) {
         setIsLoading(false);
       }
     };
-    loadWorkflows();
+    void loadWorkflows();
   }, []);
 
   const localize = value => getLocalizedContent(value, i18n.language) || '';

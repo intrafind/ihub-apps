@@ -1268,7 +1268,7 @@ function ChatMessage({
           <div
             className={`flex items-center ${compact ? 'gap-1 flex-wrap' : 'gap-3'} text-xs transition-opacity duration-200 ${
               showActions || readAloudPlayback.state !== 'idle' ? 'opacity-100' : 'opacity-0'
-            } ${isUser ? 'text-gray-500' : 'text-gray-500'}`}
+            } text-gray-500`}
           >
             {/* Standard actions first */}
             <div className="relative inline-flex items-center" ref={copyMenuRef}>

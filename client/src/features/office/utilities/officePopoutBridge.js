@@ -137,7 +137,7 @@ export function createPopoutEndpoint({
   function dispatch(envelope) {
     switch (envelope.t) {
       case 'req':
-        answer(envelope);
+        void answer(envelope);
         break;
       case 'res': {
         const call = pending.get(envelope.id);

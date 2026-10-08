@@ -69,7 +69,9 @@ export function sourcesFromGrounding(meta) {
   }
   for (const support of list(meta.webSupports)) {
     const passage = typeof support?.text === 'string' ? support.text : '';
-    const urls = list(support?.urls).map(httpUrl).filter(Boolean);
+    const urls = list(support?.urls)
+      .map(url => httpUrl(url))
+      .filter(Boolean);
     if (!passage.trim() || !urls.length) continue;
     supports.push({ text: passage, urls });
     for (const url of urls) items.push({ ...WEB, url, cited: true });

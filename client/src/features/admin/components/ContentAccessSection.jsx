@@ -110,12 +110,12 @@ function ContentAccessSection({ resourceType, resourceId, isNew = false, classNa
     if (group.wildcard || group.granted || pending.has(group.id)) return;
     setSearchTerm('');
     setActiveIndex(-1);
-    applyChange(group.id, { grant: [group.id] });
+    void applyChange(group.id, { grant: [group.id] });
   };
 
   const revokeGroup = group => {
     if (group.wildcard || pending.has(group.id)) return;
-    applyChange(group.id, { revoke: [group.id] });
+    void applyChange(group.id, { revoke: [group.id] });
   };
 
   const groups = useMemo(() => (Array.isArray(access?.groups) ? access.groups : []), [access]);

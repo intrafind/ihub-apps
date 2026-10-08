@@ -79,7 +79,7 @@ function AdminPromptEditPage() {
 
     loadApps();
     loadUIConfig();
-    loadJsonSchema();
+    void loadJsonSchema();
 
     if (!isNewPrompt) {
       loadPrompt();

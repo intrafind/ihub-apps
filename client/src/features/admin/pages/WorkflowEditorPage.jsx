@@ -59,7 +59,7 @@ function WorkflowEditorPage() {
       }
     };
 
-    loadWorkflow();
+    void loadWorkflow();
   }, [id, isNew, t]);
 
   /**

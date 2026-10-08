@@ -32,7 +32,7 @@ export default function AdminAgentMemoryPage() {
   const [showShapePrompt, setShowShapePrompt] = useState(false);
 
   useEffect(() => {
-    (async () => {
+    void (async () => {
       try {
         const list = await fetchAdminTools();
         // The admin tools endpoint returns the raw catalog (parents have a
@@ -60,7 +60,7 @@ export default function AdminAgentMemoryPage() {
   }, []);
 
   useEffect(() => {
-    (async () => {
+    void (async () => {
       try {
         const res = await fetchMemoryShaperPrompt();
         const prompt = res?.data?.prompt;

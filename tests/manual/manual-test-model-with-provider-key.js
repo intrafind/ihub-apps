@@ -107,4 +107,4 @@ async function testModelWithProviderKey() {
 }
 
 // Run the test
-testModelWithProviderKey();
+void testModelWithProviderKey();

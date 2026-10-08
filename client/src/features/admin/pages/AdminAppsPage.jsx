@@ -87,8 +87,8 @@ function AdminAppsPage() {
   const [savingOrder, setSavingOrder] = useState(false);
 
   useEffect(() => {
-    loadApps();
-    loadUIConfig();
+    void loadApps();
+    void loadUIConfig();
   }, []);
 
   const loadUIConfig = async () => {
@@ -224,7 +224,7 @@ function AdminAppsPage() {
   const handleWizardClose = () => {
     setShowCreationWizard(false);
     setSelectedTemplate(null);
-    loadApps();
+    void loadApps();
   };
 
   const handleCloneApp = app => {

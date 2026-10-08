@@ -416,6 +416,10 @@ async function issueApiKey(client, expirationDays, clientsFilePath, config) {
     stored.metadata.apiKeyExpiresAt = apiKey.expires_at;
   });
 
+  if (!apiKey) {
+    throw new PersonalKeyError('API key could not be issued', 500);
+  }
+
   return apiKey;
 }
 

@@ -172,6 +172,7 @@ function PlatformFormEditor({ value: config, onChange, onValidationChange, avail
               }
             ].map(modeOption => (
               <div
+                role="presentation"
                 key={modeOption.mode}
                 className={`p-4 border-2 rounded-lg cursor-pointer transition-colors ${
                   config.auth?.mode === modeOption.mode

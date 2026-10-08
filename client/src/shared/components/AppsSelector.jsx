@@ -42,7 +42,7 @@ function AppsSelector({ selectedApps = [], onAppsChange, excludeAppId }) {
         setIsLoading(false);
       }
     };
-    loadApps();
+    void loadApps();
   }, []);
 
   const localize = value => getLocalizedContent(value, i18n.language) || '';

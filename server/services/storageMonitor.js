@@ -195,8 +195,18 @@ export function createStorageMonitor({
 export function startStorageMonitor({ intervalMs = DEFAULT_INTERVAL_MS, ...options }) {
   if (monitorTimer) return;
   const monitor = createStorageMonitor(options);
-  monitor.check();
-  monitorTimer = setInterval(() => monitor.check(), intervalMs);
+  // check() handles a failed snapshot itself; this covers anything after it, so a
+  // monitoring hiccup is logged instead of surfacing as an unhandled rejection.
+  const runCheck = () =>
+    monitor.check().catch(error => {
+      logger.warn({
+        component: 'StorageMonitor',
+        message: 'Storage check failed',
+        error: error?.message || String(error)
+      });
+    });
+  void runCheck();
+  monitorTimer = setInterval(() => void runCheck(), intervalMs);
   monitorTimer.unref?.();
 }
 

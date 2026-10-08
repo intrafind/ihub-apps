@@ -238,24 +238,6 @@ class AzureSpeechRecognition {
     }
     console.log("'onend' is not defined");
   }
-
-  // GETTER SETTER
-
-  get host() {
-    return this.host;
-  }
-
-  set host(host) {
-    this.host = host;
-  }
-
-  get lang() {
-    return this.lang;
-  }
-
-  set lang(lang) {
-    this.lang = lang;
-  }
 }
 
 export default AzureSpeechRecognition;

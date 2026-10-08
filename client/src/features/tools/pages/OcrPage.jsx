@@ -420,7 +420,16 @@ export default function OcrPage() {
               ? 'border-green-400 bg-green-50 dark:bg-green-900/20'
               : 'border-gray-300 dark:border-gray-600 hover:border-blue-400 dark:hover:border-blue-500'
         } ${isProcessing ? 'pointer-events-none opacity-60' : ''}`}
+        role="button"
+        tabIndex={isProcessing ? -1 : 0}
+        aria-disabled={isProcessing || undefined}
         onClick={() => !isProcessing && fileInputRef.current?.click()}
+        onKeyDown={e => {
+          if (!isProcessing && (e.key === 'Enter' || e.key === ' ')) {
+            e.preventDefault();
+            fileInputRef.current?.click();
+          }
+        }}
         onDrop={handleDrop}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}

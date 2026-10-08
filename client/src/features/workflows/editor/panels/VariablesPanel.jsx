@@ -34,11 +34,8 @@ function VariablesPanel({ variables }) {
 
   const copy = value => {
     const snippet = `{{${value}}}`;
-    try {
-      navigator.clipboard?.writeText(snippet);
-    } catch {
-      /* clipboard unavailable — the name is still on screen to type */
-    }
+    // Unavailable or refused clipboard: the name is still on screen to type.
+    navigator.clipboard?.writeText(snippet)?.catch(() => {});
     setCopied(value);
     setTimeout(() => setCopied(null), 1500);
   };

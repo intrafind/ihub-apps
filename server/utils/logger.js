@@ -35,12 +35,9 @@ const orderedJsonFormat = winston.format.printf(info => {
   // 5. Add all other fields (except the ones we've already added)
   const reservedFields = ['component', 'level', 'timestamp', 'message'];
   Object.keys(info).forEach(key => {
-    if (
-      !reservedFields.includes(key) &&
-      key !== Symbol.for('level') &&
-      key !== Symbol.for('message') &&
-      key !== Symbol.for('splat')
-    ) {
+    // Object.keys() skips symbol keys (winston's level/message/splat), so only the
+    // string-keyed reserved fields need excluding.
+    if (!reservedFields.includes(key)) {
       orderedLog[key] = info[key];
     }
   });

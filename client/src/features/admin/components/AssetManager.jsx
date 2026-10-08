@@ -34,7 +34,7 @@ function AssetManager({ t }) {
   };
 
   useEffect(() => {
-    loadAssets();
+    void loadAssets();
   }, []);
 
   const handleFileUpload = async event => {

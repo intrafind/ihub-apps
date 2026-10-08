@@ -82,7 +82,7 @@ function ProxyConfig() {
         setLoading(false);
       }
     };
-    fetchConfig();
+    void fetchConfig();
   }, [applyResponse, t]);
 
   const invalidPatterns = useMemo(
@@ -708,7 +708,7 @@ function ProxyConfig() {
             onKeyDown={e => {
               if (e.key === 'Enter' && !testing && testUrl.trim()) {
                 e.preventDefault();
-                handleTest();
+                void handleTest();
               }
             }}
             placeholder={t(

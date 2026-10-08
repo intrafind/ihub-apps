@@ -104,7 +104,12 @@ function DataTableKebabMenu({ items, label = 'More actions', row }) {
   if (!items || items.length === 0) return null;
 
   return (
-    <div className="relative inline-block" ref={ref} onClick={e => e.stopPropagation()}>
+    <div
+      role="presentation"
+      className="relative inline-block"
+      ref={ref}
+      onClick={e => e.stopPropagation()}
+    >
       <button
         ref={triggerRef}
         type="button"

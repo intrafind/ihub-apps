@@ -134,7 +134,7 @@ function LanguageSelector({ variant = 'header' }) {
                   role="menuitemradio"
                   aria-checked={i18n.language === lang.code}
                   onClick={() => {
-                    changeLanguage(lang.code);
+                    void changeLanguage(lang.code);
                     closeMenu();
                   }}
                   className={`flex items-center justify-between w-full px-3 py-2 text-sm text-left hover:bg-gray-100 dark:hover:bg-gray-700 ${

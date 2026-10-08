@@ -55,7 +55,7 @@ function AdminWorkflowEditPage() {
 
   useEffect(() => {
     if (!isNewWorkflow) {
-      loadWorkflow();
+      void loadWorkflow();
     } else {
       const defaultWf = getDefaultWorkflow();
       setWorkflowData(defaultWf);

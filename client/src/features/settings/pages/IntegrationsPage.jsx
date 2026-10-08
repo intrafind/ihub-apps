@@ -265,7 +265,7 @@ export default function IntegrationsPage() {
       }
     };
 
-    loadIntegrations();
+    void loadIntegrations();
   }, [user?.id, cloudProviders, jiraEnabled]);
 
   // Connect flow — JIRA pre-checks the auth response before redirecting so

@@ -454,6 +454,6 @@ describe('V104 — repointing apps', () => {
   it('survives an apps directory that does not exist', async () => {
     await up(makeCtx(dir));
 
-    assert.rejects(() => readModel('gemini-2.5-pro'));
+    await assert.rejects(() => readModel('gemini-2.5-pro'));
   });
 });

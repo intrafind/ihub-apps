@@ -72,7 +72,7 @@ function AdminSourceEditPage() {
       }
     };
 
-    loadSourceData();
+    void loadSourceData();
   }, [id, isEditing]);
 
   const handleSave = async sourceData => {

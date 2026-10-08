@@ -43,7 +43,7 @@ function AdminSkillsPage() {
   const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
-    loadSkills();
+    void loadSkills();
   }, []);
 
   // Keep the open tab in the URL, so a reload or a shared link lands on it.
@@ -477,7 +477,7 @@ function AdminSkillsPage() {
                                   <button
                                     onClick={e => {
                                       e.stopPropagation();
-                                      handleToggleSkill(skill.name);
+                                      void handleToggleSkill(skill.name);
                                     }}
                                     className={`p-2 rounded-full ${
                                       skill.enabled !== false
@@ -501,7 +501,7 @@ function AdminSkillsPage() {
                                 <button
                                   onClick={e => {
                                     e.stopPropagation();
-                                    handleExportSkill(skill.name);
+                                    void handleExportSkill(skill.name);
                                   }}
                                   className="p-2 text-green-600 hover:bg-green-50 dark:hover:bg-green-900/30 rounded-full"
                                   title={t('admin.skills.export', 'Export Skill')}
@@ -533,7 +533,7 @@ function AdminSkillsPage() {
                                   <button
                                     onClick={e => {
                                       e.stopPropagation();
-                                      handleDeleteSkill(skill.name);
+                                      void handleDeleteSkill(skill.name);
                                     }}
                                     className="p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-full"
                                     title={t('admin.skills.delete', 'Delete')}

@@ -167,9 +167,9 @@ export function useOverviewData({ contentAdminOnly = false } = {}) {
     };
 
     if (contentAdminOnly) {
-      loadContentAdmin();
+      void loadContentAdmin();
     } else {
-      load();
+      void load();
     }
     return () => {
       cancelled = true;

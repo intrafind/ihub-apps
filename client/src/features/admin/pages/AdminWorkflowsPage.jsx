@@ -59,7 +59,7 @@ function AdminWorkflowsPage() {
   const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
-    loadWorkflows();
+    void loadWorkflows();
   }, []);
 
   const loadWorkflows = async () => {

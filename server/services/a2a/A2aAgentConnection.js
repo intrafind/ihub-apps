@@ -809,7 +809,7 @@ function isRunning(task) {
 function refuseRedirect(resp, who) {
   const status = resp?.status;
   if (resp?.type !== 'opaqueredirect' && !(status >= 300 && status < 400)) return;
-  discardBody(resp);
+  void discardBody(resp);
   const location = resp.headers?.get?.('location');
   throw a2aError(
     A2A_CLIENT_ERRORS.REDIRECT_REFUSED,

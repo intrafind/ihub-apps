@@ -224,7 +224,7 @@ function AdminLoggingPage() {
   ];
 
   useEffect(() => {
-    loadConfiguration();
+    void loadConfiguration();
     // eslint-disable-next-line @eslint-react/exhaustive-deps
   }, []);
 

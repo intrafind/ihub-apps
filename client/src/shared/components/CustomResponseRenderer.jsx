@@ -60,7 +60,7 @@ function CustomResponseRenderer({ componentName, data, rendererConfig, className
     };
 
     if (componentName) {
-      loadRendererFromAPI();
+      void loadRendererFromAPI();
     }
   }, [componentName]);
 

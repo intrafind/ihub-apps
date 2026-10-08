@@ -650,7 +650,7 @@ function AIGenerationStep({ appData, updateAppData }) {
       }
     };
 
-    loadAppGeneratorPrompt();
+    void loadAppGeneratorPrompt();
   }, [selectedLanguage]);
 
   const handleGenerate = async () => {
@@ -1151,7 +1151,7 @@ function SystemPromptStep({
         setLoadingModels(false);
       }
     };
-    loadModels();
+    void loadModels();
   }, []);
 
   const updateMultilingualField = (field, value) => {
@@ -1503,7 +1503,7 @@ function ToolsStep({ appData, updateAppData }) {
         console.error('Failed to load tools:', error);
       }
     };
-    loadTools();
+    void loadTools();
   }, [i18n.language]);
 
   const toggleTool = toolId => {

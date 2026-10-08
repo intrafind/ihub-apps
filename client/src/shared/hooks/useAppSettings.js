@@ -91,7 +91,7 @@ function useAppSettings(appId, app, { chatSettings = null, isolated = false } = 
       }
     };
 
-    loadModelsAndStyles();
+    void loadModelsAndStyles();
   }, []);
 
   // The app these settings belong to. `appId` is what was *asked* for, and

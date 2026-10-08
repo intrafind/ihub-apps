@@ -23,7 +23,7 @@ class FileSystemHandler extends SourceHandler {
     logger.info(`FileSystemHandler initialized with basePath: ${this.basePath}`);
 
     // Ensure sources subdirectory exists
-    this.ensureSourcesDirectory();
+    void this.ensureSourcesDirectory();
   }
 
   async ensureSourcesDirectory() {

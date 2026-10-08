@@ -224,4 +224,7 @@ async function runTests() {
   }
 }
 
-runTests();
+runTests().catch(error => {
+  console.error(error);
+  process.exit(1);
+});

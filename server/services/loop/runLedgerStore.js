@@ -726,7 +726,7 @@ export class RunLedgerStore {
     // from a queue of its own. A replace here would erase the workflow name,
     // the input preview, the models and who triggered the run whenever the
     // registry got there first.
-    this._queueSummaryWrite(() =>
+    void this._queueSummaryWrite(() =>
       summaries.merge(summary.runId, {
         runId: summary.runId,
         kind: summary.kind,
@@ -775,7 +775,7 @@ export class RunLedgerStore {
       this._indexAppender.append(entry);
       return;
     }
-    this._queueSummaryWrite(async () => {
+    void this._queueSummaryWrite(async () => {
       const patched = await summaries.patch(summary.runId, {
         status: summary.status,
         finishReason: summary.finishReason ?? null,

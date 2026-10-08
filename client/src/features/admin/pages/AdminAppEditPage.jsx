@@ -78,9 +78,9 @@ function AdminAppEditPage() {
       }
     };
 
-    loadModels();
-    loadUIConfig();
-    loadJsonSchema();
+    void loadModels();
+    void loadUIConfig();
+    void loadJsonSchema();
   }, []);
 
   useEffect(() => {
@@ -383,7 +383,7 @@ function AdminAppEditPage() {
 
   const handleSave = e => {
     e.preventDefault();
-    saveApp();
+    void saveApp();
   };
 
   // Ctrl/Cmd+S saves without leaving the editor. The ref always holds the

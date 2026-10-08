@@ -123,7 +123,7 @@ export default function AdminAgentEditPage() {
   const { blocker, markSaved } = useUnsavedChanges(initialData, profile);
 
   useEffect(() => {
-    (async () => {
+    void (async () => {
       try {
         const [modelsResp, appsResp] = await Promise.all([fetchAdminModels(), fetchAdminApps()]);
         setModels(modelsResp?.data || modelsResp || []);
@@ -137,7 +137,7 @@ export default function AdminAgentEditPage() {
 
   useEffect(() => {
     if (isNew) return;
-    (async () => {
+    void (async () => {
       try {
         const data = await fetchAgentProfile(profileId);
         const loaded = data?.data || data || {};

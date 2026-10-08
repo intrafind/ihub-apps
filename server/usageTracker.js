@@ -145,7 +145,7 @@ function scheduleFlush() {
   if (flushTimer) return;
   flushTimer = setTimeout(() => {
     flushTimer = null;
-    flushPending();
+    void flushPending();
   }, FLUSH_INTERVAL_MS);
   flushTimer.unref?.();
 }

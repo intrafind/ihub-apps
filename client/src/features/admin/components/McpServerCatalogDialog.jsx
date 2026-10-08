@@ -39,7 +39,7 @@ function McpServerCatalogDialog({ onClose, onSelect }) {
 
   useEffect(() => {
     let cancelled = false;
-    (async () => {
+    void (async () => {
       try {
         const { data } = await makeAdminApiCall('/admin/mcp/catalog');
         if (cancelled) return;

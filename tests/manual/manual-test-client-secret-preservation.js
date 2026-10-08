@@ -214,6 +214,11 @@ async function testClientSecretPreservation() {
 }
 
 // Run the test
-testClientSecretPreservation().then(success => {
-  process.exit(success ? 0 : 1);
-});
+testClientSecretPreservation()
+  .then(success => {
+    process.exit(success ? 0 : 1);
+  })
+  .catch(error => {
+    console.error(error);
+    process.exit(1);
+  });

@@ -79,10 +79,10 @@ setInterval(
     for (const [id, job] of jobs) {
       if (now - job.createdAt > JOB_TTL_MS) {
         jobs.delete(id);
-        removeResultFile(job.resultFile);
+        void removeResultFile(job.resultFile);
       }
     }
-    if (isClusterBusActive()) sweepOrphanedResults(now);
+    if (isClusterBusActive()) void sweepOrphanedResults(now);
   },
   5 * 60 * 1000
 ).unref();

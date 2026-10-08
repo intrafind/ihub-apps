@@ -51,7 +51,7 @@ function AdminToolsPage() {
   const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
-    loadTools();
+    void loadTools();
   }, []);
 
   const loadTools = async () => {

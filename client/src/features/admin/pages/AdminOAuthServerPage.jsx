@@ -37,7 +37,7 @@ function AdminOAuthServerPage() {
   const [savingConfig, setSavingConfig] = useState(false);
 
   useEffect(() => {
-    loadConfig();
+    void loadConfig();
     // eslint-disable-next-line @eslint-react/exhaustive-deps
   }, []);
 
@@ -95,8 +95,13 @@ function AdminOAuthServerPage() {
   }, []);
 
   const copyToClipboard = useCallback(
-    text => {
-      navigator.clipboard.writeText(text);
+    async text => {
+      try {
+        await navigator.clipboard.writeText(text);
+      } catch (error) {
+        console.error('Failed to copy to clipboard:', error);
+        return;
+      }
       setMessage({
         type: 'success',
         text: t('common.copiedToClipboard', 'Copied to clipboard')

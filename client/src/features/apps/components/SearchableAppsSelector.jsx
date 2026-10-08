@@ -81,7 +81,10 @@ function SearchableAppsSelector({ apps, value, onChange, placeholder, currentLan
       </div>
 
       {isOpen && (
-        <div className="absolute z-10 mt-1 w-full bg-white dark:bg-gray-800 shadow-lg max-h-60 rounded-md py-1 text-base ring-1 ring-black/5 dark:ring-gray-700/5 overflow-auto focus:outline-hidden sm:text-sm">
+        <div
+          role="listbox"
+          className="absolute z-10 mt-1 w-full bg-white dark:bg-gray-800 shadow-lg max-h-60 rounded-md py-1 text-base ring-1 ring-black/5 dark:ring-gray-700/5 overflow-auto focus:outline-hidden sm:text-sm"
+        >
           {/* Search input */}
           <div className="sticky top-0 bg-white dark:bg-gray-800 px-3 py-2 border-b border-gray-200 dark:border-gray-700">
             <div className="relative">
@@ -102,8 +105,17 @@ function SearchableAppsSelector({ apps, value, onChange, placeholder, currentLan
 
           {/* Clear selection option */}
           <div
+            role="option"
+            aria-selected={!value}
+            tabIndex={0}
             className="cursor-pointer select-none relative py-2 pl-3 pr-9 text-gray-900 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-700"
             onClick={handleClear}
+            onKeyDown={e => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                handleClear();
+              }
+            }}
           >
             <div className="flex items-center">
               <span className="text-sm text-gray-500 dark:text-gray-400">
@@ -117,12 +129,21 @@ function SearchableAppsSelector({ apps, value, onChange, placeholder, currentLan
             filteredApps.map(app => (
               <div
                 key={app.id}
+                role="option"
+                aria-selected={app.id === value}
+                tabIndex={0}
                 className={`cursor-pointer select-none relative py-2 pl-3 pr-9 hover:bg-gray-50 dark:hover:bg-gray-700 ${
                   app.id === value
                     ? 'bg-indigo-50 dark:bg-indigo-900/50 text-indigo-900 dark:text-indigo-100'
                     : 'text-gray-900 dark:text-gray-100'
                 }`}
                 onClick={() => handleSelect(app)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    handleSelect(app);
+                  }
+                }}
               >
                 <div className="flex items-center">
                   <div

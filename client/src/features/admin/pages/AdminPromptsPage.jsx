@@ -61,9 +61,9 @@ function AdminPromptsPage() {
   const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
-    if (promptsLibraryEnabled) loadPrompts();
+    if (promptsLibraryEnabled) void loadPrompts();
     else setLoading(false);
-    loadUIConfig();
+    void loadUIConfig();
   }, [promptsLibraryEnabled]);
 
   useEffect(() => {
@@ -593,7 +593,7 @@ function VariablesTabContent() {
   const [hasChanges, setHasChanges] = useState(false);
 
   useEffect(() => {
-    loadPlatformConfig();
+    void loadPlatformConfig();
   }, []);
 
   const loadPlatformConfig = async () => {

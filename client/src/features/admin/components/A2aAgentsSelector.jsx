@@ -32,7 +32,7 @@ function A2aAgentsSelector({ selectedTools = [], onToolsChange, onA2aToolIdsChan
 
   useEffect(() => {
     let active = true;
-    (async () => {
+    void (async () => {
       try {
         setLoading(true);
         const data = await fetchA2aSkillCatalog();

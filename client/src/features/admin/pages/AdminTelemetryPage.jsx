@@ -65,7 +65,7 @@ function AdminTelemetryPage() {
   const [config, setConfig] = useState(DEFAULT_TELEMETRY);
 
   useEffect(() => {
-    loadConfig();
+    void loadConfig();
     // eslint-disable-next-line @eslint-react/exhaustive-deps
   }, []);
 

@@ -77,7 +77,7 @@ export default function AdminAgentInboxEditPage() {
   const [newPriority, setNewPriority] = useState('p2');
 
   useEffect(() => {
-    (async () => {
+    void (async () => {
       try {
         const res = await fetchInbox(inboxId);
         const data = res?.data || {};

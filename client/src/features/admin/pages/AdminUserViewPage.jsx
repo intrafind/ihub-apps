@@ -40,7 +40,7 @@ function AdminUserViewPage() {
       }
     };
 
-    loadUser();
+    void loadUser();
   }, [userId]);
 
   useEffect(() => {
@@ -55,7 +55,7 @@ function AdminUserViewPage() {
       }
     };
 
-    loadConnections();
+    void loadConnections();
   }, [userId]);
 
   if (loading) {

@@ -592,7 +592,7 @@ function AdminMcpServersPage() {
   };
 
   useEffect(() => {
-    load();
+    void load();
     // eslint-disable-next-line @eslint-react/exhaustive-deps
   }, []);
 

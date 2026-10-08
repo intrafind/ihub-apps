@@ -99,7 +99,7 @@ function IFinderConfig() {
       }
     };
 
-    fetchConfig();
+    void fetchConfig();
   }, [t]);
 
   const handleToggleEnabled = e => {

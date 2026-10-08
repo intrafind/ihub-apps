@@ -107,7 +107,7 @@ function localThrottledRun(id, fn) {
     };
 
     if (actives.get(id) < getConcurrency(id)) {
-      execute();
+      void execute();
     } else {
       // The request had to wait for a slot - that's a throttler hit. We use
       // the "llm" scope because all current callers are LLM/tool calls.

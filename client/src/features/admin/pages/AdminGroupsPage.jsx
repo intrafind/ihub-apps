@@ -101,7 +101,7 @@ function AdminGroupsPage() {
   const [confirmDialog, setConfirmDialog] = useState(null);
 
   useEffect(() => {
-    loadGroups();
+    void loadGroups();
   }, []);
 
   const loadGroups = async () => {
@@ -130,7 +130,7 @@ function AdminGroupsPage() {
         try {
           await makeAdminApiCall(`/admin/groups/${groupId}`, { method: 'DELETE' });
           setMessage({ type: 'success', text: 'Group deleted successfully!' });
-          loadGroups();
+          void loadGroups();
         } catch (error) {
           setMessage({ type: 'error', text: `Failed to delete group: ${error.message}` });
         }

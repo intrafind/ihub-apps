@@ -35,7 +35,7 @@ function AdminUpdatesPage() {
         setVersionLoading(false);
       }
     };
-    fetchVersionInfo();
+    void fetchVersionInfo();
   }, []);
 
   useEffect(() => {
@@ -47,7 +47,7 @@ function AdminUpdatesPage() {
         // Update status not available (not a binary installation)
       }
     };
-    fetchUpdateStatus();
+    void fetchUpdateStatus();
   }, []);
 
   useEffect(() => {
@@ -152,7 +152,7 @@ function AdminUpdatesPage() {
       danger: true,
       onConfirm: async () => {
         setConfirmDialog(null);
-        doRollback();
+        void doRollback();
       }
     });
   };

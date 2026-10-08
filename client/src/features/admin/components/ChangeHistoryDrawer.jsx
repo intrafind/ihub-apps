@@ -147,7 +147,7 @@ function ConfirmRollbackModal({ isOpen, onConfirm, onCancel, loading, snapshot }
   return (
     <div className="fixed inset-0 z-60 flex items-center justify-center">
       {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/50" onClick={onCancel} />
+      <div role="presentation" className="absolute inset-0 bg-black/50" onClick={onCancel} />
 
       {/* Modal */}
       <div className="relative bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 max-w-md w-full mx-4 p-6">
@@ -394,6 +394,7 @@ function ChangeHistoryDrawer({ isOpen, onClose, resource, resourceId }) {
     <>
       {/* Backdrop */}
       <div
+        role="presentation"
         className={`fixed inset-0 z-40 bg-black/30 transition-opacity duration-300 ${
           isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'
         }`}

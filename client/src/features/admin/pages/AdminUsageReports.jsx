@@ -178,7 +178,7 @@ function AdminUsageReports() {
   };
 
   useEffect(() => {
-    load();
+    void load();
     fetchAdminUsageMeta()
       .then(setTrackingMeta)
       .catch(() => {});

@@ -283,7 +283,7 @@ export function startWorkflowStateRetention({
 
   sweepTimer = setInterval(tick, intervalMs);
   if (typeof sweepTimer.unref === 'function') sweepTimer.unref();
-  tick();
+  void tick();
   return stopWorkflowStateRetention;
 }
 

@@ -384,7 +384,7 @@ export default function registerMcpServerRoutes(app) {
     };
     if (!stateless) {
       transport.onclose = () => {
-        if (transport.sessionId) destroySession(transport.sessionId);
+        if (transport.sessionId) destroySession(transport.sessionId).catch(() => {});
       };
     }
 

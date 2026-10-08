@@ -193,4 +193,4 @@ async function exportMarkdown() {
 }
 
 // Run export
-exportMarkdown();
+void exportMarkdown();

@@ -475,7 +475,7 @@ export class UserSkillRepository {
       if (!skill) return null;
       assertAuthorized(authorize, skill);
       const before = new Set((skill.shares || []).map(shareTargetKey));
-      const after = new Set(shares.map(shareTargetKey));
+      const after = new Set(shares.map(share => shareTargetKey(share)));
       const stored = await this._write(
         { ...skill, shares, sharesUpdatedAt: now, sharesUpdatedBy: actorOf(actor) },
         etag

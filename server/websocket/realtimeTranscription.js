@@ -931,7 +931,7 @@ export function bridgeConnection(clientWs, user, limiter, options = {}) {
       for (const chunk of pending) bufferBatchAudio(chunk);
       pending.length = 0;
       pendingBytes = 0;
-      if (stopRequested) runBatchTranscription();
+      if (stopRequested) void runBatchTranscription();
       return;
     }
 
@@ -952,7 +952,7 @@ export function bridgeConnection(clientWs, user, limiter, options = {}) {
       }
       // A client that streams without a `start` frame named no model: this
       // answers it with a `no-model` error.
-      if (!cfg && !resolvingCfg) resolveAndPrepare(undefined);
+      if (!cfg && !resolvingCfg) void resolveAndPrepare(undefined);
       const chunk = Buffer.from(data);
       if (isBatch()) {
         resetIdle();
@@ -985,7 +985,7 @@ export function bridgeConnection(clientWs, user, limiter, options = {}) {
       // audio flows; the upstream opens as soon as the model resolves.
       // `msg.lang` is accepted but unused — the models auto-detect the
       // language; the field is kept for future language-pinned backends.
-      resolveAndPrepare(msg.modelId);
+      void resolveAndPrepare(msg.modelId);
     } else if (msg.type === 'stop') {
       stopRequested = true;
       logger.info('Realtime STT: stop received', {
@@ -999,7 +999,7 @@ export function bridgeConnection(clientWs, user, limiter, options = {}) {
       if (isBatch()) {
         // The whole recording is buffered — transcribe it in one request. If
         // config is still resolving, resolveAndPrepare picks this up instead.
-        if (cfg) runBatchTranscription();
+        if (cfg) void runBatchTranscription();
       } else if (upstreamReady && upstream.readyState === WebSocket.OPEN) {
         for (const frame of provider.stopFrames(cfg)) sendJson(upstream, frame);
       }

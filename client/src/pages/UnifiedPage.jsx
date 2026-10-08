@@ -75,7 +75,7 @@ export default function UnifiedPage() {
       }
     };
 
-    loadPageContent();
+    void loadPageContent();
   }, [pageId, currentLanguage, navigate]);
 
   if (loading) {

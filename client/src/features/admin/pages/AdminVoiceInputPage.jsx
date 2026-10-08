@@ -88,7 +88,7 @@ function AdminVoiceInputPage() {
   const readAloudTest = useReadAloudPlayback(READ_ALOUD_TEST_ID);
 
   useEffect(() => {
-    loadConfig();
+    void loadConfig();
     // eslint-disable-next-line @eslint-react/exhaustive-deps
   }, []);
 

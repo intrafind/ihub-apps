@@ -945,7 +945,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
     // guard above was already latched, the stored transcript was then lost for
     // the rest of the chat's life.
     const owns = () => chatHydratedRef.current === attempt;
-    (async () => {
+    void (async () => {
       try {
         const result = await fetchChat(chatId);
         if (!owns()) return;
@@ -1088,7 +1088,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
     conversationResumed.current = true;
 
     const requestedChatId = chatId;
-    (async () => {
+    void (async () => {
       try {
         const result = await getConversationMessages(appId, existingConversationId, { chatId });
         // The chat may have changed meanwhile (a new chat, a hand-off).
@@ -1237,7 +1237,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
       navigate(`${window.location.pathname}?${newSearch.toString()}`, { replace: true });
     };
 
-    fetchAndAttach();
+    void fetchAndAttach();
   }, [
     app,
     documentSource,
@@ -1539,7 +1539,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
       }
     };
 
-    loadData();
+    void loadData();
 
     // Cleanup function to handle component unmount
     return () => {
@@ -2846,6 +2846,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
 
       {showVariablesPanel && showParameters && (
         <div
+          role="presentation"
           className="md:hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
           onClick={e => {
             // Close modal when clicking backdrop

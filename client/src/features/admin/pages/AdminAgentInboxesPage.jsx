@@ -15,7 +15,7 @@ export default function AdminAgentInboxesPage() {
   const [newId, setNewId] = useState('');
 
   useEffect(() => {
-    load();
+    void load();
   }, []);
 
   async function load() {

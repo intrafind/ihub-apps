@@ -29,7 +29,7 @@ function ToolsSelector({ selectedTools = [], onToolsChange, excludeToolIds = [] 
       }
     };
 
-    loadTools();
+    void loadTools();
   }, []);
 
   // Filter tools based on search term and exclude already selected or explicitly excluded

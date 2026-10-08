@@ -61,9 +61,9 @@ export default function AdminStorageAlert({ enabled = true, linkVisible = true, 
         // Best effort: without an answer there is nothing to warn about.
       }
     };
-    load();
+    void load();
     const timer = setInterval(() => {
-      if (typeof document === 'undefined' || !document.hidden) load();
+      if (typeof document === 'undefined' || !document.hidden) void load();
     }, POLL_INTERVAL_MS);
     return () => {
       cancelled = true;

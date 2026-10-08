@@ -279,7 +279,7 @@ function ModelFormEditor({
         cancelled = true;
       };
     }
-    (async () => {
+    void (async () => {
       try {
         // makeAdminApiCall returns an axios response object: `{ data, status, ... }`,
         // not a fetch Response. Read schema via `response.data`.
@@ -302,7 +302,7 @@ function ModelFormEditor({
   const [customProviders, setCustomProviders] = useState([]);
   useEffect(() => {
     let cancelled = false;
-    (async () => {
+    void (async () => {
       try {
         const response = await makeAdminApiCall('/admin/providers');
         if (cancelled) return;

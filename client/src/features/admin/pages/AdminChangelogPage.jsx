@@ -463,7 +463,7 @@ function AdminChangelogPage() {
         }
       }
     };
-    load();
+    void load();
     return () => {
       active = false;
     };
@@ -495,7 +495,7 @@ function AdminChangelogPage() {
         }
       }
     };
-    load();
+    void load();
     return () => {
       active = false;
     };
