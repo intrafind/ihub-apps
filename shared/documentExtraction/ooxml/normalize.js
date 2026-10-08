@@ -30,11 +30,16 @@ export const outlineStyleId = level => `IHubOutline${level}`;
  * @param {Object} context
  * @param {ReturnType<import('./xml.js').createWordXml>} context.xml
  * @param {ReturnType<import('./styles.js').readStyles>} context.styles
+ * @param {ReturnType<import('./numbering.js').createNumbering>|null} [context.numbering] - List
+ *   numbering model; when given, Word's list labels (`1.`, `1.1`, `a)`) become text
  * @param {boolean} [context.canAddOutlineStyles] - False when the package has no styles part
  * @returns {{ outlineLevels: Set<number> }} Markdown heading levels (1–6) that now reference a
  *   synthetic `IHubOutline{n}` style the caller must add to styles.xml
  */
-export function normalizeDocumentXml(doc, { xml, styles, canAddOutlineStyles = true }) {
+export function normalizeDocumentXml(
+  doc,
+  { xml, styles, numbering = null, canAddOutlineStyles = true }
+) {
   const outlineLevels = new Set();
   const markerParagraphs = new Set();
 
@@ -59,6 +64,15 @@ export function normalizeDocumentXml(doc, { xml, styles, canAddOutlineStyles = t
     markerParagraphs.add(para);
     return para;
   };
+
+  // 0. Paragraphs whose paragraph mark is tracked as deleted or moved away are gone in the
+  // accepted view (mammoth merges or drops them): they take no number. Looked up before the
+  // moved-text pass removes the `w:moveFrom` marks.
+  const goneParagraphs = new Set();
+  for (const para of xml.all(doc, 'p')) {
+    const markProps = xml.kid(xml.kid(para, 'pPr'), 'rPr');
+    if (xml.kid(markProps, 'del') || xml.kid(markProps, 'moveFrom')) goneParagraphs.add(para);
+  }
 
   // 1. Moved text. mammoth drops both ends; keep the new position, drop the old one.
   for (const from of xml.all(doc, 'moveFrom')) from.parentNode?.removeChild(from);
@@ -157,7 +171,47 @@ export function normalizeDocumentXml(doc, { xml, styles, canAddOutlineStyles = t
       }
     }
 
-    // 3d. Headings by outline level. mammoth maps built-in `heading 1–6` itself; every other
+    // 3d. List labels. Word computes `1.`, `1.1`, `a)` from the list definition; they are not
+    // in the file. The label becomes the first text of the paragraph and the list properties are
+    // neutralized, so mammoth neither lists the paragraph nor numbers it a second time.
+    // Bullets stay with mammoth (a `-` list); without a result there is no label — a wrong
+    // number is worse than none.
+    if (numbering && !goneParagraphs.has(para)) {
+      const direct = xml.kid(pPr, 'numPr');
+      const directNumId = xml.val(xml.kid(direct, 'numId'));
+      const numId = directNumId ?? styles.resolve(styleId, 'numId');
+      if (numId !== undefined && numId !== '0') {
+        const levelRaw = xml.val(xml.kid(direct, 'ilvl')) ?? styles.resolve(styleId, 'ilvl');
+        const level =
+          levelRaw === undefined || Number.isNaN(Number(levelRaw)) ? undefined : Number(levelRaw);
+        const result = numbering.advance(numId, level, styleId);
+        if (result.kind !== 'bullet' && result.kind !== 'unknown') {
+          // Text mammoth outputs (not field codes or tracked deletions), or a picture.
+          const hasContent =
+            hasAcceptedContent ||
+            xml.all(para, 'drawing').length > 0 ||
+            xml.all(para, 'pict').length > 0;
+          // A numbered paragraph without content still takes a number but shows no label.
+          if (result.kind === 'label' && hasContent) {
+            const run = xml.create(doc, 'r');
+            run.appendChild(textElement(`${result.text} `));
+            para.insertBefore(run, pPr ? pPr.nextSibling : para.firstChild);
+          }
+          const props = pPr || para.insertBefore(xml.create(doc, 'pPr'), para.firstChild);
+          let numPr = xml.kid(props, 'numPr');
+          if (numPr) while (numPr.firstChild) numPr.removeChild(numPr.firstChild);
+          else numPr = props.appendChild(xml.create(doc, 'numPr'));
+          // mammoth looks a list level up by (ilvl, numId); without an ilvl it falls back to the
+          // level a numbering definition links to the paragraph's style, and the paragraph would
+          // be listed anyway. Both values together point at "list 0", which does not exist.
+          for (const name of ['ilvl', 'numId']) {
+            numPr.appendChild(xml.create(doc, name)).setAttributeNS(xml.ns, 'w:val', '0');
+          }
+        }
+      }
+    }
+
+    // 3e. Headings by outline level. mammoth maps built-in `heading 1–6` itself; every other
     // style with an outline level (corporate templates) and every paragraph with its own
     // outline level gets a synthetic style named `heading N`, which mammoth also maps.
     if (hasAcceptedContent) {
