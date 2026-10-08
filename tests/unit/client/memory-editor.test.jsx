@@ -148,6 +148,32 @@ describe('MemoryEditor', () => {
     expect(textarea()).toHaveValue('my unsaved text');
   });
 
+  it('keeps text typed while an automatic reload is still loading', async () => {
+    let finishReload;
+    const load = jest
+      .fn()
+      .mockResolvedValueOnce(DOC)
+      .mockReturnValueOnce(
+        new Promise(resolve => {
+          finishReload = resolve;
+        })
+      );
+    const { props, rerender } = setup({ load, reloadKey: 1 });
+    await flush();
+
+    // Nothing was edited when the key changed, so the reload starts silently ...
+    rerender(<MemoryEditor {...props} reloadKey={2} />);
+    await flush();
+    // ... and the user types before it answers.
+    fireEvent.change(textarea(), { target: { value: 'typed while loading' } });
+    await act(async () => {
+      finishReload({ body: 'written by a run', version: 4 });
+    });
+
+    expect(textarea()).toHaveValue('typed while loading');
+    expect(screen.getByRole('status')).toHaveTextContent('The notes changed');
+  });
+
   it('does not lose unsaved text when the page re-renders with new callbacks', async () => {
     const load = jest.fn().mockResolvedValue(DOC);
     const { rerender } = setup({ load });

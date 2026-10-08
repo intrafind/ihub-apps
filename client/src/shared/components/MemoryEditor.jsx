@@ -86,12 +86,18 @@ export default function MemoryEditor({
   const dirtyRef = useRef(false);
   dirtyRef.current = body !== savedBody;
 
-  const doLoad = useCallback(async ({ silent = false } = {}) => {
+  // `preserveEdits`: an automatic reload, started while nothing was edited, must not
+  // replace text the user typed while it was loading.
+  const doLoad = useCallback(async ({ silent = false, preserveEdits = false } = {}) => {
     const mine = ++requestIdRef.current;
     if (!silent) setLoading(true);
     try {
       const data = (await callbacksRef.current.load()) || {};
       if (mine !== requestIdRef.current) return;
+      if (preserveEdits && dirtyRef.current) {
+        setStale(true);
+        return;
+      }
       const text = data.body || '';
       setBody(text);
       setSavedBody(text);
@@ -123,7 +129,7 @@ export default function MemoryEditor({
       return;
     }
     if (dirtyRef.current) setStale(true);
-    else doLoad({ silent: true });
+    else doLoad({ silent: true, preserveEdits: true });
   }, [reloadKey, doLoad]);
 
   const overLimit = Number.isFinite(maxChars) && body.length > maxChars;
