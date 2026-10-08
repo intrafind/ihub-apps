@@ -15,7 +15,8 @@ import configCache from '../configCache.js';
 import { InferenceApiError } from '../services/inference/errors.js';
 import {
   documentFromInlineFile,
-  messagesFromChatCompletions
+  messagesFromChatCompletions,
+  messagesFromResponsesInput
 } from '../services/inference/inputContent.js';
 import { buildPdfBytes } from './helpers/structuredPdf.js';
 import { DOCX_MIME, NUMBERED_HEADINGS, buildDocx, dataUrl, p } from './helpers/docxFile.js';
@@ -141,6 +142,18 @@ describe('Word documents through the API', () => {
     ]);
     assert.equal(message.fileData[0].fileType, DOCX_MIME);
     assert.match(message.fileData[0].content, /# 2\. Laufzeit/);
+
+    const [responsesMessage] = await messagesFromResponsesInput([
+      {
+        role: 'user',
+        content: [
+          { type: 'input_text', text: 'Fasse zusammen' },
+          { type: 'input_file', filename: 'vertrag.docx', file_data: data }
+        ]
+      }
+    ]);
+    assert.equal(responsesMessage.fileData[0].fileType, DOCX_MIME);
+    assert.equal(responsesMessage.fileData[0].content, message.fileData[0].content);
   });
 });
 
