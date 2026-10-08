@@ -105,7 +105,7 @@ const MAX_STYLE_LINK_DEPTH = 8;
 export function createNumbering(numberingDoc, styles, xml) {
   const intVal = el => {
     const raw = xml.val(el);
-    const n = raw === undefined ? NaN : Number(raw);
+    const n = raw === undefined ? Number.NaN : Number(raw);
     return Number.isFinite(n) ? n : undefined;
   };
   const readLevel = lvl => {

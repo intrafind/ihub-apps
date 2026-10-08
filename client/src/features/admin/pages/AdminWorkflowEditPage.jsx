@@ -397,7 +397,7 @@ function AdminWorkflowEditPage() {
                     max={3600}
                     value={Math.round((workflowData.config?.maxExecutionTime ?? 300000) / 1000)}
                     onChange={e => {
-                      const seconds = Math.max(1, parseInt(e.target.value, 10) || 0);
+                      const seconds = Math.max(1, Number.parseInt(e.target.value, 10) || 0);
                       const ms = Math.min(seconds * 1000, 3600000);
                       handleMetadataChange('config.maxExecutionTime', ms);
                     }}

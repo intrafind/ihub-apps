@@ -55,7 +55,7 @@ function parseFrontmatter(raw) {
     const m = line.match(/^([A-Za-z0-9_]+):\s*(.*)$/);
     if (m) {
       let val = m[2].trim();
-      if (/^\d+$/.test(val)) val = parseInt(val, 10);
+      if (/^\d+$/.test(val)) val = Number.parseInt(val, 10);
       fm[m[1]] = val;
     }
   }

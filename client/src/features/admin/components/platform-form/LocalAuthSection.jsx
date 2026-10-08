@@ -17,7 +17,7 @@ function LocalAuthSection({ config, onChange }) {
     updateLocalAuth('lockout', { ...lockout, [field]: value });
   // An emptied number field drops the setting, so the server default applies.
   const updateLockoutNumber = (field, text) =>
-    updateLockout(field, text === '' ? undefined : parseInt(text, 10));
+    updateLockout(field, text === '' ? undefined : Number.parseInt(text, 10));
 
   return (
     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xs border border-gray-200 dark:border-gray-700 p-6">
@@ -44,7 +44,9 @@ function LocalAuthSection({ config, onChange }) {
           <input
             type="number"
             value={config.localAuth?.sessionTimeoutMinutes || ''}
-            onChange={e => updateLocalAuth('sessionTimeoutMinutes', parseInt(e.target.value))}
+            onChange={e =>
+              updateLocalAuth('sessionTimeoutMinutes', Number.parseInt(e.target.value))
+            }
             className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-xs focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
             placeholder="480"
           />

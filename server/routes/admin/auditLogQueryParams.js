@@ -96,7 +96,7 @@ export function isFlagSet(value) {
 }
 
 export function clampInt(raw, fallback, min, max) {
-  const parsed = parseInt(raw, 10);
+  const parsed = Number.parseInt(raw, 10);
   if (!Number.isFinite(parsed)) return fallback;
   return Math.min(max, Math.max(min, parsed));
 }

@@ -79,7 +79,7 @@ export function fencedBlocks(text) {
 function unescapeDoubleQuoted(value) {
   return value.replaceAll(/\\(u[0-9a-fA-F]{4}|.)/g, (_, escape) => {
     if (escape[0] === 'u' && escape.length === 5) {
-      return String.fromCharCode(parseInt(escape.slice(1), 16));
+      return String.fromCharCode(Number.parseInt(escape.slice(1), 16));
     }
     return { n: '\n', t: '\t', r: '\r', 0: '\0' }[escape] ?? escape;
   });

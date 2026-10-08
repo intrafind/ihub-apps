@@ -167,7 +167,7 @@ function TranscriptionSection({
                     value={app.transcription?.maxDurationSeconds || 900}
                     onChange={e =>
                       handleTranscriptionChange({
-                        maxDurationSeconds: parseNumberOrUndefined(e.target.value, parseInt)
+                        maxDurationSeconds: parseNumberOrUndefined(e.target.value, Number.parseInt)
                       })
                     }
                     className="mt-1 block w-24 rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 text-xs dark:bg-gray-700 dark:border-gray-600"

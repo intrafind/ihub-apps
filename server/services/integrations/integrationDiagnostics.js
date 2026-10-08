@@ -339,7 +339,7 @@ export function probeTcpTls({ hostname, port, protocol, timeout = 10000 }) {
 
       const cert = socket.getPeerCertificate() || {};
       const now = Date.now();
-      const validTo = cert.valid_to ? Date.parse(cert.valid_to) : NaN;
+      const validTo = cert.valid_to ? Date.parse(cert.valid_to) : Number.NaN;
       finish({
         connected: true,
         remoteAddress: socket.remoteAddress,

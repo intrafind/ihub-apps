@@ -125,7 +125,7 @@ function WebSearchSection({ app, onChange }) {
                     max="50"
                     value={app.websearch?.maxSearches ?? 5}
                     onChange={e =>
-                      handleWebSearchChange({ maxSearches: parseInt(e.target.value) || 5 })
+                      handleWebSearchChange({ maxSearches: Number.parseInt(e.target.value) || 5 })
                     }
                     className="mt-1 block w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
                   />
@@ -150,7 +150,7 @@ function WebSearchSection({ app, onChange }) {
                   value={app.websearch?.maxPageReads ?? 5}
                   onChange={e =>
                     handleWebSearchChange({
-                      maxPageReads: Math.min(50, Math.max(1, parseInt(e.target.value) || 5))
+                      maxPageReads: Math.min(50, Math.max(1, Number.parseInt(e.target.value) || 5))
                     })
                   }
                   className="mt-1 block w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
@@ -168,7 +168,7 @@ function WebSearchSection({ app, onChange }) {
                   max="20"
                   value={app.websearch?.maxResults ?? 5}
                   onChange={e =>
-                    handleWebSearchChange({ maxResults: parseInt(e.target.value) || 5 })
+                    handleWebSearchChange({ maxResults: Number.parseInt(e.target.value) || 5 })
                   }
                   className="mt-1 block w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
                 />
@@ -218,7 +218,7 @@ function WebSearchSection({ app, onChange }) {
                     value={app.websearch?.contentMaxLength ?? 3000}
                     onChange={e =>
                       handleWebSearchChange({
-                        contentMaxLength: parseInt(e.target.value) || 3000
+                        contentMaxLength: Number.parseInt(e.target.value) || 3000
                       })
                     }
                     className="mt-1 block w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"

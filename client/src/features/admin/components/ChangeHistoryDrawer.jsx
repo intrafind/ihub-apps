@@ -18,7 +18,7 @@ function truncate(str, max = 200) {
 function formatTimestamp(ts) {
   if (!ts) return '';
   const date = new Date(ts);
-  if (isNaN(date.getTime())) return String(ts);
+  if (Number.isNaN(date.getTime())) return String(ts);
   return date.toLocaleString(undefined, {
     year: 'numeric',
     month: 'short',

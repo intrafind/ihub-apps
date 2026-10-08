@@ -545,7 +545,7 @@ function ExportDialog({
                   onChange={e =>
                     setPdfConfig(prev => ({
                       ...prev,
-                      watermark: { ...prev.watermark, opacity: parseFloat(e.target.value) }
+                      watermark: { ...prev.watermark, opacity: Number.parseFloat(e.target.value) }
                     }))
                   }
                   className="w-full"

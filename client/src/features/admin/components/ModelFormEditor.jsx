@@ -1630,7 +1630,7 @@ function ModelFormEditor({
                             onChange={e =>
                               handleChange('imageGeneration', {
                                 ...data.imageGeneration,
-                                maxReferenceImages: parseInt(e.target.value, 10)
+                                maxReferenceImages: Number.parseInt(e.target.value, 10)
                               })
                             }
                             min="1"

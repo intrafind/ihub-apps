@@ -88,7 +88,7 @@ export function ipv6ToBytes(ip) {
   const bytes = [];
   for (const h of hextets) {
     if (!/^[0-9a-f]{1,4}$/.test(h)) return null;
-    const val = parseInt(h, 16);
+    const val = Number.parseInt(h, 16);
     bytes.push((val >> 8) & 0xff, val & 0xff);
   }
   return bytes;

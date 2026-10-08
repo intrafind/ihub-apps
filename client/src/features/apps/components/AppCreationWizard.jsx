@@ -1344,7 +1344,9 @@ function SystemPromptStep({
             max="2"
             step="0.1"
             value={appData.preferredTemperature}
-            onChange={e => updateAppData({ preferredTemperature: parseFloat(e.target.value) })}
+            onChange={e =>
+              updateAppData({ preferredTemperature: Number.parseFloat(e.target.value) })
+            }
             className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
           />
         </div>
@@ -1675,7 +1677,7 @@ function AdvancedSettingsStep({ appData, updateAppData }) {
           <input
             type="number"
             value={appData.order || 0}
-            onChange={e => updateAppData({ order: parseInt(e.target.value) || 0 })}
+            onChange={e => updateAppData({ order: Number.parseInt(e.target.value) || 0 })}
             className="block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
           />
         </div>

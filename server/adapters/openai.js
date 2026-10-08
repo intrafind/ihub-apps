@@ -146,7 +146,7 @@ class OpenAIAdapterClass extends BaseAdapter {
       model: effectiveModelId,
       messages: formattedMessages,
       stream,
-      temperature: parseFloat(temperature),
+      temperature: Number.parseFloat(temperature),
       max_tokens: maxTokens
     };
 

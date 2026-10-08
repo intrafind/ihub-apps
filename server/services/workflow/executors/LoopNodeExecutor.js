@@ -309,7 +309,10 @@ export class LoopNodeExecutor extends BaseNodeExecutor {
           // NOT propagated in parallel mode (only the collected results in
           // `outputVariable` and step logs survive), because concurrent
           // last-write-wins merging would be non-deterministic.
-          const concurrency = Math.max(1, Math.min(parseInt(config.concurrency, 10) || 1, 10));
+          const concurrency = Math.max(
+            1,
+            Math.min(Number.parseInt(config.concurrency, 10) || 1, 10)
+          );
           if (concurrency > 1) {
             const parallelOutcome = await this.executeForEachParallel(
               node,

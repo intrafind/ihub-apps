@@ -29,7 +29,7 @@ import { randomUUID } from 'node:crypto';
 export function checkContentLength(limit) {
   return (req, res, next) => {
     const lenHeader = req.headers['content-length'];
-    const length = lenHeader ? parseInt(lenHeader, 10) : NaN;
+    const length = lenHeader ? Number.parseInt(lenHeader, 10) : Number.NaN;
     if (!Number.isNaN(length) && length > limit) {
       return res.status(413).send('Payload Too Large');
     }
@@ -243,7 +243,7 @@ export function resolveTrustProxy(platformConfig = {}) {
     const trimmed = configured.trim();
     if (trimmed === 'true') return true;
     if (trimmed === 'false') return false;
-    if (/^\d+$/.test(trimmed)) return parseInt(trimmed, 10);
+    if (/^\d+$/.test(trimmed)) return Number.parseInt(trimmed, 10);
     // Address / subnet list (e.g. "loopback, 10.0.0.0/8") — hand through verbatim.
     return trimmed;
   }
@@ -260,7 +260,7 @@ export function resolveTrustProxy(platformConfig = {}) {
  * `platform.json`.
  */
 export function setupMiddleware(app, platformConfig = {}) {
-  const limitMb = parseInt(platformConfig.requestBodyLimitMB || '50', 10);
+  const limitMb = Number.parseInt(platformConfig.requestBodyLimitMB || '50', 10);
   const limit = limitMb * 1024 * 1024;
 
   // Debug middleware - log all requests (helpful for debugging NTLM/proxy issues)

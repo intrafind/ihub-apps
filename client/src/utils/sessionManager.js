@@ -32,7 +32,7 @@ export const getSessionId = () => {
   const now = Date.now();
 
   // Check if we have a valid session
-  if (existingSessionId && expiryTime && now < parseInt(expiryTime)) {
+  if (existingSessionId && expiryTime && now < Number.parseInt(expiryTime)) {
     return existingSessionId;
   }
 
@@ -71,7 +71,7 @@ export const getSessionRemainingTime = () => {
   }
 
   const now = Date.now();
-  const expiry = parseInt(expiryTime);
+  const expiry = Number.parseInt(expiryTime);
   return Math.max(0, expiry - now);
 };
 
@@ -95,7 +95,7 @@ export const getSessionInfo = () => {
 
   return {
     sessionId,
-    expiresAt: expiryTime ? parseInt(expiryTime) : null,
+    expiresAt: expiryTime ? Number.parseInt(expiryTime) : null,
     createdAt: sessionId.split('-')[1], // Extract timestamp from session ID
     userAgent: navigator.userAgent,
     language: navigator.language

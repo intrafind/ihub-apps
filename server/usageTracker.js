@@ -289,7 +289,7 @@ function computeAverageRating(ratings) {
   const totalRatings = Object.values(ratings).reduce((sum, count) => sum + count, 0);
   if (totalRatings === 0) return 0;
   const weightedSum = Object.entries(ratings).reduce(
-    (sum, [rating, count]) => sum + parseInt(rating) * count,
+    (sum, [rating, count]) => sum + Number.parseInt(rating) * count,
     0
   );
   return weightedSum / totalRatings;

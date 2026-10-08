@@ -77,7 +77,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const extractContent = args.includes('--extract');
   const maxResultsMatch = args.find(a => a.startsWith('--max-results='));
   const maxResults = maxResultsMatch
-    ? parseInt(maxResultsMatch.split('=')[1]) || STAAN_PAGE_SIZE
+    ? Number.parseInt(maxResultsMatch.split('=')[1]) || STAAN_PAGE_SIZE
     : STAAN_PAGE_SIZE;
   const languageMatch = args.find(a => a.startsWith('--language='));
   const language = languageMatch ? languageMatch.split('=')[1] : undefined;

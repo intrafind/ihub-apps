@@ -739,7 +739,8 @@ async function downloadFile(url, destPath, expectedSize = null) {
         throw new Error(`Download failed: HTTP ${response.status}`);
       }
 
-      const totalSize = expectedSize || parseInt(response.headers.get('content-length') || '0', 10);
+      const totalSize =
+        expectedSize || Number.parseInt(response.headers.get('content-length') || '0', 10);
       let downloadedSize = 0;
 
       const fileStream = createWriteStream(destPath);
@@ -824,8 +825,8 @@ export async function checkDiskSpace() {
     if (lines.length < 2) return { available: null, sufficient: true };
     // df output: Filesystem 1K-blocks Used Available Use% Mounted on
     const columns = lines[lines.length - 1].trim().split(/\s+/);
-    const availableKB = parseInt(columns[3], 10);
-    if (isNaN(availableKB)) return { available: null, sufficient: true };
+    const availableKB = Number.parseInt(columns[3], 10);
+    if (Number.isNaN(availableKB)) return { available: null, sufficient: true };
 
     // Need at least 500MB for backup + new version
     const requiredKB = 500 * 1024;

@@ -925,7 +925,7 @@ class GoogleDriveService {
     return {
       id: file.id,
       name: file.name,
-      size: file.size ? parseInt(file.size, 10) : 0,
+      size: file.size ? Number.parseInt(file.size, 10) : 0,
       createdDateTime: null,
       lastModifiedDateTime: file.modifiedTime,
       webUrl: file.webViewLink,

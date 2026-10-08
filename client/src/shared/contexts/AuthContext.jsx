@@ -220,7 +220,10 @@ export function AuthProvider({ children }) {
             const now = Date.now();
 
             // Only redirect if we haven't attempted in the last 5 minutes
-            if (!lastRedirectAttempt || now - parseInt(lastRedirectAttempt) > 5 * 60 * 1000) {
+            if (
+              !lastRedirectAttempt ||
+              now - Number.parseInt(lastRedirectAttempt) > 5 * 60 * 1000
+            ) {
               console.log(`🔀 Auto-redirecting to ${data.autoRedirect.provider} provider`);
               sessionStorage.setItem(redirectAttemptKey, now.toString());
 
@@ -383,7 +386,10 @@ export function AuthProvider({ children }) {
             const now = Date.now();
 
             // Only redirect if we haven't attempted recently (prevent loops)
-            if (!lastRedirectAttempt || now - parseInt(lastRedirectAttempt) > 5 * 60 * 1000) {
+            if (
+              !lastRedirectAttempt ||
+              now - Number.parseInt(lastRedirectAttempt) > 5 * 60 * 1000
+            ) {
               console.log(
                 `🔀 Session expired - auto-redirecting to ${data.autoRedirect.provider} provider`
               );

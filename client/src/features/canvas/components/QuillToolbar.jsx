@@ -171,7 +171,7 @@ const QuillToolbar = ({
                   if (headerValue === '') {
                     applyFormatWithFocus('header', false);
                   } else {
-                    applyFormatWithFocus('header', parseInt(headerValue));
+                    applyFormatWithFocus('header', Number.parseInt(headerValue));
                   }
                 }}
                 value={currentFormat.header || ''}

@@ -529,7 +529,7 @@ function IFinderConfig() {
                           onChange={e =>
                             handleIFinderChange(
                               'tokenExpirationSeconds',
-                              parseInt(e.target.value, 10) || 3600
+                              Number.parseInt(e.target.value, 10) || 3600
                             )
                           }
                           min={60}
@@ -594,7 +594,7 @@ function IFinderConfig() {
                         onChange={e =>
                           handleIFinderChange(
                             'tokenExpirationSeconds',
-                            parseInt(e.target.value, 10) || 3600
+                            Number.parseInt(e.target.value, 10) || 3600
                           )
                         }
                         min={60}
@@ -707,7 +707,10 @@ function IFinderConfig() {
                       type="number"
                       value={iAssistantConfig.timeout}
                       onChange={e =>
-                        handleIAssistantChange('timeout', parseInt(e.target.value, 10) || 60000)
+                        handleIAssistantChange(
+                          'timeout',
+                          Number.parseInt(e.target.value, 10) || 60000
+                        )
                       }
                       min={5000}
                       max={300000}

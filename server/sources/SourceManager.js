@@ -723,7 +723,7 @@ class SourceManager {
         statusText: response.statusText,
         contentType,
         contentLength: actualContentLength,
-        headerContentLength: headerContentLength ? parseInt(headerContentLength) : null,
+        headerContentLength: headerContentLength ? Number.parseInt(headerContentLength) : null,
         duration
       };
     } catch (error) {

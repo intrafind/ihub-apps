@@ -107,7 +107,7 @@ function sendInteractionError(res, err, operation) {
 export default function registerRunRoutes(app) {
   app.get(buildServerPath('/api/runs'), adminAuth, async (req, res) => {
     try {
-      const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 100, 1), 1000);
+      const limit = Math.min(Math.max(Number.parseInt(req.query.limit, 10) || 100, 1), 1000);
       const runs = await runLog.listRuns({
         from: req.query.from,
         to: req.query.to,
@@ -147,8 +147,8 @@ export default function registerRunRoutes(app) {
           ? sendNotFound(res, 'Run')
           : sendInsufficientPermissions(res, 'access run');
       }
-      const after = Math.max(parseInt(req.query.after, 10) || 0, 0);
-      const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 1000, 1), 5000);
+      const after = Math.max(Number.parseInt(req.query.after, 10) || 0, 0);
+      const limit = Math.min(Math.max(Number.parseInt(req.query.limit, 10) || 1000, 1), 5000);
       const events = await runLog.readEvents(runId, { afterSeq: after, limit });
       // The last raw ledger sequence this page read: the paging cursor. A
       // projected page can be empty (headers, budget events, compactions

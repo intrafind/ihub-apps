@@ -140,7 +140,7 @@ function AppConfigForm({
             max="1"
             step="0.1"
             value={temperature}
-            onChange={e => onTemperatureChange(parseFloat(e.target.value))}
+            onChange={e => onTemperatureChange(Number.parseFloat(e.target.value))}
             className="w-full"
           />
           <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400">

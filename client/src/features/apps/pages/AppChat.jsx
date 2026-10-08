@@ -365,7 +365,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
     }
     const tempParam = searchParams.get('temp');
     if (tempParam) {
-      setTemperature(parseFloat(tempParam));
+      setTemperature(Number.parseFloat(tempParam));
       changed = true;
     }
     const hist = searchParams.get('history');

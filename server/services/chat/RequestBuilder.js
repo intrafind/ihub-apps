@@ -672,7 +672,7 @@ class RequestBuilder {
         }
       }
 
-      const resolvedTemperature = parseFloat(temperature) || app.preferredTemperature || 0.7;
+      const resolvedTemperature = Number.parseFloat(temperature) || app.preferredTemperature || 0.7;
 
       // Provider-facing options for every model call of this turn. The loop
       // hands them to LLMClient unchanged, so follow-up calls after tool

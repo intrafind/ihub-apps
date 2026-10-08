@@ -23,7 +23,7 @@ function parseRange(range) {
   const match = range.match(/^(\d+)(d|m)$/);
   if (!match) return { startDate: null, endDate, granularity: 'daily' };
 
-  const num = parseInt(match[1]);
+  const num = Number.parseInt(match[1]);
   const unit = match[2];
 
   if (unit === 'd') {
@@ -226,8 +226,8 @@ export default function registerAdminUsageRoutes(app) {
   app.get(buildServerPath('/api/admin/usage/feedback'), adminAuth, async (req, res) => {
     try {
       const { limit = 100, offset = 0 } = req.query;
-      const limitNum = parseInt(limit, 10);
-      const offsetNum = parseInt(offset, 10);
+      const limitNum = Number.parseInt(limit, 10);
+      const offsetNum = Number.parseInt(offset, 10);
 
       const feedbackFile = getContentsPath('data', 'feedback.jsonl');
 

@@ -27,7 +27,7 @@ const MAX_REFRESH_ATTEMPTS = 2;
 
 const readAttemptCount = () => {
   const raw = sessionStorage.getItem(REFRESH_ATTEMPT_KEY);
-  const parsed = raw ? parseInt(raw, 10) : 0;
+  const parsed = raw ? Number.parseInt(raw, 10) : 0;
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
 };
 

@@ -565,7 +565,7 @@ export class DAGScheduler {
       const arrayMatch = part.match(/^(\w+)\[(\d+)\]$/);
       if (arrayMatch) {
         const [, arrayName, indexStr] = arrayMatch;
-        const index = parseInt(indexStr, 10);
+        const index = Number.parseInt(indexStr, 10);
         current = current[arrayName];
         if (Array.isArray(current)) {
           current = current[index];

@@ -54,7 +54,7 @@ export default function SetupWizard() {
   const { platformConfig, refreshConfig } = usePlatformConfig();
   const [step, setStep] = useState(() => {
     const saved = sessionStorage.getItem('setup_wizard_step');
-    return saved ? parseInt(saved, 10) : 1;
+    return saved ? Number.parseInt(saved, 10) : 1;
   }); // 1=welcome, 2=sign-in, 3=provider, 4=finish
   const [selectedProvider, setSelectedProvider] = useState(PROVIDERS[0]);
   const [apiKey, setApiKey] = useState('');

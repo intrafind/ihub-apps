@@ -82,7 +82,7 @@ export default function AppCanvas() {
     }
     const tempParam = searchParams.get('temp');
     if (tempParam) {
-      setTemperature(parseFloat(tempParam));
+      setTemperature(Number.parseFloat(tempParam));
       changed = true;
     }
     const hist = searchParams.get('history');

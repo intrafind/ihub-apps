@@ -260,12 +260,12 @@ function AdminAuditLogPage() {
   const fromDate = get('from');
   const toDate = get('to');
   const queryText = get('q');
-  const page = Math.max(1, parseInt(get('page'), 10) || 1);
+  const page = Math.max(1, Number.parseInt(get('page'), 10) || 1);
   // Clamped to what the table offers: the server caps `limit`, so a larger
   // URL value would page over rows it never returns and strand the tail.
   const pageSize = Math.min(
     MAX_PAGE_SIZE,
-    Math.max(1, parseInt(get('pageSize'), 10) || DEFAULT_PAGE_SIZE)
+    Math.max(1, Number.parseInt(get('pageSize'), 10) || DEFAULT_PAGE_SIZE)
   );
   const offset = (page - 1) * pageSize;
 

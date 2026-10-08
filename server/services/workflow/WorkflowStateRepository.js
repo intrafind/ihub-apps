@@ -175,7 +175,7 @@ function isStorableId(executionId) {
  */
 function parseTime(value) {
   const parsed = Date.parse(value);
-  return Number.isFinite(parsed) ? parsed : NaN;
+  return Number.isFinite(parsed) ? parsed : Number.NaN;
 }
 
 /**
@@ -531,7 +531,7 @@ export class WorkflowStateRepository {
     try {
       return (await fs.stat(this._legacyFile(executionId))).mtimeMs;
     } catch {
-      return NaN;
+      return Number.NaN;
     }
   }
 
@@ -547,7 +547,7 @@ export class WorkflowStateRepository {
       const parsed = parseTime(candidate);
       if (Number.isFinite(parsed)) return parsed;
     }
-    return NaN;
+    return Number.NaN;
   }
 
   /**

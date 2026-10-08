@@ -31,7 +31,7 @@ function FeedbackCard({ data }) {
   // Calculate total and average including legacy data
   const totalStarRatings = Object.values(starRatings).reduce((sum, count) => sum + count, 0);
   const weightedSum = Object.entries(starRatings).reduce(
-    (sum, [rating, count]) => sum + parseInt(rating) * count,
+    (sum, [rating, count]) => sum + Number.parseInt(rating) * count,
     0
   );
   const averageRating = totalStarRatings > 0 ? weightedSum / totalStarRatings : 0;

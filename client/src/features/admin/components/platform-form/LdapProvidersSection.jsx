@@ -462,7 +462,7 @@ function LdapProvidersSection({ config, onChange, t, availableGroups = [] }) {
                       updateLdapProvider(
                         index,
                         'sessionTimeoutMinutes',
-                        value === '' ? undefined : parseInt(value, 10)
+                        value === '' ? undefined : Number.parseInt(value, 10)
                       )
                     }
                     placeholder="480"

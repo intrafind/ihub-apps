@@ -24,7 +24,7 @@ function decodeBase64ToText(base64) {
 function decodeQuotedPrintable(str) {
   return str
     .replaceAll(/=\r?\n/g, '') // soft line break — join wrapped lines
-    .replaceAll(/=([0-9A-Fa-f]{2})/g, (_m, hex) => String.fromCharCode(parseInt(hex, 16)));
+    .replaceAll(/=([0-9A-Fa-f]{2})/g, (_m, hex) => String.fromCharCode(Number.parseInt(hex, 16)));
 }
 
 function decodeBodyByEncoding(body, encoding) {

@@ -52,7 +52,7 @@ export function getStoredThemePreference() {
 export function isDarkHexColor(hex) {
   const match = /^#?([0-9a-f]{6})$/i.exec(String(hex ?? '').trim());
   if (!match) return null;
-  const rgb = parseInt(match[1], 16);
+  const rgb = Number.parseInt(match[1], 16);
   const r = (rgb >> 16) & 255;
   const g = (rgb >> 8) & 255;
   const b = rgb & 255;

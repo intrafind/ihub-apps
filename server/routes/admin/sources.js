@@ -1688,14 +1688,14 @@ export default function registerAdminSourcesRoutes(app) {
           };
 
           const content = await manager.loadContent(source.type, previewConfig);
-          const preview = content.substring(0, parseInt(limit));
+          const preview = content.substring(0, Number.parseInt(limit));
 
           res.json({
             success: true,
             preview,
             metadata: {
               totalLength: content.length,
-              truncated: content.length > parseInt(limit),
+              truncated: content.length > Number.parseInt(limit),
               encoding: 'utf-8'
             }
           });

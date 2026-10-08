@@ -74,7 +74,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const extractContent = args.includes('--extract');
   const maxResultsMatch = args.find(a => a.startsWith('--max-results='));
   const maxResults = maxResultsMatch
-    ? parseInt(maxResultsMatch.split('=')[1]) || QWANT_MAX_WEB_RESULTS
+    ? Number.parseInt(maxResultsMatch.split('=')[1]) || QWANT_MAX_WEB_RESULTS
     : QWANT_MAX_WEB_RESULTS;
   const languageMatch = args.find(a => a.startsWith('--language='));
   const language = languageMatch ? languageMatch.split('=')[1] : undefined;

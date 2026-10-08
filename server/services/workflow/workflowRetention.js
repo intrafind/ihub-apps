@@ -110,7 +110,7 @@ function stateTime(state) {
     const parsed = Date.parse(candidate);
     if (Number.isFinite(parsed)) return parsed;
   }
-  return NaN;
+  return Number.NaN;
 }
 
 /**

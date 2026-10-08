@@ -68,7 +68,7 @@ function decodeEntities(text) {
     .replaceAll(/&#39;|&apos;/g, "'")
     .replaceAll('&nbsp;', ' ')
     .replaceAll(/&#(\d+);/g, (_, n) => safeFromCodePoint(Number(n)))
-    .replaceAll(/&#x([0-9a-f]+);/gi, (_, n) => safeFromCodePoint(parseInt(n, 16)))
+    .replaceAll(/&#x([0-9a-f]+);/gi, (_, n) => safeFromCodePoint(Number.parseInt(n, 16)))
     .replaceAll('&amp;', '&');
 }
 

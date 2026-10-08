@@ -283,7 +283,7 @@ function CorsConfig() {
           min="0"
           value={config.maxAge}
           onChange={e =>
-            setConfig(prev => ({ ...prev, maxAge: parseInt(e.target.value, 10) || 0 }))
+            setConfig(prev => ({ ...prev, maxAge: Number.parseInt(e.target.value, 10) || 0 }))
           }
           className="w-40 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100 text-sm"
         />

@@ -863,8 +863,8 @@ class RegistryService {
     }
 
     // Pagination
-    const page = parseInt(filters.page) || 1;
-    const limit = parseInt(filters.limit) || 24;
+    const page = Number.parseInt(filters.page) || 1;
+    const limit = Number.parseInt(filters.limit) || 24;
     const total = filtered.length;
     const start = (page - 1) * limit;
     const items = filtered.slice(start, start + limit);

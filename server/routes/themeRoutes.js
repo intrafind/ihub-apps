@@ -133,12 +133,12 @@ function darkenColor(hex, percent = 10) {
   }
 
   // Parse RGB values
-  let r = parseInt(hex.substring(0, 2), 16);
-  let g = parseInt(hex.substring(2, 4), 16);
-  let b = parseInt(hex.substring(4, 6), 16);
+  let r = Number.parseInt(hex.substring(0, 2), 16);
+  let g = Number.parseInt(hex.substring(2, 4), 16);
+  let b = Number.parseInt(hex.substring(4, 6), 16);
 
   // Handle NaN from invalid hex
-  if (isNaN(r) || isNaN(g) || isNaN(b)) {
+  if (Number.isNaN(r) || Number.isNaN(g) || Number.isNaN(b)) {
     return '#4338ca';
   }
 

@@ -160,8 +160,8 @@ async function runTest() {
     // Verify key file has correct permissions (Unix only)
     if (process.platform !== 'win32') {
       const stats = await fs.stat(KEY_FILE);
-      const mode = stats.mode & parseInt('777', 8);
-      const expectedMode = parseInt('600', 8);
+      const mode = stats.mode & Number.parseInt('777', 8);
+      const expectedMode = Number.parseInt('600', 8);
 
       if (mode === expectedMode) {
         console.log('  ✅ File permissions correct (600)');

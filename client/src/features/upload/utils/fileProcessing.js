@@ -852,9 +852,9 @@ const rtfToText = rtf => {
   let text = rtf
     // Drop RTF-only spans that wrap the encapsulated HTML markup.
     .replace(/\\htmlrtf\b[\s\S]*?\\htmlrtf0 ?/g, ' ')
-    .replace(/\\'([0-9a-fA-F]{2})/g, (_m, hex) => String.fromCharCode(parseInt(hex, 16)))
+    .replace(/\\'([0-9a-fA-F]{2})/g, (_m, hex) => String.fromCharCode(Number.parseInt(hex, 16)))
     .replace(/\\u(-?\d+)\??/g, (_m, n) => {
-      let code = parseInt(n, 10);
+      let code = Number.parseInt(n, 10);
       if (code < 0) code += 65536;
       return String.fromCharCode(code);
     })
@@ -979,7 +979,7 @@ export const processPptxFile = async file => {
 
   const slideNumber = path => {
     const match = path.match(/slide(\d+)\.xml$/);
-    return match ? parseInt(match[1], 10) : 0;
+    return match ? Number.parseInt(match[1], 10) : 0;
   };
   const slidePaths = Object.keys(zip.files)
     .filter(path => /^ppt\/slides\/slide\d+\.xml$/.test(path))

@@ -410,9 +410,9 @@ export class TransformNodeExecutor extends BaseNodeExecutor {
       if (typeof index === 'string') {
         index = this.getNestedValue(index, mergedData);
       }
-      index = parseInt(index, 10);
+      index = Number.parseInt(index, 10);
 
-      if (Array.isArray(array) && !isNaN(index) && index >= 0 && index < array.length) {
+      if (Array.isArray(array) && !Number.isNaN(index) && index >= 0 && index < array.length) {
         const value = array[index];
         const clonedValue =
           typeof value === 'object' && value !== null ? JSON.parse(JSON.stringify(value)) : value;
@@ -571,16 +571,16 @@ export class TransformNodeExecutor extends BaseNodeExecutor {
     let leftValue = this.getNestedValue(leftPath, data);
     if (leftValue === undefined) {
       // Try parsing as literal number
-      const num = parseFloat(leftPath);
-      leftValue = isNaN(num) ? leftPath : num;
+      const num = Number.parseFloat(leftPath);
+      leftValue = Number.isNaN(num) ? leftPath : num;
     }
 
     // Resolve right value
     let rightValue = this.getNestedValue(rightPath, data);
     if (rightValue === undefined) {
       // Try parsing as literal number
-      const num = parseFloat(rightPath);
-      rightValue = isNaN(num) ? rightPath : num;
+      const num = Number.parseFloat(rightPath);
+      rightValue = Number.isNaN(num) ? rightPath : num;
     }
 
     // Evaluate based on operator

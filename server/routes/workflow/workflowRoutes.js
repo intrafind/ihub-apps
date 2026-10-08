@@ -451,8 +451,8 @@ export default function registerWorkflowRoutes(app, deps = {}) {
         const executions = await registry.getByUser(userId, {
           status,
           includeArchived: includeArchived === 'true' || includeArchived === '1',
-          limit: parseInt(limit, 10),
-          offset: parseInt(offset, 10)
+          limit: Number.parseInt(limit, 10),
+          offset: Number.parseInt(offset, 10)
         });
 
         res.json(executions);
@@ -2040,8 +2040,8 @@ export default function registerWorkflowRoutes(app, deps = {}) {
         const registry = getExecutionRegistry();
 
         if (status === 'all' || status) {
-          const parsedOffset = parseInt(offset, 10) || 0;
-          const parsedLimit = parseInt(limit, 10) || 100;
+          const parsedOffset = Number.parseInt(offset, 10) || 0;
+          const parsedLimit = Number.parseInt(limit, 10) || 100;
 
           // One listing call: the registry filters, searches, orders and
           // pages the shared execution records, and reports the statistics

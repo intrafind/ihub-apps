@@ -156,7 +156,7 @@ function NumberField({ id, label, help, value, onChange, min }) {
         min={min}
         value={Number.isFinite(value) ? value : ''}
         onChange={e => {
-          const parsed = parseInt(e.target.value, 10);
+          const parsed = Number.parseInt(e.target.value, 10);
           onChange(Number.isFinite(parsed) ? parsed : 0);
         }}
         className={inputClass}

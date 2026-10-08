@@ -84,8 +84,8 @@ export function compareVersions(v1, v2) {
   const cleanV1 = v1.split('-')[0];
   const cleanV2 = v2.split('-')[0];
 
-  const parts1 = cleanV1.split('.').map(p => parseInt(p, 10) || 0);
-  const parts2 = cleanV2.split('.').map(p => parseInt(p, 10) || 0);
+  const parts1 = cleanV1.split('.').map(p => Number.parseInt(p, 10) || 0);
+  const parts2 = cleanV2.split('.').map(p => Number.parseInt(p, 10) || 0);
 
   for (let i = 0; i < Math.max(parts1.length, parts2.length); i++) {
     const p1 = parts1[i] || 0;
