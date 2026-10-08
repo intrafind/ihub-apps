@@ -2,7 +2,9 @@
 
 **Date:** 2026-10-08
 **Issue:** [#2751 — Document upload: preserve structure when extracting DOCX/PDF text](https://github.com/intrafind/ihub-apps/issues/2751) (Phase 5 "Optional / follow-ups" plus the optional PDF heading detection from Phase 3)
-**Status:** Plan — nothing implemented
+**Status:** Plan for release 2 — nothing implemented
+
+> **Updated 2026-10-08:** decisions D1–D4 below are resolved in [`README.md`](README.md). WP-A (headers/footers) moved into release 1 (PR 4 in `2026-10-08 Implementation Plan.md`); WP-B options must follow decision A3 (comments, deletions, hidden text and speaker notes only as opt-in per app); Phase 4 (DOCX page hints) was dropped (decision A4). Facts in "Verified findings" are extended in `2026-10-08 Current State.md`.
 
 ## Context
 
@@ -16,7 +18,6 @@ All extraction still returns **one string per file** (`{ content, pageImages }` 
 |----|--------------|-----------------------------------|---------|
 | WP-F | PDF structure: tagged structure tree, outline, page labels, heading heuristic | High | M |
 | WP-B | DOCX tracked changes and comments | High for comparison/review | M |
-| WP-A | DOCX headers and footers | Medium | S |
 | WP-E | Shared extraction core, DOCX (and more) through the inference API | Medium; also removes triple implementation | L |
 | WP-D | PPTX and XLSX parity | Medium | M |
 | WP-C | ODT/ODS/ODP structure | Medium (LibreOffice-based organisations) | M |
@@ -75,6 +76,8 @@ Current: accepted view, comments dropped (see findings). Goal: a mode switch, de
 
 ### WP-A — DOCX headers and footers
 
+> Moved to release 1 (PR 4); kept here as design notes.
+
 - Resolve parts through `sectPr` → `w:headerReference`/`w:footerReference` (`default`/`first`/`even`) → `word/_rels/document.xml.rels` → `word/headerN.xml`/`footerN.xml`.
 - Reuse the Phase 2 paragraph walker; fields (`PAGE`, `NUMPAGES`, `fldSimple` and complex `fldChar`/`instrText`) are dropped, other text kept.
 - Emit **once** as a preamble (`[Header] …` / `[Footer] …`), de-duplicated across sections — not per page, which would only add noise and tokens. Skip when nothing but page-number fields is left. Useful content: document title, version, "Draft", classification.
@@ -110,10 +113,10 @@ XLSX (`processXlsxFile`):
 
 ## Sequencing
 
-1. Decide D1–D4 (maintainer call; D1 influences how Phases 1–4 of the issue are built).
+1. D1–D4 are decided (see `README.md`); release 1 builds the shared core this plan relies on.
 2. Issue Phases 1–4 (not part of this plan).
 3. **WP-F** — highest value for structure, independent of the DOCX decisions.
-4. **WP-A**, then **WP-B** (D3 gate) — share the OOXML walker.
+4. **WP-B** (D3 gate) — builds on the OOXML pre-pass from release 1.
 5. **WP-E** — earlier if D1 is "shared core from the start"; at the latest before WP-C/D so they land once.
 6. **WP-D**, **WP-C**.
 
