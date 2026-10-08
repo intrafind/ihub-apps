@@ -100,7 +100,7 @@
     "test:tool-loading": "node --test server/tests/toolLoader-interactive-tools.test.js",
     "test:token-stats": "node client/src/features/admin/utils/tokenStats.test.js",
     "test:export-formats": "node client/src/utils/exportFormats.test.js",
-    "test:feature-flags": "node shared/featureFlags.test.js && node --test server/tests/feedback-feature-gate.test.js server/tests/app-required-features.test.js",
+    "test:feature-flags": "node shared/featureFlags.test.js && node --test server/tests/feedback-feature-gate.test.js server/tests/app-required-features.test.js server/tests/document-extraction-feature.test.js",
     "test:personal-api-keys": "node server/tests/personalApiKeys.test.js",
     "test:inference": "node --test server/tests/inference-units.test.js server/tests/loop/inferenceApi.test.js",
     "test:temporal": "node server/tests/agent-temporal-context.test.js && node server/tests/chat-temporal-context.test.js",

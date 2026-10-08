@@ -49,12 +49,12 @@ Word's rule of thumb that the implementation must follow: a paragraph is numbere
 | Case | Expected | Test |
 |---|---|---|
 | Paragraph boundaries | Blank line between paragraphs (fixes glued text) | T-DOCX-01 |
-| Explicit page break (`w:br w:type="page"`), `w:pageBreakBefore`, section break `nextPage` | `[Page break]` on its own line, unnumbered; words never glued. `pageBreakBefore`/section breaks: marker **(default)** | T-DOCX-22 |
+| Explicit page break (`w:br w:type="page"`), `w:pageBreakBefore`, section break that starts a new page | `[Page break]` on its own line, unnumbered; words never glued. Inside a paragraph the marker is a line of its own within that paragraph (single line breaks); `pageBreakBefore` and section breaks insert a marker paragraph. No marker before the first content of the document, and never two in a row. A section break counts when the *following* section starts on a new page (`nextPage` default, `oddPage`, `evenPage`; not `continuous`) — a `sectPr` describes the section it ends, its `w:type` how that section starts | T-DOCX-22 |
 | `w:lastRenderedPageBreak` | Ignored (decision A4) | T-DOCX-22 |
 | Line break (`w:br` without type), `w:cr` | Line break. mammoth ignores `w:cr` (verified: `endafter cr`) → pre-pass rewrites `w:cr` to `w:br` | T-DOCX-22 |
-| Tab | Space or tab, never glue | T-DOCX-22 |
+| Tab | Becomes one space (Turndown folds whitespace runs); never glues | T-DOCX-22 |
 | Soft hyphen U+00AD | Removed **(default)** — invisible in Word, breaks text matching | T-DOCX-24 |
-| Non-breaking space U+00A0, non-breaking hyphen | NBSP kept as-is **(default)**; `w:noBreakHyphen` → `-` (mammoth) | T-DOCX-24 |
+| Non-breaking space U+00A0, non-breaking hyphen | NBSP kept as-is **(default)**; `w:noBreakHyphen`: mammoth emits U+2011, which looks like `-` but does not match typed text, so it is normalized to `-` | T-DOCX-24 |
 | Hidden text `w:vanish` (runs and whole paragraphs) | Removed (decision A3) | T-DOCX-20 |
 | Tracked insertion / deletion | Inserted text kept; deleted text and deleted paragraphs removed (accepted view, A3) | T-DOCX-21 |
 | Moved text (`w:moveFrom`/`w:moveTo`) | mammoth drops **both** (verified: moved text vanishes completely). Pre-pass unwraps `w:moveTo` (keep runs) and removes `w:moveFrom` → text appears once, at its new position | T-DOCX-21 |

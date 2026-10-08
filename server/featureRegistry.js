@@ -172,6 +172,16 @@ export const featureRegistry = [
     default: true
   },
   {
+    id: 'structuredDocumentExtraction',
+    name: { en: 'Structured document extraction', de: 'Strukturierte Dokumentextraktion' },
+    description: {
+      en: 'Keep headings, lists, tables, footnotes and links when uploaded Word files are turned into text for the model. Turn off to return to plain text extraction; users get the change after reloading the page (at the latest after 30 minutes).',
+      de: 'Überschriften, Listen, Tabellen, Fußnoten und Links beibehalten, wenn hochgeladene Word-Dateien für das Modell in Text umgewandelt werden. Ausschalten stellt die reine Textextraktion wieder her; Nutzer erhalten die Änderung nach dem Neuladen der Seite (spätestens nach 30 Minuten).'
+    },
+    category: 'content',
+    default: true
+  },
+  {
     id: 'toolsService',
     name: { en: 'Tools Service', de: 'Tools-Dienst' },
     description: {

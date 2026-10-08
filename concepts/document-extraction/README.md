@@ -69,3 +69,32 @@ The issue was written before the verification. The implementation plan supersede
 | 3 | PDF page markers, labels, line breaks, scanned fallback | PM-01, 10 |
 | 4 | DOCX headers/footers | — |
 | 5 | Prompt guidance in `docs/apps.md` | PM-14 |
+
+## Implementation status
+
+| PR | Status | Where the code is |
+|---|---|---|
+| 1 — switch, test infra, DOCX → Markdown | Done (see below) | `shared/documentExtraction/{markers,markdown,docx}.js`, `shared/documentExtraction/ooxml/{xml,styles,normalize}.js`; wiring in `client/src/features/upload/utils/fileProcessing.js` (`processDocxFile`, `legacyDocxText`, `isStructuredExtractionEnabled`); switch in `server/featureRegistry.js`; tests `tests/unit/client/docx-*.test.jsx`, `document-extraction-flag.test.jsx`, `office-docx-attachment-extraction.test.jsx`, `server/tests/document-extraction-feature.test.js`; fixtures `tests/utils/officeFixtures.js` |
+| 2 — numbering labels | Not started | |
+| 3 — PDF pages | Not started | |
+| 4 — headers/footers | Not started | |
+| 5 — prompt guidance | Not started | |
+
+### Decisions and findings from PR 1
+
+- **Section breaks:** a `sectPr` describes the section it ends, but its `w:type` says how *that*
+  section starts. The plan said "after paragraphs carrying a `sectPr` of type nextPage"; that
+  would mark the wrong boundary. The type of section k decides whether a marker follows the
+  paragraph that ends section k−1. No marker before the first content of the document.
+- **Markers inside a paragraph** are single line breaks (`before\n[Page break]\nafter`), not
+  blank lines; `pageBreakBefore` and section breaks are paragraphs of their own.
+- **`w:noBreakHyphen`:** mammoth emits U+2011, normalized to `-`. **Tabs** fold to one space.
+- **Turndown is quadratic** on one call for a long document (see "T-PERF-01 method" in the test
+  plan). The converter works through top-level blocks in chunks of 100 and joins them; this was
+  found by measuring in Chromium, jsdom hid it.
+- **Performance vs. the 2× stop rule:** median 2.2× legacy at 5,000 paragraphs (0.3 s for about
+  100 pages, linear up to 1.4 s at 20,000 paragraphs). Raised for a decision before PR 2.
+- **Malformed XML parts** cannot test the fallback: mammoth rejects them as well, so the legacy
+  path fails exactly like before. The fallback is tested by making the structured step reject.
+- **Not applicable in PR 1:** numbering labels (PR 2); `T-DOCX-03, 04, 07–13, 15` and the numbering
+  parts of 20/21.

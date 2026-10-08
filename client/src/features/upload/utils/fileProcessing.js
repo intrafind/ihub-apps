@@ -1,5 +1,7 @@
 // Shared file processing utilities for upload components
-import { fetchMimetypesConfig } from '../../../api/endpoints/config';
+import { fetchMimetypesConfig, fetchPlatformConfig } from '../../../api/endpoints/config';
+import { FeatureFlags } from '../../../../../shared/featureFlags.js';
+import { extractDocxMarkdown } from '../../../../../shared/documentExtraction/docx.js';
 // Resolved by Vite at build time → copied to dist as a local asset.
 // Using the ?url suffix is the correct Vite pattern for worker files from
 // node_modules; it ensures offline/air-gapped deployments work and the
@@ -161,6 +163,31 @@ export const loadPdfjs = async () => {
 export const loadMammoth = async () => {
   const mammoth = await import('mammoth');
   return mammoth;
+};
+
+// Lazy load Turndown (HTML → Markdown) only when a Word document is converted
+export const loadTurndown = async () => {
+  const mod = await import('turndown');
+  return mod.default ?? mod;
+};
+
+// Admin switch (Admin → Features) for the structure-preserving extraction of Word
+// documents. Everything structured is optional: with the switch off, or when the
+// platform config cannot be read, behavior is the registry default (on) — and any error in
+// the structured path falls back to the plain text extraction below.
+export const STRUCTURED_EXTRACTION_FEATURE = 'structuredDocumentExtraction';
+
+export const isStructuredExtractionEnabled = async () => {
+  try {
+    const platformConfig = await fetchPlatformConfig();
+    const features = platformConfig?.features;
+    const featuresMap = Array.isArray(features)
+      ? Object.fromEntries(features.map(feature => [feature.id, feature.enabled]))
+      : undefined;
+    return new FeatureFlags({ featuresMap }).isEnabled(STRUCTURED_EXTRACTION_FEATURE, true);
+  } catch {
+    return true;
+  }
 };
 
 // Lazy load MSGReader only when needed.
@@ -670,9 +697,11 @@ export const renderPdfPagesToImages = async (file, maxPages = 5, scale = 1.5) =>
   return images;
 };
 
-// Process DOCX file
-export const processDocxFile = async file => {
-  const arrayBuffer = await file.arrayBuffer();
+// Plain text of a DOCX file: mammoth's HTML flattened with textContent. This is the
+// extraction before structured extraction existed — it loses headings, numbering, list
+// markers, table cells and paragraph boundaries — and stays unchanged as the fallback and
+// as the result when the admin switch is off.
+export const legacyDocxText = async arrayBuffer => {
   const mammoth = await loadMammoth();
   const result = await mammoth.convertToHtml({ arrayBuffer });
 
@@ -680,6 +709,34 @@ export const processDocxFile = async file => {
   const tempDiv = document.createElement('div');
   tempDiv.innerHTML = result.value;
   return tempDiv.textContent || tempDiv.innerText || '';
+};
+
+// Process DOCX file
+export const processDocxFile = async file => {
+  const arrayBuffer = await file.arrayBuffer();
+
+  if (await isStructuredExtractionEnabled()) {
+    try {
+      const [mammoth, JSZip, TurndownService] = await Promise.all([
+        loadMammoth(),
+        loadJSZip(),
+        loadTurndown()
+      ]);
+      return await extractDocxMarkdown({
+        arrayBuffer,
+        JSZip,
+        mammoth,
+        TurndownService,
+        DOMParser,
+        XMLSerializer
+      });
+    } catch (error) {
+      // Never make an upload fail that worked before: use the plain text extraction.
+      console.warn('[fileProcessing] structured extraction failed, using legacy', error);
+    }
+  }
+
+  return legacyDocxText(arrayBuffer);
 };
 
 // Process XLSX / XLS file — converts all sheets to tab-separated text
