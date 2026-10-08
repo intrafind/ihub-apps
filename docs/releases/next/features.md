@@ -19,7 +19,8 @@ heading by heading.
 - PDF files carry a `[Page N]` marker per page (with the printed page number when it differs, as
   in front matter numbered `i`, `ii`), keep their lines instead of one run of words, and flag
   pages without a text layer; scanned PDFs are still sent as page images
-- Headers and footers of Word files follow in a later update
+- Headers and footers of Word files (letterhead, document numbers, confidentiality notes) appear as
+  `[Header] …` and `[Footer] …` lines before the text, without page numbers
 
 Admins can switch this off under **Admin → Features → Structured document extraction** (on by
 default); the previous plain text extraction then applies after users reload the page. If the

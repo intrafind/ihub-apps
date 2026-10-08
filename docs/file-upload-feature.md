@@ -167,6 +167,7 @@ The model receives a document as text inside a `<content type="document" …>` b
 | Numbered paragraphs and headings (`1.`, `1.2.3`, `a)`, `(iii)`, `Article I`, `§ 3`) | The label Word shows is written in front of the text: `## 2.1 Scope`, `a) …`, `§ 3 …`. Labels follow Word's own counting: restarts, start-at values, skipped levels, lists that continue each other, and legal numbering. Chapter numbers are therefore part of the text and can be cited |
 | Tables | A Markdown table; the first row is the header. A merged cell spans its columns (text in the first, the others empty) or rows (text repeated in each row), so every row stays complete. A pipe character in a cell is escaped with a backslash; several paragraphs in a cell are joined with `<br>` |
 | Footnotes and endnotes | `[^1]` in the text, `[^1]: …` at the end (endnotes `[^e1]`) |
+| Headers and footers (letterhead, document number, confidentiality note, address in a text box) | `[Header] …` and `[Footer] …` lines before the body, one per paragraph (table cells joined with ` \| `), each distinct line once even when several sections repeat it. Only what Word shows is read: a first-page header needs "Different first page", an even-page header needs "Different odd & even pages"; hidden text and tracked deletions are skipped, images dropped. Page-number fields (`PAGE`, `NUMPAGES`, `SECTIONPAGES`) are dropped: their stored value belongs to whichever page was rendered last, and a line that only held "Page 3 of 10" disappears |
 | Links | `[text](https://…)`; links inside the document (table of contents) keep only their text |
 | Images | `[Image: alt text]` when the image has alt text, otherwise nothing — pictures are never sent as base64 data |
 | Explicit page break, page-break-before, new-page section break | `[Page break]` on its own line. Word does not store page numbers (it computes them when laying out), so Word files get no `[Page N]` markers |
@@ -185,8 +186,6 @@ Word does not store list and chapter numbers as text; it computes them when disp
 - Formats: `1`, `01`, `a`, `A`, `i`, `I`, `1st`, with the repeated-letter sequence Word uses after `z` (`aa`, `bb`, …); legal numbering (`1.1`) shows every level as an Arabic number; other formats (for example counting words or Asian numerals) count in plain `1, 2, 3`
 - Bullet lists stay Markdown lists (`-`); a bullet below a numbered level is written as a `-` paragraph
 - **No label rather than a wrong one:** levels that restart by a custom rule (`w:lvlRestart`), and levels whose label refers to such a level, are left unnumbered. Text of numbered paragraphs is never changed
-
-Not covered yet: headers and footers. They are added in the next step of the same feature; this section is updated with it.
 
 ### PDF files (.pdf)
 

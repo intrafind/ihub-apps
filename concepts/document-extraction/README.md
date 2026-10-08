@@ -77,7 +77,7 @@ The issue was written before the verification. The implementation plan supersede
 | 1 — switch, test infra, DOCX → Markdown | Done (see below) | `shared/documentExtraction/{markers,markdown,docx}.js`, `shared/documentExtraction/ooxml/{xml,styles,normalize}.js`; wiring in `client/src/features/upload/utils/fileProcessing.js` (`processDocxFile`, `legacyDocxText`, `isStructuredExtractionEnabled`); switch in `server/featureRegistry.js`; tests `tests/unit/client/docx-*.test.jsx`, `document-extraction-flag.test.jsx`, `office-docx-attachment-extraction.test.jsx`, `server/tests/document-extraction-feature.test.js`; fixtures `tests/utils/officeFixtures.js` |
 | 2 — numbering labels | Done (see below) | `shared/documentExtraction/ooxml/numbering.js` (counters), numbering step 3d in `ooxml/normalize.js`, wiring in `docx.js`; tests `tests/unit/client/docx-numbering-extraction.test.jsx` |
 | 3 — PDF pages | Done (see below) | `shared/documentExtraction/pdfText.js` (+ `markers.js`); wiring in `fileProcessing.js` (`extractPdfContent`, `legacyPdfText`); tests `tests/unit/client/pdf-structured-text.test.jsx`, `server/tests/document-extraction-pdf.test.js` (in `test:pdf`) |
-| 4 — headers/footers | Not started | |
+| 4 — headers/footers | Done (see below) | `shared/documentExtraction/ooxml/headerFooter.js`, wiring in `docx.js`; tests `tests/unit/client/docx-header-footer-extraction.test.jsx` |
 | 5 — prompt guidance | Not started | |
 
 ### Decisions and findings from PR 1
@@ -133,3 +133,24 @@ Validated with a differential fuzz against LibreOffice (`soffice --convert-to tx
   deviation from the test plan row, which assumed rendering cannot fail).
 - **Server-side extractors are untouched** (`inputContent.js`, `ocrProcessor.js`): release 2 (WP-E).
 - `attachDocumentPageImages` in `RequestBuilder.js` is exported for the T-DOWN-02 test; no behaviour change.
+
+### Decisions and findings from PR 4
+
+- **Visible text only (A3):** a first-page header is read only when its section has `w:titlePg`, an
+  even-page header only when `word/settings.xml` has `w:evenAndOddHeaders`; Word does not show
+  them otherwise (the plan had listed all three types unconditionally).
+- **Page-number fields** (`PAGE`, `NUMPAGES`, `SECTIONPAGES`, complex and `w:fldSimple`) lose their
+  result. A paragraph that held such a field and keeps only pagination words afterwards ("Seite
+  von", "Page of", "Pagina di", "第 页") disappears; any other remaining word keeps the line — a
+  first version dropped every short remainder and ate "Vertraulich" and "Entwurf" (found by the
+  test, not by review). The word list is small and closed on purpose; an unknown language leaves
+  "Seite von"-style noise rather than losing content.
+- **Text boxes** (letterhead addresses) are read; `mc:AlternateContent` is read once (the `Choice`
+  branch), because Word stores the same box a second time in the legacy `Fallback`.
+- **Lines, not blocks:** one `[Header] …` / `[Footer] …` line per paragraph, table rows as cells
+  joined with ` | `; identical lines appear once across all sections and types. Headers come
+  first, then footers, then a blank line and the body.
+- **Never costs the body:** a malformed or unresolvable header part is skipped silently (shared
+  code has no logging); the body is extracted as before. The headers are read before the body
+  pass changes `sectPr` handling.
+- **Applicable test ID:** T-DOCX-25 (plus the cases above). Q-03 and the other open questions are unchanged.
