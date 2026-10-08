@@ -13,8 +13,10 @@ heading.
   their alt text, never as embedded data
 - Hidden text is no longer sent to the model, and text that was moved with track changes appears
   once, at its new position
-- Chapter numbers from Word's numbering, headers and footers and PDF page markers follow in later
-  updates
+- Chapter and list numbers from Word's numbering (`2.1`, `a)`, `(iii)`, `§ 3`) are written in front of
+  the text as Word shows them, so sections can be cited by number; a numbering Word feature that is
+  not supported leaves the paragraph without a number rather than with a wrong one
+- Headers and footers and PDF page markers follow in later updates
 
 Admins can switch this off under **Admin → Features → Structured document extraction** (on by
 default); the previous plain text extraction then applies after users reload the page. If the

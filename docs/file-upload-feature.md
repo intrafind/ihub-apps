@@ -164,6 +164,7 @@ The model receives a document as text inside a `<content type="document" …>` b
 | Headings: built-in `Heading 1–6`, custom heading styles and paragraphs that carry an outline level in Word | `#` … `######` (level 7–9 is shown as `######`) |
 | Paragraphs | Separated by a blank line (no more words glued across paragraphs) |
 | Lists | `1.` / `-` items, nested with indentation |
+| Numbered paragraphs and headings (`1.`, `1.2.3`, `a)`, `(iii)`, `Article I`, `§ 3`) | The label Word shows is written in front of the text: `## 2.1 Scope`, `a) …`, `§ 3 …`. Labels follow Word's own counting: restarts, start-at values, skipped levels, lists that continue each other, and legal numbering. Chapter numbers are therefore part of the text and can be cited |
 | Tables | A Markdown table; the first row is the header. A merged cell spans its columns (text in the first, the others empty) or rows (text repeated in each row), so every row stays complete. A `|` in a cell is written `\|`; several paragraphs in a cell are joined with `<br>` |
 | Footnotes and endnotes | `[^1]` in the text, `[^1]: …` at the end (endnotes `[^e1]`) |
 | Links | `[text](https://…)`; links inside the document (table of contents) keep only their text |
@@ -176,7 +177,16 @@ The model receives a document as text inside a `<content type="document" …>` b
 
 Markdown characters in the document text are not escaped, so `1.`, `[1]` or `a_b` arrive exactly as typed. Text that happens to look like Markdown (`# not a heading`) stays as typed as well.
 
-Not covered yet: chapter numbers created with Word's numbering (they are not stored as text in the file), headers and footers, PDF page markers. These are added in the next steps of the same feature; this section is updated with each.
+#### Numbering
+
+Word does not store list and chapter numbers as text; it computes them when displaying the document. The extraction recomputes them from the numbering definitions of the file, following Word's rules (verified against LibreOffice as an independent renderer):
+
+- Numbers continue across a document wherever Word continues them, restart where Word restarts them, and count only what Word shows (hidden paragraphs and tracked deletions take no number)
+- Formats: `1`, `01`, `a`, `A`, `i`, `I`, `1st`, with the repeated-letter sequence Word uses after `z` (`aa`, `bb`, …); legal numbering (`1.1`) shows every level as an Arabic number; other formats (for example counting words or Asian numerals) count in plain `1, 2, 3`
+- Bullet lists stay Markdown lists (`-`); a bullet below a numbered level is written as a `-` paragraph
+- **No label rather than a wrong one:** levels that restart by a custom rule (`w:lvlRestart`), and levels whose label refers to such a level, are left unnumbered. Text of numbered paragraphs is never changed
+
+Not covered yet: headers and footers, PDF page markers. These are added in the next steps of the same feature; this section is updated with each.
 
 ### Admin switch
 

@@ -11,6 +11,7 @@
  */
 import { createWordXml, parseXml, wordNamespaceOf } from './ooxml/xml.js';
 import { readStyles } from './ooxml/styles.js';
+import { createNumbering } from './ooxml/numbering.js';
 import { addOutlineStyles, normalizeDocumentXml } from './ooxml/normalize.js';
 import { createDocumentMarkdownConverter, htmlToMarkdown, normalizeMarkdown } from './markdown.js';
 
@@ -77,6 +78,7 @@ export async function extractDocxMarkdown({
     '/numbering'
   ]);
   const stylesPart = related['/styles'] || 'word/styles.xml';
+  const numberingPart = related['/numbering'] || 'word/numbering.xml';
 
   const readPart = async name => {
     const file = zip.file(name);
@@ -85,13 +87,16 @@ export async function extractDocxMarkdown({
   const documentDoc = await readPart(documentPart);
   if (!documentDoc) throw new Error(`${documentPart} is missing`);
   const stylesDoc = await readPart(stylesPart);
+  const numberingDoc = await readPart(numberingPart);
 
   const xml = createWordXml(wordNamespaceOf(documentDoc));
   const styles = readStyles(stylesDoc, xml);
+  const numbering = createNumbering(numberingDoc, styles, xml);
 
   const { outlineLevels } = normalizeDocumentXml(documentDoc, {
     xml,
     styles,
+    numbering,
     canAddOutlineStyles: !!stylesDoc
   });
   if (stylesDoc && outlineLevels.size > 0) addOutlineStyles(stylesDoc, xml, outlineLevels);

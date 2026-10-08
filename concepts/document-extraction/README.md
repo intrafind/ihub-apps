@@ -75,7 +75,7 @@ The issue was written before the verification. The implementation plan supersede
 | PR | Status | Where the code is |
 |---|---|---|
 | 1 — switch, test infra, DOCX → Markdown | Done (see below) | `shared/documentExtraction/{markers,markdown,docx}.js`, `shared/documentExtraction/ooxml/{xml,styles,normalize}.js`; wiring in `client/src/features/upload/utils/fileProcessing.js` (`processDocxFile`, `legacyDocxText`, `isStructuredExtractionEnabled`); switch in `server/featureRegistry.js`; tests `tests/unit/client/docx-*.test.jsx`, `document-extraction-flag.test.jsx`, `office-docx-attachment-extraction.test.jsx`, `server/tests/document-extraction-feature.test.js`; fixtures `tests/utils/officeFixtures.js` |
-| 2 — numbering labels | Not started | |
+| 2 — numbering labels | Done (see below) | `shared/documentExtraction/ooxml/numbering.js` (counters), numbering step 3d in `ooxml/normalize.js`, wiring in `docx.js`; tests `tests/unit/client/docx-numbering-extraction.test.jsx` |
 | 3 — PDF pages | Not started | |
 | 4 — headers/footers | Not started | |
 | 5 — prompt guidance | Not started | |
@@ -98,3 +98,16 @@ The issue was written before the verification. The implementation plan supersede
   path fails exactly like before. The fallback is tested by making the structured step reject.
 - **Not applicable in PR 1:** numbering labels (PR 2); `T-DOCX-03, 04, 07–13, 15` and the numbering
   parts of 20/21.
+
+### Decisions and findings from PR 2
+
+Validated with a differential fuzz against LibreOffice (`soffice --convert-to txt` as oracle; 3 × 120–200 generated documents with direct and style-based numbering, about 8,400 labels, 0 mismatches). The fuzz script is a dev tool and is not committed; the expected labels in the tests are hard-coded.
+
+- **Counters are keyed by `abstractNum`**, shared by all `w:num` that point to it. A `w:startOverride` applies **per level, the first time that `w:num` uses that level** (not when the instance is first used at another level) — the first fuzz run had 193 mismatches before this was found.
+- **Level shown by a skipped level** is its start value; a deeper level starts over after any shallower paragraph; `isLgl` turns roman/letters/ordinals into decimals but keeps `decimalZero` zero-padded; letters repeat (`z`, `aa`, `bb`).
+- **`w:lvlRestart` is not implemented:** the level and every level whose `lvlText` refers to it get **no label** (PM-05: wrong numbering is worse than none). Counting still runs so other levels stay correct.
+- **Numbering comes from the paragraph or its style** (`numPr` in the style chain, `numStyleLink`/`styleLink`, level linked by `w:lvl/w:pStyle`). `numId 0` switches numbering off.
+- **mammoth must not see the numbering again:** a numbered paragraph gets its label as text and its `numPr` is neutralised. Clearing it is not enough — mammoth also finds list membership through the style link — so the paragraph gets explicit `ilvl=0` and `numId=0`.
+- **Bullets** stay mammoth lists only when every level above them is a bullet too; under a numbered level they become a `- ` paragraph (otherwise mammoth writes `- - text`).
+- **Empty numbered paragraph:** counted (Word shows its number), no label written. **Deleted or moved-away paragraph marks and hidden paragraphs take no number** — Q-02 (hidden numbered paragraphs in Word's print view) is still to be confirmed in Word by a human.
+- **Applicable test IDs now covered:** T-DOCX-03, 04, 07–13, 15, and the numbering parts of 20, 21 and 28.
