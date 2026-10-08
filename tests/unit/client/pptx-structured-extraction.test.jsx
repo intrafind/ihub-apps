@@ -455,6 +455,18 @@ describe('the speaker notes option reaches every way a deck gets in', () => {
           .fileUpload
       ).speakerNotes
     ).toBe('ignore');
+    // An app that only offers cloud storage hands the option to the cloud picks as well.
+    const cloudOnly = result.current.createUploadConfig(
+      {
+        upload: {
+          cloudStorageUpload: { enabled: true },
+          fileUpload: { ...fileUpload, enabled: false }
+        }
+      },
+      null
+    );
+    expect(cloudOnly.localUploadEnabled).toBe(false);
+    expect(extractionOptionsOf(cloudOnly.fileUpload).speakerNotes).toBe('include');
   });
 
   it('the cloud file picker extracts the notes of an app that asks for them, and only then', async () => {
