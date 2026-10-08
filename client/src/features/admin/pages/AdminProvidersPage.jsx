@@ -9,6 +9,8 @@ import { getAdminApiErrorMessage, makeAdminApiCall } from '../../../api/adminApi
 import AdminPageSkeleton from '../components/AdminPageSkeleton';
 import AdminEmptyState from '../components/AdminEmptyState';
 import WebsearchTestResult from '../components/WebsearchTestResult';
+import ApiKeyStatusBadge from '../components/ApiKeyStatusBadge';
+import useApiKeyStatus from '../hooks/useApiKeyStatus';
 import { translateModelTestMessage } from '../utils/modelTestMessages';
 import { apiTypeLabel } from '../utils/modelImport';
 import {
@@ -82,6 +84,7 @@ function AdminProvidersPage() {
   const currentLanguage = i18n.language;
   const navigate = useNavigate();
   const featureFlags = useFeatureFlags();
+  const { statuses: keyStatuses } = useApiKeyStatus('providers');
   const [providers, setProviders] = useState([]);
   const [models, setModels] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -503,6 +506,10 @@ function AdminProvidersPage() {
                                     <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200">
                                       {t('admin.providers.noApiKeyRequired', 'No API key required')}
                                     </span>
+                                  ) : isLlm && keyStatuses[provider.id] ? (
+                                    // The server's verdict: a stored key it cannot decrypt
+                                    // looks "Configured" below but does not work.
+                                    <ApiKeyStatusBadge status={keyStatuses[provider.id]} />
                                   ) : provider.apiKeySet ? (
                                     <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200">
                                       <Icon name="KeyIcon" className="w-3 h-3 mr-1" />

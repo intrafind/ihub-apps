@@ -104,12 +104,12 @@ Supported providers (configured at the platform level):
 | `.txt`, `.md`, `.csv`, `.json`, `.html`, `.css`, `.js`, `.xml` | `text/*` / `application/json` | Read directly as text |
 | `.vtt` | `text/vtt` | WebVTT (e.g. Microsoft Teams transcripts), read directly as text |
 | any extension | `text/*` ("Any text file") | Read as text; rejected if the content is binary — see below |
-| `.pdf` | `application/pdf` | Text extracted via `pdfjs-dist`; falls back to rendering each page as an image |
-| `.docx` | `application/vnd.openxmlformats-officedocument.wordprocessingml.document` | Converted to text via `mammoth` |
+| `.pdf` | `application/pdf` | Text extracted via `pdfjs-dist` with `[Page N]` markers and real lines — see [Extracted text format](#extracted-text-format); falls back to rendering each page as an image |
+| `.docx` | `application/vnd.openxmlformats-officedocument.wordprocessingml.document` | Converted to Markdown via `mammoth`, `jszip` and `turndown`: headings, lists, tables, footnotes, links and page breaks are kept — see [Extracted text format](#extracted-text-format) |
 | `.xlsx` | `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet` | Cell content extracted via `xlsx` |
 | `.xls` | `application/vnd.ms-excel` | Cell content extracted via `xlsx` |
-| `.pptx` | `application/vnd.openxmlformats-officedocument.presentationml.presentation` | Slide text extracted via `xlsx` |
-| `.ppt` | `application/vnd.ms-powerpoint` | Slide text extracted via `xlsx` |
+| `.pptx` | `application/vnd.openxmlformats-officedocument.presentationml.presentation` | Slide text extracted from the OOXML slides via `jszip` |
+| `.ppt` | `application/vnd.ms-powerpoint` | Not supported: the legacy binary format is rejected with "Unsupported file format" |
 | `.odt` | `application/vnd.oasis.opendocument.text` | XML text extracted via `jszip` |
 | `.ods` | `application/vnd.oasis.opendocument.spreadsheet` | XML text extracted via `jszip` |
 | `.odp` | `application/vnd.oasis.opendocument.presentation` | XML text extracted via `jszip` |
@@ -153,6 +153,72 @@ many formats, e.g. `.log`, `.yaml`, `.srt`). With it enabled:
 | `.ogg` | `audio/ogg` |
 | `.mp4` (audio) | `audio/mp4` |
 
+## Extracted text format
+
+The model receives a document as text inside a `<content type="document" …>` block (see [Apps](apps.md), "What `{{content}}` contains"). For Word files this text is **Markdown that keeps the structure of the document**, so a prompt can ask for "section 2.1" or compare two files heading by heading; for PDF files it carries **page markers**, so answers can cite pages.
+
+### Word documents (.docx)
+
+| In the document | In the text |
+|---|---|
+| Headings: built-in `Heading 1–6`, custom heading styles and paragraphs that carry an outline level in Word | `#` … `######` (level 7–9 is shown as `######`) |
+| Paragraphs | Separated by a blank line (no more words glued across paragraphs) |
+| Lists | `1.` / `-` items, nested with indentation |
+| Numbered paragraphs and headings (`1.`, `1.2.3`, `a)`, `(iii)`, `Article I`, `§ 3`) | The label Word shows is written in front of the text: `## 2.1 Scope`, `a) …`, `§ 3 …`. Labels follow Word's own counting: restarts, start-at values, skipped levels, lists that continue each other, and legal numbering. Chapter numbers are therefore part of the text and can be cited |
+| Tables | A Markdown table; the first row is the header. A merged cell spans its columns (text in the first, the others empty) or rows (text repeated in each row), so every row stays complete. A pipe character in a cell is escaped with a backslash (backslashes in that cell are doubled); several paragraphs in a cell are joined with `<br>` |
+| Footnotes and endnotes | `[^1]` in the text, `[^1]: …` at the end (endnotes `[^e1]`) |
+| Headers and footers (letterhead, document number, confidentiality note, address in a text box) | `[Header] …` and `[Footer] …` lines before the body, one per paragraph (table cells joined with ` \| `), each distinct line once even when several sections repeat it. Only what Word shows is read: a first-page header needs "Different first page", an even-page header needs "Different odd & even pages"; hidden text and tracked deletions are skipped, images dropped. Page-number fields (`PAGE`, `NUMPAGES`, `SECTIONPAGES`) are dropped: their stored value belongs to whichever page was rendered last, and a line that only held "Page 3 of 10" disappears |
+| Links | `[text](https://…)`; links inside the document (table of contents) keep only their text |
+| Images | `[Image: alt text]` when the image has alt text, otherwise nothing — pictures are never sent as base64 data |
+| Explicit page break, page-break-before, new-page section break | `[Page break]` on its own line. Word does not store page numbers (it computes them when laying out), so Word files get no `[Page N]` markers |
+| Text that was moved with track changes | Appears once, at its new position |
+| Tracked deletions, comments | Not sent. Insertions count as text (the accepted view of the document) |
+| Hidden text (Word's "Hidden" font attribute) | Not sent |
+| Soft hyphens, non-breaking hyphens | Soft hyphens are removed, non-breaking hyphens become `-` |
+
+Markdown characters in the document text are not escaped, so `1.`, `[1]` or `a_b` arrive exactly as typed. Text that happens to look like Markdown (`# not a heading`) stays as typed as well.
+
+#### Numbering
+
+Word does not store list and chapter numbers as text; it computes them when displaying the document. The extraction recomputes them from the numbering definitions of the file, following Word's rules (verified against LibreOffice as an independent renderer):
+
+- Numbers continue across a document wherever Word continues them, restart where Word restarts them, and count only what Word shows (hidden paragraphs and tracked deletions take no number)
+- Formats: `1`, `01`, `a`, `A`, `i`, `I`, `1st`, with the repeated-letter sequence Word uses after `z` (`aa`, `bb`, …); legal numbering (`1.1`) shows every level as an Arabic number; other formats (for example counting words or Asian numerals) count in plain `1, 2, 3`
+- Bullet lists stay Markdown lists (`-`); a bullet below a numbered level is written as a `-` paragraph
+- **No label rather than a wrong one:** levels that restart by a custom rule (`w:lvlRestart`), and levels whose label refers to such a level, are left unnumbered. Text of numbered paragraphs is never changed
+
+### PDF files (.pdf)
+
+```text
+[Page 1 (printed: i)]
+Inhaltsverzeichnis
+
+[Page 2 (printed: 1)]
+1. Geltungsbereich
+Dieser Vertrag gilt für alle Parteien und re-
+gelt die Zusammenarbeit.
+Seite 1 von 3
+
+[Page 3: no extractable text]
+```
+
+| In the document | In the text |
+|---|---|
+| Each page | A `[Page N]` line with the physical page number (first page = 1), followed by the text of the page |
+| Printed page numbers (roman front matter, a cover that is not counted) | `[Page 2 (printed: 1)]` when the PDF defines page labels and the label differs from the physical number, so "see page 3" can be matched to what is printed on the page |
+| Lines | One line of text per line of the page. Words are no longer separated by double spaces; a hyphen at the end of a line stays where it is (`re-` / `gelt`) |
+| A page without a text layer inside a PDF that has text elsewhere | `[Page 2: no extractable text]`, so a missing page is visible |
+| Running headers and footers (`Page 3 of 10`) | Kept as ordinary text |
+| Scanned PDF (no text, or less than 50 characters of real text — markers do not count) | No text; the first five pages are rendered as images for vision models, as before. Text on a later page is kept instead, so it is not lost |
+
+Multi-column layouts are read in the order the PDF stores the text, which is not always the reading order. Headings are not detected in PDFs.
+
+### Admin switch
+
+**Admin → Features → Structured document extraction** (on by default) turns the structured extraction off and restores the plain text of before. Browsers read the setting when the page loads, so a change reaches users after a reload, at the latest after 30 minutes. If the structured extraction ever fails for a file, the plain text extraction is used instead and the upload still works; the browser console shows `structured extraction failed, using legacy`.
+
+Structured text is somewhat longer than plain text (Markdown syntax). The document-size warning estimates tokens from the extracted text, so it follows.
+
 ## LLM Provider Support
 
 | Provider | Images | Audio | Files (text) |
@@ -175,10 +241,10 @@ All file processing happens **client-side** before content is sent to the server
 2. **Validation** — MIME type and file size are checked against the app's upload configuration. File extension is used as a fallback when the browser reports an incorrect MIME type.
 3. **Processing** (type-specific):
    - **Text files** — Read directly as UTF-8 text.
-   - **PDF** — Text extracted via PDF.js. If the extracted text is empty or minimal (e.g. a scanned document), each page is rendered as an image instead.
-   - **DOCX** — Converted to plain text via mammoth.
+   - **PDF** — Text extracted via PDF.js, page by page with a `[Page N]` marker and one line per line of the page. If the extracted text is empty or minimal (less than 50 characters outside the markers, e.g. a scanned document), each page is rendered as an image instead.
+   - **DOCX** — Converted to Markdown: mammoth reads the Word file, an OOXML pass first fixes what mammoth drops (custom heading styles, page breaks, moved text, hidden text), Turndown writes the Markdown. With the admin switch off, mammoth's HTML is flattened to plain text as before.
    - **XLSX / XLS** — Cell content extracted as text via the xlsx library.
-   - **PPTX / PPT** — Slide text extracted via the xlsx library.
+   - **PPTX** — Slide text extracted from the OOXML slides via jszip. **PPT** (legacy binary) is rejected.
    - **ODT / ODS / ODP** — XML parsed and text content extracted via jszip.
    - **MSG** — Headers (subject, sender, recipients, date, attachment names) plus the body extracted via msgreader. The body is resolved across every format Outlook may store it in — plain text, HTML (`PidTagHtml`/`PidTagBodyHtml`), or compressed RTF — so HTML-only emails like newsletters extract their full content instead of just headers.
    - **EML** — Read as-is.

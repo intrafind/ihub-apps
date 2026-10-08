@@ -1,5 +1,13 @@
 // Shared file processing utilities for upload components
-import { fetchMimetypesConfig } from '../../../api/endpoints/config';
+import { fetchMimetypesConfig, fetchPlatformConfig } from '../../../api/endpoints/config';
+import { FeatureFlags } from '../../../../../shared/featureFlags.js';
+import { extractDocxMarkdown } from '../../../../../shared/documentExtraction/docx.js';
+import { extractPdfText } from '../../../../../shared/documentExtraction/pdfText.js';
+import {
+  MIN_REAL_TEXT_CHARS,
+  lastPageWithText,
+  realTextLength
+} from '../../../../../shared/documentExtraction/markers.js';
 // Resolved by Vite at build time → copied to dist as a local asset.
 // Using the ?url suffix is the correct Vite pattern for worker files from
 // node_modules; it ensures offline/air-gapped deployments work and the
@@ -161,6 +169,31 @@ export const loadPdfjs = async () => {
 export const loadMammoth = async () => {
   const mammoth = await import('mammoth');
   return mammoth;
+};
+
+// Lazy load Turndown (HTML → Markdown) only when a Word document is converted
+export const loadTurndown = async () => {
+  const mod = await import('turndown');
+  return mod.default ?? mod;
+};
+
+// Admin switch (Admin → Features) for the structure-preserving extraction of Word
+// documents. Everything structured is optional: with the switch off, or when the
+// platform config cannot be read, behavior is the registry default (on) — and any error in
+// the structured path falls back to the plain text extraction below.
+export const STRUCTURED_EXTRACTION_FEATURE = 'structuredDocumentExtraction';
+
+export const isStructuredExtractionEnabled = async () => {
+  try {
+    const platformConfig = await fetchPlatformConfig();
+    const features = platformConfig?.features;
+    const featuresMap = Array.isArray(features)
+      ? Object.fromEntries(features.map(feature => [feature.id, feature.enabled]))
+      : undefined;
+    return new FeatureFlags({ featuresMap }).isEnabled(STRUCTURED_EXTRACTION_FEATURE, true);
+  } catch {
+    return true;
+  }
 };
 
 // Lazy load MSGReader only when needed.
@@ -633,11 +666,11 @@ export const getExtensionDisplay = fileName => {
   return dot > 0 && dot < fileName.length - 1 ? fileName.slice(dot + 1).toUpperCase() : 'TXT';
 };
 
-// Process PDF file
-export const processPdfFile = async file => {
-  const arrayBuffer = await file.arrayBuffer();
-  const pdfjsLib = await loadPdfjs();
-  const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(arrayBuffer) }).promise;
+// Plain text of a PDF: the items of each page joined with spaces, one line per page. This is the
+// extraction before structured extraction existed — it loses page boundaries and line breaks
+// and doubles spaces — and stays unchanged as the fallback and as the result when the admin
+// switch is off.
+const legacyPdfText = async pdf => {
   let textContent = '';
 
   for (let i = 1; i <= pdf.numPages; i++) {
@@ -649,6 +682,28 @@ export const processPdfFile = async file => {
 
   return textContent.trim();
 };
+
+// PDF text and how it was extracted: structured text carries page markers, which must not
+// count as text when deciding whether the PDF is a scan.
+const extractPdfContent = async file => {
+  const arrayBuffer = await file.arrayBuffer();
+  const pdfjsLib = await loadPdfjs();
+  const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(arrayBuffer) }).promise;
+
+  if (await isStructuredExtractionEnabled()) {
+    try {
+      return { content: await extractPdfText(pdf), structured: true };
+    } catch (error) {
+      // Never make an upload fail that worked before: use the plain text extraction.
+      console.warn('[fileProcessing] structured extraction failed, using legacy', error);
+    }
+  }
+
+  return { content: await legacyPdfText(pdf), structured: false };
+};
+
+// Process PDF file
+export const processPdfFile = async file => (await extractPdfContent(file)).content;
 
 // Render PDF pages to images when text extraction yields nothing
 export const renderPdfPagesToImages = async (file, maxPages = 5, scale = 1.5) => {
@@ -670,9 +725,11 @@ export const renderPdfPagesToImages = async (file, maxPages = 5, scale = 1.5) =>
   return images;
 };
 
-// Process DOCX file
-export const processDocxFile = async file => {
-  const arrayBuffer = await file.arrayBuffer();
+// Plain text of a DOCX file: mammoth's HTML flattened with textContent. This is the
+// extraction before structured extraction existed — it loses headings, numbering, list
+// markers, table cells and paragraph boundaries — and stays unchanged as the fallback and
+// as the result when the admin switch is off.
+export const legacyDocxText = async arrayBuffer => {
   const mammoth = await loadMammoth();
   const result = await mammoth.convertToHtml({ arrayBuffer });
 
@@ -680,6 +737,34 @@ export const processDocxFile = async file => {
   const tempDiv = document.createElement('div');
   tempDiv.innerHTML = result.value;
   return tempDiv.textContent || tempDiv.innerText || '';
+};
+
+// Process DOCX file
+export const processDocxFile = async file => {
+  const arrayBuffer = await file.arrayBuffer();
+
+  if (await isStructuredExtractionEnabled()) {
+    try {
+      const [mammoth, JSZip, TurndownService] = await Promise.all([
+        loadMammoth(),
+        loadJSZip(),
+        loadTurndown()
+      ]);
+      return await extractDocxMarkdown({
+        arrayBuffer,
+        JSZip,
+        mammoth,
+        TurndownService,
+        DOMParser,
+        XMLSerializer
+      });
+    } catch (error) {
+      // Never make an upload fail that worked before: use the plain text extraction.
+      console.warn('[fileProcessing] structured extraction failed, using legacy', error);
+    }
+  }
+
+  return legacyDocxText(arrayBuffer);
 };
 
 // Process XLSX / XLS file — converts all sheets to tab-separated text
@@ -1004,17 +1089,32 @@ export const processDocumentFile = async file => {
 
   // Determine processing method based on MIME type or file extension
   if (file.type === 'application/pdf' || fileExtension === '.pdf') {
-    content = await processPdfFile(file);
-    // If text extraction yields empty/minimal content, render pages as images
-    if (!content || content.trim().length < 50) {
+    const extracted = await extractPdfContent(file);
+    content = extracted.content;
+    // If text extraction yields empty/minimal content, render pages as images. Page markers
+    // of structured text are not text: a scan with markers only must still be rendered.
+    const textLength = extracted.structured
+      ? realTextLength(content)
+      : (content || '').trim().length;
+    if (textLength < MIN_REAL_TEXT_CHARS) {
       console.log(
-        `[fileProcessing] PDF text extraction yielded ${content ? content.trim().length : 0} chars, attempting page-to-image rendering`
+        `[fileProcessing] PDF text extraction yielded ${textLength} chars, attempting page-to-image rendering`
       );
       try {
         pageImages = await renderPdfPagesToImages(file, 5);
         console.log(
           `[fileProcessing] Rendered ${pageImages.length} PDF page(s) as images (${pageImages.reduce((sum, img) => sum + img.length, 0)} bytes total base64)`
         );
+        // The images carry the page; the few characters of the text layer (a page number, a
+        // stamp) would only keep the images from being attached. Without images, keep the text
+        // — and keep it when it sits on a page that was not rendered.
+        if (
+          extracted.structured &&
+          pageImages.length > 0 &&
+          lastPageWithText(content) <= pageImages.length
+        ) {
+          content = '';
+        }
       } catch (e) {
         console.warn('PDF page rendering failed:', e);
       }

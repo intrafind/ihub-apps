@@ -1,0 +1,28 @@
+{
+  "id": "list_task_runs",
+  "name": {
+    "en": "List Task Runs",
+    "de": "Aufgabenläufe auflisten"
+  },
+  "description": {
+    "en": "Only available inside a scheduled run of a task that keeps notes between runs. List the earlier runs of this task, newest first: run number, time, status, whether it reported something new and whether its chat can still be read. Use get_task_run to read what a run answered.",
+    "de": "Nur in einem geplanten Lauf einer Aufgabe verfügbar, die zwischen den Läufen Notizen führt. Die früheren Läufe dieser Aufgabe auflisten, neueste zuerst: Laufnummer, Zeit, Status, ob er etwas Neues gemeldet hat und ob sein Chat noch lesbar ist. Mit get_task_run lesen, was ein Lauf geantwortet hat."
+  },
+  "script": "scheduledTaskTools.js",
+  "method": "listTaskRuns",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "limit": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 20,
+        "default": 5,
+        "description": {
+          "en": "How many runs to list (default 5, at most 20)",
+          "de": "Wie viele Läufe aufgelistet werden (Standard 5, höchstens 20)"
+        }
+      }
+    }
+  }
+}

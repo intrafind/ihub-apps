@@ -14,7 +14,10 @@
  *   - `ask_user` is refused (`headless`), and tools that need approval pause
  *     the run (`runSeams.js`);
  *   - the chat carries `origin: { createdVia: 'scheduled-task', taskId, runId }`
- *     and is marked unread when nobody watched it finish.
+ *     and is marked unread when nobody watched it finish;
+ *   - a task that keeps memory gets its notes in the system prompt, an
+ *     instruction to read them and its earlier runs first, and (when the model
+ *     can call tools) the tools to do so (`runMemory.js`).
  *
  * A run that paused for an approval is continued in the same chat once the
  * owner approves: a short message records the approval, and the approved
@@ -30,12 +33,14 @@ import { getLocalizedError } from '../../../serverHelpers.js';
 import logger from '../../../utils/logger.js';
 import {
   abortChatRequest,
+  activeRequests,
   markChatDurable,
   clearChatDurable,
   hasChatClient
 } from '../../../sse.js';
 import config from '../../../config.js';
 import ChatService, { withAppPrompt } from '../../chat/ChatService.js';
+import llmClient from '../../loop/LLMClient.js';
 import { getChatRepository, normalizeChatSettings } from '../../chat/ChatRepository.js';
 import { isChatPersistenceConfigured } from '../../chat/chatPersistence.js';
 import interactionService from '../../loop/InteractionService.js';
@@ -56,6 +61,9 @@ import { resolveOwnerPrincipal } from './ownerPrincipal.js';
 import { checkTaskPrincipal, SCHEDULED_TASK_ORIGIN, SCHEDULED_TASK_SOURCE } from './taskPolicy.js';
 import { scheduledRunSeams } from './runSeams.js';
 import { WITHHELD_IN_SCHEDULED_RUNS } from './toolGate.js';
+import { isMemoryOn } from './taskMemory.js';
+import { prepareRunMemory, settleMemoryMarker } from './runMemory.js';
+import { composeTaskMemory, ownerMessagesAfterPreviousRun, sumUsage } from './memoryComposer.js';
 import { announceTaskChanged } from './taskEvents.js';
 import { currentPolicy, deleteRunChat, toolsOfferedByApp } from './taskService.js';
 
@@ -246,6 +254,11 @@ export async function executeTaskRun({ taskId, runId }, deps = {}) {
 
   const continuation = run.continuation || null;
   const startedAtMs = now();
+  // Whether this run uses the task's notes, and what it says about them. The
+  // marker is stored on the run however it ends.
+  const memoryOn = isMemoryOn(task, { enabled: settings.memoryEnabled });
+  let memory = null;
+  let memoryBefore = '';
   // This execution's fencing token. The run document carries it with a lease
   // this worker renews; a new scheduler owner recovers the run only once the
   // lease ran out, and a worker that finds its token gone writes nothing more.
@@ -260,6 +273,7 @@ export async function executeTaskRun({ taskId, runId }, deps = {}) {
     stopRenewal();
     const endedAt = now();
     let written = false;
+    const memoryMarker = memory ? await settleMemoryMarker(memory, task, runId) : null;
     const ended = await repository.mutateRun(taskId, runId, stored => {
       // Queued (it never started) or still ours: anything else means another
       // process settled this run — a recovery after this lease lapsed.
@@ -271,6 +285,7 @@ export async function executeTaskRun({ taskId, runId }, deps = {}) {
       return {
         ...stored,
         ...extra,
+        ...(memoryMarker ? { memory: memoryMarker } : {}),
         status,
         reason,
         finishedAt: status === 'awaiting_approval' ? null : new Date(endedAt).toISOString(),
@@ -451,6 +466,19 @@ export async function executeTaskRun({ taskId, runId }, deps = {}) {
       tool => !WITHHELD_IN_SCHEDULED_RUNS.has(tool?.id)
     );
     appendSystemNote(prepared.llmMessages, UNATTENDED_NOTE);
+    if (memoryOn) {
+      const prepareMemory = await prepareRunMemory({
+        task,
+        run,
+        prepared,
+        language,
+        continuation: Boolean(continuation),
+        maxChars: settings.memoryMaxChars
+      });
+      for (const note of prepareMemory.notes) appendSystemNote(prepared.llmMessages, note);
+      memory = prepareMemory.marker;
+      memoryBefore = prepareMemory.before;
+    }
     await checkIntegrations(prepared.tools, user);
 
     const allowedTools = new Set((task.allowedTools || []).map(entry => entry.toolId));
@@ -641,7 +669,81 @@ export async function executeTaskRun({ taskId, runId }, deps = {}) {
         { ledgerRunIds, usage: addUsage(run.usage), watched }
       );
     }
-    return finish('succeeded', null, { ledgerRunIds, usage: addUsage(run.usage), watched });
+    // The run is done and good. The notes are brought up to date by one more
+    // call that needs no tool, so this works on every model; it cannot change
+    // how the run ended.
+    let composedUsage = null;
+    if (memory && memory.compose !== 'skipped' && Number.isInteger(memory.versionRead)) {
+      const timezone = task.schedule?.timezone || 'UTC';
+      // Stopping a run aborts whatever is registered for its chat. The turn has
+      // ended and unregistered itself, so the composer registers its own call:
+      // a run stopped now ends as cancelled, not as a success.
+      const composeAbort = new AbortController();
+      if (run.chatId) activeRequests.set(run.chatId, composeAbort);
+      let composed;
+      try {
+        composed = await composeTaskMemory({
+          llmClient: deps.llmClient || llmClient,
+          task,
+          run,
+          user,
+          model: prepared.model,
+          ledgerRunId,
+          instructions: resolveRunContext(
+            task.instructions,
+            runContextVariables(task, run, { now: startedAtMs, format: formatZonedIso })
+          ),
+          runTime: formatZonedIso(startedAtMs, timezone),
+          notesBefore: memoryBefore,
+          answer: outcome.content,
+          ownerMessages: await ownerMessagesAfterPreviousRun(user, {
+            taskId,
+            currentRunId: runId
+          }),
+          maxChars: settings.memoryMaxChars,
+          versionRead: memory.versionRead,
+          signal: composeAbort.signal
+        });
+      } finally {
+        if (run.chatId && activeRequests.get(run.chatId) === composeAbort) {
+          activeRequests.delete(run.chatId);
+        }
+      }
+      composedUsage = composed.usage;
+      memory = {
+        ...memory,
+        changed: composed.changed,
+        compose: composed.compose,
+        ...(composed.usage ? { composeUsage: composed.usage } : {})
+      };
+      if (composeAbort.signal.aborted) {
+        return finish('cancelled', reasonOf('ABORTED', 'The run was stopped', now()), {
+          ledgerRunIds,
+          usage: sumUsage(addUsage(run.usage), composedUsage),
+          watched
+        });
+      }
+      // The chat was marked unread when the answer landed, before anyone knew
+      // there was nothing new in it. Someone who asked to hear only about
+      // changes should not see an unread dot for a run that had none.
+      if (task.notify === 'changes' && composed.changed === false) {
+        await getChatRepository()
+          .clearUnseen(run.chatId)
+          .catch(error =>
+            logger.warn('Could not clear the unread mark of a run without changes', {
+              component: COMPONENT,
+              taskId,
+              runId,
+              error: error.message
+            })
+          );
+      }
+    }
+    return finish('succeeded', null, {
+      ledgerRunIds,
+      usage: sumUsage(addUsage(run.usage), composedUsage),
+      watched
+    });
   } catch (error) {
     const failure =
       error instanceof RunFailure
