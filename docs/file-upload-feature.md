@@ -155,7 +155,7 @@ many formats, e.g. `.log`, `.yaml`, `.srt`). With it enabled:
 
 ## Extracted text format
 
-The model receives a document as text inside a `<content type="document" …>` block (see [Apps](apps.md), "What `{{content}}` contains"). For Word files this text is **Markdown that keeps the structure of the document**, so a prompt can refer to a section by its heading or compare two files heading by heading.
+The model receives a document as text inside a `<content type="document" …>` block (see [Apps](apps.md), "What `{{content}}` contains"). For Word files this text is **Markdown that keeps the structure of the document**, so a prompt can ask for "section 2.1" or compare two files heading by heading.
 
 ### Word documents (.docx)
 

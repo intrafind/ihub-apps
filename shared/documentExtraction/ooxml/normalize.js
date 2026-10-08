@@ -186,8 +186,9 @@ export function normalizeDocumentXml(
           levelRaw === undefined || Number.isNaN(Number(levelRaw)) ? undefined : Number(levelRaw);
         const result = numbering.advance(numId, level, styleId);
         if (result.kind !== 'bullet' && result.kind !== 'unknown') {
+          // Text mammoth outputs (not field codes or tracked deletions), or a picture.
           const hasContent =
-            para.textContent.trim() !== '' ||
+            hasAcceptedContent ||
             xml.all(para, 'drawing').length > 0 ||
             xml.all(para, 'pict').length > 0;
           // A numbered paragraph without content still takes a number but shows no label.
