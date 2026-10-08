@@ -355,6 +355,34 @@ describe('limits for documents from strangers', () => {
     });
   });
 
+  it('a package whose end record understates its entries is refused, not read as the few it names', async () => {
+    // JSZip reads every consecutive central-directory header, whatever the count says.
+    const bomb = await buildDocx({
+      body: `<w:p><w:r><w:t xml:space="preserve">${' '.repeat(40_000_000)}</w:t></w:r></w:p>`
+    });
+    const end = bomb.lastIndexOf(Buffer.from([0x50, 0x4b, 0x05, 0x06]));
+    assert.ok(end > 0 && bomb.readUInt16LE(end + 10) > 1, 'the package has several entries');
+    for (const claimed of [0, 1]) {
+      const lie = Buffer.from(bomb);
+      lie.writeUInt16LE(claimed, end + 8);
+      lie.writeUInt16LE(claimed, end + 10);
+      await rejects(documentFromInlineFile({ data: dataUrl(lie), filename: 'lie.docx' }, 'x'), {
+        code: 'invalid_file'
+      });
+    }
+  });
+
+  it('data in front of the zip, which shifts every offset for the unpacking library, is refused', async () => {
+    const plain = await buildDocx({ body: p('Text') });
+    const prefixed = Buffer.concat([Buffer.alloc(64, 0x41), plain]);
+    await rejects(documentFromInlineFile({ data: dataUrl(prefixed), filename: 'a.docx' }, 'x'), {
+      code: 'invalid_file'
+    });
+    // The same package without the prefix is read.
+    const file = await documentFromInlineFile({ data: dataUrl(plain), filename: 'a.docx' }, 'x');
+    assert.equal(file.content, 'Text');
+  });
+
   it('a truncated or damaged package is refused', async () => {
     const bytes = await buildDocx({ body: p('Text.') });
     for (const damaged of [bytes.subarray(0, bytes.length - 40), bytes.subarray(0, 100)]) {

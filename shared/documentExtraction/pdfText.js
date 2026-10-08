@@ -221,6 +221,14 @@ export async function readOutline(pdf) {
   return entries;
 }
 
+/** Characters a block holds: its text, or the cells of a table (their text counts as well). */
+const blockChars = block =>
+  block.type === 'table'
+    ? block.rows.reduce((sum, row) => sum + row.cells.reduce((n, cell) => n + cell.length, 0), 0)
+    : block.text
+      ? block.text.length
+      : 0;
+
 /**
  * Text of a pdf.js document. Reads page by page, so a long document never holds more than the
  * blocks of its pages (small compared to the items they come from).
@@ -250,7 +258,7 @@ export async function extractPdfText(pdf, { maxPages = Infinity, maxChars = Infi
       styles
     );
     pages.push(built);
-    for (const block of built.blocks) chars += block.text ? block.text.length : 0;
+    for (const block of built.blocks) chars += blockChars(block);
     if (chars > maxChars) break;
   }
   addHeadings(pages, await readOutline(pdf));

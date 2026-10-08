@@ -10,9 +10,15 @@
  *
  * @module shared/documentExtraction/xlsx
  */
-import { MAX_SHEET_ROWS, MAX_WORKBOOK_CHARS, looksLikeHeader, renderSheets } from './sheets.js';
+import {
+  MAX_SHEET_ROWS,
+  MAX_WORKBOOK_CHARS,
+  SHEET_NOTICE_RESERVE,
+  looksLikeHeader,
+  renderSheets
+} from './sheets.js';
 
-export { MAX_SHEET_ROWS, MAX_WORKBOOK_CHARS, looksLikeHeader };
+export { MAX_SHEET_ROWS, MAX_WORKBOOK_CHARS, SHEET_NOTICE_RESERVE, looksLikeHeader };
 
 /**
  * A cell that spans rows shows its text in each row (every row stays self-contained); one that
@@ -61,11 +67,18 @@ export function extractXlsxText({ XLSX, workbook, limits = {} }) {
         for (let c = merge.s.c + 1; c <= merge.e.c; c += 1) covered.add(c - range.s.c);
       }
     }
+    // Columns whose first cell the file stores as a number, a date or a boolean.
+    const typed = new Set();
+    for (let c = 0; c <= range.e.c - range.s.c; c += 1) {
+      const cell = sheet[XLSX.utils.encode_cell({ r: range.s.r, c: range.s.c + c })];
+      if (cell && ['n', 'd', 'b'].includes(cell.t)) typed.add(c);
+    }
     sheets.push({
       name,
       hidden: !!workbook.Workbook?.Sheets?.[index]?.Hidden,
       rows,
       covered,
+      typed,
       rowsBeyond: Math.max(0, range.e.r - lastRow)
     });
   });

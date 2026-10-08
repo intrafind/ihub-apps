@@ -161,6 +161,51 @@ describe('slide order', () => {
     expect((await processDocumentFile(broken)).content).toBe('[Slide 2]\nb');
   });
 
+  it('a slide list whose relationships are gone falls back to the file names instead of reading nothing', async () => {
+    const file = await buildDeck({
+      slides: [slide([shape([para('eins')])]), slide([shape([para('zwei')])])],
+      order: [1, 0]
+    });
+    const loaded = await JSZip.loadAsync(await file.arrayBuffer());
+    loaded.remove('ppt/_rels/presentation.xml.rels');
+    const broken = makeFile(
+      await loaded.generateAsync({ type: 'arraybuffer' }),
+      'd.pptx',
+      PPTX_MIME
+    );
+    expect((await processDocumentFile(broken)).content).toBe('[Slide 1]\neins\n\n[Slide 2]\nzwei');
+  });
+
+  it('a Word file named .pptx is no deck — it is not read as a deck without text', async () => {
+    const zip = new JSZip();
+    zip.file(
+      '[Content_Types].xml',
+      `${XML}<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"/>`
+    );
+    zip.file(
+      '_rels/.rels',
+      `${XML}<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
+        `<Relationship Id="rId1" Type="${REL}/officeDocument" Target="word/document.xml"/></Relationships>`
+    );
+    zip.file(
+      'word/document.xml',
+      `${XML}<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body/></w:document>`
+    );
+    const arrayBuffer = await zip.generateAsync({ type: 'arraybuffer' });
+    await expect(
+      extractPptxText({ arrayBuffer, JSZip, DOMParser: window.DOMParser })
+    ).rejects.toThrow(/not a presentation/);
+    // A real deck that happens to have no slides is a deck without text, not an error.
+    const empty = await buildDeck({ slides: [], order: [] });
+    expect(
+      await extractPptxText({
+        arrayBuffer: await empty.arrayBuffer(),
+        JSZip,
+        DOMParser: window.DOMParser
+      })
+    ).toBe('');
+  });
+
   it('slides with no text are skipped; a deck of pictures has no text', async () => {
     expect(await extract({ slides: [slide([shape([])]), slide([])], order: [0, 1] })).toBe('');
   });

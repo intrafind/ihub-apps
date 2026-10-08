@@ -17,6 +17,13 @@ export const MAX_SHEET_ROWS = 2000;
 /** Characters of all sheets together; the next row that would go beyond is left out. */
 export const MAX_WORKBOOK_CHARS = 300000;
 
+/**
+ * Once the rows have used the budget, a sheet still gets its title and the count of its rows
+ * left out (the model should know the sheet exists) — up to this many characters more. Sheets
+ * after that are only counted.
+ */
+export const SHEET_NOTICE_RESERVE = 5000;
+
 // What a number, a percentage, a date or a time looks like as text: not a column name.
 const NUMBER_LIKE = /^[-+(]?[\d.,/:'’\s€$£%)-]+$/;
 
@@ -24,19 +31,23 @@ const NUMBER_LIKE = /^[-+(]?[\d.,/:'’\s€$£%)-]+$/;
  * Whether the first row names the columns: at least two named columns, every cell filled with
  * text that is not a number or a date, and a row of data below. A cell that is the covered part
  * of a merged header (`covered`: column indexes) is empty by nature and does not count against
- * it — nor as a column: a title merged across the sheet is a title, not a header.
+ * it — nor as a column: a title merged across the sheet is a title, not a header. A cell the
+ * file stores as a number, date or time (`typed`: column indexes) is data, whatever text its
+ * format makes of it ("Oct 2026", "10 AM", "USD 10").
  *
  * @param {string[][]} rows
  * @param {Set<number>} [covered]
+ * @param {Set<number>} [typed]
  * @returns {boolean}
  */
-export function looksLikeHeader(rows, covered = new Set()) {
+export function looksLikeHeader(rows, covered = new Set(), typed = new Set()) {
   if (rows.length < 2) return false;
   const first = rows[0];
   if (first.filter((_, column) => !covered.has(column)).length < 2) return false;
   return first.every((cell, column) => {
     const text = cell.trim();
-    return covered.has(column) ? text === '' : text !== '' && !NUMBER_LIKE.test(text);
+    if (covered.has(column)) return text === '';
+    return text !== '' && !typed.has(column) && !NUMBER_LIKE.test(text);
   });
 }
 
@@ -48,6 +59,8 @@ export const oneLine = text => String(text).replace(/\s+/g, ' ').trim();
  * @property {boolean} [hidden]
  * @property {string[][]} rows - The rows that were read, without the empty ones
  * @property {Set<number>} [covered] - Columns of the first row that a merged cell covers
+ * @property {Set<number>} [typed] - Columns whose first cell the file stores as a number, a date,
+ *   a time or a boolean (not as text)
  * @property {number} [rowsBeyond] - Rows of the sheet that were not read (past the row limit)
  * @property {string[]} [notices] - Lines appended to the sheet, e.g. what was cut off
  */
@@ -60,10 +73,19 @@ export const oneLine = text => String(text).replace(/\s+/g, ' ').trim();
 export function renderSheets(sheets, limits = {}) {
   let budget = limits.workbookChars ?? MAX_WORKBOOK_CHARS;
   const blocks = [];
+  let leftOut = 0;
 
-  for (const sheet of sheets) {
+  for (const [at, sheet] of sheets.entries()) {
+    if (sheet.rows.length === 0) continue;
+    // The budget is a bound: when the rows have used it, the sheets that follow get a title and
+    // a notice — within the reserve. A sheet whose title no longer fits ends the workbook; the
+    // sheets after it are only counted.
+    const title = `[Sheet: ${sheet.name}${sheet.hidden ? ' (hidden)' : ''}]`;
+    if (budget + SHEET_NOTICE_RESERVE < title.length + 1) {
+      leftOut = sheets.slice(at).filter(other => other.rows.length > 0).length;
+      break;
+    }
     const rows = sheet.rows.map(row => row.map(oneLine));
-    if (rows.length === 0) continue;
 
     // Columns without anything in them, at the right, are not columns.
     let width = 0;
@@ -80,12 +102,11 @@ export function renderSheets(sheets, limits = {}) {
       while (cells.length < width) cells.push('');
       return cells;
     });
-    const header = looksLikeHeader(grid, sheet.covered);
+    const header = looksLikeHeader(grid, sheet.covered, sheet.typed);
     const lines = header ? markdownTableLines(grid, { header: true }) : grid.map(r => r.join('\t'));
     // Every line is a row of the sheet, except the separator of a table (its second line).
     const entries = lines.map((line, at) => ({ line, isRow: !(header && at === 1) }));
 
-    const title = `[Sheet: ${sheet.name}${sheet.hidden ? ' (hidden)' : ''}]`;
     const out = [title];
     budget -= title.length + 1;
 
@@ -98,9 +119,13 @@ export function renderSheets(sheets, limits = {}) {
     }
     // Rows left out: those that were read but did not fit, and those beyond the row limit.
     const omitted = grid.length - shown + (sheet.rowsBeyond ?? 0);
-    if (omitted > 0) out.push(`[… ${omitted}${shown === 0 ? '' : ' more'} rows omitted]`);
-    out.push(...(sheet.notices ?? []));
+    const notices = [];
+    if (omitted > 0) notices.push(`[… ${omitted}${shown === 0 ? '' : ' more'} rows omitted]`);
+    notices.push(...(sheet.notices ?? []));
+    for (const notice of notices) budget -= notice.length + 1;
+    out.push(...notices);
     blocks.push(out.join('\n'));
   }
+  if (leftOut > 0) blocks.push(`[… ${leftOut} more sheets omitted]`);
   return blocks.join('\n\n').trim();
 }

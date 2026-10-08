@@ -263,7 +263,7 @@ export default function registerOpenAIProxyRoutes(
    *                     content:
    *                       description: |
    *                         A string, or content parts. For apps: `text`, `image_url` (data URL)
-   *                         and `file` (`file_data` as a data URL; PDF and text files). System
+   *                         and `file` (`file_data` as a data URL; PDF, Word (.docx) and text files). System
    *                         messages are refused for apps — the app's prompt applies.
    *               temperature:
    *                 type: number

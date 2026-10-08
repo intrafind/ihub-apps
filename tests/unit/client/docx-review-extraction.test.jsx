@@ -100,12 +100,14 @@ const INLINE = { comments: 'inline' };
 const extract = async (spec, options, name) =>
   (await processDocumentFile(await buildDocxFile(spec, name), options)).content;
 
-describe('tracked changes', () => {
-  beforeEach(() => {
-    config.fetchPlatformConfig.mockReset();
-    config.fetchPlatformConfig.mockResolvedValue({ features: [] });
-  });
+// Every test starts with the switch at its default (on): a test that turns it off must not
+// leave that behind for the ones after it, whatever their order.
+beforeEach(() => {
+  config.fetchPlatformConfig.mockReset();
+  config.fetchPlatformConfig.mockResolvedValue({ features: [] });
+});
 
+describe('tracked changes', () => {
   it('T-WPB-01: by default the accepted view — insertions in, deletions out, no marks', async () => {
     const spec = {
       body: para(run('Der Vertrag '), del('endet nicht '), ins('endet '), run('am Montag.'))
@@ -191,6 +193,44 @@ describe('tracked changes', () => {
     );
     // The accepted view drops the deleted row, as before.
     expect(await extract({ body })).not.toContain('Kuendigung');
+  });
+
+  it('a row marked deleted or inserted only on the row shows its ordinary cell text as marked', async () => {
+    const cell = inner => tc(`<w:p>${inner}</w:p>`);
+    const row = (cells, trPr = '') =>
+      `<w:tr>${trPr ? `<w:trPr>${trPr}</w:trPr>` : ''}${cells.join('')}</w:tr>`;
+    const body =
+      `<w:tbl><w:tblPr/><w:tblGrid/>` +
+      row([cell(run('Name')), cell(run('Frist'))]) +
+      row([cell(run('Kuendigung')), cell(run('3 Monate'))], `<w:del ${ATTRS(5)}/>`) +
+      row([cell(run('Miete')), cell(run('1000'))], `<w:ins ${ATTRS(6)}/>`) +
+      `</w:tbl>`;
+    expect(await extract({ body }, MARKUP)).toBe(
+      [
+        '| Name | Frist |',
+        '| --- | --- |',
+        '| {--Kuendigung--} | {--3 Monate--} |',
+        '| {++Miete++} | {++1000++} |'
+      ].join('\n')
+    );
+    // The accepted view still drops the deleted row and keeps the inserted one.
+    const accepted = await extract({ body });
+    expect(accepted).not.toContain('Kuendigung');
+    expect(accepted).toContain('Miete');
+  });
+
+  it('a closing sequence inside tracked text cannot end its marker early', async () => {
+    const out = await extract(
+      { body: para(run('x '), del('alt --} noch weg'), run(' y '), ins('neu ++} noch neu')) },
+      MARKUP
+    );
+    expect(out).toBe('x {--alt -- } noch weg--} y {++neu ++ } noch neu++}');
+    // Split over two runs it is the same sequence.
+    const split = await extract(
+      { body: para(`<w:ins ${ATTRS(1)}>${run('a ++')}${run('} b')}</w:ins>`) },
+      MARKUP
+    );
+    expect(split).toBe('{++a ++ } b++}');
   });
 
   it('a deleted space is gone, not shown as a space', async () => {
@@ -381,6 +421,24 @@ describe('per-app options reach every way a document gets in', () => {
     expect(extractionOptionsOf(without.fileUpload)).toMatchObject({
       trackedChanges: 'accepted',
       comments: 'ignore'
+    });
+  });
+
+  it('an app that only offers cloud storage still hands its options to the cloud picks', () => {
+    const { result } = renderHook(() => useFileUploadHandler());
+    const cloudOnly = result.current.createUploadConfig(
+      {
+        upload: {
+          cloudStorageUpload: { enabled: true },
+          fileUpload: { trackedChanges: 'markup', comments: 'inline' }
+        }
+      },
+      null
+    );
+    expect(cloudOnly.localUploadEnabled).toBe(false);
+    expect(extractionOptionsOf(cloudOnly.fileUpload)).toEqual({
+      trackedChanges: 'markup',
+      comments: 'inline'
     });
   });
 
