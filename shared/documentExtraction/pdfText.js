@@ -230,21 +230,45 @@ export async function readOutline(pdf) {
   return entries;
 }
 
+/** Characters a block holds: its text, or the cells of a table (their text counts as well). */
+const blockChars = block =>
+  block.type === 'table'
+    ? block.rows.reduce((sum, row) => sum + row.cells.reduce((n, cell) => n + cell.length, 0), 0)
+    : block.text
+      ? block.text.length
+      : 0;
+
 /**
  * Text of a pdf.js document. Reads page by page, so a long document never holds more than the
  * blocks of its pages (small compared to the items they come from).
  *
  * @param {{numPages: number, getPage: Function, getPageLabels: Function}} pdf - pdf.js document
+ * @param {Object} [limits] - For callers that must bound the work (the server); the browser
+ *   reads everything
+ * @param {number} [limits.maxPages] - Pages read, counted from the first
+ * @param {number} [limits.maxChars] - Reading stops after the page that takes the text beyond
+ *   this many characters
  * @returns {Promise<string>} Markers and text, or '' when no page has a text layer
  */
-export async function extractPdfText(pdf) {
+export async function extractPdfText(pdf, { maxPages = Infinity, maxChars = Infinity } = {}) {
   const labels = await readPageLabels(pdf);
   const pages = [];
-  for (let number = 1; number <= pdf.numPages; number += 1) {
+  const last = Math.min(pdf.numPages, maxPages);
+  let chars = 0;
+  for (let number = 1; number <= last; number += 1) {
     const page = await pdf.getPage(number);
     // Marked content is what ties text to the structure tree; plain pages are unaffected.
     const { items, styles } = await page.getTextContent({ includeMarkedContent: true });
-    pages.push(buildPdfPage(items, number, labels[number - 1], await readStructTree(page), styles));
+    const built = buildPdfPage(
+      items,
+      number,
+      labels[number - 1],
+      await readStructTree(page),
+      styles
+    );
+    pages.push(built);
+    for (const block of built.blocks) chars += blockChars(block);
+    if (chars > maxChars) break;
   }
   addHeadings(pages, await readOutline(pdf));
   return joinPdfPages(pages.map(renderPdfPage));
