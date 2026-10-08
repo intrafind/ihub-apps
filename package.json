@@ -15,6 +15,7 @@
     "start": "cd server && node -r dotenv/config server.js dotenv_config_path=../.env",
     "// === INSTALLATION & CLEANUP ===": "",
     "install:all": "npm install && cd client && npm install && cd ../server && npm install",
+    "prepare": "husky || true",
     "clean": "npm run build:clean && rm -rf node_modules client/node_modules server/node_modules",
     "clean:install": "npm run clean && npm run install:all",
     "// === UTILITIES ===": "",
@@ -192,12 +193,6 @@
     "eslint-plugin-jsx-a11y": {
       "eslint": "$eslint"
     }
-  },
-  "lint-staged": {
-    "*.{js,jsx}": [
-      "eslint --fix",
-      "prettier --write"
-    ]
   },
   "allowScripts": {
     "fsevents@2.3.3": true,

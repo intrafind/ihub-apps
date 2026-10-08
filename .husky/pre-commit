@@ -1,0 +1,18 @@
+# Runs on every `git commit`. Installed by `npm install` (the "prepare" script).
+# Skip once with `git commit --no-verify`; CI runs the same checks anyway.
+
+# CI jobs that commit (e.g. auto-lint-format) run their own checks.
+[ -n "$CI" ] && exit 0
+
+# Lint and format the staged files (.lintstagedrc.json).
+npx lint-staged
+
+# Scan the staged changes for secrets (.gitleaks.toml). gitleaks is a
+# standalone binary: `brew install gitleaks` on macOS, or a release from
+# https://github.com/gitleaks/gitleaks/releases on Linux and Windows.
+if command -v gitleaks >/dev/null 2>&1; then
+  gitleaks git --pre-commit --staged --redact --no-banner --verbose
+else
+  echo "pre-commit: gitleaks is not installed, so staged changes were not scanned for secrets."
+  echo "pre-commit: install it with 'brew install gitleaks' or from https://github.com/gitleaks/gitleaks/releases"
+fi

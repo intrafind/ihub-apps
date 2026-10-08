@@ -4,9 +4,12 @@
  * Security Audit Script for Admin Endpoints
  *
  * This script scans all admin route files and verifies that:
- * 1. All admin endpoints use the adminAuth middleware
+ * 1. Every admin endpoint is guarded by an admin middleware (ADMIN_GUARD_PATTERN)
  * 2. Documents any intentional exceptions
  * 3. Generates a comprehensive security audit report
+ *
+ * Exits non-zero when an unguarded endpoint is found, so CI can run it
+ * (.github/workflows/security.yml).
  */
 
 import { readFileSync, readdirSync } from 'fs';
@@ -19,6 +22,11 @@ const __dirname = dirname(__filename);
 
 const ADMIN_ROUTES_DIR = join(__dirname, '../server/routes/admin');
 
+// Middleware that restricts a route to administrators. contentAdminAuth also
+// admits groups with the delegated contentAdmin permission (apps, prompts,
+// sources, skills) and rejects anonymous and machine principals.
+const ADMIN_GUARD_PATTERN = /\b(adminAuth|contentAdminAuth)\b/;
+
 // Known intentional exceptions (endpoints that should NOT have adminAuth)
 const INTENTIONAL_EXCEPTIONS = [
   '/api/admin/auth/status' // Public endpoint to check auth requirements
@@ -28,56 +36,28 @@ function extractRoutes(filePath, fileName) {
   const content = readFileSync(filePath, 'utf-8');
   const routes = [];
 
-  // Match route definitions: app.METHOD(buildServerPath('PATH'), ...)
-  const routeRegex = /app\.(get|post|put|delete|patch)\(\s*buildServerPath\(['"]([^'"]+)['"]/g;
-  // Alternative pattern: app.METHOD(`${basePath}/PATH`, ...)
-  const altRouteRegex = /app\.(get|post|put|delete|patch)\(\s*`\$\{basePath\}([^`]+)`/g;
+  // Every app.METHOD(<path>, ...middleware, handler) registration, whatever
+  // form the path takes: buildServerPath('...'), `${basePath}/...`, or a
+  // variable such as `${base}/:id`. (?<![.\w]) skips req.app.get('platform').
+  const routeRegex = /(?<![.\w])app\.(get|post|put|delete|patch)\(\s*([^,]+),/g;
 
   let match;
-
-  // Extract routes with buildServerPath
   while ((match = routeRegex.exec(content)) !== null) {
     const method = match[1].toUpperCase();
-    const path = match[2];
+    const pathArg = match[2].trim();
+    const path =
+      pathArg.match(/^buildServerPath\(\s*['"]([^'"]+)['"]\s*\)$/)?.[1] ??
+      pathArg.match(/^`\$\{basePath\}([^`]+)`$/)?.[1] ??
+      pathArg;
 
-    // Get the line number
     const lineNumber = content.substring(0, match.index).split('\n').length;
 
-    // Get context around the route (check up to 10 lines after the route definition)
-    const lines = content.split('\n');
-    const contextStart = lineNumber - 1;
-    const contextEnd = Math.min(contextStart + 10, lines.length);
-    const context = lines.slice(contextStart, contextEnd).join('\n');
-
-    // Check if adminAuth is in the context
-    const hasAdminAuth = context.includes('adminAuth');
-
-    routes.push({
-      file: fileName,
-      method,
-      path,
-      lineNumber,
-      hasAdminAuth,
-      isException: INTENTIONAL_EXCEPTIONS.includes(path)
-    });
-  }
-
-  // Extract routes with template literals
-  while ((match = altRouteRegex.exec(content)) !== null) {
-    const method = match[1].toUpperCase();
-    const path = match[2];
-
-    // Get the line number
-    const lineNumber = content.substring(0, match.index).split('\n').length;
-
-    // Get context around the route
-    const lines = content.split('\n');
-    const contextStart = lineNumber - 1;
-    const contextEnd = Math.min(contextStart + 10, lines.length);
-    const context = lines.slice(contextStart, contextEnd).join('\n');
-
-    // Check if adminAuth is in the context
-    const hasAdminAuth = context.includes('adminAuth');
+    // The middleware list runs from the path to the handler; only a guard
+    // named there protects the route (not one mentioned in a later comment).
+    const rest = content.slice(match.index + match[0].length);
+    const handlerStart = rest.search(/(async\s*)?\(\s*req\b|(async\s+)?function\b/);
+    const middleware = handlerStart === -1 ? rest.slice(0, 500) : rest.slice(0, handlerStart);
+    const hasAdminAuth = ADMIN_GUARD_PATTERN.test(middleware);
 
     routes.push({
       file: fileName,
