@@ -2,9 +2,9 @@
 
 ## Uploaded Documents Keep Their Structure
 
-Word documents (.docx) now reach the model as structured Markdown instead of one run of plain
-text, so prompts can refer to sections, tables and lists, and comparisons can go heading by
-heading.
+Word documents (.docx) and PDF files now reach the model with their structure instead of one run
+of plain text, so prompts can refer to sections, tables, lists and pages, and comparisons can go
+heading by heading.
 
 - Headings keep their level — built-in headings, custom heading styles and paragraphs with a Word
   outline level — and paragraphs, lists, footnotes and links stay separate and readable
@@ -16,7 +16,10 @@ heading.
 - Chapter and list numbers from Word's numbering (`2.1`, `a)`, `(iii)`, `§ 3`) are written in front of
   the text as Word shows them, so sections can be cited by number; a level with a custom restart
   rule gets no number rather than a possibly wrong one
-- Headers and footers and PDF page markers follow in later updates
+- PDF files carry a `[Page N]` marker per page (with the printed page number when it differs, as
+  in front matter numbered `i`, `ii`), keep their lines instead of one run of words, and flag
+  pages without a text layer; scanned PDFs are still sent as page images
+- Headers and footers of Word files follow in a later update
 
 Admins can switch this off under **Admin → Features → Structured document extraction** (on by
 default); the previous plain text extraction then applies after users reload the page. If the

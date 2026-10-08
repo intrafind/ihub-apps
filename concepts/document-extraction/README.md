@@ -76,7 +76,7 @@ The issue was written before the verification. The implementation plan supersede
 |---|---|---|
 | 1 — switch, test infra, DOCX → Markdown | Done (see below) | `shared/documentExtraction/{markers,markdown,docx}.js`, `shared/documentExtraction/ooxml/{xml,styles,normalize}.js`; wiring in `client/src/features/upload/utils/fileProcessing.js` (`processDocxFile`, `legacyDocxText`, `isStructuredExtractionEnabled`); switch in `server/featureRegistry.js`; tests `tests/unit/client/docx-*.test.jsx`, `document-extraction-flag.test.jsx`, `office-docx-attachment-extraction.test.jsx`, `server/tests/document-extraction-feature.test.js`; fixtures `tests/utils/officeFixtures.js` |
 | 2 — numbering labels | Done (see below) | `shared/documentExtraction/ooxml/numbering.js` (counters), numbering step 3d in `ooxml/normalize.js`, wiring in `docx.js`; tests `tests/unit/client/docx-numbering-extraction.test.jsx` |
-| 3 — PDF pages | Not started | |
+| 3 — PDF pages | Done (see below) | `shared/documentExtraction/pdfText.js` (+ `markers.js`); wiring in `fileProcessing.js` (`extractPdfContent`, `legacyPdfText`); tests `tests/unit/client/pdf-structured-text.test.jsx`, `server/tests/document-extraction-pdf.test.js` (in `test:pdf`) |
 | 4 — headers/footers | Not started | |
 | 5 — prompt guidance | Not started | |
 
@@ -111,3 +111,28 @@ Validated with a differential fuzz against LibreOffice (`soffice --convert-to tx
 - **Bullets** stay mammoth lists only when every level above them is a bullet too; under a numbered level they become a `- ` paragraph (otherwise mammoth writes `- - text`).
 - **Empty numbered paragraph:** counted (Word shows its number), no label written. **Deleted or moved-away paragraph marks and hidden paragraphs take no number** — Q-02 (hidden numbered paragraphs in Word's print view) is still to be confirmed in Word by a human.
 - **Applicable test IDs now covered:** T-DOCX-03, 04, 07–13, 15, and the numbering parts of 20, 21 and 28.
+
+### Decisions and findings from PR 3
+
+- **Lines:** pdf.js puts the spaces of a line into its items and marks the line end with `hasEOL`
+  (usually on an empty item). The items of a line are concatenated **without** a separator —
+  joining with a space (as before) doubles every space; runs of one word (kerning, font change)
+  arrive as separate items and must stay glued. Whitespace runs collapse to one space, empty lines
+  are dropped, line-end hyphens stay (no dehyphenation). Checked on real pdf.js output
+  (LibreOffice and pdf-lib PDFs).
+- **Marker label from the file is untrusted:** brackets, parentheses and line breaks are removed
+  and the label is cut at 40 characters, so a crafted label cannot produce a second marker.
+- **Scan detection** uses `realTextLength` (markers excluded) for structured text and the old
+  `trim().length < 50` for the plain text, so switching off the feature keeps the old decision
+  byte for byte. A PDF without a single character of text assembles to `''` (no row of
+  "no extractable text" markers).
+- **Short text below the threshold (T-PDF-06):** the pages are rendered and the content is set to
+  `''`, because `RequestBuilder` only attaches page images for a file without content. Before,
+  such a PDF (a scan with a page number in its text layer, or a one-line PDF) reached the model as
+  its few characters only. **If rendering fails or yields no image, the text is kept** (a
+  deviation from the test plan row, which assumed rendering cannot fail). **The text is also kept
+  when it sits on a page beyond the five rendered ones** (`lastPageWithText`), otherwise a page 6
+  with a few lines would be lost; the images are then not attached (the file has content), as in
+  the plain text path before.
+- **Server-side extractors are untouched** (`inputContent.js`, `ocrProcessor.js`): release 2 (WP-E).
+- `attachDocumentPageImages` in `RequestBuilder.js` is exported for the T-DOWN-02 test; no behaviour change.
