@@ -429,7 +429,9 @@ class TokenStorageService {
 
       let decrypted;
       if (isGcm) {
-        const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
+        // Pin the tag length: without it Node accepts a truncated tag (4-16 bytes), which
+        // weakens the integrity check to as few as 32 bits.
+        const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv, { authTagLength: 16 });
         decipher.setAuthTag(Buffer.from(encryptedData.authTag, 'hex'));
         decrypted = decipher.update(encryptedData.encrypted, 'hex', 'utf8');
         decrypted += decipher.final('utf8');
@@ -731,7 +733,8 @@ class TokenStorageService {
     const key = Buffer.from(this.encryptionKey, 'hex');
 
     // Create decipher
-    const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
+    // Pin the tag length so a truncated tag is rejected (see decryptTokens).
+    const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv, { authTagLength: 16 });
     decipher.setAuthTag(authTag);
 
     // Decrypt the data

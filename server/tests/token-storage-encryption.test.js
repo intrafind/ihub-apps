@@ -93,6 +93,33 @@ describe('TokenStorageService token encryption', () => {
     );
   });
 
+  test('rejects a GCM payload whose auth tag has been truncated', () => {
+    // Node accepts a shortened tag (4-16 bytes) unless authTagLength is pinned, so the
+    // first 4 bytes of a genuine tag would otherwise pass verification.
+    const tokens = { accessToken: 'at-5', refreshToken: 'rt-5' };
+    const encrypted = tokenStorage.encryptTokens(tokens, 'user-5', 'office365');
+    expect(encrypted.authTag).toHaveLength(32); // 16 bytes, hex
+
+    const truncated = { ...encrypted, authTag: encrypted.authTag.slice(0, 8) };
+
+    expect(() => tokenStorage.decryptTokens(truncated, 'user-5', 'office365')).toThrow(
+      'Failed to decrypt tokens'
+    );
+  });
+
+  test('rejects an encryptString payload whose auth tag has been truncated', () => {
+    const encrypted = tokenStorage.encryptString('secret-value');
+    // ENC[iv:...,data:...,tag:...] - shorten the tag to its first 4 bytes
+    const truncated = encrypted.replace(/(tag:)([A-Za-z0-9+/=]+)/, (_m, p, tag) => {
+      const bytes = Buffer.from(tag, 'base64');
+      expect(bytes).toHaveLength(16);
+      return p + bytes.subarray(0, 4).toString('base64');
+    });
+
+    expect(truncated).not.toBe(encrypted);
+    expect(() => tokenStorage.decryptString(truncated)).toThrow();
+  });
+
   test('rejects tokens encrypted for a different user/service context', () => {
     const tokens = { accessToken: 'at-4' };
     const encrypted = tokenStorage.encryptTokens(tokens, 'user-4', 'office365');

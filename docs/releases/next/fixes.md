@@ -53,3 +53,14 @@ Two vulnerabilities in bundled libraries are fixed.
 - **MCP server sign-in:** when a user signed in to an OAuth-protected MCP server, the MCP server
   could make iHub send OAuth credentials to an authorization server of its choosing
   (GHSA-6qxp-vccf-f47h).
+
+## Stored Credentials Reject Truncated Authentication Tags
+
+Encrypted values are protected with AES-256-GCM, which attaches an authentication tag to detect
+tampering. iHub did not insist on the full 16-byte tag when decrypting, so a shortened tag — as
+little as 4 bytes — was accepted, weakening the tamper check from 128 to as few as 32 bits.
+
+- Decryption of OAuth tokens (Office 365, Google Drive, Nextcloud) and of encrypted configuration
+  secrets now requires the full 16-byte tag.
+- Nothing to do on upgrade: everything iHub has written carries a full-length tag and keeps
+  decrypting. Only a value that was tampered with or cut short is now refused.
