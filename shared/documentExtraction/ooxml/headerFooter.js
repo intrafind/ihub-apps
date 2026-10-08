@@ -56,6 +56,8 @@ const relationshipId = element => {
  * @param {Map<string, {type: string, target: string}>} args.relationships - Relationships of the
  *   document part by id (targets already resolved to package part names)
  * @param {(partName: string) => Promise<Document|null>} args.readPart - Parsed part, or null
+ * @param {{resolve: (styleId: string|undefined, prop: string) => *}} [args.styles] - Style model
+ *   (`readStyles`): text hidden through a character or paragraph style is not read
  * @param {boolean} [args.evenAndOddHeaders] - `w:evenAndOddHeaders` in the settings
  * @returns {Promise<{header: string[], footer: string[]}>} De-duplicated, non-empty lines
  */
@@ -64,6 +66,7 @@ export async function readHeaderFooterText({
   xml,
   relationships,
   readPart,
+  styles = { resolve: () => undefined },
   evenAndOddHeaders = false
 }) {
   // ── text of one paragraph ────────────────────────────────────────────────────────────────
@@ -95,8 +98,26 @@ export async function readHeaderFooterText({
     let hadPageField = false;
     const suppressed = () => fields.some(f => f.phase === 'result' && f.page);
 
+    const paragraphStyleHidden = styles.resolve(
+      xml.val(xml.kid(xml.kid(paragraph, 'pPr'), 'pStyle')),
+      'vanish'
+    );
+
+    // Hidden like the body pass decides it: the run's own property, else its character style,
+    // else the paragraph's style.
+    const isHidden = run => {
+      const rPr = xml.kid(run, 'rPr');
+      let hidden = xml.toggle(xml.kid(rPr, 'vanish'));
+      if (hidden === undefined) {
+        const characterStyle = xml.val(xml.kid(rPr, 'rStyle'));
+        if (characterStyle) hidden = styles.resolve(characterStyle, 'vanish');
+      }
+      if (hidden === undefined) hidden = paragraphStyleHidden;
+      return hidden === true;
+    };
+
     const readRun = run => {
-      const hidden = xml.toggle(xml.kid(xml.kid(run, 'rPr'), 'vanish')) === true;
+      const hidden = isHidden(run);
       for (const child of Array.from(run.childNodes)) {
         if (child.nodeType !== 1) continue;
         if (
@@ -208,13 +229,21 @@ export async function readHeaderFooterText({
     return partCache.get(target);
   };
 
-  for (const sectPr of xml.all(documentDoc, 'sectPr')) {
+  // Section properties that apply now: a `w:sectPr` inside a `w:sectPrChange` is the record of
+  // how the section looked before a tracked change.
+  const sections = xml
+    .all(documentDoc, 'sectPr')
+    .filter(s => !xml.isW(s.parentNode, 'sectPrChange'));
+  // A section without a reference of some type uses the one of the section before it.
+  const inherited = { header: new Map(), footer: new Map() };
+  for (const sectPr of sections) {
     const titlePage = xml.toggle(xml.kid(sectPr, 'titlePg')) === true;
     for (const kind of ['header', 'footer']) {
-      const references = xml.kids(sectPr, `${kind}Reference`);
-      const byType = new Map(references.map(ref => [xml.attr(ref, 'type') || 'default', ref]));
+      for (const reference of xml.kids(sectPr, `${kind}Reference`)) {
+        inherited[kind].set(xml.attr(reference, 'type') || 'default', reference);
+      }
       for (const type of ['default', 'first', 'even']) {
-        const reference = byType.get(type);
+        const reference = inherited[kind].get(type);
         if (!reference) continue;
         if (type === 'first' && !titlePage) continue;
         if (type === 'even' && !evenAndOddHeaders) continue;

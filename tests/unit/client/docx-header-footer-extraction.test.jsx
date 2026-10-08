@@ -249,6 +249,66 @@ describe('DOCX headers and footers', () => {
     expect(content).toBe('Text');
   });
 
+  it('does not read text that a character or paragraph style hides', async () => {
+    const styles =
+      '<w:style w:type="character" w:styleId="Versteckt"><w:name w:val="Hidden Char"/><w:rPr><w:vanish/></w:rPr></w:style>' +
+      '<w:style w:type="paragraph" w:styleId="VersteckterAbsatz"><w:name w:val="Hidden Para"/><w:rPr><w:vanish/></w:rPr></w:style>' +
+      '<w:style w:type="paragraph" w:styleId="Abgeleitet"><w:name w:val="Derived"/><w:basedOn w:val="VersteckterAbsatz"/></w:style>';
+    const content = await extract({
+      styles,
+      ...packageOf({
+        rIdH1: hdr(
+          para(
+            run('sichtbar'),
+            '<w:r><w:rPr><w:rStyle w:val="Versteckt"/></w:rPr><w:t>per Zeichenformat versteckt</w:t></w:r>'
+          ) +
+            '<w:p><w:pPr><w:pStyle w:val="VersteckterAbsatz"/></w:pPr><w:r><w:t>per Absatzformat versteckt</w:t></w:r></w:p>' +
+            '<w:p><w:pPr><w:pStyle w:val="Abgeleitet"/></w:pPr><w:r><w:t>geerbt versteckt</w:t></w:r></w:p>' +
+            // A run that switches the hiding off again is shown.
+            '<w:p><w:pPr><w:pStyle w:val="VersteckterAbsatz"/></w:pPr><w:r><w:rPr><w:vanish w:val="0"/></w:rPr><w:t>wieder sichtbar</w:t></w:r></w:p>'
+        )
+      }),
+      body: p('Text') + sectPr(ref('header', 'rIdH1'))
+    });
+    expect(content).toBe('[Header] sichtbar\n[Header] wieder sichtbar\n\nText');
+  });
+
+  it('ignores the section properties a tracked change records as the previous state', async () => {
+    const revision = id =>
+      `<w:sectPrChange w:id="1" w:author="a"><w:sectPr>${ref('header', id)}</w:sectPr></w:sectPrChange>`;
+    const content = await extract({
+      ...packageOf({ rIdNew: hdr(para(run('aktuell'))), rIdOld: hdr(para(run('frueher'))) }),
+      body: p('A') + sectPr(ref('header', 'rIdNew'), revision('rIdOld'))
+    });
+    expect(content).toBe('[Header] aktuell\n\nA');
+
+    // A section whose only header is in a revision record has none.
+    const none = await extract({
+      ...packageOf({ rIdOld: hdr(para(run('frueher'))) }),
+      body: p('A') + sectPr(revision('rIdOld'))
+    });
+    expect(none).toBe('A');
+  });
+
+  it('inherits headers and footers from the section before: a later titlePg shows the inherited first-page header', async () => {
+    const content = await extract({
+      ...packageOf(
+        { rIdH1: hdr(para(run('Standard'))), rIdH2: hdr(para(run('Erste Seite'))) },
+        { rIdF1: ftr(para(run('Fuss'))) }
+      ),
+      body:
+        p('Abschnitt eins') +
+        // Section one defines default and first-page header, but no "different first page".
+        `<w:p><w:pPr>${sectPr(ref('header', 'rIdH1'), ref('header', 'rIdH2', 'first'), ref('footer', 'rIdF1'))}</w:pPr></w:p>` +
+        p('Abschnitt zwei') +
+        // Section two has no references of its own and turns on "different first page".
+        sectPr('<w:type w:val="continuous"/>', '<w:titlePg/>')
+    });
+    expect(content).toBe(
+      '[Header] Standard\n[Header] Erste Seite\n[Footer] Fuss\n\nAbschnitt eins\n\nAbschnitt zwei'
+    );
+  });
+
   it('T-DOCX-26: with the admin switch off there are no header or footer lines', async () => {
     config.fetchPlatformConfig.mockResolvedValueOnce({
       features: [{ id: 'structuredDocumentExtraction', enabled: false }]
