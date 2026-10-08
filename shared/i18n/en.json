@@ -963,7 +963,8 @@
           "authenticationFailed": "Authentication failed",
           "modelNotFound": "Model not found",
           "rateLimitExceeded": "Rate limit exceeded",
-          "serverError": "Server error"
+          "serverError": "Server error",
+          "apiKeyUndecryptable": "Stored API key cannot be decrypted"
         }
       },
       "enable": "Enable",
@@ -975,7 +976,8 @@
       "noModels": "No models found",
       "noModelsDesc": "Get started by creating a new model.",
       "table": {
-        "status": "Status"
+        "status": "Status",
+        "apiKey": "API key"
       },
       "status": {
         "enabled": "Enabled",
@@ -1054,7 +1056,7 @@
       "hints": {
         "modelId": "Unique identifier for the model (cannot be changed after creation)",
         "apiModelId": "Model identifier used by the provider's API (e.g., gpt-4, claude-3-opus)",
-        "apiKey": "API key for this model. If not provided, the system will use the environment variable for the provider. Keys are stored encrypted.",
+        "apiKey": "API key for this model. If not provided, the system will use the key of its provider or the environment variable. A local server (vLLM, LM Studio, Jan.ai, Ollama) needs no key — leave this empty. Keys are stored encrypted.",
         "apiKeySet": "✓ API key is configured for this model",
         "apiKeyEnvVars": "Environment variables (in priority order):\n{{envVars}}",
         "supportsVision": "Enable if this model can process image inputs",
@@ -3533,7 +3535,8 @@
         "schedule": "Schedule",
         "status": "Status",
         "lastRun": "Last run",
-        "failures": "Failures"
+        "failures": "Failures",
+        "memory": "Memory"
       },
       "runs": "Runs",
       "disable": "Disable",
@@ -3550,8 +3553,17 @@
         "runRetentionDays": "Keep run records (days)",
         "maxRunChatsPerTask": "Run chats kept per task",
         "maxInstructionLength": "Longest instructions (characters)",
-        "maxRunMinutes": "Longest run (minutes)"
-      }
+        "maxRunMinutes": "Longest run (minutes)",
+        "memoryEnabled": "Allow memory between runs",
+        "memoryMaxChars": "Longest notes (characters)",
+        "maxHistoryReadChars": "Longest earlier answer a run may read (characters)"
+      },
+      "memory": {
+        "summary": "{{chars}} chars · v{{version}} · {{updatedAt}}",
+        "clear": "Clear memory",
+        "confirmClear": "Clear the memory of \"{{name}}\" of {{owner}}? The owner loses these notes."
+      },
+      "memoryEnabledHint": "Off: runs neither read nor update the notes of a task (the notes are kept), and \"Only when something changed\" notifies after every run."
     },
     "overview": {
       "storage": {
@@ -3625,6 +3637,20 @@
       "download": "Download agent package",
       "prereqHttps": "iHub's public address uses HTTPS",
       "prereqHttpsOff": "iHub's public address is not HTTPS, and Copilot only calls HTTPS addresses — set the MCP gateway's Public URL (or forward X-Forwarded-Proto from the proxy)"
+    },
+    "apiKeyStatus": {
+      "ok": "Key found",
+      "keyless": "No key needed",
+      "keylessHint": "No key is set, so the server is called without an Authorization header.",
+      "undecryptable": "Stored key unreadable",
+      "undecryptableHint": "A key is stored, but this server cannot decrypt it: the encryption key changed since it was saved. Enter the key again, or make sure every instance uses the same TOKEN_ENCRYPTION_KEY / contents/.encryption-key.",
+      "missing": "No API key",
+      "missingHint": "Enter a key here or on the provider, or set it as an environment variable.",
+      "source": {
+        "env": "environment variable {{envVar}}",
+        "provider": "stored on the provider",
+        "model": "stored on the model"
+      }
     }
   },
   "cloudStorage": {
@@ -3942,7 +3968,8 @@
     "noModelIdProvided": "No model selected. Please select an AI model to continue.",
     "noModelsForUser": "You don't have permission to access any AI models. Please contact your administrator to request access.",
     "malformedModelResponse": "The AI model returned an incomplete response and no answer could be generated. This can happen intermittently — please try sending your message again.",
-    "outputValidationFailed": "The AI model's answer did not match the required output format."
+    "outputValidationFailed": "The AI model's answer did not match the required output format.",
+    "apiKeyUnreadable": "The API key stored for model {modelId} cannot be decrypted. The server's encryption key is not the one it was saved with. An administrator has to enter the key again (Admin › Models) or provide it as an environment variable."
   },
   "toolErrors": {
     "MISSING_URL": "URL parameter is required.",
@@ -4618,7 +4645,8 @@
       "savingButton": "Saving…",
       "skipLater": "Skip, I'll configure later",
       "freeTierBadge": "Free Tier",
-      "noApiKeyBadge": "Optional Key"
+      "noApiKeyBadge": "Optional Key",
+      "noKeyHint": "No API key yet? Choose “Local Provider” if you run your own model server, or skip for now and add a key later under Admin › Providers."
     },
     "step3": {
       "title": "You're all set!",
@@ -4630,7 +4658,12 @@
       "nextStep3": "Invite team members and configure groups under Admin › Teams",
       "nextStep4": "Explore settings to customize your workspace",
       "goToApps": "Go to Apps",
-      "goToAdmin": "Open Admin"
+      "goToAdmin": "Open Admin",
+      "keyCheck": {
+        "ready": "Models ready to use: {{count}}",
+        "blocked": "Enabled models without a usable API key: {{count}}.",
+        "fix": "Review the models"
+      }
     }
   },
   "apps": {
@@ -5543,12 +5576,13 @@
     "newTitle": "New scheduled task",
     "editorIntro": "The instructions are sent to the app on every run, as you, with the tools and integrations you pick. Each run becomes its own chat.",
     "variablesHelp": "Variables you can use",
-    "variablesHelpText": "Runs do not see each other. To ask for \"what changed since last time\", use the time of the last run in the instructions:",
+    "variablesHelpText": "Without \"Remember between runs\", runs do not see each other. To ask for \"what changed since last time\", use the time of the last run in the instructions:",
     "needsApproval": "Asks for approval",
     "notify": {
       "always": "After every run",
       "failure": "Only when a run fails",
-      "never": "Never"
+      "never": "Never",
+      "changes": "Only when something changed (and on failures)"
     },
     "create": "Create task",
     "notFound": "Task not found",
@@ -5568,7 +5602,9 @@
       "scheduled": "Scheduled",
       "started": "Started",
       "duration": "Duration",
-      "result": "Result"
+      "result": "Result",
+      "noChanges": "No changes",
+      "memoryUpdated": "Memory updated"
     },
     "reconnect": "Reconnect",
     "chatRemoved": "Chat removed (older runs keep only their record)",
@@ -5615,6 +5651,37 @@
       "TOO_MANY_APPROVALS": "The run asked for approval too many times",
       "TOO_MANY_FAILURES": "Paused after too many failed runs in a row",
       "TOOL_NOT_AVAILABLE": "The app no longer offers a tool this task uses"
+    },
+    "memory": {
+      "title": "Memory",
+      "label": "Remember between runs",
+      "help": "The task keeps notes and updates them after each run, so the next run knows what was already reported. You can read and edit the notes on the task page. A run can also look at earlier runs.",
+      "platformOff": "An administrator has switched memory off for all tasks. Your setting is kept but has no effect for now.",
+      "notifyNeedsMemory": "\"Only when something changed\" needs \"Remember between runs\".",
+      "on": "On",
+      "off": "Off",
+      "cardIntro": "Notes this task keeps between runs. A run reads them at the start and updates them when it is done.",
+      "offNotice": "Memory is off; these notes are kept but not used.",
+      "platformOffNotice": "Memory is switched off for the whole platform; these notes are kept but not used.",
+      "readOnlyNotice": "You are not allowed to edit scheduled tasks, so these notes are read-only.",
+      "clearHint": "If you changed what the task does, consider clearing its memory.",
+      "tooLong": "The notes are too long ({{chars}} of {{max}} characters). Shorten them and save again.",
+      "error": "The notes could not be saved"
     }
+  },
+  "memoryEditor": {
+    "label": "Memory notes",
+    "versionLine": "Version {{version}}",
+    "updatedAt": "updated {{at}}",
+    "updatedBy": "by {{by}}",
+    "size": "{{chars}} / {{max}} characters",
+    "save": "Save",
+    "saving": "Saving…",
+    "clear": "Clear",
+    "clearConfirm": "Clear all notes? This removes everything written so far.",
+    "reload": "Reload (discard my edits)",
+    "keepEditing": "Keep editing",
+    "versionConflict": "Conflict: memory was modified elsewhere. Reload to see the latest.",
+    "staleNotice": "The notes changed since you started editing (a run may have updated them)."
   }
 }

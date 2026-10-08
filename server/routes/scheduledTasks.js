@@ -15,6 +15,9 @@
  *   POST   /api/scheduled-tasks/:taskId/pause            pause
  *   POST   /api/scheduled-tasks/:taskId/resume           resume
  *   POST   /api/scheduled-tasks/:taskId/duplicate        copy
+ *   GET    /api/scheduled-tasks/:taskId/memory           the notes the task keeps between runs
+ *   PUT    /api/scheduled-tasks/:taskId/memory           replace them { content, expectedVersion }
+ *   DELETE /api/scheduled-tasks/:taskId/memory           clear them
  *   GET    /api/scheduled-tasks/:taskId/runs             run history, newest first (cursor-paged)
  *   GET    /api/scheduled-tasks/:taskId/runs/:runId      one run
  *   POST   /api/scheduled-tasks/:taskId/runs/:runId/cancel
@@ -71,6 +74,16 @@ const createLimiter = rateLimit({
   }
 });
 
+/** Editing the notes of a task: a person typing, not a script. */
+const memoryLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: userKey,
+  message: { error: 'Too many memory edits, please try again later', code: 'RATE_LIMITED' }
+});
+
 /** Starting runs by hand. */
 const runLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -118,6 +131,11 @@ function validRunId(req, res) {
 
 function audit(req, action, taskId, summary) {
   logAudit({ req, action, resource: 'scheduledTask', resourceId: taskId, summary });
+}
+
+/** The notes themselves are never part of an audit entry. */
+function auditMemory(req, action, taskId, summary) {
+  logAudit({ req, action, resource: 'scheduledTaskMemory', resourceId: taskId, summary });
 }
 
 export default function registerScheduledTaskRoutes(app) {
@@ -402,6 +420,112 @@ export default function registerScheduledTaskRoutes(app) {
       res.status(201).json(tasks.toPublicTask(task, { language: requestLanguage(req) }));
     } catch (error) {
       sendTaskError(res, error, 'duplicate task');
+    }
+  });
+
+  /**
+   * @swagger
+   * /scheduled-tasks/{taskId}/memory:
+   *   get:
+   *     summary: Read the notes a task keeps between runs
+   *     description: >
+   *       The owner's view of the task's memory: the markdown notes with their version, size
+   *       and last writer. Readable while memory is switched off (the notes are kept).
+   *     tags:
+   *       - Scheduled Tasks
+   *     security:
+   *       - bearerAuth: []
+   *       - sessionAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: taskId
+   *         required: true
+   *         schema: { type: string }
+   *     responses:
+   *       200:
+   *         description: "`{ enabled, platformEnabled, body, version, chars, maxChars, updatedAt, updatedBy }`"
+   *       404:
+   *         description: Not found, or not yours
+   *   put:
+   *     summary: Replace the notes of a task
+   *     description: >
+   *       Replaces the notes. With `expectedVersion` the write fails with 409 `VERSION_CONFLICT`
+   *       (and `details.currentVersion`) when the notes changed since they were read, for
+   *       example because a run updated them.
+   *     tags:
+   *       - Scheduled Tasks
+   *     security:
+   *       - bearerAuth: []
+   *       - sessionAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: taskId
+   *         required: true
+   *         schema: { type: string }
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             required: [content]
+   *             properties:
+   *               content: { type: string }
+   *               expectedVersion: { type: integer, minimum: 0 }
+   *     responses:
+   *       200:
+   *         description: "`{ version, chars, updatedAt }`"
+   *       400:
+   *         description: Invalid body, or `MEMORY_TOO_LONG` (`details.maxChars`)
+   *       409:
+   *         description: "`VERSION_CONFLICT`"
+   *   delete:
+   *     summary: Clear the notes of a task
+   *     tags:
+   *       - Scheduled Tasks
+   *     security:
+   *       - bearerAuth: []
+   *       - sessionAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: taskId
+   *         required: true
+   *         schema: { type: string }
+   *     responses:
+   *       200:
+   *         description: "`{ version }`"
+   */
+  app.get(`${base}/:taskId/memory`, ...guard, async (req, res) => {
+    try {
+      if (!validTaskId(req, res)) return;
+      res.json(await tasks.getTaskMemory(req.user, req.params.taskId));
+    } catch (error) {
+      sendTaskError(res, error, 'get task memory');
+    }
+  });
+
+  app.put(`${base}/:taskId/memory`, ...guard, memoryLimiter, async (req, res) => {
+    try {
+      if (!validTaskId(req, res)) return;
+      const result = await tasks.setTaskMemory(req.user, req.params.taskId, {
+        content: req.body?.content,
+        expectedVersion: req.body?.expectedVersion
+      });
+      auditMemory(req, 'update', req.params.taskId, 'Edited the notes of a scheduled task');
+      res.json(result);
+    } catch (error) {
+      sendTaskError(res, error, 'set task memory');
+    }
+  });
+
+  app.delete(`${base}/:taskId/memory`, ...guard, memoryLimiter, async (req, res) => {
+    try {
+      if (!validTaskId(req, res)) return;
+      const result = await tasks.deleteTaskMemory(req.user, req.params.taskId);
+      auditMemory(req, 'delete', req.params.taskId, 'Cleared the notes of a scheduled task');
+      res.json(result);
+    } catch (error) {
+      sendTaskError(res, error, 'clear task memory');
     }
   });
 

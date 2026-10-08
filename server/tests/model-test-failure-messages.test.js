@@ -64,6 +64,22 @@ test('AUTH_FAILED otherwise maps to authenticationFailed', () => {
   assert.equal(describeModelTestFailure(err).messageKey, 'authenticationFailed');
 });
 
+test('an unreadable stored key maps to apiKeyUndecryptable, not apiKeyNotConfigured', () => {
+  const err = new LLMError('cannot decrypt', {
+    code: LLM_ERROR_CODES.AUTH_FAILED,
+    providerCode: 'API_KEY_UNDECRYPTABLE'
+  });
+  assert.equal(describeModelTestFailure(err).messageKey, 'apiKeyUndecryptable');
+});
+
+test('a missing key still maps to apiKeyNotConfigured', () => {
+  const err = new LLMError('no key', {
+    code: LLM_ERROR_CODES.AUTH_FAILED,
+    providerCode: 'API_KEY_ERROR'
+  });
+  assert.equal(describeModelTestFailure(err).messageKey, 'apiKeyNotConfigured');
+});
+
 test('MODEL_NOT_FOUND maps to modelNotFound', () => {
   const err = new LLMError('nope', { code: LLM_ERROR_CODES.MODEL_NOT_FOUND });
   assert.equal(describeModelTestFailure(err).messageKey, 'modelNotFound');
