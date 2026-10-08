@@ -10,7 +10,7 @@
  * @module shared/documentExtraction/odf/writer
  */
 import { PAGE_BREAK_MARKER } from '../markers.js';
-import { markdownTableLines } from '../markdown.js';
+import { markdownDestination, markdownTableLines } from '../markdown.js';
 import { createNumbering, readListStyles } from './lists.js';
 import { readStyles } from './styles.js';
 import { NS, attr, is, kid, kids } from './xml.js';
@@ -108,7 +108,11 @@ export function createOdfReader({ contentDoc, stylesDoc }) {
       } else if (name === 'a') {
         const text = inline(node, after, depth + 1);
         const href = attr(node, 'xlink', 'href');
-        out += href && !href.startsWith('#') && text.trim() ? `[${text.trim()}](${href})` : text;
+        if (href && !href.startsWith('#') && text.trim()) {
+          // A bracket in the text would end the link text early.
+          const label = text.trim().replace(/[[\]]/g, '\\$&');
+          out += `[${label}](${markdownDestination(href.trim())})`;
+        } else out += text;
       } else if (name === 'note') out += note(node, after, depth + 1);
       else if (name === 'ruby')
         out += inline(kid(node, 'text', 'ruby-base') || node, after, depth + 1);

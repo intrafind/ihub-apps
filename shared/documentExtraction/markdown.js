@@ -39,6 +39,17 @@ const stripTrailingBlanks = line => {
   return end === line.length ? line : line.slice(0, end);
 };
 
+/**
+ * A link target that cannot end the link early: parentheses, backslashes and whitespace are
+ * percent-encoded (`Foo_(bar)` and `C:/My Documents/x` are valid targets, but not in `[text](…)`).
+ */
+export function markdownDestination(href) {
+  return href.replace(
+    /[()\\\s]/g,
+    char => `%${char.charCodeAt(0).toString(16).toUpperCase().padStart(2, '0')}`
+  );
+}
+
 /** A table cell on one line: paragraphs and line breaks as `<br>`, pipes escaped. */
 function cellMarkdown(service, cell) {
   const doc = cell.ownerDocument;
@@ -183,11 +194,7 @@ export function createDocumentMarkdownConverter(TurndownService) {
       if (!text) return '';
       const href = node.getAttribute('href').trim();
       if (href.startsWith('#') || /^javascript:/i.test(href)) return content;
-      const destination = href.replace(
-        /[()\\\s]/g,
-        char => `%${char.charCodeAt(0).toString(16).toUpperCase().padStart(2, '0')}`
-      );
-      return `[${content}](${destination})`;
+      return `[${content}](${markdownDestination(href)})`;
     }
   });
 

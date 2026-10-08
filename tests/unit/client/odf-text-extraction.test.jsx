@@ -103,6 +103,23 @@ describe('links, notes, images', () => {
     expect(await extract({ body })).toBe('Siehe [die Seite](https://example.org/a) und Kapitel 1.');
   });
 
+  it('a target with parentheses, spaces or backslashes stays one target; brackets in the text stay in the text', async () => {
+    const link = (href, text) => `<text:a xlink:href="${href}">${text}</text:a>`;
+    const body =
+      p(link('https://de.wikipedia.org/wiki/Foo_(bar)', 'Foo')) +
+      p(link('file:///C:/Mein Ordner/x.odt', 'Datei')) +
+      p(link('..\\docs\\x.odt', 'Pfad')) +
+      p(link('https://example.org/a', 'Absatz [3] der Norm'));
+    expect(await extract({ body })).toBe(
+      [
+        '[Foo](https://de.wikipedia.org/wiki/Foo_%28bar%29)',
+        '[Datei](file:///C:/Mein%20Ordner/x.odt)',
+        '[Pfad](..%5Cdocs%5Cx.odt)',
+        '[Absatz \\[3\\] der Norm](https://example.org/a)'
+      ].join('\n\n')
+    );
+  });
+
   it('T-ODF-03: footnotes and endnotes are numbered in the text and listed at the end', async () => {
     const note = (cls, text) =>
       `<text:note text:note-class="${cls}"><text:note-citation>1</text:note-citation><text:note-body>${p(text)}</text:note-body></text:note>`;
