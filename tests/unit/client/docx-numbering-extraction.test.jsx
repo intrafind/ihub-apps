@@ -381,6 +381,19 @@ describe('Word numbering in extracted text', () => {
       });
       expect(content).toBe('1. eins\n\n2. zwei');
     });
+
+    it('a numbered paragraph with only deleted text or a field code counts, but shows no label', async () => {
+      const content = await extract({
+        numbering: list,
+        body:
+          item('eins') +
+          // The text was deleted, the paragraph mark was not: Word still numbers the empty paragraph.
+          `<w:p><w:pPr>${numPr(1, 0)}</w:pPr><w:del w:id="2" w:author="A"><w:r><w:delText>weg</w:delText></w:r></w:del></w:p>` +
+          `<w:p><w:pPr>${numPr(1, 0)}</w:pPr><w:r><w:instrText xml:space="preserve"> SEQ x </w:instrText></w:r></w:p>` +
+          item('vier')
+      });
+      expect(content).toBe('1. eins\n\n4. vier');
+    });
   });
 
   it('T-DOCX-28: numbering in a Strict OOXML document', async () => {
