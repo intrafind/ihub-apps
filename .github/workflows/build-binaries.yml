@@ -183,8 +183,8 @@ jobs:
             fi
           fi
           echo "VERSION=$VERSION" >> "$GITHUB_ENV"
-          # Set versioned name for binary using shell variable (not ${{ env.VERSION }}
-          # which would be empty because expressions are evaluated before the step runs)
+          # Set versioned name for binary using the shell variable: the env context would be
+          # empty here, because expressions are evaluated before the step runs
           echo "VERSIONED_NAME=ihub-apps-$VERSION-${{ matrix.platform }}${{ matrix.binary_extension }}" >> $GITHUB_ENV
         shell: bash
 
