@@ -122,6 +122,13 @@ XLSX (`processXlsxFile`):
 
 Each work package is a separate PR with its own fixtures and docs, and can be a sub-issue of #2751.
 
+## Findings left over from release 1
+
+Raised in review, deliberately not done in release 1:
+
+- **Numbered paragraphs inside footnotes and endnotes** (`footnotes.xml`, `endnotes.xml`): mammoth reads them from their own parts, so they keep the old, label-less output. Doing it right means resolving the note parts through the document relationships, normalising them in reference order and deciding how Word's per-note counters relate to the body's. No real document with a list inside a footnote has been seen; move it up if one turns up.
+- **`startOverride` on a sub-level after its parent restarts:** the implementation restarts at the level's own start (what LibreOffice renders, checked by differential fuzz). Word's behaviour in this corner is unverified — covered by the Word golden corpus (G-01…G-07) before it is relied on.
+
 ## Test strategy
 
 - Fixtures are generated in tests where possible (JSZip as in `tests/unit/client/pptx-file-extraction.test.jsx`; the `docx` package for DOCX with numbering, changes, comments; `pdf-lib` for PDFs with outline/labels), so no opaque binaries are committed. Only the WP-F quality corpus needs real files — anonymised and small.
