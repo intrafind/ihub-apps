@@ -78,7 +78,7 @@ The issue was written before the verification. The implementation plan supersede
 | 2 — numbering labels | Done (see below) | `shared/documentExtraction/ooxml/numbering.js` (counters), numbering step 3d in `ooxml/normalize.js`, wiring in `docx.js`; tests `tests/unit/client/docx-numbering-extraction.test.jsx` |
 | 3 — PDF pages | Done (see below) | `shared/documentExtraction/pdfText.js` (+ `markers.js`); wiring in `fileProcessing.js` (`extractPdfContent`, `legacyPdfText`); tests `tests/unit/client/pdf-structured-text.test.jsx`, `server/tests/document-extraction-pdf.test.js` (in `test:pdf`) |
 | 4 — headers/footers | Done (see below) | `shared/documentExtraction/ooxml/headerFooter.js`, wiring in `docx.js`; tests `tests/unit/client/docx-header-footer-extraction.test.jsx` |
-| 5 — prompt guidance | Not started | |
+| 5 — prompt guidance | Done | `docs/apps.md` → "Writing prompts that use document structure" (what each format looks like, an example comparison prompt that aligns on section numbers and cites `[Page N]`) |
 
 ### Decisions and findings from PR 1
 
@@ -158,4 +158,21 @@ Validated with a differential fuzz against LibreOffice (`soffice --convert-to tx
   silently (shared code has no logging) — only its own lines are lost; the other headers and
   footers and the body are extracted as before. The headers are read before the body
   pass changes `sectPr` handling.
-- **Applicable test IDs:** T-DOCX-25, T-DOCX-26 (plus the cases above). Q-03 and the other open questions are unchanged.
+- **Applicable test ID:** T-DOCX-25 (plus the cases above). Q-03 and the other open questions are unchanged.
+
+### Checkpoint after PR 5 — text size, legacy vs. structured
+
+Characters of the extracted text for the repository's own documents (`docs/*.md` converted with pandoc to .docx and, through LibreOffice, to PDF), measured with the shipped code. Tokens follow characters only roughly: Markdown syntax (`|`, `---`, `#`) costs more per character than the whitespace it replaces.
+
+| File | Legacy | Structured | Change |
+|---|---:|---:|---:|
+| apps.docx | 58,722 | 62,861 | +7.0 % |
+| architecture.docx | 35,626 | 34,584 | −2.9 % |
+| file-upload-feature.docx | 17,174 | 18,738 | +9.1 % |
+| models.docx | 46,943 | 49,933 | +6.4 % |
+| apps.pdf (43 pages) | 66,477 | 60,420 | −9.1 % |
+| architecture.pdf (24 pages) | 37,889 | 33,609 | −11.3 % |
+| file-upload-feature.pdf (12 pages) | 19,196 | 17,686 | −7.9 % |
+| models.pdf (26 pages) | 52,360 | 48,153 | −8.0 % |
+
+Word: +6…9 % for table-heavy documents (Markdown tables, headings, numbering labels), slightly less where the legacy text carried glued table cells. PDF: −8…11 % — the doubled spaces of the old join are gone, the `[Page N]` markers cost about 10 characters per page. Very small documents grow in percent (a one-paragraph file with a header: 54 → 156 characters), not in absolute size.
