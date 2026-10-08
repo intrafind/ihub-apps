@@ -535,14 +535,14 @@ function tidyBody(tokens, ctx, title) {
   const ruledHeading = token => token?.type === 'heading' && hasHeadingRule(ctx, token.depth);
   const out = [];
   for (const token of blocks) {
-    const previous = out[out.length - 1];
+    const previous = out.at(-1);
     if (token.type === 'hr' && (!previous || previous.type === 'hr' || ruledHeading(previous))) {
       continue;
     }
     if (ruledHeading(token) && previous?.type === 'hr') out.pop();
     out.push(token);
   }
-  while (out[out.length - 1]?.type === 'hr') out.pop();
+  while (out.at(-1)?.type === 'hr') out.pop();
   return out;
 }
 

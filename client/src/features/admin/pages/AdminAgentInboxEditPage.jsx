@@ -38,7 +38,7 @@ function parseBody(body) {
     }
   }
   // Strip a single trailing newline we'll add back in serialize.
-  if (trailingBlank && afterLines.length && afterLines[afterLines.length - 1] === '') {
+  if (trailingBlank && afterLines.length && afterLines.at(-1) === '') {
     afterLines.pop();
   }
   return { before: beforeLines.join('\n'), items, after: afterLines.join('\n') };

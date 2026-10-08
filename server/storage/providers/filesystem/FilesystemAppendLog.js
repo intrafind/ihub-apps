@@ -152,7 +152,7 @@ function toEpochMs(olderThan) {
  * @returns {void}
  */
 function insertBySeq(out, record, max) {
-  if (out.length >= max && record.seq >= out[out.length - 1].seq) return;
+  if (out.length >= max && record.seq >= out.at(-1).seq) return;
   let index = out.length;
   while (index > 0 && out[index - 1].seq > record.seq) index -= 1;
   out.splice(index, 0, record);

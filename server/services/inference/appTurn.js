@@ -114,7 +114,7 @@ export async function prepareAppTurn({
   maxOutputTokens
 }) {
   const { app } = target;
-  const last = messages[messages.length - 1];
+  const last = messages.at(-1);
   if (!last || last.role !== 'user') {
     throw new InferenceApiError(400, 'invalid_input', 'The last message must be a user message', {
       param: 'input'

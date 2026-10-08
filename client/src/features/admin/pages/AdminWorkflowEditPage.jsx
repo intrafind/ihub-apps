@@ -133,7 +133,7 @@ function AdminWorkflowEditPage() {
       target = target[segment];
     }
 
-    const lastKey = parts[parts.length - 1];
+    const lastKey = parts.at(-1);
     if (isUnsafeKey(lastKey)) {
       return;
     }

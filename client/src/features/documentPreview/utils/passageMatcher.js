@@ -445,7 +445,7 @@ export function computePassageMatches(passages, pages) {
     ranges.sort((a, b) => a.start - b.start);
     const merged = [];
     for (const range of ranges) {
-      const last = merged[merged.length - 1];
+      const last = merged.at(-1);
       if (last && range.start <= last.start + last.length) {
         last.length = Math.max(last.length, range.start + range.length - last.start);
       } else {

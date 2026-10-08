@@ -137,7 +137,7 @@ function readFrontmatterFields(lines) {
     while (i + 1 < lines.length && (!lines[i + 1].trim() || /^\s/.test(lines[i + 1]))) {
       rest.push(lines[++i]);
     }
-    while (rest.length && !rest[rest.length - 1].trim()) rest.pop();
+    while (rest.length && !rest.at(-1).trim()) rest.pop();
     const first = raw.trim();
     if (first.startsWith('"') || first.startsWith("'")) {
       fields[key] = readQuoted(first, rest, first[0]);
@@ -194,7 +194,7 @@ function filePathOf(block) {
     .replace(/:$/, '')
     .trim();
   const words = label.split(/\s+/);
-  const last = words[words.length - 1];
+  const last = words.at(-1);
   return words.length <= 3 && SKILL_FILE_PATH.test(last) ? last : null;
 }
 

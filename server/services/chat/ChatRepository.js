@@ -1057,9 +1057,7 @@ export class ChatRepository {
     const remaining = after ? sorted.filter(chat => compareChatsDesc(chat, after) > 0) : sorted;
     const items = remaining.slice(0, pageSize);
     const nextCursor =
-      items.length > 0 && remaining.length > items.length
-        ? encodeCursor(items[items.length - 1])
-        : null;
+      items.length > 0 && remaining.length > items.length ? encodeCursor(items.at(-1)) : null;
     return { items, nextCursor };
   }
 

@@ -80,7 +80,7 @@ export function isSafeOfficeJsAssetPath(relPath) {
     if (!SEGMENT_PATTERN.test(segment)) return false;
   }
 
-  const filename = segments[segments.length - 1];
+  const filename = segments.at(-1);
   const extension = filename.slice(filename.lastIndexOf('.')).toLowerCase();
   return Object.prototype.hasOwnProperty.call(CONTENT_TYPES, extension);
 }

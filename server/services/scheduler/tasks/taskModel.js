@@ -297,7 +297,7 @@ export function planDueSlot(task, { now, settings }) {
       limit: 10_000
     });
     const missed = slots.length > 0 ? slots.map(s => s.getTime()) : [slotAt];
-    const latest = missed[missed.length - 1];
+    const latest = missed.at(-1);
     const windowMs = (settings.catchUpWindowHours || 0) * 3_600_000;
     const catchUp = windowMs > 0 && now - (latest + stagger) <= windowMs;
     const skippedCount = catchUp ? missed.length - 1 : missed.length;
@@ -349,7 +349,7 @@ export function planDueSlot(task, { now, settings }) {
   }
 
   const skipped = runs.filter(run => run.status === 'skipped');
-  if (skipped.length > 0 && !queued) next.lastRun = lastRunOf(skipped[skipped.length - 1]);
+  if (skipped.length > 0 && !queued) next.lastRun = lastRunOf(skipped.at(-1));
 
   Object.assign(
     next,

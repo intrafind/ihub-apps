@@ -366,7 +366,7 @@ export class BaseAdapter {
         if (buffer.includes('\n\n')) {
           const parts = buffer.split('\n\n');
           const completeEvents = parts.slice(0, -1).join('\n\n');
-          buffer = parts[parts.length - 1];
+          buffer = parts.at(-1);
           if (!completeEvents) continue;
 
           let result;

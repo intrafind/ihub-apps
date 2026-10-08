@@ -696,7 +696,7 @@ export class TransformNodeExecutor extends BaseNodeExecutor {
       current = current[part];
     }
 
-    current[parts[parts.length - 1]] = value;
+    current[parts.at(-1)] = value;
   }
 }
 

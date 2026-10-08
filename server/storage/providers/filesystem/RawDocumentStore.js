@@ -447,7 +447,7 @@ export class RawDocumentStore extends DocumentStore {
     }
 
     const nextCursor =
-      index < keys.length && items.length > 0 ? encodeCursor(items[items.length - 1].key) : null;
+      index < keys.length && items.length > 0 ? encodeCursor(items.at(-1).key) : null;
     return { items, nextCursor };
   }
 

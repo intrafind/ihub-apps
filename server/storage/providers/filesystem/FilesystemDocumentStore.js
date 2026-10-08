@@ -479,7 +479,7 @@ export class FilesystemDocumentStore extends DocumentStore {
     }
 
     const nextCursor =
-      consumed < keys.length && items.length > 0 ? encodeCursor(items[items.length - 1].key) : null;
+      consumed < keys.length && items.length > 0 ? encodeCursor(items.at(-1).key) : null;
     return { items, nextCursor };
   }
 

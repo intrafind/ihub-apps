@@ -278,7 +278,7 @@ class BedrockAdapterClass extends BaseAdapter {
     // Collapse consecutive same-role messages defensively.
     const merged = [];
     for (const m of out) {
-      const last = merged[merged.length - 1];
+      const last = merged.at(-1);
       if (last && last.role === m.role) {
         last.content = [...last.content, ...m.content];
       } else {
@@ -556,7 +556,7 @@ export function applyCachePoints(body, model) {
   if (Array.isArray(body.system) && body.system.length > 0) {
     body.system = [...body.system, CACHE_POINT];
   }
-  const last = body.messages?.[body.messages.length - 1];
+  const last = body.messages?.at(-1);
   if (last?.role === 'user' && Array.isArray(last.content) && last.content.length > 0) {
     body.messages[body.messages.length - 1] = { ...last, content: [...last.content, CACHE_POINT] };
   }

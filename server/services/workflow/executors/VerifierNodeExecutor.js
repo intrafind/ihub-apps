@@ -91,7 +91,7 @@ export class VerifierNodeExecutor extends BaseNodeExecutor {
         const nodeResults = state.data?.nodeResults || {};
         const resultKeys = Object.keys(nodeResults);
         if (resultKeys.length > 0) {
-          const lastResult = nodeResults[resultKeys[resultKeys.length - 1]];
+          const lastResult = nodeResults[resultKeys.at(-1)];
           inputToVerify = lastResult?.output?.content || lastResult?.output || lastResult;
         }
       }

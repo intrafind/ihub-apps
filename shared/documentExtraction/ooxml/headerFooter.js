@@ -133,7 +133,7 @@ export async function readHeaderFooterText({
             const type = xml.attr(child, 'fldCharType');
             if (type === 'begin') fields.push({ instr: '', phase: 'instr', page: false });
             else if (type === 'separate' && fields.length > 0) {
-              const field = fields[fields.length - 1];
+              const field = fields.at(-1);
               field.phase = 'result';
               field.page = PAGE_FIELD.test(field.instr);
               if (field.page) hadPageField = true;
@@ -141,7 +141,7 @@ export async function readHeaderFooterText({
             break;
           }
           case 'instrText': {
-            const field = fields[fields.length - 1];
+            const field = fields.at(-1);
             if (field && field.phase === 'instr') field.instr += child.textContent;
             break;
           }

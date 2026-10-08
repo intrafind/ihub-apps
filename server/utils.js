@@ -390,8 +390,7 @@ export async function logInteraction(interactionType, data) {
     // Extract the user's query (last user message) if messages exist
     if (data.messages && Array.isArray(data.messages)) {
       const userMessages = data.messages.filter(m => m.role === 'user');
-      const userQuery =
-        userMessages.length > 0 ? userMessages[userMessages.length - 1].content : '';
+      const userQuery = userMessages.length > 0 ? userMessages.at(-1).content : '';
 
       logEntry.query = userQuery;
       logEntry.messageCount = data.messages.length;

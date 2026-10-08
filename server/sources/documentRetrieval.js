@@ -217,7 +217,7 @@ export function splitSections(content) {
       flush();
       const level = heading[1].length;
       const title = cleanHeading(heading[2]) || 'Untitled';
-      while (stack.length && stack[stack.length - 1].level >= level) stack.pop();
+      while (stack.length && stack.at(-1).level >= level) stack.pop();
       current = { title, level, path: stack.map(s => s.title), file, lines: [line] };
       stack.push({ level, title });
       continue;

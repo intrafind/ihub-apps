@@ -333,9 +333,7 @@ function PlatformFormEditor({ value: config, onChange, onValidationChange, avail
               allowCustom={false}
               availableGroups={availableGroups}
               value={config.auth?.authenticatedGroup ? [config.auth.authenticatedGroup] : []}
-              onChange={next =>
-                updateNestedConfig('auth', 'authenticatedGroup', next[next.length - 1] || '')
-              }
+              onChange={next => updateNestedConfig('auth', 'authenticatedGroup', next.at(-1) || '')}
               placeholder={t('admin.auth.groups.searchPlaceholder', 'Search groups…')}
               emptyMessage={t('admin.auth.groups.emptySingle', 'No group selected yet')}
               helpText={t(
