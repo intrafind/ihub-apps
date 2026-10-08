@@ -1358,7 +1358,7 @@ export async function setTaskMemory(user, taskId, { content, expectedVersion } =
   if (typeof content !== 'string') {
     throw new ScheduledTaskError(400, 'INVALID_BODY', 'content must be a string');
   }
-  const versioned = expectedVersion !== undefined && expectedVersion !== null;
+  const versioned = expectedVersion != null;
   if (versioned && !(Number.isInteger(expectedVersion) && expectedVersion >= 0)) {
     throw new ScheduledTaskError(
       400,

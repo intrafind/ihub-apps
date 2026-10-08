@@ -408,7 +408,7 @@ describe('when the composer cannot be used', () => {
     await expectLeftAlone('<changed>yes</changed><notes></notes>');
   });
 
-  it('a model that ran into its token limit', async () => {
+  it('a complete reply is stored, which the cut-off replies above are not', async () => {
     const task = await newTask();
     await writeTaskMemory(await stored(task.id), { content: 'precious notes' });
     const { run } = await runTask(task, [openaiText(['A report.'])], {

@@ -454,34 +454,39 @@ describe('the settings an admin can change', () => {
       chats: { enabled: true },
       scheduledTasks: { staggerMinutes: 0, minIntervalMinutes: 15, maxTasksPerUser: 10 }
     });
-    const ok = await put({
-      memoryEnabled: false,
-      memoryMaxChars: 12000,
-      maxHistoryReadChars: 4000
-    });
-    assert.equal(ok.statusCode, 200, JSON.stringify(ok.body));
-    assert.deepEqual(ok.body.changed.sort(), [
-      'scheduledTasks.maxHistoryReadChars',
-      'scheduledTasks.memoryEnabled',
-      'scheduledTasks.memoryMaxChars'
-    ]);
-    assert.equal(ok.body.settings.memoryEnabled, false);
-    assert.equal(ok.body.settings.memoryMaxChars, 12000);
-    assert.equal(ok.body.settings.maxHistoryReadChars, 4000);
-    // The settings it did not name keep their value.
-    assert.equal(ok.body.settings.maxTasksPerUser, 10);
+    try {
+      const ok = await put({
+        memoryEnabled: false,
+        memoryMaxChars: 12000,
+        maxHistoryReadChars: 4000
+      });
+      assert.equal(ok.statusCode, 200, JSON.stringify(ok.body));
+      assert.deepEqual(ok.body.changed.sort(), [
+        'scheduledTasks.maxHistoryReadChars',
+        'scheduledTasks.memoryEnabled',
+        'scheduledTasks.memoryMaxChars'
+      ]);
+      assert.equal(ok.body.settings.memoryEnabled, false);
+      assert.equal(ok.body.settings.memoryMaxChars, 12000);
+      assert.equal(ok.body.settings.maxHistoryReadChars, 4000);
+      // The settings it did not name keep their value.
+      assert.equal(ok.body.settings.maxTasksPerUser, 10);
 
-    for (const bad of [
-      { memoryMaxChars: 10 },
-      { memoryMaxChars: 1_000_000 },
-      { maxHistoryReadChars: 0 },
-      { memoryEnabled: 'no' },
-      { memory: { enabled: true } }
-    ]) {
-      const res = await put(bad);
-      assert.equal(res.statusCode, 400, JSON.stringify(bad));
+      for (const bad of [
+        { memoryMaxChars: 10 },
+        { memoryMaxChars: 1_000_000 },
+        { maxHistoryReadChars: 0 },
+        { memoryEnabled: 'no' },
+        { memory: { enabled: true } }
+      ]) {
+        const res = await put(bad);
+        assert.equal(res.statusCode, 400, JSON.stringify(bad));
+      }
+      assert.equal(configCache.getPlatform().scheduledTasks.memoryMaxChars, 12000);
+    } finally {
+      // The settings route updated the cache; later tests start from the harness platform.
+      setPlatform();
     }
-    assert.equal(configCache.getPlatform().scheduledTasks.memoryMaxChars, 12000);
   });
 });
 
