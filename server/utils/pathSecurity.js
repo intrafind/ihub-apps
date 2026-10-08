@@ -6,8 +6,8 @@
  * All route handlers should use these functions instead of inline validation.
  */
 
-import path from 'path';
-import { promises as fs } from 'fs';
+import path from 'node:path';
+import { promises as fs } from 'node:fs';
 
 /**
  * Regular expression that allows only safe characters for IDs:

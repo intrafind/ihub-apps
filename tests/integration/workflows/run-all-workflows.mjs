@@ -15,9 +15,9 @@ dotenv.config({ path: '.env' });
 import configCache from '../../../server/configCache.js';
 import { WorkflowEngine } from '../../../server/services/workflow/WorkflowEngine.js';
 import { StateManager } from '../../../server/services/workflow/StateManager.js';
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(__dirname, '../../..');
@@ -32,12 +32,12 @@ function loadWorkflow(filename) {
 
 async function waitForCompletion(engine, executionId, maxWaitMs = 180000) {
   const startTime = Date.now();
-  const terminalStatuses = ['completed', 'failed', 'cancelled', 'approved', 'rejected'];
+  const terminalStatuses = new Set(['completed', 'failed', 'cancelled', 'approved', 'rejected']);
 
   while (Date.now() - startTime < maxWaitMs) {
     const state = await engine.getState(executionId);
     if (!state) throw new Error(`Execution ${executionId} not found`);
-    if (terminalStatuses.includes(state.status)) return state;
+    if (terminalStatuses.has(state.status)) return state;
     await new Promise(r => setTimeout(r, 500));
   }
   throw new Error(`Workflow did not complete within ${maxWaitMs}ms`);

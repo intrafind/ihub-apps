@@ -92,7 +92,7 @@ export function useOutlookMailContextSnapshot() {
       setState({ loading: false, ctx });
     }
 
-    load();
+    void load();
 
     function onItemChange() {
       // Supersede any in-flight load right away and show the loading state,
@@ -102,7 +102,7 @@ export function useOutlookMailContextSnapshot() {
       if (reloadTimerRef.current) clearTimeout(reloadTimerRef.current);
       reloadTimerRef.current = setTimeout(() => {
         reloadTimerRef.current = null;
-        load();
+        void load();
       }, RELOAD_DEBOUNCE_MS);
     }
 

@@ -176,7 +176,7 @@ export function setPlatform(platform = {}) {
   configCache.setCacheEntry('config/platform.json', {
     ...BASE_PLATFORM,
     ...platform,
-    scheduledTasks: { ...BASE_PLATFORM.scheduledTasks, ...(platform.scheduledTasks || {}) }
+    scheduledTasks: { ...BASE_PLATFORM.scheduledTasks, ...platform.scheduledTasks }
   });
 }
 
@@ -240,7 +240,9 @@ const COMPOSER_PROMPT_START = 'You maintain the notes of a scheduled task';
  */
 export function echoComposer(userMessage) {
   const section = name => {
-    const match = userMessage.match(new RegExp(`## ${name}[^\\n]*\\n([\\s\\S]*?)(?=\\n\\n## |$)`));
+    const match = userMessage.match(
+      new RegExp(String.raw`## ${name}[^\n]*\n([\s\S]*?)(?=\n\n## |$)`)
+    );
     return match ? match[1].trim() : null;
   };
   const shown = section('Current notes') ?? section('Notes before this run') ?? '';

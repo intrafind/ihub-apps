@@ -24,7 +24,7 @@ function redactUrl(url) {
 }
 
 function redactHeaders(headers) {
-  const out = { ...(headers || {}) };
+  const out = { ...headers };
   for (const k of Object.keys(out)) {
     if (/auth|api[-_]?key|bearer|token/i.test(k)) out[k] = 'REDACTED';
   }

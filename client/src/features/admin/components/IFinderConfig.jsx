@@ -11,7 +11,7 @@ const ALGORITHM_OPTIONS = ['RS256', 'RS384', 'RS512', 'ES256', 'ES384', 'ES512']
 const JWT_SUBJECT_OPTIONS = [
   { value: 'email', label: 'Email address' },
   { value: 'username', label: 'Username' },
-  { value: 'domain\\username', label: 'Domain\\Username (NTLM-style)' },
+  { value: String.raw`domain\username`, label: String.raw`Domain\Username (NTLM-style)` },
   { value: 'custom', label: 'Custom template' }
 ];
 
@@ -99,7 +99,7 @@ function IFinderConfig() {
       }
     };
 
-    fetchConfig();
+    void fetchConfig();
   }, [t]);
 
   const handleToggleEnabled = e => {
@@ -529,7 +529,7 @@ function IFinderConfig() {
                           onChange={e =>
                             handleIFinderChange(
                               'tokenExpirationSeconds',
-                              parseInt(e.target.value, 10) || 3600
+                              Number.parseInt(e.target.value, 10) || 3600
                             )
                           }
                           min={60}
@@ -594,7 +594,7 @@ function IFinderConfig() {
                         onChange={e =>
                           handleIFinderChange(
                             'tokenExpirationSeconds',
-                            parseInt(e.target.value, 10) || 3600
+                            Number.parseInt(e.target.value, 10) || 3600
                           )
                         }
                         min={60}
@@ -707,7 +707,10 @@ function IFinderConfig() {
                       type="number"
                       value={iAssistantConfig.timeout}
                       onChange={e =>
-                        handleIAssistantChange('timeout', parseInt(e.target.value, 10) || 60000)
+                        handleIAssistantChange(
+                          'timeout',
+                          Number.parseInt(e.target.value, 10) || 60000
+                        )
                       }
                       min={5000}
                       max={300000}
@@ -791,7 +794,7 @@ function IFinderConfig() {
                   <p className="text-xs text-gray-500 dark:text-gray-400">
                     {t(
                       'admin.iFinder.diagnostics.userHelp',
-                      'Leave empty to test with your own account. Fill these in to check how the JWT subject is built for a specific user — for example whether iFinder expects DOMAIN\\username instead of an email address.'
+                      String.raw`Leave empty to test with your own account. Fill these in to check how the JWT subject is built for a specific user — for example whether iFinder expects DOMAIN\username instead of an email address.`
                     )}
                   </p>
 

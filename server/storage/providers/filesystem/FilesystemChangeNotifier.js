@@ -13,7 +13,7 @@
  *
  * @module storage/providers/filesystem/FilesystemChangeNotifier
  */
-import { EventEmitter } from 'events';
+import { EventEmitter } from 'node:events';
 import logger from '../../../utils/logger.js';
 import { ChangeNotifier } from '../../ChangeNotifier.js';
 import { StorageError } from '../../errors.js';

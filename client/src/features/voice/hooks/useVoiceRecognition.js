@@ -299,7 +299,7 @@ const useVoiceRecognition = ({ app, inputRef, onSpeechResult, onCommand, disable
     if (isListening) {
       stopListening();
     } else {
-      startListening();
+      void startListening();
     }
   };
 

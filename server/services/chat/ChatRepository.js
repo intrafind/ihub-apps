@@ -32,7 +32,7 @@
  *
  * @module services/chat/ChatRepository
  */
-import { randomUUID } from 'crypto';
+import { randomUUID } from 'node:crypto';
 import logger from '../../utils/logger.js';
 import { isValidId } from '../../utils/pathSecurity.js';
 import { StorageError } from '../../storage/errors.js';
@@ -421,7 +421,7 @@ function applyChatPatch(chat, patch) {
   if ('settings' in patch) {
     const incoming = normalizeChatSettings(patch.settings);
     const existing = normalizeChatSettings(chat.settings);
-    const merged = { ...(existing || {}), ...(incoming || {}) };
+    const merged = { ...existing, ...incoming };
     next.settings = Object.keys(merged).length > 0 ? merged : null;
   } else {
     next.settings = normalizeChatSettings(chat.settings);
@@ -1057,9 +1057,7 @@ export class ChatRepository {
     const remaining = after ? sorted.filter(chat => compareChatsDesc(chat, after) > 0) : sorted;
     const items = remaining.slice(0, pageSize);
     const nextCursor =
-      items.length > 0 && remaining.length > items.length
-        ? encodeCursor(items[items.length - 1])
-        : null;
+      items.length > 0 && remaining.length > items.length ? encodeCursor(items.at(-1)) : null;
     return { items, nextCursor };
   }
 

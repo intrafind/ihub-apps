@@ -308,7 +308,7 @@ export function applyContentAccessChanges({
       action === 'grant'
         ? [...list, contentId]
         : list.filter(entry => typeof entry !== 'string' || entry.toLowerCase() !== target);
-    group.permissions = { ...(group.permissions || {}), [key]: after };
+    group.permissions = { ...group.permissions, [key]: after };
     changed.push({ groupId, action, before, after: group });
   }
 

@@ -1,6 +1,6 @@
-import { readFileSync } from 'fs';
-import { createRequire } from 'module';
-import path from 'path';
+import { readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
+import path from 'node:path';
 import fontkit from '@pdf-lib/fontkit';
 
 /**
@@ -81,7 +81,7 @@ export const DEFAULT_FONT = 'Sans';
 export function resolveFontFamily(name, fallback = DEFAULT_FONT) {
   if (typeof name !== 'string' || !name.trim()) return fallback;
   const trimmed = name.trim();
-  if (Object.prototype.hasOwnProperty.call(FONT_FAMILIES, trimmed)) return trimmed;
+  if (Object.hasOwn(FONT_FAMILIES, trimmed)) return trimmed;
   return FONT_ALIASES[trimmed.toLowerCase()] || fallback;
 }
 
@@ -130,7 +130,7 @@ const glyphCoverage = new Map();
  * @returns {(codePoint: number) => boolean}
  */
 export function glyphCheckerFor(family) {
-  const key = Object.prototype.hasOwnProperty.call(FONT_FAMILIES, family) ? family : DEFAULT_FONT;
+  const key = Object.hasOwn(FONT_FAMILIES, family) ? family : DEFAULT_FONT;
   if (!glyphCoverage.has(key)) {
     const font = fontkit.create(loadFontBytes().get(FONT_FAMILIES[key].normal));
     const cache = new Map();

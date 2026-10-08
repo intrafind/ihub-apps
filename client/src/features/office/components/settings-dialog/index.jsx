@@ -102,6 +102,7 @@ function SettingsForm({ user, onClose }) {
 
   return (
     <div
+      role="presentation"
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-2 sm:p-4 dark:bg-black/60"
       onClick={e => {
         if (e.target === e.currentTarget) onClose?.();

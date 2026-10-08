@@ -24,7 +24,7 @@
  *
  * @module utils/proxyAuthTrust
  */
-import crypto from 'crypto';
+import crypto from 'node:crypto';
 import proxyaddr from 'proxy-addr';
 import config from '../config.js';
 import credentialService from '../services/CredentialService.js';

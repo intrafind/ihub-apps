@@ -282,7 +282,7 @@ export class BaseAdapter {
             if (held) {
               // The frame after the finish frame: the usage frame or `[DONE]`.
               if (result.metadata?.usage) {
-                held.metadata = { ...(held.metadata || {}), usage: result.metadata.usage };
+                held.metadata = { ...held.metadata, usage: result.metadata.usage };
               }
               yield held;
               return;
@@ -366,7 +366,7 @@ export class BaseAdapter {
         if (buffer.includes('\n\n')) {
           const parts = buffer.split('\n\n');
           const completeEvents = parts.slice(0, -1).join('\n\n');
-          buffer = parts[parts.length - 1];
+          buffer = parts.at(-1);
           if (!completeEvents) continue;
 
           let result;

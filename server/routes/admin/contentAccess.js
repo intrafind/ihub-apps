@@ -362,7 +362,7 @@ export default function registerAdminContentAccessRoutes(app) {
 
         if (changes.length > 0) {
           groupsData.metadata = {
-            ...(groupsData.metadata || {}),
+            ...groupsData.metadata,
             lastModified: new Date().toISOString()
           };
           await configStore.writeJson(GROUPS_FILE, groupsData);

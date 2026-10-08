@@ -1,4 +1,4 @@
-import crypto from 'crypto';
+import crypto from 'node:crypto';
 import { validateClientCredentials } from '../utils/oauthClientManager.js';
 import { buildPolicyCimdClient, resolveOAuthClient } from '../utils/oauthClientResolver.js';
 import { intersectScopes, isUserAllowedByGroups } from '../utils/oauthClientPolicy.js';
@@ -61,7 +61,9 @@ function sanitizeOAuthInput(value, fieldName, maxLength = 255) {
   }
 
   // Remove null bytes and control characters
-  const sanitized = trimmed.replace(/\0/g, '').replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
+  const sanitized = trimmed
+    .replaceAll('\u{0}', '')
+    .replaceAll(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
 
   return sanitized;
 }

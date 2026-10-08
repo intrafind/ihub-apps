@@ -334,7 +334,11 @@ export default function AdminCommandPalette() {
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center pt-[15vh]">
       {/* Backdrop */}
-      <div className="fixed inset-0 bg-black/50 dark:bg-black/70" onClick={closePalette} />
+      <div
+        aria-hidden="true"
+        className="fixed inset-0 bg-black/50 dark:bg-black/70"
+        onClick={closePalette}
+      />
 
       {/* Palette */}
       <div

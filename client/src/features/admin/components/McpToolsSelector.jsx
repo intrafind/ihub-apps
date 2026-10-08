@@ -31,7 +31,7 @@ function McpToolsSelector({ selectedTools = [], onToolsChange, onMcpToolIdsChang
 
   useEffect(() => {
     let active = true;
-    (async () => {
+    void (async () => {
       try {
         setLoading(true);
         const data = await fetchMcpToolCatalog();

@@ -7,8 +7,14 @@ import { useEstimatedTokenCount } from '../../../shared/hooks/useEstimatedTokenC
 import StatusBadge from '../../../shared/components/StatusBadge';
 import ProgressBar from '../../../shared/components/ProgressBar';
 
-const ACCEPTED_TYPES = ['application/pdf', 'image/jpeg', 'image/png', 'image/tiff', 'image/webp'];
-const ACCEPTED_EXTENSIONS = ['pdf', 'jpg', 'jpeg', 'png', 'tiff', 'tif', 'webp'];
+const ACCEPTED_TYPES = new Set([
+  'application/pdf',
+  'image/jpeg',
+  'image/png',
+  'image/tiff',
+  'image/webp'
+]);
+const ACCEPTED_EXTENSIONS = new Set(['pdf', 'jpg', 'jpeg', 'png', 'tiff', 'tif', 'webp']);
 
 // Custom prompt is bounded by tokens (using the same estimator as the chat),
 // not raw characters. Keep this in sync with MAX_PROMPT_TOKENS in
@@ -30,12 +36,12 @@ const OCR_MODES = [
 ];
 
 function isAcceptedFile(file) {
-  if (ACCEPTED_TYPES.includes(file.type)) return true;
+  if (ACCEPTED_TYPES.has(file.type)) return true;
   const ext = file.name.split('.').pop()?.toLowerCase();
-  return ACCEPTED_EXTENSIONS.includes(ext);
+  return ACCEPTED_EXTENSIONS.has(ext);
 }
 
-const TERMINAL_JOB_STATUSES = ['completed', 'error', 'cancelled'];
+const TERMINAL_JOB_STATUSES = new Set(['completed', 'error', 'cancelled']);
 /** Reconnect attempts for the progress stream (1s, 2s, 4s, 8s, 16s). */
 const MAX_PROGRESS_RECONNECTS = 5;
 const reconnectDelayMs = attempt => Math.min(16000, 1000 * 2 ** attempt);
@@ -47,7 +53,7 @@ function JobCard({ job, onCancel }) {
   const [error, setError] = useState(job.error || null);
 
   useEffect(() => {
-    if (TERMINAL_JOB_STATUSES.includes(status)) return;
+    if (TERMINAL_JOB_STATUSES.has(status)) return;
 
     // Progress frames are default (`message`) SSE events carrying
     // `{ progress?, status?, error? }`. Shared fetch-based transport so the
@@ -71,7 +77,7 @@ function JobCard({ job, onCancel }) {
           if (data.status) setStatus(data.status);
           if (data.error) setError(data.error);
 
-          if (TERMINAL_JOB_STATUSES.includes(data.status)) {
+          if (TERMINAL_JOB_STATUSES.has(data.status)) {
             terminal = true;
             ac.abort();
             if (abortRef.current === ac) abortRef.current = null;
@@ -420,7 +426,16 @@ export default function OcrPage() {
               ? 'border-green-400 bg-green-50 dark:bg-green-900/20'
               : 'border-gray-300 dark:border-gray-600 hover:border-blue-400 dark:hover:border-blue-500'
         } ${isProcessing ? 'pointer-events-none opacity-60' : ''}`}
+        role="button"
+        tabIndex={isProcessing ? -1 : 0}
+        aria-disabled={isProcessing || undefined}
         onClick={() => !isProcessing && fileInputRef.current?.click()}
+        onKeyDown={e => {
+          if (!isProcessing && (e.key === 'Enter' || e.key === ' ')) {
+            e.preventDefault();
+            fileInputRef.current?.click();
+          }
+        }}
         onDrop={handleDrop}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}

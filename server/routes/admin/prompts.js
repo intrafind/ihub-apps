@@ -631,7 +631,7 @@ export default function registerAdminPromptsRoutes(app) {
       platformConfig.userPrompts = {
         ...stored,
         ...rest,
-        sharing: { ...(stored.sharing || {}), ...(sharing || {}) }
+        sharing: { ...stored.sharing, ...sharing }
       };
       await configStore.writeJson('config/platform.json', platformConfig);
       await configCache.refreshCacheEntry('config/platform.json');

@@ -23,7 +23,7 @@
  *
  * @module utils/integrationOAuthState
  */
-import crypto from 'crypto';
+import crypto from 'node:crypto';
 import tokenStorageService from '../services/TokenStorageService.js';
 import { resolveJwtSecret } from './tokenService.js';
 import logger from './logger.js';

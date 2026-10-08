@@ -129,7 +129,7 @@ export class ToolNodeExecutor extends BaseNodeExecutor {
           user,
           // A workflow node loads only the app's global skills, never users'
           // own: the `_skillIds` marker says so to the skill tools.
-          appConfig: { ...(appConfig || {}), _skillIds: getAssignedSkillIds(appConfig) }
+          appConfig: { ...appConfig, _skillIds: getAssignedSkillIds(appConfig) }
         },
         timeout
       );

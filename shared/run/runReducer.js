@@ -21,8 +21,6 @@ import { SSE_V2_EVENTS } from '../runEvents.js';
 import { emptySourceSet, mergeSources } from '../sources/sourceSet.js';
 import { generatedFilesOf } from '../generatedFiles.js';
 
-export const RUN_EVENTS = SSE_V2_EVENTS;
-
 const TERMINAL_STATUSES = new Set(['completed', 'aborted', 'error', 'budget_exhausted']);
 
 export function createStreamState(streamId = null) {
@@ -275,7 +273,7 @@ export function reduceRunEvent(state, envelope) {
       run = {
         ...run,
         kind: data.kind || run.kind,
-        refs: { ...run.refs, ...(data.refs || {}) },
+        refs: { ...run.refs, ...data.refs },
         model: data.model || run.model,
         parentRunId: data.parentRunId || run.parentRunId,
         startedAt: run.startedAt || ts,
@@ -561,7 +559,7 @@ export function reduceRunEvent(state, envelope) {
       const { extra, ...rest } = data;
       run = {
         ...run,
-        meta: { ...run.meta, ...rest, extra: { ...(run.meta.extra || {}), ...(extra || {}) } }
+        meta: { ...run.meta, ...rest, extra: { ...run.meta.extra, ...extra } }
       };
       return withRun(next, run);
     }
@@ -725,3 +723,5 @@ export function getStreamInteractions(state) {
   for (const run of getRuns(state)) for (const it of getInteractions(run)) all.push(it);
   return all;
 }
+
+export { SSE_V2_EVENTS as RUN_EVENTS } from '../runEvents.js';

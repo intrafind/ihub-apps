@@ -1,4 +1,4 @@
-import { createRequire } from 'module';
+import { createRequire } from 'node:module';
 import { PDFDocument } from 'pdf-lib';
 import { buildDocument, MAX_PAGES } from './buildDocument.js';
 import { loadFontBytes, pdfmakeFontDescriptors } from './fonts.js';

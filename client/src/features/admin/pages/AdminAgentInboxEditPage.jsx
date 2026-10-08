@@ -38,7 +38,7 @@ function parseBody(body) {
     }
   }
   // Strip a single trailing newline we'll add back in serialize.
-  if (trailingBlank && afterLines.length && afterLines[afterLines.length - 1] === '') {
+  if (trailingBlank && afterLines.length && afterLines.at(-1) === '') {
     afterLines.pop();
   }
   return { before: beforeLines.join('\n'), items, after: afterLines.join('\n') };
@@ -77,7 +77,7 @@ export default function AdminAgentInboxEditPage() {
   const [newPriority, setNewPriority] = useState('p2');
 
   useEffect(() => {
-    (async () => {
+    void (async () => {
       try {
         const res = await fetchInbox(inboxId);
         const data = res?.data || {};

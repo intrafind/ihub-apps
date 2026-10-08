@@ -1,4 +1,4 @@
-import path from 'path';
+import path from 'node:path';
 import ChatService from '../chat/ChatService.js';
 import { isValidId } from '../../utils/pathSecurity.js';
 import configCache from '../../configCache.js';
@@ -73,7 +73,7 @@ export async function invokeApp({
 }) {
   const app = resolveInvokableApp(appId);
   const list = Array.isArray(messages) ? messages : [];
-  const last = list[list.length - 1];
+  const last = list.at(-1);
   if (!last || last.role !== 'user' || typeof last.content !== 'string' || !last.content.trim()) {
     throw new Error("Missing required argument: 'message'");
   }

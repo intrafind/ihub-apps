@@ -592,7 +592,7 @@ function AdminMcpServersPage() {
   };
 
   useEffect(() => {
-    load();
+    void load();
     // eslint-disable-next-line @eslint-react/exhaustive-deps
   }, []);
 
@@ -1220,7 +1220,7 @@ function AdminMcpServersPage() {
                   className="mt-0.5"
                   checked={form.apps?.enabled !== false}
                   onChange={e =>
-                    setForm({ ...form, apps: { ...(form.apps || {}), enabled: e.target.checked } })
+                    setForm({ ...form, apps: { ...form.apps, enabled: e.target.checked } })
                   }
                 />
                 <div>

@@ -61,7 +61,7 @@ export function turnPrompt({ firstTurn, resolved, stored = null, historyReplayed
     applyTemplate: !historyReplayed,
     // Stored set first, then the defaults for anything it lacks (a variable
     // the app gained since).
-    variables: { ...resolved.variables, ...(stored || {}) },
+    variables: { ...resolved.variables, ...stored },
     storeVariables: false
   };
 }
@@ -114,7 +114,7 @@ export async function prepareAppTurn({
   maxOutputTokens
 }) {
   const { app } = target;
-  const last = messages[messages.length - 1];
+  const last = messages.at(-1);
   if (!last || last.role !== 'user') {
     throw new InferenceApiError(400, 'invalid_input', 'The last message must be a user message', {
       param: 'input'

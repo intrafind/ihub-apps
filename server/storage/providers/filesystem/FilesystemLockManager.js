@@ -31,8 +31,8 @@
  *
  * @module storage/providers/filesystem/FilesystemLockManager
  */
-import { promises as fs } from 'fs';
-import crypto from 'crypto';
+import { promises as fs } from 'node:fs';
+import crypto from 'node:crypto';
 import { tryCreateExclusive, readJsonMarker, removeIfExists } from '../../../utils/fileLock.js';
 import logger from '../../../utils/logger.js';
 import { LockManager } from '../../LockManager.js';

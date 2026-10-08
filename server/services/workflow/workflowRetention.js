@@ -110,7 +110,7 @@ function stateTime(state) {
     const parsed = Date.parse(candidate);
     if (Number.isFinite(parsed)) return parsed;
   }
-  return NaN;
+  return Number.NaN;
 }
 
 /**
@@ -283,7 +283,7 @@ export function startWorkflowStateRetention({
 
   sweepTimer = setInterval(tick, intervalMs);
   if (typeof sweepTimer.unref === 'function') sweepTimer.unref();
-  tick();
+  void tick();
   return stopWorkflowStateRetention;
 }
 

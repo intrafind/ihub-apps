@@ -309,7 +309,10 @@ export class LoopNodeExecutor extends BaseNodeExecutor {
           // NOT propagated in parallel mode (only the collected results in
           // `outputVariable` and step logs survive), because concurrent
           // last-write-wins merging would be non-deterministic.
-          const concurrency = Math.max(1, Math.min(parseInt(config.concurrency, 10) || 1, 10));
+          const concurrency = Math.max(
+            1,
+            Math.min(Number.parseInt(config.concurrency, 10) || 1, 10)
+          );
           if (concurrency > 1) {
             const parallelOutcome = await this.executeForEachParallel(
               node,
@@ -699,7 +702,7 @@ export class LoopNodeExecutor extends BaseNodeExecutor {
       if (typeof target[key] !== 'object' || target[key] === null) target[key] = {};
       target = target[key];
     }
-    const last = parts[parts.length - 1];
+    const last = parts.at(-1);
     if (last === '__proto__' || last === 'constructor' || last === 'prototype') return;
     if (!Array.isArray(target[last])) target[last] = [];
     target[last].push({
@@ -726,7 +729,7 @@ export class LoopNodeExecutor extends BaseNodeExecutor {
       if (typeof target[key] !== 'object' || target[key] === null) target[key] = {};
       target = target[key];
     }
-    const last = parts[parts.length - 1];
+    const last = parts.at(-1);
     if (last === '__proto__' || last === 'constructor' || last === 'prototype') return;
     // Never reset a counter an outer step already set — only define a missing one.
     if (typeof target[last] !== 'number') target[last] = 0;
@@ -748,7 +751,7 @@ export class LoopNodeExecutor extends BaseNodeExecutor {
       if (typeof target[key] !== 'object' || target[key] === null) target[key] = {};
       target = target[key];
     }
-    const last = parts[parts.length - 1];
+    const last = parts.at(-1);
     if (last === '__proto__' || last === 'constructor' || last === 'prototype') return;
     target[last] = (typeof target[last] === 'number' ? target[last] : 0) + 1;
   }

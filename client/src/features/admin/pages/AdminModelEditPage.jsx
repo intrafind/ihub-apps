@@ -79,7 +79,7 @@ function AdminModelEditPage() {
     }
     loadAppsUsingModel();
     loadUsageData();
-    loadJsonSchema();
+    void loadJsonSchema();
   }, [modelId, isNewModel]); // eslint-disable-line @eslint-react/exhaustive-deps
 
   useEffect(() => {
@@ -245,7 +245,7 @@ function AdminModelEditPage() {
    */
   const toOptionalInt = value => {
     if (value === '' || value === null || value === undefined) return undefined;
-    const parsed = parseInt(value, 10);
+    const parsed = Number.parseInt(value, 10);
     return Number.isFinite(parsed) ? parsed : undefined;
   };
 
@@ -257,10 +257,10 @@ function AdminModelEditPage() {
       // Prepare the data to send
       const dataToSend = {
         ...data,
-        contextWindow: data.contextWindow ? parseInt(data.contextWindow) : undefined,
-        maxOutputTokens: data.maxOutputTokens ? parseInt(data.maxOutputTokens) : undefined,
-        concurrency: data.concurrency ? parseInt(data.concurrency) : undefined,
-        requestDelayMs: data.requestDelayMs ? parseInt(data.requestDelayMs) : undefined,
+        contextWindow: data.contextWindow ? Number.parseInt(data.contextWindow) : undefined,
+        maxOutputTokens: data.maxOutputTokens ? Number.parseInt(data.maxOutputTokens) : undefined,
+        concurrency: data.concurrency ? Number.parseInt(data.concurrency) : undefined,
+        requestDelayMs: data.requestDelayMs ? Number.parseInt(data.requestDelayMs) : undefined,
         // `0` is a meaningful value on both ceilings — it disables them — so
         // these are emptiness-checked rather than truthiness-checked.
         connectTimeoutMs: toOptionalInt(data.connectTimeoutMs),

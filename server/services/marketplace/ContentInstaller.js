@@ -28,8 +28,8 @@
  * @module services/marketplace/ContentInstaller
  */
 
-import { promises as fs } from 'fs';
-import path from 'path';
+import { promises as fs } from 'node:fs';
+import path from 'node:path';
 import configStore from '../../services/config/ConfigStore.js';
 import { isValidId, resolveAndValidatePath } from '../../utils/pathSecurity.js';
 import registryService from './RegistryService.js';
@@ -264,7 +264,9 @@ export async function fetchItemContent(registryId, type, name) {
 
   // GitHub Contents API wraps file content in base64
   if (responseData && responseData.content && responseData.encoding === 'base64') {
-    const decoded = Buffer.from(responseData.content.replace(/\n/g, ''), 'base64').toString('utf8');
+    const decoded = Buffer.from(responseData.content.replaceAll('\n', ''), 'base64').toString(
+      'utf8'
+    );
     try {
       return { item, content: JSON.parse(decoded) };
     } catch {

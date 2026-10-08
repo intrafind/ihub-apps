@@ -13,7 +13,7 @@ function AppTemplateSelector({ onSelect, onClose }) {
   const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
-    loadApps();
+    void loadApps();
   }, []);
 
   const loadApps = async () => {

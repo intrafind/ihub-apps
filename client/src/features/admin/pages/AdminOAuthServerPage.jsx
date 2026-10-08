@@ -37,7 +37,7 @@ function AdminOAuthServerPage() {
   const [savingConfig, setSavingConfig] = useState(false);
 
   useEffect(() => {
-    loadConfig();
+    void loadConfig();
     // eslint-disable-next-line @eslint-react/exhaustive-deps
   }, []);
 
@@ -60,7 +60,7 @@ function AdminOAuthServerPage() {
           consentMemoryDays: data.oauth.consentMemoryDays ?? 90,
           personalKeys: {
             ...prev.personalKeys,
-            ...(data.oauth.personalKeys || {})
+            ...data.oauth.personalKeys
           }
         }));
       }
@@ -95,8 +95,13 @@ function AdminOAuthServerPage() {
   }, []);
 
   const copyToClipboard = useCallback(
-    text => {
-      navigator.clipboard.writeText(text);
+    async text => {
+      try {
+        await navigator.clipboard.writeText(text);
+      } catch (error) {
+        console.error('Failed to copy to clipboard:', error);
+        return;
+      }
       setMessage({
         type: 'success',
         text: t('common.copiedToClipboard', 'Copied to clipboard')
@@ -115,7 +120,7 @@ function AdminOAuthServerPage() {
       const updatedConfig = {
         ...platformConfig,
         oauth: {
-          ...(platformConfig.oauth || {}),
+          ...platformConfig.oauth,
           enabled: {
             authz: newStatus,
             clients: platformConfig.oauth?.enabled?.clients ?? false
@@ -173,7 +178,7 @@ function AdminOAuthServerPage() {
           consentRequired: oauthConfig.consentRequired,
           consentMemoryDays: oauthConfig.consentMemoryDays,
           personalKeys: {
-            ...(currentPlatformConfig.oauth?.personalKeys || {}),
+            ...currentPlatformConfig.oauth?.personalKeys,
             ...oauthConfig.personalKeys
           }
         }

@@ -47,7 +47,7 @@ function AdminUICustomization() {
       }
     };
 
-    loadConfig();
+    void loadConfig();
   }, [uiConfig]);
 
   const handleSave = async () => {

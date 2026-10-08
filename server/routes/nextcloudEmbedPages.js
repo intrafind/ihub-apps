@@ -9,7 +9,7 @@
 // iframe. `'self'` is always included so the integration tester opened
 // inside iHub itself works.
 
-import path from 'path';
+import path from 'node:path';
 import express from 'express';
 import { buildServerPath } from '../utils/basePath.js';
 import { getRootDir } from '../pathUtils.js';

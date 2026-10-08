@@ -29,11 +29,11 @@ function AdminUserEditPage() {
   const { blocker, markSaved } = useUnsavedChanges(initialData, user);
 
   // Generate a unique ID for new users
-  const generateUserId = () => `user_${crypto.randomUUID().replace(/-/g, '_')}`;
+  const generateUserId = () => `user_${crypto.randomUUID().replaceAll('-', '_')}`;
 
   useEffect(() => {
-    loadSchema();
-    loadGroups();
+    void loadSchema();
+    void loadGroups();
 
     if (isNewUser) {
       // Initialize new user with generated ID
@@ -76,7 +76,7 @@ function AdminUserEditPage() {
           setLoading(false);
         }
       };
-      loadExistingUser();
+      void loadExistingUser();
     }
     // eslint-disable-next-line @eslint-react/exhaustive-deps
   }, [userId]);

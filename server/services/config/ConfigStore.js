@@ -46,8 +46,8 @@
  *
  * @module services/config/ConfigStore
  */
-import { promises as fs } from 'fs';
-import path from 'path';
+import { promises as fs } from 'node:fs';
+import path from 'node:path';
 import logger from '../../utils/logger.js';
 import { isValidId, resolveAndValidatePath } from '../../utils/pathSecurity.js';
 import { atomicCreateJSON, atomicWriteFile, atomicWriteJSON } from '../../utils/atomicWrite.js';
@@ -190,7 +190,7 @@ function resolveTarget(nsOrDir) {
   // backtracks quadratically on a run of slashes that does not reach the end
   // of the string. The two remaining patterns are safe: a global replace of a
   // single character, and an anchored two-character prefix.
-  let dir = nsOrDir.replace(/\\/g, '/').replace(/^\.\//, '');
+  let dir = nsOrDir.replaceAll('\\', '/').replace(/^\.\//, '');
   let end = dir.length;
   while (end > 0 && dir[end - 1] === '/') end -= 1;
   dir = dir.slice(0, end);

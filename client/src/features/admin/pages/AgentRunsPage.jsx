@@ -42,7 +42,7 @@ export default function AgentRunsPage() {
       if (mounted) timer = setTimeout(load, hasActiveRun ? ACTIVE_POLL_MS : IDLE_POLL_MS);
     }
 
-    load();
+    void load();
 
     return () => {
       mounted = false;

@@ -59,7 +59,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
 
   const extractContent = args.includes('--extract');
   const maxResultsMatch = args.find(a => a.startsWith('--max-results='));
-  const maxResults = maxResultsMatch ? parseInt(maxResultsMatch.split('=')[1]) || 10 : 10;
+  const maxResults = maxResultsMatch ? Number.parseInt(maxResultsMatch.split('=')[1]) || 10 : 10;
 
   logger.info('Searching', { component: 'BraveSearch', searchQuery, extractContent });
 

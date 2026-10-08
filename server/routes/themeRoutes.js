@@ -11,7 +11,7 @@
  * - ETag based on theme configuration hash
  */
 
-import crypto from 'crypto';
+import crypto from 'node:crypto';
 import configCache from '../configCache.js';
 import { buildServerPath } from '../utils/basePath.js';
 import logger from '../utils/logger.js';
@@ -52,8 +52,7 @@ function generateThemeCSS(theme) {
     }
   }
 
-  css.push('}');
-  css.push('');
+  css.push('}', '');
 
   // Dark mode variables
   css.push('[data-theme="dark"] {');
@@ -134,12 +133,12 @@ function darkenColor(hex, percent = 10) {
   }
 
   // Parse RGB values
-  let r = parseInt(hex.substring(0, 2), 16);
-  let g = parseInt(hex.substring(2, 4), 16);
-  let b = parseInt(hex.substring(4, 6), 16);
+  let r = Number.parseInt(hex.substring(0, 2), 16);
+  let g = Number.parseInt(hex.substring(2, 4), 16);
+  let b = Number.parseInt(hex.substring(4, 6), 16);
 
   // Handle NaN from invalid hex
-  if (isNaN(r) || isNaN(g) || isNaN(b)) {
+  if (Number.isNaN(r) || Number.isNaN(g) || Number.isNaN(b)) {
     return '#4338ca';
   }
 
@@ -159,7 +158,7 @@ function darkenColor(hex, percent = 10) {
  */
 function sanitizeCSSName(name) {
   // Only allow alphanumeric, hyphens, and underscores
-  const sanitized = String(name).replace(/[^a-zA-Z0-9_-]/g, '');
+  const sanitized = String(name).replaceAll(/[^a-zA-Z0-9_-]/g, '');
   // Return null if sanitized name is empty
   return sanitized.length > 0 ? sanitized : null;
 }
@@ -172,9 +171,9 @@ function sanitizeCSSName(name) {
 function sanitizeCSSValue(value) {
   // Remove potentially dangerous characters and patterns
   return String(value)
-    .replace(/[;{}]/g, '') // Remove CSS structural characters
-    .replace(/\\/g, '') // Remove backslashes
-    .replace(/<|>/g, '') // Remove angle brackets
+    .replaceAll(/[;{}]/g, '') // Remove CSS structural characters
+    .replaceAll('\\', '') // Remove backslashes
+    .replaceAll(/[<>]/g, '') // Remove angle brackets
     .trim();
 }
 

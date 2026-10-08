@@ -1,7 +1,6 @@
-import { readFileSync, existsSync } from 'fs';
-import { promises as fs } from 'fs';
-import { join } from 'path';
-import { createHash } from 'crypto';
+import { readFileSync, existsSync, promises as fs } from 'node:fs';
+import { join } from 'node:path';
+import { createHash } from 'node:crypto';
 import { getRootDir } from '../../pathUtils.js';
 import configStore from '../../services/config/ConfigStore.js';
 import configCache from '../../configCache.js';
@@ -230,8 +229,8 @@ export default function registerAdminToolsRoutes(app) {
       // Workflows are managed as a dedicated app.workflows array (first-class
       // citizens), so they are intentionally NOT mixed into the tools list.
 
-      // Generate ETag for caching using MD5 hash (same as configCache)
-      const hash = createHash('md5');
+      // Generate ETag for caching from a content hash
+      const hash = createHash('sha256');
       hash.update(JSON.stringify(tools));
       const etag = `"${hash.digest('hex')}"`;
 

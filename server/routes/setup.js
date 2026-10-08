@@ -13,7 +13,7 @@ import {
 } from '../utils/responseHelpers.js';
 
 // Cloud LLM providers that require API keys
-const LLM_PROVIDER_IDS = ['openai', 'anthropic', 'google', 'mistral'];
+const LLM_PROVIDER_IDS = new Set(['openai', 'anthropic', 'google', 'mistral']);
 
 /** Platform configuration, relative to `contents/`. */
 const PLATFORM_FILE = 'config/platform.json';
@@ -69,7 +69,7 @@ async function markSetupConfigured() {
   // config has to be turned back into the failure the caller maps onto a 500 —
   // recording "setup is done" against an empty object would drop the file.
   if (!platform) throw new Error(`Unable to read ${PLATFORM_FILE}`);
-  platform.setup = { ...(platform.setup || {}), configured: true };
+  platform.setup = { ...platform.setup, configured: true };
   await configStore.writeJson(PLATFORM_FILE, platform);
   await configCache.refreshCacheEntry(PLATFORM_FILE);
 }
@@ -98,7 +98,7 @@ export default function registerSetupRoutes(app) {
   app.post(buildServerPath('/api/setup/test'), adminAuth, async (req, res) => {
     const { providerId, apiKey } = req.body;
 
-    if (!providerId || !LLM_PROVIDER_IDS.includes(providerId)) {
+    if (!providerId || !LLM_PROVIDER_IDS.has(providerId)) {
       return sendBadRequest(res, 'Invalid provider ID');
     }
     if (!apiKey || typeof apiKey !== 'string' || apiKey.trim().length === 0) {
@@ -146,7 +146,7 @@ export default function registerSetupRoutes(app) {
       }
 
       // Cloud provider: validate and save API key
-      if (!LLM_PROVIDER_IDS.includes(providerId)) {
+      if (!LLM_PROVIDER_IDS.has(providerId)) {
         return sendBadRequest(res, 'Invalid provider ID');
       }
       if (!apiKey || typeof apiKey !== 'string' || apiKey.trim().length === 0) {

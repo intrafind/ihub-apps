@@ -170,7 +170,7 @@ export const QWANT_DEFAULT_LOCALE = 'en_US';
 export function resolveQwantLocale(language) {
   if (!language || typeof language !== 'string') return QWANT_DEFAULT_LOCALE;
 
-  const normalized = language.trim().toLowerCase().replace(/-/g, '_');
+  const normalized = language.trim().toLowerCase().replaceAll('-', '_');
   if (!normalized) return QWANT_DEFAULT_LOCALE;
 
   const [lang, region] = normalized.split('_');

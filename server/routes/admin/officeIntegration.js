@@ -32,7 +32,7 @@ import {
 import { probeOfficeJsUrl } from '../../services/OfficeJsProxyService.js';
 import { assertPublicTarget, createPinnedLookup } from '../../utils/ssrfGuard.js';
 import { oauthClientsFile } from '../../utils/contentsPath.js';
-import { randomUUID } from 'crypto';
+import { randomUUID } from 'node:crypto';
 import { LEGACY_OFFICE_ADDIN_ID, resolveOfficeAddinId } from '../../utils/officeAddinManifest.js';
 
 /**
@@ -169,7 +169,7 @@ export default function registerAdminOfficeIntegrationRoutes(app) {
         const platform = configCache.getPlatform();
         const addinId = randomUUID();
         await savePlatformConfig({
-          officeIntegration: { ...(platform?.officeIntegration || {}), addinId }
+          officeIntegration: { ...platform?.officeIntegration, addinId }
         });
         logger.info('Office add-in Id regenerated', {
           component: 'AdminOfficeIntegration',
@@ -235,9 +235,9 @@ export default function registerAdminOfficeIntegrationRoutes(app) {
       // Ensure OAuth authorization code flow is enabled
       const oauthUpdates = {
         oauth: {
-          ...(platform?.oauth || {}),
+          ...platform?.oauth,
           enabled: {
-            ...(platform?.oauth?.enabled || {}),
+            ...platform?.oauth?.enabled,
             authz: true,
             clients: true
           },
@@ -249,7 +249,7 @@ export default function registerAdminOfficeIntegrationRoutes(app) {
       const updates = {
         ...oauthUpdates,
         officeIntegration: {
-          ...(platform?.officeIntegration || {}),
+          ...platform?.officeIntegration,
           enabled: true,
           oauthClientId
         }
@@ -295,7 +295,7 @@ export default function registerAdminOfficeIntegrationRoutes(app) {
 
         await savePlatformConfig({
           officeIntegration: {
-            ...(platform?.officeIntegration || {}),
+            ...platform?.officeIntegration,
             enabled: false
           }
         });
@@ -517,7 +517,7 @@ export default function registerAdminOfficeIntegrationRoutes(app) {
       if (Object.keys(allowed).length > 0) {
         await savePlatformConfig({
           officeIntegration: {
-            ...(platform?.officeIntegration || {}),
+            ...platform?.officeIntegration,
             ...allowed
           }
         });

@@ -147,9 +147,9 @@ function PromptsList() {
   const shownTypes = itemTypes.filter(
     type => type.itemType && (typeFilter === 'all' || type.id === typeFilter)
   );
-  const shownItemTypes = shownTypes.map(type => type.itemType);
-  const showsPrompts = shownItemTypes.includes('prompt');
-  const showsSkills = shownItemTypes.includes('skill');
+  const shownItemTypes = new Set(shownTypes.map(type => type.itemType));
+  const showsPrompts = shownItemTypes.has('prompt');
+  const showsSkills = shownItemTypes.has('skill');
 
   // Mine/Shared exist for a kind its user may keep; Favorites only for kinds
   // that can be favorited (prompts, not skills).
@@ -515,7 +515,7 @@ function PromptsList() {
   // The empty "Mine" view offers to create what it shows (an entry's item type
   // is its `itemType`, else its id).
   const newEntriesForType = newEntries.filter(entry =>
-    shownItemTypes.includes(entry.itemType || entry.id)
+    shownItemTypes.has(entry.itemType || entry.id)
   );
   // Someone without skills of their own, looking at skills, gets pointed at
   // ready-made ones — writing a first skill from scratch is the hard way in.
@@ -905,7 +905,7 @@ function PromptsList() {
                       <button
                         onClick={e => {
                           e.stopPropagation();
-                          handleCopy(p);
+                          void handleCopy(p);
                         }}
                         className="px-3 py-1.5 text-xs border border-indigo-600 text-indigo-600 dark:border-indigo-400 dark:text-indigo-400 rounded-lg hover:bg-indigo-50 dark:hover:bg-indigo-900/40 transition-colors flex items-center justify-center gap-1"
                       >

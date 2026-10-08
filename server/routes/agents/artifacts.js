@@ -5,9 +5,8 @@
  *   GET /api/agents/profiles/:profileId/artifacts    — list profile artifacts
  */
 
-import fs from 'fs';
-import { promises as fsp } from 'fs';
-import path from 'path';
+import fs, { promises as fsp } from 'node:fs';
+import path from 'node:path';
 import { authRequired, authenticatedOnly } from '../../middleware/authRequired.js';
 import {
   sendBadRequest,

@@ -34,8 +34,8 @@ function AdminGroupEditPage() {
   const { blocker, markSaved } = useUnsavedChanges(initialData, group);
 
   useEffect(() => {
-    loadResources();
-    loadSchema();
+    void loadResources();
+    void loadSchema();
     if (groupId === 'new') {
       // Initialize new group
       const defaultGroup = {

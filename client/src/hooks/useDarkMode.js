@@ -11,7 +11,7 @@
 import { useState, useEffect, useCallback } from 'react';
 
 const STORAGE_KEY = 'ih-dark-mode';
-const VALID_MODES = ['auto', 'light', 'dark'];
+const VALID_MODES = new Set(['auto', 'light', 'dark']);
 
 /**
  * Get the stored preference from localStorage
@@ -20,7 +20,7 @@ const VALID_MODES = ['auto', 'light', 'dark'];
 const getStoredPreference = () => {
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored && VALID_MODES.includes(stored)) {
+    if (stored && VALID_MODES.has(stored)) {
       return stored;
     }
   } catch {
@@ -74,7 +74,7 @@ const useDarkMode = () => {
   // Update preference and persist to localStorage
   const setPreference = useCallback(
     newPreference => {
-      if (!VALID_MODES.includes(newPreference)) {
+      if (!VALID_MODES.has(newPreference)) {
         console.warn(`Invalid dark mode preference: ${newPreference}`);
         return;
       }

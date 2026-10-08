@@ -51,7 +51,7 @@ function AdminToolsPage() {
   const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
-    loadTools();
+    void loadTools();
   }, []);
 
   const loadTools = async () => {
@@ -105,7 +105,7 @@ function AdminToolsPage() {
       link.download = `tool-${toolId}.json`;
       document.body.appendChild(link);
       link.click();
-      document.body.removeChild(link);
+      link.remove();
       URL.revokeObjectURL(url);
     } catch (err) {
       setError(`Failed to download tool config: ${getAdminApiErrorMessage(err)}`);

@@ -320,7 +320,7 @@ function OpenApiToolEditor({ tool, onSave, saving }) {
       openapi
     };
 
-    onSave(toolDef);
+    void onSave(toolDef);
   };
 
   const addHeaderRow = () => update({ headers: [...form.headers, { key: '', value: '' }] });

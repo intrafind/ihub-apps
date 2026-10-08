@@ -17,8 +17,8 @@
  *
  * @module utils/setupUtils
  */
-import fs from 'fs/promises';
-import path from 'path';
+import fs from 'node:fs/promises';
+import path from 'node:path';
 import { getRootDir } from '../pathUtils.js';
 import logger from './logger.js';
 import { getContentsPath } from './contentsPath.js';

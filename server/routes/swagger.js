@@ -2,8 +2,8 @@ import swaggerJSDoc from 'swagger-jsdoc';
 import swaggerUi from 'swagger-ui-express';
 import { authRequired } from '../middleware/authRequired.js';
 import { loadJson } from '../configLoader.js';
-import path from 'path';
-import { fileURLToPath } from 'url';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { buildServerPath } from '../utils/basePath.js';
 import logger from '../utils/logger.js';
 
@@ -16,7 +16,6 @@ const __dirname = path.dirname(__filename);
  * @param {string} description - API documentation description
  * @param {string} version - API version
  * @param {Array} paths - Array of file paths to scan for documentation
- * @param {string} basePath - Base path for the API server
  * @returns {Object} Swagger configuration object
  */
 function createSwaggerConfig(title, description, version, paths) {
@@ -115,8 +114,7 @@ export default async function registerSwaggerRoutes(app) {
       path.join(__dirname, 'auth.js'),
       path.join(__dirname, 'scheduledTasks.js'),
       path.join(__dirname, 'chat/**/*.js')
-    ],
-    basePath
+    ]
   );
 
   // Admin APIs Documentation
@@ -124,8 +122,7 @@ export default async function registerSwaggerRoutes(app) {
     'iHub Apps - Admin APIs',
     'Administrative APIs for managing configurations, users, groups, and system settings',
     '1.0.0',
-    [path.join(__dirname, 'adminRoutes.js'), path.join(__dirname, 'admin/**/*.js')],
-    basePath
+    [path.join(__dirname, 'adminRoutes.js'), path.join(__dirname, 'admin/**/*.js')]
   );
 
   // OpenAI Compatible APIs Documentation
@@ -133,8 +130,7 @@ export default async function registerSwaggerRoutes(app) {
     'iHub Apps - OpenAI Compatible APIs',
     'OpenAI-compatible inference APIs: chat completions, responses, conversations and model listings, for models and iHub apps',
     '1.0.0',
-    [path.join(__dirname, 'openaiProxy.js'), path.join(__dirname, 'inference/*.js')],
-    basePath
+    [path.join(__dirname, 'openaiProxy.js'), path.join(__dirname, 'inference/*.js')]
   );
 
   // Generate Swagger specs

@@ -55,7 +55,7 @@ function AdminWorkflowEditPage() {
 
   useEffect(() => {
     if (!isNewWorkflow) {
-      loadWorkflow();
+      void loadWorkflow();
     } else {
       const defaultWf = getDefaultWorkflow();
       setWorkflowData(defaultWf);
@@ -127,13 +127,13 @@ function AdminWorkflowEditPage() {
       if (isUnsafeKey(segment)) {
         return;
       }
-      if (!Object.prototype.hasOwnProperty.call(target, segment) || target[segment] == null) {
+      if (!Object.hasOwn(target, segment) || target[segment] == null) {
         target[segment] = {};
       }
       target = target[segment];
     }
 
-    const lastKey = parts[parts.length - 1];
+    const lastKey = parts.at(-1);
     if (isUnsafeKey(lastKey)) {
       return;
     }
@@ -397,7 +397,7 @@ function AdminWorkflowEditPage() {
                     max={3600}
                     value={Math.round((workflowData.config?.maxExecutionTime ?? 300000) / 1000)}
                     onChange={e => {
-                      const seconds = Math.max(1, parseInt(e.target.value, 10) || 0);
+                      const seconds = Math.max(1, Number.parseInt(e.target.value, 10) || 0);
                       const ms = Math.min(seconds * 1000, 3600000);
                       handleMetadataChange('config.maxExecutionTime', ms);
                     }}

@@ -145,7 +145,7 @@ export class BaseNodeExecutor {
       const arrayMatch = part.match(/^(\w+)\[(\d+)\]$/);
       if (arrayMatch) {
         const [, arrayName, indexStr] = arrayMatch;
-        const index = parseInt(indexStr, 10);
+        const index = Number.parseInt(indexStr, 10);
         current = current[arrayName];
         if (Array.isArray(current)) {
           current = current[index];
@@ -555,7 +555,7 @@ export class BaseNodeExecutor {
     let out = text;
     for (const [key, value] of Object.entries(vars)) {
       if (value === null || value === undefined || value === '') continue;
-      out = out.replace(new RegExp(`\\{\\{${key}\\}\\}`, 'g'), String(value));
+      out = out.replace(new RegExp(String.raw`\{\{${key}\}\}`, 'g'), String(value));
     }
     return out;
   }

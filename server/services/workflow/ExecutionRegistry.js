@@ -472,7 +472,7 @@ export class ExecutionRegistry {
       }
     );
     this._writes.set(executionId, next);
-    next.then(() => {
+    void next.then(() => {
       if (this._writes.get(executionId) === next) this._writes.delete(executionId);
     });
     return next;
@@ -722,7 +722,7 @@ export class ExecutionRegistry {
       workflowId
     });
 
-    this._enqueue(executionId, async () => {
+    void this._enqueue(executionId, async () => {
       const store = this._store();
       if (!store) return;
       // One locked upsert, never a read then a replace: the ledger records a
@@ -793,7 +793,7 @@ export class ExecutionRegistry {
       status
     });
 
-    this._enqueue(executionId, async () => {
+    void this._enqueue(executionId, async () => {
       const store = this._store();
       if (!store) return;
       await store.patch(executionId, fields);
@@ -837,7 +837,7 @@ export class ExecutionRegistry {
       ? toSummaryFields(execution)
       : { pendingCheckpoint: null, updatedAt: now };
 
-    this._enqueue(executionId, async () => {
+    void this._enqueue(executionId, async () => {
       const store = this._store();
       if (store) await store.patch(executionId, fields);
     });
@@ -1189,7 +1189,7 @@ export class ExecutionRegistry {
         archived: false
       };
 
-      this._enqueue(executionId, async () => {
+      void this._enqueue(executionId, async () => {
         const store = this._store();
         if (!store) {
           // No provider: this process's memory is the whole registry, which

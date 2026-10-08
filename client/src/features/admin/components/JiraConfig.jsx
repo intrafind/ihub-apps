@@ -43,7 +43,7 @@ function JiraConfig() {
       }
     };
 
-    fetchJiraConfig();
+    void fetchJiraConfig();
   }, [t]);
 
   const handleToggleEnabled = e => {

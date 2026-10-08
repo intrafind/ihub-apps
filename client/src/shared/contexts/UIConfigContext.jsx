@@ -84,13 +84,13 @@ export function UIConfigProvider({ children }) {
     if (uiConfig === null) return;
 
     if (uiConfig?.pwa?.enabled) {
-      import('../../services/swRegistration').then(({ registerServiceWorker }) => {
-        registerServiceWorker();
-      });
+      import('../../services/swRegistration')
+        .then(({ registerServiceWorker }) => registerServiceWorker())
+        .catch(error => console.warn('Service worker registration failed:', error));
     } else {
-      import('../../services/swRegistration').then(({ unregisterServiceWorker }) => {
-        unregisterServiceWorker();
-      });
+      import('../../services/swRegistration')
+        .then(({ unregisterServiceWorker }) => unregisterServiceWorker())
+        .catch(error => console.warn('Service worker unregistration failed:', error));
     }
   }, [uiConfig?.pwa?.enabled]);
 

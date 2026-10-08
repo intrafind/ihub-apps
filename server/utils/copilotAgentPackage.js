@@ -228,7 +228,7 @@ export function validateCopilotAgentConfig(input) {
  * @returns {{ manifest: Object, declarativeAgent: Object, plugin: Object }}
  */
 export function buildCopilotAgentManifests({ config, baseUrl, mcpUrl, version }) {
-  const settings = { ...DEFAULT_COPILOT_AGENT_CONFIG, ...(config || {}) };
+  const settings = { ...DEFAULT_COPILOT_AGENT_CONFIG, ...config };
   if (!isGuid(settings.appId)) throw new Error('The Copilot agent has no app id');
   if (!settings.oauthReferenceId) {
     throw new Error('The Copilot agent has no OAuth client registration ID');

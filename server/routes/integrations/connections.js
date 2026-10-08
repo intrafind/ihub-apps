@@ -24,12 +24,12 @@ router.use(requireFeature('integrations'));
  * delegated token must not be able to revoke the very grant that produced it,
  * nor enumerate what else its user has connected.
  */
-const DELEGATED_AUTH_MODES = [
+const DELEGATED_AUTH_MODES = new Set([
   'oauth_client_credentials',
   'oauth_static_api_key',
   'oauth_authorization_code',
   'oauth_personal_key'
-];
+]);
 
 /**
  * Resolve the caller, refusing anyone who may not manage their own
@@ -61,7 +61,7 @@ function requireConnectionOwner(req, res) {
     return null;
   }
 
-  if (DELEGATED_AUTH_MODES.includes(req.user.authMode)) {
+  if (DELEGATED_AUTH_MODES.has(req.user.authMode)) {
     res.status(403).json({ error: 'Only an interactive session can manage connections' });
     return null;
   }

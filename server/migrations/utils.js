@@ -28,7 +28,7 @@ function resolvePath(obj, dotPath) {
   return {
     parent: current,
     key: lastKey,
-    exists: Object.prototype.hasOwnProperty.call(current, lastKey),
+    exists: Object.hasOwn(current, lastKey),
     value: current[lastKey]
   };
 }
@@ -127,7 +127,7 @@ function isPlainObject(val) {
  */
 export function mergeDefaults(existing, defaults) {
   for (const key of Object.keys(defaults)) {
-    if (!Object.prototype.hasOwnProperty.call(existing, key)) {
+    if (!Object.hasOwn(existing, key)) {
       existing[key] = defaults[key];
     } else if (isPlainObject(existing[key]) && isPlainObject(defaults[key])) {
       mergeDefaults(existing[key], defaults[key]);

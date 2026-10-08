@@ -85,7 +85,7 @@ function InputModeSection({ app, onChange, t, transcriptionModels = [], currentL
                   onChange={e =>
                     handleInputChange('inputMode', {
                       ...app.inputMode,
-                      rows: parseNumberOrUndefined(e.target.value, parseInt)
+                      rows: parseNumberOrUndefined(e.target.value, Number.parseInt)
                     })
                   }
                   className="mt-1 block w-20 rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"

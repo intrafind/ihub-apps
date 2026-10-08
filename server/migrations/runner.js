@@ -8,11 +8,11 @@
  * Each migration runs exactly once, tracked in contents/.migration-history.json.
  */
 
-import fs from 'fs/promises';
-import { join } from 'path';
-import { createHash } from 'crypto';
-import { pathToFileURL } from 'url';
-import os from 'os';
+import fs from 'node:fs/promises';
+import { join } from 'node:path';
+import { createHash } from 'node:crypto';
+import { pathToFileURL } from 'node:url';
+import os from 'node:os';
 import { getRootDir } from '../pathUtils.js';
 import { atomicWriteJSON, atomicCreateJSON } from '../utils/atomicWrite.js';
 import logger from '../utils/logger.js';
@@ -501,7 +501,7 @@ function createMigrationContext(contentsDir, defaultsDir, migration) {
       }
       if (pattern) {
         // Convert glob pattern to regex (e.g., *.json → ^.*\.json$)
-        const escaped = pattern.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*');
+        const escaped = pattern.replace(/[.+^${}()|[\]\\]/g, String.raw`\$&`).replaceAll('*', '.*');
         const regex = new RegExp(`^${escaped}$`);
         return entries.filter(e => regex.test(e));
       }

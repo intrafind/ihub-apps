@@ -61,9 +61,9 @@ function AdminPromptsPage() {
   const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
-    if (promptsLibraryEnabled) loadPrompts();
+    if (promptsLibraryEnabled) void loadPrompts();
     else setLoading(false);
-    loadUIConfig();
+    void loadUIConfig();
   }, [promptsLibraryEnabled]);
 
   useEffect(() => {
@@ -158,7 +158,7 @@ function AdminPromptsPage() {
       link.download = `prompt-${promptId}.json`;
       document.body.appendChild(link);
       link.click();
-      document.body.removeChild(link);
+      link.remove();
       URL.revokeObjectURL(url);
     } catch (err) {
       setError(`Failed to download prompt config: ${getAdminApiErrorMessage(err)}`);
@@ -593,7 +593,7 @@ function VariablesTabContent() {
   const [hasChanges, setHasChanges] = useState(false);
 
   useEffect(() => {
-    loadPlatformConfig();
+    void loadPlatformConfig();
   }, []);
 
   const loadPlatformConfig = async () => {

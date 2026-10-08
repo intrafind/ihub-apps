@@ -1,5 +1,5 @@
-import { promises as fs } from 'fs';
-import path from 'path';
+import { promises as fs } from 'node:fs';
+import path from 'node:path';
 import SourceHandler from './SourceHandler.js';
 import { getRootDir } from '../pathUtils.js';
 import config from '../config.js';
@@ -23,7 +23,7 @@ class FileSystemHandler extends SourceHandler {
     logger.info(`FileSystemHandler initialized with basePath: ${this.basePath}`);
 
     // Ensure sources subdirectory exists
-    this.ensureSourcesDirectory();
+    void this.ensureSourcesDirectory();
   }
 
   async ensureSourcesDirectory() {

@@ -1,6 +1,6 @@
-import crypto from 'crypto';
-import { promises as fs } from 'fs';
-import path from 'path';
+import crypto from 'node:crypto';
+import { promises as fs } from 'node:fs';
+import path from 'node:path';
 import { isAnonymousUser } from '../../services/loop/runIdentity.js';
 import {
   createPresenceMap,
@@ -79,10 +79,10 @@ setInterval(
     for (const [id, job] of jobs) {
       if (now - job.createdAt > JOB_TTL_MS) {
         jobs.delete(id);
-        removeResultFile(job.resultFile);
+        void removeResultFile(job.resultFile);
       }
     }
-    if (isClusterBusActive()) sweepOrphanedResults(now);
+    if (isClusterBusActive()) void sweepOrphanedResults(now);
   },
   5 * 60 * 1000
 ).unref();

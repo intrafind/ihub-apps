@@ -38,7 +38,7 @@ function SkillsSelector({ selectedSkills = [], onSkillsChange }) {
       }
     };
 
-    loadSkills();
+    void loadSkills();
   }, []);
 
   // Filter skills based on search term and exclude already selected

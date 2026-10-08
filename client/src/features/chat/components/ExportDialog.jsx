@@ -12,13 +12,12 @@ import {
 } from '../../../utils/exportFormats';
 import { useUIConfig } from '../../../shared/contexts/UIConfigContext';
 import { getLocalizedContent } from '../../../utils/localizeContent';
-import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
 
 // Formats whose content can be copied to the clipboard as plain text. Binary
 // formats (pdf, docx, xlsx, pptx) and the styled HTML document can only be
 // downloaded, so the Copy button is disabled when one of those is selected.
-const COPYABLE_FORMATS = ['txt', 'markdown', 'json', 'jsonl'];
+const COPYABLE_FORMATS = new Set(['txt', 'markdown', 'json', 'jsonl']);
 
 function ExportDialog({
   isOpen,
@@ -31,7 +30,6 @@ function ExportDialog({
 }) {
   const { t, i18n } = useTranslation();
   const { uiConfig } = useUIConfig();
-  const featureFlags = useFeatureFlags();
   const currentLanguage = i18n.language || 'en';
 
   const [selectedFormat, setSelectedFormat] = useState('pdf');
@@ -82,7 +80,7 @@ function ExportDialog({
 
   if (!isOpen) return null;
 
-  const canCopySelectedFormat = COPYABLE_FORMATS.includes(selectedFormat);
+  const canCopySelectedFormat = COPYABLE_FORMATS.has(selectedFormat);
 
   const buildMeta = () => ({
     model: settings.model,
@@ -371,6 +369,7 @@ function ExportDialog({
 
   return (
     <div
+      role="presentation"
       className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-2 sm:p-4"
       onClick={e => {
         if (e.target === e.currentTarget) onClose?.();
@@ -544,7 +543,7 @@ function ExportDialog({
                   onChange={e =>
                     setPdfConfig(prev => ({
                       ...prev,
-                      watermark: { ...prev.watermark, opacity: parseFloat(e.target.value) }
+                      watermark: { ...prev.watermark, opacity: Number.parseFloat(e.target.value) }
                     }))
                   }
                   className="w-full"

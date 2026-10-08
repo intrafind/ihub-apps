@@ -375,7 +375,12 @@ export default function registerConversationsRoutes(app) {
         ordered = ordered.slice(at + 1);
       }
       const page = ordered.slice(0, limitRaw);
-      res.json(itemList(page.map(itemFromMessage), ordered.length > page.length));
+      res.json(
+        itemList(
+          page.map(message => itemFromMessage(message)),
+          ordered.length > page.length
+        )
+      );
     } catch (error) {
       send(res, error);
     }
@@ -393,7 +398,7 @@ export default function registerConversationsRoutes(app) {
       }
       const messages = messagesFromItems(req.body.items);
       const stored = await appendItems(repository, chat.id, messages);
-      res.json(itemList(stored.map(itemFromMessage)));
+      res.json(itemList(stored.map(message => itemFromMessage(message))));
     } catch (error) {
       send(res, error);
     }

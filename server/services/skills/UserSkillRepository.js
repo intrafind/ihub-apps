@@ -22,7 +22,7 @@
  *
  * @module services/skills/UserSkillRepository
  */
-import { createHash, randomBytes } from 'crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import logger from '../../utils/logger.js';
 import { isValidId } from '../../utils/pathSecurity.js';
 import { StorageError } from '../../storage/errors.js';
@@ -475,7 +475,7 @@ export class UserSkillRepository {
       if (!skill) return null;
       assertAuthorized(authorize, skill);
       const before = new Set((skill.shares || []).map(shareTargetKey));
-      const after = new Set(shares.map(shareTargetKey));
+      const after = new Set(shares.map(share => shareTargetKey(share)));
       const stored = await this._write(
         { ...skill, shares, sharesUpdatedAt: now, sharesUpdatedBy: actorOf(actor) },
         etag

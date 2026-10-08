@@ -62,7 +62,9 @@ function sanitizeAuthInput(value, fieldName, maxLength = 255) {
   }
 
   // Remove null bytes and control characters that could cause issues
-  const sanitized = trimmed.replace(/\0/g, '').replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
+  const sanitized = trimmed
+    .replaceAll('\u{0}', '')
+    .replaceAll(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
 
   return sanitized;
 }
@@ -449,7 +451,7 @@ export default function registerAuthRoutes(app) {
       // Only allow relative URLs (starting with /) and same-origin URLs
       try {
         // Normalize backslashes to prevent bypass via \evil.com interpreted as /evil.com
-        returnUrl = returnUrl.replace(/\\/g, '/');
+        returnUrl = returnUrl.replaceAll('\\', '/');
 
         // If returnUrl is an absolute URL, validate it's same origin
         if (returnUrl.startsWith('http://') || returnUrl.startsWith('https://')) {

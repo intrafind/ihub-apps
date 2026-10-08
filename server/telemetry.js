@@ -3,7 +3,6 @@ import { resolveEnvVarsInObject } from './configCache.js';
 import { NodeSDK } from '@opentelemetry/sdk-node';
 import { getNodeAutoInstrumentations } from '@opentelemetry/auto-instrumentations-node';
 import { PrometheusExporter } from '@opentelemetry/exporter-prometheus';
-import { ConsoleSpanExporter } from '@opentelemetry/sdk-trace-node';
 import { PeriodicExportingMetricReader } from '@opentelemetry/sdk-metrics';
 import apiPkg from '@opentelemetry/api';
 const { diag, DiagConsoleLogger, DiagLogLevel, metrics: metricsApi } = apiPkg;
@@ -98,7 +97,7 @@ export async function initTelemetry(rawConfig = {}) {
   const otlpEnvConfig = parseOTLPEnvVars();
   if (otlpEnvConfig && !config.exporters?.otlp?.endpoint) {
     config.exporters = config.exporters || {};
-    config.exporters.otlp = { ...otlpEnvConfig, ...(config.exporters.otlp || {}) };
+    config.exporters.otlp = { ...otlpEnvConfig, ...config.exporters.otlp };
     if (!config.provider || config.provider === 'console') {
       config.provider = 'otlp';
     }
@@ -229,7 +228,7 @@ export function getActiveTelemetryConfig() {
 export function reloadTelemetryConfig(newConfig = {}) {
   // Updating activeConfig propagates to GenAIInstrumentation (it reads from
   // its own copy) - so we must mutate that as well.
-  activeConfig = { ...(activeConfig || {}), ...newConfig };
+  activeConfig = { ...activeConfig, ...newConfig };
   if (genAIInstrumentation) {
     genAIInstrumentation.config = activeConfig;
     // Re-evaluate the enabled flag - the constructor derived it from

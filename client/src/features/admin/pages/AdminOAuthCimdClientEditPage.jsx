@@ -89,7 +89,7 @@ function AdminOAuthCimdClientEditPage() {
       setAvailableModels(await read('/admin/models', 'models'));
       setAvailablePrompts(await read('/admin/prompts', 'prompts'));
     };
-    loadOptions();
+    void loadOptions();
   }, []);
 
   const setField = (field, value) => setForm(prev => ({ ...prev, [field]: value }));

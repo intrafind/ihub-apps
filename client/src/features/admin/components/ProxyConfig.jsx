@@ -82,7 +82,7 @@ function ProxyConfig() {
         setLoading(false);
       }
     };
-    fetchConfig();
+    void fetchConfig();
   }, [applyResponse, t]);
 
   const invalidPatterns = useMemo(
@@ -573,7 +573,10 @@ function ProxyConfig() {
                 addPattern();
               }
             }}
-            placeholder={t('admin.system.proxy.urlPatternPlaceholder', 'api\\.openai\\.com')}
+            placeholder={t(
+              'admin.system.proxy.urlPatternPlaceholder',
+              String.raw`api\.openai\.com`
+            )}
             className={`${inputClass} font-mono ${
               newPattern.trim() && !isValidRegex(newPattern.trim())
                 ? 'border-red-400 dark:border-red-500'
@@ -708,7 +711,7 @@ function ProxyConfig() {
             onKeyDown={e => {
               if (e.key === 'Enter' && !testing && testUrl.trim()) {
                 e.preventDefault();
-                handleTest();
+                void handleTest();
               }
             }}
             placeholder={t(

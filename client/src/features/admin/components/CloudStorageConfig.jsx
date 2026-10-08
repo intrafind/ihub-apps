@@ -47,7 +47,7 @@ function CloudStorageConfig({ filterType } = {}) {
       }
     };
 
-    fetchCloudStorageConfig();
+    void fetchCloudStorageConfig();
   }, [t]);
 
   const handleToggleEnabled = e => {
@@ -210,7 +210,7 @@ function CloudStorageConfig({ filterType } = {}) {
     setConfig(updatedConfig);
     setShowAddProvider(false);
     setEditingProvider(null);
-    saveConfig(updatedConfig);
+    void saveConfig(updatedConfig);
   };
 
   const handleCancelEdit = () => {
@@ -255,7 +255,7 @@ function CloudStorageConfig({ filterType } = {}) {
   };
 
   const handleSaveConfig = () => {
-    saveConfig(config);
+    void saveConfig(config);
   };
 
   if (loading) {

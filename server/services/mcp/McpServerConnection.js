@@ -3,7 +3,7 @@ import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/
 import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { WebSocketClientTransport } from '@modelcontextprotocol/sdk/client/websocket.js';
-import { URL } from 'url';
+import { URL } from 'node:url';
 import credentialService from '../CredentialService.js';
 import { safeFetch, assertSafeHost } from './safeFetch.js';
 import {
@@ -203,7 +203,7 @@ export class McpServerConnection {
       // address has shifted to a private range.
       await assertSafeHost(url.hostname, this.security.allowedHosts, blockPrivateIps);
 
-      const requestInit = { headers: { ...(t.headers || {}), ...this._buildAuthHeaders(auth) } };
+      const requestInit = { headers: { ...t.headers, ...this._buildAuthHeaders(auth) } };
       const allowHosts = this.security.allowedHosts;
 
       // Use our DNS-pinned fetch as the SDK's underlying transport so the

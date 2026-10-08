@@ -126,13 +126,9 @@ export const iFinderSourceProducer = {
       );
     } else if (tool === 'ifinder_getcontent') {
       items = [
-        documentSource(
-          { ...(parsed.metadata || {}), documentId: parsed.documentId },
-          searchProfile,
-          {
-            read: { ok: true }
-          }
-        )
+        documentSource({ ...parsed.metadata, documentId: parsed.documentId }, searchProfile, {
+          read: { ok: true }
+        })
       ];
     } else {
       items = [documentSource(parsed, searchProfile)];

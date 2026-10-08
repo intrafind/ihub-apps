@@ -30,9 +30,9 @@
  *   node scripts/check-config-fs-access.js --quiet  # only print on failure
  */
 
-import { readFileSync, readdirSync } from 'fs';
-import { join, relative, dirname, sep } from 'path';
-import { fileURLToPath } from 'url';
+import { readFileSync, readdirSync } from 'node:fs';
+import { join, relative, dirname, sep } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -334,6 +334,10 @@ const FS_MODULES = new Set(['fs', 'fs/promises', 'node:fs', 'node:fs/promises'])
 /** Directories never worth walking. */
 const SKIP_DIRS = new Set(['node_modules', '.git', 'dist', 'coverage', 'tests', '__tests__']);
 
+// Config directories as regex alternatives, a nested one ("agents/profiles") matching either
+// path separator. Built here so the pattern below does not nest template literals.
+const CONFIG_DIRS_ANY_SEPARATOR = CONFIG_DIRS.map(d => d.replace('/', String.raw`[/\\]`)).join('|');
+
 /**
  * A literal path into a configuration directory, e.g. `contents/apps` or
  * `join(root, CONTENTS_DIR, 'config', ...)`. Used only by the tree-wide rule,
@@ -345,7 +349,7 @@ const SKIP_DIRS = new Set(['node_modules', '.git', 'dist', 'coverage', 'tests', 
 const LITERAL_CONFIG_PATH = new RegExp(
   [
     // contents/config, contents/apps, contents/agents/profiles, ...
-    `contents[/\\\\](?:${CONFIG_DIRS.map(d => d.replace('/', '[/\\\\]')).join('|')})\\b`,
+    String.raw`contents[/\\](?:${CONFIG_DIRS_ANY_SEPARATOR})\b`,
     // join(..., 'contents', 'config', ...) and join(..., CONTENTS_DIR, 'apps', ...)
     `(?:['"\`]contents['"\`]|CONTENTS_DIR)\\s*,\\s*['"\`](?:${CONFIG_DIRS.map(d => d.split('/')[0]).join('|')})['"\`]`,
     // join(contentsDir, 'config', …) and `${contentsDir}/config/…` — the idiom
@@ -353,7 +357,7 @@ const LITERAL_CONFIG_PATH = new RegExp(
     // the one the header names as the regression to catch. Without it a config
     // write in a file outside CONFIG_OWNING_PATHS passed in silence.
     `contentsDir\\s*,\\s*['"\`](?:${CONFIG_DIRS.map(d => d.split('/')[0]).join('|')})['"\`]`,
-    `\\$\\{\\s*contentsDir\\s*\\}[/\\\\](?:${CONFIG_DIRS.map(d => d.replace('/', '[/\\\\]')).join('|')})\\b`
+    String.raw`\$\{\s*contentsDir\s*\}[/\\](?:${CONFIG_DIRS_ANY_SEPARATOR})\b`
   ].join('|')
 );
 
@@ -375,7 +379,7 @@ const TREE_WIDE_CONTEXT_LINES = 6;
  * @returns {string} The same text, safe to interpolate into a pattern
  */
 function escapeRegExp(value) {
-  return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`);
 }
 
 /**
@@ -415,7 +419,7 @@ function configPathBindings(source) {
         continue;
       }
       for (const other of tainted) {
-        if (new RegExp(`(?<![.\\w$])${escapeRegExp(other)}(?![\\w$])`).test(init)) {
+        if (new RegExp(String.raw`(?<![.\w$])${escapeRegExp(other)}(?![\w$])`).test(init)) {
           tainted.add(name);
           break;
         }
@@ -679,7 +683,9 @@ function findFsCalls(repoPath, source) {
   const alternatives = [];
   for (const ns of namespaces) {
     const escaped = escapeRegExp(ns);
-    alternatives.push(`${escaped}\\s*\\.\\s*(?:promises\\s*\\.\\s*)?(${FS_OPS.join('|')})\\s*\\(`);
+    alternatives.push(
+      String.raw`${escaped}\s*\.\s*(?:promises\s*\.\s*)?(${FS_OPS.join('|')})\s*\(`
+    );
   }
   // Filter on what was imported, match on what is called. `escapeRegExp` is
   // load-bearing now that these are arbitrary local identifiers rather than a
@@ -689,7 +695,7 @@ function findFsCalls(repoPath, source) {
     .map(([local]) => escapeRegExp(local))
     .concat(ATOMIC_HELPERS);
   if (bareNames.length) {
-    alternatives.push(`(?<![.\\w$])(${bareNames.join('|')})\\s*\\(`);
+    alternatives.push(String.raw`(?<![.\w$])(${bareNames.join('|')})\s*\(`);
   }
   if (!alternatives.length) return [];
 
@@ -772,7 +778,7 @@ function scan() {
         continue;
       }
       const carries = [...bound].some(name =>
-        new RegExp(`(?<![.\\w$])${escapeRegExp(name)}(?![\\w$])`).test(site.arg || '')
+        new RegExp(String.raw`(?<![.\w$])${escapeRegExp(name)}(?![\w$])`).test(site.arg || '')
       );
       if (carries) {
         violations.push({ ...site, rule: 'config-path-binding' });

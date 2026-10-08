@@ -46,12 +46,12 @@ const simpleLinearWorkflow = {
 
 async function waitForCompletion(engine, executionId, maxWaitMs = 30000) {
   const startTime = Date.now();
-  const terminalStatuses = ['completed', 'failed', 'cancelled'];
+  const terminalStatuses = new Set(['completed', 'failed', 'cancelled']);
 
   while (Date.now() - startTime < maxWaitMs) {
     const state = await engine.getState(executionId);
     if (!state) throw new Error(`Execution ${executionId} not found`);
-    if (terminalStatuses.includes(state.status)) return state;
+    if (terminalStatuses.has(state.status)) return state;
     await new Promise(r => setTimeout(r, 100));
   }
   throw new Error(`Workflow did not complete within ${maxWaitMs}ms`);
@@ -92,4 +92,4 @@ async function main() {
   }
 }
 
-main();
+void main();

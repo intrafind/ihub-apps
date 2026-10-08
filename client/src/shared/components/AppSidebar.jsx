@@ -218,7 +218,7 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose = () => {
       const els = focusables();
       if (els.length === 0) return;
       const first = els[0];
-      const last = els[els.length - 1];
+      const last = els.at(-1);
       if (e.shiftKey && document.activeElement === first) {
         e.preventDefault();
         last.focus();

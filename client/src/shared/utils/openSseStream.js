@@ -102,7 +102,7 @@ export async function fetchWithAuthRetry(url, init = {}) {
       method: 'GET',
       credentials: 'include',
       ...init,
-      headers: { ...(init.headers || {}), ...getSseAuthHeaders() }
+      headers: { ...init.headers, ...getSseAuthHeaders() }
     });
 
   let res = await doFetch();

@@ -143,7 +143,7 @@ export const BRAVE_COUNTRIES = new Set([
 export function resolveBraveSearchParams(language) {
   if (!language || typeof language !== 'string') return {};
 
-  const normalized = language.trim().toLowerCase().replace(/_/g, '-');
+  const normalized = language.trim().toLowerCase().replaceAll('_', '-');
   const [lang, region] = normalized.split('-');
 
   const searchLang = BRAVE_SEARCH_LANGUAGES[normalized] || BRAVE_SEARCH_LANGUAGES[lang];
@@ -171,7 +171,7 @@ export const BRAVE_FRESHNESS = Object.freeze({ day: 'pd', week: 'pw', month: 'pm
  */
 function braveDate(value) {
   if (typeof value !== 'string' || !value.trim()) return undefined;
-  const text = /[zZ]|[+-]\d{2}:?\d{2}$/.test(value) ? value : `${value}Z`;
+  const text = /(?:[zZ]|[+-]\d{2}:?\d{2})$/.test(value) ? value : `${value}Z`;
   const date = new Date(text);
   return Number.isNaN(date.getTime()) ? undefined : date.toISOString();
 }

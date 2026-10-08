@@ -253,7 +253,7 @@ export async function transitionTicket({
 
     // If transitionId is not a number, try to find the transition by name
     let actualTransitionId = transitionId;
-    if (isNaN(parseInt(transitionId))) {
+    if (Number.isNaN(Number.parseInt(transitionId))) {
       const transitions = await JiraService.getTransitions({ issueKey, userId });
       const matchingTransition = transitions.transitions.find(
         t =>

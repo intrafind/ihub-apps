@@ -123,7 +123,7 @@ export default function AdminAgentEditPage() {
   const { blocker, markSaved } = useUnsavedChanges(initialData, profile);
 
   useEffect(() => {
-    (async () => {
+    void (async () => {
       try {
         const [modelsResp, appsResp] = await Promise.all([fetchAdminModels(), fetchAdminApps()]);
         setModels(modelsResp?.data || modelsResp || []);
@@ -137,7 +137,7 @@ export default function AdminAgentEditPage() {
 
   useEffect(() => {
     if (isNew) return;
-    (async () => {
+    void (async () => {
       try {
         const data = await fetchAgentProfile(profileId);
         const loaded = data?.data || data || {};
@@ -542,7 +542,9 @@ export default function AdminAgentEditPage() {
                     max="2"
                     step="0.1"
                     value={profile.preferredTemperature ?? 0.7}
-                    onChange={e => handleField('preferredTemperature', parseFloat(e.target.value))}
+                    onChange={e =>
+                      handleField('preferredTemperature', Number.parseFloat(e.target.value))
+                    }
                     className="mt-1 block w-full rounded-lg border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
                   />
                 </div>
@@ -555,7 +557,9 @@ export default function AdminAgentEditPage() {
                     min="1"
                     max="50"
                     value={profile.maxIterations ?? 10}
-                    onChange={e => handleField('maxIterations', parseInt(e.target.value) || 10)}
+                    onChange={e =>
+                      handleField('maxIterations', Number.parseInt(e.target.value) || 10)
+                    }
                     className="mt-1 block w-full rounded-lg border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
                   />
                 </div>

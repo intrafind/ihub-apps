@@ -17,7 +17,7 @@ import { getStorage } from './storage/bootstrap.js';
 import { getRawNamespace } from './storage/namespaces.js';
 import { loadSkillsMetadata } from './services/skillLoader.js';
 import { validateSourceConfig } from './validators/sourceConfigSchema.js';
-import { createHash } from 'crypto';
+import { createHash } from 'node:crypto';
 import ApiKeyVerifier from './utils/ApiKeyVerifier.js';
 import tokenStorageService from './services/TokenStorageService.js';
 import { SECRET_FIELDS_BY_TYPE } from './validators/credentialSchema.js';
@@ -669,7 +669,7 @@ class ConfigCache {
       clearTimeout(this.refreshTimers.get(key));
     }
     const refreshTimer = setTimeout(() => {
-      this._reloadEntry(key);
+      void this._reloadEntry(key);
     }, this.cacheTTL);
     // A TTL refresh must never be the only thing keeping the process alive
     // (test runners and CLI scripts that merely read config would hang).

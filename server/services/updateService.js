@@ -4,20 +4,20 @@
  * Downloads new versions from GitHub Releases, verifies checksums,
  * creates backups, swaps application files, and supports rollback.
  */
-import { promises as fs } from 'fs';
 import {
+  promises as fs,
   createWriteStream,
   existsSync,
   createReadStream,
   readdirSync,
   readFileSync,
   statSync
-} from 'fs';
-import { join } from 'path';
-import { createHash } from 'crypto';
-import { pipeline } from 'stream/promises';
-import { execFile } from 'child_process';
-import { promisify } from 'util';
+} from 'node:fs';
+import { join } from 'node:path';
+import { createHash } from 'node:crypto';
+import { pipeline } from 'node:stream/promises';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import { getRootDir } from '../pathUtils.js';
 import { getAppVersion } from '../utils/versionHelper.js';
 import { httpFetch } from '../utils/httpConfig.js';
@@ -739,7 +739,8 @@ async function downloadFile(url, destPath, expectedSize = null) {
         throw new Error(`Download failed: HTTP ${response.status}`);
       }
 
-      const totalSize = expectedSize || parseInt(response.headers.get('content-length') || '0', 10);
+      const totalSize =
+        expectedSize || Number.parseInt(response.headers.get('content-length') || '0', 10);
       let downloadedSize = 0;
 
       const fileStream = createWriteStream(destPath);
@@ -824,8 +825,8 @@ export async function checkDiskSpace() {
     if (lines.length < 2) return { available: null, sufficient: true };
     // df output: Filesystem 1K-blocks Used Available Use% Mounted on
     const columns = lines[lines.length - 1].trim().split(/\s+/);
-    const availableKB = parseInt(columns[3], 10);
-    if (isNaN(availableKB)) return { available: null, sufficient: true };
+    const availableKB = Number.parseInt(columns[3], 10);
+    if (Number.isNaN(availableKB)) return { available: null, sufficient: true };
 
     // Need at least 500MB for backup + new version
     const requiredKB = 500 * 1024;

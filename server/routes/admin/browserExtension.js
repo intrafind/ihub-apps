@@ -1,9 +1,9 @@
-import { join } from 'path';
-import { promises as fs } from 'fs';
+import { join } from 'node:path';
+import { promises as fs } from 'node:fs';
 import { ZipArchive } from 'archiver';
 import config from '../../config.js';
 import { getRootDir } from '../../pathUtils.js';
-import { getContentsPath } from '../../utils/contentsPath.js';
+import { getContentsPath, oauthClientsFile } from '../../utils/contentsPath.js';
 import configStore from '../../services/config/ConfigStore.js';
 import configCache from '../../configCache.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
@@ -18,7 +18,6 @@ import {
 import { isValidExtensionId } from '../../utils/pathSecurity.js';
 import logger from '../../utils/logger.js';
 import { sendInternalError, sendBadRequest, sendNotFound } from '../../utils/responseHelpers.js';
-import { oauthClientsFile } from '../../utils/contentsPath.js';
 
 // The browser extension uses a fixed redirect URI scheme:
 //   https://<extension-id>.chromiumapp.org/cb     (Chrome / Edge)
@@ -294,9 +293,9 @@ export default function registerAdminBrowserExtensionRoutes(app) {
 
       const oauthUpdates = {
         oauth: {
-          ...(platform?.oauth || {}),
+          ...platform?.oauth,
           enabled: {
-            ...(platform?.oauth?.enabled || {}),
+            ...platform?.oauth?.enabled,
             authz: true,
             clients: true
           },
@@ -349,7 +348,7 @@ export default function registerAdminBrowserExtensionRoutes(app) {
 
       await savePlatformConfig({
         browserExtension: {
-          ...(platform?.browserExtension || {}),
+          ...platform?.browserExtension,
           enabled: false
         }
       });

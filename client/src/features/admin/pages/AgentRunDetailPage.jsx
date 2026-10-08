@@ -823,9 +823,7 @@ export default function AgentRunDetailPage() {
                                   )}
                                   {/* Full transcript of the LATEST round only
                                       (one copy kept server-side). */}
-                                  <StepDetails
-                                    log={logFor(t.nodeId) || logHistory[logHistory.length - 1]}
-                                  />
+                                  <StepDetails log={logFor(t.nodeId) || logHistory.at(-1)} />
                                 </td>
                               </tr>
                             )}

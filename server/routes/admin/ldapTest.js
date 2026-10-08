@@ -1,5 +1,5 @@
-import net from 'net';
-import tls from 'tls';
+import net from 'node:net';
+import tls from 'node:tls';
 import { authenticateResult, AUTH_RESULT_SUCCESS } from 'ldap-authentication';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
@@ -562,7 +562,7 @@ export default function registerAdminLdapTestRoutes(app) {
           ),
           domain: domain
             ? `${domain}  (${resolved.domain ? 'configured' : 'detected from msDS-PrincipalName'})`
-            : 'none — integrations that identify users as DOMAIN\\username cannot work',
+            : String.raw`none — integrations that identify users as DOMAIN\username cannot work`,
           entry: presentableAttributes(entry)
         },
         hints: mapped.email

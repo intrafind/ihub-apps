@@ -136,8 +136,13 @@ function DocumentPreviewModal({ source, title, passages = [], initialPassageInde
   const passageCount = passages.length;
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-black/60" onClick={onClose}>
+    <div
+      role="presentation"
+      className="fixed inset-0 z-50 flex flex-col bg-black/60"
+      onClick={onClose}
+    >
       <div
+        role="presentation"
         className="relative m-2 sm:m-6 flex flex-col flex-1 min-h-0 bg-white dark:bg-gray-800 rounded-xl shadow-2xl overflow-hidden"
         onClick={e => e.stopPropagation()}
       >

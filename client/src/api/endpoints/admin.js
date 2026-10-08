@@ -1,7 +1,6 @@
 import { apiClient } from '../client';
 import { handleApiResponse } from '../utils/requestHandler';
-import { DEFAULT_CACHE_TTL } from '../../utils/cache';
-import cache from '../../utils/cache';
+import cache, { DEFAULT_CACHE_TTL } from '../../utils/cache';
 
 // Admin usage data
 export const fetchUsageData = async () => {

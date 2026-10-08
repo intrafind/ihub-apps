@@ -25,7 +25,7 @@ export default function AdminAgentsPage() {
   const [enabled, setEnabled] = useFilterState('enabled', 'all');
 
   useEffect(() => {
-    load();
+    void load();
   }, []);
 
   async function load() {
@@ -140,7 +140,7 @@ export default function AdminAgentsPage() {
         <button
           onClick={e => {
             e.stopPropagation();
-            handleToggle(p.id);
+            void handleToggle(p.id);
           }}
           aria-label={t('admin.agents.action.toggleAriaLabel', 'Toggle agent {{name}}', {
             name: p.name?.en || p.id

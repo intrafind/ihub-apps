@@ -9,7 +9,6 @@
  */
 
 import {
-  convertOpenAIToolsToGeneric,
   convertGenericToolCallsToOpenAI,
   convertOpenAIToolCallsToGeneric,
   convertOpenAIUsageToGeneric
@@ -79,7 +78,7 @@ export function convertGenericToolsToMistral(genericTools = []) {
 }
 
 // Mistral uses OpenAI format for other conversions
-export const convertMistralToolsToGeneric = convertOpenAIToolsToGeneric;
+
 export const convertGenericToolCallsToMistral = convertGenericToolCallsToOpenAI;
 export const convertMistralToolCallsToGeneric = convertOpenAIToolCallsToGeneric;
 
@@ -308,3 +307,5 @@ export function processMessageForMistral(message) {
 
   return processedMessage;
 }
+
+export { convertOpenAIToolsToGeneric as convertMistralToolsToGeneric } from './OpenAIConverter.js';

@@ -1,5 +1,5 @@
-import fs from 'fs';
-import path from 'path';
+import fs from 'node:fs';
+import path from 'node:path';
 import { v4 as uuidv4 } from 'uuid';
 import bcrypt from 'bcryptjs';
 import { atomicWriteJSON } from './atomicWrite.js';
@@ -295,7 +295,7 @@ export function generateClientId(name) {
  */
 export async function generateClientSecret() {
   // Generate a secure random secret (32 bytes = 64 hex characters)
-  const crypto = await import('crypto');
+  const crypto = await import('node:crypto');
   return crypto.randomBytes(32).toString('hex');
 }
 
@@ -483,7 +483,7 @@ export async function updateOAuthClient(clientId, updates, clientsFilePath, upda
   );
 
   // Return without secret
-  // eslint-disable-next-line no-unused-vars
+
   const { clientSecret, ...clientWithoutSecret } = client;
   return clientWithoutSecret;
 }
@@ -1012,7 +1012,7 @@ export async function upsertCimdClientPolicy(
         if (patch[field] !== undefined) record[field] = patch[field];
       }
 
-      record.metadata = { ...(record.metadata || {}), cimd: true, host: clientIdHost(clientId) };
+      record.metadata = { ...record.metadata, cimd: true, host: clientIdHost(clientId) };
       for (const field of CIMD_METADATA_FIELDS) {
         if (patch.metadata?.[field] !== undefined) record.metadata[field] = patch.metadata[field];
       }

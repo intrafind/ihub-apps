@@ -909,7 +909,7 @@ export default function registerAdminAppsRoutes(app) {
           return sendNotFound(res, 'App');
         }
 
-        const features = { ...(appConfig.features || {}) };
+        const features = { ...appConfig.features };
         if (enabled) {
           // Absent means "follow the platform flag" — the default state, so an
           // app that is switched back on carries no override at all.

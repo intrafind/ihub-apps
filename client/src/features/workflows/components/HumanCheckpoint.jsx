@@ -278,7 +278,7 @@ function HumanCheckpoint({ checkpoint, onRespond, displayData }) {
   const handleSubmit = () => {
     if (isQuestion) {
       if (!questionAnswered()) return;
-      submitResponse(questionValue());
+      void submitResponse(questionValue());
       return;
     }
     if (!selectedOption) return;
@@ -287,7 +287,7 @@ function HumanCheckpoint({ checkpoint, onRespond, displayData }) {
       setPendingConfirm(option);
       return;
     }
-    submitResponse(selectedOption);
+    void submitResponse(selectedOption);
   };
 
   const getButtonClasses = (option, isSelected) => {

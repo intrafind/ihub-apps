@@ -1,4 +1,4 @@
-import { randomUUID } from 'crypto';
+import { randomUUID } from 'node:crypto';
 
 /**
  * Files a tool generated during a chat turn — a PDF from `create_pdf`, later
@@ -55,11 +55,11 @@ export class GeneratedFileError extends Error {
 export function safeFileName(name, extension) {
   const base = String(typeof name === 'string' ? name : '')
     .replace(/\.[A-Za-z0-9]{1,5}$/, '')
-    .replace(/[\\/:*?"<>|\u0000-\u001f\u007f]+/g, ' ')
-    .replace(/\s+/g, ' ')
+    .replaceAll(/[\\/:*?"<>|\u0000-\u001f\u007f]+/g, ' ')
+    .replaceAll(/\s+/g, ' ')
     .trim()
     .slice(0, 120)
-    .replace(/^[.\s]+|[.\s]+$/g, '');
+    .replaceAll(/^[.\s]+|[.\s]+$/g, '');
   return `${base || 'document'}.${extension}`;
 }
 
@@ -106,7 +106,7 @@ export function holdGeneratedFile({ user, chatId, data, mimeType, name, meta = {
     );
   }
   const descriptor = {
-    id: randomUUID().replace(/-/g, ''),
+    id: randomUUID().replaceAll('-', ''),
     name: safeFileName(name, extension),
     mimeType,
     bytes: data.length,

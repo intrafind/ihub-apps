@@ -86,7 +86,7 @@ const STRUCTURAL_TAG_NAMES = [
   'reminder'
 ];
 const STRUCTURAL_TAG_RE = new RegExp(
-  `<(/?)(${STRUCTURAL_TAG_NAMES.join('|')})((?:\\s[^<>]*)?/?)>`,
+  String.raw`<(/?)(${STRUCTURAL_TAG_NAMES.join('|')})((?:\s[^<>]*)?/?)>`,
   'gi'
 );
 
@@ -100,10 +100,10 @@ export function neutralizeStructuralTags(text) {
 
 function escapeAttribute(value) {
   return String(value)
-    .replace(/&/g, '&amp;')
-    .replace(/"/g, '&quot;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
+    .replaceAll('&', '&amp;')
+    .replaceAll('"', '&quot;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;');
 }
 
 /** Source text as it goes into a block: trimmed, our tag names escaped. */

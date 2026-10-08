@@ -1,6 +1,6 @@
-import fs from 'fs/promises';
-import crypto from 'crypto';
-import path from 'path';
+import fs from 'node:fs/promises';
+import crypto from 'node:crypto';
+import path from 'node:path';
 import { chromium } from 'playwright';
 import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { getRootDir } from '../pathUtils.js';

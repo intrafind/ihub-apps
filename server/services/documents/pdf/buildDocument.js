@@ -185,12 +185,7 @@ export function tableLayouts(theme) {
               ? 0.8
               : 0.4
           : 0.5,
-      vLineWidth: (i, node) =>
-        theme.tableLines === 'horizontal'
-          ? 0
-          : i === 0 || i === node.table.widths.length
-            ? 0.5
-            : 0.5,
+      vLineWidth: () => (theme.tableLines === 'horizontal' ? 0 : 0.5),
       hLineColor: (i, node) =>
         theme.tableLines === 'horizontal' && (i === 0 || i === node.table.body.length)
           ? theme.text

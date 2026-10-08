@@ -72,7 +72,7 @@ function AdminSourceEditPage() {
       }
     };
 
-    loadSourceData();
+    void loadSourceData();
   }, [id, isEditing]);
 
   const handleSave = async sourceData => {
@@ -106,20 +106,17 @@ function AdminSourceEditPage() {
         }
       }
 
-      let savedSource;
-
       if (isEditing) {
-        const response = await makeAdminApiCall(`/admin/sources/${id}`, {
+        await makeAdminApiCall(`/admin/sources/${id}`, {
           method: 'PUT',
           body: cleanSourceData
         });
-        savedSource = response.data?.source || cleanSourceData;
       } else {
         const response = await makeAdminApiCall('/admin/sources', {
           method: 'POST',
           body: cleanSourceData
         });
-        savedSource = response.data?.source || cleanSourceData;
+        const savedSource = response.data?.source || cleanSourceData;
 
         // If new source has temporary content, upload it now
         if (tempContent && savedSource?.id) {

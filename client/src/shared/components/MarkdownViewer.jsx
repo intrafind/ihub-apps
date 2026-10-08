@@ -39,10 +39,12 @@ function MarkdownViewer({ content, name, onClose }) {
 
   return (
     <div
+      role="presentation"
       className="fixed inset-0 bg-black/40 z-50 flex items-start justify-center p-4 overflow-y-auto"
       onClick={onClose}
     >
       <div
+        role="presentation"
         className="bg-white dark:bg-gray-900 rounded-lg shadow-xl max-w-4xl w-full my-8 max-h-[90vh] flex flex-col"
         onClick={e => e.stopPropagation()}
       >

@@ -1,7 +1,7 @@
-import { promises as fs, createReadStream } from 'fs';
-import { createInterface } from 'readline';
-import { join } from 'path';
-import { randomUUID } from 'crypto';
+import { promises as fs, createReadStream } from 'node:fs';
+import { createInterface } from 'node:readline';
+import { join } from 'node:path';
+import { randomUUID } from 'node:crypto';
 import { getContentsPath } from '../utils/contentsPath.js';
 import logger from '../utils/logger.js';
 import configCache from '../configCache.js';
@@ -31,7 +31,7 @@ function isEmailShaped(value) {
   if (/\s/.test(value)) return false; // single linear test, no backtracking
   const at = value.indexOf('@');
   if (at <= 0) return false; // need a non-empty local part
-  if (value.indexOf('@', at + 1) !== -1) return false; // exactly one '@'
+  if (value.includes('@', at + 1)) return false; // exactly one '@'
   const domain = value.slice(at + 1);
   const dot = domain.indexOf('.');
   // dot must be present and neither leading nor trailing in the domain

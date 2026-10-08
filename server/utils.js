@@ -1,7 +1,4 @@
 import config from './config.js';
-import fs from 'fs/promises';
-import path from 'path';
-import { fileURLToPath } from 'url';
 import configCache from './configCache.js';
 import tokenStorageService from './services/TokenStorageService.js';
 import logger from './utils/logger.js';
@@ -26,8 +23,8 @@ function sanitizeForLog(input) {
   // - Control characters (\n, \r, \t, etc.) for log injection
   // - Backticks, dollar signs, backslashes for shell injection if logs are processed
   return input
-    .replace(/[\n\r\t\x00-\x1F\x7F]/g, '') // Remove control characters
-    .replace(/[`$\\]/g, '\\$&'); // Escape backticks, dollar signs, backslashes
+    .replaceAll(/[\x00-\x1F\x7F]/g, '') // Remove control characters
+    .replaceAll(/[`$\\]/g, String.raw`\$&`); // Escape backticks, dollar signs, backslashes
 }
 
 /**
@@ -173,7 +170,7 @@ export function inspectModelApiKey(model, { quiet = false } = {}) {
 
   // Third priority: a model-specific key in the environment
   // (e.g., GPT_4_AZURE1_API_KEY for model id "gpt-4-azure1")
-  const modelSpecificKeyName = `${String(model.id).toUpperCase().replace(/-/g, '_')}_API_KEY`;
+  const modelSpecificKeyName = `${String(model.id).toUpperCase().replaceAll('-', '_')}_API_KEY`;
   if (config[modelSpecificKeyName]) {
     log('info', 'Using environment variable API key', { envVar: modelSpecificKeyName });
     return ok(config[modelSpecificKeyName], 'env', modelSpecificKeyName);
@@ -390,8 +387,7 @@ export async function logInteraction(interactionType, data) {
     // Extract the user's query (last user message) if messages exist
     if (data.messages && Array.isArray(data.messages)) {
       const userMessages = data.messages.filter(m => m.role === 'user');
-      const userQuery =
-        userMessages.length > 0 ? userMessages[userMessages.length - 1].content : '';
+      const userQuery = userMessages.length > 0 ? userMessages.at(-1).content : '';
 
       logEntry.query = userQuery;
       logEntry.messageCount = data.messages.length;

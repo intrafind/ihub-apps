@@ -27,7 +27,7 @@ import tokenStorageService from '../services/TokenStorageService.js';
  */
 export function expandEnvVars(value) {
   if (typeof value !== 'string') return value;
-  return value.replace(/\$\{([^}]+)\}/g, (_m, name) => process.env[name] || '');
+  return value.replaceAll(/\$\{([^}]+)\}/g, (_m, name) => process.env[name] || '');
 }
 
 /**
@@ -59,7 +59,7 @@ function readSecret(raw) {
  * @returns {string}
  */
 function modelEnvVarName(modelId) {
-  return `${String(modelId).toUpperCase().replace(/-/g, '_')}_API_KEY`;
+  return `${String(modelId).toUpperCase().replaceAll('-', '_')}_API_KEY`;
 }
 
 /**

@@ -141,7 +141,7 @@ function PromptEditorModal({ prompt, initial = {}, onClose, onSaved }) {
   const updateMeta = (variableName, patch) =>
     setMetadata(prev => ({
       ...prev,
-      [variableName]: { name: variableName, ...(prev[variableName] || {}), ...patch }
+      [variableName]: { name: variableName, ...prev[variableName], ...patch }
     }));
 
   const save = async event => {

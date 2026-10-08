@@ -18,9 +18,9 @@
  * regardless of age, so a pre-warmed cache keeps working with no egress at all.
  */
 
-import path from 'path';
-import { createHash } from 'crypto';
-import { promises as fs } from 'fs';
+import path from 'node:path';
+import { createHash } from 'node:crypto';
+import { promises as fs } from 'node:fs';
 import { httpFetch } from '../utils/httpConfig.js';
 import { atomicWriteFile } from '../utils/atomicWrite.js';
 import { resolveAndValidatePath } from '../utils/pathSecurity.js';
@@ -80,9 +80,9 @@ export function isSafeOfficeJsAssetPath(relPath) {
     if (!SEGMENT_PATTERN.test(segment)) return false;
   }
 
-  const filename = segments[segments.length - 1];
+  const filename = segments.at(-1);
   const extension = filename.slice(filename.lastIndexOf('.')).toLowerCase();
-  return Object.prototype.hasOwnProperty.call(CONTENT_TYPES, extension);
+  return Object.hasOwn(CONTENT_TYPES, extension);
 }
 
 /**

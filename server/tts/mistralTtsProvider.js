@@ -261,7 +261,7 @@ async function voicesRequest(cfg, path, init = {}) {
       headers: {
         Authorization: `Bearer ${cfg.apiKey}`,
         ...(init.body ? { 'Content-Type': 'application/json' } : {}),
-        ...(init.headers || {})
+        ...init.headers
       },
       signal: init.signal || AbortSignal.timeout(60_000)
     });

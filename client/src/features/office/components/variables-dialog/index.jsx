@@ -109,7 +109,7 @@ function htmlInputType(variableType) {
 function seedValuesFromProps(definitions, currentValues) {
   const next = {};
   for (const def of definitions) {
-    if (currentValues && Object.prototype.hasOwnProperty.call(currentValues, def.name)) {
+    if (currentValues && Object.hasOwn(currentValues, def.name)) {
       next[def.name] = String(currentValues[def.name] ?? '');
     } else {
       next[def.name] = initialValueForDefinition(def);
@@ -218,6 +218,7 @@ export default function VariablesDialog({
 
   return (
     <div
+      role="presentation"
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-2 sm:p-4 dark:bg-black/60"
       onClick={e => {
         if (e.target === e.currentTarget && !closeRequiresRequiredComplete) attemptDismiss();

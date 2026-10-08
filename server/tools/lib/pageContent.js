@@ -138,7 +138,7 @@ function tableCell(service, cell) {
   return escapeCellPipes(
     service
       .turndown(cell.innerHTML || '')
-      .replace(/\s*\n+\s*/g, ' ')
+      .replaceAll(/\s*\n+\s*/g, ' ')
       .trim()
   );
 }
@@ -157,7 +157,7 @@ function tableCell(service, cell) {
  */
 function escapeCellPipes(markdown) {
   let out = '';
-  for (const char of markdown) out += char === '|' ? '\\|' : char;
+  for (const char of markdown) out += char === '|' ? String.raw`\|` : char;
   return out;
 }
 
@@ -168,7 +168,7 @@ function escapeCellPipes(markdown) {
  * @returns {string}
  */
 function linkDestination(href) {
-  return href.replace(
+  return href.replaceAll(
     /[()\\\s]/g,
     char => `%${char.charCodeAt(0).toString(16).toUpperCase().padStart(2, '0')}`
   );
@@ -194,7 +194,7 @@ export function createMarkdownConverter() {
   service.addRule('image', {
     filter: 'img',
     replacement: (_content, node) => {
-      const alt = (node.getAttribute('alt') || '').replace(/\s+/g, ' ').trim();
+      const alt = (node.getAttribute('alt') || '').replaceAll(/\s+/g, ' ').trim();
       return alt ? `[Image: ${alt}]` : '';
     }
   });
@@ -205,7 +205,7 @@ export function createMarkdownConverter() {
   service.addRule('link', {
     filter: node => node.nodeName === 'A' && Boolean(node.getAttribute('href')),
     replacement: (content, node) => {
-      const text = content.replace(/\s+/g, ' ').trim();
+      const text = content.replaceAll(/\s+/g, ' ').trim();
       if (!text) return '';
       const href = node.getAttribute('href').trim();
       if (href.startsWith('#') || /^javascript:/i.test(href)) return content;
@@ -230,7 +230,7 @@ export function createMarkdownConverter() {
   service.addRule('listItem', {
     filter: 'li',
     replacement: (content, node, options) => {
-      const text = content.replace(/^\n+/, '').replace(/\n+$/, '\n').replace(/\n/gm, '\n  ');
+      const text = content.replace(/^\n+/, '').replace(/\n+$/, '\n').replaceAll('\n', '\n  ');
       const parent = node.parentNode;
       let prefix = `${options.bulletListMarker} `;
       if (parent?.nodeName === 'OL') {
@@ -278,9 +278,9 @@ const converter = createMarkdownConverter();
  */
 export function normalizeMarkdown(markdown) {
   return String(markdown || '')
-    .replace(/\r\n?/g, '\n')
-    .replace(/[ \t]+$/gm, '')
-    .replace(/\n{3,}/g, '\n\n')
+    .replaceAll(/\r\n?/g, '\n')
+    .replaceAll(/[ \t]+$/gm, '')
+    .replaceAll(/\n{3,}/g, '\n\n')
     .trim();
 }
 
@@ -317,9 +317,9 @@ function selectContentElement(document) {
 /** Characters of readable text in Markdown: link targets and markup do not count. */
 function textLength(markdown) {
   return markdown
-    .replace(/\]\([^)]*\)/g, ']')
-    .replace(/[#*_`>|\-[\]()!]/g, '')
-    .replace(/\s+/g, ' ')
+    .replaceAll(/\]\([^)]*\)/g, ']')
+    .replaceAll(/[#*_`>|\-[\]()!]/g, '')
+    .replaceAll(/\s+/g, ' ')
     .trim().length;
 }
 
@@ -358,7 +358,7 @@ export function extractHtmlPage(html, { url } = {}) {
   let previous;
   do {
     previous = source;
-    source = source.replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, '');
+    source = source.replaceAll(/<style\b[^>]*>[\s\S]*?<\/style>/gi, '');
   } while (source !== previous);
 
   const dom = new JSDOM(source, url ? { url } : undefined);
@@ -532,7 +532,7 @@ export async function extractPdf(pdfjs, data, { url } = {}) {
     const pageText = textContent.items
       .map(item => (item.str || '') + (item.hasEOL ? '\n' : ''))
       .join('')
-      .replace(/[ \t]+\n/g, '\n')
+      .replaceAll(/[ \t]+\n/g, '\n')
       .trim();
     if (pageText) pages.push(pageText);
     length += pageText.length + 2;
@@ -581,7 +581,7 @@ export function pdfDate(value) {
  * @returns {string}
  */
 export function acceptLanguageFor(language) {
-  const tag = typeof language === 'string' ? language.trim().replace(/_/g, '-') : '';
+  const tag = typeof language === 'string' ? language.trim().replaceAll('_', '-') : '';
   if (!/^[a-z]{2,3}(-[a-z0-9]{2,8})*$/i.test(tag)) return 'en-US,en;q=0.9';
   const base = tag.split('-')[0].toLowerCase();
   const parts = [tag];

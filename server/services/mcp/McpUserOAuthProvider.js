@@ -35,7 +35,7 @@
  *
  * @module services/mcp/McpUserOAuthProvider
  */
-import crypto from 'crypto';
+import crypto from 'node:crypto';
 import { UnauthorizedError } from '@modelcontextprotocol/sdk/client/auth.js';
 import credentialService from '../CredentialService.js';
 import { safeFetch } from './safeFetch.js';

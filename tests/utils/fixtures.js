@@ -249,7 +249,7 @@ export const testApiResponses = {
 export const testEnvironment = {
   baseUrl: process.env.TEST_BASE_URL || 'http://localhost:3000',
   frontendUrl: process.env.TEST_FRONTEND_URL || 'http://localhost:5173',
-  apiTimeout: parseInt(process.env.TEST_API_TIMEOUT) || 30000,
+  apiTimeout: Number.parseInt(process.env.TEST_API_TIMEOUT) || 30000,
   enableRealApiCalls: process.env.TEST_REAL_API === 'true',
   testModelProvider: process.env.TEST_MODEL_PROVIDER || 'mock'
 };

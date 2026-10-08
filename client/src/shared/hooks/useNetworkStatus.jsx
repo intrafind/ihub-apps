@@ -70,7 +70,7 @@ export function NetworkStatusProvider({ children }) {
         pollRef.current = setTimeout(poll, pollIntervalRef.current);
       }
     };
-    poll();
+    void poll();
   }, [stopPolling, markOnline]);
 
   const markOffline = useCallback(() => {

@@ -14,7 +14,11 @@ import { checkImageDataUri, fitWithin, imagePixelSize, safeLink, LIMITS } from '
  * - images as `data:image/png|jpeg;base64,…` URIs (others become their alt text)
  */
 
-const PAGE_BREAK_MARKERS = new Set(['\\pagebreak', '\\newpage', '<!-- pagebreak -->']);
+const PAGE_BREAK_MARKERS = new Set([
+  String.raw`\pagebreak`,
+  String.raw`\newpage`,
+  '<!-- pagebreak -->'
+]);
 const PAGE_BREAK_HTML = /^<!--\s*page-?break\s*-->$|page-break-(before|after)\s*:\s*always/i;
 
 /**
@@ -58,14 +62,14 @@ export function acceptImage(ctx, src, label = 'image') {
 
 function decodeEntities(text) {
   return String(text)
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;|&apos;/g, "'")
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&#(\d+);/g, (_, n) => safeFromCodePoint(Number(n)))
-    .replace(/&#x([0-9a-f]+);/gi, (_, n) => safeFromCodePoint(parseInt(n, 16)))
-    .replace(/&amp;/g, '&');
+    .replaceAll('&lt;', '<')
+    .replaceAll('&gt;', '>')
+    .replaceAll('&quot;', '"')
+    .replaceAll(/&#39;|&apos;/g, "'")
+    .replaceAll('&nbsp;', ' ')
+    .replaceAll(/&#(\d+);/g, (_, n) => safeFromCodePoint(Number(n)))
+    .replaceAll(/&#x([0-9a-f]+);/gi, (_, n) => safeFromCodePoint(Number.parseInt(n, 16)))
+    .replaceAll('&amp;', '&');
 }
 
 function safeFromCodePoint(n) {
@@ -82,13 +86,13 @@ function safeFromCodePoint(n) {
  * would leave `<scr<b>ipt>` behind as `<script>`), then entities are decoded.
  */
 function stripTags(html) {
-  let text = String(html).replace(/<br\s*\/?>/gi, '\n');
+  let text = String(html).replaceAll(/<br\s*\/?>/gi, '\n');
   let previous;
   do {
     previous = text;
-    text = text.replace(/<[^<>]*>/g, '');
+    text = text.replaceAll(/<[^<>]*>/g, '');
   } while (text !== previous);
-  return decodeEntities(text.replace(/[<>]/g, ''));
+  return decodeEntities(text.replaceAll(/[<>]/g, ''));
 }
 
 const INLINE_HTML_TAGS = {
@@ -192,7 +196,7 @@ export function inlineRuns(tokens, ctx, style = {}) {
           htmlStack.push(INLINE_HTML_TAGS[open[1].toLowerCase()]);
         } else if (close && INLINE_HTML_TAGS[close[1].toLowerCase()]) {
           htmlStack.pop();
-        } else if (!/^<!--/.test(raw)) {
+        } else if (!raw.startsWith('<!--')) {
           push(stripTags(raw));
         }
         break;
@@ -243,7 +247,7 @@ function isPageBreakParagraph(token) {
 }
 
 function codeBlock(ctx, token) {
-  const code = String(token.text || '').replace(/\t/g, '    ');
+  const code = String(token.text || '').replaceAll('\t', '    ');
   const lines = code.split('\n');
   return {
     table: {
@@ -498,7 +502,7 @@ function comparable(text) {
   return String(text)
     .normalize('NFKC')
     .toLowerCase()
-    .replace(/[^\p{L}\p{N}]+/gu, ' ')
+    .replaceAll(/[^\p{L}\p{N}]+/gu, ' ')
     .trim();
 }
 
@@ -531,14 +535,14 @@ function tidyBody(tokens, ctx, title) {
   const ruledHeading = token => token?.type === 'heading' && hasHeadingRule(ctx, token.depth);
   const out = [];
   for (const token of blocks) {
-    const previous = out[out.length - 1];
+    const previous = out.at(-1);
     if (token.type === 'hr' && (!previous || previous.type === 'hr' || ruledHeading(previous))) {
       continue;
     }
     if (ruledHeading(token) && previous?.type === 'hr') out.pop();
     out.push(token);
   }
-  while (out[out.length - 1]?.type === 'hr') out.pop();
+  while (out.at(-1)?.type === 'hr') out.pop();
   return out;
 }
 

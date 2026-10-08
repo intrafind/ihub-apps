@@ -315,7 +315,11 @@ function StartWorkflowModal({ workflow, isOpen, onClose, onStarted }) {
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto">
       {/* Backdrop */}
-      <div className="fixed inset-0 bg-black/50 transition-opacity" onClick={handleClose} />
+      <div
+        aria-hidden="true"
+        className="fixed inset-0 bg-black/50 transition-opacity"
+        onClick={handleClose}
+      />
 
       {/* Modal */}
       <div className="flex min-h-full items-center justify-center p-4">

@@ -193,7 +193,7 @@ export default function registerConversationRoutes(app) {
         const result = await conversationApiService.getMessages(conversationId, {
           user,
           baseUrl,
-          size: parseInt(size, 10),
+          size: Number.parseInt(size, 10),
           nextCursor
         });
 

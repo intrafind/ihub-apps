@@ -1,4 +1,4 @@
-import crypto from 'crypto';
+import crypto from 'node:crypto';
 import tokenStorage from '../TokenStorageService.js';
 import { httpFetch } from '../../utils/httpConfig.js';
 import configCache from '../../configCache.js';
@@ -590,7 +590,7 @@ class JiraService {
     try {
       const transitionData = {
         transition: {
-          id: parseInt(transitionId, 10) // Convert to integer as required by JIRA API
+          id: Number.parseInt(transitionId, 10) // Convert to integer as required by JIRA API
         }
       };
 

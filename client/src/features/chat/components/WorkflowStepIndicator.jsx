@@ -41,7 +41,7 @@ function WorkflowStepIndicator({ steps = [], currentStep, result, loading }) {
     ) || '';
 
   // Determine the latest running step for the compact view
-  const latestStep = visibleSteps.length > 0 ? visibleSteps[visibleSteps.length - 1] : null;
+  const latestStep = visibleSteps.length > 0 ? visibleSteps.at(-1) : null;
   // -- RUNNING STATE --
   if (loading) {
     return (

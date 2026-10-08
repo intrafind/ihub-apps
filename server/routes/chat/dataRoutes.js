@@ -13,7 +13,7 @@ import registerPromptRoutes from '../promptRoutes.js';
 import { getUserSkillRepository } from '../../services/skills/UserSkillRepository.js';
 import { userSkillsClientConfig } from '../../services/skills/userSkillSettings.js';
 import { hasSyncedRegistry } from '../../services/skills/marketplaceSkills.js';
-import crypto from 'crypto';
+import crypto from 'node:crypto';
 import logger from '../../utils/logger.js';
 import { sendInternalError, sendFailedOperationError } from '../../utils/responseHelpers.js';
 
@@ -369,7 +369,7 @@ export default function registerDataRoutes(app) {
    */
   app.get(buildServerPath('/api/translations/:lang'), async (req, res) => {
     const originalLang = req.params.lang;
-    let requestId = `${Date.now()}-${crypto.randomUUID().replace(/-/g, '').substring(0, 9)}`;
+    let requestId = `${Date.now()}-${crypto.randomUUID().replaceAll('-', '').substring(0, 9)}`;
 
     try {
       logger.info('Translation request', {

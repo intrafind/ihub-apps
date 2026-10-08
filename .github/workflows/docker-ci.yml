@@ -110,7 +110,7 @@ jobs:
           # No npm cache: this job publishes images (zizmor cache-poisoning).
 
       - name: Install dependencies for version sync
-        run: npm ci
+        run: npm ci --ignore-scripts
 
       - name: Sync version with release tag
         if: github.event_name == 'release' && github.event.release.tag_name != ''

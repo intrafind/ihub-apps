@@ -25,7 +25,7 @@ function AppProviders({ children }) {
       }
     };
 
-    checkForceRefresh();
+    void checkForceRefresh();
   }, []);
 
   return (

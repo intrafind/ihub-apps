@@ -308,7 +308,7 @@ function useRunStream({
         }, timeoutDuration);
       }
 
-      (async () => {
+      void (async () => {
         try {
           await openSseStream(url, {
             signal: ac.signal,

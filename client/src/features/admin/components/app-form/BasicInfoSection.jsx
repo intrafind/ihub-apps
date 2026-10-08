@@ -97,7 +97,7 @@ function BasicInfoSection({
               <input
                 type="number"
                 value={app.order || 0}
-                onChange={e => handleInputChange('order', parseInt(e.target.value) || 0)}
+                onChange={e => handleInputChange('order', Number.parseInt(e.target.value) || 0)}
                 className="mt-1 block w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
               />
             </div>

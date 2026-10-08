@@ -19,8 +19,13 @@ const PRIMARY_BUTTON =
 function CopyField({ label, value, hint }) {
   const { t } = useTranslation();
   const [copied, setCopied] = useState(false);
-  const copy = () => {
-    navigator.clipboard?.writeText(value);
+  const copy = async () => {
+    try {
+      await navigator.clipboard?.writeText(value);
+    } catch (error) {
+      console.error('Failed to copy to clipboard:', error);
+      return;
+    }
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
   };
@@ -118,7 +123,7 @@ function AdminCopilotAgentPage() {
   };
 
   useEffect(() => {
-    loadStatus();
+    void loadStatus();
     // eslint-disable-next-line @eslint-react/exhaustive-deps
   }, []);
 
@@ -253,7 +258,7 @@ function AdminCopilotAgentPage() {
       document.body.appendChild(a);
       a.click();
       window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
+      a.remove();
     } catch (err) {
       setMessage({
         type: 'error',

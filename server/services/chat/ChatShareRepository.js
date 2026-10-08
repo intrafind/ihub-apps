@@ -40,7 +40,7 @@
  *
  * @module services/chat/ChatShareRepository
  */
-import { createHash, randomBytes } from 'crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import logger from '../../utils/logger.js';
 import { isValidId } from '../../utils/pathSecurity.js';
 import { StorageError } from '../../storage/errors.js';
@@ -306,7 +306,7 @@ export class ChatShareRepository {
     }
     const snapshot = (Array.isArray(messages) ? messages : []).map(snapshotMessage);
     const recipientIds =
-      mode === 'users' ? [...new Set(recipients.map(id => String(id)).filter(Boolean))] : [];
+      mode === 'users' ? [...new Set(recipients.map(String).filter(Boolean))] : [];
 
     // A fresh id is free by construction; the create-only write below is the
     // guard against the astronomically unlikely collision.
@@ -588,7 +588,7 @@ export class ChatShareRepository {
         ...(Array.isArray(share.views) ? share.views : []),
         { at, userId: recordAs ?? null }
       ];
-      const recipientViews = { ...(share.recipientViews || {}) };
+      const recipientViews = { ...share.recipientViews };
       if (viewerId && share.mode === 'users' && share.recipients?.includes(viewerId)) {
         const previous = recipientViews[viewerId] || { count: 0, lastViewedAt: null };
         recipientViews[viewerId] = { count: (Number(previous.count) || 0) + 1, lastViewedAt: at };

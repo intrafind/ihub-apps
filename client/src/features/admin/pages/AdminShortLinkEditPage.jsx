@@ -33,7 +33,7 @@ function AdminShortLinkEditPage() {
 
   useEffect(() => {
     if (!isNew) {
-      (async () => {
+      void (async () => {
         try {
           const res = await makeAdminApiCall(`/shortlinks/${code}`);
           const data = res.data;

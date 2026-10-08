@@ -48,8 +48,13 @@ const EMOJI_SUBSTITUTES = new Map(
   })
 );
 
-/** Characters that only modify the one before them and carry no glyph. */
-const INVISIBLE = /[‍︎️\u{1f3fb}-\u{1f3ff}]/gu;
+/**
+ * Characters that only modify the one before them and carry no glyph: the
+ * zero-width joiner (U+200D), variation selectors 15/16 (U+FE0E, U+FE0F) and the
+ * emoji skin-tone modifiers (U+1F3FB..U+1F3FF). Spelled as alternatives rather than
+ * one character class, which would mix marks with the characters before them.
+ */
+const INVISIBLE = /\u200D|[\uFE0E\uFE0F]|[\u{1f3fb}-\u{1f3ff}]/gu;
 
 /**
  * Split one string into runs its fonts can draw.

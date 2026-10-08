@@ -79,7 +79,7 @@ function EmbedRoot({ initialError }) {
   useEffect(() => {
     if (authStatus !== 'validating') return undefined;
     let cancelled = false;
-    (async () => {
+    void (async () => {
       try {
         // /api/oauth/userinfo is the OAuth resource server — it returns 401
         // for invalid Bearer tokens (unlike /auth/status, which silently
@@ -133,7 +133,7 @@ function EmbedRoot({ initialError }) {
   return <App />;
 }
 
-(async () => {
+void (async () => {
   const rootEl = document.getElementById('ihub-embed-root');
   if (!rootEl) return;
 

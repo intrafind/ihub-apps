@@ -16,7 +16,7 @@
  *
  * @module sources/documentRetrieval
  */
-import crypto from 'crypto';
+import crypto from 'node:crypto';
 import { estimateTokens } from '../../shared/tokenEstimator.js';
 
 /**
@@ -140,10 +140,10 @@ export function tokenize(text) {
 export function slugify(text) {
   const slug = String(text ?? '')
     .normalize('NFKD')
-    .replace(/[̀-ͯ]/g, '')
+    .replaceAll(/[̀-ͯ]/g, '')
     .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
+    .replaceAll(/[^a-z0-9]+/g, '-')
+    .replaceAll(/^-+|-+$/g, '')
     .slice(0, 60)
     .replace(/-+$/, '');
   return slug || 'section';
@@ -153,8 +153,8 @@ export function slugify(text) {
 // are escaped wherever they are written out, never rendered as HTML.
 function cleanHeading(raw) {
   return raw
-    .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
-    .replace(/[*`]/g, '')
+    .replaceAll(/\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replaceAll(/[*`]/g, '')
     .trim();
 }
 
@@ -217,7 +217,7 @@ export function splitSections(content) {
       flush();
       const level = heading[1].length;
       const title = cleanHeading(heading[2]) || 'Untitled';
-      while (stack.length && stack[stack.length - 1].level >= level) stack.pop();
+      while (stack.length && stack.at(-1).level >= level) stack.pop();
       current = { title, level, path: stack.map(s => s.title), file, lines: [line] };
       stack.push({ level, title });
       continue;
@@ -299,7 +299,7 @@ export function splitIntoParts(text, maxChars = MAX_PART_CHARS) {
 }
 
 function hashContent(content) {
-  return crypto.createHash('sha1').update(content).digest('hex');
+  return crypto.createHash('sha256').update(content).digest('hex');
 }
 
 /** Small insertion-ordered LRU on a Map. */
@@ -442,7 +442,7 @@ export function searchDocument(index, query) {
 }
 
 function escapeAttribute(value) {
-  return String(value).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+  return String(value).replaceAll('&', '&amp;').replaceAll('"', '&quot;').replaceAll('<', '&lt;');
 }
 
 function partId(section, part, partCount) {

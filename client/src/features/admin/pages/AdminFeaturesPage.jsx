@@ -31,7 +31,7 @@ function AdminFeaturesPage() {
   };
 
   useEffect(() => {
-    loadFeatures();
+    void loadFeatures();
     // eslint-disable-next-line @eslint-react/exhaustive-deps
   }, []);
 

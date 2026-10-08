@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../../shared/contexts/AuthContext';
@@ -96,7 +96,7 @@ function InputValueRenderer({ value, t }) {
   const [expanded, setExpanded] = useState({});
 
   const formatBytes = n => {
-    if (typeof n !== 'number' || !isFinite(n) || n < 0) return '';
+    if (typeof n !== 'number' || !Number.isFinite(n) || n < 0) return '';
     if (n < 1024) return `${n} B`;
     if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
     return `${(n / 1024 / 1024).toFixed(1)} MB`;
@@ -509,7 +509,7 @@ function WorkflowExecutionPage() {
   // Short, stable identifier for filenames. Execution IDs are prefixed
   // `wf-exec-`, so slicing the raw ID yields the same suffix for every run.
   const shortExecId = state.executionId.replace(/^wf-exec-/, '').slice(0, 8) || state.executionId;
-  const workflowSlug = (state.workflowId || 'workflow').replace(/[^a-zA-Z0-9._-]/g, '_');
+  const workflowSlug = (state.workflowId || 'workflow').replaceAll(/[^a-zA-Z0-9._-]/g, '_');
 
   const workflowOutput = getDisplayableOutput(state.data);
   const workflowOutputKeys = Object.keys(workflowOutput);
@@ -557,11 +557,15 @@ function WorkflowExecutionPage() {
         value.length > 200);
     const fileBase = `${key}-${workflowSlug}-${shortExecId}`;
     return (
-      <div className="flex items-center gap-1.5" onClick={e => e.stopPropagation()}>
+      <div
+        role="presentation"
+        className="flex items-center gap-1.5"
+        onClick={e => e.stopPropagation()}
+      >
         <button
           onClick={e => {
             e.stopPropagation();
-            copyToClipboard(key, value);
+            void copyToClipboard(key, value);
           }}
           className="px-2 py-1 text-xs bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-sm hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors flex items-center gap-1"
           title={t('workflows.output.copyToClipboard', 'Copy to clipboard')}
@@ -647,7 +651,7 @@ function WorkflowExecutionPage() {
               className="w-4 h-4 text-gray-400 shrink-0"
             />
             <h4 className="font-medium text-gray-700 dark:text-gray-300 capitalize">
-              {key.replace(/_/g, ' ')}
+              {key.replaceAll('_', ' ')}
             </h4>
             <span className="text-xs text-gray-400 dark:text-gray-500">
               {value === null || value === undefined
@@ -1155,7 +1159,7 @@ function WorkflowExecutionPage() {
                 <div>
                   <div className="flex items-center justify-between mb-2">
                     <h4 className="font-medium text-gray-700 dark:text-gray-300 capitalize">
-                      {primaryOutputKey.replace(/_/g, ' ')}
+                      {primaryOutputKey.replaceAll('_', ' ')}
                     </h4>
                     {renderFieldActions(primaryOutputKey, workflowOutput[primaryOutputKey])}
                   </div>
@@ -1192,7 +1196,7 @@ function WorkflowExecutionPage() {
                           <div key={key}>
                             <div className="flex items-center justify-between mb-2">
                               <h4 className="font-medium text-gray-700 dark:text-gray-300 capitalize">
-                                {key.replace(/_/g, ' ')}
+                                {key.replaceAll('_', ' ')}
                               </h4>
                               {renderFieldActions(key, workflowOutput[key])}
                             </div>

@@ -5,8 +5,8 @@ import { getIFinderAuthorizationHeader } from '../../utils/iFinderJwt.js';
 import { isValidId } from '../../utils/pathSecurity.js';
 import configCache from '../../configCache.js';
 import authDebugService from '../../utils/authDebugService.js';
-import fs from 'fs';
-import path from 'path';
+import fs from 'node:fs';
+import path from 'node:path';
 import logger from '../../utils/logger.js';
 
 /**
@@ -1192,9 +1192,11 @@ class IFinderService {
       lines.push(`- Filterable: \`${fieldCatalog.filterable.slice(0, 25).join('`, `')}\``);
       lines.push(`- Facetable: \`${fieldCatalog.aggregatable.slice(0, 25).join('`, `')}\``);
       lines.push(`- Sortable: \`${fieldCatalog.sortable.slice(0, 25).join('`, `')}\``);
-      lines.push('');
-      lines.push('Call `getFields` for the full catalog with the exact name to use per purpose.');
-      lines.push('');
+      lines.push(
+        '',
+        'Call `getFields` for the full catalog with the exact name to use per purpose.',
+        ''
+      );
     }
 
     return lines.join('\n');
@@ -1455,7 +1457,9 @@ class IFinderService {
    */
   _ensureDownloadDirectory(downloadDir) {
     if (!fs.existsSync(downloadDir)) {
-      fs.mkdirSync(downloadDir, { recursive: true });
+      // Private to the server user: downloaded documents can be confidential and the
+      // default location sits in the shared temp directory.
+      fs.mkdirSync(downloadDir, { recursive: true, mode: 0o700 });
     }
   }
 

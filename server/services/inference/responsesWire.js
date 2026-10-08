@@ -32,7 +32,7 @@
 import crypto from 'node:crypto';
 import { openAiErrorObject } from './errors.js';
 
-const hex = () => crypto.randomUUID().replace(/-/g, '');
+const hex = () => crypto.randomUUID().replaceAll('-', '');
 
 export const newResponseId = () => `resp_${hex()}`;
 const newMessageItemId = () => `msg_${hex()}`;
@@ -299,7 +299,7 @@ export class ResponseAssembler {
     let item = callId ? this.toolItems.get(String(callId)) : null;
     if (!item) {
       this.toolStarted({ callId, name, args: {} });
-      item = this.items[this.items.length - 1];
+      item = this.items.at(-1);
     }
     item.output = toJsonString(output);
     item.status = error ? 'failed' : 'completed';

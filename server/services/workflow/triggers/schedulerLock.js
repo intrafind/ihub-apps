@@ -16,10 +16,10 @@
  * @module services/workflow/triggers/schedulerLock
  */
 
-import { existsSync, readFileSync, rmSync, writeFileSync, renameSync, mkdirSync } from 'fs';
-import os from 'os';
-import path from 'path';
-import { randomUUID } from 'crypto';
+import { existsSync, readFileSync, rmSync, writeFileSync, renameSync, mkdirSync } from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { randomUUID } from 'node:crypto';
 import logger from '../../../utils/logger.js';
 import { getContentsPath } from '../../../utils/contentsPath.js';
 

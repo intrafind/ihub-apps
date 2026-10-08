@@ -122,7 +122,7 @@ function AdminProvidersPage() {
   };
 
   useEffect(() => {
-    loadData();
+    void loadData();
   }, []);
 
   // Group models by the provider entry they take their key from: `providerId`
@@ -613,7 +613,7 @@ function AdminProvidersPage() {
                                       <button
                                         onClick={e => {
                                           e.stopPropagation();
-                                          testProvider(provider.id);
+                                          void testProvider(provider.id);
                                         }}
                                         disabled={providerHealth.status === 'testing' || testingAll}
                                         className="text-green-600 hover:text-green-900 dark:text-green-400 dark:hover:text-green-300 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -625,7 +625,7 @@ function AdminProvidersPage() {
                                       <button
                                         onClick={e => {
                                           e.stopPropagation();
-                                          testWebsearchProvider(provider.id);
+                                          void testWebsearchProvider(provider.id);
                                         }}
                                         disabled={providerHealth.status === 'testing' || testingAll}
                                         className="text-green-600 hover:text-green-900 dark:text-green-400 dark:hover:text-green-300 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -651,7 +651,7 @@ function AdminProvidersPage() {
                                         <button
                                           onClick={e => {
                                             e.stopPropagation();
-                                            deleteProvider(
+                                            void deleteProvider(
                                               provider.id,
                                               getLocalizedContent(provider.name, currentLanguage)
                                             );

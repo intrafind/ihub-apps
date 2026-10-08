@@ -89,7 +89,7 @@ class MistralAdapterClass extends BaseAdapter {
       model: model.modelId,
       messages: formattedMessages,
       stream,
-      temperature: parseFloat(temperature),
+      temperature: Number.parseFloat(temperature),
       max_tokens: maxTokens
     };
 

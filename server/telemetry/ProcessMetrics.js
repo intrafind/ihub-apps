@@ -1,5 +1,5 @@
-import { monitorEventLoopDelay } from 'perf_hooks';
-import cluster from 'cluster';
+import { monitorEventLoopDelay } from 'node:perf_hooks';
+import cluster from 'node:cluster';
 import logger from '../utils/logger.js';
 
 /**

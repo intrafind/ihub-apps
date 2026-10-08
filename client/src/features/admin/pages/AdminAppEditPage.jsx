@@ -78,9 +78,9 @@ function AdminAppEditPage() {
       }
     };
 
-    loadModels();
-    loadUIConfig();
-    loadJsonSchema();
+    void loadModels();
+    void loadUIConfig();
+    void loadJsonSchema();
   }, []);
 
   useEffect(() => {
@@ -198,7 +198,7 @@ function AdminAppEditPage() {
             mode: 'manual',
             showTranscript: true
           },
-          ...(data.inputMode || {})
+          ...data.inputMode
         },
         upload: {
           enabled: data.upload?.enabled || false,
@@ -237,7 +237,7 @@ function AdminAppEditPage() {
               'application/vnd.oasis.opendocument.presentation'
             ]
           },
-          ...(data.upload || {})
+          ...data.upload
         }
       };
 
@@ -383,7 +383,7 @@ function AdminAppEditPage() {
 
   const handleSave = e => {
     e.preventDefault();
-    saveApp();
+    void saveApp();
   };
 
   // Ctrl/Cmd+S saves without leaving the editor. The ref always holds the

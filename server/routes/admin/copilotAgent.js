@@ -1,6 +1,6 @@
-import path from 'path';
-import { promises as fs } from 'fs';
-import { randomUUID } from 'crypto';
+import path from 'node:path';
+import { promises as fs } from 'node:fs';
+import { randomUUID } from 'node:crypto';
 import { ZipArchive } from 'archiver';
 import configStore from '../../services/config/ConfigStore.js';
 import configCache from '../../configCache.js';
@@ -75,7 +75,7 @@ async function updateStoredPlatform(mutate) {
 }
 
 function readSettings(platform) {
-  return { ...DEFAULT_COPILOT_AGENT_CONFIG, ...(platform?.copilotAgent || {}) };
+  return { ...DEFAULT_COPILOT_AGENT_CONFIG, ...platform?.copilotAgent };
 }
 
 function trimTrailingSlashes(url) {
@@ -277,12 +277,12 @@ export default function registerAdminCopilotAgentRoutes(app) {
 
       await updateStoredPlatform(stored => {
         stored.oauth = {
-          ...(stored.oauth || {}),
-          enabled: { ...(stored.oauth?.enabled || {}), authz: true, clients: true },
+          ...stored.oauth,
+          enabled: { ...stored.oauth?.enabled, authz: true, clients: true },
           authorizationCodeEnabled: true,
           refreshTokenEnabled: true
         };
-        stored.mcpServer = { ...(stored.mcpServer || {}), enabled: true };
+        stored.mcpServer = { ...stored.mcpServer, enabled: true };
         stored.copilotAgent = {
           ...readSettings(stored),
           enabled: true,

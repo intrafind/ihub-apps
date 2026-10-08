@@ -8,7 +8,7 @@ import configStore from '../../services/config/ConfigStore.js';
 import { logAudit } from '../../services/AuditLogService.js';
 import logger from '../../utils/logger.js';
 
-const VALID_RESOURCES = [
+const VALID_RESOURCES = new Set([
   'app',
   'group',
   'prompt',
@@ -17,7 +17,7 @@ const VALID_RESOURCES = [
   'feature',
   'source',
   'tool'
-];
+]);
 
 export default function registerAdminChangesRoutes(app) {
   /**
@@ -28,7 +28,7 @@ export default function registerAdminChangesRoutes(app) {
     try {
       const { resource, id } = req.params;
 
-      if (!VALID_RESOURCES.includes(resource)) {
+      if (!VALID_RESOURCES.has(resource)) {
         return sendBadRequest(res, `Invalid resource type: ${resource}`);
       }
       if (!validateIdForPath(id, resource, res)) {
@@ -53,7 +53,7 @@ export default function registerAdminChangesRoutes(app) {
       try {
         const { resource, id, filename } = req.params;
 
-        if (!VALID_RESOURCES.includes(resource)) {
+        if (!VALID_RESOURCES.has(resource)) {
           return sendBadRequest(res, `Invalid resource type: ${resource}`);
         }
         if (!validateIdForPath(id, resource, res)) {
@@ -83,7 +83,7 @@ export default function registerAdminChangesRoutes(app) {
       try {
         const { resource, id, filename } = req.params;
 
-        if (!VALID_RESOURCES.includes(resource)) {
+        if (!VALID_RESOURCES.has(resource)) {
           return sendBadRequest(res, `Invalid resource type: ${resource}`);
         }
         if (!validateIdForPath(id, resource, res)) {

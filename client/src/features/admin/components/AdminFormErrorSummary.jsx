@@ -164,7 +164,7 @@ function safeQuery(scope, selector) {
 
 function cssEscape(value) {
   if (typeof CSS !== 'undefined' && typeof CSS.escape === 'function') return CSS.escape(value);
-  return String(value).replace(/(["'\\.])/g, '\\$1');
+  return String(value).replace(/(["'\\.])/g, String.raw`\$1`);
 }
 
 const FLASH_CLASSES = [

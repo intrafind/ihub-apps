@@ -44,10 +44,10 @@
  *
  * @module services/loop/runLedgerStore
  */
-import { promises as fs, createReadStream } from 'fs';
-import { createInterface } from 'readline';
-import { createHash } from 'crypto';
-import path from 'path';
+import { promises as fs, createReadStream } from 'node:fs';
+import { createInterface } from 'node:readline';
+import { createHash } from 'node:crypto';
+import path from 'node:path';
 import config from '../../config.js';
 import logger from '../../utils/logger.js';
 import { createJsonlAppender } from '../../utils/jsonlAppender.js';
@@ -726,7 +726,7 @@ export class RunLedgerStore {
     // from a queue of its own. A replace here would erase the workflow name,
     // the input preview, the models and who triggered the run whenever the
     // registry got there first.
-    this._queueSummaryWrite(() =>
+    void this._queueSummaryWrite(() =>
       summaries.merge(summary.runId, {
         runId: summary.runId,
         kind: summary.kind,
@@ -775,7 +775,7 @@ export class RunLedgerStore {
       this._indexAppender.append(entry);
       return;
     }
-    this._queueSummaryWrite(async () => {
+    void this._queueSummaryWrite(async () => {
       const patched = await summaries.patch(summary.runId, {
         status: summary.status,
         finishReason: summary.finishReason ?? null,

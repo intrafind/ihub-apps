@@ -57,7 +57,7 @@ function AdminMcpGatewayPage() {
   };
 
   useEffect(() => {
-    load();
+    void load();
     // eslint-disable-next-line @eslint-react/exhaustive-deps
   }, []);
 
@@ -80,13 +80,13 @@ function AdminMcpGatewayPage() {
     setPlatform(prev => ({
       ...prev,
       mcpServer: {
-        ...(prev?.mcpServer || {}),
+        ...prev?.mcpServer,
         ...patch,
         expose: patch.expose
-          ? { ...(prev?.mcpServer?.expose || {}), ...patch.expose }
+          ? { ...prev?.mcpServer?.expose, ...patch.expose }
           : prev?.mcpServer?.expose,
         transports: patch.transports
-          ? { ...(prev?.mcpServer?.transports || {}), ...patch.transports }
+          ? { ...prev?.mcpServer?.transports, ...patch.transports }
           : prev?.mcpServer?.transports
       }
     }));
@@ -100,7 +100,7 @@ function AdminMcpGatewayPage() {
         oauth: {
           ...prevOauth,
           enabled: {
-            ...(prevOauth.enabled || {}),
+            ...prevOauth.enabled,
             authz: enabled,
             // Enabling the authorization server for MCP also needs the client
             // store and the authorization_code + refresh_token grants.
@@ -119,7 +119,7 @@ function AdminMcpGatewayPage() {
         ...prev,
         oauth: {
           ...prevOauth,
-          dcr: { ...(prevOauth.dcr || {}), enabled }
+          dcr: { ...prevOauth.dcr, enabled }
         }
       };
     });
@@ -132,7 +132,7 @@ function AdminMcpGatewayPage() {
         ...prev,
         oauth: {
           ...prevOauth,
-          cimd: { ...(prevOauth.cimd || {}), ...patch }
+          cimd: { ...prevOauth.cimd, ...patch }
         }
       };
     });
@@ -406,7 +406,7 @@ function AdminMcpGatewayPage() {
               onChange={v =>
                 update({
                   transports: {
-                    streamableHttp: { ...(transports.streamableHttp || {}), enabled: v }
+                    streamableHttp: { ...transports.streamableHttp, enabled: v }
                   }
                 })
               }
@@ -424,7 +424,7 @@ function AdminMcpGatewayPage() {
               onChange={v =>
                 update({
                   transports: {
-                    streamableHttp: { ...(transports.streamableHttp || {}), stateless: v }
+                    streamableHttp: { ...transports.streamableHttp, stateless: v }
                   }
                 })
               }
@@ -453,8 +453,8 @@ function AdminMcpGatewayPage() {
                 setPlatform(prev => ({
                   ...prev,
                   mcpServer: {
-                    ...(prev?.mcpServer || {}),
-                    a2a: { ...(prev?.mcpServer?.a2a || {}), enabled: v }
+                    ...prev?.mcpServer,
+                    a2a: { ...prev?.mcpServer?.a2a, enabled: v }
                   }
                 }))
               }
@@ -487,8 +487,8 @@ function AdminMcpGatewayPage() {
                     setPlatform(prev => ({
                       ...prev,
                       mcpServer: {
-                        ...(prev?.mcpServer || {}),
-                        a2a: { ...(prev?.mcpServer?.a2a || {}), defaultSkill: e.target.value }
+                        ...prev?.mcpServer,
+                        a2a: { ...prev?.mcpServer?.a2a, defaultSkill: e.target.value }
                       }
                     }))
                   }

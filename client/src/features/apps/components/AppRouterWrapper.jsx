@@ -34,7 +34,7 @@ function AppRouterWrapper() {
     };
 
     if (appId) {
-      loadApp();
+      void loadApp();
     }
   }, [appId, t]);
 

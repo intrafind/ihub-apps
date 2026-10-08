@@ -73,7 +73,7 @@ jobs:
       #     chromium-browser --version
 
       - name: Install NPM dependencies
-        run: npm ci
+        run: npm ci --ignore-scripts
 
       - name: Build all documentation formats
         run: npm run docs:build:all

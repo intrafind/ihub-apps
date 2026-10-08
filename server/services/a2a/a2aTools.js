@@ -537,7 +537,7 @@ export function validateAgentCard(card) {
   }
   return {
     ...card,
-    capabilities: { ...(card.capabilities || {}), streaming: card.capabilities?.streaming === true }
+    capabilities: { ...card.capabilities, streaming: card.capabilities?.streaming === true }
   };
 }
 

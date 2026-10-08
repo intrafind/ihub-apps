@@ -1,6 +1,6 @@
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { sendAuthRequired, sendInsufficientPermissions } from './responseHelpers.js';
 import logger from './logger.js';
 import configCache from '../configCache.js';
@@ -551,12 +551,12 @@ export function filterResourcesByPermissions(resources, allowedResources) {
  * API keys) and tokens that merely act on a user's behalf (authorization-code
  * delegation, personal API keys).
  */
-const NON_ADMIN_AUTH_MODES = [
+const NON_ADMIN_AUTH_MODES = new Set([
   'oauth_client_credentials',
   'oauth_static_api_key',
   'oauth_authorization_code',
   'oauth_personal_key'
-];
+]);
 
 /**
  * Whether a principal may hold admin rights at all.
@@ -573,7 +573,7 @@ const NON_ADMIN_AUTH_MODES = [
 export function isAdminEligiblePrincipal(user) {
   if (!user) return false;
   if (user.isOAuthClient || user.isAgent === true) return false;
-  return !NON_ADMIN_AUTH_MODES.includes(user.authMode);
+  return !NON_ADMIN_AUTH_MODES.has(user.authMode);
 }
 
 /**

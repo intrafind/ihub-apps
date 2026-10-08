@@ -220,7 +220,7 @@ class AnthropicAdapterClass extends BaseAdapter {
     // returns a 400 and the whole request fails. Model configs opt out with
     // `supportsTemperature: false`; everything else keeps sending it.
     if (model.supportsTemperature !== false) {
-      const parsedTemperature = parseFloat(temperature);
+      const parsedTemperature = Number.parseFloat(temperature);
       if (Number.isFinite(parsedTemperature)) {
         requestBody.temperature = parsedTemperature;
       }

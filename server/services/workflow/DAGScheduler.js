@@ -565,7 +565,7 @@ export class DAGScheduler {
       const arrayMatch = part.match(/^(\w+)\[(\d+)\]$/);
       if (arrayMatch) {
         const [, arrayName, indexStr] = arrayMatch;
-        const index = parseInt(indexStr, 10);
+        const index = Number.parseInt(indexStr, 10);
         current = current[arrayName];
         if (Array.isArray(current)) {
           current = current[index];
@@ -655,9 +655,9 @@ export class DAGScheduler {
       // If no clear end node, use the last node
       logger.warn('No clear end node found, using last node', {
         component: 'DAGScheduler',
-        lastNode: nodes[nodes.length - 1].id
+        lastNode: nodes.at(-1).id
       });
-      return [nodes[nodes.length - 1].id];
+      return [nodes.at(-1).id];
     }
 
     logger.debug('Found end nodes', { component: 'DAGScheduler', endNodes });

@@ -34,7 +34,7 @@
  *
  * @module services/mcp/mcpOAuthTicket
  */
-import crypto from 'crypto';
+import crypto from 'node:crypto';
 import tokenStorageService from '../TokenStorageService.js';
 import { resolveJwtSecret } from '../../utils/tokenService.js';
 import logger from '../../utils/logger.js';

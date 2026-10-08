@@ -16,8 +16,8 @@
  *   - [x] (P2) Triage Sentry  -- done by agent:todo-worker 2026-05-19T07:45Z
  */
 
-import fs from 'fs/promises';
-import path from 'path';
+import fs from 'node:fs/promises';
+import path from 'node:path';
 import { getContentsPath } from '../../utils/contentsPath.js';
 import { atomicWriteFile } from '../../utils/atomicWrite.js';
 import { resolveAndValidatePath } from '../../utils/pathSecurity.js';
@@ -55,7 +55,7 @@ function parseFrontmatter(raw) {
     const m = line.match(/^([A-Za-z0-9_]+):\s*(.*)$/);
     if (m) {
       let val = m[2].trim();
-      if (/^\d+$/.test(val)) val = parseInt(val, 10);
+      if (/^\d+$/.test(val)) val = Number.parseInt(val, 10);
       fm[m[1]] = val;
     }
   }

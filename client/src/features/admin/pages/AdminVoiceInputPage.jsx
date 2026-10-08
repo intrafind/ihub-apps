@@ -27,10 +27,10 @@ const DEFAULT_SPEECH = {
 
 const toFormSpeech = (speech = {}) => ({
   defaultService: speech.defaultService || DEFAULT_SPEECH.defaultService,
-  dictation: { ...DEFAULT_SPEECH.dictation, ...(speech.dictation || {}) },
-  transcription: { ...DEFAULT_SPEECH.transcription, ...(speech.transcription || {}) },
-  tts: { ...DEFAULT_SPEECH.tts, ...(speech.tts || {}) },
-  azure: { ...DEFAULT_SPEECH.azure, ...(speech.azure || {}) }
+  dictation: { ...DEFAULT_SPEECH.dictation, ...speech.dictation },
+  transcription: { ...DEFAULT_SPEECH.transcription, ...speech.transcription },
+  tts: { ...DEFAULT_SPEECH.tts, ...speech.tts },
+  azure: { ...DEFAULT_SPEECH.azure, ...speech.azure }
 });
 
 /**
@@ -88,7 +88,7 @@ function AdminVoiceInputPage() {
   const readAloudTest = useReadAloudPlayback(READ_ALOUD_TEST_ID);
 
   useEffect(() => {
-    loadConfig();
+    void loadConfig();
     // eslint-disable-next-line @eslint-react/exhaustive-deps
   }, []);
 
@@ -146,11 +146,11 @@ function AdminVoiceInputPage() {
       const response = await makeAdminApiCall('/admin/configs/platform', { method: 'GET' });
       const platform = response.data || {};
       platform.speech = {
-        ...(platform.speech || {}),
+        ...platform.speech,
         defaultService: config.defaultService,
-        dictation: { ...(platform.speech?.dictation || {}), ...config.dictation },
-        transcription: { ...(platform.speech?.transcription || {}), ...config.transcription },
-        tts: { ...(platform.speech?.tts || {}), ...config.tts },
+        dictation: { ...platform.speech?.dictation, ...config.dictation },
+        transcription: { ...platform.speech?.transcription, ...config.transcription },
+        tts: { ...platform.speech?.tts, ...config.tts },
         azure: config.azure
       };
       await makeAdminApiCall('/admin/configs/platform', { method: 'POST', body: platform });

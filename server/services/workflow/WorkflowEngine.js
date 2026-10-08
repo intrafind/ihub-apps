@@ -748,7 +748,7 @@ export class WorkflowEngine {
                     data: {
                       ...retryState.data,
                       _nodeRetries: {
-                        ...(retryState.data?._nodeRetries || {}),
+                        ...retryState.data?._nodeRetries,
                         [nodeId]: attempt
                       }
                     }

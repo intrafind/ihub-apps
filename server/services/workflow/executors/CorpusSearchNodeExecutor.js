@@ -522,7 +522,7 @@ function mergeCoverage(existing, additions) {
           quotesValidated: 0
         };
   return {
-    candidates: { ...(base.candidates || {}), ...(additions.candidates || {}) },
+    candidates: { ...base.candidates, ...additions.candidates },
     processed: base.processed || 0,
     skipped: Array.isArray(base.skipped) ? base.skipped : [],
     failed: Array.isArray(base.failed) ? base.failed : [],

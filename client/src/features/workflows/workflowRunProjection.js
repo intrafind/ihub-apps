@@ -99,7 +99,7 @@ function applyNodeEntry(acc, entry) {
     const prev = acc.data.subworkflows?.[childId];
     if (entry.status === 'running') {
       acc.data.subworkflows = {
-        ...(acc.data.subworkflows || {}),
+        ...acc.data.subworkflows,
         [childId]: {
           status: 'running',
           depth: entry.progress?.depth,
@@ -108,8 +108,8 @@ function applyNodeEntry(acc, entry) {
       };
     } else if (entry.status === 'completed') {
       acc.data.subworkflows = {
-        ...(acc.data.subworkflows || {}),
-        [childId]: { ...(prev || {}), status: 'completed', completedAt: at }
+        ...acc.data.subworkflows,
+        [childId]: { ...prev, status: 'completed', completedAt: at }
       };
     }
     return;
@@ -133,7 +133,7 @@ function applyNodeEntry(acc, entry) {
     case 'completed': {
       const result = entry.output;
       const iteration = entry.iteration ?? result?.iteration ?? result?.output?.iteration;
-      const nodeResults = { ...(acc.data.nodeResults || {}) };
+      const nodeResults = { ...acc.data.nodeResults };
       if (iteration !== undefined) nodeResults[`${nodeId}_iter${iteration}`] = result;
       nodeResults[nodeId] = result;
       acc.data.nodeResults = nodeResults;
@@ -229,13 +229,13 @@ function applyToolProgress(acc, entry) {
       // Mirror the timing so the step timeline shows Started + Duration the
       // moment the task ends, without waiting for a refetch.
       if (phase === 'agent.task.completed' && d.taskId && d.durationMs != null) {
-        acc.data._taskTimings = { ...(acc.data._taskTimings || {}), [d.taskId]: timing(d) };
+        acc.data._taskTimings = { ...acc.data._taskTimings, [d.taskId]: timing(d) };
       }
       break;
 
     case 'agent.artifact.written':
       acc.data._agent = {
-        ...(acc.data._agent || {}),
+        ...acc.data._agent,
         artifacts: [
           ...(acc.data._agent?.artifacts || []),
           { name: d.name || d.artifactName, bytes: d.bytes, at }
@@ -267,21 +267,21 @@ function applyToolProgress(acc, entry) {
           priority: d.picked.priority,
           raw: d.picked.raw
         };
-        acc.data._inboxMeta = { ...(acc.data._inboxMeta || {}), inboxId: d.inboxId };
+        acc.data._inboxMeta = { ...acc.data._inboxMeta, inboxId: d.inboxId };
       }
       break;
 
     case 'agent.step.completed':
       // Live timing for orchestrator steps (planner, synthesizer, inbox-load …).
       if (d.nodeId && d.durationMs != null) {
-        acc.data._taskTimings = { ...(acc.data._taskTimings || {}), [d.nodeId]: timing(d) };
+        acc.data._taskTimings = { ...acc.data._taskTimings, [d.nodeId]: timing(d) };
       }
       break;
 
     case 'agent.skill.activated':
       acc.history.push(historyEntry());
       acc.data._activatedSkills = {
-        ...(acc.data._activatedSkills || {}),
+        ...acc.data._activatedSkills,
         [d.skillName]: {
           description: d.description || '',
           activatedAt: at,
@@ -333,7 +333,7 @@ export function projectWorkflowState(streamState, rootRunId, baseState) {
     errors: [...(base.errors || [])],
     history: [...(base.history || [])],
     lastIteration: base._lastIteration,
-    data: { ...(base.data || {}) }
+    data: { ...base.data }
   };
 
   // ── progress (all runs on the stream, in sequence order) ─────────────

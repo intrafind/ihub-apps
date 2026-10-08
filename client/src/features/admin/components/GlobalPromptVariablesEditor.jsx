@@ -104,8 +104,12 @@ function GlobalPromptVariablesEditor({ value, onChange }) {
     });
   };
 
-  const handleCopyToClipboard = text => {
-    navigator.clipboard.writeText(text);
+  const handleCopyToClipboard = async text => {
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch (error) {
+      console.error('Failed to copy to clipboard:', error);
+    }
   };
 
   return (

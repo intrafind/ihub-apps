@@ -1,5 +1,5 @@
-import { promises as fs, existsSync, readdirSync } from 'fs';
-import path from 'path';
+import { promises as fs, existsSync, readdirSync } from 'node:fs';
+import path from 'node:path';
 import { getRootDir } from '../pathUtils.js';
 import logger from '../utils/logger.js';
 import { parseFrontMatter } from '../utils/frontMatter.js';

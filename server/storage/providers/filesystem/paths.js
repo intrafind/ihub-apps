@@ -10,8 +10,8 @@
  *
  * @module storage/providers/filesystem/paths
  */
-import path from 'path';
-import crypto from 'crypto';
+import path from 'node:path';
+import crypto from 'node:crypto';
 import { isValidId } from '../../../utils/pathSecurity.js';
 import { InvalidKeyError, StorageError } from '../../errors.js';
 

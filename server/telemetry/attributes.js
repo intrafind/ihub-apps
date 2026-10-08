@@ -60,27 +60,27 @@ export function buildRequestAttributes(model, options = {}) {
 
   // Recommended attributes
   if (options.temperature !== undefined) {
-    attributes['gen_ai.request.temperature'] = parseFloat(options.temperature);
+    attributes['gen_ai.request.temperature'] = Number.parseFloat(options.temperature);
   }
 
   if (options.maxTokens !== undefined) {
-    attributes['gen_ai.request.max_tokens'] = parseInt(options.maxTokens, 10);
+    attributes['gen_ai.request.max_tokens'] = Number.parseInt(options.maxTokens, 10);
   }
 
   if (options.topP !== undefined) {
-    attributes['gen_ai.request.top_p'] = parseFloat(options.topP);
+    attributes['gen_ai.request.top_p'] = Number.parseFloat(options.topP);
   }
 
   if (options.topK !== undefined) {
-    attributes['gen_ai.request.top_k'] = parseFloat(options.topK);
+    attributes['gen_ai.request.top_k'] = Number.parseFloat(options.topK);
   }
 
   if (options.frequencyPenalty !== undefined) {
-    attributes['gen_ai.request.frequency_penalty'] = parseFloat(options.frequencyPenalty);
+    attributes['gen_ai.request.frequency_penalty'] = Number.parseFloat(options.frequencyPenalty);
   }
 
   if (options.presencePenalty !== undefined) {
-    attributes['gen_ai.request.presence_penalty'] = parseFloat(options.presencePenalty);
+    attributes['gen_ai.request.presence_penalty'] = Number.parseFloat(options.presencePenalty);
   }
 
   if (options.stopSequences && Array.isArray(options.stopSequences)) {
@@ -88,11 +88,11 @@ export function buildRequestAttributes(model, options = {}) {
   }
 
   if (options.seed !== undefined) {
-    attributes['gen_ai.request.seed'] = parseInt(options.seed, 10);
+    attributes['gen_ai.request.seed'] = Number.parseInt(options.seed, 10);
   }
 
   if (options.choiceCount !== undefined && options.choiceCount !== 1) {
-    attributes['gen_ai.request.choice.count'] = parseInt(options.choiceCount, 10);
+    attributes['gen_ai.request.choice.count'] = Number.parseInt(options.choiceCount, 10);
   }
 
   // Output type
@@ -145,28 +145,31 @@ export function buildUsageAttributes(usage = {}) {
   const attributes = {};
 
   if (usage.inputTokens !== undefined) {
-    attributes['gen_ai.usage.input_tokens'] = parseInt(usage.inputTokens, 10);
+    attributes['gen_ai.usage.input_tokens'] = Number.parseInt(usage.inputTokens, 10);
   } else if (usage.prompt_tokens !== undefined) {
-    attributes['gen_ai.usage.input_tokens'] = parseInt(usage.prompt_tokens, 10);
+    attributes['gen_ai.usage.input_tokens'] = Number.parseInt(usage.prompt_tokens, 10);
   }
 
   if (usage.outputTokens !== undefined) {
-    attributes['gen_ai.usage.output_tokens'] = parseInt(usage.outputTokens, 10);
+    attributes['gen_ai.usage.output_tokens'] = Number.parseInt(usage.outputTokens, 10);
   } else if (usage.completion_tokens !== undefined) {
-    attributes['gen_ai.usage.output_tokens'] = parseInt(usage.completion_tokens, 10);
+    attributes['gen_ai.usage.output_tokens'] = Number.parseInt(usage.completion_tokens, 10);
   }
 
   // Prompt caching (OTel GenAI semantic conventions). Both are subsets of
   // `gen_ai.usage.input_tokens`, which counts the whole input for every
   // provider. Set only when the provider reported them.
   if (usage.cacheReadTokens !== undefined) {
-    attributes['gen_ai.usage.cache_read.input_tokens'] = parseInt(usage.cacheReadTokens, 10);
+    attributes['gen_ai.usage.cache_read.input_tokens'] = Number.parseInt(usage.cacheReadTokens, 10);
   }
   if (usage.cacheWriteTokens !== undefined) {
-    attributes['gen_ai.usage.cache_creation.input_tokens'] = parseInt(usage.cacheWriteTokens, 10);
+    attributes['gen_ai.usage.cache_creation.input_tokens'] = Number.parseInt(
+      usage.cacheWriteTokens,
+      10
+    );
   }
   if (usage.reasoningTokens !== undefined) {
-    attributes['gen_ai.usage.reasoning.output_tokens'] = parseInt(usage.reasoningTokens, 10);
+    attributes['gen_ai.usage.reasoning.output_tokens'] = Number.parseInt(usage.reasoningTokens, 10);
   }
 
   return attributes;
@@ -185,7 +188,7 @@ export function buildServerAttributes(model = {}) {
       const url = new URL(model.url);
       attributes['server.address'] = url.hostname;
       if (url.port) {
-        attributes['server.port'] = parseInt(url.port, 10);
+        attributes['server.port'] = Number.parseInt(url.port, 10);
       }
     } catch (error) {
       // Invalid URL, skip server attributes
@@ -270,7 +273,7 @@ export function buildCustomAttributes(context = {}) {
   }
 
   if (context.messageCount !== undefined) {
-    attributes['conversation.message_count'] = parseInt(context.messageCount, 10);
+    attributes['conversation.message_count'] = Number.parseInt(context.messageCount, 10);
   }
 
   // Thinking mode (for models that support it)
@@ -284,12 +287,12 @@ export function buildCustomAttributes(context = {}) {
 
   // Tool usage
   if (context.toolCount !== undefined) {
-    attributes['tool.count'] = parseInt(context.toolCount, 10);
+    attributes['tool.count'] = Number.parseInt(context.toolCount, 10);
   }
 
   // Source usage
   if (context.sourceCount !== undefined) {
-    attributes['source.count'] = parseInt(context.sourceCount, 10);
+    attributes['source.count'] = Number.parseInt(context.sourceCount, 10);
   }
 
   return attributes;

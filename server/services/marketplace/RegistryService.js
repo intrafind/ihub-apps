@@ -273,7 +273,7 @@ async function fetchContent(url, authHeaders = {}) {
 
     // GitHub Contents API wraps file content in base64
     if (data && data.content && data.encoding === 'base64') {
-      const decoded = Buffer.from(data.content.replace(/\n/g, ''), 'base64').toString('utf8');
+      const decoded = Buffer.from(data.content.replaceAll('\n', ''), 'base64').toString('utf8');
       try {
         return JSON.parse(decoded);
       } catch {
@@ -416,10 +416,12 @@ async function resolvePluginSkills(registrySource, plugins, owner, authHeaders =
         const companions = findCompanionFiles(tree, `${cleanPath}/`);
 
         // Humanize directory names: "ab-test-setup" → "Ab Test Setup"
-        const displaySkillName = skillDir.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+        const displaySkillName = skillDir
+          .replaceAll('-', ' ')
+          .replaceAll(/\b\w/g, c => c.toUpperCase());
         const displayPluginName = (plugin.name || '')
-          .replace(/-/g, ' ')
-          .replace(/\b\w/g, c => c.toUpperCase());
+          .replaceAll('-', ' ')
+          .replaceAll(/\b\w/g, c => c.toUpperCase());
 
         items.push({
           type: 'skill',
@@ -456,10 +458,12 @@ async function resolvePluginSkills(registrySource, plugins, owner, authHeaders =
         const skillDir = dir.split('/').pop();
         const skillUrl = `${rawBase}/${dir}/SKILL.md`;
         const companions = findCompanionFiles(tree, `${dir}/`);
-        const displaySkillName = skillDir.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+        const displaySkillName = skillDir
+          .replaceAll('-', ' ')
+          .replaceAll(/\b\w/g, c => c.toUpperCase());
         const displayPluginName = (plugin.category || plugin.name || '')
-          .replace(/-/g, ' ')
-          .replace(/\b\w/g, c => c.toUpperCase());
+          .replaceAll('-', ' ')
+          .replaceAll(/\b\w/g, c => c.toUpperCase());
 
         items.push({
           type: 'skill',
@@ -497,8 +501,12 @@ async function resolvePluginSkills(registrySource, plugins, owner, authHeaders =
       const companions = findCompanionFiles(tree, dirPrefix);
 
       // Humanize directory names: "canned-responses" → "Canned Responses"
-      const displaySkillName = skillDir.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-      const displayPluginName = pluginDir.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+      const displaySkillName = skillDir
+        .replaceAll('-', ' ')
+        .replaceAll(/\b\w/g, c => c.toUpperCase());
+      const displayPluginName = pluginDir
+        .replaceAll('-', ' ')
+        .replaceAll(/\b\w/g, c => c.toUpperCase());
 
       items.push({
         type: 'skill',
@@ -539,7 +547,7 @@ function rewriteRelativeLinks(markdown, sourceUrl) {
   const githubBase = `https://github.com/${owner}/${repo}/blob/${ref}/${dirPath}`;
 
   // Replace [text](relative/path) but not absolute URLs, anchors, or mailto:
-  return markdown.replace(
+  return markdown.replaceAll(
     /\[([^\]]*)\]\((?!https?:\/\/|#|mailto:)([^)]+)\)/g,
     (_, text, href) => `[${text}](${githubBase}/${href})`
   );
@@ -855,8 +863,8 @@ class RegistryService {
     }
 
     // Pagination
-    const page = parseInt(filters.page) || 1;
-    const limit = parseInt(filters.limit) || 24;
+    const page = Number.parseInt(filters.page) || 1;
+    const limit = Number.parseInt(filters.limit) || 24;
     const total = filtered.length;
     const start = (page - 1) * limit;
     const items = filtered.slice(start, start + limit);

@@ -155,9 +155,9 @@ export default [
       'no-restricted-syntax': [
         'error',
         ...[
-          'ImportDeclaration[source.value=/^gray-matter(\\x2F|$)/]',
-          'ImportExpression[source.value=/^gray-matter(\\x2F|$)/]',
-          "CallExpression[callee.name='require'][arguments.0.value=/^gray-matter(\\x2F|$)/]"
+          String.raw`ImportDeclaration[source.value=/^gray-matter(\x2F|$)/]`,
+          String.raw`ImportExpression[source.value=/^gray-matter(\x2F|$)/]`,
+          String.raw`CallExpression[callee.name='require'][arguments.0.value=/^gray-matter(\x2F|$)/]`
         ].map(selector => ({
           selector,
           message:

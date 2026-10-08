@@ -70,16 +70,9 @@ jobs:
 
       - name: Install dependencies
         run: |
-          npm ci
-          cd client && npm ci && cd ..
-          cd server && npm ci && cd ..
-
-      - name: Install client dependencies with uuid package
-        run: |
-          cd client
-          npm install
-          npm install uuid
-          cd ..
+          npm ci --ignore-scripts
+          cd client && npm ci --ignore-scripts && cd ..
+          cd server && npm ci --ignore-scripts && cd ..
 
       - name: Build client
         run: |
@@ -160,28 +153,38 @@ jobs:
 
       - name: Install dependencies
         run: |
-          npm ci
-          cd client && npm ci && npm install uuid && cd ..
-          cd server && npm ci && cd ..
+          npm ci --ignore-scripts
+          cd client && npm ci --ignore-scripts && cd ..
+          cd server && npm ci --ignore-scripts && cd ..
 
       - name: Set version
         env:
+          # Passed through the environment, never interpolated into the script: the
+          # workflow_dispatch input is free text typed by whoever triggers the run.
           RELEASE_TAG_INPUT: ${{ github.event.inputs.release_tag }}
         run: |
           if [ "$GITHUB_EVENT_NAME" == "release" ]; then
             VERSION="${GITHUB_REF#refs/tags/}"
           else
+            VERSION="$RELEASE_TAG_INPUT"
+          fi
+          # Validate first: the value is echoed in messages and written to GITHUB_ENV below, and
+          # a newline in it would add workflow commands or define further environment variables.
+          if [[ ! "$VERSION" =~ ^[A-Za-z0-9._+-]*$ ]]; then
+            echo "::error::The release tag may only contain letters, digits, '.', '_', '+' and '-'"
+            exit 1
+          fi
+          if [ "$GITHUB_EVENT_NAME" != "release" ]; then
             # The binaries are named after release_tag and their provenance records the
             # commit this run checked out, so both must be the tag.
             if [ "$GITHUB_REF" != "refs/tags/$RELEASE_TAG_INPUT" ]; then
               echo "::error::Run this workflow from the tag $RELEASE_TAG_INPUT (Use workflow from → Tags), not $GITHUB_REF, so the binaries are built from the source they are named after."
               exit 1
             fi
-            VERSION="$RELEASE_TAG_INPUT"
           fi
-          echo "VERSION=$VERSION" >> $GITHUB_ENV
-          # Set versioned name for binary using shell variable (not ${{ env.VERSION }}
-          # which would be empty because expressions are evaluated before the step runs)
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          # Set versioned name for binary using the shell variable: the env context would be
+          # empty here, because expressions are evaluated before the step runs
           echo "VERSIONED_NAME=ihub-apps-$VERSION-${{ matrix.platform }}${{ matrix.binary_extension }}" >> $GITHUB_ENV
         shell: bash
 
@@ -244,10 +247,10 @@ jobs:
           cd dist-bin
           # Create versioned archive name
           if [ "${{ matrix.os }}" == "windows-latest" ]; then
-            VERSIONED_ARCHIVE_NAME="ihub-apps-${{ env.VERSION }}-win"
+            VERSIONED_ARCHIVE_NAME="ihub-apps-${VERSION}-win"
             7z a -tzip ../$VERSIONED_ARCHIVE_NAME.zip .
           else
-            VERSIONED_ARCHIVE_NAME="ihub-apps-${{ env.VERSION }}-${{ matrix.platform }}"
+            VERSIONED_ARCHIVE_NAME="ihub-apps-${VERSION}-${{ matrix.platform }}"
             tar -czf ../$VERSIONED_ARCHIVE_NAME.tar.gz .
           fi
           echo "VERSIONED_ARCHIVE_NAME=$VERSIONED_ARCHIVE_NAME" >> $GITHUB_ENV
@@ -260,11 +263,11 @@ jobs:
           # These text files contain the entire binary archive encoded as base64
           # Customers can download the .txt file and decode it to get the original archive
           if [ "${{ matrix.os }}" == "windows-latest" ]; then
-            ARCHIVE_FILE="${{ env.VERSIONED_ARCHIVE_NAME }}.zip"
-            BASE64_FILE="${{ env.VERSIONED_ARCHIVE_NAME }}.zip.base64.txt"
+            ARCHIVE_FILE="${VERSIONED_ARCHIVE_NAME}.zip"
+            BASE64_FILE="${VERSIONED_ARCHIVE_NAME}.zip.base64.txt"
           else
-            ARCHIVE_FILE="${{ env.VERSIONED_ARCHIVE_NAME }}.tar.gz"
-            BASE64_FILE="${{ env.VERSIONED_ARCHIVE_NAME }}.tar.gz.base64.txt"
+            ARCHIVE_FILE="${VERSIONED_ARCHIVE_NAME}.tar.gz"
+            BASE64_FILE="${VERSIONED_ARCHIVE_NAME}.tar.gz.base64.txt"
           fi
           
           # Generate base64 encoded version
@@ -337,7 +340,7 @@ jobs:
           node-version: '24'
 
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --ignore-scripts
 
       - name: Set version for commit job
         run: |
@@ -415,10 +418,16 @@ jobs:
           RELEASE_TAG_INPUT: ${{ github.event.inputs.release_tag }}
         run: |
           if [ "$GITHUB_EVENT_NAME" == "release" ]; then
-            echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
+            VERSION="${GITHUB_REF#refs/tags/}"
           else
-            echo "VERSION=$RELEASE_TAG_INPUT" >> $GITHUB_ENV
+            VERSION="$RELEASE_TAG_INPUT"
           fi
+          # Written to GITHUB_ENV: reject anything that could add a line (see the build job).
+          if [[ ! "$VERSION" =~ ^[A-Za-z0-9._+-]*$ ]]; then
+            echo "::error::The release tag may only contain letters, digits, '.', '_', '+' and '-'"
+            exit 1
+          fi
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
         shell: bash
 
       - name: Setup GitHub CLI

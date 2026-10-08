@@ -1,4 +1,3 @@
-import configCache from '../configCache.js';
 import { isAdminEligiblePrincipal, loadGroupsConfiguration } from '../utils/authorization.js';
 import logger from '../utils/logger.js';
 
@@ -59,8 +58,8 @@ export function isAdminAuthRequired(req = null) {
         error
       });
       // Fallback to default admin groups if groups config fails
-      const defaultAdminGroups = ['admin', 'admins'];
-      const isAdmin = userGroups.some(group => defaultAdminGroups.includes(group));
+      const defaultAdminGroups = new Set(['admin', 'admins']);
+      const isAdmin = userGroups.some(group => defaultAdminGroups.has(group));
       if (isAdmin) {
         return false; // Allow access for authenticated admin users
       }

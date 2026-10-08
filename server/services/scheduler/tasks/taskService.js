@@ -47,12 +47,10 @@ import {
 } from './taskMemory.js';
 import {
   NOTIFY_MODES,
-  activeRunOf,
   applyRunOutcome,
   attachQueuedRun,
   holdTask,
   isFinalRunStatus,
-  lastRunOf,
   newRunDocument,
   newTaskDocument,
   reasonOf,
@@ -1064,7 +1062,7 @@ export async function failAwaitingRun(taskId, runId, interactionId, code, messag
     stored.status = 'failed';
     stored.finishedAt = new Date(now).toISOString();
     stored.reason = reasonOf(code, message, now);
-    stored.approval = { ...(stored.approval || {}), status: 'expired' };
+    stored.approval = { ...stored.approval, status: 'expired' };
     return stored;
   });
   if (!run || run.status !== 'failed') return;
@@ -1440,4 +1438,5 @@ export async function adminClearTaskMemory(taskId) {
 }
 
 // Re-exported for the runner, which records outcomes the same way.
-export { applyRunOutcome, lastRunOf, activeRunOf };
+
+export { activeRunOf, lastRunOf, applyRunOutcome } from './taskModel.js';

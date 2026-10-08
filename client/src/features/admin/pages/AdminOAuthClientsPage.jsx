@@ -48,8 +48,8 @@ function AdminOAuthClientsPage() {
   const [confirmDialog, setConfirmDialog] = useState(null);
 
   useEffect(() => {
-    checkOAuthStatus();
-    loadClients();
+    void checkOAuthStatus();
+    void loadClients();
     // eslint-disable-next-line @eslint-react/exhaustive-deps
   }, []);
 
@@ -73,7 +73,7 @@ function AdminOAuthClientsPage() {
       const updatedConfig = {
         ...platformConfig,
         oauth: {
-          ...(platformConfig.oauth || {}),
+          ...platformConfig.oauth,
           enabled: {
             authz: platformConfig.oauth?.enabled?.authz ?? false,
             clients: newStatus
@@ -99,7 +99,7 @@ function AdminOAuthClientsPage() {
       });
 
       if (newStatus) {
-        loadClients();
+        void loadClients();
       }
     } catch (error) {
       setMessage({
@@ -159,7 +159,7 @@ function AdminOAuthClientsPage() {
               { count: response.data?.deleted ?? 0 }
             )
           });
-          loadClients();
+          void loadClients();
         } catch (error) {
           setMessage({
             type: 'error',
@@ -188,7 +188,7 @@ function AdminOAuthClientsPage() {
             type: 'success',
             text: t('admin.auth.oauth.deleteSuccess', 'OAuth client deleted successfully')
           });
-          loadClients();
+          void loadClients();
         } catch (error) {
           setMessage({
             type: 'error',
@@ -220,7 +220,7 @@ function AdminOAuthClientsPage() {
           `Client ${newStatus ? 'enabled' : 'disabled'} successfully`
         )
       });
-      loadClients();
+      void loadClients();
     } catch (error) {
       setMessage({
         type: 'error',
@@ -233,8 +233,8 @@ function AdminOAuthClientsPage() {
     // The client id of a metadata-document client is a URL, so it cannot be a
     // path segment. base64url keeps it out of the path grammar entirely.
     btoa(String.fromCharCode(...new TextEncoder().encode(clientId)))
-      .replace(/\+/g, '-')
-      .replace(/\//g, '_')
+      .replaceAll('+', '-')
+      .replaceAll('/', '_')
       .replace(/=+$/, '');
 
   const patchCimdClient = async (client, patch, successKey, successFallback) => {
@@ -258,7 +258,7 @@ function AdminOAuthClientsPage() {
             )
           : t(successKey, successFallback, { name: client.name })
       });
-      loadClients();
+      void loadClients();
     } catch (error) {
       setMessage({
         type: 'error',
@@ -332,7 +332,7 @@ function AdminOAuthClientsPage() {
               { name: client.name, count: response.data?.connectionsRevoked ?? 0 }
             )
           });
-          loadClients();
+          void loadClients();
         } catch (error) {
           setMessage({
             type: 'error',
@@ -366,7 +366,7 @@ function AdminOAuthClientsPage() {
           alert(
             `${t('admin.auth.oauth.rotateSecretSuccess', 'Secret rotated successfully. Save the new secret now.')}\n\n${t('admin.auth.oauth.clientSecret', 'Client Secret')}: ${newSecret}\n\n${t('admin.auth.oauth.clientSecretWarning', 'Save this secret now. It will not be shown again.')}`
           );
-          loadClients();
+          void loadClients();
         } catch (error) {
           setMessage({
             type: 'error',
@@ -983,8 +983,13 @@ function AdminOAuthClientsPage() {
                         </p>
                       </div>
                       <button
-                        onClick={() => {
-                          navigator.clipboard.writeText(generatedToken.token);
+                        onClick={async () => {
+                          try {
+                            await navigator.clipboard.writeText(generatedToken.token);
+                          } catch (error) {
+                            console.error('Failed to copy to clipboard:', error);
+                            return;
+                          }
                           setMessage({
                             type: 'success',
                             text: t('common.copiedToClipboard', 'Copied to clipboard')

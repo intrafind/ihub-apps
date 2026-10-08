@@ -20,7 +20,7 @@
  * `/responses` and `/conversations` are registered from here too, so every
  * route of the API sits behind the same `authRequired` mount.
  */
-import crypto from 'crypto';
+import crypto from 'node:crypto';
 import { authRequired } from '../middleware/authRequired.js';
 import { filterResourcesByPermissions } from '../utils/authorization.js';
 import { getLocalizedError as defaultGetLocalizedError } from '../serverHelpers.js';
@@ -90,7 +90,7 @@ export { inferenceErrorStatus } from '../services/inference/errors.js';
 const APP_ID = 'inference-api';
 
 function newCompletionId() {
-  return `chatcmpl-${crypto.randomUUID().replace(/-/g, '')}`;
+  return `chatcmpl-${crypto.randomUUID().replaceAll('-', '')}`;
 }
 
 /** Collected tool calls (`{index,id,type,function,metadata}`) → generic tool-call shape. */

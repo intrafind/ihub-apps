@@ -4,7 +4,7 @@ import tokenStorageService from '../services/TokenStorageService.js';
 import { getJwtAlgorithm } from '../utils/tokenService.js';
 import logger from '../utils/logger.js';
 import { sendInternalError, sendErrorResponse } from '../utils/responseHelpers.js';
-import crypto from 'crypto';
+import crypto from 'node:crypto';
 import * as jose from 'jose';
 
 /**

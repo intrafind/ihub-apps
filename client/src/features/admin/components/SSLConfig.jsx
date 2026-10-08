@@ -39,7 +39,7 @@ function SSLConfig() {
       }
     };
 
-    fetchSSLConfig();
+    void fetchSSLConfig();
   }, [t]);
 
   const handleToggleIgnoreCerts = e => {

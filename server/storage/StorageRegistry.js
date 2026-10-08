@@ -133,7 +133,7 @@ export function resolveStorageConfig(platformConfig = {}, env = process.env) {
     readName(env?.[PROVIDER_ENV_VAR]) || readName(storage.provider) || DEFAULT_PROVIDER;
   // Own-property lookup only: the name may come from the environment, and
   // `storage['__proto__']` would otherwise hand back Object.prototype as config.
-  const raw = Object.prototype.hasOwnProperty.call(storage, provider) ? storage[provider] : null;
+  const raw = Object.hasOwn(storage, provider) ? storage[provider] : null;
   return { provider, config: isPlainObject(raw) ? resolveEnvVarsInObject(raw) : {} };
 }
 

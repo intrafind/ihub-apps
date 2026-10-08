@@ -65,7 +65,7 @@ function AdminTelemetryPage() {
   const [config, setConfig] = useState(DEFAULT_TELEMETRY);
 
   useEffect(() => {
-    loadConfig();
+    void loadConfig();
     // eslint-disable-next-line @eslint-react/exhaustive-deps
   }, []);
 
@@ -128,7 +128,7 @@ function AdminTelemetryPage() {
       for (let i = 0; i < segments.length - 1; i++) {
         const key = segments[i];
         if (
-          !Object.prototype.hasOwnProperty.call(cursor, key) ||
+          !Object.hasOwn(cursor, key) ||
           typeof cursor[key] !== 'object' ||
           cursor[key] === null
         ) {
@@ -302,7 +302,7 @@ function AdminTelemetryPage() {
                   type="number"
                   value={config.exporters?.prometheus?.port || 9464}
                   onChange={e =>
-                    updateField('exporters.prometheus.port', parseInt(e.target.value, 10))
+                    updateField('exporters.prometheus.port', Number.parseInt(e.target.value, 10))
                   }
                   className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                 />
@@ -430,7 +430,9 @@ function AdminTelemetryPage() {
                   <input
                     type="number"
                     value={config.events?.maxEventSize || 1024}
-                    onChange={e => updateField('events.maxEventSize', parseInt(e.target.value, 10))}
+                    onChange={e =>
+                      updateField('events.maxEventSize', Number.parseInt(e.target.value, 10))
+                    }
                     className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                   />
                 </div>
@@ -442,7 +444,7 @@ function AdminTelemetryPage() {
                     type="number"
                     value={config.metrics?.exportInterval || 60000}
                     onChange={e =>
-                      updateField('metrics.exportInterval', parseInt(e.target.value, 10))
+                      updateField('metrics.exportInterval', Number.parseInt(e.target.value, 10))
                     }
                     className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                   />
@@ -485,7 +487,10 @@ function AdminTelemetryPage() {
                 min={10}
                 value={config.activitySummary?.intervalSeconds || 300}
                 onChange={e =>
-                  updateField('activitySummary.intervalSeconds', parseInt(e.target.value, 10))
+                  updateField(
+                    'activitySummary.intervalSeconds',
+                    Number.parseInt(e.target.value, 10)
+                  )
                 }
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
               />
@@ -499,7 +504,7 @@ function AdminTelemetryPage() {
                 min={1}
                 value={config.activitySummary?.windowMinutes || 5}
                 onChange={e =>
-                  updateField('activitySummary.windowMinutes', parseInt(e.target.value, 10))
+                  updateField('activitySummary.windowMinutes', Number.parseInt(e.target.value, 10))
                 }
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
               />

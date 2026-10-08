@@ -89,8 +89,8 @@ function AdminOAuthConnectionsPage() {
     // A metadata-document client id is a URL; base64url keeps it out of the
     // path grammar rather than relying on encodeURIComponent round-tripping.
     btoa(String.fromCharCode(...new TextEncoder().encode(clientId)))
-      .replace(/\+/g, '-')
-      .replace(/\//g, '_')
+      .replaceAll('+', '-')
+      .replaceAll('/', '_')
       .replace(/=+$/, '');
 
   const handleRevokeAll = client => {

@@ -1,8 +1,7 @@
-import crypto from 'crypto';
+import crypto from 'node:crypto';
 import multer from 'multer';
-import path from 'path';
-import fs from 'fs';
-import { join } from 'path';
+import path, { join } from 'node:path';
+import fs from 'node:fs';
 import { getContentsPath } from '../../utils/contentsPath.js';
 import configCache from '../../configCache.js';
 import configStore from '../../services/config/ConfigStore.js';

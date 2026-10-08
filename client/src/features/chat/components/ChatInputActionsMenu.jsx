@@ -114,7 +114,7 @@ function ChatInputActionsMenu({
       }
     };
 
-    loadTools();
+    void loadTools();
   }, [app?.id, app?.tools]);
 
   // Close dropdown when clicking outside

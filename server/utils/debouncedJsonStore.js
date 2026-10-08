@@ -1,5 +1,5 @@
-import fs from 'fs/promises';
-import path from 'path';
+import fs from 'node:fs/promises';
+import path from 'node:path';
 import { atomicWriteJSON } from './atomicWrite.js';
 import logger from './logger.js';
 

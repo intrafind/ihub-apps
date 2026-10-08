@@ -75,7 +75,7 @@ function PromptSearch({
   useEffect(() => {
     if (!isOpen) return undefined;
     let active = true;
-    (async () => {
+    void (async () => {
       try {
         const [rawPrompts, rawSkills] = await Promise.all([
           promptsEnabled ? fetchPrompts().catch(() => []) : Promise.resolve([]),

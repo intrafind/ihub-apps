@@ -1,4 +1,4 @@
-import crypto from 'crypto';
+import crypto from 'node:crypto';
 import { createSharedJsonFile } from './utils/sharedJsonFile.js';
 import { isAllowedShortLinkTarget } from './utils/shortLinkTarget.js';
 import { getContentsPath } from './utils/contentsPath.js';

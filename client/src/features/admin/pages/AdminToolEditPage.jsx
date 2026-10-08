@@ -71,7 +71,7 @@ function AdminToolEditPage() {
         );
       }
     } else if (!isNewTool) {
-      loadTool();
+      void loadTool();
     }
   }, [toolId, isNewTool]); // eslint-disable-line @eslint-react/exhaustive-deps
 

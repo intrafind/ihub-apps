@@ -36,8 +36,8 @@
  *
  * @module storage/providers/filesystem/RawDocumentStore
  */
-import { promises as fs } from 'fs';
-import path from 'path';
+import { promises as fs } from 'node:fs';
+import path from 'node:path';
 import { atomicWriteFile } from '../../../utils/atomicWrite.js';
 import { withFileLock, removeIfExists } from '../../../utils/fileLock.js';
 import { isValidId } from '../../../utils/pathSecurity.js';
@@ -447,7 +447,7 @@ export class RawDocumentStore extends DocumentStore {
     }
 
     const nextCursor =
-      index < keys.length && items.length > 0 ? encodeCursor(items[items.length - 1].key) : null;
+      index < keys.length && items.length > 0 ? encodeCursor(items.at(-1).key) : null;
     return { items, nextCursor };
   }
 

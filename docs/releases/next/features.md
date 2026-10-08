@@ -99,6 +99,19 @@ is opt-in per task: tick **Remember between runs** on the task form.
 
 See [Scheduled Tasks](../../scheduled-tasks.md#memory-and-earlier-runs).
 
+## Keyboard Access for Source, App and OCR Pickers
+
+Three controls could only be used with a mouse. They now work from the keyboard as well:
+
+- **Source picker** (used when attaching sources to apps and agents): each source row is a checkbox you can focus with Tab
+  and toggle with Enter or Space.
+- **OCR upload area**: focus it and press Enter or Space to open the file chooser, the same as
+  clicking it.
+- **Linked-app selector** for prompts: the options can be reached with Tab and chosen with Enter
+  or Space.
+
+Screen readers now announce these controls with their proper roles and selected state.
+
 ## Signed Build Provenance and SBOMs for Releases
 
 Releases can now be checked before they are installed. Release binaries, the Nextcloud plugin and

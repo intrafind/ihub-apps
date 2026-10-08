@@ -92,7 +92,7 @@ function formatValidationErrors(ajvErrors, schema) {
     const { instancePath, keyword, message, params } = error;
 
     // Extract field name from instancePath
-    let field = instancePath.replace(/^\//, '').replace(/\//g, '.');
+    let field = instancePath.replace(/^\//, '').replaceAll('/', '.');
 
     // Handle root-level required fields
     if (keyword === 'required' && params?.missingProperty) {

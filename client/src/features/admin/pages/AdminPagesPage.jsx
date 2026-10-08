@@ -17,7 +17,7 @@ function AdminPagesPage() {
   const [confirmDialog, setConfirmDialog] = useState(null);
 
   useEffect(() => {
-    loadPages();
+    void loadPages();
   }, []);
 
   const loadPages = async () => {

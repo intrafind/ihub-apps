@@ -9,7 +9,7 @@
  *
  * @module utils/contentsPath
  */
-import path from 'path';
+import path from 'node:path';
 import config from '../config.js';
 import { getRootDir } from '../pathUtils.js';
 

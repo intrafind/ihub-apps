@@ -1,5 +1,5 @@
 import { useContext, useReducer, useEffect, useCallback, useRef } from 'react';
-import { AuthContext, useOptionalAuth } from './authContextValue';
+import { AuthContext } from './authContextValue';
 import { apiClient } from '../../api/client.js';
 import { fetchAuthStatus, invalidateAuthStatusCache } from '../../api';
 import {
@@ -115,7 +115,6 @@ function returnUrlForProvider(returnUrl) {
 
 // Create context
 // The context object lives in its own module; see authContextValue.js.
-export { useOptionalAuth };
 
 // Auth provider component
 export function AuthProvider({ children }) {
@@ -221,7 +220,10 @@ export function AuthProvider({ children }) {
             const now = Date.now();
 
             // Only redirect if we haven't attempted in the last 5 minutes
-            if (!lastRedirectAttempt || now - parseInt(lastRedirectAttempt) > 5 * 60 * 1000) {
+            if (
+              !lastRedirectAttempt ||
+              now - Number.parseInt(lastRedirectAttempt) > 5 * 60 * 1000
+            ) {
               console.log(`🔀 Auto-redirecting to ${data.autoRedirect.provider} provider`);
               sessionStorage.setItem(redirectAttemptKey, now.toString());
 
@@ -384,7 +386,10 @@ export function AuthProvider({ children }) {
             const now = Date.now();
 
             // Only redirect if we haven't attempted recently (prevent loops)
-            if (!lastRedirectAttempt || now - parseInt(lastRedirectAttempt) > 5 * 60 * 1000) {
+            if (
+              !lastRedirectAttempt ||
+              now - Number.parseInt(lastRedirectAttempt) > 5 * 60 * 1000
+            ) {
               console.log(
                 `🔀 Session expired - auto-redirecting to ${data.autoRedirect.provider} provider`
               );
@@ -737,3 +742,5 @@ export function useAuth() {
   }
   return context;
 }
+
+export { useOptionalAuth } from './authContextValue';

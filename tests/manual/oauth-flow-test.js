@@ -321,6 +321,6 @@ async function testOAuthFlow() {
 
 // Run the test
 testOAuthFlow().catch(err => {
-  error('Unexpected error:', err);
+  error(`Unexpected error: ${err?.stack || err}`);
   process.exit(1);
 });

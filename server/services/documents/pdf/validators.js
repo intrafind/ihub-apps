@@ -110,7 +110,8 @@ function svgLength(value) {
 export function svgSize(svg) {
   const root = /<svg\b[^>]*>/i.exec(svg)?.[0];
   if (!root) return null;
-  const attr = name => new RegExp(`\\s${name}\\s*=\\s*["']([^"']*)["']`, 'i').exec(root)?.[1];
+  const attr = name =>
+    new RegExp(String.raw`\s${name}\s*=\s*["']([^"']*)["']`, 'i').exec(root)?.[1];
   const width = svgLength(attr('width'));
   const height = svgLength(attr('height'));
   if (width && height) return { width, height };
@@ -288,7 +289,9 @@ export const TRANSPARENT_PIXEL =
  * @returns {number|undefined}
  */
 export function clampNumber(value, min, max) {
-  const n = typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : NaN;
+  let n = Number.NaN;
+  if (typeof value === 'number') n = value;
+  else if (typeof value === 'string') n = Number(value);
   if (!Number.isFinite(n)) return undefined;
   return Math.min(max, Math.max(min, n));
 }

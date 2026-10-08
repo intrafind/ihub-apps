@@ -24,9 +24,9 @@
  *
  * @module storage/providers/filesystem/FilesystemBlobStore
  */
-import { promises as fs } from 'fs';
-import crypto from 'crypto';
-import path from 'path';
+import { promises as fs } from 'node:fs';
+import crypto from 'node:crypto';
+import path from 'node:path';
 import { atomicWriteFile } from '../../../utils/atomicWrite.js';
 import { BlobStore } from '../../BlobStore.js';
 import { StorageError } from '../../errors.js';

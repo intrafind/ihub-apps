@@ -188,7 +188,7 @@ export function normalizeDocumentXml(
           run.insertBefore(textElement(PAGE_BREAK_MARKER), child);
           run.replaceChild(xml.create(doc, 'br'), child);
         } else if (xml.isW(child, 't') && child.textContent.includes('\u00AD')) {
-          child.textContent = child.textContent.replace(/\u00AD/g, '');
+          child.textContent = child.textContent.replaceAll('\u00AD', '');
         }
       }
     }

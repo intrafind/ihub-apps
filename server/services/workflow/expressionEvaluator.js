@@ -186,7 +186,7 @@ function tokenize(source) {
       const start = i;
       while (i < len && /[\w]/.test(source[i])) i++;
       const word = source.slice(start, i);
-      if (Object.prototype.hasOwnProperty.call(LITERAL_KEYWORDS, word)) {
+      if (Object.hasOwn(LITERAL_KEYWORDS, word)) {
         tokens.push(LITERAL_KEYWORDS[word]);
       } else if (HELPER_NAMES.has(word)) {
         tokens.push({ type: 'helper', value: word });

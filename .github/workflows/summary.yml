@@ -78,7 +78,8 @@ jobs:
 
       - name: Install Copilot CLI
         if: steps.creds.outputs.configured == 'true'
-        run: npm install -g @github/copilot
+        # Exact version, so a new release is adopted by a reviewed change rather than silently.
+        run: npm install -g --ignore-scripts @github/copilot@1.0.93
 
       - name: Summarize the issue
         id: inference

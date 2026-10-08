@@ -1,11 +1,11 @@
-import fs from 'fs';
+import fs from 'node:fs';
 import bcrypt from 'bcryptjs';
 import { v4 as uuidv4 } from 'uuid';
 import { atomicWriteJSON } from './atomicWrite.js';
 import configStore from '../services/config/ConfigStore.js';
 import configCache from '../configCache.js';
 import { announceConfigChange } from '../configSync.js';
-import { mapExternalGroups, loadGroupsConfiguration } from './authorization.js';
+import { mapExternalGroups } from './authorization.js';
 import logger from './logger.js';
 import { ensureFirstUserIsAdmin } from './adminRescue.js';
 import { locateConfigFile } from './configFileLocation.js';
@@ -341,7 +341,7 @@ export async function createOrUpdateExternalUser(externalUser, usersFilePath) {
     return { ...user, id: userId };
   } else {
     // Create new user
-    const userId = `user_${uuidv4().replace(/-/g, '_')}`;
+    const userId = `user_${uuidv4().replaceAll('-', '_')}`;
 
     const newUser = {
       id: userId,

@@ -20,7 +20,7 @@
  *
  * @module services/mcp/a2aTaskStore
  */
-import { createHash, randomUUID } from 'crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { getStorage, readFacet } from '../../storage/bootstrap.js';
 import { RUNTIME_NAMESPACES } from '../../storage/namespaces.js';
 import { publish, subscribe } from '../../clusterBus.js';

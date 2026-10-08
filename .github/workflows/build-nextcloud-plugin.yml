@@ -46,7 +46,7 @@ jobs:
 
       - name: Install dependencies
         working-directory: nextcloud-app
-        run: npm ci
+        run: npm ci --ignore-scripts
 
       - name: Build plugin tarball
         working-directory: nextcloud-app

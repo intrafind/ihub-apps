@@ -30,7 +30,7 @@
  *
  * @module services/loop/RunLog
  */
-import crypto from 'crypto';
+import crypto from 'node:crypto';
 import configCache from '../../configCache.js';
 import { isFeatureEnabled } from '../../featureRegistry.js';
 import { isChatPersistenceConfigured } from '../chat/chatPersistence.js';

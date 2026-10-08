@@ -48,9 +48,9 @@ function AdminOAuthClientEditPage() {
   const { blocker, markSaved } = useUnsavedChanges(initialData, formData);
 
   useEffect(() => {
-    loadAvailableOptions();
+    void loadAvailableOptions();
     if (!isNew) {
-      loadClient();
+      void loadClient();
     } else {
       setInitialData({
         name: '',
@@ -258,8 +258,12 @@ function AdminOAuthClientEditPage() {
     });
   };
 
-  const copyToClipboard = text => {
-    navigator.clipboard.writeText(text);
+  const copyToClipboard = async text => {
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch (error) {
+      console.error('Failed to copy to clipboard:', error);
+    }
   };
 
   const handleModalClose = () => {

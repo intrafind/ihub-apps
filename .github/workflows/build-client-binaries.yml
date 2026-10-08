@@ -80,17 +80,23 @@ jobs:
 
       - name: Install dependencies
         run: |
-          npm ci
-          cd client && npm ci && npm install uuid && cd ..
-          cd server && npm ci && cd ..
+          npm ci --ignore-scripts
+          cd client && npm ci --ignore-scripts && cd ..
+          cd server && npm ci --ignore-scripts && cd ..
 
       - name: Set version
         env:
+          # Passed through the environment, never interpolated into the script: the
+          # workflow_dispatch input is free text typed by whoever triggers the run.
           VERSION_TAG_INPUT: ${{ inputs.version_tag }}
         run: |
-          echo "VERSION=$VERSION_TAG_INPUT" >> $GITHUB_ENV
+          if [[ ! "$VERSION_TAG_INPUT" =~ ^[A-Za-z0-9._+-]+$ ]]; then
+            echo "::error::version_tag may only contain letters, digits, '.', '_', '+' and '-'"
+            exit 1
+          fi
+          echo "VERSION=$VERSION_TAG_INPUT" >> "$GITHUB_ENV"
           # Set versioned name for binary
-          echo "VERSIONED_NAME=ihub-apps-$VERSION_TAG_INPUT-${{ matrix.platform }}${{ matrix.binary_extension }}" >> $GITHUB_ENV
+          echo "VERSIONED_NAME=ihub-apps-$VERSION_TAG_INPUT-${{ matrix.platform }}${{ matrix.binary_extension }}" >> "$GITHUB_ENV"
         shell: bash
 
       - name: Sync package.json version
@@ -141,10 +147,10 @@ jobs:
           cd dist-bin
           # Create versioned archive name
           if [ "${{ matrix.os }}" == "windows-latest" ]; then
-            VERSIONED_ARCHIVE_NAME="ihub-apps-${{ env.VERSION }}-win"
+            VERSIONED_ARCHIVE_NAME="ihub-apps-${VERSION}-win"
             7z a -tzip ../$VERSIONED_ARCHIVE_NAME.zip .
           else
-            VERSIONED_ARCHIVE_NAME="ihub-apps-${{ env.VERSION }}-${{ matrix.platform }}"
+            VERSIONED_ARCHIVE_NAME="ihub-apps-${VERSION}-${{ matrix.platform }}"
             tar -czf ../$VERSIONED_ARCHIVE_NAME.tar.gz .
           fi
           echo "VERSIONED_ARCHIVE_NAME=$VERSIONED_ARCHIVE_NAME" >> $GITHUB_ENV
@@ -157,11 +163,11 @@ jobs:
           # These text files contain the entire binary archive encoded as base64
           # Customers can download the .txt file and decode it to get the original archive
           if [ "${{ matrix.os }}" == "windows-latest" ]; then
-            ARCHIVE_FILE="${{ env.VERSIONED_ARCHIVE_NAME }}.zip"
-            BASE64_FILE="${{ env.VERSIONED_ARCHIVE_NAME }}.zip.base64.txt"
+            ARCHIVE_FILE="${VERSIONED_ARCHIVE_NAME}.zip"
+            BASE64_FILE="${VERSIONED_ARCHIVE_NAME}.zip.base64.txt"
           else
-            ARCHIVE_FILE="${{ env.VERSIONED_ARCHIVE_NAME }}.tar.gz"
-            BASE64_FILE="${{ env.VERSIONED_ARCHIVE_NAME }}.tar.gz.base64.txt"
+            ARCHIVE_FILE="${VERSIONED_ARCHIVE_NAME}.tar.gz"
+            BASE64_FILE="${VERSIONED_ARCHIVE_NAME}.tar.gz.base64.txt"
           fi
 
           # Generate base64 encoded version

@@ -2,7 +2,7 @@
  * Stream Utilities
  * Provides utilities for working with different stream types (Web Streams vs Node.js streams)
  */
-import { Readable } from 'stream';
+import { Readable } from 'node:stream';
 
 /**
  * Convert a fetch response body to a Web Streams ReadableStream.

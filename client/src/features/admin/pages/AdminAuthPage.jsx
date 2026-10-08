@@ -62,9 +62,9 @@ function AdminAuthPage() {
   });
 
   useEffect(() => {
-    loadConfiguration();
-    loadSchema();
-    loadGroups();
+    void loadConfiguration();
+    void loadSchema();
+    void loadGroups();
   }, []);
 
   const loadSchema = async () => {

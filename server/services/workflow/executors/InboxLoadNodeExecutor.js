@@ -182,7 +182,7 @@ export class InboxLoadNodeExecutor extends BaseNodeExecutor {
       // inbox-load step alongside the LLM tasks. Deterministic nodes
       // are usually <50ms, so this is mostly for completeness.
       _taskTimings: {
-        ...(state?.data?._taskTimings || {}),
+        ...state?.data?._taskTimings,
         [node.id]: {
           startedAt: startedAt.toISOString(),
           completedAt: completedAtIso,
@@ -190,7 +190,7 @@ export class InboxLoadNodeExecutor extends BaseNodeExecutor {
         }
       },
       _stepLogs: {
-        ...(state?.data?._stepLogs || {}),
+        ...state?.data?._stepLogs,
         [node.id]: stepLog
       }
     };

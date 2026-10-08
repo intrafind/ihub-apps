@@ -96,7 +96,7 @@ function PromptFormEditor({
   const handleInputChange = e => {
     const { name, value, type, checked } = e.target;
     if (name === 'order') {
-      handleChange(name, value ? parseInt(value) : undefined);
+      handleChange(name, value ? Number.parseInt(value) : undefined);
     } else {
       handleChange(name, type === 'checkbox' ? checked : value);
     }

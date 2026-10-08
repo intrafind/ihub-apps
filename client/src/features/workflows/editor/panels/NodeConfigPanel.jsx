@@ -41,7 +41,7 @@ function ProgressNoteField({ config, onChange, t }) {
       : !!message && Object.values(message).some(v => typeof v === 'string' && v.trim() !== '');
 
   const update = patch => {
-    const next = { ...(progress || {}), ...patch };
+    const next = { ...progress, ...patch };
     Object.keys(next).forEach(k => {
       if (next[k] === '' || next[k] === undefined) delete next[k];
     });

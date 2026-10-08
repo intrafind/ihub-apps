@@ -1,7 +1,7 @@
-import dns from 'dns';
-import http from 'http';
-import https from 'https';
-import { URL } from 'url';
+import dns from 'node:dns';
+import http from 'node:http';
+import https from 'node:https';
+import { URL } from 'node:url';
 import configCache from '../../configCache.js';
 
 const dnsLookupAsync = dns.promises.lookup;

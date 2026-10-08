@@ -211,7 +211,7 @@ export function normalizeChunk(raw) {
     error: src.error === true,
     errorMessage: src.errorMessage ?? null,
     finishReason: src.finishReason ?? null,
-    metadata: { ...(src.metadata || {}) }
+    metadata: { ...src.metadata }
   };
   if (usage) {
     chunk.metadata.usage = usage;

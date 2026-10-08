@@ -228,11 +228,11 @@ export async function listMarketplaceSkills(filters = {}) {
 
   const limit = Math.min(
     MAX_PAGE_SIZE,
-    Math.max(1, parseInt(filters.limit, 10) || DEFAULT_PAGE_SIZE)
+    Math.max(1, Number.parseInt(filters.limit, 10) || DEFAULT_PAGE_SIZE)
   );
   const total = filtered.length;
   const totalPages = Math.max(1, Math.ceil(total / limit));
-  const page = Math.min(totalPages, Math.max(1, parseInt(filters.page, 10) || 1));
+  const page = Math.min(totalPages, Math.max(1, Number.parseInt(filters.page, 10) || 1));
   const start = (page - 1) * limit;
 
   return {

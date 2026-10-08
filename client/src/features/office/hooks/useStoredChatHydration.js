@@ -73,7 +73,7 @@ export default function useStoredChatHydration({ chat, chatId, serverBacked, isF
     pendingRef.current = true;
 
     const owns = () => attemptRef.current === chatId;
-    (async () => {
+    void (async () => {
       try {
         const result = await fetchChat(chatId);
         if (!owns()) return;
@@ -84,7 +84,7 @@ export default function useStoredChatHydration({ chat, chatId, serverBacked, isF
         const storedModelId = result?.chat?.modelId;
         setChatSettings(
           stored || storedModelId
-            ? { ...(stored || {}), ...(storedModelId ? { modelId: storedModelId } : {}) }
+            ? { ...stored, ...(storedModelId ? { modelId: storedModelId } : {}) }
             : null
         );
         const storedVariables = result?.chat?.variables;

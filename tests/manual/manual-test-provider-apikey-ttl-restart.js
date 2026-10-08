@@ -8,11 +8,9 @@
  * 2. The server restarts and reinitializes the cache
  */
 
-import { existsSync } from 'fs';
-import { promises as fs } from 'fs';
-import { join } from 'path';
-import { fileURLToPath } from 'url';
-import { dirname } from 'path';
+import { existsSync, promises as fs } from 'node:fs';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -200,7 +198,7 @@ async function runTests() {
     await cleanup();
 
     console.log('\n' + '='.repeat(60));
-    const passed = results.filter(r => r).length;
+    const passed = results.filter(Boolean).length;
     const total = results.length;
 
     if (passed === total) {
@@ -224,4 +222,7 @@ async function runTests() {
   }
 }
 
-runTests();
+runTests().catch(error => {
+  console.error(error);
+  process.exit(1);
+});

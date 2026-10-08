@@ -148,7 +148,7 @@ function AdminUsersPage() {
   );
 
   useEffect(() => {
-    loadUsers();
+    void loadUsers();
   }, []);
 
   const loadUsers = async () => {
@@ -174,7 +174,7 @@ function AdminUsersPage() {
         try {
           await makeAdminApiCall(`/admin/auth/users/${userId}`, { method: 'DELETE' });
           setMessage({ type: 'success', text: 'User deleted successfully!' });
-          loadUsers();
+          void loadUsers();
         } catch (error) {
           setMessage({ type: 'error', text: `Failed to delete user: ${error.message}` });
         }
@@ -199,7 +199,7 @@ function AdminUsersPage() {
         type: 'success',
         text: `User ${newStatus ? 'enabled' : 'disabled'} successfully!`
       });
-      loadUsers();
+      void loadUsers();
     } catch (error) {
       setMessage({ type: 'error', text: `Failed to update user status: ${error.message}` });
     }

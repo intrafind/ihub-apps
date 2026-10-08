@@ -252,7 +252,7 @@ export async function getHostSnapshot() {
   const limited = constrained > 0 && constrained < totalMemory;
   const memoryLimit = limited ? constrained : totalMemory;
   const rawAvailable =
-    typeof process.availableMemory === 'function' ? Number(process.availableMemory()) : NaN;
+    typeof process.availableMemory === 'function' ? Number(process.availableMemory()) : Number.NaN;
   const available = Math.min(
     memoryLimit,
     Math.max(0, Number.isFinite(rawAvailable) ? rawAvailable : os.freemem())

@@ -95,4 +95,7 @@ import tokenStorageService from '../../server/services/TokenStorageService.js';
   console.log('  2. Copy encrypted values to your .env file');
   console.log('  3. The application will automatically decrypt them at runtime');
   console.log('');
-})();
+})().catch(error => {
+  console.error(error);
+  process.exit(1);
+});

@@ -44,7 +44,7 @@ function SourcePicker({
 
   // Load available admin sources on mount
   useEffect(() => {
-    loadAdminSources();
+    void loadAdminSources();
     // Sizes are a hint only: a failure leaves them blank, never the picker.
     adminApi
       .fetchSourceTokens()
@@ -337,7 +337,17 @@ function SourcePicker({
                 return (
                   <div
                     key={source.id}
+                    role="checkbox"
+                    aria-checked={isSelected}
+                    aria-disabled={disabled || undefined}
+                    tabIndex={disabled ? -1 : 0}
                     onClick={() => handleSourceToggle(source.id)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        handleSourceToggle(source.id);
+                      }
+                    }}
                     className={`flex items-center p-3 cursor-pointer transition-colors ${
                       isSelected
                         ? 'bg-blue-50 dark:bg-blue-900/30 hover:bg-blue-100 dark:hover:bg-blue-900/40'

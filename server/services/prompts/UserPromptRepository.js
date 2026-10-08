@@ -27,7 +27,7 @@
  *
  * @module services/prompts/UserPromptRepository
  */
-import { createHash, randomBytes } from 'crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import logger from '../../utils/logger.js';
 import { isValidId } from '../../utils/pathSecurity.js';
 import { StorageError } from '../../storage/errors.js';
@@ -553,7 +553,7 @@ export class UserPromptRepository {
       if (!prompt) return null;
       assertAuthorized(authorize, prompt);
       const before = new Set((prompt.shares || []).map(shareTargetKey));
-      const after = new Set(shares.map(shareTargetKey));
+      const after = new Set(shares.map(share => shareTargetKey(share)));
       const stored = await this._write(
         { ...prompt, shares, sharesUpdatedAt: now, sharesUpdatedBy: actorOf(actor) },
         etag

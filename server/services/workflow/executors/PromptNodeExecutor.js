@@ -1051,7 +1051,7 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
 
     // Handle {{#compare val1 "op" val2}}...{{/compare}} blocks
     // Supports operators: <, >, <=, >=, ==, !=
-    result = result.replace(
+    result = result.replaceAll(
       /\{\{#compare\s+([^\s"]+)\s+"([^"]+)"\s+([^\s}]+)\s*\}\}([\s\S]*?)\{\{\/compare\}\}/g,
       (match, left, operator, right, content) => {
         // Resolve left value - could be a variable path or literal
@@ -1107,7 +1107,7 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
     );
 
     // Handle {{#if condition}}...{{/if}} blocks
-    result = result.replace(
+    result = result.replaceAll(
       /\{\{#if\s+([^}]+)\}\}([\s\S]*?)\{\{\/if\}\}/g,
       (match, condition, content) => {
         // Resolve the condition variable
@@ -1122,7 +1122,7 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
 
     // Handle simple {{variable}} or {{path.to.value}} substitution
     // Exclude @index and this which are handled in each loops
-    result = result.replace(/\{\{([^#/@}][^}]*)\}\}/g, (match, variable) => {
+    result = result.replaceAll(/\{\{([^#/@}][^}]*)\}\}/g, (match, variable) => {
       const trimmed = variable.trim();
 
       // Skip 'this' references outside of each loops (they should be empty)
@@ -1273,7 +1273,6 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
 
       // Extract the content between opening and closing tags
       const content = result.substring(afterOpenTag, closingIndex);
-      const fullMatch = result.substring(startIndex, closingIndex + 9);
 
       // Get the array to iterate over
       const array = this.getNestedValue(arrayPath, state.data || {});
@@ -1285,10 +1284,10 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
             let itemContent = content;
 
             // Replace {{@index}} with current index
-            itemContent = itemContent.replace(/\{\{@index\}\}/g, String(index));
+            itemContent = itemContent.replaceAll('{{@index}}', String(index));
 
             // Replace {{this.property}} with item.property
-            itemContent = itemContent.replace(/\{\{this\.([^}]+)\}\}/g, (_, prop) => {
+            itemContent = itemContent.replaceAll(/\{\{this\.([^}]+)\}\}/g, (_, prop) => {
               const propPath = prop.trim();
               const val = this.getNestedValue(propPath, item);
               if (val !== undefined && val !== null) {
@@ -1298,7 +1297,7 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
             });
 
             // Replace {{this}} with JSON of item
-            itemContent = itemContent.replace(/\{\{this\}\}/g, () => {
+            itemContent = itemContent.replaceAll('{{this}}', () => {
               return typeof item === 'object' ? JSON.stringify(item) : String(item);
             });
 
@@ -1949,7 +1948,7 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
       // (createTask / listTasks / markTaskDone / writeArtifact).
       const agentProfile = this._resolveAgentProfile(context);
       const enrichedAppConfig = {
-        ...(appConfig || {}),
+        ...appConfig,
         ...(agentProfile ? { _agentProfile: agentProfile } : {}),
         ...(context._workflowState ? { _workflowState: context._workflowState } : {}),
         // Skill tools check against the node's skills, not the parent app's.
@@ -2414,7 +2413,7 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
       const startedAtIso = executeStartedAt ? executeStartedAt.toISOString() : null;
       const durationMs = executeStartMs ? completedAtMs - executeStartMs : null;
       stateUpdates._taskTimings = {
-        ...(state?.data?._taskTimings || {}),
+        ...state?.data?._taskTimings,
         [logKey]: {
           startedAt: startedAtIso || new Date(completedAtMs).toISOString(),
           completedAt: new Date(completedAtMs).toISOString(),
@@ -2444,7 +2443,7 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
       const startedAtIso = executeStartedAt ? executeStartedAt.toISOString() : null;
       const durationMs = executeStartMs ? completedAtMs - executeStartMs : null;
 
-      const taskResults = { ...(state?.data?._taskResults || {}) };
+      const taskResults = { ...state?.data?._taskResults };
       taskResults[taskId] = {
         taskId,
         nodeId: node.id,
@@ -2464,7 +2463,7 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
       // Side-channel: store latest task timing in _taskTimings keyed by id
       // so the UI doesn't have to scan _taskResults (which can grow large
       // with full content per task) just to render durations.
-      const taskTimings = { ...(state?.data?._taskTimings || {}) };
+      const taskTimings = { ...state?.data?._taskTimings };
       taskTimings[taskId] = {
         startedAt: startedAtIso || completedAt,
         completedAt,
@@ -2487,7 +2486,7 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
       if (runId) {
         try {
           const safeTaskSlug = String(taskId)
-            .replace(/[^a-zA-Z0-9_-]+/g, '_')
+            .replaceAll(/[^a-zA-Z0-9_-]+/g, '_')
             .slice(0, 80);
           await writeArtifactDirect({
             runId,
@@ -2589,7 +2588,7 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
       const synthStartedAtIso = executeStartedAt ? executeStartedAt.toISOString() : null;
       const synthDurationMs = executeStartMs ? synthCompletedMs - executeStartMs : null;
       stateUpdates._taskTimings = {
-        ...(state?.data?._taskTimings || {}),
+        ...state?.data?._taskTimings,
         [node.id]: {
           startedAt: synthStartedAtIso || new Date(synthCompletedMs).toISOString(),
           completedAt: new Date(synthCompletedMs).toISOString(),
@@ -3387,7 +3386,7 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
       .map(c => {
         const label = c.title ? `${c.title} — ${c.url}` : c.url;
         const tail = c.snippet
-          ? `\n    ${String(c.snippet).replace(/\s+/g, ' ').slice(0, 240)}`
+          ? `\n    ${String(c.snippet).replaceAll(/\s+/g, ' ').slice(0, 240)}`
           : '';
         return `- ${label}${tail}`;
       })

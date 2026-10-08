@@ -140,9 +140,9 @@ export default function registerAdminNextcloudEmbedRoutes(app) {
 
       const oauthUpdates = {
         oauth: {
-          ...(platform?.oauth || {}),
+          ...platform?.oauth,
           enabled: {
-            ...(platform?.oauth?.enabled || {}),
+            ...platform?.oauth?.enabled,
             authz: true,
             clients: true
           },
@@ -154,7 +154,7 @@ export default function registerAdminNextcloudEmbedRoutes(app) {
       const updates = {
         ...oauthUpdates,
         nextcloudEmbed: {
-          ...(platform?.nextcloudEmbed || {}),
+          ...platform?.nextcloudEmbed,
           enabled: true,
           oauthClientId
         }
@@ -197,7 +197,7 @@ export default function registerAdminNextcloudEmbedRoutes(app) {
 
       await savePlatformConfig({
         nextcloudEmbed: {
-          ...(platform?.nextcloudEmbed || {}),
+          ...platform?.nextcloudEmbed,
           enabled: false
         }
       });
@@ -342,7 +342,7 @@ export default function registerAdminNextcloudEmbedRoutes(app) {
 
       await savePlatformConfig({
         nextcloudEmbed: {
-          ...(platform?.nextcloudEmbed || {}),
+          ...platform?.nextcloudEmbed,
           ...allowed
         }
       });

@@ -169,7 +169,8 @@ function TtsVoicesPanel({ modelId, onUseVoice, t, uiLanguage }) {
       const context = new (window.AudioContext || window.webkitAudioContext)();
       const decoded = await context.decodeAudioData(await file.arrayBuffer());
       seconds = decoded.duration;
-      context.close?.();
+      // Closing an already-closed context rejects; that is not worth reporting.
+      Promise.resolve(context.close?.()).catch(() => {});
     } catch {
       setCreateError(
         t('admin.models.ttsVoices.fileUnreadable', 'This file could not be read as audio.')

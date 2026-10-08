@@ -1,6 +1,6 @@
-import { promises as fs } from 'fs';
-import { join, dirname } from 'path';
-import { randomBytes } from 'crypto';
+import { promises as fs } from 'node:fs';
+import { join, dirname } from 'node:path';
+import { randomBytes } from 'node:crypto';
 
 /**
  * Atomically write data to a file using a temporary file and rename

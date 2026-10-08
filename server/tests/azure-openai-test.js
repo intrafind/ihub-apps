@@ -81,4 +81,4 @@ const testAzureOpenAI = async () => {
 };
 
 // Run test
-testAzureOpenAI();
+void testAzureOpenAI();

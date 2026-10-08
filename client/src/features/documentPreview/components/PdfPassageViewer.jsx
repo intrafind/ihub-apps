@@ -248,7 +248,7 @@ function PdfPassageViewer({ data, passages, scale = 1.2, onStateChange, controlR
     let cancelled = false;
     let pdfDocument = null;
 
-    (async () => {
+    void (async () => {
       setLoading(true);
       setError(null);
       try {

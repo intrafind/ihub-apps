@@ -40,7 +40,7 @@ function ResourcePicker({
         if (!cancelled) setLoading(false);
       }
     };
-    load();
+    void load();
     return () => {
       cancelled = true;
     };

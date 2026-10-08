@@ -364,7 +364,7 @@ export class SubWorkflowMaterializer {
 
       // Build the tail chain: lastTask → [synthesizer?] → [drain?] → sub-end.
       // Each step writes one edge; the final hop targets sub-end.
-      const lastTask = taskNodes[taskNodes.length - 1];
+      const lastTask = taskNodes.at(-1);
       let prev = lastTask.id;
       if (parentConfig.synthesize) {
         edges.push({ id: `edge-${prev}-synth`, source: prev, target: 'synthesizer' });

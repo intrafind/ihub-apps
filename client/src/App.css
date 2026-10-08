@@ -367,11 +367,6 @@ div .markdown-content .code-block-toolbar > div,
     flex: 1 1 0%;
     min-height: 0;
   }
-
-  /* Fix for when the parameters panel is open */
-  .md:hidden.mb-4.p-4.bg-gray-50.rounded-lg + div .flex-1.overflow-y-auto {
-    max-height: calc(100vh - 400px);
-  }
 }
 
 /* Dark mode for form elements */

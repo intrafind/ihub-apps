@@ -46,7 +46,7 @@
  *
  * @module services/artifacts/ArtifactRepository
  */
-import { randomUUID } from 'crypto';
+import { randomUUID } from 'node:crypto';
 import logger from '../../utils/logger.js';
 import { isValidId } from '../../utils/pathSecurity.js';
 import { getStorage, readFacet } from '../../storage/bootstrap.js';
@@ -244,7 +244,7 @@ export class ArtifactRepository {
     const payload = toPayload(data);
     if (!payload || payload.length === 0) return null;
     if (this.policy().enabled === false) return null;
-    const id = randomUUID().replace(/-/g, '');
+    const id = randomUUID().replaceAll('-', '');
     const key = artifactKey(target, id);
     // `isValidId` caps a key at 100 characters. A uuid scope id leaves room to
     // spare; an unusually long one does not, and a rejected key would throw

@@ -13,10 +13,9 @@
  * Run: node tests/manual-test-websearch-provider-keys.js
  */
 
-import { promises as fs } from 'fs';
-import { join } from 'path';
-import path from 'path';
-import { fileURLToPath } from 'url';
+import { promises as fs } from 'node:fs';
+import path, { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import configCache from '../../server/configCache.js';
 import tokenStorageService from '../../server/services/TokenStorageService.js';
 import webSearchService from '../../server/services/WebSearchService.js';
@@ -185,4 +184,4 @@ async function runTests() {
 }
 
 // Run tests
-runTests();
+void runTests();

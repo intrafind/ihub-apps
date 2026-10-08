@@ -154,4 +154,8 @@ initOfficeTheme();
       </EmbeddedHostProvider>
     </OfficeConfigContext.Provider>
   );
-})();
+})().catch(err => {
+  const rootEl = document.getElementById('extension-root');
+  if (rootEl) renderError(rootEl, err?.message || 'Failed to start the extension.');
+  else console.error('Failed to start the extension:', err);
+});

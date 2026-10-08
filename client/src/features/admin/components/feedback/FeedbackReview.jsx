@@ -15,7 +15,7 @@ function FeedbackCard({ data }) {
   const { t } = useTranslation();
 
   // New star rating data (merge with legacy feedback)
-  const starRatings = { ...(data.ratings || {}) };
+  const starRatings = { ...data.ratings };
 
   // Map legacy feedback: good -> 5 stars, bad -> 1 star
   const legacyGood = data.good || 0;
@@ -31,7 +31,7 @@ function FeedbackCard({ data }) {
   // Calculate total and average including legacy data
   const totalStarRatings = Object.values(starRatings).reduce((sum, count) => sum + count, 0);
   const weightedSum = Object.entries(starRatings).reduce(
-    (sum, [rating, count]) => sum + parseInt(rating) * count,
+    (sum, [rating, count]) => sum + Number.parseInt(rating) * count,
     0
   );
   const averageRating = totalStarRatings > 0 ? weightedSum / totalStarRatings : 0;
@@ -120,7 +120,7 @@ function FeedbackEntriesCard() {
   const pageSize = 20;
 
   useEffect(() => {
-    loadFeedback();
+    void loadFeedback();
   }, [page]);
 
   const loadFeedback = async () => {

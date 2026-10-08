@@ -44,8 +44,8 @@ export function contentAdminAuth(req, res, next) {
         error
       });
       // Fallback to default admin groups
-      const defaultAdminGroups = ['admin', 'admins'];
-      if (userGroups.some(group => defaultAdminGroups.includes(group))) {
+      const defaultAdminGroups = new Set(['admin', 'admins']);
+      if (userGroups.some(group => defaultAdminGroups.has(group))) {
         return next();
       }
     }

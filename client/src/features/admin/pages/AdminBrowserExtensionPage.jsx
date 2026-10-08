@@ -90,8 +90,8 @@ function AdminBrowserExtensionPage() {
   };
 
   useEffect(() => {
-    loadStatus();
-    loadGroups();
+    void loadStatus();
+    void loadGroups();
     // eslint-disable-next-line @eslint-react/exhaustive-deps
   }, []);
 
@@ -152,7 +152,7 @@ function AdminBrowserExtensionPage() {
       document.body.appendChild(a);
       a.click();
       window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
+      a.remove();
     } catch (err) {
       setMessage({
         type: 'error',
@@ -197,7 +197,7 @@ function AdminBrowserExtensionPage() {
     };
 
     if (isFirstTime) {
-      doRotate();
+      void doRotate();
     } else {
       setConfirmDialog({
         title: t('admin.browserExtension.rotateKeyTitle', 'Generate New Signing Key'),

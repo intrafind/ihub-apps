@@ -950,7 +950,7 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
           language || req.headers['accept-language']?.split(',')[0] || defaultLang;
         let messageId = null;
         if (messages && Array.isArray(messages) && messages.length > 0) {
-          const lastMessage = messages[messages.length - 1];
+          const lastMessage = messages.at(-1);
           if (lastMessage && lastMessage.messageId) {
             messageId = lastMessage.messageId;
             logger.info('Using client-provided messageId', {
@@ -966,7 +966,7 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
         await settleChatClarifications({
           chatId,
           user: req.user,
-          lastMessage: Array.isArray(messages) ? messages[messages.length - 1] : null
+          lastMessage: Array.isArray(messages) ? messages.at(-1) : null
         });
         let model;
         let llmMessages;
@@ -1120,7 +1120,7 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
 
         // --- @mention workflow detection ---
         // Check if the last user message contains an @workflow-name mention
-        const lastUserMsg = messages[messages.length - 1];
+        const lastUserMsg = messages.at(-1);
         const lastUserContent = typeof lastUserMsg?.content === 'string' ? lastUserMsg.content : '';
         const mentionMatch = lastUserContent.match(/@([\w.-]+)/);
 

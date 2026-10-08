@@ -1,7 +1,7 @@
 import express from 'express';
-import crypto from 'crypto';
-import path from 'path';
-import { fileURLToPath } from 'url';
+import crypto from 'node:crypto';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import dotenv from 'dotenv';
 import rateLimit from 'express-rate-limit';
 
@@ -178,10 +178,10 @@ app.get('/callback', async (req, res) => {
   if (error) {
     const escapeHtml = s =>
       String(s)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;');
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;');
     return res
       .status(400)
       .send(`OAuth Error: ${escapeHtml(error)} - ${escapeHtml(error_description)}`);

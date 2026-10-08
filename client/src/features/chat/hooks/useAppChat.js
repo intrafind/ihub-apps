@@ -472,7 +472,7 @@ function useAppChat({
           // Preserve workflow-set outputFormat — don't let the app default overwrite it.
           const metadata = {
             finishReason: rootRun.finishReason,
-            ...(messageMetadataRef.current || {}),
+            ...messageMetadataRef.current,
             ...(extras.outputFormat && { outputFormat: extras.outputFormat })
           };
 
@@ -589,7 +589,7 @@ function useAppChat({
           typeof displayMessage === 'string' ? displayMessage : displayMessage?.content || '';
 
         addUserMessage(contentToAdd, {
-          ...(displayMessage?.meta || {}),
+          ...displayMessage?.meta,
           // The exchange id is what the store files this turn under
           // (`clientMessageId`), so it is the only handle an edit or a
           // regenerate of a turn made in this session can fork the stored

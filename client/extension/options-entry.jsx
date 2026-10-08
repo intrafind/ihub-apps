@@ -40,7 +40,9 @@ function OptionsApp() {
       const access = await chrome.storage.session.get('ihub_access_token');
       if (!active) return;
       setSignedIn(Boolean(access.ihub_access_token || stored.ihub_refresh_token));
-    })();
+    })().catch(error => {
+      console.error('Failed to read the extension settings:', error);
+    });
     return () => {
       active = false;
     };

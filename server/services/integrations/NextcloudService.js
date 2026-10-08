@@ -547,7 +547,7 @@ class NextcloudService {
         decodedSegments = segments;
       }
       const path = decodedSegments.join('/');
-      const name = decodedSegments[decodedSegments.length - 1] || '';
+      const name = decodedSegments.at(-1) || '';
 
       items.push({
         // Prefer Nextcloud's stable file id when available; fall back
@@ -555,7 +555,7 @@ class NextcloudService {
         id: idMatch ? idMatch[1] : path,
         name,
         path,
-        size: sizeMatch ? parseInt(sizeMatch[1], 10) : 0,
+        size: sizeMatch ? Number.parseInt(sizeMatch[1], 10) : 0,
         mimeType: mimeMatch ? mimeMatch[1] : null,
         // Guard against non-RFC-1123 timestamps from third-party
         // Nextcloud plugins: `new Date('bogus').toISOString()` throws
@@ -698,10 +698,10 @@ class NextcloudService {
     }
 
     const segments = filePath.split('/').filter(Boolean);
-    const name = segments[segments.length - 1] || 'download';
+    const name = segments.at(-1) || 'download';
     const mimeType = response.headers.get('content-type') || 'application/octet-stream';
     const sizeHeader = response.headers.get('content-length');
-    const size = sizeHeader ? parseInt(sizeHeader, 10) : 0;
+    const size = sizeHeader ? Number.parseInt(sizeHeader, 10) : 0;
 
     // Cap download bytes so a single huge file (intentional or not)
     // can't OOM the worker. The client also enforces a per-file upload
