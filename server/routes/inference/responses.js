@@ -222,7 +222,7 @@ export default function registerResponsesRoutes(
    *                 description: |
    *                   A string, or message items (`{ role, content }`) whose content parts are
    *                   `input_text`, `input_image` (`image_url` as a data URL) or `input_file`
-   *                   (`file_data` as a data URL, `filename`; PDF, Word (.docx) and text files).
+   *                   (`file_data` as a data URL, `filename`; PDF, Word (.docx), PowerPoint (.pptx) and text files).
    *               instructions:
    *                 type: string
    *                 description: System instructions (plain models only)
