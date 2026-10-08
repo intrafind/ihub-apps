@@ -15,11 +15,21 @@
  * @module shared/documentExtraction/pdfStructure
  */
 
-/** Upper bound of struct tree nodes read per page (hostile or broken trees). */
+/** Upper bound of struct tree nodes read per page, content ids included (hostile or broken trees). */
 const MAX_TREE_NODES = 200000;
+
+/**
+ * Deepest element read from a struct tree. A real tree is a few dozen levels deep (document,
+ * sections, a table, a row, a cell, a paragraph); every text walks up to the root once, so a
+ * hostile chain of tens of thousands of levels would cost quadratic time.
+ */
+const MAX_TREE_DEPTH = 64;
 
 /** Outline entries read per document; a longer outline is cut, not rejected. */
 export const MAX_OUTLINE_ENTRIES = 2000;
+
+/** Outline nodes visited per document, resolved or not: entries that lead nowhere cost lookups too. */
+export const MAX_OUTLINE_NODES = 10 * MAX_OUTLINE_ENTRIES;
 
 /** Line comparisons the outline matching may spend per document. */
 const MAX_OUTLINE_COMPARISONS = 2000000;
@@ -45,8 +55,10 @@ function collapse(text) {
  * Index of a page's structure tree: for each marked-content id the table, row, cell and heading
  * the text belongs to.
  *
- * The tree is walked iteratively and node by node counted, so a deep or huge tree cannot
- * exhaust the stack or the time of the upload.
+ * The tree is walked iteratively and every node is counted when it is discovered (a node with a
+ * million children is cut at the limit, not after its children were all queued), and it is read
+ * only down to {@link MAX_TREE_DEPTH}, so a deep or huge tree cannot exhaust the stack or the
+ * time of the upload. What lies beyond the limits is not indexed: its text stays plain lines.
  *
  * @param {object|null} tree - `await page.getStructTree()`
  * @returns {{infoOf: (id: string) => object|undefined, headings: number, tables: number}|null}
@@ -55,19 +67,20 @@ export function indexStructTree(tree) {
   if (!tree || typeof tree !== 'object') return null;
   const parents = new Map();
   const owners = new Map();
-  const stack = [tree];
-  let visited = 0;
+  const stack = [{ node: tree, depth: 0 }];
+  let visited = 1;
   while (stack.length > 0 && visited < MAX_TREE_NODES) {
-    const node = stack.pop();
-    visited += 1;
-    if (!Array.isArray(node.children)) continue;
+    const { node, depth } = stack.pop();
+    if (!Array.isArray(node.children) || depth >= MAX_TREE_DEPTH) continue;
     for (const child of node.children) {
+      if (visited >= MAX_TREE_NODES) break;
       if (!child || typeof child !== 'object') continue;
+      visited += 1;
       if (child.type === 'content') {
         if (typeof child.id === 'string') owners.set(child.id, node);
       } else {
         parents.set(child, node);
-        stack.push(child);
+        stack.push({ node: child, depth: depth + 1 });
       }
     }
   }
@@ -506,8 +519,10 @@ export function applyFontHeadings(pages) {
   };
 
   // The body size is the most frequent one. Code that the PDF does not mark as fixed-width can
-  // outweigh the real body text, so a size that holds at least 15 % of the characters is tried
-  // too when the first guess would make a fifth of the document "headings".
+  // outweigh the real body text, so every size that holds at least 15 % of the characters is a
+  // plausible body size too (headings are short; a size that large is text). All of them are
+  // tried and the one that promotes the least text wins: if the most frequent size were taken
+  // whenever it gives a clean picture, the real body text next to code would be "headings".
   const sizesByShare = [...bySize]
     .sort((a, b) => b[1] - a[1] || a[0] - b[0])
     .filter(([, chars], i) => i === 0 || chars >= 0.15 * total)
@@ -531,14 +546,15 @@ export function applyFontHeadings(pages) {
     }
     const tiers = [...new Set(found.map(candidate => candidate.size))].sort((a, b) => b - a);
     return found.length > 0 && chars <= 0.2 * total && tiers.length <= MAX_TIERS
-      ? { found, tiers }
+      ? { found, tiers, chars }
       : null;
   };
 
   let plan = null;
   for (const body of sizesByShare) {
-    plan = findCandidates(body);
-    if (plan) break;
+    const guess = findCandidates(body);
+    // Equal shares keep the more frequent size (it was tried first).
+    if (guess && (!plan || guess.chars < plan.chars)) plan = guess;
   }
   if (!plan) return 0;
   const candidates = plan.found;
