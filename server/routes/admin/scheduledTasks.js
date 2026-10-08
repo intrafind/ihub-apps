@@ -301,6 +301,71 @@ export default function registerAdminScheduledTaskRoutes(app) {
     }
   });
 
+  /**
+   * @swagger
+   * /api/admin/scheduled-tasks/{taskId}/memory:
+   *   get:
+   *     summary: Metadata of the notes a task keeps between runs
+   *     description: >
+   *       Size, version, last update and last writer of the task's notes. Admins never get
+   *       the content; only the owner reads it.
+   *     tags:
+   *       - Admin - Scheduled Tasks
+   *     security:
+   *       - bearerAuth: []
+   *       - sessionAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: taskId
+   *         required: true
+   *         schema: { type: string }
+   *     responses:
+   *       200:
+   *         description: "`{ enabled, platformEnabled, version, chars, updatedAt, updatedBy }`"
+   *       404:
+   *         description: Task not found
+   *   delete:
+   *     summary: Clear the notes of a task
+   *     tags:
+   *       - Admin - Scheduled Tasks
+   *     security:
+   *       - bearerAuth: []
+   *       - sessionAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: taskId
+   *         required: true
+   *         schema: { type: string }
+   *     responses:
+   *       200:
+   *         description: "`{ version }`"
+   */
+  app.get(`${base}/:taskId/memory`, adminAuth, async (req, res) => {
+    try {
+      if (!validateIdForPath(req.params.taskId, 'task', res)) return;
+      res.json(await tasks.adminGetTaskMemory(req.params.taskId));
+    } catch (error) {
+      sendTaskError(res, error, 'admin get task memory');
+    }
+  });
+
+  app.delete(`${base}/:taskId/memory`, adminAuth, async (req, res) => {
+    try {
+      if (!validateIdForPath(req.params.taskId, 'task', res)) return;
+      const result = await tasks.adminClearTaskMemory(req.params.taskId);
+      logAudit({
+        req,
+        action: 'delete',
+        resource: 'scheduledTaskMemory',
+        resourceId: req.params.taskId,
+        summary: 'Cleared the notes of a scheduled task'
+      });
+      res.json(result);
+    } catch (error) {
+      sendTaskError(res, error, 'admin clear task memory');
+    }
+  });
+
   app.get(`${base}/:taskId/runs`, adminAuth, async (req, res) => {
     try {
       if (!validateIdForPath(req.params.taskId, 'task', res)) return;

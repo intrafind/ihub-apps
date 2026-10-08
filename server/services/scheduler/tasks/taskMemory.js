@@ -72,6 +72,27 @@ export async function readTaskMemory(task) {
 }
 
 /**
+ * What an admin may know about a task's notes: that they exist, how big they
+ * are, when they last changed and who wrote them — never what they say. The
+ * shape has no field for the content, so it cannot leak by accident.
+ *
+ * @param {Object} task
+ * @returns {Promise<{enabled: boolean, platformEnabled: boolean, version: number,
+ *   chars: number, updatedAt: string|null, updatedBy: string|null}>}
+ */
+export async function taskMemoryMetadata(task) {
+  const doc = await readTaskMemory(task);
+  return {
+    enabled: task.memory?.enabled === true,
+    platformEnabled: memorySettings().enabled,
+    version: doc.version,
+    chars: doc.chars,
+    updatedAt: doc.updatedAt,
+    updatedBy: doc.updatedBy
+  };
+}
+
+/**
  * Write the notes of a task and keep the summary on the task document in step.
  *
  * @param {Object} task - The stored task document.
@@ -106,8 +127,9 @@ export async function writeTaskMemory(task, options = {}) {
 }
 
 /**
- * Clear the notes. The version still goes up, so an editor that had them open
- * sees a conflict rather than silently bringing them back.
+ * Clear the notes. The version goes up, so an editor that had them open sees a
+ * conflict rather than silently bringing them back. Notes that are already
+ * empty are left alone.
  *
  * @param {Object} task
  * @param {Object} [options]
@@ -116,7 +138,7 @@ export async function writeTaskMemory(task, options = {}) {
  */
 export async function clearTaskMemory(task, { updatedBy } = {}) {
   const current = await readTaskMemory(task);
-  if (current.version === 0) return { version: 0 };
+  if (current.body === '') return { version: current.version };
   const result = await writeTaskMemory(task, { mode: 'replace', content: '', updatedBy });
   return { version: result.version };
 }

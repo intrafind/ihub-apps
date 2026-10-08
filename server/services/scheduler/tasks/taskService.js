@@ -38,7 +38,13 @@ import {
   isTaskId,
   newTaskId
 } from './ScheduledTaskRepository.js';
-import { getTaskMemoryRepository } from './TaskMemoryRepository.js';
+import { TaskMemoryError, getTaskMemoryRepository } from './TaskMemoryRepository.js';
+import {
+  clearTaskMemory,
+  readTaskMemory,
+  taskMemoryMetadata,
+  writeTaskMemory
+} from './taskMemory.js';
 import {
   NOTIFY_MODES,
   activeRunOf,
@@ -1284,6 +1290,145 @@ export async function adminDeleteTask(taskId, { deleteChats = false } = {}) {
   const task = isTaskId(taskId) ? await getScheduledTaskRepository().getTask(taskId) : null;
   if (!task) throw notFound();
   return removeTask(task, { deleteChats });
+}
+
+// ── memory ─────────────────────────────────────────────────────────────────
+
+/** A memory store error as the error the routes and tools already know. */
+function memoryFailure(error) {
+  if (!(error instanceof TaskMemoryError)) return error;
+  switch (error.code) {
+    case 'VERSION_CONFLICT':
+      return new ScheduledTaskError(409, 'VERSION_CONFLICT', error.message, {
+        currentVersion: error.currentVersion
+      });
+    case 'MEMORY_TOO_LONG':
+      return new ScheduledTaskError(400, 'MEMORY_TOO_LONG', error.message, {
+        chars: error.chars,
+        maxChars: error.maxChars
+      });
+    case 'TASK_NOT_FOUND':
+      return notFound();
+    default:
+      return new ScheduledTaskError(503, error.code || 'MEMORY_UNAVAILABLE', error.message);
+  }
+}
+
+/**
+ * The notes a task keeps between runs, for their owner. Readable while memory
+ * is switched off (the notes are kept), so the owner can still see and clear
+ * them.
+ *
+ * @param {Object} user
+ * @param {string} taskId
+ * @returns {Promise<{enabled: boolean, platformEnabled: boolean, body: string, version: number,
+ *   chars: number, maxChars: number, updatedAt: string|null, updatedBy: string|null}>}
+ */
+export async function getTaskMemory(user, taskId) {
+  const { settings } = assertAvailable();
+  const { task } = await loadOwnedTask(user, taskId);
+  const doc = await readTaskMemory(task);
+  return {
+    enabled: task.memory?.enabled === true,
+    platformEnabled: settings.memoryEnabled,
+    body: doc.body,
+    version: doc.version,
+    chars: doc.chars,
+    maxChars: settings.memoryMaxChars,
+    updatedAt: doc.updatedAt,
+    updatedBy: doc.updatedBy
+  };
+}
+
+/**
+ * Replace the notes of a task. Editing them changes what the task does, so it
+ * needs the same permission editing the task does.
+ *
+ * @param {Object} user
+ * @param {string} taskId
+ * @param {Object} input
+ * @param {string} input.content
+ * @param {number} [input.expectedVersion] - Without it the write wins over any version.
+ * @returns {Promise<{version: number, chars: number, updatedAt: string}>}
+ */
+export async function setTaskMemory(user, taskId, { content, expectedVersion } = {}) {
+  const { settings } = assertAvailable();
+  assertPrincipal(user);
+  const { task } = await loadOwnedTask(user, taskId);
+  if (typeof content !== 'string') {
+    throw new ScheduledTaskError(400, 'INVALID_BODY', 'content must be a string');
+  }
+  const versioned = expectedVersion !== undefined && expectedVersion !== null;
+  if (versioned && !(Number.isInteger(expectedVersion) && expectedVersion >= 0)) {
+    throw new ScheduledTaskError(
+      400,
+      'INVALID_BODY',
+      'expectedVersion must be a non-negative integer'
+    );
+  }
+  try {
+    const result = await writeTaskMemory(task, {
+      mode: 'replace',
+      content,
+      ...(versioned ? { expectedVersion } : {}),
+      updatedBy: 'owner',
+      maxChars: settings.memoryMaxChars
+    });
+    announceTaskChanged(task.id);
+    return { version: result.version, chars: result.chars, updatedAt: result.updatedAt };
+  } catch (error) {
+    throw memoryFailure(error);
+  }
+}
+
+/**
+ * Clear the notes of a task. Like deleting what one owns, it needs no
+ * permission: a user whose permission was withdrawn can still clean up.
+ *
+ * @param {Object} user
+ * @param {string} taskId
+ * @returns {Promise<{version: number}>}
+ */
+export async function deleteTaskMemory(user, taskId) {
+  assertAvailable();
+  const { task } = await loadOwnedTask(user, taskId);
+  try {
+    const result = await clearTaskMemory(task, { updatedBy: 'owner' });
+    announceTaskChanged(task.id);
+    return result;
+  } catch (error) {
+    throw memoryFailure(error);
+  }
+}
+
+/**
+ * What an admin sees of a task's notes: metadata only, never the content.
+ *
+ * @param {string} taskId
+ * @returns {Promise<Object>}
+ */
+export async function adminGetTaskMemory(taskId) {
+  const task = isTaskId(taskId) ? await getScheduledTaskRepository().getTask(taskId) : null;
+  if (!task) throw notFound();
+  return taskMemoryMetadata(task);
+}
+
+/**
+ * Clear a task's notes as an admin.
+ *
+ * @param {string} taskId
+ * @returns {Promise<{version: number}>}
+ */
+export async function adminClearTaskMemory(taskId) {
+  const task = isTaskId(taskId) ? await getScheduledTaskRepository().getTask(taskId) : null;
+  if (!task) throw notFound();
+  try {
+    const result = await clearTaskMemory(task, { updatedBy: 'admin' });
+    announceTaskChanged(task.id);
+    return result;
+  } catch (error) {
+    throw memoryFailure(error);
+  }
 }
 
 // Re-exported for the runner, which records outcomes the same way.
