@@ -5,6 +5,11 @@ export default {
   moduleNameMapper: {
     '^(\\.{1,2}/.*)\\.js$': '$1',
     '^(.*)\\?url$': '<rootDir>/tests/config/fileUrlMock.js',
+    // mammoth's Node build only accepts { buffer } / { path }; the document upload
+    // code passes { arrayBuffer }, which only the browser build understands (Vite
+    // resolves it through mammoth's `browser` field). Map it so jest exercises the
+    // same build the shipped client bundle uses.
+    '^mammoth$': '<rootDir>/client/node_modules/mammoth/mammoth.browser.js',
     '\\.(css|less|scss|sass)$': 'identity-obj-proxy',
     // Force a single React copy. Files under client/ resolve
     // client/node_modules/react while the test renderer (@testing-library/react
