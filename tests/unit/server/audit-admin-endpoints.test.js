@@ -53,6 +53,21 @@ describe('admin route audit', () => {
     expect(output).not.toContain('POST /api/admin/guarded');
   });
 
+  test('ignores parentheses and quotes in comments inside a route call', () => {
+    for (const comment of ['// TODO (auth', "// don't cache", '/* see (below */']) {
+      const { status, output } = audit(`
+        app.get(
+          buildServerPath('/api/admin/unguarded'),
+          ${comment}
+          listThings
+        );
+        app.post(buildServerPath('/api/admin/guarded'), adminAuth, async (req, res) => {});
+      `);
+      expect({ comment, status }).toEqual({ comment, status: 1 });
+      expect(output).toContain('[VULNERABILITY] GET /api/admin/unguarded');
+    }
+  });
+
   test('reads a guard passed through a call in the middleware list', () => {
     const { status } = audit(`
       app.put(buildServerPath('/api/admin/a'), rateLimit({ window: '1m (x)' }), adminAuth, saveThing);

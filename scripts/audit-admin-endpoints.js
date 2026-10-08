@@ -37,21 +37,37 @@ const INTENTIONAL_EXCEPTIONS = [
   '/api/admin/auth/status' // Public endpoint to check auth requirements
 ];
 
+/** Index of the quote that closes the string literal opening at |i|. */
+function stringEnd(source, i) {
+  const quote = source[i];
+  for (let j = i + 1; j < source.length; j++) {
+    if (source[j] === '\\') j++;
+    else if (source[j] === quote) return j;
+  }
+  return source.length;
+}
+
+/** Index of the last character of the // or /* comment opening at |i|. */
+function commentEnd(source, i) {
+  const lineComment = source[i + 1] === '/';
+  const end = source.indexOf(lineComment ? '\n' : '*/', i + 2);
+  if (end === -1) return source.length;
+  return lineComment ? end : end + 1;
+}
+
 /**
  * Index of the parenthesis that closes the call whose argument list |args|
  * continues, searching only up to |limit|; |limit| if the call is still open
- * there. Parentheses inside string literals do not count.
+ * there. Parentheses and quotes inside strings and comments do not count.
  */
 function callEnd(args, limit) {
   let depth = 0;
-  let quote = null;
   for (let i = 0; i < limit; i++) {
     const ch = args[i];
-    if (quote) {
-      if (ch === '\\') i++;
-      else if (ch === quote) quote = null;
-    } else if (ch === "'" || ch === '"' || ch === '`') {
-      quote = ch;
+    if (ch === "'" || ch === '"' || ch === '`') {
+      i = stringEnd(args, i);
+    } else if (args.startsWith('//', i) || args.startsWith('/*', i)) {
+      i = commentEnd(args, i);
     } else if (ch === '(') {
       depth++;
     } else if (ch === ')') {
