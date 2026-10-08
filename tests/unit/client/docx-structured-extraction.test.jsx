@@ -155,6 +155,24 @@ describe('structured DOCX extraction', () => {
     });
   });
 
+  describe('table cells with backslashes', () => {
+    it('keeps a backslash in front of a pipe from escaping the pipe escape', async () => {
+      const content = await extract({
+        body: tbl(
+          [tc(p('Pfad')), tc(p('Wert'))],
+          [tc(p('C:\\dir\\|x')), tc(p('plain \\ backslash'))],
+          [tc(p('a\\\\|b')), tc(p('c'))]
+        )
+      });
+      const rows = content.split('\n').slice(2);
+      // One backslash before the pipe: doubled, then the pipe escape → three; two → five.
+      expect(rows[0]).toBe('| C:\\dir\\\\\\|x | plain \\ backslash |');
+      expect(rows[1]).toBe('| a\\\\\\\\\\|b | c |');
+      // A backslash that does not touch a pipe stays as typed.
+      expect(rows[0]).toContain('plain \\ backslash');
+    });
+  });
+
   describe('images, links, footnotes', () => {
     const PNG =
       'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
