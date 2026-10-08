@@ -23,7 +23,15 @@ export const MIN_REAL_TEXT_CHARS = 50;
  * @returns {string}
  */
 export function pageMarker(pageNumber, label) {
-  const printed = label != null && String(label) !== String(pageNumber) ? String(label) : '';
+  // The label is read from the PDF: no line breaks or brackets, so it cannot break the marker.
+  const cleaned =
+    label == null
+      ? ''
+      : String(label)
+          .replace(/[\s[\]()]+/g, ' ')
+          .trim()
+          .slice(0, 40);
+  const printed = cleaned !== '' && cleaned !== String(pageNumber) ? cleaned : '';
   return printed ? `[Page ${pageNumber} (printed: ${printed})]` : `[Page ${pageNumber}]`;
 }
 

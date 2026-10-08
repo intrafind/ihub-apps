@@ -104,7 +104,7 @@ Supported providers (configured at the platform level):
 | `.txt`, `.md`, `.csv`, `.json`, `.html`, `.css`, `.js`, `.xml` | `text/*` / `application/json` | Read directly as text |
 | `.vtt` | `text/vtt` | WebVTT (e.g. Microsoft Teams transcripts), read directly as text |
 | any extension | `text/*` ("Any text file") | Read as text; rejected if the content is binary — see below |
-| `.pdf` | `application/pdf` | Text extracted via `pdfjs-dist`; falls back to rendering each page as an image |
+| `.pdf` | `application/pdf` | Text extracted via `pdfjs-dist` with `[Page N]` markers and real lines — see [Extracted text format](#extracted-text-format); falls back to rendering each page as an image |
 | `.docx` | `application/vnd.openxmlformats-officedocument.wordprocessingml.document` | Converted to Markdown via `mammoth`, `jszip` and `turndown`: headings, lists, tables, footnotes, links and page breaks are kept — see [Extracted text format](#extracted-text-format) |
 | `.xlsx` | `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet` | Cell content extracted via `xlsx` |
 | `.xls` | `application/vnd.ms-excel` | Cell content extracted via `xlsx` |
@@ -155,7 +155,7 @@ many formats, e.g. `.log`, `.yaml`, `.srt`). With it enabled:
 
 ## Extracted text format
 
-The model receives a document as text inside a `<content type="document" …>` block (see [Apps](apps.md), "What `{{content}}` contains"). For Word files this text is **Markdown that keeps the structure of the document**, so a prompt can ask for "section 2.1" or compare two files heading by heading.
+The model receives a document as text inside a `<content type="document" …>` block (see [Apps](apps.md), "What `{{content}}` contains"). For Word files this text is **Markdown that keeps the structure of the document**, so a prompt can ask for "section 2.1" or compare two files heading by heading; for PDF files it carries **page markers**, so answers can cite pages.
 
 ### Word documents (.docx)
 
@@ -186,7 +186,33 @@ Word does not store list and chapter numbers as text; it computes them when disp
 - Bullet lists stay Markdown lists (`-`); a bullet below a numbered level is written as a `-` paragraph
 - **No label rather than a wrong one:** levels that restart by a custom rule (`w:lvlRestart`), and levels whose label refers to such a level, are left unnumbered. Text of numbered paragraphs is never changed
 
-Not covered yet: headers and footers, PDF page markers. These are added in the next steps of the same feature; this section is updated with each.
+Not covered yet: headers and footers. They are added in the next step of the same feature; this section is updated with it.
+
+### PDF files (.pdf)
+
+```text
+[Page 1 (printed: i)]
+Inhaltsverzeichnis
+
+[Page 2 (printed: 1)]
+1. Geltungsbereich
+Dieser Vertrag gilt für alle Parteien und re-
+gelt die Zusammenarbeit.
+Seite 1 von 3
+
+[Page 3: no extractable text]
+```
+
+| In the document | In the text |
+|---|---|
+| Each page | A `[Page N]` line with the physical page number (first page = 1), followed by the text of the page |
+| Printed page numbers (roman front matter, a cover that is not counted) | `[Page 2 (printed: 1)]` when the PDF defines page labels and the label differs from the physical number, so "see page 3" can be matched to what is printed on the page |
+| Lines | One line of text per line of the page. Words are no longer separated by double spaces; a hyphen at the end of a line stays where it is (`re-` / `gelt`) |
+| A page without a text layer inside a PDF that has text elsewhere | `[Page 2: no extractable text]`, so a missing page is visible |
+| Running headers and footers (`Page 3 of 10`) | Kept as ordinary text |
+| Scanned PDF (no text, or less than 50 characters of real text — markers do not count) | No text; the first five pages are rendered as images for vision models, as before |
+
+Multi-column layouts are read in the order the PDF stores the text, which is not always the reading order. Headings are not detected in PDFs.
 
 ### Admin switch
 
@@ -216,7 +242,7 @@ All file processing happens **client-side** before content is sent to the server
 2. **Validation** — MIME type and file size are checked against the app's upload configuration. File extension is used as a fallback when the browser reports an incorrect MIME type.
 3. **Processing** (type-specific):
    - **Text files** — Read directly as UTF-8 text.
-   - **PDF** — Text extracted via PDF.js. If the extracted text is empty or minimal (e.g. a scanned document), each page is rendered as an image instead.
+   - **PDF** — Text extracted via PDF.js, page by page with a `[Page N]` marker and one line per line of the page. If the extracted text is empty or minimal (less than 50 characters outside the markers, e.g. a scanned document), each page is rendered as an image instead.
    - **DOCX** — Converted to Markdown: mammoth reads the Word file, an OOXML pass first fixes what mammoth drops (custom heading styles, page breaks, moved text, hidden text), Turndown writes the Markdown. With the admin switch off, mammoth's HTML is flattened to plain text as before.
    - **XLSX / XLS** — Cell content extracted as text via the xlsx library.
    - **PPTX** — Slide text extracted from the OOXML slides via jszip. **PPT** (legacy binary) is rejected.

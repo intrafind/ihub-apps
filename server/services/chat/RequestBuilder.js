@@ -19,7 +19,7 @@ import { resolveMaxOutputTokens } from '../../../shared/outputTokens.js';
  * `imageData` so each adapter can format them for its provider — next to any
  * image the user uploaded directly.
  */
-function attachDocumentPageImages(messages) {
+export function attachDocumentPageImages(messages) {
   return messages.map(msg => {
     const pageImages = normalizeFiles(msg.fileData)
       .filter(file => !file.content && Array.isArray(file.pageImages))
