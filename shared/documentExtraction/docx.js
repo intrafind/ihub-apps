@@ -38,7 +38,7 @@ async function readRelationships(zip, DOMParserCtor, ownerPart) {
   const relsFile = zip.file(`${dir ? `${dir}/` : ''}_rels/${name}.rels`);
   if (!relsFile) return [];
   const relsDoc = parseXml(DOMParserCtor, await relsFile.async('string'));
-  return Array.from(relsDoc.getElementsByTagName('Relationship'))
+  return Array.from(relsDoc.getElementsByTagNameNS('*', 'Relationship'))
     .filter(rel => rel.getAttribute('TargetMode') !== 'External')
     .map(rel => ({
       id: rel.getAttribute('Id') || '',
