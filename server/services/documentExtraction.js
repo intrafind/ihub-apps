@@ -57,14 +57,20 @@ const CENTRAL_SIGNATURE = 0x02014b50;
 const LOCAL_SIGNATURE = 0x04034b50;
 
 /**
- * Checks the zip package of a Word file against {@link PACKAGE_LIMITS} before anything unpacks
- * it. Every entry is inflated once with an output limit equal to its declared size — a header
- * that understates the size is caught here, not after gigabytes were allocated — and the
+ * Checks the zip package of an Office document against {@link PACKAGE_LIMITS} before anything
+ * unpacks it. Every entry is inflated once with an output limit equal to its declared size — a
+ * header that understates the size is caught here, not after gigabytes were allocated — and the
  * result is thrown away. Reading is asynchronous (zlib's thread pool), so a large package does
  * not block the server.
  *
+ * The entries checked are the ones the unpacking library will read. JSZip walks every
+ * consecutive central-directory header (it does not stop at the count of the end record) and
+ * shifts all offsets when data was put in front of the zip, so the directory must end exactly
+ * where the end record starts and its headers must add up to the declared count: a package
+ * where the two views could differ is refused.
+ *
  * Not supported, hence refused: zip64, encrypted entries, compression other than stored and
- * deflate. Word writes none of them.
+ * deflate, data around the directory. Word, PowerPoint and LibreOffice write none of them.
  *
  * @param {Buffer} bytes
  * @param {typeof PACKAGE_LIMITS} [limits]
@@ -72,7 +78,7 @@ const LOCAL_SIGNATURE = 0x04034b50;
  */
 export async function assertSafePackage(bytes, limits = PACKAGE_LIMITS) {
   const fail = reason => {
-    throw new DocumentExtractionError(`not a safe Word document (${reason})`);
+    throw new DocumentExtractionError(`not a safe Office document (${reason})`);
   };
   let end = -1;
   for (let at = bytes.length - 22; at >= Math.max(0, bytes.length - 22 - 0xffff); at -= 1) {
@@ -83,14 +89,22 @@ export async function assertSafePackage(bytes, limits = PACKAGE_LIMITS) {
   }
   if (end < 0) fail('no zip directory');
   const count = bytes.readUInt16LE(end + 10);
+  const directorySize = bytes.readUInt32LE(end + 12);
   const directoryOffset = bytes.readUInt32LE(end + 16);
-  if (count === 0xffff || directoryOffset === 0xffffffff) fail('zip64 is not supported');
+  if (count === 0xffff || directoryOffset === 0xffffffff || directorySize === 0xffffffff) {
+    fail('zip64 is not supported');
+  }
   if (count > limits.entries) fail(`${count} parts`);
+  if (directoryOffset + directorySize !== end) fail('unexpected data around the zip directory');
 
   let total = 0;
   let at = directoryOffset;
-  for (let index = 0; index < count; index += 1) {
-    if (at + 46 > bytes.length || bytes.readUInt32LE(at) !== CENTRAL_SIGNATURE) {
+  let seen = 0;
+  while (at < end) {
+    // The walk is bounded by the directory, not by the count the file claims.
+    seen += 1;
+    if (seen > limits.entries) fail(`more than ${limits.entries} parts`);
+    if (at + 46 > end || bytes.readUInt32LE(at) !== CENTRAL_SIGNATURE) {
       fail('damaged zip directory');
     }
     const flags = bytes.readUInt16LE(at + 8);
@@ -133,6 +147,7 @@ export async function assertSafePackage(bytes, limits = PACKAGE_LIMITS) {
       fail('unsupported compression');
     }
   }
+  if (at !== end || seen !== count) fail('damaged zip directory');
 }
 
 let domWindow;
