@@ -109,8 +109,9 @@ export function createOdfReader({ contentDoc, stylesDoc }) {
         const text = inline(node, after, depth + 1);
         const href = attr(node, 'xlink', 'href');
         if (href && !href.startsWith('#') && text.trim()) {
-          // A bracket in the text would end the link text early.
-          const label = text.trim().replace(/[[\]]/g, '\\$&');
+          // A bracket in the text would end the link text early, and so would a backslash in
+          // front of one (it would escape the escape): both are escaped.
+          const label = text.trim().replace(/[\\[\]]/g, '\\$&');
           out += `[${label}](${markdownDestination(href.trim())})`;
         } else out += text;
       } else if (name === 'note') out += note(node, after, depth + 1);

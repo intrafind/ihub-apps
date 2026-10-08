@@ -109,13 +109,15 @@ describe('links, notes, images', () => {
       p(link('https://de.wikipedia.org/wiki/Foo_(bar)', 'Foo')) +
       p(link('file:///C:/Mein Ordner/x.odt', 'Datei')) +
       p(link('..\\docs\\x.odt', 'Pfad')) +
-      p(link('https://example.org/a', 'Absatz [3] der Norm'));
+      p(link('https://example.org/a', 'Absatz [3] der Norm')) +
+      p(link('https://example.org/b', 'Ordner C:\\x\\]'));
     expect(await extract({ body })).toBe(
       [
         '[Foo](https://de.wikipedia.org/wiki/Foo_%28bar%29)',
         '[Datei](file:///C:/Mein%20Ordner/x.odt)',
         '[Pfad](..%5Cdocs%5Cx.odt)',
-        '[Absatz \\[3\\] der Norm](https://example.org/a)'
+        '[Absatz \\[3\\] der Norm](https://example.org/a)',
+        '[Ordner C:\\\\x\\\\\\]](https://example.org/b)'
       ].join('\n\n')
     );
   });
