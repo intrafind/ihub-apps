@@ -197,6 +197,20 @@ describe('MemoryEditor', () => {
     await flush();
     expect(textarea()).toHaveAttribute('readonly');
     expect(screen.queryByRole('button', { name: 'Save' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Clear' })).not.toBeInTheDocument();
+  });
+
+  it('keeps the clear button when read only, because owning the notes is enough to empty them', async () => {
+    const clear = jest.fn().mockResolvedValue({ version: 4 });
+    setup({ readOnly: true, clear });
+    await flush();
+    expect(textarea()).toHaveAttribute('readonly');
+    expect(screen.queryByRole('button', { name: 'Save' })).not.toBeInTheDocument();
+
+    jest.spyOn(window, 'confirm').mockReturnValueOnce(true);
+    fireEvent.click(screen.getByRole('button', { name: 'Clear' }));
+    await flush();
+    expect(clear).toHaveBeenCalledTimes(1);
   });
 
   it('clears after confirmation and reloads', async () => {

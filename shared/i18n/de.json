@@ -5624,6 +5624,6 @@
     "reload": "Neu laden (meine Änderungen verwerfen)",
     "keepEditing": "Weiter bearbeiten",
     "versionConflict": "Konflikt: Das Gedächtnis wurde an anderer Stelle geändert. Neu laden, um den aktuellen Stand zu sehen.",
-    "staleNotice": "Die Notizen haben sich geändert, seit du mit dem Bearbeiten begonnen hast (ein Lauf hat sie evtl. aktualisiert)."
+    "staleNotice": "Die Notizen haben sich geändert, seit Sie mit dem Bearbeiten begonnen haben (ein Lauf hat sie evtl. aktualisiert)."
   }
 }

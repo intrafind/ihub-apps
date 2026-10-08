@@ -322,6 +322,8 @@ describe('TaskDetailPage: memory', () => {
     await renderPage();
     expect(notes()).toHaveAttribute('readonly');
     expect(within(memoryCard()).queryByRole('button', { name: 'Save' })).not.toBeInTheDocument();
+    // The server lets the owner empty the notes without the permission to edit tasks.
+    expect(within(memoryCard()).getByRole('button', { name: 'Clear' })).toBeInTheDocument();
     expect(within(memoryCard()).getByTestId('memory-notice')).toHaveTextContent(
       'these notes are read-only'
     );

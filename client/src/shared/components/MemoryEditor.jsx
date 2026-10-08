@@ -38,7 +38,9 @@ function defaultFormatError(err) {
  * @param {string|number} props.id - Identity of the notes; a new id loads again.
  * @param {() => Promise<{body?: string, version?: number, updatedAt?: string|null, updatedBy?: string|null}>} props.load
  * @param {(payload: {content: string, expectedVersion: number}) => Promise<{version?: number, updatedAt?: string}|void>} props.save
- * @param {() => Promise<*>} [props.clear] - Adds a "Clear" button.
+ * @param {() => Promise<*>} [props.clear] - Adds a "Clear" button (also when `readOnly`: the
+ *   notes can be edited only by someone who may edit the task, but anyone who owns them may
+ *   empty them).
  * @param {(err: *) => boolean} [props.isConflict]
  * @param {(err: *) => string} [props.formatError]
  * @param {*} [props.reloadKey] - Change it when the stored notes may have changed.
@@ -207,7 +209,7 @@ export default function MemoryEditor({
             </span>
           )}
         </div>
-        {!readOnly && (
+        {(!readOnly || clear) && (
           <div className="flex gap-2">
             {clear && (
               <button
@@ -219,14 +221,16 @@ export default function MemoryEditor({
                 {t('memoryEditor.clear', 'Clear')}
               </button>
             )}
-            <button
-              type="button"
-              onClick={handleSave}
-              disabled={saving || overLimit || body === savedBody}
-              className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-sm text-sm disabled:opacity-50"
-            >
-              {saving ? t('memoryEditor.saving', 'Saving…') : t('memoryEditor.save', 'Save')}
-            </button>
+            {!readOnly && (
+              <button
+                type="button"
+                onClick={handleSave}
+                disabled={saving || overLimit || body === savedBody}
+                className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-sm text-sm disabled:opacity-50"
+              >
+                {saving ? t('memoryEditor.saving', 'Saving…') : t('memoryEditor.save', 'Save')}
+              </button>
+            )}
           </div>
         )}
       </div>
