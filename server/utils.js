@@ -7,6 +7,7 @@ import tokenStorageService from './services/TokenStorageService.js';
 import logger from './utils/logger.js';
 import { findByIdCaseInsensitive } from './utils/resourceLookup.js';
 import {
+  allowsMissingApiKey,
   BUILT_IN_LLM_PROVIDERS,
   getModelProviderId,
   providerEnvKeyName
@@ -30,178 +31,221 @@ function sanitizeForLog(input) {
 }
 
 /**
- * Helper function to get API key for a model
+ * @typedef {'ok'|'keyless'|'undecryptable'|'missing'|'unknown-model'} ApiKeyState
+ *   - `ok`: a key was found and can be sent.
+ *   - `keyless`: no key anywhere, and the model may run without one
+ *     (see `allowsMissingApiKey`).
+ *   - `undecryptable`: a key is stored but cannot be decrypted — the server's
+ *     encryption key is not the one it was saved with — and nothing else supplies one.
+ *   - `missing`: no key anywhere and the model needs one.
+ *   - `unknown-model`: no model with that id is configured.
+ *
+ * @typedef {'model'|'provider'|'env'|'none'} ApiKeySource
+ *   Where the key comes from; for `undecryptable`, where the unreadable one is stored.
+ *
+ * @typedef {Object} ApiKeyResolution
+ * @property {ApiKeyState} state
+ * @property {ApiKeySource} source
+ * @property {string|null} apiKey - Set only when `state` is `ok`
+ * @property {string|null} envVar - Environment variable the key came from, when `source` is `env`
+ * @property {string|null} providerId - Provider entry the model takes its key from
+ */
+
+/**
+ * Environment variable that supplies the key of a provider-level lookup, and
+ * its value. A model linked to a custom provider only reads that provider's
+ * variable (e.g. LLMHUB_API_KEY), never the one of its API type: an LLM Hub
+ * model speaking the OpenAI API must not be sent OPENAI_API_KEY.
+ */
+function readProviderEnvKey(model, providerConfigId) {
+  // Decided by the link itself, not by comparing IDs: a custom entry may be
+  // named like its API type (created before those names were reserved).
+  if (model.providerId && !BUILT_IN_LLM_PROVIDERS.includes(model.providerId)) {
+    const envVar = providerEnvKeyName(providerConfigId);
+    return { envVar, value: config[envVar] };
+  }
+
+  const provider = model.provider || '';
+  switch (provider) {
+    case 'openai':
+      return { envVar: 'OPENAI_API_KEY', value: config.OPENAI_API_KEY };
+    case 'anthropic':
+      return { envVar: 'ANTHROPIC_API_KEY', value: config.ANTHROPIC_API_KEY };
+    case 'mistral':
+      return { envVar: 'MISTRAL_API_KEY', value: config.MISTRAL_API_KEY };
+    case 'google':
+      return { envVar: 'GOOGLE_API_KEY', value: config.GOOGLE_API_KEY };
+    case 'local':
+      return { envVar: 'LOCAL_API_KEY', value: config.LOCAL_API_KEY };
+    default: {
+      // A generic key named after the provider (e.g. COHERE_API_KEY), then the
+      // catch-all as the last resort.
+      const genericVar = `${provider.toUpperCase()}_API_KEY`;
+      if (config[genericVar]) return { envVar: genericVar, value: config[genericVar] };
+      return { envVar: 'DEFAULT_API_KEY', value: config.DEFAULT_API_KEY };
+    }
+  }
+}
+
+/**
+ * Work out where a model's API key comes from, and whether it can be used.
+ *
  * Checks in this order:
  * 1. Model's stored encrypted API key (from model config)
  * 2. Provider's stored encrypted API key (from providers config) — the entry
  *    named by `model.providerId`, else by `model.provider`
  * 3. Environment variable for model-specific key
- * 4. Environment variable for provider key. A model linked to a custom
- *    provider only reads that provider's variable (e.g. LLMHUB_API_KEY), never
- *    the one of its API type: an LLM Hub model speaking the OpenAI API must not
- *    be sent OPENAI_API_KEY.
- * @param {string} modelId - The model ID
- * @returns {string|null} The API key or null if not found
+ * 4. Environment variable for provider key (see `readProviderEnvKey`)
+ *
+ * A stored key that cannot be decrypted does not end the search — a later
+ * source may still supply one — but if nothing does, the result says so
+ * (`undecryptable`) instead of reporting the key as not set: those need
+ * different fixes.
+ *
+ * Synchronous and free of side effects apart from logging, so the admin UI
+ * can ask for the state of every model. Never returns the key to anything but
+ * the caller.
+ *
+ * @param {Object} model - Model config
+ * @param {Object} [options]
+ * @param {boolean} [options.quiet=false] - Skip the per-lookup log lines (for bulk status reads)
+ * @returns {ApiKeyResolution}
  */
+export function inspectModelApiKey(model, { quiet = false } = {}) {
+  const providerConfigId = getModelProviderId(model);
+  const log = (level, message, meta) => {
+    if (!quiet) logger[level](message, { component: 'Utils', ...meta });
+  };
+  const ok = (apiKey, source, envVar = null) => ({
+    state: 'ok',
+    source,
+    apiKey,
+    envVar,
+    providerId: providerConfigId
+  });
 
-export async function getApiKeyForModel(modelId) {
-  try {
-    // Try to get models from cache first
-    let { data: models = [] } = configCache.getModels();
+  // Where an unreadable stored key sits; reported only if nothing else works.
+  let undecryptableSource = null;
 
-    if (!models) {
-      logger.error('Failed to load models configuration', { component: 'Utils' });
-      return null;
+  /** Plain value of a stored key, or null when it cannot be decrypted. */
+  const readStoredKey = (stored, source, meta) => {
+    if (!tokenStorageService.isEncrypted(stored)) {
+      // Not encrypted: used as-is (hand-written config, or kept for
+      // backwards compatibility during migration).
+      log('info', `Using stored plaintext API key for ${source}`, meta);
+      return stored;
     }
-
-    // Find the model by ID
-    const model = findByIdCaseInsensitive(models, modelId);
-    if (!model) {
-      logger.error(`Model not found: ${sanitizeForLog(modelId)}`, { component: 'Utils' });
-      return null;
-    }
-
-    // Get the provider for this model
-    const provider = model.provider;
-
-    // First priority: Check if the model has a stored (encrypted) API key
-    if (model.apiKey) {
-      try {
-        // Check if it's marked as encrypted or appears to be encrypted
-        const isEncrypted = tokenStorageService.isEncrypted(model.apiKey);
-
-        if (isEncrypted) {
-          const decryptedKey = tokenStorageService.decryptString(model.apiKey);
-          logger.info(`Using stored encrypted API key for model: %s`, {
-            component: 'Utils',
-            modelId: sanitizeForLog(modelId)
-          });
-          return decryptedKey;
-        } else {
-          // If not encrypted, use as-is (for backwards compatibility during migration)
-          logger.info(`Using stored plaintext API key for model: %s`, {
-            component: 'Utils',
-            modelId: sanitizeForLog(modelId)
-          });
-          return model.apiKey;
-        }
-      } catch (error) {
-        logger.error('Failed to decrypt API key for model', {
-          component: 'Utils',
-          modelId: sanitizeForLog(modelId),
-          error: error.message
-        });
-        // Continue to fallback options
-      }
-    }
-
-    // Second priority: Check provider-level encrypted API key
-    const providerConfigId = getModelProviderId(model);
     try {
-      const { data: providers = [] } = configCache.getProviders(true);
-      const providerConfig = providers.find(p => p.id === providerConfigId);
-
-      if (providerConfig && providerConfig.apiKey) {
-        try {
-          const isEncrypted = tokenStorageService.isEncrypted(providerConfig.apiKey);
-
-          if (isEncrypted) {
-            const decryptedKey = tokenStorageService.decryptString(providerConfig.apiKey);
-            logger.info(`Using stored encrypted provider API key for provider`, {
-              component: 'Utils',
-              provider: sanitizeForLog(providerConfigId)
-            });
-            return decryptedKey;
-          } else {
-            // If not encrypted, use as-is (for backwards compatibility during migration)
-            logger.info(`Using stored plaintext provider API key for provider`, {
-              component: 'Utils',
-              provider: sanitizeForLog(providerConfigId)
-            });
-            return providerConfig.apiKey;
-          }
-        } catch (error) {
-          logger.error('Failed to decrypt provider API key', {
-            component: 'Utils',
-            provider: sanitizeForLog(providerConfigId),
-            error: error.message
-          });
-          // Continue to fallback options
-        }
-      }
+      const decrypted = tokenStorageService.decryptString(stored);
+      log('info', `Using stored encrypted API key for ${source}`, meta);
+      return decrypted;
     } catch (error) {
-      logger.error('Error checking provider credentials:', { component: 'Utils', error });
-      // Continue to environment variable fallbacks
-    }
-
-    // Third priority: Check for model-specific API key in environment
-    // (e.g., GPT_4_AZURE1_API_KEY for model id "gpt-4-azure1")
-    const modelSpecificKeyName = `${model.id.toUpperCase().replace(/-/g, '_')}_API_KEY`;
-    const modelSpecificKey = config[modelSpecificKeyName];
-    if (modelSpecificKey) {
-      logger.info(`Using environment variable API key`, {
-        component: 'Utils',
-        envVar: modelSpecificKeyName
-      });
-      return modelSpecificKey;
-    }
-
-    // Fourth priority: Check for provider-specific API keys from environment.
-    // Decided by the link itself, not by comparing IDs: a custom entry may be
-    // named like its API type (created before those names were reserved).
-    if (model.providerId && !BUILT_IN_LLM_PROVIDERS.includes(model.providerId)) {
-      const providerEnvVar = providerEnvKeyName(providerConfigId);
-      if (config[providerEnvVar]) {
-        logger.info(`Using environment variable API key`, {
-          component: 'Utils',
-          envVar: providerEnvVar
-        });
-        return config[providerEnvVar];
-      }
-      logger.error(`No API key found for provider or model-specific key`, {
-        component: 'Utils',
-        provider: sanitizeForLog(providerConfigId),
-        modelSpecificKeyName
+      undecryptableSource = undecryptableSource || source;
+      log('error', `Failed to decrypt the stored API key of the ${source}`, {
+        ...meta,
+        error: error.message,
+        hint: 'The server encryption key is not the one the key was saved with. Check TOKEN_ENCRYPTION_KEY and contents/.encryption-key on every instance, or enter the key again.'
       });
       return null;
     }
-    switch (provider) {
-      case 'openai':
-        return config.OPENAI_API_KEY;
-      case 'anthropic':
-        return config.ANTHROPIC_API_KEY;
-      case 'mistral':
-        return config.MISTRAL_API_KEY;
-      case 'google':
-        return config.GOOGLE_API_KEY;
-      case 'local':
-        // For local models, check if there's a specific LOCAL_API_KEY or return a default empty string
-        // This allows local models to work without authentication in many cases
-        return config.LOCAL_API_KEY || '';
-      default:
-        // Try to find a generic API key based on provider name (e.g., COHERE_API_KEY for provider 'cohere')
-        const genericKey = config[`${provider.toUpperCase()}_API_KEY`];
-        if (genericKey) {
-          return genericKey;
-        }
+  };
 
-        // Check for a default API key as last resort
-        if (config.DEFAULT_API_KEY) {
-          logger.info(`Using DEFAULT_API_KEY for provider`, { component: 'Utils', provider });
-          return config.DEFAULT_API_KEY;
-        }
+  // First priority: the model's own stored key
+  if (model.apiKey) {
+    const key = readStoredKey(model.apiKey, 'model', { modelId: sanitizeForLog(model.id) });
+    if (key) return ok(key, 'model');
+  }
 
-        logger.error(`No API key found for provider or model-specific key`, {
-          component: 'Utils',
-          provider,
-          modelSpecificKeyName
-        });
-        return null;
+  // Second priority: the provider entry's stored key
+  try {
+    const { data: providers = [] } = configCache.getProviders(true);
+    const providerConfig = providers.find(p => p.id === providerConfigId);
+    if (providerConfig?.apiKey) {
+      const key = readStoredKey(providerConfig.apiKey, 'provider', {
+        provider: sanitizeForLog(providerConfigId)
+      });
+      if (key) return ok(key, 'provider');
     }
   } catch (error) {
-    logger.error('Error getting API key for model:', { component: 'Utils', error });
-    return null;
+    logger.error('Error checking provider credentials:', { component: 'Utils', error });
+    // Continue to environment variable fallbacks
   }
+
+  // Third priority: a model-specific key in the environment
+  // (e.g., GPT_4_AZURE1_API_KEY for model id "gpt-4-azure1")
+  const modelSpecificKeyName = `${String(model.id).toUpperCase().replace(/-/g, '_')}_API_KEY`;
+  if (config[modelSpecificKeyName]) {
+    log('info', 'Using environment variable API key', { envVar: modelSpecificKeyName });
+    return ok(config[modelSpecificKeyName], 'env', modelSpecificKeyName);
+  }
+
+  // Fourth priority: the provider's key in the environment
+  const providerEnv = readProviderEnvKey(model, providerConfigId);
+  if (providerEnv.value) {
+    log('info', 'Using environment variable API key', { envVar: providerEnv.envVar });
+    return ok(providerEnv.value, 'env', providerEnv.envVar);
+  }
+
+  const nothing = state => ({
+    state,
+    source: state === 'undecryptable' ? undecryptableSource : 'none',
+    apiKey: null,
+    envVar: null,
+    providerId: providerConfigId
+  });
+
+  if (undecryptableSource) return nothing('undecryptable');
+  if (allowsMissingApiKey(model)) return nothing('keyless');
+
+  log('error', 'No API key found for provider or model-specific key', {
+    provider: sanitizeForLog(providerConfigId),
+    modelSpecificKeyName
+  });
+  return nothing('missing');
+}
+
+/**
+ * Resolve the API key state of a model by id. See `inspectModelApiKey`.
+ *
+ * @param {string} modelId - The model ID
+ * @returns {Promise<ApiKeyResolution>}
+ */
+export async function resolveModelApiKey(modelId) {
+  const unavailable = state => ({
+    state,
+    source: 'none',
+    apiKey: null,
+    envVar: null,
+    providerId: null
+  });
+
+  try {
+    const { data: models = [] } = configCache.getModels();
+    const model = findByIdCaseInsensitive(models || [], modelId);
+    if (!model) {
+      logger.error(`Model not found: ${sanitizeForLog(modelId)}`, { component: 'Utils' });
+      return unavailable('unknown-model');
+    }
+    return inspectModelApiKey(model);
+  } catch (error) {
+    logger.error('Error getting API key for model:', { component: 'Utils', error });
+    return unavailable('missing');
+  }
+}
+
+/**
+ * Helper function to get API key for a model. See `inspectModelApiKey` for the
+ * lookup order.
+ *
+ * Use `resolveModelApiKey` when the reason for a missing key matters: this
+ * returns null for a model that runs without a key just as it does for one
+ * that lacks a key it needs.
+ *
+ * @param {string} modelId - The model ID
+ * @returns {Promise<string|null>} The API key or null if there is none
+ */
+export async function getApiKeyForModel(modelId) {
+  return (await resolveModelApiKey(modelId)).apiKey;
 }
 
 /**

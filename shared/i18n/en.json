@@ -963,7 +963,8 @@
           "authenticationFailed": "Authentication failed",
           "modelNotFound": "Model not found",
           "rateLimitExceeded": "Rate limit exceeded",
-          "serverError": "Server error"
+          "serverError": "Server error",
+          "apiKeyUndecryptable": "Stored API key cannot be decrypted"
         }
       },
       "enable": "Enable",
@@ -975,7 +976,8 @@
       "noModels": "No models found",
       "noModelsDesc": "Get started by creating a new model.",
       "table": {
-        "status": "Status"
+        "status": "Status",
+        "apiKey": "API key"
       },
       "status": {
         "enabled": "Enabled",
@@ -1054,7 +1056,7 @@
       "hints": {
         "modelId": "Unique identifier for the model (cannot be changed after creation)",
         "apiModelId": "Model identifier used by the provider's API (e.g., gpt-4, claude-3-opus)",
-        "apiKey": "API key for this model. If not provided, the system will use the environment variable for the provider. Keys are stored encrypted.",
+        "apiKey": "API key for this model. If not provided, the system will use the key of its provider or the environment variable. A local server (vLLM, LM Studio, Jan.ai, Ollama) needs no key — leave this empty. Keys are stored encrypted.",
         "apiKeySet": "✓ API key is configured for this model",
         "apiKeyEnvVars": "Environment variables (in priority order):\n{{envVars}}",
         "supportsVision": "Enable if this model can process image inputs",
@@ -3635,6 +3637,20 @@
       "download": "Download agent package",
       "prereqHttps": "iHub's public address uses HTTPS",
       "prereqHttpsOff": "iHub's public address is not HTTPS, and Copilot only calls HTTPS addresses — set the MCP gateway's Public URL (or forward X-Forwarded-Proto from the proxy)"
+    },
+    "apiKeyStatus": {
+      "ok": "Key found",
+      "keyless": "No key needed",
+      "keylessHint": "No key is set, so the server is called without an Authorization header.",
+      "undecryptable": "Stored key unreadable",
+      "undecryptableHint": "A key is stored, but this server cannot decrypt it: the encryption key changed since it was saved. Enter the key again, or make sure every instance uses the same TOKEN_ENCRYPTION_KEY / contents/.encryption-key.",
+      "missing": "No API key",
+      "missingHint": "Enter a key here or on the provider, or set it as an environment variable.",
+      "source": {
+        "env": "environment variable {{envVar}}",
+        "provider": "stored on the provider",
+        "model": "stored on the model"
+      }
     }
   },
   "cloudStorage": {
@@ -3952,7 +3968,8 @@
     "noModelIdProvided": "No model selected. Please select an AI model to continue.",
     "noModelsForUser": "You don't have permission to access any AI models. Please contact your administrator to request access.",
     "malformedModelResponse": "The AI model returned an incomplete response and no answer could be generated. This can happen intermittently — please try sending your message again.",
-    "outputValidationFailed": "The AI model's answer did not match the required output format."
+    "outputValidationFailed": "The AI model's answer did not match the required output format.",
+    "apiKeyUnreadable": "The API key stored for model {modelId} cannot be decrypted. The server's encryption key is not the one it was saved with. An administrator has to enter the key again (Admin › Models) or provide it as an environment variable."
   },
   "toolErrors": {
     "MISSING_URL": "URL parameter is required.",
@@ -4628,7 +4645,8 @@
       "savingButton": "Saving…",
       "skipLater": "Skip, I'll configure later",
       "freeTierBadge": "Free Tier",
-      "noApiKeyBadge": "Optional Key"
+      "noApiKeyBadge": "Optional Key",
+      "noKeyHint": "No API key yet? Choose “Local Provider” if you run your own model server, or skip for now and add a key later under Admin › Providers."
     },
     "step3": {
       "title": "You're all set!",
@@ -4640,7 +4658,12 @@
       "nextStep3": "Invite team members and configure groups under Admin › Teams",
       "nextStep4": "Explore settings to customize your workspace",
       "goToApps": "Go to Apps",
-      "goToAdmin": "Open Admin"
+      "goToAdmin": "Open Admin",
+      "keyCheck": {
+        "ready": "Models ready to use: {{count}}",
+        "blocked": "Enabled models without a usable API key: {{count}}.",
+        "fix": "Review the models"
+      }
     }
   },
   "apps": {
