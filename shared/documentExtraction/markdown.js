@@ -42,17 +42,15 @@ function cellMarkdown(service, cell) {
     while (heading.firstChild) paragraph.appendChild(heading.firstChild);
     heading.parentNode.replaceChild(paragraph, heading);
   }
-  return (
-    service
-      .turndown(clone.innerHTML || '')
-      .replace(/\s*\n+\s*/g, '<br>')
-      .replace(/^(<br>)+|(<br>)+$/g, '')
-      .trim()
-      // A pipe ends the cell, so it is escaped. A backslash in front of it would escape the escape:
-      // double those first (`\|` in the text must come out as `\\\|`, not `\\|`).
-      .replace(/\\+(?=\|)/g, run => run + run)
-      .replace(/\|/g, '\\|')
-  );
+  const text = service
+    .turndown(clone.innerHTML || '')
+    .replace(/\s*\n+\s*/g, '<br>')
+    .replace(/^(<br>)+|(<br>)+$/g, '')
+    .trim();
+  // A pipe ends the cell, so it is escaped. Backslashes are doubled first — only in a cell that
+  // needs the escape — because a backslash in front of a pipe would escape the escape (`\|` in
+  // the text must come out as `\\\|`, not `\\|`, which is a backslash and a column delimiter).
+  return text.includes('|') ? text.replace(/\\/g, '\\\\').replace(/\|/g, '\\|') : text;
 }
 
 /**
