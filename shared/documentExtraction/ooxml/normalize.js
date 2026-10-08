@@ -213,27 +213,45 @@ export function normalizeDocumentXml(
     // 3e. Headings by outline level. mammoth maps built-in `heading 1–6` itself; every other
     // style with an outline level (corporate templates) and every paragraph with its own
     // outline level gets a synthetic style named `heading N`, which mammoth also maps.
-    if (canAddOutlineStyles && hasAcceptedContent) {
+    if (hasAcceptedContent) {
       const directLevel = xml.val(xml.kid(pPr, 'outlineLvl'));
       const direct = directLevel === undefined ? undefined : Number(directLevel);
       const level = Number.isNaN(direct)
         ? undefined
         : (direct ?? styles.resolve(styleId, 'outlineLvl'));
       const native = NATIVE_HEADING_NAME.test(styles.name(styleId) || '');
-      if (level !== undefined && level >= 0 && level <= 8 && !(native && direct === undefined)) {
+      const pStyleElement = xml.kid(pPr, 'pStyle');
+      if (direct === 9 && native && pStyleElement) {
+        // The author set "body text" on a paragraph with a built-in heading style: not a
+        // heading, whatever the style says (mammoth would map the style).
+        pPr.removeChild(pStyleElement);
+      } else if (
+        level !== undefined &&
+        level >= 0 &&
+        level <= 8 &&
+        !(native && direct === undefined)
+      ) {
         const mapped = Math.min(level, 5) + 1;
-        outlineLevels.add(mapped);
-        let paraProps = pPr;
-        if (!paraProps) {
-          paraProps = xml.create(doc, 'pPr');
-          para.insertBefore(paraProps, para.firstChild);
+        if (canAddOutlineStyles) {
+          outlineLevels.add(mapped);
+          let paraProps = pPr;
+          if (!paraProps) {
+            paraProps = xml.create(doc, 'pPr');
+            para.insertBefore(paraProps, para.firstChild);
+          }
+          let pStyle = pStyleElement;
+          if (!pStyle) {
+            pStyle = xml.create(doc, 'pStyle');
+            paraProps.insertBefore(pStyle, paraProps.firstChild);
+          }
+          pStyle.setAttributeNS(xml.ns, 'w:val', outlineStyleId(mapped));
+        } else {
+          // A package without a styles part has no style to hand to mammoth: write the
+          // heading marker into the text instead.
+          const run = xml.create(doc, 'r');
+          run.appendChild(textElement(`${'#'.repeat(mapped)} `));
+          para.insertBefore(run, pPr ? pPr.nextSibling : para.firstChild);
         }
-        let pStyle = xml.kid(paraProps, 'pStyle');
-        if (!pStyle) {
-          pStyle = xml.create(doc, 'pStyle');
-          paraProps.insertBefore(pStyle, paraProps.firstChild);
-        }
-        pStyle.setAttributeNS(xml.ns, 'w:val', outlineStyleId(mapped));
       }
     }
   }
