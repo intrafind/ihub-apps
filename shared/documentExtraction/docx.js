@@ -13,6 +13,8 @@ import { createWordXml, parseXml, wordNamespaceOf } from './ooxml/xml.js';
 import { readStyles } from './ooxml/styles.js';
 import { createNumbering } from './ooxml/numbering.js';
 import { addOutlineStyles, normalizeDocumentXml } from './ooxml/normalize.js';
+import { readHeaderFooterText } from './ooxml/headerFooter.js';
+import { FOOTER_PREFIX, HEADER_PREFIX } from './markers.js';
 import { createDocumentMarkdownConverter, htmlToMarkdown, normalizeMarkdown } from './markdown.js';
 
 const DEFAULT_DOCUMENT_PART = 'word/document.xml';
@@ -28,21 +30,29 @@ function resolveTarget(baseDir, target) {
   return parts.join('/');
 }
 
-/** Targets of the relationships of `ownerPart` whose type ends with one of `typeSuffixes`. */
-async function relationshipTargets(zip, DOMParserCtor, ownerPart, typeSuffixes) {
+/** The parsed relationships of `ownerPart` (external ones left out), targets resolved. */
+async function readRelationships(zip, DOMParserCtor, ownerPart) {
   const slash = ownerPart.lastIndexOf('/');
   const dir = slash >= 0 ? ownerPart.slice(0, slash) : '';
   const name = slash >= 0 ? ownerPart.slice(slash + 1) : ownerPart;
   const relsFile = zip.file(`${dir ? `${dir}/` : ''}_rels/${name}.rels`);
-  const found = {};
-  if (!relsFile) return found;
+  if (!relsFile) return [];
   const relsDoc = parseXml(DOMParserCtor, await relsFile.async('string'));
-  for (const rel of Array.from(relsDoc.getElementsByTagNameNS('*', 'Relationship'))) {
-    const type = rel.getAttribute('Type') || '';
-    const suffix = typeSuffixes.find(s => type.endsWith(s));
-    if (suffix && rel.getAttribute('TargetMode') !== 'External') {
-      found[suffix] = resolveTarget(dir, rel.getAttribute('Target') || '');
-    }
+  return Array.from(relsDoc.getElementsByTagNameNS('*', 'Relationship'))
+    .filter(rel => rel.getAttribute('TargetMode') !== 'External')
+    .map(rel => ({
+      id: rel.getAttribute('Id') || '',
+      type: rel.getAttribute('Type') || '',
+      target: resolveTarget(dir, rel.getAttribute('Target') || '')
+    }));
+}
+
+/** Targets of the relationships of `ownerPart` whose type ends with one of `typeSuffixes`. */
+async function relationshipTargets(zip, DOMParserCtor, ownerPart, typeSuffixes) {
+  const found = {};
+  for (const rel of await readRelationships(zip, DOMParserCtor, ownerPart)) {
+    const suffix = typeSuffixes.find(s => rel.type.endsWith(s));
+    if (suffix) found[suffix] = rel.target;
   }
   return found;
 }
@@ -73,10 +83,13 @@ export async function extractDocxMarkdown({
     await relationshipTargets(zip, DOMParserCtor, '', ['/officeDocument'])
   );
   const documentPart = mainTarget || DEFAULT_DOCUMENT_PART;
-  const related = await relationshipTargets(zip, DOMParserCtor, documentPart, [
-    '/styles',
-    '/numbering'
-  ]);
+  const documentRelationships = await readRelationships(zip, DOMParserCtor, documentPart);
+  const related = {};
+  for (const rel of documentRelationships) {
+    for (const suffix of ['/styles', '/numbering', '/settings']) {
+      if (rel.type.endsWith(suffix)) related[suffix] = rel.target;
+    }
+  }
   const stylesPart = related['/styles'] || 'word/styles.xml';
   const numberingPart = related['/numbering'] || 'word/numbering.xml';
 
@@ -92,6 +105,24 @@ export async function extractDocxMarkdown({
   const xml = createWordXml(wordNamespaceOf(documentDoc));
   const styles = readStyles(stylesDoc, xml);
   const numbering = createNumbering(numberingDoc, styles, xml);
+
+  // Headers and footers are read from the document as Word shows it — before the body pass
+  // touches it — but a failure here only costs them, never the body.
+  let headerFooter = { header: [], footer: [] };
+  try {
+    const settingsDoc = related['/settings'] ? await readPart(related['/settings']) : null;
+    headerFooter = await readHeaderFooterText({
+      documentDoc,
+      xml,
+      relationships: new Map(documentRelationships.map(rel => [rel.id, rel])),
+      readPart,
+      styles,
+      evenAndOddHeaders:
+        xml.toggle(xml.kid(settingsDoc?.documentElement, 'evenAndOddHeaders')) === true
+    });
+  } catch {
+    // Malformed or unexpected header part: continue without headers and footers.
+  }
 
   const { outlineLevels } = normalizeDocumentXml(documentDoc, {
     xml,
@@ -117,5 +148,10 @@ export async function extractDocxMarkdown({
   );
 
   const converter = createDocumentMarkdownConverter(TurndownService);
-  return normalizeMarkdown(htmlToMarkdown(converter, result.value, DOMParserCtor));
+  const body = htmlToMarkdown(converter, result.value, DOMParserCtor);
+  const preamble = [
+    ...headerFooter.header.map(line => `${HEADER_PREFIX} ${line}`),
+    ...headerFooter.footer.map(line => `${FOOTER_PREFIX} ${line}`)
+  ].join('\n');
+  return normalizeMarkdown(preamble ? `${preamble}\n\n${body}` : body);
 }
