@@ -17,6 +17,28 @@ const FOOTNOTE_BACKLINK = /^#(foot|end)note-ref-\d+$/;
 
 const footnoteLabel = (kind, number) => (kind === 'end' ? `[^e${number}]` : `[^${number}]`);
 
+/**
+ * Whitespace runs that contain a line break, replaced by `replacement`. One pass over maximal
+ * whitespace runs: a pattern of optional spaces, line breaks and optional spaces rescans every
+ * run quadratically (a document with a very long run of spaces would stall the tab).
+ */
+const replaceNewlineRuns = (text, replacement) =>
+  text.replace(/\s+/g, run => (run.includes('\n') ? replacement : run));
+
+/** `text` with a trailing run of line breaks reduced to one (linear, unlike a `\n+$` pattern). */
+const singleTrailingNewline = text => {
+  let end = text.length;
+  while (end > 0 && text[end - 1] === '\n') end -= 1;
+  return end === text.length ? text : `${text.slice(0, end)}\n`;
+};
+
+/** `line` without trailing spaces and tabs (linear, unlike a `[ \t]+$` pattern). */
+const stripTrailingBlanks = line => {
+  let end = line.length;
+  while (end > 0 && (line[end - 1] === ' ' || line[end - 1] === '\t')) end -= 1;
+  return end === line.length ? line : line.slice(0, end);
+};
+
 /** A table cell on one line: paragraphs and line breaks as `<br>`, pipes escaped. */
 function cellMarkdown(service, cell) {
   const doc = cell.ownerDocument;
@@ -42,9 +64,7 @@ function cellMarkdown(service, cell) {
     while (heading.firstChild) paragraph.appendChild(heading.firstChild);
     heading.parentNode.replaceChild(paragraph, heading);
   }
-  const text = service
-    .turndown(clone.innerHTML || '')
-    .replace(/\s*\n+\s*/g, '<br>')
+  const text = replaceNewlineRuns(service.turndown(clone.innerHTML || ''), '<br>')
     .replace(/^(<br>)+|(<br>)+$/g, '')
     .trim();
   // A pipe ends the cell, so it is escaped. Backslashes are doubled first — only in a cell that
@@ -173,10 +193,7 @@ export function createDocumentMarkdownConverter(TurndownService) {
     replacement: (_content, node) => {
       const definitions = Array.from(node.children).map(item => {
         const [, kind, number] = `#${item.getAttribute('id')}`.match(FOOTNOTE_REF);
-        const text = service
-          .turndown(item.innerHTML || '')
-          .replace(/\s*\n+\s*/g, ' ')
-          .trim();
+        const text = replaceNewlineRuns(service.turndown(item.innerHTML || ''), ' ').trim();
         return `${footnoteLabel(kind, number)}: ${text}`;
       });
       return `\n\n${definitions.join('\n')}\n\n`;
@@ -187,7 +204,7 @@ export function createDocumentMarkdownConverter(TurndownService) {
   service.addRule('listItem', {
     filter: 'li',
     replacement: (content, node, options) => {
-      const text = content.replace(/^\n+/, '').replace(/\n+$/, '\n').replace(/\n/gm, '\n  ');
+      const text = singleTrailingNewline(content.replace(/^\n+/, '')).replace(/\n/g, '\n  ');
       const parent = node.parentNode;
       let prefix = `${options.bulletListMarker} `;
       if (parent?.nodeName === 'OL') {
@@ -258,7 +275,9 @@ export function normalizeMarkdown(markdown) {
     .replace(/\r\n?/g, '\n')
     .replace(/\u00AD/g, '')
     .replace(/\u2011/g, '-')
-    .replace(/[ \t]+$/gm, '')
+    .split('\n')
+    .map(stripTrailingBlanks)
+    .join('\n')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
 }

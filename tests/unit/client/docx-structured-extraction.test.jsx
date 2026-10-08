@@ -155,6 +155,52 @@ describe('structured DOCX extraction', () => {
     });
   });
 
+  describe('package relationships', () => {
+    it('resolves parts through relationship elements written with a namespace prefix', async () => {
+      const content = await extract({
+        styles: null,
+        parts: {
+          'word/corporate-styles.xml':
+            '<?xml version="1.0" encoding="UTF-8"?><w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">' +
+            '<w:style w:type="paragraph" w:styleId="Titel"><w:name w:val="Titel"/><w:pPr><w:outlineLvl w:val="0"/></w:pPr></w:style></w:styles>'
+        },
+        rels:
+          '<pr:Relationship xmlns:pr="http://schemas.openxmlformats.org/package/2006/relationships" ' +
+          'Id="rIdX" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" ' +
+          'Target="corporate-styles.xml"/>',
+        body: p('Kapitel', '<w:pStyle w:val="Titel"/>') + p('Text')
+      });
+      expect(content).toBe('# Kapitel\n\nText');
+    });
+  });
+
+  describe('long runs of whitespace (no stall)', () => {
+    it('normalizeMarkdown strips trailing blanks without rescanning long runs', () => {
+      const { normalizeMarkdown } = require('../../../shared/documentExtraction/markdown');
+      const run = ' \t'.repeat(100000);
+      const started = Date.now();
+      const text = normalizeMarkdown(`a${run}b  \nc${run}\n\n\n\nd\t`);
+      expect(Date.now() - started).toBeLessThan(1000);
+      expect(text).toBe(`a${run}b\nc\n\nd`);
+    });
+
+    it('extracts a document with very long runs of spaces, tabs and line breaks in linear time', async () => {
+      const run = ' '.repeat(200000);
+      const started = Date.now();
+      const content = await extract({
+        body:
+          p(`vor${run}nach`) +
+          tbl([tc(p(`a${run}b`) + p('c')), tc(p('d'))]) +
+          // The footnote-style and list-item rules work on the same kind of runs.
+          p(`ende${'\t'.repeat(100000)}`)
+      });
+      expect(Date.now() - started).toBeLessThan(5000);
+      expect(content).toContain('| a');
+      expect(content).toContain('vor');
+      expect(content.endsWith('ende')).toBe(true);
+    });
+  });
+
   describe('table cells with backslashes', () => {
     it('keeps a backslash in front of a pipe from escaping the pipe escape', async () => {
       const content = await extract({
@@ -309,6 +355,20 @@ describe('structured DOCX extraction', () => {
       expect(content).toBe(
         'Erste\n\n[Page break]\n\nZweite\n\nAbschnitt eins\n\nAbschnitt zwei\n\n[Page break]\n\nAbschnitt drei'
       );
+    });
+
+    it('field codes and tracked deletions are not content: they neither start nor head anything', async () => {
+      const content = await extract({
+        body:
+          // A table-of-contents field without result before the first chapter.
+          '<w:p><w:r><w:instrText xml:space="preserve"> TOC \\o "1-3" </w:instrText></w:r></w:p>' +
+          p('Erste', '<w:pageBreakBefore/>') +
+          // A heading whose only text was deleted produces nothing, not an empty heading.
+          '<w:p><w:pPr><w:outlineLvl w:val="0"/></w:pPr><w:del w:id="1" w:author="a">' +
+          '<w:r><w:delText>weg</w:delText></w:r></w:del></w:p>' +
+          p('Zweite')
+      });
+      expect(content).toBe('Erste\n\nZweite');
     });
 
     it('T-DOCX-23: Markdown characters in the document are not escaped', async () => {
