@@ -46,18 +46,20 @@ const MARKER_LINE =
   /^\[(?:Page \d+(?: \(printed: [^)\n]*\))?(?:: no extractable text)?|Page break)\]$/;
 
 /**
- * Length of the text that is not a page marker. The scanned-PDF check must use this
- * instead of the raw length: markers alone would make a scan look like text and
- * silently disable the page-image fallback.
+ * Number of characters of real text: what is left when page markers, blank lines and the line
+ * breaks between lines are not counted. The scanned-PDF check must use this instead of the raw
+ * length: markers alone would make a scan look like text and silently disable the page-image
+ * fallback, and so would the separators between many pages with a single character each.
  *
  * @param {string} text
  * @returns {number}
  */
 export function realTextLength(text) {
   if (typeof text !== 'string') return 0;
-  return text
-    .split('\n')
-    .filter(line => !MARKER_LINE.test(line.trim()))
-    .join('\n')
-    .trim().length;
+  let total = 0;
+  for (const raw of text.split('\n')) {
+    const line = raw.trim();
+    if (!MARKER_LINE.test(line)) total += line.length;
+  }
+  return total;
 }

@@ -116,6 +116,7 @@ export async function extractDocxMarkdown({
       xml,
       relationships: new Map(documentRelationships.map(rel => [rel.id, rel])),
       readPart,
+      styles,
       evenAndOddHeaders:
         xml.toggle(xml.kid(settingsDoc?.documentElement, 'evenAndOddHeaders')) === true
     });

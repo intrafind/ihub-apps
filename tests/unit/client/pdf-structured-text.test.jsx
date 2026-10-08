@@ -224,6 +224,15 @@ describe('PDF upload', () => {
     expect(result.pageImages).toHaveLength(2);
   });
 
+  it('counts the characters, not the separators between pages: 20 pages with one character each are a scan', async () => {
+    const pages = Array.from({ length: 20 }, () => page(line('x')));
+    const result = await upload(pages);
+    // 20 characters, whatever the markers and blank lines around them add up to.
+    expect(result.content).toBe('');
+    // The first five pages are rendered, as before.
+    expect(result.pageImages).toHaveLength(5);
+  });
+
   it('keeps the short text when the pages cannot be rendered', async () => {
     toDataURL.mockImplementation(() => {
       throw new Error('canvas tainted');
