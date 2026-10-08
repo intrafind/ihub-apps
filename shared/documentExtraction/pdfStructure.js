@@ -330,8 +330,10 @@ const normalizeTitle = text =>
     .toLowerCase()
     .replace(/[^\p{L}\p{N}]+/gu, '');
 
-// What may stand in front of an outline title in the text: a chapter label such as `1.2`, `IV`, `a`.
-const LABEL_PREFIX = /^(?:\d{1,3}|[ivxlcdm]{1,6}|[a-z])/;
+// What may stand in front of an outline title in the text: a chapter label such as `1.2.3`
+// (its digits, once the dots are gone), `IV` or `a`.
+const LABEL = /^(?:\d{1,6}|[ivxlcdm]{1,6}|[a-z])$/;
+const MAX_LABEL = 6;
 
 const DONE = 'done';
 const PARTIAL = 'partial';
@@ -341,13 +343,16 @@ const NO = 'no';
 function progress(seen, key) {
   if (seen === key) return DONE;
   if (key.startsWith(seen)) return PARTIAL;
-  const label = LABEL_PREFIX.exec(seen);
-  if (label) {
-    const rest = seen.slice(label[0].length);
+  // A label in front of the title: every length is tried, not the longest match — the title may
+  // start with letters that look like part of a Roman numeral (`II Introduction`: `iii` + …).
+  let partial = false;
+  for (let length = 1; length <= MAX_LABEL && length < seen.length; length += 1) {
+    if (!LABEL.test(seen.slice(0, length))) continue;
+    const rest = seen.slice(length);
     if (rest === key) return DONE;
-    if (rest !== '' && key.startsWith(rest)) return PARTIAL;
+    if (key.startsWith(rest)) partial = true;
   }
-  return NO;
+  return partial ? PARTIAL : NO;
 }
 
 /**

@@ -638,7 +638,7 @@ Uploaded documents keep their structure (admins can switch this off under **Admi
 | File | What the model reads |
 |---|---|
 | Word (.docx) | Markdown: `#` … `######` headings, the numbers Word shows in front of numbered headings and paragraphs (`2.1`, `a)`, `§ 3`), tables as Markdown tables, footnotes as `[^1]`, `[Page break]` where the author forced a new page (Word stores no page numbers, so pages cannot be cited), and `[Header] …` / `[Footer] …` lines before the text |
-| PDF | `[Page N]` before each page — `[Page 5 (printed: 3)]` when the page's printed number differs from its position —, one line per line of the page, `[Page 2: no extractable text]` for a page without a text layer. `#` headings and Markdown tables where the PDF is tagged, has an outline, or sets its headings in clearly larger type; otherwise headings are ordinary lines |
+| PDF | `[Page N]` before each page — `[Page 5 (printed: 3)]` when the page's printed number differs from its position —, one line per line of the page, `[Page 2: no extractable text]` for a page without a text layer. `#` headings come from the tags, from an outline (bookmarks) that matches the text, or from clearly larger type; otherwise headings are ordinary lines. Markdown tables only where the PDF is tagged — without tags, table rows are plain lines |
 
 Tell the model what to align on, and how to cite. Without that, a comparison falls back to matching free-flowing text:
 
