@@ -24,7 +24,7 @@
 export const version = '076';
 export const description = 'fix_ifinder_jwt_subject_template';
 
-const STANDARD_VALUES = new Set(['email', 'username', String.raw`domain\username`]);
+const STANDARD_VALUES = new Set(['email', 'username', 'domain\\username']);
 
 export async function precondition(ctx) {
   return await ctx.fileExists('config/platform.json');

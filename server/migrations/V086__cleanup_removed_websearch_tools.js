@@ -50,7 +50,7 @@ const REMOVED_TOOL_NAMES = [
 function toolNameRun() {
   const names = REMOVED_TOOL_NAMES.join('|');
   return new RegExp(
-    String.raw`\b(?:${names})\b(?:\s*(?:,|/|or|and|oder|und)\s*\b(?:${names})\b)*`,
+    `\\b(?:${names})\\b(?:\\s*(?:,|/|or|and|oder|und)\\s*\\b(?:${names})\\b)*`,
     'g'
   );
 }

@@ -52,7 +52,7 @@ export async function up(ctx) {
       : {};
 
   // Merge providers shallowly with the same "legacy wins" precedence.
-  const mergedProviders = { ...existing.providers, ...legacy.providers };
+  const mergedProviders = { ...(existing.providers || {}), ...(legacy.providers || {}) };
 
   platform.auth.debug = {
     ...existing,

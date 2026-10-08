@@ -13,8 +13,8 @@
  *    (default true) to platform.json.
  */
 
-import fs from 'node:fs/promises';
-import path from 'node:path';
+import fs from 'fs/promises';
+import path from 'path';
 import { getRootDir } from '../pathUtils.js';
 
 export const version = '042';

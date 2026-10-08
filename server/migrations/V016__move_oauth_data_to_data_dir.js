@@ -1,5 +1,5 @@
-import fs from 'node:fs/promises';
-import path from 'node:path';
+import fs from 'fs/promises';
+import path from 'path';
 
 export const version = '016';
 export const description = 'move_oauth_data_to_data_dir';
