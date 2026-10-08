@@ -1,0 +1,163 @@
+{
+  "id": "schedule_task",
+  "name": {
+    "en": "Schedule Task",
+    "de": "Aufgabe planen"
+  },
+  "description": {
+    "en": "Propose a scheduled task: a prompt that runs by itself as the user (once, on an interval, daily, weekdays, weekly, monthly, by cron, or only when started by hand). Each run is its own chat. Nothing is saved: the user reviews the task on a confirmation card and saves it there. Use it when the user asks for something to happen later or regularly, e.g. \"every weekday at 8:00, summarize my Jira tickets\".",
+    "de": "Eine geplante Aufgabe vorschlagen: ein Prompt, der von selbst als der Nutzer läuft (einmalig, im Intervall, täglich, werktags, wöchentlich, monatlich, per Cron oder nur manuell). Jeder Lauf ist ein eigener Chat. Es wird nichts gespeichert: Der Nutzer prüft die Aufgabe auf einer Bestätigungskarte und speichert sie dort. Verwenden, wenn der Nutzer etwas später oder regelmäßig erledigt haben möchte, z. B. „werktags um 8:00 meine Jira-Tickets zusammenfassen“."
+  },
+  "script": "scheduledTaskTools.js",
+  "method": "scheduleTask",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "name": {
+        "type": "string",
+        "maxLength": 120,
+        "description": {
+          "en": "Short name of the task",
+          "de": "Kurzer Name der Aufgabe"
+        }
+      },
+      "instructions": {
+        "type": "string",
+        "description": {
+          "en": "The prompt sent on every run, written as a complete instruction that makes sense without this conversation. It may use {{run_time}}, {{last_run_at}}, {{last_successful_run_at}}, {{run_number}} and {{task_name}}, e.g. \"tickets changed since {{last_successful_run_at}}\".",
+          "de": "Der Prompt, der bei jedem Lauf gesendet wird, als vollständige Anweisung, die ohne diese Unterhaltung verständlich ist. Er kann {{run_time}}, {{last_run_at}}, {{last_successful_run_at}}, {{run_number}} und {{task_name}} verwenden, z. B. „Tickets, die sich seit {{last_successful_run_at}} geändert haben“."
+        }
+      },
+      "description": {
+        "type": "string",
+        "description": {
+          "en": "Optional one-line description",
+          "de": "Optionale einzeilige Beschreibung"
+        }
+      },
+      "schedule": {
+        "type": "object",
+        "description": {
+          "en": "When the task runs. Pick a type and fill only the fields it uses: manual (only when started by hand); once (at); interval (every + unit, optional time for days); daily and weekdays (time); weekly (time + days); monthly (time + dayOfMonth); cron (cron). Times are local to timezone. Resolve relative phrases (\"tomorrow at 9\", \"in 2 hours\", \"every other Tuesday at 3pm\") into these fields yourself, e.g. every other Tuesday = interval, every 14, unit days, startAt the next Tuesday 15:00.",
+          "de": "Wann die Aufgabe läuft. Wählen Sie einen Typ und füllen Sie nur dessen Felder: manual (nur manuell); once (at); interval (every + unit, bei Tagen optional time); daily und weekdays (time); weekly (time + days); monthly (time + dayOfMonth); cron (cron). Zeiten gelten in timezone. Lösen Sie relative Angaben („morgen um 9“, „in 2 Stunden“, „jeden zweiten Dienstag um 15 Uhr“) selbst in diese Felder auf, z. B. jeder zweite Dienstag = interval, every 14, unit days, startAt der nächste Dienstag 15:00."
+        },
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": ["manual", "once", "interval", "daily", "weekdays", "weekly", "monthly", "cron"]
+          },
+          "at": {
+            "type": "string",
+            "description": {
+              "en": "once: local date and time, e.g. 2026-10-01T09:00",
+              "de": "once: lokales Datum und Uhrzeit, z. B. 2026-10-01T09:00"
+            }
+          },
+          "every": {
+            "type": "integer",
+            "minimum": 1,
+            "description": {
+              "en": "interval: how many units between runs",
+              "de": "interval: wie viele Einheiten zwischen den Läufen"
+            }
+          },
+          "unit": {
+            "type": "string",
+            "enum": ["minutes", "hours", "days"]
+          },
+          "time": {
+            "type": "string",
+            "description": {
+              "en": "Time of day, 24-hour HH:MM",
+              "de": "Uhrzeit, 24 Stunden, HH:MM"
+            }
+          },
+          "days": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+            },
+            "description": {
+              "en": "weekly: the weekdays",
+              "de": "weekly: die Wochentage"
+            }
+          },
+          "dayOfMonth": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": {
+              "en": "monthly: days of the month as \"1\" to \"31\" or \"last\"; the 29th to 31st fall back to the last day of shorter months",
+              "de": "monthly: Tage im Monat als „1“ bis „31“ oder „last“; der 29. bis 31. fallen in kürzeren Monaten auf den letzten Tag"
+            }
+          },
+          "cron": {
+            "type": "string",
+            "description": {
+              "en": "cron: five-field cron expression, e.g. 0 8 * * 1-5",
+              "de": "cron: Cron-Ausdruck mit fünf Feldern, z. B. 0 8 * * 1-5"
+            }
+          },
+          "timezone": {
+            "type": "string",
+            "description": {
+              "en": "IANA timezone, e.g. Europe/Berlin; defaults to the user's",
+              "de": "IANA-Zeitzone, z. B. Europe/Berlin; standardmäßig die des Nutzers"
+            }
+          },
+          "startAt": {
+            "type": "string",
+            "description": {
+              "en": "Optional first possible run (local date-time)",
+              "de": "Optional: frühestmöglicher Lauf (lokales Datum und Uhrzeit)"
+            }
+          },
+          "endAt": {
+            "type": "string",
+            "description": {
+              "en": "Optional: no runs after this (local date-time)",
+              "de": "Optional: keine Läufe danach (lokales Datum und Uhrzeit)"
+            }
+          },
+          "maxRuns": {
+            "type": "integer",
+            "minimum": 1,
+            "description": {
+              "en": "Optional: stop after this many runs",
+              "de": "Optional: nach so vielen Läufen aufhören"
+            }
+          }
+        },
+        "required": ["type"]
+      },
+      "appId": {
+        "type": "string",
+        "description": {
+          "en": "App the task runs with; defaults to the current app",
+          "de": "App, mit der die Aufgabe läuft; standardmäßig die aktuelle"
+        }
+      },
+      "tools": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": {
+          "en": "Optional subset of the app's tool ids; omit to use the app's defaults",
+          "de": "Optionale Teilmenge der Tool-IDs der App; weglassen für die Standards der App"
+        }
+      },
+      "notify": {
+        "type": "string",
+        "enum": ["always", "failure", "never"],
+        "description": {
+          "en": "When to notify the user: after every run (default), only on failure, or never",
+          "de": "Wann der Nutzer benachrichtigt wird: nach jedem Lauf (Standard), nur bei Fehlern oder nie"
+        }
+      }
+    },
+    "required": ["name", "instructions", "schedule"]
+  }
+}

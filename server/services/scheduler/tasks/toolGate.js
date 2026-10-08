@@ -4,7 +4,8 @@
  * An app opts in by listing them in its `tools`, like `ask_user`. They are
  * then withheld when scheduled tasks are off, from a user without the
  * permission, and — for the three that would let a task create, delete or
- * start tasks — inside a scheduled run.
+ * start tasks — inside a scheduled run. The tools that read a task's earlier
+ * runs ({@link RUN_ONLY_TOOLS}) are never offered this way at all.
  *
  * @module services/scheduler/tasks/toolGate
  */
@@ -28,6 +29,14 @@ export const WITHHELD_IN_SCHEDULED_RUNS = Object.freeze(
 );
 
 /**
+ * Tools only a scheduled run has: the ones that read the task's earlier runs.
+ * `executeTaskRun` adds them to the run's own tool list when the task keeps
+ * memory; an app can never offer them, whatever its `tools` say, and a task
+ * can never pick them.
+ */
+export const RUN_ONLY_TOOLS = Object.freeze(new Set(['list_task_runs', 'get_task_run']));
+
+/**
  * Drop the scheduling tools this user may not have in this turn.
  *
  * @param {Array<Object>} tools
@@ -37,13 +46,19 @@ export const WITHHELD_IN_SCHEDULED_RUNS = Object.freeze(
  * @returns {Array<Object>}
  */
 export function filterSchedulingTools(tools, user, { configured } = {}) {
-  if (!Array.isArray(tools) || !tools.some(tool => SCHEDULING_TOOLS.has(tool?.id))) return tools;
+  if (
+    !Array.isArray(tools) ||
+    !tools.some(tool => SCHEDULING_TOOLS.has(tool?.id) || RUN_ONLY_TOOLS.has(tool?.id))
+  ) {
+    return tools;
+  }
   const available = configured
     ? configured()
     : isScheduledTasksConfigured(configCache.getFeatures(), configCache.getPlatform() || {});
   const allowed = available && canUseScheduledTasks(user);
   const inRun = Boolean(user?.scheduledRun);
   return tools.filter(tool => {
+    if (RUN_ONLY_TOOLS.has(tool?.id)) return false;
     if (!SCHEDULING_TOOLS.has(tool?.id)) return true;
     if (!allowed) return false;
     return !(inRun && WITHHELD_IN_SCHEDULED_RUNS.has(tool.id));

@@ -5,8 +5,8 @@
     "de": "Geplante Aufgabe ändern"
   },
   "description": {
-    "en": "Pause or resume a scheduled task, or propose changes to its name, instructions, schedule, app, tools or notifications. Pausing and resuming apply at once; every other change is shown to the user on a confirmation card and applied only when they save it. Inside a scheduled run, a task may only pause itself or change its own schedule.",
-    "de": "Eine geplante Aufgabe pausieren oder fortsetzen oder Änderungen an Name, Anweisungen, Zeitplan, App, Tools oder Benachrichtigungen vorschlagen. Pausieren und Fortsetzen gelten sofort; jede andere Änderung wird dem Nutzer auf einer Bestätigungskarte gezeigt und erst beim Speichern übernommen. In einem geplanten Lauf darf sich eine Aufgabe nur selbst pausieren oder ihren eigenen Zeitplan ändern."
+    "en": "Pause or resume a scheduled task, or propose changes to its name, instructions, schedule, app, tools, notifications or memory between runs. Pausing and resuming apply at once; every other change is shown to the user on a confirmation card and applied only when they save it. Inside a scheduled run, a task may only pause itself or change its own schedule.",
+    "de": "Eine geplante Aufgabe pausieren oder fortsetzen oder Änderungen an Name, Anweisungen, Zeitplan, App, Tools, Benachrichtigungen oder das Merken zwischen Läufen vorschlagen. Pausieren und Fortsetzen gelten sofort; jede andere Änderung wird dem Nutzer auf einer Bestätigungskarte gezeigt und erst beim Speichern übernommen. In einem geplanten Lauf darf sich eine Aufgabe nur selbst pausieren oder ihren eigenen Zeitplan ändern."
   },
   "script": "scheduledTaskTools.js",
   "method": "updateScheduledTask",
@@ -146,7 +146,14 @@
       },
       "notify": {
         "type": "string",
-        "enum": ["always", "failure", "never"]
+        "enum": ["always", "failure", "never", "changes"]
+      },
+      "memory": {
+        "type": "boolean",
+        "description": {
+          "en": "Turn \"Remember between runs\" on or off. The notes are kept when it is turned off.",
+          "de": "„Zwischen Läufen merken“ ein- oder ausschalten. Die Notizen bleiben beim Ausschalten erhalten."
+        }
       }
     },
     "required": ["taskId"]

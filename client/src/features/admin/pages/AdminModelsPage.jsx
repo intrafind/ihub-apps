@@ -9,6 +9,8 @@ import { getAdminApiErrorMessage, makeAdminApiCall, toggleModels } from '../../.
 import { DataTable, SearchInput, FilterSelect } from '../components/data-table';
 import { translateModelTestMessage } from '../utils/modelTestMessages';
 import ModelImportDialog from '../components/ModelImportDialog';
+import ApiKeyStatusBadge from '../components/ApiKeyStatusBadge';
+import useApiKeyStatus from '../hooks/useApiKeyStatus';
 
 function ModelNameCell({ model, currentLanguage }) {
   return (
@@ -57,6 +59,7 @@ function AdminModelsPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const [models, setModels] = useState([]);
+  const { statuses: keyStatuses, reload: reloadKeyStatus } = useApiKeyStatus('models');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useFilterState('q', '');
@@ -75,6 +78,7 @@ function AdminModelsPage() {
   );
 
   const loadModels = async () => {
+    reloadKeyStatus();
     try {
       setLoading(true);
       setError(null);
@@ -255,6 +259,12 @@ function AdminModelsPage() {
       sortable: true,
       hideBelow: 'md',
       render: m => m.provider || '-'
+    },
+    {
+      key: 'apiKey',
+      header: t('admin.models.table.apiKey', 'API key'),
+      hideBelow: 'md',
+      render: m => <ApiKeyStatusBadge status={keyStatuses[m.id]} />
     },
     {
       key: 'status',

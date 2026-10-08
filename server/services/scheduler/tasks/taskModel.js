@@ -35,7 +35,13 @@ export const RUN_STATUSES = Object.freeze([
 ]);
 export const FINAL_RUN_STATUSES = Object.freeze(['succeeded', 'failed', 'skipped', 'cancelled']);
 export const RUN_TRIGGERS = Object.freeze(['schedule', 'manual', 'catch-up']);
-export const NOTIFY_MODES = Object.freeze(['always', 'failure', 'never']);
+/**
+ * When the owner is told about a run: after every one (`always`), only a failed
+ * one (`failure`), never, or only when something changed (`changes`: a failed
+ * run, or a run that reported something new — it needs memory, because
+ * "something new" is judged against the notes).
+ */
+export const NOTIFY_MODES = Object.freeze(['always', 'failure', 'never', 'changes']);
 
 /** A slot found later than this is treated as missed, not as merely late. */
 export const LATE_GRACE_MS = 10 * 60_000;
@@ -124,6 +130,8 @@ export function newTaskDocument(
     variables: fields.variables || null,
     enabledTools: Array.isArray(fields.enabledTools) ? fields.enabledTools : null,
     websearchEnabled: typeof fields.websearchEnabled === 'boolean' ? fields.websearchEnabled : null,
+    memory: { enabled: fields.memory?.enabled === true },
+    memorySummary: null,
     schedule: fields.schedule,
     notify: fields.notify || 'always',
     status: 'active',
@@ -418,10 +426,19 @@ export function resumeTask(task, { now, staggerMinutes }) {
  * @returns {boolean}
  */
 export function shouldNotify(task, run) {
-  if (task.notify === 'never') return false;
+  // "Only when something changed" is judged against the task's notes, so a run
+  // that did not use them (memory off, or switched off for the installation
+  // since) is treated as `always`.
+  const mode = task.notify === 'changes' && run.memory?.enabled !== true ? 'always' : task.notify;
+  if (mode === 'never') return false;
   if (run.status === 'awaiting_approval') return true;
   if (!run.chatId) return false;
-  if (task.notify === 'failure') return run.status === 'failed';
+  if (mode === 'failure') return run.status === 'failed';
+  if (mode === 'changes') {
+    // An unknown verdict (`changed` is null) counts as a change: a missed
+    // report costs more than one notification too many.
+    return run.status === 'failed' || (run.status === 'succeeded' && run.memory.changed !== false);
+  }
   return run.status === 'succeeded' || run.status === 'failed';
 }
 

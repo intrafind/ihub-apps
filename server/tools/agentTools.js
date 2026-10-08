@@ -16,7 +16,12 @@
 import { v4 as uuidv4 } from 'uuid';
 import logger from '../utils/logger.js';
 import { createSseEmitter } from '../utils/sseEmitter.js';
-import memoryFile from '../agents/memory/memoryFile.js';
+import {
+  MEMORY_SCOPE_AGENT,
+  readMemory as readScopedMemory,
+  resolveMemoryScope,
+  writeMemory as writeScopedMemory
+} from '../services/memory/memoryService.js';
 import inboxStore from '../agents/inbox/inboxStore.js';
 import {
   buildTaskRecord,
@@ -42,12 +47,31 @@ function ensureAgent(user) {
 
 // ─── Memory ───────────────────────────────────────────────────────────────
 
+/**
+ * The memory the calling principal owns, from the principal alone. The scope
+ * is never taken from the tool arguments, so a call can only reach its own
+ * notes.
+ */
+async function requireMemoryScope(user) {
+  const scope = await resolveMemoryScope(user);
+  if (!scope) throw new Error('Memory is not available for this principal');
+  return scope;
+}
+
 export async function readMemory(params = {}) {
-  const user = ensureAgent(params.user);
-  const mem = await memoryFile.readMemory(user.profileId);
-  emit('agent.memory.read', { profileId: user.profileId, version: mem.version }, params.chatId);
+  const scope = await requireMemoryScope(params.user);
+  const mem = await readScopedMemory(scope);
+  if (scope.kind === MEMORY_SCOPE_AGENT) {
+    emit('agent.memory.read', { profileId: scope.profileId, version: mem.version }, params.chatId);
+    return {
+      profileId: scope.profileId,
+      version: mem.version,
+      updatedAt: mem.updatedAt,
+      updatedBy: mem.updatedBy,
+      body: mem.body
+    };
+  }
   return {
-    profileId: user.profileId,
     version: mem.version,
     updatedAt: mem.updatedAt,
     updatedBy: mem.updatedBy,
@@ -56,24 +80,32 @@ export async function readMemory(params = {}) {
 }
 
 export async function writeMemory(params = {}) {
-  const user = ensureAgent(params.user);
+  const scope = await requireMemoryScope(params.user);
   const { mode = 'append', content = '', summary, expectedVersion } = params;
   if (!content || typeof content !== 'string') {
     throw new Error('content is required');
   }
   try {
-    const result = await memoryFile.writeMemory(user.profileId, {
+    const result = await writeScopedMemory(scope, {
       mode,
       content,
       summary,
       expectedVersion,
-      updatedBy: user.id
+      // An agent's notes record the agent. A task's record the run that wrote
+      // them: a user id would put a person's identity into data the owner and
+      // an admin both look at.
+      updatedBy:
+        scope.kind === MEMORY_SCOPE_AGENT
+          ? params.user.id
+          : `run:${params.user.scheduledRun?.runId || 'unknown'}`
     });
-    emit(
-      'agent.memory.write',
-      { profileId: user.profileId, version: result.version, mode, summary },
-      params.chatId
-    );
+    if (scope.kind === MEMORY_SCOPE_AGENT) {
+      emit(
+        'agent.memory.write',
+        { profileId: scope.profileId, version: result.version, mode, summary },
+        params.chatId
+      );
+    }
     return { ok: true, version: result.version };
   } catch (err) {
     if (err.code === 'VERSION_CONFLICT') {
@@ -82,6 +114,16 @@ export async function writeMemory(params = {}) {
         code: 'VERSION_CONFLICT',
         message: err.message,
         currentVersion: err.currentVersion
+      };
+    }
+    if (err.code === 'MEMORY_TOO_LONG') {
+      // Returned, not thrown: the model can act on it by writing less.
+      return {
+        error: true,
+        code: 'MEMORY_TOO_LONG',
+        message: `${err.message}. Keep only what the next run needs and write the notes again with mode "replace".`,
+        chars: err.chars,
+        maxChars: err.maxChars
       };
     }
     throw err;

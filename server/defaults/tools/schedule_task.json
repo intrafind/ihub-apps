@@ -24,8 +24,8 @@
       "instructions": {
         "type": "string",
         "description": {
-          "en": "The prompt sent on every run, written as a complete instruction that makes sense without this conversation. It may use {{run_time}}, {{last_run_at}}, {{last_successful_run_at}}, {{run_number}} and {{task_name}}, e.g. \"tickets changed since {{last_successful_run_at}}\".",
-          "de": "Der Prompt, der bei jedem Lauf gesendet wird, als vollständige Anweisung, die ohne diese Unterhaltung verständlich ist. Er kann {{run_time}}, {{last_run_at}}, {{last_successful_run_at}}, {{run_number}} und {{task_name}} verwenden, z. B. „Tickets, die sich seit {{last_successful_run_at}} geändert haben“."
+          "en": "The prompt sent on every run, written as a complete instruction that makes sense without this conversation. It may use {{run_time}}, {{last_run_at}}, {{last_successful_run_at}}, {{run_number}} and {{task_name}}, e.g. \"tickets changed since {{last_successful_run_at}}\". When the user wants only what is new since the last run, set memory to true and tell the task to report only what is new or changed since its last run.",
+          "de": "Der Prompt, der bei jedem Lauf gesendet wird, als vollständige Anweisung, die ohne diese Unterhaltung verständlich ist. Er kann {{run_time}}, {{last_run_at}}, {{last_successful_run_at}}, {{run_number}} und {{task_name}} verwenden, z. B. „Tickets, die sich seit {{last_successful_run_at}} geändert haben“. Möchte der Nutzer nur das Neue seit dem letzten Lauf, memory auf true setzen und der Aufgabe sagen, nur Neues oder Geändertes seit ihrem letzten Lauf zu melden."
         }
       },
       "description": {
@@ -151,10 +151,17 @@
       },
       "notify": {
         "type": "string",
-        "enum": ["always", "failure", "never"],
+        "enum": ["always", "failure", "never", "changes"],
         "description": {
-          "en": "When to notify the user: after every run (default), only on failure, or never",
-          "de": "Wann der Nutzer benachrichtigt wird: nach jedem Lauf (Standard), nur bei Fehlern oder nie"
+          "en": "When to notify the user: after every run (default), only on failure, never, or only when a run failed or reported something new (\"changes\", needs memory)",
+          "de": "Wann der Nutzer benachrichtigt wird: nach jedem Lauf (Standard), nur bei Fehlern, nie oder nur wenn ein Lauf fehlschlug oder Neues meldete („changes“, braucht memory)"
+        }
+      },
+      "memory": {
+        "type": "boolean",
+        "description": {
+          "en": "Let the task keep notes between runs (\"Remember between runs\"). Turn it on when the user wants only what is new or changed since the last run, or wants the task to continue earlier work; use it instead of relying on {{last_successful_run_at}}. The notes are updated automatically after each run and the user can read and edit them on the task page. Off by default.",
+          "de": "Die Aufgabe führt zwischen den Läufen Notizen („Zwischen Läufen merken“). Einschalten, wenn der Nutzer nur Neues oder Geändertes seit dem letzten Lauf möchte oder die Aufgabe frühere Arbeit fortsetzen soll; statt sich auf {{last_successful_run_at}} zu verlassen. Die Notizen werden nach jedem Lauf automatisch aktualisiert und der Nutzer kann sie auf der Aufgabenseite lesen und bearbeiten. Standardmäßig aus."
         }
       }
     },

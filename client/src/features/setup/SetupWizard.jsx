@@ -64,6 +64,9 @@ export default function SetupWizard() {
   const [error, setError] = useState(null);
   const [loginError, setLoginError] = useState(null);
   const [loginJustCompleted, setLoginJustCompleted] = useState(false);
+  // Result of the final key check: { ready, blocked } model counts, or null
+  // while unknown (or when the check could not be made — it is only a hint).
+  const [keyCheck, setKeyCheck] = useState(null);
 
   const userIsAdmin = user?.isAdmin === true;
 
@@ -120,6 +123,27 @@ export default function SetupWizard() {
   }, [platformConfig, navigate, step]);
 
   const isLocal = selectedProvider.id === 'local';
+
+  // On the last step, ask the server whether the enabled models can actually
+  // be called: a key saved here is not worth much if, say, the stored one
+  // cannot be decrypted, and a local server needs none at all.
+  useEffect(() => {
+    if (step !== TOTAL_STEPS) return undefined;
+    const controller = new AbortController();
+    fetch(buildApiUrl('admin/models/_key-status'), {
+      credentials: 'include',
+      signal: controller.signal
+    })
+      .then(response => (response.ok ? response.json() : null))
+      .then(data => {
+        if (!data?.statuses) return;
+        const enabled = Object.values(data.statuses).filter(status => status.enabled);
+        const ready = enabled.filter(s => s.state === 'ok' || s.state === 'keyless').length;
+        setKeyCheck({ ready, blocked: enabled.length - ready });
+      })
+      .catch(() => {});
+    return () => controller.abort();
+  }, [step]);
 
   const handleGetStarted = () => {
     if (!authLoading && isAuthenticated && userIsAdmin) {
@@ -362,9 +386,13 @@ export default function SetupWizard() {
                   className="w-full border border-gray-300 dark:border-gray-600 rounded-xl px-4 py-2.5 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-hidden focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   autoComplete="off"
                 />
-                {isLocal && (
+                {isLocal ? (
                   <p className="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
                     {t('setup.step2.localApiKeyHint')}
+                  </p>
+                ) : (
+                  <p className="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+                    {t('setup.step2.noKeyHint')}
                   </p>
                 )}
 
@@ -455,6 +483,36 @@ export default function SetupWizard() {
                       )}
                 </p>
               </div>
+
+              {keyCheck && (keyCheck.ready > 0 || keyCheck.blocked > 0) && (
+                <div
+                  className={`mb-4 p-3 rounded-xl border text-xs ${
+                    keyCheck.blocked > 0
+                      ? 'bg-amber-50 dark:bg-amber-950 border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-300'
+                      : 'bg-green-50 dark:bg-green-950 border-green-200 dark:border-green-800 text-green-700 dark:text-green-300'
+                  }`}
+                  data-testid="setup-key-check"
+                >
+                  {keyCheck.ready > 0 && (
+                    <p>✓ {t('setup.step3.keyCheck.ready', { count: keyCheck.ready })}</p>
+                  )}
+                  {keyCheck.blocked > 0 && (
+                    <p>
+                      ⚠ {t('setup.step3.keyCheck.blocked', { count: keyCheck.blocked })}{' '}
+                      <button
+                        type="button"
+                        className="underline font-medium"
+                        onClick={() => {
+                          sessionStorage.removeItem('setup_wizard_step');
+                          navigate('/admin/models', { replace: true });
+                        }}
+                      >
+                        {t('setup.step3.keyCheck.fix')}
+                      </button>
+                    </p>
+                  )}
+                </div>
+              )}
 
               {/* CTA cards */}
               <div className="mb-6 space-y-2.5">
