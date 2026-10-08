@@ -139,6 +139,27 @@ describe('sheets with a header row', () => {
     );
   });
 
+  it("reading a workbook does not change it: the filled merge cells are not written into the caller's sheet", () => {
+    const sheet = XLSX.utils.aoa_to_sheet([
+      ['Gruppe', 'Name'],
+      ['Alpha', 'x'],
+      [null, 'y'],
+      [null, 'z']
+    ]);
+    sheet['!merges'] = [XLSX.utils.decode_range('A2:A4')];
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, sheet, 'S');
+    const cellsBefore = Object.keys(sheet).sort();
+
+    const first = extractXlsxText({ XLSX, workbook });
+    expect(first).toContain('| Alpha | y |');
+    expect(first).toContain('| Alpha | z |');
+    expect(Object.keys(sheet).sort()).toEqual(cellsBefore);
+    expect(sheet.A3).toBeUndefined();
+    // And a second read gives the same text.
+    expect(extractXlsxText({ XLSX, workbook })).toBe(first);
+  });
+
   it('T-XLS-03: a title merged across the sheet is a title, not the header — the row below is not turned into a table body', async () => {
     const file = book(
       {
