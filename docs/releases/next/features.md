@@ -19,6 +19,10 @@ heading by heading.
 - PDF files carry a `[Page N]` marker per page (with the printed page number when it differs, as
   in front matter numbered `i`, `ii`), keep their lines instead of one run of words, and flag
   pages without a text layer; scanned PDFs are still sent as page images
+- PDF headings and tables are marked where the file tells where they are: tagged PDFs (exported
+  from Word, LibreOffice, InDesign and others) give `#` headings and Markdown tables, otherwise the
+  outline (bookmarks) or clearly larger type marks headings. Nothing is guessed when the picture is
+  unclear, and no text is dropped or reordered
 - Headers and footers of Word files (letterhead, document numbers, confidentiality notes) appear as
   `[Header] …` and `[Footer] …` lines before the text, without page numbers
 

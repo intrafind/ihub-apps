@@ -175,8 +175,8 @@ export const featureRegistry = [
     id: 'structuredDocumentExtraction',
     name: { en: 'Structured document extraction', de: 'Strukturierte Dokumentextraktion' },
     description: {
-      en: 'Keep headings, chapter and list numbers, tables, footnotes, headers and footers of Word files and page markers of PDF files when uploaded files are turned into text for the model. Turn off to return to plain text extraction; users get the change after reloading the page (at the latest after 30 minutes).',
-      de: 'Überschriften, Kapitel- und Listennummern, Tabellen, Fußnoten, Kopf- und Fußzeilen von Word-Dateien sowie Seitenmarker von PDF-Dateien beibehalten, wenn hochgeladene Dateien für das Modell in Text umgewandelt werden. Ausschalten stellt die reine Textextraktion wieder her; Nutzer erhalten die Änderung nach dem Neuladen der Seite (spätestens nach 30 Minuten).'
+      en: 'Keep headings, chapter and list numbers, tables, footnotes, headers and footers of Word files and page markers, headings and tables of PDF files when uploaded files are turned into text for the model. Turn off to return to plain text extraction; users get the change after reloading the page (at the latest after 30 minutes).',
+      de: 'Überschriften, Kapitel- und Listennummern, Tabellen, Fußnoten, Kopf- und Fußzeilen von Word-Dateien sowie Seitenmarker, Überschriften und Tabellen von PDF-Dateien beibehalten, wenn hochgeladene Dateien für das Modell in Text umgewandelt werden. Ausschalten stellt die reine Textextraktion wieder her; Nutzer erhalten die Änderung nach dem Neuladen der Seite (spätestens nach 30 Minuten).'
     },
     category: 'content',
     default: true

@@ -176,3 +176,36 @@ Characters of the extracted text for the repository's own documents (`docs/*.md`
 | models.pdf (26 pages) | 52,360 | 48,153 | −8.0 % |
 
 Word: +6…9 % for table-heavy documents (Markdown tables, headings, numbering labels), slightly less where the legacy text carried glued table cells. PDF: −8…11 % — the doubled spaces of the old join are gone, the `[Page N]` markers cost about 10 characters per page. Very small documents grow in percent (a one-paragraph file with a header: 54 → 156 characters), not in absolute size.
+
+## Release 2
+
+Order: WP-F → WP-B → WP-E → WP-D → WP-C, one stacked draft PR each (`2026-10-08 Follow-ups Release 2.md`).
+
+| WP | Status | Where the code is |
+|---|---|---|
+| F — PDF headings and tables | Done (see below) | `shared/documentExtraction/pdfStructure.js` (sources, tables), `pdfText.js` (orchestration, `readOutline`), `markers.js` (`realTextLength`); tests `tests/unit/client/pdf-structure.test.jsx`, `server/tests/document-extraction-pdf-structure.test.js` (in `test:pdf`) |
+
+### Decisions and findings from WP-F
+
+- **Order of trust, per document:** tags → outline → font size. The first source that yields any heading decides for the whole document, so a document never mixes two kinds of guessing. Tables come from the tags only.
+- **The tree annotates the line stream, it does not replace it.** `getTextContent({ includeMarkedContent: true })` carries the marked-content ids (`p158R_mc1`) that `getStructTree()` refers to; every text item gets the table row / cell / heading it belongs to. Running headers and footers are tagged as artifacts and stay as plain lines (Q-04: kept). Building the output from the tree alone would drop them and change the reading order of lines the model sees today.
+- **Verified on real pdf.js and LibreOffice exports:** a heading can consist of several chunks (an inline code span plus text, both under one `H3`), a table row's cells sit on one line with a gap item in the second chunk, a cell can wrap over lines, and a row that continues on the next page arrives as a table fragment without header. A cell is therefore assembled from all lines of its `TD` (joined with a space), a row from all its cells; empty cells have no content in the stream and are taken from the tree (`TR` children), so columns do not shift.
+- **No header row is invented.** The separator row follows only a first row of `TH` cells; a table continued from the previous page stays pipe rows. Column and row spans are not exposed by pdf.js, rows are padded to the widest row.
+- **`H` and unknown roles are ignored; `Title` is `#`.** pdf.js already maps custom roles through the PDF's role map.
+- **Outline:** entries are resolved to page indexes (`getDestination` + `getPageIndex`; iterative, 2,000 entries at most) and matched by normalised text (letters and digits only) against the lines of their page, in order; a chapter label in the text (`1.2 Definitionen`) may stand in front of the title, a title may wrap over three lines. An outline is used only if at least half of its entries are found. A line without letters never joins a title (found by measurement: a closing `}` was merged into "} Property Details").
+- **Font heuristic:** no bold detection — pdf.js reports only the generic family (`monospace`/`sans-serif`/`serif`), real font names would need `commonObjs` and the operator list. Body size is the most frequent size of non-monospace lines; if that guess makes a fifth of the document "headings" (unmarked code outweighing the text), the next size with at least 15 % is tried. Limits: ≤ 120 characters, no trailing `. ; ,`, at least two letters, not repeated on half of the pages, at most four tiers, candidates at most a fifth of the characters, numbered lines (`2.1 …`) from 1.05×, others from 1.15×.
+- **Safety:** the structure code never throws into the upload (tree, outline and heuristic errors keep the lines of release 1), walks the tree iteratively with a 200,000 node cap per page, and bounds the outline matching (2 million line comparisons).
+- **Measured, not asserted.** Synthetic corpus: the repository's own `docs/*.md` (apps, models, file-upload-feature, architecture; 12–43 pages) through pandoc → docx → LibreOffice as tagged PDF, PDF with bookmarks, plain PDF, and via HTML. Ground truth: the `#` headings of the Markdown source. Precision = output headings that are source headings (lines that already started with `#` in release 1 text, e.g. code comments, excluded); recall = source headings found; level = share of correct levels among the found.
+
+  | Source | Precision | Recall | Levels |
+  |---|---:|---:|---|
+  | Tags (4 docs) | 1.00 | 1.00 | exact |
+  | Outline (4 docs) | 0.99–1.00 | 0.99–1.00 | relative to the outline depth |
+  | Font size, HTML export (headings 14–24 pt, body 12) | 1.00 | 0.53–0.94 | relative |
+  | Font size, pandoc styles (headings at body size) | 1.00 | 0.05–0.35 | relative |
+
+  The last row is the honest limit: headings that differ from the body only by weight are not found, and nothing wrong is produced. This corpus is synthetic and generated from one source style; the real corpus (G-08…G-10: Word export, LaTeX, InDesign, multi-column, scan with text layer) is still to be run by a human.
+- **No text is lost or reordered:** for the 12 untagged variants the text is identical to release 1 modulo `#` and wrapped heading lines; for the 4 tagged ones the multiset of letters and digits is identical (cell text is regrouped by cell).
+- **Cost:** 43-page tagged PDF 0.67 s (release 1: 0.45 s), plain 0.41 s (0.32 s). Text size grows 2–6 % for tagged PDFs (tables, headings), < 1 % otherwise.
+- **`realTextLength` ignores the Markdown the structure adds** (heading `#`, table pipes and separator rows), so a scan with a few tagged characters still falls back to page images.
+- **Not done:** lists (`L`/`LI` — their labels are real text in a PDF, so they already read as lists), links, figure alt text, reading order from the tree for multi-column pages (the tree order would also drop artifacts; separate decision), `colspan`/`rowspan`.

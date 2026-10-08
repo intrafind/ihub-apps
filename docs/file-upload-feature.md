@@ -191,12 +191,17 @@ Word does not store list and chapter numbers as text; it computes them when disp
 
 ```text
 [Page 1 (printed: i)]
-Inhaltsverzeichnis
+# Inhaltsverzeichnis
 
 [Page 2 (printed: 1)]
-1. Geltungsbereich
+## 1. Geltungsbereich
 Dieser Vertrag gilt für alle Parteien und re-
 gelt die Zusammenarbeit.
+
+| Feld | Typ |
+| --- | --- |
+| enabled | boolean |
+
 Seite 1 von 3
 
 [Page 3: no extractable text]
@@ -208,10 +213,20 @@ Seite 1 von 3
 | Printed page numbers (roman front matter, a cover that is not counted) | `[Page 2 (printed: 1)]` when the PDF defines page labels and the label differs from the physical number, so "see page 3" can be matched to what is printed on the page |
 | Lines | One line of text per line of the page. Words are no longer separated by double spaces; a hyphen at the end of a line stays where it is (`re-` / `gelt`) |
 | A page without a text layer inside a PDF that has text elsewhere | `[Page 2: no extractable text]`, so a missing page is visible |
+| Headings | `#` … `######`, **when the PDF tells where its headings are** (see below) |
+| Tables | A Markdown table when the PDF is tagged (see below); otherwise the cells of a row are one line |
 | Running headers and footers (`Page 3 of 10`) | Kept as ordinary text |
 | Scanned PDF (no text, or less than 50 characters of real text — markers do not count) | No text; the first five pages are rendered as images for vision models, as before. Text on a later page is kept instead, so it is not lost |
 
-Multi-column layouts are read in the order the PDF stores the text, which is not always the reading order. Headings are not detected in PDFs.
+**Where headings and tables come from.** A PDF has no headings of its own, so they are only marked where the file says so. The sources are tried in this order, and the first one that yields headings is used for the whole document:
+
+1. **Tags** — PDFs exported from Word, LibreOffice, InDesign and most other tools with "tagged PDF" / "accessible PDF" switched on carry `H1`…`H6` and table structure. Headings keep their level; tables become Markdown tables with the columns of the original (an empty cell stays an empty column; a table continued from the previous page starts without a header row). Cells that span columns or rows are not reported by the PDF, so the rows are padded to the widest row.
+2. **Outline** (bookmarks) — the entries of the outline are looked up as lines on the page they point to; the nesting depth is the heading level. The outline is only used when at least half of its entries are found in the text of their pages.
+3. **Font size** — a last resort for untagged PDFs without an outline: short lines that are clearly larger than the body text (at least 15 %; 5 % for a numbered line such as `2.1 Geltungsbereich`) become headings, the largest size is `#`. Nothing is marked when a clear picture is missing — large text that makes up a fifth of the document, more than four sizes, sentences that end in a period, lines that repeat on most pages (running headers), code in a fixed-width font. Headings set in bold at body size cannot be recognised this way; the model sees them as ordinary lines.
+
+Heading levels from the outline and from the font size are relative (a document that starts with a level 2 heading shows it as `#`); levels from tags are the ones in the file. No text is dropped or reordered: the structure only adds `#` and `|`.
+
+Multi-column layouts are read in the order the PDF stores the text, which is not always the reading order.
 
 ### Admin switch
 
@@ -241,7 +256,7 @@ All file processing happens **client-side** before content is sent to the server
 2. **Validation** — MIME type and file size are checked against the app's upload configuration. File extension is used as a fallback when the browser reports an incorrect MIME type.
 3. **Processing** (type-specific):
    - **Text files** — Read directly as UTF-8 text.
-   - **PDF** — Text extracted via PDF.js, page by page with a `[Page N]` marker and one line per line of the page. If the extracted text is empty or minimal (less than 50 characters outside the markers, e.g. a scanned document), each page is rendered as an image instead.
+   - **PDF** — Text extracted via PDF.js, page by page with a `[Page N]` marker, one line per line of the page, and headings and tables where the PDF marks them. If the extracted text is empty or minimal (less than 50 characters outside the markers, e.g. a scanned document), each page is rendered as an image instead.
    - **DOCX** — Converted to Markdown: mammoth reads the Word file, an OOXML pass first fixes what mammoth drops (custom heading styles, page breaks, moved text, hidden text), Turndown writes the Markdown. With the admin switch off, mammoth's HTML is flattened to plain text as before.
    - **XLSX / XLS** — Cell content extracted as text via the xlsx library.
    - **PPTX** — Slide text extracted from the OOXML slides via jszip. **PPT** (legacy binary) is rejected.
