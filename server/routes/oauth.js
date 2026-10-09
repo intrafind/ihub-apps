@@ -20,6 +20,7 @@ import logger from '../utils/logger.js';
 import { createOAuthTokenLimiter } from '../middleware/rateLimiting.js';
 import { consumeCode } from '../utils/authorizationCodeStore.js';
 import { localUsersFile, oauthClientsFile } from '../utils/contentsPath.js';
+import { tokenUserState } from '../utils/tokenUser.js';
 import { verifyCodeChallenge } from '../utils/pkceUtils.js';
 import { generateJwt, decodeJwt } from '../utils/tokenService.js';
 import {
@@ -81,6 +82,21 @@ function sendOAuthError(res, status, error, description) {
     error: error,
     error_description: description
   });
+}
+
+/**
+ * Whether the user a delegated grant was made by is still there to be issued
+ * tokens. A grant is bound to the user's id, and grants are signed or stored, so
+ * they outlive the account unless it is asked about.
+ *
+ * @param {Object} platform - Platform configuration
+ * @param {string} userId - The user the grant belongs to
+ * @returns {Promise<'active'|'missing'|'disabled'>}
+ * @throws {Error} When the users configuration cannot be read; the token
+ *   endpoint's catch-all then fails closed
+ */
+function delegatedUserState(platform, userId) {
+  return tokenUserState(platform, { authMode: 'oauth_authorization_code', sub: userId });
 }
 
 /**
@@ -282,6 +298,17 @@ export default function registerOAuthRoutes(app) {
           );
         }
 
+        // The user who authorized this request has to still be there to be
+        // issued anything: a deleted or disabled account gets no new tokens.
+        if ((await delegatedUserState(platform, codeData.userId)) !== 'active') {
+          return sendOAuthError(
+            res,
+            400,
+            'invalid_grant',
+            'The user who authorized this request is no longer available'
+          );
+        }
+
         // Validate client
         const authCodeClientsFilePath = oauthClientsFile(oauthConfig);
         const authClient = await resolveGrantClient(
@@ -440,6 +467,17 @@ export default function registerOAuthRoutes(app) {
             400,
             'invalid_grant',
             'Refresh token is invalid, expired, or already used'
+          );
+        }
+
+        // A refresh token must not outlive the user who granted it. The token is
+        // already consumed above, so refusing here also ends the connection.
+        if ((await delegatedUserState(platform, tokenData.userId)) !== 'active') {
+          return sendOAuthError(
+            res,
+            400,
+            'invalid_grant',
+            'The user who granted this access is no longer available'
           );
         }
 

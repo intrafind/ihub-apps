@@ -6,6 +6,7 @@ import { logAudit } from '../services/AuditLogService.js';
 import { generateCode, storeCode } from '../utils/authorizationCodeStore.js';
 import { buildServerPath } from '../utils/basePath.js';
 import { verifyJwt } from '../utils/tokenService.js';
+import { tokenUserState } from '../utils/tokenUser.js';
 import configCache from '../configCache.js';
 import logger from '../utils/logger.js';
 import { hasConsent, grantConsent } from '../utils/consentStore.js';
@@ -654,7 +655,10 @@ export default function registerOAuthAuthorizeRoutes(app) {
 
       if (token) {
         const decoded = verifyJwt(token);
-        if (decoded && decoded.sub) {
+        // The cookie is signed, so it outlives the account behind it. jwtAuth
+        // refuses a deleted user's cookie, but it prefers an Authorization header
+        // over the cookie this route reads, so the user is checked here as well.
+        if (decoded && decoded.sub && (await tokenUserState(platform, decoded)) === 'active') {
           currentUser = decoded;
         }
       }
@@ -851,7 +855,7 @@ export default function registerOAuthAuthorizeRoutes(app) {
       let currentUser = null;
       if (token) {
         const decoded = verifyJwt(token);
-        if (decoded && decoded.sub) {
+        if (decoded && decoded.sub && (await tokenUserState(platform, decoded)) === 'active') {
           currentUser = decoded;
         }
       }

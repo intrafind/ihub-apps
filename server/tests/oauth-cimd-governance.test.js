@@ -23,6 +23,7 @@
 import { jest } from '@jest/globals';
 import request from 'supertest';
 import express from 'express';
+import cookieParser from 'cookie-parser';
 import rateLimit from 'express-rate-limit';
 import os from 'os';
 import path from 'path';
@@ -44,8 +45,8 @@ const state = {
 // store does not have to be stood up for a test about policy records.
 const CLIENTS_FILE = path.join(state.rootDir, 'oauth-clients.json');
 
-// Likewise the users file. `jwtAuth` only honours a delegated token while the
-// user it was minted for still exists, so the REST suite below needs one.
+// Likewise the users file. `jwtAuth` and the MCP gateway only honour a delegated
+// token while the user it was minted for still exists.
 const USERS_FILE = path.join(state.rootDir, 'users.json');
 
 jest.unstable_mockModule('../pathUtils.js', () => ({
@@ -167,6 +168,7 @@ const { listCimdClientRows, recordCimdDiscovery } =
 const { default: registerAdminOAuthCimdRoutes } =
   await import('../routes/admin/oauthCimdClients.js');
 const { default: registerOAuthAuthorizeRoutes } = await import('../routes/oauthAuthorize.js');
+const { default: registerOAuthRoutes } = await import('../routes/oauth.js');
 const { default: mcpAuth } = await import('../middleware/mcpAuth.js');
 const { default: jwtAuth } = await import('../middleware/jwtAuth.js');
 
@@ -231,6 +233,14 @@ async function resetStores() {
 }
 
 beforeEach(async () => {
+  // A delegated token is only good while the user it was minted for exists.
+  writeFileSync(
+    USERS_FILE,
+    JSON.stringify({
+      users: { alice: { id: 'alice', username: 'alice', active: true, authMethods: ['local'] } },
+      metadata: { version: '2.0.0' }
+    })
+  );
   clearClientMetadataCache();
   state.responses.clear();
   state.fetchCalls = [];
@@ -511,6 +521,144 @@ describe('discovery records', () => {
   });
 });
 
+describe('signing in at /authorize', () => {
+  // The route reads the session cookie itself, and a signed cookie outlives the
+  // account behind it, so the user has to be asked about as well.
+  function buildApp() {
+    const app = express();
+    app.use(testRateLimiter);
+    app.use(cookieParser());
+    registerOAuthAuthorizeRoutes(app);
+    return app;
+  }
+
+  const authorize = () =>
+    request(buildApp())
+      .get(
+        `/api/oauth/authorize?response_type=code&client_id=${encodeURIComponent(CODE_URL)}` +
+          `&redirect_uri=${encodeURIComponent('http://localhost/callback')}` +
+          '&code_challenge=abc&code_challenge_method=S256'
+      )
+      .set('Cookie', 'authToken=session');
+
+  const writeUsers = users =>
+    writeFileSync(USERS_FILE, JSON.stringify({ users, metadata: { version: '2.0.0' } }));
+
+  beforeEach(() => {
+    setPlatform();
+    serve(CODE_URL, 'Claude Code');
+    state.jwt = {
+      sub: 'alice',
+      username: 'alice',
+      groups: ['users'],
+      authMode: 'local',
+      aud: 'ihub-apps'
+    };
+  });
+
+  test('carries on for a user who still exists', async () => {
+    const res = await authorize();
+
+    // On to the consent screen or straight to the client with a code: either
+    // way past the sign-in, and never an error.
+    expect([200, 302]).toContain(res.status);
+    expect(res.headers.location || '').not.toContain('/login');
+  });
+
+  test('sends a deleted user to sign in again', async () => {
+    writeUsers({});
+
+    const res = await authorize();
+
+    expect(res.status).toBe(302);
+    expect(res.headers.location).toContain('/login');
+  });
+
+  test('sends a disabled user to sign in again', async () => {
+    writeUsers({
+      alice: { id: 'alice', username: 'alice', active: false, authMethods: ['local'] }
+    });
+
+    const res = await authorize();
+
+    expect(res.status).toBe(302);
+    expect(res.headers.location).toContain('/login');
+  });
+});
+
+describe('the token endpoint', () => {
+  // A grant is bound to the user's id and outlives the account unless the
+  // endpoint asks about it, so a deleted user's refresh token keeps minting.
+  function buildApp() {
+    const app = express();
+    app.use(testRateLimiter);
+    app.use(express.urlencoded({ extended: false }));
+    registerOAuthRoutes(app);
+    return app;
+  }
+
+  const refresh = token =>
+    request(buildApp())
+      .post('/api/oauth/token')
+      .type('form')
+      .send({ grant_type: 'refresh_token', refresh_token: token, client_id: CODE_URL });
+
+  const writeUsers = users =>
+    writeFileSync(USERS_FILE, JSON.stringify({ users, metadata: { version: '2.0.0' } }));
+
+  const grantFor = userId => {
+    const token = generateRefreshToken();
+    return storeRefreshToken(token, { clientId: CODE_URL, userId, scopes: ['openid'] }, 30).then(
+      () => token
+    );
+  };
+
+  beforeEach(async () => {
+    setPlatform();
+    await upsertCimdClientPolicy(
+      CODE_URL,
+      { approvalState: 'approved', active: true },
+      CLIENTS_FILE,
+      'admin'
+    );
+  });
+
+  test('does not refresh for a user who has been deleted, and the token is spent', async () => {
+    const token = await grantFor('alice');
+    writeUsers({});
+
+    const res = await refresh(token);
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('invalid_grant');
+    expect(res.body.error_description).toMatch(/no longer available/);
+    // Consumed on the way in, so it cannot be tried again once the user returns.
+    writeUsers({ alice: { id: 'alice', username: 'alice', active: true, authMethods: ['local'] } });
+    const again = await refresh(token);
+    expect(again.body.error_description).toMatch(/invalid, expired, or already used/);
+  });
+
+  test('does not refresh for a user who has been disabled', async () => {
+    const token = await grantFor('alice');
+    writeUsers({
+      alice: { id: 'alice', username: 'alice', active: false, authMethods: ['local'] }
+    });
+
+    const res = await refresh(token);
+
+    expect(res.status).toBe(400);
+    expect(res.body.error_description).toMatch(/no longer available/);
+  });
+
+  test('is not stopped by the user check while the user exists', async () => {
+    const token = await grantFor('alice');
+
+    const res = await refresh(token);
+
+    expect(res.body.error_description || '').not.toMatch(/no longer available/);
+  });
+});
+
 describe('the approval gate', () => {
   function buildApp() {
     const app = express();
@@ -751,6 +899,41 @@ describe('the gateway', () => {
     expect(res.status).toBe(403);
     expect(res.body.error).toBe('access_denied');
   });
+
+  // A delegated token is signed, so it outlives the account it was minted for
+  // unless the gateway asks about the user, as the REST API does.
+  const writeUsers = users =>
+    writeFileSync(USERS_FILE, JSON.stringify({ users, metadata: { version: '2.0.0' } }));
+
+  test('answers 401 once the user who authorized the token has been deleted', async () => {
+    writeUsers({});
+
+    const res = await call();
+
+    expect(res.status).toBe(401);
+    expect(res.body.error).toBe('invalid_token');
+    expect(res.body.error_description).toBe('User account no longer exists');
+  });
+
+  test('answers 403 once that user has been disabled', async () => {
+    writeUsers({
+      alice: { id: 'alice', username: 'alice', active: false, authMethods: ['local'] }
+    });
+
+    const res = await call();
+
+    expect(res.status).toBe(403);
+    expect(res.body.error).toBe('access_denied');
+  });
+
+  test('answers 503, not "deleted", when the users file cannot be read', async () => {
+    writeFileSync(USERS_FILE, '{ not json');
+
+    const res = await call();
+
+    expect(res.status).toBe(503);
+    expect(res.body.error).toBe('service_unavailable');
+  });
 });
 
 describe('the REST surface (jwtAuth)', () => {
@@ -778,13 +961,6 @@ describe('the REST surface (jwtAuth)', () => {
 
   beforeEach(async () => {
     setPlatform({ allowedApps: ['chat'] });
-    writeFileSync(
-      USERS_FILE,
-      JSON.stringify({
-        users: { alice: { id: 'alice', username: 'alice', active: true, authMethods: ['local'] } },
-        metadata: { version: '2.0.0' }
-      })
-    );
     state.jwt = {
       sub: 'alice',
       username: 'alice',
