@@ -584,9 +584,10 @@ describe('Migration Runner', () => {
       '157',
       '158',
       '160',
-      '161'
+      '161',
+      '162'
     ])(
-      'moves an EU AI Act entry recorded at V%s to V162 so it no longer blocks main',
+      'moves an EU AI Act entry recorded at V%s to V164 so it no longer blocks main',
       oldVersion => {
         // A dev install that ran the branch while it held that number recorded
         // it; main's provider plain names (V141), text-to-speech (V142),
@@ -595,8 +596,8 @@ describe('Migration Runner', () => {
         // settings (V152), workflow code node removal (V153), user skills
         // marketplace (V154), skill builder (V155), skills catalog token budget
         // (V156), read_url tool rename (V157), Copilot agent config (V158),
-        // scheduled task memory (V160) and larger scheduled task memory (V161)
-        // migrations hold those numbers now, and
+        // scheduled task memory (V160), larger scheduled task memory (V161) and
+        // screenshot tool retirement (V162) migrations hold those numbers now, and
         // V143 sorts below main's app wizard field cleanup (V144).
         const history = {
           schemaVersion: '1.0',
@@ -619,8 +620,8 @@ describe('Migration Runner', () => {
         };
 
         expect(reconcileRenamedMigrations(history)).toBe(true);
-        expect(history.migrations[0].version).toBe('162');
-        expect(history.migrations[0].file).toBe('V162__add_ai_transparency.js');
+        expect(history.migrations[0].version).toBe('164');
+        expect(history.migrations[0].file).toBe('V164__add_ai_transparency.js');
         expect(history.migrations[1].version).toBe('140');
       }
     );
@@ -777,6 +778,20 @@ describe('Migration Runner', () => {
 
       expect(reconcileRenamedMigrations(history)).toBe(false);
       expect(history.migrations).toEqual([largerMemory]);
+    });
+
+    it("leaves main's V162 screenshot tools entry alone when reconciling the EU AI Act V162", () => {
+      const screenshotTools = {
+        version: '162',
+        description: 'retire_screenshot_tools',
+        file: 'V162__retire_screenshot_tools.js',
+        checksum: 'abc123',
+        status: 'success'
+      };
+      const history = { schemaVersion: '1.0', migrations: [{ ...screenshotTools }] };
+
+      expect(reconcileRenamedMigrations(history)).toBe(false);
+      expect(history.migrations).toEqual([screenshotTools]);
     });
 
     it('is a no-op on a fresh install with no matching history entries', () => {
