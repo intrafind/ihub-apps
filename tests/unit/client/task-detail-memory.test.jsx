@@ -341,6 +341,9 @@ describe('TaskDetailPage: memory', () => {
           }),
           run('r-failed', { memory: { enabled: true, changed: null, compose: 'failed' } }),
           run('r-full', { memory: { enabled: true, changed: true, compose: 'too_long' } }),
+          run('r-wrote-then-failed', {
+            memory: { enabled: true, compose: 'failed', versionRead: 2, versionWritten: 3 }
+          }),
           run('r-plain')
         ],
         nextCursor: null
@@ -348,7 +351,7 @@ describe('TaskDetailPage: memory', () => {
       await renderPage();
 
       const rows = screen.getAllByRole('row').slice(1);
-      expect(rows).toHaveLength(7);
+      expect(rows).toHaveLength(8);
       const badges = row => ({
         noChanges: within(row).queryByText('No changes') !== null,
         updated: within(row).queryByText('Memory updated') !== null,
@@ -361,7 +364,9 @@ describe('TaskDetailPage: memory', () => {
       expect(badges(rows[3])).toEqual({ ...none, updated: true });
       expect(badges(rows[4])).toEqual({ ...none, warning: 'Memory not updated' });
       expect(badges(rows[5])).toEqual({ ...none, warning: 'Memory full' });
-      expect(badges(rows[6])).toEqual(none);
+      // The run wrote its notes itself; the failed update after it is not a warning then.
+      expect(badges(rows[6])).toEqual({ ...none, updated: true });
+      expect(badges(rows[7])).toEqual(none);
     });
   });
 

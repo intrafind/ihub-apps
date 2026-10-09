@@ -62,8 +62,10 @@ export function RunMemoryBadges({ memory }) {
     (Number.isFinite(memory.versionWritten) &&
       Number.isFinite(memory.versionRead) &&
       memory.versionWritten > memory.versionRead);
-  const tooLong = memory.compose === 'too_long';
-  const failed = memory.compose === 'failed';
+  // A run that wrote its notes itself (write_memory) did update them, even when the
+  // update after it failed: no warning then, it would contradict "Memory updated".
+  const tooLong = !updated && memory.compose === 'too_long';
+  const failed = !updated && memory.compose === 'failed';
   if (!unchanged && !updated && !tooLong && !failed) return null;
   return (
     <div className="flex flex-wrap gap-1.5">

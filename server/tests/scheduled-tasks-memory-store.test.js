@@ -374,6 +374,10 @@ describe('the memory service on a task scope', () => {
     assert.equal(whole2.truncated, false, 'over the limit, within twice it');
     assert.equal(whole2.chars, 51);
 
+    // Exactly twice the limit: whole, the stored trailing newline does not count.
+    await memoryService.writeMemory(scope, { mode: 'replace', content: 'x'.repeat(20) });
+    assert.equal((await memoryService.readMemoryForPrompt(scope, 10)).truncated, false);
+
     await memoryService.writeMemory(scope, {
       mode: 'replace',
       content: `head${'y'.repeat(50)}tail`

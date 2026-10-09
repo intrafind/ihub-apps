@@ -193,10 +193,11 @@ export const taskMemoryHandler = {
     const limit = Number.isFinite(maxChars) ? maxChars : memorySettings().maxChars;
     const meta = { version: doc.version, updatedAt: doc.updatedAt, chars: doc.body.length };
     const ceiling = limit * PROMPT_OVERFLOW_FACTOR;
-    if (doc.body.length <= ceiling) return { body: doc.body, truncated: false, ...meta };
+    // The stored trailing newline does not count: it is not shown either.
+    const body = doc.body.trimEnd();
+    if (body.length <= ceiling) return { body: doc.body, truncated: false, ...meta };
     // Keep both ends: the start holds the watermark, the end what was appended last.
     const half = Math.floor(ceiling / 2);
-    const body = doc.body.trimEnd();
     return {
       body: `${body.slice(0, half)}\n\n${TRUNCATION_MARKER}\n\n${body.slice(-half)}`,
       truncated: true,
