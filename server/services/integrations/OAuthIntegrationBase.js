@@ -4,6 +4,16 @@ import { getForwardedProto, getForwardedHost } from '../../utils/publicBaseUrl.j
 import logger from '../../utils/logger.js';
 import configCache from '../../configCache.js';
 import credentialService from '../CredentialService.js';
+import {
+  OAuthRefreshError,
+  REFRESH_ERROR_CODES,
+  createUnavailableError,
+  isTerminalRefreshError,
+  isUnavailableError
+} from './oauthRefreshError.js';
+
+// A request answered with 401 is retried once, after refreshing the tokens.
+const MAX_API_RETRIES = 1;
 
 /**
  * Shared OAuth 2.0 token-lifecycle implementation for cloud storage
@@ -14,9 +24,6 @@ import credentialService from '../CredentialService.js';
  * provider-config loading, token store/refresh/expiry handling, and the
  * 401-retry-once API request wrapper for free.
  */
-// A request answered with 401 is retried once, after refreshing the tokens.
-const MAX_API_RETRIES = 1;
-
 class OAuthIntegrationBase {
   constructor({ serviceName, displayName, componentName }) {
     this.serviceName = serviceName;
@@ -174,8 +181,80 @@ class OAuthIntegrationBase {
   _isPassthroughTokenError(error) {
     return (
       error.message.includes('not authenticated') ||
-      error.message.includes('authentication expired')
+      error.message.includes('authentication expired') ||
+      isUnavailableError(error)
     );
+  }
+
+  /**
+   * Build the error for a non-OK response from the token endpoint during a
+   * refresh. `invalid_grant` means the provider rejected the refresh token;
+   * any other provider error code is kept on the error as it came, and a
+   * response without one (5xx, 429, an HTML error page) is a temporary failure.
+   * @param {Response} response - The failed token endpoint response
+   * @param {Object} errorData - Parsed JSON body, or {} when it had none
+   * @returns {OAuthRefreshError}
+   */
+  _refreshFailureFromResponse(response, errorData) {
+    const providerCode = typeof errorData?.error === 'string' ? errorData.error : undefined;
+    const code = providerCode || REFRESH_ERROR_CODES.TEMPORARY;
+
+    if (response.status !== 400) {
+      return new OAuthRefreshError(`Failed to refresh access token: ${response.statusText}`, code);
+    }
+    if (providerCode === REFRESH_ERROR_CODES.INVALID_GRANT) {
+      return new OAuthRefreshError(
+        'Refresh token expired or invalid - user needs to reconnect',
+        REFRESH_ERROR_CODES.INVALID_GRANT
+      );
+    }
+    return new OAuthRefreshError(
+      `Token refresh failed: ${errorData.error_description || errorData.error}`,
+      code
+    );
+  }
+
+  /**
+   * Normalize anything thrown while refreshing into an OAuthRefreshError.
+   * Errors already typed pass through; anything else (network failure, a
+   * provider config problem) is logged and becomes a temporary failure.
+   * @param {Error} error
+   * @returns {OAuthRefreshError}
+   */
+  _toRefreshError(error) {
+    if (error instanceof OAuthRefreshError) {
+      return error;
+    }
+    logger.error(`Error refreshing ${this.displayName} access token`, {
+      component: this.componentName,
+      error
+    });
+    return new OAuthRefreshError(
+      `Failed to refresh access token: ${error.message}`,
+      REFRESH_ERROR_CODES.TEMPORARY,
+      { cause: error }
+    );
+  }
+
+  /**
+   * Decide what a failed refresh means for the user's stored tokens and return
+   * the error to throw. The tokens are deleted only when the refresh token is
+   * rejected or missing; the user then has to reconnect. Any other failure
+   * (network error, 5xx, 429, an expired client secret, a provider config
+   * problem) keeps the tokens, so access returns on its own once it clears.
+   * @param {Error} refreshError - What the refresh threw
+   * @param {string} userId - User ID
+   * @param {string} [providerId] - Provider ID
+   * @returns {Promise<Error>} The error to throw to the caller
+   */
+  async _refreshFailureError(refreshError, userId, providerId) {
+    if (isTerminalRefreshError(refreshError)) {
+      await this.deleteUserTokens(userId, providerId);
+      return new Error(
+        `${this.displayName} authentication expired. Please reconnect your account.`
+      );
+    }
+    return createUnavailableError(this.displayName, refreshError);
   }
 
   /**
@@ -204,8 +283,9 @@ class OAuthIntegrationBase {
             component: this.componentName,
             userId
           });
-          throw new Error(
-            `No refresh token available - user needs to reconnect ${this.displayName} account`
+          throw new OAuthRefreshError(
+            `No refresh token available - user needs to reconnect ${this.displayName} account`,
+            REFRESH_ERROR_CODES.NO_REFRESH_TOKEN
           );
         }
 
@@ -225,10 +305,7 @@ class OAuthIntegrationBase {
           error: refreshError
         });
 
-        await this.deleteUserTokens(userId, providerId);
-        throw new Error(
-          `${this.displayName} authentication expired. Please reconnect your account.`
-        );
+        throw await this._refreshFailureError(refreshError, userId, providerId);
       }
     } catch (error) {
       if (this._isPassthroughTokenError(error)) {
@@ -394,36 +471,14 @@ class OAuthIntegrationBase {
 
   /**
    * Refresh the user's access token after the API answered 401 and store the
-   * new tokens. Throws when there is no refresh token or the refresh fails.
-   * @param {string} userId - User ID
-   * @param {string} [providerId] - Provider ID
-   */
-  async _refreshAfterUnauthorized(userId, providerId) {
-    const expiredTokens = await tokenStorage.getUserTokens(userId, this.serviceName, providerId);
-
-    if (!expiredTokens.refreshToken) {
-      throw new Error('No refresh token available');
-    }
-
-    const refreshedTokens = await this.refreshAccessToken(
-      expiredTokens.providerId,
-      expiredTokens.refreshToken
-    );
-
-    await this.storeUserTokens(userId, refreshedTokens);
-  }
-
-  /**
-   * Handle a 401: refresh the tokens, then send the request once more. Any
-   * failure in here deletes the stored tokens and is reported as an expired
-   * session.
+   * new tokens. A rejected or missing refresh token deletes the stored tokens;
+   * any other failure keeps them (see _refreshFailureError). Either way it
+   * throws.
    * @param {string} userId - User ID
    * @param {string} [providerId] - Provider ID
    * @param {number} retryCount - Retries used so far, before this one
-   * @param {() => Promise<Object>} sendAgain - Sends the original request again
-   * @returns {Promise<Object>} API response of the retried request
    */
-  async _retryAfterUnauthorized(userId, providerId, retryCount, sendAgain) {
+  async _refreshAfterUnauthorized(userId, providerId, retryCount) {
     logger.info('Received 401, attempting token refresh and retry', {
       component: this.componentName,
       attempt: retryCount + 1,
@@ -431,16 +486,28 @@ class OAuthIntegrationBase {
     });
 
     try {
-      await this._refreshAfterUnauthorized(userId, providerId);
-      return await sendAgain();
+      const expiredTokens = await tokenStorage.getUserTokens(userId, this.serviceName, providerId);
+
+      if (!expiredTokens.refreshToken) {
+        throw new OAuthRefreshError(
+          'No refresh token available',
+          REFRESH_ERROR_CODES.NO_REFRESH_TOKEN
+        );
+      }
+
+      const refreshedTokens = await this.refreshAccessToken(
+        expiredTokens.providerId,
+        expiredTokens.refreshToken
+      );
+
+      await this.storeUserTokens(userId, refreshedTokens);
     } catch (refreshError) {
       logger.error('Forced token refresh failed', {
         component: this.componentName,
         error: refreshError
       });
 
-      await this.deleteUserTokens(userId, providerId);
-      throw new Error(`${this.displayName} authentication expired. Please reconnect your account.`);
+      throw await this._refreshFailureError(refreshError, userId, providerId);
     }
   }
 
@@ -493,16 +560,15 @@ class OAuthIntegrationBase {
       }
 
       if (response.status === 401 && retryCount < MAX_API_RETRIES) {
-        return await this._retryAfterUnauthorized(userId, providerId, retryCount, () =>
-          this._makeApiRequestWithRetry(
-            apiBaseUrl,
-            endpoint,
-            method,
-            data,
-            userId,
-            providerId,
-            retryCount + 1
-          )
+        await this._refreshAfterUnauthorized(userId, providerId, retryCount);
+        return await this._makeApiRequestWithRetry(
+          apiBaseUrl,
+          endpoint,
+          method,
+          data,
+          userId,
+          providerId,
+          retryCount + 1
         );
       }
 

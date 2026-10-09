@@ -40,6 +40,8 @@ const tokenStorage = {
 };
 jest.unstable_mockModule('../services/TokenStorageService.js', () => ({ default: tokenStorage }));
 
+const { OAuthRefreshError, REFRESH_ERROR_CODES, isUnavailableError } =
+  await import('../services/integrations/oauthRefreshError.js');
 const { default: OAuthIntegrationBase } =
   await import('../services/integrations/OAuthIntegrationBase.js');
 
@@ -110,6 +112,32 @@ async function rejection(promise) {
     return error;
   }
   throw new Error('Expected the call to reject');
+}
+
+/** A refresh token the provider has rejected (`invalid_grant`). */
+const rejectedGrant = () =>
+  new OAuthRefreshError('Refresh token expired or invalid', REFRESH_ERROR_CODES.INVALID_GRANT);
+
+/** Refresh failures that say nothing about the grant, so the tokens must stay. */
+const temporaryRefreshFailures = [
+  [
+    'temporary (network, 5xx, 429)',
+    () =>
+      new OAuthRefreshError('Failed to refresh access token: boom', REFRESH_ERROR_CODES.TEMPORARY)
+  ],
+  [
+    'invalid_client (expired client secret)',
+    () => new OAuthRefreshError('Failed to refresh access token: Unauthorized', 'invalid_client')
+  ],
+  ['unknown error', () => new Error('something nobody classified')]
+];
+
+function expectUnavailable(error) {
+  expect(error.message).toBe(
+    'Test Drive is temporarily unavailable. Please try again in a moment.'
+  );
+  expect(error.message).not.toMatch(/reconnect/i);
+  expect(isUnavailableError(error)).toBe(true);
 }
 
 let service;
@@ -235,19 +263,52 @@ describe('_makeApiRequestWithRetry: 401 handling', () => {
     expect(tokenStorage.deleteUserTokens).not.toHaveBeenCalled();
   });
 
-  // The retry runs inside the refresh try/catch, so a failure of the retried
-  // request itself is reported as an expired session and deletes the tokens
-  // that were just refreshed. Issue #2794 changes this; the refresh-failure
-  // cases below describe today's behavior as well.
-  it('reports a second 401 as an expired session and deletes the tokens (current behavior)', async () => {
+  it('reports a second 401 as authentication required and keeps the refreshed tokens', async () => {
     httpFetch.mockResolvedValue(response(401, {}));
 
     const error = await rejection(service.makeApiRequest('/files', 'GET', null, USER, PROVIDER));
 
-    expect(error.message).toBe('Test Drive authentication expired. Please reconnect your account.');
+    expect(error.message).toBe(
+      'Test Drive authentication required. Please reconnect your account.'
+    );
     expect(httpFetch).toHaveBeenCalledTimes(2);
     expect(service.refreshAccessToken).toHaveBeenCalledTimes(1);
-    expect(tokenStorage.deleteUserTokens).toHaveBeenCalledTimes(1);
+    expect(tokenStorage.deleteUserTokens).not.toHaveBeenCalled();
+    expect(store.tokens.accessToken).toBe('refreshed-access');
+  });
+
+  // The retried request is not part of the refresh: whatever it fails with is
+  // reported as itself, and the tokens that were just refreshed stay.
+  it.each([
+    ['a 404', () => apiError(404, 'File not found'), 'Test Drive API error: File not found'],
+    ['a 500', () => apiError(500, 'Backend exploded'), 'Test Drive API error: Backend exploded'],
+    [
+      'a 429',
+      () => response(429, {}),
+      'Test Drive API rate limit exceeded. Please try again in a moment.'
+    ]
+  ])(
+    'reports %s on the retried request as itself and keeps the tokens',
+    async (_label, failed, message) => {
+      httpFetch.mockResolvedValueOnce(response(401, {})).mockResolvedValueOnce(failed());
+
+      const error = await rejection(service.makeApiRequest('/files', 'GET', null, USER, PROVIDER));
+
+      expect(error.message).toBe(message);
+      expect(httpFetch).toHaveBeenCalledTimes(2);
+      expect(tokenStorage.deleteUserTokens).not.toHaveBeenCalled();
+    }
+  );
+
+  it('reports a network failure on the retried request as itself and keeps the tokens', async () => {
+    httpFetch
+      .mockResolvedValueOnce(response(401, {}))
+      .mockRejectedValueOnce(new Error('socket hang up'));
+
+    const error = await rejection(service.makeApiRequest('/files', 'GET', null, USER, PROVIDER));
+
+    expect(error.message).toBe('Test Drive API error: socket hang up');
+    expect(tokenStorage.deleteUserTokens).not.toHaveBeenCalled();
   });
 
   it('deletes the tokens and reports an expired session when there is no refresh token', async () => {
@@ -263,8 +324,8 @@ describe('_makeApiRequestWithRetry: 401 handling', () => {
     expect(logged('error')).toContain('Forced token refresh failed');
   });
 
-  it('deletes the tokens and reports an expired session when the refresh fails', async () => {
-    service.refreshAccessToken.mockRejectedValueOnce(new Error('Failed to refresh access token'));
+  it('deletes the tokens and reports an expired session when the refresh token is rejected', async () => {
+    service.refreshAccessToken.mockRejectedValueOnce(rejectedGrant());
     httpFetch.mockResolvedValueOnce(response(401, {}));
 
     const error = await rejection(service.makeApiRequest('/files', 'GET', null, USER, PROVIDER));
@@ -274,6 +335,32 @@ describe('_makeApiRequestWithRetry: 401 handling', () => {
     expect(tokenStorage.deleteUserTokens).toHaveBeenCalledWith(USER, 'testdrive', PROVIDER);
     expect(tokenStorage.storeUserTokens).not.toHaveBeenCalled();
     expect(logged('error')).toContain('Forced token refresh failed');
+  });
+
+  it.each(temporaryRefreshFailures)(
+    'keeps the tokens and reports the service as unavailable when the refresh fails: %s',
+    async (_label, makeFailure) => {
+      service.refreshAccessToken.mockRejectedValueOnce(makeFailure());
+      httpFetch.mockResolvedValueOnce(response(401, {}));
+
+      const error = await rejection(service.makeApiRequest('/files', 'GET', null, USER, PROVIDER));
+
+      expectUnavailable(error);
+      expect(httpFetch).toHaveBeenCalledTimes(1);
+      expect(tokenStorage.deleteUserTokens).not.toHaveBeenCalled();
+      expect(store.tokens.refreshToken).toBe('refresh-1');
+      expect(logged('error')).toContain('Forced token refresh failed');
+    }
+  );
+
+  it('keeps the tokens when storing the refreshed ones fails', async () => {
+    tokenStorage.storeUserTokens.mockRejectedValueOnce(new Error('disk full'));
+    httpFetch.mockResolvedValueOnce(response(401, {}));
+
+    const error = await rejection(service.makeApiRequest('/files', 'GET', null, USER, PROVIDER));
+
+    expectUnavailable(error);
+    expect(tokenStorage.deleteUserTokens).not.toHaveBeenCalled();
   });
 });
 
@@ -434,8 +521,8 @@ describe('getUserTokens', () => {
     expect(tokenStorage.deleteUserTokens).toHaveBeenCalledWith(USER, 'testdrive', PROVIDER);
   });
 
-  it('deletes the tokens and reports an expired session when the refresh fails', async () => {
-    service.refreshAccessToken.mockRejectedValueOnce(new Error('Failed to refresh access token'));
+  it('deletes the tokens and reports an expired session when the refresh token is rejected', async () => {
+    service.refreshAccessToken.mockRejectedValueOnce(rejectedGrant());
     expiredAt();
 
     const error = await rejection(service.getUserTokens(USER, PROVIDER));
@@ -443,6 +530,31 @@ describe('getUserTokens', () => {
     expect(error.message).toBe('Test Drive authentication expired. Please reconnect your account.');
     expect(tokenStorage.deleteUserTokens).toHaveBeenCalledWith(USER, 'testdrive', PROVIDER);
     expect(logged('error')).toContain('Failed to refresh tokens for user');
+  });
+
+  it.each(temporaryRefreshFailures)(
+    'keeps the tokens and reports the service as unavailable when the refresh fails: %s',
+    async (_label, makeFailure) => {
+      service.refreshAccessToken.mockRejectedValueOnce(makeFailure());
+      expiredAt();
+
+      const error = await rejection(service.getUserTokens(USER, PROVIDER));
+
+      expectUnavailable(error);
+      expect(tokenStorage.deleteUserTokens).not.toHaveBeenCalled();
+      expect(store.tokens.refreshToken).toBe('refresh-1');
+      expect(logged('error')).toContain('Failed to refresh tokens for user');
+    }
+  );
+
+  it('keeps the tokens when storing the refreshed ones fails', async () => {
+    tokenStorage.storeUserTokens.mockRejectedValueOnce(new Error('disk full'));
+    expiredAt();
+
+    const error = await rejection(service.getUserTokens(USER, PROVIDER));
+
+    expectUnavailable(error);
+    expect(tokenStorage.deleteUserTokens).not.toHaveBeenCalled();
   });
 
   it('wraps a store failure as "Failed to retrieve user tokens"', async () => {

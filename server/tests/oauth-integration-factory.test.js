@@ -14,6 +14,7 @@ import NextcloudService from '../services/integrations/NextcloudService.js';
 import JiraService from '../services/integrations/JiraService.js';
 import { issueIntegrationOAuthState } from '../utils/integrationOAuthState.js';
 import tokenStorageService from '../services/TokenStorageService.js';
+import { createUnavailableError } from '../services/integrations/oauthRefreshError.js';
 
 // In-memory key material; nothing touches disk.
 tokenStorageService.encryptionKey = 'd'.repeat(64);
@@ -360,6 +361,19 @@ for (const p of providers) {
   check(
     'an "authentication required" failure reports an expired connection',
     expired.body?.connected === false && /authentication expired/.test(expired.body.message)
+  );
+
+  service.isUserAuthenticated = async () => {
+    throw createUnavailableError('Provider');
+  };
+  const unavailable = await status();
+  check(
+    'a temporary refresh failure keeps the account connected and does not say to reconnect',
+    unavailable.status === 200 &&
+      unavailable.body?.connected === true &&
+      unavailable.body.temporarilyUnavailable === true &&
+      /temporarily unavailable/.test(unavailable.body.message) &&
+      !/reconnect|expired/i.test(unavailable.body.message)
   );
 
   // ---- /disconnect

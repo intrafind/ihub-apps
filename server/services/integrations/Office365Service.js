@@ -5,6 +5,7 @@ import logger from '../../utils/logger.js';
 import configCache from '../../configCache.js';
 import { readBoundedBody, MAX_DOWNLOAD_BYTES } from '../../utils/boundedBodyReader.js';
 import OAuthIntegrationBase from './OAuthIntegrationBase.js';
+import { isUnavailableError } from './oauthRefreshError.js';
 
 /**
  * Office 365 Service for Microsoft 365 file access integration
@@ -261,16 +262,7 @@ class Office365Service extends OAuthIntegrationBase {
           error: errorData
         });
 
-        if (response.status === 400) {
-          if (errorData.error === 'invalid_grant') {
-            throw new Error('Refresh token expired or invalid - user needs to reconnect');
-          }
-          throw new Error(
-            `Token refresh failed: ${errorData.error_description || errorData.error}`
-          );
-        }
-
-        throw new Error(`Failed to refresh access token: ${response.statusText}`);
+        throw this._refreshFailureFromResponse(response, errorData);
       }
 
       const tokens = await response.json();
@@ -284,18 +276,7 @@ class Office365Service extends OAuthIntegrationBase {
         providerId: providerId
       };
     } catch (error) {
-      if (
-        error.message.includes('Refresh token expired') ||
-        error.message.includes('Token refresh failed') ||
-        error.message.includes('Failed to refresh access token')
-      ) {
-        throw error;
-      }
-      logger.error('Error refreshing Office 365 access token', {
-        component: 'Office365Service',
-        error
-      });
-      throw new Error(`Failed to refresh access token: ${error.message}`);
+      throw this._toRefreshError(error);
     }
   }
 
@@ -366,6 +347,8 @@ class Office365Service extends OAuthIntegrationBase {
       });
       return true;
     } catch (error) {
+      // A temporary failure says nothing about the connection; let the caller report it.
+      if (isUnavailableError(error)) throw error;
       logger.info('User Office 365 authentication failed', {
         component: 'Office365Service',
         userId,

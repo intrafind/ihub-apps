@@ -48,3 +48,23 @@ example the Outlook add-in) is refused as well.
   not be used. As a result, the NTLM `allowSelfSignup: false` setting, which the old behavior
   bypassed, now takes effect: users without an account are refused.
 - No other admin action is required.
+
+## Office 365, Google Drive and Nextcloud: a Short Outage No Longer Disconnects Users
+
+When Google, Microsoft or a Nextcloud server had a short outage, every user who made a request
+while it lasted was disconnected and had to go through the sign-in again, even though their access
+was still valid. Refreshing an expired access token failed, and iHub deleted the user's stored
+tokens whatever the reason. Tokens are now only deleted when the provider rejects the refresh token
+or none is stored.
+
+- A network error, a 5xx or 429 from the provider, an expired or wrong client secret, and a
+  provider that was disabled or removed in the meantime keep the stored tokens. The request fails
+  with "temporarily unavailable. Please try again in a moment" instead of "authentication expired.
+  Please reconnect your account", and access returns once the problem clears.
+- The connection status shows the account as connected while access is temporarily unavailable,
+  instead of "not connected".
+- When an expired client secret is the cause, replacing it restores access for every user at once.
+- A request that was retried after a successful token refresh and then failed for its own reason,
+  such as a missing file or a rate limit, no longer deletes the tokens that were just refreshed. It
+  reports that error instead of "authentication expired".
+- No admin action is required.

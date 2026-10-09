@@ -21,6 +21,7 @@ import {
   sendBadRequest
 } from '../../utils/responseHelpers.js';
 import { isValidReturnUrl } from '../../utils/oauthReturnUrl.js';
+import { isUnavailableError } from '../../services/integrations/oauthRefreshError.js';
 import {
   DEFAULT_INTEGRATION_RETURN_URL,
   issueIntegrationOAuthState,
@@ -287,6 +288,21 @@ export function createOAuthIntegrationRouter(
             : `${displayName} account connected successfully`
         });
       } catch (error) {
+        // The tokens refresh failed for a reason that says nothing about the
+        // grant (outage, rate limit, provider config). The account is still
+        // connected, so say so and do not tell the user to reconnect.
+        if (isUnavailableError(error)) {
+          logger.warn(`${displayName} status unavailable`, {
+            component: displayName,
+            error: error.message
+          });
+          return res.json({
+            connected: true,
+            temporarilyUnavailable: true,
+            message: error.message
+          });
+        }
+
         logger.error(`Error getting ${displayName} status`, {
           component: displayName,
           error: error.message
