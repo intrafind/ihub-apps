@@ -141,7 +141,7 @@ async function inspectScript(script, { toolIds, exports: wanted }, { scriptsDir,
 
   const missingExports = [...wanted].filter(name => typeof loaded.mod?.[name] !== 'function');
   if (missingExports.length === 0) return null;
-  const names = missingExports.map(name => '"' + name + '"').join(', ');
+  const names = missingExports.map(name => JSON.stringify(name)).join(', ');
   return {
     script,
     toolIds: ids,

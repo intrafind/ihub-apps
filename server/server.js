@@ -820,7 +820,7 @@ if (cluster.isPrimary && workerCount > 1) {
     try {
       const { runStartupToolCheck } = await import('./services/tools/toolScriptCheck.js');
       // Deliberately not awaited: it logs its own outcome and never throws.
-      void runStartupToolCheck();
+      runStartupToolCheck();
     } catch (error) {
       logger.warn('Tool script check could not run', { component: 'Server', error });
     }
