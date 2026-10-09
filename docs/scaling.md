@@ -313,10 +313,10 @@ Several pods or hosts must agree on the two secrets a ticket depends on, or a
 ticket issued by one is refused by another (the integration callback then ends in
 `?<provider>_error=invalid_state`):
 
-- **The signing secret**, which is the JWT secret: `JWT_SECRET`, else `auth.jwtSecret`
-  in `platform.json`, else the secret generated into `contents/`. It signs these
-  tickets even when users' tokens are RS256, so setting `JWT_PRIVATE_KEY` and
-  `JWT_PUBLIC_KEY` does not cover it.
+- **The signing secret** is the JWT secret. It comes from the `JWT_SECRET` environment
+  variable, else from `auth.jwtSecret` in `platform.json`, else from the one generated
+  into `contents/`. It signs these tickets even when users' tokens are RS256, so setting
+  `JWT_PRIVATE_KEY` and `JWT_PUBLIC_KEY` does not cover it.
 - **The token encryption key**, `TOKEN_ENCRYPTION_KEY` or `contents/.encryption-key`. The
   PKCE verifier inside an integration ticket is encrypted with it.
 

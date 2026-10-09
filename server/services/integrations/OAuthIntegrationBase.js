@@ -285,7 +285,7 @@ class OAuthIntegrationBase {
           });
           throw new OAuthRefreshError(
             `No refresh token available - user needs to reconnect ${this.displayName} account`,
-            REFRESH_ERROR_CODES.NO_REFRESH_TOKEN
+            REFRESH_ERROR_CODES.MISSING
           );
         }
 
@@ -489,10 +489,7 @@ class OAuthIntegrationBase {
       const expiredTokens = await tokenStorage.getUserTokens(userId, this.serviceName, providerId);
 
       if (!expiredTokens.refreshToken) {
-        throw new OAuthRefreshError(
-          'No refresh token available',
-          REFRESH_ERROR_CODES.NO_REFRESH_TOKEN
-        );
+        throw new OAuthRefreshError('No refresh token available', REFRESH_ERROR_CODES.MISSING);
       }
 
       const refreshedTokens = await this.refreshAccessToken(

@@ -10,7 +10,7 @@ export const REFRESH_ERROR_CODES = Object.freeze({
   /** The provider rejected the refresh token (`invalid_grant`): the user must reconnect. */
   INVALID_GRANT: 'invalid_grant',
   /** No refresh token is stored: the user must reconnect. */
-  NO_REFRESH_TOKEN: 'no_refresh_token',
+  MISSING: 'refresh_missing',
   /**
    * The refresh could not be completed for a reason that says nothing about the
    * grant: network error, 5xx, 429, a provider config problem. Other provider
@@ -46,8 +46,7 @@ export class OAuthRefreshError extends Error {
  */
 export function isTerminalRefreshError(error) {
   return (
-    error?.code === REFRESH_ERROR_CODES.INVALID_GRANT ||
-    error?.code === REFRESH_ERROR_CODES.NO_REFRESH_TOKEN
+    error?.code === REFRESH_ERROR_CODES.INVALID_GRANT || error?.code === REFRESH_ERROR_CODES.MISSING
   );
 }
 
