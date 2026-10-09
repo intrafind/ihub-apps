@@ -34,12 +34,12 @@ images, or audio. They do **not** configure vLLM. Both sides must agree:
 
 | Capability        | iHub model config flag          | vLLM start parameter(s)                                  |
 | ----------------- | ------------------------------- | -------------------------------------------------------- |
-| Tool calling      | `"supportsTools": true`         | `--enable-auto-tool-choice` + `--tool-call-parser <p>`   |
+| Tool calling      | `"supportsTools": "auto"`         | `--enable-auto-tool-choice` + `--tool-call-parser <p>`   |
 | Image / vision    | `"supportsImages": true` and/or `"supportsVision": true` | `--limit-mm-per-prompt '{"image": N}'` (multimodal model) |
 | Audio input       | `"supportsAudio": true`         | `--limit-mm-per-prompt '{"audio": N}'` (audio-capable model) |
 | Reasoning/thinking | `"thinking": { "enabled": true }` | `--reasoning-parser <p>` (see local-llm-providers.md)   |
 
-**Common failure mode:** the iHub model has `"supportsTools": true` (so the UI offers tools),
+**Common failure mode:** the iHub model has `"supportsTools": "auto"` (so the UI offers tools),
 but vLLM was started **without** `--enable-auto-tool-choice`. vLLM then ignores the `tools`
 field or errors, and the user reports "tool calling does not work." Fixing this is a vLLM
 restart with the correct flags — see below.
@@ -124,7 +124,7 @@ vllm serve mistralai/Mistral-Small-Instruct-2409 \
   "provider": "openai",
   "contextWindow": 32768,
   "maxOutputTokens": 4096,
-  "supportsTools": true,
+  "supportsTools": "auto",
   "enabled": true
 }
 ```
@@ -313,7 +313,7 @@ Corresponding iHub model config:
   "provider": "openai",
   "contextWindow": 32768,
   "maxOutputTokens": 4096,
-  "supportsTools": true,
+  "supportsTools": "auto",
   "supportsImages": true,
   "supportsVision": true,
   "supportsAudio": true,
@@ -359,7 +359,7 @@ When a customer reports a vLLM capability "not working," check in this order:
 2. Does the **`--tool-call-parser`** match the model family? (Wrong parser → tool calls not parsed.)
 3. Does the model actually support function calling? (Check the
    [supported models list](https://docs.vllm.ai/en/latest/models/supported_models.html).)
-4. Is `"supportsTools": true` set in the iHub model config?
+4. Is `"supportsTools": "auto"` set in the iHub model config?
 5. Test directly with the `curl` command in [section 1](#verify-tool-calling-works) —
    if `tool_calls` is absent there, it's a vLLM-side issue, not iHub.
 

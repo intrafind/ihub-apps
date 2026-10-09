@@ -14,12 +14,14 @@
  * 5.5, Fable 5.1) reject `any` outright, and so does extended thinking; a local
  * server may ignore or refuse the field. For those the loop says it in words
  * instead: a one-off instruction after the conversation on the first round. A
- * model is known not to take it when its config says
- * `supportsForcedToolUse: false` or the provider rejected the field during
- * this process's lifetime (remembered for a while, as for native web search).
+ * model is known not to take it unless its config says `supportsTools:
+ * "required"`, or when the provider rejected the field during this process's
+ * lifetime (remembered for a while, as for native web search).
  *
  * @module services/loop/toolChoice
  */
+
+import { modelCanRequireToolUse } from '../../../shared/modelCapabilities.js';
 
 /** Values of `policies.tools.choice` (and of an app's `toolChoice`). */
 export const TOOL_CHOICES = Object.freeze(['auto', 'required']);
@@ -150,11 +152,7 @@ export function planToolChoice({
   if (choice !== 'required') return NO_PLAN;
   if (!Array.isArray(offeredTools) || offeredTools.length === 0) return NO_PLAN;
   if (iteration > 1 || priorToolUse) return NO_PLAN;
-  if (
-    forcedRejected ||
-    model?.supportsForcedToolUse === false ||
-    isForcedToolUseUnavailable(model?.id)
-  ) {
+  if (forcedRejected || !modelCanRequireToolUse(model) || isForcedToolUseUnavailable(model?.id)) {
     return { force: false, nudge: REQUIRE_TOOL_NUDGE };
   }
   return { force: true, nudge: null };

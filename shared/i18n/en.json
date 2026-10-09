@@ -1021,7 +1021,7 @@
         "maxOutputTokens": "Max Output Tokens",
         "concurrency": "Concurrency",
         "requestDelay": "Request Delay (ms)",
-        "supportsTools": "Supports Tools",
+        "supportsTools": "Tool Calling",
         "supportsVision": "Supports Vision",
         "supportsAudio": "Supports Audio",
         "enabled": "Enabled",
@@ -1053,8 +1053,14 @@
         "ttsVoiceLanguage": "Language",
         "customProviders": "Custom providers"
       },
+      "toolSupport": {
+        "none": "No tools",
+        "auto": "Tools - the model decides",
+        "required": "Tools - a tool call can be required"
+      },
       "hints": {
         "modelId": "Unique identifier for the model (cannot be changed after creation)",
+        "supportsTools": "Whether the model can be given tools, and whether the provider can force it to call one. Pick \"a tool call can be required\" only if the provider accepts a forced tool choice (OpenAI, Mistral, Google, Bedrock and most local servers do; Claude Opus 5.5, Sonnet 5.5 and Fable 5.1 do not). Apps that require a tool call ask a \"the model decides\" model in words instead.",
         "apiModelId": "Model identifier used by the provider's API (e.g., gpt-4, claude-3-opus)",
         "apiKey": "API key for this model. If not provided, the system will use the key of its provider or the environment variable. A local server (vLLM, LM Studio, Jan.ai, Ollama) needs no key — leave this empty. Keys are stored encrypted.",
         "apiKeySet": "✓ API key is configured for this model",

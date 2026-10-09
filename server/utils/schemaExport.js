@@ -43,7 +43,7 @@ const schemaMetadata = {
         provider: 'openai',
         contextWindow: 128000,
         maxOutputTokens: 16384,
-        supportsTools: true,
+        supportsTools: 'required',
         enabled: true
       }
     ]

@@ -1,6 +1,6 @@
 /**
  * Where `toolChoice` is configured: an app's `toolChoice`, a workflow node's
- * `config.toolChoice` and a model's `supportsForcedToolUse` capability flag.
+ * `config.toolChoice` and a model's `supportsTools` levels.
  */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
@@ -69,7 +69,7 @@ describe('workflow node toolChoice', () => {
   });
 });
 
-describe('model supportsForcedToolUse', () => {
+describe('model supportsTools', () => {
   const model = {
     id: 'm',
     modelId: 'm',
@@ -79,25 +79,43 @@ describe('model supportsForcedToolUse', () => {
     provider: 'anthropic'
   };
 
-  it('is an optional boolean', () => {
-    assert.equal(modelConfigSchema.safeParse(model).success, true);
-    const parsed = modelConfigSchema.safeParse({ ...model, supportsForcedToolUse: false });
-    assert.equal(parsed.success, true);
-    assert.equal(parsed.data.supportsForcedToolUse, false);
-    assert.equal(
-      modelConfigSchema.safeParse({ ...model, supportsForcedToolUse: 'no' }).success,
-      false
-    );
+  it('is none, auto or required, and none when unset', () => {
+    assert.equal(modelConfigSchema.parse(model).supportsTools, 'none');
+    for (const supportsTools of ['none', 'auto', 'required']) {
+      const parsed = modelConfigSchema.safeParse({ ...model, supportsTools });
+      assert.equal(parsed.success, true, JSON.stringify(parsed.error?.issues));
+      assert.equal(parsed.data.supportsTools, supportsTools);
+    }
   });
 
-  it('is set on the shipped model that rejects forced tool use', () => {
-    const fable = JSON.parse(
-      fs.readFileSync(
-        path.join(getRootDir(), 'server', 'defaults', 'models', 'claude-fable-5-1.json'),
-        'utf8'
-      )
-    );
-    assert.equal(fable.supportsForcedToolUse, false);
-    assert.equal(modelConfigSchema.safeParse(fable).success, true);
+  it('no longer takes a boolean', () => {
+    for (const supportsTools of [true, false, 'yes']) {
+      assert.equal(
+        modelConfigSchema.safeParse({ ...model, supportsTools }).success,
+        false,
+        `${supportsTools}`
+      );
+    }
+  });
+
+  it('is set explicitly on every shipped model that has tools, and valid', () => {
+    const dir = path.join(getRootDir(), 'server', 'defaults', 'models');
+    for (const file of fs.readdirSync(dir).filter(name => name.endsWith('.json'))) {
+      const shipped = JSON.parse(fs.readFileSync(path.join(dir, file), 'utf8'));
+      const parsed = modelConfigSchema.safeParse(shipped);
+      assert.equal(parsed.success, true, `${file}: ${JSON.stringify(parsed.error?.issues)}`);
+      assert.ok(
+        ['none', 'auto', 'required'].includes(parsed.data.supportsTools),
+        `${file}: ${parsed.data.supportsTools}`
+      );
+    }
+  });
+
+  it('shows the newest Claude models as unable to be forced', () => {
+    const dir = path.join(getRootDir(), 'server', 'defaults', 'models');
+    for (const file of ['claude-fable-5-1.json', 'claude-opus-5.json', 'claude-sonnet-5.json']) {
+      const shipped = JSON.parse(fs.readFileSync(path.join(dir, file), 'utf8'));
+      assert.equal(shipped.supportsTools, 'auto', file);
+    }
   });
 });

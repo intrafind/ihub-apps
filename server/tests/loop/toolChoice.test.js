@@ -72,7 +72,8 @@ function makeLoop(turns) {
   return { loop: new AgentLoop({ llmClient: client, logger }), requests };
 }
 
-const model = MODELS.openai;
+// A model whose provider accepts a forced tool choice (`supportsTools: 'required'`).
+const model = { ...MODELS.openai, supportsTools: 'required' };
 const messages = [
   { role: 'system', content: 'You answer questions.' },
   { role: 'user', content: 'What is new at ACME?' }
@@ -177,8 +178,8 @@ test('a tool call in an earlier turn does not count', async () => {
 
 // ── a model that cannot be forced ───────────────────────────────────────────
 
-test('supportsForcedToolUse: false asks in words, on the first call only, and keeps it out of the transcript', async () => {
-  const stubborn = { ...model, id: 'no-force', supportsForcedToolUse: false };
+test('supportsTools: auto asks in words, on the first call only, and keeps it out of the transcript', async () => {
+  const stubborn = { ...model, id: 'no-force', supportsTools: 'auto' };
   const { loop, requests } = makeLoop([toolTurn('read_url', { url: 'x' }), textTurn('Done.')]);
 
   const result = await run(loop, { model: stubborn });
@@ -263,7 +264,7 @@ test('planToolChoice decides per call', () => {
     force: false,
     nudge: REQUIRE_TOOL_NUDGE
   });
-  assert.deepEqual(planToolChoice({ ...base, model: { ...model, supportsForcedToolUse: false } }), {
+  assert.deepEqual(planToolChoice({ ...base, model: { ...model, supportsTools: 'auto' } }), {
     force: false,
     nudge: REQUIRE_TOOL_NUDGE
   });

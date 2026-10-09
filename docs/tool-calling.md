@@ -533,11 +533,12 @@ How the request reaches each provider:
 request would fail the whole turn. For those the first call carries a one-off
 instruction instead ("call one of the available tools first"): shown to the
 model for that call only and never part of the conversation. The loop knows a
-model cannot be forced when its config says `supportsForcedToolUse: false` (set
-on the shipped Claude Fable 5.1), or when the provider answered a forced call
-with a `400` naming `tool_choice`: the request is repeated in words, without
-being charged as a round, and the model is remembered for an hour so later turns
-do not try again. The OpenAI-compatible API (`/v1/chat/completions`) is not
+model can be forced only when its `supportsTools` is `required` (the model
+editor's **Tool Calling** dropdown; `auto` is set on the shipped Claude Opus 5,
+Sonnet 5 and Fable 5.1). A `required` model that the provider still refuses,
+with a `400` naming `tool_choice`, is handled the same way: the request is
+repeated in words, without being charged as a round, and the model is
+remembered for an hour so later turns do not try again. The OpenAI-compatible API (`/v1/chat/completions`) is not
 affected: a `tool_choice` sent by a client passes through unchanged on every
 request.
 

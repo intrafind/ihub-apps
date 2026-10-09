@@ -13,11 +13,10 @@
   "provider": "anthropic",
   "contextWindow": 1000000,
   "maxOutputTokens": 32000,
-  "supportsTools": true,
+  "supportsTools": "auto",
   "supportsVision": true,
   "supportsImages": true,
   "supportsTemperature": false,
-  "supportsForcedToolUse": false,
   "hint": {
     "message": {
       "en": "Claude Fable 5.1 rejects forced tool choice, so apps that define an output schema (structured output) will fail on this model. It is also slower and more expensive than Claude Opus 5 — pick it only for the hardest tasks.",

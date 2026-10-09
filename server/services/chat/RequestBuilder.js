@@ -9,6 +9,7 @@ import logger from '../../utils/logger.js';
 import { findByIdCaseInsensitive } from '../../utils/resourceLookup.js';
 import { normalizeFiles } from '../../../shared/promptContext.js';
 import { resolveMaxOutputTokens } from '../../../shared/outputTokens.js';
+import { matchesModelFilter, modelSupportsTools } from '../../../shared/modelCapabilities.js';
 
 /**
  * Attach the page images of image-based PDFs to their message.
@@ -265,21 +266,13 @@ export function filterModelsForApp(models, app) {
   const appToolsActive =
     app?.apps && app.apps.length > 0 && isFeatureEnabled('appAsTool', configCache.getFeatures());
   if ((app?.tools && app.tools.length > 0) || appToolsActive || app?.websearch?.enabled) {
-    availableModels = availableModels.filter(model => model.supportsTools);
+    availableModels = availableModels.filter(modelSupportsTools);
   }
 
   // Apply model settings filter if specified (e.g., supportsImageGeneration)
   if (app?.settings?.model?.filter) {
     const filter = app.settings.model.filter;
-    availableModels = availableModels.filter(model => {
-      // Check each filter property
-      for (const [key, value] of Object.entries(filter)) {
-        if (model[key] !== value) {
-          return false;
-        }
-      }
-      return true;
-    });
+    availableModels = availableModels.filter(model => matchesModelFilter(model, filter));
   }
 
   return availableModels;

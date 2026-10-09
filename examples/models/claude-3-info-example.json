@@ -13,7 +13,7 @@
   "provider": "anthropic",
   "contextWindow": 200000,
   "maxOutputTokens": 16000,
-  "supportsTools": true,
+  "supportsTools": "auto",
   "enabled": false,
   "hint": {
     "message": {

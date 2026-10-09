@@ -759,7 +759,7 @@ The `settings` property controls which configuration options users can adjust fo
   "enabled": true,
   "model": {
     "enabled": true,
-    "filter": { "supportsTools": true }
+    "filter": { "supportsTools": ["auto", "required"] }
   },
   "style": { "enabled": true },
   "temperature": { "enabled": true },
@@ -785,7 +785,7 @@ The `settings` property controls which configuration options users can adjust fo
 | ------------------------------------- | ------------------------------------------------------------------------ |
 | `settings.enabled`                    | Master switch for all settings - when `false`, all settings UI is hidden |
 | `settings.model.enabled`              | Enable/disable model selection option                                    |
-| `settings.model.filter`               | Record of model properties to filter the available models list. Example: `{"supportsTools": true}` shows only models that support tool calling |
+| `settings.model.filter`               | Record of model properties to filter the available models list. Example: `{"supportsTools": ["auto", "required"]}` shows only models that support tool calling (a filter value that is an array matches any of its entries) |
 | `settings.style.enabled`              | Enable/disable response style selection                                  |
 | `settings.temperature.enabled`        | Enable/disable temperature adjustment                                    |
 | `settings.outputFormat.enabled`       | Enable/disable output format selection                                   |

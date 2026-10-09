@@ -13,7 +13,7 @@
   "provider": "local",
   "contextWindow": 32000,
   "maxOutputTokens": 16000,
-  "supportsTools": false,
+  "supportsTools": "none",
   "enabled": false,
   "default": false,
   "autoDiscovery": true,

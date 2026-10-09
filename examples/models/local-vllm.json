@@ -13,7 +13,7 @@
   "provider": "openai",
   "contextWindow": 32000,
   "maxOutputTokens": 8000,
-  "supportsTools": false,
+  "supportsTools": "none",
   "enabled": true,
   "default": false,
   "autoDiscovery": true

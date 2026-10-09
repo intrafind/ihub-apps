@@ -44,8 +44,9 @@ require that the model's first step of every message calls one of the app's tool
   message still ends in an answer.
 - Models the provider cannot force — for example Claude Opus 5.5, Sonnet 5.5 and Fable 5.1 — are
   asked in words instead. A model that rejects the setting is detected on its first call, handled
-  without an error and remembered for an hour. Set `supportsForcedToolUse: false` in a model's
-  config to skip the attempt.
+  without an error and remembered for an hour. A model's **Tool Calling** setting
+  (`supportsTools: "none" | "auto" | "required"`) says up front which models can be forced: only
+  `required` models are, `auto` models are asked in words.
 - Supported for OpenAI, OpenAI Responses, Mistral, vLLM, Anthropic, Google Gemini and Amazon Bedrock
   models; other local servers may ignore it. See
   [Tool Calling](../tool-calling.md#requiring-a-tool-call).

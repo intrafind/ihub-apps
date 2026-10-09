@@ -35,12 +35,11 @@ Each model is defined with the following properties:
 | `maxOutputTokens`              | Number  | -        | Maximum tokens the model may generate in a response, sent to the provider as `max_tokens` / `maxOutputTokens` (nullable). Defaults to 16384 at runtime if unset (never more than half the context window). Reasoning models spend their thinking tokens from this limit, so keep it well above the longest answer you expect |
 | `default`                      | Boolean | `false`  | Mark this model as the system-wide default. Only one model should have this set to `true`. See [Model Selection in Apps](#model-selection-in-apps) |
 | `enabled`                      | Boolean | `true`   | Whether the model is visible and selectable. Set to `false` to hide without deleting           |
-| `supportsTools`                | Boolean | `false`  | Whether the model supports tool/function calling                                               |
+| `supportsTools` | String | `none` | What the model can do with tools: `none` (no tools), `auto` (tools; the model decides whether to call one) or `required` (tools, and the provider accepts a forced tool call, so an app's `toolChoice: "required"` can be enforced). Use `auto` for models that reject a forced tool choice — Claude Opus 5.5, Sonnet 5.5 and Fable 5.1 return a `400` — and for local servers that ignore it; an app that requires a tool call then asks the model in words instead. An older boolean value is converted by migration V163. See [Requiring a tool call](tool-calling.md#requiring-a-tool-call) |
 | `supportsImages`               | Boolean | -        | Whether the model can process image inputs (deprecated alias for `supportsVision`)             |
 | `supportsVision`               | Boolean | -        | Whether the model supports image input (vision capabilities)                                   |
 | `supportsAudio`                | Boolean | -        | Whether the model can process audio input                                                      |
 | `supportsStructuredOutput`     | Boolean | -        | Whether the model natively supports structured JSON output schemas                             |
-| `supportsForcedToolUse`        | Boolean | `true`   | Whether the provider accepts a forced tool call (`tool_choice: required` and its equivalents). Set `false` for models that reject it — Claude Opus 5.5, Sonnet 5.5 and Fable 5.1 return a `400` — so an app's `toolChoice: "required"` asks the model in words instead. See [Requiring a tool call](tool-calling.md#requiring-a-tool-call) |
 | `supportsUsageTracking`        | Boolean | -        | Whether the model reports token usage in its responses                                         |
 | `supportsTemperature`          | Boolean | `true`   | Whether the provider accepts sampling parameters for this model. Set `false` for models that reject them — Claude Opus 5, Sonnet 5 and Fable 5.x return a `400` for `temperature`, so the adapter omits the field instead of failing every request. See [Sampling Parameters](#sampling-parameters) |
 | `supportsImageGeneration`      | Boolean | `false`  | Whether the model can generate images                                                          |
@@ -651,7 +650,7 @@ The iHub provides a flexible system for selecting which AI model an app uses. Th
       "contextWindow": 1000000,
       "maxOutputTokens": 8192,
       "default": true,
-      "supportsTools": true
+      "supportsTools": "required"
     }
     ```
 
@@ -693,7 +692,7 @@ To add a new model:
   "provider": "openai-responses",
   "contextWindow": 400000,
   "maxOutputTokens": 32000,
-  "supportsTools": true,
+  "supportsTools": "required",
   "enabled": true,
   "default": false
 }
