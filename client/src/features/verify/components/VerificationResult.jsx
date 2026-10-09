@@ -238,12 +238,12 @@ function VerificationResult({ outcome, onDownloadReport, downloadError = null })
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
-              {techniques.map((technique, index) => {
+              {techniques.map(technique => {
                 const status = getTechniqueStatus(technique);
                 const trust = getTechniqueTrust(technique);
                 const style = STATUS_STYLES[status];
                 return (
-                  <tr key={`${technique.technique}-${index}`} className="align-top">
+                  <tr key={technique.technique} className="align-top">
                     <th
                       scope="row"
                       className="py-2 pr-4 text-left font-medium text-gray-900 dark:text-gray-100"

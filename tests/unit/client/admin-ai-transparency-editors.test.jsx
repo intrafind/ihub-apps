@@ -259,7 +259,11 @@ describe('JustificationDialog', () => {
 
   test('requires a choice when choices are offered and shows a failed save', async () => {
     const onConfirm = jest.fn(() =>
-      Promise.reject({ response: { data: { error: 'Server said no' } } })
+      Promise.reject(
+        Object.assign(new Error('Request failed'), {
+          response: { data: { error: 'Server said no' } }
+        })
+      )
     );
     render(
       <JustificationDialog

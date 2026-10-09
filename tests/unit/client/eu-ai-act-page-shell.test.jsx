@@ -302,7 +302,11 @@ describe('JustificationDialog', () => {
 
   test('a failed submit shows the server message and keeps the dialog open', async () => {
     const onSubmit = jest.fn(() =>
-      Promise.reject({ response: { data: { error: 'This warning cannot be dismissed' } } })
+      Promise.reject(
+        Object.assign(new Error('Request failed'), {
+          response: { data: { error: 'This warning cannot be dismissed' } }
+        })
+      )
     );
     const { onClose } = renderDialog({ onSubmit });
     fireEvent.change(screen.getByLabelText(/Justification/), {
