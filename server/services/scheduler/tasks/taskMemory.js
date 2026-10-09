@@ -26,8 +26,15 @@ const COMPONENT = 'TaskMemory';
 /** Memory scope kind of a scheduled task. */
 export const MEMORY_SCOPE_TASK = 'scheduled-task';
 
-/** What the prompt include appends when the notes were cut to fit. */
+/** What the prompt include puts where it left out the middle of the notes. */
 export const TRUNCATION_MARKER = '[notes truncated]';
+
+/**
+ * Notes over the limit (the limit was lowered after they were written) still go into the
+ * prompt whole up to this multiple of it: the step after the run sees them and shrinks
+ * them, which it cannot do with entries it was never shown.
+ */
+const PROMPT_OVERFLOW_FACTOR = 2;
 
 /**
  * The memory settings in force.
@@ -184,14 +191,17 @@ export const taskMemoryHandler = {
     const doc = await readTaskMemory(await taskOf(scope));
     if (!doc.body || doc.body.trim().length === 0) return null;
     const limit = Number.isFinite(maxChars) ? maxChars : memorySettings().maxChars;
-    if (doc.body.length <= limit) {
-      return { body: doc.body, truncated: false, version: doc.version, updatedAt: doc.updatedAt };
-    }
+    const meta = { version: doc.version, updatedAt: doc.updatedAt, chars: doc.body.length };
+    const ceiling = limit * PROMPT_OVERFLOW_FACTOR;
+    // The stored trailing newline does not count: it is not shown either.
+    const body = doc.body.trimEnd();
+    if (body.length <= ceiling) return { body, truncated: false, ...meta };
+    // Keep both ends: the start holds the watermark, the end what was appended last.
+    const half = Math.floor(ceiling / 2);
     return {
-      body: `${doc.body.slice(0, limit)}\n\n${TRUNCATION_MARKER}`,
+      body: `${body.slice(0, half)}\n\n${TRUNCATION_MARKER}\n\n${body.slice(-half)}`,
       truncated: true,
-      version: doc.version,
-      updatedAt: doc.updatedAt
+      ...meta
     };
   }
 };

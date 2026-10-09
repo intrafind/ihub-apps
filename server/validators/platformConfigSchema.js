@@ -585,7 +585,7 @@ export const platformConfigSchema = z
         maxInstructionLength: z.number().prefault(8000),
         maxRunMinutes: z.number().prefault(30),
         memoryEnabled: z.boolean().prefault(true),
-        memoryMaxChars: z.number().prefault(8000),
+        memoryMaxChars: z.number().prefault(16000),
         maxHistoryReadChars: z.number().prefault(8000)
       })
       .passthrough()

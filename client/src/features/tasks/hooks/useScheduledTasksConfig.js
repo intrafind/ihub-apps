@@ -30,6 +30,6 @@ export function useScheduledTaskLimits() {
     maxTasksPerUser: cfg.maxTasksPerUser ?? 10,
     maxInstructionLength: cfg.maxInstructionLength ?? 8000,
     memoryEnabled: cfg.memoryEnabled !== false,
-    memoryMaxChars: cfg.memoryMaxChars ?? 8000
+    memoryMaxChars: cfg.memoryMaxChars ?? 16000
   };
 }

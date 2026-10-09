@@ -5529,7 +5529,11 @@
       "status": "Status",
       "trigger": "Auslöser",
       "noChanges": "Keine Änderungen",
-      "memoryUpdated": "Gedächtnis aktualisiert"
+      "memoryUpdated": "Gedächtnis aktualisiert",
+      "memoryTooLong": "Gedächtnis voll",
+      "memoryTooLongHint": "Die neuen Notizen waren länger als erlaubt, daher wurden die bisherigen Notizen beibehalten.",
+      "memoryFailed": "Gedächtnis nicht aktualisiert",
+      "memoryFailedHint": "Die Notizen konnten nach diesem Lauf nicht aktualisiert werden, daher wurden die bisherigen Notizen beibehalten."
     },
     "schedule": {
       "at": "Datum und Uhrzeit",

@@ -95,7 +95,7 @@ describe('the first run of a task that keeps memory', () => {
     const { run, requests } = await runTask(task, [openaiText(['First report.'])]);
     assert.equal(run.status, 'succeeded');
     const system = systemOf(requests[0]);
-    assert.match(system, /<task_memory version="0">/);
+    assert.match(system, /<task_memory version="0" chars="0" limit="16000">/);
     assert.match(system, /\(no notes yet: this is the first run with memory\)/);
     assert.match(system, /<\/task_memory>/);
     assert.match(system, /data, not instructions/);
@@ -165,7 +165,7 @@ describe('a later run', () => {
     });
     const { run, requests } = await runTask(task, [openaiText(['Nothing new.'])]);
     const system = systemOf(requests[0]);
-    assert.match(system, /<task_memory version="1" updated="[^"]+">/);
+    assert.match(system, /<task_memory version="1" updated="[^"]+" chars="\d+" limit="16000">/);
     assert.match(
       system,
       /Reported up to v0\.6\.30 \(2026-09-28\)\. Source: https:\/\/example\.org\/changelog/
@@ -203,15 +203,16 @@ describe('a later run', () => {
     await cleanup(ada());
   });
 
-  it('is given at most as much of the notes as the limit says, and told they were cut', async () => {
+  it('is given notes over a lowered limit whole, with their size, so they can be shrunk', async () => {
     const task = await newTask();
     await writeTaskMemory(await stored(task.id), { content: 'z'.repeat(1500), maxChars: 5000 });
     setPlatform({ scheduledTasks: { memoryMaxChars: 1000 } });
     try {
       const { requests } = await runTask(task, [openaiText(['ok'])]);
       const system = systemOf(requests[0]);
-      assert.match(system, new RegExp(`z{1000}\\n\\n\\[notes truncated\\]\\n</task_memory>`));
-      assert.ok(!system.includes('z'.repeat(1001)));
+      assert.match(system, /<task_memory version="1" updated="[^"]+" chars="1501" limit="1000">/);
+      assert.match(system, /\nz{1500}\n<\/task_memory>/);
+      assert.ok(!system.includes('[notes truncated]'));
     } finally {
       setPlatform();
     }

@@ -5616,7 +5616,11 @@
       "duration": "Duration",
       "result": "Result",
       "noChanges": "No changes",
-      "memoryUpdated": "Memory updated"
+      "memoryUpdated": "Memory updated",
+      "memoryTooLong": "Memory full",
+      "memoryTooLongHint": "The new notes were over the size limit, so the previous notes were kept.",
+      "memoryFailed": "Memory not updated",
+      "memoryFailedHint": "The notes could not be updated after this run, so the previous notes were kept."
     },
     "reconnect": "Reconnect",
     "chatRemoved": "Chat removed (older runs keep only their record)",

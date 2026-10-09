@@ -24,9 +24,9 @@ describe('useScheduledTaskLimits: memory', () => {
     );
   });
 
-  it('defaults to memory on with 8000 characters when the server sends neither', () => {
+  it('defaults to memory on with 16000 characters when the server sends neither', () => {
     expect(limitsFor({ enabled: true })).toEqual(
-      expect.objectContaining({ memoryEnabled: true, memoryMaxChars: 8000 })
+      expect.objectContaining({ memoryEnabled: true, memoryMaxChars: 16000 })
     );
   });
 
@@ -34,7 +34,7 @@ describe('useScheduledTaskLimits: memory', () => {
     usePlatformConfig.mockReturnValue(undefined);
     const { result } = renderHook(() => useScheduledTaskLimits());
     expect(result.current).toEqual(
-      expect.objectContaining({ memoryEnabled: true, memoryMaxChars: 8000 })
+      expect.objectContaining({ memoryEnabled: true, memoryMaxChars: 16000 })
     );
   });
 });
