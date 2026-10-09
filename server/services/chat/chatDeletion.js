@@ -130,18 +130,25 @@ export async function deleteChatsOfOwner(repository, ownerId, { stopChat, ...dep
 
   let removed = 0;
   for (let pass = 0; pass < MAX_OWNER_PASSES; pass += 1) {
-    const chats = await listOwnerChats(repository, ownerId);
-
     let removedThisPass = 0;
-    for (const chat of chats) {
-      if (stopChat && (chat.status === 'running' || chat.activeRunId)) await stopChat(chat);
-      const { deleted } = await deleteChatWithCascade(repository, chat.id, deps);
-      if (deleted) removedThisPass += 1;
+    for (const chat of await listOwnerChats(repository, ownerId)) {
+      if (await removeOwnedChat(repository, chat, stopChat, deps)) removedThisPass += 1;
     }
     removed += removedThisPass;
     if (removedThisPass === 0) break;
   }
   return removed;
+}
+
+/**
+ * Remove one chat of an owner, stopping it first when it is still generating.
+ *
+ * @returns {Promise<boolean>} Whether the chat was removed
+ */
+async function removeOwnedChat(repository, chat, stopChat, deps) {
+  if (stopChat && (chat.status === 'running' || chat.activeRunId)) await stopChat(chat);
+  const { deleted } = await deleteChatWithCascade(repository, chat.id, deps);
+  return deleted;
 }
 
 export default deleteChatWithCascade;

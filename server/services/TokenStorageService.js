@@ -35,6 +35,16 @@ async function createFileExclusively(filePath, contents, mode) {
   }
 }
 
+/** The names in a directory; none when it is missing or is not a directory. */
+async function listDirectory(directory) {
+  try {
+    return await fs.readdir(directory);
+  } catch (error) {
+    if (error.code === 'ENOENT' || error.code === 'ENOTDIR') return [];
+    throw error;
+  }
+}
+
 /**
  * Centralized Token Storage Service
  * Provides secure encryption, decryption, storage, and retrieval of user tokens
@@ -609,7 +619,7 @@ class TokenStorageService {
     const ids = [...new Set(storageIds)].filter(id => this._isSafeFilenameComponent(id));
     if (ids.length === 0) return 0;
 
-    const services = await this._listDirectory(this.storageBasePath);
+    const services = await listDirectory(this.storageBasePath);
     let removed = 0;
     for (const serviceName of services.filter(name => this._isSafeFilenameComponent(name))) {
       removed += await this._deleteTokenFilesIn(path.join(this.storageBasePath, serviceName), ids);
@@ -634,20 +644,10 @@ class TokenStorageService {
     }
   }
 
-  /** The names in a directory; none when it is missing or is not a directory. */
-  async _listDirectory(directory) {
-    try {
-      return await fs.readdir(directory);
-    } catch (error) {
-      if (error.code === 'ENOENT' || error.code === 'ENOTDIR') return [];
-      throw error;
-    }
-  }
-
   /** Remove the token files of `ids` from one service directory. */
   async _deleteTokenFilesIn(serviceDir, ids) {
     let removed = 0;
-    for (const entry of await this._listDirectory(serviceDir)) {
+    for (const entry of await listDirectory(serviceDir)) {
       if (!entry.endsWith('.json')) continue;
       const name = entry.slice(0, -'.json'.length);
       if (!ids.some(id => name === id || name.startsWith(`${id}__`))) continue;
