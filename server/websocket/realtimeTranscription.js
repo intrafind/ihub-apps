@@ -55,6 +55,7 @@ import { WebSocketServer, WebSocket } from 'ws';
 import configCache from '../configCache.js';
 import logger from '../utils/logger.js';
 import { verifyJwt } from '../utils/tokenService.js';
+import { tokenUserState } from '../utils/tokenUser.js';
 import {
   isAnonymousAccessAllowed,
   getDefaultAnonymousGroups,
@@ -276,26 +277,46 @@ export function extractToken(req) {
  * missing/invalid. `groups` is carried so the upgrade handler can compute the
  * user's model permissions via `enhanceUserWithPermissions` — needed to enforce
  * per-model access for transcription models.
+ *
+ * A signed session token outlives the account behind it, and the upgrade does
+ * not pass through `jwtAuth`, so the user store is asked here too: a token for a
+ * deleted or disabled user is refused, not downgraded to anonymous.
+ *
+ * @throws {Error} When the user store cannot be read, so the caller can answer
+ *   503 rather than treating the user as deleted
  */
-export function authenticateUpgrade(req, platform = configCache.getPlatform() || {}) {
-  const token = extractToken(req);
-
-  if (token) {
-    const decoded = verifyJwt(token);
-    if (decoded) {
-      return {
-        id: decoded.sub || decoded.username || decoded.id || 'user',
-        name: decoded.name || decoded.username || 'user',
-        groups: Array.isArray(decoded.groups) ? decoded.groups : []
-      };
-    }
-  }
+export async function authenticateUpgrade(req, platform = configCache.getPlatform() || {}) {
+  const decoded = verifyTokenOf(req);
+  if (decoded) return sessionUserOf(decoded, platform);
 
   // No valid token — allow only if anonymous access is enabled platform-wide.
   if (isAnonymousAccessAllowed(platform)) {
     return { id: 'anonymous', name: 'anonymous', groups: getDefaultAnonymousGroups(platform) };
   }
   return null;
+}
+
+/** The verified claims of the request's session token, if it carries a valid one. */
+function verifyTokenOf(req) {
+  const token = extractToken(req);
+  return token ? verifyJwt(token) : null;
+}
+
+/**
+ * The user a verified session token stands for, unless that user was deleted or
+ * disabled since it was minted.
+ *
+ * @throws {Error} When the users cannot be read to check
+ */
+async function sessionUserOf(decoded, platform) {
+  const userState = await tokenUserState(platform, decoded);
+  if (userState === 'unavailable') throw new Error('Users configuration unavailable');
+  if (userState !== 'active') return null;
+  return {
+    id: decoded.sub || decoded.username || decoded.id || 'user',
+    name: decoded.name || decoded.username || 'user',
+    groups: Array.isArray(decoded.groups) ? decoded.groups : []
+  };
 }
 
 /**
@@ -1130,7 +1151,7 @@ export function attachRealtimeTranscription(httpServer) {
   });
   const wss = new WebSocketServer({ noServer: true, maxPayload: limits.maxFrameBytes });
 
-  httpServer.on('upgrade', (req, socket, head) => {
+  httpServer.on('upgrade', async (req, socket, head) => {
     let pathname;
     try {
       pathname = new URL(req.url, 'http://localhost').pathname;
@@ -1156,7 +1177,21 @@ export function attachRealtimeTranscription(httpServer) {
     }
 
     const platform = configCache.getPlatform() || {};
-    let user = authenticateUpgrade(req, platform);
+    let user = null;
+    try {
+      user = await authenticateUpgrade(req, platform);
+    } catch (err) {
+      logger.error('Realtime STT: could not validate the user behind the token', {
+        component: 'RealtimeSTT',
+        error: err.message
+      });
+      socket.write('HTTP/1.1 503 Service Unavailable\r\n\r\n');
+      socket.destroy();
+      return;
+    }
+    // The client may have gone while the user was looked up; nothing below
+    // would release what it takes.
+    if (socket.destroyed) return;
     if (!user) {
       socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
       socket.destroy();

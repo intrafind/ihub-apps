@@ -117,7 +117,7 @@ The token is per-user and per-provider — switching Nextcloud instances require
 
 ## Security Considerations
 
-- **PKCE not supported by Nextcloud OAuth**: iHub relies on the session-bound `state` parameter for CSRF protection, which matches what Nextcloud's OAuth 2.0 app supports.
+- **PKCE not supported by Nextcloud OAuth**: iHub relies on the `state` parameter for CSRF protection, which matches what Nextcloud's OAuth 2.0 app supports. The `state` is a signed ticket (HMAC) that names the provider and the signed-in user who started the flow; the callback requires the same user, so a ticket from one browser cannot complete a flow in another. It expires after 15 minutes. No server-side session is kept.
 - **Path-traversal protection**: All `folderPath` / `filePath` parameters are validated to reject `..` segments and NUL bytes before being passed to WebDAV.
 - **Encrypted tokens at rest**: Access and refresh tokens are written to `contents/integrations/nextcloud/<userId>.json` via `TokenStorageService.encryptTokens`, which encrypts with AES-256-CBC (the same crypto used for Office 365 / Google Drive user tokens; AES-256-GCM is only used by `TokenStorageService.encryptString` for platform-secret encryption like `clientSecret` in `platform.json`).
 - **Rate limiting**: The OAuth initiation endpoint is rate-limited to 10 requests per minute per IP to prevent abuse.
@@ -127,14 +127,19 @@ The token is per-user and per-provider — switching Nextcloud instances require
 | Symptom | Likely Cause | Fix |
 |---------|--------------|-----|
 | `invalid_redirect_uri` from Nextcloud | The redirect URI registered in Nextcloud doesn't exactly match the one iHub is sending. | Re-register the OAuth client in Nextcloud with the exact URI shown in the iHub admin UI hint, including the provider ID segment. |
-| User sees `Nextcloud Not Connected` after consent | Cookies blocked or session lost during the redirect. | Make sure iHub Apps and Nextcloud are reachable over HTTPS and that no proxy strips the session cookie. |
+| Back in iHub after consent, Nextcloud is still `Not Connected` and the URL has `?nextcloud_error=invalid_state` | The callback needs the iHub sign-in of the user who started the flow. It is refused when a different user, or nobody, is signed in in that browser (for example the sign-in cookie was blocked or the iHub session ended during consent), or when the ticket belongs to another provider. With several iHub instances it also appears when an instance cannot verify a ticket issued by another (see below). | Have the user sign in to iHub Apps and start again from **Settings → Integrations** in the same browser. Allow cookies for iHub Apps and make sure no proxy strips the iHub sign-in cookie. |
+| `?nextcloud_error=session_expired` | The sign-in ticket is older than 15 minutes: consent took too long. | Start again and approve within 15 minutes. |
+| `?nextcloud_error=access_denied`, `oauth_failed`, `missing_code` or `callback_failed` | The user declined, Nextcloud returned an error, the callback arrived without an authorization code, or exchanging the code for tokens failed (for example a wrong client secret or redirect URI). | Start again; for `callback_failed` check the server logs and the OAuth client registered in Nextcloud. |
 | 401 on every file action | Refresh token expired or revoked. | Have the user click **Disconnect** then **Connect to Nextcloud** to re-authorize. |
+| File actions fail with `Nextcloud is temporarily unavailable` | Refreshing the access token failed for a reason that says nothing about the user's grant: Nextcloud is unreachable or erroring, or the OAuth client secret is wrong or no longer valid. iHub keeps the user's tokens. | Check that Nextcloud is reachable and the provider configuration is correct, then retry. The user does not need to reconnect. |
 | File listing is empty | The OAuth client was registered for a different Nextcloud user, or the user has no files in that path. | Verify the connected account in **Settings → Integrations**, and check `<serverUrl>/index.php/apps/files` in a browser. |
+
+No server-side session, shared session store or sticky routing is involved in connecting, so the callback can land on any worker or instance. With several instances, every instance must be able to verify a ticket another one issued: configure the same `JWT_SECRET` (or `auth.jwtSecret`) and the same `TOKEN_ENCRYPTION_KEY` on all of them, or let them share the `contents/` directory. See [Scaling](scaling.md#sign-in-tickets-across-instances).
 
 ## Limitations
 
 - **Single drive per user**: Nextcloud exposes the user's files as one drive — there's no concept of a "Shared with me" tree separate from the home directory the way Google Drive has. Shared folders show up inline in the listing.
-- **No PKCE**: Nextcloud's OAuth 2.0 app doesn't support PKCE; CSRF protection relies on the `state` parameter only.
+- **No PKCE**: Nextcloud's OAuth 2.0 app doesn't support PKCE; CSRF protection relies on the signed, user-bound `state` ticket only.
 - **WebDAV search**: iHub uses client-side filtering of the current folder for search rather than a server-side DAV SEARCH query, because the response shape varies between Nextcloud versions. Search is therefore scoped to the folder you're currently viewing.
 
 ---

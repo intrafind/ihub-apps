@@ -58,6 +58,27 @@ check('ftp: rejected (defense in depth)', false, isValidReturnUrl('ftp://ihub.ex
 console.log('\n🧪 isValidReturnUrl — malformed input\n');
 check('garbage string rejected', false, isValidReturnUrl('not a url', req));
 check('space-prefixed rejected', false, isValidReturnUrl(' /foo', req));
+check('repeated query parameter (array) rejected', false, isValidReturnUrl(['/a', '/b'], req));
+
+// Browsers read `\` as `/` and drop tabs/newlines in a Location header, so each of these
+// ends up as the protocol-relative `//evil.example.com` (a link to another site).
+console.log('\n🧪 isValidReturnUrl — backslash and control-character bypasses\n');
+check('/\\host rejected', false, isValidReturnUrl('/\\evil.example.com', req));
+check('/\\/host rejected', false, isValidReturnUrl('/\\/evil.example.com', req));
+check('/<TAB>/host rejected', false, isValidReturnUrl('/\t/evil.example.com', req));
+check('/<CR><LF>/host rejected', false, isValidReturnUrl('/\r\n/evil.example.com', req));
+check('NUL byte rejected', false, isValidReturnUrl('/ok\0/x', req));
+check('DEL rejected', false, isValidReturnUrl('/ok\x7f', req));
+check(
+  'backslash in an absolute same-host URL rejected',
+  false,
+  isValidReturnUrl('https://ihub.example.com\\@evil.example.com/', req)
+);
+check(
+  'percent-encoded backslash and spaces are harmless and accepted',
+  true,
+  isValidReturnUrl('/apps/my%20chat%5Cx?q=a%20b#frag', req)
+);
 
 console.log(`\n${failures === 0 ? '🎉 All tests passed.' : `❌ ${failures} failure(s).`}`);
 process.exit(failures === 0 ? 0 : 1);

@@ -2,9 +2,8 @@
 // Handles OAuth2 PKCE flow for Google Workspace file access authentication
 
 import express from 'express';
-import crypto from 'node:crypto';
 import GoogleDriveService from '../../services/integrations/GoogleDriveService.js';
-import { authOptional, authRequired } from '../../middleware/authRequired.js';
+import { authRequired } from '../../middleware/authRequired.js';
 import { requireFeature } from '../../featureRegistry.js';
 import logger from '../../utils/logger.js';
 import rateLimit from 'express-rate-limit';
@@ -14,14 +13,8 @@ import {
   sendBadRequest,
   sendErrorResponse
 } from '../../utils/responseHelpers.js';
-import { isValidReturnUrl } from '../../utils/oauthReturnUrl.js';
-import {
-  DEFAULT_INTEGRATION_RETURN_URL,
-  issueIntegrationOAuthState,
-  verifyIntegrationOAuthState,
-  withQueryParam
-} from '../../utils/integrationOAuthState.js';
 import { buildContentDisposition } from '../../utils/safeContentDisposition.js';
+import { createOAuthIntegrationRouter } from './oauthIntegrationFactory.js';
 
 const router = express.Router();
 
@@ -55,228 +48,30 @@ const googleDriveApiLimiter = rateLimit({
   legacyHeaders: false
 });
 
-/**
- * Initiate Google Drive OAuth2 flow
- * GET /api/integrations/googledrive/auth?providerId=xxx
- */
-router.get('/auth', authRequired, googleDriveAuthLimiter, async (req, res) => {
-  try {
-    const { providerId, returnUrl } = req.query;
-
-    if (!providerId) {
-      return sendBadRequest(res, 'providerId query parameter is required');
-    }
-
-    // authRequired lets the anonymous principal through when anonymous
-    // access is allowed, and does not guarantee req.user.id is truthy.
-    // Refuse to start an OAuth flow without a signed-in user id — otherwise
-    // tokens would land under a shared key and could be read by another caller.
-    if (!req.user?.id || req.user.id === 'anonymous') {
-      return sendAuthRequired(res);
-    }
-
-    const codeVerifier = crypto.randomBytes(32).toString('base64url');
-
-    // Validate returnUrl to prevent open redirects
-    const validatedReturnUrl = isValidReturnUrl(returnUrl, req)
-      ? returnUrl
-      : DEFAULT_INTEGRATION_RETURN_URL;
-
-    // Signed, self-contained state instead of a session: the callback may
-    // land on another cluster worker (see utils/integrationOAuthState.js).
-    const state = issueIntegrationOAuthState({
-      service: 'googledrive',
-      providerId,
-      userId: req.user.id,
-      returnUrl: validatedReturnUrl,
-      codeVerifier
-    });
-
-    const authUrl = GoogleDriveService.generateAuthUrl(providerId, state, codeVerifier, req);
-
-    logger.info('Initiating Google Drive OAuth', {
-      component: 'Google Drive',
-      userId: req.user?.id,
-      providerId
-    });
-
-    res.redirect(authUrl);
-  } catch (error) {
-    return sendInternalError(res, error, 'initiate Google Drive OAuth');
-  }
-});
-
-/**
- * Handle Google Drive OAuth callback (provider-specific)
- * GET /api/integrations/googledrive/:providerId/callback
- */
-router.get('/:providerId/callback', authOptional, async (req, res) => {
-  const { providerId } = req.params;
-  const verified = verifyIntegrationOAuthState(req, { service: 'googledrive', providerId });
-  const { returnUrl } = verified;
-  try {
-    const { code, error: oauthError } = req.query;
-
-    if (oauthError) {
-      logger.error('Google Drive OAuth error:', {
-        component: 'Google Drive',
-        error: oauthError,
-        providerId
-      });
-      const errorCode = oauthError === 'access_denied' ? 'access_denied' : 'oauth_failed';
-      return res.redirect(withQueryParam(returnUrl, 'googledrive_error', errorCode));
-    }
-
-    if (!verified.ok) {
-      logger.error('Invalid Google Drive OAuth state parameter', {
-        component: 'Google Drive',
-        providerId,
-        reason: verified.error
-      });
-      return res.redirect(withQueryParam(returnUrl, 'googledrive_error', verified.error));
-    }
-
-    if (!code) {
-      logger.error('Google Drive OAuth callback missing code', {
-        component: 'Google Drive',
-        providerId
-      });
-      return res.redirect(withQueryParam(returnUrl, 'googledrive_error', 'missing_code'));
-    }
-
-    const tokens = await GoogleDriveService.exchangeCodeForTokens(
-      providerId,
-      code,
-      verified.codeVerifier,
-      req
-    );
-
-    if (!tokens.refreshToken) {
-      logger.error('No refresh token received from Google Drive OAuth.', {
-        component: 'Google Drive',
-        providerId
-      });
-      logger.warn(
-        'Storing tokens WITHOUT refresh capability - user will need to reconnect periodically',
-        { component: 'Google Drive' }
-      );
-    }
-
-    await GoogleDriveService.storeUserTokens(verified.userId, tokens);
-
-    logger.info('Google Drive OAuth completed', {
-      component: 'Google Drive',
-      userId: verified.userId,
-      providerId
-    });
-
-    res.redirect(withQueryParam(returnUrl, 'googledrive_connected', 'true'));
-  } catch (error) {
-    logger.error('Error handling Google Drive OAuth callback:', {
-      component: 'Google Drive',
-      error: error.message,
-      providerId
-    });
-    // Use a stable error code rather than echoing `error.message` —
-    // some upstream errors interpolate user-influenced strings.
-    res.redirect(withQueryParam(returnUrl, 'googledrive_error', 'callback_failed'));
-  }
-});
-
-/**
- * Get Google Drive connection status for current user
- * GET /api/integrations/googledrive/status
- */
-router.get('/status', authRequired, googleDriveApiLimiter, async (req, res) => {
-  try {
-    if (!req.user?.id || req.user.id === 'anonymous') {
-      return sendAuthRequired(res);
-    }
-
-    const providerId = typeof req.query.providerId === 'string' ? req.query.providerId : undefined;
-
-    const isAuthenticated = await GoogleDriveService.isUserAuthenticated(req.user.id, providerId);
-
-    if (!isAuthenticated) {
-      return res.json({
-        connected: false,
-        message: 'Google Drive account not connected'
-      });
-    }
-
-    const userInfo = await GoogleDriveService.getUserInfo(req.user.id, providerId);
-    const tokenInfo = await GoogleDriveService.getTokenExpirationInfo(req.user.id, providerId);
-
-    res.json({
-      connected: true,
-      userInfo: {
-        displayName: userInfo.displayName,
-        mail: userInfo.mail,
-        picture: userInfo.picture
-      },
-      tokenInfo: {
-        expiresAt: tokenInfo.expiresAt,
-        minutesUntilExpiry: tokenInfo.minutesUntilExpiry,
-        isExpiring: tokenInfo.isExpiring,
-        isExpired: tokenInfo.isExpired
-      },
-      message: tokenInfo.isExpiring
-        ? 'Google Drive account connected (tokens expiring soon)'
-        : 'Google Drive account connected successfully'
-    });
-  } catch (error) {
-    logger.error('Error getting Google Drive status:', {
-      component: 'Google Drive',
-      error: error.message
-    });
-
-    if (error.message.includes('authentication required')) {
-      return res.json({
-        connected: false,
-        message: 'Google Drive authentication expired'
-      });
-    }
-
-    return sendInternalError(res, error, 'get Google Drive status');
-  }
-});
-
-/**
- * Disconnect Google Drive account
- * POST /api/integrations/googledrive/disconnect
- */
-router.post('/disconnect', authRequired, async (req, res) => {
-  try {
-    if (!req.user?.id || req.user.id === 'anonymous') {
-      return sendAuthRequired(res);
-    }
-
-    const providerId =
-      (typeof req.query.providerId === 'string' && req.query.providerId) ||
-      (typeof req.body?.providerId === 'string' && req.body.providerId) ||
-      undefined;
-
-    const success = await GoogleDriveService.deleteUserTokens(req.user.id, providerId);
-
-    if (success) {
-      logger.info('Google Drive disconnected', {
-        component: 'Google Drive',
-        userId: req.user.id,
-        providerId
-      });
-      res.json({
-        success: true,
-        message: 'Google Drive account disconnected successfully'
-      });
-    } else {
-      res.json({
-        success: false,
-        message: 'No Google Drive connection found to disconnect'
-      });
-    }
-  } catch (error) {
-    return sendInternalError(res, error, 'disconnect Google Drive');
-  }
+// Shared auth -> callback -> status -> disconnect flow (see oauthIntegrationFactory.js).
+createOAuthIntegrationRouter(router, {
+  providerKey: 'googledrive',
+  displayName: 'Google Drive',
+  requiresProviderId: true,
+  usesPkce: true,
+  authLimiter: googleDriveAuthLimiter,
+  statusLimiter: googleDriveApiLimiter,
+  buildAuthUrl: ({ providerId, state, codeVerifier, req }) =>
+    GoogleDriveService.generateAuthUrl(providerId, state, codeVerifier, req),
+  exchangeCodeForTokens: ({ providerId, code, codeVerifier, req }) =>
+    GoogleDriveService.exchangeCodeForTokens(providerId, code, codeVerifier, req),
+  storeUserTokens: (userId, tokens) => GoogleDriveService.storeUserTokens(userId, tokens),
+  isUserAuthenticated: (userId, providerId) =>
+    GoogleDriveService.isUserAuthenticated(userId, providerId),
+  getUserInfo: (userId, providerId) => GoogleDriveService.getUserInfo(userId, providerId),
+  getTokenExpirationInfo: (userId, providerId) =>
+    GoogleDriveService.getTokenExpirationInfo(userId, providerId),
+  deleteUserTokens: (userId, providerId) => GoogleDriveService.deleteUserTokens(userId, providerId),
+  formatUserInfo: userInfo => ({
+    displayName: userInfo.displayName,
+    mail: userInfo.mail,
+    picture: userInfo.picture
+  })
 });
 
 /**

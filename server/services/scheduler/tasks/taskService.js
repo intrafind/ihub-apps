@@ -1298,6 +1298,31 @@ export async function adminDeleteTask(taskId, { deleteChats = false } = {}) {
   return removeTask(task, { deleteChats });
 }
 
+/**
+ * Delete every task a user owns, with its run history, notes and run chats: what
+ * deleting the user needs. A task is a standing instruction to act as its owner,
+ * so it cannot outlive them.
+ *
+ * A task's owner id is the run principal, which differs by identity mode, so the
+ * caller names each id the user may have been filed under.
+ *
+ * @param {string[]} ownerIds - Every principal id the user may own tasks as
+ * @returns {Promise<{tasks: number, chatsDeleted: number}>}
+ */
+export async function deleteTasksOfOwner(ownerIds) {
+  const repository = getScheduledTaskRepository();
+  let tasks = 0;
+  let chatsDeleted = 0;
+  for (const ownerId of new Set(ownerIds)) {
+    for (const task of await repository.listTasksByOwner(ownerId)) {
+      const result = await removeTask(task, { deleteChats: true });
+      tasks += 1;
+      chatsDeleted += result.chatsDeleted;
+    }
+  }
+  return { tasks, chatsDeleted };
+}
+
 // ── memory ─────────────────────────────────────────────────────────────────
 
 /** A memory store error as the error the routes and tools already know. */

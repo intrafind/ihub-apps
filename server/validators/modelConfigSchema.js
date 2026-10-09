@@ -5,6 +5,7 @@ import {
   MAX_OUTPUT_TOKENS_MIN,
   MAX_OUTPUT_TOKENS_MAX
 } from '../../shared/validationPatterns.js';
+import { TOOL_SUPPORT, TOOL_SUPPORT_VALUES } from '../../shared/modelCapabilities.js';
 
 // Localized string schema - matches client pattern for language codes
 const localizedStringSchema = z.record(
@@ -213,7 +214,14 @@ const baseModelConfigSchema = z
 
     // Optional fields with validation
     default: z.boolean().optional().prefault(false),
-    supportsTools: z.boolean().optional().prefault(false),
+    // What the model can do with tools: `none`, `auto` (it decides whether to
+    // call one) or `required` (the provider also accepts a forced tool call —
+    // Claude Opus 5.5, Sonnet 5.5 and Fable 5.1 reject it with a 400, and a
+    // local server may ignore it). With `auto`, an app's `toolChoice:
+    // "required"` asks the model in words instead of through the API. A
+    // `required` model that does refuse is found out on the first call and
+    // asked in words for a while. See shared/modelCapabilities.js.
+    supportsTools: z.enum(TOOL_SUPPORT_VALUES).optional().prefault(TOOL_SUPPORT.NONE),
     concurrency: z
       .number()
       .int()

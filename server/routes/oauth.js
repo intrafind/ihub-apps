@@ -20,6 +20,7 @@ import logger from '../utils/logger.js';
 import { createOAuthTokenLimiter } from '../middleware/rateLimiting.js';
 import { consumeCode } from '../utils/authorizationCodeStore.js';
 import { localUsersFile, oauthClientsFile } from '../utils/contentsPath.js';
+import { tokenUserState } from '../utils/tokenUser.js';
 import { verifyCodeChallenge } from '../utils/pkceUtils.js';
 import { generateJwt, decodeJwt } from '../utils/tokenService.js';
 import {
@@ -81,6 +82,23 @@ function sendOAuthError(res, status, error, description) {
     error: error,
     error_description: description
   });
+}
+
+/** What a grant's user check answers when the users cannot be read. */
+const USER_CHECK_UNAVAILABLE = 'Unable to validate the user. Please try again later.';
+
+/**
+ * Whether the user a delegated grant was made by is still there to be issued
+ * tokens. A grant is bound to the user's id, and grants are signed or stored, so
+ * they outlive the account unless it is asked about.
+ *
+ * @param {Object} platform - Platform configuration
+ * @param {string} userId - The user the grant belongs to
+ * @returns {Promise<'active'|'missing'|'disabled'|'unavailable'>} `'unavailable'` when
+ *   the users cannot be read, which says nothing about the user: callers answer 503
+ */
+function delegatedUserState(platform, userId) {
+  return tokenUserState(platform, { authMode: 'oauth_authorization_code', sub: userId });
 }
 
 /**
@@ -282,6 +300,21 @@ export default function registerOAuthRoutes(app) {
           );
         }
 
+        // The user who authorized this request has to still be there to be
+        // issued anything: a deleted or disabled account gets no new tokens.
+        const codeUserState = await delegatedUserState(platform, codeData.userId);
+        if (codeUserState === 'unavailable') {
+          return sendOAuthError(res, 503, 'server_error', USER_CHECK_UNAVAILABLE);
+        }
+        if (codeUserState !== 'active') {
+          return sendOAuthError(
+            res,
+            400,
+            'invalid_grant',
+            'The user who authorized this request is no longer available'
+          );
+        }
+
         // Validate client
         const authCodeClientsFilePath = oauthClientsFile(oauthConfig);
         const authClient = await resolveGrantClient(
@@ -440,6 +473,25 @@ export default function registerOAuthRoutes(app) {
             400,
             'invalid_grant',
             'Refresh token is invalid, expired, or already used'
+          );
+        }
+
+        // A refresh token must not outlive the user who granted it. The token is
+        // already consumed above, so refusing here also ends the connection.
+        const refreshUserState = await delegatedUserState(platform, tokenData.userId);
+        if (refreshUserState === 'unavailable') {
+          // Nothing is known about the user, so the grant is put back as it was:
+          // the client retries with the same token once the users can be read,
+          // instead of having to authorize again.
+          await storeRefreshToken(sanitizedRefreshToken, tokenData);
+          return sendOAuthError(res, 503, 'server_error', USER_CHECK_UNAVAILABLE);
+        }
+        if (refreshUserState !== 'active') {
+          return sendOAuthError(
+            res,
+            400,
+            'invalid_grant',
+            'The user who granted this access is no longer available'
           );
         }
 
@@ -775,7 +827,18 @@ export default function registerOAuthRoutes(app) {
       }
 
       // Introspect token
-      const introspection = introspectOAuthToken(sanitizedToken);
+      let introspection = introspectOAuthToken(sanitizedToken);
+
+      // A delegated token is signed, so it still verifies after its user is gone.
+      // The resource server asking whether it may serve it has to be told no:
+      // answering "active" is what it would act on.
+      if (introspection.active && introspection.token_type === 'oauth_authorization_code') {
+        const introspectedUserState = await delegatedUserState(platform, introspection.sub);
+        if (introspectedUserState === 'unavailable') {
+          return sendOAuthError(res, 503, 'server_error', USER_CHECK_UNAVAILABLE);
+        }
+        if (introspectedUserState !== 'active') introspection = { active: false };
+      }
 
       logger.info('[OAuth] Token introspected', {
         component: 'OAuth',

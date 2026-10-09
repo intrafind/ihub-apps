@@ -13,7 +13,7 @@
   "provider": "openai",
   "contextWindow": 8192,
   "maxOutputTokens": 4096,
-  "supportsTools": true,
+  "supportsTools": "required",
   "enabled": false,
   "default": false
 }
