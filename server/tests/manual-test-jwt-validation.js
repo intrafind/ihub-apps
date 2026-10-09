@@ -248,7 +248,7 @@ const oidcToken = jwt.sign(
 console.log(`  ✓ Generated OIDC JWT for testing`);
 console.log(`  🔍 Note: OIDC users are now validated against users database`);
 console.log(`  - If user exists and is disabled: returns 403`);
-console.log(`  - If user record is missing (deleted after token issuance): returns 401`);
+console.log('  - If user record is missing (deleted after token issuance): returns 401');
 
 // Test 9: Simulate LDAP user validation
 console.log('\n📋 Test 9: Simulate JWT validation for LDAP users');
@@ -268,8 +268,8 @@ const ldapToken = jwt.sign(
 );
 
 console.log(`  ✓ Generated LDAP JWT for testing`);
-console.log(`  🔍 Note: LDAP users are now validated against users database`);
-console.log(`  - If user record is missing (deleted after token issuance): returns 401`);
+console.log('  🔍 Note: LDAP users are now validated against users database');
+console.log('  - If user record is missing (deleted after token issuance): returns 401');
 
 // Test 10: Simulate Teams user validation
 console.log('\n📋 Test 10: Simulate JWT validation for Teams users');
@@ -291,7 +291,7 @@ const teamsToken = jwt.sign(
 
 console.log(`  ✓ Generated Teams JWT for testing`);
 console.log(`  🔍 Note: Teams users are now validated against users database`);
-console.log(`  - If user record is missing (deleted after token issuance): returns 401`);
+console.log('  - If user record is missing (deleted after token issuance): returns 401');
 
 console.log('\n' + '='.repeat(60));
 console.log('\n✅ Manual JWT validation security test completed!\n');

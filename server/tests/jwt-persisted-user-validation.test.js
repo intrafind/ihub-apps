@@ -23,6 +23,9 @@
  */
 
 import { jest, describe, it, expect, beforeEach } from '@jest/globals';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 
 const SECRET = 'jwt-persisted-user-validation-secret';
 process.env.JWT_SECRET = SECRET;
@@ -69,25 +72,27 @@ jest.unstable_mockModule('../configCache.js', () => ({
 
 jest.unstable_mockModule('../services/config/ConfigStore.js', () => ({
   default: {
-    readJson: async () => clone(state.disk),
-    readJsonStrict: async () => {
+    readJson: () => Promise.resolve(clone(state.disk)),
+    readJsonStrict: () => {
       state.storeReads += 1;
-      if (state.storeUnreadable) throw new Error('users.json is unreadable');
-      return clone(state.disk);
+      if (state.storeUnreadable) return Promise.reject(new Error('users.json is unreadable'));
+      return Promise.resolve(clone(state.disk));
     },
-    writeJson: async (_relPath, data) => {
+    writeJson: (_relPath, data) => {
       state.disk = clone(data);
+      return Promise.resolve();
     }
   }
 }));
 
 jest.unstable_mockModule('../configSync.js', () => ({
-  announceConfigChange: () => {}
+  // As outside cluster mode: nobody to tell, so nothing was sent.
+  announceConfigChange: () => false
 }));
 
 // Not under test: promotes the first user to admin when no admin exists.
 jest.unstable_mockModule('../utils/adminRescue.js', () => ({
-  ensureFirstUserIsAdmin: async user => user
+  ensureFirstUserIsAdmin: user => Promise.resolve(user)
 }));
 
 jest.unstable_mockModule('../services/TokenStorageService.js', () => ({
@@ -96,7 +101,7 @@ jest.unstable_mockModule('../services/TokenStorageService.js', () => ({
 
 const { default: jwtAuth } = await import('../middleware/jwtAuth.js');
 const { processNtlmLogin } = await import('../middleware/ntlmAuth.js');
-const { validateAndPersistExternalUser } = await import('../utils/userManager.js');
+const { validateAndPersistExternalUser, loadUsersFresh } = await import('../utils/userManager.js');
 const { generateJwt } = await import('../utils/tokenService.js');
 
 /** What each provider hands to `validateAndPersistExternalUser`. */
@@ -507,5 +512,37 @@ describe('NTLM login', () => {
     state.cache.users[user.id].active = false;
 
     await expect(processNtlmLogin(ntlmRequest(), ntlmConfig)).rejects.toThrow(/disabled/);
+  });
+});
+
+describe('loadUsersFresh for a users file outside contents/', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ihub-users-fresh-'));
+  const file = path.join(dir, 'users.json');
+
+  it('reads the file itself, not the store', async () => {
+    fs.writeFileSync(
+      file,
+      JSON.stringify({ users: { u1: { id: 'u1', active: true } }, metadata: {} })
+    );
+    state.storeReads = 0;
+
+    const usersConfig = await loadUsersFresh(file);
+
+    expect(usersConfig.users.u1).toBeDefined();
+    expect(state.storeReads).toBe(0);
+  });
+
+  it('rejects, rather than reporting no users, when the file is unreadable', async () => {
+    fs.writeFileSync(file, '{ not json');
+
+    await expect(loadUsersFresh(file)).rejects.toThrow();
+  });
+
+  it('treats a missing file as no users', async () => {
+    fs.rmSync(file, { force: true });
+
+    const usersConfig = await loadUsersFresh(file);
+
+    expect(usersConfig.users).toEqual({});
   });
 });

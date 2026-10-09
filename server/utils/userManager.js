@@ -117,6 +117,22 @@ export function loadUsers(usersFilePath) {
 /** In-flight re-reads of a users file, by cache key, so a burst shares one. */
 const freshReads = new Map();
 
+/** Whether a parsed users.json body has the shape `loadUsers` accepts. */
+function isUsersConfig(data) {
+  return !!data && typeof data === 'object' && !!data.users && typeof data.users === 'object';
+}
+
+/**
+ * Read a users file from where it lives: the configuration store for a file
+ * under contents/, the file system for one outside it (see locateConfigFile).
+ * Throws when the file exists but cannot be read or parsed.
+ */
+async function readUsersFileFresh({ fullPath, relPath }) {
+  if (relPath) return await configStore.readJsonStrict(relPath);
+  if (!fs.existsSync(fullPath)) return null;
+  return JSON.parse(fs.readFileSync(fullPath, 'utf8'));
+}
+
 /**
  * Load users straight from the store, bypassing (and refreshing) the cached
  * copy.
@@ -138,22 +154,15 @@ const freshReads = new Map();
  * @throws {Error} When the users file exists but cannot be read or parsed
  */
 export async function loadUsersFresh(usersFilePath) {
-  const { fullPath, cacheKey, relPath } = locateUsersFile(usersFilePath);
+  const location = locateUsersFile(usersFilePath);
+  const { cacheKey } = location;
   let pending = freshReads.get(cacheKey);
   if (!pending) {
-    pending = (async () => {
-      let data = null;
-      if (relPath) {
-        data = await configStore.readJsonStrict(relPath);
-      } else if (fs.existsSync(fullPath)) {
-        // A users file outside contents/ has no place in the store (see
-        // locateConfigFile); read it directly, as loadUsers does.
-        data = JSON.parse(fs.readFileSync(fullPath, 'utf8'));
-      }
-      if (data && typeof data === 'object' && data.users && typeof data.users === 'object') {
-        configCache.setCacheEntry(cacheKey, data);
-      }
-    })().finally(() => freshReads.delete(cacheKey));
+    pending = readUsersFileFresh(location)
+      .then(data => {
+        if (isUsersConfig(data)) configCache.setCacheEntry(cacheKey, data);
+      })
+      .finally(() => freshReads.delete(cacheKey));
     freshReads.set(cacheKey, pending);
   }
   await pending;
