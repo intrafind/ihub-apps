@@ -51,6 +51,25 @@ async function findTokenUserRecord(usersFilePath, find) {
 }
 
 /**
+ * The record for a token's subject: by id (users.json is keyed by it), then by
+ * the token's email among the users who sign in with `authMethod`.
+ *
+ * @param {Object} usersConfig - Users configuration
+ * @param {string} userId - The subject the token carries
+ * @param {string|undefined} email - The token's email claim
+ * @param {string} authMethod - 'oidc', 'ldap', 'teams', ...
+ * @returns {Object|undefined} The user record, if there is one
+ */
+function findByIdOrEmail(usersConfig, userId, email, authMethod) {
+  const byId = usersConfig.users?.[userId];
+  if (byId) return byId;
+  if (!email) return undefined;
+  return Object.values(usersConfig.users || {}).find(
+    u => equalsIgnoreCase(u.email, email) && u.authMethods?.includes(authMethod)
+  );
+}
+
+/**
  * Answer a request whose token is validly signed but whose user is gone.
  *
  * The 401 revokes the session, but the `authToken` cookie is httpOnly, so only
@@ -80,6 +99,38 @@ function rejectDeletedUser(req, res, next, source, userId) {
     error: 'invalid_token',
     error_description: 'User account no longer exists'
   });
+}
+
+/**
+ * Refuse a token whose user record is gone (see {@link rejectDeletedUser}) or
+ * disabled (403).
+ *
+ * @param {Object} req - Express request
+ * @param {Object} res - Express response
+ * @param {Function} next - Express next function
+ * @param {Object|null|undefined} userRecord - What the lookup found
+ * @param {string} source - Where the token came from, for the log line
+ * @param {string} userId - The subject the token carries
+ * @returns {boolean} True when the request has been answered or handed on, so
+ *   the caller must stop
+ */
+function refuseUnusableUser(req, res, next, userRecord, source, userId) {
+  if (!userRecord) {
+    rejectDeletedUser(req, res, next, source, userId);
+    return true;
+  }
+  if (!isUserActive(userRecord)) {
+    logger.warn(`JWT Auth token rejected: ${source} user account disabled`, {
+      component: 'JwtAuth',
+      userId: userRecord.id || userId
+    });
+    res.status(403).json({
+      error: 'access_denied',
+      error_description: 'User account has been disabled'
+    });
+    return true;
+  }
+  return false;
 }
 
 /**
@@ -438,20 +489,7 @@ export default async function jwtAuthMiddleware(req, res, next) {
             usersConfig => usersConfig.users?.[userId]
           );
 
-          if (!userRecord) {
-            return rejectDeletedUser(req, res, next, 'OAuth', userId);
-          }
-
-          if (!isUserActive(userRecord)) {
-            logger.warn('OAuth token rejected: user account disabled', {
-              component: 'JwtAuth',
-              userId
-            });
-            return res.status(403).json({
-              error: 'access_denied',
-              error_description: 'User account has been disabled'
-            });
-          }
+          if (refuseUnusableUser(req, res, next, userRecord, 'OAuth', userId)) return;
 
           // Load OAuth client to apply current per-client permission restrictions.
           // Client restrictions are looked up fresh on every request so that admin
@@ -582,20 +620,7 @@ export default async function jwtAuthMiddleware(req, res, next) {
             usersConfig => usersConfig.users?.[userId]
           );
 
-          if (!userRecord) {
-            return rejectDeletedUser(req, res, next, 'local', userId);
-          }
-
-          if (!isUserActive(userRecord)) {
-            logger.warn('JWT Auth token rejected: user account disabled', {
-              component: 'JwtAuth',
-              userId
-            });
-            return res.status(403).json({
-              error: 'access_denied',
-              error_description: 'User account has been disabled'
-            });
-          }
+          if (refuseUnusableUser(req, res, next, userRecord, 'local', userId)) return;
 
           // User exists and is active, create user object from token
           user = {
@@ -641,33 +666,14 @@ export default async function jwtAuthMiddleware(req, res, next) {
 
         // OIDC users can be identified by their subject ID or email
         const userId = decoded.sub || decoded.username;
-        const userRecord = await findTokenUserRecord(usersFilePath, usersConfig => {
-          const byId = usersConfig.users?.[userId];
-          if (byId) return byId;
-
-          // If not found by ID, try to find by email (OIDC users may have different IDs)
-          if (!decoded.email) return undefined;
-          return Object.values(usersConfig.users || {}).find(
-            u => equalsIgnoreCase(u.email, decoded.email) && u.authMethods?.includes('oidc')
-          );
-        });
+        // By ID, then by email (OIDC users may have different IDs)
+        const userRecord = await findTokenUserRecord(usersFilePath, usersConfig =>
+          findByIdOrEmail(usersConfig, userId, decoded.email, 'oidc')
+        );
 
         // The user was persisted before this token was issued, so a missing
         // record means the account was deleted since.
-        if (!userRecord) {
-          return rejectDeletedUser(req, res, next, 'OIDC', userId);
-        }
-
-        if (!isUserActive(userRecord)) {
-          logger.warn('JWT Auth token rejected: OIDC user account disabled', {
-            component: 'JwtAuth',
-            userId: userRecord.id
-          });
-          return res.status(403).json({
-            error: 'access_denied',
-            error_description: 'User account has been disabled'
-          });
-        }
+        if (refuseUnusableUser(req, res, next, userRecord, 'OIDC', userId)) return;
 
         user = {
           id: decoded.sub || decoded.username,
@@ -698,42 +704,22 @@ export default async function jwtAuthMiddleware(req, res, next) {
         // users.json is keyed by the persisted UUID (decoded.sub). Fall back to
         // username for legacy tokens minted before sub was the canonical id.
         const userId = decoded.sub || decoded.username;
-        const userRecord = await findTokenUserRecord(usersFilePath, usersConfig => {
-          const byId = usersConfig.users?.[userId];
-          if (byId) return byId;
-
-          const users = Object.values(usersConfig.users || {});
-          const byEmail =
-            decoded.email &&
-            users.find(
-              u => equalsIgnoreCase(u.email, decoded.email) && u.authMethods?.includes('ldap')
-            );
-          if (byEmail) return byEmail;
-
-          if (!decoded.username) return undefined;
-          return users.find(
-            u =>
-              equalsIgnoreCase(u.ldapData?.username, decoded.username) &&
-              u.authMethods?.includes('ldap')
-          );
-        });
+        // By ID, then email, then the directory login name
+        const userRecord = await findTokenUserRecord(
+          usersFilePath,
+          usersConfig =>
+            findByIdOrEmail(usersConfig, userId, decoded.email, 'ldap') ||
+            (decoded.username &&
+              Object.values(usersConfig.users || {}).find(
+                u =>
+                  equalsIgnoreCase(u.ldapData?.username, decoded.username) &&
+                  u.authMethods?.includes('ldap')
+              ))
+        );
 
         // The user was persisted before this token was issued, so a missing
         // record means the account was deleted since.
-        if (!userRecord) {
-          return rejectDeletedUser(req, res, next, 'LDAP', userId);
-        }
-
-        if (!isUserActive(userRecord)) {
-          logger.warn('JWT Auth token rejected: LDAP user account disabled', {
-            component: 'JwtAuth',
-            userId: userRecord.id
-          });
-          return res.status(403).json({
-            error: 'access_denied',
-            error_description: 'User account has been disabled'
-          });
-        }
+        if (refuseUnusableUser(req, res, next, userRecord, 'LDAP', userId)) return;
 
         user = {
           id: decoded.sub || decoded.username,
@@ -766,33 +752,14 @@ export default async function jwtAuthMiddleware(req, res, next) {
         const usersFilePath = localUsersFile(platform.localAuth);
 
         const userId = decoded.id || decoded.sub;
-        const userRecord = await findTokenUserRecord(usersFilePath, usersConfig => {
-          const byId = usersConfig.users?.[userId];
-          if (byId) return byId;
-
-          // If not found by ID, try to find by email
-          if (!decoded.email) return undefined;
-          return Object.values(usersConfig.users || {}).find(
-            u => equalsIgnoreCase(u.email, decoded.email) && u.authMethods?.includes('teams')
-          );
-        });
+        // By ID, then by email
+        const userRecord = await findTokenUserRecord(usersFilePath, usersConfig =>
+          findByIdOrEmail(usersConfig, userId, decoded.email, 'teams')
+        );
 
         // The user was persisted before this token was issued, so a missing
         // record means the account was deleted since.
-        if (!userRecord) {
-          return rejectDeletedUser(req, res, next, 'Teams', userId);
-        }
-
-        if (!isUserActive(userRecord)) {
-          logger.warn('JWT Auth token rejected: Teams user account disabled', {
-            component: 'JwtAuth',
-            userId: userRecord.id
-          });
-          return res.status(403).json({
-            error: 'access_denied',
-            error_description: 'User account has been disabled'
-          });
-        }
+        if (refuseUnusableUser(req, res, next, userRecord, 'Teams', userId)) return;
 
         user = {
           id: decoded.id || decoded.sub,
@@ -836,20 +803,7 @@ export default async function jwtAuthMiddleware(req, res, next) {
 
         // The user was persisted before this token was issued, so a missing
         // record means the account was deleted since.
-        if (!userRecord) {
-          return rejectDeletedUser(req, res, next, 'NTLM', userId);
-        }
-
-        if (!isUserActive(userRecord)) {
-          logger.warn('JWT Auth token rejected: NTLM user account disabled', {
-            component: 'JwtAuth',
-            userId: userRecord.id
-          });
-          return res.status(403).json({
-            error: 'access_denied',
-            error_description: 'User account has been disabled'
-          });
-        }
+        if (refuseUnusableUser(req, res, next, userRecord, 'NTLM', userId)) return;
 
         user = {
           id: decoded.id || decoded.sub,
