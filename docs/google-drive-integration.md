@@ -245,8 +245,24 @@ Google Workspace documents (Docs, Sheets, Presentations) cannot be downloaded as
 
 ### Token refresh failures
 
-- If automatic token refresh fails, the user will see a **"Reconnect"** prompt
+- If Google rejects the refresh token, the user will see a **"Reconnect"** prompt. iHub Apps then deletes the stored tokens (as it does when no refresh token is stored).
 - This typically happens when the refresh token has been revoked (e.g., user changed their Google password, or revoked app access in [myaccount.google.com/permissions](https://myaccount.google.com/permissions))
+- Any other refresh failure keeps the stored tokens: a network error, a Google outage (5xx or 429), an expired or wrong client secret, or a provider that was disabled or removed. Requests then fail with *"Google Drive is temporarily unavailable. Please try again in a moment."*, and the connection status still shows the account as connected. Access returns by itself once the problem clears. For an expired client secret, update it in the provider: every user is back without reconnecting.
+
+### Connecting fails with `?googledrive_error=<code>`
+
+When connecting fails, the user is sent back to the page they started from with `googledrive_error=<code>` added to the URL:
+
+| Code | Cause | Fix |
+|------|-------|-----|
+| `invalid_state` | The sign-in ticket is missing, altered, or was issued for another integration or provider. It is also refused when the callback comes from a different user, or from a browser where nobody is signed in to iHub Apps. With several instances, it appears when an instance cannot verify a ticket issued by another (see below). | Have the user sign in to iHub Apps and start again from **Settings → Integrations** in the same browser. Check that no proxy strips the iHub sign-in cookie. |
+| `session_expired` | The sign-in ticket is older than 15 minutes. | Start again and finish the Google consent within 15 minutes. |
+| `access_denied` | The user declined the Google consent screen. | Start again and approve the access. |
+| `oauth_failed` | Google returned another error on the redirect back. | Check the server logs. |
+| `missing_code` | The callback arrived without an authorization code, for example when the URL was opened by hand. | Start again from **Settings → Integrations**. |
+| `callback_failed` | Exchanging the code for tokens failed, for example because of a redirect URI mismatch or a wrong client secret. | Check the server logs and the redirect URI in the Google Cloud project. |
+
+No server-side session, shared session store or sticky routing is involved, so the callback can land on any worker or instance. With several instances, every instance must be able to verify a ticket another one issued: configure the same `JWT_SECRET` (or `auth.jwtSecret`) and the same `TOKEN_ENCRYPTION_KEY` on all of them, or let them share the `contents/` directory. See [Scaling](scaling.md#sign-in-tickets-across-instances).
 
 ---
 
@@ -256,7 +272,9 @@ Google Workspace documents (Docs, Sheets, Presentations) cannot be downloaded as
 - **Per-user tokens**: Each user connects their own Google account; no shared service account is used
 - **Encrypted storage**: Tokens are encrypted at rest using AES-256-GCM
 - **PKCE**: OAuth flow uses Proof Key for Code Exchange to prevent authorization code interception attacks
-- **State validation**: CSRF protection via session-stored state parameter
+- **State validation**: The OAuth `state` parameter is a signed ticket (HMAC) that names the integration and provider and the signed-in user who started the flow. The callback requires the same user, so a ticket from one browser cannot complete a flow in another. No server-side session is kept.
+- **PKCE verifier protection**: The PKCE code verifier travels inside the ticket, encrypted with AES-256-GCM, never in clear text
+- **Sign-in ticket lifetime**: The ticket expires after 15 minutes. A user who does not finish the Google consent in that time has to start again (`googledrive_error=session_expired`).
 - **Rate limiting**: OAuth initiation is rate-limited (10 requests/minute); API endpoints are limited to 60 requests/minute
 
 ---
@@ -265,8 +283,10 @@ Google Workspace documents (Docs, Sheets, Presentations) cannot be downloaded as
 
 ```
 server/
-├── services/integrations/GoogleDriveService.js   # Core OAuth & Drive API service
-└── routes/integrations/googledrive.js            # OAuth and browsing API routes
+├── services/integrations/GoogleDriveService.js   # Drive API calls and Google-specific OAuth endpoints
+├── services/integrations/OAuthIntegrationBase.js # Shared token lifecycle (store/refresh/expiry/401 retry)
+├── routes/integrations/googledrive.js            # Browsing API routes + provider config for the shared OAuth routes
+└── routes/integrations/oauthIntegrationFactory.js # Shared /auth, /callback, /status, /disconnect routes
 
 client/src/features/upload/
 ├── components/CloudFileBrowserShell.jsx          # Shared file-browser UI (all providers)

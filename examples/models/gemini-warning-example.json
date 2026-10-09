@@ -13,7 +13,7 @@
   "provider": "google",
   "contextWindow": 32760,
   "maxOutputTokens": 8192,
-  "supportsTools": false,
+  "supportsTools": "none",
   "enabled": false,
   "hint": {
     "message": {

@@ -227,6 +227,8 @@ function AppFormEditor({
               selectedTools={app.tools || []}
               onToolsChange={tools => handleInputChange('tools', tools)}
               mcpToolIds={mcpToolIds}
+              toolChoice={app.toolChoice}
+              onToolChoiceChange={toolChoice => handleInputChange('toolChoice', toolChoice)}
             />
 
             {/* MCP Server Tools */}

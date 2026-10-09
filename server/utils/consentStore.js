@@ -204,6 +204,34 @@ export async function revokeConsent(clientId, userId) {
 }
 
 /**
+ * Delete every consent a user has given, to any client.
+ *
+ * Matches on the stored user id rather than the composite key, and includes
+ * entries that have lapsed: they are still personal data of that user.
+ *
+ * @param {string} userId - User subject identifier.
+ * @returns {Promise<number>} How many entries were removed.
+ */
+export async function revokeConsentsForUser(userId) {
+  if (!userId) return 0;
+
+  const store = loadStore();
+  const keys = Object.entries(store.consents || {})
+    .filter(([, entry]) => entry?.userId === userId)
+    .map(([key]) => key);
+  if (keys.length === 0) return 0;
+
+  for (const key of keys) delete store.consents[key];
+  await saveStore(store);
+  logger.info('Consents revoked for user', {
+    component: 'ConsentStore',
+    userId,
+    count: keys.length
+  });
+  return keys.length;
+}
+
+/**
  * Record that a connection was used, throttled to one write a minute.
  *
  * Called on refresh-token rotation, which is the one moment the server sees a

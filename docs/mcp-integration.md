@@ -693,10 +693,11 @@ Optionally enable `platform.oauth.dcr.enabled: true` (*Dynamic client
 registration* toggle) so MCP clients such as Claude can register their
 OAuth client automatically instead of an admin creating one by hand.
 
-> ⚠️ **Restart required:** the OAuth session middleware is mounted at
-> startup. After enabling the OAuth authorization server for the first
-> time, restart the server — otherwise the consent flow has no session
-> store and authorization fails.
+> ⚠️ **Restart required:** OAuth configuration is read at startup (see
+> [OAuth Authorization Code](oauth-authorization-code.md#1-enable-oauth-in-platform-configuration)).
+> After enabling the OAuth authorization server for the first time,
+> restart the server. The consent screen keeps no server-side session: its
+> state travels in a signed ticket, so it works on any worker or instance.
 
 With the gateway enabled the endpoints go live at:
 

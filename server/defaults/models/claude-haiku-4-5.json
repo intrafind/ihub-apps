@@ -13,7 +13,7 @@
   "provider": "anthropic",
   "contextWindow": 200000,
   "maxOutputTokens": 64000,
-  "supportsTools": true,
+  "supportsTools": "required",
   "supportsVision": true,
   "supportsImages": true,
   "enabled": false,

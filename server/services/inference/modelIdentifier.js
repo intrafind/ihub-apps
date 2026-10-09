@@ -23,6 +23,7 @@ import configCache from '../../configCache.js';
 import { isFeatureEnabled } from '../../featureRegistry.js';
 import { filterModelsForApp } from '../chat/RequestBuilder.js';
 import { findByIdCaseInsensitive, hasIdCaseInsensitive } from '../../utils/resourceLookup.js';
+import { modelSupportsTools } from '../../../shared/modelCapabilities.js';
 import { InferenceApiError } from './errors.js';
 import { appOutputFormat, assertStructuredOutputSupported } from './structuredOutput.js';
 
@@ -139,7 +140,7 @@ function assertModelFitsApp(app, model, identifier) {
     );
   }
   if (filterModelsForApp([model], app).length === 0) {
-    const reason = appNeedsTools(app) && !model.supportsTools ? ' (tool calling)' : '';
+    const reason = appNeedsTools(app) && !modelSupportsTools(model) ? ' (tool calling)' : '';
     throw new InferenceApiError(
       400,
       'model_capability_missing',

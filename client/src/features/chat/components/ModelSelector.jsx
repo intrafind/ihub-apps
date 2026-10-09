@@ -4,6 +4,7 @@ import { getLocalizedContent } from '../../../utils/localizeContent';
 import Icon from '../../../shared/components/Icon';
 import { useKeyboardNavigation } from '../../../shared/hooks/useKeyboardNavigation';
 import { modelSupportsWebSearch } from '../webSearch';
+import { matchesModelFilter, modelSupportsTools } from '../../../../../shared/modelCapabilities.js';
 
 /**
  * Inline model selector component for next-gen chat input
@@ -34,21 +35,13 @@ function ModelSelector({
 
   // Filter by tools requirement
   if (app?.tools && app.tools.length > 0) {
-    filteredModels = filteredModels.filter(model => model.supportsTools);
+    filteredModels = filteredModels.filter(modelSupportsTools);
   }
 
   // Apply model settings filter if specified
   if (app?.settings?.model?.filter) {
     const filter = app.settings.model.filter;
-    filteredModels = filteredModels.filter(model => {
-      // Check each filter property
-      for (const [key, value] of Object.entries(filter)) {
-        if (model[key] !== value) {
-          return false;
-        }
-      }
-      return true;
-    });
+    filteredModels = filteredModels.filter(model => matchesModelFilter(model, filter));
   }
 
   /** Closes the model selector dropdown */

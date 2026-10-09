@@ -13,7 +13,7 @@
   "provider": "openai-responses",
   "contextWindow": 400000,
   "maxOutputTokens": 32000,
-  "supportsTools": true,
+  "supportsTools": "required",
   "supportsAudio": true,
   "enabled": false,
   "default": false

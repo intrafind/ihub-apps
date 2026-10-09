@@ -13,7 +13,7 @@
   "provider": "local",
   "contextWindow": 32768,
   "maxOutputTokens": 8192,
-  "supportsTools": true,
+  "supportsTools": "auto",
   "thinking": {
     "enabled": true,
     "chatTemplateKwargs": {

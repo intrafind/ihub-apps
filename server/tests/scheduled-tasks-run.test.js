@@ -40,7 +40,7 @@ const MODELS = [
     modelId: 'gpt-4o',
     url: 'https://u/v1/chat/completions',
     autoDiscovery: false,
-    supportsTools: true,
+    supportsTools: 'auto',
     default: true
   }
 ];

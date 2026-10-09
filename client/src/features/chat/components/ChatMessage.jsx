@@ -68,6 +68,7 @@ import ScheduledTaskProposalCards from '../../tasks/components/ScheduledTaskProp
 import ScheduleThisAction from '../../tasks/components/ScheduleThisAction';
 import GeneratedFiles from './GeneratedFiles';
 import { findSkillDraft } from '../../skills/utils/skillDraft';
+import { matchesModelFilter, modelSupportsTools } from '../../../../../shared/modelCapabilities.js';
 import './ChatMessage.css';
 
 /** How an answer ends when it stopped before it was complete. */
@@ -394,20 +395,13 @@ function ChatMessage({
 
       // Filter by tools requirement
       if (app.tools && app.tools.length > 0) {
-        availableModels = availableModels.filter(model => model.supportsTools);
+        availableModels = availableModels.filter(modelSupportsTools);
       }
 
       // Apply model settings filter if specified
       if (app.settings?.model?.filter) {
         const filter = app.settings.model.filter;
-        availableModels = availableModels.filter(model => {
-          for (const [key, value] of Object.entries(filter)) {
-            if (model[key] !== value) {
-              return false;
-            }
-          }
-          return true;
-        });
+        availableModels = availableModels.filter(model => matchesModelFilter(model, filter));
       }
 
       // Check if there are multiple models available
