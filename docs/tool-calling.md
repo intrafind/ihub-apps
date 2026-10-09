@@ -523,7 +523,7 @@ How the request reaches each provider:
 |---------|----------------------|-------|
 | `openai`, `openai-responses` | `tool_choice: "required"` | |
 | `mistral` | `tool_choice: "required"` | |
-| `vllm` / `local` | `tool_choice: "required"` | Needs a vLLM version that supports `required`; other local servers may ignore or refuse the field |
+| `local` (vLLM, ...), and `openai` with your own URL | `tool_choice: "required"` | Depends on the installation: vLLM is usually started with `--enable-auto-tool-choice`, which serves `auto`, and `required` depends on the vLLM version and deployment; other local servers may ignore or refuse the field. Keep these models on `auto` (apps then ask in words) until you have checked |
 | `anthropic` | `tool_choice: { "type": "any" }` | **Not accepted** by Claude Opus 5.5, Sonnet 5.5, Fable 5.1 and Mythos 5.1, or with manual extended thinking. Not applied when the app has an output schema (the structured-output `json` tool is already pinned) |
 | `google` | `toolConfig.functionCallingConfig.mode: "ANY"` | Not sent with native Google Search, which drops the function tools |
 | `bedrock` | `toolConfig.toolChoice: { "any": {} }` | Claude models on Bedrock have the same restrictions as on Anthropic's API |

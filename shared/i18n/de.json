@@ -1302,7 +1302,7 @@
       },
       "hints": {
         "modelId": "Eindeutige Kennung für das Modell (kann nach der Erstellung nicht geändert werden)",
-        "supportsTools": "Ob dem Modell Tools gegeben werden können und ob der Anbieter es zu einem Tool-Aufruf zwingen kann. \"Ein Tool-Aufruf kann erzwungen werden\" nur wählen, wenn der Anbieter eine erzwungene Tool-Auswahl akzeptiert (OpenAI, Mistral, Google, Bedrock und die meisten lokalen Server tun das; Claude Opus 5.5, Sonnet 5.5 und Fable 5.1 nicht). Apps, die einen Tool-Aufruf verlangen, bitten ein Modell mit \"das Modell entscheidet\" stattdessen mit Worten darum.",
+        "supportsTools": "Ob dem Modell Tools gegeben werden können und ob der Anbieter es zu einem Tool-Aufruf zwingen kann. \"Ein Tool-Aufruf kann erzwungen werden\" nur wählen, wenn der Anbieter eine erzwungene Tool-Auswahl akzeptiert (OpenAI, Mistral, Google und Bedrock tun das; Claude Opus 5.5, Sonnet 5.5 und Fable 5.1 nicht; bei vLLM und anderen lokalen Servern hängt es von der Installation ab, belassen Sie diese bei \"das Modell entscheidet\"). Apps, die einen Tool-Aufruf verlangen, bitten ein Modell mit \"das Modell entscheidet\" stattdessen mit Worten darum.",
         "apiModelId": "Modellkennung, die von der API des Anbieters verwendet wird (z.B. gpt-4, claude-3-opus)",
         "apiKey": "API-Schlüssel für dieses Modell. Wenn nicht angegeben, verwendet das System den Schlüssel des Anbieters oder die Umgebungsvariable. Ein lokaler Server (vLLM, LM Studio, Jan.ai, Ollama) braucht keinen Schlüssel – lassen Sie das Feld leer. Schlüssel werden verschlüsselt gespeichert.",
         "apiKeySet": "✓ API-Schlüssel ist für dieses Modell konfiguriert",

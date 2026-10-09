@@ -47,9 +47,10 @@ require that the model's first step of every message calls one of the app's tool
   without an error and remembered for an hour. A model's **Tool Calling** setting
   (`supportsTools: "none" | "auto" | "required"`) says up front which models can be forced: only
   `required` models are, `auto` models are asked in words.
-- Supported for OpenAI, OpenAI Responses, Mistral, vLLM, Anthropic, Google Gemini and Amazon Bedrock
-  models; other local servers may ignore it. See
-  [Tool Calling](../tool-calling.md#requiring-a-tool-call).
+- The request is built for OpenAI, OpenAI Responses, Mistral, Anthropic, Google Gemini and Amazon
+  Bedrock. Self-hosted servers such as vLLM depend on the installation (vLLM is usually started with
+  `--enable-auto-tool-choice`, which serves `auto`), so keep those models on **Tools - the model
+  decides**. See [Tool Calling](../tool-calling.md#requiring-a-tool-call).
 
 ## Tool Scripts Are Checked at Startup
 

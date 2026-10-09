@@ -44,6 +44,14 @@ but vLLM was started **without** `--enable-auto-tool-choice`. vLLM then ignores 
 field or errors, and the user reports "tool calling does not work." Fixing this is a vLLM
 restart with the correct flags — see below.
 
+**Requiring a tool call.** An app with `toolChoice: "required"` forces a tool call only when the
+model is set to `"supportsTools": "required"`. Whether vLLM takes `tool_choice: "required"` depends
+on your installation (the vLLM version and how it was deployed), whereas the usual deployment — with
+`--enable-auto-tool-choice` — serves `auto`. Leave vLLM models on `"auto"`: the app then asks the
+model in words, which works on any deployment. Move one to `"required"` once you have checked that
+your server accepts a forced tool choice; if it rejects one anyway, iHub falls back to asking in
+words. See [Requiring a tool call](tool-calling.md#requiring-a-tool-call).
+
 How iHub sends each modality over the OpenAI-compatible API:
 
 - **Images** → OpenAI `image_url` content parts (base64 data URLs).

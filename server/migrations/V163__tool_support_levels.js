@@ -11,12 +11,18 @@
  * - `auto`     — tools; the model decides whether to call one
  * - `required` — tools, and the provider accepts a forced tool call
  *
- * 1. **Models.** `true` becomes `required` where the provider's API takes a
- *    forced tool choice (OpenAI, OpenAI Responses, Mistral, Google chat models,
- *    Bedrock's Claude and Nova models) and `auto` everywhere else: a model that
- *    cannot be told to use a tool is asked in words, which works on any model,
- *    and a model that was `required` by mistake is found out on its first
- *    forced call, so neither guess breaks a chat. `false` becomes `none`.
+ * 1. **Models.** `true` becomes `required` where the endpoint is a hosted API
+ *    that takes a forced tool choice (OpenAI and Azure OpenAI, Mistral, Google
+ *    chat models, Bedrock's Claude and Nova models) and `auto` everywhere else.
+ *    Whether a self-hosted server takes it depends on the installation —
+ *    vLLM (`provider: "local"`) is usually started with
+ *    `--enable-auto-tool-choice`, which serves `auto`. Other OpenAI-compatible
+ *    servers (LM Studio, a gateway) are often reached through the `openai`
+ *    API type with their own URL, so for that type the endpoint decides, not
+ *    the API type alone. A model that cannot be
+ *    told to use a tool is asked in words, which works on any model, and a
+ *    model that was `required` by mistake is found out on its first forced
+ *    call, so neither guess breaks a chat. `false` becomes `none`.
  * 2. **App model filters.** `settings.model.filter` compares properties of the
  *    model as they are, so `{ "supportsTools": true }` no longer matches
  *    anything. It becomes `["auto", "required"]` (a filter value that is an
@@ -25,7 +31,21 @@
  * Idempotent: only the old boolean values are rewritten.
  */
 
-const PROVIDERS_TAKING_FORCED_CALLS = new Set(['openai', 'openai-responses', 'mistral']);
+// Hosts of the hosted APIs that accept a forced tool choice, per API type.
+const OPENAI_HOSTS = [/^api\.openai\.com$/, /\.openai\.azure\.com$/];
+const HOSTED_ENDPOINTS = new Map([
+  ['openai', OPENAI_HOSTS],
+  ['openai-responses', OPENAI_HOSTS],
+  ['mistral', [/^api\.mistral\.ai$/]]
+]);
+
+function hostOf(url) {
+  try {
+    return new URL(url).hostname.toLowerCase();
+  } catch {
+    return '';
+  }
+}
 
 export const version = '163';
 export const description = 'tool_support_levels';
@@ -37,7 +57,10 @@ function levelForToolModel(model) {
     return /anthropic\.claude|amazon\.nova/i.test(upstreamId) ? 'required' : 'auto';
   }
   if (model.provider === 'google') return /image/i.test(upstreamId) ? 'auto' : 'required';
-  return PROVIDERS_TAKING_FORCED_CALLS.has(model.provider) ? 'required' : 'auto';
+  const hosts = HOSTED_ENDPOINTS.get(model.provider);
+  if (!hosts) return 'auto';
+  const host = hostOf(model.url);
+  return hosts.some(pattern => pattern.test(host)) ? 'required' : 'auto';
 }
 
 function convertedModel(model) {

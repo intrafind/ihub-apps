@@ -39,10 +39,17 @@ function fakeCtx(files) {
   };
 }
 
+const HOSTED_URLS = {
+  openai: 'https://api.openai.com/v1/chat/completions',
+  'openai-responses': 'https://api.openai.com/v1/responses',
+  mistral: 'https://api.mistral.ai/v1/chat/completions'
+};
+
 const model = (provider, supportsTools, extra = {}) => ({
   id: `${provider}-model`,
   modelId: `${provider}-upstream`,
   provider,
+  url: HOSTED_URLS[provider] || `https://${provider}.example.com/v1`,
   supportsTools,
   ...extra
 });
@@ -64,7 +71,7 @@ test('false becomes none, whatever the provider', async () => {
   assert.equal(ctx.files['models/b.json'].supportsTools, 'none');
 });
 
-test('true becomes required where the provider takes a forced tool choice, auto elsewhere', async () => {
+test('true becomes required where the endpoint is a hosted API that takes a forced tool choice, auto elsewhere', async () => {
   const ctx = fakeCtx({
     'models/openai.json': model('openai', true),
     'models/responses.json': model('openai-responses', true),
@@ -74,6 +81,27 @@ test('true becomes required where the provider takes a forced tool choice, auto 
     'models/claude.json': model('anthropic', true),
     'models/vllm.json': model('vllm', true),
     'models/local.json': model('local', true),
+    'models/azure.json': model('openai', true, {
+      url: 'https://my-resource.openai.azure.com/openai/deployments/gpt-4.1/chat/completions'
+    }),
+    // vLLM is a `local` model; a gateway or LM Studio may be an `openai` one with its own URL.
+    'models/vllm-local.json': model('local', true, {
+      url: 'http://vllm.internal:8000/v1/chat/completions'
+    }),
+    'models/gateway-openai.json': model('openai', true, {
+      url: 'http://gateway.internal:8000/v1/chat/completions'
+    }),
+    'models/lmstudio.json': model('openai', true, {
+      url: 'http://localhost:1234/v1/chat/completions'
+    }),
+    'models/proxy-responses.json': model('openai-responses', true, {
+      url: 'https://gateway.example.com/v1/responses'
+    }),
+    'models/mistral-self-hosted.json': model('mistral', true, {
+      url: 'http://mistral.internal/v1/chat/completions'
+    }),
+    'models/no-url.json': model('openai', true, { url: undefined }),
+    'models/bad-url.json': model('openai', true, { url: 'not a url' }),
     'models/bedrock-claude.json': model('bedrock', true, {
       modelId: 'eu.anthropic.claude-sonnet-4-6-v1:0'
     }),
@@ -95,11 +123,19 @@ test('true becomes required where the provider takes a forced tool choice, auto 
     claude: 'auto',
     vllm: 'auto',
     local: 'auto',
+    azure: 'required',
+    'vllm-local': 'auto',
+    'gateway-openai': 'auto',
+    lmstudio: 'auto',
+    'proxy-responses': 'auto',
+    'mistral-self-hosted': 'auto',
+    'no-url': 'auto',
+    'bad-url': 'auto',
     'bedrock-claude': 'required',
     'bedrock-nova': 'required',
     'bedrock-llama': 'auto'
   });
-  assert.match(ctx.logs[0], /11 model\(s\)/);
+  assert.match(ctx.logs[0], /19 model\(s\)/);
 });
 
 test('the rest of a model file is left as it was', async () => {

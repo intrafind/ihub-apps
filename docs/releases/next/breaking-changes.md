@@ -26,9 +26,11 @@ the model editor it is the **Tool Calling** dropdown:
 | `required` | Tools, and the provider accepts a forced tool call |
 
 - The upgrade converts every model file: `false` becomes `none`; `true` becomes `required` for
-  OpenAI, OpenAI Responses, Mistral, Google chat models and Bedrock's Claude and Nova models, and
-  `auto` for everything else (Anthropic, vLLM and other local servers, other Bedrock models).
-  Raise a model to `required` in the editor when its provider accepts a forced tool choice.
+  models on the OpenAI and Azure OpenAI APIs, Mistral's API, Google chat models and Bedrock's
+  Claude and Nova models, and `auto` for everything else: Anthropic, vLLM and other local servers
+  (`provider: "local"`, and `openai` models with your own URL rather than OpenAI's or Azure's),
+  whose support depends on the installation, and other Bedrock models. Raise a model to `required`
+  in the editor when its provider accepts a forced tool choice.
 - An app's `settings.model.filter` is converted too: `{ "supportsTools": true }` becomes
   `{ "supportsTools": ["auto", "required"] }` (a filter value that is an array matches any of its
   entries) and `false` becomes `"none"`.
