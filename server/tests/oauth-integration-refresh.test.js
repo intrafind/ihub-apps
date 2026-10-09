@@ -46,19 +46,21 @@ jest.unstable_mockModule('../services/CredentialService.js', () => ({
 // In-memory stand-in for TokenStorageService: one token set per test.
 const store = { tokens: null, expired: false };
 const tokenStorage = {
-  getUserTokens: jest.fn(async () => {
-    if (!store.tokens) throw new Error('User not authenticated with this service');
-    return { ...store.tokens };
-  }),
-  areTokensExpired: jest.fn(async () => store.expired),
-  storeUserTokens: jest.fn(async (_userId, _service, tokens) => {
+  getUserTokens: jest.fn(() =>
+    store.tokens
+      ? Promise.resolve({ ...store.tokens })
+      : Promise.reject(new Error('User not authenticated with this service'))
+  ),
+  areTokensExpired: jest.fn(() => Promise.resolve(store.expired)),
+  storeUserTokens: jest.fn((_userId, _service, tokens) => {
     store.tokens = { ...tokens };
     store.expired = false;
+    return Promise.resolve();
   }),
-  deleteUserTokens: jest.fn(async () => {
+  deleteUserTokens: jest.fn(() => {
     const had = store.tokens !== null;
     store.tokens = null;
-    return had;
+    return Promise.resolve(had);
   })
 };
 jest.unstable_mockModule('../services/TokenStorageService.js', () => ({ default: tokenStorage }));
@@ -102,10 +104,7 @@ function response(status, body, { statusText = '', jsonThrows = false } = {}) {
     status,
     statusText,
     headers: { get: () => null },
-    json: async () => {
-      if (jsonThrows) throw new Error('not json');
-      return body;
-    }
+    json: () => (jsonThrows ? Promise.reject(new Error('not json')) : Promise.resolve(body))
   };
 }
 
@@ -113,9 +112,9 @@ const isTokenEndpoint = url => new URL(url).pathname.endsWith('/token');
 
 /** Route fetches: the token endpoint answers with `tokenAnswer`, the API with `apiAnswer`. */
 function fakeNetwork({ tokenAnswer, apiAnswer }) {
-  httpFetch.mockImplementation(async url => {
+  httpFetch.mockImplementation(url => {
     const answer = isTokenEndpoint(url) ? tokenAnswer : apiAnswer;
-    return typeof answer === 'function' ? answer() : answer;
+    return Promise.resolve(typeof answer === 'function' ? answer() : answer);
   });
 }
 

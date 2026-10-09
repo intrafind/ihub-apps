@@ -3,7 +3,7 @@ import { httpFetch } from '../../utils/httpConfig.js';
 import logger from '../../utils/logger.js';
 import { readBoundedBody, MAX_DOWNLOAD_BYTES } from '../../utils/boundedBodyReader.js';
 import OAuthIntegrationBase from './OAuthIntegrationBase.js';
-import { isUnavailableError } from './oauthRefreshError.js';
+import { isUnavailableError, refreshFailureFromResponse } from './oauthRefreshError.js';
 
 /**
  * Nextcloud Service for Nextcloud file access integration.
@@ -171,7 +171,7 @@ class NextcloudService extends OAuthIntegrationBase {
           error: errorData
         });
 
-        throw this._refreshFailureFromResponse(response, errorData);
+        throw refreshFailureFromResponse(response, errorData);
       }
 
       const tokens = await response.json();

@@ -5,7 +5,7 @@ import logger from '../../utils/logger.js';
 import configCache from '../../configCache.js';
 import { readBoundedBody, MAX_DOWNLOAD_BYTES } from '../../utils/boundedBodyReader.js';
 import OAuthIntegrationBase from './OAuthIntegrationBase.js';
-import { isUnavailableError } from './oauthRefreshError.js';
+import { isUnavailableError, refreshFailureFromResponse } from './oauthRefreshError.js';
 
 /**
  * Office 365 Service for Microsoft 365 file access integration
@@ -262,7 +262,7 @@ class Office365Service extends OAuthIntegrationBase {
           error: errorData
         });
 
-        throw this._refreshFailureFromResponse(response, errorData);
+        throw refreshFailureFromResponse(response, errorData);
       }
 
       const tokens = await response.json();

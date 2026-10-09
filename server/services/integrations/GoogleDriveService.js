@@ -4,7 +4,7 @@ import { httpFetch } from '../../utils/httpConfig.js';
 import logger from '../../utils/logger.js';
 import { readBoundedBody, MAX_DOWNLOAD_BYTES } from '../../utils/boundedBodyReader.js';
 import OAuthIntegrationBase from './OAuthIntegrationBase.js';
-import { isUnavailableError } from './oauthRefreshError.js';
+import { isUnavailableError, refreshFailureFromResponse } from './oauthRefreshError.js';
 
 /**
  * Google Drive export MIME type mappings for Google Workspace documents
@@ -204,7 +204,7 @@ class GoogleDriveService extends OAuthIntegrationBase {
           error: errorData
         });
 
-        throw this._refreshFailureFromResponse(response, errorData);
+        throw refreshFailureFromResponse(response, errorData);
       }
 
       const tokens = await response.json();

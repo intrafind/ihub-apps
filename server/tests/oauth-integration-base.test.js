@@ -22,20 +22,21 @@ jest.unstable_mockModule('../services/CredentialService.js', () => ({ default: {
 // In-memory stand-in for TokenStorageService: one token set per test.
 const store = { tokens: null, expired: false, failure: null };
 const tokenStorage = {
-  getUserTokens: jest.fn(async () => {
-    if (store.failure) throw store.failure;
-    if (!store.tokens) throw new Error('User not authenticated with testdrive');
-    return { ...store.tokens };
+  getUserTokens: jest.fn(() => {
+    if (store.failure) return Promise.reject(store.failure);
+    if (!store.tokens) return Promise.reject(new Error('User not authenticated with testdrive'));
+    return Promise.resolve({ ...store.tokens });
   }),
-  areTokensExpired: jest.fn(async () => store.expired),
-  storeUserTokens: jest.fn(async (_userId, _service, tokens) => {
+  areTokensExpired: jest.fn(() => Promise.resolve(store.expired)),
+  storeUserTokens: jest.fn((_userId, _service, tokens) => {
     store.tokens = { ...tokens };
     store.expired = false;
+    return Promise.resolve();
   }),
-  deleteUserTokens: jest.fn(async () => {
+  deleteUserTokens: jest.fn(() => {
     const had = store.tokens !== null;
     store.tokens = null;
-    return had;
+    return Promise.resolve(had);
   })
 };
 jest.unstable_mockModule('../services/TokenStorageService.js', () => ({ default: tokenStorage }));
@@ -52,15 +53,17 @@ const PROVIDER = 'prov-1';
 class TestService extends OAuthIntegrationBase {
   constructor() {
     super({ serviceName: 'testdrive', displayName: 'Test Drive', componentName: 'TestDrive' });
-    this.refreshAccessToken = jest.fn(async (providerId, refreshToken) => ({
-      accessToken: 'refreshed-access',
-      refreshToken,
-      expiresIn: 3600,
-      providerId
-    }));
+    this.refreshAccessToken = jest.fn((providerId, refreshToken) =>
+      Promise.resolve({
+        accessToken: 'refreshed-access',
+        refreshToken,
+        expiresIn: 3600,
+        providerId
+      })
+    );
   }
 
-  makeApiRequest(endpoint, method = 'GET', data = null, userId, providerId, retryCount = 0) {
+  makeApiRequest(endpoint, method, data, userId, providerId, retryCount = 0) {
     return this._makeApiRequestWithRetry(
       BASE_URL,
       endpoint,
@@ -75,10 +78,9 @@ class TestService extends OAuthIntegrationBase {
 
 /** A provider that, like Office 365, always sends Content-Type. */
 class AlwaysJsonService extends TestService {
-  _buildApiRequestHeaders(tokens) {
+  _buildApiRequestHeaders(tokens, method, hasBody) {
     return {
-      Authorization: `Bearer ${tokens.accessToken}`,
-      Accept: 'application/json',
+      ...super._buildApiRequestHeaders(tokens, method, hasBody),
       'Content-Type': 'application/json'
     };
   }
@@ -91,10 +93,7 @@ function response(status, body, { headers = {}, statusText = '', jsonThrows = fa
     status,
     statusText,
     headers: { get: name => headers[name.toLowerCase()] ?? null },
-    json: async () => {
-      if (jsonThrows) throw new Error('not json');
-      return body;
-    }
+    json: () => (jsonThrows ? Promise.reject(new Error('not json')) : Promise.resolve(body))
   };
 }
 
@@ -140,7 +139,7 @@ function expectUnavailable(error) {
   expect(isUnavailableError(error)).toBe(true);
 }
 
-let service;
+let service = new TestService();
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -166,7 +165,7 @@ describe('_makeApiRequestWithRetry: building the request', () => {
   });
 
   it('returns null for a 204 response', async () => {
-    httpFetch.mockResolvedValueOnce(response(204, undefined));
+    httpFetch.mockResolvedValueOnce(response(204));
 
     expect(await service.makeApiRequest('/files/1', 'DELETE', null, USER, PROVIDER)).toBeNull();
   });

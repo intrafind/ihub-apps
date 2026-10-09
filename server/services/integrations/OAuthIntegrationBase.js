@@ -15,6 +15,16 @@ import {
 // A request answered with 401 is retried once, after refreshing the tokens.
 const MAX_API_RETRIES = 1;
 
+/** An absolute endpoint passes through; a relative one is prefixed with the service's base URL. */
+function resolveApiUrl(apiBaseUrl, endpoint) {
+  return endpoint.startsWith('http') ? endpoint : `${apiBaseUrl}${endpoint}`;
+}
+
+/** The parsed JSON body of a successful response, or null for 204 No Content. */
+async function readResponseBody(response) {
+  return response.status === 204 ? null : response.json();
+}
+
 /**
  * Shared OAuth 2.0 token-lifecycle implementation for cloud storage
  * integrations (Google Drive, Office 365, Nextcloud, ...).
@@ -183,34 +193,6 @@ class OAuthIntegrationBase {
       error.message.includes('not authenticated') ||
       error.message.includes('authentication expired') ||
       isUnavailableError(error)
-    );
-  }
-
-  /**
-   * Build the error for a non-OK response from the token endpoint during a
-   * refresh. `invalid_grant` means the provider rejected the refresh token;
-   * any other provider error code is kept on the error as it came, and a
-   * response without one (5xx, 429, an HTML error page) is a temporary failure.
-   * @param {Response} response - The failed token endpoint response
-   * @param {Object} errorData - Parsed JSON body, or {} when it had none
-   * @returns {OAuthRefreshError}
-   */
-  _refreshFailureFromResponse(response, errorData) {
-    const providerCode = typeof errorData?.error === 'string' ? errorData.error : undefined;
-    const code = providerCode || REFRESH_ERROR_CODES.TEMPORARY;
-
-    if (response.status !== 400) {
-      return new OAuthRefreshError(`Failed to refresh access token: ${response.statusText}`, code);
-    }
-    if (providerCode === REFRESH_ERROR_CODES.INVALID_GRANT) {
-      return new OAuthRefreshError(
-        'Refresh token expired or invalid - user needs to reconnect',
-        REFRESH_ERROR_CODES.INVALID_GRANT
-      );
-    }
-    return new OAuthRefreshError(
-      `Token refresh failed: ${errorData.error_description || errorData.error}`,
-      code
     );
   }
 
@@ -431,10 +413,43 @@ class OAuthIntegrationBase {
   }
 
   /**
+   * Build the error for a 404. A 404 is an expected outcome, so it is only
+   * debug-logged.
+   * @param {Object} errorData - Parsed error body, or {} when it had none
+   * @param {string} endpoint - Requested endpoint, for logging
+   * @returns {Error} The error to throw
+   */
+  _notFoundError(errorData, endpoint) {
+    const message = errorData.error?.message || 'Resource not found';
+    logger.debug(`${this.displayName} API returned 404 (not found)`, {
+      component: this.componentName,
+      endpoint,
+      errorMessage: message
+    });
+    return new Error(`${this.displayName} API error: ${message}`);
+  }
+
+  /**
+   * Build the error for any other failed response: the provider's message, or
+   * the status text when the body has none.
+   * @param {Response} response - The failed response
+   * @param {Object} errorData - Parsed error body, or {} when it had none
+   * @returns {Error} The error to throw
+   */
+  _requestFailedError(response, errorData) {
+    logger.error(`${this.displayName} API request failed`, {
+      component: this.componentName,
+      error: errorData
+    });
+    return new Error(
+      `${this.displayName} API error: ${errorData.error?.message || response.statusText}`
+    );
+  }
+
+  /**
    * Turn a failed (non-OK, non-retried) API response into the error to throw.
-   * 401 and 429 get dedicated messages; everything else carries the provider's
-   * message, or the status text when the body has none. A 404 is an expected
-   * outcome and is only debug-logged.
+   * 401 and 429 get dedicated messages; a 404 and everything else carry the
+   * provider's message.
    * @param {Response} response - The failed response
    * @param {string} endpoint - Requested endpoint, for logging
    * @returns {Promise<Error>} The error to throw
@@ -450,23 +465,9 @@ class OAuthIntegrationBase {
     }
 
     const errorData = await response.json().catch(() => ({}));
-    const providerMessage = errorData?.error?.message;
-
-    if (response.status === 404) {
-      const message = providerMessage || 'Resource not found';
-      logger.debug(`${this.displayName} API returned 404 (not found)`, {
-        component: this.componentName,
-        endpoint,
-        errorMessage: message
-      });
-      return new Error(`${this.displayName} API error: ${message}`);
-    }
-
-    logger.error(`${this.displayName} API request failed`, {
-      component: this.componentName,
-      error: errorData
-    });
-    return new Error(`${this.displayName} API error: ${providerMessage || response.statusText}`);
+    return response.status === 404
+      ? this._notFoundError(errorData, endpoint)
+      : this._requestFailedError(response, errorData);
   }
 
   /**
@@ -549,11 +550,11 @@ class OAuthIntegrationBase {
   ) {
     try {
       const tokens = await this.getUserTokens(userId, providerId);
-      const url = endpoint.startsWith('http') ? endpoint : `${apiBaseUrl}${endpoint}`;
+      const url = resolveApiUrl(apiBaseUrl, endpoint);
       const response = await httpFetch(url, this._buildApiFetchOptions(tokens, method, data));
 
       if (response.ok) {
-        return response.status === 204 ? null : await response.json();
+        return await readResponseBody(response);
       }
 
       if (response.status === 401 && retryCount < MAX_API_RETRIES) {

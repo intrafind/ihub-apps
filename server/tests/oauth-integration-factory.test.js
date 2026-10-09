@@ -363,9 +363,7 @@ for (const p of providers) {
     expired.body?.connected === false && /authentication expired/.test(expired.body.message)
   );
 
-  service.isUserAuthenticated = async () => {
-    throw createUnavailableError('Provider');
-  };
+  service.isUserAuthenticated = () => Promise.reject(createUnavailableError('Provider'));
   const unavailable = await status();
   check(
     'a temporary refresh failure keeps the account connected and does not say to reconnect',

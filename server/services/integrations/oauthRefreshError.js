@@ -37,6 +37,39 @@ export class OAuthRefreshError extends Error {
   }
 }
 
+/** A 400 from the token endpoint: `invalid_grant` is a rejected refresh token, anything else is not. */
+function badRequestRefreshFailure(errorData, code) {
+  if (code === REFRESH_ERROR_CODES.INVALID_GRANT) {
+    return new OAuthRefreshError(
+      'Refresh token expired or invalid - user needs to reconnect',
+      REFRESH_ERROR_CODES.INVALID_GRANT
+    );
+  }
+  return new OAuthRefreshError(
+    `Token refresh failed: ${errorData.error_description || errorData.error}`,
+    code
+  );
+}
+
+/**
+ * Build the error for a non-OK response from the token endpoint during a
+ * refresh. `invalid_grant` means the provider rejected the refresh token; any
+ * other provider error code is kept on the error as it came, and a response
+ * without one (5xx, 429, an HTML error page) is a temporary failure.
+ * @param {Response} response - The failed token endpoint response
+ * @param {Object} errorData - Parsed JSON body, or {} when it had none
+ * @returns {OAuthRefreshError}
+ */
+export function refreshFailureFromResponse(response, errorData) {
+  const providerCode = typeof errorData.error === 'string' ? errorData.error : undefined;
+  const code = providerCode || REFRESH_ERROR_CODES.TEMPORARY;
+
+  if (response.status === 400) {
+    return badRequestRefreshFailure(errorData, code);
+  }
+  return new OAuthRefreshError(`Failed to refresh access token: ${response.statusText}`, code);
+}
+
 /**
  * True when the refresh token is rejected or missing, so the user has to go
  * through the consent flow again. Every other failure, including an unknown
