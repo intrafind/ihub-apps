@@ -114,6 +114,52 @@ export function loadUsers(usersFilePath) {
   }
 }
 
+/** In-flight re-reads of a users file, by cache key, so a burst shares one. */
+const freshReads = new Map();
+
+/**
+ * Load users straight from the store, bypassing (and refreshing) the cached
+ * copy.
+ *
+ * Cluster workers each cache this file and hear about another worker's write
+ * over the config sync bus, which takes a few milliseconds. An external user
+ * is persisted by the worker that completes their sign-in, and their very next
+ * request — the redirect back into the app — is routinely served by another
+ * worker inside that window. A lookup that is about to conclude "this user
+ * does not exist" calls this once first.
+ *
+ * Unlike {@link loadUsers} this throws when the store cannot be read, rather
+ * than handing back an empty structure: a caller that is about to treat a miss
+ * as a deleted account has to be able to tell "no such user" from "could not
+ * look".
+ *
+ * @param {string} usersFilePath - Path to users.json file
+ * @returns {Promise<Object>} Users configuration
+ * @throws {Error} When the users file exists but cannot be read or parsed
+ */
+export async function loadUsersFresh(usersFilePath) {
+  const { fullPath, cacheKey, relPath } = locateUsersFile(usersFilePath);
+  let pending = freshReads.get(cacheKey);
+  if (!pending) {
+    pending = (async () => {
+      let data = null;
+      if (relPath) {
+        data = await configStore.readJsonStrict(relPath);
+      } else if (fs.existsSync(fullPath)) {
+        // A users file outside contents/ has no place in the store (see
+        // locateConfigFile); read it directly, as loadUsers does.
+        data = JSON.parse(fs.readFileSync(fullPath, 'utf8'));
+      }
+      if (data && typeof data === 'object' && data.users && typeof data.users === 'object') {
+        configCache.setCacheEntry(cacheKey, data);
+      }
+    })().finally(() => freshReads.delete(cacheKey));
+    freshReads.set(cacheKey, pending);
+  }
+  await pending;
+  return loadUsers(usersFilePath);
+}
+
 /**
  * Save users to the local users file
  * @param {Object} usersConfig - Users configuration object

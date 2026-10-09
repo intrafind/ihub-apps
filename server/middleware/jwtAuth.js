@@ -7,7 +7,7 @@ import { buildPolicyCimdClient } from '../utils/oauthClientResolver.js';
 import { isClientIdUrl } from '../utils/clientIdMetadata.js';
 import { isPersonalKeyExpired, isPersonalKeysEnabled } from '../utils/personalApiKeyManager.js';
 import { isCurrentKeyGeneration } from '../utils/oauthTokenService.js';
-import { loadUsers, isUserActive, equalsIgnoreCase } from '../utils/userManager.js';
+import { loadUsers, loadUsersFresh, isUserActive, equalsIgnoreCase } from '../utils/userManager.js';
 import { verifyJwt, decodeJwt } from '../utils/tokenService.js';
 import { recordAuthEvent } from '../telemetry/metrics.js';
 import configCache from '../configCache.js';
@@ -16,10 +16,77 @@ import { getClearAuthCookieOptions } from '../utils/cookieSettings.js';
 import { localUsersFile, oauthClientsFile } from '../utils/contentsPath.js';
 
 /**
+ * Find the users.json record a token's identity points at.
+ *
+ * `find` receives a users configuration and returns the record or a falsy value.
+ * It runs against this worker's cached copy first; only a miss pays for a
+ * re-read from the store, because another cluster worker may have persisted the
+ * user a moment ago (see {@link loadUsersFresh}). A record that is still missing
+ * after that is genuinely gone.
+ *
+ * `loadUsers()` never throws: an unreadable file comes back as an empty
+ * structure carrying `metadata.error`. Read as "no users", that would sign out
+ * every user of the instance, so it is raised here and answered with 503 by the
+ * caller's existing catch.
+ *
+ * @param {string} usersFilePath - Path to users.json
+ * @param {(usersConfig: Object) => (Object|null|undefined)} find
+ * @returns {Promise<Object|null|undefined>} The user record, if there is one
+ * @throws {Error} When the users configuration cannot be read
+ */
+async function findTokenUserRecord(usersFilePath, find) {
+  let usersConfig = loadUsers(usersFilePath);
+  let userRecord = find(usersConfig);
+
+  if (!userRecord && !usersConfig.metadata?.error) {
+    usersConfig = await loadUsersFresh(usersFilePath);
+    userRecord = find(usersConfig);
+  }
+
+  if (!userRecord && usersConfig.metadata?.error) {
+    throw new Error(`Users configuration unavailable: ${usersConfig.metadata.error}`);
+  }
+
+  return userRecord;
+}
+
+/**
+ * Answer a request whose token is validly signed but whose user is gone.
+ *
+ * The 401 revokes the session, but the `authToken` cookie is httpOnly, so only
+ * this response can drop it. Left in place it fails every later request,
+ * including the ones that would let the person sign in again, until it
+ * expires. The auth endpoints (status, logins, logout) therefore carry on as
+ * if there were no token at all: that is exactly what a visitor without a
+ * cookie gets there, so nothing is granted that anonymous access does not
+ * already allow, and the client can show its sign-in.
+ *
+ * @param {Object} req - Express request
+ * @param {Object} res - Express response
+ * @param {Function} next - Express next function
+ * @param {string} source - Where the token came from, for the log line
+ * @param {string} userId - The subject the token carries
+ */
+function rejectDeletedUser(req, res, next, source, userId) {
+  logger.warn(`JWT Auth token rejected: ${source} user not found`, {
+    component: 'JwtAuth',
+    userId
+  });
+  res.clearCookie('authToken', getClearAuthCookieOptions(req));
+  if (req.path.startsWith('/api/auth/')) {
+    return next();
+  }
+  return res.status(401).json({
+    error: 'invalid_token',
+    error_description: 'User account no longer exists'
+  });
+}
+
+/**
  * JWT authentication middleware
  * Validates JWT tokens issued by our system regardless of auth mode (local, oidc, etc.)
  */
-export default function jwtAuthMiddleware(req, res, next) {
+export default async function jwtAuthMiddleware(req, res, next) {
   if (req.user && req.user.id !== 'anonymous') {
     return next();
   }
@@ -361,11 +428,21 @@ export default function jwtAuthMiddleware(req, res, next) {
       if (oauthConfig.enabled?.authz) {
         try {
           const usersFilePath = localUsersFile(platform.localAuth);
-          const usersConfig = loadUsers(usersFilePath);
           const userId = decoded.sub || decoded.username || decoded.id;
-          const userRecord = usersConfig.users?.[userId];
+          // The subject is the user's key in users.json: the token was minted
+          // from a session of a local or SSO user, every one of whom is
+          // persisted at sign-in. A missing record means the user was deleted
+          // since, and a refresh token must not keep their access alive.
+          const userRecord = await findTokenUserRecord(
+            usersFilePath,
+            usersConfig => usersConfig.users?.[userId]
+          );
 
-          if (userRecord && !isUserActive(userRecord)) {
+          if (!userRecord) {
+            return rejectDeletedUser(req, res, next, 'OAuth', userId);
+          }
+
+          if (!isUserActive(userRecord)) {
             logger.warn('OAuth token rejected: user account disabled', {
               component: 'JwtAuth',
               userId
@@ -497,21 +574,16 @@ export default function jwtAuthMiddleware(req, res, next) {
       if (localAuthConfig.enabled) {
         try {
           const usersFilePath = localUsersFile(localAuthConfig);
-          const usersConfig = loadUsers(usersFilePath);
           const userId = decoded.sub || decoded.username || decoded.id;
 
           // Find the user in the database
-          const userRecord = usersConfig.users?.[userId];
+          const userRecord = await findTokenUserRecord(
+            usersFilePath,
+            usersConfig => usersConfig.users?.[userId]
+          );
 
           if (!userRecord) {
-            logger.warn('JWT Auth token rejected: user not found', {
-              component: 'JwtAuth',
-              userId
-            });
-            return res.status(401).json({
-              error: 'invalid_token',
-              error_description: 'User account no longer exists'
-            });
+            return rejectDeletedUser(req, res, next, 'local', userId);
           }
 
           if (!isUserActive(userRecord)) {
@@ -566,28 +638,24 @@ export default function jwtAuthMiddleware(req, res, next) {
       // OIDC users are persisted to users.json via validateAndPersistExternalUser
       try {
         const usersFilePath = localUsersFile(platform.localAuth);
-        const usersConfig = loadUsers(usersFilePath);
 
         // OIDC users can be identified by their subject ID or email
         const userId = decoded.sub || decoded.username;
-        let userRecord = usersConfig.users?.[userId];
+        const userRecord = await findTokenUserRecord(usersFilePath, usersConfig => {
+          const byId = usersConfig.users?.[userId];
+          if (byId) return byId;
 
-        // If not found by ID, try to find by email (OIDC users may have different IDs)
-        if (!userRecord && decoded.email) {
-          userRecord = Object.values(usersConfig.users || {}).find(
+          // If not found by ID, try to find by email (OIDC users may have different IDs)
+          if (!decoded.email) return undefined;
+          return Object.values(usersConfig.users || {}).find(
             u => equalsIgnoreCase(u.email, decoded.email) && u.authMethods?.includes('oidc')
           );
-        }
+        });
 
+        // The user was persisted before this token was issued, so a missing
+        // record means the account was deleted since.
         if (!userRecord) {
-          logger.warn('JWT Auth token rejected: OIDC user not found', {
-            component: 'JwtAuth',
-            userId
-          });
-          return res.status(401).json({
-            error: 'invalid_token',
-            error_description: 'User account no longer exists'
-          });
+          return rejectDeletedUser(req, res, next, 'OIDC', userId);
         }
 
         if (!isUserActive(userRecord)) {
@@ -626,36 +694,34 @@ export default function jwtAuthMiddleware(req, res, next) {
       // LDAP users may be persisted to users.json
       try {
         const usersFilePath = localUsersFile(platform.localAuth);
-        const usersConfig = loadUsers(usersFilePath);
 
         // users.json is keyed by the persisted UUID (decoded.sub). Fall back to
         // username for legacy tokens minted before sub was the canonical id.
         const userId = decoded.sub || decoded.username;
-        let userRecord = usersConfig.users?.[userId];
+        const userRecord = await findTokenUserRecord(usersFilePath, usersConfig => {
+          const byId = usersConfig.users?.[userId];
+          if (byId) return byId;
 
-        if (!userRecord && decoded.email) {
-          userRecord = Object.values(usersConfig.users || {}).find(
-            u => equalsIgnoreCase(u.email, decoded.email) && u.authMethods?.includes('ldap')
-          );
-        }
+          const users = Object.values(usersConfig.users || {});
+          const byEmail =
+            decoded.email &&
+            users.find(
+              u => equalsIgnoreCase(u.email, decoded.email) && u.authMethods?.includes('ldap')
+            );
+          if (byEmail) return byEmail;
 
-        if (!userRecord && decoded.username) {
-          userRecord = Object.values(usersConfig.users || {}).find(
+          if (!decoded.username) return undefined;
+          return users.find(
             u =>
               equalsIgnoreCase(u.ldapData?.username, decoded.username) &&
               u.authMethods?.includes('ldap')
           );
-        }
+        });
 
+        // The user was persisted before this token was issued, so a missing
+        // record means the account was deleted since.
         if (!userRecord) {
-          logger.warn('JWT Auth token rejected: LDAP user not found', {
-            component: 'JwtAuth',
-            userId
-          });
-          return res.status(401).json({
-            error: 'invalid_token',
-            error_description: 'User account no longer exists'
-          });
+          return rejectDeletedUser(req, res, next, 'LDAP', userId);
         }
 
         if (!isUserActive(userRecord)) {
@@ -698,27 +764,23 @@ export default function jwtAuthMiddleware(req, res, next) {
       // Teams users are persisted to users.json via validateAndPersistExternalUser
       try {
         const usersFilePath = localUsersFile(platform.localAuth);
-        const usersConfig = loadUsers(usersFilePath);
 
         const userId = decoded.id || decoded.sub;
-        let userRecord = usersConfig.users?.[userId];
+        const userRecord = await findTokenUserRecord(usersFilePath, usersConfig => {
+          const byId = usersConfig.users?.[userId];
+          if (byId) return byId;
 
-        // If not found by ID, try to find by email
-        if (!userRecord && decoded.email) {
-          userRecord = Object.values(usersConfig.users || {}).find(
+          // If not found by ID, try to find by email
+          if (!decoded.email) return undefined;
+          return Object.values(usersConfig.users || {}).find(
             u => equalsIgnoreCase(u.email, decoded.email) && u.authMethods?.includes('teams')
           );
-        }
+        });
 
+        // The user was persisted before this token was issued, so a missing
+        // record means the account was deleted since.
         if (!userRecord) {
-          logger.warn('JWT Auth token rejected: Teams user not found', {
-            component: 'JwtAuth',
-            userId
-          });
-          return res.status(401).json({
-            error: 'invalid_token',
-            error_description: 'User account no longer exists'
-          });
+          return rejectDeletedUser(req, res, next, 'Teams', userId);
         }
 
         if (!isUserActive(userRecord)) {
@@ -756,31 +818,26 @@ export default function jwtAuthMiddleware(req, res, next) {
       // NTLM users are persisted to users.json via validateAndPersistExternalUser
       try {
         const usersFilePath = localUsersFile(platform.localAuth);
-        const usersConfig = loadUsers(usersFilePath);
 
         const userId = decoded.id || decoded.sub;
-        let userRecord = usersConfig.users?.[userId];
+        const userRecord = await findTokenUserRecord(
+          usersFilePath,
+          // By ID, then by ntlmData.subject or email
+          usersConfig =>
+            usersConfig.users?.[userId] ||
+            Object.values(usersConfig.users || {}).find(
+              u =>
+                (u.ntlmData?.subject === userId && u.authMethods?.includes('ntlm')) ||
+                (decoded.email &&
+                  equalsIgnoreCase(u.email, decoded.email) &&
+                  u.authMethods?.includes('ntlm'))
+            )
+        );
 
-        // If not found by ID, try to find by ntlmData.subject or email
+        // The user was persisted before this token was issued, so a missing
+        // record means the account was deleted since.
         if (!userRecord) {
-          userRecord = Object.values(usersConfig.users || {}).find(
-            u =>
-              (u.ntlmData?.subject === userId && u.authMethods?.includes('ntlm')) ||
-              (decoded.email &&
-                equalsIgnoreCase(u.email, decoded.email) &&
-                u.authMethods?.includes('ntlm'))
-          );
-        }
-
-        if (!userRecord) {
-          logger.warn('JWT Auth token rejected: NTLM user not found', {
-            component: 'JwtAuth',
-            userId
-          });
-          return res.status(401).json({
-            error: 'invalid_token',
-            error_description: 'User account no longer exists'
-          });
+          return rejectDeletedUser(req, res, next, 'NTLM', userId);
         }
 
         if (!isUserActive(userRecord)) {

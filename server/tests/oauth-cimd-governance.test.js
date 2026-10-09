@@ -26,7 +26,7 @@ import express from 'express';
 import rateLimit from 'express-rate-limit';
 import os from 'os';
 import path from 'path';
-import { mkdtempSync } from 'fs';
+import { mkdtempSync, writeFileSync } from 'fs';
 
 const testRateLimiter = rateLimit({ windowMs: 60 * 1000, limit: 10000 });
 
@@ -43,6 +43,10 @@ const state = {
 // then writes it directly instead of through the configuration store, so the
 // store does not have to be stood up for a test about policy records.
 const CLIENTS_FILE = path.join(state.rootDir, 'oauth-clients.json');
+
+// Likewise the users file. `jwtAuth` only honours a delegated token while the
+// user it was minted for still exists, so the REST suite below needs one.
+const USERS_FILE = path.join(state.rootDir, 'users.json');
 
 jest.unstable_mockModule('../pathUtils.js', () => ({
   getRootDir: () => state.rootDir
@@ -201,7 +205,8 @@ function setPlatform({ hosts = ['claude.ai'], blocked = [], approvalMode = 'auto
       }
     },
     mcpServer: { enabled: true },
-    auth: { mode: 'local' }
+    auth: { mode: 'local' },
+    localAuth: { usersFile: USERS_FILE }
   };
 }
 
@@ -773,6 +778,13 @@ describe('the REST surface (jwtAuth)', () => {
 
   beforeEach(async () => {
     setPlatform({ allowedApps: ['chat'] });
+    writeFileSync(
+      USERS_FILE,
+      JSON.stringify({
+        users: { alice: { id: 'alice', username: 'alice', active: true, authMethods: ['local'] } },
+        metadata: { version: '2.0.0' }
+      })
+    );
     state.jwt = {
       sub: 'alice',
       username: 'alice',
