@@ -606,51 +606,13 @@ class TokenStorageService {
    * @throws {Error} When a directory cannot be listed or a file cannot be removed
    */
   async deleteAllTokensForStorageIds(storageIds) {
-    const ids = [...new Set(storageIds)].filter(id => {
-      try {
-        this._assertSafeFilenameComponent(id, 'userId');
-        return true;
-      } catch {
-        return false;
-      }
-    });
+    const ids = [...new Set(storageIds)].filter(id => this._isSafeFilenameComponent(id));
     if (ids.length === 0) return 0;
 
-    let services;
-    try {
-      services = await fs.readdir(this.storageBasePath);
-    } catch (error) {
-      if (error.code === 'ENOENT') return 0;
-      throw error;
-    }
-
+    const services = await this._listDirectory(this.storageBasePath);
     let removed = 0;
-    for (const serviceName of services) {
-      try {
-        this._assertSafeFilenameComponent(serviceName, 'serviceName');
-      } catch {
-        continue;
-      }
-      const serviceDir = path.join(this.storageBasePath, serviceName);
-      let entries;
-      try {
-        entries = await fs.readdir(serviceDir);
-      } catch (error) {
-        if (error.code === 'ENOTDIR' || error.code === 'ENOENT') continue;
-        throw error;
-      }
-
-      for (const entry of entries) {
-        if (!entry.endsWith('.json')) continue;
-        const name = entry.slice(0, -'.json'.length);
-        if (!ids.some(id => name === id || name.startsWith(`${id}__`))) continue;
-        try {
-          await fs.unlink(path.join(serviceDir, entry));
-          removed += 1;
-        } catch (error) {
-          if (error.code !== 'ENOENT') throw error;
-        }
-      }
+    for (const serviceName of services.filter(name => this._isSafeFilenameComponent(name))) {
+      removed += await this._deleteTokenFilesIn(path.join(this.storageBasePath, serviceName), ids);
     }
 
     if (removed > 0) {
@@ -658,6 +620,43 @@ class TokenStorageService {
         component: 'TokenStorage',
         count: removed
       });
+    }
+    return removed;
+  }
+
+  /** Whether a name passes the file-name allowlist, without throwing. */
+  _isSafeFilenameComponent(value) {
+    try {
+      this._assertSafeFilenameComponent(value, 'userId');
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /** The names in a directory; none when it is missing or is not a directory. */
+  async _listDirectory(directory) {
+    try {
+      return await fs.readdir(directory);
+    } catch (error) {
+      if (error.code === 'ENOENT' || error.code === 'ENOTDIR') return [];
+      throw error;
+    }
+  }
+
+  /** Remove the token files of `ids` from one service directory. */
+  async _deleteTokenFilesIn(serviceDir, ids) {
+    let removed = 0;
+    for (const entry of await this._listDirectory(serviceDir)) {
+      if (!entry.endsWith('.json')) continue;
+      const name = entry.slice(0, -'.json'.length);
+      if (!ids.some(id => name === id || name.startsWith(`${id}__`))) continue;
+      try {
+        await fs.unlink(path.join(serviceDir, entry));
+        removed += 1;
+      } catch (error) {
+        if (error.code !== 'ENOENT') throw error;
+      }
     }
     return removed;
   }

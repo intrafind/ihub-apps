@@ -42,12 +42,12 @@ jest.unstable_mockModule('../configCache.js', () => ({
   default: {
     getPlatform: () => state.platform,
     get: () => null,
-    setCacheEntry: () => {}
+    setCacheEntry: () => undefined
   }
 }));
 
 jest.unstable_mockModule('../configSync.js', () => ({
-  announceConfigChange: () => {}
+  announceConfigChange: () => undefined
 }));
 
 const { grantConsent, hasConsent, listConsents } = await import('../utils/consentStore.js');
@@ -220,19 +220,22 @@ describe('chats of an owner', () => {
     return {
       live,
       isAvailable: () => true,
-      listChats: jest.fn(async (_ownerId, { limit, cursor }) => {
+      listChats: jest.fn((_ownerId, { limit, cursor }) => {
         const all = [...live.values()].slice(0, visible);
         const start = cursor ? Number(cursor) : 0;
         const items = all.slice(start, start + limit);
-        return { items, nextCursor: start + limit < all.length ? String(start + limit) : null };
+        const nextCursor = start + limit < all.length ? String(start + limit) : null;
+        return Promise.resolve({ items, nextCursor });
       }),
-      deleteChat: jest.fn(async id => ({ deleted: live.delete(id), runIds: [`run-of-${id}`] }))
+      deleteChat: jest.fn(id =>
+        Promise.resolve({ deleted: live.delete(id), runIds: [`run-of-${id}`] })
+      )
     };
   };
   const deps = () => ({
-    deleteRun: jest.fn(async () => {}),
-    removeWorkflowState: jest.fn(async () => {}),
-    deleteShares: jest.fn(async () => {}),
+    deleteRun: jest.fn(() => Promise.resolve()),
+    removeWorkflowState: jest.fn(() => Promise.resolve()),
+    deleteShares: jest.fn(() => Promise.resolve()),
     component: 'Test'
   });
   const chat = (id, extra = {}) => ({ id, ...extra });
@@ -260,7 +263,7 @@ describe('chats of an owner', () => {
 
   it('stop at a chat that will not go instead of looping', async () => {
     const repository = fakeRepository([chat('stuck')]);
-    repository.deleteChat = jest.fn(async () => ({ deleted: false, runIds: [] }));
+    repository.deleteChat = jest.fn(() => Promise.resolve({ deleted: false, runIds: [] }));
 
     expect(await deleteChatsOfOwner(repository, 'alice', deps())).toBe(0);
     expect(repository.listChats).toHaveBeenCalledTimes(1);
@@ -274,7 +277,7 @@ describe('chats of an owner', () => {
       order.push(`delete ${id}`);
       return original(id);
     });
-    const stopChat = jest.fn(async c => order.push(`stop ${c.id}`));
+    const stopChat = jest.fn(c => Promise.resolve(order.push(`stop ${c.id}`)));
 
     await deleteChatsOfOwner(repository, 'alice', { ...deps(), stopChat });
 
@@ -328,8 +331,8 @@ describe('the cleanup', () => {
   });
 
   it('runs every step with the user and the platform, and reports what each removed', async () => {
-    const first = step('first', async () => ({ removed: 2 }));
-    const second = step('second', async () => ({ removed: 0 }));
+    const first = step('first', () => Promise.resolve({ removed: 2 }));
+    const second = step('second', () => Promise.resolve({ removed: 0 }));
 
     const outcome = await cleanUpDeletedUser({
       userId: 'alice',
@@ -346,10 +349,8 @@ describe('the cleanup', () => {
   });
 
   it('carries on after a step fails, and names it', async () => {
-    const broken = step('broken', async () => {
-      throw new Error('store unreadable');
-    });
-    const after = step('after', async () => ({ removed: 1 }));
+    const broken = step('broken', () => Promise.reject(new Error('store unreadable')));
+    const after = step('after', () => Promise.resolve({ removed: 1 }));
 
     const outcome = await cleanUpDeletedUser({
       userId: 'alice',
@@ -390,7 +391,7 @@ describe('the cleanup', () => {
     startUserCleanup({
       userId: 'alice',
       platform: {},
-      steps: [step('ok', async () => ({}))],
+      steps: [step('ok', () => Promise.resolve({}))],
       onDone
     });
 

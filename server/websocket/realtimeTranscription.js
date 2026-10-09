@@ -286,27 +286,37 @@ export function extractToken(req) {
  *   503 rather than treating the user as deleted
  */
 export async function authenticateUpgrade(req, platform = configCache.getPlatform() || {}) {
-  const token = extractToken(req);
-
-  if (token) {
-    const decoded = verifyJwt(token);
-    if (decoded) {
-      const userState = await tokenUserState(platform, decoded);
-      if (userState === 'unavailable') throw new Error('Users configuration unavailable');
-      if (userState !== 'active') return null;
-      return {
-        id: decoded.sub || decoded.username || decoded.id || 'user',
-        name: decoded.name || decoded.username || 'user',
-        groups: Array.isArray(decoded.groups) ? decoded.groups : []
-      };
-    }
-  }
+  const decoded = verifyTokenOf(req);
+  if (decoded) return sessionUserOf(decoded, platform);
 
   // No valid token — allow only if anonymous access is enabled platform-wide.
   if (isAnonymousAccessAllowed(platform)) {
     return { id: 'anonymous', name: 'anonymous', groups: getDefaultAnonymousGroups(platform) };
   }
   return null;
+}
+
+/** The verified claims of the request's session token, if it carries a valid one. */
+function verifyTokenOf(req) {
+  const token = extractToken(req);
+  return token ? verifyJwt(token) : null;
+}
+
+/**
+ * The user a verified session token stands for, unless that user was deleted or
+ * disabled since it was minted.
+ *
+ * @throws {Error} When the users cannot be read to check
+ */
+async function sessionUserOf(decoded, platform) {
+  const userState = await tokenUserState(platform, decoded);
+  if (userState === 'unavailable') throw new Error('Users configuration unavailable');
+  if (userState !== 'active') return null;
+  return {
+    id: decoded.sub || decoded.username || decoded.id || 'user',
+    name: decoded.name || decoded.username || 'user',
+    groups: Array.isArray(decoded.groups) ? decoded.groups : []
+  };
 }
 
 /**

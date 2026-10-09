@@ -94,6 +94,24 @@ export async function deleteChatWithCascade(
 const MAX_OWNER_PASSES = 20;
 
 /**
+ * Every chat one listing can show for an owner, page by page.
+ *
+ * @param {import('./ChatRepository.js').ChatRepository} repository - Chat repository.
+ * @param {string} ownerId - Owning principal id.
+ * @returns {Promise<Object[]>}
+ */
+async function listOwnerChats(repository, ownerId) {
+  const chats = [];
+  let cursor = null;
+  do {
+    const page = await repository.listChats(ownerId, { limit: 100, cursor });
+    chats.push(...page.items);
+    cursor = page.nextCursor;
+  } while (cursor);
+  return chats;
+}
+
+/**
  * Delete every chat an owner has, through the same cascade as a single delete.
  *
  * What deleting a user needs. A listing shows an owner's chats only up to a
@@ -112,14 +130,7 @@ export async function deleteChatsOfOwner(repository, ownerId, { stopChat, ...dep
 
   let removed = 0;
   for (let pass = 0; pass < MAX_OWNER_PASSES; pass += 1) {
-    const chats = [];
-    let cursor = null;
-    do {
-      const page = await repository.listChats(ownerId, { limit: 100, cursor });
-      chats.push(...page.items);
-      cursor = page.nextCursor;
-    } while (cursor);
-    if (chats.length === 0) break;
+    const chats = await listOwnerChats(repository, ownerId);
 
     let removedThisPass = 0;
     for (const chat of chats) {

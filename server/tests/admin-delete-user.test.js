@@ -26,9 +26,10 @@ const state = {
 
 jest.unstable_mockModule('../services/config/ConfigStore.js', () => ({
   default: {
-    readJson: async () => structuredClone(state.users),
-    writeJson: async (_path, data) => {
+    readJson: () => Promise.resolve(structuredClone(state.users)),
+    writeJson: (_path, data) => {
       state.written = structuredClone(data);
+      return Promise.resolve();
     }
   }
 }));
@@ -37,8 +38,8 @@ jest.unstable_mockModule('../configCache.js', () => ({
   default: {
     getPlatform: () => ({ marker: 'platform' }),
     get: () => null,
-    refreshCacheEntry: async () => {},
-    setCacheEntry: () => {}
+    refreshCacheEntry: () => Promise.resolve(),
+    setCacheEntry: () => undefined
   }
 }));
 

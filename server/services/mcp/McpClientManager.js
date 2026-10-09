@@ -361,7 +361,7 @@ class McpClientManager {
     );
     for (const [key, entry] of doomed) {
       this.userConnections.delete(key);
-      await entry.conn.disconnect().catch(() => {});
+      await entry.conn.disconnect().catch(() => undefined);
     }
     return doomed.length;
   }

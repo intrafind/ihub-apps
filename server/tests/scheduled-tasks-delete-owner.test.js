@@ -12,7 +12,7 @@ import {
   taskInput,
   teardownHarness
 } from './helpers/scheduledTaskHarness.js';
-import * as tasks from '../services/scheduler/tasks/taskService.js';
+import { createTask, deleteTasksOfOwner } from '../services/scheduler/tasks/taskService.js';
 import { getScheduledTaskRepository } from '../services/scheduler/tasks/ScheduledTaskRepository.js';
 import { getTaskMemoryRepository } from '../services/scheduler/tasks/TaskMemoryRepository.js';
 import { writeTaskMemory } from '../services/scheduler/tasks/taskMemory.js';
@@ -25,14 +25,14 @@ const bob = () => principal({ id: 'user-bob', name: 'Bob' });
 
 describe('deleteTasksOfOwner', () => {
   it('removes every task of the owner with its notes, and no one else’s', async () => {
-    const first = await tasks.createTask(ada(), taskInput({ name: 'first', memory: true }));
-    const second = await tasks.createTask(ada(), taskInput({ name: 'second' }));
-    const others = await tasks.createTask(bob(), taskInput({ name: 'bob’s' }));
+    const first = await createTask(ada(), taskInput({ name: 'first', memory: true }));
+    const second = await createTask(ada(), taskInput({ name: 'second' }));
+    const others = await createTask(bob(), taskInput({ name: 'bob’s' }));
     await writeTaskMemory(await getScheduledTaskRepository().getTask(first.id), {
       content: 'what the first one knows'
     });
 
-    const result = await tasks.deleteTasksOfOwner(['user-ada']);
+    const result = await deleteTasksOfOwner(['user-ada']);
 
     assert.equal(result.tasks, 2);
     const repository = getScheduledTaskRepository();
@@ -44,13 +44,13 @@ describe('deleteTasksOfOwner', () => {
   });
 
   it('removes the tasks filed under any of the ids it is given', async () => {
-    const asId = await tasks.createTask(ada(), taskInput({ name: 'under the id' }));
-    const asPseudonym = await tasks.createTask(
+    const asId = await createTask(ada(), taskInput({ name: 'under the id' }));
+    const asPseudonym = await createTask(
       principal({ id: 'usr_0123456789abcdef', name: 'Ada' }),
       taskInput({ name: 'under the pseudonym' })
     );
 
-    const result = await tasks.deleteTasksOfOwner(['user-ada', 'usr_0123456789abcdef']);
+    const result = await deleteTasksOfOwner(['user-ada', 'usr_0123456789abcdef']);
 
     assert.equal(result.tasks, 2);
     assert.equal(await getScheduledTaskRepository().getTask(asId.id), null);
@@ -58,7 +58,7 @@ describe('deleteTasksOfOwner', () => {
   });
 
   it('does nothing for an owner without tasks', async () => {
-    assert.deepEqual(await tasks.deleteTasksOfOwner(['user-nobody']), {
+    assert.deepEqual(await deleteTasksOfOwner(['user-nobody']), {
       tasks: 0,
       chatsDeleted: 0
     });
