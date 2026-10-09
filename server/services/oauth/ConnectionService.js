@@ -23,8 +23,12 @@
  *
  * @module services/oauth/ConnectionService
  */
-import { listConsents, revokeConsent } from '../../utils/consentStore.js';
-import { listRefreshTokenUserIds, revokeRefreshTokensFor } from '../../utils/refreshTokenStore.js';
+import { listConsents, revokeConsent, revokeConsentsForUser } from '../../utils/consentStore.js';
+import {
+  listRefreshTokenUserIds,
+  revokeRefreshTokensFor,
+  revokeRefreshTokensForUser
+} from '../../utils/refreshTokenStore.js';
 import { loadOAuthClients } from '../../utils/oauthClientManager.js';
 import { oauthClientsFile } from '../../utils/contentsPath.js';
 import configCache from '../../configCache.js';
@@ -260,4 +264,29 @@ export async function revokeConnectionsForClient(clientId) {
   });
 
   return { connectionsRevoked, refreshTokensRevoked };
+}
+
+/**
+ * Disconnect one user from every client, in one action: what deleting the user
+ * needs. Both halves, as for {@link revokeConnection} — the consents, so a later
+ * account cannot inherit them, and the refresh tokens, so no client keeps
+ * minting access tokens for a user who no longer exists.
+ *
+ * @param {string} userId - User subject identifier
+ * @returns {Promise<{consentsRevoked: number, refreshTokensRevoked: number}>}
+ */
+export async function revokeConnectionsForUser(userId) {
+  if (!userId) return { consentsRevoked: 0, refreshTokensRevoked: 0 };
+
+  const consentsRevoked = await revokeConsentsForUser(userId);
+  const refreshTokensRevoked = await revokeRefreshTokensForUser(userId);
+
+  logger.info('[OAuth] All connections revoked for user', {
+    component: 'ConnectionService',
+    userId,
+    consentsRevoked,
+    refreshTokensRevoked
+  });
+
+  return { consentsRevoked, refreshTokensRevoked };
 }

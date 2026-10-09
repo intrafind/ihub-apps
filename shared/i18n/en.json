@@ -2238,7 +2238,8 @@
       "groupsEmpty": "No groups assigned yet",
       "groupsHelp": "Search and select defined groups, or type a name and press Enter to add an external group mapping. Users inherit permissions from all assigned groups.",
       "groupMembership": "Group Membership",
-      "groupMembershipDescription": "Assign this user to groups to control their permissions and access levels"
+      "groupMembershipDescription": "Assign this user to groups to control their permissions and access levels",
+      "deleteConfirm": "Delete this user? Their access ends immediately, and their API keys, connections, stored credentials, scheduled tasks, chats, prompts, skills and short links are removed. This cannot be undone. To stop someone from signing in and keep what they made, disable the account instead."
     },
     "logging": {
       "loadError": "Failed to load logging configuration",

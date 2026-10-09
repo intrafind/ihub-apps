@@ -90,4 +90,75 @@ export async function deleteChatWithCascade(
   return { deleted, runIds };
 }
 
+/** Most passes over an owner's chats; each pass removes what one listing can show. */
+const MAX_OWNER_PASSES = 20;
+
+/**
+ * Every chat one listing can show for an owner, page by page.
+ *
+ * @param {import('./ChatRepository.js').ChatRepository} repository - Chat repository.
+ * @param {string} ownerId - Owning principal id.
+ * @returns {Promise<Object[]>}
+ */
+async function listOwnerChats(repository, ownerId) {
+  const chats = [];
+  let cursor = null;
+  do {
+    const page = await repository.listChats(ownerId, { limit: 100, cursor });
+    chats.push(...page.items);
+    cursor = page.nextCursor;
+  } while (cursor);
+  return chats;
+}
+
+/**
+ * Delete every chat an owner has, through the same cascade as a single delete.
+ *
+ * What deleting a user needs. A listing shows an owner's chats only up to a
+ * bound, so the owner is listed again until nothing is left; a pass that
+ * removes nothing ends it, so a chat that refuses to go cannot loop forever.
+ *
+ * @param {import('./ChatRepository.js').ChatRepository} repository - Chat repository.
+ * @param {string} ownerId - Owning principal id.
+ * @param {Object} deps - As {@link deleteChatWithCascade}, plus:
+ * @param {(chat: Object) => Promise<unknown>} [deps.stopChat] - Stops a chat that is
+ *   still generating, so its next write cannot re-create what the cascade removed.
+ * @returns {Promise<number>} How many chats were removed
+ */
+export async function deleteChatsOfOwner(repository, ownerId, { stopChat, ...deps }) {
+  if (!repository.isAvailable() || !ownerId) return 0;
+
+  let removed = 0;
+  for (let pass = 0; pass < MAX_OWNER_PASSES; pass += 1) {
+    const removedThisPass = await removeListedChats(repository, ownerId, stopChat, deps);
+    removed += removedThisPass;
+    if (removedThisPass === 0) break;
+  }
+  return removed;
+}
+
+/**
+ * Remove every chat one listing shows for an owner.
+ *
+ * @returns {Promise<number>} How many chats were removed
+ */
+async function removeListedChats(repository, ownerId, stopChat, deps) {
+  let removed = 0;
+  for (const chat of await listOwnerChats(repository, ownerId)) {
+    if (await removeOwnedChat(repository, chat, stopChat, deps)) removed += 1;
+  }
+  return removed;
+}
+
+/**
+ * Remove one chat of an owner, stopping it first when it is still generating.
+ *
+ * @returns {Promise<boolean>} Whether the chat was removed
+ */
+async function removeOwnedChat(repository, chat, stopChat, deps) {
+  if (stopChat && (chat.status === 'running' || chat.activeRunId)) await stopChat(chat);
+  const { deleted } = await deleteChatWithCascade(repository, chat.id, deps);
+  return deleted;
+}
+
 export default deleteChatWithCascade;
