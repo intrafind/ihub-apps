@@ -37,6 +37,7 @@ const state = {
   platform: {},
   cache: null, // this worker's copy of users.json
   disk: null, // the shared users.json
+  clients: null, // oauth-clients.json
   storeUnreadable: false,
   cacheReadFails: false,
   storeReads: 0
@@ -52,14 +53,7 @@ jest.unstable_mockModule('../configCache.js', () => ({
         if (state.cacheReadFails) throw new Error('cache entry is corrupt');
         return state.cache ? { data: state.cache } : null;
       }
-      if (key === CLIENTS_KEY) {
-        return {
-          data: {
-            clients: { 'mcp-client': { clientId: 'mcp-client', active: true } },
-            metadata: {}
-          }
-        };
-      }
+      if (key === CLIENTS_KEY) return { data: state.clients };
       return null;
     },
     setCacheEntry: (key, data) => {
@@ -103,6 +97,7 @@ const { default: jwtAuth } = await import('../middleware/jwtAuth.js');
 const { processNtlmLogin } = await import('../middleware/ntlmAuth.js');
 const { validateAndPersistExternalUser, loadUsersFresh } = await import('../utils/userManager.js');
 const { generateJwt } = await import('../utils/tokenService.js');
+const { generatePersonalApiKey } = await import('../utils/oauthTokenService.js');
 
 /** What each provider hands to `validateAndPersistExternalUser`. */
 const EXTERNAL_USERS = {
@@ -219,6 +214,10 @@ beforeEach(() => {
   // The cache starts authoritative so loadUsers never reaches for a users.json
   // on the machine running the tests.
   state.cache = emptyUsersFile();
+  state.clients = {
+    clients: { 'mcp-client': { clientId: 'mcp-client', active: true } },
+    metadata: {}
+  };
   state.storeUnreadable = false;
   state.cacheReadFails = false;
   state.storeReads = 0;
@@ -594,5 +593,120 @@ describe('loadUsersFresh for a users file outside contents/', () => {
     const usersConfig = await loadUsersFresh(file);
 
     expect(usersConfig.users).toEqual({});
+  });
+});
+
+describe('personal API key', () => {
+  // A key is its owner's credential. It authenticates from its client record
+  // alone, so nothing about the token names a user to look up: the owner on the
+  // record is what has to be checked.
+  const OWNER_ID = 'user_owner';
+
+  /** A signed-in local user who has minted a key for themselves. */
+  function ownerWithKey() {
+    const owner = {
+      id: OWNER_ID,
+      username: 'owner',
+      name: 'Owner',
+      email: 'owner@example.com',
+      active: true,
+      authMethods: ['local'],
+      groups: ['authenticated']
+    };
+    state.disk.users[OWNER_ID] = clone(owner);
+    state.cache.users[OWNER_ID] = clone(owner);
+
+    state.platform.oauth = {
+      enabled: { authz: true, clients: true },
+      personalKeys: { enabled: true }
+    };
+    const client = {
+      clientId: 'key-owner-1',
+      name: 'Owner key',
+      active: true,
+      personal: true,
+      ownerUserId: OWNER_ID,
+      ownerUsername: 'owner',
+      ownerName: 'Owner',
+      ownerGroups: ['authenticated'],
+      scopes: ['mcp:tools'],
+      metadata: {}
+    };
+    state.clients.clients[client.clientId] = client;
+    return generatePersonalApiKey(client, 30).api_key;
+  }
+
+  it('is let through while its owner exists, acting as the owner', async () => {
+    const { req, nextCalled } = await request(ownerWithKey());
+
+    expect(nextCalled).toBe(true);
+    expect(req.user).toMatchObject({ id: OWNER_ID, authMode: 'oauth_personal_key' });
+  });
+
+  it('is refused with 401 once its owner has been deleted, even with the key record still there', async () => {
+    const key = ownerWithKey();
+    deleteUser(OWNER_ID);
+
+    const { res, nextCalled } = await request(key);
+
+    expect(res.statusCode).toBe(401);
+    expect(res.body).toEqual({
+      error: 'invalid_token',
+      error_description: 'The owner of this API key no longer exists'
+    });
+    expect(nextCalled).toBe(false);
+  });
+
+  it('is refused with 403 while its owner is disabled, and works again when they are not', async () => {
+    const key = ownerWithKey();
+    state.cache.users[OWNER_ID].active = false;
+
+    const refused = await request(key);
+
+    expect(refused.res.statusCode).toBe(403);
+    expect(refused.res.body.error).toBe('access_denied');
+    expect(refused.nextCalled).toBe(false);
+
+    state.cache.users[OWNER_ID].active = true;
+    expect((await request(key)).nextCalled).toBe(true);
+  });
+
+  it('finds an owner another worker created that this worker has not heard about yet', async () => {
+    const key = ownerWithKey();
+    state.cache = emptyUsersFile();
+
+    const { nextCalled } = await request(key);
+
+    expect(nextCalled).toBe(true);
+    expect(state.storeReads).toBe(1);
+  });
+
+  it('answers 503, not "revoked", when the users cannot be read to check the owner', async () => {
+    const key = ownerWithKey();
+    state.cache = emptyUsersFile();
+    state.storeUnreadable = true;
+
+    const { res, nextCalled } = await request(key);
+
+    expect(res.statusCode).toBe(503);
+    expect(nextCalled).toBe(false);
+  });
+
+  it('is not let through for an owner who has only the same name or address', async () => {
+    const key = ownerWithKey();
+    deleteUser(OWNER_ID);
+    // A later account for the same person: a different id.
+    state.disk.users.user_replacement = state.cache.users.user_replacement = {
+      id: 'user_replacement',
+      username: 'owner',
+      email: 'owner@example.com',
+      active: true,
+      authMethods: ['local']
+    };
+
+    const { res, nextCalled } = await request(key);
+
+    expect(res.statusCode).toBe(401);
+    expect(nextCalled).toBe(false);
   });
 });

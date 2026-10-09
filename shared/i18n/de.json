@@ -2506,7 +2506,8 @@
       "groupsEmpty": "Noch keine Gruppen zugewiesen",
       "groupsHelp": "Definierte Gruppen suchen und auswählen oder einen Namen eingeben und Enter drücken, um eine externe Gruppenzuordnung hinzuzufügen. Benutzer erben die Berechtigungen aller zugewiesenen Gruppen.",
       "groupMembership": "Gruppenzugehörigkeit",
-      "groupMembershipDescription": "Weisen Sie diesen Benutzer Gruppen zu, um seine Berechtigungen und Zugriffsebenen zu steuern"
+      "groupMembershipDescription": "Weisen Sie diesen Benutzer Gruppen zu, um seine Berechtigungen und Zugriffsebenen zu steuern",
+      "deleteConfirm": "Diesen Benutzer löschen? Der Zugriff endet sofort, und seine API-Schlüssel, Verbindungen, gespeicherten Zugangsdaten, geplanten Aufgaben, Chats, Prompts, Skills und Kurzlinks werden entfernt. Das lässt sich nicht rückgängig machen. Um jemandem die Anmeldung zu sperren und das Erstellte zu behalten, deaktiviere stattdessen das Konto."
     },
     "logging": {
       "loadError": "Fehler beim Laden der Logging-Konfiguration",

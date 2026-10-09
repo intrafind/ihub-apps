@@ -7,7 +7,7 @@ import { buildPolicyCimdClient } from '../utils/oauthClientResolver.js';
 import { isClientIdUrl } from '../utils/clientIdMetadata.js';
 import { isPersonalKeyExpired, isPersonalKeysEnabled } from '../utils/personalApiKeyManager.js';
 import { isCurrentKeyGeneration } from '../utils/oauthTokenService.js';
-import { resolveTokenUser, userRecordState } from '../utils/tokenUser.js';
+import { ownerUserState, resolveTokenUser, userRecordState } from '../utils/tokenUser.js';
 import { verifyJwt, decodeJwt } from '../utils/tokenService.js';
 import { recordAuthEvent } from '../telemetry/metrics.js';
 import configCache from '../configCache.js';
@@ -358,6 +358,40 @@ export default async function jwtAuthMiddleware(req, res, next) {
           error: 'access_denied',
           error_description: 'API key has been suspended'
         });
+      }
+
+      // A key is its owner's credential: it ends with the owner (deleting a user
+      // removes their keys too, this covers a removal that did not get that far)
+      // and is suspended while the owner is.
+      let ownerState;
+      try {
+        ownerState = await ownerUserState(platform, client.ownerUserId);
+      } catch (ownerError) {
+        logger.error('Failed to look up the owner of a personal API key', {
+          component: 'JwtAuth',
+          clientId: decoded.client_id,
+          error: ownerError
+        });
+        return res.status(503).json({
+          error: 'service_unavailable',
+          error_description: 'Unable to validate the API key. Please try again later.'
+        });
+      }
+      if (ownerState !== 'active') {
+        logger.warn('Personal API key rejected: its owner is gone or disabled', {
+          component: 'JwtAuth',
+          clientId: decoded.client_id,
+          ownerState
+        });
+        return ownerState === 'missing'
+          ? res.status(401).json({
+              error: 'invalid_token',
+              error_description: 'The owner of this API key no longer exists'
+            })
+          : res.status(403).json({
+              error: 'access_denied',
+              error_description: 'The owner of this API key has been disabled'
+            });
       }
 
       // The API key JWT carries its own `exp`, already verified, so its

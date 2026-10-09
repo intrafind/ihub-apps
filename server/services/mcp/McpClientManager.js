@@ -348,6 +348,25 @@ class McpClientManager {
   }
 
   /**
+   * Close every pooled connection of one user, on this worker. What deleting the
+   * user needs: the connections hold the user's tokens in memory, and would go on
+   * serving them until they idle out. Other workers' pools are not reached from
+   * here; their entries close after {@link USER_CONNECTION_IDLE_MS}.
+   * @param {string} userId
+   * @returns {Promise<number>} How many connections were closed
+   */
+  async evictAllUserConnections(userId) {
+    const doomed = [...this.userConnections.entries()].filter(
+      ([, entry]) => entry.userId === userId
+    );
+    for (const [key, entry] of doomed) {
+      this.userConnections.delete(key);
+      await entry.conn.disconnect().catch(() => {});
+    }
+    return doomed.length;
+  }
+
+  /**
    * The pooled connection of `userId` to an `oauthUser` server, created on
    * first use. It connects lazily, with the user's own tokens.
    *

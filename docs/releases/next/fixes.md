@@ -12,11 +12,14 @@ used it up before the notes were complete. That step now uses the model's normal
 Deleting a user who signed in through OIDC, LDAP, Microsoft Teams or NTLM did not cut off their
 access: they kept using iHub with their existing session until it expired (8 hours by default,
 longer if the session timeout was raised). Only deleted local (username/password) accounts were
-signed out at once. A deleted user is now refused on their next request, whichever way they signed
-in. An OAuth connection that this user authorized (for example the Outlook add-in) is refused as
-well when it calls the REST API, including with refreshed tokens.
+signed out at once. A deleted user is now refused on their next request, whichever way they
+signed in, and so is everything that acts for them: the MCP endpoint (`/mcp`), realtime
+transcription, the OAuth sign-in and token endpoints (including refreshed tokens and token
+introspection), and their personal API keys. An OAuth connection that this user authorized (for
+example the Outlook add-in) is refused as well.
 
-- Disabling a user already worked for every sign-in method and is unchanged.
+- Disabling a user already worked for every sign-in method and is unchanged, except that personal
+  API keys now also stop working while their owner is disabled.
 - A deleted user's browser no longer gets stuck. Previously the leftover session cookie made every
   request fail, including the sign-in page, until the cookie expired. The cookie is now dropped,
   and the sign-in endpoints keep working so the person can sign in again.
@@ -27,7 +30,4 @@ well when it calls the REST API, including with refreshed tokens.
 - NTLM sign-in now fails when the user cannot be saved, instead of issuing a session that could
   not be used. As a result, the NTLM `allowSelfSignup: false` setting, which the old behavior
   bypassed, now takes effect: users without an account are refused.
-- Connections made through the MCP endpoint (`/mcp`) do not re-check the user yet, for any
-  sign-in method. After deleting a user, also revoke their OAuth connections if they used MCP
-  clients.
 - No other admin action is required.

@@ -813,7 +813,16 @@ export default function registerOAuthRoutes(app) {
       }
 
       // Introspect token
-      const introspection = introspectOAuthToken(sanitizedToken);
+      let introspection = introspectOAuthToken(sanitizedToken);
+
+      // A delegated token is signed, so it still verifies after its user is gone.
+      // The resource server asking whether it may serve it has to be told no:
+      // answering "active" is what it would act on.
+      if (introspection.active && introspection.token_type === 'oauth_authorization_code') {
+        if ((await delegatedUserState(platform, introspection.sub)) !== 'active') {
+          introspection = { active: false };
+        }
+      }
 
       logger.info('[OAuth] Token introspected', {
         component: 'OAuth',

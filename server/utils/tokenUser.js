@@ -73,16 +73,17 @@ export function tokenSubject(claims) {
  *
  * @param {Object} usersConfig - Users configuration
  * @param {string|undefined} userId - The subject the token carries
- * @param {string} authMode - The token's auth mode
+ * @param {string[]} providerModes - Providers whose subject the id may be (none for a local id)
  * @returns {Object|undefined} The user record, if there is one
  */
-function findRecord(usersConfig, userId, authMode) {
+function findRecord(usersConfig, userId, providerModes) {
   if (!userId) return undefined;
   const users = usersConfig.users || {};
   if (Object.hasOwn(users, userId)) return users[userId];
-  if (!PROVIDER_MODES.has(authMode)) return undefined;
-  return Object.values(users).find(
-    u => u.authMethods?.includes(authMode) && u[`${authMode}Data`]?.subject === userId
+  return Object.values(users).find(u =>
+    providerModes.some(
+      mode => u.authMethods?.includes(mode) && u[`${mode}Data`]?.subject === userId
+    )
   );
 }
 
@@ -108,22 +109,36 @@ function findRecord(usersConfig, userId, authMode) {
 export async function resolveTokenUser(platform, claims) {
   if (!isUserBoundMode(claims?.authMode)) return null;
 
-  const usersFilePath = localUsersFile(platform?.localAuth);
   const userId = tokenSubject(claims);
+  const providerModes = PROVIDER_MODES.has(claims.authMode) ? [claims.authMode] : [];
+  return { userId, record: await lookupUserRecord(platform, userId, providerModes) };
+}
+
+/**
+ * The record for a user id, cached users first and a fresh read on a miss.
+ *
+ * @param {Object} platform - Platform configuration
+ * @param {string|undefined} userId - The subject or owner id
+ * @param {string[]} providerModes - Providers whose subject the id may be
+ * @returns {Promise<Object|undefined>} The record, undefined when the user is gone
+ * @throws {Error} When the users configuration cannot be read
+ */
+async function lookupUserRecord(platform, userId, providerModes) {
+  const usersFilePath = localUsersFile(platform?.localAuth);
 
   let usersConfig = loadUsers(usersFilePath);
-  let record = findRecord(usersConfig, userId, claims.authMode);
+  let record = findRecord(usersConfig, userId, providerModes);
 
   if (!record && !usersConfig.metadata?.error) {
     usersConfig = await loadUsersFresh(usersFilePath);
-    record = findRecord(usersConfig, userId, claims.authMode);
+    record = findRecord(usersConfig, userId, providerModes);
   }
 
   if (!record && usersConfig.metadata?.error) {
     throw new Error(`Users configuration unavailable: ${usersConfig.metadata.error}`);
   }
 
-  return { userId, record };
+  return record;
 }
 
 /**
@@ -151,4 +166,22 @@ export async function tokenUserState(platform, claims) {
   const resolved = await resolveTokenUser(platform, claims);
   if (!resolved) return 'active';
   return userRecordState(resolved.record);
+}
+
+/**
+ * Whether the user who owns a personal API key may still act through it.
+ *
+ * A personal key authenticates from its client record, not from a token that
+ * names the user, so the owner is checked here from the id the record carries.
+ * The key is the owner's credential: it ends with the owner, and is suspended
+ * while the owner is.
+ *
+ * @param {Object} platform - Platform configuration
+ * @param {string} ownerUserId - The owner id on the key's client record
+ * @returns {Promise<'active'|'missing'|'disabled'>}
+ * @throws {Error} When the users configuration cannot be read
+ */
+export async function ownerUserState(platform, ownerUserId) {
+  const record = await lookupUserRecord(platform, ownerUserId, [...PROVIDER_MODES]);
+  return userRecordState(record);
 }

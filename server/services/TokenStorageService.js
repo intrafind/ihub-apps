@@ -591,6 +591,78 @@ class TokenStorageService {
   }
 
   /**
+   * Delete every token file a user has, across every service and provider.
+   *
+   * What deleting the user needs: the files are the user's own credentials for
+   * other systems (Office 365, Jira, MCP servers, ...), and nothing else lists
+   * them. Matches `<id>.json` (the legacy single slot) and `<id>__<providerId>.json`
+   * in each service directory.
+   *
+   * A user's tokens can be filed under more than one id (MCP hashes ids that are
+   * not file-name safe), so the caller names every id to clear.
+   *
+   * @param {string[]} storageIds - File-name-safe ids the user's tokens are filed under
+   * @returns {Promise<number>} How many files were removed
+   * @throws {Error} When a directory cannot be listed or a file cannot be removed
+   */
+  async deleteAllTokensForStorageIds(storageIds) {
+    const ids = [...new Set(storageIds)].filter(id => {
+      try {
+        this._assertSafeFilenameComponent(id, 'userId');
+        return true;
+      } catch {
+        return false;
+      }
+    });
+    if (ids.length === 0) return 0;
+
+    let services;
+    try {
+      services = await fs.readdir(this.storageBasePath);
+    } catch (error) {
+      if (error.code === 'ENOENT') return 0;
+      throw error;
+    }
+
+    let removed = 0;
+    for (const serviceName of services) {
+      try {
+        this._assertSafeFilenameComponent(serviceName, 'serviceName');
+      } catch {
+        continue;
+      }
+      const serviceDir = path.join(this.storageBasePath, serviceName);
+      let entries;
+      try {
+        entries = await fs.readdir(serviceDir);
+      } catch (error) {
+        if (error.code === 'ENOTDIR' || error.code === 'ENOENT') continue;
+        throw error;
+      }
+
+      for (const entry of entries) {
+        if (!entry.endsWith('.json')) continue;
+        const name = entry.slice(0, -'.json'.length);
+        if (!ids.some(id => name === id || name.startsWith(`${id}__`))) continue;
+        try {
+          await fs.unlink(path.join(serviceDir, entry));
+          removed += 1;
+        } catch (error) {
+          if (error.code !== 'ENOENT') throw error;
+        }
+      }
+    }
+
+    if (removed > 0) {
+      logger.info('Integration tokens deleted for user', {
+        component: 'TokenStorage',
+        count: removed
+      });
+    }
+    return removed;
+  }
+
+  /**
    * Check if user has valid tokens for a specific service + provider
    */
   async hasValidTokens(userId, serviceName, providerId = null) {
