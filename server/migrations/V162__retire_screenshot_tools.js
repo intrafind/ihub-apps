@@ -19,23 +19,22 @@ const RETIRED_TOOL_IDS = ['playwrightScreenshot', 'seleniumScreenshot'];
 export const version = '162';
 export const description = 'retire_screenshot_tools';
 
+/** The retired tool files this installation still carries. */
+async function presentToolFiles(ctx) {
+  const present = await Promise.all(
+    RETIRED_TOOL_IDS.map(async id => ((await ctx.fileExists(`tools/${id}.json`)) ? id : null))
+  );
+  return present.filter(Boolean);
+}
+
 export async function precondition(ctx) {
-  for (const id of RETIRED_TOOL_IDS) {
-    if (await ctx.fileExists(`tools/${id}.json`)) {
-      return true;
-    }
-  }
-  return false;
+  return (await presentToolFiles(ctx)).length > 0;
 }
 
 export async function up(ctx) {
-  let removed = 0;
-  for (const id of RETIRED_TOOL_IDS) {
-    if (await ctx.fileExists(`tools/${id}.json`)) {
-      await ctx.deleteFile(`tools/${id}.json`);
-      removed++;
-    }
-  }
+  const present = await presentToolFiles(ctx);
+  await Promise.all(present.map(id => ctx.deleteFile(`tools/${id}.json`)));
+  const removed = present.length;
   ctx.log(
     `Removed ${removed} retired screenshot tool file(s) — the Playwright and Selenium tools are no longer shipped`
   );

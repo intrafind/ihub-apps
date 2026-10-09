@@ -141,11 +141,12 @@ async function inspectScript(script, { toolIds, exports: wanted }, { scriptsDir,
 
   const missingExports = [...wanted].filter(name => typeof loaded.mod?.[name] !== 'function');
   if (missingExports.length === 0) return null;
+  const names = missingExports.map(name => '"' + name + '"').join(', ');
   return {
     script,
     toolIds: ids,
     kind: TOOL_SCRIPT_PROBLEMS.MISSING_EXPORT,
-    message: `The script does not export ${missingExports.map(n => `"${n}"`).join(', ')} as a function`,
+    message: `The script does not export ${names} as a function`,
     missingExports
   };
 }

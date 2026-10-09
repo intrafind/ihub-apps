@@ -1,5 +1,5 @@
-import fs from 'fs';
-import path from 'path';
+import fs from 'node:fs';
+import path from 'node:path';
 import { createResourceLoader, createValidator } from './utils/resourceLoader.js';
 import { getRootDir } from './pathUtils.js';
 import logger from './utils/logger.js';

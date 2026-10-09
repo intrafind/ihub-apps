@@ -817,11 +817,13 @@ if (cluster.isPrimary && workerCount > 1) {
   // a failed tool call in a chat. Not awaited (it never delays startup) and
   // once per cluster, or every worker would log the same warnings.
   if (ownsClusterSingletons) {
-    import('./services/tools/toolScriptCheck.js')
-      .then(({ runStartupToolCheck }) => runStartupToolCheck())
-      .catch(error => {
-        logger.warn('Tool script check could not run', { component: 'Server', error });
-      });
+    try {
+      const { runStartupToolCheck } = await import('./services/tools/toolScriptCheck.js');
+      // Deliberately not awaited: it logs its own outcome and never throws.
+      void runStartupToolCheck();
+    } catch (error) {
+      logger.warn('Tool script check could not run', { component: 'Server', error });
+    }
   }
 
   // Check for SSL configuration
