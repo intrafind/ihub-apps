@@ -21,12 +21,22 @@ import {
   sendBadRequest
 } from '../../utils/responseHelpers.js';
 import { isValidReturnUrl } from '../../utils/oauthReturnUrl.js';
+import { isUnavailableError } from '../../services/integrations/oauthRefreshError.js';
 import {
   DEFAULT_INTEGRATION_RETURN_URL,
   issueIntegrationOAuthState,
   verifyIntegrationOAuthState,
   withQueryParam
 } from '../../utils/integrationOAuthState.js';
+
+/**
+ * authRequired lets the anonymous principal through when anonymous access is
+ * allowed and does not guarantee `req.user.id` is set, so routes that need a
+ * signed-in user check for both.
+ */
+function isAnonymous(user) {
+  return !user?.id || user.id === 'anonymous';
+}
 
 /**
  * Register the shared OAuth routes (`/auth`, `/callback`, `/status`,
@@ -226,6 +236,83 @@ export function createOAuthIntegrationRouter(
     }
   );
 
+  /** The provider the `/status` request asks about, for multi-provider integrations. */
+  function statusProviderId(query) {
+    return requiresProviderId && typeof query.providerId === 'string'
+      ? query.providerId
+      : undefined;
+  }
+
+  /** The `/status` payload of a connected account. */
+  function connectedStatus(userInfo, tokenInfo) {
+    return {
+      connected: true,
+      userInfo: userInfo ? formatUserInfo(userInfo) : null,
+      tokenInfo: {
+        expiresAt: tokenInfo.expiresAt,
+        minutesUntilExpiry: tokenInfo.minutesUntilExpiry,
+        isExpiring: tokenInfo.isExpiring,
+        isExpired: tokenInfo.isExpired
+      },
+      message: tokenInfo.isExpiring
+        ? `${displayName} account connected (tokens expiring soon)`
+        : `${displayName} account connected successfully`
+    };
+  }
+
+  /**
+   * The user's profile for the `/status` payload. A failing lookup is only
+   * logged when the provider tolerates it (Nextcloud); otherwise it fails the request.
+   */
+  async function loadUserInfo(userId, providerId) {
+    if (!tolerateUserInfoFailure) {
+      return getUserInfo(userId, providerId);
+    }
+    try {
+      return await getUserInfo(userId, providerId);
+    } catch (userInfoError) {
+      logger.warn(`${displayName} connected but user info lookup failed`, {
+        component: displayName,
+        userId,
+        providerId,
+        error: userInfoError.message
+      });
+      return null;
+    }
+  }
+
+  /** Answer a `/status` request that threw. */
+  function respondToStatusError(res, error) {
+    // The token refresh failed for a reason that says nothing about the grant
+    // (outage, rate limit, provider config). The account is still connected, so
+    // say so and do not tell the user to reconnect.
+    if (isUnavailableError(error)) {
+      logger.warn(`${displayName} status unavailable`, {
+        component: displayName,
+        error: error.message
+      });
+      return res.json({
+        connected: true,
+        temporarilyUnavailable: true,
+        message: error.message
+      });
+    }
+
+    logger.error(`Error getting ${displayName} status`, {
+      component: displayName,
+      error: error.message
+    });
+
+    if (error.message.includes('authentication required')) {
+      return res.json({
+        connected: false,
+        message: `${displayName} authentication expired`
+      });
+    }
+
+    return sendInternalError(res, error, `get ${displayName} status`);
+  }
+
   /**
    * Get connection status for the current user.
    * GET /api/integrations/<providerKey>/status
@@ -236,70 +323,25 @@ export function createOAuthIntegrationRouter(
     ...(statusLimiter ? [statusLimiter] : []),
     async (req, res) => {
       try {
-        if (!req.user?.id || req.user.id === 'anonymous') {
+        if (isAnonymous(req.user)) {
           return sendAuthRequired(res);
         }
 
-        const providerId =
-          requiresProviderId && typeof req.query.providerId === 'string'
-            ? req.query.providerId
-            : undefined;
+        const providerId = statusProviderId(req.query);
 
-        const isAuthenticated = await isUserAuthenticated(req.user.id, providerId);
-
-        if (!isAuthenticated) {
+        if (!(await isUserAuthenticated(req.user.id, providerId))) {
           return res.json({
             connected: false,
             message: `${displayName} account not connected`
           });
         }
 
-        let userInfo = null;
-        if (tolerateUserInfoFailure) {
-          try {
-            userInfo = await getUserInfo(req.user.id, providerId);
-          } catch (userInfoError) {
-            logger.warn(`${displayName} connected but user info lookup failed`, {
-              component: displayName,
-              userId: req.user.id,
-              providerId,
-              error: userInfoError.message
-            });
-            userInfo = null;
-          }
-        } else {
-          userInfo = await getUserInfo(req.user.id, providerId);
-        }
-
+        const userInfo = await loadUserInfo(req.user.id, providerId);
         const tokenInfo = await getTokenExpirationInfo(req.user.id, providerId);
 
-        res.json({
-          connected: true,
-          userInfo: userInfo ? formatUserInfo(userInfo) : null,
-          tokenInfo: {
-            expiresAt: tokenInfo.expiresAt,
-            minutesUntilExpiry: tokenInfo.minutesUntilExpiry,
-            isExpiring: tokenInfo.isExpiring,
-            isExpired: tokenInfo.isExpired
-          },
-          message: tokenInfo.isExpiring
-            ? `${displayName} account connected (tokens expiring soon)`
-            : `${displayName} account connected successfully`
-        });
+        res.json(connectedStatus(userInfo, tokenInfo));
       } catch (error) {
-        logger.error(`Error getting ${displayName} status`, {
-          component: displayName,
-          error: error.message
-        });
-
-        if (error.message.includes('authentication required')) {
-          return res.json({
-            connected: false,
-            message: `${displayName} authentication expired`
-          });
-        }
-
-        return sendInternalError(res, error, `get ${displayName} status`);
+        return respondToStatusError(res, error);
       }
     }
   );

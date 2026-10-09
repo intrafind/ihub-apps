@@ -270,10 +270,11 @@ Each source is controlled by the `sources` configuration object in the provider 
 
 ### Token refresh failures
 
-- If automatic token refresh fails, the user will see a **"Reconnect"** prompt
+- If Microsoft rejects the refresh token, the user will see a **"Reconnect"** prompt
 - This typically happens when the refresh token has expired (Microsoft refresh tokens can expire after 90 days of inactivity by default), or when the user revoked the app's consent
 - The user should disconnect and reconnect their Office 365 account
-- After a failed refresh, iHub Apps automatically deletes the invalid tokens so the user can start a clean connection
+- In that case (and when no refresh token is stored), iHub Apps deletes the invalid tokens so the user can start a clean connection
+- Any other refresh failure keeps the stored tokens: a network error, a Microsoft outage (5xx or 429), an expired or wrong client secret, or a provider that was disabled or removed. Requests then fail with *"Office 365 is temporarily unavailable. Please try again in a moment."*, and the connection status still shows the account as connected. Access returns by itself once the problem clears. For an expired client secret, create a new secret in the app registration and update the provider: every user is back without reconnecting.
 
 ### "Office 365 API rate limit exceeded"
 
@@ -281,10 +282,21 @@ Each source is controlled by the `sources` configuration object in the provider 
 - This is typically a temporary condition. The user should wait a moment and try again.
 - Consider reducing the number of sources enabled if users regularly hit limits during drive listing.
 
-### Session required error
+### Connecting fails with `?office365_error=<code>`
 
-- The OAuth flow requires server-side sessions. Ensure your deployment includes a session middleware compatible with Express (e.g., `express-session`).
-- If running behind a load balancer with multiple server instances, use a shared session store (e.g., Redis) so that the OAuth callback reaches the same session that initiated the flow.
+When connecting fails, the user is sent back to the page they started from with `office365_error=<code>` added to the URL:
+
+| Code | Cause | Fix |
+|------|-------|-----|
+| `invalid_state` | The sign-in ticket is missing, altered, or was issued for another integration or provider. It is also refused when the callback comes from a different user, or from a browser where nobody is signed in to iHub Apps. With several instances, it appears when an instance cannot verify a ticket issued by another (see below). | Have the user sign in to iHub Apps and start again from **Settings → Integrations** in the same browser. Check that no proxy strips the iHub sign-in cookie. |
+| `session_expired` | The sign-in ticket is older than 15 minutes. | Start again and finish the Microsoft consent within 15 minutes. |
+| `access_denied` | The user declined the Microsoft consent screen. | Start again and approve the access. |
+| `oauth_failed` | Microsoft returned another error on the redirect back. Missing admin consent (see `AADSTS65001` above) is a common reason. | Check the server logs. |
+| `missing_code` | The callback arrived without an authorization code, for example when the URL was opened by hand. | Start again from **Settings → Integrations**. |
+| `invalid_client` | Microsoft rejected the client secret: it is expired or wrong. | Create a new secret in the app registration and update the provider. Users do not need to reconnect. |
+| `callback_failed` | Exchanging the code for tokens failed, for example because of a redirect URI mismatch. | Check the server logs and the redirect URI in the app registration. |
+
+No server-side session, shared session store or sticky routing is involved, so the callback can land on any worker or instance. With several instances, every instance must be able to verify a ticket another one issued: configure the same `JWT_SECRET` (or `auth.jwtSecret`) and the same `TOKEN_ENCRYPTION_KEY` on all of them, or let them share the `contents/` directory. See [Scaling](scaling.md#sign-in-tickets-across-instances).
 
 ---
 
@@ -295,8 +307,9 @@ Each source is controlled by the `sources` configuration object in the provider 
 - **Per-user tokens**: Each user connects their own Microsoft account; no shared service account is used
 - **Encrypted storage**: Tokens are encrypted at rest using AES-256-GCM via `TokenStorageService`
 - **PKCE**: OAuth flow uses Proof Key for Code Exchange (S256 method) to prevent authorization code interception attacks
-- **State validation**: CSRF protection via session-stored state parameter, validated on callback
-- **Session timeout**: OAuth sessions expire after 15 minutes if the user does not complete the authorization flow
+- **State validation**: The OAuth `state` parameter is a signed ticket (HMAC) that names the integration and provider and the signed-in user who started the flow. The callback requires the same user, so a ticket from one browser cannot complete a flow in another. No server-side session is kept.
+- **PKCE verifier protection**: The PKCE code verifier travels inside the ticket, encrypted with AES-256-GCM, never in clear text
+- **Sign-in ticket lifetime**: The ticket expires after 15 minutes. A user who does not finish the Microsoft consent in that time has to start again (`office365_error=session_expired`).
 - **Rate limiting**: OAuth initiation is rate-limited to 10 requests per minute per IP address
 - **Input validation**: Drive IDs and file IDs passed to the Microsoft Graph API are validated against a strict character allowlist
 

@@ -4,6 +4,7 @@ import { httpFetch } from '../../utils/httpConfig.js';
 import logger from '../../utils/logger.js';
 import { readBoundedBody, MAX_DOWNLOAD_BYTES } from '../../utils/boundedBodyReader.js';
 import OAuthIntegrationBase from './OAuthIntegrationBase.js';
+import { isUnavailableError, refreshFailureFromResponse } from './oauthRefreshError.js';
 
 /**
  * Google Drive export MIME type mappings for Google Workspace documents
@@ -203,16 +204,7 @@ class GoogleDriveService extends OAuthIntegrationBase {
           error: errorData
         });
 
-        if (response.status === 400) {
-          if (errorData.error === 'invalid_grant') {
-            throw new Error('Refresh token expired or invalid - user needs to reconnect');
-          }
-          throw new Error(
-            `Token refresh failed: ${errorData.error_description || errorData.error}`
-          );
-        }
-
-        throw new Error(`Failed to refresh access token: ${response.statusText}`);
+        throw refreshFailureFromResponse(response, errorData);
       }
 
       const tokens = await response.json();
@@ -226,18 +218,7 @@ class GoogleDriveService extends OAuthIntegrationBase {
         providerId: providerId
       };
     } catch (error) {
-      if (
-        error.message.includes('Refresh token expired') ||
-        error.message.includes('Token refresh failed') ||
-        error.message.includes('Failed to refresh access token')
-      ) {
-        throw error;
-      }
-      logger.error('Error refreshing Google Drive access token', {
-        component: 'Google Drive',
-        error
-      });
-      throw new Error(`Failed to refresh access token: ${error.message}`);
+      throw this._toRefreshError(error);
     }
   }
 
@@ -274,6 +255,8 @@ class GoogleDriveService extends OAuthIntegrationBase {
       await this.makeApiRequest(this.userInfoUrl, 'GET', null, userId, providerId);
       return true;
     } catch (error) {
+      // A temporary failure says nothing about the connection; let the caller report it.
+      if (isUnavailableError(error)) throw error;
       logger.info('User Google Drive authentication failed', {
         component: 'Google Drive',
         userId,

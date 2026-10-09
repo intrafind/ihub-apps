@@ -216,7 +216,9 @@ could not be decrypted by any other. Seeing more than one
 
 Setting `JWT_PRIVATE_KEY`/`JWT_PUBLIC_KEY` and `TOKEN_ENCRYPTION_KEY` explicitly
 skips generation altogether, and is required anyway once you run more than one
-replica — see [Cross-pod, not cross-worker](#cross-pod-not-cross-worker).
+replica — together with `JWT_SECRET`, which signs the sign-in tickets; see
+[Sign-in tickets across instances](#sign-in-tickets-across-instances) and
+[Cross-pod, not cross-worker](#cross-pod-not-cross-worker).
 
 ### Crash recovery
 
@@ -303,6 +305,23 @@ Sign-in flows keep no server-side session. OIDC login, connecting an integration
 (Office 365, Google Drive, Jira, Nextcloud), MCP server sign-in and the OAuth
 consent screen carry their state in signed tickets and cookies, so the request
 that finishes a sign-in can land on any worker — or any pod.
+
+#### Sign-in tickets across instances
+
+Workers of one process tree share the key material, so nothing needs configuring.
+Several pods or hosts must agree on the two secrets a ticket depends on, or a
+ticket issued by one is refused by another (the integration callback then ends in
+`?<provider>_error=invalid_state`):
+
+- **The signing secret** is the JWT secret. It comes from the `JWT_SECRET` environment
+  variable, else from `auth.jwtSecret` in `platform.json`, else from the one generated
+  into `contents/`. It signs these tickets even when users' tokens are RS256, so setting
+  `JWT_PRIVATE_KEY` and `JWT_PUBLIC_KEY` does not cover it.
+- **The token encryption key**, `TOKEN_ENCRYPTION_KEY` or `contents/.encryption-key`. The
+  PKCE verifier inside an integration ticket is encrypted with it.
+
+Set both explicitly and identically on every pod, or share the `contents/` directory
+between them.
 
 Any new feature needing cross-worker visibility should either use the bus
 (`publish`/`subscribe` plus a presence map), persist to the shared `contents/`
