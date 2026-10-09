@@ -92,6 +92,38 @@ export function convertAnthropicToolsToGeneric(anthropicTools = []) {
 }
 
 /**
+ * Resolve a generic tool-choice value to Anthropic's `tool_choice` object.
+ *
+ * `required` (or `any`) becomes `{ type: 'any' }`, `none` `{ type: 'none' }`, a
+ * named function (OpenAI's `{ function: { name } }`, the Responses API's
+ * `{ name }`) `{ type: 'tool', name }`, and an object already in Anthropic's
+ * shape passes through. `auto` is Anthropic's default, so nothing is sent.
+ *
+ * Note: Claude Opus 5.5, Sonnet 5.5, Fable 5.1 and Mythos 5.1 reject `any` and
+ * `tool` with a 400, as does manual extended thinking; `auto` and `none` always
+ * work.
+ *
+ * @param {string|Object} [toolChoice] - Generic or OpenAI-style tool choice
+ * @returns {{type: string, name?: string}|undefined} Anthropic tool choice, undefined when none is needed
+ */
+export function convertAnthropicToolChoice(toolChoice) {
+  if (!toolChoice || toolChoice === 'auto') return undefined;
+  if (toolChoice === 'required' || toolChoice === 'any') return { type: 'any' };
+  if (toolChoice === 'none') return { type: 'none' };
+  if (typeof toolChoice === 'object') {
+    const name = toolChoice.function?.name ?? toolChoice.name;
+    if (
+      name &&
+      (toolChoice.type === 'function' || toolChoice.type === 'tool' || !toolChoice.type)
+    ) {
+      return { type: 'tool', name };
+    }
+    if (toolChoice.type === 'any' || toolChoice.type === 'none') return { type: toolChoice.type };
+  }
+  return undefined;
+}
+
+/**
  * Convert generic tool calls to Anthropic format (for message content)
  * @param {import('./GenericToolCalling.js').GenericToolCall[]} genericToolCalls - Generic tool calls
  * @returns {Object[]} Anthropic formatted tool use content blocks

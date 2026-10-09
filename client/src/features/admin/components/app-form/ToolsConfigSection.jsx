@@ -1,7 +1,13 @@
 import { useTranslation } from 'react-i18next';
 import ToolsSelector from '../../../../shared/components/ToolsSelector';
 
-function ToolsConfigSection({ selectedTools, onToolsChange, mcpToolIds }) {
+function ToolsConfigSection({
+  selectedTools,
+  onToolsChange,
+  mcpToolIds,
+  toolChoice,
+  onToolChoiceChange
+}) {
   const { t } = useTranslation();
 
   return (
@@ -28,6 +34,36 @@ function ToolsConfigSection({ selectedTools, onToolsChange, mcpToolIds }) {
               ...mcpToolIds
             ]}
           />
+          <div className="mt-6">
+            <label
+              htmlFor="app-tool-choice"
+              className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+            >
+              {t('admin.apps.edit.toolChoice', 'Tool use')}
+            </label>
+            <select
+              id="app-tool-choice"
+              value={toolChoice || 'auto'}
+              onChange={e =>
+                onToolChoiceChange(e.target.value === 'auto' ? undefined : e.target.value)
+              }
+              className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+              aria-describedby="app-tool-choice-help"
+            >
+              <option value="auto">
+                {t('admin.apps.edit.toolChoiceAuto', 'Model decides (default)')}
+              </option>
+              <option value="required">
+                {t('admin.apps.edit.toolChoiceRequired', 'Use a tool first')}
+              </option>
+            </select>
+            <p id="app-tool-choice-help" className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+              {t(
+                'admin.apps.edit.toolChoiceRequiredHelp',
+                "The first answer step of every message must call one of the app's tools; the model can then answer from the result. Not every model can be forced by the provider - for those the model is asked in words instead."
+              )}
+            </p>
+          </div>
         </div>
       </div>
     </div>

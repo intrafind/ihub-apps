@@ -260,6 +260,13 @@ const baseModelConfigSchema = z
     // can opt out and the adapter omits the field instead of failing every
     // request. Defaults to true (unset) so existing model configs are unchanged.
     supportsTemperature: z.boolean().optional(),
+    // Whether the provider accepts a forced tool call (`tool_choice: required`
+    // and its equivalents) for this model. Claude Opus 5.5, Sonnet 5.5 and
+    // Fable 5.1 reject it with a 400, and a local server may ignore it. With
+    // `false`, an app's `toolChoice: "required"` asks the model in words
+    // instead of through the API. Defaults to true (unset): a model that does
+    // refuse is found out on the first call and remembered for a while.
+    supportsForcedToolUse: z.boolean().optional(),
     supportsUsageTracking: z.boolean().optional(),
     supportsImageGeneration: z.boolean().optional().prefault(false),
     imageGeneration: imageGenerationSchema.optional(),

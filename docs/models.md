@@ -40,6 +40,7 @@ Each model is defined with the following properties:
 | `supportsVision`               | Boolean | -        | Whether the model supports image input (vision capabilities)                                   |
 | `supportsAudio`                | Boolean | -        | Whether the model can process audio input                                                      |
 | `supportsStructuredOutput`     | Boolean | -        | Whether the model natively supports structured JSON output schemas                             |
+| `supportsForcedToolUse`        | Boolean | `true`   | Whether the provider accepts a forced tool call (`tool_choice: required` and its equivalents). Set `false` for models that reject it — Claude Opus 5.5, Sonnet 5.5 and Fable 5.1 return a `400` — so an app's `toolChoice: "required"` asks the model in words instead. See [Requiring a tool call](tool-calling.md#requiring-a-tool-call) |
 | `supportsUsageTracking`        | Boolean | -        | Whether the model reports token usage in its responses                                         |
 | `supportsTemperature`          | Boolean | `true`   | Whether the provider accepts sampling parameters for this model. Set `false` for models that reject them — Claude Opus 5, Sonnet 5 and Fable 5.x return a `400` for `temperature`, so the adapter omits the field instead of failing every request. See [Sampling Parameters](#sampling-parameters) |
 | `supportsImageGeneration`      | Boolean | `false`  | Whether the model can generate images                                                          |

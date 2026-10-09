@@ -141,6 +141,36 @@ export function convertGoogleToolsToGeneric(googleTools = []) {
 }
 
 /**
+ * Resolve a generic tool-choice value to Gemini's `toolConfig`.
+ *
+ * `required` (or `any`) becomes function calling mode `ANY` (the model must
+ * call one of the declared functions), `none` `NONE`, and a named function
+ * `ANY` limited to that name. `auto` is Gemini's default, so nothing is sent.
+ * `ANY` needs function declarations in the request: it cannot be combined with
+ * the native `google_search` tool, which already excludes them.
+ *
+ * @param {string|Object} [toolChoice] - Generic or OpenAI-style tool choice
+ * @returns {{functionCallingConfig: {mode: string, allowedFunctionNames?: string[]}}|undefined}
+ *   Gemini tool config, undefined when none is needed
+ */
+export function convertGoogleToolChoice(toolChoice) {
+  if (!toolChoice || toolChoice === 'auto') return undefined;
+  if (toolChoice === 'required' || toolChoice === 'any') {
+    return { functionCallingConfig: { mode: 'ANY' } };
+  }
+  if (toolChoice === 'none') return { functionCallingConfig: { mode: 'NONE' } };
+  if (typeof toolChoice === 'object') {
+    const name = toolChoice.function?.name ?? toolChoice.name;
+    if (name) {
+      return { functionCallingConfig: { mode: 'ANY', allowedFunctionNames: [name] } };
+    }
+    if (toolChoice.type === 'any') return { functionCallingConfig: { mode: 'ANY' } };
+    if (toolChoice.type === 'none') return { functionCallingConfig: { mode: 'NONE' } };
+  }
+  return undefined;
+}
+
+/**
  * Convert generic tool calls to Google format (for message parts)
  * @param {import('./GenericToolCalling.js').GenericToolCall[]} genericToolCalls - Generic tool calls
  * @returns {Object[]} Google formatted function call parts

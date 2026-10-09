@@ -664,7 +664,7 @@ class ChatService {
           },
           // Chat tools have side effects and the client renders tool frames in
           // order — run one call at a time.
-          tools: { parallel: false },
+          tools: { parallel: false, choice: app.toolChoice },
           context: { compactThresholdTokens: chatCompactThresholdTokens(model) }
         },
         options: { temperature, maxTokens, responseFormat, responseSchema, ...llmOptions },
@@ -1289,7 +1289,7 @@ class ChatService {
         toolExecution: 'server',
         policies: {
           budgets: { maxToolRounds: CHAT_MAX_TOOL_ROUNDS, maxWallClockMs },
-          tools: { parallel: false },
+          tools: { parallel: false, choice: app.toolChoice },
           context: { compactThresholdTokens: chatCompactThresholdTokens(model) }
         },
         options: { temperature, maxTokens, responseFormat, responseSchema, ...llmOptions },

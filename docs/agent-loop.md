@@ -73,6 +73,7 @@ defaults.
 | `tools.maxRateLimitFailures`      | 2       | 429/503-style failures before a tool is withheld for the segment       |
 | `tools.maxConsecutiveFailures`    | 3       | Consecutive failures (any error) before a tool is withheld              |
 | `tools.parallel` / `maxParallel`  | true / 4 | Segment planner: read-only tools and non-overlapping calls run concurrently |
+| `tools.choice`                    | `auto`  | `required` makes the first model call of a turn call a tool; later calls are `auto`. See [Requiring a tool call](tool-calling.md#requiring-a-tool-call) |
 | `context.compactThresholdTokens`  | 16000   | Proactive compaction threshold (old tool/assistant bodies collapse)    |
 | `context.compactKeepRecent`       | 6       | Trailing messages kept verbatim when compacting                        |
 | `context.maxReactiveAttempts`     | 2       | Retries after a provider "prompt too long" error, each after compaction |
@@ -168,6 +169,7 @@ supplies `executeToolCall` as the tool executor. Node config knobs:
 | `parallelToolCalls`           | `tools.parallel` (default **false** for workflow nodes — workflow tools mutate shared run state) |
 | `maxRateLimitFailures`        | `tools.maxRateLimitFailures`                |
 | `maxConsecutiveToolFailures`  | `tools.maxConsecutiveFailures`              |
+| `toolChoice`                  | `tools.choice` (`auto` or `required`; default `auto`) |
 | `compactThresholdTokens`      | `context.compactThresholdTokens`            |
 | `compactKeepRecent`           | `context.compactKeepRecent`                 |
 | `outputSchema`                | `options.responseSchema`                    |
@@ -195,6 +197,7 @@ Chat policies:
 | ------------------------ | ------------------------------------------------------------------------------------- |
 | `budgets.maxToolRounds`  | 25 (`CHAT_MAX_TOOL_ROUNDS`); the last round is a forced tool-less final answer (a cap of 1 gets one extra tool-less call)         |
 | `tools.parallel`         | **false** — chat tools have side effects and the client renders tool events in order |
+| `tools.choice`           | the app's `toolChoice` (default `auto`) |
 | `budgets.maxWallClockMs` | headless invocations only (`invokeAppInternal`, default 180 s)                        |
 | `timeoutMs`              | hard timeout per model call (the chat route's `DEFAULT_TIMEOUT`)                      |
 
