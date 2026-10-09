@@ -12,7 +12,8 @@ import {
   createGenericUsage,
   normalizeFinishReason,
   cloneAndWalkSchema,
-  normalizeToolName
+  normalizeToolName,
+  getNamedToolChoice
 } from './GenericToolCalling.js';
 import { isPlausibleToolName, describeInvalidToolName } from './toolNameValidator.js';
 import { extractThoughtSignature } from './thoughtSignatures.js';
@@ -140,6 +141,13 @@ export function convertGoogleToolsToGeneric(googleTools = []) {
   return genericTools;
 }
 
+/** Gemini function calling modes for the tool choice values that are not `auto` (its default). */
+const GOOGLE_FUNCTION_CALLING_MODES = new Map([
+  ['required', 'ANY'],
+  ['any', 'ANY'],
+  ['none', 'NONE']
+]);
+
 /**
  * Resolve a generic tool-choice value to Gemini's `toolConfig`.
  *
@@ -154,20 +162,12 @@ export function convertGoogleToolsToGeneric(googleTools = []) {
  *   Gemini tool config, undefined when none is needed
  */
 export function convertGoogleToolChoice(toolChoice) {
-  if (!toolChoice || toolChoice === 'auto') return undefined;
-  if (toolChoice === 'required' || toolChoice === 'any') {
-    return { functionCallingConfig: { mode: 'ANY' } };
-  }
-  if (toolChoice === 'none') return { functionCallingConfig: { mode: 'NONE' } };
-  if (typeof toolChoice === 'object') {
-    const name = toolChoice.function?.name ?? toolChoice.name;
-    if (name) {
-      return { functionCallingConfig: { mode: 'ANY', allowedFunctionNames: [name] } };
-    }
-    if (toolChoice.type === 'any') return { functionCallingConfig: { mode: 'ANY' } };
-    if (toolChoice.type === 'none') return { functionCallingConfig: { mode: 'NONE' } };
-  }
-  return undefined;
+  const named = getNamedToolChoice(toolChoice);
+  if (named) return { functionCallingConfig: { mode: 'ANY', allowedFunctionNames: [named] } };
+  const mode = GOOGLE_FUNCTION_CALLING_MODES.get(
+    typeof toolChoice === 'string' ? toolChoice : toolChoice?.type
+  );
+  return mode ? { functionCallingConfig: { mode } } : undefined;
 }
 
 /**

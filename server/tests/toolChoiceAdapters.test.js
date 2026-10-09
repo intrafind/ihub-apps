@@ -134,6 +134,7 @@ describe('Anthropic', () => {
     assert.equal(convertAnthropicToolChoice('auto'), undefined);
     assert.equal(convertAnthropicToolChoice(undefined), undefined);
     assert.equal(convertAnthropicToolChoice('bogus'), undefined);
+    assert.equal(convertAnthropicToolChoice('constructor'), undefined, 'no prototype lookups');
   });
 });
 
@@ -187,6 +188,7 @@ describe('Google Gemini', () => {
     });
     assert.equal(convertGoogleToolChoice('auto'), undefined);
     assert.equal(convertGoogleToolChoice('bogus'), undefined);
+    assert.equal(convertGoogleToolChoice('constructor'), undefined, 'no prototype lookups');
   });
 });
 

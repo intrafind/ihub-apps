@@ -68,6 +68,89 @@ function defaultImportScript(scriptPath) {
 }
 
 /**
+ * Group tool definitions by the script that runs them.
+ * @param {Object[]} tools
+ * @returns {{scripts: Map<string, {toolIds: Set<string>, exports: Set<string>}>,
+ *   invalid: Array<{script: string, toolId: string}>, skipped: number}}
+ */
+function groupByScript(tools) {
+  const scripts = new Map();
+  const invalid = [];
+  let skipped = 0;
+  for (const tool of Array.isArray(tools) ? tools : []) {
+    const target = describeToolScript(tool);
+    // A disabled tool cannot be called, so a broken script behind it is not a
+    // problem (an admin may well have disabled it for that reason).
+    if (!target || tool.enabled === false) {
+      skipped++;
+    } else if (target.valid) {
+      if (!scripts.has(target.script)) {
+        scripts.set(target.script, { toolIds: new Set(), exports: new Set() });
+      }
+      const entry = scripts.get(target.script);
+      entry.toolIds.add(String(tool.id));
+      expectedExports(tool).forEach(name => entry.exports.add(name));
+    } else {
+      invalid.push({ script: String(target.script).slice(0, 200), toolId: String(tool.id) });
+    }
+  }
+  return { scripts, invalid, skipped };
+}
+
+/**
+ * Load a script the way `runTool` does.
+ * @returns {Promise<{mod: Object}|{error: unknown}>}
+ */
+function loadScript(importScript, scriptPath) {
+  return importScript(scriptPath).then(
+    mod => ({ mod }),
+    error => ({ error })
+  );
+}
+
+/**
+ * Check one script against what its tool definitions need from it.
+ * @returns {Promise<{script: string, toolIds: string[], kind: string, message: string, missingExports?: string[]}|null>}
+ *   the problem found, null when the script is usable
+ */
+async function inspectScript(script, { toolIds, exports: wanted }, { scriptsDir, importScript }) {
+  const ids = [...toolIds];
+  const scriptPath = path.join(scriptsDir, script);
+  if (!fs.existsSync(scriptPath)) {
+    return {
+      script,
+      toolIds: ids,
+      kind: TOOL_SCRIPT_PROBLEMS.MISSING,
+      message: 'The script file does not exist'
+    };
+  }
+
+  // Let the event loop serve requests between module loads: this runs right
+  // after the server starts listening.
+  await new Promise(resolve => setImmediate(resolve));
+
+  const loaded = await loadScript(importScript, scriptPath);
+  if ('error' in loaded) {
+    return {
+      script,
+      toolIds: ids,
+      kind: TOOL_SCRIPT_PROBLEMS.LOAD_FAILED,
+      message: firstLine(loaded.error)
+    };
+  }
+
+  const missingExports = [...wanted].filter(name => typeof loaded.mod?.[name] !== 'function');
+  if (missingExports.length === 0) return null;
+  return {
+    script,
+    toolIds: ids,
+    kind: TOOL_SCRIPT_PROBLEMS.MISSING_EXPORT,
+    message: `The script does not export ${missingExports.map(n => `"${n}"`).join(', ')} as a function`,
+    missingExports
+  };
+}
+
+/**
  * Check the scripts of a set of tool definitions. Several definitions may share
  * one script (every function of a multi-function tool, or the scheduling
  * tools): each script is loaded once and must export everything its
@@ -81,31 +164,11 @@ function defaultImportScript(scriptPath) {
  *   problems: Array<{script: string, toolIds: string[], kind: string, message: string, missingExports?: string[]}>}>}
  */
 export async function checkToolScripts(tools, options = {}) {
-  const scriptsDir = options.scriptsDir || defaultScriptsDir();
-  const importScript = options.importScript || defaultImportScript;
-
-  /** @type {Map<string, {toolIds: Set<string>, exports: Set<string>}>} */
-  const scripts = new Map();
-  const invalid = [];
-  let skipped = 0;
-  for (const tool of Array.isArray(tools) ? tools : []) {
-    const target = describeToolScript(tool);
-    // A disabled tool cannot be called, so a broken script behind it is not a
-    // problem (an admin may well have disabled it for that reason).
-    if (!target || tool.enabled === false) {
-      skipped++;
-      continue;
-    }
-    if (!target.valid) {
-      invalid.push({ script: String(target.script).slice(0, 200), toolId: String(tool.id) });
-      continue;
-    }
-    const script = target.script;
-    if (!scripts.has(script)) scripts.set(script, { toolIds: new Set(), exports: new Set() });
-    const entry = scripts.get(script);
-    entry.toolIds.add(String(tool.id));
-    for (const name of expectedExports(tool)) entry.exports.add(name);
-  }
+  const context = {
+    scriptsDir: options.scriptsDir || defaultScriptsDir(),
+    importScript: options.importScript || defaultImportScript
+  };
+  const { scripts, invalid, skipped } = groupByScript(tools);
 
   const problems = invalid.map(({ script, toolId }) => ({
     script,
@@ -113,47 +176,9 @@ export async function checkToolScripts(tools, options = {}) {
     kind: TOOL_SCRIPT_PROBLEMS.INVALID_NAME,
     message: 'The script name is not a plain file name'
   }));
-  for (const [script, { toolIds, exports: wanted }] of scripts) {
-    const ids = [...toolIds];
-
-    const scriptPath = path.join(scriptsDir, script);
-    if (!fs.existsSync(scriptPath)) {
-      problems.push({
-        script,
-        toolIds: ids,
-        kind: TOOL_SCRIPT_PROBLEMS.MISSING,
-        message: 'The script file does not exist'
-      });
-      continue;
-    }
-
-    // Let the event loop serve requests between module loads: this runs right
-    // after the server starts listening.
-    await new Promise(resolve => setImmediate(resolve));
-
-    let mod;
-    try {
-      mod = await importScript(scriptPath);
-    } catch (error) {
-      problems.push({
-        script,
-        toolIds: ids,
-        kind: TOOL_SCRIPT_PROBLEMS.LOAD_FAILED,
-        message: firstLine(error)
-      });
-      continue;
-    }
-
-    const missingExports = [...wanted].filter(name => typeof mod?.[name] !== 'function');
-    if (missingExports.length > 0) {
-      problems.push({
-        script,
-        toolIds: ids,
-        kind: TOOL_SCRIPT_PROBLEMS.MISSING_EXPORT,
-        message: `The script does not export ${missingExports.map(n => `"${n}"`).join(', ')} as a function`,
-        missingExports
-      });
-    }
+  for (const [script, needs] of scripts) {
+    const problem = await inspectScript(script, needs, context);
+    if (problem) problems.push(problem);
   }
 
   // Every script (a name that is not a plain file name counts as one) has at

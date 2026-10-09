@@ -11,7 +11,8 @@ import {
   createGenericStreamingResponse,
   createGenericUsage,
   normalizeFinishReason,
-  cloneAndWalkSchema
+  cloneAndWalkSchema,
+  getNamedToolChoice
 } from './GenericToolCalling.js';
 import { validateProviderToolName } from './toolNameValidator.js';
 import logger from '../../utils/logger.js';
@@ -91,6 +92,9 @@ export function convertAnthropicToolsToGeneric(anthropicTools = []) {
   );
 }
 
+/** Tool choice values that map to Anthropic's `any` (forced call) and `none`; `auto` is its default. */
+const ANTHROPIC_TOOL_CHOICE_TYPES = new Set(['required', 'any', 'none']);
+
 /**
  * Resolve a generic tool-choice value to Anthropic's `tool_choice` object.
  *
@@ -107,20 +111,12 @@ export function convertAnthropicToolsToGeneric(anthropicTools = []) {
  * @returns {{type: string, name?: string}|undefined} Anthropic tool choice, undefined when none is needed
  */
 export function convertAnthropicToolChoice(toolChoice) {
-  if (!toolChoice || toolChoice === 'auto') return undefined;
-  if (toolChoice === 'required' || toolChoice === 'any') return { type: 'any' };
-  if (toolChoice === 'none') return { type: 'none' };
-  if (typeof toolChoice === 'object') {
-    const name = toolChoice.function?.name ?? toolChoice.name;
-    if (
-      name &&
-      (toolChoice.type === 'function' || toolChoice.type === 'tool' || !toolChoice.type)
-    ) {
-      return { type: 'tool', name };
-    }
-    if (toolChoice.type === 'any' || toolChoice.type === 'none') return { type: toolChoice.type };
-  }
-  return undefined;
+  const named = getNamedToolChoice(toolChoice);
+  if (named) return { type: 'tool', name: named };
+  const type = typeof toolChoice === 'string' ? toolChoice : toolChoice?.type;
+  return ANTHROPIC_TOOL_CHOICE_TYPES.has(type)
+    ? { type: type === 'none' ? 'none' : 'any' }
+    : undefined;
 }
 
 /**

@@ -54,19 +54,21 @@ function toolTurn(name, args) {
   ];
 }
 
+const noop = () => undefined;
+
 function makeLoop(turns) {
   const script = [...turns];
   const requests = [];
   const { client } = makeClient({
     maxRetries: 0,
-    transport: async request => {
+    transport: request => {
       requests.push(request);
       const next = script.shift();
       if (!next) throw new Error(`script exhausted after ${requests.length} calls`);
       return typeof next === 'function' ? next(request) : sseResponse(next);
     }
   });
-  const logger = { debug() {}, info() {}, warn() {}, error() {} };
+  const logger = { debug: noop, info: noop, warn: noop, error: noop };
   return { loop: new AgentLoop({ llmClient: client, logger }), requests };
 }
 
