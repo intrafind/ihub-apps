@@ -1263,7 +1263,7 @@
         "maxOutputTokens": "Maximale Ausgabe-Tokens",
         "concurrency": "Gleichzeitigkeit",
         "requestDelay": "Anfrageverzögerung (ms)",
-        "supportsTools": "Unterstützt Tools",
+        "supportsTools": "Tool-Nutzung",
         "supportsVision": "Unterstützt Bilderkennung",
         "supportsAudio": "Unterstützt Audio",
         "enabled": "Aktiviert",
@@ -1295,8 +1295,14 @@
         "ttsVoiceLanguage": "Sprache",
         "customProviders": "Eigene Anbieter"
       },
+      "toolSupport": {
+        "none": "Keine Tools",
+        "auto": "Tools - das Modell entscheidet",
+        "required": "Tools - ein Tool-Aufruf kann erzwungen werden"
+      },
       "hints": {
         "modelId": "Eindeutige Kennung für das Modell (kann nach der Erstellung nicht geändert werden)",
+        "supportsTools": "Ob dem Modell Tools gegeben werden können und ob der Anbieter es zu einem Tool-Aufruf zwingen kann. \"Ein Tool-Aufruf kann erzwungen werden\" nur wählen, wenn der Anbieter eine erzwungene Tool-Auswahl akzeptiert (OpenAI, Mistral, Google und Bedrock tun das; Claude Opus 5.5, Sonnet 5.5 und Fable 5.1 nicht; bei vLLM und anderen lokalen Servern hängt es von der Installation ab, belassen Sie diese bei \"das Modell entscheidet\"). Apps, die einen Tool-Aufruf verlangen, bitten ein Modell mit \"das Modell entscheidet\" stattdessen mit Worten darum.",
         "apiModelId": "Modellkennung, die von der API des Anbieters verwendet wird (z.B. gpt-4, claude-3-opus)",
         "apiKey": "API-Schlüssel für dieses Modell. Wenn nicht angegeben, verwendet das System den Schlüssel des Anbieters oder die Umgebungsvariable. Ein lokaler Server (vLLM, LM Studio, Jan.ai, Ollama) braucht keinen Schlüssel – lassen Sie das Feld leer. Schlüssel werden verschlüsselt gespeichert.",
         "apiKeySet": "✓ API-Schlüssel ist für dieses Modell konfiguriert",
@@ -2506,7 +2512,8 @@
       "groupsEmpty": "Noch keine Gruppen zugewiesen",
       "groupsHelp": "Definierte Gruppen suchen und auswählen oder einen Namen eingeben und Enter drücken, um eine externe Gruppenzuordnung hinzuzufügen. Benutzer erben die Berechtigungen aller zugewiesenen Gruppen.",
       "groupMembership": "Gruppenzugehörigkeit",
-      "groupMembershipDescription": "Weisen Sie diesen Benutzer Gruppen zu, um seine Berechtigungen und Zugriffsebenen zu steuern"
+      "groupMembershipDescription": "Weisen Sie diesen Benutzer Gruppen zu, um seine Berechtigungen und Zugriffsebenen zu steuern",
+      "deleteConfirm": "Diesen Benutzer löschen? Der Zugriff endet sofort, und seine API-Schlüssel, Verbindungen, gespeicherten Zugangsdaten, geplanten Aufgaben, Chats, Prompts, Skills und Kurzlinks werden entfernt. Das lässt sich nicht rückgängig machen. Um jemandem die Anmeldung zu sperren und das Erstellte zu behalten, deaktiviere stattdessen das Konto."
     },
     "logging": {
       "loadError": "Fehler beim Laden der Logging-Konfiguration",
@@ -3130,6 +3137,11 @@
         "websearchResearchGuidanceCustom": "Eigene Recherche-Anweisung",
         "websearchResearchGuidanceCustomDesc": "Optional. Ersetzt die eingebaute Anweisung, die dem Systemprompt hinzugefügt wird, wenn die Websuche aktiv ist. Leer lassen, um die eingebaute Anweisung zu verwenden.",
         "websearchEnabledByDefaultDesc": "Ob die Websuche für Benutzer standardmäßig aktiviert ist",
+        "toolChoice": "Werkzeugnutzung",
+        "toolChoiceDesc": "Ob das Modell selbst entscheidet, die Werkzeuge dieser App zu nutzen",
+        "toolChoiceAuto": "Modell entscheidet (Standard)",
+        "toolChoiceRequired": "Zuerst ein Werkzeug nutzen",
+        "toolChoiceRequiredHelp": "Der erste Antwortschritt jeder Nachricht muss eines der Werkzeuge der App aufrufen; danach kann das Modell aus dem Ergebnis antworten. Nicht jedes Modell lässt sich vom Anbieter dazu zwingen - bei diesen wird das Modell stattdessen mit Worten darum gebeten.",
         "iassistant": "iAssistant",
         "iassistantDesc": "iAssistant-Integration für diese App konfigurieren",
         "iassistantEnabled": "iAssistant aktivieren",

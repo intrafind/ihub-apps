@@ -94,7 +94,7 @@ Create model configuration file `contents/models/lm-studio.json`:
   "provider": "openai",
   "contextWindow": 8192,
   "maxOutputTokens": 4096,
-  "supportsTools": true,
+  "supportsTools": "auto",
   "supportsImages": true,
   "enabled": true,
   "default": false
@@ -125,7 +125,7 @@ export LM_STUDIO_ENDPOINT="http://localhost:1234"
   "provider": "openai",
   "contextWindow": 8192,
   "maxOutputTokens": 4096,
-  "supportsTools": true
+  "supportsTools": "auto"
 }
 
 // contents/models/lm-studio-mistral.json
@@ -137,7 +137,7 @@ export LM_STUDIO_ENDPOINT="http://localhost:1234"
   "provider": "openai",
   "contextWindow": 32768,
   "maxOutputTokens": 4096,
-  "supportsTools": true
+  "supportsTools": "auto"
 }
 ```
 
@@ -212,7 +212,7 @@ Create model configuration `contents/models/jan-ai.json`:
   "provider": "openai",
   "contextWindow": 32768,
   "maxOutputTokens": 4096,
-  "supportsTools": true,
+  "supportsTools": "auto",
   "supportsImages": false,
   "enabled": true,
   "default": false
@@ -347,7 +347,7 @@ Create model configuration `contents/models/vllm-local.json`:
   "provider": "local",
   "contextWindow": 32768,
   "maxOutputTokens": 16000,
-  "supportsTools": true,
+  "supportsTools": "auto",
   "supportsImages": false,
   "enabled": true,
   "default": false
@@ -395,7 +395,7 @@ support reasoning — iHub reads `reasoning` (current vLLM) or `reasoning_conten
   "provider": "local",
   "contextWindow": 32768,
   "maxOutputTokens": 16384,
-  "supportsTools": true,
+  "supportsTools": "auto",
   "thinking": {
     "enabled": true,
     "chatTemplateKwargs": { "enable_thinking": true }
@@ -568,7 +568,7 @@ services:
   "provider": "openai",
   "contextWindow": 8192,
   "maxOutputTokens": 4096,
-  "supportsTools": true,
+  "supportsTools": "auto",
   "enabled": true
 }
 ```
@@ -607,7 +607,7 @@ Instead of using provider-level environment variables, you can specify API keys 
   "apiKey": "lm-studio-premium-key",
   "contextWindow": 8192,
   "maxOutputTokens": 4096,
-  "supportsTools": true,
+  "supportsTools": "auto",
   "enabled": true
 }
 
@@ -621,7 +621,7 @@ Instead of using provider-level environment variables, you can specify API keys 
   "apiKey": "jan-enterprise-auth-token",
   "contextWindow": 32768,
   "maxOutputTokens": 4096,
-  "supportsTools": true,
+  "supportsTools": "auto",
   "enabled": true
 }
 
@@ -635,7 +635,7 @@ Instead of using provider-level environment variables, you can specify API keys 
   "apiKey": "production-vllm-secure-key",
   "contextWindow": 32768,
   "maxOutputTokens": 4096,
-  "supportsTools": true,
+  "supportsTools": "auto",
   "enabled": true
 }
 ```
@@ -666,7 +666,7 @@ Then reference these in your model configurations:
   "apiKey": "${LM_STUDIO_GPT_OSS_KEY}",
   "contextWindow": 8192,
   "maxOutputTokens": 4096,
-  "supportsTools": true,
+  "supportsTools": "auto",
   "enabled": true
 }
 ```
@@ -686,7 +686,7 @@ For completely separate provider instances with different authentication:
   "apiKey": "dev-environment-key",
   "contextWindow": 4096,
   "maxOutputTokens": 4096,
-  "supportsTools": true,
+  "supportsTools": "auto",
   "enabled": true
 }
 
@@ -700,7 +700,7 @@ For completely separate provider instances with different authentication:
   "apiKey": "staging-environment-key",
   "contextWindow": 8192,
   "maxOutputTokens": 4096,
-  "supportsTools": true,
+  "supportsTools": "auto",
   "enabled": true
 }
 
@@ -714,7 +714,7 @@ For completely separate provider instances with different authentication:
   "apiKey": "production-secure-token",
   "contextWindow": 32768,
   "maxOutputTokens": 4096,
-  "supportsTools": true,
+  "supportsTools": "auto",
   "enabled": true
 }
 ```

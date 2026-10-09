@@ -307,6 +307,48 @@ export async function revokeRefreshTokensFor(clientId, userId) {
 }
 
 /**
+ * Revoke every refresh token a user holds, for every client.
+ *
+ * What deleting a user needs: their connections end with them, so no client may
+ * keep minting access tokens on their behalf. Scanned rather than indexed, like
+ * {@link revokeRefreshTokensFor}.
+ *
+ * @param {string} userId - User subject identifier.
+ * @returns {Promise<number>} How many tokens were revoked.
+ */
+export async function revokeRefreshTokensForUser(userId) {
+  if (!userId) return 0;
+
+  const doomedIn = store =>
+    Object.entries(store.tokens || {})
+      .filter(([, entry]) => entry?.userId === userId)
+      .map(([key]) => key);
+
+  if (doomedIn(loadStore()).length === 0) return 0;
+
+  const doomed = await withStoreLock(async () => {
+    const store = loadStore();
+    const keys = doomedIn(store);
+    if (keys.length > 0) {
+      for (const key of keys) {
+        delete store.tokens[key];
+      }
+      await saveStore(store);
+    }
+    return keys;
+  });
+
+  if (doomed.length > 0) {
+    logger.info('Refresh tokens revoked for user', {
+      component: 'RefreshTokenStore',
+      userId,
+      count: doomed.length
+    });
+  }
+  return doomed.length;
+}
+
+/**
  * Every user who still holds a live refresh token for one client.
  *
  * Revoking a whole client cannot be driven from the consent store alone: a

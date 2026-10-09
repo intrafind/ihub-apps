@@ -35,6 +35,38 @@ async function createFileExclusively(filePath, contents, mode) {
   }
 }
 
+/** The names in a directory; none when it is missing or is not a directory. */
+async function listDirectory(directory) {
+  try {
+    return await fs.readdir(directory);
+  } catch (error) {
+    if (error.code === 'ENOENT' || error.code === 'ENOTDIR') return [];
+    throw error;
+  }
+}
+
+/** Whether a file in a service directory is a token file of one of `ids` (`<id>.json` or `<id>__<provider>.json`). */
+function isTokenFileOf(entry, ids) {
+  if (!entry.endsWith('.json')) return false;
+  const name = entry.slice(0, -'.json'.length);
+  return ids.some(id => name === id || name.startsWith(`${id}__`));
+}
+
+/** Remove the token files of `ids` from one service directory. */
+async function deleteTokenFilesIn(serviceDir, ids) {
+  let removed = 0;
+  for (const entry of await listDirectory(serviceDir)) {
+    if (!isTokenFileOf(entry, ids)) continue;
+    try {
+      await fs.unlink(path.join(serviceDir, entry));
+      removed += 1;
+    } catch (error) {
+      if (error.code !== 'ENOENT') throw error;
+    }
+  }
+  return removed;
+}
+
 /**
  * Centralized Token Storage Service
  * Provides secure encryption, decryption, storage, and retrieval of user tokens
@@ -586,6 +618,50 @@ class TokenStorageService {
           error
         });
       }
+      return false;
+    }
+  }
+
+  /**
+   * Delete every token file a user has, across every service and provider.
+   *
+   * What deleting the user needs: the files are the user's own credentials for
+   * other systems (Office 365, Jira, MCP servers, ...), and nothing else lists
+   * them. Matches `<id>.json` (the legacy single slot) and `<id>__<providerId>.json`
+   * in each service directory.
+   *
+   * A user's tokens can be filed under more than one id (MCP hashes ids that are
+   * not file-name safe), so the caller names every id to clear.
+   *
+   * @param {string[]} storageIds - File-name-safe ids the user's tokens are filed under
+   * @returns {Promise<number>} How many files were removed
+   * @throws {Error} When a directory cannot be listed or a file cannot be removed
+   */
+  async deleteAllTokensForStorageIds(storageIds) {
+    const ids = [...new Set(storageIds)].filter(id => this._isSafeFilenameComponent(id));
+    if (ids.length === 0) return 0;
+
+    const services = await listDirectory(this.storageBasePath);
+    let removed = 0;
+    for (const serviceName of services.filter(name => this._isSafeFilenameComponent(name))) {
+      removed += await deleteTokenFilesIn(path.join(this.storageBasePath, serviceName), ids);
+    }
+
+    if (removed > 0) {
+      logger.info('Integration tokens deleted for user', {
+        component: 'TokenStorage',
+        count: removed
+      });
+    }
+    return removed;
+  }
+
+  /** Whether a name passes the file-name allowlist, without throwing. */
+  _isSafeFilenameComponent(value) {
+    try {
+      this._assertSafeFilenameComponent(value, 'userId');
+      return true;
+    } catch {
       return false;
     }
   }

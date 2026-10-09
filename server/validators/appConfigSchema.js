@@ -480,6 +480,9 @@ const baseAppConfigSchema = z.object({
   ephemeral: z.boolean().optional().prefault(false),
   websearch: websearchSchema,
   tools: z.array(z.string()).optional(),
+  // `required`: the model's first call of each turn must call one of the app's
+  // tools (see services/loop/toolChoice.js); later calls are `auto`.
+  toolChoice: z.enum(['auto', 'required']).optional(),
   workflows: z.array(z.string()).optional(),
   // Other app ids this app may invoke as synthetic `app__<id>` tools
   // (requires the `appAsTool` platform feature; see appToolsGateway).

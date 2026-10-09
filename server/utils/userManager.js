@@ -114,6 +114,66 @@ export function loadUsers(usersFilePath) {
   }
 }
 
+/** In-flight re-reads of a users file, by cache key, so a burst shares one. */
+const freshReads = new Map();
+
+/** Whether a parsed users.json body has the shape `loadUsers` accepts. */
+function isUsersConfig(data) {
+  return (
+    typeof data === 'object' &&
+    data !== null &&
+    typeof data.users === 'object' &&
+    data.users !== null
+  );
+}
+
+/**
+ * Read a users file from where it lives: the configuration store for a file
+ * under contents/, the file system for one outside it (see locateConfigFile).
+ * Throws when the file exists but cannot be read or parsed.
+ */
+async function readUsersFileFresh({ fullPath, relPath }) {
+  if (relPath) return await configStore.readJsonStrict(relPath);
+  if (!fs.existsSync(fullPath)) return null;
+  return JSON.parse(fs.readFileSync(fullPath, 'utf8'));
+}
+
+/**
+ * Load users straight from the store, bypassing (and refreshing) the cached
+ * copy.
+ *
+ * Cluster workers each cache this file and hear about another worker's write
+ * over the config sync bus, which takes a few milliseconds. An external user
+ * is persisted by the worker that completes their sign-in, and their very next
+ * request — the redirect back into the app — is routinely served by another
+ * worker inside that window. A lookup that is about to conclude "this user
+ * does not exist" calls this once first.
+ *
+ * Unlike {@link loadUsers} this throws when the store cannot be read, rather
+ * than handing back an empty structure: a caller that is about to treat a miss
+ * as a deleted account has to be able to tell "no such user" from "could not
+ * look".
+ *
+ * @param {string} usersFilePath - Path to users.json file
+ * @returns {Promise<Object>} Users configuration
+ * @throws {Error} When the users file exists but cannot be read or parsed
+ */
+export async function loadUsersFresh(usersFilePath) {
+  const location = locateUsersFile(usersFilePath);
+  const { cacheKey } = location;
+  let pending = freshReads.get(cacheKey);
+  if (!pending) {
+    pending = readUsersFileFresh(location)
+      .then(data => {
+        if (isUsersConfig(data)) configCache.setCacheEntry(cacheKey, data);
+      })
+      .finally(() => freshReads.delete(cacheKey));
+    freshReads.set(cacheKey, pending);
+  }
+  await pending;
+  return loadUsers(usersFilePath);
+}
+
 /**
  * Save users to the local users file
  * @param {Object} usersConfig - Users configuration object

@@ -608,7 +608,7 @@ class IAssistantConversationAdapterClass extends BaseAdapter {
       provider: 'iassistant-conversation',
       supportsStreaming: true,
       supportsImages: false,
-      supportsTools: false,
+      supportsTools: 'none',
       maxTokens: null,
       contextWindow: null
     };
