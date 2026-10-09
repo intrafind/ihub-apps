@@ -499,7 +499,7 @@
     "maxInstructionLength": 8000,
     "maxRunMinutes": 30,
     "memoryEnabled": true,
-    "memoryMaxChars": 8000,
+    "memoryMaxChars": 16000,
     "maxHistoryReadChars": 8000
   },
   "storage": {

@@ -358,7 +358,7 @@ describe('the memory service on a task scope', () => {
     await cleanup(ada());
   });
 
-  it('reads for a prompt: nothing for empty notes, a cut with a marker for long ones', async () => {
+  it('reads for a prompt: nothing for empty notes, whole up to twice the limit, then both ends', async () => {
     const task = await newTask();
     const scope = scopeOf(task);
     assert.equal(await memoryService.readMemoryForPrompt(scope, 100), null);
@@ -370,9 +370,17 @@ describe('the memory service on a task scope', () => {
     assert.equal(whole.truncated, false);
     assert.equal(whole.version, 2);
 
+    const whole2 = await memoryService.readMemoryForPrompt(scope, 30);
+    assert.equal(whole2.truncated, false, 'over the limit, within twice it');
+    assert.equal(whole2.chars, 51);
+
+    await memoryService.writeMemory(scope, {
+      mode: 'replace',
+      content: `head${'y'.repeat(50)}tail`
+    });
     const cut = await memoryService.readMemoryForPrompt(scope, 10);
     assert.equal(cut.truncated, true);
-    assert.equal(cut.body, `${'y'.repeat(10)}\n\n[notes truncated]`);
+    assert.equal(cut.body, `heady${'y'.repeat(5)}\n\n[notes truncated]\n\n${'y'.repeat(5)}ytail`);
     await cleanup(ada());
   });
 

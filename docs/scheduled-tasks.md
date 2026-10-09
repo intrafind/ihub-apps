@@ -65,7 +65,7 @@ restart.
 | `maxInstructionLength`     | `8000`  | Characters in a task's instructions                                     |
 | `maxRunMinutes`            | `30`    | Wall-clock limit of one run                                             |
 | `memoryEnabled`            | `true`  | Switch for task memory across the installation: off, tasks run without notes (the notes are kept) |
-| `memoryMaxChars`           | `8000`  | Size limit of one task's notes, 1000–64000 characters                    |
+| `memoryMaxChars`           | `16000` | Size limit of one task's notes, 1000–64000 characters (8000 before V161) |
 | `maxHistoryReadChars`      | `8000`  | How much of an earlier run's answer a run gets back from `get_task_run`, 1000–50000 |
 
 ## Creating a task
@@ -275,6 +275,12 @@ What a run with memory does:
    call without tools rewrites the notes from the run's answer: what was
    reported (as a compact watermark, not the report), open follow-ups, the
    owner's preferences. The model does not have to remember to write them.
+   It is told the limit and the current size, and aims for three quarters of
+   the limit so later runs have room. Every entry ends with the date it was
+   last confirmed, `(seen YYYY-MM-DD)`, and a run that confirms an entry again
+   refreshes its date. When the notes need room, the entries not seen for the
+   longest time go first, then older ones are merged or shortened; the latest
+   watermark, open follow-ups and the owner's preferences stay.
    `write_memory` stays available in the run for something that must survive
    even a failing run. The extra call is part of the run's usage.
 
@@ -285,7 +291,8 @@ while a run is going — at any point of it, also during the update itself — t
 stays and the run's update is dropped. A run that is stopped while its notes are being updated
 ends as cancelled and leaves them alone.
 The run's row on the task page says what happened (*Memory updated*, *No
-changes*).
+changes*, or *Memory full* / *Memory not updated* when the notes were kept as
+they were).
 
 A model that cannot call tools — no tool support, or Gemini with Google
 search, which drops every function tool — still gets its notes and the
@@ -316,9 +323,11 @@ API refuses it (`NOTIFY_CHANGES_NEEDS_MEMORY`).
   starts empty. **Deleting** the task deletes its notes.
 - **Admins** see only metadata (size, version, last update, who wrote last)
   in Admin → Scheduled Tasks, and can clear the notes. They cannot read them.
-- **Size.** `memoryMaxChars` applies to every write. The notes in the prompt
-  are cut at the limit, with a marker, if a limit was lowered after they were
-  written.
+- **Size.** `memoryMaxChars` applies to every write. The run sees the size
+  and the limit of its notes (`chars` and `limit` on the `<task_memory>`
+  block). Notes over a limit that was lowered after they were written still go
+  into the prompt whole, up to twice the limit, and the update after the run
+  shrinks them; beyond that the middle is left out and marked.
 - **Scheduling tools.** A proposal card from `schedule_task` and
   `update_scheduled_task` can carry `memory` and shows it; the model is told
   that memory exists and is off by default.

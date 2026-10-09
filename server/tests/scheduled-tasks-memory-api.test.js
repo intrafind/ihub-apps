@@ -161,7 +161,7 @@ describe('GET /scheduled-tasks/:taskId/memory', () => {
       body: '',
       version: 0,
       chars: 0,
-      maxChars: 8000,
+      maxChars: 16000,
       updatedAt: null,
       updatedBy: null
     });

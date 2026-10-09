@@ -227,7 +227,7 @@ describe('notifying only when something changed', () => {
 describe('platform settings', () => {
   it('ships defaults for the three new limits', () => {
     assert.equal(DEFAULT_SCHEDULED_TASK_SETTINGS.memoryEnabled, true);
-    assert.equal(DEFAULT_SCHEDULED_TASK_SETTINGS.memoryMaxChars, 8000);
+    assert.equal(DEFAULT_SCHEDULED_TASK_SETTINGS.memoryMaxChars, 16000);
     assert.equal(DEFAULT_SCHEDULED_TASK_SETTINGS.maxHistoryReadChars, 8000);
   });
 
@@ -235,7 +235,7 @@ describe('platform settings', () => {
     for (const platform of [undefined, {}, { scheduledTasks: {} }]) {
       const settings = scheduledTaskSettings(platform);
       assert.equal(settings.memoryEnabled, true);
-      assert.equal(settings.memoryMaxChars, 8000);
+      assert.equal(settings.memoryMaxChars, 16000);
       assert.equal(settings.maxHistoryReadChars, 8000);
     }
   });
@@ -247,7 +247,7 @@ describe('platform settings', () => {
     assert.equal(read({ memoryMaxChars: 12000 }).memoryMaxChars, 12000);
     assert.equal(read({ memoryMaxChars: 10 }).memoryMaxChars, 1000);
     assert.equal(read({ memoryMaxChars: 10_000_000 }).memoryMaxChars, 64000);
-    assert.equal(read({ memoryMaxChars: 'many' }).memoryMaxChars, 8000);
+    assert.equal(read({ memoryMaxChars: 'many' }).memoryMaxChars, 16000);
     assert.equal(read({ maxHistoryReadChars: 20000 }).maxHistoryReadChars, 20000);
     assert.equal(read({ maxHistoryReadChars: 5 }).maxHistoryReadChars, 1000);
     assert.equal(read({ maxHistoryReadChars: 10_000_000 }).maxHistoryReadChars, 50000);
@@ -257,7 +257,7 @@ describe('platform settings', () => {
     const config = scheduledTasksClientConfig(configCache.getFeatures(), configCache.getPlatform());
     assert.equal(config.enabled, true);
     assert.equal(config.memoryEnabled, true);
-    assert.equal(config.memoryMaxChars, 8000);
+    assert.equal(config.memoryMaxChars, 16000);
     assert.deepEqual(scheduledTasksClientConfig({ scheduledTasks: false }, {}), {
       enabled: false
     });

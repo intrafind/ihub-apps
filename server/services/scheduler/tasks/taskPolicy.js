@@ -46,7 +46,7 @@ export const DEFAULT_SCHEDULED_TASK_SETTINGS = Object.freeze({
   maxInstructionLength: 8000,
   maxRunMinutes: 30,
   memoryEnabled: true,
-  memoryMaxChars: 8000,
+  memoryMaxChars: 16000,
   maxHistoryReadChars: 8000
 });
 

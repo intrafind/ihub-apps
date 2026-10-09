@@ -61,10 +61,14 @@ export function neutralizeNotes(text) {
  * @param {number} notes.version - 0 when nothing was ever written.
  * @param {string|null} [notes.updatedAt]
  * @param {string} [notes.body]
+ * @param {number} [notes.chars] - Size of the stored notes, which may exceed what is shown.
+ * @param {number} [notes.maxChars] - The limit, so a write_memory call can plan for it.
  * @returns {string}
  */
-export function buildMemoryBlock({ version, updatedAt, body }) {
-  const attributes = `version="${version}"${updatedAt ? ` updated="${updatedAt}"` : ''}`;
+export function buildMemoryBlock({ version, updatedAt, body, chars, maxChars }) {
+  const attributes =
+    `version="${version}"${updatedAt ? ` updated="${updatedAt}"` : ''}` +
+    (Number.isFinite(maxChars) ? ` chars="${chars ?? 0}" limit="${maxChars}"` : '');
   let text;
   if (body && body.trim() !== '') text = neutralizeNotes(body.replace(/\s+$/, ''));
   else if (version > 0) text = '(the notes are empty)';
@@ -165,7 +169,7 @@ export async function addMemoryTools(prepared, language) {
  * @param {Object} options.prepared - Mutated: `prepared.tools`.
  * @param {string} options.language
  * @param {boolean} options.continuation
- * @param {number} options.maxChars - How much of the notes goes into the prompt.
+ * @param {number} options.maxChars - The size limit of the notes.
  * @returns {Promise<{notes: string[], marker: Object, before: string}>} `before` is the notes as
  *   the run starts, for the step that updates them afterwards.
  */
@@ -185,7 +189,9 @@ export async function prepareRunMemory({ task, run, prepared, language, continua
         buildMemoryBlock({
           version: document.version,
           updatedAt: document.updatedAt,
-          body: inPrompt?.body ?? ''
+          body: inPrompt?.body ?? '',
+          chars: (document.body || '').length,
+          maxChars
         }),
         buildProtocolNote({ toolsOffered, continuation })
       ],

@@ -330,7 +330,7 @@ describe('TaskDetailPage: memory', () => {
   });
 
   describe('run history', () => {
-    it('marks runs that found nothing new and runs that updated the notes', async () => {
+    it('marks runs that found nothing new, updated the notes, or could not update them', async () => {
       fetchScheduledTaskRuns.mockResolvedValue({
         items: [
           run('r-nochange', { memory: { enabled: true, changed: false, compose: 'unchanged' } }),
@@ -340,6 +340,7 @@ describe('TaskDetailPage: memory', () => {
             memory: { enabled: true, changed: null, versionRead: 2, versionWritten: 3 }
           }),
           run('r-failed', { memory: { enabled: true, changed: null, compose: 'failed' } }),
+          run('r-full', { memory: { enabled: true, changed: true, compose: 'too_long' } }),
           run('r-plain')
         ],
         nextCursor: null
@@ -347,17 +348,20 @@ describe('TaskDetailPage: memory', () => {
       await renderPage();
 
       const rows = screen.getAllByRole('row').slice(1);
-      expect(rows).toHaveLength(6);
+      expect(rows).toHaveLength(7);
       const badges = row => ({
         noChanges: within(row).queryByText('No changes') !== null,
-        updated: within(row).queryByText('Memory updated') !== null
+        updated: within(row).queryByText('Memory updated') !== null,
+        warning: within(row).queryByText(/^Memory (full|not updated)$/)?.textContent ?? null
       });
-      expect(badges(rows[0])).toEqual({ noChanges: true, updated: false });
-      expect(badges(rows[1])).toEqual({ noChanges: false, updated: true });
-      expect(badges(rows[2])).toEqual({ noChanges: true, updated: true });
-      expect(badges(rows[3])).toEqual({ noChanges: false, updated: true });
-      expect(badges(rows[4])).toEqual({ noChanges: false, updated: false });
-      expect(badges(rows[5])).toEqual({ noChanges: false, updated: false });
+      const none = { noChanges: false, updated: false, warning: null };
+      expect(badges(rows[0])).toEqual({ ...none, noChanges: true });
+      expect(badges(rows[1])).toEqual({ ...none, updated: true });
+      expect(badges(rows[2])).toEqual({ ...none, noChanges: true, updated: true });
+      expect(badges(rows[3])).toEqual({ ...none, updated: true });
+      expect(badges(rows[4])).toEqual({ ...none, warning: 'Memory not updated' });
+      expect(badges(rows[5])).toEqual({ ...none, warning: 'Memory full' });
+      expect(badges(rows[6])).toEqual(none);
     });
   });
 
