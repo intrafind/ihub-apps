@@ -45,13 +45,18 @@ async function listDirectory(directory) {
   }
 }
 
+/** Whether a file in a service directory is a token file of one of `ids` (`<id>.json` or `<id>__<provider>.json`). */
+function isTokenFileOf(entry, ids) {
+  if (!entry.endsWith('.json')) return false;
+  const name = entry.slice(0, -'.json'.length);
+  return ids.some(id => name === id || name.startsWith(`${id}__`));
+}
+
 /** Remove the token files of `ids` from one service directory. */
 async function deleteTokenFilesIn(serviceDir, ids) {
   let removed = 0;
   for (const entry of await listDirectory(serviceDir)) {
-    if (!entry.endsWith('.json')) continue;
-    const name = entry.slice(0, -'.json'.length);
-    if (!ids.some(id => name === id || name.startsWith(`${id}__`))) continue;
+    if (!isTokenFileOf(entry, ids)) continue;
     try {
       await fs.unlink(path.join(serviceDir, entry));
       removed += 1;
