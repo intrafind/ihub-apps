@@ -21,7 +21,7 @@ function resolveApiUrl(apiBaseUrl, endpoint) {
 }
 
 /** The parsed JSON body of a successful response, or null for 204 No Content. */
-async function readResponseBody(response) {
+function readResponseBody(response) {
   return response.status === 204 ? null : response.json();
 }
 
