@@ -67,9 +67,15 @@ async function withConfig(workflow, fn, appWorkflows = [WORKFLOW_ID]) {
  * @param {string} params.chatId - Chat id.
  * @param {string} [params.content] - The message.
  * @param {Object} [params.user] - Caller.
+ * @param {string} [params.clientLanguage] - Language the caller works in.
  * @returns {Promise<Object>}
  */
-function mention({ chatId, content = `@${WORKFLOW_ID} Q3 numbers`, user = PERMITTED }) {
+function mention({
+  chatId,
+  content = `@${WORKFLOW_ID} Q3 numbers`,
+  user = PERMITTED,
+  clientLanguage = 'en'
+}) {
   const messages = [{ role: 'user', content, messageId: 'msg-1' }];
   return tryHandleMentionWorkflow({
     messages,
@@ -79,7 +85,7 @@ function mention({ chatId, content = `@${WORKFLOW_ID} Q3 numbers`, user = PERMIT
     messageId: 'msg-1',
     modelId: 'gpt-4o',
     user,
-    clientLanguage: 'en',
+    clientLanguage,
     persistence: null
   });
 }
@@ -216,6 +222,36 @@ describe('tryHandleMentionWorkflow: refuses a workflow that cannot run from this
       );
     });
   }
+});
+
+describe('tryHandleMentionWorkflow: names the workflow the way the caller reads it', () => {
+  /** The refusal a caller in `clientLanguage` gets for a disabled workflow called `name`. */
+  async function refusalFor(name, clientLanguage) {
+    let message;
+    await withConfig({ ...WORKFLOW, enabled: false, name }, async () => {
+      const result = await mention({ chatId: nextChatId(), clientLanguage });
+      message = result.response.message;
+    });
+    return message;
+  }
+
+  it('in their language when the name has one', async () => {
+    const name = { de: 'Bericht', en: 'Report' };
+    assert.equal(await refusalFor(name, 'de'), 'Workflow "Bericht" is disabled.');
+  });
+
+  it('in English when it has none for theirs', async () => {
+    const name = { de: 'Bericht', en: 'Report' };
+    assert.equal(await refusalFor(name, 'fr'), 'Workflow "Report" is disabled.');
+  });
+
+  it('as written when the name is a plain string', async () => {
+    assert.equal(await refusalFor('Plain name', 'de'), 'Workflow "Plain name" is disabled.');
+  });
+
+  it('by the id they typed when it has no usable name', async () => {
+    assert.equal(await refusalFor({}, 'en'), `Workflow "${WORKFLOW_ID}" is disabled.`);
+  });
 });
 
 describe('tryHandleMentionWorkflow: starts a runnable workflow', () => {

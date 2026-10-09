@@ -115,6 +115,21 @@ async function materializeWorkflowAssistantTurn({ persistence, chatId, runId, su
 }
 
 /**
+ * The workflow's name as the caller reads it: in their language, else in
+ * English, else the id they typed.
+ *
+ * @param {Object} workflow - Workflow definition (`name` is a string or a map of languages).
+ * @param {string} language - Language the caller works in.
+ * @param {string} fallback - What to call it when it has no usable name.
+ * @returns {string}
+ */
+function workflowDisplayName(workflow, language, fallback) {
+  const name = workflow.name;
+  const localized = typeof name === 'object' ? name[language] || name.en : name;
+  return localized || fallback;
+}
+
+/**
  * Why `@<workflow>` cannot be started from this chat, in words for the user.
  *
  * @param {Object} params
@@ -130,10 +145,7 @@ function refusalReason({ workflow, workflowId, access, clientLanguage }) {
   const notInApp = access.reason === 'not_in_app';
   if (!isDisabled && !noChatIntegration && !notInApp) return null;
 
-  const wfName =
-    (typeof workflow.name === 'object'
-      ? workflow.name[clientLanguage] || workflow.name.en
-      : workflow.name) || workflowId;
+  const wfName = workflowDisplayName(workflow, clientLanguage, workflowId);
   if (isDisabled) return `Workflow "${wfName}" is disabled.`;
   if (noChatIntegration) {
     return `Workflow "${wfName}" is not configured for chat (chatIntegration.enabled is false).`;
@@ -188,10 +200,6 @@ async function launchMentionWorkflow({
     content: withoutMention,
     hostContext: newMessage.hostContext
   });
-
-  // Collect file data from the last message
-  const fileData = newMessage.fileData || null;
-  const imageData = newMessage.imageData || null;
 
   // Build chat history from all prior messages (excluding the last).
   // From `conversation`, not the request body: for a persisted chat
@@ -255,7 +263,8 @@ async function launchMentionWorkflow({
         input: strippedInput,
         modelId,
         _chatHistory: chatHistory.length > 0 ? chatHistory : undefined,
-        _fileData: fileData || imageData || undefined,
+        // The files (or the image) the last message carries.
+        _fileData: newMessage.fileData || newMessage.imageData || undefined,
         language: clientLanguage
       })
       .then(result => {
@@ -304,6 +313,44 @@ async function launchMentionWorkflow({
 }
 
 /**
+ * The first `@workflow-name` in a message.
+ *
+ * @param {Object|undefined} message - A chat message.
+ * @returns {{content: string, workflowId: string}|null} The text of the
+ *   message and the id after its `@`, or null when it mentions nobody.
+ */
+function findMention(message) {
+  const content = typeof message?.content === 'string' ? message.content : '';
+  const match = content.match(/@([\w.-]+)/);
+  return match ? { content, workflowId: match[1] } : null;
+}
+
+/**
+ * Tell the caller why the mentioned workflow was not started: a 400 on the
+ * POST when no stream is open to carry it, a failed run on the stream when one is.
+ *
+ * @param {Object} params
+ * @param {string} params.chatId - Chat id.
+ * @param {string|null} [params.messageId] - The client's id for the new message.
+ * @param {string} params.workflowId - The id as typed in the message.
+ * @param {string} params.reason - See {@link refusalReason}.
+ * @returns {{handled: true, response: Object, statusCode?: number}}
+ */
+function refuseMention({ chatId, messageId, workflowId, reason }) {
+  if (!hasChatClient(chatId)) {
+    return { handled: true, statusCode: 400, response: { status: 'error', message: reason } };
+  }
+  emitFailedRun(chatId, {
+    kind: 'workflow',
+    messageId,
+    code: 'WORKFLOW_UNAVAILABLE',
+    message: reason,
+    refs: { workflowId }
+  });
+  return { handled: true, response: { status: 'streaming', chatId } };
+}
+
+/**
  * Detect an `@workflow-name` mention in the last user message and, when it
  * names a workflow the caller may run from this chat, launch it.
  *
@@ -342,11 +389,10 @@ export async function tryHandleMentionWorkflow({
   persistence
 }) {
   const lastUserMsg = messages.at(-1);
-  const lastUserContent = typeof lastUserMsg?.content === 'string' ? lastUserMsg.content : '';
-  const mentionMatch = lastUserContent.match(/@([\w.-]+)/);
-  if (!mentionMatch) return NOT_HANDLED;
+  const mention = findMention(lastUserMsg);
+  if (!mention) return NOT_HANDLED;
 
-  const mentionedId = mentionMatch[1];
+  const mentionedId = mention.workflowId;
   const mentionedWorkflow = configCache.getWorkflowById(mentionedId);
   if (!mentionedWorkflow) return NOT_HANDLED;
 
@@ -369,19 +415,7 @@ export async function tryHandleMentionWorkflow({
     access,
     clientLanguage
   });
-  if (reason) {
-    if (!hasChatClient(chatId)) {
-      return { handled: true, statusCode: 400, response: { status: 'error', message: reason } };
-    }
-    emitFailedRun(chatId, {
-      kind: 'workflow',
-      messageId,
-      code: 'WORKFLOW_UNAVAILABLE',
-      message: reason,
-      refs: { workflowId: mentionedId }
-    });
-    return { handled: true, response: { status: 'streaming', chatId } };
-  }
+  if (reason) return refuseMention({ chatId, messageId, workflowId: mentionedId, reason });
 
   // Awaited rather than returned bare, so a failure still has this frame in its async stack.
   return await launchMentionWorkflow({
@@ -389,7 +423,7 @@ export async function tryHandleMentionWorkflow({
     workflowId: mentionedId,
     app: mentionApp,
     newMessage: lastUserMsg,
-    content: lastUserContent,
+    content: mention.content,
     conversation,
     chatId,
     appId,
