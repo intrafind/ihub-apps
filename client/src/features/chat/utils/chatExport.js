@@ -38,6 +38,17 @@ const escapeHtml = s =>
     .replaceAll('"', '&quot;')
     .replaceAll("'", '&#39;');
 
+// Hand a finished export to the browser. `saveBlobAs` keeps the object URL alive
+// until the transfer has started (revoking it right after `click()` cancels the
+// download in Chromium-based hosts such as the Outlook task pane) and returns
+// `false` when it cannot start one. ExportDialog closes itself after anything
+// that does not throw, so a failed save has to throw to reach the user.
+const saveDownload = (blob, filename) => {
+  if (!saveBlobAs(blob, filename)) {
+    throw new Error(`The download of ${filename} could not be started`);
+  }
+};
+
 // A real PDF, rendered on the server (`POST /api/exports/pdf`). The browser
 // print dialog this replaces printed blank pages in several hosts — the
 // Outlook task pane, the extension side panel, some Chromium builds.
@@ -96,7 +107,7 @@ export const exportChatToPDF = async (
         timestamp: msg.timestamp
       }))
   });
-  saveBlobAs(blob, filename);
+  saveDownload(blob, filename);
   return { success: true, filename };
 };
 
@@ -533,14 +544,7 @@ const generateExportHTML = (
 
 // Client-side export utility functions
 const downloadFile = (content, filename, mimeType) => {
-  const blob = new Blob([content], { type: mimeType });
-  const url = URL.createObjectURL(blob);
-
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
+  saveDownload(new Blob([content], { type: mimeType }), filename);
 };
 
 // Helper functions for generating export content
@@ -577,7 +581,7 @@ const generateJSONL = (messages, settings) => {
 // Markdown collapses newlines (list items and headings end up on one line) and
 // backslash-escapes `_` and `*`.
 const HTML_FRAGMENT_START =
-  /^\s*<(?:!doctype|html|body|p|div|h[1-6]|ul|ol|li|table|blockquote|pre|section|article|br|hr|a|strong|em|b|i|span|code)\b/i;
+  /^\s*<(?:!doctype|html|body|p|div|h[1-6]|ul|ol|li|table|blockquote|pre|section|article|br|hr|img|a|strong|em|b|i|span|code)\b/i;
 
 export const messageContentToMarkdown = content => {
   if (typeof content !== 'string' || !content) return '';

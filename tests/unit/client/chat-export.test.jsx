@@ -80,6 +80,14 @@ describe('messageContentToMarkdown', () => {
     expect(md).not.toContain('<');
   });
 
+  it('converts an image-only HTML reply instead of leaving the raw tag', () => {
+    // The chat UI renders content that is just an <img> (e.g. a generated image), so the export
+    // has to recognise it as HTML too.
+    expect(messageContentToMarkdown('<img src="data:image/png;base64,AAAA" alt="chart">')).toBe(
+      '![chart](data:image/png;base64,AAAA)'
+    );
+  });
+
   it('returns an empty string for missing or non-string content', () => {
     expect(messageContentToMarkdown()).toBe('');
     expect(messageContentToMarkdown(null)).toBe('');
@@ -93,23 +101,14 @@ describe('exportChatToFormat', () => {
 
   beforeEach(() => {
     downloads = [];
-    let counter = 0;
-    const blobs = new Map();
-    global.URL.createObjectURL = jest.fn(blob => {
-      const url = `blob:test/${(counter += 1)}`;
-      blobs.set(url, blob);
-      return url;
-    });
-    global.URL.revokeObjectURL = jest.fn();
-    jest.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function click() {
-      downloads.push({ filename: this.download, blob: blobs.get(this.href) });
-    });
     exportPdfOnServer.mockReset();
+    // Every client-side format ends in saveBlobAs (the shared helper that also keeps the object
+    // URL alive until the transfer starts), so recording its calls captures the downloads.
     saveBlobAs.mockReset();
-  });
-
-  afterEach(() => {
-    jest.restoreAllMocks();
+    saveBlobAs.mockImplementation((blob, filename) => {
+      downloads.push({ filename, blob });
+      return true;
+    });
   });
 
   const messages = [
@@ -219,7 +218,23 @@ describe('exportChatToFormat', () => {
     });
     expect(payload.messages.map(m => m.role)).toEqual(['user', 'assistant']);
     expect(saveBlobAs).toHaveBeenCalledWith(pdf, 'chat.pdf');
-    expect(downloads).toHaveLength(0);
+  });
+
+  it('reports a failed save instead of claiming the export succeeded', async () => {
+    // ExportDialog closes itself after anything that does not throw, so a download the browser
+    // refused to start has to surface as an error — for the client-side formats and for the PDF.
+    saveBlobAs.mockReturnValue(false);
+    exportPdfOnServer.mockResolvedValue(new Blob(['%PDF'], { type: 'application/pdf' }));
+
+    await expect(exportChatToFormat(messages, settings, 'markdown')).rejects.toThrow(
+      'The download of chat.md could not be started'
+    );
+    await expect(exportChatToFormat(messages, settings, 'json')).rejects.toThrow(
+      'The download of chat.json could not be started'
+    );
+    await expect(exportChatToFormat(messages, settings, 'pdf')).rejects.toThrow(
+      'The download of chat.pdf could not be started'
+    );
   });
 
   it('rejects an unsupported format', async () => {
