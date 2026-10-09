@@ -27,10 +27,12 @@ or mismatched start flag on the vLLM side — **not** the iHub configuration.
 ## How iHub Apps maps to vLLM
 
 iHub Apps connects to vLLM using the OpenAI-compatible endpoint
-(`http://<host>:8000/v1/chat/completions`) with `"provider": "openai"` (or the dedicated
-`"provider": "local"` for reasoning models). The capability flags in the model config are
-**hints to iHub's UI and request builder** — they tell iHub it is allowed to send tools,
-images, or audio. They do **not** configure vLLM. Both sides must agree:
+(`http://<host>:8000/v1/chat/completions`) with the dedicated `"provider": "local"` — mark vLLM
+models as `local`, not `openai`. The `local` provider has its own vLLM adapter: it sanitizes tool
+schemas for vLLM and, unlike `openai`, sends `include_reasoning` for reasoning models. The
+capability flags in the model config are **hints to iHub's UI and request builder** — they tell
+iHub it is allowed to send tools, images, or audio. They do **not** configure vLLM. Both sides
+must agree:
 
 | Capability        | iHub model config flag          | vLLM start parameter(s)                                  |
 | ----------------- | ------------------------------- | -------------------------------------------------------- |
@@ -56,7 +58,8 @@ How iHub sends each modality over the OpenAI-compatible API:
 
 - **Images** → OpenAI `image_url` content parts (base64 data URLs).
 - **Audio** → OpenAI `input_audio` content parts (`{ data: <base64>, format: "wav"|"mp3"|... }`).
-- **Tools** → standard OpenAI `tools` array with `tool_choice: "auto"`.
+- **Tools** → standard OpenAI `tools` array with `tool_choice: "auto"` (`"required"` on the first call
+  only, for an app with `toolChoice: "required"` and a model set to `"supportsTools": "required"`).
 
 ---
 
@@ -129,7 +132,7 @@ vllm serve mistralai/Mistral-Small-Instruct-2409 \
   "name": { "en": "Llama 3.1 8B (vLLM)" },
   "description": { "en": "Llama 3.1 with tool calling via vLLM" },
   "url": "http://localhost:8000/v1/chat/completions",
-  "provider": "openai",
+  "provider": "local",
   "contextWindow": 32768,
   "maxOutputTokens": 4096,
   "supportsTools": "auto",
@@ -218,7 +221,7 @@ vllm serve microsoft/Phi-3.5-vision-instruct \
   "name": { "en": "Phi-3.5 Vision (vLLM)" },
   "description": { "en": "Phi-3.5 vision model served by vLLM" },
   "url": "http://localhost:8000/v1/chat/completions",
-  "provider": "openai",
+  "provider": "local",
   "contextWindow": 8192,
   "maxOutputTokens": 4096,
   "supportsImages": true,
@@ -279,7 +282,7 @@ vllm serve Qwen/Qwen2-Audio-7B-Instruct \
   "name": { "en": "Ultravox (vLLM)" },
   "description": { "en": "Ultravox audio model served by vLLM" },
   "url": "http://localhost:8000/v1/chat/completions",
-  "provider": "openai",
+  "provider": "local",
   "contextWindow": 8192,
   "maxOutputTokens": 4096,
   "supportsAudio": true,
@@ -318,7 +321,7 @@ Corresponding iHub model config:
   "name": { "en": "My Multimodal Model (vLLM)" },
   "description": { "en": "Tool + image + audio capable model via vLLM" },
   "url": "http://localhost:8000/v1/chat/completions",
-  "provider": "openai",
+  "provider": "local",
   "contextWindow": 32768,
   "maxOutputTokens": 4096,
   "supportsTools": "auto",

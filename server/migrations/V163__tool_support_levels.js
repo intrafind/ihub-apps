@@ -87,20 +87,21 @@ function convertedApp(app) {
 async function convertedFiles(ctx, directory, convert) {
   if (!(await ctx.fileExists(directory))) return [];
   const names = await ctx.listFiles(directory, '*.json');
-  const changes = [];
-  for (const name of names) {
-    const path = `${directory}/${name}`;
-    let data;
-    try {
-      data = await ctx.readJson(path);
-    } catch (err) {
-      ctx.warn(`Skipping ${path}: ${err.message}`);
-      continue;
-    }
-    const next = convert(data);
-    if (next) changes.push({ path, next });
-  }
-  return changes;
+  const changes = await Promise.all(
+    names.map(async name => {
+      const path = `${directory}/${name}`;
+      let data;
+      try {
+        data = await ctx.readJson(path);
+      } catch (err) {
+        ctx.warn(`Skipping ${path}: ${err.message}`);
+        return null;
+      }
+      const next = convert(data);
+      return next ? { path, next } : null;
+    })
+  );
+  return changes.filter(Boolean);
 }
 
 async function pendingChanges(ctx) {
@@ -118,9 +119,7 @@ export async function precondition(ctx) {
 
 export async function up(ctx) {
   const { models, apps } = await pendingChanges(ctx);
-  for (const { path, next } of [...models, ...apps]) {
-    await ctx.writeJson(path, next);
-  }
+  await Promise.all([...models, ...apps].map(({ path, next }) => ctx.writeJson(path, next)));
   ctx.log(
     `Converted supportsTools on ${models.length} model(s) and ${apps.length} app model filter(s) to none/auto/required`
   );
