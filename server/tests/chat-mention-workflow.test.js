@@ -33,7 +33,7 @@ const WORKFLOW = {
 const PERMITTED = { id: 'user-1', permissions: { workflows: new Set([WORKFLOW_ID]) } };
 const NOT_PERMITTED = { id: 'user-2' };
 
-let envelopes = [];
+const envelopes = [];
 let stopObserving = null;
 let chatSeq = 0;
 
@@ -86,7 +86,14 @@ function mention({ chatId, content = `@${WORKFLOW_ID} Q3 numbers`, user = PERMIT
 
 /** Register a stream for `chatId`, as an open SSE connection would. */
 function connectClient(chatId) {
-  clients.set(chatId, { response: { write: () => true, end: () => {} }, lastActivity: new Date() });
+  const response = {
+    ended: false,
+    write: () => true,
+    end() {
+      this.ended = true;
+    }
+  };
+  clients.set(chatId, { response, lastActivity: new Date() });
 }
 
 async function waitFor(probe, what) {
@@ -104,7 +111,7 @@ before(() => {
 });
 
 afterEach(() => {
-  envelopes = [];
+  envelopes.length = 0;
   clients.clear();
 });
 
