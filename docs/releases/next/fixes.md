@@ -15,3 +15,11 @@ URL took the proxy's forwarded host and protocol verbatim, so a chain such as
 `X-Forwarded-Host: apps.example.com, proxy.internal` ended up in the URL Google was asked to
 return to. Google Drive now reads the first entry of the chain, as Office 365 and Nextcloud
 already did.
+
+## Sign-In Return Links Can No Longer Point to Other Sites
+
+After connecting Office 365, Google Drive, Nextcloud, Jira or an MCP server, users are sent back to
+the page they came from. That return link was checked to stay on the iHub site, but links written
+with a backslash or a hidden tab, such as `/\other-site.example`, slipped through and are read by
+browsers as a link to another site. They are now rejected and the user returns to the default
+page instead. Return links to pages inside iHub work as before.

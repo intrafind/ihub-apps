@@ -76,7 +76,7 @@ export function createOAuthIntegrationRouter(
     authLimiter,
     statusLimiter,
     logMissingRefreshToken,
-    mapCallbackError = () => 'callback_failed'
+    mapCallbackError = _error => 'callback_failed'
   }
 ) {
   const errorParam = `${providerKey}_error`;
@@ -85,7 +85,7 @@ export function createOAuthIntegrationRouter(
    * Initiate the OAuth2 flow.
    * GET /api/integrations/<providerKey>/auth?providerId=xxx
    */
-  router.get('/auth', authRequired, ...(authLimiter ? [authLimiter] : []), async (req, res) => {
+  router.get('/auth', authRequired, ...(authLimiter ? [authLimiter] : []), (req, res) => {
     try {
       const { returnUrl } = req.query;
       const providerId = requiresProviderId ? req.query.providerId : undefined;
@@ -254,7 +254,7 @@ export function createOAuthIntegrationRouter(
           });
         }
 
-        let userInfo;
+        let userInfo = null;
         if (tolerateUserInfoFailure) {
           try {
             userInfo = await getUserInfo(req.user.id, providerId);

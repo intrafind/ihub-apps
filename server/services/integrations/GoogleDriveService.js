@@ -251,7 +251,7 @@ class GoogleDriveService extends OAuthIntegrationBase {
    * @param {number} retryCount - Current retry count
    * @returns {Promise<Object>} API response
    */
-  async makeApiRequest(endpoint, method = 'GET', data = null, userId, providerId, retryCount = 0) {
+  makeApiRequest(endpoint, method = 'GET', data = null, userId, providerId, retryCount = 0) {
     return this._makeApiRequestWithRetry(
       this.driveApiUrl,
       endpoint,

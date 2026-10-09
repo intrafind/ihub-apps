@@ -215,6 +215,23 @@ for (const p of providers) {
     JSON.stringify(exchanged.slice(0, expectedExchange.length)) === JSON.stringify(expectedExchange)
   );
 
+  // The signed return URL is the only redirect target the callback uses, so /auth must never
+  // sign one that a browser reads as another site (`\` counts as `/`, tabs are dropped).
+  for (const evil of [
+    '//evil.example',
+    '/\\evil.example',
+    '/\t/evil.example',
+    'https://evil.example/x'
+  ]) {
+    await run(authHandler, { query: { providerId, returnUrl: evil }, user: { id: 'u1' } });
+    const evilState = key === 'jira' ? authArgs[0] : authArgs[1];
+    const evilCallback = await callback({ code: 'c', state: evilState });
+    check(
+      `return URL ${JSON.stringify(evil)} falls back to the default page`,
+      evilCallback.location === `/settings/integrations?${key}_connected=true`
+    );
+  }
+
   const declined = await callback({ error: 'access_denied', state });
   check(
     'declined consent reports access_denied',
