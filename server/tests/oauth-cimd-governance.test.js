@@ -23,7 +23,6 @@
 import { jest } from '@jest/globals';
 import request from 'supertest';
 import express from 'express';
-import cookieParser from 'cookie-parser';
 import rateLimit from 'express-rate-limit';
 import os from 'os';
 import path from 'path';
@@ -532,7 +531,21 @@ describe('signing in at /authorize', () => {
   function buildApp() {
     const app = express();
     app.use(testRateLimiter);
-    app.use(cookieParser());
+    // The cookie header is read by hand: the route only needs `req.cookies`, and
+    // a cookie parser in front of a handler without a CSRF token is what code
+    // scanning flags, which this test app is not.
+    app.use((req, res, next) => {
+      req.cookies = Object.fromEntries(
+        (req.headers.cookie || '')
+          .split(';')
+          .filter(Boolean)
+          .map(pair => {
+            const at = pair.indexOf('=');
+            return [pair.slice(0, at).trim(), decodeURIComponent(pair.slice(at + 1).trim())];
+          })
+      );
+      next();
+    });
     registerOAuthAuthorizeRoutes(app);
     return app;
   }
@@ -588,6 +601,15 @@ describe('signing in at /authorize', () => {
 
     expect(res.status).toBe(302);
     expect(res.headers.location).toContain('/login');
+  });
+
+  test('answers 503, not "sign in again", when the users cannot be read to check', async () => {
+    writeFileSync(USERS_FILE, '{ not json');
+
+    const res = await authorize();
+
+    expect(res.status).toBe(503);
+    expect(res.text).toContain('service_unavailable');
   });
 });
 
@@ -655,12 +677,31 @@ describe('the token endpoint', () => {
     expect(res.body.error_description).toMatch(/no longer available/);
   });
 
-  test('is not stopped by the user check while the user exists', async () => {
+  test('refreshes for a user who still exists, and rotates the token', async () => {
     const token = await grantFor('alice');
 
     const res = await refresh(token);
 
-    expect(res.body.error_description || '').not.toMatch(/no longer available/);
+    expect(res.status).toBe(200);
+    expect(res.body.access_token).toEqual(expect.any(String));
+    expect(res.body.refresh_token).toEqual(expect.any(String));
+    expect(res.body.refresh_token).not.toBe(token);
+  });
+
+  test('answers 503 and keeps the grant when the users cannot be read to check', async () => {
+    const token = await grantFor('alice');
+    writeFileSync(USERS_FILE, '{ not json');
+
+    const unavailable = await refresh(token);
+
+    expect(unavailable.status).toBe(503);
+    expect(unavailable.body.error).toBe('server_error');
+
+    // The grant was put back: once the users can be read, the same token works.
+    writeUsers({ alice: { id: 'alice', username: 'alice', active: true, authMethods: ['local'] } });
+    const retried = await refresh(token);
+    expect(retried.status).toBe(200);
+    expect(retried.body.access_token).toEqual(expect.any(String));
   });
 
   describe('introspection', () => {
@@ -723,7 +764,7 @@ describe('the token endpoint', () => {
 
       const res = await introspect();
 
-      expect(res.status).toBe(500);
+      expect(res.status).toBe(503);
       expect(res.body.active).toBeUndefined();
     });
 

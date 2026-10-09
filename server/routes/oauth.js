@@ -84,6 +84,9 @@ function sendOAuthError(res, status, error, description) {
   });
 }
 
+/** What a grant's user check answers when the users cannot be read. */
+const USER_CHECK_UNAVAILABLE = 'Unable to validate the user. Please try again later.';
+
 /**
  * Whether the user a delegated grant was made by is still there to be issued
  * tokens. A grant is bound to the user's id, and grants are signed or stored, so
@@ -91,9 +94,8 @@ function sendOAuthError(res, status, error, description) {
  *
  * @param {Object} platform - Platform configuration
  * @param {string} userId - The user the grant belongs to
- * @returns {Promise<'active'|'missing'|'disabled'>}
- * @throws {Error} When the users configuration cannot be read; the token
- *   endpoint's catch-all then fails closed
+ * @returns {Promise<'active'|'missing'|'disabled'|'unavailable'>} `'unavailable'` when
+ *   the users cannot be read, which says nothing about the user: callers answer 503
  */
 function delegatedUserState(platform, userId) {
   return tokenUserState(platform, { authMode: 'oauth_authorization_code', sub: userId });
@@ -300,7 +302,11 @@ export default function registerOAuthRoutes(app) {
 
         // The user who authorized this request has to still be there to be
         // issued anything: a deleted or disabled account gets no new tokens.
-        if ((await delegatedUserState(platform, codeData.userId)) !== 'active') {
+        const codeUserState = await delegatedUserState(platform, codeData.userId);
+        if (codeUserState === 'unavailable') {
+          return sendOAuthError(res, 503, 'server_error', USER_CHECK_UNAVAILABLE);
+        }
+        if (codeUserState !== 'active') {
           return sendOAuthError(
             res,
             400,
@@ -472,7 +478,15 @@ export default function registerOAuthRoutes(app) {
 
         // A refresh token must not outlive the user who granted it. The token is
         // already consumed above, so refusing here also ends the connection.
-        if ((await delegatedUserState(platform, tokenData.userId)) !== 'active') {
+        const refreshUserState = await delegatedUserState(platform, tokenData.userId);
+        if (refreshUserState === 'unavailable') {
+          // Nothing is known about the user, so the grant is put back as it was:
+          // the client retries with the same token once the users can be read,
+          // instead of having to authorize again.
+          await storeRefreshToken(sanitizedRefreshToken, tokenData);
+          return sendOAuthError(res, 503, 'server_error', USER_CHECK_UNAVAILABLE);
+        }
+        if (refreshUserState !== 'active') {
           return sendOAuthError(
             res,
             400,
@@ -819,9 +833,11 @@ export default function registerOAuthRoutes(app) {
       // The resource server asking whether it may serve it has to be told no:
       // answering "active" is what it would act on.
       if (introspection.active && introspection.token_type === 'oauth_authorization_code') {
-        if ((await delegatedUserState(platform, introspection.sub)) !== 'active') {
-          introspection = { active: false };
+        const introspectedUserState = await delegatedUserState(platform, introspection.sub);
+        if (introspectedUserState === 'unavailable') {
+          return sendOAuthError(res, 503, 'server_error', USER_CHECK_UNAVAILABLE);
         }
+        if (introspectedUserState !== 'active') introspection = { active: false };
       }
 
       logger.info('[OAuth] Token introspected', {

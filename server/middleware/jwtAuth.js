@@ -363,15 +363,8 @@ export default async function jwtAuthMiddleware(req, res, next) {
       // A key is its owner's credential: it ends with the owner (deleting a user
       // removes their keys too, this covers a removal that did not get that far)
       // and is suspended while the owner is.
-      let ownerState;
-      try {
-        ownerState = await ownerUserState(platform, client.ownerUserId);
-      } catch (ownerError) {
-        logger.error('Failed to look up the owner of a personal API key', {
-          component: 'JwtAuth',
-          clientId: decoded.client_id,
-          error: ownerError
-        });
+      const ownerState = await ownerUserState(platform, client.ownerUserId);
+      if (ownerState === 'unavailable') {
         return res.status(503).json({
           error: 'service_unavailable',
           error_description: 'Unable to validate the API key. Please try again later.'

@@ -291,7 +291,9 @@ export async function authenticateUpgrade(req, platform = configCache.getPlatfor
   if (token) {
     const decoded = verifyJwt(token);
     if (decoded) {
-      if ((await tokenUserState(platform, decoded)) !== 'active') return null;
+      const userState = await tokenUserState(platform, decoded);
+      if (userState === 'unavailable') throw new Error('Users configuration unavailable');
+      if (userState !== 'active') return null;
       return {
         id: decoded.sub || decoded.username || decoded.id || 'user',
         name: decoded.name || decoded.username || 'user',
@@ -1165,7 +1167,7 @@ export function attachRealtimeTranscription(httpServer) {
     }
 
     const platform = configCache.getPlatform() || {};
-    let user;
+    let user = null;
     try {
       user = await authenticateUpgrade(req, platform);
     } catch (err) {

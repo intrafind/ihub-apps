@@ -158,15 +158,8 @@ export default async function mcpAuth(req, res, next) {
     }
 
     // A key is its owner's credential and ends with the owner: see jwtAuth.
-    let ownerState;
-    try {
-      ownerState = await ownerUserState(platform, client.ownerUserId);
-    } catch (error) {
-      logger.error('Failed to look up the owner of a personal API key', {
-        component: 'McpAuth',
-        clientId: client.clientId,
-        error: error.message
-      });
+    const ownerState = await ownerUserState(platform, client.ownerUserId);
+    if (ownerState === 'unavailable') {
       return sendError(res, 503, 'service_unavailable', 'Unable to validate user credentials');
     }
     if (ownerState === 'missing') {
@@ -224,14 +217,8 @@ export default async function mcpAuth(req, res, next) {
     // A delegated token acts as the user who authorized it, and it is signed,
     // so it outlives that user's account unless the account is asked about:
     // refresh tokens keep minting new ones. Same check as the REST API makes.
-    let userState;
-    try {
-      userState = await tokenUserState(platform, decoded);
-    } catch (err) {
-      logger.error('Failed to validate the user behind an MCP token', {
-        component: 'McpAuth',
-        error: err.message
-      });
+    const userState = await tokenUserState(platform, decoded);
+    if (userState === 'unavailable') {
       return sendError(res, 503, 'service_unavailable', 'Unable to validate user credentials');
     }
     if (userState === 'missing') {

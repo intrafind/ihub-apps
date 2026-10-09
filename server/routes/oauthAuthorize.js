@@ -434,6 +434,33 @@ function getBaseUrl(req) {
   return `${protocol}://${host}${basePath}`;
 }
 
+/** What the authorize routes answer when the users cannot be read to check the session. */
+const SESSION_CHECK_UNAVAILABLE = 'service_unavailable: Unable to validate user credentials';
+
+/**
+ * The user behind the `authToken` session cookie, if there is one who may still
+ * sign in.
+ *
+ * The cookie is signed, so it outlives the account behind it. jwtAuth refuses a
+ * deleted user's cookie, but it prefers an Authorization header over the cookie
+ * these routes read, so the user is asked about here as well.
+ *
+ * @param {Object} platform - Platform configuration
+ * @param {string|undefined} token - The session cookie
+ * @returns {Promise<{user: (Object|null), unavailable: boolean}>} `unavailable` when
+ *   the users could not be read, which says nothing about the user
+ */
+async function resolveSessionUser(platform, token) {
+  const decoded = token ? verifyJwt(token) : null;
+  if (!decoded?.sub) return { user: null, unavailable: false };
+
+  const state = await tokenUserState(platform, decoded);
+  return {
+    user: state === 'active' ? decoded : null,
+    unavailable: state === 'unavailable'
+  };
+}
+
 /**
  * Register OAuth 2.0 authorization endpoint routes on the Express app.
  *
@@ -650,18 +677,11 @@ export default function registerOAuthAuthorizeRoutes(app) {
         : (Array.isArray(client.scopes) && client.scopes.length > 0 && client.scopes) || ['openid'];
 
       // Check if user is authenticated via the authToken JWT cookie
-      const token = req.cookies?.authToken;
-      let currentUser = null;
-
-      if (token) {
-        const decoded = verifyJwt(token);
-        // The cookie is signed, so it outlives the account behind it. jwtAuth
-        // refuses a deleted user's cookie, but it prefers an Authorization header
-        // over the cookie this route reads, so the user is checked here as well.
-        if (decoded && decoded.sub && (await tokenUserState(platform, decoded)) === 'active') {
-          currentUser = decoded;
-        }
+      const session = await resolveSessionUser(platform, req.cookies?.authToken);
+      if (session.unavailable) {
+        return res.status(503).send(SESSION_CHECK_UNAVAILABLE);
       }
+      const currentUser = session.user;
 
       // If not logged in, redirect to login. The full authorize URL rides along
       // as returnUrl, so whichever login method the user picks (and whichever
@@ -851,14 +871,11 @@ export default function registerOAuthAuthorizeRoutes(app) {
       } = ticket;
 
       // Re-authenticate: JWT cookie must still be valid after the consent interaction
-      const token = req.cookies?.authToken;
-      let currentUser = null;
-      if (token) {
-        const decoded = verifyJwt(token);
-        if (decoded && decoded.sub && (await tokenUserState(platform, decoded)) === 'active') {
-          currentUser = decoded;
-        }
+      const session = await resolveSessionUser(platform, req.cookies?.authToken);
+      if (session.unavailable) {
+        return res.status(503).send(SESSION_CHECK_UNAVAILABLE);
       }
+      const currentUser = session.user;
 
       if (!currentUser) {
         return res.status(401).send('login_required: Session expired during consent');

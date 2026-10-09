@@ -12,6 +12,7 @@
  */
 import { loadUsers, loadUsersFresh, isUserActive } from './userManager.js';
 import { localUsersFile } from './contentsPath.js';
+import logger from './logger.js';
 
 /**
  * Tokens that stand for a person with a record in users.json. Anything else
@@ -41,23 +42,27 @@ export function isUserBoundMode(authMode) {
 }
 
 /**
+ * The claims a token of each mode may carry its subject in, best first. The
+ * claim differs by provider, so it is chosen here once.
+ */
+const SUBJECT_CLAIMS = {
+  teams: ['id', 'sub'],
+  ntlm: ['id', 'sub'],
+  oidc: ['sub', 'username'],
+  ldap: ['sub', 'username']
+};
+const DEFAULT_SUBJECT_CLAIMS = ['sub', 'username', 'id'];
+
+/**
  * The subject a token of this mode carries, as the sign-in that minted it put it
- * there. The claim differs by provider, so it is chosen here once.
+ * there.
  *
  * @param {Object} claims - Decoded token payload
  * @returns {string|undefined}
  */
 export function tokenSubject(claims) {
-  switch (claims.authMode) {
-    case 'teams':
-    case 'ntlm':
-      return claims.id || claims.sub;
-    case 'oidc':
-    case 'ldap':
-      return claims.sub || claims.username;
-    default:
-      return claims.sub || claims.username || claims.id;
-  }
+  const names = SUBJECT_CLAIMS[claims.authMode] ?? DEFAULT_SUBJECT_CLAIMS;
+  return names.map(name => claims[name]).find(Boolean);
 }
 
 /**
@@ -153,35 +158,59 @@ export function userRecordState(record) {
 }
 
 /**
+ * Ask for a state, and turn a failure to ask into `'unavailable'`.
+ *
+ * Callers answer 503 for it. It is its own state, and not an error to catch, so
+ * that a caller that does not know about it treats it like anything else that is
+ * not `'active'`: refused, never let through.
+ *
+ * @param {() => Promise<string>} read - Reads the state
+ * @param {string} what - What is being looked up, for the log
+ * @returns {Promise<'active'|'missing'|'disabled'|'unavailable'>}
+ */
+async function settleState(read, what) {
+  try {
+    return await read();
+  } catch (error) {
+    logger.error(`Could not look up ${what}`, { component: 'TokenUser', error });
+    return 'unavailable';
+  }
+}
+
+/**
  * Whether the user a session token stands for may still use it. A token that
  * does not stand for a user (see {@link isUserBoundMode}) is not this module's
  * to refuse and counts as usable.
  *
+ * `'unavailable'` means the users configuration could not be read, which says
+ * nothing about the user: it is not "deleted".
+ *
  * @param {Object} platform - Platform configuration
  * @param {Object} claims - Decoded token payload
- * @returns {Promise<'active'|'missing'|'disabled'>}
- * @throws {Error} When the users configuration cannot be read
+ * @returns {Promise<'active'|'missing'|'disabled'|'unavailable'>}
  */
-export async function tokenUserState(platform, claims) {
-  const resolved = await resolveTokenUser(platform, claims);
-  if (!resolved) return 'active';
-  return userRecordState(resolved.record);
+export function tokenUserState(platform, claims) {
+  return settleState(async () => {
+    const resolved = await resolveTokenUser(platform, claims);
+    return resolved ? userRecordState(resolved.record) : 'active';
+  }, 'the user behind a token');
 }
 
 /**
  * Whether the user who owns a personal API key may still act through it.
  *
  * A personal key authenticates from its client record, not from a token that
- * names the user, so the owner is checked here from the id the record carries.
+ * names a user, so the owner is checked here from the id the record carries.
  * The key is the owner's credential: it ends with the owner, and is suspended
  * while the owner is.
  *
  * @param {Object} platform - Platform configuration
  * @param {string} ownerUserId - The owner id on the key's client record
- * @returns {Promise<'active'|'missing'|'disabled'>}
- * @throws {Error} When the users configuration cannot be read
+ * @returns {Promise<'active'|'missing'|'disabled'|'unavailable'>}
  */
-export async function ownerUserState(platform, ownerUserId) {
-  const record = await lookupUserRecord(platform, ownerUserId, [...PROVIDER_MODES]);
-  return userRecordState(record);
+export function ownerUserState(platform, ownerUserId) {
+  return settleState(
+    async () => userRecordState(await lookupUserRecord(platform, ownerUserId, [...PROVIDER_MODES])),
+    'the owner of a personal API key'
+  );
 }
