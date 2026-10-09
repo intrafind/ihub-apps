@@ -148,7 +148,7 @@ function refusalReason({ workflow, workflowId, access, clientLanguage }) {
  * @param {Object} params.workflow - The mentioned workflow definition.
  * @param {string} params.workflowId - The id as typed in the message.
  * @param {Object|undefined} params.app - The chat's app configuration.
- * @param {Object} params.message - The new user message (host context, files).
+ * @param {Object} params.newMessage - The new user message (host context, files).
  * @param {string} params.content - Its text, mention included.
  * @param {Array<Object>} params.conversation - See {@link tryHandleMentionWorkflow}.
  * @param {string} params.chatId - Chat id.
@@ -164,7 +164,7 @@ async function launchMentionWorkflow({
   workflow,
   workflowId,
   app,
-  message,
+  newMessage,
   content,
   conversation,
   chatId,
@@ -186,12 +186,12 @@ async function launchMentionWorkflow({
   const withoutMention = content.replace(/@[\w.-]+/, '').trim();
   const strippedInput = renderUserMessage({
     content: withoutMention,
-    hostContext: message.hostContext
+    hostContext: newMessage.hostContext
   });
 
   // Collect file data from the last message
-  const fileData = message.fileData || null;
-  const imageData = message.imageData || null;
+  const fileData = newMessage.fileData || null;
+  const imageData = newMessage.imageData || null;
 
   // Build chat history from all prior messages (excluding the last).
   // From `conversation`, not the request body: for a persisted chat
@@ -383,11 +383,12 @@ export async function tryHandleMentionWorkflow({
     return { handled: true, response: { status: 'streaming', chatId } };
   }
 
-  return launchMentionWorkflow({
+  // Awaited rather than returned bare, so a failure still has this frame in its async stack.
+  return await launchMentionWorkflow({
     workflow: mentionedWorkflow,
     workflowId: mentionedId,
     app: mentionApp,
-    message: lastUserMsg,
+    newMessage: lastUserMsg,
     content: lastUserContent,
     conversation,
     chatId,
