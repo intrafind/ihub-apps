@@ -1,11 +1,8 @@
 import 'dotenv/config';
-import tokenStorage from '../TokenStorageService.js';
 import { httpFetch } from '../../utils/httpConfig.js';
-import { getForwardedProto, getForwardedHost } from '../../utils/publicBaseUrl.js';
 import logger from '../../utils/logger.js';
-import configCache from '../../configCache.js';
-import credentialService from '../CredentialService.js';
 import { readBoundedBody, MAX_DOWNLOAD_BYTES } from '../../utils/boundedBodyReader.js';
+import OAuthIntegrationBase from './OAuthIntegrationBase.js';
 
 /**
  * Nextcloud Service for Nextcloud file access integration.
@@ -26,27 +23,24 @@ import { readBoundedBody, MAX_DOWNLOAD_BYTES } from '../../utils/boundedBodyRead
  *     the user's session, same as the other cloud storage providers).
  *   - Nextcloud rotates refresh tokens on every refresh, so callers must
  *     persist the new refresh token returned by `refreshAccessToken`.
+ *   - WebDAV PROPFIND / OCS calls below don't go through the shared
+ *     Graph/Drive-style `makeApiRequest` wrapper (unlike Google
+ *     Drive/Office 365) since the response shape (XML) and verbs
+ *     (PROPFIND) are fundamentally different from those JSON REST APIs.
  */
 // PROPFIND responses are small XML directory listings — a tighter cap
 // than the download budget defends against malicious or misconfigured
 // servers without affecting healthy responses.
 const MAX_PROPFIND_BYTES = 10 * 1024 * 1024; // 10 MiB
 
-class NextcloudService {
+class NextcloudService extends OAuthIntegrationBase {
   constructor() {
-    this.serviceName = 'nextcloud';
+    super({
+      serviceName: 'nextcloud',
+      displayName: 'Nextcloud',
+      componentName: 'NextcloudService'
+    });
     logger.info('NextcloudService initialized', { component: 'NextcloudService' });
-  }
-
-  _buildCallbackUrl(req, providerId) {
-    const protocol = getForwardedProto(req);
-    const host = getForwardedHost(req);
-
-    if (!host) {
-      throw new Error('Unable to determine host for callback URL');
-    }
-
-    return `${protocol}://${host}/api/integrations/${this.serviceName}/${providerId}/callback`;
   }
 
   _normalizeServerUrl(serverUrl) {
@@ -55,60 +49,15 @@ class NextcloudService {
   }
 
   _getProviderConfig(providerId) {
-    if (!configCache || typeof configCache.get !== 'function') {
-      throw new Error('Platform configuration cache is not initialized');
-    }
-
-    const platformConfig = configCache.getPlatform();
-    const cloudStorage = platformConfig?.cloudStorage;
-
-    if (!cloudStorage?.enabled) {
-      throw new Error('Cloud storage is not enabled');
-    }
-
-    const provider = cloudStorage.providers?.find(
-      p => p.id === providerId && p.type === 'nextcloud' && p.enabled !== false
-    );
-
-    if (!provider) {
-      throw new Error(`Nextcloud provider '${providerId}' not found or not enabled`);
-    }
-
-    if (!provider.serverUrl || !provider.clientId || !provider.clientSecretRef) {
-      throw new Error(
-        `Nextcloud provider '${providerId}' missing required configuration (serverUrl, clientId, clientSecretRef)`
-      );
-    }
-
-    // Resolve the client secret from the central credential store so
-    // downstream code works with the plaintext value inline on the provider.
-    return {
-      ...provider,
-      serverUrl: this._normalizeServerUrl(provider.serverUrl),
-      clientSecret: credentialService.resolveSecret(provider.clientSecretRef)
-    };
-  }
-
-  _resolveRedirectUri(provider, providerId, req) {
-    let redirectUri = provider.redirectUri || process.env.NEXTCLOUD_OAUTH_REDIRECT_URI;
-
-    if (!redirectUri && req) {
-      redirectUri = this._buildCallbackUrl(req, providerId);
-      logger.info('Auto-detected Nextcloud callback URL from request', {
-        component: 'NextcloudService',
-        redirectUri
-      });
-    }
-
-    if (!redirectUri) {
-      redirectUri = `${process.env.SERVER_URL || 'http://localhost:3000'}/api/integrations/${this.serviceName}/${providerId}/callback`;
-      logger.warn('Using fallback localhost URL for Nextcloud callback', {
-        component: 'NextcloudService',
-        redirectUri
-      });
-    }
-
-    return redirectUri;
+    return super._getProviderConfig(providerId, {
+      type: 'nextcloud',
+      requiredFields: ['serverUrl', 'clientId', 'clientSecretRef'],
+      secretFields: ['clientSecretRef'],
+      postProcess: provider => ({
+        ...provider,
+        serverUrl: this._normalizeServerUrl(provider.serverUrl)
+      })
+    });
   }
 
   /**
@@ -118,7 +67,12 @@ class NextcloudService {
    */
   generateAuthUrl(providerId, state, req = null) {
     const provider = this._getProviderConfig(providerId);
-    const redirectUri = this._resolveRedirectUri(provider, providerId, req);
+    const redirectUri = this._resolveRedirectUri(
+      provider,
+      providerId,
+      'NEXTCLOUD_OAUTH_REDIRECT_URI',
+      req
+    );
 
     const params = new URLSearchParams({
       client_id: provider.clientId,
@@ -133,7 +87,12 @@ class NextcloudService {
   async exchangeCodeForTokens(providerId, authCode, req = null) {
     try {
       const provider = this._getProviderConfig(providerId);
-      const redirectUri = this._resolveRedirectUri(provider, providerId, req);
+      const redirectUri = this._resolveRedirectUri(
+        provider,
+        providerId,
+        'NEXTCLOUD_OAUTH_REDIRECT_URI',
+        req
+      );
       const tokenUrl = `${provider.serverUrl}/apps/oauth2/api/v1/token`;
 
       const tokenData = new URLSearchParams({
@@ -252,136 +211,18 @@ class NextcloudService {
     }
   }
 
-  async storeUserTokens(userId, tokens) {
-    try {
-      if (!tokens.refreshToken) {
-        logger.warn(
-          'No Nextcloud refresh token - user will need to reconnect when access token expires',
-          { component: 'NextcloudService' }
-        );
-      }
-
-      // tokens.providerId is the source of truth — it was set by the
-      // OAuth exchange. Pass it explicitly so the storage layer scopes
-      // the file as `<userId>__<providerId>.json`.
-      await tokenStorage.storeUserTokens(userId, this.serviceName, tokens, tokens.providerId);
-      logger.info('Nextcloud tokens stored for user', {
-        component: 'NextcloudService',
-        userId,
-        providerId: tokens.providerId
-      });
-      return true;
-    } catch (error) {
-      logger.error('Error storing Nextcloud user tokens', {
-        component: 'NextcloudService',
-        error
-      });
-      throw new Error('Failed to store user tokens');
+  /**
+   * Preserve the cached Nextcloud username if the refresh response omitted it.
+   */
+  _afterTokenRefresh(refreshedTokens, previousTokens) {
+    if (!refreshedTokens.nextcloudUserId && previousTokens.nextcloudUserId) {
+      refreshedTokens.nextcloudUserId = previousTokens.nextcloudUserId;
     }
+    return refreshedTokens;
   }
 
-  async getUserTokens(userId, providerId) {
-    try {
-      const tokens = await tokenStorage.getUserTokens(userId, this.serviceName, providerId);
-      const expired = await tokenStorage.areTokensExpired(userId, this.serviceName, providerId);
-
-      if (!expired) return tokens;
-
-      logger.info('Nextcloud tokens expired, attempting refresh', {
-        component: 'NextcloudService',
-        userId,
-        providerId
-      });
-
-      try {
-        if (!tokens.refreshToken) {
-          throw new Error('No refresh token available - user needs to reconnect Nextcloud account');
-        }
-
-        const refreshedTokens = await this.refreshAccessToken(
-          tokens.providerId,
-          tokens.refreshToken
-        );
-
-        // Preserve the cached username if the refresh response omitted it
-        if (!refreshedTokens.nextcloudUserId && tokens.nextcloudUserId) {
-          refreshedTokens.nextcloudUserId = tokens.nextcloudUserId;
-        }
-
-        await this.storeUserTokens(userId, refreshedTokens);
-        logger.info('Successfully refreshed and stored Nextcloud tokens for user', {
-          component: 'NextcloudService',
-          userId,
-          providerId
-        });
-        return refreshedTokens;
-      } catch (refreshError) {
-        logger.error('Failed to refresh Nextcloud tokens for user', {
-          component: 'NextcloudService',
-          userId,
-          providerId,
-          error: refreshError
-        });
-        await this.deleteUserTokens(userId, providerId);
-        throw new Error('Nextcloud authentication expired. Please reconnect your account.');
-      }
-    } catch (error) {
-      if (
-        error.message.includes('not authenticated') ||
-        error.message.includes('authentication expired') ||
-        error.message.includes('needs to reconnect')
-      ) {
-        throw error;
-      }
-      logger.error('Error retrieving Nextcloud user tokens', {
-        component: 'NextcloudService',
-        error
-      });
-      throw new Error('Failed to retrieve user tokens');
-    }
-  }
-
-  async deleteUserTokens(userId, providerId) {
-    try {
-      const result = await tokenStorage.deleteUserTokens(userId, this.serviceName, providerId);
-      if (result) {
-        logger.info('Nextcloud tokens deleted for user', {
-          component: 'NextcloudService',
-          userId,
-          providerId
-        });
-      }
-      return result;
-    } catch (error) {
-      logger.error('Error deleting Nextcloud user tokens', {
-        component: 'NextcloudService',
-        error
-      });
-      return false;
-    }
-  }
-
-  async getTokenExpirationInfo(userId, providerId) {
-    try {
-      const metadata = await tokenStorage.getTokenMetadata(userId, this.serviceName, providerId);
-      const now = new Date();
-      const expiresAt = new Date(metadata.expiresAt);
-      const minutesUntilExpiry = Math.floor((expiresAt - now) / (1000 * 60));
-
-      return {
-        expiresAt: metadata.expiresAt,
-        minutesUntilExpiry,
-        isExpiring: minutesUntilExpiry <= 10,
-        isExpired: metadata.expired
-      };
-    } catch {
-      return {
-        expiresAt: null,
-        minutesUntilExpiry: 0,
-        isExpiring: true,
-        isExpired: true
-      };
-    }
+  _isPassthroughTokenError(error) {
+    return super._isPassthroughTokenError(error) || error.message.includes('needs to reconnect');
   }
 
   /**

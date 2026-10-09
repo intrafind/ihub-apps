@@ -306,8 +306,10 @@ Each source is controlled by the `sources` configuration object in the provider 
 
 ```
 server/
-├── services/integrations/Office365Service.js   # Core OAuth & Microsoft Graph API service
-└── routes/integrations/office365.js            # OAuth and browsing API routes
+├── services/integrations/Office365Service.js   # Microsoft Graph API calls and Microsoft-specific OAuth endpoints
+├── services/integrations/OAuthIntegrationBase.js # Shared token lifecycle (store/refresh/expiry/401 retry)
+├── routes/integrations/office365.js            # Browsing API routes + provider config for the shared OAuth routes
+└── routes/integrations/oauthIntegrationFactory.js # Shared /auth, /callback, /status, /disconnect routes
 
 client/src/features/upload/
 ├── components/CloudFileBrowserShell.jsx        # Shared file-browser UI (all providers)

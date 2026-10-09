@@ -265,8 +265,10 @@ Google Workspace documents (Docs, Sheets, Presentations) cannot be downloaded as
 
 ```
 server/
-├── services/integrations/GoogleDriveService.js   # Core OAuth & Drive API service
-└── routes/integrations/googledrive.js            # OAuth and browsing API routes
+├── services/integrations/GoogleDriveService.js   # Drive API calls and Google-specific OAuth endpoints
+├── services/integrations/OAuthIntegrationBase.js # Shared token lifecycle (store/refresh/expiry/401 retry)
+├── routes/integrations/googledrive.js            # Browsing API routes + provider config for the shared OAuth routes
+└── routes/integrations/oauthIntegrationFactory.js # Shared /auth, /callback, /status, /disconnect routes
 
 client/src/features/upload/
 ├── components/CloudFileBrowserShell.jsx          # Shared file-browser UI (all providers)

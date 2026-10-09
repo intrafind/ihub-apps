@@ -207,7 +207,8 @@ The JIRA connector provides comprehensive error handling:
 server/
 ├── services/integrations/JiraService.js    # Core JIRA service
 ├── tools/jira.js                           # Tool wrapper
-└── routes/integrations/jira.js             # OAuth routes
+├── routes/integrations/jira.js             # Jira-specific routes + provider config for the shared OAuth routes
+└── routes/integrations/oauthIntegrationFactory.js # Shared /auth, /callback, /status, /disconnect routes
 
 contents/
 ├── tools/*.json                            # Tool configuration (one file per tool)
