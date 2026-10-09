@@ -243,5 +243,5 @@ export function startUserCleanup({ onDone, ...params }) {
  * @returns {Promise<void>}
  */
 export async function waitForUserCleanups() {
-  await Promise.all([...running]);
+  await Promise.all(running);
 }

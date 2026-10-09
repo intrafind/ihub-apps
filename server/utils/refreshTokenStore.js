@@ -329,11 +329,12 @@ export async function revokeRefreshTokensForUser(userId) {
   const doomed = await withStoreLock(async () => {
     const store = loadStore();
     const keys = doomedIn(store);
-    if (keys.length === 0) return keys;
-    for (const key of keys) {
-      delete store.tokens[key];
+    if (keys.length > 0) {
+      for (const key of keys) {
+        delete store.tokens[key];
+      }
+      await saveStore(store);
     }
-    await saveStore(store);
     return keys;
   });
 
