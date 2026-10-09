@@ -20,13 +20,13 @@ export const VERIFY_REQUEST_TIMEOUT = 120000;
 export class ProvenanceRequestError extends Error {
   /**
    * @param {string} message - Server error text (English) or transport message
-   * @param {number|null} [status=null]
+   * @param {number|null} [status] - HTTP status, null when there was none
    * @param {unknown} [cause]
    */
-  constructor(message, status = null, cause) {
+  constructor(message, status, cause) {
     super(message);
     this.name = 'ProvenanceRequestError';
-    this.status = status;
+    this.status = status ?? null;
     if (cause !== undefined) this.cause = cause;
   }
 }
@@ -71,17 +71,14 @@ export async function fetchProvenanceInfo() {
  * @throws {ProvenanceRequestError}
  */
 export async function verifyProvenanceContent({ file, text } = {}, { signal } = {}) {
-  let body;
   const config = { ...PUBLIC_REQUEST, timeout: VERIFY_REQUEST_TIMEOUT, signal };
+  const body = file ? new FormData() : { text: String(text ?? '') };
   if (file) {
-    body = new FormData();
     body.append('file', file, file.name || 'upload');
     // The shared instance defaults to a JSON content type, which would make
     // axios serialise the form to JSON; undefined lets the browser set the
     // multipart boundary (same fix as `makeAdminApiCall`).
     config.headers = { 'Content-Type': undefined };
-  } else {
-    body = { text: String(text ?? '') };
   }
   try {
     const response = await apiClient.post('/provenance/verify', body, config);

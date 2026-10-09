@@ -269,6 +269,28 @@ function ModelImportDialog({ onClose, onImported, existingModelIds, initialProvi
       )
     })[problem];
 
+  const importModel = (model, id, justification) =>
+    makeAdminApiCall('/admin/models', {
+      method: 'POST',
+      body: {
+        ...buildImportedModelConfig(model, {
+          id,
+          apiType: discovery.apiType,
+          providerId: targetProviderId,
+          modelsUrl: discovery.modelsUrl,
+          enabled: enableModels
+        }),
+        ...(justification ? { [JUSTIFICATION_FIELD]: justification } : {})
+      }
+    });
+
+  const finishImport = outcome => {
+    setResults(outcome);
+    setImporting(false);
+    setStep('done');
+    onImported?.();
+  };
+
   const runImport = async () => {
     if (!canImport) return;
     setImporting(true);
@@ -319,28 +341,6 @@ function ModelImportDialog({ onClose, onImported, existingModelIds, initialProvi
       return;
     }
     finishImport(outcome);
-  };
-
-  const importModel = (model, id, justification) =>
-    makeAdminApiCall('/admin/models', {
-      method: 'POST',
-      body: {
-        ...buildImportedModelConfig(model, {
-          id,
-          apiType: discovery.apiType,
-          providerId: targetProviderId,
-          modelsUrl: discovery.modelsUrl,
-          enabled: enableModels
-        }),
-        ...(justification ? { [JUSTIFICATION_FIELD]: justification } : {})
-      }
-    });
-
-  const finishImport = outcome => {
-    setResults(outcome);
-    setImporting(false);
-    setStep('done');
-    onImported?.();
   };
 
   const importAcknowledged = async justification => {

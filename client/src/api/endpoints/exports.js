@@ -100,18 +100,13 @@ async function readErrorMessage(error) {
  * @throws {ExportRequestError} When the server refuses the request or is unreachable
  */
 export async function fetchExport(body, { signal } = {}) {
-  let response;
-  try {
-    response = await apiClient.post('/exports', body, {
-      responseType: 'blob',
-      timeout: EXPORT_REQUEST_TIMEOUT,
-      signal
+  const response = await apiClient
+    .post('/exports', body, { responseType: 'blob', timeout: EXPORT_REQUEST_TIMEOUT, signal })
+    .catch(async error => {
+      throw new ExportRequestError(await readErrorMessage(error), error?.response?.status ?? null, {
+        cause: error
+      });
     });
-  } catch (error) {
-    throw new ExportRequestError(await readErrorMessage(error), error?.response?.status ?? null, {
-      cause: error
-    });
-  }
 
   const headers = response?.headers || {};
   const blob =

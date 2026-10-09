@@ -190,7 +190,10 @@ function AiTransparencySection({ app, onChange, appId = null, onRecordsChange = 
       .then(response => {
         if (active) setInstallationId(response?.data?.installation?.installationId || null);
       })
-      .catch(() => {});
+      .catch(() => {
+        // Without the installation id every record counts as this
+        // installation's (see isForeignRecord), as before it loads.
+      });
     return () => {
       active = false;
     };

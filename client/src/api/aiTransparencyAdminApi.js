@@ -201,14 +201,13 @@ function filenameFromDisposition(header) {
  * @throws {Error} With the server's error message when the report fails.
  */
 export async function downloadComplianceReport() {
-  let response;
-  try {
-    response = await makeAdminApiCall(`${BASE}/report.pdf`, { responseType: 'blob' });
-  } catch (error) {
-    const serverMessage = await readBlobErrorMessage(error);
-    if (serverMessage) error.message = serverMessage;
-    throw error;
-  }
+  const response = await makeAdminApiCall(`${BASE}/report.pdf`, { responseType: 'blob' }).catch(
+    async error => {
+      const serverMessage = await readBlobErrorMessage(error);
+      if (serverMessage) error.message = serverMessage;
+      throw error;
+    }
+  );
   const filename =
     filenameFromDisposition(response.headers?.['content-disposition']) || DEFAULT_REPORT_FILENAME;
   const blob =
