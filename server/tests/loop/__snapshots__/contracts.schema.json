@@ -2685,6 +2685,10 @@
               },
               "applyDefaults": {
                 "type": "boolean"
+              },
+              "choice": {
+                "type": "string",
+                "enum": ["auto", "required"]
               }
             },
             "required": [
@@ -2692,7 +2696,8 @@
               "maxConsecutiveFailures",
               "parallel",
               "maxParallel",
-              "applyDefaults"
+              "applyDefaults",
+              "choice"
             ],
             "additionalProperties": false
           },

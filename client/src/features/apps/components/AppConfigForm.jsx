@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import { getLocalizedContent } from '../../../utils/localizeContent';
+import { matchesModelFilter, modelSupportsTools } from '../../../../../shared/modelCapabilities.js';
 
 function AppConfigForm({
   app,
@@ -40,21 +41,13 @@ function AppConfigForm({
 
   // Filter by tools requirement
   if (app?.tools && app.tools.length > 0) {
-    filteredModels = filteredModels.filter(model => model.supportsTools);
+    filteredModels = filteredModels.filter(modelSupportsTools);
   }
 
   // Apply model settings filter if specified
   if (app?.settings?.model?.filter) {
     const filter = app.settings.model.filter;
-    filteredModels = filteredModels.filter(model => {
-      // Check each filter property
-      for (const [key, value] of Object.entries(filter)) {
-        if (model[key] !== value) {
-          return false;
-        }
-      }
-      return true;
-    });
+    filteredModels = filteredModels.filter(model => matchesModelFilter(model, filter));
   }
 
   // Check if selected model supports thinking

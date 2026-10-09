@@ -551,6 +551,7 @@ Each app is defined with the following essential properties:
 | `imageGeneration`       | Object  | Optional. Default image generation parameters for this app. See [Image Generation](#image-generation-configuration) below |
 | `thinking`              | Object  | Optional. Extended thinking configuration for supported models. See [Thinking Configuration](#thinking-configuration) below |
 | `tools`                 | Array   | Optional. Array of tool identifiers available in this app                                                                |
+| `toolChoice`            | String  | Optional. `auto` (default): the model decides whether to use the app's tools. `required`: the first model call of every message must call one of them, then the model answers from the result. See [Requiring a tool call](tool-calling.md#requiring-a-tool-call) |
 | `apps`                  | Array   | Optional. Array of app IDs this app may invoke as tools (`app__<id>`). Requires the `appAsTool` platform feature. See [Apps as Tools](#apps-as-tools-concierge-pattern) below |
 | `websearch`             | Object  | Optional. Unified web search configuration. See [Web Search Configuration](#web-search-configuration) below             |
 | `sources`               | Array   | Optional. Array of source reference IDs for knowledge base access                                                       |
@@ -758,7 +759,7 @@ The `settings` property controls which configuration options users can adjust fo
   "enabled": true,
   "model": {
     "enabled": true,
-    "filter": { "supportsTools": true }
+    "filter": { "supportsTools": ["auto", "required"] }
   },
   "style": { "enabled": true },
   "temperature": { "enabled": true },
@@ -784,7 +785,7 @@ The `settings` property controls which configuration options users can adjust fo
 | ------------------------------------- | ------------------------------------------------------------------------ |
 | `settings.enabled`                    | Master switch for all settings - when `false`, all settings UI is hidden |
 | `settings.model.enabled`              | Enable/disable model selection option                                    |
-| `settings.model.filter`               | Record of model properties to filter the available models list. Example: `{"supportsTools": true}` shows only models that support tool calling |
+| `settings.model.filter`               | Record of model properties to filter the available models list. Example: `{"supportsTools": ["auto", "required"]}` shows only models that support tool calling (a filter value that is an array matches any of its entries) |
 | `settings.style.enabled`              | Enable/disable response style selection                                  |
 | `settings.temperature.enabled`        | Enable/disable temperature adjustment                                    |
 | `settings.outputFormat.enabled`       | Enable/disable output format selection                                   |

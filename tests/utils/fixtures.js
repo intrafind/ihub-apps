@@ -77,7 +77,7 @@ export const testModels = {
     displayName: 'GPT-4',
     isActive: true,
     maxTokens: 4096,
-    supportsTools: true,
+    supportsTools: 'auto',
     supportsStreaming: true
   },
   anthropic: {
@@ -87,7 +87,7 @@ export const testModels = {
     displayName: 'Claude 3 Sonnet',
     isActive: true,
     maxTokens: 4096,
-    supportsTools: true,
+    supportsTools: 'auto',
     supportsStreaming: true
   },
   google: {
@@ -97,7 +97,7 @@ export const testModels = {
     displayName: 'Gemini 1.5 Flash',
     isActive: true,
     maxTokens: 8192,
-    supportsTools: true,
+    supportsTools: 'auto',
     supportsStreaming: true
   },
   mistral: {
@@ -107,7 +107,7 @@ export const testModels = {
     displayName: 'Mistral Small',
     isActive: true,
     maxTokens: 4096,
-    supportsTools: true,
+    supportsTools: 'auto',
     supportsStreaming: true
   }
 };

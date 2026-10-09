@@ -1529,7 +1529,8 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
         tools: {
           maxRateLimitFailures: config.maxRateLimitFailures ?? 2,
           maxConsecutiveFailures: config.maxConsecutiveToolFailures ?? 3,
-          parallel: config.parallelToolCalls === true
+          parallel: config.parallelToolCalls === true,
+          choice: config.toolChoice
         },
         context: {
           compactThresholdTokens: config.compactThresholdTokens ?? 16000,

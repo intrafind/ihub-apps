@@ -12,7 +12,7 @@
   "provider": "bedrock",
   "contextWindow": 128000,
   "maxOutputTokens": 8000,
-  "supportsTools": true,
+  "supportsTools": "required",
   "supportsVision": false,
   "enabled": false,
   "config": {

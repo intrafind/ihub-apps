@@ -213,7 +213,29 @@ curl -X POST http://localhost:3000/api/tools/weatherLookup \
   }'
 ```
 
-### 4. App Integration
+### 4. Startup Check
+
+At startup the server checks every enabled script-backed tool without calling
+it: the script must exist in `server/tools/`, it must load (the same `import()`
+a tool call does, so a missing package or an error while loading shows up), and
+it must export what the definition declares — the default export for a plain
+tool, one named export per entry of `functions` (or the configured `method`) for
+a multi-function tool. A problem is logged as a warning and never stops the
+server; calls to that tool fail until the script is fixed or the tool is
+disabled (disabled tools are not checked):
+
+```text
+warn  Tool script cannot be used  script=weatherLookup.js problem=load-failed reason=Cannot find package 'node-fetch' …
+warn  Some tool scripts cannot be used; calls to these tools will fail until they are fixed or the tools are disabled  scripts=25 ok=24 problems=1
+```
+
+A tool whose script file is missing is reported when the tools load (and
+counted in the summary). Whether a tool is *configured* — API keys, credentials —
+is not part of the check. Write tool scripts so that importing them has no side
+effects that fail without configuration: read credentials when the tool is
+called, not when the module loads.
+
+### 5. App Integration
 
 Add the tool to your app configuration:
 
@@ -466,6 +488,62 @@ Workflow example:
 2. textAnalyzer.analyze({ text: extractedContent })
 3. summaryGenerator.generate({ analysis: analysisResults })
 ```
+
+### Requiring a tool call
+
+By default a model with tools available decides for itself whether to use them,
+and some answer from memory when the app wanted them to look something up. Set
+`toolChoice` on the app to change that:
+
+```json
+{
+  "id": "research-assistant",
+  "tools": ["iFinder.search"],
+  "toolChoice": "required"
+}
+```
+
+| Value | Behavior |
+|-------|----------|
+| `auto` (default) | The model decides whether to call a tool |
+| `required` | The **first** model call of every message must call one of the app's tools. Every later call is `auto`, so the model can answer from the tool results |
+
+Only the first call is forced because the first call is the one that has to
+trigger the tool; the rest follows from its result. A mandatory call on every
+round could never end in an answer. A message that resumes after the model asked
+the user a question (`ask_user`) is not forced again, and nothing is forced when
+the turn offers no tools (for example web search switched off). `required` does
+not pick a tool: the model chooses among the ones it was given, and a workflow
+`prompt` node takes the same setting as `config.toolChoice`. The admin app
+editor has it under **Tools → Tool use**.
+
+How the request reaches each provider:
+
+| Adapter | Sent to the provider | Notes |
+|---------|----------------------|-------|
+| `openai`, `openai-responses` | `tool_choice: "required"` | |
+| `mistral` | `tool_choice: "required"` | |
+| `local` (vLLM, ...), and `openai` with your own URL | `tool_choice: "required"` | Depends on the installation: vLLM is usually started with `--enable-auto-tool-choice`, which serves `auto`, and `required` depends on the vLLM version and deployment; other local servers may ignore or refuse the field. Keep these models on `auto` (apps then ask in words) until you have checked |
+| `anthropic` | `tool_choice: { "type": "any" }` | **Not accepted** by Claude Opus 5.5, Sonnet 5.5, Fable 5.1 and Mythos 5.1, or with manual extended thinking. Not applied when the app has an output schema (the structured-output `json` tool is already pinned) |
+| `google` | `toolConfig.functionCallingConfig.mode: "ANY"` | Not sent with native Google Search, which drops the function tools |
+| `bedrock` | `toolConfig.toolChoice: { "any": {} }` | Claude models on Bedrock have the same restrictions as on Anthropic's API |
+| `iassistant-conversation` | — | The conversation API has no function calling |
+
+**When the model cannot be forced.** Not every model takes it, and a rejected
+request would fail the whole turn. For those the first call carries a one-off
+instruction instead ("call one of the available tools first"): shown to the
+model for that call only and never part of the conversation. The loop knows a
+model can be forced only when its `supportsTools` is `required` (the model
+editor's **Tool Calling** dropdown; `auto` is set on the shipped Claude Opus 5,
+Sonnet 5 and Fable 5.1). A `required` model that the provider still refuses,
+with a `400` naming `tool_choice`, is handled the same way: the request is
+repeated in words, without being charged as a round, and the model is
+remembered for an hour so later turns do not try again. The OpenAI-compatible API (`/v1/chat/completions`) is not
+affected: a `tool_choice` sent by a client passes through unchanged on every
+request.
+
+The setting is per app (and workflow node) rather than per tool because
+"required" is about what the model must do in a turn, not about one tool.
 
 ### Performance Optimization
 
@@ -941,7 +1019,7 @@ Test complete workflow from chat interface through tool execution.
 ### Tool Development Checklist
 
 - [ ] Tool definition file in `contents/tools/`
-- [ ] Implementation script in `server/tools/`
+- [ ] Implementation script in `server/tools/`, exporting what the definition declares (see [Startup check](#4-startup-check))
 - [ ] Parameter validation implemented
 - [ ] Error handling for all edge cases
 - [ ] Authentication/authorization checks

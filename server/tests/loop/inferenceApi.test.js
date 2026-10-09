@@ -41,7 +41,7 @@ const MODEL_LIST = [
     modelId: 'gpt-4o',
     url: 'https://u/v1/chat/completions',
     autoDiscovery: false,
-    supportsTools: true,
+    supportsTools: 'auto',
     default: true
   },
   {
@@ -50,14 +50,14 @@ const MODEL_LIST = [
     modelId: 'gpt-4.1',
     url: 'https://u/v1/chat/completions',
     autoDiscovery: false,
-    supportsTools: true
+    supportsTools: 'auto'
   },
   {
     id: 'an',
     provider: 'anthropic',
     modelId: 'claude',
     url: 'https://api.anthropic.com/v1/messages',
-    supportsTools: true
+    supportsTools: 'auto'
   },
   { id: 'ia', provider: 'iassistant-conversation', modelId: 'iassistant' }
 ];

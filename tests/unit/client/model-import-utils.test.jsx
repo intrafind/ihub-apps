@@ -97,6 +97,18 @@ describe('buildImportedModelConfig', () => {
     expect(config.apiKey).toBeUndefined();
   });
 
+  it('imports a model that advertises function calling as auto, never as required', () => {
+    const options = { id: 'm', apiType: 'openai', modelsUrl: 'https://example.com/v1/models' };
+
+    expect(buildImportedModelConfig({ ...entry, supportsTools: true }, options).supportsTools).toBe(
+      'auto'
+    );
+    expect(
+      buildImportedModelConfig({ ...entry, supportsTools: false }, options).supportsTools
+    ).toBe('none');
+    expect(buildImportedModelConfig(entry, options)).not.toHaveProperty('supportsTools');
+  });
+
   it('keeps the link to a custom provider whose ID equals an API type', () => {
     const config = buildImportedModelConfig(entry, {
       id: 'm',

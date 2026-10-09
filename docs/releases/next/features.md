@@ -32,3 +32,31 @@ old data was never cleaned up.
   account itself is gone, and access with it, before the request answers. When the clean-up
   finishes, the audit log gets a `cleanup` entry for the user; it names any part that could not be
   removed.
+
+## Apps and Workflow Nodes Can Require a Tool Call
+
+Some models answer from memory when an app wanted them to look something up. An app can now
+require that the model's first step of every message calls one of the app's tools.
+
+- Set **Tools → Tool use → Use a tool first** in the app editor (`toolChoice: "required"` in the
+  app's JSON). Workflow `prompt` nodes take the same setting as `config.toolChoice`.
+- Only the first model call is required. After the tool result the model answers freely, so the
+  message still ends in an answer.
+- Models the provider cannot force — for example Claude Opus 5.5, Sonnet 5.5 and Fable 5.1 — are
+  asked in words instead. A model that rejects the setting is detected on its first call, handled
+  without an error and remembered for an hour. A model's **Tool Calling** setting
+  (`supportsTools: "none" | "auto" | "required"`) says up front which models can be forced: only
+  `required` models are, `auto` models are asked in words.
+- The request is built for OpenAI, OpenAI Responses, Mistral, Anthropic, Google Gemini and Amazon
+  Bedrock. Self-hosted servers such as vLLM depend on the installation (vLLM is usually started with
+  `--enable-auto-tool-choice`, which serves `auto`), so keep those models on **Tools - the model
+  decides**. See [Tool Calling](../tool-calling.md#requiring-a-tool-call).
+
+## Tool Scripts Are Checked at Startup
+
+A tool whose script is missing, cannot be loaded or lacks the function its definition declares used
+to fail the first time a model called it, in the middle of a chat. The server now checks every
+enabled script-backed tool at startup and logs a warning naming the tool and the reason, for
+example a package that is not installed. Nothing stops the server: fix the script or disable the
+tool. A tool entry that points at a script file that does not exist is also reported whenever the
+tools are loaded.
