@@ -37,7 +37,7 @@
     "cors": "^2.8.6",
     "croner": "^10.0.1",
     "dejavu-fonts-ttf": "^2.37.3",
-    "dotenv": "^18.0.3",
+    "dotenv": "^18.0.5",
     "envalid": "^8.2.0",
     "eventsource-parser": "^4.1.1",
     "express": "^5.2.1",
