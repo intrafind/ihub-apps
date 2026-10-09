@@ -14,6 +14,9 @@ import credentialService from '../CredentialService.js';
  * provider-config loading, token store/refresh/expiry handling, and the
  * 401-retry-once API request wrapper for free.
  */
+// A request answered with 401 is retried once, after refreshing the tokens.
+const MAX_API_RETRIES = 1;
+
 class OAuthIntegrationBase {
   constructor({ serviceName, displayName, componentName }) {
     this.serviceName = serviceName;
@@ -315,6 +318,151 @@ class OAuthIntegrationBase {
   }
 
   /**
+   * Build the fetch options for an authenticated API request. A JSON body is
+   * only sent for POST/PUT/PATCH; `_buildApiRequestHeaders` decides the rest.
+   * @param {Object} tokens - Decrypted user tokens
+   * @param {string} method - HTTP method
+   * @param {Object|null} data - Request body
+   * @returns {Object} Options for httpFetch
+   */
+  _buildApiFetchOptions(tokens, method, data) {
+    const hasBody = Boolean(data) && ['POST', 'PUT', 'PATCH'].includes(method);
+    const options = {
+      method,
+      headers: this._buildApiRequestHeaders(tokens, method, hasBody)
+    };
+    if (hasBody) {
+      options.body = JSON.stringify(data);
+    }
+    return options;
+  }
+
+  /**
+   * Build the error for a 429, logging the provider's retry-after hint.
+   * @param {Response} response - The 429 response
+   * @param {string} endpoint - Requested endpoint, for logging
+   * @returns {Error} The error to throw
+   */
+  _rateLimitError(response, endpoint) {
+    const retryAfter = response.headers.get('retry-after') || 'unknown';
+    logger.warn('Rate limit exceeded', {
+      component: this.componentName,
+      retryAfter,
+      endpoint
+    });
+    return new Error(`${this.displayName} API rate limit exceeded. Please try again in a moment.`);
+  }
+
+  /**
+   * Turn a failed (non-OK, non-retried) API response into the error to throw.
+   * 401 and 429 get dedicated messages; everything else carries the provider's
+   * message, or the status text when the body has none. A 404 is an expected
+   * outcome and is only debug-logged.
+   * @param {Response} response - The failed response
+   * @param {string} endpoint - Requested endpoint, for logging
+   * @returns {Promise<Error>} The error to throw
+   */
+  async _apiErrorFromResponse(response, endpoint) {
+    if (response.status === 401) {
+      return new Error(
+        `${this.displayName} authentication required. Please reconnect your account.`
+      );
+    }
+    if (response.status === 429) {
+      return this._rateLimitError(response, endpoint);
+    }
+
+    const errorData = await response.json().catch(() => ({}));
+    const providerMessage = errorData?.error?.message;
+
+    if (response.status === 404) {
+      const message = providerMessage || 'Resource not found';
+      logger.debug(`${this.displayName} API returned 404 (not found)`, {
+        component: this.componentName,
+        endpoint,
+        errorMessage: message
+      });
+      return new Error(`${this.displayName} API error: ${message}`);
+    }
+
+    logger.error(`${this.displayName} API request failed`, {
+      component: this.componentName,
+      error: errorData
+    });
+    return new Error(`${this.displayName} API error: ${providerMessage || response.statusText}`);
+  }
+
+  /**
+   * Refresh the user's access token after the API answered 401 and store the
+   * new tokens. Throws when there is no refresh token or the refresh fails.
+   * @param {string} userId - User ID
+   * @param {string} [providerId] - Provider ID
+   */
+  async _refreshAfterUnauthorized(userId, providerId) {
+    const expiredTokens = await tokenStorage.getUserTokens(userId, this.serviceName, providerId);
+
+    if (!expiredTokens.refreshToken) {
+      throw new Error('No refresh token available');
+    }
+
+    const refreshedTokens = await this.refreshAccessToken(
+      expiredTokens.providerId,
+      expiredTokens.refreshToken
+    );
+
+    await this.storeUserTokens(userId, refreshedTokens);
+  }
+
+  /**
+   * Handle a 401: refresh the tokens, then send the request once more. Any
+   * failure in here deletes the stored tokens and is reported as an expired
+   * session.
+   * @param {string} userId - User ID
+   * @param {string} [providerId] - Provider ID
+   * @param {number} retryCount - Retries used so far, before this one
+   * @param {() => Promise<Object>} sendAgain - Sends the original request again
+   * @returns {Promise<Object>} API response of the retried request
+   */
+  async _retryAfterUnauthorized(userId, providerId, retryCount, sendAgain) {
+    logger.info('Received 401, attempting token refresh and retry', {
+      component: this.componentName,
+      attempt: retryCount + 1,
+      maxAttempts: MAX_API_RETRIES + 1
+    });
+
+    try {
+      await this._refreshAfterUnauthorized(userId, providerId);
+      return await sendAgain();
+    } catch (refreshError) {
+      logger.error('Forced token refresh failed', {
+        component: this.componentName,
+        error: refreshError
+      });
+
+      await this.deleteUserTokens(userId, providerId);
+      throw new Error(`${this.displayName} authentication expired. Please reconnect your account.`);
+    }
+  }
+
+  /**
+   * Decide what to throw for an error that escaped an API request: errors
+   * that already name the service or concern authentication pass through,
+   * everything else is logged and wrapped as an API error.
+   * @param {Error} error
+   * @returns {Error} The error to throw
+   */
+  _toApiRequestError(error) {
+    if (error.message.includes(this.displayName) || error.message.includes('authentication')) {
+      return error;
+    }
+    logger.error(`${this.displayName} API request failed`, {
+      component: this.componentName,
+      error
+    });
+    return new Error(`${this.displayName} API error: ${error.message}`);
+  }
+
+  /**
    * Make an authenticated API request against the given base URL, with a
    * single automatic token-refresh retry on 401.
    * @param {string} apiBaseUrl - Base URL to prefix onto relative endpoints
@@ -323,130 +471,44 @@ class OAuthIntegrationBase {
    * @param {Object|null} data - Request body
    * @param {string} userId - User ID
    * @param {string} [providerId] - Provider ID
-   * @param {number} retryCount - Current retry count
+   * @param {number} [retryCount] - Current retry count
    * @returns {Promise<Object>} API response
    */
   async _makeApiRequestWithRetry(
     apiBaseUrl,
     endpoint,
-    method = 'GET',
-    data = null,
+    method,
+    data,
     userId,
     providerId,
     retryCount = 0
   ) {
-    const maxRetries = 1;
-
     try {
       const tokens = await this.getUserTokens(userId, providerId);
       const url = endpoint.startsWith('http') ? endpoint : `${apiBaseUrl}${endpoint}`;
-      const hasBody = !!data && ['POST', 'PUT', 'PATCH'].includes(method);
+      const response = await httpFetch(url, this._buildApiFetchOptions(tokens, method, data));
 
-      const fetchOptions = {
-        method,
-        headers: this._buildApiRequestHeaders(tokens, method, hasBody)
-      };
-
-      if (hasBody) {
-        fetchOptions.body = JSON.stringify(data);
+      if (response.ok) {
+        return response.status === 204 ? null : await response.json();
       }
 
-      const response = await httpFetch(url, fetchOptions);
-
-      if (!response.ok) {
-        if (response.status === 401 && retryCount < maxRetries) {
-          logger.info('Received 401, attempting token refresh and retry', {
-            component: this.componentName,
-            attempt: retryCount + 1,
-            maxAttempts: maxRetries + 1
-          });
-
-          try {
-            const expiredTokens = await tokenStorage.getUserTokens(
-              userId,
-              this.serviceName,
-              providerId
-            );
-
-            if (!expiredTokens.refreshToken) {
-              throw new Error('No refresh token available');
-            }
-
-            const refreshedTokens = await this.refreshAccessToken(
-              expiredTokens.providerId,
-              expiredTokens.refreshToken
-            );
-
-            await this.storeUserTokens(userId, refreshedTokens);
-
-            return await this._makeApiRequestWithRetry(
-              apiBaseUrl,
-              endpoint,
-              method,
-              data,
-              userId,
-              providerId,
-              retryCount + 1
-            );
-          } catch (refreshError) {
-            logger.error('Forced token refresh failed', {
-              component: this.componentName,
-              error: refreshError
-            });
-
-            await this.deleteUserTokens(userId, providerId);
-            throw new Error(
-              `${this.displayName} authentication expired. Please reconnect your account.`
-            );
-          }
-        } else if (response.status === 401) {
-          throw new Error(
-            `${this.displayName} authentication required. Please reconnect your account.`
-          );
-        } else if (response.status === 429) {
-          const retryAfter = response.headers.get('retry-after') || 'unknown';
-          logger.warn('Rate limit exceeded', {
-            component: this.componentName,
-            retryAfter,
-            endpoint
-          });
-          throw new Error(
-            `${this.displayName} API rate limit exceeded. Please try again in a moment.`
-          );
-        }
-
-        const errorData = await response.json().catch(() => ({}));
-        if (response.status === 404) {
-          logger.debug(`${this.displayName} API returned 404 (not found)`, {
-            component: this.componentName,
+      if (response.status === 401 && retryCount < MAX_API_RETRIES) {
+        return await this._retryAfterUnauthorized(userId, providerId, retryCount, () =>
+          this._makeApiRequestWithRetry(
+            apiBaseUrl,
             endpoint,
-            errorMessage: errorData?.error?.message || 'Resource not found'
-          });
-          throw new Error(
-            `${this.displayName} API error: ${errorData?.error?.message || 'Resource not found'}`
-          );
-        }
-
-        logger.error(`${this.displayName} API request failed`, {
-          component: this.componentName,
-          error: errorData
-        });
-        throw new Error(
-          `${this.displayName} API error: ${errorData?.error?.message || response.statusText}`
+            method,
+            data,
+            userId,
+            providerId,
+            retryCount + 1
+          )
         );
       }
 
-      if (response.status === 204) return null;
-      return await response.json();
+      throw await this._apiErrorFromResponse(response, endpoint);
     } catch (error) {
-      if (error.message.includes(this.displayName) || error.message.includes('authentication')) {
-        throw error;
-      }
-      logger.error(`${this.displayName} API request failed`, {
-        component: this.componentName,
-        error
-      });
-      throw new Error(`${this.displayName} API error: ${error.message}`);
+      throw this._toApiRequestError(error);
     }
   }
 }
