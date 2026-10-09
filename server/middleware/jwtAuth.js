@@ -7,7 +7,7 @@ import { buildPolicyCimdClient } from '../utils/oauthClientResolver.js';
 import { isClientIdUrl } from '../utils/clientIdMetadata.js';
 import { isPersonalKeyExpired, isPersonalKeysEnabled } from '../utils/personalApiKeyManager.js';
 import { isCurrentKeyGeneration } from '../utils/oauthTokenService.js';
-import { loadUsers, loadUsersFresh, isUserActive, equalsIgnoreCase } from '../utils/userManager.js';
+import { loadUsers, loadUsersFresh, isUserActive } from '../utils/userManager.js';
 import { verifyJwt, decodeJwt } from '../utils/tokenService.js';
 import { recordAuthEvent } from '../telemetry/metrics.js';
 import configCache from '../configCache.js';
@@ -52,20 +52,25 @@ async function findTokenUserRecord(usersFilePath, find) {
 
 /**
  * The record for a token's subject: by id (users.json is keyed by it), then by
- * the token's email among the users who sign in with `authMethod`.
+ * the identity provider's own subject for that user (`oidcData.subject`, ...),
+ * which is what tokens minted before the persisted id became the subject carry.
+ *
+ * Never by email or login name. They name a person, not an account: matching on
+ * them lets the token of a deleted account ride on a later account for the same
+ * address, and the request would still be authenticated as the deleted account,
+ * because `req.user` is built from the token's claims, not from the record.
  *
  * @param {Object} usersConfig - Users configuration
- * @param {string} userId - The subject the token carries
- * @param {string|undefined} email - The token's email claim
- * @param {string} authMethod - 'oidc', 'ldap', 'teams', ...
+ * @param {string|undefined} userId - The subject the token carries
+ * @param {string} authMethod - 'oidc', 'ldap', 'teams' or 'ntlm'
  * @returns {Object|undefined} The user record, if there is one
  */
-function findByIdOrEmail(usersConfig, userId, email, authMethod) {
+function findByIdOrSubject(usersConfig, userId, authMethod) {
+  if (!userId) return undefined;
   const byId = usersConfig.users?.[userId];
   if (byId) return byId;
-  if (!email) return undefined;
   return Object.values(usersConfig.users || {}).find(
-    u => equalsIgnoreCase(u.email, email) && u.authMethods?.includes(authMethod)
+    u => u.authMethods?.includes(authMethod) && u[`${authMethod}Data`]?.subject === userId
   );
 }
 
@@ -666,9 +671,8 @@ export default async function jwtAuthMiddleware(req, res, next) {
 
         // OIDC users can be identified by their subject ID or email
         const userId = decoded.sub || decoded.username;
-        // By ID, then by email (OIDC users may have different IDs)
         const userRecord = await findTokenUserRecord(usersFilePath, usersConfig =>
-          findByIdOrEmail(usersConfig, userId, decoded.email, 'oidc')
+          findByIdOrSubject(usersConfig, userId, 'oidc')
         );
 
         // The user was persisted before this token was issued, so a missing
@@ -701,20 +705,12 @@ export default async function jwtAuthMiddleware(req, res, next) {
       try {
         const usersFilePath = localUsersFile(platform.localAuth);
 
-        // users.json is keyed by the persisted UUID (decoded.sub). Fall back to
-        // username for legacy tokens minted before sub was the canonical id.
+        // users.json is keyed by the persisted UUID (decoded.sub). Tokens minted
+        // before sub was the canonical id carry the directory subject (or, with no
+        // sub, the username); those are matched through ldapData.subject.
         const userId = decoded.sub || decoded.username;
-        // By ID, then email, then the directory login name
-        const userRecord = await findTokenUserRecord(
-          usersFilePath,
-          usersConfig =>
-            findByIdOrEmail(usersConfig, userId, decoded.email, 'ldap') ||
-            (decoded.username &&
-              Object.values(usersConfig.users || {}).find(
-                u =>
-                  equalsIgnoreCase(u.ldapData?.username, decoded.username) &&
-                  u.authMethods?.includes('ldap')
-              ))
+        const userRecord = await findTokenUserRecord(usersFilePath, usersConfig =>
+          findByIdOrSubject(usersConfig, userId, 'ldap')
         );
 
         // The user was persisted before this token was issued, so a missing
@@ -752,9 +748,8 @@ export default async function jwtAuthMiddleware(req, res, next) {
         const usersFilePath = localUsersFile(platform.localAuth);
 
         const userId = decoded.id || decoded.sub;
-        // By ID, then by email
         const userRecord = await findTokenUserRecord(usersFilePath, usersConfig =>
-          findByIdOrEmail(usersConfig, userId, decoded.email, 'teams')
+          findByIdOrSubject(usersConfig, userId, 'teams')
         );
 
         // The user was persisted before this token was issued, so a missing
@@ -787,18 +782,8 @@ export default async function jwtAuthMiddleware(req, res, next) {
         const usersFilePath = localUsersFile(platform.localAuth);
 
         const userId = decoded.id || decoded.sub;
-        const userRecord = await findTokenUserRecord(
-          usersFilePath,
-          // By ID, then by ntlmData.subject or email
-          usersConfig =>
-            usersConfig.users?.[userId] ||
-            Object.values(usersConfig.users || {}).find(
-              u =>
-                (u.ntlmData?.subject === userId && u.authMethods?.includes('ntlm')) ||
-                (decoded.email &&
-                  equalsIgnoreCase(u.email, decoded.email) &&
-                  u.authMethods?.includes('ntlm'))
-            )
+        const userRecord = await findTokenUserRecord(usersFilePath, usersConfig =>
+          findByIdOrSubject(usersConfig, userId, 'ntlm')
         );
 
         // The user was persisted before this token was issued, so a missing

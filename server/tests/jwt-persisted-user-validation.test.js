@@ -349,6 +349,56 @@ describe.each(SSO_MODES)('%s token', mode => {
     expect(res.clearedCookies).toEqual([]);
   });
 
+  it('is not revived by a later account for the same person', async () => {
+    const first = await signIn(mode);
+    deleteUser(first.userId);
+    // The same person signs in again: same email, same provider subject, a new account.
+    const second = await signIn(mode);
+    expect(second.userId).not.toBe(first.userId);
+
+    const old = await request(first.token);
+    const current = await request(second.token);
+
+    expect(old.res.statusCode).toBe(401);
+    expect(old.nextCalled).toBe(false);
+    expect(current.nextCalled).toBe(true);
+    expect(current.req.user.id).toBe(second.userId);
+  });
+
+  it('still resolves a token whose subject is the provider subject (older sessions)', async () => {
+    const { userId } = await signIn(mode);
+    const external = EXTERNAL_USERS[mode];
+    const { token } = generateJwt(
+      { id: external.id, username: external.username, email: external.email, groups: [] },
+      { authMode: mode }
+    );
+
+    const { req, nextCalled } = await request(token);
+
+    expect(state.disk.users[userId]).toBeDefined();
+    expect(nextCalled).toBe(true);
+    expect(req.user.id).toBe(external.id);
+  });
+
+  it('does not match a record that has no provider subject at all', async () => {
+    state.disk.users.user_without_provider_data = {
+      id: 'user_without_provider_data',
+      username: 'plain',
+      active: true,
+      authMethods: [mode]
+    };
+    state.cache = clone(state.disk);
+    const { token } = generateJwt(
+      { id: `${mode}-someone-else`, username: 'x', email: 'x@example.com', groups: [] },
+      { authMode: mode }
+    );
+
+    const { res, nextCalled } = await request(token);
+
+    expect(res.statusCode).toBe(401);
+    expect(nextCalled).toBe(false);
+  });
+
   it('is refused when the user was never persisted at all', async () => {
     const { token } = generateJwt(
       { id: `${mode}-never-persisted`, username: 'ghost', email: 'ghost@example.com', groups: [] },
