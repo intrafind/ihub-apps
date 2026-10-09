@@ -81,7 +81,7 @@ describe('messageContentToMarkdown', () => {
   });
 
   it('returns an empty string for missing or non-string content', () => {
-    expect(messageContentToMarkdown(undefined)).toBe('');
+    expect(messageContentToMarkdown()).toBe('');
     expect(messageContentToMarkdown(null)).toBe('');
     expect(messageContentToMarkdown('')).toBe('');
     expect(messageContentToMarkdown({ text: 'x' })).toBe('');
@@ -89,7 +89,7 @@ describe('messageContentToMarkdown', () => {
 });
 
 describe('exportChatToFormat', () => {
-  let downloads;
+  let downloads = [];
 
   beforeEach(() => {
     downloads = [];

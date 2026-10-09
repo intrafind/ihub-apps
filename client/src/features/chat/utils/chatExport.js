@@ -100,105 +100,6 @@ export const exportChatToPDF = async (
   return { success: true, filename };
 };
 
-// HTML document for the chat's HTML export
-const generateExportHTML = (
-  messages,
-  settings,
-  template,
-  watermark,
-  appName,
-  isSingleMessage = false
-) => {
-  const docTitle = buildChatExportTitle({ appName, messages, isSingleMessage });
-  const styles = getTemplateStyles(template);
-  const watermarkStyle = getWatermarkStyle(watermark);
-
-  const formatTimestamp = timestamp => {
-    try {
-      return new Date(timestamp).toLocaleString();
-    } catch {
-      return new Date().toLocaleString();
-    }
-  };
-
-  const formatContent = renderMarkdownForExport;
-
-  const messagesHTML = messages
-    .filter(msg => !msg.isGreeting) // Exclude greeting messages
-    .map(message => {
-      const roleClass = message.role === 'user' ? 'user-message' : 'assistant-message';
-      const roleLabel = message.role === 'user' ? 'User' : 'Assistant';
-
-      return `
-        <div class="message ${roleClass}">
-          <div class="message-header">
-            <span class="role">${roleLabel}</span>
-            <span class="timestamp">${formatTimestamp(message.timestamp || Date.now())}</span>
-          </div>
-          <div class="message-content">
-            ${formatContent(message.content)}
-          </div>
-        </div>
-      `;
-    })
-    .join('');
-
-  const metadataHTML = settings
-    ? `
-    <div class="metadata">
-      <h3>Chat Settings</h3>
-      <div class="metadata-grid">
-        ${settings.model ? `<div><strong>Model:</strong> ${settings.model}</div>` : ''}
-        ${settings.temperature !== undefined ? `<div><strong>Temperature:</strong> ${settings.temperature}</div>` : ''}
-        ${settings.style ? `<div><strong>Style:</strong> ${settings.style}</div>` : ''}
-        ${settings.outputFormat ? `<div><strong>Output Format:</strong> ${settings.outputFormat}</div>` : ''}
-        ${
-          settings.variables && Object.keys(settings.variables).length > 0
-            ? `
-          <div><strong>Variables:</strong> ${Object.entries(settings.variables)
-            .map(([k, v]) => `${k}: ${v}`)
-            .join(', ')}</div>
-        `
-            : ''
-        }
-      </div>
-    </div>
-  `
-    : '';
-
-  return `
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${escapeHtml(docTitle)}</title>
-  <style>
-    ${styles}
-    ${watermarkStyle}
-  </style>
-</head>
-<body>
-  <div class="container">
-    <header class="header">
-      <h1>${escapeHtml(docTitle)}</h1>
-      ${appName ? `<h2>${appName}</h2>` : ''}
-      <p class="export-date">Exported on ${new Date().toLocaleString()}</p>
-    </header>
-    
-    ${metadataHTML}
-    
-    <main class="messages">
-      ${messagesHTML}
-    </main>
-    
-    ${watermark.text ? `<div class="watermark">${watermark.text}</div>` : ''}
-  </div>
-</body>
-</html>
-  `;
-};
-
 // Template styles
 const getTemplateStyles = template => {
   const baseStyles = `
@@ -528,6 +429,105 @@ const getWatermarkStyle = watermark => {
         ${positions[watermark.position] || positions['bottom-right']}
       }
     }
+  `;
+};
+
+// HTML document for the chat's HTML export
+const generateExportHTML = (
+  messages,
+  settings,
+  template,
+  watermark,
+  appName,
+  isSingleMessage = false
+) => {
+  const docTitle = buildChatExportTitle({ appName, messages, isSingleMessage });
+  const styles = getTemplateStyles(template);
+  const watermarkStyle = getWatermarkStyle(watermark);
+
+  const formatTimestamp = timestamp => {
+    try {
+      return new Date(timestamp).toLocaleString();
+    } catch {
+      return new Date().toLocaleString();
+    }
+  };
+
+  const formatContent = renderMarkdownForExport;
+
+  const messagesHTML = messages
+    .filter(msg => !msg.isGreeting) // Exclude greeting messages
+    .map(message => {
+      const roleClass = message.role === 'user' ? 'user-message' : 'assistant-message';
+      const roleLabel = message.role === 'user' ? 'User' : 'Assistant';
+
+      return `
+        <div class="message ${roleClass}">
+          <div class="message-header">
+            <span class="role">${roleLabel}</span>
+            <span class="timestamp">${formatTimestamp(message.timestamp || Date.now())}</span>
+          </div>
+          <div class="message-content">
+            ${formatContent(message.content)}
+          </div>
+        </div>
+      `;
+    })
+    .join('');
+
+  const metadataHTML = settings
+    ? `
+    <div class="metadata">
+      <h3>Chat Settings</h3>
+      <div class="metadata-grid">
+        ${settings.model ? `<div><strong>Model:</strong> ${settings.model}</div>` : ''}
+        ${settings.temperature !== undefined ? `<div><strong>Temperature:</strong> ${settings.temperature}</div>` : ''}
+        ${settings.style ? `<div><strong>Style:</strong> ${settings.style}</div>` : ''}
+        ${settings.outputFormat ? `<div><strong>Output Format:</strong> ${settings.outputFormat}</div>` : ''}
+        ${
+          settings.variables && Object.keys(settings.variables).length > 0
+            ? `
+          <div><strong>Variables:</strong> ${Object.entries(settings.variables)
+            .map(([k, v]) => `${k}: ${v}`)
+            .join(', ')}</div>
+        `
+            : ''
+        }
+      </div>
+    </div>
+  `
+    : '';
+
+  return `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${escapeHtml(docTitle)}</title>
+  <style>
+    ${styles}
+    ${watermarkStyle}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header class="header">
+      <h1>${escapeHtml(docTitle)}</h1>
+      ${appName ? `<h2>${appName}</h2>` : ''}
+      <p class="export-date">Exported on ${new Date().toLocaleString()}</p>
+    </header>
+    
+    ${metadataHTML}
+    
+    <main class="messages">
+      ${messagesHTML}
+    </main>
+    
+    ${watermark.text ? `<div class="watermark">${watermark.text}</div>` : ''}
+  </div>
+</body>
+</html>
   `;
 };
 
