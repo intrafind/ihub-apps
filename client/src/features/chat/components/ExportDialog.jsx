@@ -3,13 +3,6 @@ import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import useFocusTrap from '../../../shared/hooks/useFocusTrap';
 import { exportChatToFormat } from '../../../api/endpoints/apps';
-import {
-  exportToXLSX,
-  exportToCSV,
-  exportToDOCX,
-  exportToTXT,
-  exportToPPTX
-} from '../../../utils/exportFormats';
 import { useUIConfig } from '../../../shared/contexts/UIConfigContext';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
@@ -233,55 +226,23 @@ function ExportDialog({
           await exportChatToFormat(filteredMessages, exportSettings, 'html', options);
           break;
         case 'xlsx':
-          await exportToXLSX(
-            filteredMessages,
-            exportSettings,
-            appName,
-            appId,
-            chatId,
-            isSingleMessage
-          );
-          break;
         case 'csv':
-          await exportToCSV(
-            filteredMessages,
-            exportSettings,
-            appName,
-            appId,
-            chatId,
-            isSingleMessage
-          );
-          break;
         case 'docx':
-          await exportToDOCX(
-            filteredMessages,
-            exportSettings,
-            appName,
-            appId,
-            chatId,
-            isSingleMessage
-          );
-          break;
         case 'txt':
-          await exportToTXT(
-            filteredMessages,
-            exportSettings,
-            appName,
-            appId,
-            chatId,
-            isSingleMessage
-          );
+        case 'pptx': {
+          // Loaded on demand so the export libraries (docx, pptxgenjs,
+          // write-excel-file) stay out of the initial bundle.
+          const exporters = await import('../../../utils/exportFormats');
+          const exportFn = {
+            xlsx: exporters.exportToXLSX,
+            csv: exporters.exportToCSV,
+            docx: exporters.exportToDOCX,
+            txt: exporters.exportToTXT,
+            pptx: exporters.exportToPPTX
+          }[selectedFormat];
+          await exportFn(filteredMessages, exportSettings, appName, appId, chatId, isSingleMessage);
           break;
-        case 'pptx':
-          await exportToPPTX(
-            filteredMessages,
-            exportSettings,
-            appName,
-            appId,
-            chatId,
-            isSingleMessage
-          );
-          break;
+        }
         default:
           throw new Error(`Unsupported format: ${selectedFormat}`);
       }
