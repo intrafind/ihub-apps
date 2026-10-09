@@ -130,12 +130,22 @@ export async function deleteChatsOfOwner(repository, ownerId, { stopChat, ...dep
 
   let removed = 0;
   for (let pass = 0; pass < MAX_OWNER_PASSES; pass += 1) {
-    let removedThisPass = 0;
-    for (const chat of await listOwnerChats(repository, ownerId)) {
-      if (await removeOwnedChat(repository, chat, stopChat, deps)) removedThisPass += 1;
-    }
+    const removedThisPass = await removeListedChats(repository, ownerId, stopChat, deps);
     removed += removedThisPass;
     if (removedThisPass === 0) break;
+  }
+  return removed;
+}
+
+/**
+ * Remove every chat one listing shows for an owner.
+ *
+ * @returns {Promise<number>} How many chats were removed
+ */
+async function removeListedChats(repository, ownerId, stopChat, deps) {
+  let removed = 0;
+  for (const chat of await listOwnerChats(repository, ownerId)) {
+    if (await removeOwnedChat(repository, chat, stopChat, deps)) removed += 1;
   }
   return removed;
 }

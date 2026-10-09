@@ -45,6 +45,23 @@ async function listDirectory(directory) {
   }
 }
 
+/** Remove the token files of `ids` from one service directory. */
+async function deleteTokenFilesIn(serviceDir, ids) {
+  let removed = 0;
+  for (const entry of await listDirectory(serviceDir)) {
+    if (!entry.endsWith('.json')) continue;
+    const name = entry.slice(0, -'.json'.length);
+    if (!ids.some(id => name === id || name.startsWith(`${id}__`))) continue;
+    try {
+      await fs.unlink(path.join(serviceDir, entry));
+      removed += 1;
+    } catch (error) {
+      if (error.code !== 'ENOENT') throw error;
+    }
+  }
+  return removed;
+}
+
 /**
  * Centralized Token Storage Service
  * Provides secure encryption, decryption, storage, and retrieval of user tokens
@@ -622,7 +639,7 @@ class TokenStorageService {
     const services = await listDirectory(this.storageBasePath);
     let removed = 0;
     for (const serviceName of services.filter(name => this._isSafeFilenameComponent(name))) {
-      removed += await this._deleteTokenFilesIn(path.join(this.storageBasePath, serviceName), ids);
+      removed += await deleteTokenFilesIn(path.join(this.storageBasePath, serviceName), ids);
     }
 
     if (removed > 0) {
@@ -642,23 +659,6 @@ class TokenStorageService {
     } catch {
       return false;
     }
-  }
-
-  /** Remove the token files of `ids` from one service directory. */
-  async _deleteTokenFilesIn(serviceDir, ids) {
-    let removed = 0;
-    for (const entry of await listDirectory(serviceDir)) {
-      if (!entry.endsWith('.json')) continue;
-      const name = entry.slice(0, -'.json'.length);
-      if (!ids.some(id => name === id || name.startsWith(`${id}__`))) continue;
-      try {
-        await fs.unlink(path.join(serviceDir, entry));
-        removed += 1;
-      } catch (error) {
-        if (error.code !== 'ENOENT') throw error;
-      }
-    }
-    return removed;
   }
 
   /**
