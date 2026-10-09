@@ -583,9 +583,10 @@ describe('Migration Runner', () => {
       '156',
       '157',
       '158',
-      '160'
+      '160',
+      '161'
     ])(
-      'moves an EU AI Act entry recorded at V%s to V161 so it no longer blocks main',
+      'moves an EU AI Act entry recorded at V%s to V162 so it no longer blocks main',
       oldVersion => {
         // A dev install that ran the branch while it held that number recorded
         // it; main's provider plain names (V141), text-to-speech (V142),
@@ -593,8 +594,9 @@ describe('Migration Runner', () => {
         // trusted sources (V147), Translator system prompt (V148), user skills
         // settings (V152), workflow code node removal (V153), user skills
         // marketplace (V154), skill builder (V155), skills catalog token budget
-        // (V156), read_url tool rename (V157), Copilot agent config (V158) and
-        // scheduled task memory (V160) migrations hold those numbers now, and
+        // (V156), read_url tool rename (V157), Copilot agent config (V158),
+        // scheduled task memory (V160) and larger scheduled task memory (V161)
+        // migrations hold those numbers now, and
         // V143 sorts below main's app wizard field cleanup (V144).
         const history = {
           schemaVersion: '1.0',
@@ -617,8 +619,8 @@ describe('Migration Runner', () => {
         };
 
         expect(reconcileRenamedMigrations(history)).toBe(true);
-        expect(history.migrations[0].version).toBe('161');
-        expect(history.migrations[0].file).toBe('V161__add_ai_transparency.js');
+        expect(history.migrations[0].version).toBe('162');
+        expect(history.migrations[0].file).toBe('V162__add_ai_transparency.js');
         expect(history.migrations[1].version).toBe('140');
       }
     );
@@ -761,6 +763,20 @@ describe('Migration Runner', () => {
 
       expect(reconcileRenamedMigrations(history)).toBe(false);
       expect(history.migrations).toEqual([taskMemory]);
+    });
+
+    it("leaves main's V161 task memory entry alone when reconciling the EU AI Act V161", () => {
+      const largerMemory = {
+        version: '161',
+        description: 'larger_scheduled_task_memory',
+        file: 'V161__larger_scheduled_task_memory.js',
+        checksum: 'abc123',
+        status: 'success'
+      };
+      const history = { schemaVersion: '1.0', migrations: [{ ...largerMemory }] };
+
+      expect(reconcileRenamedMigrations(history)).toBe(false);
+      expect(history.migrations).toEqual([largerMemory]);
     });
 
     it('is a no-op on a fresh install with no matching history entries', () => {

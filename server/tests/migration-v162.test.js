@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * Migration V161 specs — seeding `platform.aiTransparency` and the per-model
+ * Migration V162 specs — seeding `platform.aiTransparency` and the per-model
  * `contentMarking` block (EU AI Act Art. 50, issue #2563).
  */
 import fs from 'node:fs/promises';
@@ -16,7 +16,7 @@ import {
   version,
   description,
   AI_TRANSPARENCY_DEFAULTS
-} from '../migrations/V161__add_ai_transparency.js';
+} from '../migrations/V162__add_ai_transparency.js';
 import { setDefault } from '../migrations/utils.js';
 import { DEFAULT_AI_TRANSPARENCY } from '../../shared/aiTransparency.js';
 
@@ -45,7 +45,7 @@ function makeCtx(dir) {
 }
 
 async function seed({ platform = {}, models = {} } = {}) {
-  const dir = await fs.mkdtemp(path.join(baseDir, 'v161-'));
+  const dir = await fs.mkdtemp(path.join(baseDir, 'v162-'));
   if (platform !== null) {
     await fs.mkdir(path.join(dir, 'config'), { recursive: true });
     await fs.writeFile(path.join(dir, 'config/platform.json'), JSON.stringify(platform), 'utf8');
@@ -71,16 +71,16 @@ function flatten(obj, prefix = '') {
 }
 
 before(async () => {
-  baseDir = await fs.mkdtemp(path.join(os.tmpdir(), 'ihub-migration-v161-'));
+  baseDir = await fs.mkdtemp(path.join(os.tmpdir(), 'ihub-migration-v162-'));
 });
 
 after(async () => {
   await fs.rm(baseDir, { recursive: true, force: true });
 });
 
-describe('V161 identity', () => {
+describe('V162 identity', () => {
   it('is numbered and described as its file name says', () => {
-    assert.equal(version, '161');
+    assert.equal(version, '162');
     assert.equal(description, 'add_ai_transparency');
   });
 
@@ -96,7 +96,7 @@ describe('V161 identity', () => {
   });
 });
 
-describe('V161 platform defaults', () => {
+describe('V162 platform defaults', () => {
   it('adds the whole section to an installation that has none', async () => {
     const { ctx } = await seed({ platform: { auth: { mode: 'local' } } });
     await up(ctx);
@@ -128,7 +128,7 @@ describe('V161 platform defaults', () => {
   });
 });
 
-describe('V161 model contentMarking', () => {
+describe('V162 model contentMarking', () => {
   it('marks cloud text models as unmarked and Gemini images as SynthID', async () => {
     const { ctx } = await seed({
       models: {
