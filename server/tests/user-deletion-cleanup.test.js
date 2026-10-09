@@ -243,14 +243,14 @@ describe('chats of an owner', () => {
   it('all go, across pages, each through the cascade', async () => {
     const chats = Array.from({ length: 250 }, (_, i) => chat(`c${i}`));
     const repository = fakeRepository(chats);
-    const d = deps();
+    const cascade = deps();
 
-    expect(await deleteChatsOfOwner(repository, 'alice', d)).toBe(250);
+    expect(await deleteChatsOfOwner(repository, 'alice', cascade)).toBe(250);
 
     expect(repository.live.size).toBe(0);
-    expect(d.deleteRun).toHaveBeenCalledTimes(250);
-    expect(d.removeWorkflowState).toHaveBeenCalledTimes(250);
-    expect(d.deleteShares).toHaveBeenCalledTimes(250);
+    expect(cascade.deleteRun).toHaveBeenCalledTimes(250);
+    expect(cascade.removeWorkflowState).toHaveBeenCalledTimes(250);
+    expect(cascade.deleteShares).toHaveBeenCalledTimes(250);
   });
 
   it('are listed again when one listing could not show them all', async () => {
@@ -273,7 +273,7 @@ describe('chats of an owner', () => {
     const order = [];
     const repository = fakeRepository([chat('busy', { status: 'running' }), chat('idle')]);
     const original = repository.deleteChat;
-    repository.deleteChat = jest.fn(async id => {
+    repository.deleteChat = jest.fn(id => {
       order.push(`delete ${id}`);
       return original(id);
     });
@@ -364,11 +364,8 @@ describe('the cleanup', () => {
   });
 
   it('starts in the background: the caller is not held up by a slow step', async () => {
-    let release;
-    const slow = step(
-      'slow',
-      () => new Promise(resolve => (release = () => resolve({ removed: 1 })))
-    );
+    const finish = Promise.withResolvers();
+    const slow = step('slow', () => finish.promise);
     const onDone = jest.fn();
 
     startUserCleanup({ userId: 'alice', platform: {}, steps: [slow], onDone });
@@ -377,7 +374,7 @@ describe('the cleanup', () => {
     expect(slow.run).toHaveBeenCalled();
     expect(onDone).not.toHaveBeenCalled();
 
-    release();
+    finish.resolve({ removed: 1 });
     await waitForUserCleanups();
 
     expect(onDone).toHaveBeenCalledWith({ results: { slow: { removed: 1 } }, failed: [] });
