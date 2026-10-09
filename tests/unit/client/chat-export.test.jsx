@@ -190,6 +190,40 @@ describe('exportChatToFormat', () => {
     expect(html).toContain('<title>A &lt;b&gt;&amp;&lt;/b&gt; B chat</title>');
   });
 
+  it('escapes the app name and every chat setting in the HTML export', async () => {
+    // Variable values are typed into the chat's start form, so like the title they are
+    // attacker-controlled and must not become live markup in the downloaded document.
+    await exportChatToFormat(
+      [{ role: 'user', content: 'hi' }],
+      {
+        model: '<script>alert(1)</script>',
+        temperature: 0.5,
+        style: '<b>bold</b>',
+        outputFormat: '"><svg onload=alert(1)>',
+        variables: { '<k>': '<img src=x onerror=alert(1)>' }
+      },
+      'html',
+      { appName: 'R&D <i>Hub</i>' }
+    );
+
+    const html = await readBlob(downloads[0].blob);
+    expect(html).not.toContain('<script>alert(1)</script>');
+    expect(html).not.toContain('<img src=x onerror');
+    expect(html).not.toContain('<svg onload');
+    expect(html).not.toContain('<i>Hub</i>');
+    expect(html).not.toContain('<b>bold</b>');
+    expect(html).toContain('<h2>R&amp;D &lt;i&gt;Hub&lt;/i&gt;</h2>');
+    expect(html).toContain(
+      '<div><strong>Model:</strong> &lt;script&gt;alert(1)&lt;/script&gt;</div>'
+    );
+    expect(html).toContain('<div><strong>Style:</strong> &lt;b&gt;bold&lt;/b&gt;</div>');
+    expect(html).toContain(
+      '<strong>Variables:</strong> &lt;k&gt;: &lt;img src=x onerror=alert(1)&gt;'
+    );
+    // Plain values still render as before.
+    expect(html).toContain('<div><strong>Temperature:</strong> 0.5</div>');
+  });
+
   it('renders the PDF on the server and saves the result, dropping greetings', async () => {
     const pdf = new Blob(['%PDF'], { type: 'application/pdf' });
     exportPdfOnServer.mockResolvedValue(pdf);

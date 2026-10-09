@@ -27,9 +27,11 @@ const renderMarkdownForExport = content => {
 };
 
 // HTML-escape arbitrary text for safe interpolation into the export
-// document's <title>/<h1>. The doc title now includes the first user
-// message (via buildChatExportTitle), which is attacker-controlled and
-// must not be rendered as raw HTML.
+// document. Everything but the rendered message bodies (those go through
+// DOMPurify) passes through here: the title includes the first user message
+// (via buildChatExportTitle) and the settings include the values typed into
+// the chat's start form, both attacker-controlled and not to be rendered as
+// raw HTML.
 const escapeHtml = s =>
   String(s ?? '')
     .replaceAll('&', '&amp;')
@@ -491,15 +493,15 @@ const generateExportHTML = (
     <div class="metadata">
       <h3>Chat Settings</h3>
       <div class="metadata-grid">
-        ${settings.model ? `<div><strong>Model:</strong> ${settings.model}</div>` : ''}
-        ${settings.temperature !== undefined ? `<div><strong>Temperature:</strong> ${settings.temperature}</div>` : ''}
-        ${settings.style ? `<div><strong>Style:</strong> ${settings.style}</div>` : ''}
-        ${settings.outputFormat ? `<div><strong>Output Format:</strong> ${settings.outputFormat}</div>` : ''}
+        ${settings.model ? `<div><strong>Model:</strong> ${escapeHtml(settings.model)}</div>` : ''}
+        ${settings.temperature !== undefined ? `<div><strong>Temperature:</strong> ${escapeHtml(settings.temperature)}</div>` : ''}
+        ${settings.style ? `<div><strong>Style:</strong> ${escapeHtml(settings.style)}</div>` : ''}
+        ${settings.outputFormat ? `<div><strong>Output Format:</strong> ${escapeHtml(settings.outputFormat)}</div>` : ''}
         ${
           settings.variables && Object.keys(settings.variables).length > 0
             ? `
           <div><strong>Variables:</strong> ${Object.entries(settings.variables)
-            .map(([k, v]) => `${k}: ${v}`)
+            .map(([k, v]) => `${escapeHtml(k)}: ${escapeHtml(v)}`)
             .join(', ')}</div>
         `
             : ''
@@ -525,7 +527,7 @@ const generateExportHTML = (
   <div class="container">
     <header class="header">
       <h1>${escapeHtml(docTitle)}</h1>
-      ${appName ? `<h2>${appName}</h2>` : ''}
+      ${appName ? `<h2>${escapeHtml(appName)}</h2>` : ''}
       <p class="export-date">Exported on ${new Date().toLocaleString()}</p>
     </header>
     
@@ -535,7 +537,7 @@ const generateExportHTML = (
       ${messagesHTML}
     </main>
     
-    ${watermark.text ? `<div class="watermark">${watermark.text}</div>` : ''}
+    ${watermark.text ? `<div class="watermark">${escapeHtml(watermark.text)}</div>` : ''}
   </div>
 </body>
 </html>
