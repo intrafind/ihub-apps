@@ -3,8 +3,10 @@
 // OpenAI's near-verbatim, and the duplication had already drifted into two
 // real bugs. This test pins both fixes plus the deduplication itself.
 import VLLMAdapter from '../adapters/vllm.js';
-import { convertGenericToolCallsToVLLM } from '../adapters/toolCalling/VLLMConverter.js';
-import { convertVLLMToolsToGeneric } from '../adapters/toolCalling/VLLMConverter.js';
+import {
+  convertGenericToolCallsToVLLM,
+  convertVLLMToolsToGeneric
+} from '../adapters/toolCalling/VLLMConverter.js';
 import {
   convertOpenAIToolCallsToGeneric,
   convertOpenAIResponseToGeneric
@@ -14,7 +16,7 @@ let failures = 0;
 function check(label, cond, detail) {
   if (!cond) failures++;
   console.log(`${cond ? '✅' : '❌'} ${label}`);
-  if (!cond && detail) console.log('   ' + detail);
+  if (!cond && detail) console.log(`   ${detail}`);
 }
 
 // --- Bug #1: convertGenericToolCallsToVLLM put the tool-call id in
@@ -90,7 +92,7 @@ function check(label, cond, detail) {
 
   let threw = false;
   let err = '';
-  let result;
+  let result = null;
   try {
     result = await convertOpenAIResponseToGeneric(
       chunk({ choices: [{ delta: {}, finish_reason: 'stop' }] }),
@@ -107,7 +109,7 @@ function check(label, cond, detail) {
   );
   check(
     'finish_reason path still produces the tool call with raw arguments preserved',
-    !!result && Array.isArray(result.tool_calls) && result.tool_calls.length === 1,
+    Boolean(result) && Array.isArray(result.tool_calls) && result.tool_calls.length === 1,
     JSON.stringify(result?.tool_calls)
   );
 }

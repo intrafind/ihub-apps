@@ -89,7 +89,7 @@ export function formatOpenAICompatibleMessages(messages, model, adapter) {
     if (hasImages) {
       if (Array.isArray(message.imageData)) {
         message.imageData
-          .filter(img => img && img.base64)
+          .filter(img => img?.base64)
           .forEach(img => {
             contentParts.push({
               type: 'image_url',
@@ -114,7 +114,7 @@ export function formatOpenAICompatibleMessages(messages, model, adapter) {
     if (hasAudio) {
       if (Array.isArray(message.audioData)) {
         message.audioData
-          .filter(audio => audio && audio.base64)
+          .filter(audio => audio?.base64)
           .forEach(audio => {
             contentParts.push({
               type: 'input_audio',
