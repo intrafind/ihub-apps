@@ -13,8 +13,8 @@ Deleting a user who signed in through OIDC, LDAP, Microsoft Teams or NTLM did no
 access: they kept using iHub with their existing session until it expired (8 hours by default,
 longer if the session timeout was raised). Only deleted local (username/password) accounts were
 signed out at once. A deleted user is now refused on their next request, whichever way they signed
-in, and so is any OAuth connection (for example the Outlook add-in or an MCP client) that was
-authorized by that user, including refreshed tokens.
+in. An OAuth connection that this user authorized (for example the Outlook add-in) is refused as
+well when it calls the REST API, including with refreshed tokens.
 
 - Disabling a user already worked for every sign-in method and is unchanged.
 - A deleted user's browser no longer gets stuck. Previously the leftover session cookie made every
@@ -27,4 +27,7 @@ authorized by that user, including refreshed tokens.
 - NTLM sign-in now fails when the user cannot be saved, instead of issuing a session that could
   not be used. As a result, the NTLM `allowSelfSignup: false` setting, which the old behavior
   bypassed, now takes effect: users without an account are refused.
+- Connections made through the MCP endpoint (`/mcp`) do not re-check the user yet, for any
+  sign-in method. After deleting a user, also revoke their OAuth connections if they used MCP
+  clients.
 - No other admin action is required.
