@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import useFocusTrap from '../../../shared/hooks/useFocusTrap';
-import { exportChatToFormat } from '../utils/chatExport';
+import { exportChatToFormat, EXPORT_DOWNLOAD_FAILED } from '../utils/chatExport';
 import {
   exportToXLSX,
   exportToCSV,
@@ -292,7 +292,15 @@ function ExportDialog({
       }, 500);
     } catch (error) {
       console.error(`Export to ${selectedFormat} failed:`, error);
-      setExportError(error.message || 'Export failed');
+      setExportError(
+        error.code === EXPORT_DOWNLOAD_FAILED
+          ? t(
+              'pages.appChat.export.downloadFailed',
+              'The download of {{filename}} could not be started',
+              { filename: error.filename }
+            )
+          : error.message || 'Export failed'
+      );
     } finally {
       setIsExporting(false);
     }

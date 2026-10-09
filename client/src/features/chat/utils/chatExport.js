@@ -44,10 +44,17 @@ const escapeHtml = s =>
 // until the transfer has started (revoking it right after `click()` cancels the
 // download in Chromium-based hosts such as the Outlook task pane) and returns
 // `false` when it cannot start one. ExportDialog closes itself after anything
-// that does not throw, so a failed save has to throw to reach the user.
+// that does not throw, so a failed save has to throw to reach the user. The
+// dialog translates it by `code`; the English message is the fallback for logs
+// and other callers.
+export const EXPORT_DOWNLOAD_FAILED = 'EXPORT_DOWNLOAD_FAILED';
+
 const saveDownload = (blob, filename) => {
   if (!saveBlobAs(blob, filename)) {
-    throw new Error(`The download of ${filename} could not be started`);
+    throw Object.assign(new Error(`The download of ${filename} could not be started`), {
+      code: EXPORT_DOWNLOAD_FAILED,
+      filename
+    });
   }
 };
 
@@ -577,13 +584,20 @@ const generateJSONL = (messages, settings) => {
 };
 
 // Message content is Markdown or plain text for the vast majority of chats, but
-// an HTML output format (or rich-text input) can put an HTML fragment there.
-// Only that last case needs converting. Everything else must pass through
-// untouched: turndown parses its input as HTML, so feeding it plain text or
-// Markdown collapses newlines (list items and headings end up on one line) and
-// backslash-escapes `_` and `*`.
+// an HTML output format (or rich-text input) can put an HTML fragment there,
+// opening with whatever element the model chose (the prompt only asks for
+// "HTML tags"). Only that case needs converting. Everything else must pass
+// through untouched: turndown parses its input as HTML, so feeding it plain text
+// or Markdown collapses newlines (list items and headings end up on one line)
+// and backslash-escapes `_` and `*`.
+//
+// So the test is "starts with an opening tag", with a few that stay raw on
+// purpose: a whole document (its <title> and <style> would leak into the text)
+// and <svg>/<math> (turndown keeps only their text and drops the drawing).
+// `<https://…>` autolinks and `<3` are not tags, and a code fence starts with a
+// backtick.
 const HTML_FRAGMENT_START =
-  /^\s*<(?:!doctype|html|body|p|div|h[1-6]|ul|ol|li|table|blockquote|pre|section|article|br|hr|img|a|strong|em|b|i|span|code)\b/i;
+  /^\s*<(?!(?:svg|math|html|head|script|style)\b)[a-z][a-z0-9-]*(?=[\s/>])/i;
 
 export const messageContentToMarkdown = content => {
   if (typeof content !== 'string' || !content) return '';

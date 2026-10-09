@@ -27,7 +27,8 @@ const { exportPdfOnServer } = require('../../../client/src/api/endpoints/exports
 const { saveBlobAs } = require('../../../client/src/utils/externalNavigation');
 const {
   messageContentToMarkdown,
-  exportChatToFormat
+  exportChatToFormat,
+  EXPORT_DOWNLOAD_FAILED
 } = require('../../../client/src/features/chat/utils/chatExport');
 
 /** Read a Blob's text; jsdom's Blob has no `.text()` in every version. */
@@ -78,6 +79,50 @@ describe('messageContentToMarkdown', () => {
     expect(md).toMatch(/^\*\s+a$/m);
     expect(md).toMatch(/^\*\s+b$/m);
     expect(md).not.toContain('<');
+  });
+
+  it('converts an HTML fragment whichever element it opens with', () => {
+    // The prompt only asks the model for "HTML tags", so the root element is anyone's guess.
+    expect(
+      messageContentToMarkdown(
+        '<header><h1>Title</h1><p>Intro <a href="https://x.y">link</a></p></header>'
+      )
+    ).toBe('Title\n=====\n\nIntro [link](https://x.y)');
+    expect(messageContentToMarkdown('<main><p>Body</p><ul><li>a</li><li>b</li></ul></main>')).toBe(
+      'Body\n\n*   a\n*   b'
+    );
+    expect(
+      messageContentToMarkdown(
+        '<figure><img src="https://x.y/a.png" alt="chart"><figcaption>Fig 1</figcaption></figure>'
+      )
+    ).toBe('![chart](https://x.y/a.png)\n\nFig 1');
+    expect(
+      messageContentToMarkdown('<details><summary>More</summary><p>Hidden</p></details>')
+    ).toBe('More\n\nHidden');
+    expect(messageContentToMarkdown('<nav><a href="/a">A</a> | <a href="/b">B</a></nav>')).toBe(
+      '[A](/a) | [B](/b)'
+    );
+    expect(messageContentToMarkdown('<my-card><p>x</p></my-card>')).toBe('x');
+  });
+
+  it('leaves an SVG reply raw, because converting it would drop the drawing', () => {
+    const svg = '<svg width="20" height="20"><circle cx="10" cy="10" r="8"/></svg>';
+    expect(messageContentToMarkdown(svg)).toBe(svg);
+  });
+
+  it('leaves a whole HTML document raw, so its title and style do not leak into the text', () => {
+    const doc =
+      '<!DOCTYPE html><html><head><title>T</title><style>p{color:red}</style></head><body><p>Hi</p></body></html>';
+    expect(messageContentToMarkdown(doc)).toBe(doc);
+    expect(
+      messageContentToMarkdown('<html><head><title>T</title></head><body>Hi</body></html>')
+    ).toBe('<html><head><title>T</title></head><body>Hi</body></html>');
+  });
+
+  it('leaves Markdown that opens with an autolink or a bare "<" alone', () => {
+    const autolink = '<https://example.com> is the site\n- one\n- two';
+    expect(messageContentToMarkdown(autolink)).toBe(autolink);
+    expect(messageContentToMarkdown('<3 this\n\n## Heading')).toBe('<3 this\n\n## Heading');
   });
 
   it('converts an image-only HTML reply instead of leaving the raw tag', () => {
@@ -260,9 +305,12 @@ describe('exportChatToFormat', () => {
     saveBlobAs.mockReturnValue(false);
     exportPdfOnServer.mockResolvedValue(new Blob(['%PDF'], { type: 'application/pdf' }));
 
-    await expect(exportChatToFormat(messages, settings, 'markdown')).rejects.toThrow(
-      'The download of chat.md could not be started'
-    );
+    await expect(exportChatToFormat(messages, settings, 'markdown')).rejects.toMatchObject({
+      message: 'The download of chat.md could not be started',
+      // ExportDialog translates the message by this code, with the filename filled in.
+      code: EXPORT_DOWNLOAD_FAILED,
+      filename: 'chat.md'
+    });
     await expect(exportChatToFormat(messages, settings, 'json')).rejects.toThrow(
       'The download of chat.json could not be started'
     );
@@ -275,5 +323,19 @@ describe('exportChatToFormat', () => {
     await expect(exportChatToFormat(messages, settings, 'docx-ish')).rejects.toThrow(
       'Unsupported export format: docx-ish'
     );
+  });
+});
+
+describe('download failure message', () => {
+  // ExportDialog shows this when a download cannot be started; it fills in the filename.
+  const message = lang =>
+    require(`../../../shared/i18n/${lang}.json`).pages.appChat.export.downloadFailed;
+
+  it.each(['en', 'de'])('is shipped in %s with the filename placeholder', lang => {
+    expect(message(lang)).toContain('{{filename}}');
+  });
+
+  it('is actually translated, not an English copy', () => {
+    expect(message('de')).not.toBe(message('en'));
   });
 });
