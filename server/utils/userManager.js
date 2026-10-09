@@ -119,7 +119,12 @@ const freshReads = new Map();
 
 /** Whether a parsed users.json body has the shape `loadUsers` accepts. */
 function isUsersConfig(data) {
-  return !!data && typeof data === 'object' && !!data.users && typeof data.users === 'object';
+  return (
+    typeof data === 'object' &&
+    data !== null &&
+    typeof data.users === 'object' &&
+    data.users !== null
+  );
 }
 
 /**
