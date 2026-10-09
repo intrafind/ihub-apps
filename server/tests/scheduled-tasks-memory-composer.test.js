@@ -278,6 +278,8 @@ describe('after a successful run', () => {
     assert.match(user, /## Answer of this run\nRelease 1\.1 is out\./);
     assert.ok(!(request.body.tools || []).length, 'no tools');
     assert.equal(request.body.model, requests[0].body.model, 'the model of the run');
+    // A thinking model reasons inside the same budget; a cap of its own starved it (k3s01).
+    assert.equal(request.body.maxTokens, undefined, 'no token cap of its own');
     await cleanup(ada());
   });
 

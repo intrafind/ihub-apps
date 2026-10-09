@@ -326,7 +326,9 @@ export async function composeTaskMemory({
             })
           }
         ],
-        options: { temperature: 0.2, maxTokens: Math.ceil(maxChars / 3) + 300 },
+        // No maxTokens: a thinking model spends its reasoning in the same budget, and the notes
+        // size is checked below anyway. The model's maxOutputTokens applies.
+        options: { temperature: 0.2 },
         timeoutMs: COMPOSE_TIMEOUT_MS,
         signal,
         telemetry: {
