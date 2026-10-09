@@ -10,6 +10,7 @@ import { buildServerPath } from '../utils/basePath.js';
 import configCache from '../configCache.js';
 import logger from '../utils/logger.js';
 import { oauthClientsFile } from '../utils/contentsPath.js';
+import { ownerUserState, tokenUserState } from '../utils/tokenUser.js';
 
 /**
  * Resolve the URL of the RFC 9728 protected-resource metadata document.
@@ -156,6 +157,23 @@ export default async function mcpAuth(req, res, next) {
       return sendUnauthorized(req, res, 'invalid_token', 'API key has been revoked');
     }
 
+    // A key is its owner's credential and ends with the owner: see jwtAuth.
+    const ownerState = await ownerUserState(platform, client.ownerUserId);
+    if (ownerState === 'unavailable') {
+      return sendError(res, 503, 'service_unavailable', 'Unable to validate user credentials');
+    }
+    if (ownerState === 'missing') {
+      return sendUnauthorized(
+        req,
+        res,
+        'invalid_token',
+        'The owner of this API key no longer exists'
+      );
+    }
+    if (ownerState === 'disabled') {
+      return sendError(res, 403, 'access_denied', 'The owner of this API key has been disabled');
+    }
+
     // Only credentials without their own lifetime need the key's: see jwtAuth.
     if (!decoded.static_key && isPersonalKeyExpired(client)) {
       return sendUnauthorized(req, res, 'invalid_token', 'API key has expired');
@@ -196,6 +214,28 @@ export default async function mcpAuth(req, res, next) {
       });
     });
   } else if (decoded.authMode === 'oauth_authorization_code') {
+    // A delegated token acts as the user who authorized it, and it is signed,
+    // so it outlives that user's account unless the account is asked about:
+    // refresh tokens keep minting new ones. Same check as the REST API makes.
+    const userState = await tokenUserState(platform, decoded);
+    if (userState === 'unavailable') {
+      return sendError(res, 503, 'service_unavailable', 'Unable to validate user credentials');
+    }
+    if (userState === 'missing') {
+      logger.warn('MCP token rejected: user not found', {
+        component: 'McpAuth',
+        userId: decoded.sub
+      });
+      return sendUnauthorized(req, res, 'invalid_token', 'User account no longer exists');
+    }
+    if (userState === 'disabled') {
+      logger.warn('MCP token rejected: user account disabled', {
+        component: 'McpAuth',
+        userId: decoded.sub
+      });
+      return sendError(res, 403, 'access_denied', 'User account has been disabled');
+    }
+
     user = {
       id: decoded.sub || decoded.username,
       username: decoded.username || decoded.preferred_username || decoded.sub,
