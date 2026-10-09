@@ -32,14 +32,9 @@ import {
 } from '../../middleware/authRequired.js';
 
 import ChatService from '../../services/chat/ChatService.js';
-import {
-  materializeAssistantTurn,
-  materializeUserTurn
-} from '../../services/chat/chatMaterializer.js';
 import { authorizeChat } from '../../services/chat/chatAccess.js';
-import { recordRunActivity } from '../../services/chat/runActivity.js';
-import { mentionAccess } from '../../services/workflow/workflowAccess.js';
-import { getLocalizedString } from '../../utils/localize.js';
+import { emitFailedRun } from '../../services/chat/failedRun.js';
+import { tryHandleMentionWorkflow } from '../../services/workflow/mentionWorkflow.js';
 import {
   getChatRepository,
   isPersistableChatId,
@@ -61,29 +56,6 @@ import {
 } from '../../utils/responseHelpers.js';
 import { drainPendingFinish } from '../../services/workflow/chatBridge.js';
 import { cancelChatWorkflow, replayChatWorkflowProgress } from '../../tools/workflowRunner.js';
-import { renderUserMessage } from '../../../shared/promptContext.js';
-
-/**
- * Report a failure that happened before (or instead of) a model turn on the
- * chat stream: a short-lived run that starts, errors and ends, so the client
- * reducer can attach the message to the pending assistant bubble.
- */
-function emitFailedRun(chatId, { kind = 'chat', messageId, code, message, refs = {} }) {
-  const emitter = new RunStreamEmitter({ streamId: chatId, runId: newRunId(kind) });
-  emitter.emit(SSE_V2_EVENTS.RUN_STARTED, {
-    kind,
-    refs: { chatId, ...(messageId ? { messageId } : {}), ...refs }
-  });
-  emitter.emit(SSE_V2_EVENTS.STREAM_ERROR, {
-    code: String(code || 'ERROR'),
-    message: String(message)
-  });
-  emitter.emit(SSE_V2_EVENTS.RUN_ENDED, {
-    status: 'error',
-    finishReason: 'error',
-    error: { ...(code ? { code: String(code) } : {}), message: String(message) }
-  });
-}
 
 /**
  * Chat-shaped view of a persisted transcript: role and content only.
@@ -151,94 +123,6 @@ export function messageAttachments(message) {
   return [message?.fileData, message?.imageData, message?.audioData]
     .flatMap(value => (Array.isArray(value) ? value : value ? [value] : []))
     .filter(entry => entry && typeof entry === 'object');
-}
-
-/**
- * The outcome a workflow run resolved with, in the shape the materializer's
- * `summary` describes. A cancelled workflow is an abort, anything that is not
- * a completion is a failure, and the answer text is the one the run streamed.
- *
- * @param {Object} result - What `workflowRunner` resolved with.
- * @returns {Object}
- */
-export function workflowSummary(result) {
-  const content = typeof result?.outputText === 'string' ? result.outputText : '';
-  if (result?.status === 'completed') return { status: 'success', content, finishReason: 'stop' };
-  if (result?.status === 'cancelled') {
-    return { status: 'aborted', content, finishReason: 'cancelled' };
-  }
-  return {
-    status: 'error',
-    content,
-    finishReason: 'error',
-    errorInfo: {
-      code: 'WORKFLOW_FAILED',
-      message: String(result?.error || 'Workflow execution failed')
-    }
-  };
-}
-
-/**
- * Write the human half of an @mention workflow turn, or nothing when the chat
- * is not persisted.
- *
- * @param {Object} params
- * @param {Object|null} params.persistence - Durable-chat context, or null.
- * @param {string} params.chatId - Chat id.
- * @param {string} params.appId - App the chat belongs to.
- * @param {string} [params.modelId] - Model the chat last used.
- * @param {string} params.runId - The workflow's run id.
- * @param {string} [params.titleText] - What a chat this turn opens is named
- *   after: the message without the mention.
- * @returns {Promise<void>}
- */
-async function materializeWorkflowUserTurn({
-  persistence,
-  chatId,
-  appId,
-  modelId,
-  runId,
-  titleText
-}) {
-  if (!persistence) return;
-  await materializeUserTurn({
-    titleText,
-    settings: persistence.settings,
-    variables: persistence.variables,
-    repository: persistence.repository,
-    chatId,
-    ownerId: persistence.ownerId,
-    identityMode: persistence.identityMode,
-    appId,
-    modelId,
-    runId,
-    content: persistence.content,
-    clientMessageId: persistence.clientMessageId,
-    attachments: persistence.attachments,
-    replaceFromMessageId: persistence.replaceFromMessageId
-  });
-}
-
-/**
- * Write the assistant half of an @mention workflow turn and release the chat,
- * or nothing when the chat is not persisted.
- *
- * @param {Object} params
- * @param {Object|null} params.persistence - Durable-chat context, or null.
- * @param {string} params.chatId - Chat id.
- * @param {string} params.runId - The workflow's run id.
- * @param {Object} params.summary - Turn outcome; see {@link workflowSummary}.
- * @returns {Promise<void>}
- */
-async function materializeWorkflowAssistantTurn({ persistence, chatId, runId, summary }) {
-  if (!persistence) return;
-  await materializeAssistantTurn({
-    repository: persistence.repository,
-    chatId,
-    runId,
-    summary,
-    clientConnected: hasChatClient(chatId)
-  });
 }
 
 export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_TIMEOUT }) {
@@ -1118,200 +1002,46 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
 
         trackSession(chatId, { appId, userSessionId, userAgent: req.headers['user-agent'] });
 
-        // --- @mention workflow detection ---
-        // Check if the last user message contains an @workflow-name mention
-        const lastUserMsg = messages.at(-1);
-        const lastUserContent = typeof lastUserMsg?.content === 'string' ? lastUserMsg.content : '';
-        const mentionMatch = lastUserContent.match(/@([\w.-]+)/);
-
-        if (mentionMatch) {
-          const mentionedId = mentionMatch[1];
-          const candidate = configCache.getWorkflowById(mentionedId);
-          // The composer only offers the workflows the app lists and the
-          // viewer's groups grant; the mention is plain text, so the same rule
-          // is enforced here. A workflow the caller may not run is not one to
-          // them at all: the mention stays ordinary text, as for an id that
-          // names nothing, rather than confirming that the workflow exists.
-          const mentionApp = candidate
-            ? (configCache.getApps().data || []).find(a => a.id === appId)
-            : null;
-          const access = candidate
-            ? mentionAccess({ user: req.user, app: mentionApp, workflow: candidate })
-            : null;
-          const mentionedWorkflow = access?.reason === 'not_permitted' ? null : candidate;
-
-          // If the user explicitly @-mentioned a workflow but it is not
-          // chat-runnable, refuse the message instead of falling through to
-          // the LLM (which would happily pick a *different* registered
-          // workflow tool — the @human → @auto switch users have seen).
-          if (mentionedWorkflow) {
-            const isDisabled = mentionedWorkflow.enabled === false;
-            const noChatIntegration = !mentionedWorkflow.chatIntegration?.enabled;
-            const notInApp = access?.reason === 'not_in_app';
-
-            if (isDisabled || noChatIntegration || notInApp) {
-              const wfName =
-                (typeof mentionedWorkflow.name === 'object'
-                  ? mentionedWorkflow.name[clientLanguage] || mentionedWorkflow.name.en
-                  : mentionedWorkflow.name) || mentionedId;
-              const reason = isDisabled
-                ? `Workflow "${wfName}" is disabled.`
-                : noChatIntegration
-                  ? `Workflow "${wfName}" is not configured for chat (chatIntegration.enabled is false).`
-                  : `Workflow "${wfName}" is not available in this app.`;
-              if (!hasChatClient(chatId)) {
-                return res.status(400).json({ status: 'error', message: reason });
-              }
-              emitFailedRun(chatId, {
-                kind: 'workflow',
-                messageId,
-                code: 'WORKFLOW_UNAVAILABLE',
-                message: reason,
-                refs: { workflowId: mentionedId }
-              });
-              return res.json({ status: 'streaming', chatId });
-            }
-          }
-
-          if (
-            mentionedWorkflow &&
-            access?.allowed &&
-            mentionedWorkflow.enabled !== false &&
-            mentionedWorkflow.chatIntegration?.enabled
-          ) {
-            logger.info('@mention workflow triggered', {
-              component: 'sessionRoutes',
-              workflowId: mentionedId,
-              chatId
-            });
-
-            // Strip the @mention from the input; the host item (email, page,
-            // meeting) goes along as tagged blocks, the files as inputFiles.
-            const withoutMention = lastUserContent.replace(/@[\w.-]+/, '').trim();
-            const strippedInput = renderUserMessage({
-              content: withoutMention,
-              hostContext: lastUserMsg.hostContext
-            });
-
-            // Collect file data from the last message
-            const fileData = lastUserMsg.fileData || null;
-            const imageData = lastUserMsg.imageData || null;
-
-            // Build chat history from all prior messages (excluding the last).
-            // From `conversation`, not the request body: for a persisted chat
-            // the prior turns came out of the store, not off the wire.
-            const chatHistory = conversation.slice(0, -1).map(m => ({
-              role: m.role,
-              content: m.content
-            }));
-
-            // The @mention launch owns a run on the chat stream: the bridge in
-            // workflowRunner streams progress and the answer under this runId.
-            const workflowRunId = newRunId('workflow');
-            // The steps it goes through are stored with its answer.
-            if (persistence) recordRunActivity(workflowRunId);
-            const launch = new RunStreamEmitter({ streamId: chatId, runId: workflowRunId });
-            const failLaunch = message => {
-              launch.emit(SSE_V2_EVENTS.STREAM_ERROR, { code: 'WORKFLOW_FAILED', message });
-              launch.emit(SSE_V2_EVENTS.RUN_ENDED, {
-                status: 'error',
-                finishReason: 'error',
-                error: { message }
-              });
-            };
-
-            // A workflow turn is a turn: the user asked something in this chat
-            // and read an answer in it. The launch never goes through
-            // `ChatService`, which is what materializes an ordinary turn, so
-            // both halves are written here or the exchange is missing from the
-            // transcript — and from the history every later turn replays.
-            await materializeWorkflowUserTurn({
-              persistence,
-              chatId,
-              appId,
-              modelId,
-              runId: workflowRunId,
-              // Named after what was asked, not after the id that was typed;
-              // a bare `@workflow` is named after the workflow.
-              titleText:
-                withoutMention || getLocalizedString(mentionedWorkflow.name, clientLanguage)
-            });
-            // Announced once the question is stored, like an ordinary turn
-            // (`ChatService`): a client reloading its chat list on the first
-            // frame finds the chat there.
-            launch.emit(SSE_V2_EVENTS.RUN_STARTED, {
-              kind: 'workflow',
-              refs: { chatId, appId, messageId, workflowId: mentionedId }
-            });
-
-            try {
-              const workflowRunnerMod = await import('../../tools/workflowRunner.js');
-
-              // Fire-and-forget: start workflow but don't await completion.
-              // The workflowRunner bridge streams step events and final output via SSE.
-              workflowRunnerMod
-                .default({
-                  workflowId: mentionedId,
-                  chatId,
-                  runId: workflowRunId,
-                  user: req.user,
-                  appConfig: mentionApp,
-                  _chatStored: Boolean(persistence),
-                  input: strippedInput,
-                  modelId,
-                  _chatHistory: chatHistory.length > 0 ? chatHistory : undefined,
-                  _fileData: fileData || imageData || undefined,
-                  language: clientLanguage
-                })
-                .then(result => {
-                  // A workflow that could not start never announced an end of
-                  // the run it was given: end it here, or the chat's
-                  // placeholder spins until the page is reloaded.
-                  if (result?.status === 'error') {
-                    failLaunch(result.error || 'Workflow execution failed');
-                  }
-                  // The assistant half comes off the resolved run rather than
-                  // the SSE frames: the client may be long gone by now, and
-                  // the store is the thing that has to outlive it.
-                  return materializeWorkflowAssistantTurn({
-                    persistence,
-                    chatId,
-                    runId: workflowRunId,
-                    summary: workflowSummary(result)
-                  });
-                })
-                .catch(error => {
-                  logger.error('Error running @mention workflow', {
-                    component: 'sessionRoutes',
-                    error
-                  });
-                  failLaunch(`Workflow execution failed: ${error.message}`);
-                  return materializeWorkflowAssistantTurn({
-                    persistence,
-                    chatId,
-                    runId: workflowRunId,
-                    summary: workflowSummary({ status: 'failed', error: error.message })
-                  });
-                });
-
-              // Return immediately — the SSE channel delivers all progress + final output
-              return res.json({ status: 'streaming', chatId });
-            } catch (error) {
-              logger.error('Error loading workflow runner', { component: 'sessionRoutes', error });
-              failLaunch(`Workflow execution failed: ${error.message}`);
-              // The user half is already stored and the chat is marked
-              // `running` for a run that will never start; close it out.
-              await materializeWorkflowAssistantTurn({
-                persistence,
-                chatId,
-                runId: workflowRunId,
-                summary: workflowSummary({ status: 'failed', error: error.message })
-              });
-              return res.json({ status: 'error', message: error.message });
-            }
-          }
+        const mention = await tryHandleMentionWorkflow({
+          messages,
+          conversation,
+          chatId,
+          appId,
+          messageId,
+          modelId,
+          user: req.user,
+          clientLanguage,
+          persistence
+        });
+        if (mention.handled) {
+          return mention.statusCode
+            ? res.status(mention.statusCode).json(mention.response)
+            : res.json(mention.response);
         }
-        // --- end @mention detection ---
+
+        // Both branches below prepare the very same request; they differ in what
+        // they do with the outcome. Built once so they cannot drift apart.
+        const chatRequestOptions = {
+          appId,
+          modelId,
+          messages: conversation,
+          temperature,
+          style,
+          outputFormat,
+          language: clientLanguage,
+          bypassAppPrompts,
+          thinkingEnabled,
+          thinkingLevel,
+          thinkingThoughts,
+          enabledTools,
+          websearchEnabled,
+          imageAspectRatio,
+          imageQuality,
+          requestedSkills,
+          documentIds,
+          user: req.user,
+          chatId
+        };
 
         // Resolve the SSE sink once, up front. In cluster mode the stream for
         // this chat may be held by another worker, in which case this is a
@@ -1335,27 +1065,7 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
             component: 'sessionRoutes',
             chatId
           });
-          const prep = await chatService.prepareChatRequest({
-            appId,
-            modelId,
-            messages: conversation,
-            temperature,
-            style,
-            outputFormat,
-            language: clientLanguage,
-            bypassAppPrompts,
-            thinkingEnabled,
-            thinkingLevel,
-            thinkingThoughts,
-            enabledTools,
-            websearchEnabled,
-            imageAspectRatio,
-            imageQuality,
-            requestedSkills,
-            documentIds,
-            user: req.user,
-            chatId
-          });
+          const prep = await chatService.prepareChatRequest(chatRequestOptions);
           if (!prep.success) {
             const errMsg = await getLocalizedError(
               prep.error.code || 'internalError',
@@ -1405,27 +1115,7 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
           // defeat that check, letting a dead socket's close handler bail out
           // and leak the Map entry + activeRequests controller for up to
           // 5 minutes until cleanupInactiveClients evicts it.
-          const prep = await chatService.prepareChatRequest({
-            appId,
-            modelId,
-            messages: conversation,
-            temperature,
-            style,
-            outputFormat,
-            language: clientLanguage,
-            bypassAppPrompts,
-            thinkingEnabled,
-            thinkingLevel,
-            thinkingThoughts,
-            enabledTools,
-            websearchEnabled,
-            imageAspectRatio,
-            imageQuality,
-            requestedSkills,
-            documentIds,
-            user: req.user,
-            chatId
-          });
+          const prep = await chatService.prepareChatRequest(chatRequestOptions);
           if (!prep.success) {
             const errMsg = await getLocalizedError(
               prep.error.code || 'internalError',
