@@ -812,6 +812,18 @@ if (cluster.isPrimary && workerCount > 1) {
   // Validate API keys at startup
   validateApiKeys();
 
+  // Check that every enabled script-backed tool can be loaded and exports what
+  // its definition declares, so a broken script is reported now rather than as
+  // a failed tool call in a chat. Not awaited (it never delays startup) and
+  // once per cluster, or every worker would log the same warnings.
+  if (ownsClusterSingletons) {
+    import('./services/tools/toolScriptCheck.js')
+      .then(({ runStartupToolCheck }) => runStartupToolCheck())
+      .catch(error => {
+        logger.warn('Tool script check could not run', { component: 'Server', error });
+      });
+  }
+
   // Check for SSL configuration
   let server;
   if (config.SSL_KEY && config.SSL_CERT) {
