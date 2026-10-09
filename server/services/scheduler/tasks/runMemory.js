@@ -66,9 +66,13 @@ export function neutralizeNotes(text) {
  * @returns {string}
  */
 export function buildMemoryBlock({ version, updatedAt, body, chars, maxChars }) {
-  const attributes =
-    `version="${version}"${updatedAt ? ` updated="${updatedAt}"` : ''}` +
-    (Number.isFinite(maxChars) ? ` chars="${chars ?? 0}" limit="${maxChars}"` : '');
+  const attributes = [
+    `version="${version}"`,
+    updatedAt && `updated="${updatedAt}"`,
+    Number.isFinite(maxChars) && `chars="${chars ?? 0}" limit="${maxChars}"`
+  ]
+    .filter(Boolean)
+    .join(' ');
   let text;
   if (body && body.trim() !== '') text = neutralizeNotes(body.replace(/\s+$/, ''));
   else if (version > 0) text = '(the notes are empty)';

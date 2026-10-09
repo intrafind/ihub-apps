@@ -169,6 +169,7 @@ export async function ownerMessagesAfterPreviousRun(user, { taskId, currentRunId
  * @param {string} input.timezone
  * @param {string} input.notesBefore - The notes as the run started.
  * @param {string} input.notesNow - The notes now (the run may have written some).
+ * @param {boolean} [input.writtenByRun] - This run saved `notesNow` itself with `write_memory`.
  * @param {string} input.answer
  * @param {string} [input.ownerMessages]
  * @param {number} input.maxChars
@@ -183,6 +184,7 @@ export function composerUserMessage({
   timezone,
   notesBefore,
   notesNow,
+  writtenByRun = false,
   answer,
   ownerMessages = '',
   maxChars,
@@ -195,7 +197,12 @@ export function composerUserMessage({
     `## Notes before this run\n${notesBefore.trim() === '' ? '(none)' : notesBefore.trim()}`
   ];
   if (notesNow.trim() !== notesBefore.trim()) {
-    parts.push(`## Current notes (changed during the run)\n${notesNow.trim() || '(empty)'}`);
+    // Said in the heading, so the section below it is the notes and nothing else.
+    const heading = writtenByRun
+      ? '## Current notes (this run saved them itself with write_memory: keep what it chose to ' +
+        'remember unless the answer of this run supersedes it)'
+      : '## Current notes (changed during the run)';
+    parts.push(`${heading}\n${notesNow.trim() || '(empty)'}`);
   }
   if (ownerMessages) {
     parts.push(`## What the owner wrote after the previous run\n${ownerMessages}`);
@@ -345,6 +352,7 @@ export async function composeTaskMemory({
               timezone,
               notesBefore,
               notesNow: current.body,
+              writtenByRun: current.updatedBy === `run:${run.id}`,
               answer,
               ownerMessages,
               maxChars,

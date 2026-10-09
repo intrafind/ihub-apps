@@ -211,7 +211,7 @@ describe('a later run', () => {
       const { requests } = await runTask(task, [openaiText(['ok'])]);
       const system = systemOf(requests[0]);
       assert.match(system, /<task_memory version="1" updated="[^"]+" chars="1501" limit="1000">/);
-      assert.match(system, new RegExp(`\\nz{1500}\\n</task_memory>`));
+      assert.match(system, /\nz{1500}\n<\/task_memory>/);
       assert.ok(!system.includes('[notes truncated]'));
     } finally {
       setPlatform();

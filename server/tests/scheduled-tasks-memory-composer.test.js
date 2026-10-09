@@ -301,7 +301,10 @@ describe('after a successful run', () => {
     );
     const user = lastUserMessage(composerRequests[0]);
     assert.match(user, /## Notes before this run\n\(none\)/);
-    assert.match(user, /## Current notes \(changed during the run\)\nnoted mid-run/);
+    assert.match(
+      user,
+      /## Current notes \(this run saved them itself with write_memory: keep what it chose to remember unless the answer of this run supersedes it\)\nnoted mid-run/
+    );
     assert.equal((await readTaskMemory(await stored(task.id))).body, 'final notes\n');
     assert.equal(
       run.memory.versionWritten,
