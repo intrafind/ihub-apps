@@ -20,8 +20,8 @@ import { isUnavailableError } from './oauthRefreshError.js';
  *
  * Notes / known constraints:
  *   - Nextcloud's OAuth 2.0 server does NOT support PKCE, so we rely on
- *     the CSRF `state` parameter for cross-request protection (kept in
- *     the user's session, same as the other cloud storage providers).
+ *     the CSRF `state` parameter for cross-request protection (a signed,
+ *     user-bound ticket, see utils/integrationOAuthState.js).
  *   - Nextcloud rotates refresh tokens on every refresh, so callers must
  *     persist the new refresh token returned by `refreshAccessToken`.
  *   - WebDAV PROPFIND / OCS calls below don't go through the shared
@@ -64,7 +64,7 @@ class NextcloudService extends OAuthIntegrationBase {
   /**
    * Generate OAuth 2.0 authorization URL.
    * Nextcloud's OAuth 2.0 implementation does not support PKCE, so we
-   * rely on the session-bound `state` parameter for CSRF protection.
+   * rely on the signed, user-bound `state` parameter for CSRF protection.
    */
   generateAuthUrl(providerId, state, req = null) {
     const provider = this._getProviderConfig(providerId);

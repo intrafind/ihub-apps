@@ -198,7 +198,7 @@ The JIRA connector provides comprehensive error handling:
 - **PKCE Support**: Implements Proof Key for Code Exchange for enhanced security
 - **API Version**: Uses JIRA REST API v3 (latest stable version)
 - **Cloud Gateway**: All API calls routed through `api.atlassian.com`
-- **Session Isolation**: Integration sessions separate from user auth sessions
+- **Token Isolation**: JIRA tokens are stored per user in their own encrypted file, separate from the user's iHub sign-in. Connecting keeps no server-side session: the OAuth `state` is a signed ticket bound to the user who started the flow.
 - **Token Refresh**: Automatic refresh with 2-minute buffer before expiration
 - **Encryption**: AES-256-GCM for token storage with context-aware keys
 
