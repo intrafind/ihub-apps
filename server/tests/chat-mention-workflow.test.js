@@ -46,14 +46,15 @@ function nextChatId() {
  * Serve `workflow` and an app listing `appWorkflows` for the duration of `fn`.
  *
  * @param {Object} workflow - Workflow definition to serve.
- * @param {() => Promise<void>} fn - Test body.
+ * @param {() => Promise<*>} fn - Test body.
  * @param {string[]} [appWorkflows] - The app's `workflows`.
+ * @returns {Promise<*>} What `fn` returned.
  */
 async function withConfig(workflow, fn, appWorkflows = [WORKFLOW_ID]) {
   configCache.setCacheEntry('config/workflows.json', [workflow]);
   configCache.setCacheEntry('config/apps.json', [{ id: APP_ID, workflows: appWorkflows }]);
   try {
-    await fn();
+    return await fn();
   } finally {
     configCache.setCacheEntry('config/workflows.json', []);
     configCache.setCacheEntry('config/apps.json', []);
@@ -226,13 +227,11 @@ describe('tryHandleMentionWorkflow: refuses a workflow that cannot run from this
 
 describe('tryHandleMentionWorkflow: names the workflow the way the caller reads it', () => {
   /** The refusal a caller in `clientLanguage` gets for a disabled workflow called `name`. */
-  async function refusalFor(name, clientLanguage) {
-    let message;
-    await withConfig({ ...WORKFLOW, enabled: false, name }, async () => {
+  function refusalFor(name, clientLanguage) {
+    return withConfig({ ...WORKFLOW, enabled: false, name }, async () => {
       const result = await mention({ chatId: nextChatId(), clientLanguage });
-      message = result.response.message;
+      return result.response.message;
     });
-    return message;
   }
 
   it('in their language when the name has one', async () => {
