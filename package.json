@@ -114,7 +114,7 @@
     "test:ifinder": "node --test server/tests/iFinderService.documentId.test.js server/tests/iFinderSources.test.js server/tests/sources-route.test.js server/tests/iassistantConversationSearchProfile.test.js server/tests/setupUtils.managedDefaults.test.js",
     "test:storage": "node --test server/tests/storage-filesystem-conformance.test.js server/tests/storage-registry.test.js server/tests/storage-namespaces.test.js server/tests/artifact-repository.test.js",
     "test:config-store": "node --test server/tests/config-store-*.test.js server/tests/config-cache-refresh-chain.test.js server/tests/config-cache-loaders.test.js server/tests/platform-default-language.test.js server/tests/contents-path.test.js",
-    "test:chat": "node --test server/tests/chat-persistence-*.test.js server/tests/chat-handoff.test.js",
+    "test:chat": "node --test server/tests/chat-persistence-*.test.js server/tests/chat-handoff.test.js server/tests/chat-mention-workflow.test.js",
     "test:scheduled-tasks": "node --test server/tests/scheduled-tasks-*.test.js",
     "test:memory": "node --test server/tests/memory-*.test.js",
     "test:runtime": "node --test server/tests/runtime-*.test.js",
