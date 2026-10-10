@@ -1,0 +1,775 @@
+import { Marked } from 'marked';
+import DOMPurify from 'dompurify';
+import { exportPdfOnServer } from '../../../api/endpoints/exports';
+import { buildChatExportFilename, buildChatExportTitle } from '../../../utils/exportFormats';
+import { saveBlobAs } from '../../../utils/externalNavigation';
+import { htmlToMarkdown } from '../../../utils/markdownUtils';
+
+// Chat export (PDF, HTML, JSON, JSONL, Markdown). Lives with the chat feature,
+// next to its only consumer (ExportDialog); `api/endpoints/apps.js` stays a
+// thin wrapper around the `/apps/*` HTTP calls.
+
+// Isolated marked instance for static exports (PDF/HTML). It intentionally does
+// NOT use the shared interactive markdown renderer, which injects toolbar
+// buttons and mermaid placeholders that don't work in downloaded documents.
+// GFM is enabled so tables, lists, and code blocks render correctly.
+const exportMarked = new Marked({
+  gfm: true,
+  breaks: true,
+  pedantic: false
+});
+
+// Convert message markdown to sanitized HTML for export documents.
+const renderMarkdownForExport = content => {
+  if (!content) return '';
+  const html = exportMarked.parse(String(content));
+  return DOMPurify.sanitize(html, { USE_PROFILES: { html: true } });
+};
+
+// HTML-escape arbitrary text for safe interpolation into the export
+// document. Everything but the rendered message bodies (those go through
+// DOMPurify) passes through here: the title includes the first user message
+// (via buildChatExportTitle) and the settings include the values typed into
+// the chat's start form, both attacker-controlled and not to be rendered as
+// raw HTML.
+const escapeHtml = s =>
+  String(s ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
+
+// Hand a finished export to the browser. `saveBlobAs` keeps the object URL alive
+// until the transfer has started (revoking it right after `click()` cancels the
+// download in Chromium-based hosts such as the Outlook task pane) and returns
+// `false` when it cannot start one. ExportDialog closes itself after anything
+// that does not throw, so a failed save has to throw to reach the user. The
+// dialog translates it by `code`; the English message is the fallback for logs
+// and other callers.
+export const EXPORT_DOWNLOAD_FAILED = 'EXPORT_DOWNLOAD_FAILED';
+
+const saveDownload = (blob, filename) => {
+  if (!saveBlobAs(blob, filename)) {
+    throw Object.assign(new Error(`The download of ${filename} could not be started`), {
+      code: EXPORT_DOWNLOAD_FAILED,
+      filename
+    });
+  }
+};
+
+// The text ExportDialog shows for a failed export. A download the browser refused
+// to start carries a code and is translated (`t` is the dialog's); anything else
+// shows its own message.
+export const getExportErrorMessage = (error, t) =>
+  error.code === EXPORT_DOWNLOAD_FAILED
+    ? t(
+        'pages.appChat.export.downloadFailed',
+        'The download of {{filename}} could not be started',
+        { filename: error.filename }
+      )
+    : error.message;
+
+// The browser's IANA time zone, for the timestamps of the server-rendered PDF;
+// undefined where Intl cannot tell.
+const getTimeZone = () => {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone;
+  } catch {
+    return undefined;
+  }
+};
+
+// A real PDF, rendered on the server (`POST /api/exports/pdf`). The browser
+// print dialog this replaces printed blank pages in several hosts — the
+// Outlook task pane, the extension side panel, some Chromium builds.
+export const exportChatToPDF = async (
+  messages,
+  settings,
+  template = 'default',
+  watermark = {},
+  appName = 'iHub Apps',
+  appId = null,
+  _chatId = null,
+  isSingleMessage = false,
+  language = undefined
+) => {
+  if (!messages) {
+    throw new Error('Missing required parameters');
+  }
+
+  const filename = buildChatExportFilename({
+    format: 'pdf',
+    appName,
+    appId,
+    messages,
+    isSingleMessage
+  });
+
+  const timeZone = getTimeZone();
+
+  const blob = await exportPdfOnServer({
+    kind: 'chat',
+    appId,
+    appName,
+    title: buildChatExportTitle({ appName, messages, isSingleMessage }),
+    filename,
+    template,
+    // Always sent, so a cleared text means "no watermark" rather than the
+    // platform default.
+    watermark: {
+      text: watermark?.text || '',
+      position: watermark?.position,
+      opacity: watermark?.opacity
+    },
+    settings,
+    language,
+    timeZone,
+    messages: messages
+      .filter(msg => !msg.isGreeting)
+      .map(msg => ({
+        role: msg.role,
+        content: typeof msg.content === 'string' ? msg.content : '',
+        timestamp: msg.timestamp
+      }))
+  });
+  saveDownload(blob, filename);
+  return { success: true, filename };
+};
+
+// Template styles
+const getTemplateStyles = template => {
+  const baseStyles = `
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      line-height: 1.6;
+      color: #333;
+      background-color: #fff;
+    }
+    
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    
+    .header {
+      border-bottom: 2px solid #e1e5e9;
+      padding-bottom: 20px;
+      margin-bottom: 30px;
+    }
+    
+    .header h1 {
+      color: #1a202c;
+      font-size: 28px;
+      font-weight: 700;
+      margin-bottom: 5px;
+    }
+    
+    .header h2 {
+      color: #4a5568;
+      font-size: 20px;
+      font-weight: 500;
+      margin-bottom: 10px;
+    }
+    
+    .export-date {
+      color: #718096;
+      font-size: 14px;
+    }
+    
+    .metadata {
+      background-color: #f7fafc;
+      border-radius: 8px;
+      padding: 20px;
+      margin-bottom: 30px;
+    }
+    
+    .metadata h3 {
+      color: #2d3748;
+      font-size: 16px;
+      margin-bottom: 15px;
+    }
+    
+    .metadata-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+    
+    .metadata-grid div {
+      font-size: 14px;
+      color: #4a5568;
+    }
+    
+    .message {
+      margin-bottom: 25px;
+      padding: 20px;
+      border-radius: 12px;
+      border: 1px solid #e2e8f0;
+      page-break-inside: avoid;
+    }
+    
+    .user-message {
+      background-color: #ebf8ff;
+      border-left: 4px solid #3182ce;
+    }
+    
+    .assistant-message {
+      background-color: #f0fff4;
+      border-left: 4px solid #38a169;
+    }
+    
+    .message-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+      font-size: 14px;
+    }
+    
+    .role {
+      font-weight: 600;
+      color: #2d3748;
+    }
+    
+    .timestamp {
+      color: #718096;
+    }
+    
+    .message-content {
+      color: #2d3748;
+    }
+    
+    .message-content p {
+      margin-bottom: 10px;
+    }
+    
+    .message-content p:last-child {
+      margin-bottom: 0;
+    }
+    
+    .message-content strong {
+      font-weight: 600;
+    }
+    
+    .message-content em {
+      font-style: italic;
+    }
+    
+    .message-content code {
+      background-color: #edf2f7;
+      padding: 2px 4px;
+      border-radius: 3px;
+      font-family: 'Monaco', 'Consolas', 'Courier New', monospace;
+      font-size: 13px;
+    }
+    
+    .message-content h1, .message-content h2, .message-content h3,
+    .message-content h4, .message-content h5, .message-content h6 {
+      margin-top: 15px;
+      margin-bottom: 10px;
+      font-weight: 600;
+      color: #1a202c;
+      line-height: 1.3;
+    }
+    
+    .message-content h1 { font-size: 24px; }
+    .message-content h2 { font-size: 20px; }
+    .message-content h3 { font-size: 18px; }
+    .message-content h4 { font-size: 16px; }
+    .message-content h5 { font-size: 14px; }
+    .message-content h6 { font-size: 13px; }
+    
+    .message-content h1:first-child, .message-content h2:first-child,
+    .message-content h3:first-child, .message-content h4:first-child,
+    .message-content h5:first-child, .message-content h6:first-child {
+      margin-top: 0;
+    }
+    
+    .message-content hr {
+      border: none;
+      border-top: 2px solid #e2e8f0;
+      margin: 15px 0;
+    }
+    
+    .message-content ul,
+    .message-content ol {
+      margin: 10px 0;
+      padding-left: 24px;
+    }
+
+    .message-content ul {
+      list-style-type: disc;
+    }
+
+    .message-content ol {
+      list-style-type: decimal;
+    }
+
+    .message-content li {
+      margin-bottom: 5px;
+    }
+
+    .message-content pre {
+      background-color: #1a202c;
+      color: #f7fafc;
+      padding: 12px 16px;
+      border-radius: 6px;
+      overflow-x: auto;
+      margin: 12px 0;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .message-content pre code {
+      background-color: transparent;
+      padding: 0;
+      color: inherit;
+      font-size: inherit;
+    }
+
+    .message-content blockquote {
+      border-left: 4px solid #cbd5e0;
+      padding-left: 12px;
+      margin: 12px 0;
+      color: #4a5568;
+    }
+
+    .message-content table {
+      border-collapse: collapse;
+      width: 100%;
+      margin: 12px 0;
+      font-size: 14px;
+    }
+
+    .message-content th,
+    .message-content td {
+      border: 1px solid #e2e8f0;
+      padding: 8px 12px;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    .message-content th {
+      background-color: #f7fafc;
+      font-weight: 600;
+    }
+
+    .message-content tr:nth-child(even) td {
+      background-color: #fafbfc;
+    }
+
+    .message-content a {
+      color: #3182ce;
+      text-decoration: underline;
+    }
+
+    .message-content img {
+      max-width: 100%;
+      height: auto;
+    }
+
+    @media print {
+      .container {
+        max-width: none;
+        margin: 0;
+        padding: 20px;
+      }
+      
+      .message {
+        page-break-inside: avoid;
+      }
+    }
+  `;
+
+  switch (template) {
+    case 'professional':
+      return `${baseStyles}
+        .user-message {
+          background-color: #f8f9fa;
+          border-left-color: #495057;
+        }
+        
+        .assistant-message {
+          background-color: #f8f9fa;
+          border-left-color: #6c757d;
+        }
+        
+        .header h1 {
+          color: #212529;
+        }
+      `;
+
+    case 'minimal':
+      return `${baseStyles}
+        .message {
+          border: none;
+          border-radius: 0;
+          border-bottom: 1px solid #e2e8f0;
+          background-color: transparent;
+          padding: 15px 0;
+        }
+        
+        .user-message {
+          border-left: none;
+        }
+        
+        .assistant-message {
+          border-left: none;
+        }
+        
+        .metadata {
+          background-color: transparent;
+          border: 1px solid #e2e8f0;
+        }
+      `;
+
+    default:
+      return baseStyles;
+  }
+};
+
+// Watermark positioning
+const getWatermarkStyle = watermark => {
+  const positions = {
+    'bottom-right': 'bottom: 30px; right: 30px;',
+    'bottom-left': 'bottom: 30px; left: 30px;',
+    'bottom-center': 'bottom: 30px; left: 50%; transform: translateX(-50%);'
+  };
+
+  return `
+    .watermark {
+      position: fixed;
+      ${positions[watermark.position] || positions['bottom-right']}
+      font-size: 12px;
+      color: rgba(0, 0, 0, ${watermark.opacity || 0.5});
+      pointer-events: none;
+      font-weight: 500;
+    }
+    
+    @media print {
+      .watermark {
+        position: fixed !important;
+        ${positions[watermark.position] || positions['bottom-right']}
+      }
+    }
+  `;
+};
+
+// HTML document for the chat's HTML export
+const formatTimestamp = timestamp => {
+  try {
+    return new Date(timestamp).toLocaleString();
+  } catch {
+    return new Date().toLocaleString();
+  }
+};
+
+const renderMessageHTML = message => {
+  const roleClass = message.role === 'user' ? 'user-message' : 'assistant-message';
+  const roleLabel = message.role === 'user' ? 'User' : 'Assistant';
+
+  return `
+        <div class="message ${roleClass}">
+          <div class="message-header">
+            <span class="role">${roleLabel}</span>
+            <span class="timestamp">${formatTimestamp(message.timestamp || Date.now())}</span>
+          </div>
+          <div class="message-content">
+            ${renderMarkdownForExport(message.content)}
+          </div>
+        </div>
+      `;
+};
+
+// The settings that are always listed when set; the variables come separately.
+const renderSettingRows = settings =>
+  `${settings.model ? `<div><strong>Model:</strong> ${escapeHtml(settings.model)}</div>` : ''}
+        ${settings.temperature !== undefined ? `<div><strong>Temperature:</strong> ${escapeHtml(settings.temperature)}</div>` : ''}
+        ${settings.style ? `<div><strong>Style:</strong> ${escapeHtml(settings.style)}</div>` : ''}
+        ${settings.outputFormat ? `<div><strong>Output Format:</strong> ${escapeHtml(settings.outputFormat)}</div>` : ''}`;
+
+const renderVariablesRow = variables =>
+  variables && Object.keys(variables).length > 0
+    ? `
+          <div><strong>Variables:</strong> ${Object.entries(variables)
+            .map(([k, v]) => `${escapeHtml(k)}: ${escapeHtml(v)}`)
+            .join(', ')}</div>
+        `
+    : '';
+
+const renderSettingsHTML = settings =>
+  settings
+    ? `
+    <div class="metadata">
+      <h3>Chat Settings</h3>
+      <div class="metadata-grid">
+        ${renderSettingRows(settings)}
+        ${renderVariablesRow(settings.variables)}
+      </div>
+    </div>
+  `
+    : '';
+
+const generateExportHTML = (
+  messages,
+  settings,
+  template,
+  watermark,
+  appName,
+  isSingleMessage = false
+) => {
+  const docTitle = buildChatExportTitle({ appName, messages, isSingleMessage });
+  const styles = getTemplateStyles(template);
+  const watermarkStyle = getWatermarkStyle(watermark);
+
+  const messagesHTML = messages
+    .filter(msg => !msg.isGreeting) // Exclude greeting messages
+    .map(renderMessageHTML)
+    .join('');
+
+  const metadataHTML = renderSettingsHTML(settings);
+
+  return `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${escapeHtml(docTitle)}</title>
+  <style>
+    ${styles}
+    ${watermarkStyle}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header class="header">
+      <h1>${escapeHtml(docTitle)}</h1>
+      ${appName ? `<h2>${escapeHtml(appName)}</h2>` : ''}
+      <p class="export-date">Exported on ${new Date().toLocaleString()}</p>
+    </header>
+    
+    ${metadataHTML}
+    
+    <main class="messages">
+      ${messagesHTML}
+    </main>
+    
+    ${watermark.text ? `<div class="watermark">${escapeHtml(watermark.text)}</div>` : ''}
+  </div>
+</body>
+</html>
+  `;
+};
+
+// Client-side export utility functions
+const downloadFile = (content, filename, mimeType) => {
+  saveDownload(new Blob([content], { type: mimeType }), filename);
+};
+
+// Helper functions for generating export content
+const generateJSON = (messages, settings) => {
+  const buildMetadata = () => ({
+    model: settings?.model,
+    style: settings?.style,
+    outputFormat: settings?.outputFormat,
+    temperature: settings?.temperature,
+    variables: settings?.variables
+  });
+
+  return JSON.stringify({ ...buildMetadata(), messages }, null, 2);
+};
+
+const generateJSONL = (messages, settings) => {
+  const buildMetadata = () => ({
+    model: settings?.model,
+    style: settings?.style,
+    outputFormat: settings?.outputFormat,
+    temperature: settings?.temperature,
+    variables: settings?.variables
+  });
+
+  const lines = [JSON.stringify({ meta: buildMetadata() })];
+  messages.forEach(m => lines.push(JSON.stringify(m)));
+  return lines.join('\n');
+};
+
+// Message content is Markdown or plain text for the vast majority of chats, but
+// an HTML output format (or rich-text input) can put an HTML fragment there,
+// opening with whatever element the model chose (the prompt only asks for
+// "HTML tags"). Only that case needs converting. Everything else must pass
+// through untouched: turndown parses its input as HTML, so feeding it plain text
+// or Markdown collapses newlines (list items and headings end up on one line)
+// and backslash-escapes `_` and `*`.
+//
+// So the test is "starts with an opening tag", with a few that stay raw on
+// purpose: a whole document (its <title> and <style> would leak into the text)
+// and <svg>/<math> (turndown keeps only their text and drops the drawing).
+// `<https://…>` autolinks and `<3` are not tags, and a code fence starts with a
+// backtick.
+const HTML_FRAGMENT_START =
+  /^\s*<(?!(?:svg|math|html|head|script|style)\b)[a-z][a-z0-9-]*(?=[\s/>])/i;
+
+export const messageContentToMarkdown = content => {
+  if (typeof content !== 'string' || !content) return '';
+  return HTML_FRAGMENT_START.test(content) ? htmlToMarkdown(content) : content;
+};
+
+const generateMarkdown = messages => {
+  return messages
+    .filter(m => !m.isGreeting)
+    .map(m => `**${m.role}**: ${messageContentToMarkdown(m.content)}`)
+    .join('\n\n');
+};
+
+const generateHTML = (messages, settings, appName, isSingleMessage = false) => {
+  // Use the same high-quality HTML generation as PDF export
+  // This ensures consistent styling and proper markdown rendering
+  const htmlContent = generateExportHTML(
+    messages,
+    settings,
+    'default',
+    {},
+    appName || 'iHub Apps',
+    isSingleMessage
+  );
+
+  // Return the full HTML document
+  return htmlContent;
+};
+
+// Client-side export functions
+export const exportChatToJSON = (
+  messages,
+  settings,
+  appId = null,
+  _chatId = null,
+  appName = null,
+  isSingleMessage = false
+) => {
+  const filtered = messages.filter(m => !m.isGreeting);
+  const content = generateJSON(filtered, settings);
+  const filename = buildChatExportFilename({
+    format: 'json',
+    appName,
+    appId,
+    messages: filtered,
+    isSingleMessage
+  });
+
+  downloadFile(content, filename, 'application/json');
+  return { success: true, filename };
+};
+
+export const exportChatToJSONL = (
+  messages,
+  settings,
+  appId = null,
+  _chatId = null,
+  appName = null,
+  isSingleMessage = false
+) => {
+  const filtered = messages.filter(m => !m.isGreeting);
+  const content = generateJSONL(filtered, settings);
+  const filename = buildChatExportFilename({
+    format: 'jsonl',
+    appName,
+    appId,
+    messages: filtered,
+    isSingleMessage
+  });
+
+  downloadFile(content, filename, 'application/json');
+  return { success: true, filename };
+};
+
+export const exportChatToMarkdown = (
+  messages,
+  settings,
+  appId = null,
+  _chatId = null,
+  appName = null,
+  isSingleMessage = false
+) => {
+  const content = generateMarkdown(messages);
+  const filename = buildChatExportFilename({
+    format: 'md',
+    appName,
+    appId,
+    messages,
+    isSingleMessage
+  });
+
+  downloadFile(content, filename, 'text/markdown');
+  return { success: true, filename };
+};
+
+export const exportChatToHTML = (
+  messages,
+  settings,
+  appId = null,
+  _chatId = null,
+  appName = 'iHub Apps',
+  isSingleMessage = false
+) => {
+  const content = generateHTML(messages, settings, appName, isSingleMessage);
+  const filename = buildChatExportFilename({
+    format: 'html',
+    appName,
+    appId,
+    messages,
+    isSingleMessage
+  });
+
+  downloadFile(content, filename, 'text/html');
+  return { success: true, filename };
+};
+
+// The formats that are built and saved in the browser, by the `format` the dialog passes.
+const CLIENT_EXPORTERS = new Map([
+  ['json', exportChatToJSON],
+  ['jsonl', exportChatToJSONL],
+  ['markdown', exportChatToMarkdown],
+  ['html', exportChatToHTML]
+]);
+
+// Generic export function that handles all formats including PDF
+export const exportChatToFormat = async (messages, settings, format, options = {}) => {
+  const {
+    appId = null,
+    chatId = null,
+    appName = 'iHub Apps',
+    template = 'default',
+    watermark = {},
+    isSingleMessage = false,
+    language
+  } = options;
+
+  if (format === 'pdf') {
+    return await exportChatToPDF(
+      messages,
+      settings,
+      template,
+      watermark,
+      appName,
+      appId,
+      chatId,
+      isSingleMessage,
+      language
+    );
+  }
+
+  const exportChat = CLIENT_EXPORTERS.get(format);
+  if (!exportChat) {
+    throw new Error(`Unsupported export format: ${format}`);
+  }
+  return exportChat(messages, settings, appId, chatId, appName, isSingleMessage);
+};

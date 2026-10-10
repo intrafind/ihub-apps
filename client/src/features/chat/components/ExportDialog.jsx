@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import useFocusTrap from '../../../shared/hooks/useFocusTrap';
-import { exportChatToFormat } from '../../../api/endpoints/apps';
+import { exportChatToFormat, getExportErrorMessage } from '../utils/chatExport';
 import {
   exportToXLSX,
   exportToCSV,
@@ -292,7 +292,7 @@ function ExportDialog({
       }, 500);
     } catch (error) {
       console.error(`Export to ${selectedFormat} failed:`, error);
-      setExportError(error.message || 'Export failed');
+      setExportError(getExportErrorMessage(error, t) || 'Export failed');
     } finally {
       setIsExporting(false);
     }
