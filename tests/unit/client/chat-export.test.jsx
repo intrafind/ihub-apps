@@ -28,6 +28,7 @@ const { saveBlobAs } = require('../../../client/src/utils/externalNavigation');
 const {
   messageContentToMarkdown,
   exportChatToFormat,
+  getExportErrorMessage,
   EXPORT_DOWNLOAD_FAILED
 } = require('../../../client/src/features/chat/utils/chatExport');
 
@@ -335,8 +336,54 @@ describe('exportChatToFormat', () => {
     for (const format of ['pdf', 'json', 'jsonl', 'markdown', 'html', 'nope']) {
       const result = exportChatToFormat(messages, settings, format);
       expect(result).toBeInstanceOf(Promise);
-      await result.catch(() => {});
+      await Promise.allSettled([result]);
     }
+  });
+});
+
+describe('getExportErrorMessage', () => {
+  const t = jest.fn((key, fallback, options) => `${key}|${fallback}|${options.filename}`);
+  beforeEach(() => t.mockClear());
+
+  it('translates a download that could not be started, with the filename', () => {
+    const error = Object.assign(new Error('English fallback'), {
+      code: EXPORT_DOWNLOAD_FAILED,
+      filename: 'chat.json'
+    });
+
+    expect(getExportErrorMessage(error, t)).toBe(
+      'pages.appChat.export.downloadFailed|The download of {{filename}} could not be started|chat.json'
+    );
+  });
+
+  it('uses a key that exists in English, with the same text as its default', () => {
+    // The default the code passes to t() and the shipped English string must not drift apart.
+    const error = Object.assign(new Error('x'), { code: EXPORT_DOWNLOAD_FAILED, filename: 'f' });
+    getExportErrorMessage(error, t);
+    const [key, fallback] = t.mock.calls[0];
+    const english = key
+      .split('.')
+      .reduce((node, part) => node?.[part], require('../../../shared/i18n/en.json'));
+
+    expect(english).toBe(fallback);
+  });
+
+  it('shows any other error as its own message, without translating it', () => {
+    expect(getExportErrorMessage(new Error('boom'), t)).toBe('boom');
+    expect(t).not.toHaveBeenCalled();
+  });
+
+  it('returns nothing for an error without a message, so the dialog can fall back', () => {
+    expect(getExportErrorMessage({}, t)).toBeUndefined();
+  });
+
+  it('turns the error a failed download really throws into the translated text', async () => {
+    saveBlobAs.mockReturnValue(false);
+    const error = await exportChatToFormat([{ role: 'user', content: 'hi' }], {}, 'markdown').catch(
+      thrown => thrown
+    );
+
+    expect(getExportErrorMessage(error, t)).toContain('|chat.md');
   });
 });
 

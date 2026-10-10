@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import useFocusTrap from '../../../shared/hooks/useFocusTrap';
-import { exportChatToFormat, EXPORT_DOWNLOAD_FAILED } from '../utils/chatExport';
+import { exportChatToFormat, getExportErrorMessage } from '../utils/chatExport';
 import {
   exportToXLSX,
   exportToCSV,
@@ -18,17 +18,6 @@ import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContex
 // formats (pdf, docx, xlsx, pptx) and the styled HTML document can only be
 // downloaded, so the Copy button is disabled when one of those is selected.
 const COPYABLE_FORMATS = new Set(['txt', 'markdown', 'json', 'jsonl']);
-
-// The message for a failed export. A download the browser refused to start
-// carries a code and is translated; anything else shows its own message.
-const exportErrorMessage = (error, t) =>
-  error.code === EXPORT_DOWNLOAD_FAILED
-    ? t(
-        'pages.appChat.export.downloadFailed',
-        'The download of {{filename}} could not be started',
-        { filename: error.filename }
-      )
-    : error.message;
 
 function ExportDialog({
   isOpen,
@@ -303,7 +292,7 @@ function ExportDialog({
       }, 500);
     } catch (error) {
       console.error(`Export to ${selectedFormat} failed:`, error);
-      setExportError(exportErrorMessage(error, t) || 'Export failed');
+      setExportError(getExportErrorMessage(error, t) || 'Export failed');
     } finally {
       setIsExporting(false);
     }

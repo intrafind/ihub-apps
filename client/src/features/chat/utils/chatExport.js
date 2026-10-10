@@ -58,6 +58,18 @@ const saveDownload = (blob, filename) => {
   }
 };
 
+// The text ExportDialog shows for a failed export. A download the browser refused
+// to start carries a code and is translated (`t` is the dialog's); anything else
+// shows its own message.
+export const getExportErrorMessage = (error, t) =>
+  error.code === EXPORT_DOWNLOAD_FAILED
+    ? t(
+        'pages.appChat.export.downloadFailed',
+        'The download of {{filename}} could not be started',
+        { filename: error.filename }
+      )
+    : error.message;
+
 // The browser's IANA time zone, for the timestamps of the server-rendered PDF;
 // undefined where Intl cannot tell.
 const getTimeZone = () => {
