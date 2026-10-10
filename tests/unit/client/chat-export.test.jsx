@@ -319,10 +319,24 @@ describe('exportChatToFormat', () => {
     );
   });
 
-  it('rejects an unsupported format', async () => {
-    await expect(exportChatToFormat(messages, settings, 'docx-ish')).rejects.toThrow(
-      'Unsupported export format: docx-ish'
-    );
+  // Names that exist on every object must not be mistaken for a format.
+  it.each(['docx-ish', 'constructor', 'toString', '__proto__', ''])(
+    'rejects the unsupported format "%s"',
+    async format => {
+      await expect(exportChatToFormat(messages, settings, format)).rejects.toThrow(
+        `Unsupported export format: ${format}`
+      );
+      expect(downloads).toHaveLength(0);
+    }
+  );
+
+  it('always returns a promise, so callers can await or catch it for every format', async () => {
+    exportPdfOnServer.mockResolvedValue(new Blob(['%PDF']));
+    for (const format of ['pdf', 'json', 'jsonl', 'markdown', 'html', 'nope']) {
+      const result = exportChatToFormat(messages, settings, format);
+      expect(result).toBeInstanceOf(Promise);
+      await result.catch(() => {});
+    }
   });
 });
 

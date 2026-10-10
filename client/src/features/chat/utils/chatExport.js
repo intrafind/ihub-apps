@@ -58,6 +58,16 @@ const saveDownload = (blob, filename) => {
   }
 };
 
+// The browser's IANA time zone, for the timestamps of the server-rendered PDF;
+// undefined where Intl cannot tell.
+const getTimeZone = () => {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone;
+  } catch {
+    return undefined;
+  }
+};
+
 // A real PDF, rendered on the server (`POST /api/exports/pdf`). The browser
 // print dialog this replaces printed blank pages in several hosts — the
 // Outlook task pane, the extension side panel, some Chromium builds.
@@ -84,12 +94,7 @@ export const exportChatToPDF = async (
     isSingleMessage
   });
 
-  let timeZone;
-  try {
-    timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-  } catch {
-    timeZone = undefined;
-  }
+  const timeZone = getTimeZone();
 
   const blob = await exportPdfOnServer({
     kind: 'chat',
@@ -374,9 +379,7 @@ const getTemplateStyles = template => {
 
   switch (template) {
     case 'professional':
-      return (
-        baseStyles +
-        `
+      return `${baseStyles}
         .user-message {
           background-color: #f8f9fa;
           border-left-color: #495057;
@@ -390,13 +393,10 @@ const getTemplateStyles = template => {
         .header h1 {
           color: #212529;
         }
-      `
-      );
+      `;
 
     case 'minimal':
-      return (
-        baseStyles +
-        `
+      return `${baseStyles}
         .message {
           border: none;
           border-radius: 0;
@@ -417,8 +417,7 @@ const getTemplateStyles = template => {
           background-color: transparent;
           border: 1px solid #e2e8f0;
         }
-      `
-      );
+      `;
 
     default:
       return baseStyles;
@@ -453,6 +452,60 @@ const getWatermarkStyle = watermark => {
 };
 
 // HTML document for the chat's HTML export
+const formatTimestamp = timestamp => {
+  try {
+    return new Date(timestamp).toLocaleString();
+  } catch {
+    return new Date().toLocaleString();
+  }
+};
+
+const renderMessageHTML = message => {
+  const roleClass = message.role === 'user' ? 'user-message' : 'assistant-message';
+  const roleLabel = message.role === 'user' ? 'User' : 'Assistant';
+
+  return `
+        <div class="message ${roleClass}">
+          <div class="message-header">
+            <span class="role">${roleLabel}</span>
+            <span class="timestamp">${formatTimestamp(message.timestamp || Date.now())}</span>
+          </div>
+          <div class="message-content">
+            ${renderMarkdownForExport(message.content)}
+          </div>
+        </div>
+      `;
+};
+
+// The settings that are always listed when set; the variables come separately.
+const renderSettingRows = settings =>
+  `${settings.model ? `<div><strong>Model:</strong> ${escapeHtml(settings.model)}</div>` : ''}
+        ${settings.temperature !== undefined ? `<div><strong>Temperature:</strong> ${escapeHtml(settings.temperature)}</div>` : ''}
+        ${settings.style ? `<div><strong>Style:</strong> ${escapeHtml(settings.style)}</div>` : ''}
+        ${settings.outputFormat ? `<div><strong>Output Format:</strong> ${escapeHtml(settings.outputFormat)}</div>` : ''}`;
+
+const renderVariablesRow = variables =>
+  variables && Object.keys(variables).length > 0
+    ? `
+          <div><strong>Variables:</strong> ${Object.entries(variables)
+            .map(([k, v]) => `${escapeHtml(k)}: ${escapeHtml(v)}`)
+            .join(', ')}</div>
+        `
+    : '';
+
+const renderSettingsHTML = settings =>
+  settings
+    ? `
+    <div class="metadata">
+      <h3>Chat Settings</h3>
+      <div class="metadata-grid">
+        ${renderSettingRows(settings)}
+        ${renderVariablesRow(settings.variables)}
+      </div>
+    </div>
+  `
+    : '';
+
 const generateExportHTML = (
   messages,
   settings,
@@ -465,58 +518,12 @@ const generateExportHTML = (
   const styles = getTemplateStyles(template);
   const watermarkStyle = getWatermarkStyle(watermark);
 
-  const formatTimestamp = timestamp => {
-    try {
-      return new Date(timestamp).toLocaleString();
-    } catch {
-      return new Date().toLocaleString();
-    }
-  };
-
-  const formatContent = renderMarkdownForExport;
-
   const messagesHTML = messages
     .filter(msg => !msg.isGreeting) // Exclude greeting messages
-    .map(message => {
-      const roleClass = message.role === 'user' ? 'user-message' : 'assistant-message';
-      const roleLabel = message.role === 'user' ? 'User' : 'Assistant';
-
-      return `
-        <div class="message ${roleClass}">
-          <div class="message-header">
-            <span class="role">${roleLabel}</span>
-            <span class="timestamp">${formatTimestamp(message.timestamp || Date.now())}</span>
-          </div>
-          <div class="message-content">
-            ${formatContent(message.content)}
-          </div>
-        </div>
-      `;
-    })
+    .map(renderMessageHTML)
     .join('');
 
-  const metadataHTML = settings
-    ? `
-    <div class="metadata">
-      <h3>Chat Settings</h3>
-      <div class="metadata-grid">
-        ${settings.model ? `<div><strong>Model:</strong> ${escapeHtml(settings.model)}</div>` : ''}
-        ${settings.temperature !== undefined ? `<div><strong>Temperature:</strong> ${escapeHtml(settings.temperature)}</div>` : ''}
-        ${settings.style ? `<div><strong>Style:</strong> ${escapeHtml(settings.style)}</div>` : ''}
-        ${settings.outputFormat ? `<div><strong>Output Format:</strong> ${escapeHtml(settings.outputFormat)}</div>` : ''}
-        ${
-          settings.variables && Object.keys(settings.variables).length > 0
-            ? `
-          <div><strong>Variables:</strong> ${Object.entries(settings.variables)
-            .map(([k, v]) => `${escapeHtml(k)}: ${escapeHtml(v)}`)
-            .join(', ')}</div>
-        `
-            : ''
-        }
-      </div>
-    </div>
-  `
-    : '';
+  const metadataHTML = renderSettingsHTML(settings);
 
   return `
 <!DOCTYPE html>
@@ -628,7 +635,7 @@ const generateHTML = (messages, settings, appName, isSingleMessage = false) => {
 };
 
 // Client-side export functions
-export const exportChatToJSON = async (
+export const exportChatToJSON = (
   messages,
   settings,
   appId = null,
@@ -650,7 +657,7 @@ export const exportChatToJSON = async (
   return { success: true, filename };
 };
 
-export const exportChatToJSONL = async (
+export const exportChatToJSONL = (
   messages,
   settings,
   appId = null,
@@ -672,7 +679,7 @@ export const exportChatToJSONL = async (
   return { success: true, filename };
 };
 
-export const exportChatToMarkdown = async (
+export const exportChatToMarkdown = (
   messages,
   settings,
   appId = null,
@@ -693,7 +700,7 @@ export const exportChatToMarkdown = async (
   return { success: true, filename };
 };
 
-export const exportChatToHTML = async (
+export const exportChatToHTML = (
   messages,
   settings,
   appId = null,
@@ -714,6 +721,14 @@ export const exportChatToHTML = async (
   return { success: true, filename };
 };
 
+// The formats that are built and saved in the browser, by the `format` the dialog passes.
+const CLIENT_EXPORTERS = new Map([
+  ['json', exportChatToJSON],
+  ['jsonl', exportChatToJSONL],
+  ['markdown', exportChatToMarkdown],
+  ['html', exportChatToHTML]
+]);
+
 // Generic export function that handles all formats including PDF
 export const exportChatToFormat = async (messages, settings, format, options = {}) => {
   const {
@@ -726,28 +741,23 @@ export const exportChatToFormat = async (messages, settings, format, options = {
     language
   } = options;
 
-  switch (format) {
-    case 'pdf':
-      return exportChatToPDF(
-        messages,
-        settings,
-        template,
-        watermark,
-        appName,
-        appId,
-        chatId,
-        isSingleMessage,
-        language
-      );
-    case 'json':
-      return exportChatToJSON(messages, settings, appId, chatId, appName, isSingleMessage);
-    case 'jsonl':
-      return exportChatToJSONL(messages, settings, appId, chatId, appName, isSingleMessage);
-    case 'markdown':
-      return exportChatToMarkdown(messages, settings, appId, chatId, appName, isSingleMessage);
-    case 'html':
-      return exportChatToHTML(messages, settings, appId, chatId, appName, isSingleMessage);
-    default:
-      throw new Error(`Unsupported export format: ${format}`);
+  if (format === 'pdf') {
+    return await exportChatToPDF(
+      messages,
+      settings,
+      template,
+      watermark,
+      appName,
+      appId,
+      chatId,
+      isSingleMessage,
+      language
+    );
   }
+
+  const exportChat = CLIENT_EXPORTERS.get(format);
+  if (!exportChat) {
+    throw new Error(`Unsupported export format: ${format}`);
+  }
+  return exportChat(messages, settings, appId, chatId, appName, isSingleMessage);
 };

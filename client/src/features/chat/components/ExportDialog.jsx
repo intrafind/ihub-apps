@@ -19,6 +19,17 @@ import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContex
 // downloaded, so the Copy button is disabled when one of those is selected.
 const COPYABLE_FORMATS = new Set(['txt', 'markdown', 'json', 'jsonl']);
 
+// The message for a failed export. A download the browser refused to start
+// carries a code and is translated; anything else shows its own message.
+const exportErrorMessage = (error, t) =>
+  error.code === EXPORT_DOWNLOAD_FAILED
+    ? t(
+        'pages.appChat.export.downloadFailed',
+        'The download of {{filename}} could not be started',
+        { filename: error.filename }
+      )
+    : error.message;
+
 function ExportDialog({
   isOpen,
   onClose,
@@ -292,15 +303,7 @@ function ExportDialog({
       }, 500);
     } catch (error) {
       console.error(`Export to ${selectedFormat} failed:`, error);
-      setExportError(
-        error.code === EXPORT_DOWNLOAD_FAILED
-          ? t(
-              'pages.appChat.export.downloadFailed',
-              'The download of {{filename}} could not be started',
-              { filename: error.filename }
-            )
-          : error.message || 'Export failed'
-      );
+      setExportError(exportErrorMessage(error, t) || 'Export failed');
     } finally {
       setIsExporting(false);
     }
