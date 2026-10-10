@@ -342,8 +342,8 @@ describe('exportChatToFormat', () => {
 });
 
 describe('getExportErrorMessage', () => {
-  const t = jest.fn((key, fallback, options) => `${key}|${fallback}|${options.filename}`);
-  beforeEach(() => t.mockClear());
+  const translate = jest.fn((key, fallback, options) => `${key}|${fallback}|${options.filename}`);
+  beforeEach(() => translate.mockClear());
 
   it('translates a download that could not be started, with the filename', () => {
     const error = Object.assign(new Error('English fallback'), {
@@ -351,16 +351,16 @@ describe('getExportErrorMessage', () => {
       filename: 'chat.json'
     });
 
-    expect(getExportErrorMessage(error, t)).toBe(
+    expect(getExportErrorMessage(error, translate)).toBe(
       'pages.appChat.export.downloadFailed|The download of {{filename}} could not be started|chat.json'
     );
   });
 
   it('uses a key that exists in English, with the same text as its default', () => {
-    // The default the code passes to t() and the shipped English string must not drift apart.
+    // The default the code passes to translate() and the shipped English string must not drift apart.
     const error = Object.assign(new Error('x'), { code: EXPORT_DOWNLOAD_FAILED, filename: 'f' });
-    getExportErrorMessage(error, t);
-    const [key, fallback] = t.mock.calls[0];
+    getExportErrorMessage(error, translate);
+    const [key, fallback] = translate.mock.calls[0];
     const english = key
       .split('.')
       .reduce((node, part) => node?.[part], require('../../../shared/i18n/en.json'));
@@ -369,12 +369,12 @@ describe('getExportErrorMessage', () => {
   });
 
   it('shows any other error as its own message, without translating it', () => {
-    expect(getExportErrorMessage(new Error('boom'), t)).toBe('boom');
-    expect(t).not.toHaveBeenCalled();
+    expect(getExportErrorMessage(new Error('boom'), translate)).toBe('boom');
+    expect(translate).not.toHaveBeenCalled();
   });
 
   it('returns nothing for an error without a message, so the dialog can fall back', () => {
-    expect(getExportErrorMessage({}, t)).toBeUndefined();
+    expect(getExportErrorMessage({}, translate)).toBeUndefined();
   });
 
   it('turns the error a failed download really throws into the translated text', async () => {
@@ -383,7 +383,7 @@ describe('getExportErrorMessage', () => {
       thrown => thrown
     );
 
-    expect(getExportErrorMessage(error, t)).toContain('|chat.md');
+    expect(getExportErrorMessage(error, translate)).toContain('|chat.md');
   });
 });
 
