@@ -66,8 +66,8 @@
     "@microsoft/office-js": "^1.1.110",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
-    "@vitejs/plugin-react": "^6.1.1",
-    "postcss": "^8.5.28",
+    "@vitejs/plugin-react": "^6.1.2",
+    "postcss": "^8.5.29",
     "vite": "^8.3.2"
   },
   "allowScripts": {
