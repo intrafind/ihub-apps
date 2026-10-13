@@ -61,6 +61,18 @@ example a package that is not installed. Nothing stops the server: fix the scrip
 tool. A tool entry that points at a script file that does not exist is also reported whenever the
 tools are loaded.
 
+## Anonymous Users Can Use the Local Model
+
+The local model (`local-vllm`, the self-hosted endpoint for vLLM, LM Studio or Jan.ai) is now part
+of the default permissions for anonymous users. Before, only `gemini-flash-latest` was, so an
+endpoint an admin had enabled stayed invisible to anonymous visitors until it was granted by hand.
+
+- The default `anonymous` group includes `local-vllm`. Installations upgrading to this release get
+  the same grant, unless the group already allows all models.
+- The grant only takes effect once the model is enabled in the model editor. A disabled model is
+  still not served to anyone.
+- Adjust the anonymous group's **Models** list in Admin → Groups to remove the grant.
+
 ## Workflows: Chat Integration Is Set on the Workflow Page
 
 The workflow page (**Admin → Workflows → a workflow**) has a **Chat integration** section. It
