@@ -110,6 +110,8 @@ jest.unstable_mockModule('../services/TokenStorageService.js', () => ({
   default: {
     encryptString: value => `enc:${value}`,
     isEncrypted: value => typeof value === 'string' && value.startsWith('enc:'),
+    getKeyFingerprint: () => 'test-fingerprint',
+    keySource: 'test',
     decryptString: value => {
       if (value.startsWith('enc:bad')) throw new Error('Failed to decrypt string.');
       return value.slice(4);

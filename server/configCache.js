@@ -56,7 +56,12 @@ function decryptIfEncrypted(value) {
     try {
       return tokenStorageService.decryptString(value);
     } catch (error) {
-      logger.error('Failed to decrypt config secret', { component: 'ConfigCache', error });
+      logger.error('Failed to decrypt config secret', {
+        component: 'ConfigCache',
+        keySource: tokenStorageService.keySource,
+        keyFingerprint: tokenStorageService.getKeyFingerprint(),
+        error
+      });
       return value; // Return encrypted value as-is on failure
     }
   }
