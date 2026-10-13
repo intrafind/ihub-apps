@@ -26,17 +26,17 @@ export async function precondition(ctx) {
   return await ctx.fileExists('config/groups.json');
 }
 
+/** The anonymous group's models list, or null when the group or list is missing. */
+function anonymousModels(config) {
+  const models = config?.groups?.anonymous?.permissions?.models;
+  return Array.isArray(models) ? models : null;
+}
+
 export async function up(ctx) {
   const config = await ctx.readJson('config/groups.json');
-  const anonymous = config?.groups?.anonymous;
-  if (!anonymous || typeof anonymous !== 'object') {
-    ctx.warn('groups.json has no anonymous group — skipping the local model grant');
-    return;
-  }
-
-  const models = anonymous.permissions?.models;
-  if (!Array.isArray(models)) {
-    ctx.warn('anonymous group has no models list — skipping the local model grant');
+  const models = anonymousModels(config);
+  if (!models) {
+    ctx.warn('groups.json has no anonymous models list — skipping the local model grant');
     return;
   }
   if (models.includes('*') || models.includes(ANONYMOUS_MODEL_ID)) return;

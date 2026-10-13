@@ -20,13 +20,13 @@ import {
   description
 } from '../migrations/V164__anonymous_local_model.js';
 
-let baseDir;
+let baseDir = null;
 
 function makeCtx(dir) {
   const logs = [];
   return {
     logs,
-    fileExists: async rel =>
+    fileExists: rel =>
       fs
         .stat(path.join(dir, rel))
         .then(() => true)
@@ -124,6 +124,6 @@ describe('V164 anonymous local model', () => {
     await up(ctx);
     assert.ok(ctx.logs.some(([level]) => level === 'warn'));
     const groups = await readGroups(dir);
-    assert.equal(groups.anonymous.permissions.models, undefined);
+    assert.ok(!('models' in groups.anonymous.permissions));
   });
 });
