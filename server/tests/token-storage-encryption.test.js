@@ -180,9 +180,9 @@ describe('TokenStorageService key fingerprint', () => {
   });
 
   test('treats hex casing as the same key', () => {
-    tokenStorage.encryptionKey = 'ABCDEF'.repeat(10) + 'abcd';
+    tokenStorage.encryptionKey = 'AB'.repeat(32);
     const upper = tokenStorage.getKeyFingerprint();
-    tokenStorage.encryptionKey = 'abcdef'.repeat(10) + 'abcd';
+    tokenStorage.encryptionKey = 'ab'.repeat(32);
     expect(tokenStorage.getKeyFingerprint()).toBe(upper);
   });
 
