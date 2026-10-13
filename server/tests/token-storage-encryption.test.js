@@ -153,4 +153,34 @@ describe('TokenStorageService.initializeEncryptionKey env var validation', () =>
     process.env.TOKEN_ENCRYPTION_KEY = 'not-a-valid-hex-key';
     await expect(tokenStorage.initializeEncryptionKey()).rejects.toThrow(/64-character hex string/);
   });
+
+  test('records the env key source and a fingerprint that is not the key', async () => {
+    process.env.TOKEN_ENCRYPTION_KEY = VALID_HEX_KEY;
+    await tokenStorage.initializeEncryptionKey();
+    expect(tokenStorage.keySource).toBe('env');
+    const fingerprint = tokenStorage.getKeyFingerprint();
+    expect(fingerprint).toMatch(/^[0-9a-f]{12}$/);
+    expect(fingerprint).not.toContain(VALID_HEX_KEY.slice(0, 12));
+  });
+});
+
+describe('TokenStorageService key fingerprint', () => {
+  const originalKey = tokenStorage.encryptionKey;
+
+  afterEach(() => {
+    tokenStorage.encryptionKey = originalKey;
+  });
+
+  test('is stable for the same key and differs for a different key', () => {
+    tokenStorage.encryptionKey = VALID_HEX_KEY;
+    const first = tokenStorage.getKeyFingerprint();
+    expect(tokenStorage.getKeyFingerprint()).toBe(first);
+    tokenStorage.encryptionKey = 'b'.repeat(64);
+    expect(tokenStorage.getKeyFingerprint()).not.toBe(first);
+  });
+
+  test('is null before the key is initialized', () => {
+    tokenStorage.encryptionKey = null;
+    expect(tokenStorage.getKeyFingerprint()).toBeNull();
+  });
 });

@@ -140,6 +140,8 @@ export function inspectModelApiKey(model, { quiet = false } = {}) {
       undecryptableSource = undecryptableSource || source;
       log('error', `Failed to decrypt the stored API key of the ${source}`, {
         ...meta,
+        keyFingerprint: tokenStorageService.getKeyFingerprint(),
+        keySource: tokenStorageService.keySource,
         error: error.message,
         hint: 'The server encryption key is not the one the key was saved with. Check TOKEN_ENCRYPTION_KEY and contents/.encryption-key on every instance, or enter the key again.'
       });
