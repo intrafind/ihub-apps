@@ -242,14 +242,14 @@ class TokenStorageService {
   }
 
   /**
-   * When TOKEN_ENCRYPTION_KEY overrides a persisted key that differs from it,
-   * values encrypted with the file key stop decrypting. Warn so that the
-   * mismatch is visible at startup instead of as a failed API call later.
+   * The persisted key from disk, or null when there is none or it is malformed.
+   *
+   * @returns {Promise<string|null>}
    */
-  async _warnIfEnvKeyDiffersFromFile() {
-    let fileKey = null;
+  async _readPersistedKey() {
     try {
-      fileKey = (await fs.readFile(this.keyFilePath, 'utf8')).trim();
+      const key = (await fs.readFile(this.keyFilePath, 'utf8')).trim();
+      return /^[0-9a-f]{64}$/i.test(key) ? key : null;
     } catch (error) {
       if (error.code !== 'ENOENT') {
         logger.warn(
@@ -261,9 +261,18 @@ class TokenStorageService {
           }
         );
       }
-      return;
+      return null;
     }
-    if (!fileKey || !/^[0-9a-f]{64}$/i.test(fileKey) || fileKey === this.encryptionKey) return;
+  }
+
+  /**
+   * When TOKEN_ENCRYPTION_KEY overrides a persisted key that differs from it,
+   * values encrypted with the file key stop decrypting. Warn so that the
+   * mismatch is visible at startup instead of as a failed API call later.
+   */
+  async _warnIfEnvKeyDiffersFromFile() {
+    const fileKey = await this._readPersistedKey();
+    if (!fileKey || fileKey === this.encryptionKey) return;
     logger.warn(
       'TOKEN_ENCRYPTION_KEY differs from the key persisted in contents/.encryption-key. Values encrypted with the persisted key will not decrypt while the env var is set.',
       {
