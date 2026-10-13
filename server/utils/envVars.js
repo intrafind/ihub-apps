@@ -14,6 +14,9 @@
  */
 import logger from './logger.js';
 
+/** Variables already reported as missing; one warning each per process. */
+const warnedMissingVars = new Set();
+
 /**
  * Resolve environment variables in a string
  * Replaces ${VAR_NAME} with the value of process.env.VAR_NAME
@@ -34,11 +37,16 @@ export function resolveEnvVars(value) {
       if (fallback !== undefined) {
         return fallback;
       }
-      logger.warn('Environment variable not defined, keeping placeholder', {
-        component: 'ConfigCache',
-        varName,
-        placeholder: match
-      });
+      // Config is re-read on every reload, so warn once per variable rather
+      // than once per reload and per occurrence.
+      if (!warnedMissingVars.has(varName)) {
+        warnedMissingVars.add(varName);
+        logger.warn('Environment variable not defined, keeping placeholder', {
+          component: 'ConfigCache',
+          varName,
+          placeholder: match
+        });
+      }
       return match;
     }
   );
