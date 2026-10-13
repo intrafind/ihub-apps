@@ -905,6 +905,9 @@ export function createStarterWorkflow(overrides = {}) {
       maxExecutionTime: 300000,
       maxNodes: 20
     },
+    // Spelled out although `false` is the schema default, so the JSON shows a
+    // new workflow is not offered in chat until someone switches it on.
+    chatIntegration: { enabled: false },
     nodes: [
       {
         id: 'start',

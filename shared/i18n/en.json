@@ -3675,6 +3675,42 @@
         "provider": "stored on the provider",
         "model": "stored on the model"
       }
+    },
+    "workflows": {
+      "chatIntegration": {
+        "title": "Chat integration",
+        "description": "How this workflow can be used from the chat of the apps it is assigned to.",
+        "enabled": "Available in chat",
+        "enabledHelp": "Users can start it with @ in the chat of the apps it is assigned to, and the app’s model can call it as a tool. It is also offered to MCP and A2A clients whose groups may run it.",
+        "assignedApps": "Assigned to: {{apps}}",
+        "noAssignedApps": "Not assigned to any app yet. Assign it under Admin → Apps → Workflows.",
+        "primaryOutput": "Result shown in chat",
+        "primaryOutputAuto": "Automatic",
+        "primaryOutputHelp": "Lists the variables the end step passes on.",
+        "outputFormat": "Output format",
+        "outputFormatDefault": "Default (Markdown)",
+        "formats": {
+          "markdown": "Markdown",
+          "text": "Plain text",
+          "json": "JSON"
+        },
+        "toolDescription": "Description for the model",
+        "toolDescriptionHelp": "Tells the app’s model when to call this workflow. Leave empty to use the workflow description.",
+        "warnings": {
+          "assignedButDisabled": "This workflow is assigned to the apps {{apps}}, but it is not available in chat, so it does not appear there.",
+          "primaryOutputUnknown": "The end step does not pass on \"{{name}}\". The chat will show a fallback field or JSON instead.",
+          "endNodeFormatsOutput": "The end step \"{{node}}\" formats its output as \"{{format}}\", so the result shown in chat is ignored.",
+          "automaticShowsInput": "\"Automatic\" shows \"{{name}}\", which is an input of this workflow, so the chat answers with the user’s own text. Select the result to show, or stop passing the input on in the end step.",
+          "jsonFallback": "No result is selected and no output has a name the chat recognizes, so the run answers with all outputs as JSON. The web chat shows them in the chosen output format; API, MCP and A2A callers receive the JSON."
+        },
+        "automatic": {
+          "field": "Automatic shows \"{{name}}\", because its name is one the chat treats as the answer (such as report, content or result).",
+          "json": "Automatic looks for an output named like report, content or result. None of the outputs of the end step has such a name, so the chat shows the whole output as JSON.",
+          "single": "Automatic looks for an output named like report, content or result. \"{{name}}\" is not one, so the run answers with the whole output as JSON; the web chat shows \"{{name}}\" on its own, the only variable the end step passes on. API, MCP and A2A callers receive the JSON.",
+          "lines": "Automatic looks for an output named like report, content or result. None of {{names}} is one, so the run answers with the whole output as JSON; the web chat shows each variable as a \"name:\" line followed by its value. API, MCP and A2A callers receive the JSON.",
+          "sections": "Automatic looks for an output named like report, content or result. None of {{names}} is one, so the run answers with the whole output as JSON; the web chat shows each variable as a section with its name as the heading. API, MCP and A2A callers receive the JSON."
+        }
+      }
     }
   },
   "cloudStorage": {

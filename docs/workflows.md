@@ -254,6 +254,62 @@ Like all defaults, these files live in `server/defaults/workflows/` and are copi
 
 All of them run **sequentially** — none sets `concurrency`. Each round accumulates shared state (collected evidence records, the coverage counter, the merged corpus), and as described under **Parallel mode caveat** above, body state updates are not propagated in parallel mode. Raising `concurrency` on these loops would silently discard that accumulated state.
 
+## Chat integration
+
+Whether and how a workflow can be used from an app chat is set in its `chatIntegration` block, and
+on the workflow page under **Admin → Workflows → a workflow → Chat integration**:
+
+```json
+{
+  "chatIntegration": {
+    "enabled": true,
+    "primaryOutput": "corrected_text",
+    "outputFormat": "markdown",
+    "toolDescription": { "en": "Checks a text against the house rules and corrects it." }
+  }
+}
+```
+
+| Field | Default | Effect |
+| ----- | ------- | ------ |
+| `enabled` | `false` | The workflow can be started with `@` in the apps that list it under `workflows`, and the app's model can call it as a tool (`workflow_<id>`). It is also offered to MCP and A2A clients whose groups may run it. |
+| `primaryOutput` | – | The output shown as the answer in chat. Must be a key of the **end step's output** (see below); a dotted path such as `_report.markdown` names a field inside one. |
+| `outputFormat` | `markdown` | How the chat renders the answer: `markdown`, `text` or `json`. |
+| `toolDescription` | the workflow description | What the app's model is told about when to call the workflow. |
+
+`passthroughResult` is accepted by the schema but has no effect: a workflow called from chat always
+shows its answer as it is.
+
+### Which outputs `primaryOutput` can name
+
+The answer is looked up in the output of the end step, which the end step builds in this order:
+`outputMapping` (its keys), else `includeFields`, else every variable except `excludeFields`, else
+`outputVariables`, else every variable that reaches it. A variable an earlier step writes but the
+end step does not pass on cannot be the answer. The workflow page only offers outputs that reach
+the chat, and warns when the configured one does not.
+
+Without `primaryOutput` (**Automatic** on the workflow page), the run answers with the first
+non-empty output named `finalReport`, `report`, `content`, `output`, `result`, `summary`, `text` or
+`message` (in that order), and otherwise with the whole output of the end step as JSON. The workflow
+page explains what Automatic shows for the workflow being edited and warns when it would be JSON.
+
+The web chat shows an answer that is a JSON object in the workflow's `outputFormat`:
+
+| `outputFormat` | Shown in the web chat |
+| -------------- | --------------------- |
+| `markdown` (default) | One section per output, its name as the heading |
+| `text` | One `name:` line per output, followed by its value |
+| `json` | The JSON as a code block |
+
+A single output is shown on its own, and engine fields (names starting with `_`) are left out, as
+on the execution page. The stored answer, and what inference API, MCP and A2A callers receive, stay
+JSON.
+
+Mind that `text` is on that list: a workflow whose input variable is called `text` and whose end
+step passes it on answers with its own input, and the page warns about it. An end step with
+`outputFormat` `text` or `raw` turns its output into a single value, so `primaryOutput` is ignored
+there.
+
 ## Schedule triggers
 
 A workflow runs on a schedule with a `schedule` trigger:

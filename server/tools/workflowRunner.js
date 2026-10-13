@@ -25,6 +25,7 @@ import {
   getStreamRun
 } from '../services/loop/RunStream.js';
 import { SSE_V2_EVENTS } from '../../shared/runEvents.js';
+import { CHAT_OUTPUT_FALLBACK_FIELDS } from '../../shared/workflowChatOutput.js';
 import { hasChatClient } from '../sse.js';
 import { createPresenceMap, hasRemote, publish, subscribe } from '../clusterBus.js';
 import configCache from '../configCache.js';
@@ -216,17 +217,7 @@ function extractReadableOutput(output, primaryOutput) {
   }
 
   // Fallback: look for common content field names
-  const contentFields = [
-    'finalReport',
-    'report',
-    'content',
-    'output',
-    'result',
-    'summary',
-    'text',
-    'message'
-  ];
-  for (const field of contentFields) {
+  for (const field of CHAT_OUTPUT_FALLBACK_FIELDS) {
     if (typeof output[field] === 'string' && output[field].length > 0) {
       return output[field];
     }
