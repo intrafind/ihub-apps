@@ -247,7 +247,7 @@ class TokenStorageService {
    * mismatch is visible at startup instead of as a failed API call later.
    */
   async _warnIfEnvKeyDiffersFromFile() {
-    let fileKey;
+    let fileKey = null;
     try {
       fileKey = (await fs.readFile(this.keyFilePath, 'utf8')).trim();
     } catch (error) {
@@ -263,7 +263,7 @@ class TokenStorageService {
       }
       return;
     }
-    if (!/^[0-9a-f]{64}$/i.test(fileKey) || fileKey === this.encryptionKey) return;
+    if (!fileKey || !/^[0-9a-f]{64}$/i.test(fileKey) || fileKey === this.encryptionKey) return;
     logger.warn(
       'TOKEN_ENCRYPTION_KEY differs from the key persisted in contents/.encryption-key. Values encrypted with the persisted key will not decrypt while the env var is set.',
       {
