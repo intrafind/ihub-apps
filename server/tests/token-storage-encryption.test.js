@@ -179,6 +179,13 @@ describe('TokenStorageService key fingerprint', () => {
     expect(tokenStorage.getKeyFingerprint()).not.toBe(first);
   });
 
+  test('treats hex casing as the same key', () => {
+    tokenStorage.encryptionKey = 'ABCDEF'.repeat(10) + 'abcd';
+    const upper = tokenStorage.getKeyFingerprint();
+    tokenStorage.encryptionKey = 'abcdef'.repeat(10) + 'abcd';
+    expect(tokenStorage.getKeyFingerprint()).toBe(upper);
+  });
+
   test('is null before the key is initialized', () => {
     tokenStorage.encryptionKey = null;
     expect(tokenStorage.getKeyFingerprint()).toBeNull();

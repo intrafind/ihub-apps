@@ -14,7 +14,11 @@ import { getContentsPath } from '../utils/contentsPath.js';
  * @returns {string} 12 hex characters
  */
 function fingerprintKey(hexKey) {
-  return crypto.createHash('sha256').update(hexKey, 'utf8').digest('hex').slice(0, 12);
+  return crypto
+    .createHash('sha256')
+    .update(hexKey.toLowerCase(), 'utf8')
+    .digest('hex')
+    .slice(0, 12);
 }
 
 /**
@@ -117,7 +121,8 @@ class TokenStorageService {
   async initializeEncryptionKey() {
     // Priority 1: Environment variable (allows override)
     if (process.env.TOKEN_ENCRYPTION_KEY) {
-      const envKey = process.env.TOKEN_ENCRYPTION_KEY.trim();
+      // Hex is case-insensitive; normalize so the same key always compares equal.
+      const envKey = process.env.TOKEN_ENCRYPTION_KEY.trim().toLowerCase();
       if (!/^[0-9a-f]{64}$/i.test(envKey)) {
         throw new Error(
           'TOKEN_ENCRYPTION_KEY must be a 64-character hex string (32 bytes). ' +
@@ -141,7 +146,7 @@ class TokenStorageService {
       if (persistedKey && persistedKey.length === 64) {
         // Validate it's a valid hex string
         if (/^[0-9a-f]{64}$/i.test(persistedKey.trim())) {
-          this.encryptionKey = persistedKey.trim();
+          this.encryptionKey = persistedKey.trim().toLowerCase();
           this.keySource = 'file';
           logger.info('Using persisted encryption key from disk', {
             component: 'TokenStorage',
@@ -202,7 +207,7 @@ class TokenStorageService {
         // key is the one on disk, so use that rather than the one we generated.
         const winner = (await fs.readFile(this.keyFilePath, 'utf8')).trim();
         if (/^[0-9a-f]{64}$/i.test(winner)) {
-          this.encryptionKey = winner;
+          this.encryptionKey = winner.toLowerCase();
           this.keySource = 'file';
           logger.info('Adopted encryption key created concurrently by another process', {
             component: 'TokenStorage',
@@ -249,7 +254,7 @@ class TokenStorageService {
   async _readPersistedKey() {
     try {
       const key = (await fs.readFile(this.keyFilePath, 'utf8')).trim();
-      return /^[0-9a-f]{64}$/i.test(key) ? key : null;
+      return /^[0-9a-f]{64}$/i.test(key) ? key.toLowerCase() : null;
     } catch (error) {
       if (error.code !== 'ENOENT') {
         logger.warn(
