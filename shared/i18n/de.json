@@ -3969,7 +3969,7 @@
           "assignedButDisabled": "Dieser Workflow ist den Apps {{apps}} zugewiesen, aber nicht im Chat verfügbar und erscheint dort deshalb nicht.",
           "primaryOutputUnknown": "Der End-Schritt gibt „{{name}}“ nicht weiter. Der Chat zeigt stattdessen ein Ersatzfeld oder JSON.",
           "endNodeFormatsOutput": "Der End-Schritt „{{node}}“ formatiert seine Ausgabe als „{{format}}“, daher wird das im Chat angezeigte Ergebnis ignoriert.",
-          "automaticShowsInput": "„Automatisch“ zeigt „{{name}}“, eine Eingabe dieses Workflows. Der Chat antwortet also mit dem Text des Nutzers selbst. Wähle das anzuzeigende Ergebnis aus oder gib die Eingabe im End-Schritt nicht weiter.",
+          "automaticShowsInput": "„Automatisch“ zeigt „{{name}}“, eine Eingabe dieses Workflows. Der Chat antwortet also mit dem Text des Nutzers selbst. Wählen Sie das anzuzeigende Ergebnis aus oder geben Sie die Eingabe im End-Schritt nicht weiter.",
           "jsonFallback": "Kein Ergebnis gewählt, und keine Ausgabe hat einen Namen, den der Chat erkennt. Der Lauf antwortet deshalb mit allen Ausgaben als JSON. Der Web-Chat zeigt sie im gewählten Ausgabeformat; API-, MCP- und A2A-Aufrufer erhalten das JSON."
         },
         "automatic": {
@@ -3980,7 +3980,7 @@
           "sections": "Automatisch sucht eine Ausgabe mit einem Namen wie report, content oder result. Keiner der Namen {{names}} gehört dazu, deshalb antwortet der Lauf mit der gesamten Ausgabe als JSON; der Web-Chat zeigt jede Variable als Abschnitt mit ihrem Namen als Überschrift. API-, MCP- und A2A-Aufrufer erhalten das JSON.",
           "flattened": "Der End-Schritt „{{node}}“ formatiert seine Ausgabe als „{{format}}“, deshalb zeigt der Chat diesen Wert unverändert an."
         },
-        "jsonInvalid": "Korrigiere das JSON unten, um diese Einstellungen zu ändern."
+        "jsonInvalid": "Korrigieren Sie das JSON unten, um diese Einstellungen zu ändern."
       }
     }
   },

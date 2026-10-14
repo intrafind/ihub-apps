@@ -83,7 +83,7 @@ const INTERRUPTED_FINISH_REASONS = new Set(['length', 'connection_closed', 'erro
  * where they are destructured.
  */
 function ChatMessage({
-  message: storedMessage,
+  message,
   outputFormat = 'markdown',
   onDelete,
   onEdit,
@@ -138,24 +138,6 @@ function ChatMessage({
   onSaveAsSkill = null
 }) {
   const { t } = useTranslation();
-  // A workflow that answered with its whole output as JSON (no result
-  // selected) is shown in its output format. The message is derived here,
-  // once, so the bubble, copy, read aloud and insert all use the shown text;
-  // the stored answer stays JSON.
-  const workflowView = useMemo(
-    () =>
-      storedMessage.role === 'user'
-        ? null
-        : workflowAnswerView(storedMessage, storedMessage.outputFormat || outputFormat),
-    [storedMessage, outputFormat]
-  );
-  const message = useMemo(() => {
-    if (!workflowView) return storedMessage;
-    const content =
-      workflowView.text ??
-      t('chatMessage.workflowNoOutput', 'The workflow finished without output to show.');
-    return { ...storedMessage, content };
-  }, [storedMessage, workflowView, t]);
   const featureFlags = useFeatureFlags();
   // Response feedback is off when either the platform flag or this app's
   // `features.feedback` says so. One check for every surface: ChatMessage is
@@ -983,13 +965,7 @@ function ChatMessage({
             onOpenInApp={onOpenSourceInApp}
           />
         )}
-        {workflowView?.preserveBreaks ? (
-          // A readable workflow answer in the text format is laid out in
-          // `name:` lines, which plain text would collapse (ChatMessage.css).
-          <div className="workflow-answer-lines">{renderContent()}</div>
-        ) : (
-          renderContent()
-        )}
+        {renderContent()}
         {/* Files the answer's tools generated (a PDF from the pdf skill). */}
         {!isUser && message.generatedFiles?.length > 0 && (
           <GeneratedFiles files={message.generatedFiles} chatId={chatId} />
@@ -1539,4 +1515,39 @@ function ChatMessage({
   );
 }
 
-export default ChatMessage;
+/**
+ * A chat message as it is shown. A workflow that answered with its whole
+ * output as JSON (no result selected, `wholeOutput` on its result) is shown in
+ * its output format: the message is derived here, once, so the bubble, copy,
+ * read aloud and insert all use the shown text, while the stored answer stays
+ * JSON. Every other message is passed through untouched.
+ *
+ * @param {object} props - ChatMessage props
+ */
+function ChatMessageShown(props) {
+  const { t } = useTranslation();
+  const { message: storedMessage, outputFormat = 'markdown' } = props;
+  const view = useMemo(
+    () =>
+      storedMessage.role === 'user'
+        ? null
+        : workflowAnswerView(storedMessage, storedMessage.outputFormat || outputFormat),
+    [storedMessage, outputFormat]
+  );
+  const message = useMemo(() => {
+    if (!view) return storedMessage;
+    const content =
+      view.text ??
+      t('chatMessage.workflowNoOutput', 'The workflow finished without output to show.');
+    return { ...storedMessage, content };
+  }, [storedMessage, view, t]);
+
+  if (!view) return <ChatMessage {...props} />;
+  const shown = <ChatMessage {...props} message={message} />;
+  // The text format lays the answer out in `name:` lines, which plain text
+  // would collapse; `display: contents` keeps the wrapper out of the layout
+  // (ChatMessage.css).
+  return view.preserveBreaks ? <div className="workflow-answer-lines">{shown}</div> : shown;
+}
+
+export default ChatMessageShown;
