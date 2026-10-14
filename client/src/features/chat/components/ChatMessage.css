@@ -99,3 +99,9 @@
     display: none !important;
   }
 }
+
+/* A workflow answer shown as `name:` lines in the text format keeps its line
+   breaks; other plain-text answers collapse whitespace as before. */
+.workflow-answer-lines .whitespace-normal {
+  white-space: pre-wrap;
+}

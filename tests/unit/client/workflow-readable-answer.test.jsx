@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { MemoryRouter } from 'react-router-dom';
 import { workflowAnswerView } from '../../../client/src/features/workflows/utils/readableWorkflowAnswer.js';
@@ -172,13 +172,31 @@ describe('ChatMessage with a JSON workflow answer', () => {
 
   it('shows the outputs as lines that keep their breaks in the text format', () => {
     const { container } = renderMessage({ outputFormat: 'text' });
-    // The innermost element holding the answer (document order lists
-    // the wrappers first).
-    const block = [...container.querySelectorAll('div')]
-      .filter(div => div.textContent.startsWith('bericht:'))
-      .at(-1);
-    expect(block).toBeDefined();
-    expect(block.className).toContain('whitespace-pre-wrap');
+    const wrapper = container.querySelector('.workflow-answer-lines');
+    expect(wrapper).not.toBeNull();
+    expect(wrapper.textContent).toContain('bericht:');
+  });
+
+  it('keeps other plain-text answers as they were', () => {
+    const { container } = renderMessage({ outputFormat: 'text', workflowResult: undefined });
+    expect(container.querySelector('.workflow-answer-lines')).toBeNull();
+  });
+
+  it('inserts the text it shows, not the stored JSON', () => {
+    const onInsert = jest.fn();
+    render(
+      <MemoryRouter>
+        <ChatMessage
+          message={{ ...workflowMessage, content: JSON.stringify({ corrected_text: 'Fixed.' }) }}
+          appId="chat"
+          chatId="chat-1"
+          modelId="m"
+          onInsert={onInsert}
+        />
+      </MemoryRouter>
+    );
+    fireEvent.click(screen.getByTitle('Insert into document'));
+    expect(onInsert).toHaveBeenCalledWith('Fixed.');
   });
 
   it('keeps the JSON format as JSON', () => {

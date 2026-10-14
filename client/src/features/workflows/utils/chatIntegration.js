@@ -81,6 +81,19 @@ function endNodesOf(workflow) {
     .map(endNode => describeEndNode(endNode, collectUpstreamVariables(nodes, edges, endNode.id)));
 }
 
+/** The output keys of these end nodes, each once, in order. */
+function optionsOf(ends) {
+  const options = new Map();
+  ends.forEach(end =>
+    end.keys.forEach(option => {
+      if (!options.has(option.value)) options.set(option.value, option);
+    })
+  );
+  return [...options.values()];
+}
+
+const keysOf = ends => optionsOf(ends).map(option => option.value);
+
 /**
  * The values `chatIntegration.primaryOutput` can name: the keys of the end
  * node's output, which is where the runner looks the answer up. A variable
@@ -94,29 +107,28 @@ function endNodesOf(workflow) {
  * @returns {Array<{value: string, label: string}>}
  */
 export function primaryOutputOptions(workflow) {
-  const options = new Map();
-  endNodesOf(workflow).forEach(end =>
-    end.keys.forEach(option => {
-      if (!options.has(option.value)) options.set(option.value, option);
-    })
-  );
-  return [...options.values()];
+  return optionsOf(endNodesOf(workflow));
 }
 
 /**
  * What "Automatic" (no `primaryOutput`) shows in chat for this workflow,
- * decided from the end step's configuration the way the runner decides it
- * from the values (`chatAnswerOf()` in shared/workflowChatOutput.js). An end
- * step that flattens its output answers with that single value.
+ * decided from the end steps' configuration the way the runner decides it
+ * from the values (`chatAnswerOf()` in shared/workflowChatOutput.js).
+ *
+ * An end step that flattens its output answers with that single value, so
+ * Automatic decides only for the other end steps; the workflow counts as
+ * flattened only when every end step flattens.
  *
  * @param {object} workflow - Workflow definition
  * @returns {{mode: 'flattened', node: string, format: string} | {mode: 'field', field: string} | {mode: 'json', keys: string[]} | {mode: 'none'}}
  */
 export function automaticChatOutputFor(workflow) {
   const ends = endNodesOf(workflow);
-  const flattening = ends.find(end => end.flattens);
-  if (flattening) return { mode: 'flattened', node: flattening.id, format: flattening.format };
-  return automaticChatOutput(primaryOutputOptions(workflow).map(option => option.value));
+  const open = ends.filter(end => !end.flattens);
+  if (ends.length > 0 && open.length === 0) {
+    return { mode: 'flattened', node: ends[0].id, format: ends[0].format };
+  }
+  return automaticChatOutput(keysOf(open));
 }
 
 function assignmentWarnings(assignedApps) {
@@ -173,12 +185,19 @@ export function chatIntegrationWarnings(workflow, { assignedApps = [] } = {}) {
   if (!chat.enabled) return assignmentWarnings(assignedApps);
 
   const ends = endNodesOf(workflow);
-  const flattening = ends.find(end => end.flattens);
-  const keys = primaryOutputOptions(workflow).map(option => option.value);
   const primaryOutput = typeof chat.primaryOutput === 'string' ? chat.primaryOutput.trim() : '';
-  if (primaryOutput) return selectionWarnings(primaryOutput, keys, flattening);
-  // A flattened output is the answer as it is; Automatic picks nothing.
-  return flattening ? [] : automaticWarnings(workflow, keys);
+  if (primaryOutput) {
+    return selectionWarnings(
+      primaryOutput,
+      keysOf(ends),
+      ends.find(end => end.flattens)
+    );
+  }
+  // A flattened output is the answer as it is; Automatic decides only for
+  // the end steps that pass named outputs on.
+  const open = ends.filter(end => !end.flattens);
+  if (ends.length > 0 && open.length === 0) return [];
+  return automaticWarnings(workflow, keysOf(open));
 }
 
 /**

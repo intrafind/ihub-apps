@@ -187,9 +187,14 @@ function AdminWorkflowEditPage() {
    * the previous state) so the unsaved-changes check sees the edit. A key
    * patched to `undefined` is removed, so "Automatic" leaves no
    * `primaryOutput` behind.
+   *
+   * Refused while the JSON editor holds invalid JSON: `workflowData` is then
+   * the last valid parse, and rewriting the JSON from it would throw away
+   * everything typed since. The section is disabled meanwhile.
    * @param {Object} patch - Fields to set on chatIntegration
    */
   const handleChatIntegrationChange = patch => {
+    if (jsonError) return;
     const chatIntegration = { ...workflowData.chatIntegration, ...patch };
     Object.keys(patch).forEach(key => {
       if (patch[key] === undefined) delete chatIntegration[key];
@@ -492,6 +497,7 @@ function AdminWorkflowEditPage() {
               workflow={workflowData}
               onChange={handleChatIntegrationChange}
               assignedApps={assignedApps}
+              disabled={!!jsonError}
             />
 
             {/* JSON Editor Section */}

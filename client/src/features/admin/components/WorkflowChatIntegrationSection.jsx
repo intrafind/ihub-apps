@@ -47,7 +47,7 @@ const AUTOMATIC_TEXTS = {
   ],
   field: [
     'admin.workflows.chatIntegration.automatic.field',
-    'Automatic shows "{{name}}", because its name is one the chat treats as the answer (such as report, content or result).'
+    'Automatic shows "{{name}}" when it is not empty, because its name is one the chat treats as the answer (such as report, content or result). An empty one is skipped for the next such output, or the whole output as JSON.'
   ],
   json: [
     'admin.workflows.chatIntegration.automatic.json',
@@ -274,8 +274,16 @@ function ToolDescriptionField({ value, onChange }) {
  *   `chatIntegration`; a key set to `undefined` is removed
  * @param {Array<{id: string, name?: object}>} [props.assignedApps] - Apps that
  *   list this workflow, or null while unknown
+ * @param {boolean} [props.disabled] - True while the JSON editor holds invalid
+ *   JSON: changes here would be applied to the last valid version and
+ *   overwrite what was typed there
  */
-function WorkflowChatIntegrationSection({ workflow, onChange, assignedApps = null }) {
+function WorkflowChatIntegrationSection({
+  workflow,
+  onChange,
+  assignedApps = null,
+  disabled = false
+}) {
   const { t } = useTranslation();
   const chat = workflow?.chatIntegration || {};
   const warnings = useMemo(
@@ -295,7 +303,18 @@ function WorkflowChatIntegrationSection({ workflow, onChange, assignedApps = nul
         )}
       </p>
       <WarningList warnings={warnings} />
-      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+      {disabled && (
+        <p className="mb-4 text-sm text-yellow-800 dark:text-yellow-300">
+          {t(
+            'admin.workflows.chatIntegration.jsonInvalid',
+            'Fix the JSON below to change these settings.'
+          )}
+        </p>
+      )}
+      <fieldset
+        disabled={disabled}
+        className="grid min-w-0 grid-cols-1 gap-6 sm:grid-cols-2 disabled:opacity-60"
+      >
         <AvailableInChat
           enabled={chat.enabled === true}
           onToggle={() => onChange({ enabled: chat.enabled !== true })}
@@ -304,7 +323,7 @@ function WorkflowChatIntegrationSection({ workflow, onChange, assignedApps = nul
         <ResultShownInChat workflow={workflow} chat={chat} onChange={onChange} />
         <OutputFormatField value={chat.outputFormat} onChange={onChange} />
         <ToolDescriptionField value={chat.toolDescription} onChange={onChange} />
-      </div>
+      </fieldset>
     </div>
   );
 }

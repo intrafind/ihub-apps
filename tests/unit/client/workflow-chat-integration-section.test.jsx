@@ -96,3 +96,23 @@ test('an end step that formats its output as text is shown as it is', () => {
     )
   ).toBeInTheDocument();
 });
+
+test('a conventionally named output is shown only when it is not empty', () => {
+  const wf = workflow({ outputVariables: ['bericht'] });
+  wf.nodes[3].config = { outputMapping: { report: '$.data.bericht' } };
+  expect(explanation(wf)).toContain('"report" when it is not empty');
+});
+
+test('the settings are locked while the JSON editor holds invalid JSON', () => {
+  const onChange = jest.fn();
+  render(
+    <WorkflowChatIntegrationSection
+      workflow={workflow({ outputVariables: ['corrected_text'] })}
+      onChange={onChange}
+      disabled
+    />
+  );
+  expect(screen.getByText('Fix the JSON below to change these settings.')).toBeInTheDocument();
+  expect(screen.getByRole('switch')).toBeDisabled();
+  expect(screen.getByLabelText('Result shown in chat')).toBeDisabled();
+});

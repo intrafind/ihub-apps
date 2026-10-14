@@ -321,6 +321,39 @@ describe('end steps that flatten their output', () => {
   });
 });
 
+describe('workflows with several end steps', () => {
+  // start → check → fix → end (passes both on); check → early-end (formats as text)
+  function branched(chatIntegration) {
+    const wf = ruleCheckWorkflow({
+      endConfig: { outputVariables: ['bericht', 'corrected_text'] },
+      chatIntegration
+    });
+    wf.nodes.push(node('early-end', 'end', { outputFormat: 'text', outputVariables: ['bericht'] }));
+    wf.edges.push({ id: 'e4', source: 'check', target: 'early-end' });
+    return wf;
+  }
+
+  it('keeps the Automatic warnings for the branch that does not flatten', () => {
+    expect(chatIntegrationWarnings(branched({ enabled: true }))).toEqual([
+      { code: 'jsonFallback' }
+    ]);
+  });
+
+  it('explains Automatic for the branch that does not flatten', () => {
+    expect(automaticChatOutputFor(branched({ enabled: true }))).toEqual({
+      mode: 'json',
+      keys: ['bericht', 'corrected_text']
+    });
+  });
+
+  it('counts as flattened only when every end step flattens', () => {
+    const wf = branched({ enabled: true });
+    wf.nodes.find(n => n.id === 'end').config.outputFormat = 'text';
+    expect(automaticChatOutputFor(wf).mode).toBe('flattened');
+    expect(chatIntegrationWarnings(wf)).toEqual([]);
+  });
+});
+
 describe('chatAnswerOf', () => {
   it('returns the selected output, also from a dotted path', () => {
     expect(chatAnswerOf({ a: 'x', corrected_text: 'Fixed.' }, 'corrected_text')).toEqual({
@@ -356,7 +389,7 @@ describe('chatAnswerOf', () => {
   it('passes non-object outputs through, and has nothing for an empty one', () => {
     expect(chatAnswerOf('done')).toEqual({ text: 'done', wholeOutput: false });
     expect(chatAnswerOf(42)).toEqual({ text: '42', wholeOutput: false });
-    expect(chatAnswerOf(undefined)).toEqual({ text: null, wholeOutput: false });
+    expect(chatAnswerOf()).toEqual({ text: null, wholeOutput: false });
   });
 });
 

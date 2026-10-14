@@ -83,7 +83,7 @@ const INTERRUPTED_FINISH_REASONS = new Set(['length', 'connection_closed', 'erro
  * where they are destructured.
  */
 function ChatMessage({
-  message,
+  message: storedMessage,
   outputFormat = 'markdown',
   onDelete,
   onEdit,
@@ -138,6 +138,24 @@ function ChatMessage({
   onSaveAsSkill = null
 }) {
   const { t } = useTranslation();
+  // A workflow that answered with its whole output as JSON (no result
+  // selected) is shown in its output format. The message is derived here,
+  // once, so the bubble, copy, read aloud and insert all use the shown text;
+  // the stored answer stays JSON.
+  const workflowView = useMemo(
+    () =>
+      storedMessage.role === 'user'
+        ? null
+        : workflowAnswerView(storedMessage, storedMessage.outputFormat || outputFormat),
+    [storedMessage, outputFormat]
+  );
+  const message = useMemo(() => {
+    if (!workflowView) return storedMessage;
+    const content =
+      workflowView.text ??
+      t('chatMessage.workflowNoOutput', 'The workflow finished without output to show.');
+    return { ...storedMessage, content };
+  }, [storedMessage, workflowView, t]);
   const featureFlags = useFeatureFlags();
   // Response feedback is off when either the platform flag or this app's
   // `features.feedback` says so. One check for every surface: ChatMessage is
@@ -230,25 +248,6 @@ function ChatMessage({
   // This survives re-renders and component unmounting/remounting
   const customRendererFromMessage = message.customResponseRenderer;
   const outputFormatFromMessage = message.outputFormat;
-
-  // A workflow that answered with its whole output as JSON (no result
-  // selected) is shown in its output format; the stored answer stays JSON.
-  const workflowView = useMemo(
-    () => (isUser ? null : workflowAnswerView(message, outputFormatFromMessage || outputFormat)),
-    [isUser, message, outputFormatFromMessage, outputFormat]
-  );
-  const shownContent = (() => {
-    if (!workflowView) {
-      return typeof message.content === 'string' ? message.content : message.content || '';
-    }
-    return (
-      workflowView.text ??
-      t('chatMessage.workflowNoOutput', 'The workflow finished without output to show.')
-    );
-  })();
-  // A readable workflow answer in the text format is laid out in lines;
-  // other plain-text answers keep collapsing whitespace.
-  const plainTextClass = workflowView?.preserveBreaks ? 'whitespace-pre-wrap' : 'whitespace-normal';
 
   // Close copy menu on outside click
   useEffect(() => {
@@ -589,8 +588,9 @@ function ChatMessage({
 
   // Render the message content based on the output format
   const renderContent = () => {
-    // Always a string; a whole-output workflow answer already in its format.
-    const storedContent = shownContent;
+    // Ensure content is always a string for rendering
+    const storedContent =
+      typeof message.content === 'string' ? message.content : message.content || '';
 
     // A turn that was stopped or that failed is reconstructed here when the
     // chat is reopened from the store. The live paths write their notice into
@@ -833,7 +833,7 @@ function ChatMessage({
 
     return (
       <div
-        className={`wrap-break-word ${plainTextClass}`}
+        className="wrap-break-word whitespace-normal"
         style={{ boxSizing: 'content-box', display: 'inline-block' }}
       >
         {contentToRender}
@@ -983,7 +983,13 @@ function ChatMessage({
             onOpenInApp={onOpenSourceInApp}
           />
         )}
-        {renderContent()}
+        {workflowView?.preserveBreaks ? (
+          // A readable workflow answer in the text format is laid out in
+          // `name:` lines, which plain text would collapse (ChatMessage.css).
+          <div className="workflow-answer-lines">{renderContent()}</div>
+        ) : (
+          renderContent()
+        )}
         {/* Files the answer's tools generated (a PDF from the pdf skill). */}
         {!isUser && message.generatedFiles?.length > 0 && (
           <GeneratedFiles files={message.generatedFiles} chatId={chatId} />
