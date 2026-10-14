@@ -293,7 +293,8 @@ non-empty output named `finalReport`, `report`, `content`, `output`, `result`, `
 `message` (in that order), and otherwise with the whole output of the end step as JSON. The workflow
 page explains what Automatic shows for the workflow being edited and warns when it would be JSON.
 
-The web chat shows an answer that is a JSON object in the workflow's `outputFormat`:
+When the run answers with its whole output (no result selected, no conventionally named output),
+the web chat shows that answer in the workflow's `outputFormat`:
 
 | `outputFormat` | Shown in the web chat |
 | -------------- | --------------------- |
@@ -302,13 +303,17 @@ The web chat shows an answer that is a JSON object in the workflow's `outputForm
 | `json` | The JSON as a code block |
 
 A single output is shown on its own, and engine fields (names starting with `_`) are left out, as
-on the execution page. The stored answer, and what inference API, MCP and A2A callers receive, stay
-JSON.
+on the execution page; when nothing else is left, the chat says that the workflow finished without
+output to show. An answer the workflow chose itself (a selected result, even one that is JSON) is
+shown as it is. The stored answer, and what inference API, MCP and A2A callers receive, stay JSON.
 
 Mind that `text` is on that list: a workflow whose input variable is called `text` and whose end
-step passes it on answers with its own input, and the page warns about it. An end step with
-`outputFormat` `text` or `raw` turns its output into a single value, so `primaryOutput` is ignored
-there.
+step passes it on answers with its own input, and the page warns about it.
+
+An end step's own `outputFormat` can turn its output into a single value, and then there is no
+field left for `primaryOutput` to name: `text` always does, `raw` only when the output has exactly
+one key (with two or more, `raw` returns the output unchanged and `primaryOutput` works as usual).
+The page warns when a selection is ignored for this reason.
 
 ## Schedule triggers
 

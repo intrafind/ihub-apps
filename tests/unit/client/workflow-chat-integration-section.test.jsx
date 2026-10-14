@@ -58,7 +58,7 @@ function workflow({ outputVariables, outputFormat }) {
 }
 
 const explanation = wf => {
-  render(<WorkflowChatIntegrationSection workflow={wf} onChange={() => {}} />);
+  render(<WorkflowChatIntegrationSection workflow={wf} onChange={jest.fn()} />);
   return screen.getByText(/^Automatic /).textContent;
 };
 
@@ -84,4 +84,15 @@ test('a single variable is shown on its own', () => {
   expect(explanation(workflow({ outputVariables: ['corrected_text'] }))).toContain(
     'the web chat shows "corrected_text" on its own'
   );
+});
+
+test('an end step that formats its output as text is shown as it is', () => {
+  const wf = workflow({ outputVariables: ['bericht', 'corrected_text'] });
+  wf.nodes[3].config.outputFormat = 'text';
+  render(<WorkflowChatIntegrationSection workflow={wf} onChange={jest.fn()} />);
+  expect(
+    screen.getByText(
+      'The end step "end" formats its output as "text", so the chat shows that value as it is.'
+    )
+  ).toBeInTheDocument();
 });

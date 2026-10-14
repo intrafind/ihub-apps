@@ -373,6 +373,19 @@ describe('recording what a turn did', () => {
 });
 
 describe('the stored form of the activity', () => {
+  it('keeps whether a workflow answered with its whole output', () => {
+    const stored = boundStoredActivity({
+      workflowResult: { status: 'completed', executionId: 'wf-1', wholeOutput: true }
+    });
+    assert.equal(stored.workflowResult.wholeOutput, true);
+    const chosen = boundStoredActivity({ workflowResult: { status: 'completed' } });
+    assert.equal('wholeOutput' in chosen.workflowResult, false);
+    const bogus = boundStoredActivity({
+      workflowResult: { status: 'completed', wholeOutput: 'x' }
+    });
+    assert.equal('wholeOutput' in bogus.workflowResult, false);
+  });
+
   it('bounds lists and strings and keeps only known fields', () => {
     const long = 'x'.repeat(5000);
     const items = Array.from({ length: MAX_STORED_TOOL_ITEMS + 20 }, (_, i) => ({

@@ -190,7 +190,7 @@ function AdminWorkflowEditPage() {
    * @param {Object} patch - Fields to set on chatIntegration
    */
   const handleChatIntegrationChange = patch => {
-    const chatIntegration = { ...(workflowData.chatIntegration || {}), ...patch };
+    const chatIntegration = { ...workflowData.chatIntegration, ...patch };
     Object.keys(patch).forEach(key => {
       if (patch[key] === undefined) delete chatIntegration[key];
     });

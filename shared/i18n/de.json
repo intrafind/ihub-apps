@@ -590,7 +590,8 @@
     "readAloudPause": "Pausieren",
     "readAloudResume": "Fortsetzen",
     "readAloudStop": "Vorlesen beenden",
-    "readAloudError": "Vorlesen fehlgeschlagen: {{error}}"
+    "readAloudError": "Vorlesen fehlgeschlagen: {{error}}",
+    "workflowNoOutput": "Der Workflow wurde ohne anzeigbare Ausgabe beendet."
   },
   "errors": {
     "componentError": "Komponenten-Fehler",
@@ -3976,7 +3977,8 @@
           "json": "Automatisch sucht eine Ausgabe mit einem Namen wie report, content oder result. Keine Ausgabe des End-Schritts trägt einen solchen Namen, deshalb zeigt der Chat die gesamte Ausgabe als JSON.",
           "single": "Automatisch sucht eine Ausgabe mit einem Namen wie report, content oder result. „{{name}}“ gehört nicht dazu, deshalb antwortet der Lauf mit der gesamten Ausgabe als JSON; der Web-Chat zeigt „{{name}}“ allein an, die einzige Variable, die der End-Schritt weitergibt. API-, MCP- und A2A-Aufrufer erhalten das JSON.",
           "lines": "Automatisch sucht eine Ausgabe mit einem Namen wie report, content oder result. Keiner der Namen {{names}} gehört dazu, deshalb antwortet der Lauf mit der gesamten Ausgabe als JSON; der Web-Chat zeigt jede Variable als Zeile „Name:“ gefolgt von ihrem Wert. API-, MCP- und A2A-Aufrufer erhalten das JSON.",
-          "sections": "Automatisch sucht eine Ausgabe mit einem Namen wie report, content oder result. Keiner der Namen {{names}} gehört dazu, deshalb antwortet der Lauf mit der gesamten Ausgabe als JSON; der Web-Chat zeigt jede Variable als Abschnitt mit ihrem Namen als Überschrift. API-, MCP- und A2A-Aufrufer erhalten das JSON."
+          "sections": "Automatisch sucht eine Ausgabe mit einem Namen wie report, content oder result. Keiner der Namen {{names}} gehört dazu, deshalb antwortet der Lauf mit der gesamten Ausgabe als JSON; der Web-Chat zeigt jede Variable als Abschnitt mit ihrem Namen als Überschrift. API-, MCP- und A2A-Aufrufer erhalten das JSON.",
+          "flattened": "Der End-Schritt „{{node}}“ formatiert seine Ausgabe als „{{format}}“, deshalb zeigt der Chat diesen Wert unverändert an."
         }
       }
     }

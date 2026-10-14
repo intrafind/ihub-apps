@@ -68,7 +68,7 @@ import ScheduledTaskProposalCards from '../../tasks/components/ScheduledTaskProp
 import ScheduleThisAction from '../../tasks/components/ScheduleThisAction';
 import GeneratedFiles from './GeneratedFiles';
 import { findSkillDraft } from '../../skills/utils/skillDraft';
-import { readableWorkflowAnswer } from '../../workflows/utils/readableWorkflowAnswer';
+import { workflowAnswerView } from '../../workflows/utils/readableWorkflowAnswer';
 import { matchesModelFilter, modelSupportsTools } from '../../../../../shared/modelCapabilities.js';
 import './ChatMessage.css';
 
@@ -230,6 +230,25 @@ function ChatMessage({
   // This survives re-renders and component unmounting/remounting
   const customRendererFromMessage = message.customResponseRenderer;
   const outputFormatFromMessage = message.outputFormat;
+
+  // A workflow that answered with its whole output as JSON (no result
+  // selected) is shown in its output format; the stored answer stays JSON.
+  const workflowView = useMemo(
+    () => (isUser ? null : workflowAnswerView(message, outputFormatFromMessage || outputFormat)),
+    [isUser, message, outputFormatFromMessage, outputFormat]
+  );
+  const shownContent = (() => {
+    if (!workflowView) {
+      return typeof message.content === 'string' ? message.content : message.content || '';
+    }
+    return (
+      workflowView.text ??
+      t('chatMessage.workflowNoOutput', 'The workflow finished without output to show.')
+    );
+  })();
+  // A readable workflow answer in the text format is laid out in lines;
+  // other plain-text answers keep collapsing whitespace.
+  const plainTextClass = workflowView?.preserveBreaks ? 'whitespace-pre-wrap' : 'whitespace-normal';
 
   // Close copy menu on outside click
   useEffect(() => {
@@ -570,9 +589,8 @@ function ChatMessage({
 
   // Render the message content based on the output format
   const renderContent = () => {
-    // Ensure content is always a string for rendering
-    const storedContent =
-      typeof message.content === 'string' ? message.content : message.content || '';
+    // Always a string; a whole-output workflow answer already in its format.
+    const storedContent = shownContent;
 
     // A turn that was stopped or that failed is reconstructed here when the
     // chat is reopened from the store. The live paths write their notice into
@@ -593,15 +611,6 @@ function ChatMessage({
             )
           : message.errorMessage || t('error.streamingError', 'An error occurred during streaming');
     }
-
-    // A workflow answer that is a JSON object — no result selected, so the run
-    // answered with its whole output — is shown in the chosen output format.
-    // The stored answer, and what API, MCP and A2A callers get, stays JSON.
-    const readableAnswer =
-      !isUser && message.workflowResult
-        ? readableWorkflowAnswer(contentToRender, outputFormatFromMessage || outputFormat)
-        : null;
-    if (readableAnswer !== null) contentToRender = readableAnswer;
 
     // For HTML content, check if it contains image tags or file indicators and render them properly
     const hasImageContent =
@@ -824,9 +833,7 @@ function ChatMessage({
 
     return (
       <div
-        // A readable workflow answer is laid out in lines (`name:` then the
-        // value); other plain-text answers keep collapsing whitespace.
-        className={`wrap-break-word ${readableAnswer !== null ? 'whitespace-pre-wrap' : 'whitespace-normal'}`}
+        className={`wrap-break-word ${plainTextClass}`}
         style={{ boxSizing: 'content-box', display: 'inline-block' }}
       >
         {contentToRender}

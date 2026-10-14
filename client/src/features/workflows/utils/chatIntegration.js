@@ -2,39 +2,83 @@ import { collectUpstreamVariables, workflowToFlow } from '../editor/workflowEdit
 import { automaticChatOutput } from '../../../../../shared/workflowChatOutput.js';
 
 /**
- * End-node output formats that turn the output into something other than an
- * object of named fields, so `primaryOutput` has nothing to look up.
- * Mirrors `formatOutput()` in server/services/workflow/executors/EndNodeExecutor.js.
- */
-const FLATTENING_END_FORMATS = new Set(['text', 'raw']);
-
-/**
- * The output keys one end node passes on, in the order of precedence
+ * How an end node builds its output, in the order of precedence
  * EndNodeExecutor applies: `outputMapping`, `includeFields`, `excludeFields`,
  * `outputVariables`, else every state variable that reaches the node.
+ * `explicit` says whether the keys are fixed by the configuration; when they
+ * are not, the output also carries input and engine fields at run time.
+ */
+const END_OUTPUT_RULES = [
+  {
+    applies: cfg => cfg.outputMapping && typeof cfg.outputMapping === 'object',
+    keys: (cfg, named) => named(Object.keys(cfg.outputMapping)),
+    explicit: true
+  },
+  {
+    applies: cfg => Array.isArray(cfg.includeFields),
+    keys: (cfg, named) => named(cfg.includeFields),
+    explicit: true
+  },
+  {
+    applies: cfg => Array.isArray(cfg.excludeFields),
+    keys: (cfg, _named, available) => {
+      const excluded = new Set(cfg.excludeFields);
+      return available.filter(v => !excluded.has(v.value));
+    },
+    explicit: false
+  },
+  {
+    applies: cfg => Array.isArray(cfg.outputVariables),
+    keys: (cfg, named) => named(cfg.outputVariables),
+    explicit: true
+  }
+];
+
+/**
+ * Whether an end node's `outputFormat` turns its output into a single value,
+ * so there is no named field left to pick. Mirrors `formatOutput()` in
+ * server/services/workflow/executors/EndNodeExecutor.js: `text` always yields
+ * text; `raw` yields the value only of an output with exactly one key —
+ * `includeNodeOutputs` and `includeMetadata` add a key each.
+ */
+function flattens(cfg, keys, explicit) {
+  if (cfg.outputFormat === 'text') return true;
+  if (cfg.outputFormat !== 'raw' || !explicit) return false;
+  const extraKeys = (cfg.includeNodeOutputs ? 1 : 0) + (cfg.includeMetadata ? 1 : 0);
+  return keys.length + extraKeys === 1;
+}
+
+/**
+ * What one end node passes on: its output keys and whether its output format
+ * flattens them into a single value.
  *
  * @param {object} endNode - React Flow end node
  * @param {Array<{value: string, label: string}>} available - Variables visible at the node
- * @returns {Array<{value: string, label: string}>}
+ * @returns {{id: string, format: string|undefined, keys: Array<{value: string, label: string}>, flattens: boolean}}
  */
-function outputKeysOfEndNode(endNode, available) {
+function describeEndNode(endNode, available) {
   const cfg = endNode.data?.nodeConfig || {};
   const labelOf = name => available.find(v => v.value === name)?.label || '';
-  const named = (names, label) =>
+  const named = names =>
     names
       .filter(name => typeof name === 'string' && name.trim())
-      .map(name => ({ value: name.trim(), label: label ?? labelOf(name.trim()) }));
+      .map(name => ({ value: name.trim(), label: labelOf(name.trim()) }));
+  const rule = END_OUTPUT_RULES.find(r => r.applies(cfg));
+  const keys = rule ? rule.keys(cfg, named, available) : available;
+  return {
+    id: endNode.id,
+    format: cfg.outputFormat,
+    keys,
+    flattens: flattens(cfg, keys, Boolean(rule?.explicit))
+  };
+}
 
-  if (cfg.outputMapping && typeof cfg.outputMapping === 'object') {
-    return named(Object.keys(cfg.outputMapping), 'output mapping');
-  }
-  if (Array.isArray(cfg.includeFields)) return named(cfg.includeFields);
-  if (Array.isArray(cfg.excludeFields)) {
-    const excluded = new Set(cfg.excludeFields);
-    return available.filter(v => !excluded.has(v.value));
-  }
-  if (Array.isArray(cfg.outputVariables)) return named(cfg.outputVariables);
-  return available;
+/** Every end node of the workflow, described. */
+function endNodesOf(workflow) {
+  const { nodes, edges } = workflowToFlow(workflow);
+  return nodes
+    .filter(node => node.data?.nodeType === 'end')
+    .map(endNode => describeEndNode(endNode, collectUpstreamVariables(nodes, edges, endNode.id)));
 }
 
 /**
@@ -50,29 +94,67 @@ function outputKeysOfEndNode(endNode, available) {
  * @returns {Array<{value: string, label: string}>}
  */
 export function primaryOutputOptions(workflow) {
-  const { nodes, edges } = workflowToFlow(workflow);
   const options = new Map();
-  nodes
-    .filter(node => node.data?.nodeType === 'end')
-    .forEach(endNode => {
-      const available = collectUpstreamVariables(nodes, edges, endNode.id);
-      outputKeysOfEndNode(endNode, available).forEach(option => {
-        if (!options.has(option.value)) options.set(option.value, option);
-      });
-    });
+  endNodesOf(workflow).forEach(end =>
+    end.keys.forEach(option => {
+      if (!options.has(option.value)) options.set(option.value, option);
+    })
+  );
   return [...options.values()];
 }
 
 /**
  * What "Automatic" (no `primaryOutput`) shows in chat for this workflow,
- * decided from the end step's output names the way the runner decides it
- * from the values (`extractReadableOutput()` in server/tools/workflowRunner.js).
+ * decided from the end step's configuration the way the runner decides it
+ * from the values (`chatAnswerOf()` in shared/workflowChatOutput.js). An end
+ * step that flattens its output answers with that single value.
  *
  * @param {object} workflow - Workflow definition
- * @returns {{mode: 'field', field: string} | {mode: 'json', keys: string[]} | {mode: 'none'}}
+ * @returns {{mode: 'flattened', node: string, format: string} | {mode: 'field', field: string} | {mode: 'json', keys: string[]} | {mode: 'none'}}
  */
 export function automaticChatOutputFor(workflow) {
+  const ends = endNodesOf(workflow);
+  const flattening = ends.find(end => end.flattens);
+  if (flattening) return { mode: 'flattened', node: flattening.id, format: flattening.format };
   return automaticChatOutput(primaryOutputOptions(workflow).map(option => option.value));
+}
+
+function assignmentWarnings(assignedApps) {
+  if (assignedApps.length === 0) return [];
+  return [
+    { code: 'assignedButDisabled', params: { apps: assignedApps.map(app => app.id).join(', ') } }
+  ];
+}
+
+function selectionWarnings(primaryOutput, keys, flattening) {
+  const warnings = [];
+  // A dotted path (`_report.markdown`) names a field inside an output.
+  if (!keys.includes(primaryOutput.split('.')[0])) {
+    warnings.push({ code: 'primaryOutputUnknown', params: { name: primaryOutput } });
+  }
+  if (flattening) {
+    warnings.push({
+      code: 'endNodeFormatsOutput',
+      params: { node: flattening.id, format: flattening.format }
+    });
+  }
+  return warnings;
+}
+
+function automaticWarnings(workflow, keys) {
+  const automatic = automaticChatOutput(keys);
+  if (automatic.mode !== 'field') return [{ code: 'jsonFallback' }];
+  const inputs = new Set(
+    (workflow.nodes || [])
+      .filter(n => n.type === 'start')
+      .flatMap(n => n.config?.inputVariables || [])
+      .map(v => v?.name)
+  );
+  // `text` is a conventional answer name and a common input name: an end
+  // step that passes the input on answers with the user's own text.
+  return inputs.has(automatic.field)
+    ? [{ code: 'automaticShowsInput', params: { name: automatic.field } }]
+    : [];
 }
 
 /**
@@ -86,57 +168,17 @@ export function automaticChatOutputFor(workflow) {
  */
 export function chatIntegrationWarnings(workflow, { assignedApps = [] } = {}) {
   const chat = workflow?.chatIntegration || {};
-  const warnings = [];
+  // The other checks are about the answer in chat, which a workflow that is
+  // not in chat does not give.
+  if (!chat.enabled) return assignmentWarnings(assignedApps);
 
-  if (!chat.enabled) {
-    if (assignedApps.length > 0) {
-      warnings.push({
-        code: 'assignedButDisabled',
-        params: { apps: assignedApps.map(app => app.id).join(', ') }
-      });
-    }
-    // The remaining checks are about the answer in chat, which a workflow
-    // that is not in chat does not give.
-    return warnings;
-  }
-
-  const options = primaryOutputOptions(workflow);
-  const keys = options.map(option => option.value);
+  const ends = endNodesOf(workflow);
+  const flattening = ends.find(end => end.flattens);
+  const keys = primaryOutputOptions(workflow).map(option => option.value);
   const primaryOutput = typeof chat.primaryOutput === 'string' ? chat.primaryOutput.trim() : '';
-
-  if (primaryOutput) {
-    // A dotted path (`_report.markdown`) names a field inside an output.
-    const root = primaryOutput.split('.')[0];
-    if (!keys.includes(root)) {
-      warnings.push({ code: 'primaryOutputUnknown', params: { name: primaryOutput } });
-    }
-    const flattening = (workflow.nodes || []).find(
-      node => node.type === 'end' && FLATTENING_END_FORMATS.has(node.config?.outputFormat)
-    );
-    if (flattening) {
-      warnings.push({
-        code: 'endNodeFormatsOutput',
-        params: { node: flattening.id, format: flattening.config.outputFormat }
-      });
-    }
-  } else {
-    const automatic = automaticChatOutput(keys);
-    const inputs = new Set(
-      (workflow.nodes || [])
-        .filter(n => n.type === 'start')
-        .flatMap(n => n.config?.inputVariables || [])
-        .map(v => v?.name)
-    );
-    if (automatic.mode !== 'field') {
-      warnings.push({ code: 'jsonFallback' });
-    } else if (inputs.has(automatic.field)) {
-      // `text` is a conventional answer name and a common input name: an end
-      // step that passes the input on answers with the user's own text.
-      warnings.push({ code: 'automaticShowsInput', params: { name: automatic.field } });
-    }
-  }
-
-  return warnings;
+  if (primaryOutput) return selectionWarnings(primaryOutput, keys, flattening);
+  // A flattened output is the answer as it is; Automatic picks nothing.
+  return flattening ? [] : automaticWarnings(workflow, keys);
 }
 
 /**
@@ -156,17 +198,20 @@ export function withCleanToolDescription(workflow) {
   if (!description || typeof description !== 'object' || Array.isArray(description)) {
     return workflow;
   }
-  const kept = Object.entries(description).filter(
-    ([, text]) => typeof text === 'string' && text.trim()
-  );
+  const entries = Object.entries(description);
+  const kept = entries.filter(([, text]) => typeof text === 'string' && text.trim());
   // `{}` passes the schema but would still replace the workflow description
   // with an empty one, so it is removed as well.
-  if (kept.length > 0 && kept.length === Object.keys(description).length) return workflow;
+  if (kept.length > 0 && kept.length === entries.length) return workflow;
 
-  const chatIntegration = { ...workflow.chatIntegration };
-  if (kept.length > 0) chatIntegration.toolDescription = Object.fromEntries(kept);
-  else delete chatIntegration.toolDescription;
-  return { ...workflow, chatIntegration };
+  const { toolDescription: _dropped, ...chatIntegration } = workflow.chatIntegration;
+  return {
+    ...workflow,
+    chatIntegration:
+      kept.length > 0
+        ? { ...chatIntegration, toolDescription: Object.fromEntries(kept) }
+        : chatIntegration
+  };
 }
 
 /**

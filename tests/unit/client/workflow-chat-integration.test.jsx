@@ -9,8 +9,10 @@ import {
 import { createStarterWorkflow } from '../../../client/src/features/workflows/editor/workflowEditorUtils.js';
 import {
   CHAT_OUTPUT_FALLBACK_FIELDS,
+  chatAnswerOf,
   fallbackChatOutputField
 } from '../../../shared/workflowChatOutput.js';
+import { workflowResultOf } from '../../../shared/run/runActivity.js';
 import { workflowConfigSchema } from '../../../server/validators/workflowConfigSchema.js';
 
 const node = (id, type, config = {}) => ({
@@ -266,5 +268,111 @@ describe('createStarterWorkflow chat integration', () => {
     const wf = createStarterWorkflow({ id: 'new-one' });
     expect(wf.chatIntegration).toEqual({ enabled: false });
     expect(workflowConfigSchema.safeParse(wf).success).toBe(true);
+  });
+});
+
+describe('end steps that flatten their output', () => {
+  it('text: Automatic shows the formatted value and raises no Automatic warnings', () => {
+    const wf = ruleCheckWorkflow({
+      endConfig: { outputFormat: 'text', outputVariables: ['bericht', 'corrected_text'] },
+      chatIntegration: { enabled: true }
+    });
+    expect(automaticChatOutputFor(wf)).toEqual({ mode: 'flattened', node: 'end', format: 'text' });
+    expect(chatIntegrationWarnings(wf)).toEqual([]);
+  });
+
+  it('raw with a single output: the selection is ignored', () => {
+    const wf = ruleCheckWorkflow({
+      endConfig: { outputFormat: 'raw', outputVariables: ['corrected_text'] },
+      chatIntegration: { enabled: true, primaryOutput: 'corrected_text' }
+    });
+    expect(chatIntegrationWarnings(wf)).toEqual([
+      { code: 'endNodeFormatsOutput', params: { node: 'end', format: 'raw' } }
+    ]);
+  });
+
+  it('raw with several outputs returns them unchanged, so the selection works', () => {
+    const wf = ruleCheckWorkflow({
+      endConfig: { outputFormat: 'raw', outputVariables: ['bericht', 'corrected_text'] },
+      chatIntegration: { enabled: true, primaryOutput: 'corrected_text' }
+    });
+    expect(chatIntegrationWarnings(wf)).toEqual([]);
+    expect(automaticChatOutputFor(wf).mode).toBe('json');
+  });
+
+  it('raw counts the metadata the end step adds', () => {
+    const wf = ruleCheckWorkflow({
+      endConfig: {
+        outputFormat: 'raw',
+        outputVariables: ['corrected_text'],
+        includeMetadata: true
+      },
+      chatIntegration: { enabled: true, primaryOutput: 'corrected_text' }
+    });
+    expect(chatIntegrationWarnings(wf)).toEqual([]);
+  });
+
+  it('raw on an end step that passes every variable on does not flatten', () => {
+    const wf = ruleCheckWorkflow({
+      endConfig: { outputFormat: 'raw' },
+      chatIntegration: { enabled: true, primaryOutput: 'corrected_text' }
+    });
+    expect(chatIntegrationWarnings(wf)).toEqual([]);
+  });
+});
+
+describe('chatAnswerOf', () => {
+  it('returns the selected output, also from a dotted path', () => {
+    expect(chatAnswerOf({ a: 'x', corrected_text: 'Fixed.' }, 'corrected_text')).toEqual({
+      text: 'Fixed.',
+      wholeOutput: false
+    });
+    expect(chatAnswerOf({ _report: { markdown: '# R' } }, '_report.markdown').text).toBe('# R');
+  });
+
+  it('serializes a selected object, which is not the whole-output fallback', () => {
+    expect(chatAnswerOf({ data: { a: 1 }, b: 'y' }, 'data')).toEqual({
+      text: JSON.stringify({ a: 1 }, null, 2),
+      wholeOutput: false
+    });
+  });
+
+  it('falls back to a conventionally named output when the selection is empty or missing', () => {
+    expect(chatAnswerOf({ report: 'The report', corrected_text: '' }, 'corrected_text')).toEqual({
+      text: 'The report',
+      wholeOutput: false
+    });
+    expect(chatAnswerOf({ summary: 's', report: 'r' })).toEqual({ text: 'r', wholeOutput: false });
+  });
+
+  it('answers with the whole output as JSON otherwise, and says so', () => {
+    const output = { bericht: 'b', corrected_text: 'c' };
+    expect(chatAnswerOf(output)).toEqual({
+      text: JSON.stringify(output, null, 2),
+      wholeOutput: true
+    });
+  });
+
+  it('passes non-object outputs through, and has nothing for an empty one', () => {
+    expect(chatAnswerOf('done')).toEqual({ text: 'done', wholeOutput: false });
+    expect(chatAnswerOf(42)).toEqual({ text: '42', wholeOutput: false });
+    expect(chatAnswerOf(undefined)).toEqual({ text: null, wholeOutput: false });
+  });
+});
+
+describe('the whole-output flag on a workflow result', () => {
+  const run = workflow => ({ meta: { executionId: 'wf-1', extra: { workflow } } });
+
+  it('is carried from the run metadata into the message result', () => {
+    expect(workflowResultOf(run({ status: 'completed', wholeOutput: true }))).toEqual({
+      status: 'completed',
+      executionId: 'wf-1',
+      workflowName: undefined,
+      wholeOutput: true
+    });
+  });
+
+  it('is absent for an answer the workflow chose', () => {
+    expect(workflowResultOf(run({ status: 'completed' }))).not.toHaveProperty('wholeOutput');
   });
 });

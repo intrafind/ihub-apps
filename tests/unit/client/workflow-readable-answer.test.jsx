@@ -1,13 +1,14 @@
 import { render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { MemoryRouter } from 'react-router-dom';
-import { readableWorkflowAnswer } from '../../../client/src/features/workflows/utils/readableWorkflowAnswer.js';
+import { workflowAnswerView } from '../../../client/src/features/workflows/utils/readableWorkflowAnswer.js';
 import ChatMessage from '../../../client/src/features/chat/components/ChatMessage';
 
 /**
- * A workflow that answers with its whole output as JSON (no result selected)
- * is shown in the web chat in the answer's output format; the stored answer
- * stays JSON.
+ * A workflow that answers with its whole output as JSON (no result selected,
+ * `wholeOutput` on its result) is shown in the web chat in the answer's output
+ * format; the stored answer stays JSON. An answer the workflow chose itself is
+ * never reformatted.
  */
 
 jest.mock('react-i18next', () => ({
@@ -80,47 +81,58 @@ jest.mock('../../../client/src/features/chat/components/WorkflowStepIndicator', 
 const output = { bericht: '| V1 | ok |', corrected_text: 'Fixed text.', _userHint: 'x' };
 const json = JSON.stringify(output, null, 2);
 
-describe('readableWorkflowAnswer', () => {
+const wholeOutput = { status: 'completed', wholeOutput: true };
+const view = (content, format, workflowResult = wholeOutput) =>
+  workflowAnswerView({ content, workflowResult }, format);
+
+describe('workflowAnswerView', () => {
   it('shows one Markdown section per output, leaving engine fields out', () => {
-    expect(readableWorkflowAnswer(json, 'markdown')).toBe(
-      '### bericht\n\n| V1 | ok |\n\n### corrected text\n\nFixed text.'
-    );
+    expect(view(json, 'markdown')).toEqual({
+      text: '### bericht\n\n| V1 | ok |\n\n### corrected text\n\nFixed text.',
+      preserveBreaks: false
+    });
   });
 
-  it('shows one "name:" line per output in the text format', () => {
-    expect(readableWorkflowAnswer(json, 'text')).toBe(
-      'bericht:\n| V1 | ok |\n\ncorrected text:\nFixed text.'
-    );
+  it('shows one "name:" line per output in the text format, keeping line breaks', () => {
+    expect(view(json, 'text')).toEqual({
+      text: 'bericht:\n| V1 | ok |\n\ncorrected text:\nFixed text.',
+      preserveBreaks: true
+    });
   });
 
   it('shows a single output on its own', () => {
     const single = JSON.stringify({ corrected_text: 'Fixed text.', _userHint: 'x' });
-    expect(readableWorkflowAnswer(single, 'markdown')).toBe('Fixed text.');
-    expect(readableWorkflowAnswer(single, 'text')).toBe('Fixed text.');
+    expect(view(single, 'markdown').text).toBe('Fixed text.');
+    expect(view(single, 'text').text).toBe('Fixed text.');
   });
 
   it('shows structured values as JSON, in a code block for Markdown', () => {
     const answer = JSON.stringify({ a: 'x', counts: { v1: 2 }, n: 3 });
-    expect(readableWorkflowAnswer(answer, 'markdown')).toBe(
+    expect(view(answer, 'markdown').text).toBe(
       '### a\n\nx\n\n### counts\n\n```json\n{\n  "v1": 2\n}\n```\n\n### n\n\n3'
     );
-    expect(readableWorkflowAnswer(answer, 'text')).toBe(
-      'a:\nx\n\ncounts:\n{\n  "v1": 2\n}\n\nn:\n3'
-    );
+    expect(view(answer, 'text').text).toBe('a:\nx\n\ncounts:\n{\n  "v1": 2\n}\n\nn:\n3');
+  });
+
+  it('never reformats an answer the workflow chose itself, even when it is JSON', () => {
+    // A selected object result is JSON-serialized by the runner, without wholeOutput.
+    expect(view(json, 'markdown', { status: 'completed' })).toBeNull();
+    expect(view(json, 'markdown', null)).toBeNull();
   });
 
   it('leaves the JSON format, and anything that is not a JSON object, as it is', () => {
-    expect(readableWorkflowAnswer(json, 'json')).toBeNull();
-    expect(readableWorkflowAnswer('Fixed text.', 'markdown')).toBeNull();
-    expect(readableWorkflowAnswer('{ not json', 'markdown')).toBeNull();
-    expect(readableWorkflowAnswer('[1, 2]', 'markdown')).toBeNull();
-    expect(readableWorkflowAnswer('Intro {"a": "b"}', 'markdown')).toBeNull();
+    expect(view(json, 'json')).toBeNull();
+    expect(view('Fixed text.', 'markdown')).toBeNull();
+    expect(view('{ not json', 'markdown')).toBeNull();
+    expect(view('[1, 2]', 'markdown')).toBeNull();
+    expect(view('Intro {"a": "b"}', 'markdown')).toBeNull();
   });
 
-  it('leaves an answer with nothing left to show as it is', () => {
-    expect(
-      readableWorkflowAnswer(JSON.stringify({ _userHint: 'x', empty: '' }), 'markdown')
-    ).toBeNull();
+  it('has no text when nothing is left to show, instead of showing engine fields', () => {
+    expect(view(JSON.stringify({ _userHint: 'x', empty: '' }), 'markdown')).toEqual({
+      text: null,
+      preserveBreaks: false
+    });
   });
 });
 
@@ -129,7 +141,12 @@ describe('ChatMessage with a JSON workflow answer', () => {
     id: 'msg-wf',
     role: 'assistant',
     content: json,
-    workflowResult: { status: 'completed', executionId: 'wf-1', workflowName: 'Rule check' },
+    workflowResult: {
+      status: 'completed',
+      executionId: 'wf-1',
+      workflowName: 'Rule check',
+      wholeOutput: true
+    },
     outputFormat: 'markdown'
   };
 
@@ -172,5 +189,18 @@ describe('ChatMessage with a JSON workflow answer', () => {
   it('leaves the same JSON from a model answer untouched', () => {
     renderMessage({ workflowResult: undefined });
     expect(screen.getByTestId('content')).toHaveTextContent('"bericht": "| V1 | ok |"');
+  });
+
+  it('leaves a JSON answer the workflow selected itself untouched', () => {
+    renderMessage({ workflowResult: { status: 'completed', executionId: 'wf-1' } });
+    expect(screen.getByTestId('content')).toHaveTextContent('"bericht": "| V1 | ok |"');
+  });
+
+  it('says so when no output is left to show', () => {
+    renderMessage({ content: JSON.stringify({ _userHint: 'x' }) });
+    expect(screen.getByTestId('content')).toHaveTextContent(
+      'The workflow finished without output to show.'
+    );
+    expect(screen.getByTestId('content')).not.toHaveTextContent('_userHint');
   });
 });

@@ -25,7 +25,7 @@ import {
   getStreamRun
 } from '../services/loop/RunStream.js';
 import { SSE_V2_EVENTS } from '../../shared/runEvents.js';
-import { CHAT_OUTPUT_FALLBACK_FIELDS } from '../../shared/workflowChatOutput.js';
+import { chatAnswerOf } from '../../shared/workflowChatOutput.js';
 import { hasChatClient } from '../sse.js';
 import { createPresenceMap, hasRemote, publish, subscribe } from '../clusterBus.js';
 import configCache from '../configCache.js';
@@ -162,11 +162,6 @@ function resolveLocalized(value, lang = 'en') {
 }
 
 /**
- * Extract a human-readable string from workflow output.
- * If the output is already a string, return it.
- * If it's an object, look for common report/content fields.
- */
-/**
  * Coerce an error-shaped value into a readable string. Workflow events may
  * carry `error` as a string, a plain {message,code,...} object, or a real
  * Error instance — direct interpolation produces `[object Object]` for the
@@ -188,43 +183,6 @@ function coerceErrorMessage(value) {
   } catch {
     return 'Unknown error';
   }
-}
-
-function getNestedField(obj, path) {
-  if (!obj || !path || typeof path !== 'string') return undefined;
-  const parts = path.split('.');
-  let cur = obj;
-  for (const p of parts) {
-    if (cur === null || cur === undefined) return undefined;
-    cur = cur[p];
-  }
-  return cur;
-}
-
-function extractReadableOutput(output, primaryOutput) {
-  if (!output) return null;
-  if (typeof output === 'string') return output;
-  if (typeof output !== 'object') return String(output);
-
-  // Workflow-declared primary output field. Supports dot-notation paths
-  // (e.g. "_report.markdown") so workflows can emit a structured object
-  // and still expose a flat string to the chat output.
-  const primaryVal = primaryOutput ? getNestedField(output, primaryOutput) : undefined;
-
-  if (primaryVal !== undefined && primaryVal !== null) {
-    if (typeof primaryVal === 'string' && primaryVal.length > 0) return primaryVal;
-    if (typeof primaryVal === 'object') return JSON.stringify(primaryVal, null, 2);
-  }
-
-  // Fallback: look for common content field names
-  for (const field of CHAT_OUTPUT_FALLBACK_FIELDS) {
-    if (typeof output[field] === 'string' && output[field].length > 0) {
-      return output[field];
-    }
-  }
-
-  // Fallback: JSON dump
-  return JSON.stringify(output, null, 2);
 }
 
 /**
@@ -438,7 +396,7 @@ export default async function workflowRunner(params = {}) {
       progress: { workflowName, chatVisible: chatVisible !== false }
     });
   };
-  const emitResult = ({ status, error, outputFormat }) => {
+  const emitResult = ({ status, error, outputFormat, wholeOutput }) => {
     if (!stream) return;
     stream.emit(SSE_V2_EVENTS.META, {
       executionId,
@@ -447,6 +405,9 @@ export default async function workflowRunner(params = {}) {
           status,
           workflowName,
           outputFormat: outputFormat || 'markdown',
+          // The answer is the whole end output as JSON (no result selected,
+          // no conventionally named output): the web chat may reformat it.
+          ...(wholeOutput ? { wholeOutput: true } : {}),
           ...(error ? { error: String(error) } : {})
         }
       }
@@ -649,13 +610,14 @@ export default async function workflowRunner(params = {}) {
           /* non-fatal */
         }
 
-        const primaryOutput = workflow.chatIntegration?.primaryOutput;
-        const outputText = event.output ? extractReadableOutput(event.output, primaryOutput) : null;
+        const answer = chatAnswerOf(event.output, workflow.chatIntegration?.primaryOutput);
+        const outputText = answer.text;
 
         if (chatId) {
           emitResult({
             status: 'completed',
-            outputFormat: workflow.chatIntegration?.outputFormat || 'markdown'
+            outputFormat: workflow.chatIntegration?.outputFormat || 'markdown',
+            wholeOutput: answer.wholeOutput
           });
 
           // In passthrough mode the chat turn streams the answer and ends the
@@ -672,6 +634,7 @@ export default async function workflowRunner(params = {}) {
               status: 'completed',
               outputText,
               outputFormat: workflow.chatIntegration?.outputFormat || 'markdown',
+              wholeOutput: answer.wholeOutput,
               passthrough
             });
           }

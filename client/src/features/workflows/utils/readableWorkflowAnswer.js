@@ -1,60 +1,71 @@
 import { getDisplayableOutput } from './filterInternalFields';
 
 /** Section title for an output: `corrected_text` → `corrected text`, as on the execution page. */
-const titleOf = key => key.replace(/_/g, ' ');
+const titleOf = key => key.replaceAll('_', ' ');
 
-/**
- * How the web chat shows a workflow answer that is a JSON object, in the
- * answer's output format.
- *
- * Without a selected result (`chatIntegration.primaryOutput`), a workflow
- * whose outputs have no conventional answer name answers with its whole
- * output as JSON (shared/workflowChatOutput.js). That text is what is stored
- * and what API, MCP and A2A callers receive, so it stays as it is; only the
- * web chat shows it the way the chosen format asks for:
- *
- * - `markdown`: one section per output, its name as the heading; text values
- *   as they are, structured values as a JSON code block;
- * - `text`: one `name:` line per output, followed by its value;
- * - a single output is shown on its own, without a heading.
- *
- * Engine fields (`_…` and the like) are left out, as on the execution page.
- *
- * @param {string} content - The answer as stored
- * @param {string} format - The answer's output format
- * @returns {string|null} The text to show, or null to show the answer as it is:
- *   for the JSON format, for anything that is not a JSON object, and when no
- *   output is left to show
- */
-export function readableWorkflowAnswer(content, format) {
-  if (format !== 'markdown' && format !== 'text') return null;
-  if (typeof content !== 'string') return null;
-  const trimmed = content.trim();
-  if (!trimmed.startsWith('{')) return null;
-
-  let parsed;
+/** The answer parsed as a plain JSON object, or null. */
+function parseObject(text) {
+  if (typeof text !== 'string' || !text.trim().startsWith('{')) return null;
   try {
-    parsed = JSON.parse(trimmed);
+    const parsed = JSON.parse(text);
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : null;
   } catch {
     return null;
   }
-  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
+}
 
-  const entries = Object.entries(getDisplayableOutput(parsed)).filter(
+/** The outputs worth showing: no engine fields, no empty values. */
+function shownEntries(output) {
+  return Object.entries(getDisplayableOutput(output)).filter(
     ([, value]) => value !== undefined && value !== null && value !== ''
   );
-  if (entries.length === 0) return null;
+}
 
-  const valueText = value => {
-    if (typeof value === 'string') return value;
-    if (typeof value !== 'object') return String(value);
-    const json = JSON.stringify(value, null, 2);
-    return format === 'markdown' ? '```json\n' + json + '\n```' : json;
+function valueText(value, format) {
+  if (typeof value === 'string') return value;
+  if (typeof value !== 'object') return String(value);
+  const json = JSON.stringify(value, null, 2);
+  return format === 'markdown' ? `\`\`\`json\n${json}\n\`\`\`` : json;
+}
+
+/**
+ * The outputs in the answer's format: one Markdown section, or one `name:`
+ * line, per output; a single output on its own.
+ */
+function formatEntries(entries, format) {
+  if (entries.length === 1) return valueText(entries[0][1], format);
+  const block =
+    format === 'markdown'
+      ? ([key, value]) => `### ${titleOf(key)}\n\n${valueText(value, format)}`
+      : ([key, value]) => `${titleOf(key)}:\n${valueText(value, format)}`;
+  return entries.map(block).join('\n\n');
+}
+
+/**
+ * How the web chat shows a workflow answer that is the workflow's whole
+ * output as JSON — the fallback when no result is selected and no output has
+ * a conventional answer name (`wholeOutput` on the result, set by the runner;
+ * see shared/workflowChatOutput.js). An answer the workflow chose itself is
+ * never reformatted, even when it is JSON.
+ *
+ * The stored answer, and what API, MCP and A2A callers receive, stays JSON;
+ * only the web chat shows it the way the output format asks for:
+ * Markdown — one section per output; text — one `name:` line per output;
+ * JSON — unchanged. Engine fields are left out, as on the execution page.
+ *
+ * @param {object} message - The chat message
+ * @param {string} format - The answer's output format
+ * @returns {{text: string|null, preserveBreaks: boolean}|null} null to show the
+ *   answer as it is; `text: null` when no output is left to show
+ */
+export function workflowAnswerView(message, format) {
+  if (!message?.workflowResult?.wholeOutput) return null;
+  if (format !== 'markdown' && format !== 'text') return null;
+  const output = parseObject(message.content);
+  if (!output) return null;
+  const entries = shownEntries(output);
+  return {
+    text: entries.length > 0 ? formatEntries(entries, format) : null,
+    preserveBreaks: format === 'text'
   };
-
-  if (entries.length === 1) return valueText(entries[0][1]);
-  if (format === 'markdown') {
-    return entries.map(([key, value]) => `### ${titleOf(key)}\n\n${valueText(value)}`).join('\n\n');
-  }
-  return entries.map(([key, value]) => `${titleOf(key)}:\n${valueText(value)}`).join('\n\n');
 }

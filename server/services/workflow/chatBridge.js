@@ -46,7 +46,7 @@ function evictExpired() {
  * Stash a finished workflow's chat payload for a disconnected client.
  *
  * @param {string} chatId
- * @param {Object} payload - { workflowName, executionId, status, outputText, outputFormat, errorMsg, isCancelled }
+ * @param {Object} payload - { workflowName, executionId, status, outputText, outputFormat, wholeOutput, errorMsg, isCancelled }
  */
 export function recordPendingFinish(chatId, payload) {
   if (!chatId) return;
