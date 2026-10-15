@@ -5,6 +5,9 @@
  * what stopped it, who, from where and when. This is what the viewer reads.
  */
 
+/** The actor types that are a person: shown by name or as "you". */
+const PERSON_TYPES = new Set(['user', 'admin']);
+
 /**
  * Who stopped it, as the viewer may read it: "you", an administrator, or (to
  * administrators) the user.
@@ -18,8 +21,6 @@ function actorPhrase(t, actor, viewer) {
   if (isViewer(actor, viewer)) return t('abortCauses.byYou', 'you');
   return nameForAdmin(t, actor, viewer) || genericPhrase(t, actor);
 }
-
-const PERSON_TYPES = new Set(['user', 'admin']);
 
 /** What anyone may be told: an administrator acted; a user's identity stays private. */
 function genericPhrase(t, actor) {
