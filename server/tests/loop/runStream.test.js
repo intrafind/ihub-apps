@@ -1017,6 +1017,22 @@ test('projectLedgerEvent: run/end → run/ended', () => {
   });
 });
 
+test('projectLedgerEvent: an aborted run/end keeps who stopped it', () => {
+  const cause = {
+    kind: 'user_stop',
+    message: 'Stopped from the chat',
+    at: '2026-09-02T12:00:00.000Z',
+    actor: { type: 'user', id: 'user-1' },
+    origin: { via: 'POST /stop', source: 'stop-button' }
+  };
+  const [ended] = projected(RUN_LOG_EVENTS.RUN_END, {
+    status: 'aborted',
+    finishReason: 'connection_closed',
+    cause
+  });
+  assert.deepEqual(ended.data, { status: 'aborted', finishReason: 'connection_closed', cause });
+});
+
 test('projectLedgerEvent: run/paused, run/resumed', () => {
   const [paused] = projected(RUN_LOG_EVENTS.RUN_PAUSED, { reason: 'manual', interactionId: 'i1' });
   assert.equal(paused.type, RUN_PAUSED);

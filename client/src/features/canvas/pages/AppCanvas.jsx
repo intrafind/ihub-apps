@@ -351,13 +351,6 @@ export default function AppCanvas() {
     };
   }, [appId, t]);
 
-  // Cleanup event source when component unmounts
-  useEffect(() => {
-    return () => {
-      cancelGeneration();
-    };
-  }, [cancelGeneration]);
-
   // Save settings when they change (same as AppChat)
   useEffect(() => {
     if (app) {

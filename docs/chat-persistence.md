@@ -199,7 +199,9 @@ Leaving a durable chat — opening another one, or closing the tab — does
 keeps being written and is there when you come back. Only the Stop button
 cancels a turn, and it is deliberately unconditional so that it reaches a turn
 whose client is already gone. An ephemeral chat still stops on leaving, or a
-generation nobody will ever read would keep billing tokens.
+generation nobody will ever read would keep billing tokens — but the server does
+that when it sees the connection close; the browser never sends a stop of its
+own.
 
 ### "Answered while you were away"
 
@@ -360,13 +362,42 @@ What still stops a run:
   without an SSE stream too. When it finds nothing in flight — the turn ended
   in the meantime — it answers 404 rather than reporting a stop that did not
   happen. It is also the *only* thing in the UI that stops a turn: opening
-  another chat releases this tab's stream without asking the server to stop,
-  because a persisted turn whose client is gone is precisely the turn
-  durability is for.
+  another chat, reconnecting, timing out, sending a follow-up and leaving the
+  page release this tab's stream (`detachEventSource`) without asking the server
+  to stop, because a persisted turn whose client is gone is precisely the turn
+  durability is for. The request carries the control that sent it (`source`),
+  and the run records it — see [Who stopped a turn](#who-stopped-a-turn).
 - **The model's own output cap** (`maxOutputTokens`) and the agent loop's round
   cap, unchanged.
 - **A server restart**, which is not a graceful stop — see
   [Operational notes](#operational-notes-and-limits).
+
+### Who stopped a turn
+
+Every abort of a turn carries a cause (`server/services/chat/abortCause.js`),
+passed as the reason of the turn's `AbortController` and relayed to the worker
+running it: what stopped it (`user_stop`, `run_stop`, `task_run_cancelled`,
+`task_deleted`, `task_disabled`, `chat_deleted`, `user_deleted`, `superseded`,
+`client_disconnected`, `client_evicted`, `api_client_closed`, `lease_lost`), the
+actor (a user, an administrator or the system), the code path that decided and
+the control that asked, the worker, and the time. An abort without a cause is
+recorded as `unknown`.
+
+The cause is on the ledger's `run/end` and on `run/ended`, on the stored
+assistant message (`error: { code: 'ABORTED', message, cause }`), on a scheduled
+run's `reason.cause`, and in one server log line per stop (`Chat stop requested`,
+`Aborted request`) that also has the request's IP and user agent — those two are
+never stored. The actor id goes through the identity mode of what was stopped
+(the chat's, the task's, the run's), so a pseudonymized chat or task never
+carries a raw user id. When the person who stopped it is the owner, the cause
+says so (`actor.owner`), so the owner reads "you" even where the id is a
+pseudonym the browser cannot match to its own.
+
+A shared chat keeps only the explanation of a stop (`kind` and `message`): the
+actor, the code path and the worker stay with the owner, in the snapshot and in
+what a viewer receives. A follow-up message supersedes a turn still running on
+another worker of a cluster; the relayed abort names the moment the new turn
+started, so a late arrival never cancels it.
 
 Only durable turns are protected. An anonymous or ephemeral turn is aborted on
 disconnect exactly as before, so the extra spend is bounded to authenticated,

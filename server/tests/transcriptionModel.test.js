@@ -85,6 +85,27 @@ describe('appConfigSchema — videoUpload / transcription blocks', () => {
     expect(r.data.upload.videoUpload.maxFileSizeMB).toBe(50);
   });
 
+  // The browser reads only the index and the audio of an MP4/MOV, so a video may
+  // be as large as 50 GB; the other types keep their bounds
+  describe('upload size bounds', () => {
+    const withUpload = upload =>
+      appConfigSchema.safeParse({ ...app, upload: { enabled: true, ...upload } });
+
+    test('a video can be 50 GB (51200 MB), not more', () => {
+      expect(withUpload({ videoUpload: { maxFileSizeMB: 51200 } }).success).toBe(true);
+      expect(withUpload({ videoUpload: { maxFileSizeMB: 51201 } }).success).toBe(false);
+    });
+
+    test('audio, images and files keep their bounds', () => {
+      expect(withUpload({ audioUpload: { maxFileSizeMB: 2000 } }).success).toBe(true);
+      expect(withUpload({ audioUpload: { maxFileSizeMB: 2001 } }).success).toBe(false);
+      expect(withUpload({ imageUpload: { maxFileSizeMB: 100 } }).success).toBe(true);
+      expect(withUpload({ imageUpload: { maxFileSizeMB: 101 } }).success).toBe(false);
+      expect(withUpload({ fileUpload: { maxFileSizeMB: 100 } }).success).toBe(true);
+      expect(withUpload({ fileUpload: { maxFileSizeMB: 101 } }).success).toBe(false);
+    });
+  });
+
   test('transcription block survives parsing with defaults', () => {
     const r = appConfigSchema.safeParse({
       ...app,
@@ -94,8 +115,20 @@ describe('appConfigSchema — videoUpload / transcription blocks', () => {
     expect(r.data.transcription.enabled).toBe(true);
     expect(r.data.transcription.modelId).toBe('voxtral-mini-realtime');
     expect(r.data.transcription.streaming).toBe(true);
-    expect(r.data.transcription.maxDurationSeconds).toBe(900);
+    // An hour: a 30-minute video transcribes out of the box
+    expect(r.data.transcription.maxDurationSeconds).toBe(3600);
     expect(r.data.transcription.inputs).toEqual({ upload: true, record: true, video: true });
+  });
+
+  test('an app that sets its own transcription length keeps it, up to two hours', () => {
+    const parse = maxDurationSeconds =>
+      appConfigSchema.safeParse({
+        ...app,
+        transcription: { enabled: true, modelId: 'm', maxDurationSeconds }
+      });
+    expect(parse(900).data.transcription.maxDurationSeconds).toBe(900);
+    expect(parse(7200).success).toBe(true);
+    expect(parse(7201).success).toBe(false);
   });
 });
 

@@ -18,7 +18,9 @@
     "loadingCount": "{{count}} werden geladen…",
     "showList": "Dateiliste anzeigen",
     "hideList": "Dateiliste ausblenden",
-    "regionLabel": "Angehängte Dateien"
+    "regionLabel": "Angehängte Dateien",
+    "saveAudio": "Audio speichern",
+    "saveAudioNamed": "Audio als {{name}} speichern"
   },
   "app": {
     "title": "iHub Apps",
@@ -358,6 +360,7 @@
         "copy": "Kopieren",
         "copied": "Kopiert!",
         "copyNotSupported": "Kopieren wird für dieses Format nicht unterstützt. Bitte verwenden Sie stattdessen Download.",
+        "downloadFailed": "Der Download von {{filename}} konnte nicht gestartet werden",
         "pdfOptions": "PDF-Optionen",
         "watermarkPlaceholder": "Wasserzeichentext eingeben",
         "formats": {
@@ -491,7 +494,8 @@
     "reconnected": "Verbindung wiederhergestellt"
   },
   "message": {
-    "generationCancelled": " [Generierung abgebrochen]"
+    "generationCancelled": " [Generierung abgebrochen]",
+    "generationCancelledBy": "Generierung abgebrochen: {{cause}}"
   },
   "languages": {
     "en": "Englisch",
@@ -603,6 +607,9 @@
     "videoUploadDisabled": "Video-Upload wird vom ausgewählten Modell nicht unterstützt. Bitte wählen Sie ein anderes Modell.",
     "audioDecodeError": "Audio konnte nicht aus dem Video dekodiert werden. Das Videoformat oder der Codec wird möglicherweise von Ihrem Browser nicht unterstützt.",
     "videoAudioExtractionError": "Fehler beim Extrahieren von Audio aus dem Video. Bitte stellen Sie sicher, dass das Video eine Audiospur enthält.",
+    "videoUnsupportedLargeContainer": "Videos über 2 GB werden als MP4 oder MOV unterstützt. Konvertieren Sie dieses Video in MP4 oder MOV oder verwenden Sie eine kleinere Datei.",
+    "videoLargeAudioUnsupported": "Der Ton dieses großen Videos konnte nicht gelesen werden. Videos über 2 GB benötigen AAC- oder unkomprimierten (PCM-)Ton in einer MP4- oder MOV-Datei sowie einen Browser, der diesen Ton abspielen kann.",
+    "videoTooLargeToAttach": "Dieses Video ist zu groß, um unverändert angehängt zu werden. Aktivieren Sie die Audio-Extraktion für die App oder verwenden Sie ein Video unter 2 GB.",
     "fileTooLarge": "Datei zu groß. Maximale Größe beträgt {{maxSize}}MB.",
     "unsupportedFormat": "Nicht unterstütztes Dateiformat. Bitte verwenden Sie: {{formats}}",
     "invalidImage": "Ungültige Bilddatei",
@@ -3182,6 +3189,7 @@
         "speakerNotesInclude": "Sprechernotizen senden",
         "extractAudioFromVideo": "Audiospur extrahieren (für Transkription / Audiomodelle)",
         "maxVideoSize": "Maximale Videodateigröße (MB)",
+        "maxVideoSizeHelp": "Bis zu 51200 MB (50 GB). Mit Audio-Extraktion kann eine MP4- oder MOV-Datei beliebig groß sein: Es wird nur ihr Ton gelesen. Andere Formate (WebM, MKV, ...) und Videos, die unverändert gesendet werden, funktionieren bis 2 GB. Jeder Dateityp hat sein eigenes Limit.",
         "supportedVideoFormats": "Unterstützte Videoformate",
         "transcriptionDefaultEnabled": "Standardmäßig aktiv (Nutzer können es pro Chat umschalten)",
         "appsAsTools": "Apps als Tools",
@@ -4029,7 +4037,26 @@
       "processing": "Datei wird verarbeitet...",
       "uploadFile": "Datei hochladen",
       "uploadFiles": "Dateien hochladen",
-      "supportedFormats": "Unterstützt: {{formats}} (max {{maxSize}}MB)"
+      "supportedFormats": "Unterstützt: {{formats}} (max {{maxSize}}MB)",
+      "stop": "Stopp",
+      "stopProcessing": "Verarbeitung von {{fileName}} stoppen",
+      "progressFor": "Fortschritt von {{fileName}}",
+      "fileOfTotal": "Datei {{current}} von {{total}}",
+      "stage": {
+        "read": "Datei wird gelesen…",
+        "parse": "Dokument wird geöffnet…",
+        "extract": "Text wird extrahiert…",
+        "convert": "Datei wird konvertiert…",
+        "render": "Seiten werden gerendert…",
+        "decode": "Audio wird extrahiert…",
+        "resample": "Audio wird konvertiert…",
+        "encode": "Audio wird kodiert…",
+        "finalize": "Wird abgeschlossen…"
+      },
+      "detail": {
+        "page": "Seite {{current}} von {{total}}",
+        "slide": "Folie {{current}} von {{total}}"
+      }
     }
   },
   "feedback": {
@@ -4876,6 +4903,8 @@
       "aborted": "Die Transkription wurde abgebrochen.",
       "serverTooLong": "Diese Aufnahme ist zu lang für das konfigurierte Transkriptionsmodell. Bitte teilen Sie sie in kürzere Abschnitte auf.",
       "serverBusy": "Der Transkriptionsdienst ist derzeit ausgelastet. Bitte versuchen Sie es in einem Moment erneut.",
+      "notPermitted": "Sie haben keine Berechtigung, dieses Transkriptionsmodell zu verwenden. Bitte wenden Sie sich an Ihren Administrator.",
+      "sessionLimit": "Die Transkriptionssitzung hat ihre maximale Dauer erreicht. Bitte teilen Sie die Aufnahme in kürzere Abschnitte auf.",
       "service": "Transkription fehlgeschlagen.",
       "serviceDetail": "Transkription fehlgeschlagen: {{detail}}",
       "generic": "Transkription fehlgeschlagen. Bitte versuchen Sie es erneut.",
@@ -5478,6 +5507,24 @@
       "adding": "Wird hinzugefügt…",
       "addToMine": "Zu meinen Skills hinzufügen"
     }
+  },
+  "abortCauses": {
+    "user_stop": "Im Chat gestoppt",
+    "run_stop": "Über die Run-API gestoppt",
+    "task_run_cancelled": "Vom Besitzer abgebrochen",
+    "task_deleted": "Die Aufgabe wurde gelöscht",
+    "task_disabled": "Von einem Administrator deaktiviert",
+    "chat_deleted": "Der Chat wurde gelöscht",
+    "user_deleted": "Der Benutzer wurde gelöscht",
+    "superseded": "Durch eine neuere Nachricht im selben Chat ersetzt",
+    "client_disconnected": "Der Browser hat die Verbindung getrennt",
+    "client_evicted": "Die Verbindung des Browsers ist abgelaufen",
+    "api_client_closed": "Der API-Client hat die Verbindung geschlossen",
+    "lease_lost": "Der Lauf hat seine Ausführungssperre an einen anderen Worker verloren",
+    "unknown": "Gestoppt (die Ursache wurde nicht erfasst)",
+    "byYou": "Sie",
+    "byAdmin": "ein Administrator",
+    "byUser": "Benutzer {{id}}"
   },
   "scheduledTasks": {
     "allowedActions": "Ohne Rückfrage erlaubt",

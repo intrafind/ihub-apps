@@ -16,6 +16,12 @@
 import { createPresenceMap, hasRemote, publish, subscribe } from './clusterBus.js';
 import { setEnvelopeDelivery, resetStream, stampSeq } from './services/loop/RunStream.js';
 import logger from './utils/logger.js';
+import {
+  abortCause,
+  abortReason,
+  describeCause,
+  normalizeAbortCause
+} from './services/chat/abortCause.js';
 
 /** streamId → { response, lastActivity, appId? } for locally held SSE streams. */
 export const clients = createPresenceMap('sse');
@@ -93,7 +99,10 @@ export function deliverEnvelope(streamId, envelope) {
       error: error?.message || String(error)
     });
     try {
-      abortChatRequestOnDisconnect(streamId);
+      abortChatRequestOnDisconnect(
+        streamId,
+        abortCause('client_disconnected', { via: 'SSE write failed' })
+      );
     } catch (abortErr) {
       logger.error('Error aborting activeRequest after SSE write failure', {
         component: 'SSE',
@@ -212,14 +221,29 @@ export function isChatDurable(chatId) {
 /**
  * Abort the in-flight model turn for a chat, wherever it is running.
  *
+ * The cause is the abort reason: the turn reads it back and records who
+ * stopped it, from where and when (`services/chat/abortCause.js`). A caller
+ * that passes none is recorded as `unknown`.
+ *
+ * @param {string} chatId
+ * @param {Object} [cause] - From `abortCause()` / `userAbortCause()`.
+ * @param {Object} [options]
+ * @param {number} [options.before] - Epoch ms. Only a turn that started at or before it is
+ *   aborted, so an abort that arrives late never cancels a turn that began after it was
+ *   decided (a superseding turn names the moment it started).
  * @returns {boolean} True if the abort was applied locally or relayed.
  */
-export function abortChatRequest(chatId) {
+export function abortChatRequest(chatId, cause, { before } = {}) {
+  const normalized = normalizeAbortCause(cause);
   if (activeRequests.has(chatId)) {
     try {
-      activeRequests.get(chatId).abort();
+      activeRequests.get(chatId).abort(abortReason(normalized));
       activeRequests.delete(chatId);
-      logger.info('Aborted request', { component: 'SSE', chatId });
+      logger.info('Aborted request', {
+        component: 'SSE',
+        chatId,
+        ...describeCause(normalized)
+      });
     } catch (error) {
       logger.error('Error aborting request', {
         component: 'SSE',
@@ -230,7 +254,16 @@ export function abortChatRequest(chatId) {
     return true;
   }
   if (hasRemote('request', chatId)) {
-    publish(ABORT_CHANNEL, { chatId }, { kind: 'request', key: chatId });
+    publish(
+      ABORT_CHANNEL,
+      { chatId, cause: normalized, ...(before ? { before } : {}) },
+      { kind: 'request', key: chatId }
+    );
+    logger.info('Abort relayed to the worker running the request', {
+      component: 'SSE',
+      chatId,
+      ...describeCause(normalized)
+    });
     return true;
   }
   return false;
@@ -246,14 +279,18 @@ export function abortChatRequest(chatId) {
  * button has to work on a durable turn too.
  *
  * @param {string} chatId
+ * @param {Object} [cause] - Defaults to `client_disconnected`.
  * @returns {boolean} True if an abort was applied locally or relayed.
  */
-export function abortChatRequestOnDisconnect(chatId) {
+export function abortChatRequestOnDisconnect(chatId, cause) {
   if (isChatDurable(chatId)) {
     logger.info('Client gone; durable chat turn keeps running', { component: 'SSE', chatId });
     return false;
   }
-  return abortChatRequest(chatId);
+  return abortChatRequest(
+    chatId,
+    cause || abortCause('client_disconnected', { via: 'SSE connection closed' })
+  );
 }
 
 /**
@@ -286,20 +323,37 @@ export function closeChatClient(chatId) {
   return false;
 }
 
-subscribe(ABORT_CHANNEL, ({ chatId }) => {
-  if (!activeRequests.has(chatId)) return;
+/**
+ * Apply an abort another worker relayed to the turn running here.
+ *
+ * @param {{chatId: string, cause?: Object, before?: number}} message
+ * @returns {boolean} Whether a turn was aborted.
+ */
+export function applyRelayedAbort({ chatId, cause, before }) {
+  if (!activeRequests.has(chatId)) return false;
+  // A turn that began after the abort was decided is not the one it meant.
+  if (before && activeRequests.get(chatId).startedAt > before) return false;
   try {
-    activeRequests.get(chatId).abort();
+    const normalized = normalizeAbortCause(cause);
+    activeRequests.get(chatId).abort(abortReason(normalized));
     activeRequests.delete(chatId);
-    logger.info('Aborted request on behalf of another worker', { component: 'SSE', chatId });
+    logger.info('Aborted request on behalf of another worker', {
+      component: 'SSE',
+      chatId,
+      ...describeCause(normalized)
+    });
+    return true;
   } catch (error) {
     logger.error('Error aborting relayed request', {
       component: 'SSE',
       chatId,
       error: error.message
     });
+    return false;
   }
-});
+}
+
+subscribe(ABORT_CHANNEL, applyRelayedAbort);
 
 subscribe(CLOSE_CHANNEL, ({ chatId }) => {
   const client = clients.get(chatId);

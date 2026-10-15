@@ -1434,7 +1434,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
   const { handleVoiceInput, handleVoiceCommand } = useVoiceCommands({
     messages,
     clearChat: () => {
-      cancelGeneration();
+      cancelGeneration('voice');
       clearMessages();
       resetConversationState();
       startNewChat();
@@ -1843,7 +1843,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
         t('pages.appChat.confirmClear', 'Are you sure you want to clear the entire chat history?')
       )
     ) {
-      cancelGeneration();
+      cancelGeneration('clear-chat');
 
       if (compareModeActive) {
         // Clear every compare panel (regenerates their chatIds internally)
@@ -2047,7 +2047,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
           finishRecording((err.partialText || '').trim(), err);
         },
         onTick: setRecordElapsed,
-        maxDurationSeconds: app?.transcription?.maxDurationSeconds || 900,
+        maxDurationSeconds: app?.transcription?.maxDurationSeconds || 3600,
         onMaxDuration: () => {
           if (liveSessionRef.current === session) stopRecordingAndSend();
         }
@@ -2120,7 +2120,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
         return;
       }
       const streaming = app?.transcription?.streaming !== false;
-      const maxDurationSeconds = app?.transcription?.maxDurationSeconds || 900;
+      const maxDurationSeconds = app?.transcription?.maxDurationSeconds || 3600;
 
       // The composer's content is the message being built now.
       setInput('');
@@ -2149,7 +2149,12 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
             name: name || t('transcription.recording', 'Recording')
           });
           showLiveTranscript(compose(label));
-          const audioBuffer = await decodeAudioFileToBuffer(file.base64);
+          // Audio extracted from a video keeps its WAV Blob: decoding that
+          // skips re-parsing the base64 data URL. Anything else, or an
+          // attachment restored from a stored message, only has the base64.
+          const audioBuffer = await decodeAudioFileToBuffer(
+            file.blob instanceof Blob ? file.blob : file.base64
+          );
           if (audioBuffer?.duration > maxDurationSeconds) {
             throw Object.assign(new Error('too-long'), {
               code: 'too-long',
@@ -2254,6 +2259,11 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
    */
   const handleSubmit = async (e, startFormMessage = null) => {
     e.preventDefault();
+    // An attachment is still being processed (e.g. the audio of a video is
+    // extracted), in whichever composer it was added: the message would go
+    // without it. Each composer holds back its own Send; this is the backstop
+    // for the one that was not told.
+    if (fileUploadHandler.isAttachmentProcessing) return;
     const typed = startFormMessage ?? input;
 
     // While recording, "send" means: finish the recording and send what was
@@ -2659,6 +2669,10 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
           ? setTranscriptionEnabled
           : undefined,
       onFileSelect: fileUploadHandler.handleFileSelect,
+      // The phone and the desktop layout each mount a composer, hidden by CSS
+      // only: all of them have to know that an attachment is being processed
+      isAttachmentProcessing: fileUploadHandler.isAttachmentProcessing,
+      onAttachmentProcessingChange: fileUploadHandler.setAttachmentProcessing,
       uploadConfig: fileUploadHandler.createUploadConfig(app, currentModel),
       // While recording, Send stops the recording and sends it — with or
       // without anything typed.
@@ -2746,6 +2760,8 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
             )}
             selectedFile={fileUploadHandler.selectedFile}
             onFileSelect={fileUploadHandler.handleFileSelect}
+            isAttachmentProcessing={fileUploadHandler.isAttachmentProcessing}
+            onAttachmentProcessingChange={fileUploadHandler.setAttachmentProcessing}
             onSubmit={handleStartFormSubmit}
             canSubmit={
               startFormMessage.trim() !== '' ||

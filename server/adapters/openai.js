@@ -1,129 +1,21 @@
 /**
  * OpenAI API adapter
  */
-import { convertToolsFromGeneric, withSerializedToolArguments } from './toolCalling/index.js';
-import {
-  modelConsumesThoughtSignature,
-  stripThoughtSignatureExtraContent
-} from './toolCalling/thoughtSignatures.js';
+import { convertToolsFromGeneric } from './toolCalling/index.js';
 import { BaseAdapter } from './BaseAdapter.js';
+import { formatOpenAICompatibleMessages } from './openaiCompatibleMessages.js';
 import logger from '../utils/logger.js';
 import modelDiscoveryService from '../services/ModelDiscoveryService.js';
 
 class OpenAIAdapterClass extends BaseAdapter {
   /**
-   * Map audio MIME type to OpenAI format string
-   * @param {string} mimeType - MIME type (e.g., 'audio/wav', 'audio/mpeg')
-   * @returns {string} OpenAI format string (e.g., 'wav', 'mp3')
-   */
-  getAudioFormat(mimeType) {
-    const formatMap = {
-      'audio/wav': 'wav',
-      'audio/mpeg': 'mp3',
-      'audio/mp3': 'mp3',
-      'audio/flac': 'flac',
-      'audio/ogg': 'ogg',
-      'audio/mp4': 'mp4',
-      'audio/webm': 'webm'
-    };
-    return formatMap[mimeType] || 'mp3';
-  }
-
-  /**
    * Format messages for OpenAI API, including handling image and audio data
    * @param {Array} messages - Messages to format
+   * @param {Object} model - Target model config
    * @returns {Array} Formatted messages for OpenAI API
    */
   formatMessages(messages, model) {
-    const keepExtraContent = modelConsumesThoughtSignature(model);
-    const formattedMessages = messages.map(message => {
-      const content = message.content;
-
-      // Base message with role and optional tool fields
-      const base = { role: message.role };
-      // Gemini's `extra_content` thought signature is a Google vendor extension.
-      // Strict OpenAI-compatible providers reject a request that carries it, so
-      // drop it unless this model is the one that consumes it — a caller
-      // replaying Gemini-originated history against another model must not have
-      // that field forwarded upstream. A call made without arguments goes back
-      // as `{}`: strict servers (Ollama) reject `"arguments": ""`.
-      if (message.tool_calls) {
-        base.tool_calls = withSerializedToolArguments(
-          keepExtraContent
-            ? message.tool_calls
-            : stripThoughtSignatureExtraContent(message.tool_calls)
-        );
-      }
-      if (message.tool_call_id) base.tool_call_id = message.tool_call_id;
-      if (message.name) base.name = message.name;
-
-      const hasImages = this.hasImageData(message);
-      const hasAudio = this.hasAudioData(message);
-
-      // No media attachments — return plain content
-      if (!hasImages && !hasAudio) {
-        const finalContent =
-          base.tool_calls && (content === undefined || content === '') ? null : content;
-        return { ...base, content: finalContent };
-      }
-
-      // Build multipart content array for messages with media
-      const contentParts = content ? [{ type: 'text', text: content }] : [];
-
-      // Add image parts
-      if (hasImages) {
-        if (Array.isArray(message.imageData)) {
-          message.imageData
-            .filter(img => img && img.base64)
-            .forEach(img => {
-              contentParts.push({
-                type: 'image_url',
-                image_url: {
-                  url: `data:${img.fileType || 'image/jpeg'};base64,${this.cleanBase64Data(img.base64)}`,
-                  detail: 'high'
-                }
-              });
-            });
-        } else {
-          contentParts.push({
-            type: 'image_url',
-            image_url: {
-              url: `data:${message.imageData.format || message.imageData.fileType || 'image/jpeg'};base64,${this.cleanBase64Data(message.imageData.base64)}`,
-              detail: 'high'
-            }
-          });
-        }
-      }
-
-      // Add audio parts
-      if (hasAudio) {
-        if (Array.isArray(message.audioData)) {
-          message.audioData
-            .filter(audio => audio && audio.base64)
-            .forEach(audio => {
-              contentParts.push({
-                type: 'input_audio',
-                input_audio: {
-                  data: this.cleanBase64Data(audio.base64),
-                  format: this.getAudioFormat(audio.fileType)
-                }
-              });
-            });
-        } else {
-          contentParts.push({
-            type: 'input_audio',
-            input_audio: {
-              data: this.cleanBase64Data(message.audioData.base64),
-              format: this.getAudioFormat(message.audioData.fileType)
-            }
-          });
-        }
-      }
-
-      return { ...base, content: contentParts };
-    });
-
-    return formattedMessages;
+    return formatOpenAICompatibleMessages(messages, model, this);
   }
 
   /**
@@ -172,21 +64,7 @@ class OpenAIAdapterClass extends BaseAdapter {
     // to the same cache (see adapters/promptCaching.js).
     if (options.promptCache?.key) body.prompt_cache_key = options.promptCache.key;
     if (responseSchema) {
-      // Deep clone incoming schema and enforce additionalProperties:false on all objects
-      const schemaClone = JSON.parse(JSON.stringify(responseSchema));
-      const enforceNoExtras = node => {
-        if (node && node.type === 'object') {
-          node.additionalProperties = false;
-        }
-        if (node.properties) {
-          Object.values(node.properties).forEach(enforceNoExtras);
-        }
-        if (node.items) {
-          const items = Array.isArray(node.items) ? node.items : [node.items];
-          items.forEach(enforceNoExtras);
-        }
-      };
-      enforceNoExtras(schemaClone);
+      const schemaClone = this.enforceSchemaNoExtras(responseSchema);
 
       body.response_format = {
         type: 'json_schema',

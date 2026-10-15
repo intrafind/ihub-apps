@@ -6,14 +6,17 @@ iHub Apps supports a unified upload system that enables users to attach files, i
 
 ## Upload Types
 
-Four upload sub-types are available, each independently enabled:
+Five upload sub-types are available, each independently enabled:
 
 | Type | Description | Default size limit |
 |------|-------------|--------------------|
-| `fileUpload` | Text documents, PDFs, Office files, email files | 5 MB |
+| `fileUpload` | Text documents, PDFs, Office files, email files | 20 MB |
 | `imageUpload` | JPEG, PNG, GIF, WebP, TIFF images | 10 MB |
-| `audioUpload` | MP3, WAV, FLAC, OGG, MP4 audio | 20 MB |
+| `audioUpload` | MP3, WAV, FLAC, OGG, M4A/MP4 audio | 20 MB |
+| `videoUpload` | MP4, MOV, WebM video; its audio track is extracted in the browser | 50 MB (up to 50 GB) |
 | `cloudStorageUpload` | Google Drive, OneDrive, Nextcloud | — |
+
+Each type has its own size limit, and a file is held to the limit of its own type (see [Size Limits](#size-limits)).
 
 ## Configuration
 
@@ -44,7 +47,7 @@ All upload types share a single `upload` object in the app configuration:
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `enabled` | boolean | `false` | Enable document/file attachment |
-| `maxFileSizeMB` | number (1–100) | `5` | Maximum file size in megabytes |
+| `maxFileSizeMB` | number (1–100) | `20` | Maximum file size in megabytes |
 | `supportedFormats` | string[] | See below | MIME types accepted for upload |
 | `trackedChanges` | `"accepted"` \| `"markup"` | `"accepted"` | Word documents: `markup` writes tracked insertions and deletions into the text as `{++added++}` and `{--removed--}` (see [Tracked changes and comments](#tracked-changes-and-comments-opt-in)) |
 | `comments` | `"ignore"` \| `"inline"` | `"ignore"` | Word documents: `inline` writes comments as `{>>Author: text<<}` after the text they belong to |
@@ -79,10 +82,21 @@ TIFF images (`image/tiff`, `image/tif`) are supported when added to `supportedFo
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `enabled` | boolean | `false` | Enable audio attachment |
-| `maxFileSizeMB` | number (1–100) | `20` | Maximum file size in megabytes |
+| `maxFileSizeMB` | number (1–2000) | `20` | Maximum file size in megabytes |
 | `supportedFormats` | string[] | `['audio/mpeg', 'audio/wav', 'audio/mp3', 'audio/flac', 'audio/ogg', 'audio/mp4']` | Must match `audio/*` |
 
-The system can also extract the audio track from video files using the Web Audio API.
+The system can also extract the audio track from video files using the Web Audio API, as a 16 kHz mono WAV (see [Audio Extraction](audio-extraction.md)).
+
+### `videoUpload` Options
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `enabled` | boolean | `false` | Enable video attachment |
+| `extractAudio` | boolean | `true` | Extract the audio track in the browser (16 kHz mono WAV) instead of sending the video |
+| `maxFileSizeMB` | number (1–51200) | `50` | Maximum file size in megabytes, up to 50 GB |
+| `supportedFormats` | string[] | `['video/mp4', 'video/webm', 'video/quicktime']` | Must match `video/*` |
+
+The video itself never leaves the browser when `extractAudio` is on. An **MP4 or MOV can be up to 50 GB**: only its index and its audio are read, not the picture. Other containers (WebM, MKV, ...) and videos sent as they are (`extractAudio: false`) work up to about 2 GB, which is all a browser can read into memory. See [Audio Extraction](audio-extraction.md#large-videos-mp4-and-mov-up-to-50-gb).
 
 > **Note:** Audio upload requires a model that supports audio input. OpenAI (GPT-4o Audio models) and Google Gemini support audio; Anthropic Claude does not.
 
@@ -107,7 +121,7 @@ Supported providers (configured at the platform level):
 | `.txt`, `.md`, `.csv`, `.json`, `.html`, `.css`, `.js`, `.xml` | `text/*` / `application/json` | Read directly as text |
 | `.vtt` | `text/vtt` | WebVTT (e.g. Microsoft Teams transcripts), read directly as text |
 | any extension | `text/*` ("Any text file") | Read as text; rejected if the content is binary — see below |
-| `.pdf` | `application/pdf` | Text extracted via `pdfjs-dist` with `[Page N]` markers and real lines — see [Extracted text format](#extracted-text-format); falls back to rendering each page as an image |
+| `.pdf` | `application/pdf` | Text extracted via the legacy build of `pdfjs-dist` (library and worker, both served locally, so it also works in browsers without `Map.prototype.getOrInsertComputed`) with `[Page N]` markers and real lines — see [Extracted text format](#extracted-text-format); falls back to rendering each page as an image |
 | `.docx` | `application/vnd.openxmlformats-officedocument.wordprocessingml.document` | Converted to Markdown via `mammoth`, `jszip` and `turndown`: headings, lists, tables, footnotes, links and page breaks are kept — see [Extracted text format](#extracted-text-format) |
 | `.xlsx` | `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet` | Cell content extracted via `xlsx`: a sheet with a header row becomes a Markdown table, see [PowerPoint and spreadsheets](#powerpoint-and-spreadsheets) |
 | `.xls` | `application/vnd.ms-excel` | Cell content extracted via `xlsx`, as `.xlsx` |
@@ -154,7 +168,9 @@ many formats, e.g. `.log`, `.yaml`, `.srt`). With it enabled:
 | `.wav` | `audio/wav` |
 | `.flac` | `audio/flac` |
 | `.ogg` | `audio/ogg` |
-| `.mp4` (audio) | `audio/mp4` |
+| `.m4a`, `.mp4` (audio) | `audio/mp4` |
+
+Browsers report some audio files under alternative MIME types (`audio/x-m4a` for `.m4a`, `audio/x-wav` for `.wav`) or none at all. The upload treats these as the listed type, so `audio/mp4` in `supportedFormats` also accepts QuickTime "Audio Only" exports. See [Audio File Support](audio-file-support.md#alternative-mime-types).
 
 ## Extracted text format
 
@@ -329,6 +345,14 @@ All file processing happens **client-side** before content is sent to the server
    - **Images** — Optionally resized to max 1024 px and converted to JPEG; TIFF images converted to PNG first.
    - **Audio** — Base64-encoded and sent natively to the model.
    - **Video** — Audio track extracted via the Web Audio API, then processed as audio.
+
+   Processing that takes more than a moment shows a progress panel above the message box with the file name, the step, a progress bar and a **Stop** button. Stopping attaches nothing for that file and shows no error; files attached before stay. Sending is held back until the attachment is there. What the panel reports depends on the format:
+
+   - **PDF, PPTX, DOCX, TIFF** — real progress and a real Stop. A PDF names the page it reads (_Page 12 of 340_), a PowerPoint the slide (_Slide 3 of 40_), a TIFF the page it converts; Word reports its steps (opening, converting, finishing up). Stop lands at the next page, slide or step: pdf.js is told to destroy the document, which ends its worker, and the plain text extraction does not start in its place. A scanned PDF reports the pages it renders as images (the first five) as a step of its own
+   - **Text, images, audio, video** — how much of the file has been read; for a video, the steps of [extracting its audio](audio-extraction.md#progress-and-stop)
+   - **XLSX/XLS, ODT/ODS/ODP, MSG** — how much of the file has been read, then an animated bar without a value: a single call of a library takes the file apart. Stop returns at once, and what the browser is still doing is dropped when it ends
+   - The percentage never goes down, and a document of any number of pages is reported at most once per percent point (the page counter itself, at most ten times a second)
+   - The cloud storage picker, source documents opened from the chat and the Office add-in read the file as before and show no panel
 4. **Preview** — Attached files are displayed with a preview before sending.
 5. **Sending** — File content is packed into the message:
    - Text file content → prepended to `message.content` as `[File: filename.ext (type)]\n<content>`
@@ -341,13 +365,16 @@ All file processing happens **client-side** before content is sent to the server
 
 ### Size Limits
 
-| Type | Default | Configurable range | Server ceiling |
-|------|---------|--------------------|----------------|
-| Files | 5 MB | 1–100 MB | 50 MB |
-| Images | 10 MB | 1–100 MB | 50 MB |
-| Audio | 20 MB | 1–100 MB | 50 MB |
+| Type | Default | Configurable range | What else limits it |
+|------|---------|--------------------|---------------------|
+| Files | 20 MB | 1–100 MB | Documents are read in the browser; the text is sent, not the file |
+| Images | 10 MB | 1–100 MB | The image is sent in the request: 50 MB (see below) |
+| Audio | 20 MB | 1–2000 MB | The audio is sent in the request (50 MB, see below) unless it is transcribed in the browser; a data URL of more than about 400 MB cannot be built |
+| Video | 50 MB | 1–51200 MB (50 GB) | MP4/MOV with extracted audio: nothing but the limit. Other containers, and videos sent as they are: about 2 GB |
 
-The server-wide request body limit is set by `requestBodyLimitMB` in `platform.json` (default: 50 MB). Per-type limits must stay within this ceiling.
+**Each file is held to the limit of its own type.** A PDF is refused above the `fileUpload` limit and a photo above the `imageUpload` limit, even when the video limit is 50 GB; the message names the limit that applied ("File too large. Maximum size is 20MB."). In front of that, the uploader lets a file in only up to the largest of the limits, and names that one.
+
+**The request body.** What is sent in a chat request must fit `requestBodyLimitMB` in `platform.json` (default: 50 MB): images, audio and videos sent as they are, and extracted audio sent to a multimodal model, all as base64. That does not limit the video itself, which is never uploaded, nor audio that an app [transcribes](voice-transcription.md) in the browser (only the text is sent). Raise the limit of a type beyond that only where it does not apply.
 
 ## Example Configurations
 
@@ -373,7 +400,7 @@ The server-wide request body limit is set by `requestBodyLimitMB` in `platform.j
     },
     "fileUpload": {
       "enabled": true,
-      "maxFileSizeMB": 5
+      "maxFileSizeMB": 20
     },
     "cloudStorageUpload": {
       "enabled": true

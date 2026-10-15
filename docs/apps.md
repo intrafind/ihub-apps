@@ -975,9 +975,15 @@ The `upload` property controls file and media upload capabilities:
     "maxFileSizeMB": 20,
     "supportedFormats": ["audio/mpeg", "audio/wav", "audio/mp3"]
   },
+  "videoUpload": {
+    "enabled": true,
+    "extractAudio": true,
+    "maxFileSizeMB": 51200,
+    "supportedFormats": ["video/mp4", "video/quicktime", "video/webm"]
+  },
   "fileUpload": {
     "enabled": true,
-    "maxFileSizeMB": 5,
+    "maxFileSizeMB": 20,
     "supportedFormats": ["application/pdf", "text/plain", "text/csv"]
   },
   "cloudStorageUpload": {
@@ -985,6 +991,8 @@ The `upload` property controls file and media upload capabilities:
   }
 }
 ```
+
+Every upload type has its own size limit, and a file is held to the limit of its own type: a PDF is refused above `fileUpload.maxFileSizeMB` even when `videoUpload.maxFileSizeMB` is 51200. Before, every file was accepted up to the largest limit of all types.
 
 | Property                            | Type    | Default  | Description                                                                              |
 | ----------------------------------- | ------- | -------- | ---------------------------------------------------------------------------------------- |
@@ -995,10 +1003,14 @@ The `upload` property controls file and media upload capabilities:
 | `upload.imageUpload.maxFileSizeMB`  | Number  | `10`     | Maximum image file size in megabytes (1-100)                                             |
 | `upload.imageUpload.supportedFormats` | Array | `["image/jpeg","image/jpg","image/png","image/gif","image/webp"]` | Allowed MIME types for image uploads |
 | `upload.audioUpload.enabled`        | Boolean | `false`  | Enable audio file upload support (for transcription or audio-capable models)            |
-| `upload.audioUpload.maxFileSizeMB`  | Number  | `20`     | Maximum audio file size in megabytes (1-100)                                             |
+| `upload.audioUpload.maxFileSizeMB`  | Number  | `20`     | Maximum audio file size in megabytes (1-2000)                                            |
 | `upload.audioUpload.supportedFormats` | Array | `["audio/mpeg","audio/wav","audio/mp3","audio/flac","audio/ogg"]` | Allowed MIME types for audio uploads |
+| `upload.videoUpload.enabled`        | Boolean | `false`  | Enable video upload (the audio is extracted in the browser for transcription or audio-capable models) |
+| `upload.videoUpload.extractAudio`   | Boolean | `true`   | Extract the audio of the video as a 16 kHz mono WAV; `false` sends the whole video to the model |
+| `upload.videoUpload.maxFileSizeMB`  | Number  | `50`     | Maximum video file size in megabytes (1-51200, that is 50 GB). An MP4 or MOV can be that large when its audio is extracted: only its index and audio are read. Other containers, and videos sent as they are, work up to about 2 GB — see [Audio Extraction](audio-extraction.md#large-videos-mp4-and-mov-up-to-50-gb) |
+| `upload.videoUpload.supportedFormats` | Array | `["video/mp4","video/webm","video/quicktime"]` | Allowed MIME types for video uploads |
 | `upload.fileUpload.enabled`         | Boolean | `false`  | Enable document/text file upload support                                                 |
-| `upload.fileUpload.maxFileSizeMB`   | Number  | `5`      | Maximum document file size in megabytes (1-100)                                          |
+| `upload.fileUpload.maxFileSizeMB`   | Number  | `20`     | Maximum document file size in megabytes (1-100)                                          |
 | `upload.fileUpload.supportedFormats`| Array   | See schema | Allowed MIME types for document uploads (plain text, CSV, PDF, Office formats, etc.)   |
 | `upload.fileUpload.trackedChanges`  | String  | `"accepted"` | `"markup"` sends tracked changes of Word documents as `{++added++}` / `{--removed--}`; `"accepted"` sends the accepted view |
 | `upload.fileUpload.comments`        | String  | `"ignore"` | `"inline"` sends Word comments as `{>>Author: text<<}` after the text they belong to      |

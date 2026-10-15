@@ -93,13 +93,13 @@ const ComparePanel = forwardRef(function ComparePanel(
       },
       clear() {
         const { chat: c } = latestRef.current;
-        c.cancelGeneration();
+        c.cancelGeneration('compare');
         c.clearMessages();
         c.resetConversationState();
         setChatId(`compare-${uuidv4()}`);
       },
       cancel() {
-        latestRef.current.chat.cancelGeneration();
+        latestRef.current.chat.cancelGeneration('compare');
       }
     }),
     []

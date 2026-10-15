@@ -73,7 +73,8 @@ jest.mock('../../../client/src/shared/hooks/useEventSource', () => ({
       initEventSource: () => {
         mockStream.opened += 1;
       },
-      cleanupEventSource: () => {}
+      detachEventSource: () => {},
+      stopEventSource: jest.fn()
     };
   }
 }));
@@ -522,6 +523,42 @@ describe('uploaded audio becomes the user message', () => {
     expect(message.audioData).toBeFalsy();
   });
 
+  test("a video's audio is decoded from its WAV Blob, not from the base64 string", async () => {
+    transcribeAudioBuffer.mockResolvedValue('Standup notes.');
+    const blob = new Blob(['RIFF'], { type: 'audio/wav' });
+    // Like UnifiedUploader hands it over: the Blob is not an enumerable field.
+    const attachment = { ...VIDEO_AUDIO };
+    Object.defineProperty(attachment, 'blob', { value: blob, enumerable: false });
+    renderApp();
+    await attach(attachment);
+    await send();
+
+    await waitFor(() => expect(mockStream.opened).toBe(1));
+    expect(decodeAudioFileToBuffer).toHaveBeenCalledTimes(1);
+    expect(decodeAudioFileToBuffer).toHaveBeenCalledWith(blob);
+  });
+
+  test('without a Blob (an attachment restored from a stored message) it decodes the base64', async () => {
+    transcribeAudioBuffer.mockResolvedValue('Standup notes.');
+    // What JSON makes of a Blob that was serialized with the attachment.
+    renderApp();
+    await attach({ ...VIDEO_AUDIO, blob: {} });
+    await send();
+
+    await waitFor(() => expect(mockStream.opened).toBe(1));
+    expect(decodeAudioFileToBuffer).toHaveBeenCalledWith(VIDEO_AUDIO.base64);
+  });
+
+  test('uploaded audio is decoded from its base64', async () => {
+    transcribeAudioBuffer.mockResolvedValue('Memo.');
+    renderApp();
+    await attach(AUDIO);
+    await send();
+
+    await waitFor(() => expect(mockStream.opened).toBe(1));
+    expect(decodeAudioFileToBuffer).toHaveBeenCalledWith(AUDIO.base64);
+  });
+
   test('several files each get a section; one without speech says so', async () => {
     transcribeAudioBuffer.mockResolvedValueOnce('First part.').mockResolvedValueOnce('');
     renderApp();
@@ -585,8 +622,38 @@ describe('uploaded audio becomes the user message', () => {
   });
 
   test('audio over the length limit is refused before transcribing', async () => {
-    decodeAudioFileToBuffer.mockResolvedValue({ duration: 1200 });
+    // The limit is an hour unless the app sets its own
+    decodeAudioFileToBuffer.mockResolvedValue({ duration: 4000 });
     renderApp();
+    await attach(AUDIO);
+    await send();
+
+    await waitFor(() =>
+      expect(systemMessages()[0]?.content).toBe(
+        'This audio is 4000s long, which exceeds the 3600s limit for transcription.'
+      )
+    );
+    expect(transcribeAudioBuffer).not.toHaveBeenCalled();
+    expect(mockStream.opened).toBe(0);
+  });
+
+  test('half an hour of audio is within the default limit', async () => {
+    decodeAudioFileToBuffer.mockResolvedValue({ duration: 1800 });
+    transcribeAudioBuffer.mockResolvedValue('We ship on Friday.');
+    renderApp();
+    await attach(AUDIO);
+    await send();
+
+    await waitFor(() => expect(transcribeAudioBuffer).toHaveBeenCalledTimes(1));
+    expect(systemMessages()).toHaveLength(0);
+  });
+
+  test("an app's own limit is kept", async () => {
+    decodeAudioFileToBuffer.mockResolvedValue({ duration: 1200 });
+    renderApp({
+      ...TRANSCRIPTION_APP,
+      transcription: { enabled: true, modelId: 'voxtral', streaming: true, maxDurationSeconds: 900 }
+    });
     await attach(AUDIO);
     await send();
 
@@ -596,7 +663,6 @@ describe('uploaded audio becomes the user message', () => {
       )
     );
     expect(transcribeAudioBuffer).not.toHaveBeenCalled();
-    expect(mockStream.opened).toBe(0);
   });
 });
 

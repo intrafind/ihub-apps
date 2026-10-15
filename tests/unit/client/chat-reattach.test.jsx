@@ -70,7 +70,7 @@ jest.mock('../../../client/src/shared/utils/openSseStream', () => {
 
 const useAppChat = require('../../../client/src/features/chat/hooks/useAppChat').default;
 const { fetchWithAuthRetry } = require('../../../client/src/shared/utils/openSseStream');
-const { checkAppChatStatus } = require('../../../client/src/api');
+const { checkAppChatStatus, stopAppChatStream } = require('../../../client/src/api');
 
 const RUN_ID = 'chat-run-77';
 
@@ -106,6 +106,7 @@ beforeEach(() => {
   sessionStorage.clear();
   fetchWithAuthRetry.mockClear();
   checkAppChatStatus.mockReset().mockResolvedValue({ active: true, processing: true });
+  stopAppChatStream.mockClear();
 });
 
 test('replays what the ledger already holds, then follows the stream', async () => {
@@ -422,6 +423,26 @@ test('reattaching to nothing is a no-op', async () => {
   expect(mockOpenCalls).toEqual([]);
 });
 
+test('re-attaching over an open stream does not stop the turn it follows (#2830)', async () => {
+  // The stop endpoint aborts a stored turn — a scheduled run's included — so a
+  // surface that only replaces its own connection must never send it.
+  ledgerPages.push(page([envelope(1, 'run/started', { kind: 'chat', refs: {} })]));
+  ledgerPages.push(page([envelope(1, 'run/started', { kind: 'chat', refs: {} })]));
+  const { result } = renderHook(() =>
+    useAppChat({ appId: 'acme', chatId: 'chat-abc', serverBacked: true })
+  );
+
+  await act(async () => {
+    await result.current.reattachToRun(RUN_ID);
+  });
+  await act(async () => {
+    await result.current.reattachToRun(RUN_ID);
+  });
+
+  expect(mockOpenCalls).toHaveLength(2);
+  expect(stopAppChatStream).not.toHaveBeenCalled();
+});
+
 describe('the heartbeat backstop for a turn nobody is running', () => {
   beforeEach(() => {
     jest.useFakeTimers();
@@ -464,6 +485,51 @@ describe('the heartbeat backstop for a turn nobody is running', () => {
     });
 
     expect(result.current.processing).toBe(false);
+    // Nothing is running on the server, so there is nothing to stop — and the
+    // client never sends a stop of its own.
+    expect(stopAppChatStream).not.toHaveBeenCalled();
+  });
+
+  test('"Clear chat" still stops a run whose stream was dropped', async () => {
+    // The surface detached (the server no longer holds its stream) but the run
+    // it followed may still be going: a stored turn outlives its viewers.
+    checkAppChatStatus.mockResolvedValue({ active: false });
+    const { result } = await attachToStrandedRun();
+
+    await act(async () => {
+      jest.advanceTimersByTime(60000);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(result.current.processing).toBe(false);
+    expect(stopAppChatStream).not.toHaveBeenCalled();
+
+    await act(async () => {
+      result.current.cancelGeneration('clear-chat');
+    });
+    expect(stopAppChatStream).toHaveBeenCalledTimes(1);
+    expect(stopAppChatStream).toHaveBeenCalledWith('acme', 'chat-abc', { source: 'clear-chat' });
+
+    // The stop is sent once; clearing again finds nothing to stop.
+    await act(async () => {
+      result.current.cancelGeneration('clear-chat');
+    });
+    expect(stopAppChatStream).toHaveBeenCalledTimes(1);
+  });
+
+  test('"Clear chat" sends nothing when the server was running nothing', async () => {
+    checkAppChatStatus.mockResolvedValue({ active: true, processing: false });
+    const { result } = await attachToStrandedRun();
+
+    await act(async () => {
+      jest.advanceTimersByTime(60000);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    await act(async () => {
+      result.current.cancelGeneration('clear-chat');
+    });
+    expect(stopAppChatStream).not.toHaveBeenCalled();
   });
 
   test('does not stop a turn this surface sent itself', async () => {
