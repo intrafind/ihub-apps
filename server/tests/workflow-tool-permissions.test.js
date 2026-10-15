@@ -49,8 +49,8 @@ configCache.getTools = () => ({ data: [] });
 configCache.getPlatform = () => ({ defaultLanguage: 'en' });
 configCache.getSources = () => ({ data: [] });
 configCache.getFeatures = () => ({ skills: false });
-mcpClientManager.listAllTools = async () => [];
-a2aClientManager.listAllTools = async () => [];
+mcpClientManager.listAllTools = () => Promise.resolve([]);
+a2aClientManager.listAllTools = () => Promise.resolve([]);
 
 function serve(workflow) {
   configCache.setCacheEntry('config/workflows.json', workflow ? [workflow] : []);
@@ -114,7 +114,7 @@ describe('the workflow tools an app offers its model', () => {
   });
 
   it('does not offer it when the call carries no user', async () => {
-    assert.deepEqual(await offeredIds(undefined), []);
+    assert.deepEqual(await offeredIds(), []);
   });
 
   it('keeps offering only workflows with chat integration on', async () => {
