@@ -82,7 +82,7 @@ TIFF images (`image/tiff`, `image/tif`) are supported when added to `supportedFo
 | `maxFileSizeMB` | number (1–100) | `20` | Maximum file size in megabytes |
 | `supportedFormats` | string[] | `['audio/mpeg', 'audio/wav', 'audio/mp3', 'audio/flac', 'audio/ogg', 'audio/mp4']` | Must match `audio/*` |
 
-The system can also extract the audio track from video files using the Web Audio API.
+The system can also extract the audio track from video files using the Web Audio API, as a 16 kHz mono WAV (see [Audio Extraction](audio-extraction.md)).
 
 > **Note:** Audio upload requires a model that supports audio input. OpenAI (GPT-4o Audio models) and Google Gemini support audio; Anthropic Claude does not.
 

@@ -4,7 +4,7 @@ This document describes the audio extraction feature that allows users to upload
 
 ## Overview
 
-The audio extraction feature uses the browser's Web Audio API to decode and extract audio from video files (MP4, WebM, MOV) without requiring any server-side processing or external tools. The extracted audio is converted to WAV format for maximum compatibility with AI models that support audio input.
+The audio extraction feature uses the browser's Web Audio API to decode and extract audio from video files (MP4, WebM, MOV) without requiring any server-side processing or external tools. The extracted audio is converted to a 16 kHz mono WAV file: compatible with AI models that support audio input, and exactly the format the transcription models are fed.
 
 ## How It Works
 
@@ -15,14 +15,14 @@ Users can upload video files through the standard file upload interface in any a
 When a video file is uploaded:
 1. The file is read as an ArrayBuffer
 2. The Web Audio API `decodeAudioData()` method extracts the audio track
-3. An `OfflineAudioContext` renders the audio to a clean buffer
+3. An `OfflineAudioContext` downmixes the audio to mono and resamples it to 16 kHz
 4. The audio is converted to WAV format (16-bit PCM)
-5. The WAV file is encoded as base64 for transmission to the AI model
+5. The WAV file is encoded as base64 for transmission to the AI model. The attachment also keeps the WAV itself as a `Blob`, which transcription decodes directly (the `Blob` is never serialized with the chat message)
 
 ### 3. Model Processing
 The extracted audio is sent to the AI model as if it were a regular audio file upload.
 
-For **transcription-enabled apps** (see [Transcription Models](models.md#transcription-models)), the extracted audio is instead transcribed by the app's transcription model, and the transcript takes the audio's place in the user's message. Note that `extractAudioFromVideo()` renders at the video's **original** sample rate and channel count; the transcription client re-renders the buffer to 16 kHz mono via an `OfflineAudioContext` before streaming (the vLLM realtime endpoint requires 16 kHz mono PCM16).
+For **transcription-enabled apps** (see [Transcription Models](models.md#transcription-models)), the extracted audio is instead transcribed by the app's transcription model, and the transcript takes the audio's place in the user's message. The extracted audio is already 16 kHz mono, which is what the transcription client streams (the vLLM realtime endpoint requires 16 kHz mono PCM16), so it is decoded from the attachment's WAV `Blob` and streamed as it is.
 
 ## Browser Compatibility
 
@@ -83,18 +83,21 @@ If you want to allow video uploads without automatic audio extraction (for model
 
 ## Extracted Audio Format
 
-The extracted audio is always in **WAV format (PCM 16-bit)** which provides:
+The extracted audio is always a **16 kHz mono WAV file (PCM 16-bit)**, whatever the video's own sample rate and channel count. It provides:
 - Universal compatibility across AI models
-- No lossy compression
-- Predictable quality
-- Standard format supported by all browsers
+- No lossy compression after the downmix
+- Speech quality, which is what these uploads are for (music loses its high frequencies at 16 kHz)
+- A small file: about 1.9 MB per minute, a sixth of a WAV at 48 kHz stereo (about 11.5 MB per minute)
+
+The size matters. The attachment is also held as a base64 data URL, and browsers cannot build a string beyond a fixed length (about 536 million characters in Chromium). A 48 kHz stereo WAV passed that limit at roughly 35 minutes of video: the browser then returned an empty string instead of an error, so the attachment looked fine and sending it failed with "Could not decode this audio in your browser" (issue #2836). At 16 kHz mono the limit is about 3.5 hours; a video whose audio still exceeds it is refused when it is uploaded.
 
 ### Audio Metadata
 
-When audio is extracted, the following metadata is preserved:
-- Sample rate (Hz)
-- Number of channels (mono/stereo)
+When audio is extracted, the following metadata is kept, describing the 16 kHz mono output:
+- Sample rate (Hz), always 16000
+- Number of channels, always 1
 - Duration (seconds)
+- File size (bytes)
 - Original video filename
 
 ## Error Handling
@@ -148,8 +151,13 @@ A standalone test page is available at `tests/manual/test-audio-extraction.html`
 
 - **`client/src/features/upload/utils/fileProcessing.js`**
   - `extractAudioFromVideo()` - Main extraction function
-  - `audioBufferToWav()` - WAV format conversion
   - Helper utilities for encoding
+
+- **`client/src/utils/realtimeTranscriptionCore.js`**
+  - `resampleTo16kMono()` - Downmix and resample the decoded audio
+
+- **`client/src/utils/wav.js`**
+  - `audioBufferToWav()` - WAV format conversion
 
 - **`client/src/features/upload/components/UnifiedUploader.jsx`**
   - Video upload configuration
@@ -165,12 +173,8 @@ const audioContext = new AudioContext();
 // Decode video as audio
 const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
 
-// Render to clean buffer
-const offlineContext = new OfflineAudioContext(
-  audioBuffer.numberOfChannels,
-  audioBuffer.length,
-  audioBuffer.sampleRate
-);
+// Downmix to mono and resample to 16 kHz (resampleTo16kMono)
+const offlineContext = new OfflineAudioContext(1, Math.ceil(audioBuffer.duration * 16000), 16000);
 
 const source = offlineContext.createBufferSource();
 source.buffer = audioBuffer;
@@ -182,9 +186,9 @@ const renderedBuffer = await offlineContext.startRendering();
 
 ## Performance Considerations
 
-- **Memory Usage**: Large videos require significant memory during extraction
+- **Memory Usage**: Large videos require significant memory during extraction. The video's whole audio track is decoded at its original rate and channel count first (see the memory note in [Realtime Voice & Transcription](voice-transcription.md#enabling-transcription-on-an-app)) before it is reduced to 16 kHz mono
 - **Processing Time**: Proportional to video duration (typically 1-5 seconds for short clips)
-- **File Size**: WAV files are larger than compressed audio formats
+- **File Size**: The extracted WAV is about 1.9 MB per minute, still larger than compressed audio formats
 - **Browser Limits**: Very large files may exceed browser memory limits
 
 ### Recommended Limits
@@ -220,29 +224,26 @@ Potential improvements for future versions:
 
 ## API Reference
 
-### extractAudioFromVideo(file, options)
+### extractAudioFromVideo(file)
 
-Extracts audio from a video file using Web Audio API.
+Extracts audio from a video file using Web Audio API, as a 16 kHz mono WAV.
 
 **Parameters:**
 - `file` (File): The video file to extract audio from
-- `options` (Object): Processing options
-  - `format` (string): Output format (default: 'wav')
 
 **Returns:**
-Promise resolving to object with:
-- `audioBuffer` (AudioBuffer): The rendered audio buffer
-- `base64` (string): Base64-encoded audio data
-- `blob` (Blob): Audio file as blob
-- `format` (string): MIME type of output
-- `sampleRate` (number): Sample rate in Hz
-- `channels` (number): Number of audio channels
+Promise resolving to object with (all describing the 16 kHz mono output):
+- `base64` (string): Base64 data URL of the WAV
+- `blob` (Blob): The WAV as a blob
+- `format` (string): MIME type of output (`audio/wav`)
+- `sampleRate` (number): Sample rate in Hz (`16000`)
+- `channels` (number): Number of audio channels (`1`)
 - `duration` (number): Duration in seconds
 - `size` (number): File size in bytes
 
 **Throws:**
 - `audio-decode-error`: Cannot decode video audio
-- `video-audio-extraction-error`: General extraction failure
+- `video-audio-extraction-error`: General extraction failure, including audio too long to be attached as a base64 data URL
 
 ## Resources
 

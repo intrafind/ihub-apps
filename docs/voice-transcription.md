@@ -301,7 +301,7 @@ Instead of picking the same model in every app, set it once under **Admin → Vo
 }
 ```
 
-`upload.videoUpload.maxFileSizeMB` accepts up to `2000`. Note that browsers decode the **entire** file in memory to extract PCM — for very large videos budget roughly 700 MB of tab memory per hour of 48 kHz stereo audio on top of the file itself. The `maxDurationSeconds` cap is the better lever for bounding work.
+`upload.videoUpload.maxFileSizeMB` accepts up to `2000`. Note that browsers decode the **entire** file in memory to extract PCM — for very large videos budget roughly 700 MB of tab memory per hour of 48 kHz stereo audio on top of the file itself. What stays attached is only the 16 kHz mono WAV of the audio track (about 1.9 MB per minute; see [Audio Extraction](audio-extraction.md#extracted-audio-format)). The `maxDurationSeconds` cap is the better lever for bounding work.
 
 ### What users see
 
@@ -484,6 +484,8 @@ Notes:
 | Transcript stops mid-file behind a proxy                       | Proxy killing the WebSocket — verify Upgrade headers and raise `proxy_read_timeout` (see above).   |
 | `Transcription session exceeded the maximum duration`          | Session hit `maxSessionSeconds` — raise it for very long recordings.                              |
 | Chat stuck on "generating"                                     | The `{"type":"done"}` frame never arrived — usually a proxy dropping the socket after `stop`; check proxy timeouts, then server logs (`component: RealtimeSTT`). |
+
+The messages quoted in the first column are what the bridge sends to the browser, and the chat shows them as they are: `Transcription failed: <message>`. A not-permitted model and an exhausted session have their own wording instead of the bridge's message.
 
 Server-side, all bridge activity is logged with `component: "RealtimeSTT"` — connection establishment, upstream readiness (with trigger), stop/commit bookkeeping (frame counts), failures with diagnostic reasons, and cap/keepalive/session-limit closures.
 

@@ -328,7 +328,9 @@ describe('test panel', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Stop and transcribe' }));
     });
 
-    expect(await screen.findByText('Transcription failed. Please try again.')).toBeInTheDocument();
+    expect(
+      await screen.findByText('Transcription failed: Transcription model "voxtral" is disabled')
+    ).toBeInTheDocument();
     expect(
       screen.getByText('model-disabled: Transcription model "voxtral" is disabled')
     ).toBeInTheDocument();

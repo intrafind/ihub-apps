@@ -2149,7 +2149,12 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
             name: name || t('transcription.recording', 'Recording')
           });
           showLiveTranscript(compose(label));
-          const audioBuffer = await decodeAudioFileToBuffer(file.base64);
+          // Audio extracted from a video keeps its WAV Blob: decoding that
+          // skips re-parsing the base64 data URL. Anything else, or an
+          // attachment restored from a stored message, only has the base64.
+          const audioBuffer = await decodeAudioFileToBuffer(
+            file.blob instanceof Blob ? file.blob : file.base64
+          );
           if (audioBuffer?.duration > maxDurationSeconds) {
             throw Object.assign(new Error('too-long'), {
               code: 'too-long',
