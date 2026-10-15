@@ -77,3 +77,17 @@ are read from the file and the picture is skipped, so the size of the video no l
   `gemini-3.5-transcribe`, the server now buffers up to 128 MiB of audio per connection (about 70
   minutes, before 32 MiB) and 512 MiB in all (before 256 MiB). Installations that set
   `speech.realtime.maxBufferedAudioBytes` or `maxBufferedAudioBytesTotal` keep their values
+- A live recording of the full hour no longer runs into the server's session limit. The session
+  cap (`speech.realtime.maxSessionSeconds`) was 3600 seconds from the connection, as long as the
+  longest recording, so it could end a session before the automatic stop or while the transcript
+  was still being made, and the recording was lost. The default is now 4200 seconds (the hour plus
+  10 minutes). Installations that set `maxSessionSeconds` keep their value and have to keep it
+  larger than the longest `transcription.maxDurationSeconds` of their apps plus a margin
+- An MP4 or MOV is checked before its audio is read. An index that points outside of the file or
+  asks for more audio than the file holds is refused at once, where it could freeze the tab. The
+  video's edit list is followed: a recording that was trimmed (for example in QuickTime) is
+  transcribed as trimmed, not with the audio around the cut, and the encoder's delay at the start
+  of AAC audio is dropped. Fragmented MP4 files are no longer read from their index alone, which
+  cut the audio off, and uncompressed audio that is unsigned and wider than 8 bits is no longer
+  read as signed. Such files are decoded from the whole file as before (up to 2 GB) and fail with
+  the message for videos larger than 2 GB above that

@@ -602,13 +602,14 @@ const SPECIFIC_EXTRACTION_ERRORS = [
 
 /**
  * The audio of an MP4, MOV or M4A file, read with `File.slice()` and decoded:
- * an AudioBuffer for the resample, whatever the size of the file (see
- * `mp4AudioExtraction.js`: only the index and the audio are read). Null where
- * the whole-file path takes over: the file is not an MP4-family one, or this
- * could not read it (a codec or layout it does not handle, a damaged index, a
- * browser that cannot decode the AAC) and the file is small enough for that
- * path. A large one has nothing to fall back on and fails with
- * `video-large-audio-unsupported`.
+ * `{ audioBuffer, trim }` for the resample, whatever the size of the file (see
+ * `mp4AudioExtraction.js`: only the index and the audio are read). `trim` is the
+ * part of the audio the edit list of the file plays, or null for all of it. Null
+ * where the whole-file path takes over: the file is not an MP4-family one, or
+ * this could not read it (a codec or layout it does not handle, an edit list or
+ * fragments it cannot follow, a damaged index, a browser that cannot decode the
+ * AAC) and the file is small enough for that path. A large one has nothing to
+ * fall back on and fails with `video-large-audio-unsupported`.
  */
 const decodeMp4Streaming = async (file, audioContext, { signal, report }) => {
   try {
@@ -623,11 +624,12 @@ const decodeMp4Streaming = async (file, audioContext, { signal, report }) => {
     if (audio.kind === 'pcm') {
       // Nothing to decode: the samples were converted as they were read
       report('decode', 100);
-      return audio.buffer;
+      return { audioBuffer: audio.buffer, trim: audio.trim };
     }
     report('decode');
     const frames = await readFileAsArrayBuffer(audio.blob, { signal });
-    return await raceAbort(audioContext.decodeAudioData(frames), signal);
+    const audioBuffer = await raceAbort(audioContext.decodeAudioData(frames), signal);
+    return { audioBuffer, trim: audio.trim };
   } catch (error) {
     if (isAbortError(error)) throw error;
     console.warn('Could not extract the audio by reading the file in parts:', error);
@@ -698,7 +700,11 @@ export const extractAudioFromVideo = async (file, { signal, onProgress } = {}) =
     report('read', 0);
     // Where the browser cannot read the video whole (above ~2 GB) it reads what
     // it needs. An MP4 or MOV is read that way at any size, it is quicker
-    let audioBuffer = await decodeMp4Streaming(file, audioContext, { signal, report });
+    const streamed = await decodeMp4Streaming(file, audioContext, { signal, report });
+    let audioBuffer = streamed?.audioBuffer ?? null;
+    // What the edit list of the video plays of that audio, applied by the resample.
+    // The browser applies it itself where it decodes the whole file: no trim there
+    const trim = streamed?.trim ?? null;
 
     if (!audioBuffer) {
       if (file.size > WHOLE_FILE_READ_LIMIT_BYTES) {
@@ -727,7 +733,9 @@ export const extractAudioFromVideo = async (file, { signal, onProgress } = {}) =
     report('resample');
     const samples = await resampleTo16kMono(audioBuffer, {
       signal,
-      onProgress: percent => report('resample', percent)
+      onProgress: percent => report('resample', percent),
+      offset: trim?.offset,
+      duration: trim?.duration
     });
     // The decoded track (hundreds of MB for a long video) is not needed again
     audioBuffer = null;

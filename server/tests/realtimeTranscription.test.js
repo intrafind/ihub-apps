@@ -21,8 +21,10 @@ import {
   diagnoseUnexpectedResponse,
   diagnoseUpstreamClose,
   getBatchLimits,
+  getMaxSessionSeconds,
   testTranscriptionModel
 } from '../websocket/realtimeTranscription.js';
+import { appConfigSchema } from '../validators/appConfigSchema.js';
 import { generateJwt } from '../utils/tokenService.js';
 import { getTranscriptionProvider } from '../transcription/index.js';
 import configCache from '../configCache.js';
@@ -1173,5 +1175,51 @@ describe('getBatchLimits', () => {
     );
 
     expect(getBatchLimits()).toEqual({ maxBytes: 1000, maxBytesTotal: 5000 });
+  });
+});
+
+describe('getMaxSessionSeconds', () => {
+  const platform = speech => ({
+    jwt: { algorithm: 'HS256' },
+    auth: { jwtSecret: 'realtime-stt-test-secret' },
+    ...(speech ? { speech } : {})
+  });
+
+  test('the default session outlasts the longest recording an app allows by default', () => {
+    configCache.setCacheEntry('config/platform.json', platform());
+    const app = appConfigSchema.parse({
+      id: 'x',
+      name: { en: 'X' },
+      description: { en: 'd' },
+      color: '#4F46E5',
+      icon: 'chat',
+      system: { en: 's' },
+      transcription: { enabled: true, modelId: 'voxtral-mini-realtime' }
+    });
+
+    // The session starts before the recording does and a batch provider
+    // transcribes after Stop: it needs more than the recording's own length
+    const recording = app.transcription.maxDurationSeconds;
+    expect(recording).toBe(3600);
+    expect(getMaxSessionSeconds()).toBe(4200);
+    expect(getMaxSessionSeconds()).toBeGreaterThanOrEqual(recording + 600);
+  });
+
+  test('platform.speech.realtime.maxSessionSeconds still overrides it', () => {
+    configCache.setCacheEntry(
+      'config/platform.json',
+      platform({ realtime: { maxSessionSeconds: 9000 } })
+    );
+
+    expect(getMaxSessionSeconds()).toBe(9000);
+  });
+
+  test.each([0, -5, 1.5, '7200', null])('a value of %p is not a cap: the default stays', value => {
+    configCache.setCacheEntry(
+      'config/platform.json',
+      platform({ realtime: { maxSessionSeconds: value } })
+    );
+
+    expect(getMaxSessionSeconds()).toBe(4200);
   });
 });

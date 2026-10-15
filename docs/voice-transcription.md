@@ -95,7 +95,7 @@ A transcription session pins a GPU-backed upstream socket, so the bridge is deli
 | Idle timeout                | 60 s      | No audio and no upstream activity → close both legs.                                           |
 | Keepalive ping/pong         | every 25 s| Server pings the browser (browsers auto-pong). A client that misses a whole interval (crashed tab, suspended laptop) is terminated. Pings also keep reverse-proxy read timeouts from killing quiet sessions while the GPU processes a long tail. |
 | Post-stop settle            | 2.5 s     | After `stop`, the transcript is complete once the upstream stays quiet this long (long files produce many segments). Then `{"type":"done"}` is sent and the session closes. |
-| Session duration cap        | 3600 s    | Hard ceiling on one session's lifetime (configurable, see below).                              |
+| Session duration cap        | 4200 s    | Hard ceiling on one session's lifetime, counted from the connection (configurable, see below). The default is the 3600 s an app records by default plus 10 minutes for the setup and the final transcription. |
 | Frame size cap              | 256 KB    | `maxPayload` on the WebSocket server; oversized frames terminate the connection.               |
 | Connection caps             | 50 total / 3 per user | Enforced **before** the handshake completes; excess upgrades get HTTP 429. Anonymous users are capped per client IP (first `X-Forwarded-For` hop behind a proxy), not as one shared bucket. |
 | Upstream backpressure       | 4 MB high water | If iHub→vLLM is the slow hop, the client socket is paused (real TCP flow control) until the upstream send buffer drains below 1 MB — per-connection memory stays bounded instead of buffering a whole file. |
@@ -282,7 +282,7 @@ Add a `transcription` block to the app config (Admin → Apps → Edit → Trans
 | `modelId`            | `""`    | Which `modelType: "transcription"` model to route to. Empty uses the platform default (`speech.transcription.defaultModelId`, see below). |
 | `defaultEnabled`     | `true`  | Whether the per-chat **Transcription** toggle starts on. Users can flip it per conversation (like web search). When off, audio/video submissions fall through to the multimodal chat path instead. |
 | `streaming`          | `true`  | Show the transcript growing in the user's message while it is produced. When off, the message shows "Listening…" / "Transcribing…" until the transcript is complete. |
-| `maxDurationSeconds` | `3600`  | Client-enforced cap on recording length / decoded audio duration (max `7200`). One hour by default, so a 30-minute video transcribes out of the box. An app that saved its own value keeps it. |
+| `maxDurationSeconds` | `3600`  | Client-enforced cap on recording length / decoded audio duration (max `7200`). One hour by default, so a 30-minute video transcribes out of the box. An app that saved its own value keeps it. Live recordings also run inside the server's session cap, `speech.realtime.maxSessionSeconds` (4200 s by default), which has to stay larger than this value plus a margin, see [Runtime limits and tuning](#runtime-limits-and-tuning). |
 | `inputs.upload`      | `true`  | Allow transcribing uploaded audio files.                                                     |
 | `inputs.record`      | `true`  | Show the record → send button.                                                              |
 | `inputs.video`       | `true`  | Allow transcribing uploaded videos (audio track extracted in the browser).                   |
@@ -391,9 +391,11 @@ All knobs live under `platform.json` → `speech.realtime` and apply to the whol
 | `maxConnections`        | `50`      | on server start     | Global concurrent realtime connections per iHub **worker process**.   |
 | `maxConnectionsPerUser` | `3`       | on server start     | Per-user concurrent connections per worker process.                   |
 | `maxFrameBytes`         | `262144`  | on server start     | Max size of one inbound WebSocket frame.                              |
-| `maxSessionSeconds`     | `3600`    | per new connection  | Hard cap on one session's lifetime. Hot-reloaded (no restart needed). |
+| `maxSessionSeconds`     | `4200`    | per new connection  | Hard cap on one session's lifetime, counted from the connection. Must be larger than the longest recording an app allows (`transcription.maxDurationSeconds`, 3600 s by default, up to 7200 s) plus a margin for the setup and, with a batch provider, the transcription after Stop (10 minutes is enough for an hour of audio). Hot-reloaded (no restart needed). |
 | `maxBufferedAudioBytes` | `134217728` | per new connection | Batch providers only: audio one connection may buffer (128 MiB ≈ 70 min of 16 kHz PCM16). Hot-reloaded. |
 | `maxBufferedAudioBytesTotal` | `536870912` | per new connection | Batch providers only: audio buffered across the whole process (512 MiB). Hot-reloaded. |
+
+A recording that is allowed to last as long as the session does is lost: the session's clock starts when the connection opens, the recording's a little later (microphone permission, connecting), and a batch provider (one that returns the transcript in one piece) transcribes only after Stop, so a cap equal to `maxDurationSeconds` can end the session (`session-limit`) before the automatic Stop or while the transcript is still pending. The default of 4200 s leaves 10 minutes for that beyond the default 60-minute recording. An app that sets `transcription.maxDurationSeconds` above 3600 s needs `maxSessionSeconds` raised to match (for the maximum of 7200 s, for example 7800).
 
 Sizing guidance: each concurrent connection holds one vLLM realtime session, so set `maxConnections` to what your GPU deployment sustains. Per-connection server memory is bounded by the backpressure high-water mark (~4 MB worst case, typically far less).
 
@@ -482,7 +484,7 @@ Notes:
 | `…rejected the connection (HTTP 401/403)`                      | Upstream auth — set/fix the model `apiKey`.                                                       |
 | Empty transcript / "no speech detected"                        | Clip silent or extremely short; check the input device with the admin **Microphone check** and the vLLM logs. |
 | Transcript stops mid-file behind a proxy                       | Proxy killing the WebSocket — verify Upgrade headers and raise `proxy_read_timeout` (see above).   |
-| `Transcription session exceeded the maximum duration`          | Session hit `maxSessionSeconds` — raise it for very long recordings.                              |
+| `Transcription session exceeded the maximum duration`          | Session hit `maxSessionSeconds` — raise it for very long recordings. It has to exceed the longest app recording limit (`transcription.maxDurationSeconds`) plus a margin; see [Runtime limits and tuning](#runtime-limits-and-tuning). |
 | Chat stuck on "generating"                                     | The `{"type":"done"}` frame never arrived — usually a proxy dropping the socket after `stop`; check proxy timeouts, then server logs (`component: RealtimeSTT`). |
 
 The messages quoted in the first column are what the bridge sends to the browser, and the chat shows them as they are: `Transcription failed: <message>`. A not-permitted model and an exhausted session have their own wording instead of the bridge's message.

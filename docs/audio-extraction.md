@@ -17,7 +17,7 @@ Users can upload video files through the standard file upload interface in any a
 When a video file is uploaded:
 1. The audio is read (`read`). For an MP4 or MOV that is the index and the audio bytes of the file, read with `File.slice()` (see [Large videos](#large-videos-mp4-and-mov-up-to-50-gb)); for any other container, the whole file as an ArrayBuffer
 2. The Web Audio API `decodeAudioData()` method extracts the audio track, in a context running at 16 kHz so the track is resampled while it is decoded (`decode`). Uncompressed PCM in a MOV needs no decoder: it is converted to floats as it is read, and this step is done at once
-3. An `OfflineAudioContext` downmixes the audio to mono and resamples it to 16 kHz (`resample`)
+3. An `OfflineAudioContext` downmixes the audio to mono and resamples it to 16 kHz (`resample`). Of an MP4 or MOV whose edit list trims the audio only the part it plays is rendered (see [Large videos](#large-videos-mp4-and-mov-up-to-50-gb))
 4. The audio is converted to WAV format (16-bit PCM), in slices (`encode`)
 5. The WAV file is encoded as base64 for transmission to the AI model (`finalize`). The attachment also keeps the WAV itself as a `Blob`, which transcription decodes directly (the `Blob` is never serialized with the chat message)
 
@@ -33,12 +33,22 @@ A browser cannot read more than about 2 GB of a file into one ArrayBuffer (measu
 
 The memory used is proportional to the audio, not to the file: reading 30 minutes of AAC from a 10 GB video takes about 30 MB of reads. The progress of the `read` stage counts the bytes of the index and of the audio.
 
+**The index is checked against the file.** The sample table comes from the file, so it is not believed blindly: every sample range has to lie inside the file, and together the ranges cannot add up to more than the file (samples do not overlap), and the chunks of the table have to follow each other. A damaged or crafted index could otherwise ask for terabytes of audio, which would freeze the tab while the reads were planned, or read the same bytes over and over. Such a file is refused (`mp4-invalid`) at once, before any audio is read.
+
+**Edit lists.** An MP4 or MOV can carry an edit list (`edts`/`elst`) that says which part of the track is played. QuickTime writes one when a recording is trimmed, and ffmpeg and most AAC encoders write one that skips the encoder's delay (the first 1024 samples). The reader does not cut the samples, it hands the result of the edit list to the resample as a trim, so only the part the file plays is rendered and transcribed:
+
+- Empty edits at the start only delay the track, they are ignored
+- Then one edit at normal speed is a trim: where it starts, and how long it lasts (to the end of the audio where it reaches it)
+- Anything else (the audio played in several pieces, at another speed, a gap after it has started, nothing played at all) cannot be described by one trim and would give other audio than the file plays. The file is refused (`mp4-unsupported-edit`) and takes the path of any other file the reader cannot take: the whole file is decoded by the browser, which applies the edit list itself (up to 1.9 GB), above that the extraction fails with `video-large-audio-unsupported`
+
+**Fragmented files** (`mvex` in the index, the rest of the samples in `moof` boxes after it) are always refused, also those whose index lists some samples: reading only those would cut the audio off, and the transcript with it.
+
 What does not work this way, and what happens then:
 
 | The file | Up to about 1.9 GB | Above |
 |----------|--------------------|-------|
 | MP4/MOV with AAC-LC, HE-AAC or PCM audio | read in parts | read in parts |
-| MP4/MOV with another audio codec (Opus, AC-3, ALAC, ...), a fragmented MP4 (`moof`), a damaged index, an audio track the browser cannot decode | the whole file is decoded by the browser, as for any other video | `video-large-audio-unsupported` |
+| MP4/MOV with another audio codec (Opus, AC-3, ALAC, ...), unsigned 16, 24 or 32-bit `lpcm`, a fragmented MP4 (`moof`, whether or not its index lists samples), an edit list that plays the audio in pieces or at another speed, a damaged index or one that points outside of the file, an audio track the browser cannot decode | the whole file is decoded by the browser, as for any other video | `video-large-audio-unsupported` |
 | Other containers (WebM, MKV, AVI, ...) | the whole file is decoded by the browser | `video-unsupported-large-container` |
 | `extractAudio: false` (the video itself is sent to the model) | read whole as a data URL | `video-too-large-to-attach` |
 
@@ -155,8 +165,8 @@ The system handles various error conditions:
 
 ### Audio Of A Large Video Cannot Be Read
 **Error**: `video-large-audio-unsupported`
-**Cause**: An MP4 or MOV larger than about 1.9 GB whose audio cannot be read in parts: a codec other than AAC or PCM, a fragmented MP4, a damaged index, or a browser that cannot decode the AAC. A smaller file would have been decoded from the whole file instead
-**Solution**: Use AAC or uncompressed audio in a regular (not fragmented) MP4 or MOV, or a browser with an AAC decoder
+**Cause**: An MP4 or MOV larger than about 1.9 GB whose audio cannot be read in parts: a codec other than AAC or PCM, a fragmented MP4, an edit list that plays the audio in pieces or at another speed, a damaged index, or a browser that cannot decode the AAC. A smaller file would have been decoded from the whole file instead
+**Solution**: Use AAC or uncompressed audio in a regular (not fragmented) MP4 or MOV whose timeline is not cut up into pieces, or a browser with an AAC decoder
 
 ### Video Too Large To Attach As It Is
 **Error**: `video-too-large-to-attach`
@@ -219,10 +229,11 @@ A standalone test page is available at `tests/manual/test-audio-extraction.html`
 
 - **`client/src/features/upload/utils/mp4AudioExtraction.js`**
   - `readMp4Audio()` - The audio of an MP4/MOV/M4A of any size, read with `File.slice()`: AAC as ADTS or PCM as floats
-  - `isMp4Container()`, `planReads()`, `parseAudioSpecificConfig()`, `writeAdtsHeader()`, `convertPcmToMono()` - Its parts
+  - `readMp4Audio()` returns the `trim` of the edit list (`{ offset, duration }` in seconds, or null) next to the audio; `extractAudioFromVideo()` hands it to `resampleTo16kMono()`
+  - `isMp4Container()`, `planReads()`, `parseAudioSpecificConfig()`, `writeAdtsHeader()`, `convertPcmToMono()`, `parseEditList()`, `editListTrim()`, `createRangeGuard()` - Its parts
 
 - **`client/src/utils/realtimeTranscriptionCore.js`**
-  - `resampleTo16kMono()` - Downmix and resample the decoded audio; with `onProgress`/`signal` it suspends the offline render at 40 checkpoints
+  - `resampleTo16kMono()` - Downmix and resample the decoded audio; with `onProgress`/`signal` it suspends the offline render at 40 checkpoints. With `offset`/`duration` (seconds) it renders only that part of the audio, the trim an MP4/MOV edit list gives
 
 - **`client/src/utils/wav.js`**
   - `audioBufferToWav()` - WAV format conversion

@@ -160,6 +160,11 @@ export const withAudioFormat = (bytes, format) => {
 const u16 = value => new Uint8Array([(value >> 8) & 255, value & 255]);
 const u32 = value =>
   new Uint8Array([(value >>> 24) & 255, (value >>> 16) & 255, (value >>> 8) & 255, value & 255]);
+// 64-bit, signed where `value` is negative (-1 is all ones)
+const u64 = value => {
+  const high = Math.floor(value / 2 ** 32);
+  return new Uint8Array([...u32(high), ...u32(value - high * 2 ** 32)]);
+};
 const f64 = value => {
   const out = new Uint8Array(8);
   new DataView(out.buffer).setFloat64(0, value);
@@ -187,17 +192,29 @@ const fullBox = (type, version, flags, ...parts) =>
  * reader looks at: ftyp, mdat, and a moov with a track whose sample description
  * is `entry` (the box of the sample entry). The PCM bytes are written in chunks
  * of `chunkFrames` frames. Only for what no tool in reach writes, e.g. `lpcm`.
+ *
+ * `tables` replaces what the sample tables say, to build the damaged or crafted
+ * files a reader must not believe: `runs` (`[first chunk, samples per chunk,
+ * description index = 1]` per `stsc` entry), `sampleSize` and `sampleCount`
+ * (`stsz`), `chunkOffsets` (`stco`, or `co64` with `wideOffsets`).
  */
-export const buildPcmMov = ({ entry, pcm, frameBytes, chunkFrames }) => {
+export const buildPcmMov = ({ entry, pcm, frameBytes, chunkFrames, tables = {} }) => {
   const ftyp = box('ftyp', ascii('qt  '), u32(0), ascii('qt  '));
   const mdat = box('mdat', pcm);
   const frames = pcm.length / frameBytes;
   const chunks = [];
   for (let frame = 0; frame < frames; frame += chunkFrames) chunks.push(frame);
   // The last chunk holds what is left, as in a real file
-  const runs = [[1, chunkFrames]];
-  if (frames % chunkFrames) runs.push([chunks.length, frames % chunkFrames]);
+  const runs = tables.runs ?? [[1, chunkFrames]];
+  if (!tables.runs && frames % chunkFrames) {
+    // A single chunk that is not full has the one run to itself
+    if (chunks.length === 1) runs[0][1] = frames % chunkFrames;
+    else runs.push([chunks.length, frames % chunkFrames]);
+  }
   const firstChunkAt = ftyp.length + 8;
+  const chunkOffsets =
+    tables.chunkOffsets ?? chunks.map(frame => firstChunkAt + frame * frameBytes);
+  const writeOffset = tables.wideOffsets ? u64 : u32;
   const stbl = box(
     'stbl',
     fullBox('stsd', 0, 0, u32(1), entry),
@@ -206,15 +223,19 @@ export const buildPcmMov = ({ entry, pcm, frameBytes, chunkFrames }) => {
       0,
       0,
       u32(runs.length),
-      ...runs.flatMap(([first, perChunk]) => [u32(first), u32(perChunk), u32(1)])
+      ...runs.flatMap(([first, perChunk, description = 1]) => [
+        u32(first),
+        u32(perChunk),
+        u32(description)
+      ])
     ),
-    fullBox('stsz', 0, 0, u32(frameBytes), u32(frames)),
+    fullBox('stsz', 0, 0, u32(tables.sampleSize ?? frameBytes), u32(tables.sampleCount ?? frames)),
     fullBox(
-      'stco',
+      tables.wideOffsets ? 'co64' : 'stco',
       0,
       0,
-      u32(chunks.length),
-      ...chunks.map(frame => u32(firstChunkAt + frame * frameBytes))
+      u32(chunkOffsets.length),
+      ...chunkOffsets.map(writeOffset)
     )
   );
   const trak = box(
@@ -258,3 +279,140 @@ export const lpcmEntry = ({ channels, sampleRate, bits, flags }) =>
     u32((channels * bits) / 8),
     u32(1)
   );
+
+// ---------------------------------------------------------------- changed in place
+
+/** The boxes in `bytes[start, end)`: `{ type, start, end }`, 32-bit sizes only. */
+const childrenOf = (bytes, start, end) => {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const children = [];
+  for (let at = start; at < end;) {
+    const size = view.getUint32(at);
+    children.push({
+      type: String.fromCharCode(...bytes.subarray(at + 4, at + 8)),
+      start: at,
+      end: at + size
+    });
+    at += size;
+  }
+  return children;
+};
+
+/** The `moov` of a fixture that has it last, its children, and the end of the file before it. */
+const moovOf = bytes => {
+  const moov = topLevelBoxes(bytes).find(candidate => candidate.type === 'moov');
+  if (moov.start + moov.size !== bytes.length) {
+    throw new Error('the fixture does not have its moov last');
+  }
+  return { start: moov.start, children: childrenOf(bytes, moov.start + 8, bytes.length) };
+};
+
+const sliceOf = (bytes, child) => bytes.subarray(child.start, child.end);
+
+/** `container` as a box of its own type, each child as `replace(child)` or as it was. */
+const mapChildren = (bytes, container, replace) =>
+  box(
+    container.type,
+    ...childrenOf(bytes, container.start + 8, container.end).map(
+      child => replace(child) ?? sliceOf(bytes, child)
+    )
+  );
+
+/** Whether a `trak` is the sound track: its `hdlr` says `soun`. */
+const isAudioTrack = (bytes, trak) => {
+  const mdia = childrenOf(bytes, trak.start + 8, trak.end).find(child => child.type === 'mdia');
+  const hdlr = mdia && childrenOf(bytes, mdia.start + 8, mdia.end).find(c => c.type === 'hdlr');
+  return (
+    Boolean(hdlr) &&
+    String.fromCharCode(...bytes.subarray(hdlr.start + 16, hdlr.start + 20)) === 'soun'
+  );
+};
+
+/**
+ * An `elst` box. `entries` are `{ segmentDuration, mediaTime, rate = 1 }` (a
+ * `mediaTime` of -1 is an empty edit). `version` 1 writes 64-bit fields. `count`
+ * writes another number of entries than there are: what a damaged file does.
+ */
+export const elstBox = (entries, { version = 0, count = entries.length } = {}) => {
+  const wide = version === 1;
+  const field = value => (wide ? u64(value) : u32(value));
+  return fullBox(
+    'elst',
+    version,
+    0,
+    u32(count),
+    ...entries.flatMap(({ segmentDuration, mediaTime, rate = 1 }) => {
+      const whole = Math.floor(rate);
+      return [
+        field(segmentDuration),
+        field(mediaTime),
+        u16(whole),
+        u16(Math.round((rate - whole) * 65536))
+      ];
+    })
+  );
+};
+
+/**
+ * The fixture (which has its `moov` last) with the edit list of its audio track
+ * replaced by `elst` (a box from `elstBox`), or with none where `elst` is null.
+ */
+export const withEditList = (bytes, elst) => {
+  const { start, children } = moovOf(bytes);
+  const audioIndex = children.findIndex(
+    child => child.type === 'trak' && isAudioTrack(bytes, child)
+  );
+  if (audioIndex < 0) throw new Error('no audio track in the fixture');
+  const trak = children[audioIndex];
+  const parts = childrenOf(bytes, trak.start + 8, trak.end).filter(child => child.type !== 'edts');
+  const kept = parts.map(part => sliceOf(bytes, part));
+  // Where it belongs: after the track header
+  if (elst) kept.splice(parts.findIndex(part => part.type === 'tkhd') + 1, 0, box('edts', elst));
+  const moov = box(
+    'moov',
+    ...children.map((child, i) => (i === audioIndex ? box('trak', ...kept) : sliceOf(bytes, child)))
+  );
+  return concat([bytes.subarray(0, start), moov]);
+};
+
+/** An `mvhd` or `mdhd` (the `tail` is what follows the duration in each). */
+const timesBox = (type, { timescale, duration, wide = false }, tail) =>
+  fullBox(
+    type,
+    wide ? 1 : 0,
+    0,
+    wide ? u64(0) : u32(0), // creation
+    wide ? u64(0) : u32(0), // modification
+    u32(timescale),
+    wide ? u64(duration) : u32(duration),
+    tail
+  );
+
+/**
+ * The fixture (which has its `moov` last) with the timescale and duration of its
+ * movie (`mvhd`) and of the media of its audio track (`mdhd`) replaced:
+ * `{ timescale, duration, wide }` each, `wide` for the 64-bit version 1 boxes.
+ */
+export const withTimes = (bytes, { movie, media }) => {
+  const { start, children } = moovOf(bytes);
+  const replaced = children.map(child => {
+    if (child.type === 'mvhd' && movie) return timesBox('mvhd', movie, new Uint8Array(80));
+    if (child.type !== 'trak' || !media || !isAudioTrack(bytes, child)) return null;
+    return mapChildren(bytes, child, part =>
+      part.type === 'mdia'
+        ? mapChildren(bytes, part, header =>
+            header.type === 'mdhd' ? timesBox('mdhd', media, new Uint8Array(4)) : null
+          )
+        : null
+    );
+  });
+  const moov = box('moov', ...children.map((child, i) => replaced[i] ?? sliceOf(bytes, child)));
+  return concat([bytes.subarray(0, start), moov]);
+};
+
+/** The fixture (which has its `moov` last) with an empty box of `type` added to its `moov`. */
+export const withMoovChild = (bytes, type) => {
+  const { start, children } = moovOf(bytes);
+  const moov = box('moov', ...children.map(child => sliceOf(bytes, child)), box(type));
+  return concat([bytes.subarray(0, start), moov]);
+};

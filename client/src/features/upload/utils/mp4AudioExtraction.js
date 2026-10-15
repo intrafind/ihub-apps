@@ -27,8 +27,20 @@
  *     into one object per frame (86 million for half an hour of 48 kHz), where
  *     the raw table is a few thousand chunk offsets
  *
- * Anything else (fragmented files, Opus, AC-3, ALAC, ...) is refused with an
- * `Mp4AudioError`; the caller decides whether the whole-file path can take over.
+ * The sample table is read from the file, so it is checked before anything is
+ * done with it: every sample range has to lie inside the file, and together they
+ * cannot be larger than it. A damaged or crafted index could otherwise ask for
+ * trillions of frames (and freeze the page while the read plan is made) or for
+ * the same bytes again and again.
+ *
+ * The edit list of the track (`edts`/`elst`) is not applied to the samples, it is
+ * handed back as a `trim` (where the audio starts and how long it lasts, in
+ * seconds) for the resample to apply: QuickTime writes one when a recording is
+ * trimmed, and an AAC encoder's delay is taken off by one.
+ *
+ * Anything else (fragmented files, Opus, AC-3, ALAC, a track played in several
+ * pieces, ...) is refused with an `Mp4AudioError`; the caller decides whether the
+ * whole-file path can take over.
  */
 import { createAbortError, throwIfAborted } from '../../../utils/abortable';
 
@@ -72,7 +84,9 @@ const ADTS_CHANNEL_CONFIG = { 1: 1, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6, 8: 7 };
  * Why the audio could not be read this way. `code` says what was wrong:
  * `mp4-invalid` (not an MP4/MOV file, damaged index), `mp4-no-moov`,
  * `mp4-fragmented`, `mp4-no-audio-track`, `mp4-unsupported-codec` (`codec` names
- * it), `mp4-unsupported-layout`, `mp4-too-large`.
+ * it), `mp4-unsupported-layout`, `mp4-unsupported-edit` (an edit list that plays
+ * the audio in pieces, at another speed or with gaps, which no single trim
+ * describes), `mp4-too-large`.
  */
 export class Mp4AudioError extends Error {
   constructor(code, detail = {}) {
@@ -88,6 +102,9 @@ export class Mp4AudioError extends Error {
 const be16 = (b, o) => (b[o] << 8) | b[o + 1];
 const be32 = (b, o) => ((b[o] << 24) | (b[o + 1] << 16) | (b[o + 2] << 8) | b[o + 3]) >>> 0;
 const be64 = (b, o) => be32(b, o) * 4294967296 + be32(b, o + 4);
+// Signed: the high word carries the sign (-1 is all ones)
+const beInt32 = (b, o) => be32(b, o) | 0;
+const beInt64 = (b, o) => beInt32(b, o) * 4294967296 + be32(b, o + 4);
 const fourcc = (b, o) => String.fromCharCode(b[o], b[o + 1], b[o + 2], b[o + 3]);
 
 /** Read `file[start, end)`; stops with the abort error when `signal` fires. */
@@ -221,17 +238,20 @@ const describeTracks = (b, moov, isQuickTime) => {
     if (trak.type !== 'trak') continue;
     const mdia = childOf(b, trak, 'mdia');
     const hdlr = mdia && childOf(b, mdia, 'hdlr');
+    const mdhd = mdia && childOf(b, mdia, 'mdhd');
     const minf = mdia && childOf(b, mdia, 'minf');
     const stbl = minf && childOf(b, minf, 'stbl');
     const stsd = stbl && childOf(b, stbl, 'stsd');
     const tkhd = childOf(b, trak, 'tkhd');
+    const edts = childOf(b, trak, 'edts');
+    const elst = edts && childOf(b, edts, 'elst');
     if (!hdlr || !stsd || !tkhd) continue;
 
     const body = tkhd.start + tkhd.headerSize;
     const id = be32(b, body + 4 + (b[body] === 1 ? 16 : 8));
     const handler = fourcc(b, hdlr.start + hdlr.headerSize + 8);
     const entry = boxesIn(b, stsd.start + stsd.headerSize + 8, stsd.end)[0];
-    const track = { trak, stbl, id, handler, format: entry?.type };
+    const track = { trak, stbl, id, handler, format: entry?.type, mdhd, elst };
     if (handler === 'soun' && entry && entry.end - entry.start - entry.headerSize >= 28) {
       // After the 6 reserved bytes and the data reference index
       const at = entry.start + entry.headerSize + 8;
@@ -252,6 +272,127 @@ const describeTracks = (b, moov, isQuickTime) => {
     tracks.push(track);
   }
   return tracks;
+};
+
+// ------------------------------------------------------------ edit lists
+
+/**
+ * The timescale (ticks per second) and the duration (in ticks) of an `mvhd` or
+ * `mdhd` box, which are laid out alike: version and flags, the creation and
+ * modification times (4 bytes each, 8 in version 1), the timescale, the duration
+ * (4 bytes, 8 in version 1). `duration` is null where the file does not know it
+ * (0, or all ones as a recorder that is still writing leaves it).
+ */
+const readTimes = (b, box) => {
+  const body = box.start + box.headerSize;
+  const wide = b[body] === 1;
+  if (box.end - body < (wide ? 32 : 20)) throw new Mp4AudioError('mp4-invalid');
+  const at = body + 4 + (wide ? 16 : 8);
+  const duration = wide ? be64(b, at + 4) : be32(b, at + 4);
+  const unknown =
+    duration === 0 || (wide ? duration > Number.MAX_SAFE_INTEGER : duration === 0xffffffff);
+  return { timescale: be32(b, at), duration: unknown ? null : duration };
+};
+
+/**
+ * The entries of an `elst` box: `{ segmentDuration, mediaTime, mediaRate }`.
+ * `segmentDuration` is in the timescale of the movie, `mediaTime` in that of the
+ * track's media (-1 for an empty edit: the track is silent for that long), and
+ * `mediaRate` is 1 for normal speed (16.16 fixed point in the file).
+ */
+export const parseEditList = (b, elst) => {
+  const body = elst.start + elst.headerSize;
+  const version = b[body];
+  if (version !== 0 && version !== 1) throw new Mp4AudioError('mp4-unsupported-edit');
+  if (elst.end - body < 8) throw new Mp4AudioError('mp4-invalid');
+  const count = be32(b, body + 4);
+  const entryBytes = version === 1 ? 20 : 12;
+  // The count is the file's word; the box says how many entries fit
+  if (count > Math.floor((elst.end - body - 8) / entryBytes))
+    throw new Mp4AudioError('mp4-invalid');
+
+  const entries = [];
+  for (let i = 0; i < count; i++) {
+    const at = body + 8 + i * entryBytes;
+    const rateAt = at + (version === 1 ? 16 : 8);
+    entries.push({
+      segmentDuration: version === 1 ? be64(b, at) : be32(b, at),
+      mediaTime: version === 1 ? beInt64(b, at + 8) : beInt32(b, at + 4),
+      mediaRate: ((be16(b, rateAt) << 16) >> 16) + be16(b, rateAt + 2) / 65536
+    });
+  }
+  return entries;
+};
+
+/**
+ * What an edit list plays of the track's media, as a trim: `{ offset, duration }`
+ * in seconds, where `duration` is null for "to the end". Null where the whole
+ * media is played. Only the usual cases are understood:
+ *
+ *   - empty edits (`mediaTime` -1) at the start only delay the track, which does
+ *     not matter for the transcript of a recording: they are left out
+ *   - then one edit at normal speed: what a trimmed recording has, and what an
+ *     AAC encoder's delay is taken off with (an offset of 1024 samples)
+ *
+ * Anything else (several pieces, another speed, an empty edit after the audio
+ * starts, nothing at all played) would give other audio than the file plays, so
+ * it throws `mp4-unsupported-edit` instead.
+ *
+ * @param {Array<{segmentDuration: number, mediaTime: number, mediaRate: number}>} entries
+ * @param {Object} timing
+ * @param {number} timing.movieTimescale - Ticks per second of `segmentDuration`
+ * @param {number} timing.mediaTimescale - Ticks per second of `mediaTime`
+ * @param {number|null} timing.mediaDuration - Length of the media in its ticks, null if unknown
+ * @returns {{offset: number, duration: number|null}|null}
+ */
+export const editListTrim = (entries, { movieTimescale, mediaTimescale, mediaDuration }) => {
+  if (!entries.length) return null;
+  let first = 0;
+  while (first < entries.length && entries[first].mediaTime === -1) first++;
+  // Only silence is played, or the audio is played in more than one piece
+  if (first >= entries.length || first + 1 < entries.length) {
+    throw new Mp4AudioError('mp4-unsupported-edit');
+  }
+
+  const { segmentDuration, mediaTime, mediaRate } = entries[first];
+  if (mediaRate !== 1) throw new Mp4AudioError('mp4-unsupported-edit');
+  // A negative start other than the empty edit's -1 is no time at all
+  if (!Number.isSafeInteger(mediaTime) || mediaTime < 0) throw new Mp4AudioError('mp4-invalid');
+  if (!(movieTimescale > 0 && mediaTimescale > 0)) throw new Mp4AudioError('mp4-invalid');
+  // The audio starts where the media has ended: nothing would be played
+  if (mediaDuration !== null && mediaTime >= mediaDuration) {
+    throw new Mp4AudioError('mp4-unsupported-edit');
+  }
+
+  // The length of a segment is rounded to a tick of the movie: a segment that
+  // ends within one tick of the media's end reaches it
+  const movieTickInMedia = mediaTimescale / movieTimescale;
+  const segmentEnd = mediaTime + segmentDuration * movieTickInMedia;
+  const toTheEnd =
+    segmentDuration === 0 ||
+    (mediaDuration !== null && segmentEnd >= mediaDuration - movieTickInMedia);
+
+  const offset = mediaTime / mediaTimescale;
+  if (offset === 0 && toTheEnd) return null;
+  return { offset, duration: toTheEnd ? null : segmentDuration / movieTimescale };
+};
+
+/**
+ * The trim the edit list of `track` asks for (see `editListTrim`), or null where
+ * it has none or plays all of it.
+ */
+const trimOf = (b, moov, track) => {
+  if (!track.elst) return null;
+  const entries = parseEditList(b, track.elst);
+  if (!entries.length) return null;
+  const mvhd = childOf(b, moov, 'mvhd');
+  if (!mvhd || !track.mdhd) throw new Mp4AudioError('mp4-invalid');
+  const media = readTimes(b, track.mdhd);
+  return editListTrim(entries, {
+    movieTimescale: readTimes(b, mvhd).timescale,
+    mediaTimescale: media.timescale,
+    mediaDuration: media.duration
+  });
 };
 
 // ------------------------------------------------------------ PCM
@@ -328,6 +469,8 @@ export const describePcm = (b, track) => {
     if (nonInterleaved || be32(b, at + 28) !== (channels * bits) / 8) return null;
     if (isFloat) kind = { 32: 'float32', 64: 'float64' }[bits];
     else if (bits === 8) kind = isSigned ? 'int8' : 'uint8';
+    // The readers of the wider formats are signed: unsigned would play as noise
+    else if (!isSigned) return null;
     else kind = { 16: 'int16', 24: 'int24', 32: 'int32' }[bits];
     if (kind && !/^(u?int8)$/.test(kind)) kind += little ? 'le' : 'be';
   }
@@ -338,11 +481,35 @@ export const describePcm = (b, track) => {
 };
 
 /**
+ * A check for the sample ranges of a track, which the file dictates: each call
+ * takes the next range and throws `mp4-invalid` unless it lies inside the file
+ * and the ranges so far add up to no more than the file (samples do not overlap).
+ * `fileSize` is that of the file, so a range that reaches past it, however it is
+ * made up, is refused before anything is made of it.
+ */
+export const createRangeGuard = fileSize => {
+  let total = 0;
+  return (offset, bytes) => {
+    total += bytes;
+    // Written so that a NaN fails too
+    if (!(offset + bytes <= fileSize) || !(total <= fileSize)) {
+      throw new Mp4AudioError('mp4-invalid');
+    }
+  };
+};
+
+/**
  * The byte ranges of the chunks of a track from its raw sample table:
  * `stsc` (samples per chunk), `stco`/`co64` (where each chunk starts) and a
  * constant sample size from `stsz`. `[{ offset, bytes }]`
+ *
+ * Every chunk is checked against the size of the file as it is made (see
+ * `createRangeGuard`): two 32-bit fields (samples per chunk, sample size) can
+ * ask for 18 exabytes, which `splitIntoFrames` would cut into trillions of
+ * pieces before any limit could say no. The first chunk of each run of `stsc`
+ * has to be later than that of the run before, so that no chunk is made twice.
  */
-const readChunks = (b, track) => {
+const readChunks = (b, track, fileSize) => {
   const { stbl } = track;
   const stsz = childOf(b, stbl, 'stsz');
   const stsc = childOf(b, stbl, 'stsc');
@@ -369,7 +536,9 @@ const readChunks = (b, track) => {
   const runCount = be32(b, runsAt + 4);
   if (runsAt + 8 + runCount * 12 > stsc.end) throw new Mp4AudioError('mp4-invalid');
 
+  const guard = createRangeGuard(fileSize);
   const chunks = [];
+  let previousFirst = 0;
   for (let run = 0; run < runCount; run++) {
     const entryAt = runsAt + 8 + run * 12;
     const first = be32(b, entryAt);
@@ -377,13 +546,16 @@ const readChunks = (b, track) => {
     const descriptionIndex = be32(b, entryAt + 8);
     // A track mixing sample descriptions would mix sample formats
     if (descriptionIndex !== 1) throw new Mp4AudioError('mp4-unsupported-layout');
+    // Chunks are numbered from 1 and the runs follow each other
+    if (first <= previousFirst) throw new Mp4AudioError('mp4-invalid');
+    previousFirst = first;
     const last = run + 1 < runCount ? be32(b, entryAt + 12) - 1 : chunkCount;
     for (let chunk = first; chunk <= last && chunk <= chunkCount; chunk++) {
       const at = offsetsAt + 8 + (chunk - 1) * (wide ? 8 : 4);
-      chunks.push({
-        offset: wide ? be64(b, at) : be32(b, at),
-        bytes: samplesPerChunk * sampleSize
-      });
+      const offset = wide ? be64(b, at) : be32(b, at);
+      const bytes = samplesPerChunk * sampleSize;
+      guard(offset, bytes);
+      chunks.push({ offset, bytes });
     }
   }
   return chunks;
@@ -678,6 +850,12 @@ const plainBuffer = (length, sampleRate) => {
 };
 
 /**
+ * The part of the audio a file plays: starts `offset` seconds in, lasts `duration`
+ * seconds (null: to the end).
+ * @typedef {{offset: number, duration: number|null}} Trim
+ */
+
+/**
  * Read the audio of an MP4/MOV/M4A file.
  *
  * @param {File} file
@@ -692,8 +870,12 @@ const plainBuffer = (length, sampleRate) => {
  *   Where PCM is written to: a mono buffer. `audioContext.createBuffer(1, ...)`
  *   makes one the Web Audio API can resample, which a plain buffer is not
  * @returns {Promise<{kind: 'aac', blob: Blob, codec: string, sampleRate: number,
- *   channels: number, duration: number} | {kind: 'pcm', buffer: AudioBuffer,
- *   codec: string, sampleRate: number, channels: number, duration: number}>}
+ *   channels: number, duration: number, trim: Trim|null} | {kind: 'pcm',
+ *   buffer: AudioBuffer, codec: string, sampleRate: number, channels: number,
+ *   duration: number, trim: Trim|null}>} `duration` is that of all the audio the
+ *   file holds. `trim` is what its edit list plays of that, `{ offset, duration }`
+ *   in seconds (`duration` null: to the end), or null for all of it. The caller
+ *   applies it, e.g. with the `offset` and `duration` of `resampleTo16kMono`
  * @throws {Mp4AudioError} when this reader cannot take the file
  */
 export const readMp4Audio = async (
@@ -745,12 +927,10 @@ export const readMp4Audio = async (
   const audioTracks = tracks.filter(track => track.handler === 'soun');
   if (!audioTracks.length) throw new Mp4AudioError('mp4-no-audio-track');
   if (boxesIn(index, moov.start + moov.headerSize, moov.end).some(box => box.type === 'mvex')) {
-    // The samples are in `moof` boxes between the `mdat`s: nothing here lists them
-    const empty = audioTracks.every(track => {
-      const stsz = childOf(index, track.stbl, 'stsz');
-      return !stsz || be32(index, stsz.start + stsz.headerSize + 8) === 0;
-    });
-    if (empty) throw new Mp4AudioError('mp4-fragmented');
+    // More samples follow in `moof` boxes between the `mdat`s, and nothing here
+    // lists them. Not even where the index has some of its own: reading those
+    // alone would cut the audio off
+    throw new Mp4AudioError('mp4-fragmented');
   }
 
   const track = audioTracks.find(
@@ -760,13 +940,21 @@ export const readMp4Audio = async (
     throw new Mp4AudioError('mp4-unsupported-codec', { codec: audioTracks[0].format });
   }
 
+  // Where the audio starts and ends, if the edit list says; a file this cannot
+  // describe is refused here, before any audio is read
+  const trim = trimOf(index, moov, track);
+
   const total = { value: index.length };
   const progressOf = bytes => report(index.length + bytes, total.value);
 
   // ---- PCM: the samples straight into floats
   const pcm = track.format === 'mp4a' ? null : describePcm(index, track);
   if (pcm) {
-    const pieces = splitIntoFrames(readChunks(index, track), pcm.frameBytes, maxReadBytes);
+    const pieces = splitIntoFrames(
+      readChunks(index, track, file.size),
+      pcm.frameBytes,
+      maxReadBytes
+    );
     const frames = pieces.reduce((sum, piece) => sum + piece.bytes / pcm.frameBytes, 0);
     if (!frames) throw new Mp4AudioError('mp4-invalid');
     if (frames * 4 > MAX_PCM_BYTES) throw new Mp4AudioError('mp4-too-large');
@@ -804,7 +992,8 @@ export const readMp4Audio = async (
       codec: track.format,
       sampleRate: pcm.sampleRate,
       channels: pcm.channels,
-      duration: frames / pcm.sampleRate
+      duration: frames / pcm.sampleRate,
+      trim
     };
   }
 
@@ -817,8 +1006,10 @@ export const readMp4Audio = async (
   const table = await readAacTable(trimmed, track.id, track.sound?.channels);
   const { offsets, sizes, adts } = table;
   if (!offsets.length) throw new Mp4AudioError('mp4-invalid');
-  for (const size of sizes) {
-    if (size + 7 > 8191) throw new Mp4AudioError('mp4-unsupported-layout');
+  const guard = createRangeGuard(file.size);
+  for (let i = 0; i < sizes.length; i++) {
+    if (sizes[i] + 7 > 8191) throw new Mp4AudioError('mp4-unsupported-layout');
+    guard(offsets[i], sizes[i]);
   }
   const reads = planReads(offsets, sizes, { maxRead: maxReadBytes });
   total.value += reads.reduce((sum, read) => sum + read.end - read.start, 0);
@@ -850,6 +1041,7 @@ export const readMp4Audio = async (
     sampleRate: adts.outputSampleRate,
     channels: track.sound?.channels,
     // An AAC frame is 1024 samples of the core's rate (before any SBR)
-    duration: (offsets.length * 1024) / adts.sampleRate
+    duration: (offsets.length * 1024) / adts.sampleRate,
+    trim
   };
 };

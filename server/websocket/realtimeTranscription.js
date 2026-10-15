@@ -102,7 +102,12 @@ const BACKPRESSURE_POLL_MS = 250;
 // Hard ceiling on a single bridge session's lifetime, so a (possibly scripted)
 // client streaming forever can't pin a GPU-backed upstream session
 // indefinitely. Overridable via platform.speech.realtime.maxSessionSeconds.
-const DEFAULT_MAX_SESSION_SECONDS = 3600;
+// 4200 s = the 3600 s an app records by default (transcription.maxDurationSeconds)
+// plus 10 minutes. The session's clock starts when the connection opens and the
+// recording's a little later, and a batch provider transcribes only after Stop,
+// which takes minutes for an hour of audio. A cap equal to the recording limit
+// would end the session before the transcript arrives and lose the recording.
+const DEFAULT_MAX_SESSION_SECONDS = 4200;
 
 // Defaults for the concurrent-connection caps. Overridable via
 // platform.speech.realtime.{maxConnections,maxConnectionsPerUser}.
@@ -1087,11 +1092,7 @@ export function bridgeConnection(clientWs, user, limiter, options = {}) {
   // Hard cap on the whole session so a client streaming forever can't pin a
   // GPU-backed upstream session indefinitely (per-user caps bound how many, this
   // bounds how long). Configurable via platform.speech.realtime.maxSessionSeconds.
-  const platformRealtime = (configCache.getPlatform() || {}).speech?.realtime || {};
-  const maxSessionSeconds =
-    Number.isInteger(platformRealtime.maxSessionSeconds) && platformRealtime.maxSessionSeconds > 0
-      ? platformRealtime.maxSessionSeconds
-      : DEFAULT_MAX_SESSION_SECONDS;
+  const maxSessionSeconds = getMaxSessionSeconds();
   sessionTimer = setTimeout(() => {
     failBridge(
       'session-limit',
@@ -1104,6 +1105,22 @@ export function bridgeConnection(clientWs, user, limiter, options = {}) {
     component: 'RealtimeSTT',
     userId: user.id
   });
+}
+
+/**
+ * The hard cap on one session's lifetime in seconds: the platform's
+ * `speech.realtime.maxSessionSeconds` where that is a positive integer, the
+ * default otherwise. It has to exceed the longest recording an app allows
+ * (`transcription.maxDurationSeconds`) with room for the final transcription.
+ * Exported for tests.
+ *
+ * @returns {number}
+ */
+export function getMaxSessionSeconds() {
+  const { maxSessionSeconds } = (configCache.getPlatform() || {}).speech?.realtime || {};
+  return Number.isInteger(maxSessionSeconds) && maxSessionSeconds > 0
+    ? maxSessionSeconds
+    : DEFAULT_MAX_SESSION_SECONDS;
 }
 
 /**

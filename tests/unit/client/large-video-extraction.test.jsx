@@ -30,15 +30,20 @@ const { isAbortError } = require('../../../client/src/utils/abortable');
 const {
   bytesOf,
   bytesRead,
+  elstBox,
   fileOf,
   fixture,
   inflate,
   recording,
-  withAudioFormat
+  withAudioFormat,
+  withEditList,
+  withMoovChild
 } = require('../../utils/mp4Fixtures');
 
 // What decoding the ADTS stream of aac44s_faststart.mp4 yields: 131 frames of 1024
 const DECODED_SECONDS = (131 * 1024) / 44100;
+// Its edit list skips the encoder's delay (1024 samples) when it is played
+const ENCODER_DELAY_SECONDS = 1024 / 44100;
 const ADTS_BYTES = 9540 + 131 * 7;
 
 let contexts;
@@ -100,7 +105,15 @@ class FakeOfflineAudioContext {
   }
 
   createBufferSource() {
-    const source = { connect: () => {}, start: () => {}, disconnect: () => {}, buffer: null };
+    const source = {
+      connect: () => {},
+      // What the render was told to play: [when, offset, duration]
+      start: (...args) => {
+        source.startArgs = args;
+      },
+      disconnect: () => {},
+      buffer: null
+    };
     sources.push(source);
     return source;
   }
@@ -152,7 +165,8 @@ describe('extractAudioFromVideo: MP4 and MOV are read in parts', () => {
       sampleRate: 16000,
       channels: 1
     });
-    expect(result.duration).toBeCloseTo(DECODED_SECONDS, 3);
+    // ... without the encoder's delay at its start, which the edit list of the file takes off
+    expect(result.duration).toBeCloseTo(DECODED_SECONDS - ENCODER_DELAY_SECONDS, 3);
     expect(result.base64).toMatch(/^data:audio\/wav;base64,/);
     expect(result.blob.size).toBe(result.size);
     expect(contexts[0].state).toBe('closed');
@@ -278,6 +292,122 @@ describe('extractAudioFromVideo: where the whole file takes over', () => {
 
     expect(contexts[0].decoded).toEqual([64]);
     expect(result.format).toBe('audio/wav');
+  });
+});
+
+describe('extractAudioFromVideo: the edit list of the video', () => {
+  // The tracks of aac48m_moovend.mov and pcm44s.mov are played from an edit list
+  const aac = bytesOf('aac48m_moovend.mov');
+  const pcm = bytesOf('pcm44s.mov');
+  const mov = bytes => fileOf(bytes, 'edit.mov', 'video/quicktime');
+
+  test('PCM: only the part the edit list plays is rendered, and the render is that long', async () => {
+    // 44100 ticks a second in the media: from 0.1 s on, for 0.1 s of the 0.3 s
+    const file = mov(withEditList(pcm, elstBox([{ segmentDuration: 100, mediaTime: 4410 }])));
+
+    const result = await extractAudioFromVideo(file);
+
+    expect(contexts[0].buffers[0]).toMatchObject({ sampleRate: 44100, length: 13230 });
+    expect(offlineContexts).toEqual([{ channels: 1, length: 1600, sampleRate: 16000 }]);
+    expect(sources[0].startArgs).toEqual([0, 0.1, 0.1]);
+    expect(result.duration).toBeCloseTo(0.1, 5);
+  });
+
+  test('PCM that is played from start to end is rendered as it is, with no offset', async () => {
+    const result = await extractAudioFromVideo(fixture('pcm44s.mov', 'video/quicktime'));
+
+    expect(offlineContexts).toEqual([{ channels: 1, length: 4800, sampleRate: 16000 }]);
+    expect(sources[0].startArgs).toEqual([0]);
+    expect(result.duration).toBeCloseTo(0.3, 5);
+  });
+
+  test('a start without a length: the render goes to the end of the audio', async () => {
+    const file = mov(withEditList(pcm, elstBox([{ segmentDuration: 0, mediaTime: 4410 }])));
+
+    const result = await extractAudioFromVideo(file);
+
+    expect(offlineContexts).toEqual([{ channels: 1, length: 3200, sampleRate: 16000 }]);
+    expect(sources[0].startArgs).toEqual([0, 0.1]);
+    expect(result.duration).toBeCloseTo(0.2, 5);
+  });
+
+  test('AAC: what the browser decodes is trimmed by the edit list, the encoder delay included', async () => {
+    // Decoded mono at 16 kHz, which needs no render: the samples are cut where they are
+    const file = mov(withEditList(aac, elstBox([{ segmentDuration: 1500, mediaTime: 48000 }])));
+
+    const result = await extractAudioFromVideo(file);
+
+    // 1.5 s from 1 s on of the 3.04 s the fake decoder returns
+    expect(result.duration).toBeCloseTo(1.5, 5);
+    expect(result.size).toBe(44 + 24000 * 2);
+  });
+
+  test('a file whose edit list cannot be followed is decoded whole, as a file always was', async () => {
+    const bytes = withEditList(
+      aac,
+      elstBox([
+        { segmentDuration: 1000, mediaTime: 0 },
+        { segmentDuration: 1000, mediaTime: 96000 }
+      ])
+    );
+    const file = mov(bytes);
+    file.arrayBuffer = async () => bytes.buffer;
+
+    const result = await extractAudioFromVideo(file);
+
+    // The browser was handed the file: it applies the edit list itself, no trim is made
+    expect(contexts[0].decoded).toEqual([bytes.length]);
+    expect(result.duration).toBeCloseTo(DECODED_SECONDS, 3);
+    expect(console.warn).toHaveBeenCalledWith(
+      expect.stringContaining('reading the file in parts'),
+      expect.objectContaining({ code: 'mp4-unsupported-edit' })
+    );
+  });
+
+  test('a fragmented file with samples in its index is decoded whole too', async () => {
+    const bytes = withMoovChild(aac, 'mvex');
+    const file = mov(bytes);
+    file.arrayBuffer = async () => bytes.buffer;
+
+    const result = await extractAudioFromVideo(file);
+
+    expect(contexts[0].decoded).toEqual([bytes.length]);
+    expect(result.duration).toBeCloseTo(DECODED_SECONDS, 3);
+    expect(console.warn).toHaveBeenCalledWith(
+      expect.stringContaining('reading the file in parts'),
+      expect.objectContaining({ code: 'mp4-fragmented' })
+    );
+  });
+
+  test('a 3 GB file with such an edit list fails clearly, with nothing to fall back on', async () => {
+    const bytes = withEditList(
+      aac,
+      elstBox([
+        { segmentDuration: 1000, mediaTime: 0 },
+        { segmentDuration: 1000, mediaTime: 96000 }
+      ])
+    );
+
+    await expect(extractAudioFromVideo(inflate(bytes, 3 * GB))).rejects.toThrow(
+      'video-large-audio-unsupported'
+    );
+    expect(contexts[0].decoded).toEqual([]);
+    expect(contexts[0].state).toBe('closed');
+  });
+
+  test('a 3 GB file with samples in its index and fragments after it fails clearly too', async () => {
+    const file = inflate(withMoovChild(aac, 'mvex'), 3 * GB);
+
+    await expect(extractAudioFromVideo(file)).rejects.toThrow('video-large-audio-unsupported');
+  });
+
+  test('a 3 GB file with a trimmed edit list is trimmed the same', async () => {
+    const bytes = withEditList(pcm, elstBox([{ segmentDuration: 100, mediaTime: 4410 }]));
+
+    const result = await extractAudioFromVideo(inflate(bytes, 3 * GB));
+
+    expect(offlineContexts).toEqual([{ channels: 1, length: 1600, sampleRate: 16000 }]);
+    expect(result.duration).toBeCloseTo(0.1, 5);
   });
 });
 
