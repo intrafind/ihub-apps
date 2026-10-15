@@ -181,12 +181,17 @@ const UnifiedUploader = ({
     return getFileTypeDisplayUtil(mimeType);
   };
 
-  const processImage = file =>
-    processImageFile(file, {
-      maxDimension: MAX_DIMENSION,
-      resize: RESIZE_IMAGES,
-      allowMultiple
-    });
+  // `options`: { signal, onProgress } from the Uploader
+  const processImage = (file, options) =>
+    processImageFile(
+      file,
+      {
+        maxDimension: MAX_DIMENSION,
+        resize: RESIZE_IMAGES,
+        allowMultiple
+      },
+      options
+    );
 
   // `options`: { signal, onProgress } from the Uploader
   const processAudio = async (file, mimeType, { signal, onProgress } = {}) => {
@@ -338,7 +343,7 @@ const UnifiedUploader = ({
 
     // Handle image files
     if (isListed(IMAGE_FORMATS)) {
-      return await processImage(file);
+      return await processImage(file, options);
     }
 
     // Handle audio files
@@ -356,8 +361,8 @@ const UnifiedUploader = ({
     // through a format-specific extractor the admin did not enable.
     const isGenericText = ALLOW_GENERIC_TEXT && !isExplicitTextFile(file);
     const { content: processedContent, pageImages } = isGenericText
-      ? await processGenericTextFile(file)
-      : await processDocumentFile(file, extractionOptionsOf(fileConfig));
+      ? await processGenericTextFile(file, options)
+      : await processDocumentFile(file, extractionOptionsOf(fileConfig), options);
     const displayContent = processedContent || '';
     const previewContent =
       displayContent.length > 200 ? displayContent.substring(0, 200) + '...' : displayContent;

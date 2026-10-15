@@ -3733,10 +3733,18 @@
       "fileOfTotal": "File {{current}} of {{total}}",
       "stage": {
         "read": "Reading file…",
+        "parse": "Opening document…",
+        "extract": "Extracting text…",
+        "convert": "Converting file…",
+        "render": "Rendering pages…",
         "decode": "Extracting audio…",
         "resample": "Converting audio…",
         "encode": "Encoding audio…",
         "finalize": "Finishing up…"
+      },
+      "detail": {
+        "page": "Page {{current}} of {{total}}",
+        "slide": "Slide {{current}} of {{total}}"
       }
     }
   },

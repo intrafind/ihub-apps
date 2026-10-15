@@ -13,6 +13,7 @@ import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs';
 
 import { extractPdfText } from '../../shared/documentExtraction/pdfText.js';
 import { MIN_REAL_TEXT_CHARS, realTextLength } from '../../shared/documentExtraction/markers.js';
+import { isAbortError } from '../../shared/documentExtraction/progress.js';
 import { renderUserMessage } from '../../shared/promptContext.js';
 import { attachDocumentPageImages } from '../services/chat/RequestBuilder.js';
 
@@ -95,6 +96,56 @@ describe('structured PDF text from real pdf.js', () => {
     assert.ok(text.length > MIN_REAL_TEXT_CHARS);
     assert.equal(realTextLength(text), 'Nur ein Satz.'.length);
     assert.ok(realTextLength(text) < MIN_REAL_TEXT_CHARS);
+  });
+});
+
+describe('progress and Stop on real pdf.js', () => {
+  const pages = Array.from({ length: 4 }, (_, index) => [{ text: `Seite ${index + 1}` }]);
+
+  it('reports every page, then finishing; the text is the one without progress', async () => {
+    const pdf = await buildPdf(pages);
+    const events = [];
+    const text = await extractPdfText(pdf, { onProgress: event => events.push(event) });
+
+    assert.equal(text, await extractPdfText(await buildPdf(pages)));
+    const extracting = events.filter(event => event.stage === 'extract');
+    assert.deepEqual(
+      extracting.map(event => event.detail),
+      [1, 2, 3, 4].map(current => ({ unit: 'page', current, total: 4 }))
+    );
+    assert.deepEqual(
+      extracting.map(event => event.percent),
+      [0, 25, 50, 75]
+    );
+    assert.deepEqual(events.at(-1), { stage: 'finalize', percent: null });
+  });
+
+  it('Stop ends the extraction at the next page with the abort error', async () => {
+    const pdf = await buildPdf(pages);
+    const controller = new AbortController();
+    const seen = [];
+
+    await assert.rejects(
+      extractPdfText(pdf, {
+        signal: controller.signal,
+        onProgress: event => {
+          seen.push(event);
+          if (event.detail?.current === 2) controller.abort();
+        }
+      }),
+      error => isAbortError(error) && error.code === 'aborted' && error.name === 'AbortError'
+    );
+    assert.deepEqual(
+      seen.map(event => event.detail?.current),
+      [1, 2]
+    );
+  });
+
+  it('a signal that has fired reads no page at all', async () => {
+    const pdf = await buildPdf(pages);
+    const controller = new AbortController();
+    controller.abort();
+    await assert.rejects(extractPdfText(pdf, { signal: controller.signal }), isAbortError);
   });
 });
 

@@ -11,13 +11,15 @@ import { isAbortError, raceAbort } from '../../../utils/abortable';
  * content in `onProcessFile`, e.g. "any text file" uploads.
  *
  * `onProcessFile(file, { signal, onProgress })` may use its second argument: it
- * stops when `signal` aborts and reports `onProgress({ stage, percent })`
- * (`percent` null when unknown). The render prop gets that as `progress`,
- * `{ fileName, stage, percent, index, total }` (`index` counts from 0 within
- * the batch), and `cancelProcessing()` to stop. Stopping is not an error:
- * nothing is attached for the file being processed, files attached before stay,
- * and so do the files of the batch that were done. `handleClear()` and unmounting
- * are not a stop but a discard: the run publishes nothing.
+ * stops when `signal` aborts and reports `onProgress({ stage, percent, detail })`
+ * (`percent` null when unknown, `detail` optional: what is being worked on,
+ * `{ unit: 'page'|'slide', current, total }`). The render prop gets that as
+ * `progress`, `{ fileName, stage, percent, detail?, index, total }` (`index`
+ * counts from 0 within the batch), and `cancelProcessing()` to stop. Stopping
+ * is not an error: nothing is attached for the file being processed, files
+ * attached before stay, and so do the files of the batch that were done.
+ * `handleClear()` and unmounting are not a stop but a discard: the run
+ * publishes nothing.
  * `onProcessingChange(true|false)` follows `isProcessing`, for a parent that
  * must not act on an attachment still on its way (e.g. send).
  *
@@ -188,10 +190,10 @@ const Uploader = ({
     const processOne = (file, index) => {
       const where = { fileName: file.name, index, total: files.length };
       setProgress({ ...where, stage: null, percent: null });
-      const onProgress = ({ stage = null, percent = null } = {}) => {
+      const onProgress = ({ stage = null, percent = null, detail = null } = {}) => {
         // Not a late report of a processor that was stopped or has finished
         if (abortRef.current === controller && !signal.aborted) {
-          setProgress({ ...where, stage, percent });
+          setProgress({ ...where, stage, percent, ...(detail && { detail }) });
         }
       };
       return raceAbort(onProcessFile(file, { signal, onProgress }), signal);
