@@ -451,6 +451,94 @@ async function undoMoves(moves) {
 }
 
 /**
+ * Best-effort removal of an import work folder. A leftover folder is harmless
+ * (old staging folders are pruned later), so a failure is only logged.
+ *
+ * @param {string} target - Folder to remove.
+ * @param {object} [options] - `{ onlyIfEmpty: true }` uses rmdir, which refuses
+ *   a folder that still holds anything.
+ */
+async function removeImportFolder(target, { onlyIfEmpty = false } = {}) {
+  try {
+    await (onlyIfEmpty ? fs.rmdir(target) : fs.rm(target, { recursive: true, force: true }));
+  } catch (error) {
+    logger.warn('Could not remove import folder', { component: 'AdminBackup', target, error });
+  }
+}
+
+/**
+ * Refuse a copy source outside the extraction root (it is derived from the
+ * uploaded file's temp path) and a backup name that is not a plain folder name.
+ */
+function assertImportPaths(extractRoot, extractedContentsPath, backupName) {
+  const resolvedExtractRoot = path.resolve(extractRoot);
+  const extractRootWithSep = resolvedExtractRoot.endsWith(path.sep)
+    ? resolvedExtractRoot
+    : resolvedExtractRoot + path.sep;
+  if (!path.resolve(extractedContentsPath).startsWith(extractRootWithSep)) {
+    throw new Error('Refusing to stage imported configuration: source path is invalid.');
+  }
+  if (path.basename(backupName) !== backupName || backupName.startsWith('.')) {
+    throw new Error('Refusing to stage imported configuration: backup name is invalid.');
+  }
+}
+
+/**
+ * Copy the extracted configuration into the staging folder and create the
+ * (empty) backup folder. On failure nothing of either is left behind.
+ */
+async function stageImport({ sourcePath, stagingPath, backupPath }) {
+  const skippedSource = path.join(sourcePath, IMPORT_BACKUPS_DIR);
+  let backupCreated = false;
+  try {
+    await fs.mkdir(path.dirname(backupPath), { recursive: true });
+    await fs.mkdir(backupPath);
+    backupCreated = true;
+    await fs.cp(sourcePath, stagingPath, {
+      recursive: true,
+      filter: source => source !== skippedSource
+    });
+  } catch (error) {
+    await removeImportFolder(stagingPath);
+    if (backupCreated) {
+      await removeImportFolder(backupPath, { onlyIfEmpty: true });
+    }
+    throw importStepError(
+      'Failed to stage the imported configuration; the live configuration was not modified',
+      error
+    );
+  }
+}
+
+/**
+ * Move every top-level entry of the live contents (except the backups folder)
+ * into the backup folder, then every staged entry into the live contents.
+ *
+ * @returns {Promise<Array<[string, string]>>} The renames done, in order.
+ * @throws The rename error, with `moves` set to the renames done before it.
+ */
+async function swapEntries({ liveContentsPath, stagingPath, backupPath }) {
+  const moves = [];
+  const move = async (from, to) => {
+    await fs.rename(from, to);
+    moves.push([from, to]);
+  };
+  try {
+    const liveEntries = await fs.readdir(liveContentsPath);
+    for (const name of liveEntries.filter(entry => entry !== IMPORT_BACKUPS_DIR)) {
+      await move(path.join(liveContentsPath, name), path.join(backupPath, name));
+    }
+    for (const name of await fs.readdir(stagingPath)) {
+      await move(path.join(stagingPath, name), path.join(liveContentsPath, name));
+    }
+  } catch (error) {
+    error.moves = moves;
+    throw error;
+  }
+  return moves;
+}
+
+/**
  * Stage an extracted configuration and swap it in for the live one, keeping the
  * replaced configuration in `<contents>/.backups/<backupName>/`.
  *
@@ -475,61 +563,18 @@ export async function stageAndSwapContents({
   extractRoot,
   backupName
 }) {
-  // extractedContentsPath is derived from the uploaded file's temp path; verify it
-  // resolves within the expected extraction root before using it as a copy source.
-  const resolvedExtractRoot = path.resolve(extractRoot);
-  const resolvedExtractedContentsPath = path.resolve(extractedContentsPath);
-  const extractRootWithSep = resolvedExtractRoot.endsWith(path.sep)
-    ? resolvedExtractRoot
-    : resolvedExtractRoot + path.sep;
-  if (!resolvedExtractedContentsPath.startsWith(extractRootWithSep)) {
-    throw new Error('Refusing to stage imported configuration: source path is invalid.');
-  }
-  if (path.basename(backupName) !== backupName || backupName.startsWith('.')) {
-    throw new Error('Refusing to stage imported configuration: backup name is invalid.');
-  }
+  assertImportPaths(extractRoot, extractedContentsPath, backupName);
 
   const backupsRoot = path.join(liveContentsPath, IMPORT_BACKUPS_DIR);
   const stagingPath = path.join(backupsRoot, `${IMPORT_STAGING_PREFIX}${backupName}`);
   const backupPath = path.join(backupsRoot, backupName);
-  const skippedSource = path.join(resolvedExtractedContentsPath, IMPORT_BACKUPS_DIR);
 
-  let backupCreated = false;
-  try {
-    await fs.mkdir(backupsRoot, { recursive: true });
-    await fs.mkdir(backupPath);
-    backupCreated = true;
-    await fs.cp(resolvedExtractedContentsPath, stagingPath, {
-      recursive: true,
-      filter: source => source !== skippedSource
-    });
-  } catch (error) {
-    await fs.rm(stagingPath, { recursive: true, force: true }).catch(() => {});
-    if (backupCreated) {
-      await fs.rmdir(backupPath).catch(() => {});
-    }
-    throw importStepError(
-      'Failed to stage the imported configuration; the live configuration was not modified',
-      error
-    );
-  }
+  await stageImport({ sourcePath: path.resolve(extractedContentsPath), stagingPath, backupPath });
 
-  const moves = [];
-  const move = async (from, to) => {
-    await fs.rename(from, to);
-    moves.push([from, to]);
-  };
   try {
-    for (const name of await fs.readdir(liveContentsPath)) {
-      if (name !== IMPORT_BACKUPS_DIR) {
-        await move(path.join(liveContentsPath, name), path.join(backupPath, name));
-      }
-    }
-    for (const name of await fs.readdir(stagingPath)) {
-      await move(path.join(stagingPath, name), path.join(liveContentsPath, name));
-    }
+    await swapEntries({ liveContentsPath, stagingPath, backupPath });
   } catch (error) {
-    const undoError = await undoMoves(moves);
+    const undoError = await undoMoves(error.moves ?? []);
     const mountPoint = await findMountPointEntry(liveContentsPath, error);
     if (undoError) {
       // Leave staging and backup in place: they hold whatever could not be moved back.
@@ -539,8 +584,8 @@ export async function stageAndSwapContents({
         mountPoint
       );
     }
-    await fs.rm(stagingPath, { recursive: true, force: true }).catch(() => {});
-    await fs.rmdir(backupPath).catch(() => {});
+    await removeImportFolder(stagingPath);
+    await removeImportFolder(backupPath, { onlyIfEmpty: true });
     throw importStepError(
       'Failed to activate the imported configuration; rolled back to the previous configuration',
       error,
@@ -548,14 +593,30 @@ export async function stageAndSwapContents({
     );
   }
 
-  await fs.rm(stagingPath, { recursive: true, force: true }).catch(error => {
-    logger.warn('Could not remove import staging folder', {
-      component: 'AdminBackup',
-      stagingPath,
-      error
-    });
-  });
+  await removeImportFolder(stagingPath);
   return backupPath;
+}
+
+/**
+ * Staging folders in `backupsRoot` old enough to be left over from an import
+ * that crashed; a younger one may belong to an import still running.
+ *
+ * @param {string} backupsRoot - The {@link IMPORT_BACKUPS_DIR} folder.
+ * @param {import('node:fs').Dirent[]} entries - Its entries.
+ * @returns {Promise<string[]>} Folder names.
+ */
+async function findStaleStagingFolders(backupsRoot, entries) {
+  const staging = entries.filter(
+    entry => entry.isDirectory() && entry.name.startsWith(IMPORT_STAGING_PREFIX)
+  );
+  const stale = [];
+  for (const entry of staging) {
+    const { mtimeMs } = await fs.stat(path.join(backupsRoot, entry.name));
+    if (Date.now() - mtimeMs > STALE_STAGING_AGE_MS) {
+      stale.push(entry.name);
+    }
+  }
+  return stale;
 }
 
 /**
@@ -576,16 +637,10 @@ export async function pruneImportBackups(contentsPath) {
       .map(entry => entry.name)
       .sort()
       .reverse();
-    const expired = backups.slice(IMPORT_BACKUPS_TO_KEEP);
-
-    for (const entry of entries) {
-      if (entry.isDirectory() && entry.name.startsWith(IMPORT_STAGING_PREFIX)) {
-        const { mtimeMs } = await fs.stat(path.join(backupsRoot, entry.name));
-        if (Date.now() - mtimeMs > STALE_STAGING_AGE_MS) {
-          expired.push(entry.name);
-        }
-      }
-    }
+    const expired = [
+      ...backups.slice(IMPORT_BACKUPS_TO_KEEP),
+      ...(await findStaleStagingFolders(backupsRoot, entries))
+    ];
 
     for (const name of expired) {
       await fs.rm(path.join(backupsRoot, name), { recursive: true, force: true });

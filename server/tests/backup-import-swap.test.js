@@ -13,13 +13,30 @@ import {
 
 const BACKUP_NAME = '2026-10-15T12-00-00-000Z';
 
+/** A filesystem error the way Node reports one. */
+function fsError(code, message, details = {}) {
+  return Object.assign(new Error(`${code}: ${message}`), { code, ...details });
+}
+
+/**
+ * Make fs.rename fail with the error `pickError` returns for a move, and do
+ * every other move for real.
+ */
+function failRenames(pickError) {
+  const originalRename = fsp.rename;
+  mock.method(fsp, 'rename', (src, dest) => {
+    const error = pickError(src, dest);
+    return error ? Promise.reject(error) : originalRename(src, dest);
+  });
+}
+
 describe('stageAndSwapContents', () => {
-  let workDir;
-  let contentsPath;
-  let extractRoot;
-  let extractedContentsPath;
-  let backupsRoot;
-  let backupPath;
+  let workDir = '';
+  let contentsPath = '';
+  let extractRoot = '';
+  let extractedContentsPath = '';
+  let backupsRoot = '';
+  let backupPath = '';
 
   const swap = (overrides = {}) =>
     stageAndSwapContents({
@@ -57,8 +74,8 @@ describe('stageAndSwapContents', () => {
 
   afterEach(async () => {
     mock.restoreAll();
-    await fs.chmod(workDir, 0o755).catch(() => {});
-    await fs.rm(workDir, { recursive: true, force: true }).catch(() => {});
+    await fs.chmod(workDir, 0o755);
+    await fs.rm(workDir, { recursive: true, force: true });
   });
 
   it('activates the new contents and keeps the old ones in .backups/<name>', async () => {
@@ -80,15 +97,11 @@ describe('stageAndSwapContents', () => {
   });
 
   it('never renames the contents directory itself (a volume mount point in containers)', async () => {
-    const originalRename = fsp.rename;
-    mock.method(fsp, 'rename', async (src, dest) => {
-      if (src === contentsPath || dest === contentsPath) {
-        const error = new Error(`EBUSY: resource busy or locked, rename '${src}'`);
-        error.code = 'EBUSY';
-        throw error;
-      }
-      return originalRename(src, dest);
-    });
+    failRenames((src, dest) =>
+      src === contentsPath || dest === contentsPath
+        ? fsError('EBUSY', `resource busy or locked, rename '${src}'`)
+        : null
+    );
 
     await swap();
 
@@ -176,16 +189,12 @@ describe('stageAndSwapContents', () => {
   });
 
   it('rolls back every move when one fails halfway through', async () => {
-    const originalRename = fsp.rename;
-    mock.method(fsp, 'rename', async (src, dest) => {
-      // Fail while moving the staged entries in, after the old ones were moved out.
-      if (dest === join(contentsPath, 'new-root.json')) {
-        const error = new Error('EBUSY: resource busy or locked');
-        error.code = 'EBUSY';
-        throw error;
-      }
-      return originalRename(src, dest);
-    });
+    // Fail while moving the staged entries in, after the old ones were moved out.
+    failRenames((src, dest) =>
+      dest === join(contentsPath, 'new-root.json')
+        ? fsError('EBUSY', 'resource busy or locked')
+        : null
+    );
 
     const error = await swap().then(
       () => assert.fail('expected the swap to fail'),
@@ -208,21 +217,19 @@ describe('stageAndSwapContents', () => {
 
   it('names a folder mounted separately inside contents, even when the error is EACCES', async () => {
     const appsPath = join(contentsPath, 'apps');
-    const originalRename = fsp.rename;
+    // What a non-root user gets for renaming a mount point.
+    failRenames((src, dest) =>
+      src === appsPath
+        ? fsError('EACCES', `permission denied, rename '${src}' -> '${dest}'`, { path: src, dest })
+        : null
+    );
     const originalReadFile = fsp.readFile;
-    mock.method(fsp, 'rename', async (src, dest) => {
-      if (src === appsPath) {
-        // What a non-root user gets for renaming a mount point.
-        const error = new Error(`EACCES: permission denied, rename '${src}' -> '${dest}'`);
-        Object.assign(error, { code: 'EACCES', path: src, dest });
-        throw error;
-      }
-      return originalRename(src, dest);
-    });
     const realAppsPath = await fs.realpath(appsPath);
-    mock.method(fsp, 'readFile', async (file, ...rest) =>
+    mock.method(fsp, 'readFile', (file, ...rest) =>
       file === '/proc/self/mountinfo'
-        ? `22 1 0:21 / / rw - overlay overlay rw\n35 22 8:1 /vol ${realAppsPath} rw - ext4 /dev/sda1 rw\n`
+        ? Promise.resolve(
+            `22 1 0:21 / / rw - overlay overlay rw\n35 22 8:1 /vol ${realAppsPath} rw - ext4 /dev/sda1 rw\n`
+          )
         : originalReadFile(file, ...rest)
     );
 
@@ -237,16 +244,12 @@ describe('stageAndSwapContents', () => {
   });
 
   it('keeps backup and staging when the rollback itself fails', async () => {
-    const originalRename = fsp.rename;
-    mock.method(fsp, 'rename', async (src, dest) => {
-      const fail =
-        dest === join(contentsPath, 'new-root.json') ||
-        (src === join(backupPath, 'apps') && dest === join(contentsPath, 'apps'));
-      if (fail) {
-        throw new Error('simulated rename failure');
-      }
-      return originalRename(src, dest);
-    });
+    failRenames((src, dest) =>
+      dest === join(contentsPath, 'new-root.json') ||
+      (src === join(backupPath, 'apps') && dest === join(contentsPath, 'apps'))
+        ? new Error('simulated rename failure')
+        : null
+    );
 
     await assert.rejects(
       () => swap(),
@@ -258,8 +261,8 @@ describe('stageAndSwapContents', () => {
 });
 
 describe('pruneImportBackups', () => {
-  let contentsPath;
-  let backupsRoot;
+  let contentsPath = '';
+  let backupsRoot = '';
 
   beforeEach(async () => {
     contentsPath = join(
@@ -271,7 +274,7 @@ describe('pruneImportBackups', () => {
   });
 
   afterEach(async () => {
-    await fs.rm(contentsPath, { recursive: true, force: true }).catch(() => {});
+    await fs.rm(contentsPath, { recursive: true, force: true });
   });
 
   it('keeps the three newest backups', async () => {
