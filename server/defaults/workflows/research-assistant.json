@@ -129,10 +129,11 @@
       "name": { "en": "End", "de": "Ende" },
       "position": { "x": 900, "y": 200 },
       "config": {
+        "output": "finalReport",
         "outputMapping": {
-          "report": "$.finalReport",
-          "searchResults": "$.searchResults",
-          "plan": "$.researchPlan"
+          "report": "$.data.finalReport",
+          "searchResults": "$.data.searchResults",
+          "plan": "$.data.researchPlan"
         }
       },
       "execution": {

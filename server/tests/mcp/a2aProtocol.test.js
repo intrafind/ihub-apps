@@ -116,7 +116,14 @@ beforeEach(() => {
     return { text: 'Hello', result: {} };
   });
   runTool.mockReset();
-  runTool.mockImplementation(async () => ({ report: 'done' }));
+  // What the workflow runner resolves with for a finished run: the output of
+  // the end step (its `output` is the answer) and the text the chat showed.
+  runTool.mockImplementation(async () => ({
+    status: 'completed',
+    executionId: 'wf-exec-1',
+    output: { output: 'done', topic: 'quarterly' },
+    outputText: 'done'
+  }));
   published.length = 0;
 });
 
@@ -411,7 +418,8 @@ describe('message/send', () => {
       ctx()
     );
     expect(r.result.status.state).toBe('completed');
-    expect(r.result.artifacts[0].parts[0].text).toBe(JSON.stringify({ report: 'done' }));
+    // The answer and nothing else: not the run's executionId, status or extras
+    expect(r.result.artifacts[0].parts).toEqual([{ kind: 'text', text: 'done' }]);
     expect(runTool).toHaveBeenCalledWith(
       'workflow_wf1',
       expect.objectContaining({
@@ -421,6 +429,45 @@ describe('message/send', () => {
         user: expect.objectContaining({ id: 'alice' })
       })
     );
+  });
+
+  it('returns the JSON answer of a workflow as a data part, next to the same JSON as text', async () => {
+    runTool.mockImplementation(async () => ({
+      status: 'completed',
+      executionId: 'wf-exec-2',
+      output: { output: { verdict: 'ok', findings: [1, 2] }, topic: 'quarterly' },
+      outputText: '{}'
+    }));
+    const r = await dispatchA2A(
+      rpc('message/send', {
+        message: textMessage('quarterly', { metadata: { skillId: 'workflow__wf1' } })
+      }),
+      ctx()
+    );
+    expect(r.result.status.state).toBe('completed');
+    const [text, data] = r.result.artifacts[0].parts;
+    expect(JSON.parse(text.text)).toEqual({ verdict: 'ok', findings: [1, 2] });
+    // JSON stays JSON, not a string inside a part
+    expect(data).toEqual({
+      kind: 'data',
+      data: { output: { verdict: 'ok', findings: [1, 2] } }
+    });
+  });
+
+  it('fails the task when the workflow run did not finish with an answer', async () => {
+    runTool.mockImplementation(async () => ({
+      status: 'failed',
+      executionId: 'wf-exec-3',
+      error: 'Node end failed: The end step has no output',
+      outputText: 'Workflow failed: Node end failed: The end step has no output'
+    }));
+    const r = await dispatchA2A(
+      rpc('message/send', {
+        message: textMessage('quarterly', { metadata: { skillId: 'workflow__wf1' } })
+      }),
+      ctx()
+    );
+    expect(r.result.status.state).toBe('failed');
   });
 
   it('rejects file parts, push notification requests and messages for finished tasks', async () => {

@@ -70,7 +70,6 @@ import ScheduledTaskProposalCards from '../../tasks/components/ScheduledTaskProp
 import ScheduleThisAction from '../../tasks/components/ScheduleThisAction';
 import GeneratedFiles from './GeneratedFiles';
 import { findSkillDraft } from '../../skills/utils/skillDraft';
-import { workflowAnswerView } from '../../workflows/utils/readableWorkflowAnswer';
 import { matchesModelFilter, modelSupportsTools } from '../../../../../shared/modelCapabilities.js';
 import './ChatMessage.css';
 
@@ -1530,39 +1529,4 @@ function ChatMessage({
   );
 }
 
-/**
- * A chat message as it is shown. A workflow that answered with its whole
- * output as JSON (no result selected, `wholeOutput` on its result) is shown in
- * its output format: the message is derived here, once, so the bubble, copy,
- * read aloud and insert all use the shown text, while the stored answer stays
- * JSON. Every other message is passed through untouched.
- *
- * @param {object} props - ChatMessage props
- */
-function ChatMessageShown(props) {
-  const { t } = useTranslation();
-  const { message: storedMessage, outputFormat = 'markdown' } = props;
-  const view = useMemo(
-    () =>
-      storedMessage.role === 'user'
-        ? null
-        : workflowAnswerView(storedMessage, storedMessage.outputFormat || outputFormat),
-    [storedMessage, outputFormat]
-  );
-  const message = useMemo(() => {
-    if (!view) return storedMessage;
-    const content =
-      view.text ??
-      t('chatMessage.workflowNoOutput', 'The workflow finished without output to show.');
-    return { ...storedMessage, content };
-  }, [storedMessage, view, t]);
-
-  if (!view) return <ChatMessage {...props} />;
-  const shown = <ChatMessage {...props} message={message} />;
-  // The text format lays the answer out in `name:` lines, which plain text
-  // would collapse; `display: contents` keeps the wrapper out of the layout
-  // (ChatMessage.css).
-  return view.preserveBreaks ? <div className="workflow-answer-lines">{shown}</div> : shown;
-}
-
-export default ChatMessageShown;
+export default ChatMessage;

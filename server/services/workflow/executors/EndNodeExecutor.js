@@ -9,10 +9,14 @@
  */
 
 import { BaseNodeExecutor } from './BaseNodeExecutor.js';
+import renderTemplate from '../../templating/renderTemplate.js';
 
 /**
  * End node configuration
  * @typedef {Object} EndNodeConfig
+ * @property {string} output - The end step's output, the answer the workflow gives (the chat
+ *   shows exactly this): a variable (`finalReport`), a path into one (`report.markdown`), a state
+ *   path (`$.data.finalReport`) or a text with variables (`{{summary}}`). Required.
  * @property {Object} [outputMapping] - Map state fields to output fields
  * @property {Array<string>} [includeFields] - Specific fields to include in output
  * @property {Array<string>} [excludeFields] - Fields to exclude from output
@@ -25,7 +29,9 @@ import { BaseNodeExecutor } from './BaseNodeExecutor.js';
  * Executor for end nodes.
  *
  * End nodes are responsible for:
- * - Collecting final workflow output
+ * - Giving the workflow its output: every end node has an `output`, and what a chat
+ *   or an API caller gets as the answer is exactly that
+ * - Collecting additional information next to it (variables, mapping, metadata)
  * - Applying output mapping/transformation
  * - Signaling workflow completion
  * - Formatting the final result
@@ -39,6 +45,7 @@ import { BaseNodeExecutor } from './BaseNodeExecutor.js';
  *   type: 'end',
  *   name: 'Success Exit',
  *   config: {
+ *     output: '$.data.processedResult',
  *     outputMapping: {
  *       result: '$.data.processedResult',
  *       summary: '$.nodeOutputs.summarizer.content'
@@ -74,7 +81,12 @@ export class EndNodeExecutor extends BaseNodeExecutor {
 
     const { config = {} } = node;
 
-    // Determine the output based on configuration
+    // The output comes first: an end step without one cannot give the workflow
+    // an answer, and a run that ends without one is a configuration error to
+    // surface, not something to guess a replacement for.
+    const answer = this.resolveAnswer(node, state);
+
+    // Determine the additional information next to it based on configuration
     let output;
 
     if (config.outputMapping) {
@@ -115,6 +127,10 @@ export class EndNodeExecutor extends BaseNodeExecutor {
       }
     }
 
+    // The output is the answer, whatever else the end step passes on: it wins
+    // over a mapped or listed variable of the same name.
+    output.output = answer;
+
     // Add node outputs if requested
     if (config.includeNodeOutputs) {
       output._nodeOutputs = { ...state.nodeOutputs };
@@ -149,6 +165,69 @@ export class EndNodeExecutor extends BaseNodeExecutor {
       isTerminal: true,
       workflowStatus // Pass custom status to WorkflowEngine
     });
+  }
+
+  /**
+   * The end step's output, from its `output` setting.
+   *
+   * The setting is one of
+   *   - a state path: `$.data.finalReport`
+   *   - a text with variables: `{{summary}}` or `Done: {{count}} items`. A text that
+   *     is a single `{{variable}}` is the variable itself, so JSON stays JSON
+   *   - a variable or a path into one: `finalReport`, `report.markdown`
+   * A value that is not there yet (a branch that never set the variable) is an
+   * empty output, not an error: the run still ends, the answer is just empty.
+   *
+   * @param {Object} node - The end node
+   * @param {Object} state - Workflow state
+   * @returns {*} The output value: text, or any other value as it is
+   * @throws {Error} `END_OUTPUT_MISSING` when the end step has no `output` set
+   * @private
+   */
+  resolveAnswer(node, state) {
+    const spec = node.config?.output;
+    if (typeof spec !== 'string' || !spec.trim()) {
+      const error = new Error(
+        `The end step '${node.id}' has no output. Set its Output to the variable that holds the answer.`
+      );
+      error.code = 'END_OUTPUT_MISSING';
+      throw error;
+    }
+
+    const text = spec.trim();
+    const data = state.data || {};
+    // A text that is a single `{{variable}}` is that variable, not a rendering
+    // of it: JSON stays JSON. Only a text with more in it is built as text.
+    const single = /^\{\{\s*([^#/@}][^}]*?)\s*\}\}$/.exec(text);
+    let value;
+    if (single) {
+      value = this.valueAt(data, single[1]);
+    } else if (text.includes('{{')) {
+      value = renderTemplate(text, data);
+    } else if (text.startsWith('$')) {
+      value = this.resolveVariable(text, state);
+    } else {
+      value = this.valueAt(data, text);
+    }
+    return value === undefined || value === null ? '' : value;
+  }
+
+  /**
+   * The value at a dotted path in the workflow data (`report.markdown`).
+   *
+   * @param {Object} data - Workflow data
+   * @param {string} path - Variable name or dotted path into one
+   * @returns {*} The value as it is, of whatever type; undefined when it is not there
+   * @private
+   */
+  valueAt(data, path) {
+    return path
+      .trim()
+      .split('.')
+      .reduce(
+        (current, key) => (current === null || current === undefined ? undefined : current[key]),
+        data
+      );
   }
 
   /**

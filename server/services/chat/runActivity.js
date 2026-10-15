@@ -417,8 +417,7 @@ export function boundStoredActivity(activity) {
       workflowName:
         typeof activity.workflowResult.workflowName === 'object'
           ? activity.workflowResult.workflowName
-          : text(activity.workflowResult.workflowName, 300),
-      wholeOutput: activity.workflowResult.wholeOutput === true ? true : undefined
+          : text(activity.workflowResult.workflowName, 300)
     });
   }
   if (typeof activity.outputFormat === 'string' && activity.outputFormat) {

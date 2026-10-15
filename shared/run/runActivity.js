@@ -82,10 +82,7 @@ export function workflowResultOf(run) {
   return {
     status: workflow.status,
     executionId: run.meta?.executionId,
-    workflowName: workflow.workflowName,
-    // The answer is the workflow's whole output as JSON; see
-    // shared/workflowChatOutput.js. Only then does the web chat reformat it.
-    ...(workflow.wholeOutput === true ? { wholeOutput: true } : {})
+    workflowName: workflow.workflowName
   };
 }
 

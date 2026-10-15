@@ -339,7 +339,7 @@
       "type": "end",
       "name": { "en": "Done", "de": "Fertig" },
       "position": { "x": 100, "y": 2960 },
-      "config": { "outputVariables": ["finalReport"] }
+      "config": { "outputVariables": ["finalReport"], "output": "finalReport" }
     }
   ],
   "edges": [
@@ -402,7 +402,6 @@
   "chatIntegration": {
     "enabled": true,
     "passthroughResult": false,
-    "primaryOutput": "finalReport",
     "outputFormat": "markdown"
   }
 }

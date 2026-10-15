@@ -140,6 +140,7 @@
       },
       "position": { "x": 100, "y": 550 },
       "config": {
+        "output": "summary",
         "outputVariables": ["topic", "research_results", "summary"]
       }
     },
@@ -152,6 +153,7 @@
       },
       "position": { "x": 300, "y": 450 },
       "config": {
+        "output": "Rejected: {{topic}}",
         "outputVariables": ["topic", "research_results"],
         "status": "rejected"
       }

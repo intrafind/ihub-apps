@@ -528,7 +528,6 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
                   status: pending.status,
                   workflowName: pending.workflowName,
                   outputFormat: pending.outputFormat || 'markdown',
-                  ...(pending.wholeOutput ? { wholeOutput: true } : {}),
                   ...(pending.errorMsg ? { error: String(pending.errorMsg) } : {})
                 }
               }

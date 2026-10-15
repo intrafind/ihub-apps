@@ -1,0 +1,251 @@
+/**
+ * Migration V166 — Every workflow end step gets an `output`
+ *
+ * Every end step now has an `output`: the answer a chat shows as it is (and what
+ * an API, MCP or A2A caller receives), with whatever else the end step passes
+ * on as additional information next to it. Before, the answer of a workflow was
+ * picked from its whole result: the `chatIntegration.primaryOutput` it named,
+ * else the first of a list of conventional names (`finalReport`, `report`, …),
+ * else a dump of everything as JSON. `primaryOutput` is gone, and so is the
+ * guessing.
+ *
+ * What is changed, in every workflow of `workflows/*.json` (and of the legacy
+ * `config/workflows.json`):
+ *   - Each end step without an `output` gets one, in this order:
+ *       1. the workflow's `chatIntegration.primaryOutput`. For an end step with an
+ *          `outputMapping` it is translated through the mapping to what the key
+ *          maps to; otherwise it names a variable (or a path into one) as it did
+ *       2. the first conventional answer name the end step passes on, in the
+ *          order the chat looked for them
+ *       3. for the workflows that shipped with iHub, the answer of that end step
+ *          (SHIPPED_OUTPUTS), for those whose answer has no conventional name
+ *   - `chatIntegration.primaryOutput` is removed.
+ *
+ * What is left alone: an end step that already has an `output`, a workflow
+ * without end steps, and files that cannot be read.
+ *
+ * What needs an admin: an end step whose answer none of the rules can tell, such
+ * as a custom workflow that passes on several variables and names none of them
+ * in `primaryOutput`. It is listed in the log and left without an `output`. The
+ * workflow still loads, and a run that reaches that end step fails with a
+ * message that names the step; saving the workflow in the editor asks for the
+ * output. Set the end step's Output to the variable that holds the answer.
+ *
+ * Running it again changes nothing: every end step it could resolve has an
+ * `output` by then, and the ones it could not are listed again.
+ */
+
+export const version = '166';
+export const description = 'workflow_end_step_output';
+
+/**
+ * The names the chat looked for as the answer of a workflow, in the order it
+ * looked (`CHAT_OUTPUT_FALLBACK_FIELDS` of shared/workflowChatOutput.js as of
+ * V166). Do NOT replace with an import: the chat no longer looks for any, and a
+ * migration must not change with the application.
+ */
+const CONVENTIONAL_ANSWER_NAMES = [
+  'finalReport',
+  'report',
+  'content',
+  'output',
+  'result',
+  'summary',
+  'text',
+  'message'
+];
+
+/**
+ * The answer of the end steps of the workflows that shipped with iHub and whose
+ * answer has no conventional name, as set in `server/defaults/workflows/`.
+ * Keyed by workflow id, then end step id. Snapshot as of V166.
+ */
+const SHIPPED_OUTPUTS = {
+  'approval-workflow': { 'end-rejected': 'Rejected: {{topic}}' },
+  'claude-style-agent': { end: 'draft' },
+  'claude-style-agent-phased': { end: 'draft' },
+  'knowledge-qa': { end: 'answer' }
+};
+
+/** The top-level keys of the run state a `$.` path can start at. Variables live under `data`. */
+const STATE_ROOTS = new Set(['data', 'nodeOutputs', 'metadata', 'executedNodes']);
+
+/** The legacy single file holding all workflows as an array. */
+const LEGACY_FILE = 'config/workflows.json';
+
+const isPlainObject = value => value !== null && typeof value === 'object' && !Array.isArray(value);
+const isText = value => typeof value === 'string' && value.trim() !== '';
+
+/**
+ * The variables the workflow's steps write, for an end step that passes on
+ * every variable and so does not name them.
+ */
+function writtenVariables(workflow) {
+  const names = new Set();
+  for (const node of workflow.nodes || []) {
+    const config = node?.config;
+    if (isText(config?.outputVariable)) names.add(config.outputVariable.trim());
+    if (node?.type === 'start' && Array.isArray(config?.inputVariables)) {
+      for (const variable of config.inputVariables) {
+        if (isText(variable?.name)) names.add(variable.name.trim());
+      }
+    }
+  }
+  return names;
+}
+
+/**
+ * What an end step passes on, as the end step builds its output: its mapping,
+ * else its included fields, else everything but its excluded fields, else its
+ * listed variables, else every variable.
+ *
+ * @returns {{mapping: Object}|{names: string[]}}
+ */
+function passedOn(workflow, endNode) {
+  const config = endNode.config || {};
+  if (isPlainObject(config.outputMapping)) return { mapping: config.outputMapping };
+  if (Array.isArray(config.includeFields)) return { names: config.includeFields };
+  if (Array.isArray(config.excludeFields)) {
+    const excluded = new Set(config.excludeFields);
+    return { names: [...writtenVariables(workflow)].filter(name => !excluded.has(name)) };
+  }
+  if (Array.isArray(config.outputVariables)) return { names: config.outputVariables };
+  return { names: [...writtenVariables(workflow)] };
+}
+
+/**
+ * What a mapped key maps to, as an end step output: only a `$.` path can be one.
+ * A path that does not start at a part of the run state, `$.finalReport`, never
+ * found anything, because variables live under `data`: it means the variable.
+ */
+function mappedSource(mapping, key, restPath = '') {
+  const source = mapping[key];
+  if (typeof source !== 'string' || !source.trim().startsWith('$')) return null;
+  const path = source.trim().replace(/^\$\.?/, '') + restPath;
+  const root = path.split('.')[0].replace(/\[\d+\]$/, '');
+  return STATE_ROOTS.has(root) ? `$.${path}` : path;
+}
+
+/**
+ * The output for an end step that has none, or null when no rule tells it.
+ */
+function outputFor(workflow, endNode) {
+  const passed = passedOn(workflow, endNode);
+  const primary = isText(workflow.chatIntegration?.primaryOutput)
+    ? workflow.chatIntegration.primaryOutput.trim()
+    : null;
+
+  // 1. The primary output the workflow named. For a mapped end step it named a
+  //    key of the mapping, which is what its output was looked up by.
+  if (primary) {
+    if (passed.mapping) {
+      const [key, ...rest] = primary.split('.');
+      const source =
+        key in passed.mapping
+          ? mappedSource(passed.mapping, key, rest.map(part => `.${part}`).join(''))
+          : null;
+      if (source) return source;
+    }
+    return primary;
+  }
+
+  // 2. The first conventional answer name the end step passes on.
+  const names = passed.mapping ? Object.keys(passed.mapping) : passed.names;
+  const present = new Set(names.filter(isText).map(name => name.trim()));
+  for (const name of CONVENTIONAL_ANSWER_NAMES) {
+    if (!present.has(name)) continue;
+    if (!passed.mapping) return name;
+    const source = mappedSource(passed.mapping, name);
+    if (source) return source;
+  }
+
+  // 3. The answer of a shipped workflow that names it unconventionally.
+  return SHIPPED_OUTPUTS[workflow.id]?.[endNode.id] || null;
+}
+
+/**
+ * Give the end steps of `workflow` their output and drop `primaryOutput`.
+ *
+ * @returns {{changed: boolean, set: number, unresolved: string[]}}
+ */
+function migrateWorkflow(workflow) {
+  let changed = false;
+  let set = 0;
+  const unresolved = [];
+
+  for (const node of Array.isArray(workflow.nodes) ? workflow.nodes : []) {
+    if (node?.type !== 'end' || isText(node.config?.output)) continue;
+    const output = outputFor(workflow, node);
+    if (output) {
+      node.config = { ...(node.config || {}), output };
+      changed = true;
+      set += 1;
+    } else {
+      unresolved.push(node.id);
+    }
+  }
+
+  if (isPlainObject(workflow.chatIntegration) && 'primaryOutput' in workflow.chatIntegration) {
+    delete workflow.chatIntegration.primaryOutput;
+    changed = true;
+  }
+  return { changed, set, unresolved };
+}
+
+export async function precondition(ctx) {
+  return (
+    (await ctx.listFiles('workflows', '*.json')).length > 0 || (await ctx.fileExists(LEGACY_FILE))
+  );
+}
+
+export async function up(ctx) {
+  let workflows = 0;
+  let endSteps = 0;
+  const needAdmin = [];
+
+  const record = (workflow, result) => {
+    if (result.set > 0) workflows += 1;
+    endSteps += result.set;
+    for (const nodeId of result.unresolved) needAdmin.push(`${workflow.id || '?'} (${nodeId})`);
+  };
+
+  for (const file of await ctx.listFiles('workflows', '*.json')) {
+    const relativePath = `workflows/${file}`;
+    let workflow;
+    try {
+      workflow = await ctx.readJson(relativePath);
+    } catch (error) {
+      ctx.warn(`Skipped ${relativePath}: ${error.message}`);
+      continue;
+    }
+    if (!isPlainObject(workflow)) continue;
+    const result = migrateWorkflow(workflow);
+    record(workflow, result);
+    if (result.changed) await ctx.writeJson(relativePath, workflow);
+  }
+
+  if (await ctx.fileExists(LEGACY_FILE)) {
+    let legacy = null;
+    try {
+      legacy = await ctx.readJson(LEGACY_FILE);
+    } catch (error) {
+      ctx.warn(`Skipped ${LEGACY_FILE}: ${error.message}`);
+    }
+    if (Array.isArray(legacy)) {
+      let changed = false;
+      for (const workflow of legacy.filter(isPlainObject)) {
+        const result = migrateWorkflow(workflow);
+        record(workflow, result);
+        changed = changed || result.changed;
+      }
+      if (changed) await ctx.writeJson(LEGACY_FILE, legacy);
+    }
+  }
+
+  ctx.log(`Gave ${endSteps} end step(s) in ${workflows} workflow(s) an output`);
+  if (needAdmin.length > 0) {
+    ctx.warn(
+      `No output could be told for the end steps ${needAdmin.join(', ')}. Set the Output of each of them in the workflow editor; until then a run that reaches one fails.`
+    );
+  }
+}

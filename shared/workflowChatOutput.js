@@ -1,94 +1,91 @@
 /**
- * How the answer of a workflow run is picked for the chat, shared by the
- * server (which picks it, `server/tools/workflowRunner.js`) and the client
- * (the admin page explains the pick; the web chat shows a whole-output answer
- * in the workflow's output format).
+ * The answer of a workflow run, shared by the server (the chat runner, the
+ * MCP and A2A gateways, the handoff of an execution to a chat) and the client
+ * (the execution pages).
  *
- * A workflow names its answer with `chatIntegration.primaryOutput`. Without
- * one ("Automatic"), the runner takes the first non-empty string among these
- * fields of the end node's output, and otherwise answers with the whole output
- * as JSON.
+ * Every end step has an `output` (`EndNodeExecutor`), and that is the answer: a
+ * chat shows it as it is, and so does an API, MCP or A2A caller. Whatever else
+ * the end step passes on is additional information next to it.
+ *
+ * The answer keeps its type. Text is text, and JSON (an object or a list) stays
+ * JSON: it is handed on as a JSON value (`answerOf`) and only turned into text
+ * where text is all there is, which is a chat bubble (`chatAnswerOf`), shown
+ * there as a JSON block (`chatAnswerFormat`).
  *
  * @module shared/workflowChatOutput
  */
 
-export const CHAT_OUTPUT_FALLBACK_FIELDS = Object.freeze([
-  'finalReport',
-  'report',
-  'content',
-  'output',
-  'result',
-  'summary',
-  'text',
-  'message'
-]);
+/**
+ * The answer a workflow's output gives, as the value it is: text, JSON (an
+ * object or a list), a number or a boolean. Null when it gives none.
+ *
+ * The output is the end step's output object, and its `output` is the answer.
+ * An end step whose output format reduces its output to a single value hands
+ * that value back instead, and the value is the answer.
+ *
+ * @param {*} output - What the workflow finished with (`finalOutputOf()`)
+ * @returns {*} The answer; null for no answer
+ */
+export function answerOf(output) {
+  if (output === null || output === undefined || output === '') return null;
+  const answer = typeof output === 'object' && !Array.isArray(output) ? output.output : output;
+  return answer === null || answer === undefined || answer === '' ? null : answer;
+}
 
 /**
- * The fallback field the runner would pick among the given output keys, or
- * null when none of them is one, i.e. the chat would show JSON.
+ * Whether an answer is JSON, an object or a list, rather than text or a scalar.
  *
- * @param {string[]} keys - Keys of the end node's output
+ * @param {*} answer - A value from `answerOf()`
+ * @returns {boolean}
+ */
+export function isJsonAnswer(answer) {
+  return answer !== null && typeof answer === 'object';
+}
+
+/**
+ * The answer as text for a chat bubble, or null when there is none. Text is
+ * text as it is; JSON is written out, because a bubble holds nothing else.
+ *
+ * @param {*} output - What the workflow finished with (`finalOutputOf()`)
  * @returns {string|null}
  */
-export function fallbackChatOutputField(keys) {
-  const present = new Set(keys || []);
-  return CHAT_OUTPUT_FALLBACK_FIELDS.find(field => present.has(field)) || null;
+export function chatAnswerOf(output) {
+  const answer = answerOf(output);
+  if (answer === null) return null;
+  if (typeof answer === 'string') return answer;
+  return isJsonAnswer(answer) ? JSON.stringify(answer, null, 2) : String(answer);
 }
 
 /**
- * What "Automatic" shows for an end step passing on these keys, decided from
- * the names alone so the admin page can explain it before the workflow runs.
- * At run time a fallback field that turns out empty is skipped like the
- * runner does; from the names alone that cannot be known.
+ * The format a chat shows the answer in: JSON as a JSON block, whatever format
+ * the workflow asks for, and everything else in the format it asks for.
  *
- * @param {string[]} keys - Keys of the end node's output, in order
- * @returns {{mode: 'field', field: string} | {mode: 'json', keys: string[]} | {mode: 'none'}}
+ * @param {*} output - What the workflow finished with (`finalOutputOf()`)
+ * @param {string} [format] - The workflow's output format (`markdown`, `text`, `json`)
+ * @returns {string}
  */
-export function automaticChatOutput(keys) {
-  const field = fallbackChatOutputField(keys);
-  if (field) return { mode: 'field', field };
-  return keys && keys.length > 0 ? { mode: 'json', keys: [...keys] } : { mode: 'none' };
-}
-
-function getNestedField(obj, path) {
-  let cur = obj;
-  for (const part of path.split('.')) {
-    if (cur === null || cur === undefined) return undefined;
-    cur = cur[part];
-  }
-  return cur;
-}
-
-/** The selected output as answer text, or null when it gives none. */
-function selectedAnswer(output, primaryOutput) {
-  if (!primaryOutput || typeof primaryOutput !== 'string') return null;
-  const value = getNestedField(output, primaryOutput);
-  if (typeof value === 'string') return value.length > 0 ? value : null;
-  if (value && typeof value === 'object') return JSON.stringify(value, null, 2);
-  return null;
+export function chatAnswerFormat(output, format = 'markdown') {
+  return isJsonAnswer(answerOf(output)) ? 'json' : format;
 }
 
 /**
- * The answer a workflow run gives in chat, and whether it is the whole output
- * — the fallback when neither the selected result nor a conventionally named
- * output gives one. The web chat reformats only that fallback; an answer the
- * workflow chose is shown as it is.
+ * What a finished execution ended with: the output of the end step it finished at.
  *
- * @param {*} output - The end node's output
- * @param {string} [primaryOutput] - `chatIntegration.primaryOutput`
- * @returns {{text: string|null, wholeOutput: boolean}}
+ * @param {Object} state - Execution state (`WorkflowEngine.getState`)
+ * @returns {*} The output; undefined when the run finished nowhere
  */
-export function chatAnswerOf(output, primaryOutput) {
-  if (!output) return { text: null, wholeOutput: false };
-  if (typeof output !== 'object') return { text: String(output), wholeOutput: false };
+export function executionOutputOf(state) {
+  const completed = state?.completedNodes;
+  const lastNodeId = Array.isArray(completed) ? completed[completed.length - 1] : undefined;
+  return state?.data?.nodeResults?.[lastNodeId]?.output;
+}
 
-  const selected = selectedAnswer(output, primaryOutput);
-  if (selected !== null) return { text: selected, wholeOutput: false };
-
-  const field = CHAT_OUTPUT_FALLBACK_FIELDS.find(
-    name => typeof output[name] === 'string' && output[name].length > 0
-  );
-  if (field) return { text: output[field], wholeOutput: false };
-
-  return { text: JSON.stringify(output, null, 2), wholeOutput: true };
+/**
+ * The answer of a finished execution as text, from the end step it finished at.
+ *
+ * @param {Object} state - Execution state (`WorkflowEngine.getState`)
+ * @returns {string|null}
+ */
+export function executionAnswerOf(state) {
+  return chatAnswerOf(executionOutputOf(state));
 }

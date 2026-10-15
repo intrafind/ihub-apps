@@ -149,6 +149,7 @@
         "y": 800
       },
       "config": {
+        "output": "draft",
         "outputVariables": ["draft", "currentInboxItem"]
       }
     }

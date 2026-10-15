@@ -26,7 +26,7 @@ import {
   getStreamRun
 } from '../services/loop/RunStream.js';
 import { SSE_V2_EVENTS } from '../../shared/runEvents.js';
-import { chatAnswerOf } from '../../shared/workflowChatOutput.js';
+import { chatAnswerFormat, chatAnswerOf } from '../../shared/workflowChatOutput.js';
 import { hasChatClient } from '../sse.js';
 import { createPresenceMap, hasRemote, publish, subscribe } from '../clusterBus.js';
 import configCache from '../configCache.js';
@@ -410,7 +410,7 @@ export default async function workflowRunner(params = {}) {
       progress: { workflowName, chatVisible: chatVisible !== false }
     });
   };
-  const emitResult = ({ status, error, outputFormat, wholeOutput }) => {
+  const emitResult = ({ status, error, outputFormat }) => {
     if (!stream) return;
     stream.emit(SSE_V2_EVENTS.META, {
       executionId,
@@ -419,9 +419,6 @@ export default async function workflowRunner(params = {}) {
           status,
           workflowName,
           outputFormat: outputFormat || 'markdown',
-          // The answer is the whole end output as JSON (no result selected,
-          // no conventionally named output): the web chat may reformat it.
-          ...(wholeOutput ? { wholeOutput: true } : {}),
           ...(error ? { error: String(error) } : {})
         }
       }
@@ -624,15 +621,16 @@ export default async function workflowRunner(params = {}) {
           /* non-fatal */
         }
 
-        const answer = chatAnswerOf(event.output, workflow.chatIntegration?.primaryOutput);
-        const outputText = answer.text;
+        // The answer is the `output` of the end step the run finished at. A
+        // bubble holds text, so JSON is written out for it and shown as JSON.
+        const outputText = chatAnswerOf(event.output);
+        const answerFormat = chatAnswerFormat(
+          event.output,
+          workflow.chatIntegration?.outputFormat || 'markdown'
+        );
 
         if (chatId) {
-          emitResult({
-            status: 'completed',
-            outputFormat: workflow.chatIntegration?.outputFormat || 'markdown',
-            wholeOutput: answer.wholeOutput
-          });
+          emitResult({ status: 'completed', outputFormat: answerFormat });
 
           // In passthrough mode the chat turn streams the answer and ends the
           // run. In @mention / direct mode we own the run.
@@ -647,8 +645,7 @@ export default async function workflowRunner(params = {}) {
               runId: stream?.runId || null,
               status: 'completed',
               outputText,
-              outputFormat: workflow.chatIntegration?.outputFormat || 'markdown',
-              wholeOutput: answer.wholeOutput,
+              outputFormat: answerFormat,
               passthrough
             });
           }

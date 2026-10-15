@@ -537,8 +537,6 @@ const baseWorkflowConfigSchema = z.object({
       passthroughResult: z.boolean().optional().prefault(false),
       /** Overrides workflow description for the LLM tool definition */
       toolDescription: localizedStringSchema.optional(),
-      /** Which output field to display as the primary result (e.g., "finalReport") */
-      primaryOutput: z.string().optional(),
       /** Output format hint for the client renderer */
       outputFormat: z.enum(['markdown', 'text', 'json']).optional()
     })
@@ -609,7 +607,7 @@ export const knownWorkflowKeys = Object.keys(baseWorkflowConfigSchema.shape);
  *
  * Refinements ensure:
  * 1. Exactly one 'start' node exists
- * 2. At least one 'end' node exists
+ * 2. At least one 'end' node exists, and every end node has an output
  * 3. All edge source/target references are valid node IDs
  * 4. No orphan nodes (every node except start must have an incoming edge)
  */
@@ -634,6 +632,21 @@ export const workflowConfigSchema = baseWorkflowConfigSchema
     },
     {
       message: 'Workflow must have at least one end node',
+      path: ['nodes']
+    }
+  )
+  .refine(
+    data => {
+      // Every end node has an output: the answer the workflow gives, which a
+      // chat shows as it is (see EndNodeExecutor). Without one a run that
+      // reaches the end node fails, so it is refused when the workflow is saved.
+      return data.nodes
+        .filter(node => node.type === 'end')
+        .every(node => typeof node.config?.output === 'string' && node.config.output.trim() !== '');
+    },
+    {
+      message:
+        'Every end node needs an output: set the "output" of each end node to the variable that holds the answer',
       path: ['nodes']
     }
   )

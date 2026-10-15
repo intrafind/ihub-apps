@@ -373,19 +373,6 @@ describe('recording what a turn did', () => {
 });
 
 describe('the stored form of the activity', () => {
-  it('keeps whether a workflow answered with its whole output', () => {
-    const stored = boundStoredActivity({
-      workflowResult: { status: 'completed', executionId: 'wf-1', wholeOutput: true }
-    });
-    assert.equal(stored.workflowResult.wholeOutput, true);
-    const chosen = boundStoredActivity({ workflowResult: { status: 'completed' } });
-    assert.equal('wholeOutput' in chosen.workflowResult, false);
-    const bogus = boundStoredActivity({
-      workflowResult: { status: 'completed', wholeOutput: 'x' }
-    });
-    assert.equal('wholeOutput' in bogus.workflowResult, false);
-  });
-
   it('bounds lists and strings and keeps only known fields', () => {
     const long = 'x'.repeat(5000);
     const items = Array.from({ length: MAX_STORED_TOOL_ITEMS + 20 }, (_, i) => ({
@@ -1134,9 +1121,11 @@ describe('a chat whose run died with its process', () => {
           const states = {
             [runId]: {
               status: 'completed',
+              completedNodes: ['end'],
               data: {
-                _workflowDefinition: { chatIntegration: { primaryOutput: 'report' }, nodes: [] },
-                report: 'The review.'
+                _workflowDefinition: { nodes: [] },
+                report: 'The review.',
+                nodeResults: { end: { status: 'completed', output: { output: 'The review.' } } }
               }
             }
           };
@@ -1305,15 +1294,25 @@ describe('Chat with Results: a stored chat about an execution', () => {
     executionId: 'wf-exec-1',
     workflowId: 'review',
     status: 'completed',
+    completedNodes: ['start', 'end'],
     data: {
       topic: 'Wind farm statements',
       finalReport: '# Report\n\nThree statements object.',
       shortNote: 'n/a',
+      nodeResults: {
+        end: {
+          status: 'completed',
+          output: { output: '# Report\n\nThree statements object.', shortNote: 'n/a' }
+        }
+      },
       _workflowDefinition: {
         id: 'review',
         name: { en: 'Statement review', de: 'Stellungnahmen-Prüfung' },
-        nodes: [{ type: 'start', config: { inputVariables: [{ name: 'topic', type: 'string' }] } }],
-        chatIntegration: { primaryOutput: 'finalReport', outputFormat: 'markdown' }
+        nodes: [
+          { type: 'start', config: { inputVariables: [{ name: 'topic', type: 'string' }] } },
+          { id: 'end', type: 'end', config: { output: 'finalReport' } }
+        ],
+        chatIntegration: { outputFormat: 'markdown' }
       }
     }
   };
@@ -1380,16 +1379,34 @@ describe('Chat with Results: a stored chat about an execution', () => {
     });
   });
 
-  it('reads a nested primary output, as an @workflow answer does', async () => {
+  it('answers with the output of the end step the execution finished at, as an @workflow run does', async () => {
     const { executionHandoff } = await import('../services/workflow/executionChat.js');
     const { outputText } = executionHandoff({
+      completedNodes: ['start', 'end'],
       data: {
         summary: 'not this one, although it is a long text result',
-        _report: { markdown: '# The report' },
-        _workflowDefinition: { chatIntegration: { primaryOutput: '_report.markdown' } }
+        nodeResults: {
+          end: {
+            status: 'completed',
+            output: { output: '# The report', summary: 'not this one either' }
+          }
+        },
+        _workflowDefinition: { nodes: [] }
       }
     });
     assert.equal(outputText, '# The report');
+  });
+
+  it('shows an output that is not text as JSON, and no answer when the end step left none', async () => {
+    const { executionHandoff } = await import('../services/workflow/executionChat.js');
+    const finishedWith = output =>
+      executionHandoff({
+        completedNodes: ['end'],
+        data: { nodeResults: { end: { status: 'completed', output } }, _workflowDefinition: {} }
+      }).outputText;
+    assert.equal(finishedWith({ output: { verdict: 'ok' } }), '{\n  "verdict": "ok"\n}');
+    assert.equal(finishedWith({ output: '', other: 'x' }), '');
+    assert.equal(finishedWith(undefined), '');
   });
 
   it('opens no half chat when the results cannot be stored', async () => {
@@ -1441,18 +1458,5 @@ describe('Chat with Results: a stored chat about an execution', () => {
       });
       assert.deepEqual(result, { error: 'NOT_FINISHED' }, status);
     }
-  });
-
-  it('picks the longest text result when the workflow declares no primary output', async () => {
-    const { executionHandoff } = await import('../services/workflow/executionChat.js');
-    const { outputText } = executionHandoff({
-      data: {
-        a: 'short',
-        b: 'the longer one',
-        _hidden: 'x'.repeat(100),
-        humanResponse_1: 'y'.repeat(100)
-      }
-    });
-    assert.equal(outputText, 'the longer one');
   });
 });
