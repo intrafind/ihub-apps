@@ -23,6 +23,8 @@ const KEYS = [
   'scheduledTasks.memory.clearHint',
   'scheduledTasks.memory.tooLong',
   'scheduledTasks.memory.error',
+  'scheduledTasks.runs.notesUsed',
+  'scheduledTasks.runs.notesUsedHint',
   'scheduledTasks.runs.noChanges',
   'scheduledTasks.runs.memoryUpdated',
   'scheduledTasks.runs.memoryTooLong',

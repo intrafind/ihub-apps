@@ -5587,6 +5587,8 @@
       "started": "Gestartet",
       "status": "Status",
       "trigger": "Auslöser",
+      "notesUsed": "Notizen v{{version}} genutzt",
+      "notesUsedHint": "Dieser Lauf ist mit Version {{version}} der Notizen dieser Aufgabe gestartet.",
       "noChanges": "Keine Änderungen",
       "memoryUpdated": "Gedächtnis aktualisiert",
       "memoryTooLong": "Gedächtnis voll",

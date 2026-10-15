@@ -43,11 +43,13 @@ export function RunStatusBadge({ status }) {
 }
 
 /**
- * What a run did with the task's memory: "No changes" when it reported nothing
- * new, "Memory updated" when it wrote the notes, and a warning when the notes
- * could not be updated (too long even after a retry, or the reply was unusable).
- * Runs of tasks without memory (and runs from before the feature) carry no
- * `memory` and show nothing.
+ * What a run did with the task's memory: "Used notes v2" when it started from
+ * stored notes (the notes go into the run's system prompt, which the chat never
+ * shows, so this is the one visible sign that they were loaded), "No changes"
+ * when it reported nothing new, "Memory updated" when it wrote the notes, and a
+ * warning when the notes could not be updated (too long even after a retry, or
+ * the reply was unusable). Runs of tasks without memory (and runs from before
+ * the feature) carry no `memory` and show nothing.
  *
  * @param {Object} props
  * @param {{changed?: boolean|null, compose?: string, versionRead?: number,
@@ -56,6 +58,9 @@ export function RunStatusBadge({ status }) {
 export function RunMemoryBadges({ memory }) {
   const { t } = useTranslation();
   if (!memory) return null;
+  // Version 0 is "nothing was ever written": a first run has no notes to have used.
+  const usedVersion =
+    Number.isInteger(memory.versionRead) && memory.versionRead > 0 ? memory.versionRead : null;
   const unchanged = memory.changed === false;
   const updated =
     memory.compose === 'written' ||
@@ -66,9 +71,23 @@ export function RunMemoryBadges({ memory }) {
   // update after it failed: no warning then, it would contradict "Memory updated".
   const tooLong = !updated && memory.compose === 'too_long';
   const failed = !updated && memory.compose === 'failed';
-  if (!unchanged && !updated && !tooLong && !failed) return null;
+  if (usedVersion === null && !unchanged && !updated && !tooLong && !failed) return null;
   return (
     <div className="flex flex-wrap gap-1.5">
+      {usedVersion !== null && (
+        <span
+          className={`${pill} bg-sky-100 text-sky-800 dark:bg-sky-900/30 dark:text-sky-300`}
+          title={t(
+            'scheduledTasks.runs.notesUsedHint',
+            'This run started with version {{version}} of the notes of this task.',
+            { version: usedVersion }
+          )}
+        >
+          {t('scheduledTasks.runs.notesUsed', 'Used notes v{{version}}', {
+            version: usedVersion
+          })}
+        </span>
+      )}
       {unchanged && (
         <span className={`${pill} bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300`}>
           {t('scheduledTasks.runs.noChanges', 'No changes')}

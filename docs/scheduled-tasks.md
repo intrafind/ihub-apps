@@ -290,9 +290,12 @@ were, and a run that fails does not touch them. When the owner edits the notes
 while a run is going — at any point of it, also during the update itself — the owner's edit
 stays and the run's update is dropped. A run that is stopped while its notes are being updated
 ends as cancelled and leaves them alone.
-The run's row on the task page says what happened (*Memory updated*, *No
-changes*, or *Memory full* / *Memory not updated* when the notes were kept as
-they were).
+The run's row on the task page says what happened: *Used notes v2* when the run started from
+stored notes (the version it read; the notes sit in the run's system prompt, which its chat never
+shows, so this is the visible sign they were loaded — a first run has none), *Memory updated*,
+*No changes*, or *Memory full* / *Memory not updated* when the notes were kept as they were.
+*No changes* is the verdict of the update step on what the answer reported compared with the notes
+the run started from; it does not say how the answer was worded.
 
 A model that cannot call tools — no tool support, or Gemini with Google
 search, which drops every function tool — still gets its notes and the
