@@ -227,7 +227,7 @@ export default function AttachedFilesList({
                   <button
                     type="button"
                     onClick={() => saveExtractedAudio(file)}
-                    className="shrink-0 rounded-sm text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors p-1 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-500"
+                    className="shrink-0 rounded-sm text-gray-500 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors p-1 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-500"
                     title={t('attachedFiles.saveAudio', 'Save audio')}
                     aria-label={t('attachedFiles.saveAudioNamed', 'Save audio as {{name}}', {
                       name: file.fileName
