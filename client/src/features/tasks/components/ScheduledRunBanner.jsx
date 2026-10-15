@@ -95,19 +95,33 @@ export default function ScheduledRunBanner({ origin, onRunChanged }) {
   );
 }
 
-/** What the run's state adds under the header: the approval it needs, or why it failed or was stopped. */
-function RunNotes({ run, origin, onAnswered }) {
+function ApprovalNote({ run, origin, onAnswered }) {
+  return <ApprovalControls taskId={origin.taskId} run={run} compact onAnswered={onAnswered} />;
+}
+
+function FailedNote({ run }) {
+  const { t } = useTranslation();
+  if (!run.reason?.message) return null;
+  return <p className="text-red-700 dark:text-red-300">{reasonText(t, run.reason)}</p>;
+}
+
+/** A stopped run says what stopped it, and who to the people who may know. */
+function CancelledNote({ run }) {
   const { t } = useTranslation();
   const auth = useOptionalAuth();
-  if (run?.status === 'awaiting_approval') {
-    return <ApprovalControls taskId={origin.taskId} run={run} compact onAnswered={onAnswered} />;
-  }
-  if (run?.status === 'failed' && run.reason?.message) {
-    return <p className="text-red-700 dark:text-red-300">{reasonText(t, run.reason)}</p>;
-  }
-  if (run?.status === 'cancelled' && run.reason?.cause) {
-    const viewer = { userId: auth?.user?.id, isAdmin: auth?.user?.isAdmin };
-    return <p className="text-gray-700 dark:text-gray-300">{reasonText(t, run.reason, viewer)}</p>;
-  }
-  return null;
+  if (!run.reason?.cause) return null;
+  const viewer = { userId: auth?.user?.id, isAdmin: auth?.user?.isAdmin };
+  return <p className="text-gray-700 dark:text-gray-300">{reasonText(t, run.reason, viewer)}</p>;
+}
+
+const RUN_NOTES = {
+  awaiting_approval: ApprovalNote,
+  failed: FailedNote,
+  cancelled: CancelledNote
+};
+
+/** What the run's state adds under the header: the approval it needs, or why it failed or was stopped. */
+function RunNotes({ run, origin, onAnswered }) {
+  const Note = RUN_NOTES[run?.status];
+  return Note ? <Note run={run} origin={origin} onAnswered={onAnswered} /> : null;
 }
