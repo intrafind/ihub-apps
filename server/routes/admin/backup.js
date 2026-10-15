@@ -185,18 +185,6 @@ function extractZip(zipPath, extractPath) {
 
         // Extract the relative path within contents/
         const relativePath = contentsMatch[1];
-
-        // Backups of earlier imports belong to the installation they were made
-        // on; restoring them would also write into the import's own work area.
-        if (relativePath.split('/')[0] === IMPORT_BACKUPS_DIR) {
-          logger.info('Skipping import backup entry', {
-            component: 'AdminBackup',
-            fileName: entry.fileName
-          });
-          zipfile.readEntry();
-          return;
-        }
-
         const entryPath = await resolveAndValidatePath(relativePath, contentsBase);
 
         // Prevent ZIP slip: skip entries that would escape the extract directory
@@ -684,6 +672,17 @@ function findExpiredBackups(entries) {
 }
 
 /**
+ * Answer a failed import: with the explanation when the failure carries one an
+ * admin can act on (see importStepError), otherwise with the generic error.
+ */
+function sendImportError(res, error) {
+  if (error.adminMessage) {
+    return sendErrorResponse(res, 500, error.adminMessage);
+  }
+  return sendInternalError(res, error, 'import configuration');
+}
+
+/**
  * Import configuration from uploaded ZIP file
  */
 export async function importConfig(req, res) {
@@ -752,9 +751,6 @@ export async function importConfig(req, res) {
       });
     } catch (error) {
       logger.error('Failed to swap in imported configuration', { component: 'AdminBackup', error });
-      if (error.adminMessage) {
-        return sendErrorResponse(res, 500, error.adminMessage);
-      }
       throw error;
     }
 
@@ -817,7 +813,7 @@ export async function importConfig(req, res) {
     });
   } catch (error) {
     logger.error('Import error', { component: 'AdminBackup', error });
-    sendInternalError(res, error, 'import configuration');
+    sendImportError(res, error);
   } finally {
     // Clean up temporary files
     try {
