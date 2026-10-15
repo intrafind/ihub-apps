@@ -51,6 +51,43 @@ export function workerId() {
   return `${os.hostname()}:${process.pid}`;
 }
 
+// The pieces of a cause. The builder and the normalizer share them, so the
+// two cannot drift apart on what a well-formed cause looks like.
+
+function messageOf(message, kind) {
+  return clip(typeof message === 'string' && message ? message : ABORT_KINDS[kind]);
+}
+
+function timeOf(at) {
+  const parsed = Date.parse(at);
+  return new Date(Number.isFinite(parsed) ? parsed : Date.now()).toISOString();
+}
+
+function actorOf(actor) {
+  const hasId = typeof actor?.id === 'string' && actor.id;
+  return {
+    type: ACTOR_TYPES.has(actor?.type) ? actor.type : 'system',
+    ...(hasId ? { id: clip(actor.id) } : {})
+  };
+}
+
+function originOf({ via, source, worker } = {}) {
+  return {
+    via: clip(via || 'unspecified'),
+    ...(source ? { source: clip(source) } : {}),
+    ...(worker ? { worker: clip(worker) } : {})
+  };
+}
+
+/** Ids that are absent (a run that was never started) or empty are left out. */
+function relatedOf(related) {
+  if (!related || typeof related !== 'object') return {};
+  const entries = Object.entries(related)
+    .filter(([, value]) => typeof value === 'string' && value)
+    .map(([key, value]) => [clip(key), clip(value)]);
+  return entries.length > 0 ? { related: Object.fromEntries(entries) } : {};
+}
+
 /**
  * Build a cause.
  *
@@ -65,25 +102,13 @@ export function workerId() {
  */
 export function abortCause(kind, { actor, via, source, related, message } = {}) {
   const known = Object.hasOwn(ABORT_KINDS, kind) ? kind : 'unknown';
-  const actorType = ACTOR_TYPES.has(actor?.type) ? actor.type : 'system';
-  // Ids that are absent (a run that was never started) or empty are left out.
-  const relatedEntries = Object.entries(related || {}).filter(([, value]) => Boolean(value));
   return {
     kind: known,
-    message: clip(message || ABORT_KINDS[known]),
+    message: messageOf(message, known),
     at: new Date().toISOString(),
-    actor: {
-      type: actorType,
-      ...(actor?.id ? { id: clip(actor.id) } : {})
-    },
-    origin: {
-      via: clip(via || 'unspecified'),
-      ...(source ? { source: clip(source) } : {}),
-      worker: workerId()
-    },
-    ...(relatedEntries.length > 0
-      ? { related: Object.fromEntries(relatedEntries.map(([key, value]) => [key, clip(value)])) }
-      : {})
+    actor: actorOf(actor),
+    origin: originOf({ via, source, worker: workerId() }),
+    ...relatedOf(related)
   };
 }
 
@@ -125,37 +150,17 @@ export function abortReason(cause) {
  */
 export function normalizeAbortCause(value) {
   const candidate = value?.abortCause || value;
-  if (candidate && typeof candidate === 'object' && Object.hasOwn(ABORT_KINDS, candidate.kind)) {
-    const at = Date.parse(candidate.at);
-    return {
-      kind: candidate.kind,
-      message: clip(
-        typeof candidate.message === 'string' && candidate.message
-          ? candidate.message
-          : ABORT_KINDS[candidate.kind]
-      ),
-      at: Number.isFinite(at) ? new Date(at).toISOString() : new Date().toISOString(),
-      actor: {
-        type: ACTOR_TYPES.has(candidate.actor?.type) ? candidate.actor.type : 'system',
-        ...(typeof candidate.actor?.id === 'string' ? { id: clip(candidate.actor.id) } : {})
-      },
-      origin: {
-        via: clip(candidate.origin?.via || 'unspecified'),
-        ...(candidate.origin?.source ? { source: clip(candidate.origin.source) } : {}),
-        ...(candidate.origin?.worker ? { worker: clip(candidate.origin.worker) } : {})
-      },
-      ...(candidate.related && typeof candidate.related === 'object'
-        ? {
-            related: Object.fromEntries(
-              Object.entries(candidate.related)
-                .filter(([, v]) => typeof v === 'string' && v)
-                .map(([k, v]) => [clip(k), clip(v)])
-            )
-          }
-        : {})
-    };
-  }
-  return abortCause('unknown');
+  const known =
+    candidate && typeof candidate === 'object' && Object.hasOwn(ABORT_KINDS, candidate.kind);
+  if (!known) return abortCause('unknown');
+  return {
+    kind: candidate.kind,
+    message: messageOf(candidate.message, candidate.kind),
+    at: timeOf(candidate.at),
+    actor: actorOf(candidate.actor),
+    origin: originOf(candidate.origin),
+    ...relatedOf(candidate.related)
+  };
 }
 
 /** The cause a signal was aborted with, or the `unknown` cause. */

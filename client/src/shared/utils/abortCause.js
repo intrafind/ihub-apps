@@ -5,6 +5,14 @@
  * what stopped it, who, from where and when. This is what the viewer reads.
  */
 
+/** Who stopped it, as the viewer may read it: "you", an administrator, or (to administrators) the user. */
+function actorPhrase(t, actor, { userId, isAdmin }) {
+  if (actor?.type === 'admin') return t('abortCauses.byAdmin', 'an administrator');
+  if (actor?.type !== 'user' || !actor.id) return '';
+  if (userId && actor.id === userId) return t('abortCauses.byYou', 'you');
+  return isAdmin ? t('abortCauses.byUser', { id: actor.id, defaultValue: 'user {{id}}' }) : '';
+}
+
 /**
  * @param {Function} t - i18next `t`.
  * @param {{kind?: string, message?: string, actor?: {type?: string, id?: string}}|null} cause
@@ -13,18 +21,11 @@
  * @param {boolean} [viewer.isAdmin] - Administrators also see which user it was.
  * @returns {string} e.g. "Stopped from the chat (you)"; empty without a cause
  */
-export function abortCauseText(t, cause, { userId, isAdmin } = {}) {
+export function abortCauseText(t, cause, viewer = {}) {
   if (!cause || typeof cause !== 'object') return '';
   const base = cause.kind
     ? t(`abortCauses.${cause.kind}`, { defaultValue: cause.message || '' })
     : cause.message || '';
-  const actor = cause.actor || {};
-  let by = '';
-  if (actor.type === 'admin') {
-    by = t('abortCauses.byAdmin', 'an administrator');
-  } else if (actor.type === 'user' && actor.id) {
-    if (userId && actor.id === userId) by = t('abortCauses.byYou', 'you');
-    else if (isAdmin) by = t('abortCauses.byUser', { id: actor.id, defaultValue: 'user {{id}}' });
-  }
+  const by = actorPhrase(t, cause.actor, viewer);
   return by ? `${base} (${by})` : base;
 }
