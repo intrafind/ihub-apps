@@ -27,28 +27,39 @@ or mismatched start flag on the vLLM side — **not** the iHub configuration.
 ## How iHub Apps maps to vLLM
 
 iHub Apps connects to vLLM using the OpenAI-compatible endpoint
-(`http://<host>:8000/v1/chat/completions`) with `"provider": "openai"` (or the dedicated
-`"provider": "local"` for reasoning models). The capability flags in the model config are
-**hints to iHub's UI and request builder** — they tell iHub it is allowed to send tools,
-images, or audio. They do **not** configure vLLM. Both sides must agree:
+(`http://<host>:8000/v1/chat/completions`) with the dedicated `"provider": "local"` — mark vLLM
+models as `local`, not `openai`. The `local` provider has its own vLLM adapter: it sanitizes tool
+schemas for vLLM and, unlike `openai`, sends `include_reasoning` for reasoning models. The
+capability flags in the model config are **hints to iHub's UI and request builder** — they tell
+iHub it is allowed to send tools, images, or audio. They do **not** configure vLLM. Both sides
+must agree:
 
 | Capability        | iHub model config flag          | vLLM start parameter(s)                                  |
 | ----------------- | ------------------------------- | -------------------------------------------------------- |
-| Tool calling      | `"supportsTools": true`         | `--enable-auto-tool-choice` + `--tool-call-parser <p>`   |
+| Tool calling      | `"supportsTools": "auto"`         | `--enable-auto-tool-choice` + `--tool-call-parser <p>`   |
 | Image / vision    | `"supportsImages": true` and/or `"supportsVision": true` | `--limit-mm-per-prompt '{"image": N}'` (multimodal model) |
 | Audio input       | `"supportsAudio": true`         | `--limit-mm-per-prompt '{"audio": N}'` (audio-capable model) |
 | Reasoning/thinking | `"thinking": { "enabled": true }` | `--reasoning-parser <p>` (see local-llm-providers.md)   |
 
-**Common failure mode:** the iHub model has `"supportsTools": true` (so the UI offers tools),
+**Common failure mode:** the iHub model has `"supportsTools": "auto"` (so the UI offers tools),
 but vLLM was started **without** `--enable-auto-tool-choice`. vLLM then ignores the `tools`
 field or errors, and the user reports "tool calling does not work." Fixing this is a vLLM
 restart with the correct flags — see below.
+
+**Requiring a tool call.** An app with `toolChoice: "required"` forces a tool call only when the
+model is set to `"supportsTools": "required"`. Whether vLLM takes `tool_choice: "required"` depends
+on your installation (the vLLM version and how it was deployed), whereas the usual deployment — with
+`--enable-auto-tool-choice` — serves `auto`. Leave vLLM models on `"auto"`: the app then asks the
+model in words, which works on any deployment. Move one to `"required"` once you have checked that
+your server accepts a forced tool choice; if it rejects one anyway, iHub falls back to asking in
+words. See [Requiring a tool call](tool-calling.md#requiring-a-tool-call).
 
 How iHub sends each modality over the OpenAI-compatible API:
 
 - **Images** → OpenAI `image_url` content parts (base64 data URLs).
 - **Audio** → OpenAI `input_audio` content parts (`{ data: <base64>, format: "wav"|"mp3"|... }`).
-- **Tools** → standard OpenAI `tools` array with `tool_choice: "auto"`.
+- **Tools** → standard OpenAI `tools` array with `tool_choice: "auto"` (`"required"` on the first call
+  only, for an app with `toolChoice: "required"` and a model set to `"supportsTools": "required"`).
 
 ---
 
@@ -121,10 +132,10 @@ vllm serve mistralai/Mistral-Small-Instruct-2409 \
   "name": { "en": "Llama 3.1 8B (vLLM)" },
   "description": { "en": "Llama 3.1 with tool calling via vLLM" },
   "url": "http://localhost:8000/v1/chat/completions",
-  "provider": "openai",
+  "provider": "local",
   "contextWindow": 32768,
   "maxOutputTokens": 4096,
-  "supportsTools": true,
+  "supportsTools": "auto",
   "enabled": true
 }
 ```
@@ -210,7 +221,7 @@ vllm serve microsoft/Phi-3.5-vision-instruct \
   "name": { "en": "Phi-3.5 Vision (vLLM)" },
   "description": { "en": "Phi-3.5 vision model served by vLLM" },
   "url": "http://localhost:8000/v1/chat/completions",
-  "provider": "openai",
+  "provider": "local",
   "contextWindow": 8192,
   "maxOutputTokens": 4096,
   "supportsImages": true,
@@ -271,7 +282,7 @@ vllm serve Qwen/Qwen2-Audio-7B-Instruct \
   "name": { "en": "Ultravox (vLLM)" },
   "description": { "en": "Ultravox audio model served by vLLM" },
   "url": "http://localhost:8000/v1/chat/completions",
-  "provider": "openai",
+  "provider": "local",
   "contextWindow": 8192,
   "maxOutputTokens": 4096,
   "supportsAudio": true,
@@ -310,10 +321,10 @@ Corresponding iHub model config:
   "name": { "en": "My Multimodal Model (vLLM)" },
   "description": { "en": "Tool + image + audio capable model via vLLM" },
   "url": "http://localhost:8000/v1/chat/completions",
-  "provider": "openai",
+  "provider": "local",
   "contextWindow": 32768,
   "maxOutputTokens": 4096,
-  "supportsTools": true,
+  "supportsTools": "auto",
   "supportsImages": true,
   "supportsVision": true,
   "supportsAudio": true,
@@ -359,7 +370,7 @@ When a customer reports a vLLM capability "not working," check in this order:
 2. Does the **`--tool-call-parser`** match the model family? (Wrong parser → tool calls not parsed.)
 3. Does the model actually support function calling? (Check the
    [supported models list](https://docs.vllm.ai/en/latest/models/supported_models.html).)
-4. Is `"supportsTools": true` set in the iHub model config?
+4. Is `"supportsTools": "auto"` set in the iHub model config?
 5. Test directly with the `curl` command in [section 1](#verify-tool-calling-works) —
    if `tool_calls` is absent there, it's a vLLM-side issue, not iHub.
 

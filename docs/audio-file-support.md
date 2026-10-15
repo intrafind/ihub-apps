@@ -172,7 +172,7 @@ Models can declare audio support using the `supportsAudio` field:
   "provider": "google",
   "supportsAudio": true,
   "supportsVision": true,
-  "supportsTools": true,
+  "supportsTools": "required",
   "enabled": true
 }
 ```

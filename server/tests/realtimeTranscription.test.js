@@ -126,26 +126,64 @@ describe('extractToken', () => {
 });
 
 describe('authenticateUpgrade', () => {
-  test('accepts a valid JWT and returns the user identity', () => {
+  test('accepts a valid JWT and returns the user identity', async () => {
     const { token } = generateJwt({ id: 'u1', name: 'Alice', groups: ['users'] });
     const req = { headers: { cookie: `authToken=${token}` } };
-    const user = authenticateUpgrade(req, anonDenied);
+    const user = await authenticateUpgrade(req, anonDenied);
     expect(user).toBeTruthy();
     expect(user.id).toBe('u1');
   });
 
-  test('falls back to anonymous when anonymous access is enabled and no token', () => {
-    const user = authenticateUpgrade({ headers: {} }, anonAllowed);
+  test('falls back to anonymous when anonymous access is enabled and no token', async () => {
+    const user = await authenticateUpgrade({ headers: {} }, anonAllowed);
     expect(user).toEqual({ id: 'anonymous', name: 'anonymous', groups: ['anonymous'] });
   });
 
-  test('rejects (null) when no token and anonymous access is disabled', () => {
-    expect(authenticateUpgrade({ headers: {} }, anonDenied)).toBeNull();
+  test('rejects (null) when no token and anonymous access is disabled', async () => {
+    expect(await authenticateUpgrade({ headers: {} }, anonDenied)).toBeNull();
   });
 
-  test('rejects an invalid token when anonymous access is disabled', () => {
+  test('rejects an invalid token when anonymous access is disabled', async () => {
     const req = { headers: { cookie: 'authToken=not-a-real-jwt' } };
-    expect(authenticateUpgrade(req, anonDenied)).toBeNull();
+    expect(await authenticateUpgrade(req, anonDenied)).toBeNull();
+  });
+
+  describe('the user behind a session token', () => {
+    const setUsers = users =>
+      configCache.setCacheEntry('config/users.json', { users, metadata: { version: '2.0.0' } });
+    const cookieFor = id => {
+      const { token } = generateJwt(
+        { id, name: 'Alice', groups: ['users'] },
+        { authMode: 'local' }
+      );
+      return { headers: { cookie: `authToken=${token}` } };
+    };
+
+    afterEach(() => {
+      const timer = configCache.refreshTimers?.get('config/users.json');
+      if (timer) clearTimeout(timer);
+      configCache.refreshTimers?.delete('config/users.json');
+    });
+
+    test('is let through while the user exists and is active', async () => {
+      setUsers({ u_ws_1: { id: 'u_ws_1', active: true, authMethods: ['local'] } });
+
+      const user = await authenticateUpgrade(cookieFor('u_ws_1'), anonDenied);
+
+      expect(user?.id).toBe('u_ws_1');
+    });
+
+    test('is refused once the user has been deleted, even when anonymous access is on', async () => {
+      setUsers({});
+
+      expect(await authenticateUpgrade(cookieFor('u_ws_gone'), anonAllowed)).toBeNull();
+    });
+
+    test('is refused once the user has been disabled', async () => {
+      setUsers({ u_ws_2: { id: 'u_ws_2', active: false, authMethods: ['local'] } });
+
+      expect(await authenticateUpgrade(cookieFor('u_ws_2'), anonAllowed)).toBeNull();
+    });
   });
 });
 

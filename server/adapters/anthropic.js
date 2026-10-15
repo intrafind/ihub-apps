@@ -2,6 +2,7 @@
  * Anthropic API adapter
  */
 import { convertToolsFromGeneric } from './toolCalling/index.js';
+import { convertAnthropicToolChoice } from './toolCalling/AnthropicConverter.js';
 import { BaseAdapter } from './BaseAdapter.js';
 import logger from '../utils/logger.js';
 
@@ -198,7 +199,7 @@ class AnthropicAdapterClass extends BaseAdapter {
    * Create a completion request for Anthropic
    */
   async createCompletionRequest(model, messages, apiKey, options = {}) {
-    const { temperature, stream, maxTokens, tools, responseSchema, nativeWebSearch } =
+    const { temperature, stream, maxTokens, tools, toolChoice, responseSchema, nativeWebSearch } =
       this.extractRequestOptions(options);
 
     // Format messages and extract system prompt
@@ -249,6 +250,14 @@ class AnthropicAdapterClass extends BaseAdapter {
 
     if (anthropicTools.length > 0) {
       requestBody.tools = anthropicTools;
+      // A caller's tool choice (the loop's "call a tool first") never overrides
+      // the structured-output `json` tool pinned above. The newest Claude
+      // models reject `any`; the loop handles that rejection, see
+      // services/loop/toolChoice.js.
+      if (!responseSchema) {
+        const anthropicToolChoice = convertAnthropicToolChoice(toolChoice);
+        if (anthropicToolChoice) requestBody.tool_choice = anthropicToolChoice;
+      }
       // // Anthropic-specific instruction to encourage tool use, especially in multi-turn scenarios.
       // const toolInstruction =
       //   "If you need to use a tool to answer, please do so. After using the tools, provide a final answer to the user's question.";

@@ -1,8 +1,12 @@
 # Fixes — Unreleased
 
-## Scheduled Tasks: Memory Is Written on Reasoning Models
+## Opening a Running Scheduled Run No Longer Risks Cancelling It
 
-Tasks with memory turned on never updated their notes when the task ran on a model with thinking
-enabled (for example Qwen on vLLM): the run succeeded, but the Memory card stayed empty. The step
-that rewrites the notes allowed the model only a small output budget, and the model's reasoning
-used it up before the notes were complete. That step now uses the model's normal output limit.
+A scheduled run could end as "cancelled" after someone opened its chat while it was still
+running and waited for it. The browser sent a stop request on its own — when it re-attached to the
+run, replaced its connection, timed out or sent a follow-up — and that request ends a stored run.
+
+- The browser no longer stops a chat turn by itself: only the Stop button (and "Clear chat", and
+  the compare view's stop) does
+- Leaving or reloading a chat leaves a stored run going; a chat that is not stored still ends
+  when its connection closes

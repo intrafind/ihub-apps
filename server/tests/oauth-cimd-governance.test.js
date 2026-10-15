@@ -26,7 +26,7 @@ import express from 'express';
 import rateLimit from 'express-rate-limit';
 import os from 'os';
 import path from 'path';
-import { mkdtempSync } from 'fs';
+import { mkdtempSync, writeFileSync } from 'fs';
 
 const testRateLimiter = rateLimit({ windowMs: 60 * 1000, limit: 10000 });
 
@@ -36,6 +36,7 @@ const state = {
   responses: new Map(),
   fetchCalls: [],
   token: null,
+  introspection: null,
   jwt: null
 };
 
@@ -43,6 +44,10 @@ const state = {
 // then writes it directly instead of through the configuration store, so the
 // store does not have to be stood up for a test about policy records.
 const CLIENTS_FILE = path.join(state.rootDir, 'oauth-clients.json');
+
+// Likewise the users file. `jwtAuth` and the MCP gateway only honour a delegated
+// token while the user it was minted for still exists.
+const USERS_FILE = path.join(state.rootDir, 'users.json');
 
 jest.unstable_mockModule('../pathUtils.js', () => ({
   getRootDir: () => state.rootDir
@@ -111,7 +116,10 @@ jest.unstable_mockModule('../utils/oauthTokenService.js', () => ({
   isCurrentKeyGeneration: () => true,
   isPersonalClient: () => false,
   generateOAuthToken: notUsedHere,
-  introspectOAuthToken: notUsedHere,
+  introspectOAuthToken: () => {
+    if (!state.introspection) notUsedHere();
+    return state.introspection;
+  },
   generateStaticApiKey: notUsedHere,
   generatePersonalApiKey: notUsedHere,
   personalKeyGeneration: () => 0,
@@ -163,6 +171,7 @@ const { listCimdClientRows, recordCimdDiscovery } =
 const { default: registerAdminOAuthCimdRoutes } =
   await import('../routes/admin/oauthCimdClients.js');
 const { default: registerOAuthAuthorizeRoutes } = await import('../routes/oauthAuthorize.js');
+const { default: registerOAuthRoutes } = await import('../routes/oauth.js');
 const { default: mcpAuth } = await import('../middleware/mcpAuth.js');
 const { default: jwtAuth } = await import('../middleware/jwtAuth.js');
 
@@ -201,7 +210,8 @@ function setPlatform({ hosts = ['claude.ai'], blocked = [], approvalMode = 'auto
       }
     },
     mcpServer: { enabled: true },
-    auth: { mode: 'local' }
+    auth: { mode: 'local' },
+    localAuth: { usersFile: USERS_FILE }
   };
 }
 
@@ -226,10 +236,19 @@ async function resetStores() {
 }
 
 beforeEach(async () => {
+  // A delegated token is only good while the user it was minted for exists.
+  writeFileSync(
+    USERS_FILE,
+    JSON.stringify({
+      users: { alice: { id: 'alice', username: 'alice', active: true, authMethods: ['local'] } },
+      metadata: { version: '2.0.0' }
+    })
+  );
   clearClientMetadataCache();
   state.responses.clear();
   state.fetchCalls = [];
   state.token = null;
+  state.introspection = null;
   state.jwt = null;
   setPlatform();
   await resetClientStore();
@@ -506,6 +525,264 @@ describe('discovery records', () => {
   });
 });
 
+describe('signing in at /authorize', () => {
+  // The route reads the session cookie itself, and a signed cookie outlives the
+  // account behind it, so the user has to be asked about as well.
+  function buildApp() {
+    const app = express();
+    app.use(testRateLimiter);
+    // The cookie header is read by hand: the route only needs `req.cookies`, and
+    // a cookie parser in front of a handler without a CSRF token is what code
+    // scanning flags, which this test app is not.
+    app.use((req, res, next) => {
+      req.cookies = Object.fromEntries(
+        (req.headers.cookie || '')
+          .split(';')
+          .filter(Boolean)
+          .map(pair => {
+            const at = pair.indexOf('=');
+            return [pair.slice(0, at).trim(), decodeURIComponent(pair.slice(at + 1).trim())];
+          })
+      );
+      next();
+    });
+    registerOAuthAuthorizeRoutes(app);
+    return app;
+  }
+
+  const authorize = () =>
+    request(buildApp())
+      .get(
+        `/api/oauth/authorize?response_type=code&client_id=${encodeURIComponent(CODE_URL)}` +
+          `&redirect_uri=${encodeURIComponent('http://localhost/callback')}` +
+          '&code_challenge=abc&code_challenge_method=S256'
+      )
+      .set('Cookie', 'authToken=session');
+
+  const writeUsers = users =>
+    writeFileSync(USERS_FILE, JSON.stringify({ users, metadata: { version: '2.0.0' } }));
+
+  beforeEach(() => {
+    setPlatform();
+    serve(CODE_URL, 'Claude Code');
+    state.jwt = {
+      sub: 'alice',
+      username: 'alice',
+      groups: ['users'],
+      authMode: 'local',
+      aud: 'ihub-apps'
+    };
+  });
+
+  test('carries on for a user who still exists', async () => {
+    const res = await authorize();
+
+    // On to the consent screen or straight to the client with a code: either
+    // way past the sign-in, and never an error.
+    expect([200, 302]).toContain(res.status);
+    expect(res.headers.location || '').not.toContain('/login');
+  });
+
+  test('sends a deleted user to sign in again', async () => {
+    writeUsers({});
+
+    const res = await authorize();
+
+    expect(res.status).toBe(302);
+    expect(res.headers.location).toContain('/login');
+  });
+
+  test('sends a disabled user to sign in again', async () => {
+    writeUsers({
+      alice: { id: 'alice', username: 'alice', active: false, authMethods: ['local'] }
+    });
+
+    const res = await authorize();
+
+    expect(res.status).toBe(302);
+    expect(res.headers.location).toContain('/login');
+  });
+
+  test('answers 503, not "sign in again", when the users cannot be read to check', async () => {
+    writeFileSync(USERS_FILE, '{ not json');
+
+    const res = await authorize();
+
+    expect(res.status).toBe(503);
+    expect(res.text).toContain('service_unavailable');
+  });
+});
+
+describe('the token endpoint', () => {
+  // A grant is bound to the user's id and outlives the account unless the
+  // endpoint asks about it, so a deleted user's refresh token keeps minting.
+  function buildApp() {
+    const app = express();
+    app.use(testRateLimiter);
+    app.use(express.urlencoded({ extended: false }));
+    registerOAuthRoutes(app);
+    return app;
+  }
+
+  const refresh = token =>
+    request(buildApp())
+      .post('/api/oauth/token')
+      .type('form')
+      .send({ grant_type: 'refresh_token', refresh_token: token, client_id: CODE_URL });
+
+  const writeUsers = users =>
+    writeFileSync(USERS_FILE, JSON.stringify({ users, metadata: { version: '2.0.0' } }));
+
+  const grantFor = userId => {
+    const token = generateRefreshToken();
+    return storeRefreshToken(token, { clientId: CODE_URL, userId, scopes: ['openid'] }, 30).then(
+      () => token
+    );
+  };
+
+  beforeEach(async () => {
+    setPlatform();
+    await upsertCimdClientPolicy(
+      CODE_URL,
+      { approvalState: 'approved', active: true },
+      CLIENTS_FILE,
+      'admin'
+    );
+  });
+
+  test('does not refresh for a user who has been deleted, and the token is spent', async () => {
+    const token = await grantFor('alice');
+    writeUsers({});
+
+    const res = await refresh(token);
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('invalid_grant');
+    expect(res.body.error_description).toMatch(/no longer available/);
+    // Consumed on the way in, so it cannot be tried again once the user returns.
+    writeUsers({ alice: { id: 'alice', username: 'alice', active: true, authMethods: ['local'] } });
+    const again = await refresh(token);
+    expect(again.body.error_description).toMatch(/invalid, expired, or already used/);
+  });
+
+  test('does not refresh for a user who has been disabled', async () => {
+    const token = await grantFor('alice');
+    writeUsers({
+      alice: { id: 'alice', username: 'alice', active: false, authMethods: ['local'] }
+    });
+
+    const res = await refresh(token);
+
+    expect(res.status).toBe(400);
+    expect(res.body.error_description).toMatch(/no longer available/);
+  });
+
+  test('refreshes for a user who still exists, and rotates the token', async () => {
+    const token = await grantFor('alice');
+
+    const res = await refresh(token);
+
+    expect(res.status).toBe(200);
+    expect(res.body.access_token).toEqual(expect.any(String));
+    expect(res.body.refresh_token).toEqual(expect.any(String));
+    expect(res.body.refresh_token).not.toBe(token);
+  });
+
+  test('answers 503 and keeps the grant when the users cannot be read to check', async () => {
+    const token = await grantFor('alice');
+    writeFileSync(USERS_FILE, '{ not json');
+
+    const unavailable = await refresh(token);
+
+    expect(unavailable.status).toBe(503);
+    expect(unavailable.body.error).toBe('server_error');
+
+    // The grant was put back: once the users can be read, the same token works.
+    writeUsers({ alice: { id: 'alice', username: 'alice', active: true, authMethods: ['local'] } });
+    const retried = await refresh(token);
+    expect(retried.status).toBe(200);
+    expect(retried.body.access_token).toEqual(expect.any(String));
+  });
+
+  describe('introspection', () => {
+    // A resource server asks this before serving a token. The token is signed,
+    // so it verifies long after its user is gone: answering "active" is what
+    // the resource server would then act on.
+    const introspect = () => {
+      const app = express();
+      app.use(testRateLimiter);
+      app.use(express.urlencoded({ extended: false }));
+      app.use((req, res, next) => {
+        req.user = { id: 'admin', isAdmin: true };
+        next();
+      });
+      registerOAuthRoutes(app);
+      return request(app).post('/api/oauth/introspect').type('form').send({ token: 'a-token' });
+    };
+
+    const delegated = {
+      active: true,
+      token_type: 'oauth_authorization_code',
+      sub: 'alice',
+      client_id: CODE_URL,
+      scopes: ['openid']
+    };
+
+    test('reports a delegated token as active while its user exists', async () => {
+      state.introspection = { ...delegated };
+
+      const res = await introspect();
+
+      expect(res.status).toBe(200);
+      expect(res.body).toMatchObject({ active: true, sub: 'alice' });
+    });
+
+    test('reports it as inactive, and nothing more, once its user has been deleted', async () => {
+      state.introspection = { ...delegated };
+      writeUsers({});
+
+      const res = await introspect();
+
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({ active: false });
+    });
+
+    test('reports it as inactive while its user is disabled', async () => {
+      state.introspection = { ...delegated };
+      writeUsers({
+        alice: { id: 'alice', username: 'alice', active: false, authMethods: ['local'] }
+      });
+
+      const res = await introspect();
+
+      expect(res.body).toEqual({ active: false });
+    });
+
+    test('fails closed, rather than saying active, when the users cannot be read', async () => {
+      state.introspection = { ...delegated };
+      writeFileSync(USERS_FILE, '{ not json');
+
+      const res = await introspect();
+
+      expect(res.status).toBe(503);
+      expect(res.body.active).toBeUndefined();
+    });
+
+    test('leaves a token that is not a user’s alone', async () => {
+      state.introspection = {
+        active: true,
+        token_type: 'oauth_client_credentials',
+        client_id: 'service-client'
+      };
+      writeUsers({});
+
+      const res = await introspect();
+
+      expect(res.body).toMatchObject({ active: true, client_id: 'service-client' });
+    });
+  });
+});
+
 describe('the approval gate', () => {
   function buildApp() {
     const app = express();
@@ -745,6 +1022,114 @@ describe('the gateway', () => {
 
     expect(res.status).toBe(403);
     expect(res.body.error).toBe('access_denied');
+  });
+
+  // A delegated token is signed, so it outlives the account it was minted for
+  // unless the gateway asks about the user, as the REST API does.
+  const writeUsers = users =>
+    writeFileSync(USERS_FILE, JSON.stringify({ users, metadata: { version: '2.0.0' } }));
+
+  test('answers 401 once the user who authorized the token has been deleted', async () => {
+    writeUsers({});
+
+    const res = await call();
+
+    expect(res.status).toBe(401);
+    expect(res.body.error).toBe('invalid_token');
+    expect(res.body.error_description).toBe('User account no longer exists');
+  });
+
+  test('answers 403 once that user has been disabled', async () => {
+    writeUsers({
+      alice: { id: 'alice', username: 'alice', active: false, authMethods: ['local'] }
+    });
+
+    const res = await call();
+
+    expect(res.status).toBe(403);
+    expect(res.body.error).toBe('access_denied');
+  });
+
+  test('answers 503, not "deleted", when the users file cannot be read', async () => {
+    writeFileSync(USERS_FILE, '{ not json');
+
+    const res = await call();
+
+    expect(res.status).toBe(503);
+    expect(res.body.error).toBe('service_unavailable');
+  });
+
+  // A personal API key authenticates from its client record, not from a token
+  // that names a user, so the owner on the record is what has to be asked about.
+  describe('with a personal API key', () => {
+    const KEY = 'key-alice';
+
+    beforeEach(() => {
+      state.platform.oauth.personalKeys = { enabled: true };
+      writeFileSync(
+        CLIENTS_FILE,
+        JSON.stringify({
+          clients: {
+            [KEY]: {
+              clientId: KEY,
+              name: 'Alice key',
+              active: true,
+              personal: true,
+              ownerUserId: 'alice',
+              ownerUsername: 'alice',
+              ownerGroups: ['users'],
+              scopes: ['mcp:tools:call'],
+              metadata: {}
+            }
+          },
+          metadata: { version: '1.0.0' }
+        })
+      );
+      state.token = {
+        sub: 'alice',
+        client_id: KEY,
+        authMode: 'oauth_personal_key',
+        static_key: true,
+        scopes: ['mcp:tools:call']
+      };
+    });
+
+    test('is accepted while its owner exists', async () => {
+      const res = await call();
+
+      expect(res.status).toBe(200);
+      expect(res.body.user).toBe('alice');
+    });
+
+    test('answers 401 once its owner has been deleted, with the key record still there', async () => {
+      writeUsers({});
+
+      const res = await call();
+
+      expect(res.status).toBe(401);
+      expect(res.body.error).toBe('invalid_token');
+      expect(res.body.error_description).toBe('The owner of this API key no longer exists');
+    });
+
+    test('answers 403 while its owner is disabled', async () => {
+      writeUsers({
+        alice: { id: 'alice', username: 'alice', active: false, authMethods: ['local'] }
+      });
+
+      const res = await call();
+
+      expect(res.status).toBe(403);
+      expect(res.body.error).toBe('access_denied');
+    });
+
+    test('answers 503, not "revoked", when the users file cannot be read', async () => {
+      writeFileSync(USERS_FILE, '{ not json');
+
+      const res = await call();
+
+      expect(res.status).toBe(503);
+      expect(res.body.error).toBe('service_unavailable');
+    });
   });
 });
 

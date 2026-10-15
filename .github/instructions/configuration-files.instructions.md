@@ -80,7 +80,7 @@ Each model is defined in its own JSON file.
 ### Optional Fields
 
 - `url` - Custom endpoint URL (for local providers)
-- `supportsTools` - Tool calling support (boolean)
+- `supportsTools` - Tool calling support (`none`, `auto` or `required`; `required` = the provider accepts a forced tool call)
 - `supportsVision` - Image input support (boolean)
 - `description` - Localized model descriptions
 - `apiKeyEnvVar` - Environment variable for API key (default based on provider)

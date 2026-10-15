@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef, useMemo, useId } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useOptionalAuth } from '../../../shared/contexts/authContextValue';
+import { abortCauseText } from '../../../shared/utils/abortCause';
 import DOMPurify from 'dompurify';
 import { sendMessageFeedback, answerInteraction } from '../../../api';
 import { getConversationId } from '../../../utils/chatId';
@@ -68,6 +70,7 @@ import ScheduledTaskProposalCards from '../../tasks/components/ScheduledTaskProp
 import ScheduleThisAction from '../../tasks/components/ScheduleThisAction';
 import GeneratedFiles from './GeneratedFiles';
 import { findSkillDraft } from '../../skills/utils/skillDraft';
+import { matchesModelFilter, modelSupportsTools } from '../../../../../shared/modelCapabilities.js';
 import './ChatMessage.css';
 
 /** How an answer ends when it stopped before it was complete. */
@@ -136,6 +139,7 @@ function ChatMessage({
   onSaveAsSkill = null
 }) {
   const { t } = useTranslation();
+  const auth = useOptionalAuth();
   const featureFlags = useFeatureFlags();
   // Response feedback is off when either the platform flag or this app's
   // `features.feedback` says so. One check for every surface: ChatMessage is
@@ -394,20 +398,13 @@ function ChatMessage({
 
       // Filter by tools requirement
       if (app.tools && app.tools.length > 0) {
-        availableModels = availableModels.filter(model => model.supportsTools);
+        availableModels = availableModels.filter(modelSupportsTools);
       }
 
       // Apply model settings filter if specified
       if (app.settings?.model?.filter) {
         const filter = app.settings.model.filter;
-        availableModels = availableModels.filter(model => {
-          for (const [key, value] of Object.entries(filter)) {
-            if (model[key] !== value) {
-              return false;
-            }
-          }
-          return true;
-        });
+        availableModels = availableModels.filter(model => matchesModelFilter(model, filter));
       }
 
       // Check if there are multiple models available
@@ -585,7 +582,19 @@ function ChatMessage({
     // flag and, for a failure, the stored reason. Without this the bubble
     // renders empty — a stopped answer and a crashed one both look like the
     // model replied with nothing.
-    const cancelledNote = t('message.generationCancelled', ' [Generation cancelled]');
+    // A stopped turn reopened from the store says who stopped it and from where.
+    const causeText = message.abortCause
+      ? abortCauseText(t, message.abortCause, {
+          userId: auth?.user?.id,
+          isAdmin: auth?.user?.isAdmin === true
+        })
+      : '';
+    const cancelledNote = causeText
+      ? ` [${t('message.generationCancelledBy', {
+          cause: causeText,
+          defaultValue: 'Generation cancelled: {{cause}}'
+        })}]`
+      : t('message.generationCancelled', ' [Generation cancelled]');
     let contentToRender = storedContent;
     if (message.fromServer && message.cancelled && !storedContent.includes(cancelledNote)) {
       contentToRender = `${storedContent}${cancelledNote}`;

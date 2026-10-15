@@ -13,7 +13,7 @@
   "provider": "mistral",
   "contextWindow": 256000,
   "maxOutputTokens": 32000,
-  "supportsTools": true,
+  "supportsTools": "required",
   "supportsVision": true,
   "supportsImages": true,
   "supportsStructuredOutput": true,

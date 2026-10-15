@@ -607,7 +607,15 @@ export class RunLog {
   /** Convenience: append run/end. */
   endRun(
     runId,
-    { status = 'completed', finishReason = null, usage, error, durationMs, knowledgeSources } = {}
+    {
+      status = 'completed',
+      finishReason = null,
+      usage,
+      error,
+      durationMs,
+      knowledgeSources,
+      cause
+    } = {}
   ) {
     return this.append(runId, RUN_LOG_EVENTS.RUN_END, {
       status,
@@ -615,7 +623,9 @@ export class RunLog {
       usage,
       error,
       durationMs,
-      ...(knowledgeSources ? { knowledgeSources } : {})
+      ...(knowledgeSources ? { knowledgeSources } : {}),
+      // Who stopped an aborted run (`services/chat/abortCause.js`).
+      ...(cause ? { cause } : {})
     });
   }
 

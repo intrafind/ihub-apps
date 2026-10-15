@@ -13,7 +13,7 @@
   "provider": "mistral",
   "contextWindow": 32000,
   "maxOutputTokens": 8000,
-  "supportsTools": true,
+  "supportsTools": "required",
   "concurrency": 1,
   "requestDelayMs": 1000,
   "enabled": true,

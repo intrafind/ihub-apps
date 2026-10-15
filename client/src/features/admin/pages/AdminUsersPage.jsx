@@ -167,7 +167,10 @@ function AdminUsersPage() {
   const handleDeleteUser = userId => {
     setConfirmDialog({
       title: t('admin.users.deleteTitle', 'Delete User'),
-      message: t('admin.users.deleteConfirm', 'Are you sure you want to delete this user?'),
+      message: t(
+        'admin.users.deleteConfirm',
+        'Delete this user? Their access ends immediately, and their API keys, connections, stored credentials, scheduled tasks, chats, prompts, skills and short links are removed. This cannot be undone. To stop someone from signing in and keep what they made, disable the account instead.'
+      ),
       danger: true,
       onConfirm: async () => {
         setConfirmDialog(null);

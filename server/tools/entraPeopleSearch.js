@@ -1,7 +1,18 @@
-// DEPRECATED: This file has been moved to services/integrations/EntraService.js
-// This wrapper is maintained for backward compatibility
+// Tool functions for the Microsoft Entra ID directory. The Graph client lives in
+// services/integrations/EntraService.js.
 
-import entraService from '../services/integrations/EntraService.js';
+/**
+ * The Entra service, loaded on first use. It reads its Azure credentials from
+ * the environment when it is created and throws without them, so importing it
+ * here would make this whole script fail to load on every installation that
+ * does not use Entra (and be reported by the startup tool check). A call on
+ * such an installation still fails, with the service's own message.
+ * @returns {Promise<Object>} The Entra service
+ */
+async function getEntraService() {
+  const { default: entraService } = await import('../services/integrations/EntraService.js');
+  return entraService;
+}
 
 /**
  * Find a user by name in Microsoft Entra (Azure AD)
@@ -10,7 +21,7 @@ import entraService from '../services/integrations/EntraService.js';
  * @returns {Promise<Object>} The matching user(s)
  */
 export async function findUser({ name }) {
-  return entraService.findUser(name);
+  return (await getEntraService()).findUser(name);
 }
 
 /**
@@ -20,7 +31,7 @@ export async function findUser({ name }) {
  * @returns {Promise<Object>} The user details
  */
 export async function getAllUserDetails({ userId }) {
-  return entraService.getAllUserDetails(userId);
+  return (await getEntraService()).getAllUserDetails(userId);
 }
 
 /**
@@ -30,7 +41,7 @@ export async function getAllUserDetails({ userId }) {
  * @returns {Promise<Object>} The user's manager
  */
 export async function getUserManager({ userId }) {
-  return entraService.getUserManager(userId);
+  return (await getEntraService()).getUserManager(userId);
 }
 
 /**
@@ -40,7 +51,7 @@ export async function getUserManager({ userId }) {
  * @returns {Promise<Object>} The user's groups
  */
 export async function getUserGroups({ userId }) {
-  return entraService.getUserGroups(userId);
+  return (await getEntraService()).getUserGroups(userId);
 }
 
 /**
@@ -50,7 +61,7 @@ export async function getUserGroups({ userId }) {
  * @returns {Promise<Object>} The team members
  */
 export async function getTeamMembers({ teamId }) {
-  return entraService.getTeamMembers(teamId);
+  return (await getEntraService()).getTeamMembers(teamId);
 }
 
 /**
@@ -60,7 +71,7 @@ export async function getTeamMembers({ teamId }) {
  * @returns {Promise<string>} The photo as base64 string
  */
 export async function getUserPhotoBase64({ userId }) {
-  return entraService.getUserPhotoBase64(userId);
+  return (await getEntraService()).getUserPhotoBase64(userId);
 }
 
 /**
@@ -70,7 +81,7 @@ export async function getUserPhotoBase64({ userId }) {
  * @returns {Promise<Object>} The team channels
  */
 export async function getTeamChannels({ teamId }) {
-  return entraService.getTeamChannels(teamId);
+  return (await getEntraService()).getTeamChannels(teamId);
 }
 
 export default {

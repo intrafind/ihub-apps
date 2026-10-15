@@ -1434,7 +1434,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
   const { handleVoiceInput, handleVoiceCommand } = useVoiceCommands({
     messages,
     clearChat: () => {
-      cancelGeneration();
+      cancelGeneration('voice');
       clearMessages();
       resetConversationState();
       startNewChat();
@@ -1843,7 +1843,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
         t('pages.appChat.confirmClear', 'Are you sure you want to clear the entire chat history?')
       )
     ) {
-      cancelGeneration();
+      cancelGeneration('clear-chat');
 
       if (compareModeActive) {
         // Clear every compare panel (regenerates their chatIds internally)

@@ -45,6 +45,12 @@ import {
   resolveNativeWebSearchFallbackTools as defaultResolveNativeWebSearchFallbackTools
 } from './nativeWebSearchFallback.js';
 import {
+  isToolChoiceRejection,
+  markForcedToolUseUnavailable,
+  planToolChoice,
+  turnHasToolCalls
+} from './toolChoice.js';
+import {
   compactIfOversized,
   microcompactMessages,
   isContextOverflowError,
@@ -274,6 +280,11 @@ export class AgentLoop {
       }
     };
 
+    // A turn that already holds a tool call (it resumed after the model asked a
+    // question) has had its first call: nothing is forced again.
+    const priorToolUse = policies.tools.choice === 'required' && turnHasToolCalls(request.messages);
+    let forcedToolUseRejected = false;
+
     let forceFinish = false;
     let forceReason = null;
     let reactiveAttempts = 0;
@@ -388,13 +399,28 @@ export class AgentLoop {
         const availableTools = tools.filter(t => !ctx.disabledTools.has(t.id));
         const offeredTools = availableTools.length > 0 && !forceFinish ? availableTools : undefined;
 
+        // "Call a tool first": forced through the provider where the model
+        // takes it, as a one-off instruction after the conversation where it
+        // does not. Never kept in the transcript.
+        const choicePlan = planToolChoice({
+          choice: policies.tools.choice,
+          offeredTools,
+          iteration,
+          priorToolUse,
+          model,
+          forcedRejected: forcedToolUseRejected
+        });
+
         let result;
         try {
           const stream = await this.llmClient.execute({
             model,
-            messages: ctx.messages,
+            messages: choicePlan.nudge
+              ? [...ctx.messages, nudgeMessage(choicePlan.nudge)]
+              : ctx.messages,
             options: {
               ...options,
+              ...(choicePlan.force ? { toolChoice: 'required' } : {}),
               tools: offeredTools,
               nativeWebSearch: forceFinish ? null : nativeWebSearch,
               responseSchema,
@@ -432,6 +458,22 @@ export class AgentLoop {
           }
           result = stream.result();
         } catch (err) {
+          // The provider turned down the forced call (the newest Claude models
+          // do, as does extended thinking): remember it for this model and
+          // retry the same round, which now asks in words instead.
+          if (choicePlan.force && !isAbortError(err) && isToolChoiceRejection(err)) {
+            forcedToolUseRejected = true;
+            markForcedToolUseUnavailable(model.id, { reason: err.message });
+            this.logger.warn('Provider rejected a forced tool call — asking for one in words', {
+              component: COMPONENT,
+              runId,
+              modelId: model.id,
+              provider: model.provider,
+              reason: err.message
+            });
+            iteration--;
+            continue;
+          }
           if (nativeWebSearch && !isAbortError(err) && isNativeWebSearchRejection(err)) {
             markNativeWebSearchUnavailable(model.id, { reason: err.message });
             await applyNativeWebSearchFallback(err.message);

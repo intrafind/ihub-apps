@@ -531,11 +531,13 @@ describe('model picker web search marker', () => {
     expect(
       modelSupportsWebSearch(app(), { provider: 'anthropic', nativeWebSearch: { enabled: false } })
     ).toBe(false);
-    expect(modelSupportsWebSearch(app(), { provider: 'mistral', supportsTools: true })).toBe(false);
+    expect(modelSupportsWebSearch(app(), { provider: 'mistral', supportsTools: 'auto' })).toBe(
+      false
+    );
     expect(
       modelSupportsWebSearch(app({ websearchAvailability: { native: [], script: true } }), {
         provider: 'mistral',
-        supportsTools: true
+        supportsTools: 'auto'
       })
     ).toBe(true);
     expect(modelSupportsWebSearch({ id: 'plain' }, { provider: 'openai' })).toBeNull();
@@ -546,8 +548,8 @@ describe('model picker web search marker', () => {
       <ModelSelector
         app={app()}
         models={[
-          { id: 'claude', name: 'Claude', provider: 'anthropic', supportsTools: true },
-          { id: 'local', name: 'Local', provider: 'openai', supportsTools: true }
+          { id: 'claude', name: 'Claude', provider: 'anthropic', supportsTools: 'auto' },
+          { id: 'local', name: 'Local', provider: 'openai', supportsTools: 'auto' }
         ]}
         selectedModel="claude"
         onModelChange={() => {}}

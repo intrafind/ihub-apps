@@ -3,7 +3,7 @@
 
 import express from 'express';
 import NextcloudService from '../../services/integrations/NextcloudService.js';
-import { authOptional, authRequired } from '../../middleware/authRequired.js';
+import { authRequired } from '../../middleware/authRequired.js';
 import { requireFeature } from '../../featureRegistry.js';
 import logger from '../../utils/logger.js';
 import rateLimit from 'express-rate-limit';
@@ -13,14 +13,8 @@ import {
   sendBadRequest,
   sendErrorResponse
 } from '../../utils/responseHelpers.js';
-import { isValidReturnUrl } from '../../utils/oauthReturnUrl.js';
-import {
-  DEFAULT_INTEGRATION_RETURN_URL,
-  issueIntegrationOAuthState,
-  verifyIntegrationOAuthState,
-  withQueryParam
-} from '../../utils/integrationOAuthState.js';
 import { buildContentDisposition } from '../../utils/safeContentDisposition.js';
+import { createOAuthIntegrationRouter } from './oauthIntegrationFactory.js';
 
 const router = express.Router();
 
@@ -49,229 +43,33 @@ const nextcloudAuthLimiter = rateLimit({
   legacyHeaders: false
 });
 
-/**
- * Initiate Nextcloud OAuth2 flow
- * GET /api/integrations/nextcloud/auth?providerId=xxx
- */
-router.get('/auth', authRequired, nextcloudAuthLimiter, async (req, res) => {
-  try {
-    const { providerId, returnUrl } = req.query;
-
-    if (!providerId) {
-      return sendBadRequest(res, 'providerId query parameter is required');
-    }
-
-    // authRequired lets the anonymous principal through when anonymous
-    // access is allowed, and does not guarantee req.user.id is truthy.
-    // Refuse to start an OAuth flow without a signed-in user id — otherwise
-    // tokens would land under a shared key and could be read by another caller.
-    if (!req.user?.id || req.user.id === 'anonymous') {
-      return sendAuthRequired(res);
-    }
-
-    const validatedReturnUrl = isValidReturnUrl(returnUrl, req)
-      ? returnUrl
-      : DEFAULT_INTEGRATION_RETURN_URL;
-
-    // Signed, self-contained state instead of a session: the callback may
-    // land on another cluster worker (see utils/integrationOAuthState.js).
-    const state = issueIntegrationOAuthState({
-      service: 'nextcloud',
-      providerId,
-      userId: req.user.id,
-      returnUrl: validatedReturnUrl
-    });
-
-    const authUrl = NextcloudService.generateAuthUrl(providerId, state, req);
-
-    logger.info('Initiating Nextcloud OAuth', {
-      component: 'Nextcloud',
-      userId: req.user?.id,
-      providerId
-    });
-
-    res.redirect(authUrl);
-  } catch (error) {
-    return sendInternalError(res, error, 'initiate Nextcloud OAuth');
-  }
-});
-
-/**
- * Handle Nextcloud OAuth callback (provider-specific)
- * GET /api/integrations/nextcloud/:providerId/callback
- */
-router.get('/:providerId/callback', authOptional, async (req, res) => {
-  const { providerId } = req.params;
-  const verified = verifyIntegrationOAuthState(req, { service: 'nextcloud', providerId });
-  const { returnUrl } = verified;
-  try {
-    const { code, error: oauthError } = req.query;
-
-    if (oauthError) {
-      logger.error('Nextcloud OAuth error', {
-        component: 'Nextcloud',
-        error: oauthError,
-        providerId
-      });
-      const errorCode = oauthError === 'access_denied' ? 'access_denied' : 'oauth_failed';
-      return res.redirect(withQueryParam(returnUrl, 'nextcloud_error', errorCode));
-    }
-
-    if (!verified.ok) {
-      logger.error('Invalid Nextcloud OAuth state parameter', {
-        component: 'Nextcloud',
-        providerId,
-        reason: verified.error
-      });
-      return res.redirect(withQueryParam(returnUrl, 'nextcloud_error', verified.error));
-    }
-
-    if (!code) {
-      logger.error('Nextcloud OAuth callback missing code', {
-        component: 'Nextcloud',
-        providerId
-      });
-      return res.redirect(withQueryParam(returnUrl, 'nextcloud_error', 'missing_code'));
-    }
-
-    const tokens = await NextcloudService.exchangeCodeForTokens(providerId, code, req);
-
-    if (!tokens.refreshToken) {
-      logger.warn(
-        'Storing Nextcloud tokens WITHOUT refresh capability - user will need to reconnect periodically',
-        { component: 'Nextcloud', providerId }
-      );
-    }
-
-    await NextcloudService.storeUserTokens(verified.userId, tokens);
-
-    logger.info('Nextcloud OAuth completed', {
-      component: 'Nextcloud',
-      userId: verified.userId,
-      providerId
-    });
-
-    res.redirect(withQueryParam(returnUrl, 'nextcloud_connected', 'true'));
-  } catch (error) {
-    logger.error('Error handling Nextcloud OAuth callback', {
-      component: 'Nextcloud',
-      error: error.message,
-      providerId
-    });
-    // Use a stable error code rather than echoing `error.message` —
-    // some upstream errors interpolate user-influenced strings.
-    res.redirect(withQueryParam(returnUrl, 'nextcloud_error', 'callback_failed'));
-  }
-});
-
-/**
- * Get Nextcloud connection status for current user
- * GET /api/integrations/nextcloud/status
- */
-router.get('/status', authRequired, async (req, res) => {
-  try {
-    if (!req.user?.id || req.user.id === 'anonymous') {
-      return sendAuthRequired(res);
-    }
-
-    const providerId = typeof req.query.providerId === 'string' ? req.query.providerId : undefined;
-
-    const isAuthenticated = await NextcloudService.isUserAuthenticated(req.user.id, providerId);
-
-    if (!isAuthenticated) {
-      return res.json({
-        connected: false,
-        message: 'Nextcloud account not connected'
-      });
-    }
-
-    let userInfo = null;
-    try {
-      userInfo = await NextcloudService.getUserInfo(req.user.id, providerId);
-    } catch (userInfoError) {
-      logger.warn('Nextcloud connected but user info lookup failed', {
-        component: 'Nextcloud',
-        userId: req.user.id,
-        providerId,
-        error: userInfoError.message
-      });
-    }
-    const tokenInfo = await NextcloudService.getTokenExpirationInfo(req.user.id, providerId);
-
-    res.json({
-      connected: true,
-      userInfo: userInfo
-        ? {
-            displayName: userInfo.displayName,
-            email: userInfo.email,
-            userPrincipalName: userInfo.id,
-            serverUrl: userInfo.serverUrl
-          }
-        : null,
-      tokenInfo: {
-        expiresAt: tokenInfo.expiresAt,
-        minutesUntilExpiry: tokenInfo.minutesUntilExpiry,
-        isExpiring: tokenInfo.isExpiring,
-        isExpired: tokenInfo.isExpired
-      },
-      message: tokenInfo.isExpiring
-        ? 'Nextcloud account connected (tokens expiring soon)'
-        : 'Nextcloud account connected successfully'
-    });
-  } catch (error) {
-    logger.error('Error getting Nextcloud status', {
-      component: 'Nextcloud',
-      error: error.message
-    });
-
-    if (error.message.includes('authentication required')) {
-      return res.json({
-        connected: false,
-        message: 'Nextcloud authentication expired'
-      });
-    }
-
-    return sendInternalError(res, error, 'get Nextcloud status');
-  }
-});
-
-/**
- * Disconnect Nextcloud account
- * POST /api/integrations/nextcloud/disconnect
- */
-router.post('/disconnect', authRequired, async (req, res) => {
-  try {
-    if (!req.user?.id || req.user.id === 'anonymous') {
-      return sendAuthRequired(res);
-    }
-
-    // Accept providerId from either query (legacy clients) or JSON body.
-    const providerId =
-      (typeof req.query.providerId === 'string' && req.query.providerId) ||
-      (typeof req.body?.providerId === 'string' && req.body.providerId) ||
-      undefined;
-
-    const success = await NextcloudService.deleteUserTokens(req.user.id, providerId);
-
-    if (success) {
-      logger.info('Nextcloud disconnected', {
-        component: 'Nextcloud',
-        userId: req.user.id,
-        providerId
-      });
-      res.json({
-        success: true,
-        message: 'Nextcloud account disconnected successfully'
-      });
-    } else {
-      res.json({
-        success: false,
-        message: 'No Nextcloud connection found to disconnect'
-      });
-    }
-  } catch (error) {
-    return sendInternalError(res, error, 'disconnect Nextcloud');
-  }
+// Shared auth -> callback -> status -> disconnect flow (see oauthIntegrationFactory.js).
+// Nextcloud's OAuth2 flow does not use PKCE.
+createOAuthIntegrationRouter(router, {
+  providerKey: 'nextcloud',
+  displayName: 'Nextcloud',
+  requiresProviderId: true,
+  usesPkce: false,
+  authLimiter: nextcloudAuthLimiter,
+  buildAuthUrl: ({ providerId, state, req }) =>
+    NextcloudService.generateAuthUrl(providerId, state, req),
+  exchangeCodeForTokens: ({ providerId, code, req }) =>
+    NextcloudService.exchangeCodeForTokens(providerId, code, req),
+  storeUserTokens: (userId, tokens) => NextcloudService.storeUserTokens(userId, tokens),
+  isUserAuthenticated: (userId, providerId) =>
+    NextcloudService.isUserAuthenticated(userId, providerId),
+  getUserInfo: (userId, providerId) => NextcloudService.getUserInfo(userId, providerId),
+  getTokenExpirationInfo: (userId, providerId) =>
+    NextcloudService.getTokenExpirationInfo(userId, providerId),
+  deleteUserTokens: (userId, providerId) => NextcloudService.deleteUserTokens(userId, providerId),
+  // A connected account whose profile lookup fails is still connected.
+  tolerateUserInfoFailure: true,
+  formatUserInfo: userInfo => ({
+    displayName: userInfo.displayName,
+    email: userInfo.email,
+    userPrincipalName: userInfo.id,
+    serverUrl: userInfo.serverUrl
+  })
 });
 
 /**

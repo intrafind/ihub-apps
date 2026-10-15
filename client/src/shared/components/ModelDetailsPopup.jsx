@@ -182,7 +182,10 @@ function ModelDetailsPopup({ model, isOpen, onClose }) {
                 {t('admin.models.details.supportsTools', 'Supports Tools')}
               </div>
               <div className="text-sm text-gray-900 dark:text-gray-100 mt-1">
-                {model.supportsTools ? t('common.yes', 'Yes') : t('common.no', 'No')}
+                {t(
+                  `admin.models.toolSupport.${model.supportsTools || 'none'}`,
+                  model.supportsTools || 'none'
+                )}
               </div>
             </div>
             {model.concurrency && (

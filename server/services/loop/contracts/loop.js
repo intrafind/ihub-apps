@@ -46,7 +46,13 @@ export const toolPoliciesSchema = z.object({
   parallel: z.boolean().prefault(true),
   maxParallel: z.number().int().positive().prefault(4),
   /** Apply schema defaults to omitted arguments. */
-  applyDefaults: z.boolean().prefault(true)
+  applyDefaults: z.boolean().prefault(true),
+  /**
+   * `required` makes the first model call of a turn call a tool (provider tool
+   * choice where the model allows it, an instruction where it does not); every
+   * later call is `auto`, so the model can answer from the tool results.
+   */
+  choice: z.enum(['auto', 'required']).prefault('auto')
 });
 
 export const contextPoliciesSchema = z.object({

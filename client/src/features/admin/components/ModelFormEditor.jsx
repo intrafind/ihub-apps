@@ -21,6 +21,14 @@ import {
 import { DEFAULT_MAX_OUTPUT_TOKENS } from '../../../../../shared/outputTokens.js';
 import { isCustomLlmProvider, providerEnvKeyName } from '../../../../../shared/llmProviders.js';
 import { apiTypeLabel } from '../utils/modelImport';
+import { TOOL_SUPPORT, TOOL_SUPPORT_VALUES } from '../../../../../shared/modelCapabilities.js';
+
+/** English fallbacks for the tool calling dropdown (`admin.models.toolSupport.*`). */
+const TOOL_SUPPORT_LABELS = {
+  [TOOL_SUPPORT.NONE]: 'No tools',
+  [TOOL_SUPPORT.AUTO]: 'Tools - the model decides',
+  [TOOL_SUPPORT.REQUIRED]: 'Tools - a tool call can be required'
+};
 
 /**
  * Editor for a JSON-typed provider config field. Keeps the raw textarea contents in
@@ -1082,31 +1090,43 @@ function ModelFormEditor({
                 </div>
 
                 <div className="col-span-6">
+                  <label
+                    htmlFor="supportsTools"
+                    className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                  >
+                    {t('admin.models.fields.supportsTools', 'Tool Calling')}
+                  </label>
+                  <select
+                    id="supportsTools"
+                    name="supportsTools"
+                    value={data.supportsTools || 'none'}
+                    onChange={handleInputChange}
+                    aria-describedby="supportsTools-help"
+                    className="mt-1 block w-full shadow-xs sm:text-sm border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md focus:ring-indigo-500 focus:border-indigo-500"
+                  >
+                    {TOOL_SUPPORT_VALUES.map(value => (
+                      <option key={value} value={value}>
+                        {t(`admin.models.toolSupport.${value}`, TOOL_SUPPORT_LABELS[value])}
+                      </option>
+                    ))}
+                  </select>
+                  <p
+                    id="supportsTools-help"
+                    className="mt-2 text-sm text-gray-500 dark:text-gray-400"
+                  >
+                    {t(
+                      'admin.models.hints.supportsTools',
+                      'Whether the model can be given tools, and whether the provider can force it to call one.'
+                    )}
+                  </p>
+                </div>
+
+                <div className="col-span-6">
                   <fieldset>
                     <legend className="text-base font-medium text-gray-900 dark:text-gray-100">
                       Options
                     </legend>
                     <div className="mt-4 space-y-4">
-                      <div className="flex items-start">
-                        <div className="flex items-center h-5">
-                          <input
-                            id="supportsTools"
-                            name="supportsTools"
-                            type="checkbox"
-                            checked={data.supportsTools || false}
-                            onChange={handleInputChange}
-                            className="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded-sm"
-                          />
-                        </div>
-                        <div className="ml-3 text-sm">
-                          <label
-                            htmlFor="supportsTools"
-                            className="font-medium text-gray-700 dark:text-gray-300"
-                          >
-                            {t('admin.models.fields.supportsTools')}
-                          </label>
-                        </div>
-                      </div>
                       <div className="flex items-start">
                         <div className="flex items-center h-5">
                           <input

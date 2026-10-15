@@ -51,7 +51,7 @@ function AdminModelEditPage() {
     provider: '',
     contextWindow: '',
     maxOutputTokens: '',
-    supportsTools: false,
+    supportsTools: 'none',
     supportsImageGeneration: false,
     enabled: true,
     default: false,
@@ -103,7 +103,7 @@ function AdminModelEditPage() {
         provider: '',
         contextWindow: '',
         maxOutputTokens: '',
-        supportsTools: false,
+        supportsTools: 'none',
         supportsImageGeneration: false,
         enabled: true,
         default: false,
@@ -140,7 +140,7 @@ function AdminModelEditPage() {
         provider: model.provider || '',
         contextWindow: model.contextWindow || '',
         maxOutputTokens: model.maxOutputTokens || '',
-        supportsTools: model.supportsTools || false,
+        supportsTools: model.supportsTools || 'none',
         enabled: model.enabled !== undefined ? model.enabled : true,
         default: model.default || false
       };

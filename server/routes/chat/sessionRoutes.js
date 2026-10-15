@@ -51,6 +51,7 @@ import validate from '../../validators/validate.js';
 import { chatTestSchema, chatPostSchema, chatConnectSchema } from '../../validators/index.js';
 import { buildServerPath } from '../../utils/basePath.js';
 import logger from '../../utils/logger.js';
+import { describeCause, userAbortCause } from '../../services/chat/abortCause.js';
 import { findByIdCaseInsensitive } from '../../utils/resourceLookup.js';
 import {
   sendNotFound,
@@ -1557,6 +1558,27 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
         (bound && typeof bound === 'object' ? bound.runId : bound) ||
         access.chat?.activeRunId ||
         null;
+      // Who stopped it and from where, recorded wherever the turn ends up
+      // written down. The surface is the client's own label for the control
+      // that sent this; anything but a short slug is dropped.
+      const requestedSource = typeof req.body?.source === 'string' ? req.body.source : '';
+      const cause = await userAbortCause('user_stop', req.user, {
+        mode:
+          access.chat?.identityMode ||
+          (boundRunId && runLog.getRunMeta(boundRunId)?.identityMode) ||
+          runLog.identityMode(),
+        ownerId: access.chat?.ownerId,
+        via: 'POST /api/apps/:appId/chat/:chatId/stop',
+        ...(/^[a-z][a-z0-9-]{0,31}$/.test(requestedSource) ? { source: requestedSource } : {}),
+        related: boundRunId ? { runId: boundRunId } : undefined
+      });
+      logger.info('Chat stop requested', {
+        component: 'sessionRoutes',
+        chatId,
+        ip: req.ip,
+        userAgent: String(req.headers?.['user-agent'] || '').slice(0, 200),
+        ...describeCause(cause)
+      });
       if (boundRunId) {
         try {
           // The turn may run on another worker: continue its persisted sequence.
@@ -1581,7 +1603,7 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
       // helper resolves its own owner and relays if it is not this process.
       // The abort is deliberately the unconditional one — Stop overrides
       // durability, which only ever protects a run from a *disconnect*.
-      const aborted = abortChatRequest(chatId);
+      const aborted = abortChatRequest(chatId, cause);
 
       // Also cancel any running workflow execution for this chatId
       const workflowCancelled = await cancelChatWorkflow(chatId);

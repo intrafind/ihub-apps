@@ -22,6 +22,7 @@ import { renderUserMessage } from '../../../shared/promptContext.js';
 import { SSE_V2_EVENTS } from '../../../shared/runEvents.js';
 import { RunStreamEmitter } from '../../services/loop/RunStream.js';
 import { newRunId } from '../../services/loop/RunLog.js';
+import { abortCause, abortReason } from '../../services/chat/abortCause.js';
 import { activeRequests, clearChatDurable, markChatDurable, hasChatClient } from '../../sse.js';
 import { normalizeChatSettings } from '../../services/chat/ChatRepository.js';
 import {
@@ -535,7 +536,11 @@ export default function registerResponsesRoutes(
       disconnected = true;
       // A stateless turn ends with its caller. A conversation turn is stored
       // whether or not anybody is still reading, like a chat turn in the UI.
-      if (!chat) activeRequests.get(chatId)?.abort();
+      if (!chat) {
+        activeRequests
+          .get(chatId)
+          ?.abort(abortReason(abortCause('api_client_closed', { via: 'POST /v1/responses' })));
+      }
     });
 
     let persistence = null;

@@ -22,13 +22,6 @@ iHub Apps provides a unified web search system that automatically selects the be
 | Tool | Purpose |
 |------|---------|
 | **read_url** | Open a web page or PDF by URL and read its main content as Markdown (offered automatically with web search) |
-| **playwrightScreenshot** | Capture screenshots or PDFs using Playwright |
-| **seleniumScreenshot** | Capture screenshots or PDFs using Selenium |
-| **deepResearch** | Iterative multi-round web research |
-| **researchPlanner** | Decompose research topics into subtasks |
-| **evaluator** | Evaluate draft answers for quality |
-| **answerReducer** | Merge multiple texts into one article |
-| **queryRewriter** | Rewrite search queries for better results |
 
 ## Unified Web Search Configuration
 
@@ -579,96 +572,6 @@ None of these take any parameters — they're automatically enabled when `websea
 - **SSRF protection**: Blocks access to private/internal IP addresses. Domains listed in the SSL whitelist configuration bypass this check (added in v5.2.12)
 
 In the chat's tool activity, a page read shows the page's title, its site, the words read and a *truncated* hint.
-
-### Playwright Screenshot (`playwrightScreenshot`)
-
-**Purpose**: Capture a screenshot or PDF of any webpage using the Playwright browser automation library. If a PDF is captured, the text is extracted and returned.
-
-**Parameters**:
-
-- `url` (string, required): Page URL to capture
-- `format` (string, optional): `"png"` or `"pdf"` (default: `"png"`)
-- `fullPage` (boolean, optional): Capture the full page height (default: `true`)
-
-**Returns**: Attachment information with a download URL and extracted text for PDFs.
-
-### Selenium Screenshot (`seleniumScreenshot`)
-
-**Purpose**: Capture screenshots or PDFs using Selenium and Chrome DevTools.
-
-**Parameters**:
-
-- `url` (string, required): Page URL to capture
-- `format` (string, optional): `"png"` or `"pdf"` (default: `"png"`)
-- `fullPage` (boolean, optional): Capture the full page height (default: `true`)
-
-**Returns**: Attachment information with a download URL and extracted text for PDFs.
-
-### Answer Evaluator (`evaluator`)
-
-**Purpose**: Check a draft answer for definitiveness, freshness and completeness.
-
-**Parameters**:
-
-- `question` (string, required): Original user question
-- `answer` (string, required): Draft answer to evaluate
-- `model` (string, optional): Model ID used for the evaluation (default `gemini-1.5-flash`)
-
-**Returns**: Array `evaluation` with one entry per check containing `type`, `pass`, and `think` fields.
-
-### Answer Reducer (`answerReducer`)
-
-**Purpose**: Compress multiple text excerpts into a single well-structured article.
-
-**Usage**: Pass an array of strings under the `answers` parameter.
-
-```json
-{
-  "answers": ["text from source 1", "text from source 2"]
-}
-```
-
-### Query Rewriter (`queryRewriter`)
-
-**Purpose**: Generate optimized variations of a user search query.
-
-**Parameters**:
-
-- `query` (string, required): The original search query
-- `think` (string, optional): Additional motivation or notes
-- `context` (string, optional): Optional contextual text
-
-**Returns**: An array of rewritten queries.
-
-### Deep Research (`deepResearch`)
-
-**Purpose**: Perform iterative web searches and content extraction while sending progress events to the frontend.
-
-**Usage**: Include the `chatId` parameter when called from a chat session so the tool can emit progress updates.
-
-```json
-{
-  "query": "renewable energy market analysis",
-  "maxRounds": 2,
-  "chatId": "{currentChatId}"
-}
-```
-
-### Research Planner (`researchPlanner`)
-
-**Purpose**: Decompose a research topic into distinct tasks for a team of researchers.
-
-**Parameters**:
-
-- `question` (string, required): Research topic to analyze
-- `teamSize` (integer, optional): Number of tasks to create (default: 3)
-- `soundBites` (string, optional): Additional context or quotes
-
-**Returns**: JSON containing the `subproblems` array and internal reasoning in `think`.
-
-## Installation Requirements
-
-Run `npx playwright install` after installing dependencies. Selenium tools require a local Chrome or Chromium executable available in your `PATH`.
 
 ## Complete Example
 

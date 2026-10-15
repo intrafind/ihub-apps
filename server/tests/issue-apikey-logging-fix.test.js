@@ -11,7 +11,7 @@ const modelConfig = {
   provider: 'openai',
   tokenLimit: 8192,
   apiKey: 'sk-proj-1234567890abcdefghijklmnopqrstuvwxyz',
-  supportsTools: true,
+  supportsTools: 'auto',
   supportsVision: true,
   enabled: true
 };

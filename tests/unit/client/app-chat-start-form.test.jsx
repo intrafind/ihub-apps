@@ -68,7 +68,8 @@ jest.mock('../../../client/src/shared/hooks/useEventSource', () => ({
       initEventSource: () => {
         mockStream.opened += 1;
       },
-      cleanupEventSource: () => {}
+      detachEventSource: () => {},
+      stopEventSource: jest.fn()
     };
   }
 }));

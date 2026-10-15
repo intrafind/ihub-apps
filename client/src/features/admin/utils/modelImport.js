@@ -15,6 +15,7 @@ import {
   TRANSCRIPTION_API_TYPES,
   getProviderApiType
 } from '../../../../../shared/llmProviders.js';
+import { TOOL_SUPPORT } from '../../../../../shared/modelCapabilities.js';
 
 /** Same rule as the `id` field of the model and provider schemas. */
 const ID_PATTERN = /^[a-z0-9._-]+$/;
@@ -189,7 +190,11 @@ export function buildImportedModelConfig(
   if (entry.contextWindow) config.contextWindow = entry.contextWindow;
   if (entry.maxOutputTokens) config.maxOutputTokens = entry.maxOutputTokens;
   if (entry.supportsVision === true) config.supportsVision = true;
-  if (typeof entry.supportsTools === 'boolean') config.supportsTools = entry.supportsTools;
+  // Discovery learns whether function calling is offered, not whether the
+  // provider accepts a forced call: that is the admin's to raise to `required`.
+  if (typeof entry.supportsTools === 'boolean') {
+    config.supportsTools = entry.supportsTools ? TOOL_SUPPORT.AUTO : TOOL_SUPPORT.NONE;
+  }
   return config;
 }
 

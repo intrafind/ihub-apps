@@ -259,7 +259,12 @@ export const nodeConfigSchema = z.object({
        * include the generic `webSearch` marker and the model has native search
        * (Anthropic `max_uses`). Defaults to 5.
        */
-      maxWebSearches: z.number().int().min(1).max(50).optional()
+      maxWebSearches: z.number().int().min(1).max(50).optional(),
+      /**
+       * `required`: the node's first model call must call one of its tools
+       * (later calls are `auto`, so the node can still answer). Default `auto`.
+       */
+      toolChoice: z.enum(['auto', 'required']).optional()
     })
     .passthrough()
     .optional(),

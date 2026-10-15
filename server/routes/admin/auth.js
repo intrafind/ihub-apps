@@ -15,6 +15,7 @@ import {
 } from '../../utils/responseHelpers.js';
 import { isLastAdmin } from '../../utils/adminRescue.js';
 import { logAudit } from '../../services/AuditLogService.js';
+import { startUserCleanup } from '../../services/userDeletion.js';
 import { clearFailedLogins, lockoutKey } from '../../utils/loginLockout.js';
 import { getDemoAccountStatus } from '../../utils/demoAccounts.js';
 
@@ -717,6 +718,28 @@ export default function registerAdminAuthRoutes(app) {
         resource: 'user',
         resourceId: userId,
         summary: `Deleted user "${username}"`
+      });
+
+      // The record is gone, which is what ended the user's access. What they
+      // owned (connections, API keys, stored credentials, scheduled tasks, chats,
+      // prompts, skills, short links) is removed in the background: a user with a
+      // lot of chats should not make the admin wait. The outcome is audited, so a
+      // step that failed is visible somewhere other than the server log.
+      startUserCleanup({
+        userId,
+        platform: configCache.getPlatform() || {},
+        onDone: ({ failed }) =>
+          logAudit({
+            req,
+            action: 'cleanup',
+            resource: 'user',
+            resourceId: userId,
+            result: failed.length > 0 ? 'failure' : 'success',
+            summary:
+              failed.length > 0
+                ? `Removed what user "${username}" owned, except: ${failed.join(', ')}`
+                : `Removed what user "${username}" owned`
+          })
       });
 
       res.json({ message: 'User deleted successfully' });

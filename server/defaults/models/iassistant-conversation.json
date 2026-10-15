@@ -12,7 +12,7 @@
   },
   "provider": "iassistant-conversation",
   "contextWindow": null,
-  "supportsTools": false,
+  "supportsTools": "none",
   "supportsImages": false,
   "streamIdleTimeoutMs": 180000,
   "default": false,

@@ -597,6 +597,44 @@ export function listPersonalClientsByOwner(clientsFilePath, ownerUserId) {
 }
 
 /**
+ * Delete every personal OAuth client (API key) a user owns.
+ *
+ * A personal key authenticates from its client record alone, so the record is
+ * the whole key: removing it ends every token ever issued for it. Deleting a
+ * user has to do this, or their keys keep working with nobody left to answer
+ * for them.
+ *
+ * @param {string} clientsFilePath - Path to oauth-clients.json file
+ * @param {string} ownerUserId - Owner user ID
+ * @param {string} deletedBy - Who is deleting them (for the log)
+ * @returns {Promise<string[]>} Client IDs that were removed
+ */
+export async function deletePersonalClientsByOwner(clientsFilePath, ownerUserId, deletedBy) {
+  if (!ownerUserId) return [];
+
+  const removed = [];
+  await updateOAuthClients(clientsFilePath, clientsConfig => {
+    for (const [clientId, client] of Object.entries(clientsConfig.clients)) {
+      if (client?.personal === true && client.ownerUserId === ownerUserId) {
+        delete clientsConfig.clients[clientId];
+        removed.push(clientId);
+      }
+    }
+    return removed.length > 0;
+  });
+
+  if (removed.length > 0) {
+    logger.info('Personal OAuth clients deleted with their owner', {
+      component: 'OAuthClientManager',
+      ownerUserId,
+      clientIds: removed,
+      deletedBy
+    });
+  }
+  return removed;
+}
+
+/**
  * Refresh the owner identity snapshot stored on a personal OAuth client.
  *
  * jwtAuth resolves the acting user from this snapshot on every request, so

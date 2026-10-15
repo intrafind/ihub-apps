@@ -120,7 +120,7 @@ When wiring up an internal wiki, point at concrete pages or at prepared, condens
 
 [Tools](tool-calling.md) extend iHub beyond text generation: [web search and content extraction](web-tools.md), API calls, screenshots, people search, [Jira](JIRA_INTEGRATION.md), iFinder, and further systems connected via [MCP](mcp-integration.md). Tools are enabled per app, and the model calls them when the task requires it.
 
-Note that tool calling requires a model that supports it — check the model's `supportsTools` flag.
+Note that tool calling requires a model that supports it — check the model's `supportsTools` setting (anything but `none`).
 
 ---
 
