@@ -921,7 +921,9 @@ export function createStarterWorkflow(overrides = {}) {
         type: 'end',
         name: { en: 'End' },
         position: { x: 460, y: 150 },
-        config: {}
+        // Every end step has an output, the answer of the workflow; the
+        // starter hands the user's input back until a step produces a better one.
+        config: { output: 'input' }
       }
     ],
     edges: [{ id: 'e-start-end', source: 'start', target: 'end' }],

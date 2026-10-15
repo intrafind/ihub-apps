@@ -185,8 +185,8 @@ function AdminWorkflowEditPage() {
    * Merges a patch into `chatIntegration`. Built immutably (unlike
    * handleMetadataChange, which writes into the nested object it shares with
    * the previous state) so the unsaved-changes check sees the edit. A key
-   * patched to `undefined` is removed, so "Automatic" leaves no
-   * `primaryOutput` behind.
+   * patched to `undefined` is removed, so the default output format leaves no
+   * `outputFormat` behind.
    *
    * Refused while the JSON editor holds invalid JSON: `workflowData` is then
    * the last valid parse, and rewriting the JSON from it would throw away

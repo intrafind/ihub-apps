@@ -8,6 +8,7 @@ import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import Icon from '../../../shared/components/Icon';
 import { apiClient } from '../../../api/client';
 import { getDisplayableOutput } from '../utils/filterInternalFields';
+import { answerOf, executionOutputOf } from '../../../../../shared/workflowChatOutput.js';
 
 /**
  * Tab content showing the user's workflow executions.
@@ -55,15 +56,19 @@ function MyExecutionsTab({ onBrowseWorkflows }) {
           execution.executionId.replace(/^wf-exec-/, '').slice(0, 8) || execution.executionId;
         const workflowSlug = (execution.workflowId || 'workflow').replace(/[^a-zA-Z0-9._-]/g, '_');
 
-        // Prefer the workflow-declared primary output. Fall back to a single
-        // string field, then to a Markdown bundle of all string outputs, and
-        // finally to a JSON dump of whatever is left.
-        const primaryKey = state.data?._workflowDefinition?.chatIntegration?.primaryOutput;
+        // The answer of the run is the output of the end step it finished at: text
+        // as Markdown, JSON as JSON. A run without one (stopped, failed) offers
+        // what it has: a single string field, then a Markdown bundle of all
+        // string outputs, and finally a JSON dump of whatever is left.
+        const answer = answerOf(executionOutputOf(state));
         let content = null;
         let extension = 'md';
 
-        if (primaryKey && typeof output[primaryKey] === 'string') {
-          content = output[primaryKey];
+        if (typeof answer === 'string') {
+          content = answer;
+        } else if (answer !== null && typeof answer === 'object') {
+          content = JSON.stringify(answer, null, 2);
+          extension = 'json';
         } else {
           const stringKeys = outputKeys.filter(k => typeof output[k] === 'string');
           if (stringKeys.length === 1) {

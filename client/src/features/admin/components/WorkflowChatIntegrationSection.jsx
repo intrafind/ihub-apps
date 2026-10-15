@@ -2,11 +2,7 @@ import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import DynamicLanguageEditor from '../../../shared/components/DynamicLanguageEditor';
-import {
-  automaticChatOutputFor,
-  chatIntegrationWarnings,
-  primaryOutputOptions
-} from '../../workflows/utils/chatIntegration';
+import { chatIntegrationWarnings } from '../../workflows/utils/chatIntegration';
 
 const OUTPUT_FORMATS = ['markdown', 'text', 'json'];
 
@@ -21,74 +17,11 @@ const WARNING_TEXTS = {
     'admin.workflows.chatIntegration.warnings.assignedButDisabled',
     'This workflow is assigned to the apps {{apps}}, but it is not available in chat, so it does not appear there.'
   ],
-  primaryOutputUnknown: [
-    'admin.workflows.chatIntegration.warnings.primaryOutputUnknown',
-    'The end step does not pass on "{{name}}". The chat will show a fallback field or JSON instead.'
-  ],
-  endNodeFormatsOutput: [
-    'admin.workflows.chatIntegration.warnings.endNodeFormatsOutput',
-    'The end step "{{node}}" formats its output as "{{format}}", so the result shown in chat is ignored.'
-  ],
-  automaticShowsInput: [
-    'admin.workflows.chatIntegration.warnings.automaticShowsInput',
-    '"Automatic" shows "{{name}}", which is an input of this workflow, so the chat answers with the user’s own text. Select the result to show, or stop passing the input on in the end step.'
-  ],
-  jsonFallback: [
-    'admin.workflows.chatIntegration.warnings.jsonFallback',
-    'No result is selected and no output has a name the chat recognizes, so the run answers with all outputs as JSON. The web chat shows them in the chosen output format; API, MCP and A2A callers receive the JSON.'
+  endWithoutOutput: [
+    'admin.workflows.chatIntegration.warnings.endWithoutOutput',
+    'The end step {{nodes}} has no output. The workflow cannot be saved, and a run that reaches that step fails, until you set its Output in the visual editor.'
   ]
 };
-
-/** Translation key, English default and values for each way Automatic can answer. */
-const AUTOMATIC_TEXTS = {
-  flattened: [
-    'admin.workflows.chatIntegration.automatic.flattened',
-    'The end step "{{node}}" formats its output as "{{format}}", so the chat shows that value as it is.'
-  ],
-  field: [
-    'admin.workflows.chatIntegration.automatic.field',
-    'Automatic shows "{{name}}" when it is not empty, because its name is one the chat treats as the answer (such as report, content or result). An empty one is skipped for the next such output, or the whole output as JSON.'
-  ],
-  json: [
-    'admin.workflows.chatIntegration.automatic.json',
-    'Automatic looks for an output named like report, content or result. None of the outputs of the end step has such a name, so the chat shows the whole output as JSON.'
-  ],
-  single: [
-    'admin.workflows.chatIntegration.automatic.single',
-    'Automatic looks for an output named like report, content or result. "{{name}}" is not one, so the run answers with the whole output as JSON; the web chat shows "{{name}}" on its own, the only variable the end step passes on. API, MCP and A2A callers receive the JSON.'
-  ],
-  lines: [
-    'admin.workflows.chatIntegration.automatic.lines',
-    'Automatic looks for an output named like report, content or result. None of {{names}} is one, so the run answers with the whole output as JSON; the web chat shows each variable as a "name:" line followed by its value. API, MCP and A2A callers receive the JSON.'
-  ],
-  sections: [
-    'admin.workflows.chatIntegration.automatic.sections',
-    'Automatic looks for an output named like report, content or result. None of {{names}} is one, so the run answers with the whole output as JSON; the web chat shows each variable as a section with its name as the heading. API, MCP and A2A callers receive the JSON.'
-  ]
-};
-
-/**
- * Which explanation fits what Automatic does for this workflow, in the chosen
- * output format (the web chat formats a whole-output answer, see
- * workflowAnswerView()).
- *
- * @returns {[string, object]} AUTOMATIC_TEXTS entry and its values
- */
-function automaticCase(automatic, format) {
-  if (automatic.mode === 'flattened' || automatic.mode === 'field')
-    return [automatic.mode, automatic];
-  // The web chat leaves engine fields out, as on the execution page.
-  const shown = automatic.mode === 'json' ? automatic.keys.filter(k => !k.startsWith('_')) : [];
-  if (format === 'json' || shown.length === 0) return ['json', {}];
-  if (shown.length === 1) return ['single', { name: shown[0] }];
-  return [format === 'text' ? 'lines' : 'sections', { names: shown.join(', ') }];
-}
-
-function automaticExplanation(t, automatic, format) {
-  const [textCase, values] = automaticCase(automatic, format);
-  const [key, fallback] = AUTOMATIC_TEXTS[textCase];
-  return t(key, fallback, { name: automatic.field, ...values });
-}
 
 function WarningList({ warnings }) {
   const { t } = useTranslation();
@@ -162,53 +95,6 @@ function AvailableInChat({ enabled, onToggle, assignedApps }) {
   );
 }
 
-function ResultShownInChat({ workflow, chat, onChange }) {
-  const { t } = useTranslation();
-  const primaryOutput = typeof chat.primaryOutput === 'string' ? chat.primaryOutput : '';
-  const options = useMemo(() => primaryOutputOptions(workflow), [workflow]);
-  const automatic = useMemo(() => automaticChatOutputFor(workflow), [workflow]);
-  // A value set in the JSON that the end node does not pass on (or a dotted
-  // path) stays selectable, so opening the page never rewrites it.
-  const showCustomValue = primaryOutput && !options.some(o => o.value === primaryOutput);
-  return (
-    <div>
-      <label htmlFor="workflow-primary-output" className={labelClass}>
-        {t('admin.workflows.chatIntegration.primaryOutput', 'Result shown in chat')}
-      </label>
-      <select
-        id="workflow-primary-output"
-        value={primaryOutput}
-        onChange={e => onChange({ primaryOutput: e.target.value || undefined })}
-        className={inputClass}
-      >
-        <option value="">
-          {t('admin.workflows.chatIntegration.primaryOutputAuto', 'Automatic')}
-        </option>
-        {options.map(option => (
-          <option key={option.value} value={option.value}>
-            {option.label ? `${option.value} — ${option.label}` : option.value}
-          </option>
-        ))}
-        {showCustomValue && <option value={primaryOutput}>{primaryOutput}</option>}
-      </select>
-      <p className={helpClass}>
-        {t(
-          'admin.workflows.chatIntegration.primaryOutputHelp',
-          'Lists the variables the end step passes on.'
-        )}
-      </p>
-      {!primaryOutput && (
-        <div className="mt-2 flex rounded-md border border-indigo-100 dark:border-indigo-900 bg-indigo-50 dark:bg-indigo-900/20 p-2">
-          <Icon name="information-circle" className="h-4 w-4 text-indigo-500 mt-0.5 shrink-0" />
-          <p className="ml-2 text-xs text-indigo-800 dark:text-indigo-200">
-            {automaticExplanation(t, automatic, chat.outputFormat || 'markdown')}
-          </p>
-        </div>
-      )}
-    </div>
-  );
-}
-
 function OutputFormatField({ value, onChange }) {
   const { t } = useTranslation();
   return (
@@ -231,6 +117,12 @@ function OutputFormatField({ value, onChange }) {
           </option>
         ))}
       </select>
+      <p className={helpClass}>
+        {t(
+          'admin.workflows.chatIntegration.outputFormatHelp',
+          'How the chat shows the answer. An answer that is JSON is always shown as JSON.'
+        )}
+      </p>
     </div>
   );
 }
@@ -261,8 +153,8 @@ function ToolDescriptionField({ value, onChange }) {
 
 /**
  * Edits a workflow's `chatIntegration` block: whether the workflow is offered
- * in chat, which output is the answer, its format and the description the
- * app's model sees.
+ * in chat, how the answer is shown and the description the app's model sees.
+ * What the answer is needs no setting here: it is the Output of the end step.
  *
  * `passthroughResult` is deliberately not offered: no code reads it — a
  * workflow called from chat always streams its answer as-is. It stays in the
@@ -299,7 +191,7 @@ function WorkflowChatIntegrationSection({
       <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
         {t(
           'admin.workflows.chatIntegration.description',
-          'How this workflow can be used from the chat of the apps it is assigned to.'
+          'How this workflow can be used from the chat of the apps it is assigned to. The chat shows the Output of its end step as the answer.'
         )}
       </p>
       <WarningList warnings={warnings} />
@@ -320,7 +212,6 @@ function WorkflowChatIntegrationSection({
           onToggle={() => onChange({ enabled: chat.enabled !== true })}
           assignedApps={assignedApps}
         />
-        <ResultShownInChat workflow={workflow} chat={chat} onChange={onChange} />
         <OutputFormatField value={chat.outputFormat} onChange={onChange} />
         <ToolDescriptionField value={chat.toolDescription} onChange={onChange} />
       </fieldset>

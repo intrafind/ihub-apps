@@ -28,6 +28,21 @@ import MarkdownViewer from '../../../shared/components/MarkdownViewer';
 import { apiClient } from '../../../api/client';
 import { invalidateChatsCache, useChatPersistence } from '../../../shared/hooks/useChats';
 import { getDisplayableOutput } from '../utils/filterInternalFields';
+import {
+  answerOf,
+  executionAnswerOf,
+  executionOutputOf
+} from '../../../../../shared/workflowChatOutput.js';
+
+/** The Output setting of the end step an execution finished at, or ''. */
+function endStepOutputSpec(state) {
+  const completed = state?.completedNodes;
+  const lastNodeId = Array.isArray(completed) ? completed[completed.length - 1] : undefined;
+  const endStep = state?.data?._workflowDefinition?.nodes?.find(
+    node => node.id === lastNodeId && node.type === 'end'
+  );
+  return typeof endStep?.config?.output === 'string' ? endStep.config.output.trim() : '';
+}
 
 /**
  * Helper to download content as a file
@@ -394,26 +409,10 @@ function WorkflowExecutionPage() {
     }
 
     const workflowDef = state?.data?._workflowDefinition;
-    const output = getDisplayableOutput(state?.data);
 
-    // 1. Determine the primary output text (assistant message)
-    let outputText = '';
-    const primaryOutputKey = workflowDef?.chatIntegration?.primaryOutput;
-    if (primaryOutputKey && state?.data?.[primaryOutputKey]) {
-      const val = state.data[primaryOutputKey];
-      outputText = typeof val === 'string' ? val : JSON.stringify(val, null, 2);
-    } else {
-      // Fallback: pick the longest string field (reports are longer than inputs)
-      const keys = Object.keys(output);
-      for (const key of keys) {
-        if (typeof output[key] === 'string' && output[key].length > outputText.length) {
-          outputText = output[key];
-        }
-      }
-      if (!outputText && keys.length > 0) {
-        outputText = JSON.stringify(output, null, 2);
-      }
-    }
+    // 1. The answer (assistant message): the output of the end step the run
+    //    finished at, as the chat of the workflow shows it.
+    const outputText = executionAnswerOf(state) || '';
 
     // 2. Determine the user's original input (user message)
     let userInput = '';
@@ -513,10 +512,15 @@ function WorkflowExecutionPage() {
 
   const workflowOutput = getDisplayableOutput(state.data);
   const workflowOutputKeys = Object.keys(workflowOutput);
-  const primaryOutputKey = state.data?._workflowDefinition?.chatIntegration?.primaryOutput;
-  const hasPrimaryOutput = primaryOutputKey && workflowOutput[primaryOutputKey] !== undefined;
-  const additionalKeys = hasPrimaryOutput
-    ? workflowOutputKeys.filter(k => k !== primaryOutputKey)
+  // The answer of the run is the output of the end step it finished at. Named
+  // after the variable it is, when it is one, so it is not shown a second time
+  // among the additional data.
+  const answerValue = answerOf(executionOutputOf(state));
+  const hasAnswer = answerValue !== null;
+  const endOutputSpec = endStepOutputSpec(state);
+  const answerKey = /^[A-Za-z_]\w*$/.test(endOutputSpec) ? endOutputSpec : 'output';
+  const additionalKeys = hasAnswer
+    ? workflowOutputKeys.filter(k => k !== answerKey)
     : workflowOutputKeys;
 
   // Start inputs: take user-provided values that were passed to the start node
@@ -1152,18 +1156,18 @@ function WorkflowExecutionPage() {
               </button>
             </div>
 
-            {/* Primary output mode: show primary field prominently, rest in collapsible section */}
-            {hasPrimaryOutput ? (
+            {/* The answer prominently, the additional data in a collapsible section */}
+            {hasAnswer ? (
               <div className="space-y-6">
                 {/* Primary output - always visible */}
                 <div>
                   <div className="flex items-center justify-between mb-2">
                     <h4 className="font-medium text-gray-700 dark:text-gray-300 capitalize">
-                      {primaryOutputKey.replaceAll('_', ' ')}
+                      {answerKey.replaceAll('_', ' ')}
                     </h4>
-                    {renderFieldActions(primaryOutputKey, workflowOutput[primaryOutputKey])}
+                    {renderFieldActions(answerKey, answerValue)}
                   </div>
-                  {renderValue(workflowOutput[primaryOutputKey])}
+                  {renderValue(answerValue)}
                 </div>
 
                 {/* Additional data - collapsible */}

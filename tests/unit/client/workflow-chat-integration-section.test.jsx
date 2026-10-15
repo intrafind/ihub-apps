@@ -1,25 +1,27 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import WorkflowChatIntegrationSection from '../../../client/src/features/admin/components/WorkflowChatIntegrationSection';
 
 /**
- * The explanation under "Result shown in chat" says what Automatic shows for
- * the workflow being edited, in the output format chosen for it.
+ * The chat integration section of the workflow page. It sets whether the
+ * workflow is offered in chat, how the answer is shown and what the model is
+ * told. What the answer is needs no setting: it is the Output of the end step,
+ * so there is no result to pick and nothing to explain about Automatic.
  */
 
-jest.mock('react-i18next', () => ({
-  useTranslation: () => ({
-    t: (key, fallback, options) => {
-      const text = typeof fallback === 'string' ? fallback : fallback?.defaultValue || key;
-      const values = typeof fallback === 'object' ? fallback : options || {};
-      return Object.entries(values).reduce(
-        (out, [name, value]) => out.replaceAll(`{{${name}}}`, value),
-        text
-      );
-    },
-    i18n: { language: 'en' }
-  })
-}));
+jest.mock('react-i18next', () => {
+  const en = require('../../../shared/i18n/en.json');
+  const lookup = key => key.split('.').reduce((node, part) => node?.[part], en);
+  const translate = (key, fallback, options) => {
+    const text = typeof lookup(key) === 'string' ? lookup(key) : fallback;
+    const values = typeof fallback === 'object' ? fallback : options || {};
+    return Object.entries(values).reduce(
+      (out, [name, value]) => out.replaceAll(`{{${name}}}`, value),
+      typeof text === 'string' ? text : key
+    );
+  };
+  return { useTranslation: () => ({ t: translate, i18n: { language: 'en' } }) };
+});
 
 jest.mock('../../../client/src/shared/components/Icon', () => ({
   __esModule: true,
@@ -28,7 +30,7 @@ jest.mock('../../../client/src/shared/components/Icon', () => ({
 
 jest.mock('../../../client/src/shared/components/DynamicLanguageEditor', () => ({
   __esModule: true,
-  default: () => null
+  default: ({ label }) => <div data-testid="tool-description">{label}</div>
 }));
 
 const node = (id, type, config = {}) => ({
@@ -39,80 +41,92 @@ const node = (id, type, config = {}) => ({
   config
 });
 
-function workflow({ outputVariables, outputFormat }) {
-  return {
-    id: 'rule-check',
-    chatIntegration: { enabled: true, ...(outputFormat ? { outputFormat } : {}) },
-    nodes: [
-      node('start', 'start', { inputVariables: [{ name: 'input', type: 'textarea' }] }),
-      node('check', 'prompt', { outputVariable: 'bericht' }),
-      node('fix', 'prompt', { outputVariable: 'corrected_text' }),
-      node('end', 'end', { outputVariables })
-    ],
-    edges: [
-      { id: 'e1', source: 'start', target: 'check' },
-      { id: 'e2', source: 'check', target: 'fix' },
-      { id: 'e3', source: 'fix', target: 'end' }
-    ]
-  };
-}
-
-const explanation = wf => {
-  render(<WorkflowChatIntegrationSection workflow={wf} onChange={jest.fn()} />);
-  return screen.getByText(/^Automatic /).textContent;
-};
-
-test('Markdown: one section per variable', () => {
-  expect(explanation(workflow({ outputVariables: ['bericht', 'corrected_text'] }))).toContain(
-    'the web chat shows each variable as a section'
-  );
+const workflow = ({ endConfig = { output: 'finalReport' }, chatIntegration = {} } = {}) => ({
+  id: 'rule-check',
+  chatIntegration,
+  nodes: [node('start', 'start'), node('end', 'end', endConfig)],
+  edges: [{ id: 'e1', source: 'start', target: 'end' }]
 });
 
-test('Text: one "name:" line per variable', () => {
-  expect(
-    explanation(workflow({ outputVariables: ['bericht', 'corrected_text'], outputFormat: 'text' }))
-  ).toContain('as a "name:" line');
-});
+describe('the chat integration section', () => {
+  it('has the settings that are left: availability, output format and the model description', () => {
+    render(<WorkflowChatIntegrationSection workflow={workflow()} onChange={() => {}} />);
+    expect(screen.getByRole('switch', { name: 'Available in chat' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Output format')).toBeInTheDocument();
+    expect(screen.getByTestId('tool-description')).toHaveTextContent('Description for the model');
+  });
 
-test('JSON: the whole output as JSON', () => {
-  expect(
-    explanation(workflow({ outputVariables: ['bericht', 'corrected_text'], outputFormat: 'json' }))
-  ).toContain('the chat shows the whole output as JSON');
-});
+  it('has no result to pick and no Automatic: the answer is the output of the end step', () => {
+    render(<WorkflowChatIntegrationSection workflow={workflow()} onChange={() => {}} />);
+    expect(screen.queryByLabelText('Result shown in chat')).not.toBeInTheDocument();
+    expect(screen.queryByText(/Automatic/)).not.toBeInTheDocument();
+    expect(screen.getByText(/shows the Output of its end step as the answer/)).toBeInTheDocument();
+  });
 
-test('a single variable is shown on its own', () => {
-  expect(explanation(workflow({ outputVariables: ['corrected_text'] }))).toContain(
-    'the web chat shows "corrected_text" on its own'
-  );
-});
+  it('switches availability through onChange', () => {
+    const onChange = jest.fn();
+    render(<WorkflowChatIntegrationSection workflow={workflow()} onChange={onChange} />);
+    fireEvent.click(screen.getByRole('switch', { name: 'Available in chat' }));
+    expect(onChange).toHaveBeenCalledWith({ enabled: true });
+  });
 
-test('an end step that formats its output as text is shown as it is', () => {
-  const wf = workflow({ outputVariables: ['bericht', 'corrected_text'] });
-  wf.nodes[3].config.outputFormat = 'text';
-  render(<WorkflowChatIntegrationSection workflow={wf} onChange={jest.fn()} />);
-  expect(
-    screen.getByText(
-      'The end step "end" formats its output as "text", so the chat shows that value as it is.'
-    )
-  ).toBeInTheDocument();
-});
+  it('sets the output format, and removes it for the default', () => {
+    const onChange = jest.fn();
+    render(
+      <WorkflowChatIntegrationSection
+        workflow={workflow({ chatIntegration: { enabled: true, outputFormat: 'text' } })}
+        onChange={onChange}
+      />
+    );
+    const select = screen.getByLabelText('Output format');
+    expect(select).toHaveValue('text');
+    fireEvent.change(select, { target: { value: 'json' } });
+    expect(onChange).toHaveBeenLastCalledWith({ outputFormat: 'json' });
+    fireEvent.change(select, { target: { value: '' } });
+    expect(onChange).toHaveBeenLastCalledWith({ outputFormat: undefined });
+  });
 
-test('a conventionally named output is shown only when it is not empty', () => {
-  const wf = workflow({ outputVariables: ['bericht'] });
-  wf.nodes[3].config = { outputMapping: { report: '$.data.bericht' } };
-  expect(explanation(wf)).toContain('"report" when it is not empty');
-});
+  it('says that a JSON answer is always shown as JSON', () => {
+    render(<WorkflowChatIntegrationSection workflow={workflow()} onChange={() => {}} />);
+    expect(screen.getByText(/always shown as JSON/)).toBeInTheDocument();
+  });
 
-test('the settings are locked while the JSON editor holds invalid JSON', () => {
-  const onChange = jest.fn();
-  render(
-    <WorkflowChatIntegrationSection
-      workflow={workflow({ outputVariables: ['corrected_text'] })}
-      onChange={onChange}
-      disabled
-    />
-  );
-  expect(screen.getByText('Fix the JSON below to change these settings.')).toBeInTheDocument();
-  expect(screen.getByRole('switch')).toBeDisabled();
-  expect(screen.getByLabelText('Result shown in chat')).toBeDisabled();
+  it('warns about an end step without an output', () => {
+    render(
+      <WorkflowChatIntegrationSection workflow={workflow({ endConfig: {} })} onChange={() => {}} />
+    );
+    expect(
+      screen.getByText(/The end step end has no output\. The workflow cannot be saved/)
+    ).toBeInTheDocument();
+  });
+
+  it('warns about a workflow assigned to apps that is not available in chat', () => {
+    render(
+      <WorkflowChatIntegrationSection
+        workflow={workflow()}
+        onChange={() => {}}
+        assignedApps={[{ id: 'chat' }]}
+      />
+    );
+    expect(
+      screen.getByText(/assigned to the apps chat, but it is not available/)
+    ).toBeInTheDocument();
+  });
+
+  it('has no warning for a workflow that is set up', () => {
+    render(
+      <WorkflowChatIntegrationSection
+        workflow={workflow({ chatIntegration: { enabled: true } })}
+        onChange={() => {}}
+        assignedApps={[{ id: 'chat' }]}
+      />
+    );
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+  });
+
+  it('is locked, with the reason, while the JSON editor holds invalid JSON', () => {
+    render(<WorkflowChatIntegrationSection workflow={workflow()} onChange={() => {}} disabled />);
+    expect(screen.getByText('Fix the JSON below to change these settings.')).toBeInTheDocument();
+    expect(screen.getByRole('switch', { name: 'Available in chat' })).toBeDisabled();
+  });
 });

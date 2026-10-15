@@ -594,8 +594,7 @@
     "readAloudPause": "Pausieren",
     "readAloudResume": "Fortsetzen",
     "readAloudStop": "Vorlesen beenden",
-    "readAloudError": "Vorlesen fehlgeschlagen: {{error}}",
-    "workflowNoOutput": "Der Workflow wurde ohne anzeigbare Ausgabe beendet."
+    "readAloudError": "Vorlesen fehlgeschlagen: {{error}}"
   },
   "errors": {
     "componentError": "Komponenten-Fehler",
@@ -3956,16 +3955,14 @@
     "workflows": {
       "chatIntegration": {
         "title": "Chat-Anbindung",
-        "description": "Wie dieser Workflow im Chat der Apps genutzt werden kann, denen er zugewiesen ist.",
+        "description": "Wie dieser Workflow im Chat der Apps genutzt werden kann, denen er zugewiesen ist. Der Chat zeigt die Ausgabe seines End-Schritts als Antwort.",
         "enabled": "Im Chat verfügbar",
         "enabledHelp": "Nutzer können ihn im Chat der zugewiesenen Apps mit @ starten, und das Modell der App kann ihn als Tool aufrufen. Er wird außerdem MCP- und A2A-Clients angeboten, deren Gruppen ihn ausführen dürfen.",
         "assignedApps": "Zugewiesen an: {{apps}}",
         "noAssignedApps": "Noch keiner App zugewiesen. Zuweisen unter Admin → Apps → Workflows.",
-        "primaryOutput": "Im Chat angezeigtes Ergebnis",
-        "primaryOutputAuto": "Automatisch",
-        "primaryOutputHelp": "Zeigt die Variablen, die der End-Schritt weitergibt.",
         "outputFormat": "Ausgabeformat",
         "outputFormatDefault": "Standard (Markdown)",
+        "outputFormatHelp": "Wie der Chat die Antwort anzeigt. Eine Antwort, die JSON ist, wird immer als JSON angezeigt.",
         "formats": {
           "markdown": "Markdown",
           "text": "Reiner Text",
@@ -3975,18 +3972,7 @@
         "toolDescriptionHelp": "Sagt dem Modell der App, wann es diesen Workflow aufrufen soll. Leer lassen, um die Beschreibung des Workflows zu verwenden.",
         "warnings": {
           "assignedButDisabled": "Dieser Workflow ist den Apps {{apps}} zugewiesen, aber nicht im Chat verfügbar und erscheint dort deshalb nicht.",
-          "primaryOutputUnknown": "Der End-Schritt gibt „{{name}}“ nicht weiter. Der Chat zeigt stattdessen ein Ersatzfeld oder JSON.",
-          "endNodeFormatsOutput": "Der End-Schritt „{{node}}“ formatiert seine Ausgabe als „{{format}}“, daher wird das im Chat angezeigte Ergebnis ignoriert.",
-          "automaticShowsInput": "„Automatisch“ zeigt „{{name}}“, eine Eingabe dieses Workflows. Der Chat antwortet also mit dem Text des Nutzers selbst. Wählen Sie das anzuzeigende Ergebnis aus oder geben Sie die Eingabe im End-Schritt nicht weiter.",
-          "jsonFallback": "Kein Ergebnis gewählt, und keine Ausgabe hat einen Namen, den der Chat erkennt. Der Lauf antwortet deshalb mit allen Ausgaben als JSON. Der Web-Chat zeigt sie im gewählten Ausgabeformat; API-, MCP- und A2A-Aufrufer erhalten das JSON."
-        },
-        "automatic": {
-          "field": "Automatisch zeigt „{{name}}“, sofern es nicht leer ist, weil der Chat diesen Namen als Antwort behandelt (wie report, content oder result). Ist es leer, folgt die nächste solche Ausgabe oder die gesamte Ausgabe als JSON.",
-          "json": "Automatisch sucht eine Ausgabe mit einem Namen wie report, content oder result. Keine Ausgabe des End-Schritts trägt einen solchen Namen, deshalb zeigt der Chat die gesamte Ausgabe als JSON.",
-          "single": "Automatisch sucht eine Ausgabe mit einem Namen wie report, content oder result. „{{name}}“ gehört nicht dazu, deshalb antwortet der Lauf mit der gesamten Ausgabe als JSON; der Web-Chat zeigt „{{name}}“ allein an, die einzige Variable, die der End-Schritt weitergibt. API-, MCP- und A2A-Aufrufer erhalten das JSON.",
-          "lines": "Automatisch sucht eine Ausgabe mit einem Namen wie report, content oder result. Keiner der Namen {{names}} gehört dazu, deshalb antwortet der Lauf mit der gesamten Ausgabe als JSON; der Web-Chat zeigt jede Variable als Zeile „Name:“ gefolgt von ihrem Wert. API-, MCP- und A2A-Aufrufer erhalten das JSON.",
-          "sections": "Automatisch sucht eine Ausgabe mit einem Namen wie report, content oder result. Keiner der Namen {{names}} gehört dazu, deshalb antwortet der Lauf mit der gesamten Ausgabe als JSON; der Web-Chat zeigt jede Variable als Abschnitt mit ihrem Namen als Überschrift. API-, MCP- und A2A-Aufrufer erhalten das JSON.",
-          "flattened": "Der End-Schritt „{{node}}“ formatiert seine Ausgabe als „{{format}}“, deshalb zeigt der Chat diesen Wert unverändert an."
+          "endWithoutOutput": "Der End-Schritt {{nodes}} hat keine Ausgabe. Der Workflow lässt sich nicht speichern, und ein Lauf, der diesen Schritt erreicht, schlägt fehl, bis Sie seine Ausgabe im visuellen Editor setzen."
         },
         "jsonInvalid": "Korrigieren Sie das JSON unten, um diese Einstellungen zu ändern."
       }
@@ -4505,7 +4491,7 @@
       "back": "Zurück",
       "boundaryEdgesRemoved": "Verbindungen über die Schleifengrenze wurden entfernt — bitte innerhalb oder außerhalb der Schleife neu verbinden.",
       "chatIntegrationLink": "Chat-Anbindung",
-      "chatIntegrationLinkHint": "Verfügbarkeit im Chat, das dort gezeigte Ergebnis und sein Format werden auf der Workflow-Seite festgelegt. Nicht gespeicherte Änderungen auf der Arbeitsfläche gehen verloren.",
+      "chatIntegrationLinkHint": "Verfügbarkeit im Chat, die Darstellung der Antwort und ihre Beschreibung werden auf der Workflow-Seite festgelegt. Nicht gespeicherte Änderungen auf der Arbeitsfläche gehen verloren.",
       "chatVisible": "Fortschritt im Chat anzeigen",
       "config": "Konfiguration",
       "configJson": "Konfiguration (JSON)",
@@ -4523,6 +4509,10 @@
       "edgeValueText": "Wird als Text verglichen.",
       "edgeValueTyped": "Wird als {{kind}} verglichen.",
       "edgeWhen": "Dieser Verbindung folgen",
+      "endOutput": "Ausgabe",
+      "endOutputHelp": "Die Antwort des Workflows, die der Chat unverändert anzeigt: eine Variable (finalReport), ein Pfad in eine Variable (report.markdown) oder ein Text mit Variablen ({{summary}}). JSON bleibt JSON. Alles darunter sind zusätzliche Informationen.",
+      "endOutputMissing": "Jeder End-Schritt braucht eine Ausgabe: Ohne sie lässt sich der Workflow nicht speichern, und ein Lauf, der diesen Schritt erreicht, schlägt fehl.",
+      "endOutputMissingShort": "Keine Ausgabe gesetzt",
       "filterVariables": "Variablen filtern…",
       "formTab": "Formular",
       "groups": {

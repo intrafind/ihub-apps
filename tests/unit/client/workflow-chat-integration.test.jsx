@@ -1,18 +1,11 @@
 import { describe, it, expect } from '@jest/globals';
 import {
   appsUsingWorkflow,
-  automaticChatOutputFor,
   chatIntegrationWarnings,
-  primaryOutputOptions,
+  endStepsWithoutOutput,
   withCleanToolDescription
 } from '../../../client/src/features/workflows/utils/chatIntegration.js';
 import { createStarterWorkflow } from '../../../client/src/features/workflows/editor/workflowEditorUtils.js';
-import {
-  CHAT_OUTPUT_FALLBACK_FIELDS,
-  chatAnswerOf,
-  fallbackChatOutputField
-} from '../../../shared/workflowChatOutput.js';
-import { workflowResultOf } from '../../../shared/run/runActivity.js';
 import { workflowConfigSchema } from '../../../server/validators/workflowConfigSchema.js';
 
 const node = (id, type, config = {}) => ({
@@ -23,8 +16,8 @@ const node = (id, type, config = {}) => ({
   config
 });
 
-/** start(text) → check(outputVariable: report) → fix(outputVariable: corrected_text) → end */
-function ruleCheckWorkflow({ endConfig = {}, chatIntegration } = {}) {
+/** start(text) → check → fix → end, whose end step has the given config. */
+function ruleCheckWorkflow({ endConfig = { output: 'corrected_text' }, chatIntegration } = {}) {
   return {
     id: 'rule-check',
     name: { en: 'Rule check' },
@@ -46,136 +39,84 @@ function ruleCheckWorkflow({ endConfig = {}, chatIntegration } = {}) {
   };
 }
 
-const values = options => options.map(option => option.value).sort();
-
-describe('primaryOutputOptions', () => {
-  it('offers every variable that reaches an unrestricted end step', () => {
-    expect(values(primaryOutputOptions(ruleCheckWorkflow()))).toEqual(
-      ['bericht', 'corrected_text', 'text'].sort()
-    );
+describe('endStepsWithoutOutput', () => {
+  it('is empty when every end step has an output', () => {
+    expect(endStepsWithoutOutput(ruleCheckWorkflow())).toEqual([]);
   });
 
-  it('offers only the listed outputVariables', () => {
-    const wf = ruleCheckWorkflow({ endConfig: { outputVariables: ['bericht'] } });
-    expect(values(primaryOutputOptions(wf))).toEqual(['bericht']);
+  it('names the end steps without one: none set, empty, blank or not text', () => {
+    for (const endConfig of [{}, { output: '' }, { output: '   ' }, { output: 3 }]) {
+      expect(endStepsWithoutOutput(ruleCheckWorkflow({ endConfig }))).toEqual(['end']);
+    }
   });
 
-  it('offers the outputMapping keys, which take precedence over outputVariables', () => {
-    const wf = ruleCheckWorkflow({
-      endConfig: {
-        outputMapping: { answer: '$.data.corrected_text' },
-        outputVariables: ['bericht']
-      }
-    });
-    expect(values(primaryOutputOptions(wf))).toEqual(['answer']);
+  it('does not take a variable that happens to be named like an answer for an output', () => {
+    expect(
+      endStepsWithoutOutput(ruleCheckWorkflow({ endConfig: { outputVariables: ['finalReport'] } }))
+    ).toEqual(['end']);
   });
 
-  it('leaves out excluded fields', () => {
-    const wf = ruleCheckWorkflow({ endConfig: { excludeFields: ['text'] } });
-    expect(values(primaryOutputOptions(wf))).toEqual(['bericht', 'corrected_text']);
+  it('checks every end step of a workflow with several', () => {
+    const wf = ruleCheckWorkflow();
+    wf.nodes.push(node('end-b', 'end', {}), node('end-c', 'end', { output: 'x' }));
+    expect(endStepsWithoutOutput(wf)).toEqual(['end-b']);
   });
 
-  it('combines the outputs of several end steps', () => {
-    const wf = ruleCheckWorkflow({ endConfig: { outputVariables: ['corrected_text'] } });
-    wf.nodes.push(node('early-end', 'end', { outputVariables: ['bericht'] }));
-    wf.edges.push({ id: 'e4', source: 'check', target: 'early-end' });
-    expect(values(primaryOutputOptions(wf))).toEqual(['bericht', 'corrected_text']);
-  });
-
-  it('labels a variable with the step that writes it', () => {
-    const option = primaryOutputOptions(ruleCheckWorkflow()).find(o => o.value === 'bericht');
-    expect(option.label).toContain('check');
+  it('copes with a workflow that has no nodes yet', () => {
+    expect(endStepsWithoutOutput(undefined)).toEqual([]);
+    expect(endStepsWithoutOutput({})).toEqual([]);
   });
 });
 
 describe('chatIntegrationWarnings', () => {
   it('warns when apps list the workflow but it is not available in chat', () => {
-    const warnings = chatIntegrationWarnings(ruleCheckWorkflow(), {
-      assignedApps: [{ id: 'strafsuche' }]
-    });
-    expect(warnings).toEqual([{ code: 'assignedButDisabled', params: { apps: 'strafsuche' } }]);
+    expect(
+      chatIntegrationWarnings(ruleCheckWorkflow(), { assignedApps: [{ id: 'chat' }, { id: 'hr' }] })
+    ).toEqual([{ code: 'assignedButDisabled', params: { apps: 'chat, hr' } }]);
   });
 
   it('stays quiet for a workflow that is neither in chat nor assigned', () => {
     expect(chatIntegrationWarnings(ruleCheckWorkflow())).toEqual([]);
   });
 
-  it('warns when the selected result is not passed on by the end step', () => {
-    const wf = ruleCheckWorkflow({
-      endConfig: { outputVariables: ['bericht'] },
-      chatIntegration: { enabled: true, primaryOutput: 'corrected_text' }
-    });
-    expect(chatIntegrationWarnings(wf).map(w => w.code)).toEqual(['primaryOutputUnknown']);
+  it('stays quiet for a workflow that is available in chat', () => {
+    expect(
+      chatIntegrationWarnings(ruleCheckWorkflow({ chatIntegration: { enabled: true } }), {
+        assignedApps: [{ id: 'chat' }]
+      })
+    ).toEqual([]);
   });
 
-  it('accepts a dotted path into an output', () => {
-    const wf = ruleCheckWorkflow({
-      chatIntegration: { enabled: true, primaryOutput: 'bericht.markdown' }
-    });
-    expect(chatIntegrationWarnings(wf)).toEqual([]);
+  it('warns about an end step without an output, in chat or not', () => {
+    for (const chatIntegration of [undefined, { enabled: true }]) {
+      expect(
+        chatIntegrationWarnings(ruleCheckWorkflow({ endConfig: {}, chatIntegration }))
+      ).toEqual([{ code: 'endWithoutOutput', params: { nodes: 'end' } }]);
+    }
   });
 
-  it('warns that the chat shows JSON when nothing selects or names the answer', () => {
-    const wf = ruleCheckWorkflow({
-      endConfig: { outputVariables: ['bericht', 'corrected_text'] },
-      chatIntegration: { enabled: true }
-    });
-    expect(chatIntegrationWarnings(wf)).toEqual([{ code: 'jsonFallback' }]);
-  });
-
-  it('stays quiet when Automatic finds a conventionally named output', () => {
-    const wf = ruleCheckWorkflow({
-      endConfig: { outputMapping: { report: '$.data.corrected_text' } },
-      chatIntegration: { enabled: true }
-    });
-    expect(chatIntegrationWarnings(wf)).toEqual([]);
-  });
-
-  it('warns when Automatic would answer with the workflow input', () => {
-    // `text` is a conventional answer name and the input here; an end step
-    // that passes everything on would answer with the user's own text.
-    const wf = ruleCheckWorkflow({ chatIntegration: { enabled: true } });
+  it('lists every end step that has none', () => {
+    const wf = ruleCheckWorkflow({ endConfig: {} });
+    wf.nodes.push(node('end-b', 'end', {}));
     expect(chatIntegrationWarnings(wf)).toEqual([
-      { code: 'automaticShowsInput', params: { name: 'text' } }
+      { code: 'endWithoutOutput', params: { nodes: 'end, end-b' } }
     ]);
   });
 
-  it('warns about JSON when the end step passes nothing on', () => {
+  it('raises both warnings together', () => {
+    const codes = chatIntegrationWarnings(ruleCheckWorkflow({ endConfig: {} }), {
+      assignedApps: [{ id: 'chat' }]
+    }).map(warning => warning.code);
+    expect(codes).toEqual(['assignedButDisabled', 'endWithoutOutput']);
+  });
+
+  it('never warns about which output the chat shows: it is always the end step output', () => {
+    // These warned before ("shows JSON", "result not passed on", "shows the input").
     const wf = ruleCheckWorkflow({
-      endConfig: { outputVariables: [] },
+      endConfig: { output: 'bericht', outputVariables: ['text'], outputFormat: 'text' },
       chatIntegration: { enabled: true }
     });
-    expect(chatIntegrationWarnings(wf)).toEqual([{ code: 'jsonFallback' }]);
-  });
-
-  it('warns when an end step flattens its output so the selection is ignored', () => {
-    const wf = ruleCheckWorkflow({
-      endConfig: { outputFormat: 'text' },
-      chatIntegration: { enabled: true, primaryOutput: 'corrected_text' }
-    });
-    expect(chatIntegrationWarnings(wf)).toEqual([
-      { code: 'endNodeFormatsOutput', params: { node: 'end', format: 'text' } }
-    ]);
-  });
-});
-
-describe('automaticChatOutputFor', () => {
-  it('shows a conventionally named output on its own', () => {
-    const wf = ruleCheckWorkflow({ endConfig: { outputMapping: { report: '$.data.bericht' } } });
-    expect(automaticChatOutputFor(wf)).toEqual({ mode: 'field', field: 'report' });
-  });
-
-  it('shows JSON when no output has such a name, listing what the end step passes on', () => {
-    const wf = ruleCheckWorkflow({ endConfig: { outputVariables: ['corrected_text', 'bericht'] } });
-    expect(automaticChatOutputFor(wf)).toEqual({
-      mode: 'json',
-      keys: ['corrected_text', 'bericht']
-    });
-  });
-
-  it('reports an end step that passes nothing on', () => {
-    const wf = ruleCheckWorkflow({ endConfig: { outputVariables: [] } });
-    expect(automaticChatOutputFor(wf)).toEqual({ mode: 'none' });
+    expect(chatIntegrationWarnings(wf)).toEqual([]);
   });
 });
 
@@ -240,172 +181,17 @@ describe('appsUsingWorkflow', () => {
   });
 });
 
-describe('fallbackChatOutputField', () => {
-  it('picks the first field in the runner order', () => {
-    expect(fallbackChatOutputField(['summary', 'report'])).toBe('report');
-  });
-
-  it('returns null when no key is on the list', () => {
-    expect(fallbackChatOutputField(['bericht', 'corrected_text'])).toBeNull();
-  });
-
-  it('keeps the order the runner has always used', () => {
-    expect(CHAT_OUTPUT_FALLBACK_FIELDS).toEqual([
-      'finalReport',
-      'report',
-      'content',
-      'output',
-      'result',
-      'summary',
-      'text',
-      'message'
-    ]);
-  });
-});
-
-describe('createStarterWorkflow chat integration', () => {
+describe('createStarterWorkflow', () => {
   it('spells out that a new workflow is not in chat, and the schema accepts it', () => {
     const wf = createStarterWorkflow({ id: 'new-one' });
     expect(wf.chatIntegration).toEqual({ enabled: false });
     expect(workflowConfigSchema.safeParse(wf).success).toBe(true);
   });
-});
 
-describe('end steps that flatten their output', () => {
-  it('text: Automatic shows the formatted value and raises no Automatic warnings', () => {
-    const wf = ruleCheckWorkflow({
-      endConfig: { outputFormat: 'text', outputVariables: ['bericht', 'corrected_text'] },
-      chatIntegration: { enabled: true }
-    });
-    expect(automaticChatOutputFor(wf)).toEqual({ mode: 'flattened', node: 'end', format: 'text' });
-    expect(chatIntegrationWarnings(wf)).toEqual([]);
-  });
-
-  it('raw with a single output: the selection is ignored', () => {
-    const wf = ruleCheckWorkflow({
-      endConfig: { outputFormat: 'raw', outputVariables: ['corrected_text'] },
-      chatIntegration: { enabled: true, primaryOutput: 'corrected_text' }
-    });
-    expect(chatIntegrationWarnings(wf)).toEqual([
-      { code: 'endNodeFormatsOutput', params: { node: 'end', format: 'raw' } }
-    ]);
-  });
-
-  it('raw with several outputs returns them unchanged, so the selection works', () => {
-    const wf = ruleCheckWorkflow({
-      endConfig: { outputFormat: 'raw', outputVariables: ['bericht', 'corrected_text'] },
-      chatIntegration: { enabled: true, primaryOutput: 'corrected_text' }
-    });
-    expect(chatIntegrationWarnings(wf)).toEqual([]);
-    expect(automaticChatOutputFor(wf).mode).toBe('json');
-  });
-
-  it('raw counts the metadata the end step adds', () => {
-    const wf = ruleCheckWorkflow({
-      endConfig: {
-        outputFormat: 'raw',
-        outputVariables: ['corrected_text'],
-        includeMetadata: true
-      },
-      chatIntegration: { enabled: true, primaryOutput: 'corrected_text' }
-    });
-    expect(chatIntegrationWarnings(wf)).toEqual([]);
-  });
-
-  it('raw on an end step that passes every variable on does not flatten', () => {
-    const wf = ruleCheckWorkflow({
-      endConfig: { outputFormat: 'raw' },
-      chatIntegration: { enabled: true, primaryOutput: 'corrected_text' }
-    });
-    expect(chatIntegrationWarnings(wf)).toEqual([]);
-  });
-});
-
-describe('workflows with several end steps', () => {
-  // start → check → fix → end (passes both on); check → early-end (formats as text)
-  function branched(chatIntegration) {
-    const wf = ruleCheckWorkflow({
-      endConfig: { outputVariables: ['bericht', 'corrected_text'] },
-      chatIntegration
-    });
-    wf.nodes.push(node('early-end', 'end', { outputFormat: 'text', outputVariables: ['bericht'] }));
-    wf.edges.push({ id: 'e4', source: 'check', target: 'early-end' });
-    return wf;
-  }
-
-  it('keeps the Automatic warnings for the branch that does not flatten', () => {
-    expect(chatIntegrationWarnings(branched({ enabled: true }))).toEqual([
-      { code: 'jsonFallback' }
-    ]);
-  });
-
-  it('explains Automatic for the branch that does not flatten', () => {
-    expect(automaticChatOutputFor(branched({ enabled: true }))).toEqual({
-      mode: 'json',
-      keys: ['bericht', 'corrected_text']
-    });
-  });
-
-  it('counts as flattened only when every end step flattens', () => {
-    const wf = branched({ enabled: true });
-    wf.nodes.find(n => n.id === 'end').config.outputFormat = 'text';
-    expect(automaticChatOutputFor(wf).mode).toBe('flattened');
-    expect(chatIntegrationWarnings(wf)).toEqual([]);
-  });
-});
-
-describe('chatAnswerOf', () => {
-  it('returns the selected output, also from a dotted path', () => {
-    expect(chatAnswerOf({ a: 'x', corrected_text: 'Fixed.' }, 'corrected_text')).toEqual({
-      text: 'Fixed.',
-      wholeOutput: false
-    });
-    expect(chatAnswerOf({ _report: { markdown: '# R' } }, '_report.markdown').text).toBe('# R');
-  });
-
-  it('serializes a selected object, which is not the whole-output fallback', () => {
-    expect(chatAnswerOf({ data: { a: 1 }, b: 'y' }, 'data')).toEqual({
-      text: JSON.stringify({ a: 1 }, null, 2),
-      wholeOutput: false
-    });
-  });
-
-  it('falls back to a conventionally named output when the selection is empty or missing', () => {
-    expect(chatAnswerOf({ report: 'The report', corrected_text: '' }, 'corrected_text')).toEqual({
-      text: 'The report',
-      wholeOutput: false
-    });
-    expect(chatAnswerOf({ summary: 's', report: 'r' })).toEqual({ text: 'r', wholeOutput: false });
-  });
-
-  it('answers with the whole output as JSON otherwise, and says so', () => {
-    const output = { bericht: 'b', corrected_text: 'c' };
-    expect(chatAnswerOf(output)).toEqual({
-      text: JSON.stringify(output, null, 2),
-      wholeOutput: true
-    });
-  });
-
-  it('passes non-object outputs through, and has nothing for an empty one', () => {
-    expect(chatAnswerOf('done')).toEqual({ text: 'done', wholeOutput: false });
-    expect(chatAnswerOf(42)).toEqual({ text: '42', wholeOutput: false });
-    expect(chatAnswerOf()).toEqual({ text: null, wholeOutput: false });
-  });
-});
-
-describe('the whole-output flag on a workflow result', () => {
-  const run = workflow => ({ meta: { executionId: 'wf-1', extra: { workflow } } });
-
-  it('is carried from the run metadata into the message result', () => {
-    expect(workflowResultOf(run({ status: 'completed', wholeOutput: true }))).toEqual({
-      status: 'completed',
-      executionId: 'wf-1',
-      workflowName: undefined,
-      wholeOutput: true
-    });
-  });
-
-  it('is absent for an answer the workflow chose', () => {
-    expect(workflowResultOf(run({ status: 'completed' }))).not.toHaveProperty('wholeOutput');
+  it('ends with an output, so it can be saved the moment it is created', () => {
+    const wf = createStarterWorkflow({ id: 'new-one' });
+    const end = wf.nodes.find(n => n.type === 'end');
+    expect(end.config.output).toBe('input');
+    expect(endStepsWithoutOutput(wf)).toEqual([]);
   });
 });
