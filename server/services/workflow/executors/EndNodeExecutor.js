@@ -239,7 +239,9 @@ export class EndNodeExecutor extends BaseNodeExecutor {
   /**
    * The value at a dotted path in the workflow data (`report.markdown`).
    *
-   * @param {Object} data - Workflow data
+   * @param {*} data - Workflow data. Typed loosely on purpose: a path runs into values of any
+   *   type, null and undefined included, and a narrower type makes a static analyzer take the
+   *   checks for them as always false
    * @param {string} path - Variable name or dotted path into one
    * @returns {*} The value as it is, of whatever type; undefined when it is not there
    * @private
