@@ -66,16 +66,15 @@ export function workerId() {
 export function abortCause(kind, { actor, via, source, related, message } = {}) {
   const known = Object.hasOwn(ABORT_KINDS, kind) ? kind : 'unknown';
   const actorType = ACTOR_TYPES.has(actor?.type) ? actor.type : 'system';
-  const relatedEntries = Object.entries(related || {}).filter(
-    ([, value]) => value !== undefined && value !== null && value !== ''
-  );
+  // Ids that are absent (a run that was never started) or empty are left out.
+  const relatedEntries = Object.entries(related || {}).filter(([, value]) => Boolean(value));
   return {
     kind: known,
     message: clip(message || ABORT_KINDS[known]),
     at: new Date().toISOString(),
     actor: {
       type: actorType,
-      ...(actor?.id !== undefined && actor?.id !== null ? { id: clip(actor.id) } : {})
+      ...(actor?.id ? { id: clip(actor.id) } : {})
     },
     origin: {
       via: clip(via || 'unspecified'),
