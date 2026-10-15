@@ -89,6 +89,22 @@ function relatedOf(related) {
   return entries.length > 0 ? { related: Object.fromEntries(entries) } : {};
 }
 
+/** The one place a cause is put together, so the builder and the normalizer cannot drift apart. */
+function assemble({ kind, message, at, actor, origin, related }) {
+  return {
+    kind,
+    message: messageOf(message, kind),
+    at: timeOf(at),
+    actor: actorOf(actor),
+    origin: originOf(origin),
+    ...relatedOf(related)
+  };
+}
+
+function knownKind(kind) {
+  return Object.hasOwn(ABORT_KINDS, kind) ? kind : 'unknown';
+}
+
 /**
  * Build a cause.
  *
@@ -101,16 +117,16 @@ function relatedOf(related) {
  * @param {string} [options.message] - Overrides the sentence of the kind.
  * @returns {{kind: string, message: string, at: string, actor: Object, origin: Object, related?: Object}}
  */
-export function abortCause(kind, { actor, via, source, related, message } = {}) {
-  const known = Object.hasOwn(ABORT_KINDS, kind) ? kind : 'unknown';
-  return {
-    kind: known,
-    message: messageOf(message, known),
+export function abortCause(kind, options = {}) {
+  const { actor, via, source, related, message } = options;
+  return assemble({
+    kind: knownKind(kind),
+    message,
     at: new Date().toISOString(),
-    actor: actorOf(actor),
-    origin: originOf({ via, source, worker: workerId() }),
-    ...relatedOf(related)
-  };
+    actor,
+    origin: { via, source, worker: workerId() },
+    related
+  });
 }
 
 /**
@@ -171,17 +187,15 @@ export function abortReason(cause) {
  */
 export function normalizeAbortCause(value) {
   const candidate = value?.abortCause || value;
-  const known =
-    candidate && typeof candidate === 'object' && Object.hasOwn(ABORT_KINDS, candidate.kind);
-  if (!known) return abortCause('unknown');
-  return {
-    kind: candidate.kind,
-    message: messageOf(candidate.message, candidate.kind),
-    at: timeOf(candidate.at),
-    actor: actorOf(candidate.actor),
-    origin: originOf(candidate.origin),
-    ...relatedOf(candidate.related)
-  };
+  return isKnownCause(candidate) ? assemble(candidate) : abortCause('unknown');
+}
+
+function isKnownCause(candidate) {
+  return (
+    Boolean(candidate) &&
+    typeof candidate === 'object' &&
+    Object.hasOwn(ABORT_KINDS, candidate.kind)
+  );
 }
 
 /** The cause a signal was aborted with, or the `unknown` cause. */

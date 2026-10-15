@@ -490,6 +490,48 @@ describe('the heartbeat backstop for a turn nobody is running', () => {
     expect(stopAppChatStream).not.toHaveBeenCalled();
   });
 
+  test('"Clear chat" still stops a run whose stream was dropped', async () => {
+    // The surface detached (the server no longer holds its stream) but the run
+    // it followed may still be going: a stored turn outlives its viewers.
+    checkAppChatStatus.mockResolvedValue({ active: false });
+    const { result } = await attachToStrandedRun();
+
+    await act(async () => {
+      jest.advanceTimersByTime(60000);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(result.current.processing).toBe(false);
+    expect(stopAppChatStream).not.toHaveBeenCalled();
+
+    await act(async () => {
+      result.current.cancelGeneration('clear-chat');
+    });
+    expect(stopAppChatStream).toHaveBeenCalledTimes(1);
+    expect(stopAppChatStream).toHaveBeenCalledWith('acme', 'chat-abc', { source: 'clear-chat' });
+
+    // The stop is sent once; clearing again finds nothing to stop.
+    await act(async () => {
+      result.current.cancelGeneration('clear-chat');
+    });
+    expect(stopAppChatStream).toHaveBeenCalledTimes(1);
+  });
+
+  test('"Clear chat" sends nothing when the server was running nothing', async () => {
+    checkAppChatStatus.mockResolvedValue({ active: true, processing: false });
+    const { result } = await attachToStrandedRun();
+
+    await act(async () => {
+      jest.advanceTimersByTime(60000);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    await act(async () => {
+      result.current.cancelGeneration('clear-chat');
+    });
+    expect(stopAppChatStream).not.toHaveBeenCalled();
+  });
+
   test('does not stop a turn this surface sent itself', async () => {
     // The window the predicate exists for: a stream opened for our own turn is
     // connected before the turn's POST reaches the server, so `processing` is

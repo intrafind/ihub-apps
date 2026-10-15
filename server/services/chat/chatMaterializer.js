@@ -203,23 +203,23 @@ function normalizeUsage(usage) {
  * what happened, and without it a truncated answer reads as a complete one.
  */
 function messageError(summary) {
-  if (summary?.status === 'aborted') {
-    // The cause says who stopped it; a turn from before causes were recorded
-    // (or a caller that passed none) keeps the generic sentence.
-    const cause = summary.abortCause;
-    return {
-      code: 'ABORTED',
-      message: cause?.message || 'Turn stopped before it finished.',
-      ...(cause ? { cause } : {})
-    };
-  }
+  if (summary?.status === 'aborted') return abortedError(summary.abortCause);
   if (summary?.status !== 'error') return null;
-  const info = summary.errorInfo || summary.error;
-  if (!info) return { code: 'ERROR', message: 'Turn failed.' };
+  return failedError(summary.errorInfo || summary.error);
+}
+
+/** The cause says who stopped it; a turn from before causes were recorded keeps the generic sentence. */
+function abortedError(cause) {
   return {
-    code: String(info.code || 'ERROR'),
-    message: String(info.message || info)
+    code: 'ABORTED',
+    message: cause?.message || 'Turn stopped before it finished.',
+    ...(cause ? { cause } : {})
   };
+}
+
+function failedError(info) {
+  if (!info) return { code: 'ERROR', message: 'Turn failed.' };
+  return { code: String(info.code || 'ERROR'), message: String(info.message || info) };
 }
 
 /**

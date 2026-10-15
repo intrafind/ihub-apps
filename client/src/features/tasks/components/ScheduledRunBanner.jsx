@@ -27,7 +27,6 @@ const WAITING_POLL_MS = 15000;
 export default function ScheduledRunBanner({ origin, onRunChanged }) {
   const { t, i18n } = useTranslation();
   const available = useScheduledTasksEnabled();
-  const auth = useOptionalAuth();
   const [run, setRun] = useState(null);
 
   const load = useCallback(() => {
@@ -90,18 +89,25 @@ export default function ScheduledRunBanner({ origin, onRunChanged }) {
           </span>
           {run && <RunStatusBadge status={run.status} />}
         </div>
-        {run?.status === 'awaiting_approval' && (
-          <ApprovalControls taskId={origin.taskId} run={run} compact onAnswered={load} />
-        )}
-        {run?.status === 'failed' && run.reason?.message && (
-          <p className="text-red-700 dark:text-red-300">{reasonText(t, run.reason)}</p>
-        )}
-        {run?.status === 'cancelled' && run.reason?.cause && (
-          <p className="text-gray-700 dark:text-gray-300">
-            {reasonText(t, run.reason, { userId: auth?.user?.id, isAdmin: auth?.user?.isAdmin })}
-          </p>
-        )}
+        <RunNotes run={run} origin={origin} onAnswered={load} />
       </div>
     </div>
   );
+}
+
+/** What the run's state adds under the header: the approval it needs, or why it failed or was stopped. */
+function RunNotes({ run, origin, onAnswered }) {
+  const { t } = useTranslation();
+  const auth = useOptionalAuth();
+  if (run?.status === 'awaiting_approval') {
+    return <ApprovalControls taskId={origin.taskId} run={run} compact onAnswered={onAnswered} />;
+  }
+  if (run?.status === 'failed' && run.reason?.message) {
+    return <p className="text-red-700 dark:text-red-300">{reasonText(t, run.reason)}</p>;
+  }
+  if (run?.status === 'cancelled' && run.reason?.cause) {
+    const viewer = { userId: auth?.user?.id, isAdmin: auth?.user?.isAdmin };
+    return <p className="text-gray-700 dark:text-gray-300">{reasonText(t, run.reason, viewer)}</p>;
+  }
+  return null;
 }

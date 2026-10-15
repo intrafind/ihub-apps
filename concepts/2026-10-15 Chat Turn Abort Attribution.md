@@ -163,7 +163,10 @@ Changes:
 ## Decisions
 
 1. **"Clear chat" on a running stored chat stays a stop.** It is an explicit user action, so it
-   sends the stop request (source `clear-chat`; `voice` for the voice command).
+   sends the stop request (source `clear-chat`; `voice` for the voice command). It stops a run the
+   surface has detached from too: the hook remembers that a run it started or followed may still be
+   going (cleared by the run's end, by a stop, or when the server says it runs nothing), so a stream
+   that dropped does not leave the run beyond reach of "Clear chat".
 2. **Only the user id is stored as the actor** (through the run's identity mode). The client shows
    "you" to that user and the id to administrators; no display name is saved.
 

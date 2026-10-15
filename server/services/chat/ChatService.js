@@ -184,6 +184,14 @@ export function withAppPrompt(messages, variables, promptTemplate) {
  * the optional provider counters (cache read/write, reasoning, web searches)
  * when reported, and the source.
  */
+/** The error of a run's end record, or nothing for a run that did not fail. */
+function ledgerError(error) {
+  if (!error) return {};
+  return {
+    error: { code: String(error.code || 'ERROR'), message: String(error.message || error) }
+  };
+}
+
 function wireUsage(usage) {
   if (!usage) return undefined;
   const out = {
@@ -350,14 +358,7 @@ class ChatService {
         ...(Array.isArray(knowledgeSources) ? { knowledgeSources } : {}),
         // Why an aborted turn was stopped (`services/chat/abortCause.js`).
         ...(cause ? { cause } : {}),
-        ...(error
-          ? {
-              error: {
-                code: String(error.code || 'ERROR'),
-                message: String(error.message || error)
-              }
-            }
-          : {}),
+        ...ledgerError(error),
         durationMs: Date.now() - startedAt
       });
     } catch (err) {

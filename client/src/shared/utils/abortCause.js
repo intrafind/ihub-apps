@@ -49,9 +49,13 @@ function nameForAdmin(t, actor, { isAdmin }) {
  */
 export function abortCauseText(t, cause, viewer = {}) {
   if (!cause || typeof cause !== 'object') return '';
-  const base = cause.kind
-    ? t(`abortCauses.${cause.kind}`, { defaultValue: cause.message || '' })
-    : cause.message || '';
+  const base = kindText(t, cause);
   const by = actorPhrase(t, cause.actor, viewer);
   return by ? `${base} (${by})` : base;
+}
+
+/** What stopped it: this client's wording for the kind, else the sentence the server stored. */
+function kindText(t, cause) {
+  const stored = cause.message || '';
+  return cause.kind ? t(`abortCauses.${cause.kind}`, { defaultValue: stored }) : stored;
 }

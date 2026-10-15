@@ -297,10 +297,11 @@ const TRANSLATED_REASONS = new Set([
 export function reasonText(t, reason, viewer) {
   if (!reason) return '';
   // A stopped run says what stopped it and who, not just that it was stopped.
-  if (reason.cause) {
-    const text = abortCauseText(t, reason.cause, viewer);
-    if (text) return text;
-  }
+  const caused = reason.cause ? abortCauseText(t, reason.cause, viewer) : '';
+  return caused || translatedReason(t, reason);
+}
+
+function translatedReason(t, reason) {
   const fallback = reason.message || '';
   if (!TRANSLATED_REASONS.has(reason.code)) return fallback;
   return t(`scheduledTasks.reasons.${reason.code}`, {

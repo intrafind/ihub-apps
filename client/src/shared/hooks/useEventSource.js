@@ -8,6 +8,16 @@ import {
 } from '../utils/openSseStream';
 import { RUN_EVENTS } from '../../../../shared/run/runReducer.js';
 
+/** The first top-level `run/started` on a connection is the turn's own run. */
+function startsTurn(envelope, turnRunId) {
+  return envelope.type === RUN_EVENTS.RUN_STARTED && !turnRunId && !envelope.data?.parentRunId;
+}
+
+/** Only the turn's own `run/ended` closes the stream: a chat-launched child run ending must not. */
+function endsTurn(envelope, turnRunId) {
+  return envelope.type === RUN_EVENTS.RUN_ENDED && (!turnRunId || envelope.runId === turnRunId);
+}
+
 /**
  * Chat stream transport (SSE v2) on top of the shared fetch-based
  * `openSseStream` transport (Bearer header + 401 refresh for the Office
@@ -61,12 +71,23 @@ function useEventSource({
   // The stream whose Stop is on its way to the server: it delivers no more
   // frames, but stays open until the server has the stop (see stopEventSource).
   const stoppingRef = useRef(null);
+  // Whether a run this surface started or followed may still be going on the
+  // server. A detached surface has no stream and is not "processing", yet the
+  // run lives on (a stored turn keeps going), so "Clear chat" still has to stop
+  // it. Left true after a detach; cleared by the run's end, by a stop, and when
+  // the server says it runs nothing here.
+  const serverRunActiveRef = useRef(false);
 
   // Synchronously release the connection slot: abort the fetch and clear timers.
   // Kept separate from cleanupEventSource so callers (and initEventSource) can
   // tear the slot down without awaiting a 30s axios round-trip — that delay
   // re-opened the original leak window (an in-flight fetch keeps holding its
   // HTTP/1.1 slot until ac.abort() actually runs).
+  // A run belongs to its chat: switching chats forgets the previous one's.
+  useEffect(() => {
+    serverRunActiveRef.current = false;
+  }, [chatId]);
+
   const clearTimers = useCallback(() => {
     if (heartbeatIntervalRef.current) {
       clearInterval(heartbeatIntervalRef.current);
@@ -121,8 +142,23 @@ function useEventSource({
    * @param {Object} [options]
    * @param {string} [options.source='stop-button'] - The control that asked; the server records it
    * @param {boolean} [options.force=false] - Also send it when this surface has no stream open
-   *   (a turn running with nobody attached still has to be stoppable)
+   *   and no run it knows of (a turn running with nobody attached still has to be stoppable)
    */
+  /** Whether there is a run to stop: a stream is open, the caller knows one runs, or this surface does. */
+  const mayHaveRun = useCallback(
+    (ac, force) => Boolean(ac) || force || serverRunActiveRef.current,
+    []
+  );
+
+  /** Close the stream that was open when Stop was pressed, not one opened since. */
+  const finishStop = useCallback(
+    ac => {
+      if (abortControllerRef.current === ac) abortAndClearTimers();
+      if (stoppingRef.current === ac) stoppingRef.current = null;
+    },
+    [abortAndClearTimers]
+  );
+
   const stopEventSource = useCallback(
     async ({ source = 'stop-button', force = false } = {}) => {
       // The server gets the stop while this stream is still open. A turn that
@@ -133,12 +169,11 @@ function useEventSource({
       const ac = abortControllerRef.current;
       stoppingRef.current = ac;
       clearTimers();
-      if (ac || force) await sendStop(source);
-      // Close the stream that was open when Stop was pressed, not one opened since.
-      if (abortControllerRef.current === ac) abortAndClearTimers();
-      if (stoppingRef.current === ac) stoppingRef.current = null;
+      if (mayHaveRun(ac, force)) await sendStop(source);
+      serverRunActiveRef.current = false;
+      finishStop(ac);
     },
-    [sendStop, abortAndClearTimers, clearTimers]
+    [mayHaveRun, sendStop, finishStop, clearTimers]
   );
 
   /**
@@ -172,6 +207,7 @@ function useEventSource({
         if (!status || !status.active || idle) {
           // Detach only: the server has nothing running on this chat (or no
           // longer holds this stream), so there is nothing to stop.
+          if (idle) serverRunActiveRef.current = false;
           detachEventSource();
           if (onProcessingChange) onProcessingChange(false);
         }
@@ -197,6 +233,7 @@ function useEventSource({
       abortAndClearTimers();
 
       if (onProcessingChange) onProcessingChange(true);
+      serverRunActiveRef.current = true;
 
       const ac = new AbortController();
       abortControllerRef.current = ac;
@@ -257,19 +294,12 @@ function useEventSource({
             if (envelope.type === RUN_EVENTS.STREAM_CONNECTED) {
               connectionEstablished = true;
             }
-            if (
-              envelope.type === RUN_EVENTS.RUN_STARTED &&
-              !turnRunId &&
-              !envelope.data?.parentRunId
-            ) {
-              turnRunId = envelope.runId;
-            }
+            if (startsTurn(envelope, turnRunId)) turnRunId = envelope.runId;
 
             emit(envelope);
 
-            const isTurnEnd =
-              envelope.type === RUN_EVENTS.RUN_ENDED &&
-              (!turnRunId || envelope.runId === turnRunId);
+            const isTurnEnd = endsTurn(envelope, turnRunId);
+            if (isTurnEnd) serverRunActiveRef.current = false;
             if (isTurnEnd || envelope.type === RUN_EVENTS.STREAM_ERROR) {
               releaseSlot();
             }
