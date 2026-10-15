@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { formatFileSize } from '../utils/cloudFileProcessing';
+import { canSaveExtractedAudio, saveExtractedAudio } from '../utils/extractedAudio';
 
 // Auto-collapse the list by default once it reaches this many files. Below the
 // threshold the list stays fully expanded with no collapse chrome — a 1-3 file
@@ -12,7 +13,8 @@ const AUTO_COLLAPSE_THRESHOLD = 4;
 
 /**
  * Standalone component that displays a list of attached files
- * with source icon, file type icon, name, size, and remove buttons.
+ * with source icon, file type icon, name, size, and remove buttons. Audio that
+ * was extracted from a video also gets a button to save it as a .wav file.
  * Always visible when files are attached, independent of uploader state.
  *
  * To keep the chat input reachable, the list:
@@ -218,6 +220,22 @@ export default function AttachedFilesList({
                       : formatFileSize(file.fileSize)}
                   </div>
                 </div>
+
+                {/* Save button — only for audio extracted from a video, which the
+                    user does not have as a file of its own */}
+                {canSaveExtractedAudio(file) && (
+                  <button
+                    type="button"
+                    onClick={() => saveExtractedAudio(file)}
+                    className="shrink-0 rounded-sm text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors p-1 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-500"
+                    title={t('attachedFiles.saveAudio', 'Save audio')}
+                    aria-label={t('attachedFiles.saveAudioNamed', 'Save audio as {{name}}', {
+                      name: file.fileName
+                    })}
+                  >
+                    <Icon name="download" size="sm" />
+                  </button>
+                )}
 
                 {/* Remove button */}
                 <button

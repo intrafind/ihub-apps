@@ -18,7 +18,9 @@
     "loadingCount": "{{count}} loading…",
     "showList": "Show file list",
     "hideList": "Hide file list",
-    "regionLabel": "Attached files"
+    "regionLabel": "Attached files",
+    "saveAudio": "Save audio",
+    "saveAudioNamed": "Save audio as {{name}}"
   },
   "app": {
     "title": "iHub Apps",

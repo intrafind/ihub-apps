@@ -149,6 +149,15 @@ After extraction, users see:
 - Audio duration
 - File size comparison (video vs audio)
 
+### Saving the Extracted Audio
+
+The extracted audio is attached as `<video name>.wav`, a file the user does not have on disk. While it is attached, its row in the attachment list has a **Save audio** button (download icon) that saves the WAV locally under that name: `lecture.mp4` becomes `lecture.wav`. The 16 kHz mono WAV is saved exactly as it would be transcribed or sent to the model.
+
+- Only audio extracted from a video gets the button. Audio files the user uploads themselves are already on their disk
+- The button saves the attachment's WAV `Blob`. An attachment that lost it, for example a copy of the attachment that was serialized and restored, is rebuilt from its base64 data URL
+- The button is available while the chat input is busy, so the audio can still be saved while an answer is running
+- In a transcription-enabled app the audio is replaced by its transcript when the message is sent, so save it before sending
+
 ## Testing
 
 A standalone test page is available at `tests/manual/test-audio-extraction.html` that allows testing the audio extraction without running the full application.
@@ -187,6 +196,9 @@ A standalone test page is available at `tests/manual/test-audio-extraction.html`
 
 - **`client/src/features/upload/components/ProcessingProgress.jsx`**
   - The progress panel with the Stop button
+
+- **`client/src/features/upload/components/AttachedFilesList.jsx`** and **`client/src/features/upload/utils/extractedAudio.js`**
+  - The **Save audio** button of an extracted-audio attachment and the helpers behind it (`canSaveExtractedAudio()`, `getExtractedAudioBlob()`, `saveExtractedAudio()`)
 
 ### Web Audio API Usage
 
