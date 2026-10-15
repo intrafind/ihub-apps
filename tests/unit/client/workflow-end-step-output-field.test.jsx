@@ -70,6 +70,119 @@ describe('the end step form', () => {
   });
 });
 
+describe('an output made of several fields', () => {
+  const FIELDS = { topic: 'topic', report: 'finalReport' };
+  const form = (output, onChange = () => {}) =>
+    render(<EndForm config={{ output }} onChange={onChange} variables={VARIABLES} />);
+
+  it('is chosen with the switch, seeded from the variable that was the output', () => {
+    const onChange = jest.fn();
+    form('finalReport', onChange);
+    expect(screen.getByRole('button', { name: 'One value' })).toHaveAttribute(
+      'aria-pressed',
+      'true'
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Several fields' }));
+    expect(onChange).toHaveBeenCalledWith({ output: { finalReport: 'finalReport' } });
+  });
+
+  it('starts with an empty field when the output was not a plain variable name', () => {
+    const onChange = jest.fn();
+    form('{{summary}} and more', onChange);
+    fireEvent.click(screen.getByRole('button', { name: 'Several fields' }));
+    expect(onChange).toHaveBeenCalledWith({ output: { '': '' } });
+  });
+
+  it('goes back to one value, taking the first field', () => {
+    const onChange = jest.fn();
+    form(FIELDS, onChange);
+    fireEvent.click(screen.getByRole('button', { name: 'One value' }));
+    expect(onChange).toHaveBeenCalledWith({ output: 'topic' });
+  });
+
+  it('shows a name and a value for each field, with the variables as suggestions', () => {
+    const { container } = form(FIELDS);
+    expect(screen.getAllByLabelText('Field name').map(input => input.value)).toEqual([
+      'topic',
+      'report'
+    ]);
+    expect(screen.getAllByLabelText('Variable or text').map(input => input.value)).toEqual([
+      'topic',
+      'finalReport'
+    ]);
+    expect(screen.getByRole('button', { name: 'Several fields' })).toHaveAttribute(
+      'aria-pressed',
+      'true'
+    );
+    const options = [...container.querySelectorAll('datalist option')].map(o => o.value);
+    expect(options).toEqual(['finalReport', 'summary']);
+    expect(screen.getByText(/The answer is a JSON object with these fields/)).toBeInTheDocument();
+  });
+
+  it('renames a field where it is, and changes its value', () => {
+    const onChange = jest.fn();
+    form(FIELDS, onChange);
+    fireEvent.change(screen.getAllByLabelText('Field name')[0], { target: { value: 'subject' } });
+    expect(onChange).toHaveBeenLastCalledWith({
+      output: { subject: 'topic', report: 'finalReport' }
+    });
+    expect(Object.keys(onChange.mock.calls[0][0].output)).toEqual(['subject', 'report']);
+    fireEvent.change(screen.getAllByLabelText('Variable or text')[1], {
+      target: { value: 'summary' }
+    });
+    expect(onChange).toHaveBeenLastCalledWith({ output: { topic: 'topic', report: 'summary' } });
+  });
+
+  it('does not take a name another field has, or one that reaches into the prototype', () => {
+    const onChange = jest.fn();
+    form(FIELDS, onChange);
+    const name = screen.getAllByLabelText('Field name')[0];
+    for (const value of ['report', '__proto__', 'constructor']) {
+      fireEvent.change(name, { target: { value } });
+    }
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it('adds a field, but only one at a time while its name is blank', () => {
+    const onChange = jest.fn();
+    const { rerender } = form(FIELDS, onChange);
+    fireEvent.click(screen.getByRole('button', { name: '+ Add field' }));
+    expect(onChange).toHaveBeenCalledWith({ output: { ...FIELDS, '': '' } });
+    rerender(
+      <EndForm
+        config={{ output: { ...FIELDS, '': '' } }}
+        onChange={onChange}
+        variables={VARIABLES}
+      />
+    );
+    expect(screen.getByRole('button', { name: '+ Add field' })).toBeDisabled();
+  });
+
+  it('removes a field', () => {
+    const onChange = jest.fn();
+    form(FIELDS, onChange);
+    fireEvent.click(screen.getAllByRole('button', { name: 'Remove field' })[0]);
+    expect(onChange).toHaveBeenCalledWith({ output: { report: 'finalReport' } });
+  });
+
+  it('shows a nested object as it is, to be edited in the JSON tab', () => {
+    form({ topic: 'topic', meta: { a: 'a' } });
+    expect(screen.getAllByLabelText('Variable or text')).toHaveLength(1);
+    expect(screen.getByText(/"a": "a"/)).toBeInTheDocument();
+  });
+
+  it('is an output, so there is nothing to warn about, until it has no field left', () => {
+    const { rerender } = form(FIELDS);
+    expect(screen.queryByText(/Every end step needs an output/)).not.toBeInTheDocument();
+    rerender(<EndForm config={{ output: {} }} onChange={() => {}} variables={VARIABLES} />);
+    expect(screen.getByText(/Every end step needs an output/)).toBeInTheDocument();
+    rerender(
+      <EndForm config={{ output: { topic: '' } }} onChange={() => {}} variables={VARIABLES} />
+    );
+    expect(screen.getByText(/Every end step needs an output/)).toBeInTheDocument();
+  });
+});
+
 describe('the end step card on the canvas', () => {
   const card = nodeConfig =>
     render(
@@ -84,6 +197,12 @@ describe('the end step card on the canvas', () => {
   it('shows the output it gives the workflow', () => {
     card({ output: ' finalReport ' });
     expect(screen.getByText('→ finalReport')).toBeInTheDocument();
+    expect(screen.queryByText('No output set')).not.toBeInTheDocument();
+  });
+
+  it('names the fields of an object output', () => {
+    card({ output: { topic: 'topic', report: 'finalReport' } });
+    expect(screen.getByText('→ { topic, report }')).toBeInTheDocument();
     expect(screen.queryByText('No output set')).not.toBeInTheDocument();
   });
 

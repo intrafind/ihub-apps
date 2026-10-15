@@ -1,6 +1,8 @@
 import { useTranslation } from 'react-i18next';
 import FormField from './FormField';
 import ArrayField from './ArrayField';
+import EndOutputField from './EndOutputField';
+import { hasEndOutput } from '../../../../../../../shared/workflowEndOutput.js';
 
 /**
  * The end step's settings. Its Output is the answer of the workflow, which the
@@ -9,20 +11,14 @@ import ArrayField from './ArrayField';
  */
 function EndForm({ config, onChange, variables }) {
   const { t } = useTranslation();
-  const missing = typeof config.output !== 'string' || config.output.trim() === '';
+  const missing = !hasEndOutput(config.output);
   return (
     <div className="space-y-3">
       <div>
-        <FormField
-          label={t('workflows.editor.endOutput', 'Output')}
+        <EndOutputField
           value={config.output}
           onChange={v => onChange({ ...config, output: v })}
-          placeholder="finalReport"
-          suggestions={variables}
-          helpText={t(
-            'workflows.editor.endOutputHelp',
-            'The answer of the workflow, which the chat shows as it is: a variable (finalReport), a path into one (report.markdown) or a text with variables ({{summary}}). JSON stays JSON. Everything below is additional information.'
-          )}
+          variables={variables}
         />
         {missing && (
           <p className="text-xs text-amber-700 dark:text-amber-400 mt-0.5">

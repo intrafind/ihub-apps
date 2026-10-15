@@ -4513,6 +4513,13 @@
       "endOutputHelp": "Die Antwort des Workflows, die der Chat unverändert anzeigt: eine Variable (finalReport), ein Pfad in eine Variable (report.markdown) oder ein Text mit Variablen ({{summary}}). JSON bleibt JSON. Alles darunter sind zusätzliche Informationen.",
       "endOutputMissing": "Jeder End-Schritt braucht eine Ausgabe: Ohne sie lässt sich der Workflow nicht speichern, und ein Lauf, der diesen Schritt erreicht, schlägt fehl.",
       "endOutputMissingShort": "Keine Ausgabe gesetzt",
+      "endOutputOneValue": "Ein Wert",
+      "endOutputSeveralFields": "Mehrere Felder",
+      "endOutputFieldName": "Feldname",
+      "endOutputFieldValue": "Variable oder Text",
+      "endOutputAddField": "Feld hinzufügen",
+      "endOutputRemoveField": "Feld entfernen",
+      "endOutputFieldsHelp": "Die Antwort ist ein JSON-Objekt mit diesen Feldern. Jeder Wert ist eine Variable (finalReport), ein Pfad in eine Variable (report.markdown) oder ein Text mit Variablen ({{summary}}). Ein Feld, dessen Variable nie gesetzt wurde, entfällt. Alles darunter sind zusätzliche Informationen.",
       "filterVariables": "Variablen filtern…",
       "formTab": "Formular",
       "groups": {

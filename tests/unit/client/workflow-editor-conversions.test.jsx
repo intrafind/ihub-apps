@@ -119,9 +119,7 @@ describe('flowToWorkflow round-trip', () => {
   it('keeps the chatIntegration block, which the canvas has no fields for', () => {
     const chatIntegration = {
       enabled: true,
-      primaryOutput: 'searchResults',
       outputFormat: 'text',
-      passthroughResult: true,
       toolDescription: { en: 'Searches', de: 'Sucht' }
     };
     const workflow = { ...containerWorkflow, chatIntegration };

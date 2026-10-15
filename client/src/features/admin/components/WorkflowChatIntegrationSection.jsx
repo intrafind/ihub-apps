@@ -172,10 +172,6 @@ function ToolDescriptionField({ value, onChange }) {
  * in chat, how the answer is shown and the description the app's model sees.
  * What the answer is needs no setting here: it is the Output of the end step.
  *
- * `passthroughResult` is deliberately not offered: no code reads it — a
- * workflow called from chat always streams its answer as-is. It stays in the
- * JSON untouched.
- *
  * @param {object} props
  * @param {object} props.workflow - The workflow definition being edited
  * @param {(patch: object) => void} props.onChange - Merges `patch` into

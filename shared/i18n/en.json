@@ -4548,6 +4548,13 @@
       "endOutputHelp": "The answer of the workflow, which the chat shows as it is: a variable (finalReport), a path into one (report.markdown) or a text with variables ({{summary}}). JSON stays JSON. Everything below is additional information.",
       "endOutputMissing": "Every end step needs an output: the workflow cannot be saved, and a run that reaches this step fails, without one.",
       "endOutputMissingShort": "No output set",
+      "endOutputOneValue": "One value",
+      "endOutputSeveralFields": "Several fields",
+      "endOutputFieldName": "Field name",
+      "endOutputFieldValue": "Variable or text",
+      "endOutputAddField": "Add field",
+      "endOutputRemoveField": "Remove field",
+      "endOutputFieldsHelp": "The answer is a JSON object with these fields. Each value is a variable (finalReport), a path into one (report.markdown) or a text with variables ({{summary}}). A field whose variable was never set is left out. Everything below is additional information.",
       "filterVariables": "Filter variables…",
       "formTab": "Form",
       "groups": {

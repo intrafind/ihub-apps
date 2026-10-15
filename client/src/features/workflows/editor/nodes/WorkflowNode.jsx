@@ -3,6 +3,7 @@ import { Handle, Position } from '@xyflow/react';
 import { NODE_TYPE_COLORS, NODE_TYPE_META } from '../workflowEditorUtils';
 import { useTranslation } from 'react-i18next';
 import { NodeTypeIcon } from './nodeIcons';
+import { endOutputLabel } from '../../../../../../shared/workflowEndOutput.js';
 
 /** Extracts a plain string from a localized object or scalar. */
 function localizedText(value) {
@@ -21,8 +22,10 @@ function nodeSummary(type, cfg) {
       const count = Array.isArray(cfg.inputVariables) ? cfg.inputVariables.length : 0;
       return count > 0 ? `${count} input${count === 1 ? '' : 's'}` : '';
     }
-    case 'end':
-      return typeof cfg.output === 'string' && cfg.output.trim() ? `→ ${cfg.output.trim()}` : '';
+    case 'end': {
+      const label = endOutputLabel(cfg.output);
+      return label ? `→ ${label}` : '';
+    }
     case 'prompt':
     case 'planner':
     case 'verifier':

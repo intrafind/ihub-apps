@@ -1,3 +1,5 @@
+import { hasEndOutput } from '../../../../../shared/workflowEndOutput.js';
+
 const isText = value => typeof value === 'string' && value.trim() !== '';
 
 /**
@@ -9,7 +11,7 @@ const isText = value => typeof value === 'string' && value.trim() !== '';
  */
 export function endStepsWithoutOutput(workflow) {
   return (Array.isArray(workflow?.nodes) ? workflow.nodes : [])
-    .filter(node => node?.type === 'end' && !isText(node.config?.output))
+    .filter(node => node?.type === 'end' && !hasEndOutput(node.config?.output))
     .map(node => node.id);
 }
 

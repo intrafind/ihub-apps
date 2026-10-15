@@ -50,6 +50,15 @@ describe('endStepsWithoutOutput', () => {
     }
   });
 
+  it('takes an object of fields as an output, and not an empty or half-filled one', () => {
+    for (const output of [{ a: 'a' }, { topic: 'topic', report: 'finalReport' }]) {
+      expect(endStepsWithoutOutput(ruleCheckWorkflow({ endConfig: { output } }))).toEqual([]);
+    }
+    for (const output of [{}, { a: '' }, { '': 'a' }, ['a']]) {
+      expect(endStepsWithoutOutput(ruleCheckWorkflow({ endConfig: { output } }))).toEqual(['end']);
+    }
+  });
+
   it('does not take a variable that happens to be named like an answer for an output', () => {
     expect(
       endStepsWithoutOutput(ruleCheckWorkflow({ endConfig: { outputVariables: ['finalReport'] } }))
