@@ -5674,6 +5674,8 @@
       "started": "Started",
       "duration": "Duration",
       "result": "Result",
+      "notesUsed": "Used notes v{{version}}",
+      "notesUsedHint": "This run started with version {{version}} of the notes of this task.",
       "noChanges": "No changes",
       "memoryUpdated": "Memory updated",
       "memoryTooLong": "Memory full",

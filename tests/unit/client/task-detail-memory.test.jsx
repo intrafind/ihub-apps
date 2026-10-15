@@ -344,6 +344,14 @@ describe('TaskDetailPage: memory', () => {
           run('r-wrote-then-failed', {
             memory: { enabled: true, compose: 'failed', versionRead: 2, versionWritten: 3 }
           }),
+          // A second run: it started from the notes the first one left, and found nothing new.
+          run('r-second', {
+            memory: { enabled: true, changed: false, compose: 'unchanged', versionRead: 1 }
+          }),
+          // A first run has no notes to have used.
+          run('r-first', {
+            memory: { enabled: true, changed: true, compose: 'written', versionRead: 0 }
+          }),
           run('r-plain')
         ],
         nextCursor: null
@@ -351,22 +359,26 @@ describe('TaskDetailPage: memory', () => {
       await renderPage();
 
       const rows = screen.getAllByRole('row').slice(1);
-      expect(rows).toHaveLength(8);
+      expect(rows).toHaveLength(10);
       const badges = row => ({
+        used: within(row).queryByText(/^Used notes v\d+$/)?.textContent ?? null,
         noChanges: within(row).queryByText('No changes') !== null,
         updated: within(row).queryByText('Memory updated') !== null,
         warning: within(row).queryByText(/^Memory (full|not updated)$/)?.textContent ?? null
       });
-      const none = { noChanges: false, updated: false, warning: null };
+      const none = { used: null, noChanges: false, updated: false, warning: null };
       expect(badges(rows[0])).toEqual({ ...none, noChanges: true });
       expect(badges(rows[1])).toEqual({ ...none, updated: true });
       expect(badges(rows[2])).toEqual({ ...none, noChanges: true, updated: true });
-      expect(badges(rows[3])).toEqual({ ...none, updated: true });
+      expect(badges(rows[3])).toEqual({ ...none, used: 'Used notes v2', updated: true });
       expect(badges(rows[4])).toEqual({ ...none, warning: 'Memory not updated' });
       expect(badges(rows[5])).toEqual({ ...none, warning: 'Memory full' });
       // The run wrote its notes itself; the failed update after it is not a warning then.
-      expect(badges(rows[6])).toEqual({ ...none, updated: true });
-      expect(badges(rows[7])).toEqual(none);
+      expect(badges(rows[6])).toEqual({ ...none, used: 'Used notes v2', updated: true });
+      // The sign that the notes were loaded, next to the verdict on what the run reported.
+      expect(badges(rows[7])).toEqual({ ...none, used: 'Used notes v1', noChanges: true });
+      expect(badges(rows[8])).toEqual({ ...none, updated: true });
+      expect(badges(rows[9])).toEqual(none);
     });
   });
 

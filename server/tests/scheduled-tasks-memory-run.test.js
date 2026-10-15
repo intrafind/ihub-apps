@@ -11,6 +11,7 @@ import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   cleanup,
+  composerReply,
   getLedger,
   principal,
   scriptedChatService,
@@ -172,6 +173,34 @@ describe('a later run', () => {
     );
     assert.ok(!system.includes('no notes yet'));
     assert.equal(run.memory.versionRead, 1);
+    await cleanup(ada());
+  });
+
+  it('is given what the run before it left in the notes, end to end', async () => {
+    const task = await newTask();
+    const watermark = '- Reported Alpha 1.0 and Beta 2.0 (seen 2026-10-15)';
+    const first = await runTask(task, [openaiText(['Alpha 1.0 and Beta 2.0 are out.'])], {
+      composer: [composerReply(watermark)]
+    });
+    assert.equal(first.run.memory.versionRead, 0);
+    assert.equal(first.run.memory.compose, 'written');
+    assert.equal(first.run.memory.versionWritten, 1);
+
+    const second = await runTask(task, [openaiText(['Nothing new since the last run.'])], {
+      composer: [composerReply(watermark, false)]
+    });
+    const system = systemOf(second.requests[0]);
+    // The notes the first run's composer wrote are what the second run's model is told first.
+    assert.match(system, /<task_memory version="1" updated="[^"]+" chars="\d+" limit="16000">/);
+    assert.ok(system.includes(watermark), 'the watermark is in the system prompt');
+    assert.ok(!system.includes('no notes yet'));
+    assert.match(system, /report only what is new or changed/);
+    assert.equal(second.run.memory.versionRead, 1, 'the run records which notes it started from');
+    // The composer that judges the second run compares it with those same notes.
+    const shownToComposer = second.composerRequests[0].body.messages.at(-1).content;
+    assert.match(shownToComposer, /## Notes before this run\n- Reported Alpha 1\.0 and Beta 2\.0/);
+    assert.equal(second.run.memory.changed, false);
+    assert.equal(second.run.memory.compose, 'unchanged');
     await cleanup(ada());
   });
 
