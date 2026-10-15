@@ -539,6 +539,8 @@ export function projectLedgerEvent(ev) {
           finishReason: d.finishReason ?? null,
           ...(d.usage ? { usage: d.usage } : {}),
           ...(Array.isArray(d.knowledgeSources) ? { knowledgeSources: d.knowledgeSources } : {}),
+          // Who stopped an aborted run, so a replay says what the live stream said.
+          ...(d.cause ? { cause: d.cause } : {}),
           ...(d.error ? { error: d.error } : {})
         })
       ];

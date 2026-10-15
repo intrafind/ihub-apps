@@ -23,6 +23,7 @@ import interactionService from '../../loop/InteractionService.js';
 import { getChatRepository, normalizeChatVariables } from '../../chat/ChatRepository.js';
 import { deleteChatWithCascade } from '../../chat/chatDeletion.js';
 import { abortChatRequest } from '../../../sse.js';
+import { abortCause, userAbortCause } from '../../chat/abortCause.js';
 import { getWorkflowStateRepository } from '../../workflow/WorkflowStateRepository.js';
 import {
   describeSchedule,
@@ -687,23 +688,24 @@ export async function duplicateTask(user, taskId, { language = 'en' } = {}) {
  * @param {Object} task
  * @param {string} reasonCode
  * @param {string} message
+ * @param {Object} cause - Why and by whom (`services/chat/abortCause.js`); recorded on the run.
  * @returns {Promise<void>}
  */
-async function stopActiveRun(task, reasonCode, message) {
+async function stopActiveRun(task, reasonCode, message, cause) {
   const active = task.activeRun;
   if (!active) return;
   const repository = getScheduledTaskRepository();
   const now = Date.now();
   if (active.status === 'running' && active.chatId) {
     // The runner records the aborted turn as cancelled.
-    abortChatRequest(active.chatId);
+    abortChatRequest(active.chatId, cause);
     return;
   }
   const run = await repository.mutateRun(task.id, active.id, stored => {
     if (isFinalRunStatus(stored.status)) return null;
     stored.status = 'cancelled';
     stored.finishedAt = new Date(now).toISOString();
-    stored.reason = reasonOf(reasonCode, message, now);
+    stored.reason = reasonOf(reasonCode, message, now, { cause });
     return stored;
   });
   // A queued or waiting run never reaches the runner again (it only executes
@@ -743,12 +745,18 @@ async function stopActiveRun(task, reasonCode, message) {
 export async function deleteTask(user, taskId, { deleteChats = false } = {}) {
   assertAvailable();
   const { task } = await loadOwnedTask(user, taskId);
-  return removeTask(task, { deleteChats });
+  const cause = await userAbortCause('task_deleted', user, {
+    mode: task.owner?.identityMode,
+    ownerId: task.ownerId,
+    via: 'DELETE /api/scheduled-tasks/:taskId',
+    related: { taskId, runId: task.activeRun?.id }
+  });
+  return removeTask(task, { deleteChats, cause });
 }
 
-async function removeTask(task, { deleteChats }) {
+async function removeTask(task, { deleteChats, cause }) {
   const repository = getScheduledTaskRepository();
-  await stopActiveRun(task, 'TASK_DELETED', 'The task was deleted');
+  await stopActiveRun(task, 'TASK_DELETED', 'The task was deleted', cause);
   await repository.deleteTask(task.id);
   // The notes go with the task even when the run history cannot be removed: once the task
   // record is gone nobody could reach them to clear them. A run that is still writing finds
@@ -856,7 +864,17 @@ export async function cancelRun(user, taskId, runId) {
   if (!isRunId(runId) || task.activeRun?.id !== runId) {
     throw new ScheduledTaskError(409, 'RUN_NOT_ACTIVE', 'This run is not in progress');
   }
-  await stopActiveRun(task, 'CANCELLED_BY_OWNER', 'Cancelled by the owner');
+  await stopActiveRun(
+    task,
+    'CANCELLED_BY_OWNER',
+    'Cancelled by the owner',
+    await userAbortCause('task_run_cancelled', user, {
+      mode: task.owner?.identityMode,
+      ownerId: task.ownerId,
+      via: 'POST /api/scheduled-tasks/:taskId/runs/:runId/cancel',
+      related: { taskId, runId }
+    })
+  );
   if (task.activeRun.status !== 'running') announceTaskChanged(taskId);
   return getScheduledTaskRepository().getRun(taskId, runId);
 }
@@ -1265,7 +1283,19 @@ export async function adminSetTaskStatus(admin, taskId, status, message) {
   });
   if (!task) throw notFound();
   if (status === 'disabled' && task.activeRun) {
-    await stopActiveRun(task, 'DISABLED_BY_ADMIN', 'Disabled by an administrator');
+    await stopActiveRun(
+      task,
+      'DISABLED_BY_ADMIN',
+      'Disabled by an administrator',
+      await userAbortCause('task_disabled', admin, {
+        admin: true,
+        // The task's identity mode, as the owner's own stops use: a
+        // pseudonymized task never carries the administrator's raw id either.
+        mode: task.owner?.identityMode,
+        via: 'admin status change of a scheduled task',
+        related: { taskId, runId: task.activeRun?.id }
+      })
+    );
     announceTaskChanged(taskId);
     return (await getScheduledTaskRepository().getTask(taskId)) || task;
   }
@@ -1295,7 +1325,14 @@ export async function adminListRuns(taskId, { limit, cursor } = {}) {
 export async function adminDeleteTask(taskId, { deleteChats = false } = {}) {
   const task = isTaskId(taskId) ? await getScheduledTaskRepository().getTask(taskId) : null;
   if (!task) throw notFound();
-  return removeTask(task, { deleteChats });
+  return removeTask(task, {
+    deleteChats,
+    cause: abortCause('task_deleted', {
+      actor: { type: 'admin' },
+      via: 'admin delete of a scheduled task',
+      related: { taskId, runId: task.activeRun?.id }
+    })
+  });
 }
 
 /**
@@ -1315,7 +1352,14 @@ export async function deleteTasksOfOwner(ownerIds) {
   let chatsDeleted = 0;
   for (const ownerId of new Set(ownerIds)) {
     for (const task of await repository.listTasksByOwner(ownerId)) {
-      const result = await removeTask(task, { deleteChats: true });
+      const result = await removeTask(task, {
+        deleteChats: true,
+        cause: abortCause('user_deleted', {
+          actor: { type: 'admin' },
+          via: 'user deletion',
+          related: { taskId: task.id, runId: task.activeRun?.id }
+        })
+      });
       tasks += 1;
       chatsDeleted += result.chatsDeleted;
     }

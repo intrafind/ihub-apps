@@ -21,6 +21,7 @@ import crypto from 'node:crypto';
 import { buildServerPath } from '../../utils/basePath.js';
 import runLog from '../../services/loop/RunLog.js';
 import { abortChatRequest } from '../../sse.js';
+import { userAbortCause } from '../../services/chat/abortCause.js';
 import { cancelChatWorkflow } from '../../tools/workflowRunner.js';
 import { getWorkflowStateRepository } from '../../services/workflow/WorkflowStateRepository.js';
 import { deleteChatWithCascade } from '../../services/chat/chatDeletion.js';
@@ -257,7 +258,15 @@ export default function registerConversationsRoutes(app) {
       // Stop a response still running in it before erasing what records it
       // (the same order `DELETE /api/chats/:id` keeps).
       if (chat.status === 'running' || chat.activeRunId) {
-        abortChatRequest(chat.id);
+        abortChatRequest(
+          chat.id,
+          await userAbortCause('chat_deleted', user, {
+            mode: chat.identityMode,
+            ownerId: chat.ownerId,
+            via: 'DELETE /v1/conversations/:conversationId',
+            related: chat.activeRunId ? { runId: chat.activeRunId } : undefined
+          })
+        );
         await cancelChatWorkflow(chat.id);
       }
       await deleteChatWithCascade(repository, chat.id, {

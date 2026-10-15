@@ -1,7 +1,7 @@
 import { Marked } from 'marked';
 import DOMPurify from 'dompurify';
 import { exportPdfOnServer } from '../../../api/endpoints/exports';
-import { buildChatExportFilename, buildChatExportTitle } from '../../../utils/exportFormats';
+import { buildChatExportFilename, buildChatExportTitle } from '../../../utils/exportNaming';
 import { saveBlobAs } from '../../../utils/externalNavigation';
 import { htmlToMarkdown } from '../../../utils/markdownUtils';
 

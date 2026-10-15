@@ -16,9 +16,8 @@ jest.mock('../../../client/src/api/endpoints/exports', () => ({
 jest.mock('../../../client/src/utils/externalNavigation', () => ({
   saveBlobAs: jest.fn()
 }));
-// The DOCX/PPTX builders pulled in by exportFormats are irrelevant here (and heavy); keep the
-// two naming helpers the chat export uses deterministic.
-jest.mock('../../../client/src/utils/exportFormats', () => ({
+// Keep the two naming helpers the chat export uses deterministic.
+jest.mock('../../../client/src/utils/exportNaming', () => ({
   buildChatExportFilename: jest.fn(({ format }) => `chat.${format}`),
   buildChatExportTitle: jest.fn(({ appName }) => `${appName} chat`)
 }));

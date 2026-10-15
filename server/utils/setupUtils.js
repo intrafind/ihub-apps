@@ -68,7 +68,7 @@ async function copyMissingFiles(src, dest, copiedCount = 0) {
         try {
           await fs.stat(destPath);
           // File exists, skip copying
-          logger.info('Skipping existing file', {
+          logger.debug('Skipping existing file', {
             component: 'Setup',
             file: path.relative(dest, destPath)
           });

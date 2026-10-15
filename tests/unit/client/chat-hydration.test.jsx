@@ -29,7 +29,11 @@ jest.mock('uuid', () => ({
 
 jest.mock('../../../client/src/shared/hooks/useEventSource', () => ({
   __esModule: true,
-  default: () => ({ initEventSource: jest.fn(), cleanupEventSource: jest.fn() })
+  default: () => ({
+    initEventSource: jest.fn(),
+    detachEventSource: jest.fn(),
+    stopEventSource: jest.fn()
+  })
 }));
 
 jest.mock('../../../client/src/api', () => ({

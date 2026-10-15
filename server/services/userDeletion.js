@@ -128,6 +128,7 @@ export const USER_CLEANUP_STEPS = [
         ]);
       const { getWorkflowStateRepository } = await import('./workflow/WorkflowStateRepository.js');
       const { abortChatRequest } = await import('../sse.js');
+      const { abortCause } = await import('./chat/abortCause.js');
       const { cancelChatWorkflow } = await import('../tools/workflowRunner.js');
 
       const repository = getChatRepository();
@@ -137,7 +138,14 @@ export const USER_CLEANUP_STEPS = [
           deleteRun: runId => runLog.deleteRun(runId),
           removeWorkflowState: runId => getWorkflowStateRepository().remove(runId),
           stopChat: async chat => {
-            abortChatRequest(chat.id);
+            abortChatRequest(
+              chat.id,
+              abortCause('user_deleted', {
+                via: 'user deletion',
+                actor: { type: 'admin' },
+                related: chat.activeRunId ? { runId: chat.activeRunId } : undefined
+              })
+            );
             await cancelChatWorkflow(chat.id);
           },
           component: COMPONENT

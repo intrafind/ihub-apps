@@ -6,6 +6,22 @@ import logger from '../utils/logger.js';
 import { getContentsPath } from '../utils/contentsPath.js';
 
 /**
+ * A short, non-secret fingerprint of an encryption key for logs. A SHA-256
+ * prefix cannot be used to recover the key, but it is stable across restarts,
+ * so a changed key shows up as a changed fingerprint.
+ *
+ * @param {string} hexKey - 64-character hex key
+ * @returns {string} 12 hex characters
+ */
+function fingerprintKey(hexKey) {
+  return crypto
+    .createHash('sha256')
+    .update(hexKey.toLowerCase(), 'utf8')
+    .digest('hex')
+    .slice(0, 12);
+}
+
+/**
  * Create `filePath` containing `contents`, exclusively AND atomically.
  * Throws an EEXIST error - exactly like writeFile's `wx` flag - when the file
  * already exists, so callers keep their existing race handling.
@@ -76,6 +92,10 @@ class TokenStorageService {
   constructor() {
     // Initialize encryption key from environment or persistent storage
     this.encryptionKey = null;
+    // Where the active key came from: 'env', 'file', 'generated' or
+    // 'generated-unpersisted'. Logged with the fingerprint so a restart that
+    // silently switched keys is visible in the logs.
+    this.keySource = null;
     this.keyFilePath = getContentsPath('.encryption-key');
     this.algorithm = 'aes-256-gcm';
     this.storageBasePath = getContentsPath('integrations');
@@ -101,7 +121,8 @@ class TokenStorageService {
   async initializeEncryptionKey() {
     // Priority 1: Environment variable (allows override)
     if (process.env.TOKEN_ENCRYPTION_KEY) {
-      const envKey = process.env.TOKEN_ENCRYPTION_KEY.trim();
+      // Hex is case-insensitive; normalize so the same key always compares equal.
+      const envKey = process.env.TOKEN_ENCRYPTION_KEY.trim().toLowerCase();
       if (!/^[0-9a-f]{64}$/i.test(envKey)) {
         throw new Error(
           'TOKEN_ENCRYPTION_KEY must be a 64-character hex string (32 bytes). ' +
@@ -109,9 +130,13 @@ class TokenStorageService {
         );
       }
       this.encryptionKey = envKey;
+      this.keySource = 'env';
       logger.info('Using encryption key from TOKEN_ENCRYPTION_KEY environment variable', {
-        component: 'TokenStorage'
+        component: 'TokenStorage',
+        keySource: this.keySource,
+        keyFingerprint: this.getKeyFingerprint()
       });
+      await this._warnIfEnvKeyDiffersFromFile();
       return;
     }
 
@@ -121,8 +146,14 @@ class TokenStorageService {
       if (persistedKey && persistedKey.length === 64) {
         // Validate it's a valid hex string
         if (/^[0-9a-f]{64}$/i.test(persistedKey.trim())) {
-          this.encryptionKey = persistedKey.trim();
-          logger.info('Using persisted encryption key from disk', { component: 'TokenStorage' });
+          this.encryptionKey = persistedKey.trim().toLowerCase();
+          this.keySource = 'file';
+          logger.info('Using persisted encryption key from disk', {
+            component: 'TokenStorage',
+            keySource: this.keySource,
+            keyFilePath: this.keyFilePath,
+            keyFingerprint: this.getKeyFingerprint()
+          });
           return;
         } else {
           logger.warn('Persisted encryption key has invalid format, generating new key', {
@@ -159,9 +190,12 @@ class TokenStorageService {
       // Anything one worker encrypted would then be undecryptable everywhere
       // else. The loser of the race adopts the winner's key below.
       await createFileExclusively(this.keyFilePath, this.encryptionKey, 0o600);
+      this.keySource = 'generated';
       logger.info('Encryption key persisted to disk', {
         component: 'TokenStorage',
-        keyFilePath: this.keyFilePath
+        keySource: this.keySource,
+        keyFilePath: this.keyFilePath,
+        keyFingerprint: this.getKeyFingerprint()
       });
       logger.info(
         'Keep the key file secure and back it up. Losing it will make encrypted API keys unrecoverable.',
@@ -173,9 +207,13 @@ class TokenStorageService {
         // key is the one on disk, so use that rather than the one we generated.
         const winner = (await fs.readFile(this.keyFilePath, 'utf8')).trim();
         if (/^[0-9a-f]{64}$/i.test(winner)) {
-          this.encryptionKey = winner;
+          this.encryptionKey = winner.toLowerCase();
+          this.keySource = 'file';
           logger.info('Adopted encryption key created concurrently by another process', {
-            component: 'TokenStorage'
+            component: 'TokenStorage',
+            keySource: this.keySource,
+            keyFilePath: this.keyFilePath,
+            keyFingerprint: this.getKeyFingerprint()
           });
           return;
         }
@@ -189,10 +227,66 @@ class TokenStorageService {
         component: 'TokenStorage',
         error
       });
+      this.keySource = 'generated-unpersisted';
       logger.warn('Encryption key is not persisted. API keys will be lost on server restart.', {
-        component: 'TokenStorage'
+        component: 'TokenStorage',
+        keySource: this.keySource,
+        keyFilePath: this.keyFilePath,
+        keyFingerprint: this.getKeyFingerprint()
       });
     }
+  }
+
+  /**
+   * Fingerprint of the active encryption key, for logs. Never the key itself.
+   *
+   * @returns {string|null} null until the key is initialized
+   */
+  getKeyFingerprint() {
+    return this.encryptionKey ? fingerprintKey(this.encryptionKey) : null;
+  }
+
+  /**
+   * The persisted key from disk, or null when there is none or it is malformed.
+   *
+   * @returns {Promise<string|null>}
+   */
+  async _readPersistedKey() {
+    try {
+      const key = (await fs.readFile(this.keyFilePath, 'utf8')).trim();
+      return /^[0-9a-f]{64}$/i.test(key) ? key.toLowerCase() : null;
+    } catch (error) {
+      if (error.code !== 'ENOENT') {
+        logger.warn(
+          'Could not read persisted encryption key to compare with TOKEN_ENCRYPTION_KEY',
+          {
+            component: 'TokenStorage',
+            keyFilePath: this.keyFilePath,
+            error: error.message
+          }
+        );
+      }
+      return null;
+    }
+  }
+
+  /**
+   * When TOKEN_ENCRYPTION_KEY overrides a persisted key that differs from it,
+   * values encrypted with the file key stop decrypting. Warn so that the
+   * mismatch is visible at startup instead of as a failed API call later.
+   */
+  async _warnIfEnvKeyDiffersFromFile() {
+    const fileKey = await this._readPersistedKey();
+    if (!fileKey || fileKey === this.encryptionKey) return;
+    logger.warn(
+      'TOKEN_ENCRYPTION_KEY differs from the key persisted in contents/.encryption-key. Values encrypted with the persisted key will not decrypt while the env var is set.',
+      {
+        component: 'TokenStorage',
+        keySource: this.keySource,
+        keyFingerprint: this.getKeyFingerprint(),
+        persistedKeyFingerprint: fingerprintKey(fileKey)
+      }
+    );
   }
 
   /**
@@ -767,6 +861,8 @@ class TokenStorageService {
     } catch (error) {
       logger.error('Error decrypting string', {
         component: 'TokenStorage',
+        keySource: this.keySource,
+        keyFingerprint: this.getKeyFingerprint(),
         error
       });
       throw new Error('Failed to decrypt string. The encryption key may have changed.');

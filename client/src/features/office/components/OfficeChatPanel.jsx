@@ -1313,7 +1313,7 @@ function OfficeChatPanel({
                   // continue yet.
                   disabled={mailSnapshot.loading || loadingStoredChat}
                   isProcessing={adapter.processing}
-                  onCancel={adapter.cancelGeneration}
+                  onCancel={() => adapter.cancelGeneration('office')}
                   allowEmptySubmit={!!selectedApp?.allowEmptyContent}
                   currentLanguage={officeLocale}
                   showModelSelector={modelSelectionAllowed}

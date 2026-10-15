@@ -3857,7 +3857,8 @@
     "reconnected": "Connection restored"
   },
   "message": {
-    "generationCancelled": " [Generation cancelled]"
+    "generationCancelled": " [Generation cancelled]",
+    "generationCancelledBy": "Generation cancelled: {{cause}}"
   },
   "languages": {
     "en": "English",
@@ -5475,6 +5476,24 @@
       "adding": "Adding…",
       "addToMine": "Add to my skills"
     }
+  },
+  "abortCauses": {
+    "user_stop": "Stopped from the chat",
+    "run_stop": "Stopped through the run API",
+    "task_run_cancelled": "Cancelled by the owner",
+    "task_deleted": "The task was deleted",
+    "task_disabled": "Disabled by an administrator",
+    "chat_deleted": "The chat was deleted",
+    "user_deleted": "The user was deleted",
+    "superseded": "Replaced by a newer message in the same chat",
+    "client_disconnected": "The browser disconnected",
+    "client_evicted": "The browser connection timed out",
+    "api_client_closed": "The API client closed the connection",
+    "lease_lost": "The run lost its execution lease to another worker",
+    "unknown": "Stopped (the cause was not recorded)",
+    "byYou": "you",
+    "byAdmin": "an administrator",
+    "byUser": "user {{id}}"
   },
   "scheduledTasks": {
     "scheduleThis": "Schedule this…",
