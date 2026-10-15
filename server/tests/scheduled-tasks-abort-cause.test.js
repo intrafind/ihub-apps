@@ -78,7 +78,7 @@ describe('the cause of a stopped scheduled run', () => {
 
   it('records the cause on the ledger and on the stored message', async () => {
     const user = ada();
-    const { task, chatId, finished } = await startBlockedRun(user);
+    const { chatId, finished } = await startBlockedRun(user);
 
     abortChatRequest(
       chatId,
