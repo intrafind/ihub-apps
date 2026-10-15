@@ -183,6 +183,7 @@ Validates agentic workflow definitions that power the DAG-based workflow orchest
 **Validation Refinements:**
 - Exactly one `start` node must exist
 - At least one `end` node must exist
+- Every `end` node must have a `config.output`: a variable, path or text that is not blank, or an object of fields
 - All edge `source` and `target` references must point to valid node IDs
 - All non-start nodes must have at least one incoming edge (no orphan nodes)
 
