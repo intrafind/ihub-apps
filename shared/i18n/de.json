@@ -4839,6 +4839,8 @@
       "aborted": "Die Transkription wurde abgebrochen.",
       "serverTooLong": "Diese Aufnahme ist zu lang für das konfigurierte Transkriptionsmodell. Bitte teilen Sie sie in kürzere Abschnitte auf.",
       "serverBusy": "Der Transkriptionsdienst ist derzeit ausgelastet. Bitte versuchen Sie es in einem Moment erneut.",
+      "notPermitted": "Sie haben keine Berechtigung, dieses Transkriptionsmodell zu verwenden. Bitte wenden Sie sich an Ihren Administrator.",
+      "sessionLimit": "Die Transkriptionssitzung hat ihre maximale Dauer erreicht. Bitte teilen Sie die Aufnahme in kürzere Abschnitte auf.",
       "service": "Transkription fehlgeschlagen.",
       "serviceDetail": "Transkription fehlgeschlagen: {{detail}}",
       "generic": "Transkription fehlgeschlagen. Bitte versuchen Sie es erneut.",

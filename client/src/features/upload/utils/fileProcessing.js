@@ -17,6 +17,7 @@ import {
 // version always tracks the installed pdfjs-dist package.
 import pdfjsWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import { audioBufferToWav } from '../../../utils/wav';
+import { TARGET_SAMPLE_RATE, resampleTo16kMono } from '../../../utils/realtimeTranscriptionCore';
 
 // Cache for mimetypes configuration
 let mimetypesConfigCache = null;
@@ -497,11 +498,22 @@ export const processImageFile = async (file, options = {}) => {
 };
 
 /**
- * Extract audio from a video file using Web Audio API
+ * Extract the audio track of a video file as a 16 kHz mono WAV using the Web
+ * Audio API.
+ *
+ * The track is decoded at the video's own sample rate and channel count, then
+ * rendered straight to 16 kHz mono before it is encoded: the format the
+ * transcription models are fed anyway (see `resampleTo16kMono`), and plenty
+ * for speech sent to a multimodal chat model. A WAV of the original 48 kHz
+ * stereo is six times larger — over 11 MB per minute. Its base64 data URL
+ * then outgrows the engine's maximum string length for videos beyond ~35
+ * minutes, where `FileReader` hands back an empty string without an error:
+ * the attachment looks fine and only fails once it is sent.
+ *
  * @param {File} file - The video file to extract audio from
- * @param {Object} options - Processing options
- * @param {string} options.format - Output format: 'wav' (default) or 'mp3'
- * @returns {Promise<Object>} Object with audioBuffer and metadata
+ * @returns {Promise<Object>} The WAV as a data URL (`base64`) and a `blob`,
+ *   with `format`, `sampleRate` (16000), `channels` (1), `duration` (seconds)
+ *   and `size` (bytes) describing that output
  */
 export const extractAudioFromVideo = async file => {
   let audioContext = null;
@@ -520,20 +532,26 @@ export const extractAudioFromVideo = async file => {
       throw new Error('audio-decode-error');
     }
 
-    // decodeAudioData already yields the fully-decoded PCM. (An earlier version
-    // re-rendered it through a same-rate/same-channel OfflineAudioContext — a
-    // pure copy that doubled peak memory on long videos.)
-    const wavBlob = audioBufferToWav(audioBuffer);
+    // Downmix + resample natively. (An earlier version re-rendered the decoded
+    // PCM through a same-rate/same-channel OfflineAudioContext — a pure copy
+    // that doubled peak memory on long videos.)
+    const samples = await resampleTo16kMono(audioBuffer);
+    // audioBufferToWav only reads these four members of its input.
+    const wavBlob = audioBufferToWav({
+      numberOfChannels: 1,
+      sampleRate: TARGET_SAMPLE_RATE,
+      length: samples.length,
+      getChannelData: () => samples
+    });
     const wavBase64 = await blobToBase64(wavBlob);
 
     return {
-      audioBuffer,
       base64: wavBase64,
       blob: wavBlob,
       format: 'audio/wav',
-      sampleRate: audioBuffer.sampleRate,
-      channels: audioBuffer.numberOfChannels,
-      duration: audioBuffer.duration,
+      sampleRate: TARGET_SAMPLE_RATE,
+      channels: 1,
+      duration: samples.length / TARGET_SAMPLE_RATE,
       size: wavBlob.size
     };
   } catch (error) {
@@ -616,7 +634,13 @@ export const decodeAudioFileToBuffer = async input => {
 const blobToBase64 = blob => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onload = () => resolve(reader.result);
+    reader.onload = () => {
+      // A data URL beyond the engine's maximum string length comes back as an
+      // empty string, not as an error: fail now instead of attaching a file
+      // that is empty once sent.
+      if (!reader.result && blob.size > 0) reject(new Error('read-error'));
+      else resolve(reader.result);
+    };
     reader.onerror = reject;
     reader.readAsDataURL(blob);
   });

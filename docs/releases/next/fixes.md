@@ -37,3 +37,20 @@ names containing `&` display correctly.
 Audio attached to a chat with a vLLM model that has **Supports Audio** enabled was silently
 dropped: the model only saw the text of the message. vLLM models now receive the audio the same
 way OpenAI models do. Models without the flag are unaffected.
+
+## Long Videos Can Be Transcribed
+
+Transcribing an uploaded video failed for long recordings: the audio was extracted and shown as a
+`.wav` attachment, but sending it ended with "Could not decode this audio in your browser".
+
+- The audio extracted from a video is now a 16 kHz mono WAV, the format transcription streams
+  anyway. It is about six times smaller than before (1.9 MB instead of 11.5 MB per minute). For
+  videos longer than about 35 minutes the old attachment was more than the browser can hold and
+  arrived empty
+- A video whose audio is still too long to attach is refused when it is uploaded, not when it is
+  sent
+- A failed transcription now says why: the message of the transcription service ("Transcription
+  failed: …") instead of "Transcription failed. Please try again.". A model the user may not use
+  and a session that reached its maximum duration have their own messages
+- The extracted audio is 16 kHz mono also when it goes to a chat model that accepts audio instead
+  of being transcribed. That is plenty for speech, but music loses its high frequencies

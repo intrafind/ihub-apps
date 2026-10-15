@@ -523,6 +523,42 @@ describe('uploaded audio becomes the user message', () => {
     expect(message.audioData).toBeFalsy();
   });
 
+  test("a video's audio is decoded from its WAV Blob, not from the base64 string", async () => {
+    transcribeAudioBuffer.mockResolvedValue('Standup notes.');
+    const blob = new Blob(['RIFF'], { type: 'audio/wav' });
+    // Like UnifiedUploader hands it over: the Blob is not an enumerable field.
+    const attachment = { ...VIDEO_AUDIO };
+    Object.defineProperty(attachment, 'blob', { value: blob, enumerable: false });
+    renderApp();
+    await attach(attachment);
+    await send();
+
+    await waitFor(() => expect(mockStream.opened).toBe(1));
+    expect(decodeAudioFileToBuffer).toHaveBeenCalledTimes(1);
+    expect(decodeAudioFileToBuffer).toHaveBeenCalledWith(blob);
+  });
+
+  test('without a Blob (an attachment restored from a stored message) it decodes the base64', async () => {
+    transcribeAudioBuffer.mockResolvedValue('Standup notes.');
+    // What JSON makes of a Blob that was serialized with the attachment.
+    renderApp();
+    await attach({ ...VIDEO_AUDIO, blob: {} });
+    await send();
+
+    await waitFor(() => expect(mockStream.opened).toBe(1));
+    expect(decodeAudioFileToBuffer).toHaveBeenCalledWith(VIDEO_AUDIO.base64);
+  });
+
+  test('uploaded audio is decoded from its base64', async () => {
+    transcribeAudioBuffer.mockResolvedValue('Memo.');
+    renderApp();
+    await attach(AUDIO);
+    await send();
+
+    await waitFor(() => expect(mockStream.opened).toBe(1));
+    expect(decodeAudioFileToBuffer).toHaveBeenCalledWith(AUDIO.base64);
+  });
+
   test('several files each get a section; one without speech says so', async () => {
     transcribeAudioBuffer.mockResolvedValueOnce('First part.').mockResolvedValueOnce('');
     renderApp();

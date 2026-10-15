@@ -214,6 +214,30 @@ const UnifiedUploader = ({
         const baseFileName = file.name.replace(/\.[^/.]+$/, ''); // Remove extension
         const audioFileName = `${baseFileName}.wav`;
 
+        const data = {
+          type: 'audio',
+          source: 'local',
+          base64: audioData.base64,
+          fileName: audioFileName,
+          fileSize: audioData.size,
+          fileType: audioData.format,
+          extractedFromVideo: true,
+          originalVideoName: file.name,
+          duration: audioData.duration,
+          sampleRate: audioData.sampleRate,
+          channels: audioData.channels
+        };
+        // The WAV Blob travels with the attachment, so transcription decodes it
+        // directly instead of re-parsing the base64 string. Non-enumerable:
+        // attachments are JSON-serialized into the chat history, sessionStorage
+        // and the request body, where a Blob would turn into a bogus `{}`.
+        Object.defineProperty(data, 'blob', {
+          value: audioData.blob,
+          enumerable: false,
+          writable: true,
+          configurable: true
+        });
+
         return {
           preview: {
             type: 'audio',
@@ -223,19 +247,7 @@ const UnifiedUploader = ({
             extractedFrom: file.name,
             duration: audioData.duration
           },
-          data: {
-            type: 'audio',
-            source: 'local',
-            base64: audioData.base64,
-            fileName: audioFileName,
-            fileSize: audioData.size,
-            fileType: audioData.format,
-            extractedFromVideo: true,
-            originalVideoName: file.name,
-            duration: audioData.duration,
-            sampleRate: audioData.sampleRate,
-            channels: audioData.channels
-          }
+          data
         };
       } catch (error) {
         console.error('Error extracting audio from video:', error);
