@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import { canonicalMimeType } from '../utils/fileProcessing';
 
 /**
  * Generic uploader component that handles file selection, validation and preview logic.
@@ -99,7 +100,10 @@ const Uploader = ({
       // Note: Some browsers may return empty string or incorrect MIME type for certain files
       // In such cases, we can fall back to extension-based validation
       const hasValidMimeType =
-        acceptAnyFile || acceptedMimeTypes.length === 0 || acceptedMimeTypes.includes(file.type);
+        acceptAnyFile ||
+        acceptedMimeTypes.length === 0 ||
+        acceptedMimeTypes.includes(file.type) ||
+        acceptedMimeTypes.includes(canonicalMimeType(file.type, file.name));
 
       if (!hasValidMimeType) {
         // If MIME type doesn't match, try checking file extension as fallback

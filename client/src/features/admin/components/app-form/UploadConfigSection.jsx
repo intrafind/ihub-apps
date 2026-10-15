@@ -86,7 +86,7 @@ const UPLOAD_TYPE_CONFIGS = {
     formatsLabel: ['admin.apps.edit.supportedAudioFormats', 'Supported Audio Formats'],
     defaultMaxFileSizeMB: 20,
     maxFileSizeUpperBound: 2000,
-    defaultFormats: ['audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/flac', 'audio/ogg']
+    defaultFormats: ['audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/flac', 'audio/ogg', 'audio/mp4']
   },
   videoUpload: {
     categoryType: 'video',

@@ -146,6 +146,58 @@ export const getMimeTypesByCategories = categories => {
   return [...new Set(mimeTypes)]; // Remove duplicates
 };
 
+// Browsers report one audio format under several MIME types: Chrome and Safari on macOS call a
+// QuickTime ".m4a" export `audio/x-m4a`, Windows browsers call a ".wav" `audio/x-wav`. The
+// configured formats only list the canonical type, so these map to it.
+const MIME_TYPE_ALIASES = {
+  'audio/x-m4a': 'audio/mp4',
+  'audio/m4a': 'audio/mp4',
+  'audio/x-wav': 'audio/wav',
+  'audio/wave': 'audio/wav',
+  'audio/vnd.wave': 'audio/wav',
+  'audio/x-flac': 'audio/flac'
+};
+
+/**
+ * Canonical MIME type of a file: known aliases map to the type the configuration lists
+ * (`audio/x-m4a` → `audio/mp4`). When the browser reports no type (or the generic
+ * `application/octet-stream`) the type comes from the file extension, as far as the extension
+ * identifies exactly one audio/video type — `.mp4` is both `audio/mp4` and `video/mp4`, so it
+ * stays as reported. Every other type is returned unchanged.
+ * @param {string} type - MIME type as reported by the browser (`file.type`)
+ * @param {string} [fileName] - File name, used when the type is empty or generic
+ * @returns {string} Canonical MIME type
+ */
+export const canonicalMimeType = (type, fileName = '') => {
+  const alias = MIME_TYPE_ALIASES[(type || '').trim().toLowerCase()];
+  if (alias) return alias;
+  if (type && type !== 'application/octet-stream') return type;
+
+  const dot = fileName.lastIndexOf('.');
+  if (dot <= 0) return type || '';
+  const extension = fileName.slice(dot).toLowerCase();
+  const matches = Object.entries(getConfig().mimeTypes || {}).filter(
+    ([, details]) =>
+      (details.category === 'audio' || details.category === 'video') &&
+      details.extensions?.includes(extension)
+  );
+  return matches.length === 1 ? matches[0][0] : type || '';
+};
+
+/**
+ * Replace the MIME type in the prefix of a data URL (`data:audio/x-m4a;base64,…` →
+ * `data:audio/mp4;base64,…`). The adapters strip that prefix with a pattern that only knows
+ * plain type names, so an alias or the `application/octet-stream` a browser puts there for an
+ * empty type would reach the model provider as part of the audio.
+ * @param {string} dataUrl - Data URL as produced by `FileReader.readAsDataURL`
+ * @param {string} mimeType - MIME type the prefix should carry
+ * @returns {string} Data URL with the given MIME type
+ */
+export const withDataUrlMimeType = (dataUrl, mimeType) =>
+  mimeType && !dataUrl.startsWith(`data:${mimeType};`)
+    ? dataUrl.replace(/^data:[^;,]*/, `data:${mimeType}`)
+    : dataUrl;
+
 // Legacy export for backward compatibility - returns all document MIME types (text merged into documents)
 export const SUPPORTED_TEXT_FORMATS = getMimeTypesByCategories(['documents']);
 
