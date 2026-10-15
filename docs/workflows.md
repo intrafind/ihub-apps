@@ -297,8 +297,10 @@ the step as suggestions. The step's card says **No output set** while it has non
 - **It is required.** A workflow with an end step without an output is refused when it is saved,
   and a run that reaches such a step fails with a message that names the step.
 - A variable that was never set (a branch that did not run) gives an empty output, not an error.
-- An end step's own `outputFormat` can still reduce everything it passes on to a single value
-  (`text` always does, `raw` when there is exactly one key); that value is then the answer.
+- An end step's own `outputFormat` shapes what is passed on next to the answer, never where the
+  answer is: it is always the `output` of the result. `json` (the default) passes the answer and
+  the additional information, `raw` the answer alone as it is, and `text` the answer alone as text
+  (a JSON answer is written out).
 
 ## Chat integration
 
@@ -363,10 +365,18 @@ which no code ever read. For an end step without an `output` it takes, in this o
    named none of them as its answer used to give them all as one JSON object, and it still does.
    The migration logs these end steps; name the single answer in the workflow editor if you want to.
 
-An end step that passes on nothing that can be named, or that maps a key to a literal instead of to
-a `$.` path, cannot be decided: it is listed in the server log and left without an output. The
-workflow keeps loading, a run that reaches that step fails with a message that names it, and it
-cannot be saved until you set the step's Output in the visual editor.
+The variables of an end step that passes on everything are the ones the steps of the workflow
+define, as the visual editor lists them: the output variable of a step, what a transform sets, the
+counter of a loop, the values a start step defaults, and so on. A path that starts at the run
+state (`$.executionId`, `$.data.x`) keeps its meaning; one that starts at nothing (`$.finalReport`)
+never found anything and names the variable.
+
+Some end steps cannot be decided: one that passes on nothing that can be named, one that maps a key
+to a literal instead of to a `$.` path (also when that key is the `primaryOutput`), and one that
+passes on everything of a workflow with a planner, a memory or inbox finalizer or a quote
+validator, whose variables cannot all be listed. They are listed in the server log and left
+without an output. The workflow keeps loading, a run that reaches that step fails with a message
+that names it, and it cannot be saved until you set the step's Output in the visual editor.
 
 What callers receive changes in one way: for MCP and A2A, a JSON answer now arrives as JSON
 (`structuredContent`, a `data` part) next to the text, and the answer is the Output only, not the

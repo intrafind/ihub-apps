@@ -20,7 +20,9 @@ editor. Workflows that you or your integrators create through the API need an `o
 `config` of every end step, a variable or text, or an object of fields.
 
 For MCP and A2A, the answer is now the Output only, and a JSON answer arrives as JSON (structured
-content, a data part) next to the text. `chatIntegration.passthroughResult` is removed: it never had
+content, a data part) next to the text. The **Output format** of an end step no longer replaces the
+result: the answer stays in `output`, with `raw` and `text` leaving out the additional information
+(`text` writes a JSON answer out). `chatIntegration.passthroughResult` is removed: it never had
 an effect, as a workflow called from chat always showed its answer as it is.
 
 ## Upload Size Limits Apply per File Type
