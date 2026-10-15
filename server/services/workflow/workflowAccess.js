@@ -87,9 +87,10 @@ export function mentionAccess({ user, app, workflow }) {
  * A2A gateways and an `@mention`. Those last three check on their own first and
  * pass the same user, so the two checks agree.
  *
- * Inside an app (`app` given) it is the mention rule: the app lists the
- * workflow and the user's groups grant it. Without an app, such as a direct
- * call of the tool endpoint, the user's groups alone decide.
+ * Inside an app (`app` is a chat app's configuration) it is the mention rule:
+ * the app lists the workflow and the user's groups grant it. Without an app,
+ * such as a direct call of the tool endpoint or a step of a workflow that no
+ * chat started, the user's groups alone decide.
  *
  * A call that carries no user, which is every call that did not come from a
  * person, has no permissions and is refused.
@@ -101,6 +102,19 @@ export function mentionAccess({ user, app, workflow }) {
  * @returns {boolean}
  */
 export function runnerAccess({ user, app, workflow }) {
-  if (app) return mentionAccess({ user, app, workflow }).allowed;
+  if (isChatApp(app)) return mentionAccess({ user, app, workflow }).allowed;
   return Boolean(workflow?.id) && filterByPermissions([workflow], user).length > 0;
+}
+
+/**
+ * Whether `app` is a chat app's configuration. One names itself. The context a
+ * workflow step passes on is not one: a tool node or an agent step hands the
+ * runner `{ _skillIds: [...] }` and the like even when no app is behind the
+ * run, and that has no workflows list to hold a workflow against.
+ *
+ * @param {Object|null|undefined} app
+ * @returns {boolean}
+ */
+function isChatApp(app) {
+  return Boolean(app) && typeof app.id === 'string' && app.id !== '';
 }

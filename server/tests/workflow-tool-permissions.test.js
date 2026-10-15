@@ -83,6 +83,31 @@ describe('runnerAccess', () => {
     assert.equal(runnerAccess({ user: ANONYMOUS, workflow: WORKFLOW }), false);
   });
 
+  it('does not take the context of a workflow step for an app: the user alone decides', () => {
+    // What a tool node or an agent step hands the runner when no chat is behind the run
+    const stepContext = { _skillIds: [] };
+    assert.equal(runnerAccess({ user: PERMITTED, app: stepContext, workflow: WORKFLOW }), true);
+    assert.equal(runnerAccess({ user: WILDCARD, app: stepContext, workflow: WORKFLOW }), true);
+    assert.equal(
+      runnerAccess({ user: NO_PERMISSIONS, app: stepContext, workflow: WORKFLOW }),
+      false
+    );
+    assert.equal(runnerAccess({ user: undefined, app: stepContext, workflow: WORKFLOW }), false);
+  });
+
+  it('still holds a step that runs for a chat to the apps list, which carries the app along', () => {
+    const forChat = { ...APP, _skillIds: [] };
+    assert.equal(runnerAccess({ user: PERMITTED, app: forChat, workflow: WORKFLOW }), true);
+    assert.equal(
+      runnerAccess({
+        user: PERMITTED,
+        app: { id: 'chat', workflows: [], _skillIds: [] },
+        workflow: WORKFLOW
+      }),
+      false
+    );
+  });
+
   it('inside an app also needs the app to list the workflow', () => {
     assert.equal(runnerAccess({ user: PERMITTED, app: APP, workflow: WORKFLOW }), true);
     assert.equal(
