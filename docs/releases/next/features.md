@@ -53,3 +53,41 @@ file now has a **Save audio** button in the attachment list, so the audio can be
 - Audio files that users upload themselves have no such button, they already have the file
 - In an app with transcription the audio is replaced by its transcript once the message is sent,
   so save it before sending
+
+## Upload Videos up to 50 GB and Transcribe an Hour by Default
+
+Half an hour of video is often 10 GB and more. A browser cannot read more than about 2 GB of a
+file into memory, so the video limit of 2000 MB could never be reached: larger videos failed
+however it was set. An MP4 or MOV is now read for its audio only. The index and the audio track
+are read from the file and the picture is skipped, so the size of the video no longer matters.
+
+- The video limit (`upload.videoUpload.maxFileSizeMB`) can now be set up to 51200 MB (50 GB) in the
+  app editor and in the app configuration. The default stays 50 MB
+- MP4 and MOV videos with AAC audio (including HE-AAC) or uncompressed PCM audio work at any size
+  up to the limit. Small ones are extracted faster too, and the memory used follows the audio (30
+  minutes of AAC take about 30 MB), not the video
+- Other containers (WebM, MKV, AVI, …), MP4 and MOV videos with other audio (Opus, AC-3, ALAC, …)
+  and fragmented MP4 files work up to 2 GB as before. Above that, users get a message that says
+  which formats work: videos larger than 2 GB are supported as MP4 or MOV with AAC or PCM audio
+- A video that is sent to the model as it is (audio extraction off) is limited to 2 GB as well
+- Apps with transcription now take 60 minutes of audio by default, so a video of half an hour
+  transcribes out of the box. `transcription.maxDurationSeconds` was 900 seconds; the maximum stays
+  7200. Apps that already set the value keep it, apps that never did get the new default
+- For transcription models that return the transcript in one piece, such as
+  `gemini-3.5-transcribe`, the server now buffers up to 128 MiB of audio per connection (about 70
+  minutes, before 32 MiB) and 512 MiB in all (before 256 MiB). Installations that set
+  `speech.realtime.maxBufferedAudioBytes` or `maxBufferedAudioBytesTotal` keep their values
+- A live recording of the full hour no longer runs into the server's session limit. The session
+  cap (`speech.realtime.maxSessionSeconds`) was 3600 seconds from the connection, as long as the
+  longest recording, so it could end a session before the automatic stop or while the transcript
+  was still being made, and the recording was lost. The default is now 4200 seconds (the hour plus
+  10 minutes). Installations that set `maxSessionSeconds` keep their value and have to keep it
+  larger than the longest `transcription.maxDurationSeconds` of their apps plus a margin
+- An MP4 or MOV is checked before its audio is read. An index that points outside of the file or
+  asks for more audio than the file holds is refused at once, where it could freeze the tab. The
+  video's edit list is followed: a recording that was trimmed (for example in QuickTime) is
+  transcribed as trimmed, not with the audio around the cut, and the encoder's delay at the start
+  of AAC audio is dropped. Fragmented MP4 files are no longer read from their index alone, which
+  cut the audio off, and uncompressed audio that is unsigned and wider than 8 bits is no longer
+  read as signed. Such files are decoded from the whole file as before (up to 2 GB) and fail with
+  the message for videos larger than 2 GB above that

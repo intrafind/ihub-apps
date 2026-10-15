@@ -622,8 +622,38 @@ describe('uploaded audio becomes the user message', () => {
   });
 
   test('audio over the length limit is refused before transcribing', async () => {
-    decodeAudioFileToBuffer.mockResolvedValue({ duration: 1200 });
+    // The limit is an hour unless the app sets its own
+    decodeAudioFileToBuffer.mockResolvedValue({ duration: 4000 });
     renderApp();
+    await attach(AUDIO);
+    await send();
+
+    await waitFor(() =>
+      expect(systemMessages()[0]?.content).toBe(
+        'This audio is 4000s long, which exceeds the 3600s limit for transcription.'
+      )
+    );
+    expect(transcribeAudioBuffer).not.toHaveBeenCalled();
+    expect(mockStream.opened).toBe(0);
+  });
+
+  test('half an hour of audio is within the default limit', async () => {
+    decodeAudioFileToBuffer.mockResolvedValue({ duration: 1800 });
+    transcribeAudioBuffer.mockResolvedValue('We ship on Friday.');
+    renderApp();
+    await attach(AUDIO);
+    await send();
+
+    await waitFor(() => expect(transcribeAudioBuffer).toHaveBeenCalledTimes(1));
+    expect(systemMessages()).toHaveLength(0);
+  });
+
+  test("an app's own limit is kept", async () => {
+    decodeAudioFileToBuffer.mockResolvedValue({ duration: 1200 });
+    renderApp({
+      ...TRANSCRIPTION_APP,
+      transcription: { enabled: true, modelId: 'voxtral', streaming: true, maxDurationSeconds: 900 }
+    });
     await attach(AUDIO);
     await send();
 
@@ -633,7 +663,6 @@ describe('uploaded audio becomes the user message', () => {
       )
     );
     expect(transcribeAudioBuffer).not.toHaveBeenCalled();
-    expect(mockStream.opened).toBe(0);
   });
 });
 

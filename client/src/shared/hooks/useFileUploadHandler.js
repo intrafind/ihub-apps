@@ -189,7 +189,7 @@ export function useFileUploadHandler() {
         trackedChanges: fileConfig?.trackedChanges,
         comments: fileConfig?.comments,
         speakerNotes: fileConfig?.speakerNotes,
-        maxFileSizeMB: fileConfig?.maxFileSizeMB || 5,
+        maxFileSizeMB: fileConfig?.maxFileSizeMB || 20,
         supportedFormats: fileConfig?.supportedFormats || [
           'text/plain',
           'text/markdown',

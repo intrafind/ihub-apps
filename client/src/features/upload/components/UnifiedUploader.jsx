@@ -17,7 +17,8 @@ import {
   loadMimetypesConfig,
   canonicalMimeType,
   withDataUrlMimeType,
-  readFileAsDataURL
+  readFileAsDataURL,
+  WHOLE_FILE_READ_LIMIT_BYTES
 } from '../utils/fileProcessing';
 import { extractionOptionsOf } from '../utils/extractionOptions';
 import { isAbortError } from '../../../utils/abortable';
@@ -267,7 +268,10 @@ const UnifiedUploader = ({
     }
 
     // If audio extraction is not enabled, treat as regular file
-    // (Some models might support video directly)
+    // (Some models might support video directly). The whole video is read into
+    // a data URL, which a browser cannot do beyond ~2 GB (and a request could
+    // not carry anyway): only audio extraction takes videos that large.
+    if (file.size > WHOLE_FILE_READ_LIMIT_BYTES) throw new Error('video-too-large-to-attach');
     const mimeType = canonicalMimeType(file.type, file.name);
     const dataUrl = await readFileAsDataURL(file, {
       signal,
@@ -316,6 +320,20 @@ const UnifiedUploader = ({
     // Check if file upload is disabled
     if (!isFileUploadEnabled && isListed(TEXT_FORMATS)) {
       throw new Error('file-upload-disabled');
+    }
+
+    // The Uploader let the file in against the largest limit of all types
+    // (`MAX_FILE_SIZE_MB`): it is held to the limit of its own type, routed as
+    // below
+    const typeLimitMB = isListed(IMAGE_FORMATS)
+      ? imageConfig.maxFileSizeMB
+      : isListed(AUDIO_FORMATS)
+        ? audioConfig.maxFileSizeMB
+        : isListed(VIDEO_FORMATS)
+          ? videoConfig.maxFileSizeMB
+          : fileConfig.maxFileSizeMB;
+    if (typeLimitMB && file.size > typeLimitMB * 1024 * 1024) {
+      throw Object.assign(new Error('file-too-large'), { params: { maxSizeMB: typeLimitMB } });
     }
 
     // Handle image files
@@ -386,13 +404,17 @@ const UnifiedUploader = ({
     return allFormats;
   })();
 
-  const getErrorMessage = code => {
+  // `params`: what the error that raised `code` carried (see Uploader)
+  const getErrorMessage = (code, params) => {
     switch (code) {
-      case 'file-too-large':
+      case 'file-too-large': {
+        // The limit of the file's own type, or the largest one for a file the gate stopped
+        const maxSize = params?.maxSizeMB ?? MAX_FILE_SIZE_MB;
         return t('errors.fileTooLarge', {
-          maxSize: MAX_FILE_SIZE_MB,
-          defaultValue: `File too large. Maximum size is ${MAX_FILE_SIZE_MB}MB.`
+          maxSize,
+          defaultValue: `File too large. Maximum size is ${maxSize}MB.`
         });
+      }
       case 'unsupported-format':
         return t('errors.unsupportedFormat', {
           formats: formatList,
@@ -432,6 +454,21 @@ const UnifiedUploader = ({
           'errors.videoAudioExtractionError',
           'Error extracting audio from video. Please ensure the video contains an audio track.'
         );
+      case 'video-unsupported-large-container':
+        return t(
+          'errors.videoUnsupportedLargeContainer',
+          'Videos larger than 2 GB are supported as MP4 or MOV. Convert this video to MP4 or MOV, or use a smaller file.'
+        );
+      case 'video-large-audio-unsupported':
+        return t(
+          'errors.videoLargeAudioUnsupported',
+          'The audio of this large video could not be read. Videos larger than 2 GB need AAC or uncompressed (PCM) audio in an MP4 or MOV file, and a browser that can play that audio.'
+        );
+      case 'video-too-large-to-attach':
+        return t(
+          'errors.videoTooLargeToAttach',
+          'This video is too large to be attached as it is. Turn on audio extraction for the app, or use a video smaller than 2 GB.'
+        );
       case 'file-upload-disabled':
         return t('errors.fileUploadDisabled', 'File upload is disabled for this application.');
       default:
@@ -453,6 +490,7 @@ const UnifiedUploader = ({
     >
       {({
         error,
+        errorParams,
         isProcessing,
         progress,
         cancelProcessing,
@@ -507,7 +545,9 @@ const UnifiedUploader = ({
 
             {/* Error message */}
             {error && (
-              <div className="text-red-500 text-sm mb-2 px-2">{getErrorMessage(error)}</div>
+              <div className="text-red-500 text-sm mb-2 px-2">
+                {getErrorMessage(error, errorParams)}
+              </div>
             )}
 
             {/* Wrapped children (form + file list) */}

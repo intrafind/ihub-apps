@@ -90,7 +90,7 @@
     "enabled": true,
     "fileUpload": {
       "enabled": true,
-      "maxFileSizeMB": 5,
+      "maxFileSizeMB": 20,
       "supportedFormats": [
         "text/plain",
         "text/markdown",

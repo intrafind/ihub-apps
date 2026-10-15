@@ -2047,7 +2047,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
           finishRecording((err.partialText || '').trim(), err);
         },
         onTick: setRecordElapsed,
-        maxDurationSeconds: app?.transcription?.maxDurationSeconds || 900,
+        maxDurationSeconds: app?.transcription?.maxDurationSeconds || 3600,
         onMaxDuration: () => {
           if (liveSessionRef.current === session) stopRecordingAndSend();
         }
@@ -2120,7 +2120,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
         return;
       }
       const streaming = app?.transcription?.streaming !== false;
-      const maxDurationSeconds = app?.transcription?.maxDurationSeconds || 900;
+      const maxDurationSeconds = app?.transcription?.maxDurationSeconds || 3600;
 
       // The composer's content is the message being built now.
       setInput('');
