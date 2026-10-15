@@ -7,7 +7,8 @@
  * whole result: the `chatIntegration.primaryOutput` a workflow named, else the
  * first conventional name (`finalReport`, `report`, …), else everything as
  * JSON. The migration gives each end step the output that rule would have
- * picked, and drops `primaryOutput`.
+ * picked (for the last, an object of what the end step passes on), and drops
+ * `primaryOutput` and `passthroughResult`.
  *
  * Run: node --test server/tests/migration-v166.test.js
  */
@@ -283,8 +284,8 @@ describe('V166 every workflow end step gets an output', () => {
     });
   });
 
-  describe('what needs an admin', () => {
-    it('is listed, and left without an output', async () => {
+  describe('an end step with no single answer', () => {
+    it('gets an object of what it passes on: the result it gave before, still JSON', async () => {
       const dir = await freshDir({
         'custom.json': workflow({
           id: 'custom',
@@ -294,12 +295,17 @@ describe('V166 every workflow end step gets an output', () => {
       const ctx = makeCtx(dir);
       await up(ctx);
       const wf = await readWorkflow(dir, 'custom.json');
-      assert.equal(outputOf(wf), undefined);
-      const warning = ctx.logs.find(([level]) => level === 'warn');
-      assert.match(warning[1], /custom \(end\)/);
-      assert.match(warning[1], /Set the Output/);
-      // It is refused on save until an admin sets one
-      assert.equal(workflowConfigSchema.safeParse(wf).success, false);
+      assert.deepEqual(outputOf(wf), { alpha: 'alpha', beta: 'beta' });
+      assert.equal(workflowConfigSchema.safeParse(wf).success, true);
+      // It says so, so an admin can name the one that is the answer
+      const note = ctx.logs.find(
+        ([level, text]) => level === 'info' && /No single answer/.test(text)
+      );
+      assert.match(note[1], /custom \(end\)/);
+      assert.equal(
+        ctx.logs.some(([level]) => level === 'warn'),
+        false
+      );
     });
 
     it('does not guess from a variable that merely sits in the list', async () => {
@@ -307,7 +313,95 @@ describe('V166 every workflow end step gets an output', () => {
         'a.json': workflow({ id: 'a', end: { outputVariables: ['answer', 'classification'] } })
       });
       await up(makeCtx(dir));
-      assert.equal(outputOf(await readWorkflow(dir, 'a.json')), undefined);
+      assert.deepEqual(outputOf(await readWorkflow(dir, 'a.json')), {
+        answer: 'answer',
+        classification: 'classification'
+      });
+    });
+
+    it('takes the variables the steps write for an end step that passes on all of them', async () => {
+      const dir = await freshDir({
+        'all.json': workflow({
+          id: 'all',
+          steps: [node('p', 'prompt', { outputVariable: 'notes' })],
+          end: {}
+        })
+      });
+      await up(makeCtx(dir));
+      assert.deepEqual(outputOf(await readWorkflow(dir, 'all.json')), { notes: 'notes' });
+    });
+
+    it('takes the mapped keys of an end step with an output mapping, as the paths they map to', async () => {
+      const dir = await freshDir({
+        'mapped.json': workflow({
+          id: 'mapped',
+          end: {
+            outputMapping: { verdict: '$.data.check', sources: '$.nodeOutputs.search.results' }
+          }
+        })
+      });
+      await up(makeCtx(dir));
+      assert.deepEqual(outputOf(await readWorkflow(dir, 'mapped.json')), {
+        verdict: '$.data.check',
+        sources: '$.nodeOutputs.search.results'
+      });
+    });
+
+    it('is still decided by a conventional name before it is an object', async () => {
+      const dir = await freshDir({
+        'a.json': workflow({ id: 'a', end: { outputVariables: ['alpha', 'report'] } })
+      });
+      await up(makeCtx(dir));
+      assert.equal(outputOf(await readWorkflow(dir, 'a.json')), 'report');
+    });
+  });
+
+  describe('what needs an admin', () => {
+    it('is an end step that passes on nothing that can be named: listed, left without an output', async () => {
+      const dir = await freshDir({
+        'empty.json': workflow({ id: 'empty', end: { outputVariables: [] } })
+      });
+      const ctx = makeCtx(dir);
+      await up(ctx);
+      const wf = await readWorkflow(dir, 'empty.json');
+      assert.equal(outputOf(wf), undefined);
+      const warning = ctx.logs.find(([level]) => level === 'warn');
+      assert.match(warning[1], /empty \(end\)/);
+      assert.match(warning[1], /Set the Output/);
+      // It is refused on save until an admin sets one
+      assert.equal(workflowConfigSchema.safeParse(wf).success, false);
+    });
+
+    it('is an end step that maps a key to a literal, which an output cannot say', async () => {
+      const dir = await freshDir({
+        'literal.json': workflow({
+          id: 'literal',
+          end: { outputMapping: { verdict: '$.data.check', label: 'fixed text' } }
+        })
+      });
+      const ctx = makeCtx(dir);
+      await up(ctx);
+      assert.equal(outputOf(await readWorkflow(dir, 'literal.json')), undefined);
+      assert.match(ctx.logs.find(([level]) => level === 'warn')[1], /literal \(end\)/);
+    });
+  });
+
+  describe('chatIntegration.passthroughResult', () => {
+    it('is removed: no code ever read it', async () => {
+      const dir = await freshDir({
+        'a.json': workflow({
+          id: 'a',
+          end: { output: 'report' },
+          chatIntegration: { enabled: true, passthroughResult: false, outputFormat: 'text' }
+        })
+      });
+      const ctx = makeCtx(dir);
+      await up(ctx);
+      assert.deepEqual((await readWorkflow(dir, 'a.json')).chatIntegration, {
+        enabled: true,
+        outputFormat: 'text'
+      });
+      assert.deepEqual(ctx.writes, ['workflows/a.json']);
     });
   });
 
@@ -338,18 +432,21 @@ describe('V166 every workflow end step gets an output', () => {
         end: { outputVariables: ['finalReport'] },
         chatIntegration: { primaryOutput: 'finalReport' }
       }),
-      'custom.json': workflow({ id: 'custom', end: { outputVariables: ['alpha', 'beta'] } })
+      'custom.json': workflow({ id: 'custom', end: { outputVariables: ['alpha', 'beta'] } }),
+      'empty.json': workflow({ id: 'empty', end: { outputVariables: [] } })
     });
     await up(makeCtx(dir));
     const before = {
       a: await readWorkflow(dir, 'a.json'),
-      custom: await readWorkflow(dir, 'custom.json')
+      custom: await readWorkflow(dir, 'custom.json'),
+      empty: await readWorkflow(dir, 'empty.json')
     };
     const again = makeCtx(dir);
     await up(again);
     assert.deepEqual(again.writes, []);
     assert.deepEqual(await readWorkflow(dir, 'a.json'), before.a);
     assert.deepEqual(await readWorkflow(dir, 'custom.json'), before.custom);
+    assert.deepEqual(await readWorkflow(dir, 'empty.json'), before.empty);
   });
 });
 
@@ -381,6 +478,7 @@ describe('the workflows that ship with iHub', () => {
         `${name}: ${result.error?.issues.map(i => `${i.path.join('.')}: ${i.message}`).join('; ')}`
       );
       assert.equal('primaryOutput' in (wf.chatIntegration || {}), false, name);
+      assert.equal('passthroughResult' in (wf.chatIntegration || {}), false, name);
     }
   });
 

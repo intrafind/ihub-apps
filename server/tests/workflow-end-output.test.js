@@ -20,6 +20,7 @@ import assert from 'node:assert/strict';
 
 import { EndNodeExecutor } from '../services/workflow/executors/EndNodeExecutor.js';
 import { finalOutputOf } from '../services/workflow/finalOutput.js';
+import { endOutputLabel, hasEndOutput } from '../../shared/workflowEndOutput.js';
 import {
   WorkflowEngine,
   getWorkflowEngine,
@@ -125,12 +126,145 @@ describe('an end step resolves its output', () => {
   });
 });
 
+describe('an end step with an object as its output', () => {
+  it('gives an object with a field for each entry, each resolved like a text output', async () => {
+    const { output } = await endResult(
+      {
+        output: {
+          topic: 'topic',
+          summary: '{{summary}}',
+          verdict: 'review.verdict',
+          sources: '$.data.review.sources',
+          line: 'Done: {{count}} items'
+        }
+      },
+      {
+        topic: 'wind',
+        summary: 'All good',
+        count: 3,
+        review: { verdict: 'ok', sources: ['a', 'b'] }
+      }
+    );
+    assert.deepEqual(output.output, {
+      topic: 'wind',
+      summary: 'All good',
+      verdict: 'ok',
+      sources: ['a', 'b'],
+      line: 'Done: 3 items'
+    });
+  });
+
+  it('keeps the type of a field: an object stays an object, a list a list', async () => {
+    const { output } = await endResult(
+      { output: { items: 'items', record: '{{record}}' } },
+      { items: [1, 2], record: { a: 1 } }
+    );
+    assert.deepEqual(output.output, { items: [1, 2], record: { a: 1 } });
+  });
+
+  it('leaves out a field whose variable was never set, as listed variables always were', async () => {
+    const { output } = await endResult(
+      { output: { present: 'present', absent: 'absent', gone: '{{gone}}' } },
+      { present: 'here' }
+    );
+    assert.deepEqual(output.output, { present: 'here' });
+  });
+
+  it('is an empty object when none of the fields is there: the run still ends', async () => {
+    const { output } = await endResult({ output: { absent: 'absent' } }, {});
+    assert.deepEqual(output.output, {});
+  });
+
+  it('may nest an object in a field', async () => {
+    const { output } = await endResult(
+      { output: { report: 'report', meta: { topic: 'topic', missing: 'missing' } } },
+      { report: 'R', topic: 'wind' }
+    );
+    assert.deepEqual(output.output, { report: 'R', meta: { topic: 'wind' } });
+  });
+
+  it('is the answer next to the additional information, and wins over a variable named output', async () => {
+    const { output } = await endResult(
+      { output: { topic: 'topic' }, outputVariables: ['topic', 'output'] },
+      { topic: 'wind', output: 'not this' }
+    );
+    assert.deepEqual(output, { topic: 'wind', output: { topic: 'wind' } });
+  });
+
+  it('is JSON to everything that reads the answer', async () => {
+    const { output } = await endResult({ output: { topic: 'topic' } }, { topic: 'wind' });
+    assert.deepEqual(answerOf(output), { topic: 'wind' });
+    assert.equal(isJsonAnswer(output), true);
+    assert.deepEqual(JSON.parse(chatAnswerOf(output)), { topic: 'wind' });
+    assert.equal(chatAnswerFormat(output, 'markdown'), 'json');
+  });
+
+  it('does not take a field name that would reach into the prototype', async () => {
+    const spec = JSON.parse('{"__proto__": "topic", "constructor": "topic", "ok": "topic"}');
+    // The name is refused when saving; a run that reaches it anyway leaves it out
+    assert.equal(hasEndOutput(spec), false);
+    const executor = new EndNodeExecutor();
+    assert.deepEqual(executor.resolveOutputSpec(spec, { data: { topic: 'wind' } }), { ok: 'wind' });
+    assert.equal({}.wind, undefined, 'and nothing else was touched');
+  });
+
+  it('does not read a member of the prototype through a path', async () => {
+    const { output } = await endResult(
+      { output: { name: 'topic.constructor.name', length: 'topic.length' } },
+      { topic: 'wind' }
+    );
+    assert.deepEqual(output.output, { length: 4 });
+  });
+});
+
+describe('what counts as an output', () => {
+  it('is a text that is not blank, or an object whose fields all are', () => {
+    for (const spec of ['report', ' report ', '{{x}}', { a: 'a' }, { a: { b: 'b' } }]) {
+      assert.equal(hasEndOutput(spec), true, JSON.stringify(spec));
+    }
+  });
+
+  it('is not nothing, a blank text, an empty object, a blank field or a list', () => {
+    for (const spec of [
+      undefined,
+      null,
+      42,
+      '',
+      '   ',
+      {},
+      { a: '' },
+      { a: '  ' },
+      { '': 'a' },
+      { a: {} },
+      { a: ['x'] },
+      ['x']
+    ]) {
+      assert.equal(hasEndOutput(spec), false, JSON.stringify(spec));
+    }
+  });
+
+  it('is not an object nested deeper than anyone writes one', () => {
+    let spec = 'x';
+    for (let depth = 0; depth < 12; depth += 1) spec = { a: spec };
+    assert.equal(hasEndOutput(spec), false);
+  });
+
+  it('is labeled with its text, or with the names of its fields', () => {
+    assert.equal(endOutputLabel(' report '), 'report');
+    assert.equal(endOutputLabel({ topic: 't', report: 'r' }), '{ topic, report }');
+    assert.equal(endOutputLabel({ a: 'a', b: 'b', c: 'c', d: 'd' }), '{ a, b, c, … }');
+    assert.equal(endOutputLabel({}), '');
+    assert.equal(endOutputLabel(undefined), '');
+  });
+});
+
 describe('an end step without an output', () => {
   it('fails, and says which step and what to do', async () => {
-    for (const config of [{}, { output: '' }, { output: '   ' }, { output: 42 }]) {
+    for (const config of [{}, { output: '' }, { output: '   ' }, { output: 42 }, { output: {} }]) {
       await assert.rejects(endResult(config, { finalReport: 'x' }), error => {
         assert.equal(error.code, 'END_OUTPUT_MISSING');
         assert.match(error.message, /end step 'end' has no output/);
+        assert.match(error.message, /or to an object of fields/);
         return true;
       });
     }
@@ -360,6 +494,20 @@ describe('saving a workflow', () => {
     }
   });
 
+  it('takes an object as the output, and refuses one that is empty or has a blank field', () => {
+    assert.equal(
+      workflowConfigSchema.safeParse(
+        workflow({ output: { topic: 'topic', report: 'finalReport' } })
+      ).success,
+      true
+    );
+    for (const output of [{}, { topic: '' }, { '': 'topic' }, { topic: ['x'] }, ['topic']]) {
+      const result = workflowConfigSchema.safeParse(workflow({ output }));
+      assert.equal(result.success, false, JSON.stringify(output));
+      assert.match(result.error.issues[0].message, /or to an object of fields/);
+    }
+  });
+
   it('refuses a workflow in which only one of two end nodes has an output', () => {
     const wf = workflow({ output: 'report' });
     wf.nodes.push(node('end-b', 'end', {}));
@@ -376,6 +524,15 @@ describe('saving a workflow', () => {
     });
     assert.equal(result.success, true);
     assert.equal('primaryOutput' in result.data.chatIntegration, false);
+  });
+
+  it('no longer takes a passthrough result: the answer is always shown as it is', () => {
+    const result = workflowConfigSchema.safeParse({
+      ...workflow({ output: 'report' }),
+      chatIntegration: { enabled: true, passthroughResult: true }
+    });
+    assert.equal(result.success, true);
+    assert.equal('passthroughResult' in result.data.chatIntegration, false);
   });
 });
 
@@ -445,6 +602,16 @@ describe('a real run of the engine', () => {
     assert.deepEqual(event.output, { output: 'Only this' });
   });
 
+  it('completes with an object as the answer when the output is an object', async () => {
+    const event = await run(
+      { output: { topic: 'topic', summary: 'summary' } },
+      { topic: 'wind', summary: 'All good' }
+    );
+    assert.equal(event.event, 'workflow.complete');
+    assert.deepEqual(event.output.output, { topic: 'wind', summary: 'All good' });
+    assert.equal(isJsonAnswer(event.output), true);
+  });
+
   it('fails, saying what is missing, when the end step has no output', async () => {
     const event = await run({ outputVariables: ['summary'] }, { summary: 'An answer in disguise' });
     assert.equal(event.event, 'workflow.failed');
@@ -511,6 +678,18 @@ describe('a run through the chat runner', () => {
     const streamed = envelopes.filter(e => e.type === 'step/delta').map(e => e.data.content);
     return { result, told: meta?.data.extra.workflow, streamed: streamed.join('') };
   }
+
+  it('returns an object output as JSON with the fields of the end step, shown as JSON', async () => {
+    const { result, told, streamed } = await run(
+      workflow({ topic: 'topic', verdict: 'verdict' }, 'markdown'),
+      { topic: 'wind', verdict: 'ok' }
+    );
+    assert.equal(result.status, 'completed');
+    assert.deepEqual(result.output.output, { topic: 'wind', verdict: 'ok' });
+    assert.deepEqual(JSON.parse(result.outputText), { topic: 'wind', verdict: 'ok' });
+    assert.deepEqual(JSON.parse(streamed), { topic: 'wind', verdict: 'ok' });
+    assert.equal(told.outputFormat, 'json');
+  });
 
   it('returns a JSON answer as JSON, and tells the chat to show it as JSON', async () => {
     const answer = { verdict: 'ok', items: [1, 2] };

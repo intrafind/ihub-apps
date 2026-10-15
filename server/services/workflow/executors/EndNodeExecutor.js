@@ -10,13 +10,19 @@
 
 import { BaseNodeExecutor } from './BaseNodeExecutor.js';
 import renderTemplate from '../../templating/renderTemplate.js';
+import {
+  UNSAFE_OUTPUT_KEYS,
+  hasEndOutput,
+  isOutputObject
+} from '../../../../shared/workflowEndOutput.js';
 
 /**
  * End node configuration
  * @typedef {Object} EndNodeConfig
- * @property {string} output - The end step's output, the answer the workflow gives (the chat
+ * @property {string|Object} output - The end step's output, the answer the workflow gives (the chat
  *   shows exactly this): a variable (`finalReport`), a path into one (`report.markdown`), a state
- *   path (`$.data.finalReport`) or a text with variables (`{{summary}}`). Required.
+ *   path (`$.data.finalReport`) or a text with variables (`{{summary}}`); or an object of those,
+ *   `{ topic: 'topic', report: 'finalReport' }`, which gives a JSON object. Required.
  * @property {Object} [outputMapping] - Map state fields to output fields
  * @property {Array<string>} [includeFields] - Specific fields to include in output
  * @property {Array<string>} [excludeFields] - Fields to exclude from output
@@ -170,28 +176,53 @@ export class EndNodeExecutor extends BaseNodeExecutor {
   /**
    * The end step's output, from its `output` setting.
    *
-   * The setting is one of
+   * The setting is a text, or an object of texts. A text is one of
    *   - a state path: `$.data.finalReport`
    *   - a text with variables: `{{summary}}` or `Done: {{count}} items`. A text that
    *     is a single `{{variable}}` is the variable itself, so JSON stays JSON
    *   - a variable or a path into one: `finalReport`, `report.markdown`
+   * An object gives an object: each field is resolved like a text, and a field whose
+   * value is not there is left out of it.
    * A value that is not there yet (a branch that never set the variable) is an
    * empty output, not an error: the run still ends, the answer is just empty.
    *
    * @param {Object} node - The end node
    * @param {Object} state - Workflow state
-   * @returns {*} The output value: text, or any other value as it is
+   * @returns {*} The output value: text, an object, or any other value as it is
    * @throws {Error} `END_OUTPUT_MISSING` when the end step has no `output` set
    * @private
    */
   resolveAnswer(node, state) {
     const spec = node.config?.output;
-    if (typeof spec !== 'string' || !spec.trim()) {
+    if (!hasEndOutput(spec)) {
       const error = new Error(
-        `The end step '${node.id}' has no output. Set its Output to the variable that holds the answer.`
+        `The end step '${node.id}' has no output. Set its Output to the variable that holds the answer, or to an object of fields.`
       );
       error.code = 'END_OUTPUT_MISSING';
       throw error;
+    }
+
+    const value = this.resolveOutputSpec(spec, state);
+    return value === undefined || value === null ? '' : value;
+  }
+
+  /**
+   * One text or object of an `output` setting, resolved against the run.
+   *
+   * @param {string|Object} spec - A text, or an object of texts
+   * @param {Object} state - Workflow state
+   * @returns {*} The value; undefined or null when it is not there
+   * @private
+   */
+  resolveOutputSpec(spec, state) {
+    if (isOutputObject(spec)) {
+      const fields = {};
+      for (const [name, field] of Object.entries(spec)) {
+        if (UNSAFE_OUTPUT_KEYS.includes(name)) continue;
+        const value = this.resolveOutputSpec(field, state);
+        if (value !== undefined && value !== null) fields[name] = value;
+      }
+      return fields;
     }
 
     const text = spec.trim();
@@ -199,17 +230,10 @@ export class EndNodeExecutor extends BaseNodeExecutor {
     // A text that is a single `{{variable}}` is that variable, not a rendering
     // of it: JSON stays JSON. Only a text with more in it is built as text.
     const single = /^\{\{\s*([^#/@}][^}]*?)\s*\}\}$/.exec(text);
-    let value;
-    if (single) {
-      value = this.valueAt(data, single[1]);
-    } else if (text.includes('{{')) {
-      value = renderTemplate(text, data);
-    } else if (text.startsWith('$')) {
-      value = this.resolveVariable(text, state);
-    } else {
-      value = this.valueAt(data, text);
-    }
-    return value === undefined || value === null ? '' : value;
+    if (single) return this.valueAt(data, single[1]);
+    if (text.includes('{{')) return renderTemplate(text, data);
+    if (text.startsWith('$')) return this.resolveVariable(text, state);
+    return this.valueAt(data, text);
   }
 
   /**
@@ -224,10 +248,13 @@ export class EndNodeExecutor extends BaseNodeExecutor {
     return path
       .trim()
       .split('.')
-      .reduce(
-        (current, key) => (current === null || current === undefined ? undefined : current[key]),
-        data
-      );
+      .reduce((current, key) => {
+        if (current === null || current === undefined) return undefined;
+        // Only what the value itself holds: never a prototype member such as `constructor`
+        return Object.prototype.hasOwnProperty.call(Object(current), key)
+          ? current[key]
+          : undefined;
+      }, data);
   }
 
   /**

@@ -384,7 +384,6 @@
   "allowedGroups": [],
   "chatIntegration": {
     "enabled": true,
-    "passthroughResult": false,
     "outputFormat": "markdown"
   }
 }

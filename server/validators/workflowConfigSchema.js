@@ -4,6 +4,7 @@ import {
   APP_ID_MAX_LENGTH,
   LANGUAGE_CODE_PATTERN
 } from '../../shared/validationPatterns.js';
+import { hasEndOutput } from '../../shared/workflowEndOutput.js';
 
 /**
  * Workflow Configuration Schema
@@ -533,8 +534,6 @@ const baseWorkflowConfigSchema = z.object({
     .object({
       /** Whether the workflow appears as a selectable tool in chat apps */
       enabled: z.boolean().optional().prefault(false),
-      /** If true, workflow output streams directly as chat answer; if false, LLM formats the result */
-      passthroughResult: z.boolean().optional().prefault(false),
       /** Overrides workflow description for the LLM tool definition */
       toolDescription: localizedStringSchema.optional(),
       /** Output format hint for the client renderer */
@@ -642,11 +641,11 @@ export const workflowConfigSchema = baseWorkflowConfigSchema
       // reaches the end node fails, so it is refused when the workflow is saved.
       return data.nodes
         .filter(node => node.type === 'end')
-        .every(node => typeof node.config?.output === 'string' && node.config.output.trim() !== '');
+        .every(node => hasEndOutput(node.config?.output));
     },
     {
       message:
-        'Every end node needs an output: set the "output" of each end node to the variable that holds the answer',
+        'Every end node needs an output: set the "output" of each end node to the variable that holds the answer, or to an object of fields',
       path: ['nodes']
     }
   )
