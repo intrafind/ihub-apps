@@ -36,6 +36,24 @@ test('an administrator acting on someone else’s work is said so, and the syste
   expect(abortCauseText(t, cause({ type: 'system' }), {})).toBe('Stopped from the chat');
 });
 
+test('an administrator actor is named to an administrator and reads "you" to themselves', () => {
+  const stopped = cause({ type: 'admin', id: 'root-2' }, 'task_disabled');
+  expect(abortCauseText(t, stopped, { userId: 'root-2', isAdmin: true })).toContain('(you)');
+  expect(abortCauseText(t, stopped, { userId: 'root-1', isAdmin: true })).toContain(
+    '(user root-2)'
+  );
+  expect(abortCauseText(t, stopped, { userId: 'u1' })).toContain('(an administrator)');
+});
+
+test('the owner reads "you" even where the recorded id is a pseudonym', () => {
+  const stopped = cause({ type: 'user', id: 'a1b2c3d4', owner: true });
+  expect(abortCauseText(t, stopped, { userId: 'alice' })).toBe('Stopped from the chat (you)');
+  // An administrator looking at it sees who it was, not "you".
+  expect(abortCauseText(t, stopped, { userId: 'root', isAdmin: true })).toBe(
+    'Stopped from the chat (user a1b2c3d4)'
+  );
+});
+
 test('a kind this client has no wording for falls back to the server’s sentence', () => {
   expect(abortCauseText(t, cause({ type: 'system' }, 'from_the_future'), {})).toBe(
     'Stopped (server text)'

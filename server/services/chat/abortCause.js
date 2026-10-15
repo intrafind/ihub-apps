@@ -67,7 +67,8 @@ function actorOf(actor) {
   const hasId = typeof actor?.id === 'string' && actor.id;
   return {
     type: ACTOR_TYPES.has(actor?.type) ? actor.type : 'system',
-    ...(hasId ? { id: clip(actor.id) } : {})
+    ...(hasId ? { id: clip(actor.id) } : {}),
+    ...(actor?.owner === true ? { owner: true } : {})
   };
 }
 
@@ -118,16 +119,36 @@ export function abortCause(kind, { actor, via, source, related, message } = {}) 
  *
  * @param {keyof typeof ABORT_KINDS} kind
  * @param {Object|null} user
- * @param {Object} [options] - As {@link abortCause}, plus `mode` (the run's identity mode) and `admin`.
+ * @param {Object} [options] - As {@link abortCause}, plus:
+ * @param {string} [options.mode] - The identity mode of what is stopped (its chat, task or run)
+ * @param {boolean} [options.admin] - An administrator acting on someone else's work
+ * @param {string} [options.ownerId] - The owner's id in that same mode. When the stopper is the
+ *   owner the cause says so (`actor.owner`), which lets the owner read "you" even where the
+ *   id is a pseudonym the browser cannot match.
  * @returns {Promise<Object>}
  */
 export async function userAbortCause(
   kind,
   user,
-  { mode = 'default', admin = false, ...rest } = {}
+  { mode = 'default', admin = false, ownerId, ...rest } = {}
 ) {
   const id = await resolveActorId(user, { mode }).catch(() => undefined);
-  return abortCause(kind, { ...rest, actor: { type: admin ? 'admin' : 'user', id } });
+  const owner = !!id && !!ownerId && id === ownerId;
+  return abortCause(kind, { ...rest, actor: { type: admin ? 'admin' : 'user', id, owner } });
+}
+
+/**
+ * The part of a cause that is safe to show anyone who can read the message:
+ * what happened, not who did it, from where or on which worker. Used for
+ * messages that leave the owner's reach (a shared chat's snapshot).
+ *
+ * @param {*} cause
+ * @returns {{kind: string, message: string}|null}
+ */
+export function publicAbortCause(cause) {
+  if (!cause || typeof cause !== 'object') return null;
+  const { kind, message } = normalizeAbortCause(cause);
+  return { kind, message };
 }
 
 /** An `AbortError` carrying a cause: the value to pass to `controller.abort()`. */

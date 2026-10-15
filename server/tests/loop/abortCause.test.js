@@ -6,10 +6,13 @@ import {
   abortReason,
   causeOfSignal,
   normalizeAbortCause,
+  publicAbortCause,
   userAbortCause
 } from '../../services/chat/abortCause.js';
+import { resolveActorId } from '../../services/loop/runIdentity.js';
 import { isAbortError } from '../../services/loop/contracts/errors.js';
-import { activeRequests, abortChatRequest } from '../../sse.js';
+import { activeRequests, abortChatRequest, applyRelayedAbort } from '../../sse.js';
+import { snapshotMessage, withPublicCause } from '../../services/chat/ChatShareRepository.js';
 
 test('a cause says what, who, from where and when', () => {
   const cause = abortCause('user_stop', {
@@ -85,4 +88,79 @@ test('abortChatRequest aborts the registered turn with the cause it was given', 
   assert.equal(controller.signal.aborted, true);
   assert.equal(causeOfSignal(controller.signal).kind, 'user_stop');
   assert.equal(activeRequests.has('chat-abort-cause'), false);
+});
+
+test('the owner is marked in the cause without exposing their raw id', async () => {
+  const ownerId = await resolveActorId({ id: 'user-7' }, { mode: 'pseudonymized' });
+  const own = await userAbortCause(
+    'user_stop',
+    { id: 'user-7' },
+    { mode: 'pseudonymized', ownerId }
+  );
+  assert.equal(own.actor.owner, true);
+  assert.notEqual(own.actor.id, 'user-7');
+  const other = await userAbortCause(
+    'user_stop',
+    { id: 'user-8' },
+    { mode: 'pseudonymized', ownerId }
+  );
+  assert.equal(other.actor.owner, undefined, 'someone else is not marked as the owner');
+  assert.deepEqual(normalizeAbortCause(own).actor, own.actor, 'the mark survives a round trip');
+});
+
+test('a share keeps the explanation of a stop and nothing about who or where', async () => {
+  const cause = await userAbortCause(
+    'user_stop',
+    { id: 'user-7' },
+    { via: 'POST /stop', source: 'stop-button', related: { runId: 'chat-1' } }
+  );
+  assert.deepEqual(publicAbortCause(cause), { kind: 'user_stop', message: cause.message });
+  assert.equal(publicAbortCause('nonsense'), null);
+
+  const message = {
+    id: 'm',
+    role: 'assistant',
+    content: 'half an answer',
+    error: { code: 'ABORTED', message: cause.message, cause }
+  };
+  const snapshot = snapshotMessage(message);
+  assert.deepEqual(snapshot.error, {
+    code: 'ABORTED',
+    message: cause.message,
+    cause: { kind: 'user_stop', message: cause.message }
+  });
+  assert.ok(!JSON.stringify(snapshot).includes('user-7'));
+  assert.ok(!JSON.stringify(snapshot).includes('runId'));
+  // The owner's stored message is untouched.
+  assert.equal(message.error.cause.actor.id, 'user-7');
+  // A snapshot written before this existed is cut down when a viewer gets it.
+  assert.deepEqual(withPublicCause(message.error).cause, {
+    kind: 'user_stop',
+    message: cause.message
+  });
+});
+
+test('an abort relayed from another worker applies to the turn that was running, not a newer one', () => {
+  const old = new AbortController();
+  old.startedAt = 1000;
+  activeRequests.set('chat-relayed', old);
+  const superseding = abortCause('superseded', { via: 'test' });
+  assert.equal(
+    applyRelayedAbort({ chatId: 'chat-relayed', cause: superseding, before: 1500 }),
+    true
+  );
+  assert.equal(causeOfSignal(old.signal).kind, 'superseded');
+
+  // The same message arriving after a newer turn took the chat over is stale.
+  const newer = new AbortController();
+  newer.startedAt = 2000;
+  activeRequests.set('chat-relayed', newer);
+  assert.equal(
+    applyRelayedAbort({ chatId: 'chat-relayed', cause: superseding, before: 1500 }),
+    false
+  );
+  assert.equal(newer.signal.aborted, false);
+  // A Stop names no moment: it ends whatever runs.
+  assert.equal(applyRelayedAbort({ chatId: 'chat-relayed', cause: abortCause('user_stop') }), true);
+  assert.equal(newer.signal.aborted, true);
 });

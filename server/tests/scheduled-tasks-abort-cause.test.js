@@ -67,7 +67,7 @@ describe('the cause of a stopped scheduled run', () => {
     assert.equal(run.reason.code, 'ABORTED');
     assert.equal(run.reason.message, 'Cancelled by the owner');
     assert.equal(run.reason.cause.kind, 'task_run_cancelled');
-    assert.deepEqual(run.reason.cause.actor, { type: 'user', id: 'user-ada' });
+    assert.deepEqual(run.reason.cause.actor, { type: 'user', id: 'user-ada', owner: true });
     assert.equal(
       run.reason.cause.origin.via,
       'POST /api/scheduled-tasks/:taskId/runs/:runId/cancel'

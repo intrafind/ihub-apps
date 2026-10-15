@@ -119,7 +119,7 @@ workflow launched from chat) streams its answer as `step/delta` frames and ends
 with `run/ended { finishReason: 'tool_passthrough_complete', toolName }`. A
 failure is `stream/error` followed by `run/ended { status: 'error' }`; a stop
 or disconnect is `run/ended { status: 'aborted', finishReason: 'connection_closed', cause }`.
-`cause` says who stopped the run and from where: `{ kind, message, at, actor: { type, id? },
+`cause` says who stopped the run and from where: `{ kind, message, at, actor: { type, id?, owner? },
 origin: { via, source?, worker? }, related? }` with `kind` one of `user_stop`, `run_stop`,
 `task_run_cancelled`, `task_deleted`, `task_disabled`, `chat_deleted`, `user_deleted`,
 `superseded`, `client_disconnected`, `client_evicted`, `api_client_closed`, `lease_lost` or

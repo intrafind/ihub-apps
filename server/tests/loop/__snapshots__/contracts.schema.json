@@ -252,6 +252,9 @@
                       },
                       "id": {
                         "type": "string"
+                      },
+                      "owner": {
+                        "type": "boolean"
                       }
                     },
                     "required": ["type"],
@@ -4087,6 +4090,9 @@
                       },
                       "id": {
                         "type": "string"
+                      },
+                      "owner": {
+                        "type": "boolean"
                       }
                     },
                     "required": ["type"],

@@ -387,8 +387,17 @@ The cause is on the ledger's `run/end` and on `run/ended`, on the stored
 assistant message (`error: { code: 'ABORTED', message, cause }`), on a scheduled
 run's `reason.cause`, and in one server log line per stop (`Chat stop requested`,
 `Aborted request`) that also has the request's IP and user agent — those two are
-never stored. The actor id goes through the run's identity mode, so a
-pseudonymized ledger never carries a raw user id.
+never stored. The actor id goes through the identity mode of what was stopped
+(the chat's, the task's, the run's), so a pseudonymized chat or task never
+carries a raw user id. When the person who stopped it is the owner, the cause
+says so (`actor.owner`), so the owner reads "you" even where the id is a
+pseudonym the browser cannot match to its own.
+
+A shared chat keeps only the explanation of a stop (`kind` and `message`): the
+actor, the code path and the worker stay with the owner, in the snapshot and in
+what a viewer receives. A follow-up message supersedes a turn still running on
+another worker of a cluster; the relayed abort names the moment the new turn
+started, so a late arrival never cancels it.
 
 Only durable turns are protected. An anonymous or ephemeral turn is aborted on
 disconnect exactly as before, so the extra spend is bounded to authenticated,

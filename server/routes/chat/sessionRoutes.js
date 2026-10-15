@@ -1563,7 +1563,11 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
       // that sent this; anything but a short slug is dropped.
       const requestedSource = typeof req.body?.source === 'string' ? req.body.source : '';
       const cause = await userAbortCause('user_stop', req.user, {
-        mode: (boundRunId && runLog.getRunMeta(boundRunId)?.identityMode) || runLog.identityMode(),
+        mode:
+          access.chat?.identityMode ||
+          (boundRunId && runLog.getRunMeta(boundRunId)?.identityMode) ||
+          runLog.identityMode(),
+        ownerId: access.chat?.ownerId,
         via: 'POST /api/apps/:appId/chat/:chatId/stop',
         ...(/^[a-z][a-z0-9-]{0,31}$/.test(requestedSource) ? { source: requestedSource } : {}),
         related: boundRunId ? { runId: boundRunId } : undefined

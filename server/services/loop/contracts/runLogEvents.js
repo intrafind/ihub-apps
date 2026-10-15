@@ -114,7 +114,12 @@ export const abortCauseSchema = z.object({
   kind: z.string(),
   message: z.string(),
   at: z.string(),
-  actor: z.object({ type: z.enum(['user', 'admin', 'system']), id: z.string().optional() }),
+  actor: z.object({
+    type: z.enum(['user', 'admin', 'system']),
+    id: z.string().optional(),
+    /** The stopper is the owner of what was stopped (their id may be a pseudonym). */
+    owner: z.boolean().optional()
+  }),
   origin: z.object({
     via: z.string(),
     source: z.string().optional(),

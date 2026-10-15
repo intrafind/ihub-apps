@@ -354,9 +354,11 @@ export default function registerChatRoutes(app) {
           chatId,
           await userAbortCause('chat_deleted', req.user, {
             mode:
+              access.chat?.identityMode ||
               (access.chat?.activeRunId &&
                 runLog.getRunMeta(access.chat.activeRunId)?.identityMode) ||
               runLog.identityMode(),
+            ownerId: access.chat?.ownerId,
             via: 'DELETE /api/chats/:chatId',
             related: access.chat?.activeRunId ? { runId: access.chat.activeRunId } : undefined
           })

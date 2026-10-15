@@ -181,3 +181,17 @@ Where the build differs from the design above:
 - The client keeps the name `cancelGeneration` for the Stop path and adds `detachEventSource` /
   `stopEventSource` to `useEventSource`; `cleanupEventSource` is gone. `AppCanvas` no longer
   cancels on unmount — the hook's teardown detaches.
+- The actor carries `owner: true` when the stopper owns what was stopped. In a pseudonymized chat or
+  task the recorded id is a fingerprint, so the browser cannot compare it with its own user id; the
+  server compares the two in the same mode and says so.
+- Every stop is resolved in the identity mode of what it stops (the chat's, the task's), not the
+  caller's default — including the administrator's disable of a pseudonymized task and the deletion
+  of a pseudonymized conversation.
+- A shared chat's snapshot, and what a viewer receives of older snapshots, keep only `kind` and
+  `message` of a cause.
+- The client sends the stop first and closes its stream after the server has it (frames stop being
+  delivered at once). A turn that is not stored ends when its stream closes; closing first would
+  record that as a disconnect instead of the attributed stop. The stream that is closed afterwards
+  is the one that was open when Stop was pressed, never a replacement.
+- Superseding is cluster-aware: a turn running on another worker is aborted over the relay, which
+  carries the moment the new turn started so that a late message cannot cancel it.

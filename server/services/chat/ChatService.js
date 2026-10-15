@@ -18,7 +18,12 @@ import { logInteraction as defaultLogInteraction } from '../../utils.js';
 import { runTool as defaultRunTool } from '../../toolLoader.js';
 import configCache from '../../configCache.js';
 import { findByIdCaseInsensitive } from '../../utils/resourceLookup.js';
-import { activeRequests, hasChatClient } from '../../sse.js';
+import {
+  abortChatRequest,
+  activeRequests,
+  hasActiveChatRequest,
+  hasChatClient
+} from '../../sse.js';
 import { isFailureFinishReason } from '../../adapters/toolCalling/index.js';
 import PromptService from '../PromptService.js';
 import logger from '../../utils/logger.js';
@@ -473,7 +478,9 @@ class ChatService {
     const controller = new AbortController();
     const trackRequest = !!chatId && (streaming || !!persistence?.repository);
     if (trackRequest) {
-      if (activeRequests.has(chatId)) {
+      // The turn in flight may be on another worker: the follow-up no longer
+      // stops it from the browser, so the server has to.
+      if (hasActiveChatRequest(chatId)) {
         const cause = abortCause('superseded', {
           via: 'ChatService.runTurn',
           related: { runId }
@@ -483,8 +490,10 @@ class ChatService {
           chatId,
           ...describeCause(cause)
         });
-        activeRequests.get(chatId).abort(abortReason(cause));
+        if (activeRequests.has(chatId)) activeRequests.get(chatId).abort(abortReason(cause));
+        else abortChatRequest(chatId, cause, { before: Date.now() });
       }
+      controller.startedAt = Date.now();
       activeRequests.set(chatId, controller);
     }
 

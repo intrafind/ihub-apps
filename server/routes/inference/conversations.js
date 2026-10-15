@@ -261,6 +261,8 @@ export default function registerConversationsRoutes(app) {
         abortChatRequest(
           chat.id,
           await userAbortCause('chat_deleted', user, {
+            mode: chat.identityMode,
+            ownerId: chat.ownerId,
             via: 'DELETE /v1/conversations/:conversationId',
             related: chat.activeRunId ? { runId: chat.activeRunId } : undefined
           })

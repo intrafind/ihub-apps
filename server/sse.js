@@ -227,9 +227,13 @@ export function isChatDurable(chatId) {
  *
  * @param {string} chatId
  * @param {Object} [cause] - From `abortCause()` / `userAbortCause()`.
+ * @param {Object} [options]
+ * @param {number} [options.before] - Epoch ms. Only a turn that started at or before it is
+ *   aborted, so an abort that arrives late never cancels a turn that began after it was
+ *   decided (a superseding turn names the moment it started).
  * @returns {boolean} True if the abort was applied locally or relayed.
  */
-export function abortChatRequest(chatId, cause) {
+export function abortChatRequest(chatId, cause, { before } = {}) {
   const normalized = normalizeAbortCause(cause);
   if (activeRequests.has(chatId)) {
     try {
@@ -250,7 +254,11 @@ export function abortChatRequest(chatId, cause) {
     return true;
   }
   if (hasRemote('request', chatId)) {
-    publish(ABORT_CHANNEL, { chatId, cause: normalized }, { kind: 'request', key: chatId });
+    publish(
+      ABORT_CHANNEL,
+      { chatId, cause: normalized, ...(before ? { before } : {}) },
+      { kind: 'request', key: chatId }
+    );
     logger.info('Abort relayed to the worker running the request', {
       component: 'SSE',
       chatId,
@@ -315,8 +323,16 @@ export function closeChatClient(chatId) {
   return false;
 }
 
-subscribe(ABORT_CHANNEL, ({ chatId, cause }) => {
-  if (!activeRequests.has(chatId)) return;
+/**
+ * Apply an abort another worker relayed to the turn running here.
+ *
+ * @param {{chatId: string, cause?: Object, before?: number}} message
+ * @returns {boolean} Whether a turn was aborted.
+ */
+export function applyRelayedAbort({ chatId, cause, before }) {
+  if (!activeRequests.has(chatId)) return false;
+  // A turn that began after the abort was decided is not the one it meant.
+  if (before && activeRequests.get(chatId).startedAt > before) return false;
   try {
     const normalized = normalizeAbortCause(cause);
     activeRequests.get(chatId).abort(abortReason(normalized));
@@ -326,14 +342,18 @@ subscribe(ABORT_CHANNEL, ({ chatId, cause }) => {
       chatId,
       ...describeCause(normalized)
     });
+    return true;
   } catch (error) {
     logger.error('Error aborting relayed request', {
       component: 'SSE',
       chatId,
       error: error.message
     });
+    return false;
   }
-});
+}
+
+subscribe(ABORT_CHANNEL, applyRelayedAbort);
 
 subscribe(CLOSE_CHANNEL, ({ chatId }) => {
   const client = clients.get(chatId);

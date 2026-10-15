@@ -219,6 +219,34 @@ test('only the Stop button stops the turn, and says which control it was', async
   expect(stopAppChatStream).toHaveBeenCalledWith('acme', 'chat-fff', { source: 'stop-button' });
 });
 
+test('the server has the stop before the stream is closed', async () => {
+  // A turn that is not stored ends when the server sees its stream close, and
+  // that end would be recorded as a disconnect instead of the attributed stop.
+  let releaseStop;
+  stopAppChatStream.mockImplementationOnce(
+    () =>
+      new Promise(resolve => {
+        releaseStop = resolve;
+      })
+  );
+  const { result } = renderHook(() =>
+    useAppChat({ appId: 'acme', chatId: 'chat-hhh', serverBacked: false })
+  );
+
+  await startTurn(result, 'a question');
+  await act(async () => {
+    result.current.cancelGeneration('stop-button');
+  });
+
+  expect(stopAppChatStream).toHaveBeenCalledTimes(1);
+  expect(mockSignals[0].aborted).toBe(false);
+
+  await act(async () => {
+    releaseStop({});
+  });
+  expect(mockSignals[0].aborted).toBe(true);
+});
+
 test('a control that names itself is recorded under that name', async () => {
   const { result } = renderHook(() =>
     useAppChat({ appId: 'acme', chatId: 'chat-ggg', serverBacked: true })

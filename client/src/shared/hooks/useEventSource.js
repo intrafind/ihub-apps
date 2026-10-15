@@ -58,16 +58,16 @@ function useEventSource({
 
   const connectionTimeoutRef = useRef(null);
   const heartbeatIntervalRef = useRef(null);
+  // The stream whose Stop is on its way to the server: it delivers no more
+  // frames, but stays open until the server has the stop (see stopEventSource).
+  const stoppingRef = useRef(null);
 
   // Synchronously release the connection slot: abort the fetch and clear timers.
   // Kept separate from cleanupEventSource so callers (and initEventSource) can
   // tear the slot down without awaiting a 30s axios round-trip — that delay
   // re-opened the original leak window (an in-flight fetch keeps holding its
   // HTTP/1.1 slot until ac.abort() actually runs).
-  const abortAndClearTimers = useCallback(() => {
-    const ac = abortControllerRef.current;
-    abortControllerRef.current = null;
-
+  const clearTimers = useCallback(() => {
     if (heartbeatIntervalRef.current) {
       clearInterval(heartbeatIntervalRef.current);
       heartbeatIntervalRef.current = null;
@@ -76,6 +76,12 @@ function useEventSource({
       clearTimeout(connectionTimeoutRef.current);
       connectionTimeoutRef.current = null;
     }
+  }, []);
+
+  const abortAndClearTimers = useCallback(() => {
+    const ac = abortControllerRef.current;
+    abortControllerRef.current = null;
+    clearTimers();
 
     if (ac) {
       try {
@@ -86,7 +92,7 @@ function useEventSource({
     }
 
     return !!ac;
-  }, []);
+  }, [clearTimers]);
 
   /**
    * Let go of the stream: close this surface's fetch and drop its timers. The
@@ -106,16 +112,26 @@ function useEventSource({
    */
   const stopEventSource = useCallback(
     async ({ source = 'stop-button', force = false } = {}) => {
-      const wasActive = abortAndClearTimers();
-      if ((wasActive || force) && appId && chatId) {
+      // The server gets the stop while this stream is still open. A turn that
+      // is not stored ends the moment the server sees its stream close, and that
+      // end is recorded as "the browser disconnected" — closing first would let
+      // it win over the attributed stop. Frames stop being delivered at once, so
+      // the UI does not keep drawing a turn the user stopped.
+      const ac = abortControllerRef.current;
+      stoppingRef.current = ac;
+      clearTimers();
+      if ((ac || force) && appId && chatId) {
         try {
           await stopAppChatStream(appId, chatId, { source });
         } catch (err) {
           console.warn('Failed to stop chat stream:', err);
         }
       }
+      // Close the stream that was open when Stop was pressed, not one opened since.
+      if (abortControllerRef.current === ac) abortAndClearTimers();
+      if (stoppingRef.current === ac) stoppingRef.current = null;
     },
-    [appId, chatId, abortAndClearTimers]
+    [appId, chatId, abortAndClearTimers, clearTimers]
   );
 
   /**
@@ -185,6 +201,7 @@ function useEventSource({
       let turnRunId = null;
 
       const emit = envelope => {
+        if (stoppingRef.current === ac) return;
         if (onEvent) onEvent({ type: envelope.type, envelope });
       };
 

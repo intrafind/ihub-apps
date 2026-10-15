@@ -747,6 +747,7 @@ export async function deleteTask(user, taskId, { deleteChats = false } = {}) {
   const { task } = await loadOwnedTask(user, taskId);
   const cause = await userAbortCause('task_deleted', user, {
     mode: task.owner?.identityMode,
+    ownerId: task.ownerId,
     via: 'DELETE /api/scheduled-tasks/:taskId',
     related: { taskId, runId: task.activeRun?.id }
   });
@@ -869,6 +870,7 @@ export async function cancelRun(user, taskId, runId) {
     'Cancelled by the owner',
     await userAbortCause('task_run_cancelled', user, {
       mode: task.owner?.identityMode,
+      ownerId: task.ownerId,
       via: 'POST /api/scheduled-tasks/:taskId/runs/:runId/cancel',
       related: { taskId, runId }
     })
@@ -1287,6 +1289,9 @@ export async function adminSetTaskStatus(admin, taskId, status, message) {
       'Disabled by an administrator',
       await userAbortCause('task_disabled', admin, {
         admin: true,
+        // The task's identity mode, as the owner's own stops use: a
+        // pseudonymized task never carries the administrator's raw id either.
+        mode: task.owner?.identityMode,
         via: 'admin status change of a scheduled task',
         related: { taskId, runId: task.activeRun?.id }
       })
