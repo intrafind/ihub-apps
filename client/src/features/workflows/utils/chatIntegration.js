@@ -39,6 +39,15 @@ export function chatIntegrationWarnings(workflow, { assignedApps = [] } = {}) {
   return warnings;
 }
 
+const isPlainObject = value => Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+
+/** The languages of a tool description that have text, and whether that is all of them. */
+function languagesWithText(description) {
+  const entries = Object.entries(description);
+  const kept = entries.filter(([, text]) => isText(text));
+  return { kept, complete: kept.length === entries.length };
+}
+
 /**
  * The workflow with the empty languages of `chatIntegration.toolDescription`
  * removed, and the description itself removed when no text is left.
@@ -53,14 +62,12 @@ export function chatIntegrationWarnings(workflow, { assignedApps = [] } = {}) {
  */
 export function withCleanToolDescription(workflow) {
   const description = workflow?.chatIntegration?.toolDescription;
-  if (!description || typeof description !== 'object' || Array.isArray(description)) {
-    return workflow;
-  }
-  const entries = Object.entries(description);
-  const kept = entries.filter(([, text]) => typeof text === 'string' && text.trim());
+  if (!isPlainObject(description)) return workflow;
+
+  const { kept, complete } = languagesWithText(description);
   // `{}` passes the schema but would still replace the workflow description
   // with an empty one, so it is removed as well.
-  if (kept.length > 0 && kept.length === entries.length) return workflow;
+  if (complete && kept.length > 0) return workflow;
 
   const chatIntegration = { ...workflow.chatIntegration };
   delete chatIntegration.toolDescription;

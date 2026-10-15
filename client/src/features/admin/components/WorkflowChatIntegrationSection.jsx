@@ -46,37 +46,53 @@ function WarningList({ warnings }) {
   );
 }
 
-function AvailableInChat({ enabled, onToggle, assignedApps }) {
+/** The note under the switch: which apps the workflow is assigned to, if known. */
+function AssignmentNote({ assignedApps }) {
   const { t } = useTranslation();
-  const assignment =
-    assignedApps &&
-    (assignedApps.length > 0
+  if (!assignedApps) return null;
+  const note =
+    assignedApps.length > 0
       ? t('admin.workflows.chatIntegration.assignedApps', 'Assigned to: {{apps}}', {
           apps: assignedApps.map(app => app.id).join(', ')
         })
       : t(
           'admin.workflows.chatIntegration.noAssignedApps',
           'Not assigned to any app yet. Assign it under Admin → Apps → Workflows.'
-        ));
+        );
+  return <p className={helpClass}>{note}</p>;
+}
+
+function ToggleSwitch({ enabled, onToggle, labelledBy }) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${
+        enabled ? 'bg-indigo-600' : 'bg-gray-200 dark:bg-gray-600'
+      }`}
+      role="switch"
+      aria-checked={enabled}
+      aria-labelledby={labelledBy}
+    >
+      <span
+        className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+          enabled ? 'translate-x-5' : 'translate-x-0'
+        }`}
+      />
+    </button>
+  );
+}
+
+function AvailableInChat({ enabled, onToggle, assignedApps }) {
+  const { t } = useTranslation();
   return (
     <div className="sm:col-span-2">
       <div className="flex items-center">
-        <button
-          type="button"
-          onClick={onToggle}
-          className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${
-            enabled ? 'bg-indigo-600' : 'bg-gray-200 dark:bg-gray-600'
-          }`}
-          role="switch"
-          aria-checked={enabled}
-          aria-labelledby="workflow-chat-enabled-label"
-        >
-          <span
-            className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-              enabled ? 'translate-x-5' : 'translate-x-0'
-            }`}
-          />
-        </button>
+        <ToggleSwitch
+          enabled={enabled}
+          onToggle={onToggle}
+          labelledBy="workflow-chat-enabled-label"
+        />
         <span
           id="workflow-chat-enabled-label"
           className="ml-3 text-sm font-medium text-gray-700 dark:text-gray-300"
@@ -90,7 +106,7 @@ function AvailableInChat({ enabled, onToggle, assignedApps }) {
           'Users can start it with @ in the chat of the apps it is assigned to, and the app’s model can call it as a tool. It is also offered to MCP and A2A clients whose groups may run it.'
         )}
       </p>
-      {assignment && <p className={helpClass}>{assignment}</p>}
+      <AssignmentNote assignedApps={assignedApps} />
     </div>
   );
 }
