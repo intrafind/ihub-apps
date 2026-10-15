@@ -219,9 +219,9 @@ function extractZip(zipPath, extractPath) {
         await ensureDir(path.dirname(entryPath));
 
         // Extract file
-        zipfile.openReadStream(entry, (err, readStream) => {
-          if (err) {
-            reject(err);
+        zipfile.openReadStream(entry, (streamErr, readStream) => {
+          if (streamErr) {
+            reject(streamErr);
             return;
           }
 
@@ -233,8 +233,8 @@ function extractZip(zipPath, extractPath) {
             zipfile.readEntry();
           });
 
-          writeStream.on('error', err => {
-            reject(err);
+          writeStream.on('error', writeErr => {
+            reject(writeErr);
           });
         });
       });
@@ -243,8 +243,8 @@ function extractZip(zipPath, extractPath) {
         resolve(extractedCount);
       });
 
-      zipfile.on('error', err => {
-        reject(err);
+      zipfile.on('error', zipErr => {
+        reject(zipErr);
       });
     });
   });
@@ -628,27 +628,51 @@ async function findStaleStagingFolders(backupsRoot, entries) {
 export async function pruneImportBackups(contentsPath) {
   const backupsRoot = path.join(contentsPath, IMPORT_BACKUPS_DIR);
   try {
-    const entries = await fs.readdir(backupsRoot, { withFileTypes: true });
-    const backups = entries
-      .filter(entry => entry.isDirectory() && !entry.name.startsWith('.'))
-      .map(entry => entry.name)
-      .sort()
-      .reverse();
+    const entries = await readImportBackupsDir(backupsRoot);
     const expired = [
-      ...backups.slice(IMPORT_BACKUPS_TO_KEEP),
+      ...findExpiredBackups(entries),
       ...(await findStaleStagingFolders(backupsRoot, entries))
     ];
-
     for (const name of expired) {
       await fs.rm(path.join(backupsRoot, name), { recursive: true, force: true });
       logger.info('Removed old import backup', { component: 'AdminBackup', name });
     }
   } catch (error) {
-    if (error.code === 'ENOENT') {
-      return;
-    }
     logger.warn('Could not prune old import backups', { component: 'AdminBackup', error });
   }
+}
+
+/**
+ * Entries of the {@link IMPORT_BACKUPS_DIR} folder; none before the first import.
+ *
+ * @param {string} backupsRoot - The backups folder.
+ * @returns {Promise<import('node:fs').Dirent[]>}
+ */
+async function readImportBackupsDir(backupsRoot) {
+  try {
+    return await fs.readdir(backupsRoot, { withFileTypes: true });
+  } catch (error) {
+    if (error.code === 'ENOENT') {
+      return [];
+    }
+    throw error;
+  }
+}
+
+/**
+ * Import backups beyond the newest {@link IMPORT_BACKUPS_TO_KEEP}. Their names
+ * are timestamps, so sorting by name sorts them by age.
+ *
+ * @param {import('node:fs').Dirent[]} entries - Entries of the backups folder.
+ * @returns {string[]} Folder names.
+ */
+function findExpiredBackups(entries) {
+  return entries
+    .filter(entry => entry.isDirectory() && !entry.name.startsWith('.'))
+    .map(entry => entry.name)
+    .sort()
+    .reverse()
+    .slice(IMPORT_BACKUPS_TO_KEEP);
 }
 
 /**
