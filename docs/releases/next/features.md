@@ -42,3 +42,14 @@ users stop it.
 - The extraction is lighter on the page: for a 40-minute video the longest freeze drops from about
   0.6 s to about 0.3 s, the decoded audio takes 290 MB of memory instead of 810 MB, and the
   extraction is about 30% quicker
+
+## Save the Audio Extracted from a Video
+
+When a video is attached to a chat, its audio is extracted and shown as a `.wav` attachment. That
+file now has a **Save audio** button in the attachment list, so the audio can be kept locally.
+
+- The audio is saved as `<video name>.wav`: `lecture.mp4` becomes `lecture.wav`
+- It is the same 16 kHz mono WAV that is transcribed or sent to the model
+- Audio files that users upload themselves have no such button, they already have the file
+- In an app with transcription the audio is replaced by its transcript once the message is sent,
+  so save it before sending
