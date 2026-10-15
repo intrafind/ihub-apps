@@ -1,8 +1,7 @@
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import SourceHandler from './SourceHandler.js';
-import { getRootDir } from '../pathUtils.js';
-import config from '../config.js';
+import { getContentsPath } from '../utils/contentsPath.js';
 import logger from '../utils/logger.js';
 import { resolveAndValidatePath, sanitizeRelativePath } from '../utils/pathSecurity.js';
 
@@ -15,11 +14,7 @@ import { resolveAndValidatePath, sanitizeRelativePath } from '../utils/pathSecur
 class FileSystemHandler extends SourceHandler {
   constructor(handlerConfig = {}) {
     super(handlerConfig);
-    // Absolute path to the contents directory; resolve() keeps an absolute
-    // CONTENTS_DIR as is instead of nesting it under the installation root.
-    const rootDir = getRootDir();
-    const contentsDir = config.CONTENTS_DIR || 'contents';
-    this.basePath = handlerConfig.basePath || path.resolve(rootDir, contentsDir);
+    this.basePath = handlerConfig.basePath || getContentsPath();
     logger.info(`FileSystemHandler initialized with basePath: ${this.basePath}`);
 
     // Ensure sources subdirectory exists
