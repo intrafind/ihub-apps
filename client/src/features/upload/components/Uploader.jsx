@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { canonicalMimeType } from '../utils/fileProcessing';
 import { isAbortError, raceAbort } from '../../../utils/abortable';
 
@@ -15,7 +15,9 @@ import { isAbortError, raceAbort } from '../../../utils/abortable';
  * (`percent` null when unknown). The render prop gets that as `progress`,
  * `{ fileName, stage, percent, index, total }` (`index` counts from 0 within
  * the batch), and `cancelProcessing()` to stop. Stopping is not an error:
- * nothing is attached for the file being processed, files attached before stay.
+ * nothing is attached for the file being processed, files attached before stay,
+ * and so do the files of the batch that were done. `handleClear()` and unmounting
+ * are not a stop but a discard: the run publishes nothing.
  * `onProcessingChange(true|false)` follows `isProcessing`, for a parent that
  * must not act on an attachment still on its way (e.g. send).
  */
@@ -41,9 +43,21 @@ const Uploader = ({
   const fileInputRef = useRef(null);
   // Aborts the processing run in progress, if any
   const abortRef = useRef(null);
+  // The runs aborted to be discarded (Clear, unmount) rather than stopped by the
+  // user: whatever they had finished must not be attached after all
+  const discardedRunsRef = useRef(new WeakSet());
 
-  // A run still going when the uploader goes away is stopped
-  useEffect(() => () => abortRef.current?.abort(), []);
+  /** Abort the run in progress and drop what it has done so far. */
+  const discardProcessing = useCallback(() => {
+    const controller = abortRef.current;
+    if (!controller) return;
+    discardedRunsRef.current.add(controller);
+    controller.abort();
+  }, []);
+
+  // A run still going when the uploader goes away is discarded: there is no
+  // composer left to attach its files to
+  useEffect(() => () => discardProcessing(), [discardProcessing]);
 
   useEffect(() => {
     if (!isProcessing) return undefined;
@@ -159,6 +173,7 @@ const Uploader = ({
     const controller = new AbortController();
     const { signal } = controller;
     abortRef.current = controller;
+    const isDiscarded = () => discardedRunsRef.current.has(controller);
 
     // Even a processor that ignores the signal is stopped as far as the user
     // can tell: Stop returns at once and drops its result
@@ -200,7 +215,8 @@ const Uploader = ({
           }
         }
 
-        if (results.length > 0) {
+        // A stop keeps the files done so far, a discard (Clear, unmount) keeps none
+        if (results.length > 0 && !isDiscarded()) {
           const newPreviews = results.map(r => r.preview || null);
           const newDataArray = results.map(r => r.data);
 
@@ -220,7 +236,7 @@ const Uploader = ({
       } else {
         // Process single file (legacy behavior)
         const result = await processOne(files[0], 0);
-        if (result && typeof result === 'object') {
+        if (result && typeof result === 'object' && !isDiscarded()) {
           // Check if this is a multipage TIFF that returned multiple results
           if (result.multipleResults && Array.isArray(result.multipleResults)) {
             // For single file mode with multipage TIFF, use only the first page
@@ -270,7 +286,7 @@ const Uploader = ({
   const cancelProcessing = () => abortRef.current?.abort();
 
   const handleClear = () => {
-    cancelProcessing();
+    discardProcessing();
     setPreview(null);
     setFileData(null);
     setError(null);

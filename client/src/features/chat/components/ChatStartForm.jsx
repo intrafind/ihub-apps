@@ -10,6 +10,7 @@ import UnifiedUploader from '../../upload/components/UnifiedUploader';
 import AttachedFilesList from '../../upload/components/AttachedFilesList';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import { getMissingRequiredVariables } from '../utils/startForm';
+import useAttachmentProcessing from '../../../shared/hooks/useAttachmentProcessing';
 
 /**
  * The form a new chat of an app with `startForm.enabled` opens with (issue
@@ -33,6 +34,11 @@ import { getMissingRequiredVariables } from '../utils/startForm';
  * @param {Function} props.onSubmit - Called with the submit event once the form is valid
  * @param {boolean} [props.canSubmit=true] - False while there is nothing to send yet
  * @param {boolean} [props.isProcessing=false]
+ * @param {boolean} [props.isAttachmentProcessing=false] - A file is still being processed
+ *   somewhere on the page (`useFileUploadHandler().isAttachmentProcessing`); the form's own
+ *   uploader is always taken into account
+ * @param {Function} [props.onAttachmentProcessingChange] - Tells the page that this form's
+ *   uploader is busy or idle, `(id, busy) => void` (`useFileUploadHandler().setAttachmentProcessing`)
  * @param {Object|string|null} [props.welcomeMessage] - The app greeting (`{ title, subtitle }`
  *   or a plain title)
  * @param {string|null} [props.errorMessage] - Shown above the send button
@@ -57,6 +63,8 @@ function ChatStartForm({
   onSubmit,
   canSubmit = true,
   isProcessing = false,
+  isAttachmentProcessing = false,
+  onAttachmentProcessingChange = undefined,
   welcomeMessage = null,
   errorMessage = null,
   models = null,
@@ -72,7 +80,8 @@ function ChatStartForm({
   const [acknowledgedModel, setAcknowledgedModel] = useState(null);
   // A file is still being processed (the audio of a video is extracted): the chat
   // would start without it.
-  const [attaching, setAttaching] = useState(false);
+  const { attachmentProcessing: attaching, onProcessingChange: handleAttachingChange } =
+    useAttachmentProcessing(isAttachmentProcessing, onAttachmentProcessingChange);
 
   const selectedModelData = models?.find(m => m.id === selectedModel) || null;
   const modelHint = selectedModelData?.hint || null;
@@ -256,7 +265,7 @@ function ChatStartForm({
   return uploadEnabled ? (
     <UnifiedUploader
       onFileSelect={onFileSelect}
-      onProcessingChange={setAttaching}
+      onProcessingChange={handleAttachingChange}
       disabled={isProcessing}
       fileData={selectedFile}
       config={uploadConfig}

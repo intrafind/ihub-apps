@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 
 /**
  * Custom hook for handling file uploads in chat applications.
@@ -13,10 +13,31 @@ import { useState } from 'react';
  * @returns {Function} returns.hideUploader - Hide the uploader UI () => void
  * @returns {Function} returns.setSelectedFile - Direct state setter for selected file
  * @returns {Function} returns.setShowUploader - Direct state setter for uploader visibility
+ * @returns {boolean} returns.isAttachmentProcessing - Whether any uploader is still processing a
+ *   file (e.g. extracting the audio of a video). A message sent meanwhile would go without it.
+ * @returns {Function} returns.setAttachmentProcessing - Report an uploader as busy or idle,
+ *   (id, busy) => void; `id` tells the uploaders sharing this handler apart
  */
 export function useFileUploadHandler() {
   const [selectedFile, setSelectedFile] = useState(null);
   const [showUploader, setShowUploader] = useState(false);
+  // The ids of the uploaders processing a file right now. A page can mount more
+  // than one composer for the same chat (a phone layout and a desktop layout,
+  // toggled by CSS only), and all of them must know that a file is on its way,
+  // not just the one it was dropped on.
+  const [processingUploaders, setProcessingUploaders] = useState(() => new Set());
+
+  // Stable, so an uploader that reports through it is not restarted by a re-render
+  const setAttachmentProcessing = useCallback((id, busy) => {
+    setProcessingUploaders(current => {
+      // Nothing changes: no re-render
+      if (current.has(id) === Boolean(busy)) return current;
+      const next = new Set(current);
+      if (busy) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  }, []);
 
   // Handle file selection from UnifiedUploader (handles both images and files)
   const handleFileSelect = fileData => {
@@ -246,7 +267,9 @@ export function useFileUploadHandler() {
     clearSelectedFile,
     hideUploader,
     setSelectedFile,
-    setShowUploader
+    setShowUploader,
+    isAttachmentProcessing: processingUploaders.size > 0,
+    setAttachmentProcessing
   };
 }
 

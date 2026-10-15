@@ -29,7 +29,7 @@ A long video takes seconds to minutes, so while a file is processed a panel show
 - A progress bar. Decoding cannot report how far it is, so the bar is animated, without a value, during that step. Reading, converting, encoding and finishing have a percentage
 - A **Stop** button. Stopping rejects the extraction at its next checkpoint (the decoding itself cannot be cancelled: it runs on and its result is dropped). It is not an error: nothing is attached for the file, no message is shown, the file picker is reset so the same file can be picked again, and the files attached before stay. When several files were added at once, the ones already processed stay too
 
-The panel shows after 300 ms of processing, so files that are done in a blink never flash it. It is shown for every kind of attachment (images, documents, audio and video); only audio and video report a percentage, the others show the animated bar. While it shows, sending is held back: a message sent meanwhile would go without the attachment, which would then join the next message.
+The panel shows after 300 ms of processing, so files that are done in a blink never flash it. It is shown for every kind of attachment (images, documents, audio and video); only audio and video report a percentage, the others show the animated bar. While it shows, sending is held back: a message sent meanwhile would go without the attachment, which would then join the next message. That holds for every message box of the chat page: the page has one for the phone layout and one for the desktop layout, and after a resize the one that comes into view still waits for a file added in the other. A run that is still going when the chat is left (or when the uploader is cleared with its `handleClear`) is not a Stop but a discard: it is cancelled and attaches nothing, not even the files of its batch that were done (a Stop keeps those).
 
 The page is kept free while the extraction runs. Reading, decoding and resampling run natively, off the main thread, and the WAV is encoded in slices of about 8 ms with the event loop in between (`audioBufferToWavAsync()`). The slices hand over through a message port instead of a timer, so a tab the user switched away from keeps going at full speed (browsers run a timer once per second in the background). For a 40-minute video (the WAV is 73 MB) the longest freeze of the page measured in Chromium dropped from about 0.6 s to about 0.3 s. What is left is the browser itself: handing the decoded audio to the page (about 0.2 s) and building the base64 data URL (about 0.25 s).
 
@@ -178,7 +178,7 @@ A standalone test page is available at `tests/manual/test-audio-extraction.html`
   - The abort error (`code: 'aborted'`), `raceAbort()` and `yieldToEventLoop()`
 
 - **`client/src/features/upload/components/Uploader.jsx`**
-  - One `AbortController` per processing run; hands `{ signal, onProgress }` to `onProcessFile`; exposes `progress` and `cancelProcessing`
+  - One `AbortController` per processing run; hands `{ signal, onProgress }` to `onProcessFile`; exposes `progress` and `cancelProcessing`. `cancelProcessing` is a Stop (the batch's finished files are attached); `handleClear` and unmounting discard the run (nothing is attached)
 
 - **`client/src/features/upload/components/UnifiedUploader.jsx`**
   - Video upload configuration
@@ -281,7 +281,7 @@ Promise resolving to object with (all describing the 16 kHz mono output):
 
 ### Uploader and UnifiedUploader
 
-`onProcessFile(file, { signal, onProgress })` gets the signal and the progress callback as a second argument (callers that take only the file keep working). `Uploader` hands `progress` (`{ fileName, stage, percent, index, total }`, `index` counting from 0 within a batch) and `cancelProcessing()` to its render prop, and calls `onProcessingChange(true|false)` as processing starts and ends. `UnifiedUploader` forwards `onProcessingChange`; `ChatInput` and `ChatStartForm` use it to hold back sending.
+`onProcessFile(file, { signal, onProgress })` gets the signal and the progress callback as a second argument (callers that take only the file keep working). `Uploader` hands `progress` (`{ fileName, stage, percent, index, total }`, `index` counting from 0 within a batch) and `cancelProcessing()` to its render prop, and calls `onProcessingChange(true|false)` as processing starts and ends. `UnifiedUploader` forwards `onProcessingChange`; `ChatInput` and `ChatStartForm` use it to hold back sending. Where a page mounts several of them for one chat (`AppChat`), they report through `useFileUploadHandler()`: its `isAttachmentProcessing` is true while any uploader is busy and `setAttachmentProcessing(id, busy)` is how each reports (via `useAttachmentProcessing`); `AppChat` passes both on as `isAttachmentProcessing` and `onAttachmentProcessingChange`, and its own submit returns early while it is true. Both props are optional: without them a composer waits for its own uploader only.
 
 ## Resources
 

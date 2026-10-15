@@ -383,6 +383,22 @@ describe('Stop', () => {
     expect(extraction.signal.aborted).toBe(true);
     expect(onProcessingChange).toHaveBeenLastCalledWith(false);
   });
+
+  test('attaches nothing of a batch when the uploader goes away during it', async () => {
+    const uploadConfig = config({ allowMultiple: true });
+    const { upload, unmount, onFileSelect } = renderUploader({ uploadConfig });
+    upload(note('done.txt'), video());
+    await showPanel();
+
+    unmount();
+    // Let the stopped run run out
+    await act(async () => {
+      await new Promise(resolve => setTimeout(resolve, 0));
+    });
+
+    // The composer is gone: there is nothing left to attach the text file to
+    expect(onFileSelect).not.toHaveBeenCalled();
+  });
 });
 
 describe('onProcessingChange', () => {
@@ -520,5 +536,73 @@ describe('Uploader', () => {
     expect(seen).toContainEqual(['a.txt', 0, 2]);
     expect(seen).toContainEqual(['b.txt', 1, 2]);
     await act(async () => release());
+  });
+
+  describe('a batch that is stopped or discarded while its last file is processed', () => {
+    // Let a run that was aborted run out: its loop goes on in later ticks
+    const settle = () =>
+      act(async () => {
+        await new Promise(resolve => setTimeout(resolve, 0));
+      });
+
+    // `quick.txt` is done at once, `slow.txt` never ends (and ignores the signal)
+    const quickThenSlow = async file => {
+      if (file.name === 'slow.txt') await new Promise(() => {});
+      return { preview: {}, data: { fileName: file.name } };
+    };
+
+    const startBatch = async () => {
+      const utils = renderBareUploader(quickThenSlow, {
+        accept: ['text/plain'],
+        allowMultiple: true
+      });
+      utils.upload(note('quick.txt'), note('slow.txt'));
+      await waitFor(() => expect(utils.state().progress).toMatchObject({ fileName: 'slow.txt' }));
+      return utils;
+    };
+
+    test('Stop keeps the files that were done', async () => {
+      const { state, onSelect } = await startBatch();
+
+      act(() => state().cancelProcessing());
+      await settle();
+
+      expect(onSelect).toHaveBeenCalledTimes(1);
+      expect(onSelect).toHaveBeenCalledWith([{ fileName: 'quick.txt' }]);
+      expect(state().isProcessing).toBe(false);
+    });
+
+    test('Clear drops them: the cleared attachments do not come back', async () => {
+      const { state, onSelect } = await startBatch();
+
+      act(() => state().handleClear());
+      await settle();
+
+      // Cleared, and not attached again by the run that was still going
+      expect(onSelect).toHaveBeenCalledTimes(1);
+      expect(onSelect).toHaveBeenLastCalledWith(null);
+      expect(state().isProcessing).toBe(false);
+      expect(state().preview).toBeNull();
+    });
+
+    test('going away drops them: nothing is attached after the unmount', async () => {
+      const { unmount, onSelect } = await startBatch();
+
+      unmount();
+      await settle();
+
+      expect(onSelect).not.toHaveBeenCalled();
+    });
+
+    test('a new batch after a Clear is attached as usual', async () => {
+      const { state, onSelect, upload } = await startBatch();
+      act(() => state().handleClear());
+      await settle();
+
+      upload(note('again.txt'));
+
+      await waitFor(() => expect(onSelect).toHaveBeenCalledTimes(2));
+      expect(onSelect).toHaveBeenLastCalledWith([{ fileName: 'again.txt' }]);
+    });
   });
 });

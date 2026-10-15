@@ -19,6 +19,7 @@ import { VoiceInputComponent } from '../../voice/components';
 import { useUIConfig } from '../../../shared/contexts/UIConfigContext';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
 import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
+import useAttachmentProcessing from '../../../shared/hooks/useAttachmentProcessing';
 import MagicPromptLoader from '../../../shared/components/MagicPromptLoader';
 import {
   computeContextUsage,
@@ -136,6 +137,12 @@ function ChatInput({
   // the live token-count estimate so the context-window indicator reflects what
   // will actually be sent to the LLM.
   extraContextText = '',
+  // For a page that mounts more than one composer for a chat (`useFileUploadHandler`):
+  // `isAttachmentProcessing` says that a file is still being processed in any of
+  // them, `onAttachmentProcessingChange(id, busy)` is how this composer reports its
+  // own uploader. Optional: without them the composer waits for its own uploader only.
+  isAttachmentProcessing = false,
+  onAttachmentProcessingChange = undefined,
   // Optional override for the auto-grow textarea cap. Defaults to 5 lines
   // (~150 px) in single-line mode and 12 lines in multiline mode. The
   // Outlook taskpane passes 3 so the input doesn't dominate the small
@@ -168,7 +175,8 @@ function ChatInput({
   const [modelAlertAcknowledged, setModelAlertAcknowledged] = useState(false);
   // An attachment is still being processed (the audio of a video is extracted):
   // a message sent now would go without it, and it would join the next one.
-  const [attachmentProcessing, setAttachmentProcessing] = useState(false);
+  const { attachmentProcessing, onProcessingChange: handleAttachmentProcessingChange } =
+    useAttachmentProcessing(isAttachmentProcessing, onAttachmentProcessingChange);
   const sendBlockedByAttachment = attachmentProcessing && !isProcessing;
 
   const promptsListEnabled =
@@ -1046,7 +1054,7 @@ function ChatInput({
       {localUploadEnabled ? (
         <UnifiedUploader
           onFileSelect={handleLocalFileSelect}
-          onProcessingChange={setAttachmentProcessing}
+          onProcessingChange={handleAttachmentProcessingChange}
           disabled={isInputDisabled || isProcessing}
           fileData={selectedFile}
           config={uploadConfig}
