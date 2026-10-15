@@ -35,7 +35,7 @@ Each model is defined with the following properties:
 | `maxOutputTokens`              | Number  | -        | Maximum tokens the model may generate in a response, sent to the provider as `max_tokens` / `maxOutputTokens` (nullable). Defaults to 16384 at runtime if unset (never more than half the context window). Reasoning models spend their thinking tokens from this limit, so keep it well above the longest answer you expect |
 | `default`                      | Boolean | `false`  | Mark this model as the system-wide default. Only one model should have this set to `true`. See [Model Selection in Apps](#model-selection-in-apps) |
 | `enabled`                      | Boolean | `true`   | Whether the model is visible and selectable. Set to `false` to hide without deleting           |
-| `supportsTools`                | Boolean | `false`  | Whether the model supports tool/function calling                                               |
+| `supportsTools` | String | `none` | What the model can do with tools: `none` (no tools), `auto` (tools; the model decides whether to call one) or `required` (tools, and the provider accepts a forced tool call, so an app's `toolChoice: "required"` can be enforced). Use `auto` for models that reject a forced tool choice — Claude Opus 5.5, Sonnet 5.5 and Fable 5.1 return a `400` — and for local servers such as vLLM, whose support depends on the installation; an app that requires a tool call then asks the model in words instead. An older boolean value is converted by migration V163. See [Requiring a tool call](tool-calling.md#requiring-a-tool-call) |
 | `supportsImages`               | Boolean | -        | Whether the model can process image inputs (deprecated alias for `supportsVision`)             |
 | `supportsVision`               | Boolean | -        | Whether the model supports image input (vision capabilities)                                   |
 | `supportsAudio`                | Boolean | -        | Whether the model can process audio input                                                      |
@@ -650,7 +650,7 @@ The iHub provides a flexible system for selecting which AI model an app uses. Th
       "contextWindow": 1000000,
       "maxOutputTokens": 8192,
       "default": true,
-      "supportsTools": true
+      "supportsTools": "required"
     }
     ```
 
@@ -692,7 +692,7 @@ To add a new model:
   "provider": "openai-responses",
   "contextWindow": 400000,
   "maxOutputTokens": 32000,
-  "supportsTools": true,
+  "supportsTools": "required",
   "enabled": true,
   "default": false
 }

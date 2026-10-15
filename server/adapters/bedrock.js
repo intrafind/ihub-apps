@@ -504,7 +504,7 @@ class BedrockAdapterClass extends BaseAdapter {
       provider: 'bedrock',
       supportsStreaming: true,
       supportsImages: true,
-      supportsTools: true,
+      supportsTools: 'required',
       maxTokens: null,
       contextWindow: null
     };

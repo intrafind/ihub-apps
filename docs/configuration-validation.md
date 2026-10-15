@@ -98,7 +98,7 @@ Validates LLM model definitions and connection parameters.
   "provider": "openai",
   "contextWindow": 128000,
   "maxOutputTokens": 32000,
-  "supportsTools": true,
+  "supportsTools": "required",
   "enabled": true
 }
 ```
@@ -608,7 +608,7 @@ export function validateNewConfig(config) {
   "provider": "anthropic",
   "contextWindow": 200000,
   "maxOutputTokens": 16000,
-  "supportsTools": true,
+  "supportsTools": "auto",
   "concurrency": 5,
   "requestDelayMs": 1000,
   "enabled": true

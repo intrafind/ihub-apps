@@ -414,3 +414,17 @@ export function cloneAndWalkSchema(schema, visitSchemaNode) {
 
   return walk(sanitized);
 }
+
+/**
+ * The function a tool choice asks for by name: OpenAI's
+ * `{ type: 'function', function: { name } }`, the Responses API's
+ * `{ type: 'function', name }` or Anthropic's `{ type: 'tool', name }`.
+ *
+ * @param {string|Object} [toolChoice] - Tool choice as handed to an adapter
+ * @returns {string|undefined} The function name, undefined for `auto`/`required`/`none`
+ */
+export function getNamedToolChoice(toolChoice) {
+  if (!toolChoice || typeof toolChoice !== 'object') return undefined;
+  const name = toolChoice.function?.name ?? toolChoice.name;
+  return typeof name === 'string' && name ? name : undefined;
+}

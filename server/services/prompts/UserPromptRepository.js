@@ -722,6 +722,18 @@ export class UserPromptRepository {
     };
   }
 
+  /**
+   * Remove one user's favorites and recents. For deleting the user, whose
+   * preferences are filed under their id and listed nowhere else.
+   *
+   * @param {string} userId - User id.
+   * @returns {Promise<void>}
+   */
+  async deletePreferences(userId) {
+    if (!this.isAvailable() || !userId) return;
+    await this.documents.delete(PROMPT_PREFERENCES_NAMESPACE, preferencesKey(userId));
+  }
+
   async _updatePreferences(userId, mutate) {
     const key = preferencesKey(userId);
     return this.locks.withLock(

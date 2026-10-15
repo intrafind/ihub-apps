@@ -13,7 +13,7 @@
   "provider": "openai",
   "contextWindow": 128000,
   "maxOutputTokens": 4096,
-  "supportsTools": true,
+  "supportsTools": "required",
   "enabled": false,
   "hint": {
     "message": {

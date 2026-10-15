@@ -38,10 +38,8 @@ import {
   hasActiveChatRequest,
   markChatDurable
 } from '../sse.js';
-import registerSessionRoutes, {
-  messageAttachments,
-  workflowSummary
-} from '../routes/chat/sessionRoutes.js';
+import registerSessionRoutes, { messageAttachments } from '../routes/chat/sessionRoutes.js';
+import { workflowSummary } from '../services/workflow/mentionWorkflow.js';
 
 const USER = { id: 'user-1', name: 'Ada' };
 const APP_ID = 'chat';

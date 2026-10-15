@@ -299,7 +299,7 @@ recorded` by design — but the IP and email columns can both be anonymized.
 | --- | --- |
 | **Access** (Art. 15) | Admin → Usage → Feedback (CSV export); audit log via Admin → Platform → Audit Log; user record at `contents/config/users.json` |
 | **Rectification** (Art. 16) | Edit the user via Admin → Users; OIDC/LDAP/NTLM users are read-only mirrors of the IdP |
-| **Erasure** (Art. 17) | Delete the user via Admin → Users; rewrite `feedback.jsonl` with `cleanupFeedback()` or shorten `feedbackRetentionDays`; audit entries are kept for the configured `retentionDays` and cannot be deleted before expiry (regulatory requirement) |
+| **Erasure** (Art. 17) | Delete the user via Admin → Users, which also removes their API keys, connections, stored integration credentials, scheduled tasks, chats, prompts, skills and short links; rewrite `feedback.jsonl` with `cleanupFeedback()` or shorten `feedbackRetentionDays`; audit entries are kept for the configured `retentionDays` and cannot be deleted before expiry (regulatory requirement) |
 | **Portability** (Art. 20) | Export usage CSV (`GET /api/admin/usage/export`); user data lives in plain JSON files for direct extraction |
 | **Restrict / object** (Art. 18, 21) | Disable the user (`active: false` in `users.json`); set `usageTrackingMode: "anonymous"` |
 

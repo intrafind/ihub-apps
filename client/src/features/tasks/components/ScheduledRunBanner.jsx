@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { fetchScheduledTaskRun } from '../../../api';
+import { useOptionalAuth } from '../../../shared/contexts/authContextValue';
 import { useScheduledTasksEnabled } from '../hooks/useScheduledTasksConfig';
 import { formatDateTime, reasonText } from '../utils/taskFormat';
 import { RunStatusBadge } from './TaskBadges';
@@ -88,13 +89,39 @@ export default function ScheduledRunBanner({ origin, onRunChanged }) {
           </span>
           {run && <RunStatusBadge status={run.status} />}
         </div>
-        {run?.status === 'awaiting_approval' && (
-          <ApprovalControls taskId={origin.taskId} run={run} compact onAnswered={load} />
-        )}
-        {run?.status === 'failed' && run.reason?.message && (
-          <p className="text-red-700 dark:text-red-300">{reasonText(t, run.reason)}</p>
-        )}
+        <RunNotes run={run} origin={origin} onAnswered={load} />
       </div>
     </div>
   );
+}
+
+function ApprovalNote({ run, origin, onAnswered }) {
+  return <ApprovalControls taskId={origin.taskId} run={run} compact onAnswered={onAnswered} />;
+}
+
+function FailedNote({ run }) {
+  const { t } = useTranslation();
+  if (!run.reason?.message) return null;
+  return <p className="text-red-700 dark:text-red-300">{reasonText(t, run.reason)}</p>;
+}
+
+/** A stopped run says what stopped it, and who to the people who may know. */
+function CancelledNote({ run }) {
+  const { t } = useTranslation();
+  const auth = useOptionalAuth();
+  if (!run.reason?.cause) return null;
+  const viewer = { userId: auth?.user?.id, isAdmin: auth?.user?.isAdmin };
+  return <p className="text-gray-700 dark:text-gray-300">{reasonText(t, run.reason, viewer)}</p>;
+}
+
+const RUN_NOTES = {
+  awaiting_approval: ApprovalNote,
+  failed: FailedNote,
+  cancelled: CancelledNote
+};
+
+/** What the run's state adds under the header: the approval it needs, or why it failed or was stopped. */
+function RunNotes({ run, origin, onAnswered }) {
+  const Note = RUN_NOTES[run?.status];
+  return Note ? <Note run={run} origin={origin} onAnswered={onAnswered} /> : null;
 }

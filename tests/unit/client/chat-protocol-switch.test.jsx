@@ -37,7 +37,7 @@ jest.mock('../../../client/src/shared/hooks/useEventSource', () => ({
   __esModule: true,
   default: ({ onEvent }) => {
     capturedOnEvent = onEvent;
-    return { initEventSource: jest.fn(), cleanupEventSource: jest.fn() };
+    return { initEventSource: jest.fn(), detachEventSource: jest.fn(), stopEventSource: jest.fn() };
   }
 }));
 

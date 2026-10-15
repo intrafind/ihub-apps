@@ -1,3 +1,5 @@
+import { matchesModelFilter, modelSupportsTools } from '../../../shared/modelCapabilities.js';
+
 /**
  * Filter models based on app requirements.
  * Mirrors the server-side filterModelsForApp logic in
@@ -22,17 +24,12 @@ export function filterModelsForApp(models, app) {
   }
 
   if ((app?.tools && app.tools.length > 0) || app?.websearch?.enabled) {
-    filtered = filtered.filter(model => model.supportsTools);
+    filtered = filtered.filter(modelSupportsTools);
   }
 
   if (app?.settings?.model?.filter) {
     const filter = app.settings.model.filter;
-    filtered = filtered.filter(model => {
-      for (const [key, value] of Object.entries(filter)) {
-        if (model[key] !== value) return false;
-      }
-      return true;
-    });
+    filtered = filtered.filter(model => matchesModelFilter(model, filter));
   }
 
   return filtered;

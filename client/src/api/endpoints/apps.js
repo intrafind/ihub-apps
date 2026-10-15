@@ -2,7 +2,7 @@ import { Marked } from 'marked';
 import DOMPurify from 'dompurify';
 import { apiClient, streamingApiClient } from '../client';
 import { handleApiResponse } from '../utils/requestHandler';
-import { buildChatExportFilename, buildChatExportTitle } from '../../utils/exportFormats';
+import { buildChatExportFilename, buildChatExportTitle } from '../../utils/exportNaming';
 import { saveBlobAs } from '../../utils/externalNavigation';
 import { exportPdfOnServer } from './exports';
 
@@ -73,9 +73,19 @@ export const sendAppChatMessage = async (appId, chatId, messages, options = {}) 
   );
 };
 
-export const stopAppChatStream = async (appId, chatId) => {
+/**
+ * Stop the turn running on a chat. This is the unconditional abort — it ends a
+ * stored turn too — so only a person's Stop reaches it; see `useEventSource`.
+ *
+ * @param {string} appId
+ * @param {string} chatId
+ * @param {Object} [options]
+ * @param {string} [options.source] - The control that asked (`stop-button`, `compare`, …),
+ *   recorded with who stopped the turn
+ */
+export const stopAppChatStream = async (appId, chatId, { source } = {}) => {
   return handleApiResponse(
-    () => apiClient.post(`/apps/${appId}/chat/${chatId}/stop`),
+    () => apiClient.post(`/apps/${appId}/chat/${chatId}/stop`, source ? { source } : undefined),
     null, // No caching
     null,
     false // Don't deduplicate

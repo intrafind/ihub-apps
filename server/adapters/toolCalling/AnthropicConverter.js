@@ -11,7 +11,8 @@ import {
   createGenericStreamingResponse,
   createGenericUsage,
   normalizeFinishReason,
-  cloneAndWalkSchema
+  cloneAndWalkSchema,
+  getNamedToolChoice
 } from './GenericToolCalling.js';
 import { validateProviderToolName } from './toolNameValidator.js';
 import logger from '../../utils/logger.js';
@@ -89,6 +90,33 @@ export function convertAnthropicToolsToGeneric(anthropicTools = []) {
       { originalFormat: 'anthropic' }
     )
   );
+}
+
+/** Tool choice values that map to Anthropic's `any` (forced call) and `none`; `auto` is its default. */
+const ANTHROPIC_TOOL_CHOICE_TYPES = new Set(['required', 'any', 'none']);
+
+/**
+ * Resolve a generic tool-choice value to Anthropic's `tool_choice` object.
+ *
+ * `required` (or `any`) becomes `{ type: 'any' }`, `none` `{ type: 'none' }`, a
+ * named function (OpenAI's `{ function: { name } }`, the Responses API's
+ * `{ name }`) `{ type: 'tool', name }`, and an object already in Anthropic's
+ * shape passes through. `auto` is Anthropic's default, so nothing is sent.
+ *
+ * Note: Claude Opus 5.5, Sonnet 5.5, Fable 5.1 and Mythos 5.1 reject `any` and
+ * `tool` with a 400, as does manual extended thinking; `auto` and `none` always
+ * work.
+ *
+ * @param {string|Object} [toolChoice] - Generic or OpenAI-style tool choice
+ * @returns {{type: string, name?: string}|undefined} Anthropic tool choice, undefined when none is needed
+ */
+export function convertAnthropicToolChoice(toolChoice) {
+  const named = getNamedToolChoice(toolChoice);
+  if (named) return { type: 'tool', name: named };
+  const type = typeof toolChoice === 'string' ? toolChoice : toolChoice?.type;
+  return ANTHROPIC_TOOL_CHOICE_TYPES.has(type)
+    ? { type: type === 'none' ? 'none' : 'any' }
+    : undefined;
 }
 
 /**

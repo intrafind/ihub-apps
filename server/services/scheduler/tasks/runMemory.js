@@ -18,6 +18,7 @@
  */
 import { loadConfiguredTools } from '../../../toolLoader.js';
 import logger from '../../../utils/logger.js';
+import { modelSupportsTools } from '../../../../shared/modelCapabilities.js';
 import { readMemory, readMemoryForPrompt } from '../../memory/memoryService.js';
 import { MEMORY_SCOPE_TASK } from './taskMemory.js';
 
@@ -36,7 +37,7 @@ export const HISTORY_TOOL_IDS = Object.freeze(['list_task_runs', 'get_task_run']
  */
 export function modelCanCallTools(prepared) {
   return (
-    prepared?.model?.supportsTools === true &&
+    modelSupportsTools(prepared?.model) &&
     // With Google native search the adapter sends only `google_search` and
     // drops every function tool.
     prepared?.llmOptions?.nativeWebSearch?.provider !== 'google'

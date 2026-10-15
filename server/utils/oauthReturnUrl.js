@@ -1,3 +1,8 @@
+function isBackslashOrControlChar(char) {
+  const code = char.codePointAt(0);
+  return char === '\\' || code < 0x20 || code === 0x7f;
+}
+
 /**
  * Validate a `returnUrl` parameter supplied to an OAuth flow before
  * passing it to `res.redirect()`.
@@ -14,13 +19,21 @@
  * the hostname, so a scheme check is mandatory. Major browsers strip
  * JS-scheme `Location` headers today, but defense in depth is cheap.
  *
+ * Also rejects backslashes and control characters. Browsers read `\` as `/`
+ * and drop tabs and newlines while parsing a `Location` header, so
+ * `/\evil.example` and `/<TAB>/evil.example` both end up as the
+ * protocol-relative `//evil.example`, a link to another site that the
+ * `//` check above cannot see.
+ *
  * @param {string|undefined|null} returnUrl
  * @param {{ hostname: string }} req — anything with a `hostname` property
  *   (an Express request is the typical caller).
  * @returns {boolean}
  */
 export function isValidReturnUrl(returnUrl, req) {
-  if (!returnUrl) return false;
+  // `req.query.returnUrl` is an array when the parameter is repeated.
+  if (typeof returnUrl !== 'string' || !returnUrl) return false;
+  if ([...returnUrl].some(isBackslashOrControlChar)) return false;
   if (returnUrl.startsWith('/') && !returnUrl.startsWith('//')) return true;
   try {
     const url = new URL(returnUrl);

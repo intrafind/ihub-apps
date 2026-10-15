@@ -45,6 +45,7 @@ import { projectLedgerEvent, getStreamRun } from '../services/loop/RunStream.js'
 import { getExecutionRegistry } from '../services/workflow/ExecutionRegistry.js';
 import { getWorkflowEngine } from '../services/workflow/WorkflowEngine.js';
 import { abortChatRequest } from '../sse.js';
+import { userAbortCause } from '../services/chat/abortCause.js';
 import { cancelChatWorkflow } from '../tools/workflowRunner.js';
 import logger from '../utils/logger.js';
 
@@ -59,13 +60,13 @@ import logger from '../utils/logger.js';
  * records the event without aborting a newer turn of the same chat.
  * @returns {Promise<string|null>} what was stopped
  */
-async function stopRun(runId, meta) {
+async function stopRun(runId, meta, cause) {
   const refs = runLog.getRunMeta(runId)?.refs || meta?.refs || {};
   if (meta?.kind === 'chat' && refs.chatId) {
     if (await runLog.hasEnded(runId)) return null;
     const bound = getStreamRun(refs.chatId);
     if (bound && bound.runId !== runId) return null;
-    abortChatRequest(refs.chatId);
+    abortChatRequest(refs.chatId, cause);
     await cancelChatWorkflow(refs.chatId);
     return 'chat_aborted';
   }
@@ -401,7 +402,14 @@ export default function registerRunRoutes(app) {
         { kind: auth.meta?.kind || 'chat' }
       );
       let effect = null;
-      if (kind === 'stop') effect = await stopRun(runId, auth.meta);
+      if (kind === 'stop') {
+        const cause = await userAbortCause('run_stop', req.user, {
+          mode: auth.meta?.identityMode || runLog.identityMode(),
+          via: 'POST /api/runs/:runId/human-events (stop)',
+          related: { runId }
+        });
+        effect = await stopRun(runId, auth.meta, cause);
+      }
       // A steer reaches the running loop at its next step boundary (queued on
       // the worker that owns the run, relayed there in a cluster); without an
       // active loop it is recorded only.

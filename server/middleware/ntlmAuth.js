@@ -792,17 +792,13 @@ export async function processNtlmLogin(req, ntlmConfig) {
     user = enhanceUserGroups(user, authConfig, ntlmConfig);
   }
 
-  // Validate and persist NTLM user (similar to OIDC/Proxy)
-  try {
-    user = await validateAndPersistExternalUser(user, platform);
-    logger.info('NTLM Auth: user persisted via login', { component: 'NtlmAuth', userId: user.id });
-  } catch (userError) {
-    logger.error('NTLM Auth: user persistence error during login', {
-      component: 'NtlmAuth',
-      error: userError
-    });
-    // Continue with authentication even if persistence fails
-  }
+  // Validate and persist NTLM user (similar to OIDC/Proxy). The user must be
+  // persisted - if this fails, the login fails. The token below is validated on
+  // every request against the persisted record (see jwtAuth.js), so one issued
+  // for a user that was never persisted could not be used, and continuing here
+  // would also let a disabled user or a self-signup the admin turned off through.
+  user = await validateAndPersistExternalUser(user, platform);
+  logger.info('NTLM Auth: user persisted via login', { component: 'NtlmAuth', userId: user.id });
 
   // Generate JWT token using centralized token service
   const sessionTimeout =

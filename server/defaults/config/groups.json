@@ -35,7 +35,7 @@
       "permissions": {
         "apps": ["chat"],
         "prompts": ["*"],
-        "models": ["gemini-flash-latest"],
+        "models": ["gemini-flash-latest", "local-vllm"],
         "skills": [],
         "adminAccess": false,
         "scheduledTasks": false

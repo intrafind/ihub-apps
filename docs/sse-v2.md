@@ -42,7 +42,7 @@ reducer, `client/src/shared/run/runReducer.js`.
 | `stream/connected`     | `{ runId, lastSeq, protocol: 2 }`                                                                                             | Subscription established                                                      |
 | `stream/error`         | `{ code, message, details?, retryable, isContextWindowError? }`                                                               | The run failed; always followed by `run/ended { status: 'error' }`            |
 | `run/started`          | `{ kind, model?, parentRunId?, refs }`                                                                                        | A run began (`kind`: chat, workflow, agent, subagent, inference, utility)     |
-| `run/ended`            | `{ status, finishReason, usage?, knowledgeSources?, toolName?, output?, error? }`                                            | Terminal frame of a run                                                       |
+| `run/ended`            | `{ status, finishReason, usage?, knowledgeSources?, toolName?, output?, cause?, error? }`                                    | Terminal frame of a run                                                       |
 | `run/paused`           | `{ reason: interaction \| manual \| system, interactionId? }`                                                                  | The run waits (a question, an approval)                                       |
 | `run/resumed`          | `{ interactionId? }`                                                                                                          | The run continues                                                             |
 | `step/delta`           | `{ step, kind: text \| thinking \| image, content?, image?, meta? }`                                                           | Streamed answer output of model step `step`                                   |
@@ -118,7 +118,13 @@ the user's answer arrives as the next chat message (or through
 workflow launched from chat) streams its answer as `step/delta` frames and ends
 with `run/ended { finishReason: 'tool_passthrough_complete', toolName }`. A
 failure is `stream/error` followed by `run/ended { status: 'error' }`; a stop
-or disconnect is `run/ended { status: 'aborted', finishReason: 'connection_closed' }`.
+or disconnect is `run/ended { status: 'aborted', finishReason: 'connection_closed', cause }`.
+`cause` says who stopped the run and from where: `{ kind, message, at, actor: { type, id?, owner? },
+origin: { via, source?, worker? }, related? }` with `kind` one of `user_stop`, `run_stop`,
+`task_run_cancelled`, `task_deleted`, `task_disabled`, `chat_deleted`, `user_deleted`,
+`superseded`, `client_disconnected`, `client_evicted`, `api_client_closed`, `lease_lost` or
+`unknown`. The same object is on the ledger's `run/end`. Only a person's Stop (or the server)
+ends a turn: a client that merely leaves or reconnects sends nothing.
 
 `run/ended.knowledgeSources` is what the answer was based on, and the only
 thing the answer badge reads: `websearch`, `ifinder`, `sources`, `iassistant`,

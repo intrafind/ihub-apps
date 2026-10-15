@@ -49,6 +49,7 @@ import { RUNTIME_NAMESPACES } from '../../storage/namespaces.js';
 import { SHARE_MODES, shareState } from './chatSharing.js';
 import { shareableActivity } from './runActivity.js';
 import { shareableSourceSet } from '../../../shared/sources/index.js';
+import { publicAbortCause } from './abortCause.js';
 
 const COMPONENT = 'ChatShareRepository';
 
@@ -144,6 +145,18 @@ export function recipientMarkerKey(shareId, recipientId) {
 }
 
 /**
+ * A stored message error with its abort cause cut down to the public part.
+ *
+ * @param {Object} error - `message.error`.
+ * @returns {Object}
+ */
+export function withPublicCause(error) {
+  const { cause, ...rest } = error;
+  const publicCause = publicAbortCause(cause);
+  return publicCause ? { ...rest, cause: publicCause } : rest;
+}
+
+/**
  * The snapshot form of one stored message: what was stored, minus the fields
  * that only mean something to the chat it came from.
  *
@@ -164,6 +177,9 @@ export function snapshotMessage(message) {
     if (sources) copy.sources = sources;
     else delete copy.sources;
   }
+  // A stopped answer carries what stopped it; a share keeps the explanation
+  // and drops who did it and where (an account id, a worker's host name).
+  if (copy.error?.cause) copy.error = withPublicCause(copy.error);
   // The activity behind an answer is shared without the document hits the
   // owner's searches found, for the same reason.
   if (copy.activity) {

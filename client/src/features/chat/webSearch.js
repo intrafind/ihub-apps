@@ -6,6 +6,8 @@
  * @module features/chat/webSearch
  */
 
+import { modelSupportsTools } from '../../../../shared/modelCapabilities.js';
+
 /** Providers that run web search themselves (mirrors the server's list). */
 const NATIVE_WEB_SEARCH_PROVIDERS = ['google', 'openai-responses', 'anthropic'];
 
@@ -31,6 +33,6 @@ export function modelSupportsWebSearch(app, model) {
       : NATIVE_WEB_SEARCH_PROVIDERS;
   const native =
     nativeProviders.includes(model.provider) && model.nativeWebSearch?.enabled !== false;
-  const script = availability?.script !== false && Boolean(model.supportsTools);
+  const script = availability?.script !== false && modelSupportsTools(model);
   return native || script;
 }

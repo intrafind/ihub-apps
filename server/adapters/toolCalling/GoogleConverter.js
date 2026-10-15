@@ -12,7 +12,8 @@ import {
   createGenericUsage,
   normalizeFinishReason,
   cloneAndWalkSchema,
-  normalizeToolName
+  normalizeToolName,
+  getNamedToolChoice
 } from './GenericToolCalling.js';
 import { isPlausibleToolName, describeInvalidToolName } from './toolNameValidator.js';
 import { extractThoughtSignature } from './thoughtSignatures.js';
@@ -138,6 +139,35 @@ export function convertGoogleToolsToGeneric(googleTools = []) {
   }
 
   return genericTools;
+}
+
+/** Gemini function calling modes for the tool choice values that are not `auto` (its default). */
+const GOOGLE_FUNCTION_CALLING_MODES = new Map([
+  ['required', 'ANY'],
+  ['any', 'ANY'],
+  ['none', 'NONE']
+]);
+
+/**
+ * Resolve a generic tool-choice value to Gemini's `toolConfig`.
+ *
+ * `required` (or `any`) becomes function calling mode `ANY` (the model must
+ * call one of the declared functions), `none` `NONE`, and a named function
+ * `ANY` limited to that name. `auto` is Gemini's default, so nothing is sent.
+ * `ANY` needs function declarations in the request: it cannot be combined with
+ * the native `google_search` tool, which already excludes them.
+ *
+ * @param {string|Object} [toolChoice] - Generic or OpenAI-style tool choice
+ * @returns {{functionCallingConfig: {mode: string, allowedFunctionNames?: string[]}}|undefined}
+ *   Gemini tool config, undefined when none is needed
+ */
+export function convertGoogleToolChoice(toolChoice) {
+  const named = getNamedToolChoice(toolChoice);
+  if (named) return { functionCallingConfig: { mode: 'ANY', allowedFunctionNames: [named] } };
+  const mode = GOOGLE_FUNCTION_CALLING_MODES.get(
+    typeof toolChoice === 'string' ? toolChoice : toolChoice?.type
+  );
+  return mode ? { functionCallingConfig: { mode } } : undefined;
 }
 
 /**

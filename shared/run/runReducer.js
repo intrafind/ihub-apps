@@ -293,6 +293,8 @@ export function reduceRunEvent(state, envelope) {
         toolName: data.toolName || run.toolName,
         output: data.output !== undefined ? data.output : run.output,
         error: data.error || run.error,
+        // Set on an aborted run: who stopped it (see `abortCause.js` on the server).
+        cause: data.cause || run.cause,
         endedAt: ts,
         lastLifecycleAt: ts,
         pendingInteractionId: null

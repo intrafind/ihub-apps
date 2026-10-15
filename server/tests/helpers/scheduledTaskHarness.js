@@ -29,7 +29,7 @@ export const MODELS = [
     modelId: 'gpt-4o',
     url: 'https://u/v1/chat/completions',
     autoDiscovery: false,
-    supportsTools: true,
+    supportsTools: 'auto',
     default: true
   },
   {
@@ -38,7 +38,7 @@ export const MODELS = [
     modelId: 'local-model',
     url: 'https://u/v1/chat/completions',
     autoDiscovery: false,
-    supportsTools: false
+    supportsTools: 'none'
   }
 ];
 
@@ -267,7 +267,8 @@ export function composerReply(notes, changed = true) {
  *
  * @param {Array} script - One streamed response per model call.
  * @param {Object} [options]
- * @param {(req: Object) => Promise<void>|void} [options.onRequest] - Runs before each call is answered.
+ * @param {(req: Object, ctx: {signal: AbortSignal}) => Promise<void>|void} [options.onRequest] - Runs before each
+ *   call is answered; `ctx.signal` aborts when the turn is stopped.
  * @param {Object[]} [options.models]
  * @param {(toolId: string, params: Object) => Promise<Object>} [options.runTool] - Replaces the stub
  *   (pass the real `runTool` to run the real handlers).
@@ -287,7 +288,7 @@ export function scriptedChatService(
   const { client } = makeClient({
     models,
     runLog: ledger.runLog,
-    transport: async req => {
+    transport: async (req, ctx) => {
       const messages = req.body?.messages || [];
       if (String(messages[0]?.content || '').startsWith(COMPOSER_PROMPT_START)) {
         composerRequests.push(req);
@@ -304,7 +305,7 @@ export function scriptedChatService(
         return sseResponse(openaiText([text], usage ? { usage } : {}));
       }
       requests.push(req);
-      await onRequest?.(req);
+      await onRequest?.(req, ctx);
       const next = queue.shift();
       if (!next) throw new Error(`script exhausted after ${requests.length} calls`);
       return sseResponse(next);

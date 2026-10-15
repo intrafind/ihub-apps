@@ -239,19 +239,19 @@ describe('when the model cannot be given tools', () => {
 
   it('Gemini with Google search drops function tools, so none are offered', () => {
     const google = {
-      model: { id: 'gem', provider: 'google', supportsTools: true },
+      model: { id: 'gem', provider: 'google', supportsTools: 'auto' },
       llmOptions: { nativeWebSearch: { provider: 'google' } },
       tools: []
     };
     assert.equal(modelCanCallTools(google), false);
     const anthropic = {
-      model: { id: 'cl', provider: 'anthropic', supportsTools: true },
+      model: { id: 'cl', provider: 'anthropic', supportsTools: 'auto' },
       llmOptions: { nativeWebSearch: { provider: 'anthropic' } },
       tools: []
     };
     assert.equal(modelCanCallTools(anthropic), true, 'other providers keep function tools');
-    assert.equal(modelCanCallTools({ model: { supportsTools: true }, llmOptions: {} }), true);
-    assert.equal(modelCanCallTools({ model: { supportsTools: false }, llmOptions: {} }), false);
+    assert.equal(modelCanCallTools({ model: { supportsTools: 'auto' }, llmOptions: {} }), true);
+    assert.equal(modelCanCallTools({ model: { supportsTools: 'none' }, llmOptions: {} }), false);
     assert.equal(modelCanCallTools({ model: {}, llmOptions: {} }), false);
     assert.equal(modelCanCallTools({}), false);
   });
@@ -260,7 +260,7 @@ describe('when the model cannot be given tools', () => {
     const task = await newTask();
     await writeTaskMemory(await stored(task.id), { content: 'watermark' });
     const prepared = {
-      model: { id: 'gem', provider: 'google', supportsTools: true },
+      model: { id: 'gem', provider: 'google', supportsTools: 'auto' },
       llmOptions: { nativeWebSearch: { provider: 'google' } },
       tools: []
     };

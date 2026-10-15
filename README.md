@@ -434,7 +434,6 @@ Best for: customization, contributing, building new apps.
 
 - **Web search**: Brave, Staan, Qwant, and native search for Claude, Gemini and OpenAI
 - **Page reader**: The model opens and reads pages as Markdown
-- **Screenshots**: Playwright and Selenium-based page capture
 - **Microsoft Entra**: Corporate directory and people search
 - **Jira integration**: Issue tracking and project management
 - **MCP**: Connect further systems via the Model Context Protocol, including MCP Apps and per-user sign-in

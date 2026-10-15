@@ -567,10 +567,21 @@ attempting an outbound request. An Outlook add-in needs about 600 KB —
 - In Outlook on the web, open browser DevTools → Network and reload the add-in. Look for blocked CORS or 401 responses.
 - The add-in calls `/api/integrations/office-addin/config` before authenticating. That route is intentionally unauthenticated — make sure your reverse proxy or WAF is not requiring auth on `/api/integrations/office-addin/*`.
 
+### The add-in is disabled in a mail that is attached to another mail
+
+When you open a `.msg` or `.eml` attachment from the reading pane (or open one from the file system), Outlook does not load any add-in in that window, so the iHub button is greyed out or missing. This is a documented Outlook limitation, not an iHub setting: [Microsoft lists](https://learn.microsoft.com/en-us/office/dev/add-ins/outlook/outlook-add-ins-overview#add-in-activation-limitations) "a .msg or .eml file which is an attachment to another message" and "a .msg or .eml file opened from the file system" among the items add-ins never activate on. The manifest cannot opt in, and redeploying it does not change this.
+
+Work around it with one of these:
+
+- **Keep the parent mail open and use iHub there.** The attached message is read as part of the open email's attachments (see below), so you can ask about it from the parent mail's task pane.
+- **Save the attached message and upload the `.msg` or `.eml` file in the iHub web app**, in an app that accepts those file types (for example the default File Analysis or Summarizer apps).
+
+Outlook applies the same rule to other items, such as delivery and non-delivery reports and IRM-protected mail on Outlook mobile; Microsoft's page above has the full list.
+
 ### Email attachments are not picked up
 
 - Reading attachments needs Mailbox API **1.8+**. Outlook on the web and current desktop Outlook satisfy this; very old Outlook 2016 builds may not.
-- Inline images and item attachments are filtered out — only file attachments are forwarded as chat context.
+- Inline images are filtered out. Every other attachment is forwarded as chat context: files are read like uploads, attached emails (`.eml`) are turned into a headers-and-body text block, and meeting invites into a short summary. Cloud links (OneDrive / SharePoint) are passed as the link only, since there are no file bytes to read.
 - Total attachment size is capped by iHub's normal upload limits — see [File Upload Feature](file-upload-feature.md).
 
 ### "Add to email" is greyed out, or a document will not attach

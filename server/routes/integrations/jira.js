@@ -2,235 +2,65 @@
 // Handles OAuth2 PKCE flow for JIRA authentication
 
 import express from 'express';
-import crypto from 'node:crypto';
 import JiraService from '../../services/integrations/JiraService.js';
-import { authOptional, authRequired } from '../../middleware/authRequired.js';
+import { authRequired } from '../../middleware/authRequired.js';
 import { requireFeature } from '../../featureRegistry.js';
 import logger from '../../utils/logger.js';
+import rateLimit from 'express-rate-limit';
 import {
   sendInternalError,
   sendAuthRequired,
   sendErrorResponse
 } from '../../utils/responseHelpers.js';
-import { isValidReturnUrl } from '../../utils/oauthReturnUrl.js';
-import {
-  DEFAULT_INTEGRATION_RETURN_URL,
-  issueIntegrationOAuthState,
-  verifyIntegrationOAuthState,
-  withQueryParam
-} from '../../utils/integrationOAuthState.js';
+import { createOAuthIntegrationRouter } from './oauthIntegrationFactory.js';
 
 const router = express.Router();
 
 // Gate all Jira routes behind the integrations feature flag
 router.use(requireFeature('integrations'));
 
-/**
- * Initiate JIRA OAuth2 flow for Atlassian Cloud
- * GET /api/integrations/jira/auth
- */
-router.get('/auth', authRequired, async (req, res) => {
-  try {
-    const { returnUrl } = req.query;
-
-    // authRequired lets the anonymous principal through when anonymous
-    // access is allowed, and does not guarantee req.user.id is truthy.
-    // Refuse to start an OAuth flow without a signed-in user id — otherwise
-    // tokens would land under a shared key and could be read by another caller.
-    if (!req.user?.id || req.user.id === 'anonymous') {
-      return sendAuthRequired(res);
-    }
-
-    // Generate PKCE parameters (may be ignored by Atlassian Cloud)
-    const codeVerifier = crypto.randomBytes(32).toString('base64url');
-
-    // Validate returnUrl to reject `javascript:`, `data:`, off-host
-    // redirects, and protocol-relative URLs that would leak the flow
-    // off-site after the callback finishes.
-    const validatedReturnUrl = isValidReturnUrl(returnUrl, req)
-      ? returnUrl
-      : DEFAULT_INTEGRATION_RETURN_URL;
-
-    // Signed, self-contained state instead of a session: the callback may
-    // land on another cluster worker (see utils/integrationOAuthState.js).
-    const state = issueIntegrationOAuthState({
-      service: 'jira',
-      userId: req.user.id,
-      returnUrl: validatedReturnUrl,
-      codeVerifier
-    });
-
-    // Generate authorization URL for Atlassian Cloud
-    const authUrl = JiraService.generateAuthUrl(state, codeVerifier);
-
-    logger.info('Initiating JIRA OAuth', { component: 'Jira', userId: req.user?.id });
-
-    // Redirect to Atlassian OAuth consent screen
-    res.redirect(authUrl);
-  } catch (error) {
-    return sendInternalError(res, error, 'initiate JIRA OAuth');
-  }
+// Same 10 req/min cap the other OAuth integrations put on flow initiation.
+const jiraAuthLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false
 });
 
-/**
- * Handle JIRA OAuth callback
- * GET /api/integrations/jira/callback
- */
-router.get('/callback', authOptional, async (req, res) => {
-  const verified = verifyIntegrationOAuthState(req, { service: 'jira' });
-  const { returnUrl } = verified;
-  try {
-    const { code, error } = req.query;
-
-    if (error) {
-      logger.error('JIRA OAuth error', { component: 'Jira', oauthError: error });
-      // Stable error code rather than echoing the upstream error string.
-      const errorCode = error === 'access_denied' ? 'access_denied' : 'oauth_failed';
-      return res.redirect(withQueryParam(returnUrl, 'jira_error', errorCode));
-    }
-
-    if (!verified.ok) {
-      logger.error('Invalid JIRA OAuth state parameter', {
+// Shared auth -> callback -> status -> disconnect flow (see oauthIntegrationFactory.js).
+// Jira has a single connection per user, so there is no providerId in any route.
+createOAuthIntegrationRouter(router, {
+  providerKey: 'jira',
+  displayName: 'JIRA',
+  requiresProviderId: false,
+  usesPkce: true,
+  authLimiter: jiraAuthLimiter,
+  buildAuthUrl: ({ state, codeVerifier }) => JiraService.generateAuthUrl(state, codeVerifier),
+  exchangeCodeForTokens: ({ code, codeVerifier }) =>
+    JiraService.exchangeCodeForTokens(code, codeVerifier),
+  storeUserTokens: (userId, tokens) => JiraService.storeUserTokens(userId, tokens),
+  isUserAuthenticated: userId => JiraService.isUserAuthenticated(userId),
+  getUserInfo: userId => JiraService.getUserInfo(userId),
+  getTokenExpirationInfo: userId => JiraService.getTokenExpirationInfo(userId),
+  deleteUserTokens: userId => JiraService.deleteUserTokens(userId),
+  formatUserInfo: userInfo => ({
+    displayName: userInfo.displayName,
+    emailAddress: userInfo.emailAddress,
+    accountType: userInfo.accountType,
+    active: userInfo.active
+  }),
+  logMissingRefreshToken: () =>
+    logger.error(
+      'CRITICAL: No refresh token received from JIRA OAuth - user will need to re-authenticate when access token expires',
+      {
         component: 'Jira',
-        reason: verified.error
-      });
-      return res.redirect(withQueryParam(returnUrl, 'jira_error', verified.error));
-    }
-
-    // Surface a stable error code if the IdP returned no `code`
-    // rather than failing inside `exchangeCodeForTokens`.
-    if (!code) {
-      logger.error('JIRA OAuth callback missing code', { component: 'Jira' });
-      return res.redirect(withQueryParam(returnUrl, 'jira_error', 'missing_code'));
-    }
-
-    // Exchange authorization code for tokens
-    const tokens = await JiraService.exchangeCodeForTokens(code, verified.codeVerifier);
-
-    // Verify we received a refresh token (required for long-term access)
-    if (!tokens.refreshToken) {
-      logger.error(
-        'CRITICAL: No refresh token received from JIRA OAuth - user will need to re-authenticate when access token expires',
-        {
-          component: 'Jira',
-          causes: [
-            'JIRA app does not support offline access',
-            'User denied offline_access scope',
-            'Atlassian OAuth server configuration issue'
-          ]
-        }
-      );
-
-      // Still store the tokens but with a clear warning in logs
-      logger.warn(
-        'Storing tokens WITHOUT refresh capability - user will need to reconnect every hour',
-        { component: 'Jira' }
-      );
-    }
-
-    // Store encrypted tokens for user
-    await JiraService.storeUserTokens(verified.userId, tokens);
-
-    logger.info('JIRA OAuth completed', {
-      component: 'Jira',
-      userId: verified.userId,
-      returnUrl
-    });
-
-    res.redirect(withQueryParam(returnUrl, 'jira_connected', 'true'));
-  } catch (error) {
-    logger.error('Error handling JIRA OAuth callback', { component: 'Jira', error });
-    // Use a stable error code rather than echoing `error.message` —
-    // some upstream errors interpolate user-influenced strings, and
-    // we don't want those landing in the redirect URL.
-    res.redirect(withQueryParam(returnUrl, 'jira_error', 'callback_failed'));
-  }
-});
-
-/**
- * Get JIRA connection status for current user
- * GET /api/integrations/jira/status
- */
-router.get('/status', authRequired, async (req, res) => {
-  try {
-    if (!req.user?.id || req.user.id === 'anonymous') {
-      return sendAuthRequired(res);
-    }
-
-    const isAuthenticated = await JiraService.isUserAuthenticated(req.user.id);
-
-    if (!isAuthenticated) {
-      return res.json({
-        connected: false,
-        message: 'JIRA account not connected'
-      });
-    }
-
-    // Get user info from JIRA
-    const userInfo = await JiraService.getUserInfo(req.user.id);
-
-    // Get token expiration info
-    const tokenInfo = await JiraService.getTokenExpirationInfo(req.user.id);
-
-    res.json({
-      connected: true,
-      userInfo: {
-        displayName: userInfo.displayName,
-        emailAddress: userInfo.emailAddress,
-        accountType: userInfo.accountType,
-        active: userInfo.active
-      },
-      tokenInfo: {
-        expiresAt: tokenInfo.expiresAt,
-        minutesUntilExpiry: tokenInfo.minutesUntilExpiry,
-        isExpiring: tokenInfo.isExpiring,
-        isExpired: tokenInfo.isExpired
-      },
-      message: tokenInfo.isExpiring
-        ? 'JIRA account connected (tokens expiring soon)'
-        : 'JIRA account connected successfully'
-    });
-  } catch (error) {
-    logger.error('Error getting JIRA status', { component: 'Jira', error });
-
-    if (error.message.includes('authentication required')) {
-      return res.json({
-        connected: false,
-        message: 'JIRA authentication expired'
-      });
-    }
-
-    return sendInternalError(res, error, 'get JIRA status');
-  }
-});
-
-/**
- * Disconnect JIRA account
- * POST /api/integrations/jira/disconnect
- */
-router.post('/disconnect', authRequired, async (req, res) => {
-  try {
-    if (!req.user?.id || req.user.id === 'anonymous') {
-      return sendAuthRequired(res);
-    }
-
-    const success = await JiraService.deleteUserTokens(req.user.id);
-
-    if (success) {
-      logger.info('JIRA disconnected', { component: 'Jira', userId: req.user.id });
-      res.json({
-        success: true,
-        message: 'JIRA account disconnected successfully'
-      });
-    } else {
-      res.json({
-        success: false,
-        message: 'No JIRA connection found to disconnect'
-      });
-    }
-  } catch (error) {
-    return sendInternalError(res, error, 'disconnect JIRA');
-  }
+        causes: [
+          'JIRA app does not support offline access',
+          'User denied offline_access scope',
+          'Atlassian OAuth server configuration issue'
+        ]
+      }
+    )
 });
 
 /**

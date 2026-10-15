@@ -45,9 +45,9 @@ import {
 import { structuredOutputSeam } from '../services/loop/seams/structuredOutputSeam.js';
 
 const MODELS = [
-  { id: 'gpt', provider: 'openai', supportsTools: true },
-  { id: 'claude', provider: 'anthropic', supportsTools: true },
-  { id: 'notools', provider: 'openai', supportsTools: false },
+  { id: 'gpt', provider: 'openai', supportsTools: 'auto' },
+  { id: 'claude', provider: 'anthropic', supportsTools: 'auto' },
+  { id: 'notools', provider: 'openai', supportsTools: 'none' },
   { id: 'ia', provider: 'iassistant-conversation' },
   { id: 'br', provider: 'bedrock' }
 ];

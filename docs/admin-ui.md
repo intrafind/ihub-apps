@@ -228,6 +228,14 @@ Go to **Access & Identity → Users** to view, edit, and manage user accounts.
 
 **Bulk operations:** Select multiple users with the checkboxes to perform bulk actions (enable, disable, change group).
 
+**Deleting a user:** Deleting a user ends their access immediately, whichever way they signed in, and then removes what they owned in the background:
+
+- Always: personal API keys, OAuth connections, the credentials they stored for other systems (Office 365, Jira, Google Drive, Nextcloud, MCP servers) and their scheduled tasks.
+- Also for now: their chats, prompts, skills and short links. Anything others reached through a shared prompt, skill or chat link goes with it.
+- Kept: the audit log and usage statistics. When the clean-up finishes, the audit log gets a `cleanup` entry for the user, listing any part that could not be removed.
+
+Deleting cannot be undone. To stop someone from signing in while keeping what they made, disable the account instead.
+
 ---
 
 ## Managing Groups
