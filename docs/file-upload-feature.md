@@ -346,7 +346,13 @@ All file processing happens **client-side** before content is sent to the server
    - **Audio** — Base64-encoded and sent natively to the model.
    - **Video** — Audio track extracted via the Web Audio API, then processed as audio.
 
-   Processing that takes more than a moment shows a progress panel above the message box with the file name, the step, a progress bar and a **Stop** button. Stopping attaches nothing for that file and shows no error; files attached before stay. Sending is held back until the attachment is there. Details: [Audio Extraction](audio-extraction.md#progress-and-stop).
+   Processing that takes more than a moment shows a progress panel above the message box with the file name, the step, a progress bar and a **Stop** button. Stopping attaches nothing for that file and shows no error; files attached before stay. Sending is held back until the attachment is there. What the panel reports depends on the format:
+
+   - **PDF, PPTX, DOCX, TIFF** — real progress and a real Stop. A PDF names the page it reads (_Page 12 of 340_), a PowerPoint the slide (_Slide 3 of 40_), a TIFF the page it converts; Word reports its steps (opening, converting, finishing up). Stop lands at the next page, slide or step: pdf.js is told to destroy the document, which ends its worker, and the plain text extraction does not start in its place. A scanned PDF reports the pages it renders as images (the first five) as a step of its own
+   - **Text, images, audio, video** — how much of the file has been read; for a video, the steps of [extracting its audio](audio-extraction.md#progress-and-stop)
+   - **XLSX/XLS, ODT/ODS/ODP, MSG** — how much of the file has been read, then an animated bar without a value: a single call of a library takes the file apart. Stop returns at once, and what the browser is still doing is dropped when it ends
+   - The percentage never goes down, and a document of any number of pages is reported at most once per percent point (the page counter itself, at most ten times a second)
+   - The cloud storage picker, source documents opened from the chat and the Office add-in read the file as before and show no panel
 4. **Preview** — Attached files are displayed with a preview before sending.
 5. **Sending** — File content is packed into the message:
    - Text file content → prepended to `message.content` as `[File: filename.ext (type)]\n<content>`

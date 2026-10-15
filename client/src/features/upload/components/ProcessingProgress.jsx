@@ -11,8 +11,10 @@ const SHOW_AFTER_MS = 300;
  * button. Mount it while processing, unmount it when done.
  *
  * @param {Object} props
- * @param {{fileName: string, stage: string|null, percent: number|null, index: number, total: number}|null} props.progress
- *   From `Uploader`; `stage` is one of the stages `extractAudioFromVideo` reports
+ * @param {{fileName: string, stage: string|null, percent: number|null, detail?: {unit: string, current: number, total: number}, index: number, total: number}|null} props.progress
+ *   From `Uploader`; `stage` is one of the stages the extractions report (`read`, `parse`,
+ *   `extract`, `convert`, `render`, `finalize` for documents, `decode`, `resample`, `encode` for
+ *   audio), `detail` the page or slide a document extraction is on
  * @param {Function} props.onStop - Stops the processing
  */
 const ProcessingProgress = ({ progress, onStop }) => {
@@ -26,14 +28,35 @@ const ProcessingProgress = ({ progress, onStop }) => {
 
   if (!visible || !progress) return null;
 
-  const { fileName, stage, percent, index, total } = progress;
+  const { fileName, stage, percent, detail, index, total } = progress;
   const stageText = {
     read: t('components.uploader.stage.read', 'Reading file…'),
+    parse: t('components.uploader.stage.parse', 'Opening document…'),
+    extract: t('components.uploader.stage.extract', 'Extracting text…'),
+    convert: t('components.uploader.stage.convert', 'Converting file…'),
+    render: t('components.uploader.stage.render', 'Rendering pages…'),
     decode: t('components.uploader.stage.decode', 'Extracting audio…'),
     resample: t('components.uploader.stage.resample', 'Converting audio…'),
     encode: t('components.uploader.stage.encode', 'Encoding audio…'),
     finalize: t('components.uploader.stage.finalize', 'Finishing up…')
   }[stage];
+  // Which page or slide a document extraction is on; a unit this panel does not know is left out
+  const detailLabel = ({ unit, current, total }) => {
+    if (unit === 'page') {
+      return t('components.uploader.detail.page', 'Page {{current}} of {{total}}', {
+        current,
+        total
+      });
+    }
+    if (unit === 'slide') {
+      return t('components.uploader.detail.slide', 'Slide {{current}} of {{total}}', {
+        current,
+        total
+      });
+    }
+    return null;
+  };
+  const detailText = detail ? detailLabel(detail) : null;
   const known = typeof percent === 'number';
 
   return (
@@ -48,6 +71,15 @@ const ProcessingProgress = ({ progress, onStop }) => {
           </p>
           <p className="text-gray-600 dark:text-gray-300">
             {stageText || t('components.uploader.processing', 'Processing file...')}
+            {detailText && (
+              // Not announced: it changes every page, and the progress bar says how far it is
+              <span
+                aria-hidden="true"
+                className="ml-2 tabular-nums text-gray-500 dark:text-gray-400"
+              >
+                {detailText}
+              </span>
+            )}
             {total > 1 && (
               <span className="ml-2 text-gray-500 dark:text-gray-400">
                 {t('components.uploader.fileOfTotal', 'File {{current}} of {{total}}', {

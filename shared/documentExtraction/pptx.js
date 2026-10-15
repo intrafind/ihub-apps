@@ -13,6 +13,7 @@
 import { markdownTableLines } from './markdown.js';
 import { readRelationships, relationshipTargets } from './ooxml/package.js';
 import { parseXml } from './ooxml/xml.js';
+import { itemProgress, throwIfAborted } from './progress.js';
 
 const A_NS = new Set([
   'http://schemas.openxmlformats.org/drawingml/2006/main',
@@ -154,6 +155,11 @@ function slideContent(doc) {
  * @param {typeof DOMParser} args.DOMParser
  * @param {'ignore'|'include'} [args.speakerNotes] - `include` adds the notes of a slide as
  *   `[Notes]` after it; they are not sent by default
+ * @param {AbortSignal} [args.signal] - Stops the extraction between slides, rejecting with the
+ *   abort error (see {@link module:shared/documentExtraction/progress})
+ * @param {Function} [args.onProgress] - Called with `{ stage, percent, detail }`, `percent` being
+ *   the share of the stage done: `parse` (no percent) while the package is opened, then `extract`
+ *   for every slide (`detail` is `{ unit: 'slide', current, total }`, the slide being read)
  * @returns {Promise<string>} Text of the slides, '' when no slide has any
  * @throws When the package cannot be read — the caller falls back to the plain extraction
  */
@@ -161,9 +167,14 @@ export async function extractPptxText({
   arrayBuffer,
   JSZip,
   DOMParser: DOMParserCtor,
-  speakerNotes = 'ignore'
+  speakerNotes = 'ignore',
+  signal,
+  onProgress
 }) {
+  throwIfAborted(signal);
+  onProgress?.({ stage: 'parse', percent: null });
   const zip = await JSZip.loadAsync(arrayBuffer);
+  throwIfAborted(signal);
   const readPart = async name => {
     const file = zip.file(name);
     return file ? parseXml(DOMParserCtor, await file.async('string')) : null;
@@ -214,7 +225,9 @@ export async function extractPptxText({
   }
 
   const output = [];
-  for (const { number, part } of slides) {
+  for (const [index, { number, part }] of slides.entries()) {
+    throwIfAborted(signal);
+    onProgress?.(itemProgress('extract', 'slide', index + 1, slides.length));
     if (!part) continue;
     const doc = await readPart(part);
     if (!doc) continue;

@@ -26,9 +26,9 @@ app first opens. They load only when someone exports a chat to one of those form
 
 ## Progress and Stop While Attachments Are Processed
 
-Extracting the audio of a video can take minutes. Nothing showed that it was working, and the page
-froze for moments on the way. Now a panel above the message box shows what is going on and lets
-users stop it.
+Extracting the audio of a video, or the text of a large PDF or presentation, can take minutes.
+Nothing showed that it was working, and the page froze for moments on the way. Now a panel above
+the message box shows what is going on and lets users stop it.
 
 - The panel names the file and the step ("Extracting audio…", "Converting audio…", …) and shows a
   progress bar. Decoding the video's audio has no measurable progress, so the bar is animated
@@ -37,6 +37,12 @@ users stop it.
   attached before stay. When several files are added at once, the ones already done stay as well
 - The panel appears for any attachment that takes more than a moment, such as audio, video or
   large documents; instant ones never flash it
+- PDF, PowerPoint, Word and TIFF files show real progress: the panel names the page or slide being
+  read ("Page 12 of 340", "Slide 3 of 40") and the bar fills as the pages go by. **Stop** ends the
+  extraction at the next page, slide or step instead of letting it run on in the browser. A scanned
+  PDF shows the pages it renders as images as a step of its own
+- Spreadsheets, OpenDocument files and Outlook messages show how far the file has been read, then
+  an animated bar while it is taken apart. **Stop** returns at once for them too
 - Messages cannot be sent while an attachment is still being processed. Before, the message went
   without the file, which then joined the next message
 - The extraction is lighter on the page: for a 40-minute video the longest freeze drops from about

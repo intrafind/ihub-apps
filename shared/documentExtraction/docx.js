@@ -18,6 +18,7 @@ import { readHeaderFooterText } from './ooxml/headerFooter.js';
 import { normalizeReviewOptions, readComments } from './ooxml/review.js';
 import { FOOTER_PREFIX, HEADER_PREFIX } from './markers.js';
 import { createDocumentMarkdownConverter, htmlToMarkdown, normalizeMarkdown } from './markdown.js';
+import { throwIfAborted } from './progress.js';
 
 const DEFAULT_DOCUMENT_PART = 'word/document.xml';
 
@@ -33,6 +34,12 @@ const DEFAULT_DOCUMENT_PART = 'word/document.xml';
  *   `{++added++}` / `{--removed--}`; the default is the accepted view
  * @param {'ignore'|'inline'} [args.comments] - `inline` writes comments as `{>>Author: text<<}`
  *   after the text they belong to; the default leaves them out
+ * @param {AbortSignal} [args.signal] - Stops the extraction between its steps, rejecting with the
+ *   abort error (see {@link module:shared/documentExtraction/progress}). A step itself (mammoth, one
+ *   call of Turndown) cannot be interrupted
+ * @param {Function} [args.onProgress] - Called with `{ stage, percent, detail }`, `percent` being
+ *   the share of the stage done, in this order: `parse` (the package, its parts, the body pass),
+ *   `convert` (mammoth, no percent), `finalize` (HTML to Markdown, no percent)
  * @returns {Promise<string>} Markdown
  * @throws When the package cannot be read — the caller falls back to the legacy extraction
  */
@@ -44,10 +51,20 @@ export async function extractDocxMarkdown({
   DOMParser: DOMParserCtor,
   XMLSerializer: XMLSerializerCtor,
   trackedChanges,
-  comments
+  comments,
+  signal,
+  onProgress
 }) {
+  // Stops when asked, and tells how far the package has been taken apart
+  const checkpoint = percent => {
+    throwIfAborted(signal);
+    onProgress?.({ stage: 'parse', percent });
+  };
+
   const reviewOptions = normalizeReviewOptions({ trackedChanges, comments });
+  checkpoint(0);
   const zip = await JSZip.loadAsync(arrayBuffer);
+  checkpoint(20);
 
   // Part names come from the relationships; word/document.xml etc. are only the default.
   const [mainTarget] = Object.values(
@@ -72,6 +89,7 @@ export async function extractDocxMarkdown({
   if (!documentDoc) throw new Error(`${documentPart} is missing`);
   const stylesDoc = await readPart(stylesPart);
   const numberingDoc = await readPart(numberingPart);
+  checkpoint(40);
 
   const xml = createWordXml(wordNamespaceOf(documentDoc));
   const styles = readStyles(stylesDoc, xml);
@@ -106,6 +124,8 @@ export async function extractDocxMarkdown({
     }
   }
 
+  checkpoint(60);
+
   const { outlineLevels } = normalizeDocumentXml(documentDoc, {
     xml,
     styles,
@@ -115,14 +135,21 @@ export async function extractDocxMarkdown({
   });
   if (stylesDoc && outlineLevels.size > 0) addOutlineStyles(stylesDoc, xml, outlineLevels);
 
+  checkpoint(80);
+
   const serializer = new XMLSerializerCtor();
   zip.file(documentPart, serializer.serializeToString(documentDoc));
   if (stylesDoc && outlineLevels.size > 0) {
     zip.file(stylesPart, serializer.serializeToString(stylesDoc));
   }
-  const normalized = await zip.generateAsync({ type: 'arraybuffer' });
+  const normalized = await zip.generateAsync(
+    { type: 'arraybuffer' },
+    onProgress && (({ percent }) => onProgress({ stage: 'parse', percent: 80 + percent / 5 }))
+  );
+  throwIfAborted(signal);
 
   // Images become alt text only: skip decoding them and never embed base64 in the prompt.
+  onProgress?.({ stage: 'convert', percent: null });
   const images = mammoth.images || mammoth.default?.images;
   const convertToHtml = mammoth.convertToHtml || mammoth.default?.convertToHtml;
   const result = await convertToHtml(
@@ -130,6 +157,8 @@ export async function extractDocxMarkdown({
     images ? { convertImage: images.imgElement(async () => ({ src: '' })) } : {}
   );
 
+  throwIfAborted(signal);
+  onProgress?.({ stage: 'finalize', percent: null });
   const converter = createDocumentMarkdownConverter(TurndownService);
   const body = htmlToMarkdown(converter, result.value, DOMParserCtor);
   const preamble = [

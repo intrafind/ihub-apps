@@ -4005,10 +4005,18 @@
       "fileOfTotal": "Datei {{current}} von {{total}}",
       "stage": {
         "read": "Datei wird gelesen…",
+        "parse": "Dokument wird geöffnet…",
+        "extract": "Text wird extrahiert…",
+        "convert": "Datei wird konvertiert…",
+        "render": "Seiten werden gerendert…",
         "decode": "Audio wird extrahiert…",
         "resample": "Audio wird konvertiert…",
         "encode": "Audio wird kodiert…",
         "finalize": "Wird abgeschlossen…"
+      },
+      "detail": {
+        "page": "Seite {{current}} von {{total}}",
+        "slide": "Folie {{current}} von {{total}}"
       }
     }
   },

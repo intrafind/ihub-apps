@@ -1,21 +1,22 @@
+import {
+  createAbortError,
+  isAbortError,
+  throwIfAborted
+} from '../../../shared/documentExtraction/progress.js';
+
 /**
  * Helpers for long browser-side jobs that can be stopped with an AbortSignal:
- * extracting the audio of a video, encoding a WAV.
+ * extracting the audio of a video, encoding a WAV, extracting the text of a
+ * document.
  *
  * What stopping rejects with is an Error named `AbortError` whose message and
  * `code` are both `'aborted'`. Callers tell it from a failure with
  * `isAbortError()` and show nothing: the user asked for it.
  */
 
-export const createAbortError = () =>
-  Object.assign(new Error('aborted'), { name: 'AbortError', code: 'aborted' });
-
-export const isAbortError = error => error?.code === 'aborted' || error?.name === 'AbortError';
-
-/** Throw the abort error if `signal` has fired. */
-export const throwIfAborted = signal => {
-  if (signal?.aborted) throw createAbortError();
-};
+// Defined next to the document extractors: `shared/` is also loaded by the server and cannot
+// import from the client, but the client can import from it.
+export { createAbortError, isAbortError, throwIfAborted };
 
 /**
  * Settle with `promise` (or a plain value), or reject with the abort error as

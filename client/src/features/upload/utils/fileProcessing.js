@@ -11,6 +11,10 @@ import {
   lastPageWithText,
   realTextLength
 } from '../../../../../shared/documentExtraction/markers.js';
+import {
+  createProgressReporter,
+  itemProgress
+} from '../../../../../shared/documentExtraction/progress.js';
 // Resolved by Vite at build time → copied to dist as a local asset.
 // Using the ?url suffix is the correct Vite pattern for worker files from
 // node_modules; it ensures offline/air-gapped deployments work and the
@@ -22,7 +26,8 @@ import {
   createAbortError,
   isAbortError,
   raceAbort,
-  throwIfAborted
+  throwIfAborted,
+  yieldToEventLoop
 } from '../../../utils/abortable';
 
 // Cache for mimetypes configuration
@@ -300,6 +305,75 @@ export const loadUTIF = async () => {
   return UTIF.default;
 };
 
+// Progress and Stop of the extraction of a document. The functions below take a trailing
+// `{ signal, onProgress }` (both optional: the cloud picker, the chat's source documents and the
+// Office add-in pass none). `onProgress` there receives what the extractors report: `{ stage,
+// percent, detail }` with the percent of that stage. The entry points (processDocumentFile,
+// processImageFile, processGenericTextFile) take the callback of the uploader instead — overall
+// percent, never going down — and make the one from the other with `progressFor`.
+
+// What share of the overall progress (percent) each stage spans, by kind of document: a scale
+// for the bar, not a share of the time. The stages are the ones the extractors report (see
+// shared/documentExtraction); a stage without a percent shows as an indeterminate bar.
+const DOCUMENT_STAGES = {
+  pdf: { read: [0, 10], parse: [10, 15], extract: [15, 85], finalize: [85, 90], render: [90, 100] },
+  docx: { read: [0, 10], parse: [10, 40], convert: [40, 85], finalize: [85, 100] },
+  pptx: { read: [0, 15], parse: [15, 25], extract: [25, 100] },
+  tiff: { read: [0, 10], parse: [10, 15], convert: [15, 90], finalize: [90, 100] },
+  // Spreadsheets, OpenDocument, mails: one call of a library takes the file apart
+  opaque: { read: [0, 90], extract: [90, 100] },
+  // Text and plain images: reading is all there is
+  read: { read: [0, 100] }
+};
+
+/**
+ * `{ signal, onProgress }` for the extractors of a `kind` of document (a key of
+ * `DOCUMENT_STAGES`), given those of the caller.
+ */
+const progressFor = (kind, { signal, onProgress } = {}) => ({
+  signal,
+  onProgress: onProgress && createProgressReporter(onProgress, DOCUMENT_STAGES[kind])
+});
+
+/**
+ * Options to read a file with as the `read` stage of an extraction (see `readBlob`); reports 0
+ * at once, so the panel names a stage before the first bytes are in.
+ */
+const readingOf = ({ signal, onProgress } = {}) => {
+  const read = percent => onProgress?.({ stage: 'read', percent });
+  read(0);
+  return { signal, onProgress: read };
+};
+
+// Nothing to report to and no one to stop it (the cloud picker, the chat's source documents, the
+// Office add-in): the file is read as it always was
+const readDocumentBuffer = (file, progress = {}) =>
+  progress.signal || progress.onProgress
+    ? readFileAsArrayBuffer(file, readingOf(progress))
+    : file.arrayBuffer();
+
+/**
+ * Read a document taken apart by one call of a library (spreadsheet, OpenDocument, mail): the
+ * read can be measured and stopped, what follows cannot, and shows as an indeterminate bar.
+ */
+const readOpaqueDocument = async (file, progress = {}) => {
+  const arrayBuffer = await readDocumentBuffer(file, progress);
+  throwIfAborted(progress.signal);
+  progress.onProgress?.({ stage: 'extract', percent: null });
+  return arrayBuffer;
+};
+
+/**
+ * Where a failure is caught to try another way (the plain text extraction after a failed
+ * structured one), a stopped extraction must not be one: call this first, it throws the abort
+ * error when the extraction was stopped. A library whose document was destroyed on Stop fails
+ * with an error of its own; the signal tells it was the Stop.
+ */
+const rethrowIfAborted = (error, signal) => {
+  if (isAbortError(error)) throw error;
+  throwIfAborted(signal);
+};
+
 /**
  * Process TIFF file and convert to PNG/JPEG
  * Handles multipage TIFF by converting each page
@@ -307,25 +381,38 @@ export const loadUTIF = async () => {
  * @param {Object} options - Processing options
  * @param {number} options.maxDimension - Maximum dimension for resizing
  * @param {boolean} options.resize - Whether to resize images
+ * @param {Object} [progress] - `signal` stops the conversion between pages (rejecting with the
+ *   abort error); `onProgress` hears the `read`, `parse` and `convert` stages, the latter with the
+ *   page being converted as `detail`
  * @returns {Promise<Array>} Array of processed image data (one per page)
  */
-export const processTiffFile = async (file, options = {}) => {
+export const processTiffFile = async (file, options = {}, progress = {}) => {
   const { maxDimension = 1024, resize = true } = options;
+  const { signal, onProgress } = progress;
 
   try {
     // Load UTIF library
     const UTIF = await loadUTIF();
 
     // Read file as ArrayBuffer
-    const arrayBuffer = await file.arrayBuffer();
+    const arrayBuffer = await readDocumentBuffer(file, progress);
+    throwIfAborted(signal);
 
     // Decode TIFF
+    onProgress?.({ stage: 'parse', percent: null });
     const ifds = UTIF.decode(arrayBuffer);
 
     // Process each page
     const pages = [];
 
     for (let i = 0; i < ifds.length; i++) {
+      throwIfAborted(signal);
+      onProgress?.(itemProgress('convert', 'page', i + 1, ifds.length));
+      // A page takes long to decode and holds the page while it does: let the panel show which
+      // page it is, and let Stop land, before it starts
+      await yieldToEventLoop();
+      throwIfAborted(signal);
+
       const ifd = ifds[i];
       UTIF.decodeImage(arrayBuffer, ifd);
 
@@ -387,6 +474,8 @@ export const processTiffFile = async (file, options = {}) => {
 
     return pages;
   } catch (error) {
+    // Stopping is not a failure
+    if (isAbortError(error)) throw error;
     console.error('Error processing TIFF file:', error);
     throw new Error('tiff-processing-error');
   }
@@ -434,24 +523,38 @@ export const resizeImageCanvas = (img, maxDimension, quality = 0.8) => {
  * @param {boolean} [options.resize] - Whether to resize images
  * @param {boolean} [options.allowMultiple] - Return one result per TIFF page
  * @param {number} [options.quality] - JPEG re-encode quality (0-1)
+ * @param {Object} [progressOptions] - What the uploader hands its processors
+ * @param {AbortSignal} [progressOptions.signal] - Stops a TIFF between its pages (a plain image is
+ *   only stopped while it is read), rejecting with the abort error
+ * @param {(progress: {stage: string, percent: number|null, detail?: object}) => void} [progressOptions.onProgress] -
+ *   Overall progress: reading the file, and for a TIFF every page being converted
  * @returns {Promise<Object>} `{ preview, data }` or `{ multipleResults }`
  */
-export const processImageFile = async (file, options = {}) => {
+export const processImageFile = async (file, options = {}, progressOptions = {}) => {
   const { maxDimension = 1024, resize = true, allowMultiple = false, quality = 0.8 } = options;
   const isTiff = file.type === 'image/tiff' || file.type === 'image/tif';
 
   if (isTiff) {
+    const progress = progressFor('tiff', progressOptions);
+    const { signal, onProgress } = progress;
     try {
-      const pages = await processTiffFile(file, { maxDimension, resize });
+      const pages = await processTiffFile(file, { maxDimension, resize }, progress);
 
       if (pages.length > 1 && allowMultiple) {
         const pageResults = [];
 
         for (let i = 0; i < pages.length; i++) {
+          onProgress?.(itemProgress('finalize', 'page', i + 1, pages.length));
           const page = pages[i];
 
           const response = await fetch(page.base64);
           const blob = await response.blob();
+          // Checked after the read, the last page's too: nothing shows the previews of a
+          // stopped upload, so none is made and the ones made so far are let go
+          if (signal?.aborted) {
+            pageResults.forEach(({ preview }) => URL.revokeObjectURL(preview.url));
+            throwIfAborted(signal);
+          }
           const previewUrl = URL.createObjectURL(blob);
 
           const baseFileName = file.name.replace(/\.tiff?$/i, '');
@@ -482,6 +585,7 @@ export const processImageFile = async (file, options = {}) => {
       const firstPage = pages[0];
       const response = await fetch(firstPage.base64);
       const blob = await response.blob();
+      throwIfAborted(signal);
       const previewUrl = URL.createObjectURL(blob);
 
       return {
@@ -501,57 +605,54 @@ export const processImageFile = async (file, options = {}) => {
         }
       };
     } catch (error) {
+      // Stopping is not a failure
+      if (isAbortError(error)) throw error;
       console.error('Error processing TIFF file:', error);
       throw new Error('tiff-processing-error');
     }
   }
 
+  const source = await readFileAsDataURL(file, readingOf(progressFor('read', progressOptions)));
+
   return new Promise((resolve, reject) => {
-    const reader = new FileReader();
+    const img = new Image();
+    img.onload = () => {
+      const previewUrl = URL.createObjectURL(file);
 
-    reader.onload = e => {
-      const img = new Image();
-      img.onload = () => {
-        const previewUrl = URL.createObjectURL(file);
-
-        if (!resize) {
-          return resolve({
-            preview: { type: 'image', url: previewUrl },
-            data: {
-              type: 'image',
-              source: 'local',
-              base64: e.target.result,
-              fileName: file.name,
-              fileSize: file.size,
-              fileType: file.type,
-              width: img.width,
-              height: img.height
-            }
-          });
-        }
-
-        const { width, height, dataUrl } = resizeImageCanvas(img, maxDimension, quality);
-
-        resolve({
+      if (!resize) {
+        return resolve({
           preview: { type: 'image', url: previewUrl },
           data: {
             type: 'image',
             source: 'local',
-            base64: dataUrl,
+            base64: source,
             fileName: file.name,
             fileSize: file.size,
-            fileType: 'image/jpeg',
-            width,
-            height
+            fileType: file.type,
+            width: img.width,
+            height: img.height
           }
         });
-      };
-      img.onerror = () => reject(new Error('invalid-image'));
-      img.src = e.target.result;
-    };
+      }
 
-    reader.onerror = () => reject(new Error('read-error'));
-    reader.readAsDataURL(file);
+      const { width, height, dataUrl } = resizeImageCanvas(img, maxDimension, quality);
+
+      resolve({
+        preview: { type: 'image', url: previewUrl },
+        data: {
+          type: 'image',
+          source: 'local',
+          base64: dataUrl,
+          fileName: file.name,
+          fileSize: file.size,
+          fileType: 'image/jpeg',
+          width,
+          height
+        }
+      });
+    };
+    img.onerror = () => reject(new Error('invalid-image'));
+    img.src = source;
   });
 };
 
@@ -932,15 +1033,13 @@ export const formatMimeTypesToDisplay = mimeTypes => {
   return [...new Set(displayFormats)].join(', ');
 };
 
-// Read text file
-export const readTextFile = file => {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = e => resolve(e.target.result);
-    reader.onerror = () => reject(new Error('read-error'));
-    reader.readAsText(file);
-  });
-};
+/**
+ * Read a text file.
+ * @param {Blob} file
+ * @param {Object} [options] - `signal` and `onProgress`, see `readBlob`
+ * @returns {Promise<string>}
+ */
+export const readTextFile = (file, options) => readBlob(reader => reader.readAsText(file), options);
 
 // Upper-cased extension of a file name ("meeting.log" → "LOG"), used as the
 // display type for files accepted via GENERIC_TEXT_MIME_TYPE, which have no
@@ -954,10 +1053,12 @@ export const getExtensionDisplay = fileName => {
 // extraction before structured extraction existed — it loses page boundaries and line breaks
 // and doubles spaces — and stays unchanged as the fallback and as the result when the admin
 // switch is off.
-const legacyPdfText = async pdf => {
+const legacyPdfText = async (pdf, { signal, onProgress } = {}) => {
   let textContent = '';
 
   for (let i = 1; i <= pdf.numPages; i++) {
+    throwIfAborted(signal);
+    onProgress?.(itemProgress('extract', 'page', i, pdf.numPages));
     const page = await pdf.getPage(i);
     const textContentPage = await page.getTextContent();
     const textItems = textContentPage.items.map(item => item.str).join(' ');
@@ -967,55 +1068,94 @@ const legacyPdfText = async pdf => {
   return textContent.trim();
 };
 
+/**
+ * Read a PDF, open it with pdf.js and hand the document to `work`. The document is destroyed
+ * afterwards, which ends pdf.js's worker for it — also when the extraction is stopped: Stop
+ * destroys it at once, whatever pdf.js is doing, and the extraction rejects with the abort error.
+ * (A request that pdf.js is answering when its document is destroyed may never be answered at
+ * all, so Stop does not wait for the extraction to notice.)
+ */
+const withPdfDocument = async (file, progress, work) => {
+  const { signal, onProgress } = progress;
+  const arrayBuffer = await readDocumentBuffer(file, progress);
+  const pdfjsLib = await loadPdfjs();
+  throwIfAborted(signal);
+
+  onProgress?.({ stage: 'parse', percent: null });
+  const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(arrayBuffer) });
+  const destroy = () => {
+    try {
+      loadingTask.destroy?.()?.catch?.(() => {});
+    } catch {
+      // Already destroyed
+    }
+  };
+  signal?.addEventListener('abort', destroy, { once: true });
+  try {
+    return await raceAbort((async () => work(await loadingTask.promise))(), signal);
+  } catch (error) {
+    rethrowIfAborted(error, signal);
+    throw error;
+  } finally {
+    signal?.removeEventListener('abort', destroy);
+    destroy();
+  }
+};
+
 // PDF text and how it was extracted: structured text carries page markers, which must not
 // count as text when deciding whether the PDF is a scan.
-const extractPdfContent = async file => {
-  const arrayBuffer = await file.arrayBuffer();
-  const pdfjsLib = await loadPdfjs();
-  const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(arrayBuffer) }).promise;
-
-  if (await isStructuredExtractionEnabled()) {
-    try {
-      return { content: await extractPdfText(pdf), structured: true };
-    } catch (error) {
-      // Never make an upload fail that worked before: use the plain text extraction.
-      console.warn('[fileProcessing] structured extraction failed, using legacy', error);
+const extractPdfContent = (file, progress = {}) =>
+  withPdfDocument(file, progress, async pdf => {
+    if (await isStructuredExtractionEnabled()) {
+      try {
+        return { content: await extractPdfText(pdf, progress), structured: true };
+      } catch (error) {
+        // A stopped extraction is not one to try again the plain way
+        rethrowIfAborted(error, progress.signal);
+        // Never make an upload fail that worked before: use the plain text extraction.
+        console.warn('[fileProcessing] structured extraction failed, using legacy', error);
+      }
     }
-  }
 
-  return { content: await legacyPdfText(pdf), structured: false };
-};
+    return { content: await legacyPdfText(pdf, progress), structured: false };
+  });
 
-// Process PDF file
-export const processPdfFile = async file => (await extractPdfContent(file)).content;
+// Process PDF file. `progress`: `{ signal, onProgress }`, see the notes above processTiffFile.
+export const processPdfFile = async (file, progress) =>
+  (await extractPdfContent(file, progress)).content;
 
 // Render PDF pages to images when text extraction yields nothing
-export const renderPdfPagesToImages = async (file, maxPages = 5, scale = 1.5) => {
-  const arrayBuffer = await file.arrayBuffer();
-  const pdfjsLib = await loadPdfjs();
-  const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(arrayBuffer) }).promise;
-  const pages = Math.min(pdf.numPages, maxPages);
-  const images = [];
-  for (let i = 1; i <= pages; i++) {
-    const page = await pdf.getPage(i);
-    const viewport = page.getViewport({ scale });
-    const canvas = document.createElement('canvas');
-    canvas.width = viewport.width;
-    canvas.height = viewport.height;
-    const ctx = canvas.getContext('2d');
-    await page.render({ canvasContext: ctx, viewport }).promise;
-    images.push(canvas.toDataURL('image/jpeg', 0.8));
-  }
-  return images;
-};
+export const renderPdfPagesToImages = (file, maxPages = 5, scale = 1.5, progress = {}) =>
+  withPdfDocument(file, progress, async pdf => {
+    const pages = Math.min(pdf.numPages, maxPages);
+    const images = [];
+    for (let i = 1; i <= pages; i++) {
+      throwIfAborted(progress.signal);
+      progress.onProgress?.(itemProgress('render', 'page', i, pages));
+      const page = await pdf.getPage(i);
+      const viewport = page.getViewport({ scale });
+      const canvas = document.createElement('canvas');
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+      const ctx = canvas.getContext('2d');
+      await page.render({ canvasContext: ctx, viewport }).promise;
+      images.push(canvas.toDataURL('image/jpeg', 0.8));
+    }
+    return images;
+  });
 
 // Plain text of a DOCX file: mammoth's HTML flattened with textContent. This is the
 // extraction before structured extraction existed — it loses headings, numbering, list
 // markers, table cells and paragraph boundaries — and stays unchanged as the fallback and
 // as the result when the admin switch is off.
-export const legacyDocxText = async arrayBuffer => {
+export const legacyDocxText = async (arrayBuffer, { signal, onProgress } = {}) => {
+  throwIfAborted(signal);
+  onProgress?.({ stage: 'convert', percent: null });
   const mammoth = await loadMammoth();
+  // Stopped while mammoth was loaded: the conversion is not started
+  throwIfAborted(signal);
   const result = await mammoth.convertToHtml({ arrayBuffer });
+  throwIfAborted(signal);
 
   // Extract plain text from HTML for better readability
   const tempDiv = document.createElement('div');
@@ -1023,9 +1163,9 @@ export const legacyDocxText = async arrayBuffer => {
   return tempDiv.textContent || tempDiv.innerText || '';
 };
 
-// Process DOCX file
-export const processDocxFile = async (file, options = {}) => {
-  const arrayBuffer = await file.arrayBuffer();
+// Process DOCX file. `progress`: `{ signal, onProgress }`, see the notes above processTiffFile.
+export const processDocxFile = async (file, options = {}, progress = {}) => {
+  const arrayBuffer = await readDocumentBuffer(file, progress);
 
   if (await isStructuredExtractionEnabled()) {
     try {
@@ -1042,15 +1182,18 @@ export const processDocxFile = async (file, options = {}) => {
         DOMParser,
         XMLSerializer,
         trackedChanges: options?.trackedChanges,
-        comments: options?.comments
+        comments: options?.comments,
+        ...progress
       });
     } catch (error) {
+      // A stopped extraction is not one to try again the plain way
+      rethrowIfAborted(error, progress.signal);
       // Never make an upload fail that worked before: use the plain text extraction.
       console.warn('[fileProcessing] structured extraction failed, using legacy', error);
     }
   }
 
-  return legacyDocxText(arrayBuffer);
+  return legacyDocxText(arrayBuffer, progress);
 };
 
 // Tab-separated text of every sheet: the extraction before structured extraction existed. It
@@ -1072,8 +1215,8 @@ export const legacyXlsxText = async arrayBuffer => {
 
 // Process XLSX / XLS file — a sheet with a header row as a Markdown table, merged cells filled,
 // hidden sheets flagged, rows and characters limited (see shared/documentExtraction/xlsx.js)
-export const processXlsxFile = async file => {
-  const arrayBuffer = await file.arrayBuffer();
+export const processXlsxFile = async (file, progress) => {
+  const arrayBuffer = await readOpaqueDocument(file, progress);
 
   if (await isStructuredExtractionEnabled()) {
     try {
@@ -1261,8 +1404,8 @@ export const extractMsgContent = async fileData => {
 };
 
 // Process MSG file
-export const processMsgFile = async file => {
-  const arrayBuffer = await file.arrayBuffer();
+export const processMsgFile = async (file, progress) => {
+  const arrayBuffer = await readOpaqueDocument(file, progress);
   const MsgReader = await loadMsgReader();
   const msgReader = new MsgReader(arrayBuffer);
   const fileData = msgReader.getFileData();
@@ -1278,7 +1421,9 @@ const DRAWINGML_NS = 'http://schemas.openxmlformats.org/drawingml/2006/main';
 // existed. It stays unchanged as the fallback and as the result when the admin switch is off.
 // (Without any PPTX handler the file fell through to readTextFile, which decoded the raw ZIP
 // container as text and shipped hundreds of thousands of garbage tokens to the model.)
-export const legacyPptxText = async arrayBuffer => {
+export const legacyPptxText = async (arrayBuffer, { signal, onProgress } = {}) => {
+  throwIfAborted(signal);
+  onProgress?.({ stage: 'parse', percent: null });
   const JSZip = await loadJSZip();
   const zip = await JSZip.loadAsync(arrayBuffer);
 
@@ -1292,7 +1437,9 @@ export const legacyPptxText = async arrayBuffer => {
 
   const parser = new DOMParser();
   const slides = [];
-  for (const path of slidePaths) {
+  for (const [index, path] of slidePaths.entries()) {
+    throwIfAborted(signal);
+    onProgress?.(itemProgress('extract', 'slide', index + 1, slidePaths.length));
     const xml = await zip.file(path).async('string');
     const doc = parser.parseFromString(xml, 'application/xml');
     // Paragraphs (<a:p>) keep line structure; each holds one or more text
@@ -1317,8 +1464,9 @@ export const legacyPptxText = async arrayBuffer => {
 // Process PPTX file — slides in the order of the presentation, the title as a heading, tables as
 // Markdown, hidden slides flagged; speaker notes only when the app asks for them
 // (see shared/documentExtraction/pptx.js)
-export const processPptxFile = async (file, options = {}) => {
-  const arrayBuffer = await file.arrayBuffer();
+// `progress`: `{ signal, onProgress }`, see the notes above processTiffFile.
+export const processPptxFile = async (file, options = {}, progress = {}) => {
+  const arrayBuffer = await readDocumentBuffer(file, progress);
 
   if (await isStructuredExtractionEnabled()) {
     try {
@@ -1327,15 +1475,18 @@ export const processPptxFile = async (file, options = {}) => {
         arrayBuffer,
         JSZip,
         DOMParser,
-        speakerNotes: options?.speakerNotes
+        speakerNotes: options?.speakerNotes,
+        ...progress
       });
     } catch (error) {
+      // A stopped extraction is not one to try again the plain way
+      rethrowIfAborted(error, progress.signal);
       // Never make an upload fail that worked before: use the plain text extraction.
       console.warn('[fileProcessing] structured extraction failed, using legacy', error);
     }
   }
 
-  return legacyPptxText(arrayBuffer);
+  return legacyPptxText(arrayBuffer, progress);
 };
 
 // Heuristic check that a string produced by reading a file "as text" is
@@ -1359,8 +1510,8 @@ export const looksLikeBinaryText = text => {
 // processDocumentFile it never dispatches to a format-specific extractor —
 // the admin allowed "any text file", not e.g. DOCX — so binary content is
 // rejected instead of being parsed.
-export const processGenericTextFile = async file => {
-  const content = await readTextFile(file);
+export const processGenericTextFile = async (file, progressOptions) => {
+  const content = await readTextFile(file, readingOf(progressFor('read', progressOptions)));
   if (looksLikeBinaryText(content)) {
     throw new Error('unsupported-format');
   }
@@ -1410,8 +1561,8 @@ export const legacyOpenOfficeText = async arrayBuffer => {
 
 // Process OpenOffice/LibreOffice file (.odt, .ods, .odp) — headings, lists with their numbers,
 // tables, footnotes, links; sheets as tables; slides (see shared/documentExtraction/odf.js)
-export const processOpenOfficeFile = async (file, options = {}) => {
-  const arrayBuffer = await file.arrayBuffer();
+export const processOpenOfficeFile = async (file, options = {}, progress = {}) => {
+  const arrayBuffer = await readOpaqueDocument(file, progress);
 
   if (await isStructuredExtractionEnabled()) {
     try {
@@ -1435,16 +1586,24 @@ export const processOpenOfficeFile = async (file, options = {}) => {
 // Returns { content, pageImages } where pageImages is set for image-based PDFs.
 // `options` are the per-app extraction options of `upload.fileUpload` (Word documents only):
 // `trackedChanges: 'markup'` and `comments: 'inline'` — see docs/file-upload-feature.md.
-export const processDocumentFile = async (file, options = {}) => {
+// `progressOptions` is what the uploader hands its processors, both parts optional: `signal` stops
+// the extraction (rejecting with the abort error, see abortable.js) and `onProgress({ stage,
+// percent, detail })` hears how far it is. PDF, Word, PowerPoint and TIFF stop at the next page,
+// slide or step, and report the page or slide they are on as `detail`; spreadsheets, OpenDocument
+// files and mails are taken apart by one call of a library: they report and stop while they are
+// read, then show an indeterminate bar. See docs/file-upload-feature.md.
+export const processDocumentFile = async (file, options = {}, progressOptions = {}) => {
   let content = '';
   let pageImages;
+  const progressOf = kind => progressFor(kind, progressOptions);
 
   // Get file extension as fallback for MIME type detection
   const fileExtension = '.' + file.name.split('.').pop().toLowerCase();
 
   // Determine processing method based on MIME type or file extension
   if (file.type === 'application/pdf' || fileExtension === '.pdf') {
-    const extracted = await extractPdfContent(file);
+    const progress = progressOf('pdf');
+    const extracted = await extractPdfContent(file, progress);
     content = extracted.content;
     // If text extraction yields empty/minimal content, render pages as images. Page markers
     // of structured text are not text: a scan with markers only must still be rendered.
@@ -1456,7 +1615,7 @@ export const processDocumentFile = async (file, options = {}) => {
         `[fileProcessing] PDF text extraction yielded ${textLength} chars, attempting page-to-image rendering`
       );
       try {
-        pageImages = await renderPdfPagesToImages(file, 5);
+        pageImages = await renderPdfPagesToImages(file, 5, undefined, progress);
         console.log(
           `[fileProcessing] Rendered ${pageImages.length} PDF page(s) as images (${pageImages.reduce((sum, img) => sum + img.length, 0)} bytes total base64)`
         );
@@ -1471,6 +1630,8 @@ export const processDocumentFile = async (file, options = {}) => {
           content = '';
         }
       } catch (e) {
+        // Stopping is not a failure
+        rethrowIfAborted(e, progress.signal);
         console.warn('PDF page rendering failed:', e);
       }
     }
@@ -1478,28 +1639,28 @@ export const processDocumentFile = async (file, options = {}) => {
     file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
     fileExtension === '.docx'
   ) {
-    content = await processDocxFile(file, options);
+    content = await processDocxFile(file, options, progressOf('docx'));
   } else if (
     file.type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
     file.type === 'application/vnd.ms-excel' ||
     fileExtension === '.xlsx' ||
     fileExtension === '.xls'
   ) {
-    content = await processXlsxFile(file);
+    content = await processXlsxFile(file, progressOf('opaque'));
   } else if (file.type === 'application/vnd.ms-outlook' || fileExtension === '.msg') {
-    content = await processMsgFile(file);
+    content = await processMsgFile(file, progressOf('opaque'));
   } else if (
     file.type === 'image/tif' ||
     file.type === 'image/tiff' ||
     fileExtension === '.tif' ||
     fileExtension === '.tiff'
   ) {
-    content = await processTiffFile(file);
+    content = await processTiffFile(file, {}, progressOf('tiff'));
   } else if (
     file.type === 'application/vnd.openxmlformats-officedocument.presentationml.presentation' ||
     fileExtension === '.pptx'
   ) {
-    content = await processPptxFile(file, options);
+    content = await processPptxFile(file, options, progressOf('pptx'));
   } else if (file.type === 'application/vnd.ms-powerpoint' || fileExtension === '.ppt') {
     // Legacy binary PowerPoint (OLE compound file) — no client-side extractor
     // exists. Reject instead of falling through to readTextFile, which would
@@ -1513,10 +1674,10 @@ export const processDocumentFile = async (file, options = {}) => {
     fileExtension === '.ods' ||
     fileExtension === '.odp'
   ) {
-    content = await processOpenOfficeFile(file, options);
+    content = await processOpenOfficeFile(file, options, progressOf('opaque'));
   } else {
     // Default: read as text file
-    content = await readTextFile(file);
+    content = await readTextFile(file, readingOf(progressOf('read')));
     // Unknown binary formats (renamed Office files, archives, executables)
     // decode to NUL/replacement-character soup here — refuse to treat that
     // as document content rather than flooding the model's context window.
