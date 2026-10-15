@@ -7,6 +7,9 @@
  * attachment looks fine, and sending it fails ("Could not decode this audio").
  * It is now rendered to 16 kHz mono — what transcription streams anyway — and
  * the WAV Blob stays on the attachment.
+ *
+ * Extracting takes seconds to minutes for a long video (issue #2835), so it
+ * reports its progress, never holds the page, and can be stopped.
  */
 
 import '@testing-library/jest-dom';
@@ -50,17 +53,30 @@ const fakeAudioBuffer = (sampleRate, channels, seconds) => {
 
 let contexts;
 let offlineContexts;
+let sources;
 let decodeFails;
+// What decoding yields: the length of the video's audio, and a way to hold it up
+let decodedSeconds;
+let decodeNever;
+// Whether the engine can run a context at the rate asked for, and suspend an
+// offline render
+let refuseSampleRate;
+let offlineCanSuspend;
 
 class FakeAudioContext {
-  constructor() {
+  constructor(options) {
+    if (options && refuseSampleRate) throw new Error('NotSupportedError');
+    this.options = options;
     this.state = 'running';
+    this.decodeCalls = 0;
     contexts.push(this);
   }
 
   async decodeAudioData() {
+    this.decodeCalls++;
+    if (decodeNever) return new Promise(() => {});
     if (decodeFails) throw new Error('EncodingError');
-    return fakeAudioBuffer(SOURCE_RATE, SOURCE_CHANNELS, SECONDS);
+    return fakeAudioBuffer(SOURCE_RATE, SOURCE_CHANNELS, decodedSeconds);
   }
 
   async close() {
@@ -68,20 +84,35 @@ class FakeAudioContext {
   }
 }
 
-// Renders what it is asked to: a buffer of the requested shape.
+// Renders what it is asked to: a buffer of the requested shape. Where it can
+// suspend, each suspension waits for resume() like the real one.
 class FakeOfflineAudioContext {
   constructor(channels, length, sampleRate) {
     this.shape = { channels, length, sampleRate };
     this.destination = {};
+    this.suspensions = [];
     offlineContexts.push(this.shape);
+    if (offlineCanSuspend) {
+      this.suspend = time => new Promise(resolve => this.suspensions.push({ time, resolve }));
+      this.resume = async () => this.resumeRender?.();
+    }
   }
 
   createBufferSource() {
-    return { connect: () => {}, start: () => {} };
+    const source = { connect: () => {}, start: () => {}, disconnect: jest.fn() };
+    sources.push(source);
+    return source;
   }
 
   async startRendering() {
     const { channels, length, sampleRate } = this.shape;
+    const ordered = [...this.suspensions].sort((a, b) => a.time - b.time);
+    for (const { resolve } of ordered) {
+      await new Promise(resumed => {
+        this.resumeRender = resumed;
+        resolve();
+      });
+    }
     return fakeAudioBuffer(sampleRate, channels, length / sampleRate);
   }
 }
@@ -104,7 +135,12 @@ const readBytes = blob =>
 beforeEach(() => {
   contexts = [];
   offlineContexts = [];
+  sources = [];
   decodeFails = false;
+  decodedSeconds = SECONDS;
+  decodeNever = false;
+  refuseSampleRate = false;
+  offlineCanSuspend = false;
   window.AudioContext = FakeAudioContext;
   window.OfflineAudioContext = FakeOfflineAudioContext;
   jest.spyOn(console, 'error').mockImplementation(() => {});
@@ -172,8 +208,12 @@ describe('extractAudioFromVideo', () => {
 
   test('a data URL the engine cannot hold fails the extraction instead of attaching empty audio', async () => {
     // What FileReader does beyond the maximum string length: an empty result,
-    // no error.
+    // no error. (Reading the video itself works.)
     jest.spyOn(window, 'FileReader').mockImplementation(function EmptyReader() {
+      this.readAsArrayBuffer = () => {
+        this.result = new ArrayBuffer(8);
+        setTimeout(() => this.onload());
+      };
       this.readAsDataURL = () => {
         this.result = '';
         setTimeout(() => this.onload());
@@ -182,6 +222,245 @@ describe('extractAudioFromVideo', () => {
 
     await expect(extractAudioFromVideo(video())).rejects.toThrow('video-audio-extraction-error');
     expect(contexts[0].state).toBe('closed');
+  });
+});
+
+describe('extractAudioFromVideo decoding context', () => {
+  test('decodes in a context at 16 kHz, which keeps the decoded track small', async () => {
+    await extractAudioFromVideo(video());
+    expect(contexts).toHaveLength(1);
+    expect(contexts[0].options).toEqual({ sampleRate: 16000 });
+  });
+
+  test('decodes in a default context where 16 kHz is refused', async () => {
+    refuseSampleRate = true;
+
+    const result = await extractAudioFromVideo(video());
+
+    expect(contexts).toHaveLength(1);
+    expect(contexts[0].options).toBeUndefined();
+    // The render to 16 kHz mono does the rest
+    expect(result).toMatchObject({ sampleRate: 16000, channels: 1 });
+  });
+});
+
+describe('extractAudioFromVideo progress', () => {
+  const collect = async (options = {}) => {
+    const events = [];
+    const result = await extractAudioFromVideo(video(), {
+      ...options,
+      onProgress: event => events.push(event)
+    });
+    return { events, result };
+  };
+  const numbers = events => events.map(e => e.percent).filter(percent => percent !== null);
+
+  test('walks the stages read, decode, resample, encode and finalize, in that order', async () => {
+    const { events } = await collect();
+
+    const stages = [...new Set(events.map(e => e.stage))];
+    expect(stages).toEqual(['read', 'decode', 'resample', 'encode', 'finalize']);
+    // Never back to an earlier stage
+    const order = events.map(e => stages.indexOf(e.stage));
+    expect(order).toEqual([...order].sort((a, b) => a - b));
+  });
+
+  test('starts at 0, ends at 100 and never goes down', async () => {
+    const { events } = await collect();
+
+    expect(events[0]).toEqual({ stage: 'read', percent: 0 });
+    expect(events[events.length - 1]).toEqual({ stage: 'finalize', percent: 100 });
+    const percents = numbers(events);
+    expect(percents).toEqual([...percents].sort((a, b) => a - b));
+    for (const percent of percents) {
+      expect(Number.isInteger(percent)).toBe(true);
+      expect(percent).toBeGreaterThanOrEqual(0);
+      expect(percent).toBeLessThanOrEqual(100);
+    }
+  });
+
+  test('decode has no percent: decoding cannot say how far it is', async () => {
+    const { events } = await collect();
+    expect(events.filter(e => e.stage === 'decode')).toEqual([{ stage: 'decode', percent: null }]);
+  });
+
+  test('reports the same state only once', async () => {
+    const { events } = await collect();
+    const keys = events.map(e => `${e.stage}:${e.percent}`);
+    expect(new Set(keys).size).toBe(keys.length);
+  });
+
+  test('resample has no percent where the browser cannot suspend an offline render', async () => {
+    const { events } = await collect();
+    expect(events.filter(e => e.stage === 'resample')).toEqual([
+      { stage: 'resample', percent: null }
+    ]);
+  });
+
+  test('resample reports how far the render is where the browser can suspend it', async () => {
+    offlineCanSuspend = true;
+
+    const { events, result } = await collect();
+
+    const resample = events.filter(e => e.stage === 'resample');
+    expect(resample[0]).toEqual({ stage: 'resample', percent: null });
+    const percents = numbers(resample);
+    // Several checkpoints within the stage's share of the bar (50-70)
+    expect(percents.length).toBeGreaterThan(5);
+    expect(Math.min(...percents)).toBeGreaterThanOrEqual(50);
+    expect(Math.max(...percents)).toBeLessThanOrEqual(70);
+    expect(percents).toEqual([...percents].sort((a, b) => a - b));
+    // The suspended render still produced the whole file
+    expect(result.duration).toBe(SECONDS);
+  });
+
+  test('encode reports its slices as the encoder writes them', async () => {
+    // 60 s of 16 kHz is two encoder slices
+    decodedSeconds = 60;
+
+    const { events } = await collect();
+
+    const encode = events.filter(e => e.stage === 'encode').map(e => e.percent);
+    expect(encode.length).toBeGreaterThan(2);
+    expect(Math.min(...encode)).toBeGreaterThanOrEqual(70);
+    expect(Math.max(...encode)).toBeLessThanOrEqual(90);
+  });
+
+  test('works without anyone listening', async () => {
+    await expect(extractAudioFromVideo(video())).resolves.toMatchObject({ format: 'audio/wav' });
+    await expect(extractAudioFromVideo(video(), {})).resolves.toMatchObject({
+      format: 'audio/wav'
+    });
+  });
+});
+
+describe('extractAudioFromVideo stopping', () => {
+  const abortedError = { message: 'aborted', code: 'aborted' };
+
+  test('rejects with the abort error, not a video-audio-extraction-error', async () => {
+    const controller = new AbortController();
+    controller.abort();
+
+    const extraction = extractAudioFromVideo(video(), { signal: controller.signal });
+
+    await expect(extraction).rejects.toMatchObject(abortedError);
+    await expect(extraction).rejects.not.toThrow('video-audio-extraction-error');
+  });
+
+  test('does not even open an AudioContext when it is stopped before it starts', async () => {
+    const controller = new AbortController();
+    controller.abort();
+
+    await expect(extractAudioFromVideo(video(), { signal: controller.signal })).rejects.toThrow(
+      'aborted'
+    );
+    expect(contexts).toHaveLength(0);
+  });
+
+  test('stops reading the video', async () => {
+    const controller = new AbortController();
+
+    const extraction = extractAudioFromVideo(video(), { signal: controller.signal });
+    controller.abort();
+
+    await expect(extraction).rejects.toMatchObject(abortedError);
+    expect(contexts[0].decodeCalls).toBe(0);
+    expect(contexts[0].state).toBe('closed');
+  });
+
+  test('stops while decoding, which cannot be cancelled: the result is dropped', async () => {
+    decodeNever = true;
+    const controller = new AbortController();
+    const extraction = extractAudioFromVideo(video(), {
+      signal: controller.signal,
+      onProgress: ({ stage }) => {
+        if (stage === 'decode') setTimeout(() => controller.abort());
+      }
+    });
+
+    await expect(extraction).rejects.toMatchObject(abortedError);
+    expect(contexts[0].decodeCalls).toBe(1);
+    expect(contexts[0].state).toBe('closed');
+    expect(offlineContexts).toHaveLength(0);
+  });
+
+  test('stops while resampling and lets go of the source of the render', async () => {
+    offlineCanSuspend = true;
+    const controller = new AbortController();
+    const extraction = extractAudioFromVideo(video(), {
+      signal: controller.signal,
+      onProgress: ({ stage, percent }) => {
+        if (stage === 'resample' && percent !== null && percent >= 55) controller.abort();
+      }
+    });
+
+    await expect(extraction).rejects.toMatchObject(abortedError);
+    expect(contexts[0].state).toBe('closed');
+
+    // At its next checkpoint the render drops its source and runs on as silence
+    await new Promise(resolve => setTimeout(resolve, 20));
+    expect(sources[0].disconnect).toHaveBeenCalled();
+  });
+
+  test('stops between the slices of the encoder', async () => {
+    decodedSeconds = 120; // four slices
+    const controller = new AbortController();
+    const encodeReports = [];
+    const extraction = extractAudioFromVideo(video(), {
+      signal: controller.signal,
+      onProgress: ({ stage, percent }) => {
+        if (stage !== 'encode') return;
+        encodeReports.push(percent);
+        // The first slice is written: stop
+        if (encodeReports.length === 2) controller.abort();
+      }
+    });
+
+    await expect(extraction).rejects.toMatchObject(abortedError);
+    // 0 at the start, then one slice; no more after the stop
+    expect(encodeReports).toHaveLength(2);
+    expect(contexts[0].state).toBe('closed');
+  });
+
+  test('stops while the data URL is made', async () => {
+    const controller = new AbortController();
+    const extraction = extractAudioFromVideo(video(), {
+      signal: controller.signal,
+      onProgress: ({ stage }) => {
+        if (stage === 'finalize') controller.abort();
+      }
+    });
+
+    await expect(extraction).rejects.toMatchObject(abortedError);
+    expect(contexts[0].state).toBe('closed');
+  });
+
+  test('is not logged as an error', async () => {
+    const controller = new AbortController();
+    controller.abort();
+
+    await expect(extractAudioFromVideo(video(), { signal: controller.signal })).rejects.toThrow();
+
+    expect(console.error).not.toHaveBeenCalled();
+  });
+
+  test('a stopped extraction does not stop the next one', async () => {
+    const controller = new AbortController();
+    controller.abort();
+    await expect(
+      extractAudioFromVideo(video(), { signal: controller.signal })
+    ).rejects.toMatchObject(abortedError);
+
+    await expect(extractAudioFromVideo(video())).resolves.toMatchObject({ format: 'audio/wav' });
+  });
+
+  test('a failure that is not a stop still maps to its own error', async () => {
+    decodeFails = true;
+    const controller = new AbortController();
+
+    await expect(extractAudioFromVideo(video(), { signal: controller.signal })).rejects.toThrow(
+      'audio-decode-error'
+    );
   });
 });
 

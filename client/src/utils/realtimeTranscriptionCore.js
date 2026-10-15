@@ -8,6 +8,8 @@
  * at 16 kHz — the format the transcription providers are fed.
  */
 
+import { raceAbort, throwIfAborted } from './abortable';
+
 export const TARGET_SAMPLE_RATE = 16000;
 
 // Samples per binary WebSocket frame when streaming a whole buffer
@@ -200,6 +202,36 @@ export function createTranscriptAssembler() {
   };
 }
 
+// The audio engine renders in blocks of this many frames; a suspend lands on one.
+const RENDER_QUANTUM = 128;
+// Progress reports (and chances to stop) while an offline render runs.
+const RENDER_CHECKPOINTS = 40;
+
+/**
+ * Report how far an OfflineAudioContext has rendered, and stop it when
+ * `signal` fires, by suspending the render at evenly spaced frames. A render
+ * cannot be cancelled, but one whose source has been disconnected is a render
+ * of silence that finishes at once, so the (large) source buffer is released.
+ * Does nothing where `suspend()` is missing or the render is too short to be
+ * worth it; the render then simply runs to its end.
+ */
+function trackRendering(offline, source, frameCount, { signal, onProgress }) {
+  if (!signal && !onProgress) return;
+  const steps = Math.min(RENDER_CHECKPOINTS, Math.floor(frameCount / RENDER_QUANTUM / 8));
+  if (typeof offline.suspend !== 'function' || steps < 2) return;
+  for (let step = 1; step < steps; step++) {
+    const frame = Math.floor((frameCount * step) / steps / RENDER_QUANTUM) * RENDER_QUANTUM;
+    offline
+      .suspend(frame / TARGET_SAMPLE_RATE)
+      .then(() => {
+        if (signal?.aborted) source.disconnect();
+        else onProgress?.((step / steps) * 100);
+        return offline.resume();
+      })
+      .catch(() => {});
+  }
+}
+
 /**
  * Downmix an AudioBuffer to mono and resample it to 16 kHz using an
  * OfflineAudioContext, returning the rendered Float32 sample data.
@@ -210,9 +242,16 @@ export function createTranscriptAssembler() {
  * the channel downmix and the resample natively (issue #1927 gap G4).
  *
  * @param {AudioBuffer} audioBuffer
+ * @param {Object} [options]
+ * @param {AbortSignal} [options.signal] - Rejects with the abort error (see
+ *   `abortable.js`) as soon as it fires
+ * @param {(percent: number) => void} [options.onProgress] - Percent (0-100) of
+ *   the render done, a few dozen times along the way. Never called where the
+ *   browser cannot suspend an offline render.
  * @returns {Promise<Float32Array>} mono 16 kHz samples
  */
-export async function resampleTo16kMono(audioBuffer) {
+export async function resampleTo16kMono(audioBuffer, { signal, onProgress } = {}) {
+  throwIfAborted(signal);
   if (!audioBuffer || !audioBuffer.length) {
     return new Float32Array(0);
   }
@@ -235,8 +274,11 @@ export async function resampleTo16kMono(audioBuffer) {
   source.buffer = audioBuffer;
   source.connect(offline.destination);
   source.start(0);
-  const rendered = await offline.startRendering();
-  return rendered.getChannelData(0).slice();
+  trackRendering(offline, source, frameCount, { signal, onProgress });
+  const rendered = await raceAbort(offline.startRendering(), signal);
+  // The rendered buffer is nobody else's: no copy needed (a 40-minute track
+  // takes the page 0.13 s to copy)
+  return rendered.getChannelData(0);
 }
 
 /**

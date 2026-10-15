@@ -2259,6 +2259,11 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
    */
   const handleSubmit = async (e, startFormMessage = null) => {
     e.preventDefault();
+    // An attachment is still being processed (e.g. the audio of a video is
+    // extracted), in whichever composer it was added: the message would go
+    // without it. Each composer holds back its own Send; this is the backstop
+    // for the one that was not told.
+    if (fileUploadHandler.isAttachmentProcessing) return;
     const typed = startFormMessage ?? input;
 
     // While recording, "send" means: finish the recording and send what was
@@ -2664,6 +2669,10 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
           ? setTranscriptionEnabled
           : undefined,
       onFileSelect: fileUploadHandler.handleFileSelect,
+      // The phone and the desktop layout each mount a composer, hidden by CSS
+      // only: all of them have to know that an attachment is being processed
+      isAttachmentProcessing: fileUploadHandler.isAttachmentProcessing,
+      onAttachmentProcessingChange: fileUploadHandler.setAttachmentProcessing,
       uploadConfig: fileUploadHandler.createUploadConfig(app, currentModel),
       // While recording, Send stops the recording and sends it — with or
       // without anything typed.
@@ -2751,6 +2760,8 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
             )}
             selectedFile={fileUploadHandler.selectedFile}
             onFileSelect={fileUploadHandler.handleFileSelect}
+            isAttachmentProcessing={fileUploadHandler.isAttachmentProcessing}
+            onAttachmentProcessingChange={fileUploadHandler.setAttachmentProcessing}
             onSubmit={handleStartFormSubmit}
             canSubmit={
               startFormMessage.trim() !== '' ||

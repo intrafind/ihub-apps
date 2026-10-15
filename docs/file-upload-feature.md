@@ -331,6 +331,8 @@ All file processing happens **client-side** before content is sent to the server
    - **Images** — Optionally resized to max 1024 px and converted to JPEG; TIFF images converted to PNG first.
    - **Audio** — Base64-encoded and sent natively to the model.
    - **Video** — Audio track extracted via the Web Audio API, then processed as audio.
+
+   Processing that takes more than a moment shows a progress panel above the message box with the file name, the step, a progress bar and a **Stop** button. Stopping attaches nothing for that file and shows no error; files attached before stay. Sending is held back until the attachment is there. Details: [Audio Extraction](audio-extraction.md#progress-and-stop).
 4. **Preview** — Attached files are displayed with a preview before sending.
 5. **Sending** — File content is packed into the message:
    - Text file content → prepended to `message.content` as `[File: filename.ext (type)]\n<content>`

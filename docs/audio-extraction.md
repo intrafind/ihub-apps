@@ -13,11 +13,25 @@ Users can upload video files through the standard file upload interface in any a
 
 ### 2. Browser Processing
 When a video file is uploaded:
-1. The file is read as an ArrayBuffer
-2. The Web Audio API `decodeAudioData()` method extracts the audio track
-3. An `OfflineAudioContext` downmixes the audio to mono and resamples it to 16 kHz
-4. The audio is converted to WAV format (16-bit PCM)
-5. The WAV file is encoded as base64 for transmission to the AI model. The attachment also keeps the WAV itself as a `Blob`, which transcription decodes directly (the `Blob` is never serialized with the chat message)
+1. The file is read as an ArrayBuffer (`read`)
+2. The Web Audio API `decodeAudioData()` method extracts the audio track, in a context running at 16 kHz so the track is resampled while it is decoded (`decode`)
+3. An `OfflineAudioContext` downmixes the audio to mono and resamples it to 16 kHz (`resample`)
+4. The audio is converted to WAV format (16-bit PCM), in slices (`encode`)
+5. The WAV file is encoded as base64 for transmission to the AI model (`finalize`). The attachment also keeps the WAV itself as a `Blob`, which transcription decodes directly (the `Blob` is never serialized with the chat message)
+
+The names in brackets are the stages the extraction reports its progress by (see below).
+
+### Progress and Stop
+
+A long video takes seconds to minutes, so while a file is processed a panel shows above the message box (issue #2835):
+
+- The file name and the step ("Reading file…", "Extracting audio…", "Converting audio…", "Encoding audio…", "Finishing up…")
+- A progress bar. Decoding cannot report how far it is, so the bar is animated, without a value, during that step. Reading, converting, encoding and finishing have a percentage
+- A **Stop** button. Stopping rejects the extraction at its next checkpoint (the decoding itself cannot be cancelled: it runs on and its result is dropped). It is not an error: nothing is attached for the file, no message is shown, the file picker is reset so the same file can be picked again, and the files attached before stay. When several files were added at once, the ones already processed stay too
+
+The panel shows after 300 ms of processing, so files that are done in a blink never flash it. It is shown for every kind of attachment (images, documents, audio and video); only audio and video report a percentage, the others show the animated bar. While it shows, sending is held back: a message sent meanwhile would go without the attachment, which would then join the next message. That holds for every message box of the chat page: the page has one for the phone layout and one for the desktop layout, and after a resize the one that comes into view still waits for a file added in the other. A run that is still going when the chat is left (or when the uploader is cleared with its `handleClear`) is not a Stop but a discard: it is cancelled and attaches nothing, not even the files of its batch that were done (a Stop keeps those).
+
+The page is kept free while the extraction runs. Reading, decoding and resampling run natively, off the main thread, and the WAV is encoded in slices of about 8 ms with the event loop in between (`audioBufferToWavAsync()`). The slices hand over through a message port instead of a timer, so a tab the user switched away from keeps going at full speed (browsers run a timer once per second in the background). For a 40-minute video (the WAV is 73 MB) the longest freeze of the page measured in Chromium dropped from about 0.6 s to about 0.3 s. What is left is the browser itself: handing the decoded audio to the page (about 0.2 s) and building the base64 data URL (about 0.25 s).
 
 ### 3. Model Processing
 The extracted audio is sent to the AI model as if it were a regular audio file upload.
@@ -150,25 +164,35 @@ A standalone test page is available at `tests/manual/test-audio-extraction.html`
 ### Key Files
 
 - **`client/src/features/upload/utils/fileProcessing.js`**
-  - `extractAudioFromVideo()` - Main extraction function
-  - Helper utilities for encoding
+  - `extractAudioFromVideo()` - Main extraction function: stages, weighted progress, stopping
+  - `readFileAsDataURL()` and the `FileReader` helpers (progress, abortable)
 
 - **`client/src/utils/realtimeTranscriptionCore.js`**
-  - `resampleTo16kMono()` - Downmix and resample the decoded audio
+  - `resampleTo16kMono()` - Downmix and resample the decoded audio; with `onProgress`/`signal` it suspends the offline render at 40 checkpoints
 
 - **`client/src/utils/wav.js`**
   - `audioBufferToWav()` - WAV format conversion
+  - `audioBufferToWavAsync()` - The same file, encoded in slices with progress and a signal
+
+- **`client/src/utils/abortable.js`**
+  - The abort error (`code: 'aborted'`), `raceAbort()` and `yieldToEventLoop()`
+
+- **`client/src/features/upload/components/Uploader.jsx`**
+  - One `AbortController` per processing run; hands `{ signal, onProgress }` to `onProcessFile`; exposes `progress` and `cancelProcessing`. `cancelProcessing` is a Stop (the batch's finished files are attached); `handleClear` and unmounting discard the run (nothing is attached)
 
 - **`client/src/features/upload/components/UnifiedUploader.jsx`**
   - Video upload configuration
   - `processVideo()` - Video processing handler
   - Integration with file upload flow
 
+- **`client/src/features/upload/components/ProcessingProgress.jsx`**
+  - The progress panel with the Stop button
+
 ### Web Audio API Usage
 
 ```javascript
-// Create audio context
-const audioContext = new AudioContext();
+// Create audio context (at 16 kHz: decoding resamples to the context's rate)
+const audioContext = new AudioContext({ sampleRate: 16000 });
 
 // Decode video as audio
 const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
@@ -186,8 +210,8 @@ const renderedBuffer = await offlineContext.startRendering();
 
 ## Performance Considerations
 
-- **Memory Usage**: Large videos require significant memory during extraction. The video's whole audio track is decoded at its original rate and channel count first (see the memory note in [Realtime Voice & Transcription](voice-transcription.md#enabling-transcription-on-an-app)) before it is reduced to 16 kHz mono
-- **Processing Time**: Proportional to video duration (typically 1-5 seconds for short clips)
+- **Memory Usage**: Large videos require significant memory during extraction. The video's whole audio track is decoded first (see the memory note in [Realtime Voice & Transcription](voice-transcription.md#enabling-transcription-on-an-app)) before it is reduced to mono. It is decoded at 16 kHz, so for a stereo video it takes 290 MB per 40 minutes instead of the 810 MB it takes at 44.1 kHz (a browser that cannot run a context at 16 kHz decodes at its own rate). The result differs from decoding at the video's rate and resampling afterwards by about -70 dB, which is inaudible
+- **Processing Time**: Proportional to video duration (typically 1-5 seconds for short clips). Decoding is the longest step: about 7.5 s for 40 minutes of audio, of about 9 s in all
 - **File Size**: The extracted WAV is about 1.9 MB per minute, still larger than compressed audio formats
 - **Browser Limits**: Very large files may exceed browser memory limits
 
@@ -200,7 +224,7 @@ const renderedBuffer = await offlineContext.startRendering();
 
 Potential improvements for future versions:
 - Support for MP3 output format (smaller file size)
-- Progress indication for long extractions
+- A percentage while the video is decoded (the browser reports none)
 - Ability to extract specific time ranges
 - Support for multiple audio tracks
 - Audio preprocessing (normalization, noise reduction)
@@ -224,12 +248,15 @@ Potential improvements for future versions:
 
 ## API Reference
 
-### extractAudioFromVideo(file)
+### extractAudioFromVideo(file, options)
 
 Extracts audio from a video file using Web Audio API, as a 16 kHz mono WAV.
 
 **Parameters:**
 - `file` (File): The video file to extract audio from
+- `options` (Object, optional):
+  - `signal` (AbortSignal): Stops the extraction at the next checkpoint (between the stages, while the file is read, in the encoder's loop, at the checkpoints of the render), and at once while decoding, whose result is then dropped. The AudioContext is closed
+  - `onProgress` (Function): Called with `{ stage, percent }`. `stage` is `read`, `decode`, `resample`, `encode` or `finalize`, in that order. `percent` is the overall progress, an integer from 0 to 100 that never goes down (`read` spans 0-10, `decode` 10-50, `resample` 50-70, `encode` 70-90, `finalize` 90-100: a scale for the bar, not shares of the time), or `null` while the stage has nothing to measure: always during `decode`, and during `resample` in browsers that cannot suspend an offline render
 
 **Returns:**
 Promise resolving to object with (all describing the 16 kHz mono output):
@@ -242,8 +269,19 @@ Promise resolving to object with (all describing the 16 kHz mono output):
 - `size` (number): File size in bytes
 
 **Throws:**
+- `aborted`: The signal fired. The error is named `AbortError`, and its message and `code` are `'aborted'` (`isAbortError()` in `abortable.js` tells it from a failure). It is never turned into `video-audio-extraction-error`
 - `audio-decode-error`: Cannot decode video audio
 - `video-audio-extraction-error`: General extraction failure, including audio too long to be attached as a base64 data URL
+
+### audioBufferToWavAsync(audioBuffer, options)
+
+`audioBufferToWav()` for long audio: the same file byte for byte, encoded in slices with the event loop in between. Takes an AudioBuffer or anything with `numberOfChannels`, `sampleRate`, `length` and `getChannelData()`.
+
+**Options:** `signal` (stops at the next slice, rejecting with the abort error), `onProgress(percent)` (0-100, after each slice), `chunkSamples` (frames per slice, default 524288: about 8 ms of work for a mono track). Resolves to the WAV `Blob`.
+
+### Uploader and UnifiedUploader
+
+`onProcessFile(file, { signal, onProgress })` gets the signal and the progress callback as a second argument (callers that take only the file keep working). `Uploader` hands `progress` (`{ fileName, stage, percent, index, total }`, `index` counting from 0 within a batch) and `cancelProcessing()` to its render prop, and calls `onProcessingChange(true|false)` as processing starts and ends. `UnifiedUploader` forwards `onProcessingChange`; `ChatInput` and `ChatStartForm` use it to hold back sending. Where a page mounts several of them for one chat (`AppChat`), they report through `useFileUploadHandler()`: its `isAttachmentProcessing` is true while any uploader is busy and `setAttachmentProcessing(id, busy)` is how each reports (via `useAttachmentProcessing`); `AppChat` passes both on as `isAttachmentProcessing` and `onAttachmentProcessingChange`, and its own submit returns early while it is true. Both props are optional: without them a composer waits for its own uploader only.
 
 ## Resources
 
