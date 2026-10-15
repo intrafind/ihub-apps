@@ -114,10 +114,10 @@ describe('client pdf.js imports', () => {
 
 /**
  * Imports one pdfjs-dist file in a fresh Node process and reports which of the four
- * upsert methods (Map/WeakMap x getOrInsert/getOrInsertComputed) exist before and after.
- * A fresh process keeps the check independent of anything else loaded in the jest worker;
- * on a Node that implements the methods natively both lists are complete and the check is
- * trivially satisfied.
+ * upsert methods (Map/WeakMap x getOrInsert/getOrInsertComputed) are missing before and after.
+ * The methods are deleted first, so the check also means something on a Node that implements
+ * them natively. A fresh process keeps it independent of anything else loaded in the jest
+ * worker.
  */
 function upsertMethodsAround(relativeFile) {
   const url = pathToFileURL(path.join(pdfjsRoot, relativeFile)).href;
@@ -126,6 +126,11 @@ function upsertMethodsAround(relativeFile) {
       ['getOrInsert', 'getOrInsertComputed']
         .filter(method => typeof globalThis[ctor].prototype[method] !== 'function')
         .map(method => ctor + '.' + method));
+    for (const ctor of ['Map', 'WeakMap']) {
+      for (const method of ['getOrInsert', 'getOrInsertComputed']) {
+        delete globalThis[ctor].prototype[method];
+      }
+    }
     const before = missing();
     await import(${JSON.stringify(url)});
     console.log(JSON.stringify({ before, after: missing() }));
@@ -142,7 +147,13 @@ describe('installed pdfjs-dist legacy build', () => {
     ['library', 'legacy/build/pdf.mjs'],
     ['worker', 'legacy/build/pdf.worker.min.mjs']
   ])('installs the upsert polyfill by itself (%s)', (_name, file) => {
-    // Whatever the runtime lacks when the file is loaded, it has once the file has run.
-    expect(upsertMethodsAround(file).after).toEqual([]);
+    const { before, after } = upsertMethodsAround(file);
+    expect(before).toEqual([
+      'Map.getOrInsert',
+      'Map.getOrInsertComputed',
+      'WeakMap.getOrInsert',
+      'WeakMap.getOrInsertComputed'
+    ]);
+    expect(after).toEqual([]);
   });
 });
