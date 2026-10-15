@@ -26,8 +26,8 @@ import path from 'path';
 import { pathToFileURL } from 'url';
 
 jest.mock('../../../client/src/api/endpoints/config', () => ({
-  fetchMimetypesConfig: jest.fn(async () => ({ categories: {}, mimeTypes: {} })),
-  fetchPlatformConfig: jest.fn(async () => ({ features: [] }))
+  fetchMimetypesConfig: jest.fn(() => Promise.resolve({ categories: {}, mimeTypes: {} })),
+  fetchPlatformConfig: jest.fn(() => Promise.resolve({ features: [] }))
 }));
 // Distinguishable fake of the legacy library; the modern entries must never be requested.
 jest.mock(
