@@ -101,6 +101,19 @@ function useEventSource({
    */
   const detachEventSource = abortAndClearTimers;
 
+  /** Send the stop request; a failure is reported, never thrown. */
+  const sendStop = useCallback(
+    async source => {
+      if (!appId || !chatId) return;
+      try {
+        await stopAppChatStream(appId, chatId, { source });
+      } catch (err) {
+        console.warn('Failed to stop chat stream:', err);
+      }
+    },
+    [appId, chatId]
+  );
+
   /**
    * Stop the turn on the server, because a person asked to (the Stop button).
    * The only path in this hook that sends the stop request.
@@ -120,18 +133,12 @@ function useEventSource({
       const ac = abortControllerRef.current;
       stoppingRef.current = ac;
       clearTimers();
-      if ((ac || force) && appId && chatId) {
-        try {
-          await stopAppChatStream(appId, chatId, { source });
-        } catch (err) {
-          console.warn('Failed to stop chat stream:', err);
-        }
-      }
+      if (ac || force) await sendStop(source);
       // Close the stream that was open when Stop was pressed, not one opened since.
       if (abortControllerRef.current === ac) abortAndClearTimers();
       if (stoppingRef.current === ac) stoppingRef.current = null;
     },
-    [appId, chatId, abortAndClearTimers, clearTimers]
+    [sendStop, abortAndClearTimers, clearTimers]
   );
 
   /**

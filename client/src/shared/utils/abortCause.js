@@ -13,14 +13,24 @@
  * stopper was the owner (`actor.owner`) to a viewer who is not an administrator
  * — an owner's id may be a pseudonym the browser cannot match to its own.
  */
-function actorPhrase(t, actor, { userId, isAdmin }) {
-  if (!actor || (actor.type !== 'user' && actor.type !== 'admin')) return '';
-  const own = (userId && actor.id === userId) || (actor.owner === true && !isAdmin);
-  if (own) return t('abortCauses.byYou', 'you');
-  if (isAdmin && actor.id) {
-    return t('abortCauses.byUser', { id: actor.id, defaultValue: 'user {{id}}' });
-  }
+function actorPhrase(t, actor, viewer) {
+  if (actor?.type !== 'user' && actor?.type !== 'admin') return '';
+  if (isViewer(actor, viewer)) return t('abortCauses.byYou', 'you');
+  const named = nameForAdmin(t, actor, viewer);
+  if (named) return named;
   return actor.type === 'admin' ? t('abortCauses.byAdmin', 'an administrator') : '';
+}
+
+/** The viewer is the actor: the same id, or the owner (whose id may be a pseudonym) to a non-admin. */
+function isViewer(actor, { userId, isAdmin }) {
+  if (userId && actor.id === userId) return true;
+  return actor.owner === true && !isAdmin;
+}
+
+/** Administrators are told which user it was. */
+function nameForAdmin(t, actor, { isAdmin }) {
+  if (!isAdmin || !actor.id) return '';
+  return t('abortCauses.byUser', { id: actor.id, defaultValue: 'user {{id}}' });
 }
 
 /**

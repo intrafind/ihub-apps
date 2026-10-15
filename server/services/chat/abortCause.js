@@ -133,7 +133,7 @@ export async function userAbortCause(
   { mode = 'default', admin = false, ownerId, ...rest } = {}
 ) {
   const id = await resolveActorId(user, { mode }).catch(() => undefined);
-  const owner = !!id && !!ownerId && id === ownerId;
+  const owner = Boolean(ownerId) && id === ownerId;
   return abortCause(kind, { ...rest, actor: { type: admin ? 'admin' : 'user', id, owner } });
 }
 
