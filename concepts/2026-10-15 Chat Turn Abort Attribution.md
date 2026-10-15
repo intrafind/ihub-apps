@@ -52,7 +52,7 @@ One shape, created at the place that decides to stop, passed as the abort reason
   kind: 'user_stop',            // see table below
   message: 'Stopped from the chat',
   at: '2026-10-15T10:42:07.120Z',
-  actor: { type: 'user', id: '<resolved actor id>' },   // or { type: 'system' }
+  actor: { type: 'user', id: '<resolved actor id>' },   // type: 'user' | 'admin' | 'system'; id absent for 'system'
   origin: {
     via: 'POST /api/apps/:appId/chat/:chatId/stop',     // code path that decided
     source: 'stop-button',      // client surface, when a client asked (optional)
@@ -102,10 +102,13 @@ into `{ kind: 'unknown' }`, and maps a cause to a user-facing message.
 
 ### 4. Where the cause is recorded
 
-- **Ledger** — `run/end` for an aborted turn carries `cause`, and `finishReason` comes from the
-  cause (`user_stop`, `superseded`, `client_disconnected`, …) instead of always
-  `connection_closed`. The existing `human/event` stop record stays. Update the run-log contract
-  snapshot and `docs/sse-v2.md` (`run/ended` gets an optional `cause`).
+- **Ledger and stream** — an optional `cause` (`abortCauseSchema`, in `runLogEvents.js`) on
+  `runEndData` and on the SSE `runEndedData`, carried through every hop: `ChatService._endLedgerRun`
+  → `RunLog.endRun` (which picks its fields explicitly) → the ledger store, the live `run/ended`
+  frame and the replay projection (`projectLedgerEvent`), and kept by the client's run reducer.
+  The existing `human/event` stop record stays. Covered by the contract snapshot, a replay
+  projection test and `docs/sse-v2.md`. (`finishReason` stays `connection_closed`: see the
+  implementation notes.)
 - **Stored chat message** — `chatMaterializer.messageError` stores
   `{ code: 'ABORTED', message: <cause message>, cause }`; the chat shows e.g. "Stopped by you at
   10:42" or "Stopped: replaced by a newer message".
