@@ -27,7 +27,7 @@ const UPLOAD_TYPE_CONFIGS = {
     enableLabel: ['admin.apps.edit.enableFileUpload', 'Enable File Upload'],
     maxSizeLabel: ['admin.apps.edit.maxFileSize', 'Max File Size (MB)'],
     formatsLabel: ['admin.apps.edit.supportedFormats', 'Supported File Formats'],
-    defaultMaxFileSizeMB: 5,
+    defaultMaxFileSizeMB: 20,
     maxFileSizeUpperBound: 100,
     defaultFormats: [
       'text/plain',

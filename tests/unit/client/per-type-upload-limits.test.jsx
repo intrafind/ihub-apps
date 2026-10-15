@@ -9,7 +9,7 @@
 
 import '@testing-library/jest-dom';
 import { useState } from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react';
 
 // fileProcessing transitively imports the API client, which uses
 // `import.meta.env` and cannot be parsed by babel-jest.
@@ -50,6 +50,7 @@ const TranscriptionSection =
 const UploadConfigSection =
   require('../../../client/src/features/admin/components/app-form/UploadConfigSection').default;
 const fileProcessing = require('../../../client/src/features/upload/utils/fileProcessing');
+const { useFileUploadHandler } = require('../../../client/src/shared/hooks/useFileUploadHandler');
 
 const { extractAudioFromVideo, processDocumentFile, processImageFile } = fileProcessing;
 
@@ -342,6 +343,108 @@ describe('the app editor', () => {
       expect(screen.queryByText(/Up to 51200 MB/)).not.toBeInTheDocument();
       unmount();
     }
+  });
+});
+
+describe('the document limit defaults to 20 MB', () => {
+  const renderFileSection = (fileUpload, onChange = () => {}) => {
+    const t = (key, fallback) => (typeof fallback === 'string' ? fallback : key);
+    return render(
+      <UploadConfigSection
+        app={{ upload: { enabled: true, fileUpload } }}
+        onChange={onChange}
+        t={t}
+        parseNumberOrUndefined={value => Number(value)}
+      />
+    );
+  };
+
+  test('the app editor offers 20 MB for an app that has not set it, without writing it', () => {
+    const onChange = jest.fn();
+    const { container } = renderFileSection({ enabled: true }, onChange);
+
+    const size = container.querySelector('input[type="number"]');
+    expect(size).toHaveValue(20);
+    // The bounds do not move with the default
+    expect(size).toHaveAttribute('min', '1');
+    expect(size).toHaveAttribute('max', '100');
+    // Showing the default does not write it into the app
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  test('the app editor shows the limit the app set, the old default of 5 MB included', () => {
+    expect(
+      renderFileSection({ enabled: true, maxFileSizeMB: 5 }).container.querySelector(
+        'input[type="number"]'
+      )
+    ).toHaveValue(5);
+  });
+
+  test('the other types keep their defaults in the app editor', () => {
+    const t = (key, fallback) => (typeof fallback === 'string' ? fallback : key);
+    const defaults = { imageUpload: 10, audioUpload: 20, videoUpload: 50 };
+    for (const [type, expected] of Object.entries(defaults)) {
+      const { container, unmount } = render(
+        <UploadConfigSection
+          app={{ upload: { enabled: true, [type]: { enabled: true } } }}
+          onChange={() => {}}
+          t={t}
+          parseNumberOrUndefined={value => Number(value)}
+        />
+      );
+      expect(container.querySelector('input[type="number"]')).toHaveValue(expected);
+      unmount();
+    }
+  });
+
+  test('the upload config of the chat falls back to 20 MB for documents', () => {
+    const { result } = renderHook(() => useFileUploadHandler());
+    const uploadOf = upload => result.current.createUploadConfig({ upload }, null);
+
+    expect(
+      uploadOf({ enabled: true, fileUpload: { enabled: true } }).fileUpload.maxFileSizeMB
+    ).toBe(20);
+    // An app that lists no document settings at all
+    expect(
+      uploadOf({ enabled: true, imageUpload: { enabled: true } }).fileUpload.maxFileSizeMB
+    ).toBe(20);
+    // What the app set is kept, and so is what the other types fall back to
+    expect(
+      uploadOf({ enabled: true, fileUpload: { enabled: true, maxFileSizeMB: 5 } }).fileUpload
+        .maxFileSizeMB
+    ).toBe(5);
+    const fallbacks = uploadOf({ enabled: true, imageUpload: { enabled: true } });
+    expect(fallbacks.imageUpload.maxFileSizeMB).toBe(10);
+    expect(fallbacks.audioUpload.maxFileSizeMB).toBe(20);
+    expect(fallbacks.videoUpload.maxFileSizeMB).toBe(50);
+  });
+
+  test('an app with the default limits takes a 15 MB document and refuses 25 MB with 20 MB', async () => {
+    const { upload, onFileSelect } = renderUploader(
+      config({
+        imageUpload: {
+          enabled: true,
+          resizeImages: false,
+          supportedFormats: ['image/png'],
+          maxFileSizeMB: 10
+        },
+        videoUpload: {
+          enabled: true,
+          extractAudio: true,
+          supportedFormats: ['video/mp4'],
+          maxFileSizeMB: 50
+        },
+        fileUpload: { enabled: true, supportedFormats: ['text/plain'], maxFileSizeMB: 20 }
+      })
+    );
+
+    upload(sized('notes.txt', 'text/plain', 15 * MB));
+    await waitFor(() => expect(onFileSelect).toHaveBeenCalled());
+    expect(screen.queryByText(/File too large/)).not.toBeInTheDocument();
+
+    upload(sized('big.txt', 'text/plain', 25 * MB));
+    expect(await screen.findByText('File too large. Maximum size is 20MB.')).toBeInTheDocument();
+    expect(processDocumentFile).toHaveBeenCalledTimes(1);
   });
 });
 

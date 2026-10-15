@@ -224,7 +224,7 @@ const uploadSchema = z
         // PowerPoint (.pptx) and OpenDocument (.odp) decks: `include` sends the speaker notes of a
         // slide after its text as [Notes]. Off by default — notes are not what the audience sees.
         speakerNotes: z.enum(['ignore', 'include']).optional().prefault('ignore'),
-        maxFileSizeMB: z.number().int().min(1).max(100).optional().prefault(5),
+        maxFileSizeMB: z.number().int().min(1).max(100).optional().prefault(20),
         supportedFormats: z
           .array(z.string())
           .optional()

@@ -10,7 +10,7 @@ Five upload sub-types are available, each independently enabled:
 
 | Type | Description | Default size limit |
 |------|-------------|--------------------|
-| `fileUpload` | Text documents, PDFs, Office files, email files | 5 MB |
+| `fileUpload` | Text documents, PDFs, Office files, email files | 20 MB |
 | `imageUpload` | JPEG, PNG, GIF, WebP, TIFF images | 10 MB |
 | `audioUpload` | MP3, WAV, FLAC, OGG, M4A/MP4 audio | 20 MB |
 | `videoUpload` | MP4, MOV, WebM video; its audio track is extracted in the browser | 50 MB (up to 50 GB) |
@@ -47,7 +47,7 @@ All upload types share a single `upload` object in the app configuration:
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `enabled` | boolean | `false` | Enable document/file attachment |
-| `maxFileSizeMB` | number (1–100) | `5` | Maximum file size in megabytes |
+| `maxFileSizeMB` | number (1–100) | `20` | Maximum file size in megabytes |
 | `supportedFormats` | string[] | See below | MIME types accepted for upload |
 | `trackedChanges` | `"accepted"` \| `"markup"` | `"accepted"` | Word documents: `markup` writes tracked insertions and deletions into the text as `{++added++}` and `{--removed--}` (see [Tracked changes and comments](#tracked-changes-and-comments-opt-in)) |
 | `comments` | `"ignore"` \| `"inline"` | `"ignore"` | Word documents: `inline` writes comments as `{>>Author: text<<}` after the text they belong to |
@@ -361,12 +361,12 @@ All file processing happens **client-side** before content is sent to the server
 
 | Type | Default | Configurable range | What else limits it |
 |------|---------|--------------------|---------------------|
-| Files | 5 MB | 1–100 MB | Documents are read in the browser; the text is sent, not the file |
+| Files | 20 MB | 1–100 MB | Documents are read in the browser; the text is sent, not the file |
 | Images | 10 MB | 1–100 MB | The image is sent in the request: 50 MB (see below) |
 | Audio | 20 MB | 1–2000 MB | The audio is sent in the request (50 MB, see below) unless it is transcribed in the browser; a data URL of more than about 400 MB cannot be built |
 | Video | 50 MB | 1–51200 MB (50 GB) | MP4/MOV with extracted audio: nothing but the limit. Other containers, and videos sent as they are: about 2 GB |
 
-**Each file is held to the limit of its own type.** A PDF is refused above the `fileUpload` limit and a photo above the `imageUpload` limit, even when the video limit is 50 GB; the message names the limit that applied ("File too large. Maximum size is 5MB."). In front of that, the uploader lets a file in only up to the largest of the limits, and names that one.
+**Each file is held to the limit of its own type.** A PDF is refused above the `fileUpload` limit and a photo above the `imageUpload` limit, even when the video limit is 50 GB; the message names the limit that applied ("File too large. Maximum size is 20MB."). In front of that, the uploader lets a file in only up to the largest of the limits, and names that one.
 
 **The request body.** What is sent in a chat request must fit `requestBodyLimitMB` in `platform.json` (default: 50 MB): images, audio and videos sent as they are, and extracted audio sent to a multimodal model, all as base64. That does not limit the video itself, which is never uploaded, nor audio that an app [transcribes](voice-transcription.md) in the browser (only the text is sent). Raise the limit of a type beyond that only where it does not apply.
 
@@ -394,7 +394,7 @@ All file processing happens **client-side** before content is sent to the server
     },
     "fileUpload": {
       "enabled": true,
-      "maxFileSizeMB": 5
+      "maxFileSizeMB": 20
     },
     "cloudStorageUpload": {
       "enabled": true

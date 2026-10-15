@@ -84,7 +84,7 @@ In the app edit page, you can:
     },
     "fileUpload": {
       "enabled": true,
-      "maxFileSizeMB": 5,
+      "maxFileSizeMB": 20,
       "categories": ["documents"]
     }
   }

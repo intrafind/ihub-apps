@@ -983,7 +983,7 @@ The `upload` property controls file and media upload capabilities:
   },
   "fileUpload": {
     "enabled": true,
-    "maxFileSizeMB": 5,
+    "maxFileSizeMB": 20,
     "supportedFormats": ["application/pdf", "text/plain", "text/csv"]
   },
   "cloudStorageUpload": {
@@ -1010,7 +1010,7 @@ Every upload type has its own size limit, and a file is held to the limit of its
 | `upload.videoUpload.maxFileSizeMB`  | Number  | `50`     | Maximum video file size in megabytes (1-51200, that is 50 GB). An MP4 or MOV can be that large when its audio is extracted: only its index and audio are read. Other containers, and videos sent as they are, work up to about 2 GB — see [Audio Extraction](audio-extraction.md#large-videos-mp4-and-mov-up-to-50-gb) |
 | `upload.videoUpload.supportedFormats` | Array | `["video/mp4","video/webm","video/quicktime"]` | Allowed MIME types for video uploads |
 | `upload.fileUpload.enabled`         | Boolean | `false`  | Enable document/text file upload support                                                 |
-| `upload.fileUpload.maxFileSizeMB`   | Number  | `5`      | Maximum document file size in megabytes (1-100)                                          |
+| `upload.fileUpload.maxFileSizeMB`   | Number  | `20`     | Maximum document file size in megabytes (1-100)                                          |
 | `upload.fileUpload.supportedFormats`| Array   | See schema | Allowed MIME types for document uploads (plain text, CSV, PDF, Office formats, etc.)   |
 | `upload.fileUpload.trackedChanges`  | String  | `"accepted"` | `"markup"` sends tracked changes of Word documents as `{++added++}` / `{--removed--}`; `"accepted"` sends the accepted view |
 | `upload.fileUpload.comments`        | String  | `"ignore"` | `"inline"` sends Word comments as `{>>Author: text<<}` after the text they belong to      |
