@@ -611,16 +611,36 @@ const generateJSONL = (messages, settings) => {
 // and backslash-escapes `_` and `*`.
 //
 // So the test is "starts with an opening tag", with a few that stay raw on
-// purpose: a whole document (its <title> and <style> would leak into the text)
-// and <svg>/<math> (turndown keeps only their text and drops the drawing).
-// `<https://…>` autolinks and `<3` are not tags, and a code fence starts with a
-// backtick.
-const HTML_FRAGMENT_START =
-  /^\s*<(?!(?:svg|math|html|head|script|style)\b)[a-z][a-z0-9-]*(?=[\s/>])/i;
+// purpose: a whole document (its <title> and <style> would leak into the text),
+// and anything turndown's default rules cannot carry over, wherever it sits in
+// the fragment: a <table> (its rows and columns collapse into paragraphs) and
+// <svg>/<math> (the drawing is dropped). `<https://…>` autolinks and `<3` are
+// not tags, and a code fence starts with a backtick.
+//
+// A Markdown reply can also open with inline HTML (`<kbd>Ctrl</kbd> to copy.`
+// followed by a list), and that must not be taken for HTML: converting it would
+// flatten its lists. So a fragment that uses Markdown syntax outside its
+// <pre>/<code> blocks is left alone too. Leaving a doubtful reply raw is what the
+// export did before this conversion existed; converting a Markdown one loses text.
+const HTML_FRAGMENT_START = /^\s*<(?!(?:html|head|script|style)\b)[a-z][a-z0-9-]*(?=[\s/>])/i;
+const LOSSY_ELEMENT = /<(?:table|svg|math)[\s/>]/i;
+const CODE_BLOCK = /<(pre|code)\b[\s\S]*?<\/\1>/gi;
+// A list item, heading, quote, fence or table row at the start of a line.
+const MARKDOWN_BLOCK =
+  /^[ \t]*(?:[-*+][ \t]+\S|\d{1,9}[.)][ \t]+\S|#{1,6}[ \t]+\S|>[ \t]+\S|```|~~~|\|.+\|[ \t]*$)/m;
+// Bold, a link or inline code.
+const MARKDOWN_INLINE = /\*\*[^*\n]+\*\*|\[[^\]\n]+\]\([^)\n]+\)|`[^`\n]+`/;
+
+const hasMarkdownSyntax = text => MARKDOWN_BLOCK.test(text) || MARKDOWN_INLINE.test(text);
+
+const isHtmlFragment = content =>
+  HTML_FRAGMENT_START.test(content) &&
+  !LOSSY_ELEMENT.test(content) &&
+  !hasMarkdownSyntax(content.replace(CODE_BLOCK, ''));
 
 export const messageContentToMarkdown = content => {
   if (typeof content !== 'string' || !content) return '';
-  return HTML_FRAGMENT_START.test(content) ? htmlToMarkdown(content) : content;
+  return isHtmlFragment(content) ? htmlToMarkdown(content) : content;
 };
 
 const generateMarkdown = messages => {

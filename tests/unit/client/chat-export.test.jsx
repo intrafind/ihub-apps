@@ -111,6 +111,23 @@ describe('messageContentToMarkdown', () => {
     expect(messageContentToMarkdown(svg)).toBe(svg);
   });
 
+  it('leaves HTML with a table raw, because converting it would flatten rows and columns', () => {
+    const table =
+      '<table><thead><tr><th>A</th><th>B</th></tr></thead><tbody><tr><td>1</td><td>2</td></tr></tbody></table>';
+    expect(messageContentToMarkdown(table)).toBe(table);
+
+    const withText = `<h2>Report</h2><p>See <a href="https://x.y">the docs</a></p>${table}`;
+    expect(messageContentToMarkdown(withText)).toBe(withText);
+  });
+
+  it.each([
+    ['an SVG inside another element', '<div><svg><circle cx="10" cy="10" r="8"/></svg></div>'],
+    ['MathML inside a paragraph', '<p>Euler: <math><mi>e</mi><mo>=</mo><mn>2</mn></math></p>'],
+    ['an SVG after other content', '<p>Chart:</p><svg width="20"><circle r="8"/></svg>']
+  ])('leaves HTML with %s raw, because converting it would drop the drawing', (_name, html) => {
+    expect(messageContentToMarkdown(html)).toBe(html);
+  });
+
   it('leaves a whole HTML document raw, so its title and style do not leak into the text', () => {
     const doc =
       '<!DOCTYPE html><html><head><title>T</title><style>p{color:red}</style></head><body><p>Hi</p></body></html>';
@@ -124,6 +141,36 @@ describe('messageContentToMarkdown', () => {
     const autolink = '<https://example.com> is the site\n- one\n- two';
     expect(messageContentToMarkdown(autolink)).toBe(autolink);
     expect(messageContentToMarkdown('<3 this\n\n## Heading')).toBe('<3 this\n\n## Heading');
+  });
+
+  it('leaves Markdown that opens with inline HTML alone, so its lists and headings survive', () => {
+    // A leading tag is not proof that the whole reply is HTML: turndown would collapse these.
+    const kbd = '<kbd>Ctrl</kbd> + <kbd>C</kbd> to copy.\n\n- one\n- two';
+    expect(messageContentToMarkdown(kbd)).toBe(kbd);
+
+    const heading = '<br>\nIntro\n\n## Heading\n\n1. open\n2. close';
+    expect(messageContentToMarkdown(heading)).toBe(heading);
+
+    const quoteAndTable = '<b>Note</b>\n> quoted\n\n| a | b |\n| - | - |\n| 1 | 2 |';
+    expect(messageContentToMarkdown(quoteAndTable)).toBe(quoteAndTable);
+
+    const fenced = '<span>Run:</span>\n\n```sh\nls -la\n```';
+    expect(messageContentToMarkdown(fenced)).toBe(fenced);
+  });
+
+  it('leaves a reply alone that opens with inline HTML and uses inline Markdown', () => {
+    const md = '<b>Note</b>: **bold**, `code` and [a link](https://x.y).';
+    expect(messageContentToMarkdown(md)).toBe(md);
+  });
+
+  it('still converts HTML whose code blocks contain Markdown-looking lines', () => {
+    const html =
+      '<p>Run <a href="https://x.y">this</a>:</p><pre><code># comment\n- yaml: item\n`date`\n</code></pre>';
+    const md = messageContentToMarkdown(html);
+
+    expect(md).toContain('[this](https://x.y)');
+    expect(md).toContain('    - yaml: item');
+    expect(md).not.toContain('<');
   });
 
   it('converts an image-only HTML reply instead of leaving the raw tag', () => {

@@ -13,7 +13,8 @@ Exporting a chat as Markdown left replies that arrive as HTML (for example from 
 output format) half-converted: links, bullet and numbered lists and headings stayed as raw HTML
 tags in the `.md` file, because only bold, italic, inline code and paragraph breaks were
 converted. They now come out as regular Markdown links, lists and headings. Replies that are
-already Markdown or plain text are exported unchanged.
+already Markdown or plain text are exported unchanged, and so are HTML replies that contain a table,
+an SVG drawing or MathML, because Markdown cannot hold those.
 
 - No admin action is required — the fix takes effect automatically on upgrade.
 
