@@ -11,16 +11,17 @@ import { apiClient } from '../../../client/src/api/client';
  * such page, so there is no link while creating one.
  */
 
-// `t` reads the real English strings, so a key the page uses but en.json lacks fails here.
+// The translation function reads the real English strings, so a key the page uses but en.json
+// lacks fails here.
 jest.mock('react-i18next', () => {
   const en = require('../../../shared/i18n/en.json');
   const lookup = key => key.split('.').reduce((node, part) => node?.[part], en);
-  const t = (key, fallback, values) => {
+  const translate = (key, fallback, values) => {
     const text = typeof lookup(key) === 'string' ? lookup(key) : fallback;
     if (typeof text !== 'string') return key;
-    return text.replace(/\{\{(\w+)\}\}/g, (_, name) => String(values?.[name] ?? ''));
+    return text.replace(/\{\{(\w+)\}\}/g, (placeholder, name) => String(values?.[name] ?? ''));
   };
-  const translation = { t, i18n: { language: 'en' } };
+  const translation = { t: translate, i18n: { language: 'en' } };
   return { useTranslation: () => translation };
 });
 

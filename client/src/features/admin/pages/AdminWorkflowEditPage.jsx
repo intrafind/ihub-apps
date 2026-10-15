@@ -497,7 +497,7 @@ function AdminWorkflowEditPage() {
               workflow={workflowData}
               onChange={handleChatIntegrationChange}
               assignedApps={assignedApps}
-              disabled={!!jsonError}
+              disabled={Boolean(jsonError)}
             />
 
             {/* JSON Editor Section */}
