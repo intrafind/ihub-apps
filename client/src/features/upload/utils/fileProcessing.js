@@ -544,16 +544,17 @@ export const processImageFile = async (file, options = {}, progressOptions = {})
         const pageResults = [];
 
         for (let i = 0; i < pages.length; i++) {
-          if (signal?.aborted) {
-            // Stopped half way: nothing will show the previews made so far
-            pageResults.forEach(({ preview }) => URL.revokeObjectURL(preview.url));
-            throwIfAborted(signal);
-          }
           onProgress?.(itemProgress('finalize', 'page', i + 1, pages.length));
           const page = pages[i];
 
           const response = await fetch(page.base64);
           const blob = await response.blob();
+          // Checked after the read, the last page's too: nothing shows the previews of a
+          // stopped upload, so none is made and the ones made so far are let go
+          if (signal?.aborted) {
+            pageResults.forEach(({ preview }) => URL.revokeObjectURL(preview.url));
+            throwIfAborted(signal);
+          }
           const previewUrl = URL.createObjectURL(blob);
 
           const baseFileName = file.name.replace(/\.tiff?$/i, '');
@@ -584,6 +585,7 @@ export const processImageFile = async (file, options = {}, progressOptions = {})
       const firstPage = pages[0];
       const response = await fetch(firstPage.base64);
       const blob = await response.blob();
+      throwIfAborted(signal);
       const previewUrl = URL.createObjectURL(blob);
 
       return {
@@ -1150,6 +1152,8 @@ export const legacyDocxText = async (arrayBuffer, { signal, onProgress } = {}) =
   throwIfAborted(signal);
   onProgress?.({ stage: 'convert', percent: null });
   const mammoth = await loadMammoth();
+  // Stopped while mammoth was loaded: the conversion is not started
+  throwIfAborted(signal);
   const result = await mammoth.convertToHtml({ arrayBuffer });
   throwIfAborted(signal);
 

@@ -23,8 +23,14 @@ jest.mock('utif2', () => ({
   __esModule: true,
   default: { decode: jest.fn(), decodeImage: jest.fn(), toRGBA8: jest.fn() }
 }));
+// The real mammoth, with its conversion observable
+jest.mock('mammoth', () => {
+  const actual = jest.requireActual('mammoth');
+  return { ...actual, convertToHtml: jest.fn(actual.convertToHtml) };
+});
 
 const JSZip = require('jszip');
+const mammoth = require('mammoth');
 const XLSX = require('xlsx');
 const pdfjs = require('pdfjs-dist');
 const UTIF = require('utif2').default;
@@ -691,6 +697,28 @@ describe('Word', () => {
     ).rejects.toMatchObject(abortedError);
   });
 
+  it('the plain extraction does not start converting when stopped while mammoth loads', async () => {
+    config.fetchPlatformConfig.mockResolvedValue(STRUCTURED_OFF);
+    const file = await docx();
+    const controller = new AbortController();
+    mammoth.convertToHtml.mockClear();
+
+    const result = processDocumentFile(
+      file,
+      {},
+      {
+        signal: controller.signal,
+        // Announced just before mammoth is loaded
+        onProgress: event => {
+          if (event.stage === 'convert') controller.abort();
+        }
+      }
+    );
+
+    await expect(result).rejects.toMatchObject(abortedError);
+    expect(mammoth.convertToHtml).not.toHaveBeenCalled();
+  });
+
   it('Stop while the file is read ends the read', async () => {
     const file = await docx();
     const controller = new AbortController();
@@ -855,8 +883,50 @@ describe('TIFF', () => {
     );
 
     await expect(result).rejects.toMatchObject(abortedError);
+    // The first page's preview was made and let go; none was made for the second
+    expect(URL.createObjectURL).toHaveBeenCalledTimes(1);
+    expect(revoke).toHaveBeenCalledTimes(1);
+  });
+
+  it('as an upload: Stop while the last page is read lets go of every preview', async () => {
+    const controller = new AbortController();
+    let reads = 0;
+    global.fetch = jest.fn(async () => ({
+      blob: async () => {
+        reads += 1;
+        if (reads === 3) controller.abort();
+        return new Blob(['png']);
+      }
+    }));
+
+    const result = processImageFile(
+      tiff(),
+      { allowMultiple: true },
+      { signal: controller.signal, onProgress: () => {} }
+    );
+
+    await expect(result).rejects.toMatchObject(abortedError);
     expect(URL.createObjectURL).toHaveBeenCalledTimes(2);
     expect(revoke).toHaveBeenCalledTimes(2);
+  });
+
+  it('as an upload: Stop while a single page is read makes no preview', async () => {
+    const controller = new AbortController();
+    global.fetch = jest.fn(async () => ({
+      blob: async () => {
+        controller.abort();
+        return new Blob(['png']);
+      }
+    }));
+
+    const result = processImageFile(
+      tiff(),
+      {},
+      { signal: controller.signal, onProgress: () => {} }
+    );
+
+    await expect(result).rejects.toMatchObject(abortedError);
+    expect(URL.createObjectURL).not.toHaveBeenCalled();
   });
 
   it('processImageFile without options converts as before', async () => {
