@@ -345,6 +345,7 @@
         "copy": "Copy",
         "copied": "Copied!",
         "copyNotSupported": "Copy not supported for this format. Please use download instead.",
+        "downloadFailed": "The download of {{filename}} could not be started",
         "pdfOptions": "PDF Options",
         "watermarkPlaceholder": "Enter watermark text",
         "formats": {

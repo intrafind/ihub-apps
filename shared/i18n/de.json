@@ -358,6 +358,7 @@
         "copy": "Kopieren",
         "copied": "Kopiert!",
         "copyNotSupported": "Kopieren wird für dieses Format nicht unterstützt. Bitte verwenden Sie stattdessen Download.",
+        "downloadFailed": "Der Download von {{filename}} konnte nicht gestartet werden",
         "pdfOptions": "PDF-Optionen",
         "watermarkPlaceholder": "Wasserzeichentext eingeben",
         "formats": {
