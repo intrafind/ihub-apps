@@ -1,5 +1,26 @@
 # Fixes — Unreleased
 
+## An App's Model Only Runs Workflows the Person Chatting May Run
+
+A workflow with **Available in chat** switched on was offered to the model of every app that lists
+it, and the model could run it for any user of that app, whatever the workflow's group
+permissions said. Only starting it yourself with `@` checked them. The model now acts with the
+rights of the person who chats:
+
+- The model is only offered the workflows the chatting user may run — the same rule as the `@`
+  menu: the app lists the workflow and one of the user's groups grants it
+- A call for any other workflow is refused when it is made, even if the model was never offered
+  the workflow. It is answered like a workflow that does not exist, and the server log records the
+  refusal with the user and the app
+- This also applies to the agent steps of a workflow and to scheduled runs, which act as their
+  owner
+- A tool call that carries no user, which is every call that did not come from a person, is
+  refused
+
+**Admin action:** none if the groups of your users already grant the workflows their apps list. If
+a model can no longer run a workflow, add the workflow to the **Workflows** permissions of the
+user's group under **Admin → Groups**.
+
 ## Opening a Running Scheduled Run No Longer Risks Cancelling It
 
 A scheduled run could end as "cancelled" after someone opened its chat while it was still

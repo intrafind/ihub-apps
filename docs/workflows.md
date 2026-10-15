@@ -272,7 +272,7 @@ on the workflow page under **Admin → Workflows → a workflow → Chat integra
 
 | Field | Default | Effect |
 | ----- | ------- | ------ |
-| `enabled` | `false` | The workflow can be started with `@` in the apps that list it under `workflows`, and the app's model can call it as a tool (`workflow_<id>`). It is also offered to MCP and A2A clients whose groups may run it. |
+| `enabled` | `false` | The workflow can be started with `@` in the apps that list it under `workflows`, and the app's model can call it as a tool (`workflow_<id>`). Both only work for a user whose groups grant the workflow (`permissions.workflows`): the model acts with the rights of the person who chats and is not even offered a workflow that person may not run. It is also offered to MCP and A2A clients whose groups may run it. |
 | `primaryOutput` | – | The output shown as the answer in chat. Must be a key of the **end step's output** (see below); a dotted path such as `_report.markdown` names a field inside one. |
 | `outputFormat` | `markdown` | How the chat renders the answer: `markdown`, `text` or `json`. |
 | `toolDescription` | the workflow description | What the app's model is told about when to call the workflow. |

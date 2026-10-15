@@ -12,6 +12,7 @@
  */
 
 import { getWorkflowEngine } from '../services/workflow/WorkflowEngine.js';
+import { runnerAccess } from '../services/workflow/workflowAccess.js';
 import { isValidRunId } from '../services/loop/RunLog.js';
 import { getExecutionRegistry } from '../services/workflow/ExecutionRegistry.js';
 import { recordPendingFinish, buildReplayStepsFromState } from '../services/workflow/chatBridge.js';
@@ -222,6 +223,19 @@ export default async function workflowRunner(params = {}) {
   // 1. Load workflow definition
   const workflow = configCache.getWorkflowById(workflowId);
   if (!workflow) {
+    throw new Error(`Workflow '${workflowId}' not found`);
+  }
+  // Whoever starts a run, a person or a model acting for one, may only run what
+  // that person may run (`workflowAccess.js`). Checked before anything else is
+  // said about the workflow, and answered like a workflow that does not exist,
+  // so a refusal does not confirm that it does.
+  if (!runnerAccess({ user, app: _appConfig, workflow })) {
+    logger.warn('Workflow run refused: the caller may not run this workflow', {
+      component: 'workflowRunner',
+      workflowId,
+      userId: user?.id || null,
+      appId: _appConfig?.id || null
+    });
     throw new Error(`Workflow '${workflowId}' not found`);
   }
   if (workflow.enabled === false) {
