@@ -35,6 +35,11 @@ describe('the end step form', () => {
     expect(options).toEqual(['finalReport', 'summary']);
   });
 
+  it('names the output input by its visible label, for assistive technology', () => {
+    render(<EndForm config={{}} onChange={() => {}} variables={VARIABLES} />);
+    expect(screen.getByLabelText('Output')).toBe(screen.getByPlaceholderText('finalReport'));
+  });
+
   it('writes what is typed into the output and leaves the rest of the config alone', () => {
     const onChange = jest.fn();
     render(

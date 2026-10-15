@@ -18,6 +18,8 @@ function FormField({
     'w-full text-sm border border-gray-300 dark:border-gray-600 rounded-sm px-2 py-1.5 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100';
   const labelClass = 'block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1';
   const datalistId = useId();
+  // Ties the visible label to its input, so assistive technology can name the input by it
+  const inputId = useId();
 
   if (type === 'checkbox') {
     return (
@@ -37,13 +39,14 @@ function FormField({
     const numericValue = typeof value === 'number' ? value : Number(value) || min || 0;
     return (
       <div>
-        <label className={labelClass}>
+        <label htmlFor={inputId} className={labelClass}>
           {label}
           <span className="float-right font-mono text-gray-500 dark:text-gray-400">
             {numericValue}
           </span>
         </label>
         <input
+          id={inputId}
           type="range"
           value={numericValue}
           onChange={e => onChange(Number(e.target.value))}
@@ -87,9 +90,12 @@ function FormField({
 
   return (
     <div>
-      <label className={labelClass}>{label}</label>
+      <label htmlFor={inputId} className={labelClass}>
+        {label}
+      </label>
       {type === 'textarea' ? (
         <textarea
+          id={inputId}
           value={value ?? ''}
           onChange={e => onChange(e.target.value)}
           rows={rows || 4}
@@ -97,7 +103,12 @@ function FormField({
           className={`${inputClass} font-mono`}
         />
       ) : type === 'select' ? (
-        <select value={value ?? ''} onChange={e => onChange(e.target.value)} className={inputClass}>
+        <select
+          id={inputId}
+          value={value ?? ''}
+          onChange={e => onChange(e.target.value)}
+          className={inputClass}
+        >
           {(options || []).map(opt => (
             <option key={opt.value ?? opt} value={opt.value ?? opt}>
               {opt.label ?? opt}
@@ -107,6 +118,7 @@ function FormField({
       ) : (
         <>
           <input
+            id={inputId}
             type={type}
             value={value ?? ''}
             onChange={e => onChange(type === 'number' ? Number(e.target.value) : e.target.value)}
