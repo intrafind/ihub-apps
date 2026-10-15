@@ -730,7 +730,11 @@ function useAppChat({
   // Read at stop time, so a turn running with no stream attached is still
   // stopped without making the callback change with every `processing` flip.
   const processingRef = useRef(false);
-  processingRef.current = processing;
+  // After commit, not during render: a render React discards must not leave a
+  // value here that the committed state never had.
+  useLayoutEffect(() => {
+    processingRef.current = processing;
+  }, [processing]);
 
   /**
    * A person stopped the turn: the one place this hook tells the server to.
