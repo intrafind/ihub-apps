@@ -54,3 +54,16 @@ Transcribing an uploaded video failed for long recordings: the audio was extract
   and a session that reached its maximum duration have their own messages
 - The extracted audio is 16 kHz mono also when it goes to a chat model that accepts audio instead
   of being transcribed. That is plenty for speech, but music loses its high frequencies
+
+## M4A Audio Files Can Be Uploaded
+
+Audio exported from QuickTime ("Export As → Audio Only") is an `.m4a` file. Uploading it was
+refused with "Unsupported file format. Please use: …, MP4", although MP4 audio is supported:
+Chrome and Safari on macOS report such files as `audio/x-m4a` instead of `audio/mp4`, and the
+upload only recognised the exact type.
+
+- `.m4a` files are accepted wherever `audio/mp4` is allowed and reach the model as `audio/mp4`.
+  The same goes for `.wav` and `.flac` files that browsers label `audio/x-wav` or `audio/x-flac`.
+- Cloud storage pickers list `.m4a` files as well.
+- The hint with the supported formats names M4A, and the audio formats the app editor preselects
+  include `audio/mp4` like the server default does.

@@ -13,7 +13,9 @@ import {
   formatAcceptAttribute,
   processImageFile,
   extractAudioFromVideo,
-  loadMimetypesConfig
+  loadMimetypesConfig,
+  canonicalMimeType,
+  withDataUrlMimeType
 } from '../utils/fileProcessing';
 import { extractionOptionsOf } from '../utils/extractionOptions';
 
@@ -147,7 +149,7 @@ const UnifiedUploader = ({
   const isAudioFile = type => AUDIO_FORMATS.includes(type);
   const isVideoFile = type => VIDEO_FORMATS.includes(type);
 
-  const getFileTypeDisplay = mimeType => {
+  const getFileTypeDisplay = (mimeType, fileName = '') => {
     // Image types
     if (isImageFile(mimeType)) {
       return mimeType.replace('image/', '').toUpperCase();
@@ -155,6 +157,8 @@ const UnifiedUploader = ({
 
     // Audio types
     if (isAudioFile(mimeType)) {
+      // An .m4a is an audio/mp4 file; show it as the format the user picked, not "MP4"
+      if (mimeType === 'audio/mp4' && /\.m4a$/i.test(fileName)) return 'M4A';
       return mimeType.replace('audio/', '').toUpperCase();
     }
 
@@ -174,27 +178,28 @@ const UnifiedUploader = ({
       allowMultiple
     });
 
-  const processAudio = file => {
+  const processAudio = (file, mimeType) => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
 
       reader.onload = e => {
         // For audio files, we just need to read the base64 data
-        // No processing or resizing is needed
+        // No processing or resizing is needed. The data URL carries the canonical
+        // MIME type: the adapters only strip the prefix of plain type names.
         resolve({
           preview: {
             type: 'audio',
             fileName: file.name,
-            fileType: getFileTypeDisplay(file.type),
+            fileType: getFileTypeDisplay(mimeType, file.name),
             fileSize: file.size
           },
           data: {
             type: 'audio',
             source: 'local',
-            base64: e.target.result,
+            base64: withDataUrlMimeType(e.target.result, mimeType),
             fileName: file.name,
             fileSize: file.size,
-            fileType: file.type
+            fileType: mimeType
           }
         });
       };
@@ -257,6 +262,7 @@ const UnifiedUploader = ({
 
     // If audio extraction is not enabled, treat as regular file
     // (Some models might support video directly)
+    const mimeType = canonicalMimeType(file.type, file.name);
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
 
@@ -265,16 +271,16 @@ const UnifiedUploader = ({
           preview: {
             type: 'video',
             fileName: file.name,
-            fileType: getFileTypeDisplay(file.type),
+            fileType: getFileTypeDisplay(mimeType),
             fileSize: file.size
           },
           data: {
             type: 'video',
             source: 'local',
-            base64: e.target.result,
+            base64: withDataUrlMimeType(e.target.result, mimeType),
             fileName: file.name,
             fileSize: file.size,
-            fileType: file.type
+            fileType: mimeType
           }
         });
       };
@@ -285,38 +291,43 @@ const UnifiedUploader = ({
   };
 
   const processFile = async file => {
+    // Route by the canonical type (`audio/x-m4a` → `audio/mp4`); a type the app lists
+    // verbatim keeps matching too
+    const mimeType = canonicalMimeType(file.type, file.name);
+    const isListed = formats => formats.includes(file.type) || formats.includes(mimeType);
+
     // Check if image files are disabled
-    if (!isImageUploadEnabled && IMAGE_FORMATS.includes(file.type)) {
+    if (!isImageUploadEnabled && isListed(IMAGE_FORMATS)) {
       throw new Error('image-upload-disabled');
     }
 
     // Check if audio files are disabled
-    if (!isAudioUploadEnabled && AUDIO_FORMATS.includes(file.type)) {
+    if (!isAudioUploadEnabled && isListed(AUDIO_FORMATS)) {
       throw new Error('audio-upload-disabled');
     }
 
     // Check if video files are disabled
-    if (!isVideoUploadEnabled && VIDEO_FORMATS.includes(file.type)) {
+    if (!isVideoUploadEnabled && isListed(VIDEO_FORMATS)) {
       throw new Error('video-upload-disabled');
     }
 
     // Check if file upload is disabled
-    if (!isFileUploadEnabled && TEXT_FORMATS.includes(file.type)) {
+    if (!isFileUploadEnabled && isListed(TEXT_FORMATS)) {
       throw new Error('file-upload-disabled');
     }
 
     // Handle image files
-    if (isImageFile(file.type)) {
+    if (isListed(IMAGE_FORMATS)) {
       return await processImage(file);
     }
 
     // Handle audio files
-    if (isAudioFile(file.type)) {
-      return await processAudio(file);
+    if (isListed(AUDIO_FORMATS)) {
+      return await processAudio(file, mimeType);
     }
 
     // Handle video files
-    if (isVideoFile(file.type)) {
+    if (isListed(VIDEO_FORMATS)) {
       return await processVideo(file);
     }
 
@@ -356,7 +367,10 @@ const UnifiedUploader = ({
 
   const formatList = (() => {
     const imageFormats = IMAGE_FORMATS.map(format => format.replace('image/', '').toUpperCase());
-    const audioFormats = AUDIO_FORMATS.map(format => format.replace('audio/', '').toUpperCase());
+    // audio/mp4 covers .m4a files; name it so users looking for M4A find it
+    const audioFormats = AUDIO_FORMATS.map(format =>
+      format === 'audio/mp4' ? 'M4A, MP4' : format.replace('audio/', '').toUpperCase()
+    );
     const videoFormats = VIDEO_FORMATS.map(format => format.replace('video/', '').toUpperCase());
     const textFormatsDisplay = formatMimeTypesToDisplay(TEXT_FORMATS);
     const allFormats = [

@@ -4,7 +4,7 @@ iHub Apps supports audio file uploads for transcription, analysis, and processin
 
 ## Overview
 
-Audio file support allows users to upload audio files (MP3, WAV, FLAC, OGG) directly into compatible applications. The audio data is sent to LLM providers that support multimodal input, enabling tasks such as:
+Audio file support allows users to upload audio files (MP3, WAV, FLAC, OGG, M4A/MP4) directly into compatible applications. The audio data is sent to LLM providers that support multimodal input, enabling tasks such as:
 
 - **Transcription**: Convert speech to text
 - **Speaker Identification**: Identify and label different speakers
@@ -80,7 +80,25 @@ The following audio formats are supported:
 | WAV | `audio/wav` | `.wav` | Uncompressed audio, highest quality for speech |
 | FLAC | `audio/flac` | `.flac` | Lossless compressed audio |
 | OGG | `audio/ogg` | `.ogg` | Open-source compressed audio format |
-| MP4 | `audio/mp4` | `.mp4`, `.m4a` | MPEG-4 audio (used by QuickTime and Apple devices) |
+| M4A / MP4 | `audio/mp4` | `.m4a`, `.mp4` | MPEG-4 audio (QuickTime "Export As → Audio Only", Apple devices) |
+
+### Alternative MIME types
+
+Browsers do not report every format under the MIME type listed above — Chrome and Safari on macOS
+report an `.m4a` file as `audio/x-m4a`, and some setups report no type at all. The upload picks
+the canonical type from the table, so a file is accepted when the app lists the canonical type
+(`audio/mp4`); the alternative type does not have to be added to `supportedFormats`:
+
+| Reported by the browser | Treated as |
+|-------------------------|------------|
+| `audio/x-m4a`, `audio/m4a` | `audio/mp4` |
+| `audio/x-wav`, `audio/wave`, `audio/vnd.wave` | `audio/wav` |
+| `audio/x-flac` | `audio/flac` |
+| no type or `application/octet-stream` | the type of the file extension (`.m4a` → `audio/mp4`), when the extension identifies one audio or video type |
+
+An `.mp4` file keeps the type the browser reports, because the extension is used for audio and
+video alike. The canonical type is what the attachment carries (`fileType` and the prefix of the
+data URL), so the model providers receive a type they know.
 
 ### File Size Limits
 
@@ -119,7 +137,8 @@ To enable audio upload in an application, add the `audioUpload` configuration to
         "audio/mp3",
         "audio/wav",
         "audio/flac",
-        "audio/ogg"
+        "audio/ogg",
+        "audio/mp4"
       ]
     }
   },
@@ -183,8 +202,8 @@ Models can declare audio support using the `supportsAudio` field:
 
 When a user uploads an audio file:
 
-1. **File Validation**: The `UnifiedUploader` component validates the file type and size
-2. **Base64 Encoding**: Audio files are converted to base64-encoded data URLs
+1. **File Validation**: The `UnifiedUploader` component validates the file type and size. The type is the canonical one (see [Alternative MIME types](#alternative-mime-types)), so `audio/x-m4a` is accepted where `audio/mp4` is listed
+2. **Base64 Encoding**: Audio files are converted to base64-encoded data URLs that carry the canonical MIME type
 3. **No Processing**: Unlike images, audio files are not processed or modified
 4. **Message Attachment**: Audio data is attached to the message as `audioData`
 

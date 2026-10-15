@@ -12,7 +12,7 @@ Four upload sub-types are available, each independently enabled:
 |------|-------------|--------------------|
 | `fileUpload` | Text documents, PDFs, Office files, email files | 5 MB |
 | `imageUpload` | JPEG, PNG, GIF, WebP, TIFF images | 10 MB |
-| `audioUpload` | MP3, WAV, FLAC, OGG, MP4 audio | 20 MB |
+| `audioUpload` | MP3, WAV, FLAC, OGG, M4A/MP4 audio | 20 MB |
 | `cloudStorageUpload` | Google Drive, OneDrive, Nextcloud | — |
 
 ## Configuration
@@ -154,7 +154,9 @@ many formats, e.g. `.log`, `.yaml`, `.srt`). With it enabled:
 | `.wav` | `audio/wav` |
 | `.flac` | `audio/flac` |
 | `.ogg` | `audio/ogg` |
-| `.mp4` (audio) | `audio/mp4` |
+| `.m4a`, `.mp4` (audio) | `audio/mp4` |
+
+Browsers report some audio files under alternative MIME types (`audio/x-m4a` for `.m4a`, `audio/x-wav` for `.wav`) or none at all. The upload treats these as the listed type, so `audio/mp4` in `supportedFormats` also accepts QuickTime "Audio Only" exports. See [Audio File Support](audio-file-support.md#alternative-mime-types).
 
 ## Extracted text format
 

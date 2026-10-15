@@ -88,7 +88,8 @@ const CloudFileBrowserShell = ({
 
     if (!showUnsupportedFiles) {
       result = result.filter(
-        item => item.isFolder || isVirtualFile(item) || isCloudFileSupported(item.mimeType)
+        item =>
+          item.isFolder || isVirtualFile(item) || isCloudFileSupported(item.mimeType, item.name)
       );
     }
 
@@ -154,7 +155,7 @@ const CloudFileBrowserShell = ({
   const canSelectFile = item => {
     if (item.isFolder) return false;
     const maxSize = (uploadConfig.maxFileSizeMB || 10) * 1024 * 1024;
-    const supported = isCloudFileSupported(item.mimeType);
+    const supported = isCloudFileSupported(item.mimeType, item.name);
     if (isVirtualFile(item)) return supported;
     return supported && item.size <= maxSize;
   };
@@ -162,7 +163,7 @@ const CloudFileBrowserShell = ({
   const getFileTooltip = item => {
     if (item.isFolder) return null;
     const maxSize = (uploadConfig.maxFileSizeMB || 10) * 1024 * 1024;
-    const supported = isCloudFileSupported(item.mimeType);
+    const supported = isCloudFileSupported(item.mimeType, item.name);
     const virtual = isVirtualFile(item);
 
     if (!supported && !virtual) {
