@@ -43,6 +43,34 @@ export function RunStatusBadge({ status }) {
 }
 
 /**
+ * Which memory badges a run's `memory` marker earns.
+ *
+ * @param {{changed?: boolean|null, compose?: string, versionRead?: number,
+ *   versionWritten?: number}} memory
+ * @returns {{usedVersion: number|null, unchanged: boolean, updated: boolean,
+ *   tooLong: boolean, failed: boolean}}
+ */
+function memoryBadgeState(memory) {
+  // Version 0 is "nothing was ever written": a first run has no notes to have used.
+  const usedVersion =
+    Number.isInteger(memory.versionRead) && memory.versionRead > 0 ? memory.versionRead : null;
+  const updated =
+    memory.compose === 'written' ||
+    (Number.isFinite(memory.versionWritten) &&
+      Number.isFinite(memory.versionRead) &&
+      memory.versionWritten > memory.versionRead);
+  return {
+    usedVersion,
+    unchanged: memory.changed === false,
+    updated,
+    // A run that wrote its notes itself (write_memory) did update them, even when the
+    // update after it failed: no warning then, it would contradict "Memory updated".
+    tooLong: !updated && memory.compose === 'too_long',
+    failed: !updated && memory.compose === 'failed'
+  };
+}
+
+/**
  * What a run did with the task's memory: "Used notes v2" when it started from
  * stored notes (the notes go into the run's system prompt, which the chat never
  * shows, so this is the one visible sign that they were loaded), "No changes"
@@ -58,20 +86,8 @@ export function RunStatusBadge({ status }) {
 export function RunMemoryBadges({ memory }) {
   const { t } = useTranslation();
   if (!memory) return null;
-  // Version 0 is "nothing was ever written": a first run has no notes to have used.
-  const usedVersion =
-    Number.isInteger(memory.versionRead) && memory.versionRead > 0 ? memory.versionRead : null;
-  const unchanged = memory.changed === false;
-  const updated =
-    memory.compose === 'written' ||
-    (Number.isFinite(memory.versionWritten) &&
-      Number.isFinite(memory.versionRead) &&
-      memory.versionWritten > memory.versionRead);
-  // A run that wrote its notes itself (write_memory) did update them, even when the
-  // update after it failed: no warning then, it would contradict "Memory updated".
-  const tooLong = !updated && memory.compose === 'too_long';
-  const failed = !updated && memory.compose === 'failed';
-  if (usedVersion === null && !unchanged && !updated && !tooLong && !failed) return null;
+  const { usedVersion, unchanged, updated, tooLong, failed } = memoryBadgeState(memory);
+  if (usedVersion === null && !(unchanged || updated || tooLong || failed)) return null;
   return (
     <div className="flex flex-wrap gap-1.5">
       {usedVersion !== null && (
