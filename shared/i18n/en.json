@@ -3723,7 +3723,18 @@
       "processing": "Processing file...",
       "uploadFile": "Upload File",
       "uploadFiles": "Upload Files",
-      "supportedFormats": "Supported: {{formats}} (max {{maxSize}}MB)"
+      "supportedFormats": "Supported: {{formats}} (max {{maxSize}}MB)",
+      "stop": "Stop",
+      "stopProcessing": "Stop processing {{fileName}}",
+      "progressFor": "Progress of {{fileName}}",
+      "fileOfTotal": "File {{current}} of {{total}}",
+      "stage": {
+        "read": "Reading file…",
+        "decode": "Extracting audio…",
+        "resample": "Converting audio…",
+        "encode": "Encoding audio…",
+        "finalize": "Finishing up…"
+      }
     }
   },
   "feedback": {

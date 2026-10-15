@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Uploader from './Uploader';
+import ProcessingProgress from './ProcessingProgress';
 import '../components/ImageUpload.css';
 import {
   SUPPORTED_TEXT_FORMATS,
@@ -15,17 +16,25 @@ import {
   extractAudioFromVideo,
   loadMimetypesConfig,
   canonicalMimeType,
-  withDataUrlMimeType
+  withDataUrlMimeType,
+  readFileAsDataURL
 } from '../utils/fileProcessing';
 import { extractionOptionsOf } from '../utils/extractionOptions';
+import { isAbortError } from '../../../utils/abortable';
 
 /**
  * Unified uploader component that handles both images and files in a single interface.
  * Automatically detects file type and applies appropriate processing.
  * Wraps children with drag-drop handlers to make any area a drop zone.
+ *
+ * While a file is processed (extracting the audio of a video can take minutes)
+ * a progress panel with a Stop button shows above the children.
+ * `onProcessingChange(true|false)` tells the parent when an attachment is on its
+ * way, so it can hold back sending until it is attached.
  */
 const UnifiedUploader = ({
   onFileSelect,
+  onProcessingChange,
   disabled = false,
   fileData = null,
   config = {},
@@ -178,42 +187,38 @@ const UnifiedUploader = ({
       allowMultiple
     });
 
-  const processAudio = (file, mimeType) => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-
-      reader.onload = e => {
-        // For audio files, we just need to read the base64 data
-        // No processing or resizing is needed. The data URL carries the canonical
-        // MIME type: the adapters only strip the prefix of plain type names.
-        resolve({
-          preview: {
-            type: 'audio',
-            fileName: file.name,
-            fileType: getFileTypeDisplay(mimeType, file.name),
-            fileSize: file.size
-          },
-          data: {
-            type: 'audio',
-            source: 'local',
-            base64: withDataUrlMimeType(e.target.result, mimeType),
-            fileName: file.name,
-            fileSize: file.size,
-            fileType: mimeType
-          }
-        });
-      };
-
-      reader.onerror = () => reject(new Error('read-error'));
-      reader.readAsDataURL(file);
+  // `options`: { signal, onProgress } from the Uploader
+  const processAudio = async (file, mimeType, { signal, onProgress } = {}) => {
+    // For audio files, we just need to read the base64 data
+    // No processing or resizing is needed. The data URL carries the canonical
+    // MIME type: the adapters only strip the prefix of plain type names.
+    const dataUrl = await readFileAsDataURL(file, {
+      signal,
+      onProgress: percent => onProgress?.({ stage: 'read', percent })
     });
+    return {
+      preview: {
+        type: 'audio',
+        fileName: file.name,
+        fileType: getFileTypeDisplay(mimeType, file.name),
+        fileSize: file.size
+      },
+      data: {
+        type: 'audio',
+        source: 'local',
+        base64: withDataUrlMimeType(dataUrl, mimeType),
+        fileName: file.name,
+        fileSize: file.size,
+        fileType: mimeType
+      }
+    };
   };
 
-  const processVideo = async file => {
+  const processVideo = async (file, { signal, onProgress } = {}) => {
     // Extract audio from video if enabled
     if (extractAudioFromVideoEnabled) {
       try {
-        const audioData = await extractAudioFromVideo(file);
+        const audioData = await extractAudioFromVideo(file, { signal, onProgress });
 
         // Generate new filename for extracted audio
         const baseFileName = file.name.replace(/\.[^/.]+$/, ''); // Remove extension
@@ -255,7 +260,8 @@ const UnifiedUploader = ({
           data
         };
       } catch (error) {
-        console.error('Error extracting audio from video:', error);
+        // Stopping is not a failure to log
+        if (!isAbortError(error)) console.error('Error extracting audio from video:', error);
         throw error;
       }
     }
@@ -263,34 +269,30 @@ const UnifiedUploader = ({
     // If audio extraction is not enabled, treat as regular file
     // (Some models might support video directly)
     const mimeType = canonicalMimeType(file.type, file.name);
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-
-      reader.onload = e => {
-        resolve({
-          preview: {
-            type: 'video',
-            fileName: file.name,
-            fileType: getFileTypeDisplay(mimeType),
-            fileSize: file.size
-          },
-          data: {
-            type: 'video',
-            source: 'local',
-            base64: withDataUrlMimeType(e.target.result, mimeType),
-            fileName: file.name,
-            fileSize: file.size,
-            fileType: mimeType
-          }
-        });
-      };
-
-      reader.onerror = () => reject(new Error('read-error'));
-      reader.readAsDataURL(file);
+    const dataUrl = await readFileAsDataURL(file, {
+      signal,
+      onProgress: percent => onProgress?.({ stage: 'read', percent })
     });
+    return {
+      preview: {
+        type: 'video',
+        fileName: file.name,
+        fileType: getFileTypeDisplay(mimeType),
+        fileSize: file.size
+      },
+      data: {
+        type: 'video',
+        source: 'local',
+        base64: withDataUrlMimeType(dataUrl, mimeType),
+        fileName: file.name,
+        fileSize: file.size,
+        fileType: mimeType
+      }
+    };
   };
 
-  const processFile = async file => {
+  // `options`: { signal, onProgress } from the Uploader
+  const processFile = async (file, options = {}) => {
     // Route by the canonical type (`audio/x-m4a` → `audio/mp4`); a type the app lists
     // verbatim keeps matching too
     const mimeType = canonicalMimeType(file.type, file.name);
@@ -323,12 +325,12 @@ const UnifiedUploader = ({
 
     // Handle audio files
     if (isListed(AUDIO_FORMATS)) {
-      return await processAudio(file, mimeType);
+      return await processAudio(file, mimeType, options);
     }
 
     // Handle video files
     if (isListed(VIDEO_FORMATS)) {
-      return await processVideo(file);
+      return await processVideo(file, options);
     }
 
     // Handle text/document files using shared utility. Files that only pass
@@ -447,10 +449,13 @@ const UnifiedUploader = ({
       data={fileData}
       allowMultiple={allowMultiple}
       acceptAnyFile={ALLOW_GENERIC_TEXT}
+      onProcessingChange={onProcessingChange}
     >
       {({
         error,
-        isProcessing: _isProcessing,
+        isProcessing,
+        progress,
+        cancelProcessing,
         isDragging,
         handleButtonClick,
         handleDragEnter,
@@ -496,6 +501,9 @@ const UnifiedUploader = ({
                 </div>
               </div>
             )}
+
+            {/* Progress while a file is processed */}
+            {isProcessing && <ProcessingProgress progress={progress} onStop={cancelProcessing} />}
 
             {/* Error message */}
             {error && (

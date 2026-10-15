@@ -70,6 +70,9 @@ function ChatStartForm({
   const [missing, setMissing] = useState([]);
   // The model whose alert hint was acknowledged: picking another one asks again.
   const [acknowledgedModel, setAcknowledgedModel] = useState(null);
+  // A file is still being processed (the audio of a video is extracted): the chat
+  // would start without it.
+  const [attaching, setAttaching] = useState(false);
 
   const selectedModelData = models?.find(m => m.id === selectedModel) || null;
   const modelHint = selectedModelData?.hint || null;
@@ -103,7 +106,7 @@ function ChatStartForm({
 
   const handleSubmit = e => {
     e.preventDefault();
-    if (isProcessing || !canSubmit || alertPending) return;
+    if (isProcessing || attaching || !canSubmit || alertPending) return;
     // The inputs carry `required`, but a value of only spaces passes the
     // browser's own check.
     const missingNow = getMissingRequiredVariables(app, variables);
@@ -239,7 +242,7 @@ function ChatStartForm({
         )}
         <button
           type="submit"
-          disabled={isProcessing || !canSubmit || alertPending}
+          disabled={isProcessing || attaching || !canSubmit || alertPending}
           className="px-5 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {submitLabel}
@@ -253,6 +256,7 @@ function ChatStartForm({
   return uploadEnabled ? (
     <UnifiedUploader
       onFileSelect={onFileSelect}
+      onProcessingChange={setAttaching}
       disabled={isProcessing}
       fileData={selectedFile}
       config={uploadConfig}

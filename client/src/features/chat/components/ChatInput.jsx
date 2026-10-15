@@ -166,6 +166,10 @@ function ChatInput({
   };
   const [showWorkflowSearch, setShowWorkflowSearch] = useState(false);
   const [modelAlertAcknowledged, setModelAlertAcknowledged] = useState(false);
+  // An attachment is still being processed (the audio of a video is extracted):
+  // a message sent now would go without it, and it would join the next one.
+  const [attachmentProcessing, setAttachmentProcessing] = useState(false);
+  const sendBlockedByAttachment = attachmentProcessing && !isProcessing;
 
   const promptsListEnabled =
     uiConfig?.promptsList?.enabled !== false && app?.features?.promptsList !== false;
@@ -490,7 +494,7 @@ function ChatInput({
 
   const handleSubmit = e => {
     e.preventDefault();
-    if ((value.trim() || allowEmptySubmit) && !isProcessing) {
+    if ((value.trim() || allowEmptySubmit) && !isProcessing && !sendBlockedByAttachment) {
       onSubmit(e);
       // Keep focus on the input so the user can continue typing
       setTimeout(() => {
@@ -935,9 +939,15 @@ function ChatInput({
             <button
               type="button"
               onClick={isProcessing ? handleCancel : handleSubmit}
-              disabled={isInputDisabled || (!allowEmptySubmit && !value.trim() && !isProcessing)}
+              disabled={
+                isInputDisabled ||
+                sendBlockedByAttachment ||
+                (!allowEmptySubmit && !value.trim() && !isProcessing)
+              }
               className={`p-2 sm:p-2.5 rounded-lg font-medium flex items-center justify-center transition-colors ${
-                disabled || (!allowEmptySubmit && !value.trim() && !isProcessing)
+                disabled ||
+                sendBlockedByAttachment ||
+                (!allowEmptySubmit && !value.trim() && !isProcessing)
                   ? 'bg-gray-200 text-gray-400 cursor-not-allowed dark:bg-gray-700 dark:text-gray-500'
                   : isProcessing
                     ? 'bg-red-500 text-white hover:bg-red-600 dark:bg-red-600 dark:hover:bg-red-700'
@@ -1036,6 +1046,7 @@ function ChatInput({
       {localUploadEnabled ? (
         <UnifiedUploader
           onFileSelect={handleLocalFileSelect}
+          onProcessingChange={setAttachmentProcessing}
           disabled={isInputDisabled || isProcessing}
           fileData={selectedFile}
           config={uploadConfig}

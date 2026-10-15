@@ -3992,7 +3992,18 @@
       "processing": "Datei wird verarbeitet...",
       "uploadFile": "Datei hochladen",
       "uploadFiles": "Dateien hochladen",
-      "supportedFormats": "Unterstützt: {{formats}} (max {{maxSize}}MB)"
+      "supportedFormats": "Unterstützt: {{formats}} (max {{maxSize}}MB)",
+      "stop": "Stopp",
+      "stopProcessing": "Verarbeitung von {{fileName}} stoppen",
+      "progressFor": "Fortschritt von {{fileName}}",
+      "fileOfTotal": "Datei {{current}} von {{total}}",
+      "stage": {
+        "read": "Datei wird gelesen…",
+        "decode": "Audio wird extrahiert…",
+        "resample": "Audio wird konvertiert…",
+        "encode": "Audio wird kodiert…",
+        "finalize": "Wird abgeschlossen…"
+      }
     }
   },
   "feedback": {
