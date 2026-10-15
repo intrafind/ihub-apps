@@ -124,3 +124,15 @@ are read from the file and the picture is skipped, so the size of the video no l
   cut the audio off, and uncompressed audio that is unsigned and wider than 8 bits is no longer
   read as signed. Such files are decoded from the whole file as before (up to 2 GB) and fail with
   the message for videos larger than 2 GB above that
+
+## Scheduled Tasks: Runs Show Which Notes They Started From
+
+A run of a task that keeps notes between runs now shows **Used notes v2** next to its row in the
+run history of the task page, so a later run visibly started from what the earlier ones left.
+
+- The notes go into the run's instructions, which the run's chat does not show. Until now nothing on
+  screen told you that a second run had loaded them, even though it had.
+- The badge names the version of the notes the run started from; hover it for the explanation. A
+  first run has no notes yet and shows no badge.
+- It appears next to the existing verdicts, so a run that reads **Used notes v1** and **No changes**
+  started from the first run's notes and found nothing new compared with them.

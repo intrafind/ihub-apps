@@ -100,3 +100,20 @@ works in these browsers as well.
 - Nothing to configure: the PDF engine is still served by iHub itself, so installations without
   internet access are unaffected
 - The PDF engine loads on demand, as before; its download grows by about 36 KB compressed
+
+## Backup & Restore: Importing a Configuration Works in Docker and Kubernetes
+
+Importing a configuration ZIP under **Platform → Backup & Restore** failed with "Internal server
+error" in every Docker and Kubernetes installation. The import tried to move the whole `contents`
+folder aside, which is not possible when that folder is a mounted volume. The import now replaces
+the configuration inside the folder, so it works with the standard volume setup.
+
+- The configuration an import replaces is kept in `contents/.backups/<date and time>/` on the same
+  volume (previously a `contents-backup-…` folder next to `contents`). The three newest are kept.
+- If the import fails partway, the steps already taken are undone and the previous configuration
+  is back in place. Should undoing fail as well, the error names the `contents/.backups/` folder
+  that holds the previous configuration.
+- A failed import says why — missing write permission, not enough disk space, or a folder inside
+  `contents` mounted separately — instead of "Internal server error".
+- `.backups` is never included in an export and never restored from an archive.
+- Only one import runs at a time; a second one started meanwhile is refused and can be retried.
