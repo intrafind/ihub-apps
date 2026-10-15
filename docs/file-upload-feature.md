@@ -107,7 +107,7 @@ Supported providers (configured at the platform level):
 | `.txt`, `.md`, `.csv`, `.json`, `.html`, `.css`, `.js`, `.xml` | `text/*` / `application/json` | Read directly as text |
 | `.vtt` | `text/vtt` | WebVTT (e.g. Microsoft Teams transcripts), read directly as text |
 | any extension | `text/*` ("Any text file") | Read as text; rejected if the content is binary — see below |
-| `.pdf` | `application/pdf` | Text extracted via `pdfjs-dist` with `[Page N]` markers and real lines — see [Extracted text format](#extracted-text-format); falls back to rendering each page as an image |
+| `.pdf` | `application/pdf` | Text extracted via the legacy build of `pdfjs-dist` (library and worker, both served locally, so it also works in browsers without `Map.prototype.getOrInsertComputed`) with `[Page N]` markers and real lines — see [Extracted text format](#extracted-text-format); falls back to rendering each page as an image |
 | `.docx` | `application/vnd.openxmlformats-officedocument.wordprocessingml.document` | Converted to Markdown via `mammoth`, `jszip` and `turndown`: headings, lists, tables, footnotes, links and page breaks are kept — see [Extracted text format](#extracted-text-format) |
 | `.xlsx` | `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet` | Cell content extracted via `xlsx`: a sheet with a header row becomes a Markdown table, see [PowerPoint and spreadsheets](#powerpoint-and-spreadsheets) |
 | `.xls` | `application/vnd.ms-excel` | Cell content extracted via `xlsx`, as `.xlsx` |

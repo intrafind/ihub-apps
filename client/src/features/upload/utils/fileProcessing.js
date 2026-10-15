@@ -15,7 +15,15 @@ import {
 // Using the ?url suffix is the correct Vite pattern for worker files from
 // node_modules; it ensures offline/air-gapped deployments work and the
 // version always tracks the installed pdfjs-dist package.
-import pdfjsWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
+//
+// This is the LEGACY worker on purpose, and it must stay paired with the legacy library
+// imported in `loadPdfjs`. The modern build calls `Map.prototype.getOrInsertComputed`
+// (TC39 "upsert"), which many current browsers do not implement yet, so encrypted PDFs fail
+// to parse and no page can be rendered. The legacy build bundles its own polyfill for it —
+// in the library and, because a worker has its own global scope, in the worker as well.
+// Mixing a modern library with a legacy worker (or the reverse) would leave one of the two
+// without the polyfill. tests/unit/client/pdfjs-legacy-build.test.jsx guards both imports.
+import pdfjsWorkerUrl from 'pdfjs-dist/legacy/build/pdf.worker.min.mjs?url';
 import { audioBufferToWav } from '../../../utils/wav';
 
 // Cache for mimetypes configuration
@@ -159,10 +167,12 @@ export const MIME_TO_EXTENSION = {};
 // lazily by every consumer that needs it, so warm-up here was only ever a
 // minor optimisation.
 
-// Lazy load PDF.js only when needed
+// Lazy load PDF.js only when needed.
+// Loads the legacy build (see the worker import above for why) — never `pdfjs-dist` itself or
+// `pdfjs-dist/build/*`, which are the modern build.
 export const loadPdfjs = async () => {
-  const pdfjsLib = await import('pdfjs-dist');
-  // Use the locally bundled worker (resolved by the static import above).
+  const pdfjsLib = await import('pdfjs-dist/legacy/build/pdf.mjs');
+  // Use the locally bundled legacy worker (resolved by the static import above).
   // Works in offline/air-gapped environments; version tracks pdfjs-dist.
   pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorkerUrl;
   return pdfjsLib;

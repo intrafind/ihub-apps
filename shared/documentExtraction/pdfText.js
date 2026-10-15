@@ -5,8 +5,8 @@
  * missing — and, where the PDF offers it, headings (`#`) and tables (`|`).
  *
  * Pure functions on pdf.js output. pdf.js itself is not imported here (`shared/` has no bare
- * imports; the browser loads pdfjs-dist lazily, the server tests use the legacy build) — the
- * document object is passed in. Where the structure comes from is described in
+ * imports; the browser and the server both load pdfjs-dist's legacy build) — the document
+ * object is passed in. Where the structure comes from is described in
  * {@link module:shared/documentExtraction/pdfStructure}.
  *
  * @module shared/documentExtraction/pdfText

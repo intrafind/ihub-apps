@@ -14,11 +14,14 @@ jest.mock('../../../client/src/api/endpoints/config', () => ({
   fetchMimetypesConfig: jest.fn(async () => ({ categories: {}, mimeTypes: {} })),
   fetchPlatformConfig: jest.fn(async () => ({ features: [] }))
 }));
-jest.mock('pdfjs-dist', () => ({ GlobalWorkerOptions: {}, getDocument: jest.fn() }), {
-  virtual: true
-});
+// The client loads pdf.js's legacy build (see pdfjs-legacy-build.test.jsx for why).
+jest.mock(
+  'pdfjs-dist/legacy/build/pdf.mjs',
+  () => ({ GlobalWorkerOptions: {}, getDocument: jest.fn() }),
+  { virtual: true }
+);
 
-const pdfjs = require('pdfjs-dist');
+const pdfjs = require('pdfjs-dist/legacy/build/pdf.mjs');
 const config = require('../../../client/src/api/endpoints/config');
 const { processDocumentFile } = require('../../../client/src/features/upload/utils/fileProcessing');
 const {
