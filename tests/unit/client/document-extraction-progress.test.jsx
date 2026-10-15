@@ -16,9 +16,13 @@ jest.mock('../../../client/src/api/endpoints/config', () => ({
   fetchMimetypesConfig: jest.fn(async () => ({ categories: {}, mimeTypes: {} })),
   fetchPlatformConfig: jest.fn(async () => ({ features: [] }))
 }));
-jest.mock('pdfjs-dist', () => ({ GlobalWorkerOptions: {}, getDocument: jest.fn() }), {
-  virtual: true
-});
+jest.mock(
+  'pdfjs-dist/legacy/build/pdf.mjs',
+  () => ({ GlobalWorkerOptions: {}, getDocument: jest.fn() }),
+  {
+    virtual: true
+  }
+);
 jest.mock('utif2', () => ({
   __esModule: true,
   default: { decode: jest.fn(), decodeImage: jest.fn(), toRGBA8: jest.fn() }
@@ -32,7 +36,7 @@ jest.mock('mammoth', () => {
 const JSZip = require('jszip');
 const mammoth = require('mammoth');
 const XLSX = require('xlsx');
-const pdfjs = require('pdfjs-dist');
+const pdfjs = require('pdfjs-dist/legacy/build/pdf.mjs');
 const UTIF = require('utif2').default;
 const config = require('../../../client/src/api/endpoints/config');
 const {

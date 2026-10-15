@@ -67,3 +67,15 @@ upload only recognised the exact type.
 - Cloud storage pickers list `.m4a` files as well.
 - The hint with the supported formats names M4A, and the audio formats the app editor preselects
   include `audio/mp4` like the server default does.
+
+## PDF Uploads Work in Browsers Without the Newest JavaScript Features
+
+Some PDF uploads failed in browsers that do not yet support the JavaScript method
+`Map.prototype.getOrInsertComputed`, with the error "getOrInsertComputed is not a function".
+Encrypted PDFs could not be read at all, and scanned PDFs and the source preview could not draw
+their pages. The browser now loads the compatibility build of the PDF engine (pdf.js), which
+works in these browsers as well.
+
+- Nothing to configure: the PDF engine is still served by iHub itself, so installations without
+  internet access are unaffected
+- The PDF engine loads on demand, as before; its download grows by about 36 KB compressed

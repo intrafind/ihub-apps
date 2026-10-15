@@ -10,9 +10,13 @@ jest.mock('../../../client/src/api/endpoints/config', () => ({
   fetchMimetypesConfig: jest.fn(async () => ({ categories: {}, mimeTypes: {} })),
   fetchPlatformConfig: jest.fn(async () => ({ features: [] }))
 }));
-jest.mock('pdfjs-dist', () => ({ GlobalWorkerOptions: {}, getDocument: jest.fn() }), {
-  virtual: true
-});
+jest.mock(
+  'pdfjs-dist/legacy/build/pdf.mjs',
+  () => ({ GlobalWorkerOptions: {}, getDocument: jest.fn() }),
+  {
+    virtual: true
+  }
+);
 
 // The real thing, interpolation included
 jest.mock('react-i18next', () => ({
@@ -25,7 +29,7 @@ jest.mock('react-i18next', () => ({
   })
 }));
 
-const pdfjs = require('pdfjs-dist');
+const pdfjs = require('pdfjs-dist/legacy/build/pdf.mjs');
 const ProcessingProgress =
   require('../../../client/src/features/upload/components/ProcessingProgress').default;
 const Uploader = require('../../../client/src/features/upload/components/Uploader').default;
