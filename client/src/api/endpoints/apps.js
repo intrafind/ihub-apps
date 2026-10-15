@@ -2,7 +2,7 @@ import { Marked } from 'marked';
 import DOMPurify from 'dompurify';
 import { apiClient, streamingApiClient } from '../client';
 import { handleApiResponse } from '../utils/requestHandler';
-import { buildChatExportFilename, buildChatExportTitle } from '../../utils/exportFormats';
+import { buildChatExportFilename, buildChatExportTitle } from '../../utils/exportNaming';
 import { saveBlobAs } from '../../utils/externalNavigation';
 import { exportPdfOnServer } from './exports';
 

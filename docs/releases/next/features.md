@@ -13,3 +13,13 @@ only "The run was stopped".
 - People see "you" for their own stops; administrators also see which user it was
 - The run ledger records the cause on `run/end`, and the server log has one line per stop with
   the user, the control (Stop button, compare view, Office add-in) and the worker that decided
+
+## Chat Export: Faster First Page Load
+
+The libraries that create Word, PowerPoint and Excel exports are no longer downloaded when the
+app first opens. They load only when someone exports a chat to one of those formats.
+
+- About 870 KB less JavaScript is fetched on the first page load, which helps most on slow or
+  proxied networks.
+- Exporting to DOCX, PPTX or XLSX downloads the needed library once, the first time it is used,
+  so that first export can take a moment longer. The exported files are unchanged.
