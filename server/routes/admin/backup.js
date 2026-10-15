@@ -467,6 +467,16 @@ async function removeImportFolder(target, { onlyIfEmpty = false } = {}) {
 }
 
 /**
+ * Refuse a backup name that is not a plain, visible folder name: it becomes a
+ * folder inside {@link IMPORT_BACKUPS_DIR}, next to the hidden staging folders.
+ */
+function assertPlainBackupName(backupName) {
+  if (path.basename(backupName) !== backupName || backupName.startsWith('.')) {
+    throw new Error('Refusing to stage imported configuration: backup name is invalid.');
+  }
+}
+
+/**
  * Copy the extracted configuration into the staging folder and create the
  * (empty) backup folder. On failure nothing of either is left behind.
  */
@@ -558,9 +568,7 @@ export async function stageAndSwapContents({
   extractRoot,
   backupName
 }) {
-  if (path.basename(backupName) !== backupName || backupName.startsWith('.')) {
-    throw new Error('Refusing to stage imported configuration: backup name is invalid.');
-  }
+  assertPlainBackupName(backupName);
 
   const backupsRoot = path.join(liveContentsPath, IMPORT_BACKUPS_DIR);
   const stagingPath = path.join(backupsRoot, `${IMPORT_STAGING_PREFIX}${backupName}`);
@@ -571,7 +579,7 @@ export async function stageAndSwapContents({
   try {
     await swapEntries({ liveContentsPath, stagingPath, backupPath });
   } catch (error) {
-    const undoError = await undoMoves(error.moves ?? []);
+    const undoError = await undoMoves(error.moves);
     const mountPoint = await findMountPointEntry(liveContentsPath, error);
     if (undoError) {
       // Leave staging and backup in place: they hold whatever could not be moved back.
