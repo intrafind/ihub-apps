@@ -39,6 +39,7 @@ import {
   hasChatClient
 } from '../../../sse.js';
 import config from '../../../config.js';
+import { abortCause, causeOfSignal } from '../../chat/abortCause.js';
 import ChatService, { withAppPrompt } from '../../chat/ChatService.js';
 import llmClient from '../../loop/LLMClient.js';
 import { getChatRepository, normalizeChatSettings } from '../../chat/ChatRepository.js';
@@ -356,7 +357,15 @@ export async function executeTaskRun({ taskId, runId }, deps = {}) {
           taskId,
           runId
         });
-        if (run.chatId) abortChatRequest(run.chatId);
+        if (run.chatId) {
+          abortChatRequest(
+            run.chatId,
+            abortCause('lease_lost', {
+              via: 'scheduled run lease renewal',
+              related: { taskId, runId }
+            })
+          );
+        }
       })
       .catch(error =>
         logger.warn('Could not renew a scheduled run lease', {
@@ -644,7 +653,9 @@ export async function executeTaskRun({ taskId, runId }, deps = {}) {
       );
     }
     if (outcome.status === 'aborted') {
-      return finish('cancelled', reasonOf('ABORTED', 'The run was stopped', now()), {
+      // Who stopped it, from the reason the turn was aborted with.
+      const cause = outcome.abortCause || causeOfSignal(null);
+      return finish('cancelled', reasonOf('ABORTED', cause.message, now(), { cause }), {
         ledgerRunIds,
         usage: addUsage(run.usage),
         watched
@@ -717,7 +728,8 @@ export async function executeTaskRun({ taskId, runId }, deps = {}) {
         ...(composed.usage ? { composeUsage: composed.usage } : {})
       };
       if (composeAbort.signal.aborted) {
-        return finish('cancelled', reasonOf('ABORTED', 'The run was stopped', now()), {
+        const cause = causeOfSignal(composeAbort.signal);
+        return finish('cancelled', reasonOf('ABORTED', cause.message, now(), { cause }), {
           ledgerRunIds,
           usage: sumUsage(addUsage(run.usage), composedUsage),
           watched

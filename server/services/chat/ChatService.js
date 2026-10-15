@@ -22,6 +22,7 @@ import { activeRequests, hasChatClient } from '../../sse.js';
 import { isFailureFinishReason } from '../../adapters/toolCalling/index.js';
 import PromptService from '../PromptService.js';
 import logger from '../../utils/logger.js';
+import { abortCause, abortReason, causeOfSignal, describeCause } from './abortCause.js';
 import defaultAgentLoop from '../loop/AgentLoop.js';
 import { OPTIONAL_COUNTERS } from '../loop/llmUsage.js';
 import runLogSingleton, { newRunId, isValidRunId } from '../loop/RunLog.js';
@@ -333,7 +334,7 @@ class ChatService {
     }
   }
 
-  _endLedgerRun(runId, { status, finishReason, usage, error, knowledgeSources, startedAt }) {
+  _endLedgerRun(runId, { status, finishReason, usage, error, knowledgeSources, cause, startedAt }) {
     try {
       this.runLog.endRun(runId, {
         status,
@@ -342,6 +343,8 @@ class ChatService {
         // What `run/ended` reported, so a replay of the ledger badges the
         // answer the same way the live stream did.
         ...(Array.isArray(knowledgeSources) ? { knowledgeSources } : {}),
+        // Why an aborted turn was stopped (`services/chat/abortCause.js`).
+        ...(cause ? { cause } : {}),
         ...(error
           ? {
               error: {
@@ -470,7 +473,18 @@ class ChatService {
     const controller = new AbortController();
     const trackRequest = !!chatId && (streaming || !!persistence?.repository);
     if (trackRequest) {
-      if (activeRequests.has(chatId)) activeRequests.get(chatId).abort();
+      if (activeRequests.has(chatId)) {
+        const cause = abortCause('superseded', {
+          via: 'ChatService.runTurn',
+          related: { runId }
+        });
+        logger.info('Chat turn supersedes the one in flight', {
+          component: COMPONENT,
+          chatId,
+          ...describeCause(cause)
+        });
+        activeRequests.get(chatId).abort(abortReason(cause));
+      }
       activeRequests.set(chatId, controller);
     }
 
@@ -729,6 +743,7 @@ class ChatService {
         generatedFiles,
         promptSources,
         takePendingCall: () => turnSeam.takePendingCall(),
+        signal: controller.signal,
         structured: outputSeam
           ? {
               validate: structuredOutput.validate,
@@ -759,6 +774,7 @@ class ChatService {
         usage: outcome.usage,
         error: outcome.error || (outcome.errorInfo ? outcome.errorInfo : undefined),
         knowledgeSources: outcome.knowledgeSources,
+        cause: outcome.abortCause,
         startedAt
       });
       // The single choke point: every terminal shape `_finishTurn` produces —
@@ -837,7 +853,8 @@ class ChatService {
     generatedFiles = [],
     promptSources = [],
     takePendingCall = () => null,
-    structured = null
+    structured = null,
+    signal = null
   }) {
     const loopSources = result.knowledgeSources || [];
     const content = result.content || '';
@@ -897,15 +914,19 @@ class ChatService {
       const knowledgeSources = producedOutput
         ? this.resolveAnswerSources(loopSources, promptSources)
         : undefined;
+      // Who stopped it: the reason the turn's controller was aborted with.
+      const cause = causeOfSignal(signal);
       endRun({
         status: 'aborted',
         finishReason: 'connection_closed',
+        cause,
         ...(knowledgeSources ? { knowledgeSources } : {})
       });
       return {
         ...summary,
         status: 'aborted',
         finishReason: 'connection_closed',
+        abortCause: cause,
         ...(knowledgeSources ? { knowledgeSources } : {})
       };
     }

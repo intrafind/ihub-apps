@@ -13,7 +13,12 @@ import {
   RUN_STATUSES,
   RUN_KINDS
 } from '../../../../shared/runEvents.js';
-import { usageSchema, toolCallRecordSchema, sourcesAddedData } from './runLogEvents.js';
+import {
+  usageSchema,
+  toolCallRecordSchema,
+  sourcesAddedData,
+  abortCauseSchema
+} from './runLogEvents.js';
 import { interactionSchema, interactionAnswerSchema } from './interaction.js';
 
 const ts = z.string().datetime({ offset: true });
@@ -50,6 +55,8 @@ export const runEndedData = z.object({
   knowledgeSources: z.array(z.string()).optional(),
   /** Workflow output (chat-visible result) when the run produced one. */
   output: z.any().optional(),
+  /** Set when the run was aborted: who stopped it, from where and when. */
+  cause: abortCauseSchema.optional(),
   error: z.object({ code: z.string().optional(), message: z.string() }).optional()
 });
 

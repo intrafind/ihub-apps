@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { fetchScheduledTaskRun } from '../../../api';
+import { useOptionalAuth } from '../../../shared/contexts/authContextValue';
 import { useScheduledTasksEnabled } from '../hooks/useScheduledTasksConfig';
 import { formatDateTime, reasonText } from '../utils/taskFormat';
 import { RunStatusBadge } from './TaskBadges';
@@ -26,6 +27,7 @@ const WAITING_POLL_MS = 15000;
 export default function ScheduledRunBanner({ origin, onRunChanged }) {
   const { t, i18n } = useTranslation();
   const available = useScheduledTasksEnabled();
+  const auth = useOptionalAuth();
   const [run, setRun] = useState(null);
 
   const load = useCallback(() => {
@@ -93,6 +95,11 @@ export default function ScheduledRunBanner({ origin, onRunChanged }) {
         )}
         {run?.status === 'failed' && run.reason?.message && (
           <p className="text-red-700 dark:text-red-300">{reasonText(t, run.reason)}</p>
+        )}
+        {run?.status === 'cancelled' && run.reason?.cause && (
+          <p className="text-gray-700 dark:text-gray-300">
+            {reasonText(t, run.reason, { userId: auth?.user?.id, isAdmin: auth?.user?.isAdmin })}
+          </p>
         )}
       </div>
     </div>

@@ -157,11 +157,24 @@ Changes:
 - No config migration (no config files change). No breaking API change: `cause` is an optional
   field, and the stop endpoint keeps its contract (the `source` body field is optional).
 
-## Open decisions
+## Decisions
 
-1. **"Clear chat" on a running stored chat.** Today it stops the turn. Under "only the user stops"
-   it could either stay a stop (it is a user action) or become a detach (the stored chat keeps
-   running and appears in history; clearing only starts a new chat). Recommendation: detach — the
-   user asked for a fresh chat, not for the old one to be killed.
-2. **Actor shown to others.** Store the resolved actor id only and render "you" when it matches
-   the viewer, the user's name for admins. Alternative: also store the display name at abort time.
+1. **"Clear chat" on a running stored chat stays a stop.** It is an explicit user action, so it
+   sends the stop request (source `clear-chat`; `voice` for the voice command).
+2. **Only the user id is stored as the actor** (through the run's identity mode). The client shows
+   "you" to that user and the id to administrators; no display name is saved.
+
+## Implementation notes
+
+Where the build differs from the design above:
+
+- The abort reason is an `AbortError` carrying the cause (`error.abortCause`), not a bare object.
+  `fetch` rejects with whatever a signal was aborted with, and the loop recognises an abort by the
+  error's name.
+- `run/ended.finishReason` stays `connection_closed` for every abort — the client reads it to show
+  the retry control — and the cause rides beside it as `cause`.
+- `POST /v1/responses` keeps its own `turn_aborted` answer; its aborts carry a cause but it does not
+  store one.
+- The client keeps the name `cancelGeneration` for the Stop path and adds `detachEventSource` /
+  `stopEventSource` to `useEventSource`; `cleanupEventSource` is gone. `AppCanvas` no longer
+  cancels on unmount — the hook's teardown detaches.

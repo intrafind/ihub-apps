@@ -47,6 +47,7 @@ import ChatService from '../services/chat/ChatService.js';
 import { RunStreamEmitter } from '../services/loop/RunStream.js';
 import { newRunId } from '../services/loop/RunLog.js';
 import { SSE_V2_EVENTS } from '../../shared/runEvents.js';
+import { abortCause, abortReason } from '../services/chat/abortCause.js';
 import { activeRequests } from '../sse.js';
 import {
   InferenceApiError,
@@ -816,7 +817,13 @@ export default function registerOpenAIProxyRoutes(
         clientDisconnected = true;
         // runTurn registers the turn's controller under the chat id; aborting
         // it frees the provider call the way a closed browser tab does.
-        activeRequests.get(chatId)?.abort();
+        activeRequests
+          .get(chatId)
+          ?.abort(
+            abortReason(
+              abortCause('api_client_closed', { via: 'POST /v1/chat/completions (proxy)' })
+            )
+          );
       }
     });
 

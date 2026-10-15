@@ -106,6 +106,23 @@ export const runStartData = z.object({
   policies: z.record(z.any()).optional()
 });
 
+/**
+ * Why a turn was stopped, as recorded on `run/end` and reported on `run/ended`
+ * (`services/chat/abortCause.js`).
+ */
+export const abortCauseSchema = z.object({
+  kind: z.string(),
+  message: z.string(),
+  at: z.string(),
+  actor: z.object({ type: z.enum(['user', 'admin', 'system']), id: z.string().optional() }),
+  origin: z.object({
+    via: z.string(),
+    source: z.string().optional(),
+    worker: z.string().optional()
+  }),
+  related: z.record(z.string(), z.string()).optional()
+});
+
 export const runEndData = z.object({
   status: runStatusSchema,
   finishReason: z.string().nullable().prefault(null),
@@ -114,6 +131,8 @@ export const runEndData = z.object({
   knowledgeSources: z.array(z.string()).optional(),
   cost: z.number().nonnegative().optional(),
   durationMs: z.number().int().nonnegative().optional(),
+  /** Set when the run was aborted: who stopped it, from where and when. */
+  cause: abortCauseSchema.optional(),
   error: z
     .object({
       code: z.string(),

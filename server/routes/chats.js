@@ -47,6 +47,7 @@ import { getArtifactRepository } from '../services/artifacts/ArtifactRepository.
 import { isChatPersistenceConfigured } from '../services/chat/chatPersistence.js';
 import { StorageError, storageHttpStatus } from '../storage/errors.js';
 import { abortChatRequest } from '../sse.js';
+import { userAbortCause } from '../services/chat/abortCause.js';
 import { cancelChatWorkflow } from '../tools/workflowRunner.js';
 import { getWorkflowStateRepository } from '../services/workflow/WorkflowStateRepository.js';
 import { deleteChatWithCascade } from '../services/chat/chatDeletion.js';
@@ -349,7 +350,17 @@ export default function registerChatRoutes(app) {
       // and cluster-aware for the same reason: the turn may be producing on
       // another worker.
       if (access.chat?.status === 'running' || access.chat?.activeRunId) {
-        abortChatRequest(chatId);
+        abortChatRequest(
+          chatId,
+          await userAbortCause('chat_deleted', req.user, {
+            mode:
+              (access.chat?.activeRunId &&
+                runLog.getRunMeta(access.chat.activeRunId)?.identityMode) ||
+              runLog.identityMode(),
+            via: 'DELETE /api/chats/:chatId',
+            related: access.chat?.activeRunId ? { runId: access.chat.activeRunId } : undefined
+          })
+        );
         await cancelChatWorkflow(chatId);
       }
       await deleteChatWithCascade(repository, chatId, {

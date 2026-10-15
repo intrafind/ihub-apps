@@ -204,7 +204,14 @@ function normalizeUsage(usage) {
  */
 function messageError(summary) {
   if (summary?.status === 'aborted') {
-    return { code: 'ABORTED', message: 'Turn stopped before it finished.' };
+    // The cause says who stopped it; a turn from before causes were recorded
+    // (or a caller that passed none) keeps the generic sentence.
+    const cause = summary.abortCause;
+    return {
+      code: 'ABORTED',
+      message: cause?.message || 'Turn stopped before it finished.',
+      ...(cause ? { cause } : {})
+    };
   }
   if (summary?.status !== 'error') return null;
   const info = summary.errorInfo || summary.error;

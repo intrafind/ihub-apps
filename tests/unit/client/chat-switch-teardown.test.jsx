@@ -21,9 +21,11 @@ import { renderHook, act } from '@testing-library/react';
  * chat was. For a durable chat that is the same mistake with a different
  * trigger, and it was reported from real use — close the tab on a running
  * turn, come back, and the chat holds an empty assistant message with an
- * ABORTED error where the answer should be. Unmount therefore stops an
- * ephemeral turn (leaving the page must not bill a generation nobody will
- * read) and leaves a durable one running.
+ * ABORTED error where the answer should be. The client now never stops a turn
+ * by itself: unmounting, switching chats, sending a new message and replacing a
+ * stream only detach (close the fetch, send nothing). An ephemeral turn is
+ * ended by the server when it sees the connection close; only the Stop button
+ * sends `POST …/stop`, and says which control it was.
  *
  * The real `useAppChat` and the real `useEventSource` run; only the HTTP
  * transport underneath them is stubbed.
@@ -59,6 +61,7 @@ jest.mock('../../../client/src/api', () => ({
 // while it is being generated. `openSseStream` resolves when the connection is
 // aborted, which is what the real transport does for an AbortError.
 const mockOpenCalls = [];
+const mockSignals = [];
 jest.mock('../../../client/src/shared/utils/openSseStream', () => {
   const actual = jest.requireActual('../../../client/src/shared/utils/openSseStream');
   return {
@@ -66,6 +69,7 @@ jest.mock('../../../client/src/shared/utils/openSseStream', () => {
     ...actual,
     openSseStream: jest.fn((url, { signal, onOpen, onEvent }) => {
       mockOpenCalls.push(url);
+      mockSignals.push(signal);
       onOpen?.();
       // The frame that tells `useAppChat` the connection is live and the
       // queued body may go out.
@@ -102,6 +106,7 @@ async function startTurn(result, content) {
 
 beforeEach(() => {
   mockOpenCalls.length = 0;
+  mockSignals.length = 0;
   sessionStorage.clear();
   sendAppChatMessage.mockClear();
   stopAppChatStream.mockClear();
@@ -165,20 +170,66 @@ test('a turn queued but never connected is not posted into the chat that replace
   expect(messages[0].content).toBe('meant for B');
 });
 
-test('unmounting an ephemeral chat still stops the stream', async () => {
-  // Nothing stores this turn, so leaving the surface for good is the last
-  // chance to stop a generation that no one will ever read.
+test('unmounting an ephemeral chat closes the stream and leaves the stopping to the server', async () => {
+  // Nothing stores this turn, so the server ends it when it sees the
+  // connection close (`abortChatRequestOnDisconnect`). The client sends nothing.
   const { result, unmount } = renderHook(() =>
     useAppChat({ appId: 'acme', chatId: 'chat-ccc', serverBacked: false })
   );
 
   await startTurn(result, 'a question');
+  expect(mockSignals[0].aborted).toBe(false);
 
   await act(async () => {
     unmount();
   });
 
-  expect(stopAppChatStream).toHaveBeenCalledWith('acme', 'chat-ccc');
+  expect(mockSignals[0].aborted).toBe(true);
+  expect(stopAppChatStream).not.toHaveBeenCalled();
+});
+
+test('sending a new message does not stop the turn it follows up', async () => {
+  // The server supersedes the turn in flight and records that it did.
+  const { result } = renderHook(() =>
+    useAppChat({ appId: 'acme', chatId: 'chat-eee', serverBacked: true })
+  );
+
+  await startTurn(result, 'first');
+  await startTurn(result, 'second');
+
+  expect(mockOpenCalls).toHaveLength(2);
+  expect(mockSignals[0].aborted).toBe(true);
+  expect(stopAppChatStream).not.toHaveBeenCalled();
+});
+
+test('only the Stop button stops the turn, and says which control it was', async () => {
+  const { result } = renderHook(() =>
+    useAppChat({ appId: 'acme', chatId: 'chat-fff', serverBacked: true })
+  );
+
+  await startTurn(result, 'a question');
+  expect(stopAppChatStream).not.toHaveBeenCalled();
+
+  await act(async () => {
+    // As `onClick={cancelGeneration}` hands it: a click event, not a label.
+    result.current.cancelGeneration({ type: 'click' });
+  });
+
+  expect(stopAppChatStream).toHaveBeenCalledTimes(1);
+  expect(stopAppChatStream).toHaveBeenCalledWith('acme', 'chat-fff', { source: 'stop-button' });
+});
+
+test('a control that names itself is recorded under that name', async () => {
+  const { result } = renderHook(() =>
+    useAppChat({ appId: 'acme', chatId: 'chat-ggg', serverBacked: true })
+  );
+
+  await startTurn(result, 'a question');
+  await act(async () => {
+    result.current.cancelGeneration('compare');
+  });
+
+  expect(stopAppChatStream).toHaveBeenCalledWith('acme', 'chat-ggg', { source: 'compare' });
 });
 
 test('a durability flip mid-turn does not tear the stream down', async () => {
@@ -210,7 +261,9 @@ test('unmounting a durable chat leaves the turn running', async () => {
   // The whole promise of a durable chat is that closing the tab does not cost
   // you the answer. `POST …/stop` aborts unconditionally — it has to, so the
   // Stop button works on a turn whose client is gone — so sending it here
-  // stored an empty assistant message with an ABORTED error instead.
+  // stored an empty assistant message with an ABORTED error instead. (The same
+  // holds for an ephemeral chat now: the server ends it when the connection
+  // closes.)
   const { result, unmount } = renderHook(() =>
     useAppChat({ appId: 'acme', chatId: 'chat-ddd', serverBacked: true })
   );
