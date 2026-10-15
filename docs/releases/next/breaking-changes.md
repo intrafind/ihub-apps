@@ -1,5 +1,26 @@
 # Breaking Changes — Unreleased
 
+## Every Workflow End Step Needs an Output
+
+The answer of a workflow is now the **Output** of its end step, and every end step must have one.
+The `chatIntegration.primaryOutput` setting ("Result shown in chat") is gone, and so is the
+guessing behind "Automatic". What the chat shows, and what an API, MCP or A2A caller receives, is
+that Output.
+
+**Before upgrading:** The update (migration V166) sets the Output of the end steps of your
+workflows: the result you had picked in the chat settings, else the first of `finalReport`,
+`report`, `content`, `output`, `result`, `summary`, `text` and `message` that the end step passes
+on. The workflows that ship with iHub are covered. Check the server log after the update for end
+steps it could not decide, such as a workflow that passes on several variables and never named
+one: they keep loading, but a run that reaches them fails and the workflow cannot be saved until
+you set **Output** in the end step's form of the visual editor. Workflows that you or your
+integrators create through the API need an `output` in the `config` of every end step.
+
+What callers get changes for a workflow that had no result picked: they received all outputs as one
+JSON object, and now receive the answer; the other outputs stay in the workflow result as
+additional information. MCP and A2A clients receive the answer only, and a JSON answer as JSON
+(structured content, a data part) next to the text.
+
 ## Upload Size Limits Apply per File Type
 
 Every file was accepted up to the largest size limit of the app: in an app with a video limit of

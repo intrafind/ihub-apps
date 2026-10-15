@@ -202,8 +202,8 @@ Validates agentic workflow definitions that power the DAG-based workflow orchest
   },
   "nodes": [
     { "id": "start", "type": "start", "name": { "en": "Start" }, "position": { "x": 0, "y": 0 } },
-    { "id": "extract", "type": "agent", "name": { "en": "Extract Content" }, "position": { "x": 200, "y": 0 }, "config": { "appId": "extractor" } },
-    { "id": "end", "type": "end", "name": { "en": "End" }, "position": { "x": 400, "y": 0 } }
+    { "id": "extract", "type": "agent", "name": { "en": "Extract Content" }, "position": { "x": 200, "y": 0 }, "config": { "appId": "extractor", "outputVariable": "extracted" } },
+    { "id": "end", "type": "end", "name": { "en": "End" }, "position": { "x": 400, "y": 0 }, "config": { "output": "extracted" } }
   ],
   "edges": [
     { "id": "e1", "source": "start", "target": "extract" },

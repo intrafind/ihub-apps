@@ -1,27 +1,31 @@
 # Features — Unreleased
 
-## Workflows: Chat Integration Is Set on the Workflow Page
+## Workflows: Every Workflow Ends With an Output, and Chat Shows Exactly That
 
-The workflow page (**Admin → Workflows → a workflow**) has a **Chat integration** section. It
-sets whether the workflow is available in chat, which output is shown as the answer, the output
-format and the description the app's model sees — settings that until now could only be changed
-in the JSON.
+Every end step now has an **Output**: the variable, path or text that is the answer of the
+workflow. A chat shows it as it is, and an API, MCP or A2A caller receives it. There is nothing to
+select and nothing to guess: no result to pick in the chat settings, no "Automatic" that looks for
+an output named `report` or `result`. Whatever else the end step passes on, such as the other
+variables or the run's metadata, travels next to the answer as additional information.
 
-- **Available in chat** lets users start the workflow with `@` in the apps it is assigned to and
-  lets the app's model call it as a tool. It also offers the workflow to MCP and A2A clients whose
-  groups may run it. The section lists the apps the workflow is assigned to.
-- **Result shown in chat** offers exactly what the end step passes on. Under the list, the page
-  explains what **Automatic** shows for this workflow: an output named like `report`, `content` or
-  `result`, otherwise the whole output as JSON.
-- In the web chat, a workflow answer made of all outputs follows the output format: **Markdown**
-  shows a section per variable, **Text** a line per variable, **JSON** a code block. The stored
-  answer and what the inference API, MCP and A2A return stay JSON.
-- Warnings point out a workflow that is assigned to apps but not available in chat, a result the
-  end step does not pass on, an end step whose format makes the selection ignored, an Automatic
-  answer that would repeat the workflow's own input, and an answer that would be shown as JSON.
-- New workflows start with chat integration switched off, as before, now visible in their JSON.
-- The visual editor keeps the settings when it saves and links to the workflow page from its header
-  (a saved workflow only).
+- **The Output of an end step** is set in the visual editor, first in the end step's form, with the
+  variables that reach the step as suggestions. It takes a variable (`finalReport`), a path into
+  one (`result.summary`), a state path (`$.data.nodeResults.compose.content`) or text with
+  placeholders (`Rejected: {{topic}}`). A single placeholder keeps the type of the variable.
+- **JSON stays JSON.** An answer that is an object or a list is not turned into text on the way
+  out: the chat shows a JSON block, an MCP client receives it as structured content next to the
+  text, and an A2A client receives it as a data part. The model that called the workflow as a tool
+  gets the JSON text.
+- **The page of a workflow** (**Admin → Workflows → a workflow**) has a **Chat integration**
+  section with what is left to set: whether the workflow is **available in chat**, the **output
+  format** and the description the app's model sees. It lists the apps the workflow is assigned to
+  and warns about a workflow that is assigned to apps but not available in chat, and about an end
+  step without an Output.
+- A workflow whose end step has no Output **cannot be saved**, and a run that reaches such an end
+  step fails with a message that names the step. A new workflow starts with an end step that
+  answers with its input.
+- The visual editor keeps the chat integration settings when it saves and links to the workflow
+  page from its header (a saved workflow only).
 
 ## Stopped Chats and Scheduled Runs Say Who Stopped Them
 
