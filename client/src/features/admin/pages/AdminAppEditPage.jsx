@@ -136,7 +136,7 @@ function AdminAppEditPage() {
           },
           fileUpload: {
             enabled: false,
-            maxFileSizeMB: 5,
+            maxFileSizeMB: 20,
             supportedFormats: [
               'text/plain',
               'text/markdown',
@@ -216,7 +216,7 @@ function AdminAppEditPage() {
           },
           fileUpload: {
             enabled: data.upload?.fileUpload?.enabled || false,
-            maxFileSizeMB: data.upload?.fileUpload?.maxFileSizeMB || 5,
+            maxFileSizeMB: data.upload?.fileUpload?.maxFileSizeMB || 20,
             supportedFormats: data.upload?.fileUpload?.supportedFormats || [
               'text/plain',
               'text/markdown',

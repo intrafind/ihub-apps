@@ -18,7 +18,9 @@
     "loadingCount": "{{count}} loading…",
     "showList": "Show file list",
     "hideList": "Hide file list",
-    "regionLabel": "Attached files"
+    "regionLabel": "Attached files",
+    "saveAudio": "Save audio",
+    "saveAudioNamed": "Save audio as {{name}}"
   },
   "app": {
     "title": "iHub Apps",
@@ -345,6 +347,7 @@
         "copy": "Copy",
         "copied": "Copied!",
         "copyNotSupported": "Copy not supported for this format. Please use download instead.",
+        "downloadFailed": "The download of {{filename}} could not be started",
         "pdfOptions": "PDF Options",
         "watermarkPlaceholder": "Enter watermark text",
         "formats": {
@@ -2913,6 +2916,7 @@
         "speakerNotesInclude": "Send speaker notes",
         "extractAudioFromVideo": "Extract audio track (for transcription / audio models)",
         "maxVideoSize": "Max Video File Size (MB)",
+        "maxVideoSizeHelp": "Up to 51200 MB (50 GB). With audio extraction, an MP4 or MOV can be any size: only its audio is read. Other formats (WebM, MKV, ...) and videos sent as they are work up to 2 GB. Each file type has its own limit.",
         "supportedVideoFormats": "Supported Video Formats",
         "transcriptionDefaultEnabled": "On by default (users can toggle it per chat)",
         "appsAsTools": "Apps as Tools",
@@ -3722,7 +3726,26 @@
       "processing": "Processing file...",
       "uploadFile": "Upload File",
       "uploadFiles": "Upload Files",
-      "supportedFormats": "Supported: {{formats}} (max {{maxSize}}MB)"
+      "supportedFormats": "Supported: {{formats}} (max {{maxSize}}MB)",
+      "stop": "Stop",
+      "stopProcessing": "Stop processing {{fileName}}",
+      "progressFor": "Progress of {{fileName}}",
+      "fileOfTotal": "File {{current}} of {{total}}",
+      "stage": {
+        "read": "Reading file…",
+        "parse": "Opening document…",
+        "extract": "Extracting text…",
+        "convert": "Converting file…",
+        "render": "Rendering pages…",
+        "decode": "Extracting audio…",
+        "resample": "Converting audio…",
+        "encode": "Encoding audio…",
+        "finalize": "Finishing up…"
+      },
+      "detail": {
+        "page": "Page {{current}} of {{total}}",
+        "slide": "Slide {{current}} of {{total}}"
+      }
     }
   },
   "feedback": {
@@ -3768,6 +3791,9 @@
     "videoUploadDisabled": "Video upload is not supported by the selected model. Please choose a different model.",
     "audioDecodeError": "Could not decode audio from video. The video format or codec may not be supported by your browser.",
     "videoAudioExtractionError": "Error extracting audio from video. Please ensure the video contains an audio track.",
+    "videoUnsupportedLargeContainer": "Videos larger than 2 GB are supported as MP4 or MOV. Convert this video to MP4 or MOV, or use a smaller file.",
+    "videoLargeAudioUnsupported": "The audio of this large video could not be read. Videos larger than 2 GB need AAC or uncompressed (PCM) audio in an MP4 or MOV file, and a browser that can play that audio.",
+    "videoTooLargeToAttach": "This video is too large to be attached as it is. Turn on audio extraction for the app, or use a video smaller than 2 GB.",
     "fileTooLarge": "File too large. Maximum size is {{maxSize}}MB.",
     "unsupportedFormat": "Unsupported file format. Please use: {{formats}}",
     "invalidImage": "Invalid image file",
@@ -4873,6 +4899,8 @@
       "aborted": "Transcription was cancelled.",
       "serverTooLong": "This recording is too long for the configured transcription model. Please split it into shorter parts.",
       "serverBusy": "The transcription service is busy right now. Please try again in a moment.",
+      "notPermitted": "You are not permitted to use this transcription model. Please contact your administrator.",
+      "sessionLimit": "The transcription session reached its maximum duration. Please split the recording into shorter parts.",
       "service": "Transcription failed.",
       "serviceDetail": "Transcription failed: {{detail}}",
       "generic": "Transcription failed. Please try again.",

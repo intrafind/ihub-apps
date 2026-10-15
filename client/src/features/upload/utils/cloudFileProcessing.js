@@ -1,8 +1,21 @@
-import { processDocumentFile, getFileTypeDisplay, SUPPORTED_TEXT_FORMATS } from './fileProcessing';
+import {
+  processDocumentFile,
+  getFileTypeDisplay,
+  canonicalMimeType,
+  withDataUrlMimeType,
+  SUPPORTED_TEXT_FORMATS
+} from './fileProcessing';
 import { extractionOptionsOf } from './extractionOptions';
 
 const IMAGE_TYPES = new Set(['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp']);
-const AUDIO_TYPES = new Set(['audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/flac', 'audio/ogg']);
+const AUDIO_TYPES = new Set([
+  'audio/mpeg',
+  'audio/mp3',
+  'audio/wav',
+  'audio/flac',
+  'audio/ogg',
+  'audio/mp4'
+]);
 
 /**
  * Process a cloud-downloaded file into the same data shape as local uploads.
@@ -11,13 +24,14 @@ const AUDIO_TYPES = new Set(['audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/flac
  * @returns {Promise<Object>} Data object matching UnifiedUploader output shape
  */
 export async function processCloudFile(file, config = {}) {
-  const mimeType = file.type;
+  // Cloud providers report the same aliases as browsers (`audio/x-m4a`)
+  const mimeType = canonicalMimeType(file.type, file.name);
 
   if (IMAGE_TYPES.has(mimeType)) {
     return processCloudImage(file, config);
   }
   if (AUDIO_TYPES.has(mimeType)) {
-    return processCloudAudio(file);
+    return processCloudAudio(file, mimeType);
   }
   // Document/text files
   return processCloudDocument(file, config?.fileUpload);
@@ -76,16 +90,16 @@ async function processCloudImage(file, config) {
 /**
  * Process cloud audio: convert to base64
  */
-async function processCloudAudio(file) {
+async function processCloudAudio(file, mimeType) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = e => {
       resolve({
         type: 'audio',
-        base64: e.target.result,
+        base64: withDataUrlMimeType(e.target.result, mimeType),
         fileName: file.name,
         fileSize: file.size,
-        fileType: file.type
+        fileType: mimeType
       });
     };
     reader.onerror = () => reject(new Error('File reading failed'));
@@ -124,12 +138,9 @@ async function processCloudDocument(file, fileUploadConfig) {
 /**
  * Check if file type is supported for cloud upload
  */
-export function isCloudFileSupported(mimeType) {
-  return (
-    IMAGE_TYPES.has(mimeType) ||
-    AUDIO_TYPES.has(mimeType) ||
-    SUPPORTED_TEXT_FORMATS.includes(mimeType)
-  );
+export function isCloudFileSupported(mimeType, fileName) {
+  const type = canonicalMimeType(mimeType, fileName);
+  return IMAGE_TYPES.has(type) || AUDIO_TYPES.has(type) || SUPPORTED_TEXT_FORMATS.includes(type);
 }
 
 /**

@@ -73,7 +73,7 @@
       "supportedFormats": ["image/jpeg", "image/jpg", "image/png", "image/gif", "image/webp"]
     },
     "fileUpload": {
-      "maxFileSizeMB": 5,
+      "maxFileSizeMB": 20,
       "supportedFormats": [
         "text/plain",
         "text/markdown",

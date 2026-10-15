@@ -13,6 +13,7 @@
  */
 
 import { noTextPageMarker, pageMarker } from './markers.js';
+import { itemProgress, throwIfAborted } from './progress.js';
 import {
   MAX_OUTLINE_ENTRIES,
   MAX_OUTLINE_NODES,
@@ -182,9 +183,12 @@ async function readStructTree(page) {
  * page (external links, broken destinations) are left out.
  *
  * @param {object} pdf - pdf.js document
+ * @param {Object} [options]
+ * @param {AbortSignal} [options.signal] - Stops reading at the next entry, returning what was read
+ *   so far (the caller sees the abort)
  * @returns {Promise<Array<{title: string, depth: number, pageIndex: number}>>}
  */
-export async function readOutline(pdf) {
+export async function readOutline(pdf, { signal } = {}) {
   const entries = [];
   try {
     const outline = typeof pdf.getOutline === 'function' ? await pdf.getOutline() : null;
@@ -196,7 +200,8 @@ export async function readOutline(pdf) {
     while (
       stack.length > 0 &&
       entries.length < MAX_OUTLINE_ENTRIES &&
-      visited < MAX_OUTLINE_NODES
+      visited < MAX_OUTLINE_NODES &&
+      !signal?.aborted
     ) {
       const frame = stack[stack.length - 1];
       if (frame.next >= frame.items.length) {
@@ -248,14 +253,27 @@ const blockChars = block =>
  * @param {number} [limits.maxPages] - Pages read, counted from the first
  * @param {number} [limits.maxChars] - Reading stops after the page that takes the text beyond
  *   this many characters
+ * @param {AbortSignal} [limits.signal] - Stops the extraction between pages, rejecting with the
+ *   abort error (see {@link module:shared/documentExtraction/progress}). The caller owns the
+ *   document and destroys it
+ * @param {Function} [limits.onProgress] - Called with `{ stage, percent, detail }`, `percent`
+ *   being the share of the stage done: `extract` for every page (`detail` is
+ *   `{ unit: 'page', current, total }`, the page being read), then `finalize` (no percent) for
+ *   the outline and headings
  * @returns {Promise<string>} Markers and text, or '' when no page has a text layer
  */
-export async function extractPdfText(pdf, { maxPages = Infinity, maxChars = Infinity } = {}) {
+export async function extractPdfText(
+  pdf,
+  { maxPages = Infinity, maxChars = Infinity, signal, onProgress } = {}
+) {
+  throwIfAborted(signal);
   const labels = await readPageLabels(pdf);
   const pages = [];
   const last = Math.min(pdf.numPages, maxPages);
   let chars = 0;
   for (let number = 1; number <= last; number += 1) {
+    throwIfAborted(signal);
+    onProgress?.(itemProgress('extract', 'page', number, last));
     const page = await pdf.getPage(number);
     // Marked content is what ties text to the structure tree; plain pages are unaffected.
     const { items, styles } = await page.getTextContent({ includeMarkedContent: true });
@@ -270,6 +288,10 @@ export async function extractPdfText(pdf, { maxPages = Infinity, maxChars = Infi
     for (const block of built.blocks) chars += blockChars(block);
     if (chars > maxChars) break;
   }
-  addHeadings(pages, await readOutline(pdf));
+  throwIfAborted(signal);
+  onProgress?.({ stage: 'finalize', percent: null });
+  const outline = await readOutline(pdf, { signal });
+  throwIfAborted(signal);
+  addHeadings(pages, outline);
   return joinPdfPages(pages.map(renderPdfPage));
 }

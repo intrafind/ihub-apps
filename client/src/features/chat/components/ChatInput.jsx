@@ -19,6 +19,7 @@ import { VoiceInputComponent } from '../../voice/components';
 import { useUIConfig } from '../../../shared/contexts/UIConfigContext';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
 import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
+import useAttachmentProcessing from '../../../shared/hooks/useAttachmentProcessing';
 import MagicPromptLoader from '../../../shared/components/MagicPromptLoader';
 import {
   computeContextUsage,
@@ -136,6 +137,12 @@ function ChatInput({
   // the live token-count estimate so the context-window indicator reflects what
   // will actually be sent to the LLM.
   extraContextText = '',
+  // For a page that mounts more than one composer for a chat (`useFileUploadHandler`):
+  // `isAttachmentProcessing` says that a file is still being processed in any of
+  // them, `onAttachmentProcessingChange(id, busy)` is how this composer reports its
+  // own uploader. Optional: without them the composer waits for its own uploader only.
+  isAttachmentProcessing = false,
+  onAttachmentProcessingChange = undefined,
   // Optional override for the auto-grow textarea cap. Defaults to 5 lines
   // (~150 px) in single-line mode and 12 lines in multiline mode. The
   // Outlook taskpane passes 3 so the input doesn't dominate the small
@@ -166,6 +173,11 @@ function ChatInput({
   };
   const [showWorkflowSearch, setShowWorkflowSearch] = useState(false);
   const [modelAlertAcknowledged, setModelAlertAcknowledged] = useState(false);
+  // An attachment is still being processed (the audio of a video is extracted):
+  // a message sent now would go without it, and it would join the next one.
+  const { attachmentProcessing, onProcessingChange: handleAttachmentProcessingChange } =
+    useAttachmentProcessing(isAttachmentProcessing, onAttachmentProcessingChange);
+  const sendBlockedByAttachment = attachmentProcessing && !isProcessing;
 
   const promptsListEnabled =
     uiConfig?.promptsList?.enabled !== false && app?.features?.promptsList !== false;
@@ -490,7 +502,7 @@ function ChatInput({
 
   const handleSubmit = e => {
     e.preventDefault();
-    if ((value.trim() || allowEmptySubmit) && !isProcessing) {
+    if ((value.trim() || allowEmptySubmit) && !isProcessing && !sendBlockedByAttachment) {
       onSubmit(e);
       // Keep focus on the input so the user can continue typing
       setTimeout(() => {
@@ -935,9 +947,15 @@ function ChatInput({
             <button
               type="button"
               onClick={isProcessing ? handleCancel : handleSubmit}
-              disabled={isInputDisabled || (!allowEmptySubmit && !value.trim() && !isProcessing)}
+              disabled={
+                isInputDisabled ||
+                sendBlockedByAttachment ||
+                (!allowEmptySubmit && !value.trim() && !isProcessing)
+              }
               className={`p-2 sm:p-2.5 rounded-lg font-medium flex items-center justify-center transition-colors ${
-                disabled || (!allowEmptySubmit && !value.trim() && !isProcessing)
+                disabled ||
+                sendBlockedByAttachment ||
+                (!allowEmptySubmit && !value.trim() && !isProcessing)
                   ? 'bg-gray-200 text-gray-400 cursor-not-allowed dark:bg-gray-700 dark:text-gray-500'
                   : isProcessing
                     ? 'bg-red-500 text-white hover:bg-red-600 dark:bg-red-600 dark:hover:bg-red-700'
@@ -1036,6 +1054,7 @@ function ChatInput({
       {localUploadEnabled ? (
         <UnifiedUploader
           onFileSelect={handleLocalFileSelect}
+          onProcessingChange={handleAttachmentProcessingChange}
           disabled={isInputDisabled || isProcessing}
           fileData={selectedFile}
           config={uploadConfig}

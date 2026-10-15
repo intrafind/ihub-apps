@@ -4,7 +4,7 @@ iHub Apps supports audio file uploads for transcription, analysis, and processin
 
 ## Overview
 
-Audio file support allows users to upload audio files (MP3, WAV, FLAC, OGG) directly into compatible applications. The audio data is sent to LLM providers that support multimodal input, enabling tasks such as:
+Audio file support allows users to upload audio files (MP3, WAV, FLAC, OGG, M4A/MP4) directly into compatible applications. The audio data is sent to LLM providers that support multimodal input, enabling tasks such as:
 
 - **Transcription**: Convert speech to text
 - **Speaker Identification**: Identify and label different speakers
@@ -80,13 +80,33 @@ The following audio formats are supported:
 | WAV | `audio/wav` | `.wav` | Uncompressed audio, highest quality for speech |
 | FLAC | `audio/flac` | `.flac` | Lossless compressed audio |
 | OGG | `audio/ogg` | `.ogg` | Open-source compressed audio format |
-| MP4 | `audio/mp4` | `.mp4`, `.m4a` | MPEG-4 audio (used by QuickTime and Apple devices) |
+| M4A / MP4 | `audio/mp4` | `.m4a`, `.mp4` | MPEG-4 audio (QuickTime "Export As → Audio Only", Apple devices) |
+
+### Alternative MIME types
+
+Browsers do not report every format under the MIME type listed above — Chrome and Safari on macOS
+report an `.m4a` file as `audio/x-m4a`, and some setups report no type at all. The upload picks
+the canonical type from the table, so a file is accepted when the app lists the canonical type
+(`audio/mp4`); the alternative type does not have to be added to `supportedFormats`:
+
+| Reported by the browser | Treated as |
+|-------------------------|------------|
+| `audio/x-m4a`, `audio/m4a` | `audio/mp4` |
+| `audio/x-wav`, `audio/wave`, `audio/vnd.wave` | `audio/wav` |
+| `audio/x-flac` | `audio/flac` |
+| no type or `application/octet-stream` | the type of the file extension (`.m4a` → `audio/mp4`), when the extension identifies one audio or video type |
+
+An `.mp4` file keeps the type the browser reports, because the extension is used for audio and
+video alike. The canonical type is what the attachment carries (`fileType` and the prefix of the
+data URL), so the model providers receive a type they know.
 
 ### File Size Limits
 
-- **Default maximum size**: 20MB
+- **Default maximum size**: 20MB (`audioUpload.maxFileSizeMB`, 1-2000)
 - **Recommended size**: Under 10MB for faster processing
 - **Note**: The 20MB limit is based on Google Gemini API's inline data limit
+- **Own limit**: An audio file is held to the audio limit, whatever the limits of the other upload types are (a 50 GB video limit does not raise it); the message of a refused file names the limit of its own type
+- **Larger files**: The audio is attached as a base64 data URL, which a browser cannot build beyond about 400 MB of audio. What is sent to a multimodal model in a request must also fit the request body (`requestBodyLimitMB`, 50 MB by default), so raise the limit only where the audio is [transcribed](#two-audio-paths-multimodal-vs-voxtral-transcription) in the browser instead
 
 ### Audio Quality Recommendations
 
@@ -119,7 +139,8 @@ To enable audio upload in an application, add the `audioUpload` configuration to
         "audio/mp3",
         "audio/wav",
         "audio/flac",
-        "audio/ogg"
+        "audio/ogg",
+        "audio/mp4"
       ]
     }
   },
@@ -134,7 +155,7 @@ To enable audio upload in an application, add the `audioUpload` configuration to
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `enabled` | boolean | `false` | Enable audio file uploads |
-| `maxFileSizeMB` | number | `20` | Maximum file size in megabytes (1-100) |
+| `maxFileSizeMB` | number | `20` | Maximum file size in megabytes (1-2000) |
 | `supportedFormats` | string[] | See below | Array of supported MIME types |
 
 **Default supported formats**:
@@ -149,7 +170,7 @@ The audio upload configuration is validated using the following schema (defined 
 ```javascript
 audioUpload: z.object({
   enabled: z.boolean().optional().default(false),
-  maxFileSizeMB: z.number().int().min(1).max(100).optional().default(20),
+  maxFileSizeMB: z.number().int().min(1).max(2000).optional().default(20),
   supportedFormats: z
     .array(z.string().regex(/^audio\//))
     .optional()
@@ -183,8 +204,8 @@ Models can declare audio support using the `supportsAudio` field:
 
 When a user uploads an audio file:
 
-1. **File Validation**: The `UnifiedUploader` component validates the file type and size
-2. **Base64 Encoding**: Audio files are converted to base64-encoded data URLs
+1. **File Validation**: The `UnifiedUploader` component validates the file type and size. The type is the canonical one (see [Alternative MIME types](#alternative-mime-types)), so `audio/x-m4a` is accepted where `audio/mp4` is listed
+2. **Base64 Encoding**: Audio files are converted to base64-encoded data URLs that carry the canonical MIME type
 3. **No Processing**: Unlike images, audio files are not processed or modified
 4. **Message Attachment**: Audio data is attached to the message as `audioData`
 

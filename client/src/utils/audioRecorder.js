@@ -9,13 +9,13 @@ import { createPcmCapturePipeline } from './realtimeTranscriptionCore';
  * 16 kHz mono (a no-op when the pipeline already captured at 16 kHz).
  *
  * Usage:
- *   const rec = new AudioBufferRecorder({ maxDurationSeconds: 900, onTick, onMaxDuration });
+ *   const rec = new AudioBufferRecorder({ maxDurationSeconds: 3600, onTick, onMaxDuration });
  *   await rec.start();
  *   // ... user speaks ...
  *   const { audioBuffer, durationSeconds } = await rec.stop();
  */
 export class AudioBufferRecorder {
-  constructor({ maxDurationSeconds = 900, onTick, onMaxDuration } = {}) {
+  constructor({ maxDurationSeconds = 3600, onTick, onMaxDuration } = {}) {
     this.maxDurationSeconds = maxDurationSeconds;
     this.onTick = onTick;
     this.onMaxDuration = onMaxDuration;

@@ -33,3 +33,19 @@
     transform: scale(1);
   }
 }
+
+/* Progress bar without a percentage (ProcessingProgress): a segment sliding
+   across the track. The global reduced-motion rule in App.css stills it. */
+@keyframes upload-progress-indeterminate {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(333%);
+  }
+}
+
+.upload-progress-indeterminate {
+  width: 30%;
+  animation: upload-progress-indeterminate 1.4s ease-in-out infinite;
+}

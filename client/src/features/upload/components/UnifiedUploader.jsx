@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Uploader from './Uploader';
+import ProcessingProgress from './ProcessingProgress';
 import '../components/ImageUpload.css';
 import {
   SUPPORTED_TEXT_FORMATS,
@@ -13,17 +14,28 @@ import {
   formatAcceptAttribute,
   processImageFile,
   extractAudioFromVideo,
-  loadMimetypesConfig
+  loadMimetypesConfig,
+  canonicalMimeType,
+  withDataUrlMimeType,
+  readFileAsDataURL,
+  WHOLE_FILE_READ_LIMIT_BYTES
 } from '../utils/fileProcessing';
 import { extractionOptionsOf } from '../utils/extractionOptions';
+import { isAbortError } from '../../../utils/abortable';
 
 /**
  * Unified uploader component that handles both images and files in a single interface.
  * Automatically detects file type and applies appropriate processing.
  * Wraps children with drag-drop handlers to make any area a drop zone.
+ *
+ * While a file is processed (extracting the audio of a video can take minutes)
+ * a progress panel with a Stop button shows above the children.
+ * `onProcessingChange(true|false)` tells the parent when an attachment is on its
+ * way, so it can hold back sending until it is attached.
  */
 const UnifiedUploader = ({
   onFileSelect,
+  onProcessingChange,
   disabled = false,
   fileData = null,
   config = {},
@@ -147,7 +159,7 @@ const UnifiedUploader = ({
   const isAudioFile = type => AUDIO_FORMATS.includes(type);
   const isVideoFile = type => VIDEO_FORMATS.includes(type);
 
-  const getFileTypeDisplay = mimeType => {
+  const getFileTypeDisplay = (mimeType, fileName = '') => {
     // Image types
     if (isImageFile(mimeType)) {
       return mimeType.replace('image/', '').toUpperCase();
@@ -155,6 +167,8 @@ const UnifiedUploader = ({
 
     // Audio types
     if (isAudioFile(mimeType)) {
+      // An .m4a is an audio/mp4 file; show it as the format the user picked, not "MP4"
+      if (mimeType === 'audio/mp4' && /\.m4a$/i.test(fileName)) return 'M4A';
       return mimeType.replace('audio/', '').toUpperCase();
     }
 
@@ -167,52 +181,78 @@ const UnifiedUploader = ({
     return getFileTypeDisplayUtil(mimeType);
   };
 
-  const processImage = file =>
-    processImageFile(file, {
-      maxDimension: MAX_DIMENSION,
-      resize: RESIZE_IMAGES,
-      allowMultiple
+  // `options`: { signal, onProgress } from the Uploader
+  const processImage = (file, options) =>
+    processImageFile(
+      file,
+      {
+        maxDimension: MAX_DIMENSION,
+        resize: RESIZE_IMAGES,
+        allowMultiple
+      },
+      options
+    );
+
+  // `options`: { signal, onProgress } from the Uploader
+  const processAudio = async (file, mimeType, { signal, onProgress } = {}) => {
+    // For audio files, we just need to read the base64 data
+    // No processing or resizing is needed. The data URL carries the canonical
+    // MIME type: the adapters only strip the prefix of plain type names.
+    const dataUrl = await readFileAsDataURL(file, {
+      signal,
+      onProgress: percent => onProgress?.({ stage: 'read', percent })
     });
-
-  const processAudio = file => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-
-      reader.onload = e => {
-        // For audio files, we just need to read the base64 data
-        // No processing or resizing is needed
-        resolve({
-          preview: {
-            type: 'audio',
-            fileName: file.name,
-            fileType: getFileTypeDisplay(file.type),
-            fileSize: file.size
-          },
-          data: {
-            type: 'audio',
-            source: 'local',
-            base64: e.target.result,
-            fileName: file.name,
-            fileSize: file.size,
-            fileType: file.type
-          }
-        });
-      };
-
-      reader.onerror = () => reject(new Error('read-error'));
-      reader.readAsDataURL(file);
-    });
+    return {
+      preview: {
+        type: 'audio',
+        fileName: file.name,
+        fileType: getFileTypeDisplay(mimeType, file.name),
+        fileSize: file.size
+      },
+      data: {
+        type: 'audio',
+        source: 'local',
+        base64: withDataUrlMimeType(dataUrl, mimeType),
+        fileName: file.name,
+        fileSize: file.size,
+        fileType: mimeType
+      }
+    };
   };
 
-  const processVideo = async file => {
+  const processVideo = async (file, { signal, onProgress } = {}) => {
     // Extract audio from video if enabled
     if (extractAudioFromVideoEnabled) {
       try {
-        const audioData = await extractAudioFromVideo(file);
+        const audioData = await extractAudioFromVideo(file, { signal, onProgress });
 
         // Generate new filename for extracted audio
         const baseFileName = file.name.replace(/\.[^/.]+$/, ''); // Remove extension
         const audioFileName = `${baseFileName}.wav`;
+
+        const data = {
+          type: 'audio',
+          source: 'local',
+          base64: audioData.base64,
+          fileName: audioFileName,
+          fileSize: audioData.size,
+          fileType: audioData.format,
+          extractedFromVideo: true,
+          originalVideoName: file.name,
+          duration: audioData.duration,
+          sampleRate: audioData.sampleRate,
+          channels: audioData.channels
+        };
+        // The WAV Blob travels with the attachment, so transcription decodes it
+        // directly instead of re-parsing the base64 string. Non-enumerable:
+        // attachments are JSON-serialized into the chat history, sessionStorage
+        // and the request body, where a Blob would turn into a bogus `{}`.
+        Object.defineProperty(data, 'blob', {
+          value: audioData.blob,
+          enumerable: false,
+          writable: true,
+          configurable: true
+        });
 
         return {
           preview: {
@@ -223,89 +263,97 @@ const UnifiedUploader = ({
             extractedFrom: file.name,
             duration: audioData.duration
           },
-          data: {
-            type: 'audio',
-            source: 'local',
-            base64: audioData.base64,
-            fileName: audioFileName,
-            fileSize: audioData.size,
-            fileType: audioData.format,
-            extractedFromVideo: true,
-            originalVideoName: file.name,
-            duration: audioData.duration,
-            sampleRate: audioData.sampleRate,
-            channels: audioData.channels
-          }
+          data
         };
       } catch (error) {
-        console.error('Error extracting audio from video:', error);
+        // Stopping is not a failure to log
+        if (!isAbortError(error)) console.error('Error extracting audio from video:', error);
         throw error;
       }
     }
 
     // If audio extraction is not enabled, treat as regular file
-    // (Some models might support video directly)
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-
-      reader.onload = e => {
-        resolve({
-          preview: {
-            type: 'video',
-            fileName: file.name,
-            fileType: getFileTypeDisplay(file.type),
-            fileSize: file.size
-          },
-          data: {
-            type: 'video',
-            source: 'local',
-            base64: e.target.result,
-            fileName: file.name,
-            fileSize: file.size,
-            fileType: file.type
-          }
-        });
-      };
-
-      reader.onerror = () => reject(new Error('read-error'));
-      reader.readAsDataURL(file);
+    // (Some models might support video directly). The whole video is read into
+    // a data URL, which a browser cannot do beyond ~2 GB (and a request could
+    // not carry anyway): only audio extraction takes videos that large.
+    if (file.size > WHOLE_FILE_READ_LIMIT_BYTES) throw new Error('video-too-large-to-attach');
+    const mimeType = canonicalMimeType(file.type, file.name);
+    const dataUrl = await readFileAsDataURL(file, {
+      signal,
+      onProgress: percent => onProgress?.({ stage: 'read', percent })
     });
+    return {
+      preview: {
+        type: 'video',
+        fileName: file.name,
+        fileType: getFileTypeDisplay(mimeType),
+        fileSize: file.size
+      },
+      data: {
+        type: 'video',
+        source: 'local',
+        base64: withDataUrlMimeType(dataUrl, mimeType),
+        fileName: file.name,
+        fileSize: file.size,
+        fileType: mimeType
+      }
+    };
   };
 
-  const processFile = async file => {
+  // `options`: { signal, onProgress } from the Uploader
+  const processFile = async (file, options = {}) => {
+    // Route by the canonical type (`audio/x-m4a` → `audio/mp4`); a type the app lists
+    // verbatim keeps matching too
+    const mimeType = canonicalMimeType(file.type, file.name);
+    const isListed = formats => formats.includes(file.type) || formats.includes(mimeType);
+
     // Check if image files are disabled
-    if (!isImageUploadEnabled && IMAGE_FORMATS.includes(file.type)) {
+    if (!isImageUploadEnabled && isListed(IMAGE_FORMATS)) {
       throw new Error('image-upload-disabled');
     }
 
     // Check if audio files are disabled
-    if (!isAudioUploadEnabled && AUDIO_FORMATS.includes(file.type)) {
+    if (!isAudioUploadEnabled && isListed(AUDIO_FORMATS)) {
       throw new Error('audio-upload-disabled');
     }
 
     // Check if video files are disabled
-    if (!isVideoUploadEnabled && VIDEO_FORMATS.includes(file.type)) {
+    if (!isVideoUploadEnabled && isListed(VIDEO_FORMATS)) {
       throw new Error('video-upload-disabled');
     }
 
     // Check if file upload is disabled
-    if (!isFileUploadEnabled && TEXT_FORMATS.includes(file.type)) {
+    if (!isFileUploadEnabled && isListed(TEXT_FORMATS)) {
       throw new Error('file-upload-disabled');
     }
 
+    // The Uploader let the file in against the largest limit of all types
+    // (`MAX_FILE_SIZE_MB`): it is held to the limit of its own type, routed as
+    // below
+    const typeLimitMB = isListed(IMAGE_FORMATS)
+      ? imageConfig.maxFileSizeMB
+      : isListed(AUDIO_FORMATS)
+        ? audioConfig.maxFileSizeMB
+        : isListed(VIDEO_FORMATS)
+          ? videoConfig.maxFileSizeMB
+          : fileConfig.maxFileSizeMB;
+    if (typeLimitMB && file.size > typeLimitMB * 1024 * 1024) {
+      throw Object.assign(new Error('file-too-large'), { params: { maxSizeMB: typeLimitMB } });
+    }
+
     // Handle image files
-    if (isImageFile(file.type)) {
-      return await processImage(file);
+    if (isListed(IMAGE_FORMATS)) {
+      return await processImage(file, options);
     }
 
     // Handle audio files
-    if (isAudioFile(file.type)) {
-      return await processAudio(file);
+    if (isListed(AUDIO_FORMATS)) {
+      return await processAudio(file, mimeType, options);
     }
 
     // Handle video files
-    if (isVideoFile(file.type)) {
-      return await processVideo(file);
+    if (isListed(VIDEO_FORMATS)) {
+      return await processVideo(file, options);
     }
 
     // Handle text/document files using shared utility. Files that only pass
@@ -313,8 +361,8 @@ const UnifiedUploader = ({
     // through a format-specific extractor the admin did not enable.
     const isGenericText = ALLOW_GENERIC_TEXT && !isExplicitTextFile(file);
     const { content: processedContent, pageImages } = isGenericText
-      ? await processGenericTextFile(file)
-      : await processDocumentFile(file, extractionOptionsOf(fileConfig));
+      ? await processGenericTextFile(file, options)
+      : await processDocumentFile(file, extractionOptionsOf(fileConfig), options);
     const displayContent = processedContent || '';
     const previewContent =
       displayContent.length > 200 ? displayContent.substring(0, 200) + '...' : displayContent;
@@ -344,7 +392,10 @@ const UnifiedUploader = ({
 
   const formatList = (() => {
     const imageFormats = IMAGE_FORMATS.map(format => format.replace('image/', '').toUpperCase());
-    const audioFormats = AUDIO_FORMATS.map(format => format.replace('audio/', '').toUpperCase());
+    // audio/mp4 covers .m4a files; name it so users looking for M4A find it
+    const audioFormats = AUDIO_FORMATS.map(format =>
+      format === 'audio/mp4' ? 'M4A, MP4' : format.replace('audio/', '').toUpperCase()
+    );
     const videoFormats = VIDEO_FORMATS.map(format => format.replace('video/', '').toUpperCase());
     const textFormatsDisplay = formatMimeTypesToDisplay(TEXT_FORMATS);
     const allFormats = [
@@ -358,13 +409,17 @@ const UnifiedUploader = ({
     return allFormats;
   })();
 
-  const getErrorMessage = code => {
+  // `params`: what the error that raised `code` carried (see Uploader)
+  const getErrorMessage = (code, params) => {
     switch (code) {
-      case 'file-too-large':
+      case 'file-too-large': {
+        // The limit of the file's own type, or the largest one for a file the gate stopped
+        const maxSize = params?.maxSizeMB ?? MAX_FILE_SIZE_MB;
         return t('errors.fileTooLarge', {
-          maxSize: MAX_FILE_SIZE_MB,
-          defaultValue: `File too large. Maximum size is ${MAX_FILE_SIZE_MB}MB.`
+          maxSize,
+          defaultValue: `File too large. Maximum size is ${maxSize}MB.`
         });
+      }
       case 'unsupported-format':
         return t('errors.unsupportedFormat', {
           formats: formatList,
@@ -404,6 +459,21 @@ const UnifiedUploader = ({
           'errors.videoAudioExtractionError',
           'Error extracting audio from video. Please ensure the video contains an audio track.'
         );
+      case 'video-unsupported-large-container':
+        return t(
+          'errors.videoUnsupportedLargeContainer',
+          'Videos larger than 2 GB are supported as MP4 or MOV. Convert this video to MP4 or MOV, or use a smaller file.'
+        );
+      case 'video-large-audio-unsupported':
+        return t(
+          'errors.videoLargeAudioUnsupported',
+          'The audio of this large video could not be read. Videos larger than 2 GB need AAC or uncompressed (PCM) audio in an MP4 or MOV file, and a browser that can play that audio.'
+        );
+      case 'video-too-large-to-attach':
+        return t(
+          'errors.videoTooLargeToAttach',
+          'This video is too large to be attached as it is. Turn on audio extraction for the app, or use a video smaller than 2 GB.'
+        );
       case 'file-upload-disabled':
         return t('errors.fileUploadDisabled', 'File upload is disabled for this application.');
       default:
@@ -421,10 +491,14 @@ const UnifiedUploader = ({
       data={fileData}
       allowMultiple={allowMultiple}
       acceptAnyFile={ALLOW_GENERIC_TEXT}
+      onProcessingChange={onProcessingChange}
     >
       {({
         error,
-        isProcessing: _isProcessing,
+        errorParams,
+        isProcessing,
+        progress,
+        cancelProcessing,
         isDragging,
         handleButtonClick,
         handleDragEnter,
@@ -471,9 +545,14 @@ const UnifiedUploader = ({
               </div>
             )}
 
+            {/* Progress while a file is processed */}
+            {isProcessing && <ProcessingProgress progress={progress} onStop={cancelProcessing} />}
+
             {/* Error message */}
             {error && (
-              <div className="text-red-500 text-sm mb-2 px-2">{getErrorMessage(error)}</div>
+              <div className="text-red-500 text-sm mb-2 px-2">
+                {getErrorMessage(error, errorParams)}
+              </div>
             )}
 
             {/* Wrapped children (form + file list) */}

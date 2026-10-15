@@ -63,3 +63,44 @@ describe('app file upload: Word review options', () => {
     }
   });
 });
+
+describe('app file upload: size limit', () => {
+  const limitOf = upload => {
+    const result = appConfigSchema.safeParse(app(upload));
+    expect(result.success).toBe(true);
+    return result.data.upload.fileUpload.maxFileSizeMB;
+  };
+
+  test('is 20 MB for an app that does not set it', () => {
+    expect(limitOf({ fileUpload: { enabled: true } })).toBe(20);
+    expect(limitOf({ fileUpload: {} })).toBe(20);
+  });
+
+  test('keeps what the app set, including the old default of 5 MB', () => {
+    expect(limitOf({ fileUpload: { enabled: true, maxFileSizeMB: 5 } })).toBe(5);
+    expect(limitOf({ fileUpload: { enabled: true, maxFileSizeMB: 50 } })).toBe(50);
+  });
+
+  test('stays within 1 to 100 MB', () => {
+    for (const maxFileSizeMB of [1, 100]) {
+      expect(
+        appConfigSchema.safeParse(app({ fileUpload: { enabled: true, maxFileSizeMB } })).success
+      ).toBe(true);
+    }
+    for (const maxFileSizeMB of [0, 101]) {
+      expect(
+        appConfigSchema.safeParse(app({ fileUpload: { enabled: true, maxFileSizeMB } })).success
+      ).toBe(false);
+    }
+  });
+
+  test('has defaults of its own for the other upload types', () => {
+    const { upload } = appConfigSchema.parse(
+      app({ imageUpload: {}, audioUpload: {}, videoUpload: {}, fileUpload: {} })
+    );
+    expect(upload.imageUpload.maxFileSizeMB).toBe(10);
+    expect(upload.audioUpload.maxFileSizeMB).toBe(20);
+    expect(upload.videoUpload.maxFileSizeMB).toBe(50);
+    expect(upload.fileUpload.maxFileSizeMB).toBe(20);
+  });
+});

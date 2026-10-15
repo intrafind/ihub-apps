@@ -8,6 +8,8 @@
  * at 16 kHz — the format the transcription providers are fed.
  */
 
+import { raceAbort, throwIfAborted } from './abortable';
+
 export const TARGET_SAMPLE_RATE = 16000;
 
 // Samples per binary WebSocket frame when streaming a whole buffer
@@ -200,6 +202,52 @@ export function createTranscriptAssembler() {
   };
 }
 
+// The audio engine renders in blocks of this many frames; a suspend lands on one.
+const RENDER_QUANTUM = 128;
+// Progress reports (and chances to stop) while an offline render runs.
+const RENDER_CHECKPOINTS = 40;
+
+/**
+ * Report how far an OfflineAudioContext has rendered, and stop it when
+ * `signal` fires, by suspending the render at evenly spaced frames. A render
+ * cannot be cancelled, but one whose source has been disconnected is a render
+ * of silence that finishes at once, so the (large) source buffer is released.
+ * Does nothing where `suspend()` is missing or the render is too short to be
+ * worth it; the render then simply runs to its end.
+ */
+function trackRendering(offline, source, frameCount, { signal, onProgress }) {
+  if (!signal && !onProgress) return;
+  const steps = Math.min(RENDER_CHECKPOINTS, Math.floor(frameCount / RENDER_QUANTUM / 8));
+  if (typeof offline.suspend !== 'function' || steps < 2) return;
+  for (let step = 1; step < steps; step++) {
+    const frame = Math.floor((frameCount * step) / steps / RENDER_QUANTUM) * RENDER_QUANTUM;
+    offline
+      .suspend(frame / TARGET_SAMPLE_RATE)
+      .then(() => {
+        if (signal?.aborted) source.disconnect();
+        else onProgress?.((step / steps) * 100);
+        return offline.resume();
+      })
+      .catch(() => {});
+  }
+}
+
+/**
+ * The part of an AudioBuffer to render: from `offset` seconds, for `duration`
+ * seconds (to the end where that is null, undefined, or more than is left).
+ * `seconds` is 0 where nothing is left. `limited` says whether `duration` cut the
+ * end short, so that the render has to be told how long to play. Without an
+ * offset or a duration it is the whole buffer, as long as the buffer says.
+ */
+function trimSpan(audioBuffer, offset, duration) {
+  const start = Number.isFinite(offset) && offset > 0 ? offset : 0;
+  const asked = Number.isFinite(duration) && duration >= 0;
+  if (!start && !asked) return { start: 0, seconds: audioBuffer.duration, limited: false };
+  const left = Math.max(0, audioBuffer.duration - start);
+  const limited = asked && duration < left;
+  return { start, seconds: limited ? duration : left, limited };
+}
+
 /**
  * Downmix an AudioBuffer to mono and resample it to 16 kHz using an
  * OfflineAudioContext, returning the rendered Float32 sample data.
@@ -209,34 +257,71 @@ export function createTranscriptAssembler() {
  * stereo). Rendering through a mono, 16 kHz OfflineAudioContext performs both
  * the channel downmix and the resample natively (issue #1927 gap G4).
  *
+ * `offset` and `duration` render only a part of the buffer: the edit list of an
+ * MP4/MOV (a trimmed recording, an encoder's delay) says which. The render is
+ * told to start there and is as long as that part, so nothing outside it is
+ * resampled. Without them the whole buffer is rendered.
+ *
  * @param {AudioBuffer} audioBuffer
+ * @param {Object} [options]
+ * @param {AbortSignal} [options.signal] - Rejects with the abort error (see
+ *   `abortable.js`) as soon as it fires
+ * @param {(percent: number) => void} [options.onProgress] - Percent (0-100) of
+ *   the render done, a few dozen times along the way. Never called where the
+ *   browser cannot suspend an offline render.
+ * @param {number} [options.offset] - Seconds of the buffer to skip at the start
+ *   (default 0)
+ * @param {number|null} [options.duration] - Seconds to render from `offset`;
+ *   null or undefined: to the end of the buffer
  * @returns {Promise<Float32Array>} mono 16 kHz samples
  */
-export async function resampleTo16kMono(audioBuffer) {
+export async function resampleTo16kMono(
+  audioBuffer,
+  { signal, onProgress, offset, duration } = {}
+) {
+  throwIfAborted(signal);
   if (!audioBuffer || !audioBuffer.length) {
     return new Float32Array(0);
   }
 
+  const { start, seconds, limited } = trimSpan(audioBuffer, offset, duration);
+  const trimmed = start > 0 || limited;
+  // Nothing of the buffer is inside the part asked for
+  if (trimmed && !(seconds > 0)) return new Float32Array(0);
+  const frameCount = Math.max(1, Math.ceil(seconds * TARGET_SAMPLE_RATE));
+
   // Already mono @ 16 kHz — no work needed.
   if (audioBuffer.numberOfChannels === 1 && audioBuffer.sampleRate === TARGET_SAMPLE_RATE) {
-    return audioBuffer.getChannelData(0).slice();
+    const samples = audioBuffer.getChannelData(0);
+    if (!trimmed) return samples.slice();
+    const from = Math.min(samples.length, Math.round(start * TARGET_SAMPLE_RATE));
+    return samples.slice(from, Math.min(samples.length, from + frameCount));
   }
 
   const OfflineCtor = window.OfflineAudioContext || window.webkitOfflineAudioContext;
   if (!OfflineCtor) {
     // No OfflineAudioContext (very old browser): fall back to a manual downmix
     // of channel 0 + linear resample so we still emit 16 kHz mono.
-    return downsample(audioBuffer.getChannelData(0), audioBuffer.sampleRate);
+    const { sampleRate } = audioBuffer;
+    const samples = audioBuffer.getChannelData(0);
+    if (!trimmed) return downsample(samples, sampleRate);
+    const from = Math.min(samples.length, Math.round(start * sampleRate));
+    const to = Math.min(samples.length, Math.round((start + seconds) * sampleRate));
+    return downsample(samples.subarray(from, to), sampleRate);
   }
 
-  const frameCount = Math.max(1, Math.ceil(audioBuffer.duration * TARGET_SAMPLE_RATE));
   const offline = new OfflineCtor(1, frameCount, TARGET_SAMPLE_RATE);
   const source = offline.createBufferSource();
   source.buffer = audioBuffer;
   source.connect(offline.destination);
-  source.start(0);
-  const rendered = await offline.startRendering();
-  return rendered.getChannelData(0).slice();
+  if (limited) source.start(0, start, seconds);
+  else if (start) source.start(0, start);
+  else source.start(0);
+  trackRendering(offline, source, frameCount, { signal, onProgress });
+  const rendered = await raceAbort(offline.startRendering(), signal);
+  // The rendered buffer is nobody else's: no copy needed (a 40-minute track
+  // takes the page 0.13 s to copy)
+  return rendered.getChannelData(0);
 }
 
 /**

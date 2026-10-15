@@ -375,10 +375,10 @@ under `platform.speech.realtime`:
 
 | Setting | Default | Meaning |
 | --- | --- | --- |
-| `maxBufferedAudioBytes` | 33554432 (32 MB, ≈17 min) | Per connection. Exceeding it fails the session with `audio-too-long`. |
-| `maxBufferedAudioBytesTotal` | 268435456 (256 MB) | Across the whole process. Exceeding it fails the session with `server-busy`. |
+| `maxBufferedAudioBytes` | 134217728 (128 MiB, ≈70 min) | Per connection. Exceeding it fails the session with `audio-too-long`. |
+| `maxBufferedAudioBytesTotal` | 536870912 (512 MiB) | Across the whole process. Exceeding it fails the session with `server-busy`. |
 
-Raise `maxBufferedAudioBytes` for hour-long recordings (one hour of 16 kHz PCM16 is ≈115 MB) and size `maxBufferedAudioBytesTotal` against the memory the instance can spare — `maxConnections` × `maxBufferedAudioBytes` is the theoretical worst case.
+The default per-connection cap holds the hour of audio an app transcribes by default (one hour of 16 kHz PCM16 is ≈115 MB). Raise `maxBufferedAudioBytes` for recordings longer than ≈70 minutes (an app's `transcription.maxDurationSeconds` goes up to 7200 s ≈ 230 MB) and size `maxBufferedAudioBytesTotal` against the memory the instance can spare — `maxConnections` × `maxBufferedAudioBytes` is the theoretical worst case.
 
 ### Text-to-Speech Models
 
