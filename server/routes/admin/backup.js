@@ -413,7 +413,7 @@ async function isMountPoint(target) {
         .map(line =>
           line
             .split(' ')[4]
-            ?.replace(/\\([0-7]{3})/g, (_, oct) => String.fromCharCode(parseInt(oct, 8)))
+            ?.replace(/\\([0-7]{3})/g, (_, oct) => String.fromCodePoint(Number.parseInt(oct, 8)))
         )
         .includes(resolved);
     } catch {
@@ -676,8 +676,7 @@ function findExpiredBackups(entries) {
   return entries
     .filter(entry => entry.isDirectory() && !entry.name.startsWith('.'))
     .map(entry => entry.name)
-    .sort()
-    .reverse()
+    .sort((a, b) => b.localeCompare(a))
     .slice(IMPORT_BACKUPS_TO_KEEP);
 }
 

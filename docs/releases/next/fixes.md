@@ -89,7 +89,9 @@ the configuration inside the folder, so it works with the standard volume setup.
 
 - The configuration an import replaces is kept in `contents/.backups/<date and time>/` on the same
   volume (previously a `contents-backup-…` folder next to `contents`). The three newest are kept.
-- If any step fails, the previous configuration is restored completely, as before.
+- If the import fails partway, the steps already taken are undone and the previous configuration
+  is back in place. Should undoing fail as well, the error names the `contents/.backups/` folder
+  that holds the previous configuration.
 - A failed import says why — missing write permission, not enough disk space, or a folder inside
   `contents` mounted separately — instead of "Internal server error".
 - `.backups` is never included in an export and never restored from an archive.
