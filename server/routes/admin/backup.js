@@ -10,7 +10,11 @@ import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
 import { resolveAndValidatePath } from '../../utils/pathSecurity.js';
 import logger from '../../utils/logger.js';
-import { sendInternalError, sendBadRequest } from '../../utils/responseHelpers.js';
+import {
+  sendInternalError,
+  sendBadRequest,
+  sendErrorResponse
+} from '../../utils/responseHelpers.js';
 import { runConfigMigrations } from '../../migrations/runner.js';
 import { logAudit } from '../../services/AuditLogService.js';
 import { getContentsPath } from '../../utils/contentsPath.js';
@@ -29,6 +33,26 @@ const ARCHIVE_CONTENTS_DIR = 'contents';
  * carrying it.
  */
 const IMPORT_UPLOAD_DIR_PREFIX = 'ihub-import-';
+
+/**
+ * Folder inside the contents directory holding what an import replaced, one
+ * `<timestamp>/` folder per import, and the import's staging area while it runs.
+ *
+ * Inside the contents directory because that is the one place the server can
+ * always write to and rename within: in a container the contents directory is a
+ * volume mount point, which cannot be renamed, and its parent belongs to root.
+ * Never exported, and never restored from an archive.
+ */
+export const IMPORT_BACKUPS_DIR = '.backups';
+
+/** Prefix of the staging folder inside {@link IMPORT_BACKUPS_DIR}. */
+const IMPORT_STAGING_PREFIX = '.staging-';
+
+/** How many import backups are kept; older ones are removed after an import. */
+const IMPORT_BACKUPS_TO_KEEP = 3;
+
+/** A staging folder this old is left over from an import that crashed. */
+const STALE_STAGING_AGE_MS = 60 * 60 * 1000;
 
 /**
  * Remove the private directory an import upload was stored in.
@@ -54,14 +78,17 @@ async function removeUploadDir(dir) {
 /**
  * Get all files recursively from a directory
  */
-async function getAllFiles(dirPath, arrayOfFiles = []) {
+async function getAllFiles(dirPath, arrayOfFiles = [], skipPaths = new Set()) {
   try {
     const files = await fs.readdir(dirPath, { withFileTypes: true });
 
     for (const file of files) {
       const fullPath = path.join(dirPath, file.name);
+      if (skipPaths.has(fullPath)) {
+        continue;
+      }
       if (file.isDirectory()) {
-        arrayOfFiles = await getAllFiles(fullPath, arrayOfFiles);
+        arrayOfFiles = await getAllFiles(fullPath, arrayOfFiles, skipPaths);
       } else {
         arrayOfFiles.push(fullPath);
       }
@@ -75,6 +102,14 @@ async function getAllFiles(dirPath, arrayOfFiles = []) {
   }
 
   return arrayOfFiles;
+}
+
+/**
+ * The configuration files under the contents directory, without the backups
+ * earlier imports left in {@link IMPORT_BACKUPS_DIR}.
+ */
+function getConfigurationFiles(contentsPath) {
+  return getAllFiles(contentsPath, [], new Set([path.join(contentsPath, IMPORT_BACKUPS_DIR)]));
 }
 
 /**
@@ -150,6 +185,18 @@ function extractZip(zipPath, extractPath) {
 
         // Extract the relative path within contents/
         const relativePath = contentsMatch[1];
+
+        // Backups of earlier imports belong to the installation they were made
+        // on; restoring them would also write into the import's own work area.
+        if (relativePath.split('/')[0] === IMPORT_BACKUPS_DIR) {
+          logger.info('Skipping import backup entry', {
+            component: 'AdminBackup',
+            fileName: entry.fileName
+          });
+          zipfile.readEntry();
+          return;
+        }
+
         const entryPath = await resolveAndValidatePath(relativePath, contentsBase);
 
         // Prevent ZIP slip: skip entries that would escape the extract directory
@@ -232,7 +279,7 @@ export async function exportConfig(req, res) {
 
     // Get all files from contents directory
     const contentsPath = getContentsPath();
-    const allFiles = await getAllFiles(contentsPath);
+    const allFiles = await getConfigurationFiles(contentsPath);
 
     let fileCount = 0;
 
@@ -291,26 +338,142 @@ export async function exportConfig(req, res) {
 }
 
 /**
- * Stage an extracted configuration directory and atomically swap it in place of
- * the live contents directory, using renames instead of a destructive
- * delete-then-copy. Renaming `contentsPath` aside doubles as the safety backup:
- * if it fails, nothing has been touched yet and the import is aborted. If the
- * second rename fails, the original directory is restored from the backup.
+ * What an admin can do about a filesystem error during an import, by error code.
+ * The import runs as the server's user inside the contents directory, so these
+ * are the failures a deployment can actually cause.
+ */
+const IMPORT_FS_ERROR_HINTS = {
+  EACCES:
+    'The server is not allowed to write in the configuration directory. Make sure the user running iHub owns the contents directory and everything in it.',
+  EPERM:
+    'The server is not allowed to write in the configuration directory. Make sure the user running iHub owns the contents directory and everything in it.',
+  EROFS: 'The configuration directory is on a read-only filesystem.',
+  ENOSPC:
+    'Not enough disk space. An import needs room for a second copy of the configuration next to the current one.',
+  EDQUOT:
+    'The disk quota is exhausted. An import needs room for a second copy of the configuration next to the current one.',
+  EBUSY:
+    'A folder inside the contents directory is a separate mount point, which cannot be replaced. Mount the volume on the contents directory itself (or its parent), not on folders inside it.',
+  EXDEV:
+    'A folder inside the contents directory is on a separate filesystem, which cannot be replaced. Mount the volume on the contents directory itself (or its parent), not on folders inside it.'
+};
+
+/**
+ * An import step failed on the filesystem: an error whose message says what
+ * happened to the live configuration and, where known, how to fix the cause.
  *
- * @param {object} paths
- * @param {string} paths.contentsPath - Live contents directory to replace.
- * @param {string} paths.extractedContentsPath - Source directory (from the extracted ZIP).
- * @param {string} paths.extractRoot - Directory extractedContentsPath must resolve within
+ * @param {string} outcome - What the failure means for the live configuration.
+ * @param {Error} cause - The underlying filesystem error.
+ * @param {string} [mountPoint] - Folder (relative to the contents directory) the
+ *   failure came from, when that folder is a separate mount point.
+ * @returns {Error} Error carrying `adminMessage`, safe to show to an admin.
+ */
+function importStepError(outcome, cause, mountPoint) {
+  const hint = mountPoint
+    ? `The folder "${mountPoint}" in the contents directory is a separate mount point, which cannot be replaced. Mount the volume on the contents directory itself (or its parent), not on folders inside it.`
+    : IMPORT_FS_ERROR_HINTS[cause?.code];
+  const adminMessage = hint ? `${outcome}. ${hint} (${cause.code})` : `${outcome}.`;
+  const error = new Error(`${outcome}: ${cause?.message ?? cause}`, { cause });
+  error.adminMessage = adminMessage;
+  return error;
+}
+
+/**
+ * The entry of the contents directory a failed rename was about, if that entry
+ * is a mount point of its own. Moving one fails with EBUSY as root but with
+ * EACCES for any other user, so the error code alone would blame permissions.
+ *
+ * @param {string} contentsPath - Live contents directory.
+ * @param {Error} error - Error from fs.rename, carrying `path` and `dest`.
+ * @returns {Promise<string|undefined>} Entry name relative to the contents directory.
+ */
+async function findMountPointEntry(contentsPath, error) {
+  for (const candidate of [error?.path, error?.dest]) {
+    if (candidate && path.dirname(candidate) === contentsPath && (await isMountPoint(candidate))) {
+      return path.basename(candidate);
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Whether `target` is a mount point. Docker volumes are bind mounts from the
+ * host's filesystem and share its device id, so on Linux the mount table is
+ * the reliable answer; elsewhere a device change from the parent is.
+ *
+ * @param {string} target - Absolute path.
+ * @returns {Promise<boolean>}
+ */
+async function isMountPoint(target) {
+  try {
+    const resolved = await fs.realpath(target);
+    try {
+      const mountInfo = await fs.readFile('/proc/self/mountinfo', 'utf8');
+      // Field 5 is the mount point, with spaces and the like escaped as \ooo.
+      return mountInfo
+        .split('\n')
+        .map(line =>
+          line
+            .split(' ')[4]
+            ?.replace(/\\([0-7]{3})/g, (_, oct) => String.fromCharCode(parseInt(oct, 8)))
+        )
+        .includes(resolved);
+    } catch {
+      const [entry, parent] = await Promise.all([
+        fs.stat(resolved),
+        fs.stat(path.dirname(resolved))
+      ]);
+      return entry.dev !== parent.dev;
+    }
+  } catch {
+    // Not there (any more); not a mount point we can name.
+    return false;
+  }
+}
+
+/**
+ * Undo recorded renames, newest first.
+ *
+ * @param {Array<[string, string]>} moves - `[from, to]` pairs, in the order done.
+ * @returns {Promise<Error|null>} The first error, or null if every move was undone.
+ */
+async function undoMoves(moves) {
+  let firstError = null;
+  for (const [from, to] of [...moves].reverse()) {
+    try {
+      await fs.rename(to, from);
+    } catch (error) {
+      firstError ??= error;
+      logger.error('Could not undo import move', { component: 'AdminBackup', from, to, error });
+    }
+  }
+  return firstError;
+}
+
+/**
+ * Stage an extracted configuration and swap it in for the live one, keeping the
+ * replaced configuration in `<contents>/.backups/<backupName>/`.
+ *
+ * The contents directory itself is never renamed or removed: in a container it
+ * is a volume mount point, which Linux refuses to rename (EBUSY), and its
+ * parent is not writable for the server (EACCES). Instead each top-level entry
+ * is renamed, all within the contents directory and so on one filesystem. Every
+ * rename is recorded; if one fails, the recorded ones are undone so the live
+ * configuration is exactly what it was. Staging failures leave it untouched.
+ *
+ * @param {object} params
+ * @param {string} params.contentsPath - Live contents directory.
+ * @param {string} params.extractedContentsPath - Source directory (from the extracted ZIP).
+ * @param {string} params.extractRoot - Directory extractedContentsPath must resolve within
  *   (the temp extraction directory) — validated to guard against a tainted/traversal path.
- * @param {string} paths.stagingPath - Sibling of contentsPath to stage the new contents in.
- * @param {string} paths.backupPath - Sibling of contentsPath to move the old contents to.
+ * @param {string} params.backupName - Folder name for the replaced configuration.
+ * @returns {Promise<string>} Absolute path of the backup folder.
  */
 export async function stageAndSwapContents({
   contentsPath: liveContentsPath,
   extractedContentsPath,
   extractRoot,
-  stagingPath,
-  backupPath
+  backupName
 }) {
   // extractedContentsPath is derived from the uploaded file's temp path; verify it
   // resolves within the expected extraction root before using it as a copy source.
@@ -322,34 +485,117 @@ export async function stageAndSwapContents({
   if (!resolvedExtractedContentsPath.startsWith(extractRootWithSep)) {
     throw new Error('Refusing to stage imported configuration: source path is invalid.');
   }
+  if (path.basename(backupName) !== backupName || backupName.startsWith('.')) {
+    throw new Error('Refusing to stage imported configuration: backup name is invalid.');
+  }
 
+  const backupsRoot = path.join(liveContentsPath, IMPORT_BACKUPS_DIR);
+  const stagingPath = path.join(backupsRoot, `${IMPORT_STAGING_PREFIX}${backupName}`);
+  const backupPath = path.join(backupsRoot, backupName);
+  const skippedSource = path.join(resolvedExtractedContentsPath, IMPORT_BACKUPS_DIR);
+
+  let backupCreated = false;
   try {
-    await fs.cp(resolvedExtractedContentsPath, stagingPath, { recursive: true });
+    await fs.mkdir(backupsRoot, { recursive: true });
+    await fs.mkdir(backupPath);
+    backupCreated = true;
+    await fs.cp(resolvedExtractedContentsPath, stagingPath, {
+      recursive: true,
+      filter: source => source !== skippedSource
+    });
   } catch (error) {
     await fs.rm(stagingPath, { recursive: true, force: true }).catch(() => {});
-    throw new Error(
-      `Failed to stage imported configuration; the live configuration was not modified: ${error.message}`
+    if (backupCreated) {
+      await fs.rmdir(backupPath).catch(() => {});
+    }
+    throw importStepError(
+      'Failed to stage the imported configuration; the live configuration was not modified',
+      error
     );
   }
 
+  const moves = [];
+  const move = async (from, to) => {
+    await fs.rename(from, to);
+    moves.push([from, to]);
+  };
   try {
-    await fs.rename(liveContentsPath, backupPath);
+    for (const name of await fs.readdir(liveContentsPath)) {
+      if (name !== IMPORT_BACKUPS_DIR) {
+        await move(path.join(liveContentsPath, name), path.join(backupPath, name));
+      }
+    }
+    for (const name of await fs.readdir(stagingPath)) {
+      await move(path.join(stagingPath, name), path.join(liveContentsPath, name));
+    }
   } catch (error) {
+    const undoError = await undoMoves(moves);
+    const mountPoint = await findMountPointEntry(liveContentsPath, error);
+    if (undoError) {
+      // Leave staging and backup in place: they hold whatever could not be moved back.
+      throw importStepError(
+        `Failed to activate the imported configuration, and the rollback failed as well; the previous configuration is in ${IMPORT_BACKUPS_DIR}/${backupName}`,
+        error,
+        mountPoint
+      );
+    }
     await fs.rm(stagingPath, { recursive: true, force: true }).catch(() => {});
-    throw new Error(
-      `Failed to back up the current configuration; the import was aborted: ${error.message}`
+    await fs.rmdir(backupPath).catch(() => {});
+    throw importStepError(
+      'Failed to activate the imported configuration; rolled back to the previous configuration',
+      error,
+      mountPoint
     );
   }
 
+  await fs.rm(stagingPath, { recursive: true, force: true }).catch(error => {
+    logger.warn('Could not remove import staging folder', {
+      component: 'AdminBackup',
+      stagingPath,
+      error
+    });
+  });
+  return backupPath;
+}
+
+/**
+ * Remove all but the newest {@link IMPORT_BACKUPS_TO_KEEP} import backups, and
+ * staging folders left behind by an import that crashed.
+ *
+ * Backups sit on the same volume as the live configuration, so without this
+ * every import would grow it by a full copy.
+ *
+ * @param {string} contentsPath - Live contents directory.
+ */
+export async function pruneImportBackups(contentsPath) {
+  const backupsRoot = path.join(contentsPath, IMPORT_BACKUPS_DIR);
   try {
-    await fs.rename(stagingPath, liveContentsPath);
+    const entries = await fs.readdir(backupsRoot, { withFileTypes: true });
+    const backups = entries
+      .filter(entry => entry.isDirectory() && !entry.name.startsWith('.'))
+      .map(entry => entry.name)
+      .sort()
+      .reverse();
+    const expired = backups.slice(IMPORT_BACKUPS_TO_KEEP);
+
+    for (const entry of entries) {
+      if (entry.isDirectory() && entry.name.startsWith(IMPORT_STAGING_PREFIX)) {
+        const { mtimeMs } = await fs.stat(path.join(backupsRoot, entry.name));
+        if (Date.now() - mtimeMs > STALE_STAGING_AGE_MS) {
+          expired.push(entry.name);
+        }
+      }
+    }
+
+    for (const name of expired) {
+      await fs.rm(path.join(backupsRoot, name), { recursive: true, force: true });
+      logger.info('Removed old import backup', { component: 'AdminBackup', name });
+    }
   } catch (error) {
-    // Restore the original contents directory so the server isn't left without one.
-    await fs.rename(backupPath, liveContentsPath);
-    await fs.rm(stagingPath, { recursive: true, force: true }).catch(() => {});
-    throw new Error(
-      `Failed to activate imported configuration; rolled back to the previous configuration: ${error.message}`
-    );
+    if (error.code === 'ENOENT') {
+      return;
+    }
+    logger.warn('Could not prune old import backups', { component: 'AdminBackup', error });
   }
 }
 
@@ -405,23 +651,12 @@ export async function importConfig(req, res) {
       });
     }
 
-    // Stage the imported contents next to the live directory (same filesystem as
-    // contentsPath's parent) so the swap can use atomic renames instead of a
-    // destructive delete-then-copy.
-    const backupTimestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-    const currentBackupPath = path.join(
-      path.dirname(contentsPath),
-      `${path.basename(contentsPath)}-backup-${backupTimestamp}`
-    );
-    const stagingPath = path.join(
-      path.dirname(contentsPath),
-      `${path.basename(contentsPath)}-staging-${backupTimestamp}`
-    );
+    // Milliseconds included so two imports in the same second get their own backup.
+    const backupName = new Date().toISOString().replace(/[:.]/g, '-');
 
     logger.info('Staging and swapping in imported configuration', {
       component: 'AdminBackup',
-      stagingPath,
-      currentBackupPath
+      backupName
     });
 
     try {
@@ -429,15 +664,18 @@ export async function importConfig(req, res) {
         contentsPath,
         extractedContentsPath,
         extractRoot: tempExtractPath,
-        stagingPath,
-        backupPath: currentBackupPath
+        backupName
       });
     } catch (error) {
       logger.error('Failed to swap in imported configuration', { component: 'AdminBackup', error });
+      if (error.adminMessage) {
+        return sendErrorResponse(res, 500, error.adminMessage);
+      }
       throw error;
     }
 
     logger.info('Configuration files replaced', { component: 'AdminBackup' });
+    await pruneImportBackups(contentsPath);
 
     // Run pending migrations against the imported configuration. The backup
     // carries contents/.migration-history.json, so the runner only applies the
@@ -467,7 +705,7 @@ export async function importConfig(req, res) {
     logger.info('Configuration cache reloaded', { component: 'AdminBackup' });
 
     // Count imported files
-    const importedFiles = await getAllFiles(contentsPath);
+    const importedFiles = await getConfigurationFiles(contentsPath);
 
     await logAudit({
       req,
@@ -482,7 +720,7 @@ export async function importConfig(req, res) {
         ? 'Configuration imported, but one or more migrations failed. See server logs and the migrations field for details.'
         : 'Configuration imported successfully',
       importedFiles: importedFiles.length,
-      backupPath: path.basename(currentBackupPath),
+      backupPath: `${IMPORT_BACKUPS_DIR}/${backupName}`,
       metadata: metadata,
       migrations: migrationResult,
       migrationError,

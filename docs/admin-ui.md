@@ -479,6 +479,10 @@ Go to **Platform → Backup & Restore** to export and import the full platform c
 
 **Import:** Upload a previously exported ZIP. The current configuration is automatically backed up before the import is applied. After import, the server applies any pending configuration migrations automatically.
 
+The replaced configuration is kept in `contents/.backups/<timestamp>/`; the three newest backups are kept and older ones are removed. To roll back an import, import a ZIP of the old configuration, or copy the files from that folder back into `contents/` and restart the server. `.backups` is never exported and never restored from an archive.
+
+The import replaces the files *inside* `contents/` rather than the folder itself, so it works when `contents/` is a mounted volume (Docker, Kubernetes). It needs write access to `contents/` and room for a second copy of the configuration on the same volume. Do not mount separate volumes on folders *inside* `contents/` (such as `contents/data`): those cannot be replaced, and the import stops with an error naming the cause.
+
 ---
 
 ## Security Settings
