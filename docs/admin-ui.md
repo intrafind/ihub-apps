@@ -479,6 +479,17 @@ Go to **Platform → Backup & Restore** to export and import the full platform c
 
 **Import:** Upload a previously exported ZIP. The current configuration is automatically backed up before the import is applied. After import, the server applies any pending configuration migrations automatically.
 
+The replaced configuration is kept in `contents/.backups/<timestamp>/`; the three newest backups are kept and older ones are removed. `.backups` is never exported and never restored from an archive. Only one import runs at a time; a second one started meanwhile is refused and can be retried once the first has finished.
+
+To roll back an import, the simplest way is to import a ZIP exported before it. To restore a backup folder by hand instead:
+
+1. Stop every iHub server instance (all containers or pods), so nothing writes to `contents/` meanwhile.
+2. Move the current entries of `contents/` aside, except `.backups`, so that nothing the import added stays behind. Copying the backup over them would merge the two configurations.
+3. Move the entries of `contents/.backups/<timestamp>/` into `contents/`, including hidden files such as `.encryption-key` and `.migration-history.json`.
+4. Start the servers again.
+
+The import replaces the files *inside* `contents/` rather than the folder itself, so it works when `contents/` is a mounted volume (Docker, Kubernetes). It needs write access to `contents/` and room for a second copy of the configuration on the same volume. Do not mount separate volumes on folders *inside* `contents/` (such as `contents/data`): those cannot be replaced, and the import stops with an error naming the cause.
+
 ---
 
 ## Security Settings
