@@ -467,27 +467,22 @@ async function removeImportFolder(target, { onlyIfEmpty = false } = {}) {
 }
 
 /**
- * Refuse a copy source outside the extraction root (it is derived from the
- * uploaded file's temp path) and a backup name that is not a plain folder name.
+ * Copy the extracted configuration into the staging folder and create the
+ * (empty) backup folder. On failure nothing of either is left behind.
  */
-function assertImportPaths(extractRoot, extractedContentsPath, backupName) {
+async function stageImport({ extractRoot, extractedContentsPath, stagingPath, backupPath }) {
+  // extractedContentsPath is derived from the uploaded file's temp path; verify it
+  // resolves within the extraction root before using it as a copy source. Kept
+  // next to the copy so the check visibly guards it.
   const resolvedExtractRoot = path.resolve(extractRoot);
   const extractRootWithSep = resolvedExtractRoot.endsWith(path.sep)
     ? resolvedExtractRoot
     : resolvedExtractRoot + path.sep;
-  if (!path.resolve(extractedContentsPath).startsWith(extractRootWithSep)) {
+  const sourcePath = path.resolve(extractedContentsPath);
+  if (!sourcePath.startsWith(extractRootWithSep)) {
     throw new Error('Refusing to stage imported configuration: source path is invalid.');
   }
-  if (path.basename(backupName) !== backupName || backupName.startsWith('.')) {
-    throw new Error('Refusing to stage imported configuration: backup name is invalid.');
-  }
-}
 
-/**
- * Copy the extracted configuration into the staging folder and create the
- * (empty) backup folder. On failure nothing of either is left behind.
- */
-async function stageImport({ sourcePath, stagingPath, backupPath }) {
   const skippedSource = path.join(sourcePath, IMPORT_BACKUPS_DIR);
   let backupCreated = false;
   try {
@@ -563,13 +558,15 @@ export async function stageAndSwapContents({
   extractRoot,
   backupName
 }) {
-  assertImportPaths(extractRoot, extractedContentsPath, backupName);
+  if (path.basename(backupName) !== backupName || backupName.startsWith('.')) {
+    throw new Error('Refusing to stage imported configuration: backup name is invalid.');
+  }
 
   const backupsRoot = path.join(liveContentsPath, IMPORT_BACKUPS_DIR);
   const stagingPath = path.join(backupsRoot, `${IMPORT_STAGING_PREFIX}${backupName}`);
   const backupPath = path.join(backupsRoot, backupName);
 
-  await stageImport({ sourcePath: path.resolve(extractedContentsPath), stagingPath, backupPath });
+  await stageImport({ extractRoot, extractedContentsPath, stagingPath, backupPath });
 
   try {
     await swapEntries({ liveContentsPath, stagingPath, backupPath });
