@@ -102,12 +102,7 @@ export async function userAbortCause(
   user,
   { mode = 'default', admin = false, ...rest } = {}
 ) {
-  let id;
-  try {
-    id = await resolveActorId(user, { mode });
-  } catch {
-    id = undefined;
-  }
+  const id = await resolveActorId(user, { mode }).catch(() => undefined);
   return abortCause(kind, { ...rest, actor: { type: admin ? 'admin' : 'user', id } });
 }
 

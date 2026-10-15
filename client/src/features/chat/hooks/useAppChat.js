@@ -743,7 +743,8 @@ function useAppChat({
       // Set flag to prevent error messages during manual cancellation
       isCancellingRef.current = true;
 
-      void stopEventSource({
+      // Not awaited: it reports its own failure, and the UI must not wait on the network.
+      stopEventSource({
         source: typeof source === 'string' ? source : 'stop-button',
         force: processingRef.current
       });
