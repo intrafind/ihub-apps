@@ -26,7 +26,8 @@ import {
  * @property {Object} [outputMapping] - Map state fields to output fields
  * @property {Array<string>} [includeFields] - Specific fields to include in output
  * @property {Array<string>} [excludeFields] - Fields to exclude from output
- * @property {string} [outputFormat] - Output format ('json', 'text', 'raw')
+ * @property {string} [outputFormat] - What the output holds next to the answer: 'json' (the default) the
+ *   additional information too, 'text' the answer alone as text, 'raw' the answer alone as it is
  * @property {string} [status] - Custom workflow status (e.g., 'approved', 'rejected')
  * @property {string} [statusCode] - Custom status code for the workflow result (deprecated, use status)
  */
@@ -324,35 +325,28 @@ export class EndNodeExecutor extends BaseNodeExecutor {
   }
 
   /**
-   * Format output according to specified format.
+   * Format the output of the end step according to its `outputFormat`.
    *
-   * @param {Object} output - Output object
+   * The answer stays in `output`, whatever the format: a caller finds it there
+   * and never has to tell an answer from the object around it.
+   *   - `json` (the default): the answer and the additional information
+   *   - `text`: the answer alone, as text. A JSON answer is written out
+   *   - `raw`: the answer alone, as the value it is
+   *
+   * @param {Object} output - The end step's output: its `output` and what else it passes on
    * @param {string} format - Output format ('json', 'text', 'raw')
-   * @returns {*} Formatted output
+   * @returns {Object} The output
    * @private
    */
   formatOutput(output, format) {
     switch (format) {
-      case 'json':
-        return output;
-
-      case 'text':
-        // Convert to human-readable text
-        if (typeof output === 'string') {
-          return output;
-        }
-        if (output.content || output.text || output.message) {
-          return output.content || output.text || output.message;
-        }
-        return JSON.stringify(output, null, 2);
+      case 'text': {
+        const answer = output.output;
+        return { output: typeof answer === 'string' ? answer : JSON.stringify(answer, null, 2) };
+      }
 
       case 'raw':
-        // Return first value if single-key object
-        const keys = Object.keys(output);
-        if (keys.length === 1) {
-          return output[keys[0]];
-        }
-        return output;
+        return { output: output.output };
 
       default:
         return output;

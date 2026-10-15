@@ -20,8 +20,8 @@
  * object or a list), a number or a boolean. Null when it gives none.
  *
  * The output is the end step's output object, and its `output` is the answer.
- * An end step whose output format reduces its output to a single value hands
- * that value back instead, and the value is the answer.
+ * Anything that is not an object, such as the output a run was stored with
+ * before an end step kept its answer in `output`, is the answer itself.
  *
  * @param {*} output - What the workflow finished with (`finalOutputOf()`)
  * @returns {*} The answer; null for no answer

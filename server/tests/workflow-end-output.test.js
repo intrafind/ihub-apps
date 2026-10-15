@@ -312,13 +312,46 @@ describe('what else an end step passes on', () => {
     assert.equal(excluded.output._metadata.exitNode, 'end');
   });
 
-  it('can still reduce the whole result to a single value, which is then the answer', async () => {
+  it('keeps the answer in `output` whatever its own format: raw gives the answer alone', async () => {
     const { output } = await endResult(
-      { output: 'finalReport', outputVariables: [], outputFormat: 'raw' },
-      { finalReport: '# Only this' }
+      { output: 'finalReport', outputFormat: 'raw' },
+      { finalReport: '# Only this', topic: 'wind' }
     );
-    assert.equal(output, '# Only this');
+    assert.deepEqual(output, { output: '# Only this' });
     assert.equal(chatAnswerOf(output), '# Only this');
+  });
+
+  it('does not lose a JSON answer to its format, nor mistake one with an `output` field of its own', async () => {
+    for (const outputFormat of ['raw', 'json']) {
+      const verdict = await endResult(
+        { output: 'report', outputVariables: [], outputFormat },
+        { report: { verdict: 'ok' } }
+      );
+      assert.deepEqual(answerOf(verdict.output), { verdict: 'ok' }, outputFormat);
+      const nested = await endResult(
+        { output: 'report', outputVariables: [], outputFormat },
+        { report: { output: 'its own field', verdict: 'ok' } }
+      );
+      assert.deepEqual(
+        answerOf(nested.output),
+        { output: 'its own field', verdict: 'ok' },
+        outputFormat
+      );
+    }
+  });
+
+  it('gives the answer alone as text for the text format, a JSON answer written out', async () => {
+    const text = await endResult(
+      { output: 'summary', outputFormat: 'text' },
+      { summary: 'All good', content: 'not this', topic: 'wind' }
+    );
+    assert.deepEqual(text.output, { output: 'All good' });
+    const json = await endResult(
+      { output: 'report', outputFormat: 'text' },
+      { report: { verdict: 'ok' } }
+    );
+    assert.deepEqual(json.output, { output: JSON.stringify({ verdict: 'ok' }, null, 2) });
+    assert.equal(chatAnswerOf(json.output), JSON.stringify({ verdict: 'ok' }, null, 2));
   });
 });
 
