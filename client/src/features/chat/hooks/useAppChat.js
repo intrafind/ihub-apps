@@ -123,7 +123,7 @@ function useAppChat({
     loadServerMessages
   } = useChatMessages(chatId, { ephemeral, serverBacked });
 
-  const cleanupEventSourceRef = useRef();
+  const detachEventSourceRef = useRef();
 
   // Per-chat SSE v2 stream state (one reducer for every surface). Kept in a
   // ref: it is the authoritative accumulation and is folded synchronously per
@@ -303,7 +303,7 @@ function useAppChat({
           false
         );
       }
-      cleanupEventSourceRef.current?.();
+      detachEventSourceRef.current?.();
       setProcessing(false);
     }
   }, [t, messagesRef, updateAssistantMessage]);
@@ -533,11 +533,9 @@ function useAppChat({
     ]
   );
 
-  const { initEventSource, cleanupEventSource } = useEventSource({
+  const { initEventSource, detachEventSource, stopEventSource } = useEventSource({
     appId,
     chatId: chatId,
-    // A stored chat's turn outlives this surface: leaving it must not stop it.
-    durable: serverBacked,
     onEvent: handleEvent,
     onProcessingChange: setProcessing,
     // True only while this surface is following a turn it did not start, which
@@ -547,8 +545,8 @@ function useAppChat({
     isFollowingExistingRun: () => reattachedRunRef.current !== null
   });
 
-  // Store cleanup function in ref for access in callbacks
-  cleanupEventSourceRef.current = cleanupEventSource;
+  // Store the detach function in a ref for access in callbacks
+  detachEventSourceRef.current = detachEventSource;
 
   /**
    * Send a chat message and start streaming the response.
@@ -573,7 +571,9 @@ function useAppChat({
         // Reset cancellation flag when starting a new message
         isCancellingRef.current = false;
 
-        cleanupEventSource();
+        // Detach only: the server supersedes a turn still running on this chat
+        // when the new message arrives, and says so in what it records.
+        detachEventSource();
         setProcessing(true);
         const exchangeId = `msg-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
         lastMessageIdRef.current = exchangeId;
@@ -650,7 +650,7 @@ function useAppChat({
       }
     },
     [
-      cleanupEventSource,
+      detachEventSource,
       addUserMessage,
       addAssistantMessage,
       getMessagesForApi,
@@ -727,36 +727,58 @@ function useAppChat({
     [messages, deleteFromMessage]
   );
 
-  const cancelGeneration = useCallback(() => {
-    // Set flag to prevent error messages during manual cancellation
-    isCancellingRef.current = true;
+  // Read at stop time, so a turn running with no stream attached is still
+  // stopped without making the callback change with every `processing` flip.
+  const processingRef = useRef(false);
+  // After commit, not during render: a render React discards must not leave a
+  // value here that the committed state never had.
+  useLayoutEffect(() => {
+    processingRef.current = processing;
+  }, [processing]);
 
-    cleanupEventSource();
+  /**
+   * A person stopped the turn: the one place this hook tells the server to.
+   *
+   * @param {string} [source] - The control that asked; anything else (a click
+   *   event handed over by `onClick={cancelGeneration}`) records as the Stop button.
+   */
+  const cancelGeneration = useCallback(
+    source => {
+      // Set flag to prevent error messages during manual cancellation
+      isCancellingRef.current = true;
 
-    if (lastMessageIdRef.current) {
-      // Append the cancellation note via a functional setState updater so it
-      // always concatenates onto the LATEST content — never an out-of-date
-      // snapshot from messagesRef. Previously this read content from
-      // messagesRef and passed `read + note` to updateAssistantMessage,
-      // which wholesale-replaced the message. Any chunks that arrived
-      // between the read and the write were lost, and if the read happened
-      // before the first chunk landed the entire streamed body was erased.
-      appendToAssistantMessage(
-        lastMessageIdRef.current,
-        t('message.generationCancelled', ' [Generation cancelled]'),
-        { loading: false, cancelled: true }
-      );
-    }
+      // Not awaited: it reports its own failure, and the UI must not wait on the network.
+      stopEventSource({
+        source: typeof source === 'string' ? source : 'stop-button',
+        force: processingRef.current
+      });
 
-    setProcessing(false);
-    setClarificationPending(false);
-    activeClarificationRef.current = null;
+      if (lastMessageIdRef.current) {
+        // Append the cancellation note via a functional setState updater so it
+        // always concatenates onto the LATEST content — never an out-of-date
+        // snapshot from messagesRef. Previously this read content from
+        // messagesRef and passed `read + note` to updateAssistantMessage,
+        // which wholesale-replaced the message. Any chunks that arrived
+        // between the read and the write were lost, and if the read happened
+        // before the first chunk landed the entire streamed body was erased.
+        appendToAssistantMessage(
+          lastMessageIdRef.current,
+          t('message.generationCancelled', ' [Generation cancelled]'),
+          { loading: false, cancelled: true }
+        );
+      }
 
-    // Reset the cancellation flag after a short delay to allow cleanup to complete
-    setTimeout(() => {
-      isCancellingRef.current = false;
-    }, 100);
-  }, [cleanupEventSource, appendToAssistantMessage, t]);
+      setProcessing(false);
+      setClarificationPending(false);
+      activeClarificationRef.current = null;
+
+      // Reset the cancellation flag after a short delay to allow cleanup to complete
+      setTimeout(() => {
+        isCancellingRef.current = false;
+      }, 100);
+    },
+    [stopEventSource, appendToAssistantMessage, t]
+  );
 
   /**
    * Submit a response to a clarification question.
@@ -828,7 +850,7 @@ function useAppChat({
       // The response is sent as a special message that the server will process
       try {
         isCancellingRef.current = false;
-        cleanupEventSource();
+        detachEventSource();
         setProcessing(true);
 
         const exchangeId = `msg-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
@@ -893,7 +915,7 @@ function useAppChat({
       }
     },
     [
-      cleanupEventSource,
+      detachEventSource,
       updateAssistantMessage,
       addUserMessage,
       addAssistantMessage,

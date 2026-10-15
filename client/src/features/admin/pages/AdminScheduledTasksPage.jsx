@@ -1,3 +1,4 @@
+import { useOptionalAuth } from '../../../shared/contexts/authContextValue';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -45,6 +46,8 @@ const STATUS_FILTERS = ['', 'active', 'paused', 'completed', 'disabled'];
  */
 export default function AdminScheduledTasksPage() {
   const { t, i18n } = useTranslation();
+  const auth = useOptionalAuth();
+  const viewer = { userId: auth?.user?.id, isAdmin: true };
   const language = i18n.language;
   const [data, setData] = useState(null);
   const [filter, setFilter] = useState('');
@@ -545,7 +548,7 @@ export default function AdminScheduledTasksPage() {
                       {formatDuration(run.durationMs) || '—'}
                     </td>
                     <td className="py-2 text-gray-600 dark:text-gray-400">
-                      {reasonText(t, { ...run.reason, missedSlots: run.missedSlots })}
+                      {reasonText(t, { ...run.reason, missedSlots: run.missedSlots }, viewer)}
                     </td>
                   </tr>
                 ))}

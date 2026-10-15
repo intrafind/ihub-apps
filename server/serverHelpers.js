@@ -1,4 +1,5 @@
 import PromptService from './services/PromptService.js';
+import { abortCause, abortReason } from './services/chat/abortCause.js';
 import { clients, activeRequests, isChatDurable } from './sse.js';
 import ErrorHandler from './utils/ErrorHandler.js';
 import ApiKeyVerifier from './utils/ApiKeyVerifier.js';
@@ -72,7 +73,9 @@ export function cleanupInactiveClients() {
       if (!activeRequests.has(chatId)) return;
       try {
         const controller = activeRequests.get(chatId);
-        controller.abort();
+        controller.abort(
+          abortReason(abortCause('client_evicted', { via: 'inactive SSE client sweep' }))
+        );
         activeRequests.delete(chatId);
       } catch (error) {
         logger.error('Error aborting request for chat', {

@@ -66,7 +66,8 @@ jest.mock('../../../client/src/shared/hooks/useEventSource', () => ({
   __esModule: true,
   default: () => ({
     initEventSource: jest.fn(url => mockStreams.push(url)),
-    cleanupEventSource: jest.fn()
+    detachEventSource: jest.fn(),
+    stopEventSource: jest.fn()
   })
 }));
 

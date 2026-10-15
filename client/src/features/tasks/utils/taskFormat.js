@@ -6,6 +6,7 @@
  * converts between the form's flat state and the schedule object, and formats
  * times for display.
  */
+import { abortCauseText } from '../../../shared/utils/abortCause';
 
 export const SCHEDULE_TYPES = [
   'manual',
@@ -289,11 +290,18 @@ const TRANSLATED_REASONS = new Set([
  * A task's or run's reason, in the viewer's language where the code allows.
  *
  * @param {Function} t - i18next `t`.
- * @param {{code?: string, message?: string, missedSlots?: number}|null} reason
+ * @param {{code?: string, message?: string, missedSlots?: number, cause?: Object}|null} reason
+ * @param {{userId?: string, isAdmin?: boolean}} [viewer] - Who is reading, for who stopped a run.
  * @returns {string}
  */
-export function reasonText(t, reason) {
+export function reasonText(t, reason, viewer) {
   if (!reason) return '';
+  // A stopped run says what stopped it and who, not just that it was stopped.
+  const caused = reason.cause ? abortCauseText(t, reason.cause, viewer) : '';
+  return caused || translatedReason(t, reason);
+}
+
+function translatedReason(t, reason) {
   const fallback = reason.message || '';
   if (!TRANSLATED_REASONS.has(reason.code)) return fallback;
   return t(`scheduledTasks.reasons.${reason.code}`, {

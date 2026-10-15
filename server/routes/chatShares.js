@@ -47,7 +47,11 @@ import { authorizeChat } from '../services/chat/chatAccess.js';
 import { getChatRepository } from '../services/chat/ChatRepository.js';
 import { getArtifactRepository } from '../services/artifacts/ArtifactRepository.js';
 import { isChatPersistenceConfigured } from '../services/chat/chatPersistence.js';
-import { getChatShareRepository, isShareId } from '../services/chat/ChatShareRepository.js';
+import {
+  getChatShareRepository,
+  isShareId,
+  withPublicCause
+} from '../services/chat/ChatShareRepository.js';
 import { authorizeShareView } from '../services/chat/chatShareAccess.js';
 import {
   CHAT_SHARING_FEATURE,
@@ -248,7 +252,9 @@ function viewerMessages(messages) {
     // viewer is not authorized for anyway.
     // eslint-disable-next-line no-unused-vars
     const { usage, clientMessageId, runId, ...rest } = message;
-    return rest;
+    // Snapshots taken before causes were cut down to the public part carry
+    // the actor and the worker; the viewer gets the explanation only.
+    return rest.error?.cause ? { ...rest, error: withPublicCause(rest.error) } : rest;
   });
 }
 

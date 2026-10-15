@@ -126,8 +126,10 @@ export function transformStoredMessage(msg) {
     // cancelled message, not a failed one. `error` is only ever read as a
     // strict boolean (`ChatMessage.jsx`), so the stored `{ code, message }`
     // must not be handed through as-is.
-    if (msg.error.code === 'ABORTED') message.cancelled = true;
-    else message.error = true;
+    if (msg.error.code === 'ABORTED') {
+      message.cancelled = true;
+      if (msg.error.cause) message.abortCause = msg.error.cause;
+    } else message.error = true;
     // The reason survives separately. A failed turn usually stored no content
     // at all, so without this the bubble has nothing to show and reads as an
     // answer the model never gave.

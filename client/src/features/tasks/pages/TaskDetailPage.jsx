@@ -1,3 +1,4 @@
+import { useOptionalAuth } from '../../../shared/contexts/authContextValue';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -46,6 +47,8 @@ const card =
  */
 export default function TaskDetailPage() {
   const { t, i18n } = useTranslation();
+  const auth = useOptionalAuth();
+  const viewer = { userId: auth?.user?.id, isAdmin: auth?.user?.isAdmin };
   const language = i18n.language;
   const { taskId } = useParams();
   const navigate = useNavigate();
@@ -441,7 +444,11 @@ export default function TaskDetailPage() {
                                 run.status === 'failed' ? 'text-red-600 dark:text-red-400' : ''
                               }
                             >
-                              {reasonText(t, { ...run.reason, missedSlots: run.missedSlots })}
+                              {reasonText(
+                                t,
+                                { ...run.reason, missedSlots: run.missedSlots },
+                                viewer
+                              )}
                             </p>
                           )}
                           {run.reason?.connectUrl && (

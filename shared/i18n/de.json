@@ -491,7 +491,8 @@
     "reconnected": "Verbindung wiederhergestellt"
   },
   "message": {
-    "generationCancelled": " [Generierung abgebrochen]"
+    "generationCancelled": " [Generierung abgebrochen]",
+    "generationCancelledBy": "Generierung abgebrochen: {{cause}}"
   },
   "languages": {
     "en": "Englisch",
@@ -5439,6 +5440,24 @@
       "adding": "Wird hinzugefügt…",
       "addToMine": "Zu meinen Skills hinzufügen"
     }
+  },
+  "abortCauses": {
+    "user_stop": "Im Chat gestoppt",
+    "run_stop": "Über die Run-API gestoppt",
+    "task_run_cancelled": "Vom Besitzer abgebrochen",
+    "task_deleted": "Die Aufgabe wurde gelöscht",
+    "task_disabled": "Von einem Administrator deaktiviert",
+    "chat_deleted": "Der Chat wurde gelöscht",
+    "user_deleted": "Der Benutzer wurde gelöscht",
+    "superseded": "Durch eine neuere Nachricht im selben Chat ersetzt",
+    "client_disconnected": "Der Browser hat die Verbindung getrennt",
+    "client_evicted": "Die Verbindung des Browsers ist abgelaufen",
+    "api_client_closed": "Der API-Client hat die Verbindung geschlossen",
+    "lease_lost": "Der Lauf hat seine Ausführungssperre an einen anderen Worker verloren",
+    "unknown": "Gestoppt (die Ursache wurde nicht erfasst)",
+    "byYou": "Sie",
+    "byAdmin": "ein Administrator",
+    "byUser": "Benutzer {{id}}"
   },
   "scheduledTasks": {
     "allowedActions": "Ohne Rückfrage erlaubt",

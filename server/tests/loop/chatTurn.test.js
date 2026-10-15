@@ -1441,6 +1441,11 @@ test('a new turn on the same chatId supersedes the previous in-flight controller
 
   assertWellFormed(frames, { runId: summary.runId });
   assert.equal(stale.signal.aborted, true, 'previous turn aborted');
+  assert.equal(
+    stale.signal.reason?.abortCause?.kind,
+    'superseded',
+    'the superseded turn is told why it was stopped'
+  );
   assert.equal(summary.content, 'fresh');
   assert.equal(summary.finishReason, 'stop');
   assert.equal(frame(frames, RUN_ENDED).data.status, 'completed');
