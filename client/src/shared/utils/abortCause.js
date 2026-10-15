@@ -14,10 +14,15 @@
  * — an owner's id may be a pseudonym the browser cannot match to its own.
  */
 function actorPhrase(t, actor, viewer) {
-  if (actor?.type !== 'user' && actor?.type !== 'admin') return '';
+  if (!PERSON_TYPES.has(actor?.type)) return '';
   if (isViewer(actor, viewer)) return t('abortCauses.byYou', 'you');
-  const named = nameForAdmin(t, actor, viewer);
-  if (named) return named;
+  return nameForAdmin(t, actor, viewer) || genericPhrase(t, actor);
+}
+
+const PERSON_TYPES = new Set(['user', 'admin']);
+
+/** What anyone may be told: an administrator acted; a user's identity stays private. */
+function genericPhrase(t, actor) {
   return actor.type === 'admin' ? t('abortCauses.byAdmin', 'an administrator') : '';
 }
 
