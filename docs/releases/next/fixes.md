@@ -93,3 +93,4 @@ the configuration inside the folder, so it works with the standard volume setup.
 - A failed import says why — missing write permission, not enough disk space, or a folder inside
   `contents` mounted separately — instead of "Internal server error".
 - `.backups` is never included in an export and never restored from an archive.
+- Only one import runs at a time; a second one started meanwhile is refused and can be retried.

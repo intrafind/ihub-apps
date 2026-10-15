@@ -10,6 +10,7 @@ import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
 import { resolveAndValidatePath } from '../../utils/pathSecurity.js';
 import logger from '../../utils/logger.js';
+import { tryCreateExclusive, readJsonMarker, removeIfExists } from '../../utils/fileLock.js';
 import {
   sendInternalError,
   sendBadRequest,
@@ -53,6 +54,15 @@ const IMPORT_BACKUPS_TO_KEEP = 3;
 
 /** A staging folder this old is left over from an import that crashed. */
 const STALE_STAGING_AGE_MS = 60 * 60 * 1000;
+
+/** Lock file in {@link IMPORT_BACKUPS_DIR} held while an import runs. */
+const IMPORT_LOCK_FILE = '.import.lock';
+
+/**
+ * An import lock this old is left over from an import that died. Imports take
+ * seconds; the margin covers a very large archive on a slow volume.
+ */
+const STALE_IMPORT_LOCK_MS = 30 * 60 * 1000;
 
 /**
  * Remove the private directory an import upload was stored in.
@@ -677,9 +687,58 @@ function findExpiredBackups(entries) {
  */
 function sendImportError(res, error) {
   if (error.adminMessage) {
-    return sendErrorResponse(res, 500, error.adminMessage);
+    return sendErrorResponse(res, error.status ?? 500, error.adminMessage);
   }
   return sendInternalError(res, error, 'import configuration');
+}
+
+/**
+ * Take the import lock, so only one import at a time works on the contents
+ * directory. Two imports swapping entries at once would interleave their moves
+ * and could split the replaced configuration (and its encryption key) across
+ * two backups, neither of them complete. The lock is a file every cluster
+ * worker sees, created exclusively; one older than STALE_IMPORT_LOCK_MS is
+ * taken over.
+ *
+ * @param {string} contentsPath - Live contents directory.
+ * @returns {Promise<string>} Path of the lock file, to pass to releaseImportLock.
+ * @throws {Error} With status 409 and `adminMessage` while another import runs.
+ */
+export async function acquireImportLock(contentsPath) {
+  const lockPath = path.join(contentsPath, IMPORT_BACKUPS_DIR, IMPORT_LOCK_FILE);
+  const owner = JSON.stringify({ pid: process.pid, at: new Date().toISOString() });
+  if (await tryCreateExclusive(lockPath, owner)) {
+    return lockPath;
+  }
+  const held = await readJsonMarker(lockPath);
+  if (!held || Date.now() - held.mtimeMs > STALE_IMPORT_LOCK_MS) {
+    logger.warn('Taking over a stale import lock', { component: 'AdminBackup' });
+    await removeIfExists(lockPath);
+    if (await tryCreateExclusive(lockPath, owner)) {
+      return lockPath;
+    }
+  }
+  const error = new Error('Another configuration import is in progress');
+  error.status = 409;
+  error.adminMessage =
+    'Another configuration import is in progress. Try again once it has finished.';
+  throw error;
+}
+
+/**
+ * Release a lock taken by acquireImportLock; does nothing without one.
+ *
+ * @param {string|null} lockPath - What acquireImportLock returned, if anything.
+ */
+export async function releaseImportLock(lockPath) {
+  if (!lockPath) {
+    return;
+  }
+  try {
+    await removeIfExists(lockPath);
+  } catch (error) {
+    logger.warn('Could not release the import lock', { component: 'AdminBackup', error });
+  }
 }
 
 /**
@@ -689,6 +748,7 @@ export async function importConfig(req, res) {
   const contentsPath = getContentsPath();
   let tempZipPath = null;
   let tempExtractPath = null;
+  let importLock = null;
 
   try {
     logger.info('Starting configuration import', { component: 'AdminBackup' });
@@ -697,6 +757,10 @@ export async function importConfig(req, res) {
     if (!req.file) {
       return sendBadRequest(res, 'No ZIP file uploaded');
     }
+
+    // Held until the response is sent: staging, swap, pruning, migrations and
+    // the cache reload all work on the contents directory.
+    importLock = await acquireImportLock(contentsPath);
 
     tempZipPath = req.file.path;
     tempExtractPath = path.join(path.dirname(tempZipPath), `extract_${Date.now()}`);
@@ -815,6 +879,8 @@ export async function importConfig(req, res) {
     logger.error('Import error', { component: 'AdminBackup', error });
     sendImportError(res, error);
   } finally {
+    await releaseImportLock(importLock);
+
     // Clean up temporary files
     try {
       if (tempZipPath) {

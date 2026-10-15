@@ -8,6 +8,8 @@ import { tmpdir } from 'os';
 import {
   stageAndSwapContents,
   pruneImportBackups,
+  acquireImportLock,
+  releaseImportLock,
   IMPORT_BACKUPS_DIR
 } from '../routes/admin/backup.js';
 
@@ -121,13 +123,18 @@ describe('stageAndSwapContents', () => {
     assert.deepStrictEqual(await fs.readdir(join(contentsPath, 'apps')), ['new.json']);
   });
 
-  it('keeps the backups of earlier imports in place', async () => {
+  it('keeps the backups of earlier imports and the import lock in place', async () => {
     await fs.mkdir(join(backupsRoot, 'earlier'), { recursive: true });
     await fs.writeFile(join(backupsRoot, 'earlier', 'kept.json'), '{}');
+    await fs.writeFile(join(backupsRoot, '.import.lock'), '{}');
 
     await swap();
 
-    assert.deepStrictEqual((await fs.readdir(backupsRoot)).sort(), [BACKUP_NAME, 'earlier']);
+    assert.deepStrictEqual((await fs.readdir(backupsRoot)).sort(), [
+      '.import.lock',
+      BACKUP_NAME,
+      'earlier'
+    ]);
     assert.deepStrictEqual(await fs.readdir(join(backupsRoot, 'earlier')), ['kept.json']);
   });
 
@@ -311,5 +318,62 @@ describe('pruneImportBackups', () => {
     await fs.rm(backupsRoot, { recursive: true });
     await pruneImportBackups(contentsPath);
     await assert.rejects(() => fs.access(backupsRoot));
+  });
+});
+
+describe('import lock', () => {
+  let contentsPath = '';
+  let lockPath = '';
+
+  beforeEach(async () => {
+    contentsPath = join(
+      tmpdir(),
+      `backup-lock-test-${Date.now()}-${Math.random().toString(36).slice(2)}`
+    );
+    lockPath = join(contentsPath, IMPORT_BACKUPS_DIR, '.import.lock');
+    await fs.mkdir(contentsPath, { recursive: true });
+  });
+
+  afterEach(async () => {
+    await fs.rm(contentsPath, { recursive: true, force: true });
+  });
+
+  it('refuses a second import while one holds the lock, and frees it on release', async () => {
+    const held = await acquireImportLock(contentsPath);
+    assert.strictEqual(held, lockPath);
+
+    const busy = await acquireImportLock(contentsPath).then(
+      () => assert.fail('expected the second import to be refused'),
+      e => e
+    );
+    assert.strictEqual(busy.status, 409);
+    assert.match(busy.adminMessage, /Another configuration import is in progress/);
+
+    await releaseImportLock(held);
+    await assert.rejects(() => fs.access(lockPath));
+    assert.strictEqual(await acquireImportLock(contentsPath), lockPath);
+  });
+
+  it('lets exactly one of two simultaneous imports through', async () => {
+    const results = await Promise.allSettled([
+      acquireImportLock(contentsPath),
+      acquireImportLock(contentsPath)
+    ]);
+
+    assert.deepStrictEqual(results.map(result => result.status).sort(), ['fulfilled', 'rejected']);
+  });
+
+  it('takes over a lock left behind by an import that died', async () => {
+    await fs.mkdir(join(contentsPath, IMPORT_BACKUPS_DIR), { recursive: true });
+    await fs.writeFile(lockPath, JSON.stringify({ pid: 1 }));
+    const anHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+    await fs.utimes(lockPath, anHourAgo, anHourAgo);
+
+    assert.strictEqual(await acquireImportLock(contentsPath), lockPath);
+  });
+
+  it('does nothing when released without a lock', async () => {
+    await releaseImportLock(null);
+    await assert.rejects(() => fs.access(lockPath));
   });
 });
