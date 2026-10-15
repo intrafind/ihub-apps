@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import WorkflowEditorPage from '../../../client/src/features/admin/pages/WorkflowEditorPage';
@@ -62,7 +62,7 @@ describe('visual editor: link to the chat integration settings', () => {
   it('has no link while a new workflow is being created', async () => {
     renderEditorAt('/admin/workflows/new/edit');
 
-    await waitFor(() => expect(screen.getByTestId('canvas')).toBeInTheDocument());
+    expect(await screen.findByTestId('canvas')).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Chat integration' })).not.toBeInTheDocument();
   });
 });

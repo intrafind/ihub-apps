@@ -223,7 +223,8 @@ export function withCleanToolDescription(workflow) {
   // with an empty one, so it is removed as well.
   if (kept.length > 0 && kept.length === entries.length) return workflow;
 
-  const { toolDescription: _dropped, ...chatIntegration } = workflow.chatIntegration;
+  const chatIntegration = { ...workflow.chatIntegration };
+  delete chatIntegration.toolDescription;
   return {
     ...workflow,
     chatIntegration:
