@@ -281,9 +281,19 @@ the step as suggestions. The step's card says **No output set** while it has non
 | A state path              | `$.data.finalReport`    | the value at that path                           |
 | A single `{{variable}}`   | `{{findings}}`          | the variable, as it is (same as the first row)   |
 | A text with variables     | `Done: {{count}} items` | the text, built from the variables               |
+| An object of those        | `{ "topic": "topic", "report": "finalReport" }` | a JSON object with those fields |
 
 - **JSON stays JSON.** A variable, a path or a single `{{variable}}` keeps its type: an object stays
   an object and a list stays a list. Only a text with more in it than one variable is text.
+- **An object gives a JSON object.** Each field is a variable, a path, a state path or a text with
+  variables, resolved like a text output, and may itself be an object. A field whose variable was
+  never set is left out, as a listed variable always was. In the visual editor choose **Several
+  fields** under the Output and give each field a name and a value.
+
+  ```json
+  { "id": "end", "type": "end", "config": { "output": { "topic": "topic", "report": "finalReport" } } }
+  ```
+
 - **It is required.** A workflow with an end step without an output is refused when it is saved,
   and a run that reaches such a step fails with a message that names the step.
 - A variable that was never set (a branch that did not run) gives an empty output, not an error.
@@ -315,8 +325,7 @@ The answer needs no setting here: it is the Output of the end step. The workflow
 a workflow that is assigned to apps but not available in chat, and about an end step without an
 output.
 
-`passthroughResult` is accepted by the schema but has no effect: a workflow called from chat always
-shows its answer as it is.
+A workflow called from chat always shows its answer as it is: the app's model does not rewrite it.
 
 The visual editor keeps the block as it is when it saves, but has no fields for it: the **Chat
 integration** link in its header opens the workflow page. Unsaved changes on the canvas are lost
@@ -340,20 +349,28 @@ fails the A2A task.
 ### Upgrading
 
 Migration V166 gives every end step of an existing workflow an `output` and removes
-`chatIntegration.primaryOutput`, which no longer exists. It takes the output the chat showed
-before: the `primaryOutput` of the workflow (translated through the `outputMapping` of an end step
-that has one), else the first of `finalReport`, `report`, `content`, `output`, `result`, `summary`,
-`text` and `message` that the end step passes on. For the workflows that ship with iHub the
-migration knows the answer of the few that name it differently (`answer`, `draft`).
+`chatIntegration.primaryOutput`, which no longer exists, and `chatIntegration.passthroughResult`,
+which no code ever read. For an end step without an `output` it takes, in this order:
 
-An end step whose answer none of that can tell, such as a custom workflow that passes on several
-variables and never named one, is listed in the server log and left without an output. The
+1. the `primaryOutput` of the workflow (translated through the `outputMapping` of an end step that
+   has one);
+2. the first of `finalReport`, `report`, `content`, `output`, `result`, `summary`, `text` and
+   `message` that the end step passes on. This is what the chat looked for before;
+3. for the workflows that ship with iHub, the answer the migration knows for the few that name it
+   differently (`answer`, `draft`);
+4. otherwise an object of what the end step passes on, one field per variable:
+   `{ "topic": "topic", "findings": "findings" }`. A workflow that passed on several variables and
+   named none of them as its answer used to give them all as one JSON object, and it still does.
+   The migration logs these end steps; name the single answer in the workflow editor if you want to.
+
+An end step that passes on nothing that can be named, or that maps a key to a literal instead of to
+a `$.` path, cannot be decided: it is listed in the server log and left without an output. The
 workflow keeps loading, a run that reaches that step fails with a message that names it, and it
 cannot be saved until you set the step's Output in the visual editor.
 
-What callers receive changes for workflows that had no `primaryOutput`: they used to get all
-outputs as one JSON object, and now get the answer. The other outputs stay in the workflow result
-as additional information.
+What callers receive changes in one way: for MCP and A2A, a JSON answer now arrives as JSON
+(`structuredContent`, a `data` part) next to the text, and the answer is the Output only, not the
+run around it.
 
 ## Schedule triggers
 

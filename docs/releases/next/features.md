@@ -12,6 +12,9 @@ variables or the run's metadata, travels next to the answer as additional inform
   variables that reach the step as suggestions. It takes a variable (`finalReport`), a path into
   one (`result.summary`), a state path (`$.data.nodeResults.compose.content`) or text with
   placeholders (`Rejected: {{topic}}`). A single placeholder keeps the type of the variable.
+- **Several fields make the answer a JSON object.** Choose **Several fields** under the Output and
+  give each field a name and a variable, path or text, for example `topic` → `topic` and `report` →
+  `finalReport`. A field whose variable was never set is left out.
 - **JSON stays JSON.** An answer that is an object or a list is not turned into text on the way
   out: the chat shows a JSON block, an MCP client receives it as structured content next to the
   text, and an A2A client receives it as a data part. The model that called the workflow as a tool
