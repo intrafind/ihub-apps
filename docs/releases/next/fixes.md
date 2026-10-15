@@ -10,3 +10,9 @@ run, replaced its connection, timed out or sent a follow-up — and that request
   the compare view's stop) does
 - Leaving or reloading a chat leaves a stored run going; a chat that is not stored still ends
   when its connection closes
+
+## Audio Attachments Reach vLLM Models That Support Audio
+
+Audio attached to a chat with a vLLM model that has **Supports Audio** enabled was silently
+dropped: the model only saw the text of the message. vLLM models now receive the audio the same
+way OpenAI models do. Models without the flag are unaffected.
