@@ -280,6 +280,10 @@ on the workflow page under **Admin → Workflows → a workflow → Chat integra
 `passthroughResult` is accepted by the schema but has no effect: a workflow called from chat always
 shows its answer as it is.
 
+The visual editor keeps the block as it is when it saves, but has no fields for it: the **Chat
+integration** link in its header opens the workflow page. Unsaved changes on the canvas are lost
+when following it, so save first.
+
 ### Which outputs `primaryOutput` can name
 
 The answer is looked up in the output of the end step, which the end step builds in this order:

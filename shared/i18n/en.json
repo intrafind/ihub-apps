@@ -4539,6 +4539,8 @@
       "autoLayout": "Auto Layout",
       "back": "Back",
       "boundaryEdgesRemoved": "Connections crossing the loop boundary were removed — reconnect inside or outside the loop.",
+      "chatIntegrationLink": "Chat integration",
+      "chatIntegrationLinkHint": "Availability in chat, the result shown there and its format are set on the workflow page. Unsaved changes on the canvas are lost.",
       "chatVisible": "Show progress in chat",
       "config": "Configuration",
       "configJson": "Config (JSON)",

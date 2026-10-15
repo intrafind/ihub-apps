@@ -4504,6 +4504,8 @@
       "autoLayout": "Auto-Layout",
       "back": "Zurück",
       "boundaryEdgesRemoved": "Verbindungen über die Schleifengrenze wurden entfernt — bitte innerhalb oder außerhalb der Schleife neu verbinden.",
+      "chatIntegrationLink": "Chat-Anbindung",
+      "chatIntegrationLinkHint": "Verfügbarkeit im Chat, das dort gezeigte Ergebnis und sein Format werden auf der Workflow-Seite festgelegt. Nicht gespeicherte Änderungen auf der Arbeitsfläche gehen verloren.",
       "chatVisible": "Fortschritt im Chat anzeigen",
       "config": "Konfiguration",
       "configJson": "Konfiguration (JSON)",

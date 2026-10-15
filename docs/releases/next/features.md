@@ -20,6 +20,8 @@ in the JSON.
   end step does not pass on, an end step whose format makes the selection ignored, an Automatic
   answer that would repeat the workflow's own input, and an answer that would be shown as JSON.
 - New workflows start with chat integration switched off, as before, now visible in their JSON.
+- The visual editor keeps the settings when it saves and links to the workflow page from its header
+  (a saved workflow only).
 
 ## Stopped Chats and Scheduled Runs Say Who Stopped Them
 

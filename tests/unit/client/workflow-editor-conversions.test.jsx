@@ -115,6 +115,20 @@ describe('flowToWorkflow round-trip', () => {
     const e1 = roundTripped.edges.find(e => e.id === 'e1');
     expect(e1.condition).toBeUndefined();
   });
+
+  it('keeps the chatIntegration block, which the canvas has no fields for', () => {
+    const chatIntegration = {
+      enabled: true,
+      primaryOutput: 'searchResults',
+      outputFormat: 'text',
+      passthroughResult: true,
+      toolDescription: { en: 'Searches', de: 'Sucht' }
+    };
+    const workflow = { ...containerWorkflow, chatIntegration };
+    const { nodes, edges } = workflowToFlow(workflow);
+
+    expect(flowToWorkflow(nodes, edges, workflow).chatIntegration).toEqual(chatIntegration);
+  });
 });
 
 describe('new loop and step options survive an editor round-trip', () => {
