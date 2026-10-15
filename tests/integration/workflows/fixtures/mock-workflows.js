@@ -35,6 +35,7 @@ export const simpleLinearWorkflow = {
       type: 'end',
       name: { en: 'End' },
       config: {
+        output: 'result',
         outputVariables: ['result']
       }
     }
@@ -91,6 +92,7 @@ export const decisionWorkflow = {
       type: 'end',
       name: { en: 'End' },
       config: {
+        output: 'result',
         outputVariables: ['result', 'value']
       }
     }
@@ -171,6 +173,7 @@ export const humanCheckpointWorkflow = {
       type: 'end',
       name: { en: 'End' },
       config: {
+        output: 'status',
         outputVariables: ['status', 'content']
       }
     }
@@ -233,6 +236,7 @@ export const simpleAgentWorkflow = {
       type: 'end',
       name: { en: 'End' },
       config: {
+        output: 'summary',
         outputVariables: ['summary']
       }
     }
@@ -288,6 +292,7 @@ export const toolCallingWorkflow = {
       type: 'end',
       name: { en: 'End' },
       config: {
+        output: 'searchResults',
         outputVariables: ['searchResults']
       }
     }
@@ -373,6 +378,7 @@ export const iterativeResearchWorkflow = {
       type: 'end',
       name: { en: 'End' },
       config: {
+        output: 'findings',
         outputVariables: ['findings', 'iteration', 'topic']
       }
     }
@@ -425,7 +431,7 @@ export const failingWorkflow = {
       id: 'end',
       type: 'end',
       name: { en: 'End' },
-      config: {}
+      config: { output: 'result' }
     }
   ],
   edges: [
@@ -485,6 +491,7 @@ export const multiTransformWorkflow = {
       type: 'end',
       name: { en: 'End' },
       config: {
+        output: 'counter',
         outputVariables: ['counter', 'itemCount', 'firstItem', 'processed']
       }
     }

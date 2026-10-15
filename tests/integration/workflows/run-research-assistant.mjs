@@ -229,6 +229,7 @@ async function testAgentSearcherWorkflow(engine) {
         type: 'end',
         name: { en: 'End' },
         config: {
+          output: 'finalReport',
           outputVariables: ['finalReport', 'searchResults', 'researchPlan']
         }
       }

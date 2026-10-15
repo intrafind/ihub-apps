@@ -39,6 +39,8 @@ import {
 import configCache from '../configCache.js';
 import { observeEmittedEnvelopes } from '../services/loop/RunStream.js';
 import workflowRunner from '../tools/workflowRunner.js';
+import { buildDefaultWorkflowForProfile } from '../agents/profile/profileWorkflowSerializer.js';
+import { SubWorkflowMaterializer } from '../services/workflow/SubWorkflowMaterializer.js';
 
 const executor = new EndNodeExecutor();
 
@@ -543,5 +545,73 @@ describe('a run through the chat runner', () => {
     assert.equal(result.output.output, '');
     assert.equal(result.outputText, '');
     assert.equal(streamed, '');
+  });
+});
+
+describe('workflows that are built by code end with an output as well', () => {
+  const PROFILES = {
+    simple: { id: 'p-simple' },
+    'drain only': { id: 'p-drain', dynamicTasks: { enabled: true } },
+    planner: { id: 'p-planner', planner: { enabled: true } },
+    'planner without synthesizer': {
+      id: 'p-planner-plain',
+      planner: { enabled: true },
+      synthesizer: { enabled: false }
+    },
+    'inbox worker': { id: 'p-inbox', inboxId: 'inbox-1' },
+    'inbox worker without synthesizer': {
+      id: 'p-inbox-plain',
+      inboxId: 'inbox-1',
+      synthesizer: { enabled: false }
+    }
+  };
+
+  for (const [shape, profile] of Object.entries(PROFILES)) {
+    it(`an agent profile (${shape}) has an end step with an output`, () => {
+      const { nodes } = buildDefaultWorkflowForProfile(profile);
+      const ends = nodes.filter(node => node.type === 'end');
+      assert.equal(ends.length, 1);
+      assert.equal(typeof ends[0].config?.output, 'string');
+      assert.notEqual(ends[0].config.output.trim(), '');
+    });
+  }
+
+  it('an agent profile ends with what its last step produced', () => {
+    const output = profile =>
+      buildDefaultWorkflowForProfile(profile).nodes.find(node => node.type === 'end').config.output;
+    assert.equal(output(PROFILES.simple), '$.data.nodeResults.agent.content');
+    assert.equal(output(PROFILES.planner), '_synthesizerOutput');
+    assert.equal(output(PROFILES['planner without synthesizer']), '_taskResults');
+    assert.equal(output(PROFILES['inbox worker']), '_synthesizerOutput');
+  });
+
+  it('a simple agent run answers with the output of its one node', async () => {
+    const { nodes } = buildDefaultWorkflowForProfile(PROFILES.simple);
+    const end = nodes.find(node => node.type === 'end');
+    const { output } = await endResult(
+      end.config,
+      {},
+      {
+        data: {
+          nodeResults: {
+            agent: { output: { content: 'The agent answer' }, content: 'The agent answer' }
+          }
+        }
+      }
+    );
+    assert.equal(output.output, 'The agent answer');
+  });
+
+  it('a plan that is carried out as a sub-workflow ends with an output', () => {
+    const plan = {
+      tasks: [{ id: 't1', title: 'Find it', description: 'Look it up' }]
+    };
+    const taskTemplate = { system: { en: 'You are an agent.' } };
+    const outputOf = parentConfig =>
+      SubWorkflowMaterializer.materialize(plan, { taskTemplate, ...parentConfig }, 0).nodes.find(
+        node => node.type === 'end'
+      ).config.output;
+    assert.equal(outputOf({ synthesize: true }), 'synthesized_result');
+    assert.equal(outputOf({ synthesize: false }), '_taskResults');
   });
 });

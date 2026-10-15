@@ -43,6 +43,7 @@ const toolCallingWorkflow = {
       type: 'end',
       name: { en: 'End' },
       config: {
+        output: 'searchResults',
         outputVariables: ['searchResults']
       }
     }

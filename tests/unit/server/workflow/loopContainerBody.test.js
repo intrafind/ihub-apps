@@ -77,7 +77,13 @@ function containerContext(children, edges = []) {
           position: { x: 100, y: 0 }
         },
         ...children,
-        { id: 'end', type: 'end', name: { en: 'End' }, position: { x: 200, y: 0 } }
+        {
+          id: 'end',
+          type: 'end',
+          name: { en: 'End' },
+          position: { x: 200, y: 0 },
+          config: { output: 'result' }
+        }
       ],
       edges
     }
@@ -245,7 +251,7 @@ describe('DAGScheduler with container children', () => {
         { id: 'start', type: 'start' },
         { id: 'the-loop', type: 'loop' },
         { id: 'body-entry', type: 'transform', parentId: 'the-loop' },
-        { id: 'end', type: 'end' }
+        { id: 'end', type: 'end', config: { output: 'result' } }
       ],
       edges: [
         { id: 'e1', source: 'start', target: 'the-loop' },
@@ -281,7 +287,13 @@ describe('workflowConfigSchema container validation', () => {
         parentId: 'the-loop',
         config: {}
       },
-      { id: 'end', type: 'end', name: { en: 'End' }, position: { x: 200, y: 0 } }
+      {
+        id: 'end',
+        type: 'end',
+        name: { en: 'End' },
+        position: { x: 200, y: 0 },
+        config: { output: 'result' }
+      }
     ],
     edges: [
       { id: 'e1', source: 'start', target: 'the-loop' },
