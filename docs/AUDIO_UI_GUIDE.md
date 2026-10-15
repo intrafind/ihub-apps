@@ -38,7 +38,7 @@ Upload Configuration
 
 **Features:**
 - Toggle to enable/disable audio upload
-- Configurable max file size (1-100MB, default 20MB)
+- Configurable max file size (1-2000MB, default 20MB). Audio files are held to this limit, not to the larger limits of other upload types
 - Individual checkboxes for each audio format
 - Follows same UI pattern as image/file upload
 - Purple/indigo theme matching the admin interface
@@ -171,6 +171,8 @@ When multiple files including audio are selected:
 │ Maximum size is 20MB.               │
 └─────────────────────────────────────┘
 ```
+
+The message names the limit of the file's own type (here the audio limit), not the largest limit of the app.
 
 ### Audio Upload Disabled for Model
 

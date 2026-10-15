@@ -6,14 +6,17 @@ iHub Apps supports a unified upload system that enables users to attach files, i
 
 ## Upload Types
 
-Four upload sub-types are available, each independently enabled:
+Five upload sub-types are available, each independently enabled:
 
 | Type | Description | Default size limit |
 |------|-------------|--------------------|
 | `fileUpload` | Text documents, PDFs, Office files, email files | 5 MB |
 | `imageUpload` | JPEG, PNG, GIF, WebP, TIFF images | 10 MB |
 | `audioUpload` | MP3, WAV, FLAC, OGG, M4A/MP4 audio | 20 MB |
+| `videoUpload` | MP4, MOV, WebM video; its audio track is extracted in the browser | 50 MB (up to 50 GB) |
 | `cloudStorageUpload` | Google Drive, OneDrive, Nextcloud | — |
+
+Each type has its own size limit, and a file is held to the limit of its own type (see [Size Limits](#size-limits)).
 
 ## Configuration
 
@@ -79,10 +82,21 @@ TIFF images (`image/tiff`, `image/tif`) are supported when added to `supportedFo
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `enabled` | boolean | `false` | Enable audio attachment |
-| `maxFileSizeMB` | number (1–100) | `20` | Maximum file size in megabytes |
+| `maxFileSizeMB` | number (1–2000) | `20` | Maximum file size in megabytes |
 | `supportedFormats` | string[] | `['audio/mpeg', 'audio/wav', 'audio/mp3', 'audio/flac', 'audio/ogg', 'audio/mp4']` | Must match `audio/*` |
 
 The system can also extract the audio track from video files using the Web Audio API, as a 16 kHz mono WAV (see [Audio Extraction](audio-extraction.md)).
+
+### `videoUpload` Options
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `enabled` | boolean | `false` | Enable video attachment |
+| `extractAudio` | boolean | `true` | Extract the audio track in the browser (16 kHz mono WAV) instead of sending the video |
+| `maxFileSizeMB` | number (1–51200) | `50` | Maximum file size in megabytes, up to 50 GB |
+| `supportedFormats` | string[] | `['video/mp4', 'video/webm', 'video/quicktime']` | Must match `video/*` |
+
+The video itself never leaves the browser when `extractAudio` is on. An **MP4 or MOV can be up to 50 GB**: only its index and its audio are read, not the picture. Other containers (WebM, MKV, ...) and videos sent as they are (`extractAudio: false`) work up to about 2 GB, which is all a browser can read into memory. See [Audio Extraction](audio-extraction.md#large-videos-mp4-and-mov-up-to-50-gb).
 
 > **Note:** Audio upload requires a model that supports audio input. OpenAI (GPT-4o Audio models) and Google Gemini support audio; Anthropic Claude does not.
 
@@ -345,13 +359,16 @@ All file processing happens **client-side** before content is sent to the server
 
 ### Size Limits
 
-| Type | Default | Configurable range | Server ceiling |
-|------|---------|--------------------|----------------|
-| Files | 5 MB | 1–100 MB | 50 MB |
-| Images | 10 MB | 1–100 MB | 50 MB |
-| Audio | 20 MB | 1–100 MB | 50 MB |
+| Type | Default | Configurable range | What else limits it |
+|------|---------|--------------------|---------------------|
+| Files | 5 MB | 1–100 MB | Documents are read in the browser; the text is sent, not the file |
+| Images | 10 MB | 1–100 MB | The image is sent in the request: 50 MB (see below) |
+| Audio | 20 MB | 1–2000 MB | The audio is sent in the request (50 MB, see below) unless it is transcribed in the browser; a data URL of more than about 400 MB cannot be built |
+| Video | 50 MB | 1–51200 MB (50 GB) | MP4/MOV with extracted audio: nothing but the limit. Other containers, and videos sent as they are: about 2 GB |
 
-The server-wide request body limit is set by `requestBodyLimitMB` in `platform.json` (default: 50 MB). Per-type limits must stay within this ceiling.
+**Each file is held to the limit of its own type.** A PDF is refused above the `fileUpload` limit and a photo above the `imageUpload` limit, even when the video limit is 50 GB; the message names the limit that applied ("File too large. Maximum size is 5MB."). In front of that, the uploader lets a file in only up to the largest of the limits, and names that one.
+
+**The request body.** What is sent in a chat request must fit `requestBodyLimitMB` in `platform.json` (default: 50 MB): images, audio and videos sent as they are, and extracted audio sent to a multimodal model, all as base64. That does not limit the video itself, which is never uploaded, nor audio that an app [transcribes](voice-transcription.md) in the browser (only the text is sent). Raise the limit of a type beyond that only where it does not apply.
 
 ## Example Configurations
 

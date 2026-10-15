@@ -164,7 +164,7 @@ function TranscriptionSection({
                     type="number"
                     min="1"
                     max="7200"
-                    value={app.transcription?.maxDurationSeconds || 900}
+                    value={app.transcription?.maxDurationSeconds || 3600}
                     onChange={e =>
                       handleTranscriptionChange({
                         maxDurationSeconds: parseNumberOrUndefined(e.target.value, Number.parseInt)

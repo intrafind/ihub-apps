@@ -92,9 +92,13 @@ const UPLOAD_TYPE_CONFIGS = {
     categoryType: 'video',
     enableLabel: ['admin.apps.edit.enableVideoUpload', 'Enable Video Upload'],
     maxSizeLabel: ['admin.apps.edit.maxVideoSize', 'Max Video File Size (MB)'],
+    maxSizeHelp: [
+      'admin.apps.edit.maxVideoSizeHelp',
+      'Up to 51200 MB (50 GB). With audio extraction, an MP4 or MOV can be any size: only its audio is read. Other formats (WebM, MKV, ...) and videos sent as they are work up to 2 GB. Each file type has its own limit.'
+    ],
     formatsLabel: ['admin.apps.edit.supportedVideoFormats', 'Supported Video Formats'],
     defaultMaxFileSizeMB: 50,
-    maxFileSizeUpperBound: 2000,
+    maxFileSizeUpperBound: 51200,
     defaultFormats: ['video/mp4', 'video/webm', 'video/quicktime'],
     extraToggle: {
       field: 'extractAudio',
@@ -147,6 +151,9 @@ function UploadTypeCard({ app, onChange, uploadKey, t, parseNumberOrUndefined })
               }
               className="mt-1 block w-20 rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 text-xs"
             />
+            {config.maxSizeHelp && (
+              <p className="mt-1 text-xs text-gray-500">{t(...config.maxSizeHelp)}</p>
+            )}
           </div>
           {config.selects?.map(select => (
             <div key={select.field}>

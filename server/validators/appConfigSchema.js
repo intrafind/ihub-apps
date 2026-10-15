@@ -202,7 +202,10 @@ const uploadSchema = z
       .object({
         enabled: z.boolean().optional().prefault(false),
         extractAudio: z.boolean().optional().prefault(true),
-        maxFileSizeMB: z.number().int().min(1).max(2000).optional().prefault(50),
+        // 50 GB: the browser reads only the index and the audio of an MP4/MOV (see
+        // client/src/features/upload/utils/mp4AudioExtraction.js), so the size of
+        // the video does not matter. Other containers stop at ~2 GB.
+        maxFileSizeMB: z.number().int().min(1).max(51200).optional().prefault(50),
         supportedFormats: z
           .array(z.string().regex(/^video\//))
           .optional()
@@ -281,8 +284,10 @@ const transcriptionSchema = z
       .prefault({}),
     // Show the transcript growing in the user's message while it is produced.
     streaming: z.boolean().optional().prefault(true),
-    // Client-enforced cap on decoded audio / recording length (seconds).
-    maxDurationSeconds: z.number().int().min(1).max(7200).optional().prefault(900)
+    // Client-enforced cap on decoded audio / recording length (seconds). One hour
+    // by default: a 30-minute video transcribes out of the box. Apps that set
+    // their own value keep it.
+    maxDurationSeconds: z.number().int().min(1).max(7200).optional().prefault(3600)
   })
   .optional();
 

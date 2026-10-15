@@ -118,12 +118,12 @@ const DEFAULT_MAX_FRAME_BYTES = 256 * 1024;
 const MAX_PENDING_BYTES = 1024 * 1024;
 // Batch providers have no upstream socket to stream into, so the whole
 // recording is held in memory until `stop`. Two caps bound that: one per
-// connection (≈17 min of 16 kHz PCM16) and one across the process, so the
-// per-user/global connection caps can't be combined into an OOM. Both are
-// overridable via platform.speech.realtime.{maxBufferedAudioBytes,
-// maxBufferedAudioBytesTotal}.
-const DEFAULT_MAX_BATCH_BYTES = 32 * 1024 * 1024;
-const DEFAULT_MAX_BATCH_BYTES_TOTAL = 256 * 1024 * 1024;
+// connection (≈70 min of 16 kHz PCM16, which holds the 60 minutes an app
+// transcribes by default) and one across the process, so the per-user/global
+// connection caps can't be combined into an OOM. Both are overridable via
+// platform.speech.realtime.{maxBufferedAudioBytes, maxBufferedAudioBytesTotal}.
+const DEFAULT_MAX_BATCH_BYTES = 128 * 1024 * 1024;
+const DEFAULT_MAX_BATCH_BYTES_TOTAL = 512 * 1024 * 1024;
 
 // Process-wide accounting for audio buffered by batch-mode connections.
 let batchBytesInFlight = 0;

@@ -585,6 +585,58 @@ const createDecodingContext = () => {
 };
 
 /**
+ * The most a browser reads into one ArrayBuffer. A 1.9 GB file works, a 3 GB one
+ * fails with NotReadableError, `File.slice()` works at any size (measured in
+ * Chromium). Whatever has to be read whole, a video that is sent as it is or
+ * decoded by the browser as it is, stays below this.
+ */
+export const WHOLE_FILE_READ_LIMIT_BYTES = Math.floor(1.9 * 1024 * 1024 * 1024);
+
+// Errors of the extraction the caller shows as they are; any other becomes
+// `video-audio-extraction-error`
+const SPECIFIC_EXTRACTION_ERRORS = [
+  'audio-decode-error',
+  'video-large-audio-unsupported',
+  'video-unsupported-large-container'
+];
+
+/**
+ * The audio of an MP4, MOV or M4A file, read with `File.slice()` and decoded:
+ * an AudioBuffer for the resample, whatever the size of the file (see
+ * `mp4AudioExtraction.js`: only the index and the audio are read). Null where
+ * the whole-file path takes over: the file is not an MP4-family one, or this
+ * could not read it (a codec or layout it does not handle, a damaged index, a
+ * browser that cannot decode the AAC) and the file is small enough for that
+ * path. A large one has nothing to fall back on and fails with
+ * `video-large-audio-unsupported`.
+ */
+const decodeMp4Streaming = async (file, audioContext, { signal, report }) => {
+  try {
+    const mp4 = await import('./mp4AudioExtraction');
+    if (!(await mp4.isMp4Container(file, signal))) return null;
+
+    const audio = await mp4.readMp4Audio(file, {
+      signal,
+      onProgress: percent => report('read', percent),
+      createPcmBuffer: (length, sampleRate) => audioContext.createBuffer(1, length, sampleRate)
+    });
+    if (audio.kind === 'pcm') {
+      // Nothing to decode: the samples were converted as they were read
+      report('decode', 100);
+      return audio.buffer;
+    }
+    report('decode');
+    const frames = await readFileAsArrayBuffer(audio.blob, { signal });
+    return await raceAbort(audioContext.decodeAudioData(frames), signal);
+  } catch (error) {
+    if (isAbortError(error)) throw error;
+    console.warn('Could not extract the audio by reading the file in parts:', error);
+    if (file.size > WHOLE_FILE_READ_LIMIT_BYTES) throw new Error('video-large-audio-unsupported');
+    return null;
+  }
+};
+
+/**
  * Extract the audio track of a video file as a 16 kHz mono WAV using the Web
  * Audio API.
  *
@@ -596,6 +648,12 @@ const createDecodingContext = () => {
  * then outgrows the engine's maximum string length for videos beyond ~35
  * minutes, where `FileReader` hands back an empty string without an error:
  * the attachment looks fine and only fails once it is sent.
+ *
+ * Videos of any size work as MP4 or MOV: only their index and audio are read,
+ * with `File.slice()` (see `decodeMp4Streaming`). Other containers (WebM, MKV,
+ * AVI, ...) are decoded by the browser from the whole file, up to
+ * `WHOLE_FILE_READ_LIMIT_BYTES`; above it they fail with
+ * `video-unsupported-large-container`.
  *
  * A long video takes seconds to minutes, so the extraction reports its
  * progress and can be stopped, and it never holds the page: reading, decoding
@@ -638,21 +696,29 @@ export const extractAudioFromVideo = async (file, { signal, onProgress } = {}) =
     audioContext = createDecodingContext();
 
     report('read', 0);
-    const arrayBuffer = await readFileAsArrayBuffer(file, {
-      signal,
-      onProgress: percent => report('read', percent)
-    });
+    // Where the browser cannot read the video whole (above ~2 GB) it reads what
+    // it needs. An MP4 or MOV is read that way at any size, it is quicker
+    let audioBuffer = await decodeMp4Streaming(file, audioContext, { signal, report });
 
-    // Decode audio from video file. It cannot report progress or be cancelled:
-    // stopping drops its result.
-    report('decode');
-    let audioBuffer;
-    try {
-      audioBuffer = await raceAbort(audioContext.decodeAudioData(arrayBuffer), signal);
-    } catch (decodeError) {
-      if (isAbortError(decodeError)) throw decodeError;
-      console.error('Audio decode error:', decodeError);
-      throw new Error('audio-decode-error');
+    if (!audioBuffer) {
+      if (file.size > WHOLE_FILE_READ_LIMIT_BYTES) {
+        throw new Error('video-unsupported-large-container');
+      }
+      const arrayBuffer = await readFileAsArrayBuffer(file, {
+        signal,
+        onProgress: percent => report('read', percent)
+      });
+
+      // Decode audio from video file. It cannot report progress or be cancelled:
+      // stopping drops its result.
+      report('decode');
+      try {
+        audioBuffer = await raceAbort(audioContext.decodeAudioData(arrayBuffer), signal);
+      } catch (decodeError) {
+        if (isAbortError(decodeError)) throw decodeError;
+        console.error('Audio decode error:', decodeError);
+        throw new Error('audio-decode-error');
+      }
     }
 
     // Downmix + resample natively. (An earlier version re-rendered the decoded
@@ -698,7 +764,7 @@ export const extractAudioFromVideo = async (file, { signal, onProgress } = {}) =
     // Stopping is not a failure
     if (isAbortError(error)) throw error;
     console.error('Error extracting audio from video:', error);
-    if (error.message === 'audio-decode-error') {
+    if (SPECIFIC_EXTRACTION_ERRORS.includes(error.message)) {
       throw error;
     }
     throw new Error('video-audio-extraction-error');

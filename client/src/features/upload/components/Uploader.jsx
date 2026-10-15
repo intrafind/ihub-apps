@@ -20,6 +20,11 @@ import { isAbortError, raceAbort } from '../../../utils/abortable';
  * are not a stop but a discard: the run publishes nothing.
  * `onProcessingChange(true|false)` follows `isProcessing`, for a parent that
  * must not act on an attachment still on its way (e.g. send).
+ *
+ * `maxSizeMB` is the gate every file passes. A processor holding a file to a
+ * lower limit of its own (per file type) throws an Error with the message
+ * `file-too-large` and `params: { maxSizeMB }`; the render prop gets `error` and
+ * those `errorParams`.
  */
 const Uploader = ({
   accept = [],
@@ -36,6 +41,8 @@ const Uploader = ({
   const [preview, setPreview] = useState(null);
   const [fileData, setFileData] = useState(null); // Track file data separately
   const [error, setError] = useState(null);
+  // What the message of `error` needs, from the error `onProcessFile` threw
+  const [errorParams, setErrorParams] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [progress, setProgress] = useState(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -119,6 +126,7 @@ const Uploader = ({
 
   const processFiles = async files => {
     setError(null);
+    setErrorParams(null);
     if (!files.length || !files[0]) return;
 
     // Filter accept array to only include MIME types (not file extensions like .pdf, .msg)
@@ -260,6 +268,7 @@ const Uploader = ({
       if (!isAbortError(err)) {
         console.error('Error processing file:', err);
         setError(err.message || 'processing-error');
+        setErrorParams(err.params || null);
       }
     } finally {
       if (abortRef.current === controller) abortRef.current = null;
@@ -290,6 +299,7 @@ const Uploader = ({
     setPreview(null);
     setFileData(null);
     setError(null);
+    setErrorParams(null);
     setIsProcessing(false);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
@@ -365,6 +375,7 @@ const Uploader = ({
   return children({
     preview,
     error,
+    errorParams,
     isProcessing,
     progress,
     cancelProcessing,

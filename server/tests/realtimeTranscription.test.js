@@ -20,6 +20,7 @@ import {
   diagnoseSocketError,
   diagnoseUnexpectedResponse,
   diagnoseUpstreamClose,
+  getBatchLimits,
   testTranscriptionModel
 } from '../websocket/realtimeTranscription.js';
 import { generateJwt } from '../utils/tokenService.js';
@@ -1135,5 +1136,42 @@ describe('testTranscriptionModel', () => {
       ok: false,
       message: 'The model has no endpoint URL'
     });
+  });
+});
+
+describe('getBatchLimits', () => {
+  const platform = speech => ({
+    jwt: { algorithm: 'HS256' },
+    auth: { jwtSecret: 'realtime-stt-test-secret' },
+    ...(speech ? { speech } : {})
+  });
+
+  test('by default a connection buffers 128 MiB and the process 512 MiB', () => {
+    configCache.setCacheEntry('config/platform.json', platform());
+
+    expect(getBatchLimits()).toEqual({
+      maxBytes: 128 * 1024 * 1024,
+      maxBytesTotal: 512 * 1024 * 1024
+    });
+  });
+
+  test('a connection can buffer more than the hour of audio an app transcribes by default', () => {
+    configCache.setCacheEntry('config/platform.json', platform());
+
+    // 16 kHz PCM16: 32,000 bytes a second. 128 MiB is ~70 minutes.
+    const hour = 3600 * 16000 * 2;
+    expect(getBatchLimits().maxBytes).toBeGreaterThan(hour);
+    expect(getBatchLimits().maxBytes / 32000 / 60).toBeGreaterThan(69);
+    // ... and the process can hold four such recordings at once
+    expect(getBatchLimits().maxBytesTotal).toBeGreaterThanOrEqual(4 * 128 * 1024 * 1024);
+  });
+
+  test('platform.speech.realtime still overrides both', () => {
+    configCache.setCacheEntry(
+      'config/platform.json',
+      platform({ realtime: { maxBufferedAudioBytes: 1000, maxBufferedAudioBytesTotal: 5000 } })
+    );
+
+    expect(getBatchLimits()).toEqual({ maxBytes: 1000, maxBytesTotal: 5000 });
   });
 });

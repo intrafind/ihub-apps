@@ -212,9 +212,9 @@ they are off by default.
   `customVocabulary` (up to 1,000 phrases biasing recognition toward domain
   terms, acronyms and proper names).
 
-  Long recordings need the buffer cap raised: one hour of 16 kHz PCM16 is
-  ≈115 MB and the default `maxBufferedAudioBytes` is 32 MB. See
-  [Runtime limits and tuning](#runtime-limits-and-tuning).
+  One hour of 16 kHz PCM16 is ≈115 MB, which the default
+  `maxBufferedAudioBytes` (128 MiB, ≈70 min) holds. Raise it for longer
+  recordings: see [Runtime limits and tuning](#runtime-limits-and-tuning).
 
 ### Hosted alternative: Whisper (T-Systems LLM Hub, OpenAI)
 
@@ -261,7 +261,7 @@ Add a `transcription` block to the app config (Admin → Apps → Edit → Trans
     "modelId": "voxtral-mini-realtime",
     "defaultEnabled": true,
     "streaming": true,
-    "maxDurationSeconds": 900,
+    "maxDurationSeconds": 3600,
     "inputs": { "upload": true, "record": true, "video": true }
   },
   "upload": {
@@ -269,7 +269,7 @@ Add a `transcription` block to the app config (Admin → Apps → Edit → Trans
     "videoUpload": {
       "enabled": true,
       "extractAudio": true,
-      "maxFileSizeMB": 500,
+      "maxFileSizeMB": 51200,
       "supportedFormats": ["video/mp4", "video/webm", "video/quicktime"]
     }
   }
@@ -282,7 +282,7 @@ Add a `transcription` block to the app config (Admin → Apps → Edit → Trans
 | `modelId`            | `""`    | Which `modelType: "transcription"` model to route to. Empty uses the platform default (`speech.transcription.defaultModelId`, see below). |
 | `defaultEnabled`     | `true`  | Whether the per-chat **Transcription** toggle starts on. Users can flip it per conversation (like web search). When off, audio/video submissions fall through to the multimodal chat path instead. |
 | `streaming`          | `true`  | Show the transcript growing in the user's message while it is produced. When off, the message shows "Listening…" / "Transcribing…" until the transcript is complete. |
-| `maxDurationSeconds` | `900`   | Client-enforced cap on recording length / decoded audio duration (max `7200`).               |
+| `maxDurationSeconds` | `3600`  | Client-enforced cap on recording length / decoded audio duration (max `7200`). One hour by default, so a 30-minute video transcribes out of the box. An app that saved its own value keeps it. |
 | `inputs.upload`      | `true`  | Allow transcribing uploaded audio files.                                                     |
 | `inputs.record`      | `true`  | Show the record → send button.                                                              |
 | `inputs.video`       | `true`  | Allow transcribing uploaded videos (audio track extracted in the browser).                   |
@@ -301,7 +301,7 @@ Instead of picking the same model in every app, set it once under **Admin → Vo
 }
 ```
 
-`upload.videoUpload.maxFileSizeMB` accepts up to `2000`. Note that browsers decode the **entire** file in memory to extract PCM — for very large videos budget roughly 700 MB of tab memory per hour of 48 kHz stereo audio on top of the file itself. What stays attached is only the 16 kHz mono WAV of the audio track (about 1.9 MB per minute; see [Audio Extraction](audio-extraction.md#extracted-audio-format)). The `maxDurationSeconds` cap is the better lever for bounding work.
+`upload.videoUpload.maxFileSizeMB` accepts up to `51200` (50 GB): half an hour of video is 10 GB and more. The video is never uploaded, and an **MP4 or MOV of any size** is not read whole: only its index and its audio are (see [Audio Extraction](audio-extraction.md#large-videos-mp4-and-mov-up-to-50-gb)), so the memory used follows the audio, not the video. Other containers (WebM, MKV, ...) are decoded from the whole file in memory, which a browser can do up to about 2 GB; above that they are refused with a message that asks for MP4 or MOV. What stays attached is only the 16 kHz mono WAV of the audio track (about 1.9 MB per minute; see [Audio Extraction](audio-extraction.md#extracted-audio-format)). The `maxDurationSeconds` cap is the lever for bounding work: an hour of audio is a WAV of 115 MB.
 
 ### What users see
 
@@ -392,8 +392,8 @@ All knobs live under `platform.json` → `speech.realtime` and apply to the whol
 | `maxConnectionsPerUser` | `3`       | on server start     | Per-user concurrent connections per worker process.                   |
 | `maxFrameBytes`         | `262144`  | on server start     | Max size of one inbound WebSocket frame.                              |
 | `maxSessionSeconds`     | `3600`    | per new connection  | Hard cap on one session's lifetime. Hot-reloaded (no restart needed). |
-| `maxBufferedAudioBytes` | `33554432` | per new connection | Batch providers only: audio one connection may buffer (32 MB ≈ 17 min). Hot-reloaded. |
-| `maxBufferedAudioBytesTotal` | `268435456` | per new connection | Batch providers only: audio buffered across the whole process (256 MB). Hot-reloaded. |
+| `maxBufferedAudioBytes` | `134217728` | per new connection | Batch providers only: audio one connection may buffer (128 MiB ≈ 70 min of 16 kHz PCM16). Hot-reloaded. |
+| `maxBufferedAudioBytesTotal` | `536870912` | per new connection | Batch providers only: audio buffered across the whole process (512 MiB). Hot-reloaded. |
 
 Sizing guidance: each concurrent connection holds one vLLM realtime session, so set `maxConnections` to what your GPU deployment sustains. Per-connection server memory is bounded by the backpressure high-water mark (~4 MB worst case, typically far less).
 

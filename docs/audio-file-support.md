@@ -102,9 +102,11 @@ data URL), so the model providers receive a type they know.
 
 ### File Size Limits
 
-- **Default maximum size**: 20MB
+- **Default maximum size**: 20MB (`audioUpload.maxFileSizeMB`, 1-2000)
 - **Recommended size**: Under 10MB for faster processing
 - **Note**: The 20MB limit is based on Google Gemini API's inline data limit
+- **Own limit**: An audio file is held to the audio limit, whatever the limits of the other upload types are (a 50 GB video limit does not raise it); the message of a refused file names the limit of its own type
+- **Larger files**: The audio is attached as a base64 data URL, which a browser cannot build beyond about 400 MB of audio. What is sent to a multimodal model in a request must also fit the request body (`requestBodyLimitMB`, 50 MB by default), so raise the limit only where the audio is [transcribed](#two-audio-paths-multimodal-vs-voxtral-transcription) in the browser instead
 
 ### Audio Quality Recommendations
 
@@ -153,7 +155,7 @@ To enable audio upload in an application, add the `audioUpload` configuration to
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `enabled` | boolean | `false` | Enable audio file uploads |
-| `maxFileSizeMB` | number | `20` | Maximum file size in megabytes (1-100) |
+| `maxFileSizeMB` | number | `20` | Maximum file size in megabytes (1-2000) |
 | `supportedFormats` | string[] | See below | Array of supported MIME types |
 
 **Default supported formats**:
@@ -168,7 +170,7 @@ The audio upload configuration is validated using the following schema (defined 
 ```javascript
 audioUpload: z.object({
   enabled: z.boolean().optional().default(false),
-  maxFileSizeMB: z.number().int().min(1).max(100).optional().default(20),
+  maxFileSizeMB: z.number().int().min(1).max(2000).optional().default(20),
   supportedFormats: z
     .array(z.string().regex(/^audio\//))
     .optional()
