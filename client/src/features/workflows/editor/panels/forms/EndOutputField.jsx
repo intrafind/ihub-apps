@@ -1,4 +1,4 @@
-import { useId } from 'react';
+import { useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import FormField from './FormField';
 import {
@@ -32,11 +32,11 @@ function textFromFields(fields) {
   return first ?? '';
 }
 
-/** `fields` with the entry at `index` replaced by `[name, value]`, in the same place. */
-function withEntryAt(fields, index, name, value) {
+/** `fields` with the entry `name` replaced by `[newName, value]`, in the same place. */
+function withEntry(fields, name, newName, value) {
   return Object.fromEntries(
-    Object.entries(fields).map(([key, current], at) =>
-      at === index ? [name, value] : [key, current]
+    Object.entries(fields).map(([key, current]) =>
+      key === name ? [newName, value] : [key, current]
     )
   );
 }
@@ -61,8 +61,7 @@ function EndOutputField({ value, onChange, variables }) {
       <div>
         <ModeSwitch
           asObject={false}
-          onSingle={() => {}}
-          onFields={() => onChange(fieldsFromText(value))}
+          onSelect={fields => fields && onChange(fieldsFromText(value))}
         />
         <FormField
           label={t('workflows.editor.endOutput', 'Output')}
@@ -79,59 +78,29 @@ function EndOutputField({ value, onChange, variables }) {
     );
   }
 
-  const entries = Object.entries(value);
-  const hasBlankName = entries.some(([name]) => name.trim() === '');
-
+  const names = Object.keys(value);
+  const hasBlankName = names.some(name => name.trim() === '');
   // A name another field has, or one that would reach into the prototype, is not taken
-  const rename = (index, name) => {
-    const current = entries[index][0];
-    if (name !== current && (Object.hasOwn(value, name) || UNSAFE_OUTPUT_KEYS.includes(name)))
-      return;
-    onChange(withEntryAt(value, index, name, entries[index][1]));
-  };
+  const canTake = name => !Object.hasOwn(value, name) && !UNSAFE_OUTPUT_KEYS.includes(name);
 
   return (
     <div>
-      <ModeSwitch asObject onSingle={() => onChange(textFromFields(value))} onFields={() => {}} />
+      <ModeSwitch asObject onSelect={fields => !fields && onChange(textFromFields(value))} />
       <span className={labelClass}>{t('workflows.editor.endOutput', 'Output')}</span>
       <div className="space-y-1.5">
-        {entries.map(([name, field], index) => (
-          // The name is what is being edited, so it cannot be the key: the row would be
-          // replaced, and lose focus, with every keystroke.
-          // eslint-disable-next-line @eslint-react/no-array-index-key
-          <div key={index} className="flex items-start gap-1.5">
-            <input
-              type="text"
-              value={name}
-              onChange={e => rename(index, e.target.value)}
-              placeholder={t('workflows.editor.endOutputFieldName', 'Field name')}
-              aria-label={t('workflows.editor.endOutputFieldName', 'Field name')}
-              className={`${inputClass} flex-1`}
-            />
-            {typeof field === 'string' ? (
-              <input
-                type="text"
-                value={field}
-                onChange={e => onChange(withEntryAt(value, index, name, e.target.value))}
-                placeholder={t('workflows.editor.endOutputFieldValue', 'Variable or text')}
-                aria-label={t('workflows.editor.endOutputFieldValue', 'Variable or text')}
-                list={variables?.length > 0 ? datalistId : undefined}
-                className={`${inputClass} flex-1`}
-              />
-            ) : (
-              <pre className="flex-1 text-xs font-mono border border-amber-300 dark:border-amber-700 rounded-sm px-2 py-1.5 bg-amber-50 dark:bg-amber-900/20 text-amber-900 dark:text-amber-200 whitespace-pre-wrap wrap-break-word max-h-24 overflow-y-auto">
-                {JSON.stringify(field, null, 2)}
-              </pre>
-            )}
-            <button
-              type="button"
-              onClick={() => onChange(Object.fromEntries(entries.filter((_, at) => at !== index)))}
-              className="text-red-500 hover:text-red-700 dark:hover:text-red-400 p-1 text-sm shrink-0"
-              aria-label={t('workflows.editor.endOutputRemoveField', 'Remove field')}
-            >
-              &#x2715;
-            </button>
-          </div>
+        {names.map(name => (
+          <FieldRow
+            key={name}
+            name={name}
+            field={value[name]}
+            listId={variables?.length > 0 ? datalistId : undefined}
+            canTake={canTake}
+            onRename={next => onChange(withEntry(value, name, next, value[name]))}
+            onValueChange={next => onChange(withEntry(value, name, name, next))}
+            onRemove={() =>
+              onChange(Object.fromEntries(Object.entries(value).filter(([key]) => key !== name)))
+            }
+          />
         ))}
       </div>
       {variables?.length > 0 && (
@@ -161,14 +130,71 @@ function EndOutputField({ value, onChange, variables }) {
   );
 }
 
-function ModeSwitch({ asObject, onSingle, onFields }) {
+/**
+ * One field of an object output: its name and its value.
+ *
+ * The row is keyed by the name, so renaming it on every keystroke would replace
+ * the row and the input would lose focus. The name is typed into a draft and
+ * taken when the input is left or Enter is pressed.
+ */
+function FieldRow({ name, field, listId, canTake, onRename, onValueChange, onRemove }) {
+  const { t } = useTranslation();
+  const [draft, setDraft] = useState(name);
+
+  const commit = () => {
+    if (draft === name) return;
+    if (canTake(draft)) onRename(draft);
+    else setDraft(name);
+  };
+
+  return (
+    <div className="flex items-start gap-1.5">
+      <input
+        type="text"
+        value={draft}
+        onChange={e => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={e => e.key === 'Enter' && commit()}
+        placeholder={t('workflows.editor.endOutputFieldName', 'Field name')}
+        aria-label={t('workflows.editor.endOutputFieldName', 'Field name')}
+        className={`${inputClass} flex-1`}
+      />
+      {typeof field === 'string' ? (
+        <input
+          type="text"
+          value={field}
+          onChange={e => onValueChange(e.target.value)}
+          placeholder={t('workflows.editor.endOutputFieldValue', 'Variable or text')}
+          aria-label={t('workflows.editor.endOutputFieldValue', 'Variable or text')}
+          list={listId}
+          className={`${inputClass} flex-1`}
+        />
+      ) : (
+        <pre className="flex-1 text-xs font-mono border border-amber-300 dark:border-amber-700 rounded-sm px-2 py-1.5 bg-amber-50 dark:bg-amber-900/20 text-amber-900 dark:text-amber-200 whitespace-pre-wrap wrap-break-word max-h-24 overflow-y-auto">
+          {JSON.stringify(field, null, 2)}
+        </pre>
+      )}
+      <button
+        type="button"
+        onClick={onRemove}
+        className="text-red-500 hover:text-red-700 dark:hover:text-red-400 p-1 text-sm shrink-0"
+        aria-label={t('workflows.editor.endOutputRemoveField', 'Remove field')}
+      >
+        &#x2715;
+      </button>
+    </div>
+  );
+}
+
+/** The switch between one value and several fields; `onSelect(true)` asks for fields. */
+function ModeSwitch({ asObject, onSelect }) {
   const { t } = useTranslation();
   return (
     <div className="flex gap-1 mb-1.5">
       <button
         type="button"
         aria-pressed={!asObject}
-        onClick={onSingle}
+        onClick={() => onSelect(false)}
         className={modeClass(!asObject)}
       >
         {t('workflows.editor.endOutputOneValue', 'One value')}
@@ -176,7 +202,7 @@ function ModeSwitch({ asObject, onSingle, onFields }) {
       <button
         type="button"
         aria-pressed={asObject}
-        onClick={onFields}
+        onClick={() => onSelect(true)}
         className={modeClass(asObject)}
       >
         {t('workflows.editor.endOutputSeveralFields', 'Several fields')}

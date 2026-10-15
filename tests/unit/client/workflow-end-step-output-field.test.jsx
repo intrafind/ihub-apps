@@ -119,10 +119,14 @@ describe('an output made of several fields', () => {
     expect(screen.getByText(/The answer is a JSON object with these fields/)).toBeInTheDocument();
   });
 
-  it('renames a field where it is, and changes its value', () => {
+  it('renames a field where it is once the name is left, and changes its value as it is typed', () => {
     const onChange = jest.fn();
     form(FIELDS, onChange);
-    fireEvent.change(screen.getAllByLabelText('Field name')[0], { target: { value: 'subject' } });
+    const name = screen.getAllByLabelText('Field name')[0];
+    fireEvent.change(name, { target: { value: 'subject' } });
+    // Not taken while it is being typed: the row would lose its focus with every key
+    expect(onChange).not.toHaveBeenCalled();
+    fireEvent.blur(name);
     expect(onChange).toHaveBeenLastCalledWith({
       output: { subject: 'topic', report: 'finalReport' }
     });
@@ -133,12 +137,24 @@ describe('an output made of several fields', () => {
     expect(onChange).toHaveBeenLastCalledWith({ output: { topic: 'topic', report: 'summary' } });
   });
 
+  it('takes a name when Enter is pressed as well', () => {
+    const onChange = jest.fn();
+    form(FIELDS, onChange);
+    const name = screen.getAllByLabelText('Field name')[1];
+    fireEvent.change(name, { target: { value: 'body' } });
+    fireEvent.keyDown(name, { key: 'Enter' });
+    expect(onChange).toHaveBeenCalledWith({ output: { topic: 'topic', body: 'finalReport' } });
+  });
+
   it('does not take a name another field has, or one that reaches into the prototype', () => {
     const onChange = jest.fn();
     form(FIELDS, onChange);
     const name = screen.getAllByLabelText('Field name')[0];
     for (const value of ['report', '__proto__', 'constructor']) {
       fireEvent.change(name, { target: { value } });
+      fireEvent.blur(name);
+      // The name goes back to what it was
+      expect(name).toHaveValue('topic');
     }
     expect(onChange).not.toHaveBeenCalled();
   });
