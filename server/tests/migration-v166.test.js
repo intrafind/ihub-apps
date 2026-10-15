@@ -356,6 +356,148 @@ describe('V166 every workflow end step gets an output', () => {
     });
   });
 
+  describe('the variables the steps write', () => {
+    it('include what a transform sets, so the answer it computes is found', async () => {
+      const dir = await freshDir({
+        'computed.json': workflow({
+          id: 'computed',
+          steps: [node('t', 'transform', { operations: [{ set: 'finalReport', value: 'x' }] })],
+          end: {}
+        })
+      });
+      await up(makeCtx(dir));
+      assert.equal(outputOf(await readWorkflow(dir, 'computed.json')), 'finalReport');
+    });
+
+    it('follow the editor: transform destinations, loop counters, start defaults, fixed names', async () => {
+      const dir = await freshDir({
+        'many.json': workflow({
+          id: 'many',
+          steps: [
+            node('start2', 'start', { defaults: { greeting: 'hi' }, inputMapping: { who: 'x' } }),
+            node('t', 'transform', {
+              operations: [
+                { to: 'alpha', from: 'b' },
+                { into: 'merged.deep' },
+                { increment: 'counter' },
+                'not an operation'
+              ]
+            }),
+            node('loop', 'loop', {
+              countInto: 'rounds',
+              body: [node('inner', 'prompt', { outputVariable: 'inside' })]
+            }),
+            node('c', 'corpus-search', {}),
+            node('h', 'human', {}),
+            node('v', 'verifier', {})
+          ],
+          end: {}
+        })
+      });
+      await up(makeCtx(dir));
+      const fields = Object.keys(outputOf(await readWorkflow(dir, 'many.json')));
+      assert.deepEqual(
+        fields.sort(),
+        [
+          '_corpus',
+          '_coverage',
+          'alpha',
+          'counter',
+          'greeting',
+          'humanResponse_h',
+          'inside',
+          'merged',
+          'rounds',
+          'verificationResult',
+          'who'
+        ].sort()
+      );
+    });
+
+    it('cannot be listed for a workflow with a planner: an end step that passes on all is left to an admin', async () => {
+      const dir = await freshDir({
+        'planned.json': workflow({
+          id: 'planned',
+          steps: [
+            node('p', 'planner', {}),
+            node('t', 'transform', { operations: [{ set: 'summary' }] })
+          ],
+          end: {}
+        })
+      });
+      const ctx = makeCtx(dir);
+      await up(ctx);
+      // Not even the `summary` it can see: the planner may write a name that comes before it
+      assert.equal(outputOf(await readWorkflow(dir, 'planned.json')), undefined);
+      assert.match(ctx.logs.find(([level]) => level === 'warn')[1], /planned \(end\)/);
+    });
+
+    it('do not matter to an end step that names what it passes on', async () => {
+      const dir = await freshDir({
+        'named.json': workflow({
+          id: 'named',
+          steps: [node('p', 'planner', {})],
+          end: { outputVariables: ['alpha', 'beta'] }
+        })
+      });
+      await up(makeCtx(dir));
+      assert.deepEqual(outputOf(await readWorkflow(dir, 'named.json')), {
+        alpha: 'alpha',
+        beta: 'beta'
+      });
+    });
+  });
+
+  describe('a mapping to the run state', () => {
+    it('keeps a path that starts at a part of the state, `$.executionId` among them', async () => {
+      const dir = await freshDir({
+        'ids.json': workflow({
+          id: 'ids',
+          end: { outputMapping: { runId: '$.executionId', done: '$.completedNodes' } }
+        }),
+        'picked.json': workflow({
+          id: 'picked',
+          end: { outputMapping: { runId: '$.executionId' } },
+          chatIntegration: { primaryOutput: 'runId' }
+        }),
+        'old.json': workflow({
+          id: 'old',
+          end: { outputMapping: { a: '$.finalReport', b: '$.data.kept' } }
+        })
+      });
+      await up(makeCtx(dir));
+      assert.deepEqual(outputOf(await readWorkflow(dir, 'ids.json')), {
+        runId: '$.executionId',
+        done: '$.completedNodes'
+      });
+      assert.equal(outputOf(await readWorkflow(dir, 'picked.json')), '$.executionId');
+      // A path that starts at no part of the state never found anything: it names the variable
+      assert.deepEqual(outputOf(await readWorkflow(dir, 'old.json')), {
+        a: 'finalReport',
+        b: '$.data.kept'
+      });
+    });
+  });
+
+  describe('a primary output that is a mapped literal', () => {
+    it('is left to an admin, not turned into a variable that is never set', async () => {
+      const dir = await freshDir({
+        'literal.json': workflow({
+          id: 'literal',
+          end: { outputMapping: { shown: 'Fixed text', other: '$.data.x' } },
+          chatIntegration: { primaryOutput: 'shown' }
+        })
+      });
+      const ctx = makeCtx(dir);
+      await up(ctx);
+      const wf = await readWorkflow(dir, 'literal.json');
+      assert.equal(outputOf(wf), undefined);
+      assert.match(ctx.logs.find(([level]) => level === 'warn')[1], /literal \(end\)/);
+      // The selection is gone all the same: it no longer exists
+      assert.equal('primaryOutput' in (wf.chatIntegration || {}), false);
+    });
+  });
+
   describe('what needs an admin', () => {
     it('is an end step that passes on nothing that can be named: listed, left without an output', async () => {
       const dir = await freshDir({

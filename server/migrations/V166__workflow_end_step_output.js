@@ -31,7 +31,10 @@
  * without end steps, and files that cannot be read.
  *
  * What needs an admin: an end step that passes on nothing that can be named, or
- * maps a key to a literal rather than to a `$.` path. It is listed in the log and
+ * maps a key to a literal rather than to a `$.` path (also when that key is the
+ * `primaryOutput`), and an end step that passes on every variable of a workflow
+ * with a planner, a memory or inbox finalizer or a quote validator, whose
+ * variables cannot all be listed. It is listed in the log and
  * left without an `output`. The workflow still loads, and a run that reaches that
  * end step fails with a message that names the step; saving the workflow in the
  * editor asks for the output. Set the end step's Output to the variable that holds
@@ -73,8 +76,41 @@ const SHIPPED_OUTPUTS = {
   'knowledge-qa': { end: 'answer' }
 };
 
-/** The top-level keys of the run state a `$.` path can start at. Variables live under `data`. */
-const STATE_ROOTS = new Set(['data', 'nodeOutputs', 'metadata', 'executedNodes']);
+/**
+ * The top-level keys of the run state a `$.` path can start at: what
+ * `StateManager.create()` gives a run, and the `nodeOutputs`, `metadata` and
+ * `executedNodes` the documentation names. Variables live under `data`.
+ */
+const STATE_ROOTS = new Set([
+  'data',
+  'executionId',
+  'workflowId',
+  'status',
+  'currentNodes',
+  'completedNodes',
+  'failedNodes',
+  'history',
+  'checkpoints',
+  'errors',
+  'createdAt',
+  'updatedAt',
+  'startedAt',
+  'completedAt',
+  'nodeOutputs',
+  'metadata',
+  'executedNodes'
+]);
+
+/**
+ * Step types whose writes to the run state are not all named by their
+ * configuration: the variables of a workflow that has one cannot be listed.
+ */
+const UNLISTABLE_TYPES = new Set([
+  'planner',
+  'memory-finalize',
+  'inbox-finalize',
+  'quote-validator'
+]);
 
 /** The legacy single file holding all workflows as an array. */
 const LEGACY_FILE = 'config/workflows.json';
@@ -84,41 +120,87 @@ const isText = value => typeof value === 'string' && value.trim() !== '';
 /** An output is set when it is a text, or an object with at least one field. */
 const hasOutput = value => isText(value) || (isPlainObject(value) && Object.keys(value).length > 0);
 
+const keysOf = value => (isPlainObject(value) ? Object.keys(value) : []);
+
+/**
+ * The variables each type of step defines beyond its `outputVariable`, as the
+ * visual editor lists them (`variablesProducedBy()` as of V166). Do NOT replace
+ * with an import: a migration must not change with the application.
+ */
+const PRODUCED_BY_TYPE = {
+  start: config => [
+    ...(Array.isArray(config.inputVariables) ? config.inputVariables.map(item => item?.name) : []),
+    ...keysOf(config.defaults),
+    ...keysOf(config.inputMapping)
+  ],
+  loop: config => [config.countInto],
+  'corpus-search': config => [config.corpusVar || '_corpus', config.coverageVar || '_coverage'],
+  'structured-record': config => [config.recordsVar || '_records'],
+  'query-plan': config => [config.outputVar || '_queryPlan'],
+  'template-render': config => [config.reportVar],
+  'inbox-load': config => [config.outputVariable || 'currentInboxItem'],
+  human: (config, node) => [config.outputVariable || `humanResponse_${node.id}`],
+  verifier: () => ['verificationResult'],
+  // A transform names its destination under `to`, `set`, `into` or `increment`
+  transform: config =>
+    (Array.isArray(config.operations) ? config.operations : []).flatMap(operation =>
+      isPlainObject(operation)
+        ? [operation.to, operation.set, operation.into, operation.increment]
+        : []
+    )
+};
+
 /**
  * The variables the workflow's steps write, for an end step that passes on
- * every variable and so does not name them.
+ * every variable and so does not name them. `complete` is false when a step
+ * writes more than its configuration names, and the list falls short.
+ *
+ * @returns {{names: Set<string>, complete: boolean}}
  */
 function writtenVariables(workflow) {
   const names = new Set();
-  for (const node of workflow.nodes || []) {
-    const config = node?.config;
-    if (isText(config?.outputVariable)) names.add(config.outputVariable.trim());
-    if (node?.type === 'start' && Array.isArray(config?.inputVariables)) {
-      for (const variable of config.inputVariables) {
-        if (isText(variable?.name)) names.add(variable.name.trim());
+  let complete = true;
+
+  const visit = nodes => {
+    for (const node of Array.isArray(nodes) ? nodes : []) {
+      if (!isPlainObject(node)) continue;
+      const config = isPlainObject(node.config) ? node.config : {};
+      if (UNLISTABLE_TYPES.has(node.type)) complete = false;
+      for (const name of [
+        config.outputVariable,
+        ...(PRODUCED_BY_TYPE[node.type]?.(config, node) ?? [])
+      ]) {
+        // A path into a variable writes that variable
+        if (isText(name)) names.add(name.trim().split('.')[0]);
       }
+      // A loop can hold its steps inline
+      visit(config.body);
     }
-  }
-  return names;
+  };
+  visit(workflow.nodes);
+  return { names, complete };
 }
 
 /**
  * What an end step passes on, as the end step builds its output: its mapping,
  * else its included fields, else everything but its excluded fields, else its
- * listed variables, else every variable.
+ * listed variables, else every variable. When that is every variable and the
+ * workflow has a step whose writes cannot be listed, it is `unknown`.
  *
- * @returns {{mapping: Object}|{names: string[]}}
+ * @returns {{mapping: Object}|{names: string[]}|{unknown: true}}
  */
 function passedOn(workflow, endNode) {
   const config = endNode.config || {};
   if (isPlainObject(config.outputMapping)) return { mapping: config.outputMapping };
   if (Array.isArray(config.includeFields)) return { names: config.includeFields };
-  if (Array.isArray(config.excludeFields)) {
-    const excluded = new Set(config.excludeFields);
-    return { names: [...writtenVariables(workflow)].filter(name => !excluded.has(name)) };
+  if (Array.isArray(config.outputVariables) && !Array.isArray(config.excludeFields)) {
+    return { names: config.outputVariables };
   }
-  if (Array.isArray(config.outputVariables)) return { names: config.outputVariables };
-  return { names: [...writtenVariables(workflow)] };
+
+  const written = writtenVariables(workflow);
+  if (!written.complete) return { unknown: true };
+  const excluded = new Set(Array.isArray(config.excludeFields) ? config.excludeFields : []);
+  return { names: [...written.names].filter(name => !excluded.has(name)) };
 }
 
 /**
@@ -146,19 +228,18 @@ function outputFor(workflow, endNode) {
   // 1. The primary output the workflow named. For a mapped end step it named a
   //    key of the mapping, which is what its output was looked up by.
   if (primary) {
-    if (passed.mapping) {
-      const [key, ...rest] = primary.split('.');
-      const source =
-        key in passed.mapping
-          ? mappedSource(passed.mapping, key, rest.map(part => `.${part}`).join(''))
-          : null;
-      if (source) return source;
+    const [key, ...rest] = primary.split('.');
+    if (passed.mapping && Object.hasOwn(passed.mapping, key)) {
+      // Null when the key maps to a literal, which no output can say: an admin sets it
+      return mappedSource(passed.mapping, key, rest.map(part => `.${part}`).join(''));
     }
     return primary;
   }
 
-  // 2. The first conventional answer name the end step passes on.
-  const names = passed.mapping ? Object.keys(passed.mapping) : passed.names;
+  // 2. The first conventional answer name the end step passes on. An end step
+  //    that passes on everything of a workflow whose variables cannot all be
+  //    listed is left to an admin: the name found may not be the first there is.
+  const names = passed.mapping ? Object.keys(passed.mapping) : (passed.names ?? []);
   const present = new Set(names.filter(isText).map(name => name.trim()));
   for (const name of CONVENTIONAL_ANSWER_NAMES) {
     if (!present.has(name)) continue;
@@ -181,6 +262,7 @@ function outputFor(workflow, endNode) {
  * key that maps to a literal).
  */
 function objectOf(passed) {
+  if (passed.unknown) return null;
   const fields = {};
   if (passed.mapping) {
     for (const key of Object.keys(passed.mapping)) {
