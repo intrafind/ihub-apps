@@ -3188,7 +3188,22 @@
         "dictationModelHint": "Das Mikrofon wird über den iHub-Server an dieses Transkriptionsmodell gestreamt. Benutzer brauchen über ihre Gruppen Zugriff auf das Modell.",
         "dictationModelUnavailable": "Dieses Modell ist deaktiviert, existiert nicht mehr oder streamt nicht. Die Spracheingabe schlägt in dieser App daher fehl.",
         "websearchMaxPageReads": "Max. Seitenaufrufe pro Antwort",
-        "websearchMaxPageReadsDesc": "Begrenzt, wie viele Seiten das Modell mit dem Seitenleser für eine Antwort öffnen darf. Seiten, die die Suche selbst für ihre Auszüge abruft, zählen nicht. 1–50, Standard 5."
+        "websearchMaxPageReadsDesc": "Begrenzt, wie viele Seiten das Modell mit dem Seitenleser für eine Antwort öffnen darf. Seiten, die die Suche selbst für ihre Auszüge abruft, zählen nicht. 1–50, Standard 5.",
+        "usageGuide": {
+          "title": "Bedienungsanleitung",
+          "description": "Eine vorab geschriebene Antwort auf „Wie nutze ich diese App?“. Nutzer öffnen sie über eine Schaltfläche im Chat. Es wird kein Modell aufgerufen und die Anleitung wird nicht an das Modell gesendet – sie kostet nichts und belegt kein Kontextfenster.",
+          "language": "Sprache",
+          "generate": "Mit KI erstellen",
+          "regenerate": "Mit KI neu erstellen",
+          "generating": "Wird erstellt…",
+          "write": "Selbst schreiben",
+          "delete": "Anleitung löschen",
+          "generateHint": "Zum Erstellen wird das Standardmodell einmal aufgerufen, mit dem aktuellen Stand dieses Formulars. Prüfen Sie den Text – er wird beim Speichern der App übernommen.",
+          "question": "Schaltflächentext / Frage",
+          "content": "Anleitung (Markdown)",
+          "confirmRegenerate": "Den aktuellen Anleitungstext für diese Sprache durch einen neu erstellten ersetzen?",
+          "confirmDelete": "Die Bedienungsanleitung dieser App löschen?"
+        }
       },
       "reorder": "Reihenfolge",
       "reorderHelp": "Ziehen Sie eine Zeile oder nutzen Sie die Pfeile, um die Reihenfolge festzulegen, in der Apps für Benutzer erscheinen – in der App-Übersicht, auf der Startseite und in der Seitenleiste. Es werden immer alle Apps aufgelistet, Suche und Filter gelten hier nicht. Gespeichert wird erst mit „Reihenfolge speichern“.",
@@ -5740,5 +5755,9 @@
     "keepEditing": "Weiter bearbeiten",
     "versionConflict": "Konflikt: Das Gedächtnis wurde an anderer Stelle geändert. Neu laden, um den aktuellen Stand zu sehen.",
     "staleNotice": "Die Notizen haben sich geändert, seit Sie mit dem Bearbeiten begonnen haben (ein Lauf hat sie evtl. aktualisiert)."
+  },
+  "usageGuide": {
+    "question": "Wie nutze ich diese App?",
+    "inlineLabel": "Anleitung"
   }
 }

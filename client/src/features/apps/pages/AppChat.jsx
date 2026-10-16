@@ -47,6 +47,8 @@ import GreetingView from '../../chat/components/GreetingView';
 import NoMessagesView from '../../chat/components/NoMessagesView';
 import InputVariables from '../../chat/components/InputVariables';
 import ChatStartForm from '../../chat/components/ChatStartForm';
+import UsageGuideButton from '../../chat/components/UsageGuideButton';
+import useUsageGuide from '../../chat/hooks/useUsageGuide';
 import {
   isStartFormEnabled,
   localizeVariables,
@@ -131,7 +133,8 @@ const renderStartupState = (
   handleStarterPromptClick,
   hydrating,
   modeResolving,
-  t
+  t,
+  usageGuideHint = null
 ) => {
   // The app details can arrive before the platform config and the auth status
   // do, and until both have, nothing here knows whether this chat is
@@ -150,17 +153,26 @@ const renderStartupState = (
   }
 
   const starterPrompts = app?.starterPrompts || [];
+  let view;
   if (starterPrompts.length > 0) {
-    return (
+    view = (
       <StarterPromptsView
         starterPrompts={starterPrompts}
         onSelectPrompt={handleStarterPromptClick}
       />
     );
   } else if (welcomeMessage) {
-    return <GreetingView welcomeMessage={welcomeMessage} />;
+    view = <GreetingView welcomeMessage={welcomeMessage} />;
+  } else {
+    view = <NoMessagesView />;
   }
-  return <NoMessagesView />;
+  if (!usageGuideHint) return view;
+  return (
+    <>
+      {view}
+      <div className="flex justify-center px-4 pb-4">{usageGuideHint}</div>
+    </>
+  );
 };
 
 // The query string an embedded chat reads: none. Module-level, so its identity
@@ -222,6 +234,9 @@ const MAX_ATTACHED_RECORDING_SECONDS = 900;
 const PromptEditorModal = lazyWithRetry(() => import('../../prompts/components/PromptEditorModal'));
 // Loaded on first use too: "Save as skill" only shows under a drafted skill.
 const SkillEditorModal = lazyWithRetry(() => import('../../skills/components/SkillEditorModal'));
+// Loaded on first use too: the usage guide opens in it only from a start form
+// or compare mode.
+const MarkdownViewer = lazyWithRetry(() => import('../../../shared/components/MarkdownViewer'));
 
 /**
  * The chat page of an app.
@@ -779,7 +794,8 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
     resetConversationState,
     addUserMessage,
     addAssistantMessage,
-    updateAssistantMessage
+    updateAssistantMessage,
+    removeMessage
   } = useAppChat({
     appId,
     chatId,
@@ -1710,7 +1726,47 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
     }
   };
 
+  // Usage guide (issue #2838): the app's pre-written answer to "how do I use
+  // this app?", shown without a model call. In the chat it is a question and
+  // its answer, marked `isGreeting` so neither is sent to the model, stored or
+  // exported. The start form and compare mode have no single transcript to
+  // answer in, so there it opens in a viewer instead.
+  const usageGuide = useUsageGuide(app, currentLanguage);
+  const [usageGuideViewerOpen, setUsageGuideViewerOpen] = useState(false);
+  const showUsageGuide = () => {
+    if (!usageGuide.available) return;
+    if (showStartForm || compareModeActive) {
+      setUsageGuideViewerOpen(true);
+      return;
+    }
+    const pairId = uuidv4();
+    const answerId = `msg-${uuidv4()}`;
+    const mark = { isGreeting: true, usageGuide: pairId };
+    addUserMessage(usageGuide.question, mark);
+    addAssistantMessage(answerId);
+    updateAssistantMessage(answerId, usageGuide.content, false, {
+      ...mark,
+      outputFormat: 'markdown'
+    });
+  };
+  const renderUsageGuideButton = variant =>
+    usageGuide.available ? (
+      <UsageGuideButton
+        question={usageGuide.question}
+        onClick={showUsageGuide}
+        disabled={processing}
+        variant={variant}
+      />
+    ) : null;
+
   const handleDeleteMessage = messageId => {
+    // A guide exchange is not part of the conversation: removing it takes the
+    // question and its answer, and leaves the turns after it alone.
+    const pairId = messages.find(m => m.id === messageId)?.usageGuide;
+    if (pairId) {
+      messages.filter(m => m.usageGuide === pairId).forEach(m => removeMessage(m.id));
+      return;
+    }
     deleteMessage(messageId);
   };
 
@@ -2710,6 +2766,11 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
         // AI disclaimer shares the tight line below the input with the
         // ephemeral toggle; shown after the first submitted message.
         disclaimer={messages.length > 0 ? <AIDisclaimerBanner /> : null}
+        // Once the start screen with its centered guide button is gone, the
+        // guide stays one click away next to the input.
+        leadingAction={
+          messages.length > 0 || compareModeActive ? renderUsageGuideButton('inline') : null
+        }
       />
     );
   };
@@ -2760,6 +2821,9 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
             showModelSelector={modelSelectionAllowed}
             currentLanguage={currentLanguage}
           />
+          {usageGuide.available && (
+            <div className="flex justify-center mt-4">{renderUsageGuideButton('hint')}</div>
+          )}
         </div>
       </div>
     );
@@ -2980,7 +3044,8 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
                             handleStarterPromptClick,
                             hydrating,
                             chatModeResolving,
-                            t
+                            t,
+                            renderUsageGuideButton('hint')
                           )}
                         </div>
                       </div>
@@ -3032,7 +3097,8 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
                         handleStarterPromptClick,
                         hydrating,
                         chatModeResolving,
-                        t
+                        t,
+                        renderUsageGuideButton('hint')
                       )}
                     </div>
                   )}
@@ -3177,6 +3243,15 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
             name: savedSkillName
           })}
         </div>
+      )}
+      {usageGuideViewerOpen && (
+        <Suspense fallback={null}>
+          <MarkdownViewer
+            content={usageGuide.content}
+            name={usageGuide.question}
+            onClose={() => setUsageGuideViewerOpen(false)}
+          />
+        </Suspense>
       )}
       {showShare && (
         <ShareDialog

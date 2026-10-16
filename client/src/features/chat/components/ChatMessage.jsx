@@ -1364,7 +1364,9 @@ function ChatMessage({
             </button>
           )}
 
-          {isUser && editable && (
+          {/* A usage guide question was never sent: nothing to edit, resend,
+              link to or schedule. */}
+          {isUser && editable && !message.usageGuide && (
             <>
               {/* A transcription turn's audio is not kept: nothing to edit, resend or
                   link to (a link would send its name, not the recording). */}
@@ -1408,7 +1410,7 @@ function ChatMessage({
             </>
           )}
 
-          {isUser && !readOnly && onSaveAsPrompt && (
+          {isUser && !readOnly && onSaveAsPrompt && !message.usageGuide && (
             <button
               onClick={() => onSaveAsPrompt(getEditableContent())}
               className="flex items-center gap-1 hover:text-indigo-600 transition-colors duration-150"
@@ -1430,21 +1432,26 @@ function ChatMessage({
           )}
 
           {/* Add star rating for AI responses only */}
-          {feedbackEnabled && !readOnly && !isUser && !isError && !message.loading && (
-            <>
-              {!compact && <div className="mx-2 h-4 border-l border-gray-300"></div>}
-              <div className="flex items-center gap-2">
-                <StarRating
-                  rating={activeFeedback}
-                  onRatingChange={handleStarRatingClick}
-                  allowHalfStars
-                  size="w-4 h-4"
-                  showTooltip
-                  className="shrink-0"
-                />
-              </div>
-            </>
-          )}
+          {feedbackEnabled &&
+            !readOnly &&
+            !isUser &&
+            !isError &&
+            !message.loading &&
+            !message.usageGuide && (
+              <>
+                {!compact && <div className="mx-2 h-4 border-l border-gray-300"></div>}
+                <div className="flex items-center gap-2">
+                  <StarRating
+                    rating={activeFeedback}
+                    onRatingChange={handleStarRatingClick}
+                    allowHalfStars
+                    size="w-4 h-4"
+                    showTooltip
+                    className="shrink-0"
+                  />
+                </div>
+              </>
+            )}
         </div>
       </div>
 

@@ -484,7 +484,7 @@ The following fields are specific to chat apps and are not used for redirect or 
 - `preferredStyle`, `preferredTemperature`, `sendChatHistory`
 - `tools`, `websearch`, `variables`, `prompt`, `outputSchema`
 - `settings`, `inputMode`, `upload`, `features`
-- `greeting`, `starterPrompts`, `messagePlaceholder`
+- `greeting`, `starterPrompts`, `usageGuide`, `messagePlaceholder`
 - `allowEmptyContent`, `allowedModels`, `disallowModelSelection`
 - `sources`, `thinking`, `ephemeral`
 
@@ -929,6 +929,48 @@ The chat interface adapts its initial appearance based on the app configuration:
 The priority order is: Starter Prompts > Welcome Message > Example Prompts.
 
 An app with a [start form](#start-form) opens with the form instead of any of these.
+
+#### Usage Guide
+
+An app can carry a pre-written answer to "How do I use this app?". Users open it from a
+button, and the chat shows the question and the guide like any exchange — but no model is
+called, and neither message is sent to the model with later turns, so the guide costs nothing
+and takes no room in the context window. Starter prompts stay real prompts.
+
+```json
+"usageGuide": {
+  "question": { "en": "How do I use the Email Composer?", "de": "Wie nutze ich den E-Mail-Assistenten?" },
+  "content": {
+    "en": "The **Email Composer** drafts emails for you.\n\n1. Pick a tone above the message box.\n2. Describe what the mail should say.",
+    "de": "Der **E-Mail-Assistent** entwirft E-Mails für Sie. ..."
+  }
+}
+```
+
+| Field      | Type   | Required | Description                                                                        |
+| ---------- | ------ | -------- | ---------------------------------------------------------------------------------- |
+| `content`  | Object | Yes      | Localized guide text in Markdown                                                   |
+| `question` | Object | No       | Localized button text and question; defaults to "How do I use this app?"           |
+
+Where users find it:
+
+- **Start screen**: a button in the middle of the screen, below the starter prompts or the
+  greeting — also when the app has no starter prompts.
+- **Next to the chat input**: a "Usage guide" link on the line below the input once the chat
+  has messages.
+- **Start form and compare mode**: the same button opens the guide in a viewer, as there is no
+  single transcript to answer in.
+
+The guide is part of the app's configuration, so it is exported, backed up and installed with
+the app. The app list (`GET /api/apps`) leaves the guide's text out; the chat reads it from the
+app's details (`GET /api/apps/{appId}`). The guide is shown in the user's language, falling back
+to English. It is not stored with the chat and does not appear in exports.
+
+In the admin app editor, the **Usage Guide** section writes the guide by hand or generates it:
+**Generate with AI** asks the default chat model once, for the chosen language, using the
+editor's current form (name, description, instructions, input fields, starter prompts, uploads,
+tools and knowledge sources). Review and edit the text, then save the app. **Regenerate**
+replaces the text of that language; **Delete guide** removes the guide.
 
 #### Content Restrictions
 
