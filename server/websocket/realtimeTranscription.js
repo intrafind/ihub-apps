@@ -113,7 +113,7 @@ const BACKPRESSURE_POLL_MS = 250;
 // Hard ceiling on a single bridge session's lifetime, so a (possibly scripted)
 // client streaming forever can't pin a GPU-backed upstream session
 // indefinitely. Overridable via platform.speech.realtime.maxSessionSeconds.
-// 4200 s = the 3600 s an app records by default (transcription.maxDurationSeconds)
+// 4200 s = the 3600 s the chat lets a transcription run (MAX_TRANSCRIPTION_SECONDS)
 // plus 10 minutes. The session's clock starts when the connection opens and the
 // recording's a little later, and a batch provider transcribes only after Stop,
 // which takes minutes for an hour of audio. A cap equal to the recording limit
@@ -1460,7 +1460,7 @@ export function bridgeConnection(clientWs, user, limiter, options = {}) {
  * The hard cap on one session's lifetime in seconds: the platform's
  * `speech.realtime.maxSessionSeconds` where that is a positive integer, the
  * default otherwise. It has to exceed the longest recording an app allows
- * (`transcription.maxDurationSeconds`) with room for the final transcription.
+ * (the chat's MAX_TRANSCRIPTION_SECONDS) with room for the final transcription.
  * Exported for tests.
  *
  * @returns {number}

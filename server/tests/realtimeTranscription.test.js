@@ -25,7 +25,6 @@ import {
   getStreamLimits,
   testTranscriptionModel
 } from '../websocket/realtimeTranscription.js';
-import { appConfigSchema } from '../validators/appConfigSchema.js';
 import { generateJwt } from '../utils/tokenService.js';
 import { getTranscriptionProvider } from '../transcription/index.js';
 import configCache from '../configCache.js';
@@ -1226,20 +1225,11 @@ describe('getMaxSessionSeconds', () => {
 
   test('the default session outlasts the longest recording an app allows by default', () => {
     configCache.setCacheEntry('config/platform.json', platform());
-    const app = appConfigSchema.parse({
-      id: 'x',
-      name: { en: 'X' },
-      description: { en: 'd' },
-      color: '#4F46E5',
-      icon: 'chat',
-      system: { en: 's' },
-      transcription: { enabled: true, modelId: 'voxtral-mini-realtime' }
-    });
 
     // The session starts before the recording does and a batch provider
     // transcribes after Stop: it needs more than the recording's own length
-    const recording = app.transcription.maxDurationSeconds;
-    expect(recording).toBe(3600);
+    // (an hour by default)
+    const recording = 3600;
     expect(getMaxSessionSeconds()).toBe(4200);
     expect(getMaxSessionSeconds()).toBeGreaterThanOrEqual(recording + 600);
   });

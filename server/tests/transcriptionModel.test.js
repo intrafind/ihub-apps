@@ -106,29 +106,12 @@ describe('appConfigSchema — videoUpload / transcription blocks', () => {
     });
   });
 
-  test('transcription block survives parsing with defaults', () => {
+  test('the retired per-app transcription block is rejected', () => {
     const r = appConfigSchema.safeParse({
       ...app,
       transcription: { enabled: true, modelId: 'voxtral-mini-realtime' }
     });
-    expect(r.success).toBe(true);
-    expect(r.data.transcription.enabled).toBe(true);
-    expect(r.data.transcription.modelId).toBe('voxtral-mini-realtime');
-    expect(r.data.transcription.streaming).toBe(true);
-    // An hour: a 30-minute video transcribes out of the box
-    expect(r.data.transcription.maxDurationSeconds).toBe(3600);
-    expect(r.data.transcription.inputs).toEqual({ upload: true, record: true, video: true });
-  });
-
-  test('an app that sets its own transcription length keeps it, up to two hours', () => {
-    const parse = maxDurationSeconds =>
-      appConfigSchema.safeParse({
-        ...app,
-        transcription: { enabled: true, modelId: 'm', maxDurationSeconds }
-      });
-    expect(parse(900).data.transcription.maxDurationSeconds).toBe(900);
-    expect(parse(7200).success).toBe(true);
-    expect(parse(7201).success).toBe(false);
+    expect(r.success).toBe(false);
   });
 });
 
