@@ -16,11 +16,10 @@ const selectClass =
 const errorDetail = err =>
   err?.code && err.message && err.message !== err.code ? `${err.code}: ${err.message}` : err?.code;
 
-/** The button for the test's current step, and what it is doing. */
-function RecordingControls({ status, elapsed, onStart, onStop, onCancel, startDisabled, t }) {
-  let button;
+/** The button for the test's current step. */
+function RecordingButton({ status, onStart, onStop, onCancel, startDisabled, t }) {
   if (status === 'recording') {
-    button = (
+    return (
       <button
         type="button"
         onClick={onStop}
@@ -30,8 +29,9 @@ function RecordingControls({ status, elapsed, onStart, onStop, onCancel, startDi
         {t('admin.voiceInput.test.recording.stop', 'Stop and transcribe')}
       </button>
     );
-  } else if (status === 'transcribing') {
-    button = (
+  }
+  if (status === 'transcribing') {
+    return (
       <button
         type="button"
         onClick={onCancel}
@@ -40,22 +40,25 @@ function RecordingControls({ status, elapsed, onStart, onStop, onCancel, startDi
         {t('common.cancel', 'Cancel')}
       </button>
     );
-  } else {
-    button = (
-      <button
-        type="button"
-        onClick={onStart}
-        disabled={startDisabled}
-        className="inline-flex items-center gap-2 px-3 py-2 rounded-md border border-indigo-600 text-indigo-600 dark:text-indigo-400 dark:border-indigo-400 text-sm font-medium hover:bg-indigo-50 dark:hover:bg-indigo-900/20 disabled:opacity-50"
-      >
-        <span className="w-2.5 h-2.5 bg-red-600 rounded-full" aria-hidden="true" />
-        {t('admin.voiceInput.test.recording.start', 'Start recording')}
-      </button>
-    );
   }
   return (
+    <button
+      type="button"
+      onClick={onStart}
+      disabled={startDisabled}
+      className="inline-flex items-center gap-2 px-3 py-2 rounded-md border border-indigo-600 text-indigo-600 dark:text-indigo-400 dark:border-indigo-400 text-sm font-medium hover:bg-indigo-50 dark:hover:bg-indigo-900/20 disabled:opacity-50"
+    >
+      <span className="w-2.5 h-2.5 bg-red-600 rounded-full" aria-hidden="true" />
+      {t('admin.voiceInput.test.recording.start', 'Start recording')}
+    </button>
+  );
+}
+
+/** The button for the test's current step, and what it is doing. */
+function RecordingControls({ status, elapsed, t, ...buttonProps }) {
+  return (
     <div className="flex items-center gap-3">
-      {button}
+      <RecordingButton status={status} t={t} {...buttonProps} />
       <span className="text-sm text-gray-600 dark:text-gray-400" aria-live="polite">
         {status === 'recording' &&
           t('admin.voiceInput.test.recording.recording', 'Recording… {{elapsed}} s', {
@@ -68,9 +71,50 @@ function RecordingControls({ status, elapsed, onStart, onStop, onCancel, startDi
   );
 }
 
+/** How the finished test went: how long it took, or that no text came back. */
+function RecordingVerdict({ transcript, durationSeconds, processingMs, t }) {
+  if (!transcript.trim()) {
+    return (
+      <p className="text-sm text-amber-600 dark:text-amber-400 flex items-center gap-1">
+        <Icon name="exclamation-triangle" className="w-4 h-4 shrink-0" />
+        {t(
+          'admin.voiceInput.test.recording.noText',
+          'The model returned no text. Use the microphone check to confirm the microphone picks up sound.'
+        )}
+      </p>
+    );
+  }
+  return (
+    <p className="text-sm text-green-600 dark:text-green-400 flex items-center gap-1">
+      <Icon name="check-circle" className="w-4 h-4 shrink-0" />
+      {t(
+        'admin.voiceInput.test.recording.success',
+        'Transcribed {{duration}} s of audio in {{ms}} ms.',
+        { duration: (durationSeconds || 0).toFixed(1), ms: processingMs }
+      )}
+    </p>
+  );
+}
+
+/** Why the test failed, with the raw code for admins. */
+function RecordingError({ error }) {
+  return (
+    <div className="text-sm text-red-600 dark:text-red-400" role="alert">
+      <p className="flex items-center gap-1">
+        <Icon name="clearCircle" className="w-4 h-4 shrink-0" />
+        {error.message}
+      </p>
+      {error.detail && (
+        <p className="mt-1 ml-5 text-xs font-mono text-red-500 dark:text-red-400 break-all">
+          {error.detail}
+        </p>
+      )}
+    </div>
+  );
+}
+
 /** The transcript, how long it took, or why it failed. */
 function RecordingOutcome({ status, transcript, durationSeconds, processingMs, error, t }) {
-  const noText = status === 'done' && !transcript.trim();
   return (
     <>
       {transcript && (
@@ -81,42 +125,63 @@ function RecordingOutcome({ status, transcript, durationSeconds, processingMs, e
           {transcript}
         </div>
       )}
-
-      {status === 'done' && !noText && (
-        <p className="text-sm text-green-600 dark:text-green-400 flex items-center gap-1">
-          <Icon name="check-circle" className="w-4 h-4 shrink-0" />
-          {t(
-            'admin.voiceInput.test.recording.success',
-            'Transcribed {{duration}} s of audio in {{ms}} ms.',
-            { duration: (durationSeconds || 0).toFixed(1), ms: processingMs }
-          )}
-        </p>
+      {status === 'done' && (
+        <RecordingVerdict
+          transcript={transcript}
+          durationSeconds={durationSeconds}
+          processingMs={processingMs}
+          t={t}
+        />
       )}
-      {noText && (
-        <p className="text-sm text-amber-600 dark:text-amber-400 flex items-center gap-1">
-          <Icon name="exclamation-triangle" className="w-4 h-4 shrink-0" />
-          {t(
-            'admin.voiceInput.test.recording.noText',
-            'The model returned no text. Use the microphone check to confirm the microphone picks up sound.'
-          )}
-        </p>
-      )}
-      {error && (
-        <div className="text-sm text-red-600 dark:text-red-400" role="alert">
-          <p className="flex items-center gap-1">
-            <Icon name="clearCircle" className="w-4 h-4 shrink-0" />
-            {error.message}
-          </p>
-          {error.detail && (
-            <p className="mt-1 ml-5 text-xs font-mono text-red-500 dark:text-red-400 break-all">
-              {error.detail}
-            </p>
-          )}
-        </div>
-      )}
+      {error && <RecordingError error={error} />}
     </>
   );
 }
+
+/** The model to test with, and a hint when there is none. */
+function ModelPicker({ models, modelId, disabled, onChange, language, t }) {
+  return (
+    <div className="max-w-md">
+      <label
+        className="block text-xs font-medium text-gray-700 dark:text-gray-300"
+        htmlFor="voice-test-model"
+      >
+        {t('admin.voiceInput.test.recording.model', 'Transcription model')}
+      </label>
+      <select
+        id="voice-test-model"
+        value={modelId}
+        disabled={disabled || !models?.length}
+        onChange={e => onChange(e.target.value)}
+        className={selectClass}
+      >
+        {models === null && <option value="">{t('common.loading', 'Loading...')}</option>}
+        {(models || []).map(m => (
+          <option key={m.id} value={m.id}>
+            {getLocalizedContent(m.name, language) || m.id}
+          </option>
+        ))}
+      </select>
+      {models?.length === 0 && (
+        <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
+          {t(
+            'admin.apps.edit.noTranscriptionModels',
+            'No transcription models configured. Add one under Admin → Models (model type "transcription").'
+          )}
+        </p>
+      )}
+    </div>
+  );
+}
+
+/** The model picked, or until the admin picks one, the first. */
+const pickModelId = (models, selectedId) => {
+  const list = models || [];
+  return list.find(m => m.id === selectedId)?.id || list[0]?.id || '';
+};
+
+/** Whether the test is between Start and its result. */
+const isBusy = status => ['starting', 'recording', 'transcribing'].includes(status);
 
 /**
  * Record → transcribe test: records a short clip and sends it to a
@@ -144,8 +209,7 @@ function RecordingTest({ models, t, language }) {
   // releases the microphone instead of recording on.
   const disposedRef = useRef(false);
 
-  // Until the admin picks one: the first model.
-  const modelId = (models || []).find(m => m.id === selectedModelId)?.id || models?.[0]?.id || '';
+  const modelId = pickModelId(models, selectedModelId);
 
   // Release the microphone and abort a running transcription on unmount.
   useEffect(() => {
@@ -239,8 +303,7 @@ function RecordingTest({ models, t, language }) {
     abortRef.current?.abort();
   };
 
-  const busy = status === 'starting' || status === 'recording' || status === 'transcribing';
-  const noModels = Array.isArray(models) && models.length === 0;
+  const busy = isBusy(status);
 
   return (
     <div className="space-y-3">
@@ -257,36 +320,14 @@ function RecordingTest({ models, t, language }) {
         </p>
       </div>
 
-      <div className="max-w-md">
-        <label
-          className="block text-xs font-medium text-gray-700 dark:text-gray-300"
-          htmlFor="voice-test-model"
-        >
-          {t('admin.voiceInput.test.recording.model', 'Transcription model')}
-        </label>
-        <select
-          id="voice-test-model"
-          value={modelId}
-          disabled={busy || !models?.length}
-          onChange={e => setSelectedModelId(e.target.value)}
-          className={selectClass}
-        >
-          {models === null && <option value="">{t('common.loading', 'Loading...')}</option>}
-          {(models || []).map(m => (
-            <option key={m.id} value={m.id}>
-              {getLocalizedContent(m.name, language) || m.id}
-            </option>
-          ))}
-        </select>
-        {noModels && (
-          <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
-            {t(
-              'admin.apps.edit.noTranscriptionModels',
-              'No transcription models configured. Add one under Admin → Models (model type "transcription").'
-            )}
-          </p>
-        )}
-      </div>
+      <ModelPicker
+        models={models}
+        modelId={modelId}
+        disabled={busy}
+        onChange={setSelectedModelId}
+        language={language}
+        t={t}
+      />
 
       <RecordingControls
         status={status}

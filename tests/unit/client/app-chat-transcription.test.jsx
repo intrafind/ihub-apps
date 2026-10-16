@@ -574,7 +574,7 @@ describe('a transcription model selected in the chat', () => {
     await attach([AUDIO, DOC]);
     await send();
     await waitFor(() => expect(shownTurns()).toHaveLength(2));
-    expect(mockUpload.selected).toEqual([DOC]);
+    expect(mockUpload.selected).toEqual(DOC);
   });
 
   test('the transcript streams into the answer', async () => {

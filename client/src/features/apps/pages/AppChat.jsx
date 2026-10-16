@@ -167,6 +167,20 @@ const renderStartupState = (
 // is stable across renders like the router's own.
 const NO_SEARCH_PARAMS = new URLSearchParams();
 
+/** Whether a message is half of a transcription turn (its audio is not kept). */
+const isTranscriptionTurn = (messages, messageId) =>
+  messages.some(message => message.id === messageId && message.transcription);
+
+/** A message can go out with text, attachments, or — where the app allows it — neither. */
+const hasSomethingToSend = (content, files, app) =>
+  Boolean(content) || files.length > 0 || app?.allowEmptyContent === true;
+
+/** Attachments as the uploader holds them: none, one object, or a list. */
+const asSelection = files => {
+  if (files.length === 0) return null;
+  return files.length === 1 ? files[0] : files;
+};
+
 /** A message's images, audio and documents (each one or a list) as one list. */
 const attachmentsOf = ({ imageData, audioData, fileData }) =>
   [imageData, audioData, fileData].flatMap(data => (data ? [data].flat() : []));
@@ -1704,34 +1718,29 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
     editMessage(messageId, newContent);
   };
 
+  // Variables of a message being resent, when it had any. Kept in a ref as
+  // well, so validation sees them before the state update has committed.
+  const restoreVariables = restored => {
+    if (!restored) return;
+    setVariables(restored);
+    pendingVariablesRef.current = restored;
+  };
+
   const handleResendMessage = (messageId, editedContent) => {
     // A transcription turn's audio is not kept: there is nothing to resend,
     // and preparing a resend would already remove the transcript.
-    if (messages.find(message => message.id === messageId)?.transcription) return;
+    if (isTranscriptionTurn(messages, messageId)) return;
     const resendData = prepareResend(messageId, editedContent);
-    const contentToResend = resendData.content;
     const filesToRestore = attachmentsOf(resendData);
 
     // Allow resending if there's content OR if the app allows empty content (for variable-only messages)
-    if (!contentToResend && filesToRestore.length === 0 && !app?.allowEmptyContent) return;
+    if (!hasSomethingToSend(resendData.content, filesToRestore, app)) return;
 
-    setInput(contentToResend || '');
-
-    // Restore variables if they exist
-    if (resendData.variables) {
-      setVariables(resendData.variables);
-      // Store variables in ref to ensure they're available for validation
-      // This avoids race condition with async state updates
-      pendingVariablesRef.current = resendData.variables;
-    }
+    setInput(resendData.content || '');
+    restoreVariables(resendData.variables);
 
     // The message's images, audio and documents become the selection again.
-    fileUploadHandler.clearSelectedFile();
-    if (filesToRestore.length > 0) {
-      fileUploadHandler.setSelectedFile(
-        filesToRestore.length === 1 ? filesToRestore[0] : filesToRestore
-      );
-    }
+    fileUploadHandler.setSelectedFile(asSelection(filesToRestore));
 
     // Held from here on: resending the first exchange of a form-started chat
     // empties the transcript, and the composer has to stay to send it.
@@ -2054,8 +2063,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
     async (files, others = []) => {
       if (!transcriptionModel || busyWithAudio()) return;
       setInput('');
-      if (others.length > 0) fileUploadHandler.setSelectedFile(others);
-      else fileUploadHandler.clearSelectedFile();
+      fileUploadHandler.setSelectedFile(asSelection(others));
       fileUploadHandler.hideUploader();
 
       const abortController = new AbortController();
@@ -2176,7 +2184,8 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
   const startRecording = useCallback(async () => {
     // Re-entrancy: a second click while the permission prompt is open would
     // start a second recorder and orphan the first (hot mic).
-    if (recorderStartingRef.current || busyWithAudio()) return;
+    if (recorderStartingRef.current) return;
+    if (busyWithAudio()) return;
     const onMaxDuration = () => stopRecording();
     recorderStartingRef.current = true;
     // A transcription model gets the recording live; a chat model gets it attached.
