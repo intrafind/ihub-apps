@@ -15,25 +15,22 @@ Audio file support allows users to upload audio files (MP3, WAV, FLAC, OGG, M4A/
 
 ## Two audio paths: multimodal vs. Voxtral transcription
 
-iHub Apps offers **two independent ways** to handle uploaded audio, which coexist and never fire for the same submission:
+iHub Apps offers **two ways** to handle audio; the model selected in the chat decides which applies:
 
-| | Multimodal audio (this page) | Voxtral transcription ([Transcription Models](models.md#transcription-models)) |
+| | Multimodal audio (this page) | Transcription model ([Transcription Models](models.md#transcription-models)) |
 | --- | --- | --- |
-| **Enabled by** | `upload.audioUpload` + a chat model with `supportsAudio: true` | `app.transcription.enabled` + a `modelType: "transcription"` model |
-| **Where the audio goes** | Sent as `audioData` to the multimodal **chat** LLM (Gemini / OpenAI), often an external provider | Streamed to a **self-hosted Voxtral** realtime endpoint; the URL/key stay server-side |
-| **Result** | The chat model's answer (transcription, analysis, Q&A…) | The transcript becomes part of the user's message (streaming into it), and the chat model answers the text |
-| **Sources** | Audio upload, video upload (extracted audio) | Audio upload, video upload (extracted audio), **and browser recording** |
+| **Selected model** | A chat model with `supportsAudio: true` (plus `upload.audioUpload` on the app) | A `modelType: "transcription"` model, picked in the model selector |
+| **Where the audio goes** | Sent as `audioData` to the multimodal **chat** LLM (Gemini / OpenAI), often an external provider | Streamed through iHub to the transcription endpoint; the URL/key stay server-side |
+| **Result** | The chat model's answer (transcription, analysis, Q&A…) | The transcript is the answer and is stored in the chat |
+| **Sources** | Audio upload, video upload (extracted audio), browser recording | Audio upload, video upload (extracted audio), browser recording |
 | **Decode** | Provider decodes server-side | Browser decodes to 16 kHz mono PCM16 (see caveat below) |
 
-When `app.transcription.enabled` is set and the submission contains audio (uploaded audio or audio extracted from an uploaded video), it is transcribed first and replaced by its text: the message sent to the chat model is the typed text followed by `Transcript of <file>:` and the transcript, with any non-audio attachments. If transcription is not enabled, the multimodal path below applies.
+With a transcription model selected, the text box is disabled: the user uploads audio/video or records, and the transcript comes back as the answer. A chat model picked afterwards can work with it (summarize, write notes, …).
 
-Because the chat model only ever sees text, the audio/video upload pickers are **not** gated on the chat model's `supportsAudio` for transcription-enabled apps.
-
-**Gate precedence** (what actually decides whether audio/video can be attached and where it goes):
+**Gate precedence** (what decides whether audio/video can be attached):
 
 1. `upload.enabled` must not be `false`, and the specific block (`audioUpload` / `videoUpload`) must be enabled. Note the asymmetry: an *absent* `audioUpload` block passes the `enabled !== false` check, while a present block defaults to `enabled: false` in the schema — be explicit in app configs.
-2. The picker is shown when the chat model has `supportsAudio: true` **or** the app has `transcription.enabled` with the matching input (`inputs.upload` / `inputs.video`) allowed.
-3. At submit time, the **per-chat Transcription toggle** decides the route: toggled on → the audio is transcribed into the user's message; toggled off → the audio goes to the chat model as multimodal input, which is only permitted when that model has `supportsAudio: true` (otherwise the submission is blocked with guidance to re-enable transcription or remove the attachment).
+2. The picker is shown when the selected model has `supportsAudio: true` or is a transcription model.
 
 For deployment-level details (endpoint configuration, reverse proxy, limits), see [Realtime Voice & Transcription](voice-transcription.md).
 

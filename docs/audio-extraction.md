@@ -69,7 +69,7 @@ The page is kept free while the extraction runs. Reading, decoding and resamplin
 ### 3. Model Processing
 The extracted audio is sent to the AI model as if it were a regular audio file upload.
 
-For **transcription-enabled apps** (see [Transcription Models](models.md#transcription-models)), the extracted audio is instead transcribed by the app's transcription model, and the transcript takes the audio's place in the user's message. The extracted audio is already 16 kHz mono, which is what the transcription client streams (the vLLM realtime endpoint requires 16 kHz mono PCM16), so it is decoded from the attachment's WAV `Blob` and streamed as it is.
+With a **transcription model selected** in the chat (see [Transcription Models](models.md#transcription-models)), the extracted audio is instead transcribed by that model: the video's name is the question and the transcript is the answer. The extracted audio is already 16 kHz mono, which is what the transcription client streams (the vLLM realtime endpoint requires 16 kHz mono PCM16), so it is decoded from the attachment's WAV `Blob` and streamed as it is.
 
 ## Browser Compatibility
 
@@ -206,7 +206,7 @@ The extracted audio is attached as `<video name>.wav`, a file the user does not 
 - Only audio extracted from a video gets the button. Audio files the user uploads themselves are already on their disk
 - The button saves the attachment's WAV `Blob`. An attachment that lost it, for example a copy of the attachment that was serialized and restored, is rebuilt from its base64 data URL
 - The button is available while the chat input is busy, so the audio can still be saved while an answer is running
-- In a transcription-enabled app the audio is replaced by its transcript when the message is sent, so save it before sending
+- With a transcription model selected, the audio is transcribed when the message is sent and only the transcript stays in the chat, so save it before sending
 
 ## Testing
 
@@ -287,7 +287,7 @@ const renderedBuffer = await offlineContext.startRendering();
 
 ### Recommended Limits
 - Maximum video file size: up to 50 GB as MP4 or MOV (`maxFileSizeMB` up to 51200), about 2 GB for other containers
-- Maximum video duration: as long as the audio the model takes: an app transcribes an hour by default (`transcription.maxDurationSeconds`, at most 7200). Audio sent to a multimodal model must fit in the request body (`requestBodyLimitMB`, 50 MB by default, about 20 minutes of 16 kHz mono WAV)
+- Maximum video duration: as long as the audio the model takes: a transcription takes an hour by default. Audio sent to a multimodal model must fit in the request body (`requestBodyLimitMB`, 50 MB by default, about 20 minutes of 16 kHz mono WAV)
 
 ## Future Enhancements
 

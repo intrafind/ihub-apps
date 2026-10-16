@@ -191,6 +191,15 @@ function ModelSelector({
                         >
                           {name}
                         </div>
+                        {model.modelType === 'transcription' && (
+                          /* Selecting one turns the chat into transcription:
+                             audio and video in, the transcript as the answer. */
+                          <div className="mt-0.5 text-xs font-medium text-indigo-600 dark:text-indigo-400">
+                            {model.transcriptionMode === 'batch'
+                              ? t('transcription.modelBadgeBatch', 'Transcription · whole file')
+                              : t('transcription.modelBadgeLive', 'Transcription · live')}
+                          </div>
+                        )}
                         {desc && (
                           /* Mobile uses `truncate` (nowrap + ellipsis) rather
                              than line-clamp-1: an element with

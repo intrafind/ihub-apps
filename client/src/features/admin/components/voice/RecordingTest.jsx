@@ -20,12 +20,11 @@ const selectClass =
  * measured on its own.
  *
  * @param {object} props
- * @param {object} props.speech Saved speech config in the public client shape.
  * @param {Array|null} props.models Enabled transcription models (null while loading).
  * @param {Function} props.t
  * @param {string} props.language UI language, for localized model names.
  */
-function RecordingTest({ speech, models, t, language }) {
+function RecordingTest({ models, t, language }) {
   const [selectedModelId, setSelectedModelId] = useState('');
   const [status, setStatus] = useState('idle');
   const [elapsed, setElapsed] = useState(0);
@@ -39,14 +38,8 @@ function RecordingTest({ speech, models, t, language }) {
   // releases the microphone instead of recording on.
   const disposedRef = useRef(false);
 
-  const defaultModelId = speech?.transcription?.defaultModelId || '';
-
-  // Until the admin picks one: the platform default, else the first model.
-  const modelId =
-    (models || []).find(m => m.id === selectedModelId)?.id ||
-    (models || []).find(m => m.id === defaultModelId)?.id ||
-    models?.[0]?.id ||
-    '';
+  // Until the admin picks one: the first model.
+  const modelId = (models || []).find(m => m.id === selectedModelId)?.id || models?.[0]?.id || '';
 
   // Release the microphone and abort a running transcription on unmount.
   useEffect(() => {
@@ -183,9 +176,6 @@ function RecordingTest({ speech, models, t, language }) {
           {(models || []).map(m => (
             <option key={m.id} value={m.id}>
               {getLocalizedContent(m.name, language) || m.id}
-              {m.id === defaultModelId
-                ? ` (${t('admin.voiceInput.test.recording.platformDefault', 'platform default')})`
-                : ''}
             </option>
           ))}
         </select>

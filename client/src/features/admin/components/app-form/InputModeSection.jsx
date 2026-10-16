@@ -10,8 +10,8 @@ import {
 
 /**
  * @param {object} props
- * @param {Array} [props.transcriptionModels] Enabled transcription models: each
- *   one can take the app's voice input.
+ * @param {Array} [props.transcriptionModels] Enabled streaming transcription
+ *   models: each one can take the app's voice input.
  */
 function InputModeSection({ app, onChange, t, transcriptionModels = [], currentLanguage }) {
   const { platformConfig } = usePlatformConfig();
@@ -226,7 +226,7 @@ function InputModeSection({ app, onChange, t, transcriptionModels = [], currentL
                   {selectedModelMissing
                     ? t(
                         'admin.apps.edit.dictationModelUnavailable',
-                        'This model is disabled or no longer exists, so voice input fails in this app.'
+                        'This model is disabled, no longer exists or does not stream, so voice input fails in this app.'
                       )
                     : t(
                         'admin.apps.edit.dictationModelHint',

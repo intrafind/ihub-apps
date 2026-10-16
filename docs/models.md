@@ -343,7 +343,7 @@ Key points:
 
 - **Credentials stay server-side.** The public `GET /api/models` endpoint strips `apiKey` from every model and strips `url` from transcription models, so the vLLM URL and API key never reach the browser. `GET /api/models` returns chat models by default; `GET /api/models?type=transcription` returns permitted transcription models (sanitized). The admin pages (app editor, Voice Input) list models from `GET /api/admin/models` instead, since admin access does not imply model permissions.
 - **Permissions** are enforced the same way as chat models — a user must be permitted to use the transcription model.
-- **Selection.** Apps reference a transcription model via the `transcription.modelId` app-config field (Admin → Apps → Transcription), not the chat model selector. Transcription models are hidden from the chat model selector, magic prompt, and compare mode.
+- **Selection.** Transcription models appear in the chat's model selector (an app's `allowedModels` must include them when it restricts models). With one selected, the text box is disabled and the user uploads audio/video or records; the transcript is the answer and is stored in the chat. They are hidden from magic prompt and compare mode.
 - **Dictation.** The microphone button uses a transcription model when Admin → Voice Input → Voice input (`speech.defaultService: "model"`, `speech.dictation.modelId`) or the app (`settings.speechRecognition.service: "model"`, `modelId`) picks one. See [Microphone Feature](microphone-feature.md#transcription-models-server-proxied).
 - **Testing.** The **Test** action in Admin → Models starts a session with the model's endpoint (a batch model is sent one second of silence), also for a disabled model.
 
@@ -378,7 +378,7 @@ under `platform.speech.realtime`:
 | `maxBufferedAudioBytes` | 134217728 (128 MiB, ≈70 min) | Per connection. Exceeding it fails the session with `audio-too-long`. |
 | `maxBufferedAudioBytesTotal` | 536870912 (512 MiB) | Across the whole process. Exceeding it fails the session with `server-busy`. |
 
-The default per-connection cap holds the hour of audio an app transcribes by default (one hour of 16 kHz PCM16 is ≈115 MB). Raise `maxBufferedAudioBytes` for recordings longer than ≈70 minutes (an app's `transcription.maxDurationSeconds` goes up to 7200 s ≈ 230 MB) and size `maxBufferedAudioBytesTotal` against the memory the instance can spare — `maxConnections` × `maxBufferedAudioBytes` is the theoretical worst case.
+The default per-connection cap holds the hour of audio an app transcribes by default (one hour of 16 kHz PCM16 is ≈115 MB). Raise `maxBufferedAudioBytes` for recordings longer than ≈70 minutes (two hours ≈ 230 MB) and size `maxBufferedAudioBytesTotal` against the memory the instance can spare — `maxConnections` × `maxBufferedAudioBytes` is the theoretical worst case.
 
 ### Text-to-Speech Models
 

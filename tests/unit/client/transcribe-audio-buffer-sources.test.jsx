@@ -53,7 +53,7 @@ async function openSession(opts) {
   const transcript = transcribeAudioBuffer(AUDIO, { modelId: 'voxtral', ...opts });
   await flush();
   const socket = FakeSocket.last;
-  expect(JSON.parse(socket.sent[0])).toEqual({ type: 'start', modelId: 'voxtral' });
+  expect(JSON.parse(socket.sent[0])).toEqual({ type: 'start', modelId: 'voxtral', source: 'file' });
   return { transcript, socket };
 }
 

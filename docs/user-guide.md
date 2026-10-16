@@ -82,16 +82,17 @@ in the form again. The values stay with the chat, so they are still there when y
 ### The chat input
 
 - **Enter** sends, **Shift+Enter** adds a line break. Type `/` to search the prompt library.
-- **+** opens the per-chat options the app offers — for example **Web Search**, the app's tools,
-  **Transcription** or image settings. A switched-on option shows as a chip in the input.
+- **+** opens the per-chat options the app offers — for example **Web Search**, the app's tools
+  or image settings. A switched-on option shows as a chip in the input.
 
-  ![The chat input's options menu with web search and transcription](assets/screenshots/chat-input-menu.png)
+  ![The chat input's options menu with web search](assets/screenshots/chat-input-menu.png)
 
 - **✨ Magic Prompt** rewrites a short or vague request into a well-formed prompt. You can undo it.
 - **📎** attaches files: documents, images, audio or video, depending on the app.
-- **🎙️** dictates into the input field; the **red dot** records a voice message (see
-  [Transcription](#transcription-and-voice)).
+- **🎙️** dictates into the input field; the **red dot** records audio for the selected
+  model (see [Transcription](#transcription-and-voice)).
 - The **model selector** on the right chooses the model for this chat, when the app allows it.
+  It also lists transcription models, which turn audio into text.
   Hover a model to read its description; some models carry a hint or a notice from the
   administrator, for example "do not use for confidential data".
 
@@ -142,24 +143,28 @@ be renamed and deleted from the sidebar.
 
 ## Transcription and voice
 
-Apps with transcription turn speech into the message you send:
+Transcription models appear in the chat's model selector next to the chat models. With one
+selected, the text box is disabled and the chat transcribes instead of answering:
 
-- **Record**: press the red dot, speak, and press stop (or Send). The transcript appears in your
-  message while you speak; then the chat model answers it.
-- **Upload**: attach an audio or video file and send. Your typed text comes first, followed by
-  *Transcript of <file>:* and the transcript. Long recordings such as meetings are supported.
-- The **Transcription** switch in the **+** menu decides per chat whether uploaded audio is
-  transcribed (on) or given to the model directly (off, for models that understand audio).
+- **Record**: press the red dot, speak, and press stop. The transcript appears while you speak.
+- **Upload**: attach an audio or video file. Long recordings such as meetings are supported.
+
+The transcript is the answer and is stored in the chat like any other turn. Switch back to a chat
+model to work with it — for example to turn it into meeting notes.
+
+With a chat model that understands audio, **Record** sends the recording itself to that model as
+audio, and it answers directly.
 
 ![A meeting recording transcribed and turned into meeting notes](assets/screenshots/transcription-chat.png)
 
-The answer is marked **Based on audio recording**. Typical uses: meeting notes from a recording,
+A transcript is marked **Based on audio recording**. Typical uses: meeting notes from a recording,
 an email from a voice memo, a summary of an interview.
 
 Two more voice features may be available:
 
 - **Dictation** — the microphone button types what you say into the input field, so you can check
-  it before sending.
+  it before sending. It uses the dictation service the administrator configured, whichever model
+  is selected.
 - **Read aloud** — the play button on a message reads it to you. Click again to pause, the square
   stops.
 

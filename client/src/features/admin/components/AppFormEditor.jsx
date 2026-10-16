@@ -13,7 +13,6 @@ import UploadConfigSection from './app-form/UploadConfigSection';
 import VariablesSection from './app-form/VariablesSection';
 import WebSearchSection from './app-form/WebSearchSection';
 import IAssistantSection from './app-form/IAssistantSection';
-import TranscriptionSection from './app-form/TranscriptionSection';
 import MagicPromptSection from './app-form/MagicPromptSection';
 import ExportConfigSection from './app-form/ExportConfigSection';
 import CompareModeSection from './app-form/CompareModeSection';
@@ -274,16 +273,6 @@ function AppFormEditor({
               app={app}
               onChange={handleInputChange}
               t={t}
-              parseNumberOrUndefined={parseNumberOrUndefined}
-            />
-
-            {/* Transcription Configuration */}
-            <TranscriptionSection
-              app={app}
-              onChange={handleInputChange}
-              t={t}
-              currentLanguage={currentLanguage}
-              transcriptionModels={transcriptionModels}
               parseNumberOrUndefined={parseNumberOrUndefined}
             />
 

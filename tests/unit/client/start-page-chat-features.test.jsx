@@ -29,7 +29,6 @@ const mockApp = {
   icon: 'chat',
   tools: ['braveSearch', 'jira'],
   websearch: { enabled: true, enabledByDefault: false },
-  transcription: { enabled: true, defaultEnabled: true },
   features: { magicPrompt: { enabled: true } }
 };
 
@@ -130,12 +129,13 @@ describe('start page chat input features', () => {
     consumePendingChatStart('chat'); // drop any handoff a previous case left
   });
 
-  it('offers the web search and transcription toggles', async () => {
+  it('offers the web search toggle', async () => {
     await renderStartPage();
     openActionsMenu();
 
     expect(switchFor('Web Search')).not.toBeChecked();
-    expect(switchFor('Transcription')).toBeChecked();
+    // Transcription is a model to select now, not a toggle.
+    expect(screen.queryByText('Transcription')).toBeNull();
 
     fireEvent.click(switchFor('Web Search'));
     expect(switchFor('Web Search')).toBeChecked();

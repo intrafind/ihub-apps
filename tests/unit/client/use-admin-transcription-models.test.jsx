@@ -1,7 +1,7 @@
 import { renderHook, waitFor } from '@testing-library/react';
 
 /**
- * The app editor's transcription and voice input pickers list the enabled
+ * The app editor's voice input picker lists the enabled streaming
  * transcription models of the admin model list — not the public /api/models,
  * which only holds the models the admin's own groups may use.
  */
@@ -18,19 +18,20 @@ beforeEach(() => {
   mockMakeAdminApiCall.mockReset();
 });
 
-test('lists the enabled transcription models of the admin model list', async () => {
+test('lists the enabled streaming transcription models of the admin model list', async () => {
   mockMakeAdminApiCall.mockResolvedValue({
     data: [
-      { id: 'whisper', modelType: 'transcription', enabled: true },
-      { id: 'voxtral', modelType: 'transcription' },
-      { id: 'old', modelType: 'transcription', enabled: false },
+      { id: 'gemini-live', modelType: 'transcription', provider: 'google-live', enabled: true },
+      { id: 'voxtral', modelType: 'transcription', provider: 'vllm-realtime' },
+      { id: 'whisper', modelType: 'transcription', provider: 'openai', enabled: true },
+      { id: 'old', modelType: 'transcription', provider: 'mistral', enabled: false },
       { id: 'gpt', modelType: 'chat', enabled: true },
       { id: 'speech', modelType: 'tts', enabled: true }
     ]
   });
   const { result } = renderHook(() => useAdminTranscriptionModels());
 
-  await waitFor(() => expect(result.current.map(m => m.id)).toEqual(['whisper', 'voxtral']));
+  await waitFor(() => expect(result.current.map(m => m.id)).toEqual(['gemini-live', 'voxtral']));
   expect(mockMakeAdminApiCall).toHaveBeenCalledWith('/admin/models');
 });
 

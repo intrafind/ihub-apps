@@ -56,7 +56,6 @@ export default function StartPage() {
   // passing `null` to hide the tools section outright.
   const [enabledTools, setEnabledTools] = useState(null);
   const [websearchEnabled, setWebsearchEnabled] = useState(false);
-  const [transcriptionEnabled, setTranscriptionEnabled] = useState(true);
   const [imageAspectRatio, setImageAspectRatio] = useState('1:1');
   const [imageQuality, setImageQuality] = useState('Medium');
 
@@ -210,7 +209,6 @@ export default function StartPage() {
     setWebsearchEnabled(
       saved.websearchEnabled ?? defaultAppDetails.websearch?.enabledByDefault ?? false
     );
-    setTranscriptionEnabled(defaultAppDetails.transcription?.defaultEnabled !== false);
     setImageAspectRatio(
       saved.imageAspectRatio || defaultAppDetails.imageGeneration?.aspectRatio || '1:1'
     );
@@ -311,7 +309,6 @@ export default function StartPage() {
         settings: {
           ...(effectiveEnabledTools !== null ? { enabledTools: effectiveEnabledTools } : {}),
           websearchEnabled,
-          transcriptionEnabled,
           imageAspectRatio,
           imageQuality
         }
@@ -338,7 +335,6 @@ export default function StartPage() {
       selectedModel,
       effectiveEnabledTools,
       websearchEnabled,
-      transcriptionEnabled,
       imageAspectRatio,
       imageQuality
     ]
@@ -430,13 +426,6 @@ export default function StartPage() {
                 websearchEnabled={websearchEnabled}
                 onWebsearchEnabledChange={
                   defaultAppDetails?.websearch?.enabled ? setWebsearchEnabled : undefined
-                }
-                transcriptionAvailable={defaultAppDetails?.transcription?.enabled === true}
-                transcriptionEnabled={transcriptionEnabled}
-                onTranscriptionEnabledChange={
-                  defaultAppDetails?.transcription?.enabled === true
-                    ? setTranscriptionEnabled
-                    : undefined
                 }
                 model={selectedModelObject}
                 imageAspectRatio={imageAspectRatio}

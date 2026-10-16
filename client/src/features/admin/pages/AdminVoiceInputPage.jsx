@@ -9,6 +9,7 @@ import {
   getSpeechServiceLabel,
   toDictationValue
 } from '../../voice/utils/speechService';
+import { isStreamingTranscriptionModel } from '../utils/transcriptionMode';
 import VoiceInputTestPanel from '../components/voice/VoiceInputTestPanel';
 import ReadAloudButton from '../../voice/components/ReadAloudButton';
 import useReadAloudPlayback from '../../voice/hooks/useReadAloudPlayback';
@@ -20,7 +21,6 @@ const READ_ALOUD_TEST_ID = 'admin-read-aloud-test';
 const DEFAULT_SPEECH = {
   defaultService: 'browser',
   dictation: { modelId: '' },
-  transcription: { defaultModelId: '' },
   tts: { enabled: false, defaultModelId: '' },
   azure: { enabled: false, host: '', region: '', subscriptionKey: '' }
 };
@@ -28,7 +28,6 @@ const DEFAULT_SPEECH = {
 const toFormSpeech = (speech = {}) => ({
   defaultService: speech.defaultService || DEFAULT_SPEECH.defaultService,
   dictation: { ...DEFAULT_SPEECH.dictation, ...speech.dictation },
-  transcription: { ...DEFAULT_SPEECH.transcription, ...speech.transcription },
   tts: { ...DEFAULT_SPEECH.tts, ...speech.tts },
   azure: { ...DEFAULT_SPEECH.azure, ...speech.azure }
 });
@@ -39,15 +38,14 @@ const toFormSpeech = (speech = {}) => ({
  * back as ***REDACTED***, which is enough to know one is configured.
  *
  * @param {object} speech Form-shaped speech config.
- * @param {Array|null} transcriptionModels Enabled transcription models.
+ * @param {Array|null} dictationModels Enabled streaming transcription models.
  */
-const toPublicSpeech = (speech, transcriptionModels) => ({
+const toPublicSpeech = (speech, dictationModels) => ({
   defaultService: speech.defaultService,
   dictation: {
     modelId: speech.dictation.modelId,
-    available: (transcriptionModels || []).some(m => m.id === speech.dictation.modelId)
+    available: (dictationModels || []).some(m => m.id === speech.dictation.modelId)
   },
-  transcription: { defaultModelId: speech.transcription.defaultModelId },
   tts: { enabled: !!speech.tts.enabled, defaultModelId: speech.tts.defaultModelId },
   azure: {
     enabled: !!speech.azure.enabled,
@@ -60,9 +58,8 @@ const toPublicSpeech = (speech, transcriptionModels) => ({
 /**
  * Admin page for voice, stored in platform.json under `speech`. It picks what
  * apps use unless they pick their own:
- *   - Voice input (the microphone button) — the browser, Azure Speech or any
- *     transcription model.
- *   - Transcription (record button, audio/video uploads) — a transcription model.
+ *   - Voice input (the microphone button) — the browser, Azure Speech or a
+ *     streaming transcription model.
  *   - Read aloud — a text-to-speech model.
  * Model endpoints and keys live on the models (Admin → Models). Azure Speech is
  * no model, so its host/region and subscription key are set here; the key is
@@ -149,7 +146,6 @@ function AdminVoiceInputPage() {
         ...platform.speech,
         defaultService: config.defaultService,
         dictation: { ...platform.speech?.dictation, ...config.dictation },
-        transcription: { ...platform.speech?.transcription, ...config.transcription },
         tts: { ...platform.speech?.tts, ...config.tts },
         azure: config.azure
       };
@@ -252,16 +248,15 @@ function AdminVoiceInputPage() {
   const labelClass = 'block text-sm font-medium text-gray-700 dark:text-gray-300';
   const dirty = JSON.stringify(config) !== JSON.stringify(savedConfig);
   const dictationModelId = config.defaultService === 'model' ? config.dictation.modelId : '';
+  // Dictation needs a live model; batch models only answer once the audio ends.
+  const dictationModels = Array.isArray(transcriptionModels)
+    ? transcriptionModels.filter(isStreamingTranscriptionModel)
+    : null;
   const dictationModelMissing =
     config.defaultService === 'model' &&
-    Array.isArray(transcriptionModels) &&
-    !transcriptionModels.some(m => m.id === dictationModelId);
+    Array.isArray(dictationModels) &&
+    !dictationModels.some(m => m.id === dictationModelId);
   const modelName = model => getLocalizedContent(model.name, i18n.language) || model.id;
-  const defaultModelId = config.transcription.defaultModelId;
-  const defaultModelMissing =
-    !!defaultModelId &&
-    Array.isArray(transcriptionModels) &&
-    !transcriptionModels.some(m => m.id === defaultModelId);
   const ttsModelId = config.tts.defaultModelId;
   const ttsModel = (ttsModels || []).find(m => m.id === ttsModelId);
   const ttsModelMissing = !!ttsModelId && Array.isArray(ttsModels) && !ttsModel;
@@ -299,7 +294,7 @@ function AdminVoiceInputPage() {
               <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
                 {t(
                   'admin.voiceInput.description',
-                  'Choose what apps use for voice input, transcription and read aloud. Apps follow these choices unless they pick their own in the app editor. Endpoints and keys of transcription and text-to-speech models are set under Admin → Models.'
+                  'Choose what apps use for voice input and read aloud. Apps follow these choices unless they pick their own in the app editor. Endpoints and keys of transcription and text-to-speech models are set under Admin → Models.'
                 )}
               </p>
             </div>
@@ -361,9 +356,9 @@ function AdminVoiceInputPage() {
                   ? ` (${t('admin.voiceInput.notEnabled', 'not enabled')})`
                   : ''}
               </option>
-              {((transcriptionModels || []).length > 0 || dictationModelMissing) && (
+              {((dictationModels || []).length > 0 || dictationModelMissing) && (
                 <optgroup label={t('admin.voiceInput.services.models', 'Transcription models')}>
-                  {(transcriptionModels || []).map(m => (
+                  {(dictationModels || []).map(m => (
                     <option
                       key={m.id}
                       value={toDictationValue({ service: 'model', modelId: m.id })}
@@ -400,11 +395,11 @@ function AdminVoiceInputPage() {
                 {dictationModelMissing
                   ? t(
                       'admin.voiceInput.dictation.modelUnavailable',
-                      'This model is disabled or no longer exists. Until it is enabled, apps that follow the platform default use the browser.'
+                      'This model is disabled, no longer exists or does not stream. Until a streaming model is chosen, apps that follow the platform default use the browser.'
                     )
                   : t(
                       'admin.voiceInput.dictation.modelHint',
-                      'The microphone streams through the iHub server to this model; its endpoint and key stay on the server. Streaming models show the text while the user speaks, others insert it when they stop. Users need access to the model through their groups.'
+                      'The microphone streams through the iHub server to this model; its endpoint and key stay on the server, and the text shows while the user speaks. Users need access to the model through their groups.'
                     )}
               </p>
             )}
@@ -416,59 +411,11 @@ function AdminVoiceInputPage() {
                 )}
               </p>
             )}
-            {Array.isArray(transcriptionModels) && transcriptionModels.length === 0 && (
+            {Array.isArray(dictationModels) && dictationModels.length === 0 && (
               <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                 {t(
                   'admin.voiceInput.dictation.noModels',
-                  'Enable a transcription model under Admin → Models to offer it here.'
-                )}
-              </p>
-            )}
-          </div>
-        </div>
-
-        {/* Transcription (recording and uploads) */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6 space-y-4">
-          <div>
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-              {t('admin.voiceInput.transcription.title', 'Transcription (recording and uploads)')}
-            </h2>
-            <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-              {t(
-                'admin.voiceInput.transcription.description',
-                'The model that transcribes recordings and audio/video uploads in apps that enable transcription without choosing a model of their own.'
-              )}
-            </p>
-          </div>
-
-          <div>
-            <label className={labelClass} htmlFor="default-transcription-model">
-              {t('admin.voiceInput.transcription.model', 'Model')}
-            </label>
-            <select
-              id="default-transcription-model"
-              value={defaultModelId}
-              onChange={e =>
-                setConfig(prev => ({
-                  ...prev,
-                  transcription: { ...prev.transcription, defaultModelId: e.target.value }
-                }))
-              }
-              className={inputClass}
-            >
-              <option value="">{t('admin.voiceInput.noModel', 'None')}</option>
-              {defaultModelMissing && <option value={defaultModelId}>{defaultModelId}</option>}
-              {(transcriptionModels || []).map(m => (
-                <option key={m.id} value={m.id}>
-                  {modelName(m)}
-                </option>
-              ))}
-            </select>
-            {defaultModelMissing && (
-              <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
-                {t(
-                  'admin.voiceInput.transcription.modelUnavailable',
-                  'This model is disabled or no longer exists, so recording fails in apps that rely on the default.'
+                  'Enable a streaming transcription model (vLLM Realtime, Gemini Live or Mistral) under Admin → Models to offer it here.'
                 )}
               </p>
             )}
@@ -704,8 +651,9 @@ function AdminVoiceInputPage() {
         </div>
 
         <VoiceInputTestPanel
-          speech={toPublicSpeech(savedConfig, transcriptionModels)}
+          speech={toPublicSpeech(savedConfig, dictationModels)}
           models={transcriptionModels}
+          dictationModels={dictationModels}
           dirty={dirty}
           t={t}
           language={i18n.language}

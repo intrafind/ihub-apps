@@ -395,7 +395,7 @@ function useChatMessages(chatId = 'default', { ephemeral = false, serverBacked =
     try {
       // Filter out greeting messages and a transcript still being recorded
       // (it becomes a real message only when it is sent) for persistence
-      const persistableMessages = messages.filter(msg => !msg.isGreeting && !msg.isLiveTranscript);
+      const persistableMessages = messages.filter(msg => !msg.isGreeting);
 
       // Strip image data to avoid sessionStorage quota issues
       // Images can be very large (base64 encoded) and exceed the ~5-10MB quota
@@ -445,7 +445,7 @@ function useChatMessages(chatId = 'default', { ephemeral = false, serverBacked =
         );
         try {
           const textOnlyMessages = messages
-            .filter(msg => !msg.isGreeting && !msg.isLiveTranscript)
+            .filter(msg => !msg.isGreeting)
             .map(msg => {
               const { images: _images, ...rest } = withoutGeneratedFileData(msg);
               return rest;
@@ -785,9 +785,7 @@ function useChatMessages(chatId = 'default', { ephemeral = false, serverBacked =
       // bubble: it is replaced by the message it turns into, but the ref can
       // still hold it for a render after the swap.
       let messagesForApi =
-        includeFull && !serverBacked
-          ? messagesRef.current.filter(msg => !msg.isGreeting && !msg.isLiveTranscript)
-          : [];
+        includeFull && !serverBacked ? messagesRef.current.filter(msg => !msg.isGreeting) : [];
 
       if (additionalMessage) {
         messagesForApi = [...messagesForApi, additionalMessage];

@@ -12,11 +12,12 @@ import RecordingTest from './RecordingTest';
  * @param {object} props
  * @param {object} props.speech Saved speech config in the public client shape.
  * @param {Array|null} props.models Enabled transcription models (null while loading).
+ * @param {Array|null} props.dictationModels The streaming ones among them.
  * @param {boolean} props.dirty The form has unsaved changes.
  * @param {Function} props.t
  * @param {string} props.language
  */
-function VoiceInputTestPanel({ speech, models, dirty, t, language }) {
+function VoiceInputTestPanel({ speech, models, dictationModels, dirty, t, language }) {
   return (
     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6 space-y-6">
       <div>
@@ -48,12 +49,12 @@ function VoiceInputTestPanel({ speech, models, dirty, t, language }) {
       <DictationTest
         key={`${speech.defaultService}:${speech.dictation?.modelId || ''}:${!!speech.dictation?.available}`}
         speech={speech}
-        models={models}
+        models={dictationModels}
         t={t}
         language={language}
       />
       <hr className="border-gray-100 dark:border-gray-700" />
-      <RecordingTest speech={speech} models={models} t={t} language={language} />
+      <RecordingTest models={models} t={t} language={language} />
     </div>
   );
 }

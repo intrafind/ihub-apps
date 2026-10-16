@@ -1014,6 +1014,33 @@ const blobToBase64 = async (blob, options) => {
   return dataUrl;
 };
 
+/**
+ * A microphone recording as an audio attachment, in the shape an uploaded
+ * audio file has: 16 kHz mono WAV, as the audio of a video is extracted to.
+ *
+ * @param {AudioBuffer} audioBuffer - The recording (any rate/channels).
+ * @param {string} fileName
+ * @returns {Promise<Object>} The attachment (`type: 'audio'`).
+ */
+export const recordingToAudioAttachment = async (audioBuffer, fileName) => {
+  const samples = await resampleTo16kMono(audioBuffer);
+  const blob = await audioBufferToWavAsync({
+    numberOfChannels: 1,
+    sampleRate: TARGET_SAMPLE_RATE,
+    length: samples.length,
+    getChannelData: () => samples
+  });
+  return {
+    type: 'audio',
+    source: 'local',
+    base64: await blobToBase64(blob),
+    fileName,
+    fileSize: blob.size,
+    fileType: 'audio/wav',
+    duration: samples.length / TARGET_SAMPLE_RATE
+  };
+};
+
 // Convert MIME types array to accept string with both MIME types and extensions
 export const formatAcceptAttribute = mimeTypes => {
   const config = getConfig();

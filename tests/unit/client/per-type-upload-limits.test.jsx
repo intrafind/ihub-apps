@@ -45,8 +45,6 @@ jest.mock('../../../client/src/shared/contexts/PlatformConfigContext', () => ({
 
 const UnifiedUploader =
   require('../../../client/src/features/upload/components/UnifiedUploader').default;
-const TranscriptionSection =
-  require('../../../client/src/features/admin/components/app-form/TranscriptionSection').default;
 const UploadConfigSection =
   require('../../../client/src/features/admin/components/app-form/UploadConfigSection').default;
 const fileProcessing = require('../../../client/src/features/upload/utils/fileProcessing');
@@ -445,33 +443,5 @@ describe('the document limit defaults to 20 MB', () => {
     upload(sized('big.txt', 'text/plain', 25 * MB));
     expect(await screen.findByText('File too large. Maximum size is 20MB.')).toBeInTheDocument();
     expect(processDocumentFile).toHaveBeenCalledTimes(1);
-  });
-});
-
-describe('the transcription length in the app editor', () => {
-  const renderTranscription = transcription => {
-    const onChange = jest.fn();
-    const utils = render(
-      <TranscriptionSection
-        app={{ transcription: { enabled: true, ...transcription } }}
-        onChange={onChange}
-        t={(key, fallback) => (typeof fallback === 'string' ? fallback : key)}
-        currentLanguage="en"
-        transcriptionModels={[]}
-        parseNumberOrUndefined={value => Number(value)}
-      />
-    );
-    return { ...utils, onChange, length: utils.container.querySelector('input[max="7200"]') };
-  };
-
-  test('is an hour for an app that does not set it', () => {
-    const { length, onChange } = renderTranscription({});
-    expect(length).toHaveValue(3600);
-    // Showing the default does not write it into the app
-    expect(onChange).not.toHaveBeenCalled();
-  });
-
-  test('is what the app set', () => {
-    expect(renderTranscription({ maxDurationSeconds: 900 }).length).toHaveValue(900);
   });
 });

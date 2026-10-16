@@ -152,7 +152,7 @@ export function buildHandoffMessages(messages, hostContext = null) {
   const out = [];
   for (const message of Array.isArray(messages) ? messages : []) {
     if (!message || (message.role !== 'user' && message.role !== 'assistant')) continue;
-    if (message.isGreeting || message.isLiveTranscript || message.loading) continue;
+    if (message.isGreeting || message.loading) continue;
     const content = typeof message.content === 'string' ? message.content : '';
     if (!content.trim()) continue;
     out.push({ role: message.role, content });

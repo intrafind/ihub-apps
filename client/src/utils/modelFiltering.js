@@ -38,7 +38,8 @@ export function filterModelsForApp(models, app) {
 /**
  * Pick the initial model ID for an app from a list of available models.
  * Prefers, in order: app.preferredModel (if compatible), a compatible model
- * flagged default, then the first compatible model. Falls back to the full
+ * flagged default, then the first compatible model. Transcription models are
+ * only picked as the app's preferred model: a chat opens on a chat model. Falls back to the full
  * list's default or first entry when no compatible model exists, to avoid
  * leaving the chat without any selection.
  *
@@ -56,8 +57,10 @@ export function pickInitialModelForApp(models, app) {
     return app.preferredModel;
   }
 
-  const defaultModel = pool.find(m => m.default);
+  const chatPool = pool.filter(m => m.modelType !== 'transcription');
+  const candidates = chatPool.length > 0 ? chatPool : pool;
+  const defaultModel = candidates.find(m => m.default);
   if (defaultModel) return defaultModel.id;
 
-  return pool[0]?.id || null;
+  return candidates[0]?.id || null;
 }

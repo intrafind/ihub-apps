@@ -906,7 +906,7 @@
     },
     "voiceInput": {
       "title": "Spracheingabe (Speech-to-Text)",
-      "description": "Legen Sie fest, was Apps für Spracheingabe, Transkription und Vorlesen verwenden. Apps folgen dieser Auswahl, sofern sie im App-Editor keine eigene treffen. Endpunkte und Schlüssel von Transkriptions- und Text-to-Speech-Modellen werden unter Admin → Modelle festgelegt.",
+      "description": "Legen Sie fest, was Apps für Spracheingabe und Vorlesen verwenden. Apps folgen dieser Auswahl, sofern sie im App-Editor keine eigene treffen. Endpunkte und Schlüssel von Transkriptions- und Text-to-Speech-Modellen werden unter Admin → Modelle festgelegt.",
       "loadError": "Spracheingabe-Einstellungen konnten nicht geladen werden",
       "saveSuccess": "Spracheingabe-Einstellungen gespeichert.",
       "saveError": "Spracheingabe-Einstellungen konnten nicht gespeichert werden",
@@ -915,16 +915,10 @@
         "description": "Was Sprache in Text umwandelt, wenn Benutzer im Chat die Mikrofon-Schaltfläche drücken. Gilt für jede App, deren Spracherkennungsdienst „Plattform-Standard“ ist.",
         "service": "Spracherkennung",
         "azureNotEnabled": "Azure Speech ist unten nicht aktiviert. Bis dahin verwenden Apps, die dem Plattform-Standard folgen, den Browser.",
-        "modelUnavailable": "Dieses Modell ist deaktiviert oder existiert nicht mehr. Bis es aktiviert ist, verwenden Apps, die dem Plattform-Standard folgen, den Browser.",
-        "modelHint": "Das Mikrofon wird über den iHub-Server an dieses Modell gestreamt; sein Endpunkt und Schlüssel bleiben auf dem Server. Streamende Modelle zeigen den Text während des Sprechens, andere fügen ihn am Ende ein. Benutzer brauchen über ihre Gruppen Zugriff auf das Modell.",
+        "modelUnavailable": "Dieses Modell ist deaktiviert, existiert nicht mehr oder streamt nicht. Bis ein streamendes Modell gewählt ist, verwenden Apps, die dem Plattform-Standard folgen, den Browser.",
+        "modelHint": "Das Mikrofon wird über den iHub-Server an dieses Modell gestreamt; sein Endpunkt und Schlüssel bleiben auf dem Server, und der Text erscheint während des Sprechens. Benutzer brauchen über ihre Gruppen Zugriff auf das Modell.",
         "browserHint": "Läuft im Browser mit der Web Speech API. Welche Browser sie unterstützen und wohin sie das Audio senden, entscheidet der Browser.",
-        "noModels": "Aktivieren Sie unter Admin → Modelle ein Transkriptionsmodell, um es hier anzubieten."
-      },
-      "transcription": {
-        "title": "Transkription (Aufnahmen und Uploads)",
-        "description": "Das Modell, das Aufnahmen sowie Audio-/Video-Uploads in Apps transkribiert, die die Transkription aktivieren, ohne ein eigenes Modell auszuwählen.",
-        "model": "Modell",
-        "modelUnavailable": "Dieses Modell ist deaktiviert oder existiert nicht mehr. Aufnahmen schlagen daher in Apps fehl, die sich auf den Standard verlassen."
+        "noModels": "Aktivieren Sie unter Admin → Modelle ein streamendes Transkriptionsmodell (vLLM Realtime, Gemini Live oder Mistral), um es hier anzubieten."
       },
       "azure": {
         "title": "Azure Speech",
@@ -989,7 +983,6 @@
           "title": "Aufnahme (aufnehmen → transkribieren)",
           "description": "Nehmen Sie einen kurzen Clip auf (bis zu {{seconds}} Sekunden) und lassen Sie ihn über dieselbe Verbindung wie im Chat von einem Transkriptionsmodell transkribieren – mit der Dauer bis zum Transkript.",
           "model": "Transkriptionsmodell",
-          "platformDefault": "Plattform-Standard",
           "start": "Aufnahme starten",
           "stop": "Stoppen und transkribieren",
           "recording": "Aufnahme… {{elapsed}} s",
@@ -3160,19 +3153,7 @@
         "iassistantExtraContextDesc": "Zusätzlicher Kontext, der zum Response-State-Prompt hinzugefügt wird. Unterstützt Prompt-Variablen wie {{user_name}}, {{user_email}}, {{date}} sowie eigene globale Variablen. Mit Vorsicht verwenden, da Änderungen die Antwortqualität beeinflussen können.",
         "iassistantSystemPromptPreamble": "System-Prompt-Präambel",
         "iassistantSystemPromptPreambleDesc": "Die Prompt-Präambel, die im Response-State-System-Prompt verwendet wird. Ideal zum Ändern der Identität des iAssistant. Unterstützt Prompt-Variablen wie {{user_name}}, {{user_email}}, {{date}} sowie eigene globale Variablen. Mit Vorsicht verwenden.",
-        "transcription": "Transkription",
-        "transcriptionDesc": "Hochgeladene Audiodateien, hochgeladene Videos oder eine Browser-Aufnahme mit einem Transkriptionsmodell (z. B. Voxtral) in Text umwandeln. Der Text wird zur Nachricht des Nutzers, die das Chat-Modell beantwortet.",
-        "enableTranscription": "Transkription aktivieren",
-        "transcriptionModel": "Transkriptionsmodell",
-        "selectTranscriptionModel": "Modell auswählen…",
         "noTranscriptionModels": "Keine Transkriptionsmodelle konfiguriert. Fügen Sie eines unter Admin → Modelle hinzu (Modelltyp \"transcription\").",
-        "transcriptionInputs": "Eingabequellen",
-        "transcriptionUpload": "Audio-Upload",
-        "transcriptionVideo": "Video-Upload",
-        "transcriptionRecord": "Audio aufnehmen",
-        "transcriptionInputsHint": "Audio-/Video-Upload erfordert außerdem den entsprechenden Upload-Schalter unter Upload-Konfiguration.",
-        "transcriptionStreaming": "Transkript während der Erstellung streamen",
-        "transcriptionMaxDuration": "Maximale Dauer (Sekunden)",
         "enableVideoUpload": "Video-Upload aktivieren",
         "trackedChanges": "Word: Änderungen nachverfolgen",
         "trackedChangesHelp": "Wie nachverfolgte Änderungen in Word-Dokumenten an das Modell gehen. Markierte Änderungen werden als {++eingefügt++} und {--gelöscht--} geschrieben.",
@@ -3190,7 +3171,6 @@
         "maxVideoSize": "Maximale Videodateigröße (MB)",
         "maxVideoSizeHelp": "Bis zu 51200 MB (50 GB). Mit Audio-Extraktion kann eine MP4- oder MOV-Datei beliebig groß sein: Es wird nur ihr Ton gelesen. Andere Formate (WebM, MKV, ...) und Videos, die unverändert gesendet werden, funktionieren bis 2 GB. Jeder Dateityp hat sein eigenes Limit.",
         "supportedVideoFormats": "Unterstützte Videoformate",
-        "transcriptionDefaultEnabled": "Standardmäßig aktiv (Nutzer können es pro Chat umschalten)",
         "appsAsTools": "Apps als Tools",
         "appsAsToolsDesc": "Erlaubt dieser App, an andere Apps zu delegieren. Das Modell kann jede ausgewählte App als Tool aufrufen und deren Antwort verwenden (Concierge-Muster).",
         "appsAsToolsHelper": "Jede ausgewählte App wird zu einem Tool (app__<id>), das das Modell aufrufen kann. Nutzer erreichen nur Apps, für die sie berechtigt sind; eine aufgerufene App kann keine weiteren Apps aufrufen.",
@@ -3206,9 +3186,7 @@
         "browserService": "Browser (Web Speech API)",
         "platformDefaultServiceHint": "Folgt dem unter Admin → Spracheingabe festgelegten Standard, auch bei späteren Änderungen.",
         "dictationModelHint": "Das Mikrofon wird über den iHub-Server an dieses Transkriptionsmodell gestreamt. Benutzer brauchen über ihre Gruppen Zugriff auf das Modell.",
-        "dictationModelUnavailable": "Dieses Modell ist deaktiviert oder existiert nicht mehr. Die Spracheingabe schlägt in dieser App daher fehl.",
-        "platformDefaultTranscriptionModel": "Plattform-Standard ({{model}})",
-        "transcriptionModelRequired": "Wählen Sie ein Modell aus oder legen Sie unter Admin → Spracheingabe ein Standard-Transkriptionsmodell fest.",
+        "dictationModelUnavailable": "Dieses Modell ist deaktiviert, existiert nicht mehr oder streamt nicht. Die Spracheingabe schlägt in dieser App daher fehl.",
         "websearchMaxPageReads": "Max. Seitenaufrufe pro Antwort",
         "websearchMaxPageReadsDesc": "Begrenzt, wie viele Seiten das Modell mit dem Seitenleser für eine Antwort öffnen darf. Seiten, die die Suche selbst für ihre Auszüge abruft, zählen nicht. 1–50, Standard 5."
       },
@@ -4883,16 +4861,13 @@
     "scheduled": "Geplant"
   },
   "transcription": {
-    "record": "Nachricht einsprechen",
+    "record": "Audio für das ausgewählte Modell aufnehmen",
     "stopRecording": "Aufnahme beenden und senden",
     "recording": "Aufnahme",
     "listening": "Hört zu…",
     "transcribing": "Wird transkribiert…",
-    "transcriptOf": "Transkript von {{name}}:",
     "noSpeechInFile": "(keine Sprache erkannt)",
-    "partialInInput": "Der bisher transkribierte Text steht im Eingabefeld.",
     "errors": {
-      "noModel": "Für diese App ist kein Transkriptionsmodell konfiguriert.",
       "decode": "Diese Audiodatei konnte im Browser nicht dekodiert werden. Das Format oder der Codec wird möglicherweise nicht unterstützt (z. B. OGG in Safari).",
       "empty": "Aus dieser Datei konnte kein Audio gelesen werden.",
       "notReady": "Der Transkriptionsdienst war nicht bereit. Bitte überprüfen Sie die Modellkonfiguration und versuchen Sie es erneut.",
@@ -4911,10 +4886,11 @@
       "mic": "Auf das Mikrofon konnte nicht zugegriffen werden. Bitte erteilen Sie die Berechtigung und versuchen Sie es erneut.",
       "busy": "Es läuft bereits eine Transkription. Bitte zuerst stoppen.",
       "noSpeech": "Es wurde keine Sprache erkannt. Es wurde nichts gesendet.",
-      "audioNeedsTranscription": "Das ausgewählte Chat-Modell kann Audio nicht direkt verarbeiten. Aktivieren Sie die Transkription im Aktionsmenü oder entfernen Sie den Audio-Anhang."
+      "modelTakesNoAudio": "Das ausgewählte Modell kann kein Audio verarbeiten. Wählen Sie ein Modell, das es kann, oder ein Transkriptionsmodell, oder entfernen Sie den Audio-Anhang."
     },
-    "toggleLabel": "Transkription",
-    "toggleDescription": "Hochgeladene Audio- und Videodateien werden in Ihre Nachricht transkribiert, und das Chat-Modell beantwortet den Text"
+    "audioOnlyPlaceholder": "Laden Sie eine Audio- oder Videodatei hoch oder nehmen Sie auf, um das Transkript zu erhalten",
+    "modelBadgeLive": "Transkription · live",
+    "modelBadgeBatch": "Transkription · ganze Datei"
   },
   "documentPreview": {
     "title": "Dokumentvorschau",

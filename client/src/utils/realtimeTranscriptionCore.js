@@ -334,3 +334,25 @@ export async function resampleTo16kMono(
  */
 export const isCompletionClose = evt =>
   evt?.wasClean === true && (evt.code === 1000 || evt.code === 1005);
+
+/**
+ * The `start` frame of a session. `chat` names the chat a transcription model
+ * was selected in, so the server stores the audio as the question and the
+ * transcript as the model's answer (dictation names no chat: its text goes
+ * into the input field).
+ *
+ * @param {string} modelId
+ * @param {Object} [options]
+ * @param {'mic'|'file'} [options.source] - `file`: a whole recording sent faster
+ *   than real time, which the server paces for rate-limited live models.
+ * @param {{chatId: string, appId: string, ephemeral?: boolean,
+ *   clientMessageId?: string, attachment?: {name: string, type?: string, bytes?: number}}} [options.chat]
+ * @returns {string}
+ */
+export const startFrame = (modelId, { source, chat } = {}) =>
+  JSON.stringify({
+    type: 'start',
+    modelId,
+    ...(source ? { source } : {}),
+    ...(chat?.chatId && chat?.appId ? chat : {})
+  });
