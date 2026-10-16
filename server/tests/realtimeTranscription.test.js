@@ -22,6 +22,7 @@ import {
   diagnoseUpstreamClose,
   getBatchLimits,
   getMaxSessionSeconds,
+  getStreamLimits,
   testTranscriptionModel
 } from '../websocket/realtimeTranscription.js';
 import { appConfigSchema } from '../validators/appConfigSchema.js';
@@ -301,6 +302,44 @@ describe('upstream error diagnostics', () => {
   test('diagnoseUpstreamClose reports an abnormal close code even after handshake', () => {
     const msg = diagnoseUpstreamClose({ gotTranscription: false, upstreamReady: true, code: 1011 });
     expect(msg).toMatch(/code 1011/);
+  });
+
+  // Gemini Live drops a session fed too fast with 1011 after some text came
+  // back; that used to end the bridge silently with a truncated transcript.
+  test('diagnoseUpstreamClose reports an abnormal close code after transcription', () => {
+    const msg = diagnoseUpstreamClose({
+      gotTranscription: true,
+      upstreamReady: true,
+      code: 1011,
+      reason: 'Resource has been exhausted (e.g. check quota).'
+    });
+    expect(msg).toMatch(/code 1011: Resource has been exhausted/);
+  });
+
+  test('diagnoseUpstreamClose treats 1005 (no status) as a normal close', () => {
+    expect(
+      diagnoseUpstreamClose({ gotTranscription: true, upstreamReady: true, code: 1005 })
+    ).toBeNull();
+  });
+});
+
+describe('getStreamLimits', () => {
+  test('takes the provider defaults', () => {
+    expect(getStreamLimits({ maxRealtimeFactor: 3, maxSessionSeconds: 540 }, {})).toEqual({
+      maxRealtimeFactor: 3,
+      maxSessionSeconds: 540
+    });
+  });
+
+  test('a model config overrides the provider, and 0 / junk means unlimited', () => {
+    const provider = { maxRealtimeFactor: 3, maxSessionSeconds: 540 };
+    expect(
+      getStreamLimits(provider, { config: { maxRealtimeFactor: 1.5, maxSessionSeconds: 0 } })
+    ).toEqual({ maxRealtimeFactor: 1.5, maxSessionSeconds: 0 });
+    expect(getStreamLimits({}, { config: { maxRealtimeFactor: 'fast' } })).toEqual({
+      maxRealtimeFactor: 0,
+      maxSessionSeconds: 0
+    });
   });
 });
 
@@ -1221,5 +1260,193 @@ describe('getMaxSessionSeconds', () => {
     );
 
     expect(getMaxSessionSeconds()).toBe(4200);
+  });
+});
+
+// Gemini Live: rate-limited audio (files are paced) and capped session
+// lifetime (sessions are rotated). See getStreamLimits.
+describe('bridgeConnection — Gemini Live pacing and session rotation (fake sockets)', () => {
+  const user = { id: 'u1', name: 'u1', permissions: { models: new Set(['gemini-live']) } };
+  const geminiModel = {
+    id: 'gemini-live',
+    modelId: 'gemini-3.5-transcribe-live',
+    url: 'wss://generativelanguage.example/ws',
+    provider: 'google-live',
+    modelType: 'transcription',
+    apiKey: 'google-test-key',
+    enabled: true
+  };
+  const SECOND = Buffer.alloc(32_000); // one second of PCM16 at 16 kHz
+
+  const parsed = ws => ws.sent.map(s => JSON.parse(s));
+  const audioBytes = ws =>
+    parsed(ws)
+      .filter(m => m.realtimeInput?.audio)
+      .reduce((n, m) => n + Buffer.from(m.realtimeInput.audio.data, 'base64').length, 0);
+  const streamEnds = ws => parsed(ws).filter(m => m.realtimeInput?.audioStreamEnd).length;
+
+  const useModel = model => configCache.setCacheEntry('config/models.json', [model]);
+
+  beforeEach(() => {
+    jest.useFakeTimers();
+    configCache.setCacheEntry('config/platform.json', {
+      jwt: { algorithm: 'HS256' },
+      auth: { jwtSecret: 'realtime-stt-test-secret' }
+    });
+    useModel(geminiModel);
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  afterAll(() => {
+    for (const key of ['config/platform.json', 'config/models.json']) {
+      const timer = configCache.refreshTimers?.get(key);
+      if (timer) clearTimeout(timer);
+      configCache.refreshTimers?.delete(key);
+    }
+  });
+
+  const setup = () => {
+    const client = new FakeWs();
+    const upstreams = [];
+    const limiter = new ConnectionLimiter({ maxTotal: 5, maxPerUser: 5 });
+    limiter.tryAcquire(user.id);
+    const createUpstream = jest.fn(() => {
+      const ws = new FakeWs(WebSocket.CONNECTING);
+      upstreams.push(ws);
+      return ws;
+    });
+    bridgeConnection(client, user, limiter, { createUpstream });
+    return { client, upstreams, createUpstream };
+  };
+
+  const openSession = async ws => {
+    ws.readyState = WebSocket.OPEN;
+    ws.emit('open');
+    ws.emit('message', JSON.stringify({ setupComplete: {} }));
+    await jest.advanceTimersByTimeAsync(0);
+  };
+
+  const start = async (client, extra = {}) => {
+    client.emit(
+      'message',
+      JSON.stringify({ type: 'start', modelId: 'gemini-live', ...extra }),
+      false
+    );
+    await jest.advanceTimersByTimeAsync(0);
+  };
+
+  test('a file is fed at maxRealtimeFactor, and the end of audio follows the last paced chunk', async () => {
+    const { client, upstreams } = setup();
+    await start(client, { source: 'file' });
+    await openSession(upstreams[0]);
+    expect(client.framesOfType('ready')[0]).toMatchObject({ mode: 'stream', realtimeFactor: 3 });
+
+    // The browser sends ten seconds at once, then stop.
+    for (let i = 0; i < 10; i++) client.emit('message', SECOND, true);
+    client.emit('message', JSON.stringify({ type: 'stop' }), false);
+
+    await jest.advanceTimersByTimeAsync(1000);
+    // One second of burst credit at 3x, then 3x real time, plus at most one
+    // chunk of overshoot: 3 + 3 + 1 seconds of audio.
+    expect(audioBytes(upstreams[0])).toBeLessThanOrEqual(7 * 32_000);
+    expect(audioBytes(upstreams[0])).toBeGreaterThan(0);
+    expect(streamEnds(upstreams[0])).toBe(0);
+
+    // A segment while the file is still feeding must not end the session.
+    upstreams[0].emit(
+      'message',
+      JSON.stringify({ serverContent: { inputTranscription: { text: 'first' } } })
+    );
+    await jest.advanceTimersByTimeAsync(3000);
+    expect(client.framesOfType('done')).toHaveLength(0);
+
+    await jest.advanceTimersByTimeAsync(1000);
+    expect(audioBytes(upstreams[0])).toBe(10 * 32_000);
+    expect(streamEnds(upstreams[0])).toBe(1);
+
+    upstreams[0].emit(
+      'message',
+      JSON.stringify({ serverContent: { inputTranscription: { text: 'last' } } })
+    );
+    await jest.advanceTimersByTimeAsync(2600);
+    expect(client.framesOfType('final').map(f => f.text)).toEqual(['first', 'last']);
+    expect(client.framesOfType('done')).toHaveLength(1);
+  });
+
+  test('microphone audio is not paced', async () => {
+    const { client, upstreams } = setup();
+    await start(client);
+    await openSession(upstreams[0]);
+    expect(client.framesOfType('ready')[0].realtimeFactor).toBeUndefined();
+    for (let i = 0; i < 10; i++) client.emit('message', SECOND, true);
+    expect(audioBytes(upstreams[0])).toBe(10 * 32_000);
+  });
+
+  test('an upstream that drops the session mid-recording is reported, not ended silently', async () => {
+    const { client, upstreams } = setup();
+    await start(client);
+    await openSession(upstreams[0]);
+    client.emit('message', SECOND, true);
+    upstreams[0].emit(
+      'message',
+      JSON.stringify({ serverContent: { inputTranscription: { text: 'a few words' } } })
+    );
+    upstreams[0].emit(
+      'close',
+      1011,
+      Buffer.from('Resource has been exhausted (e.g. check quota).')
+    );
+    await jest.advanceTimersByTimeAsync(0);
+    const [err] = client.framesOfType('error');
+    expect(err.code).toBe('upstream-closed');
+    expect(err.message).toMatch(/1011: Resource has been exhausted/);
+    expect(client.framesOfType('done')).toHaveLength(0);
+  });
+
+  test('a session at its lifetime cap is replaced; the client sees one session and no audio is lost', async () => {
+    useModel({ ...geminiModel, config: { maxSessionSeconds: 2 } });
+    const { client, upstreams, createUpstream } = setup();
+    await start(client);
+    await openSession(upstreams[0]);
+
+    client.emit('message', SECOND, true);
+    await jest.advanceTimersByTimeAsync(2100);
+    client.emit('message', SECOND, true); // goes out, then the cap is reached
+    expect(streamEnds(upstreams[0])).toBe(1);
+
+    client.emit('message', SECOND, true); // held while the old session finishes
+    upstreams[0].emit(
+      'message',
+      JSON.stringify({ serverContent: { inputTranscription: { text: 'tail' } } })
+    );
+    await jest.advanceTimersByTimeAsync(1600); // the old session went quiet
+    expect(upstreams[0].readyState).toBe(WebSocket.CLOSED);
+    expect(createUpstream).toHaveBeenCalledTimes(2);
+
+    await openSession(upstreams[1]);
+    expect(audioBytes(upstreams[1])).toBe(32_000);
+    expect(client.framesOfType('ready')).toHaveLength(1);
+    expect(client.framesOfType('final').map(f => f.text)).toEqual(['tail']);
+    expect(client.framesOfType('error')).toHaveLength(0);
+
+    // Stop now ends the new session, not the retired one.
+    client.emit('message', JSON.stringify({ type: 'stop' }), false);
+    expect(streamEnds(upstreams[1])).toBe(1);
+  });
+
+  test("Gemini's goAway starts a fresh session", async () => {
+    const { client, upstreams, createUpstream } = setup();
+    await start(client);
+    await openSession(upstreams[0]);
+    upstreams[0].emit('message', JSON.stringify({ goAway: { timeLeft: '10s' } }));
+    expect(streamEnds(upstreams[0])).toBe(1);
+    upstreams[0].emit('close', 1000, Buffer.from(''));
+    await jest.advanceTimersByTimeAsync(0);
+    expect(createUpstream).toHaveBeenCalledTimes(2);
+    expect(client.framesOfType('error')).toHaveLength(0);
+    expect(client.readyState).toBe(WebSocket.OPEN);
   });
 });

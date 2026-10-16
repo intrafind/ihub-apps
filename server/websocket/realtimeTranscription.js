@@ -68,7 +68,14 @@ import { getTranscriptionProvider } from '../transcription/index.js';
 // says so, like `run/ended.knowledgeSources` does for a chat turn, so a
 // transcript shown as a chat answer is badged by what the server reported —
 // including a partial one, whose session never reaches `done`.
-const readyFrame = mode => ({ type: 'ready', mode, knowledgeSources: ['audio'] });
+// `realtimeFactor` is set only when a file is paced, so the client can tell the
+// user how long the transcript will take.
+const readyFrame = (mode, realtimeFactor) => ({
+  type: 'ready',
+  mode,
+  knowledgeSources: ['audio'],
+  ...(realtimeFactor ? { realtimeFactor } : {})
+});
 
 // Close cleanly if the browser stops sending audio and no transcription is
 // flowing. Keeps orphaned upstream sockets from lingering.
@@ -129,6 +136,20 @@ const MAX_PENDING_BYTES = 1024 * 1024;
 // platform.speech.realtime.{maxBufferedAudioBytes, maxBufferedAudioBytesTotal}.
 const DEFAULT_MAX_BATCH_BYTES = 128 * 1024 * 1024;
 const DEFAULT_MAX_BATCH_BYTES_TOTAL = 512 * 1024 * 1024;
+
+// Pacing a file into a rate-limited live upstream (see getStreamLimits): the
+// queue drains every tick, with at most one second of audio as burst credit.
+// The client socket is paused while the queue holds more than the high mark,
+// so a file streamed at full speed is held as TCP backpressure, not in memory.
+const PACE_TICK_MS = 100;
+const PACE_HIGH_BYTES = 2 * 1024 * 1024;
+const PACE_LOW_BYTES = 512 * 1024;
+// Session rotation: after `stop` the retiring session gets this long to
+// deliver its last segment (quiet time after its last frame), at most the max.
+const RETIRE_QUIET_MS = 1_500;
+const RETIRE_MAX_MS = 10_000;
+// PCM16 mono at 16 kHz.
+const BYTES_PER_SECOND = 32_000;
 
 // Process-wide accounting for audio buffered by batch-mode connections.
 let batchBytesInFlight = 0;
@@ -402,7 +423,35 @@ export async function resolveTranscriptionUpstream({ modelId, user } = {}) {
       error: `Transcription model "${modelId}" has no endpoint URL`
     };
   }
-  return { ok: true, upstream, provider };
+  return { ok: true, upstream, provider, limits: getStreamLimits(provider, model) };
+}
+
+/**
+ * How fast a whole file may be fed to a streaming upstream, and how long one
+ * upstream session may run. A model's `config` overrides the provider's
+ * defaults; 0 / absent means unlimited. Exported for tests.
+ *
+ * - `maxRealtimeFactor`: a live API that rate-limits audio closes the session
+ *   when a file arrives much faster than real time (Gemini Live answers ~8x
+ *   with 1011 "Resource has been exhausted"). Microphone audio is real time
+ *   already and is never paced.
+ * - `maxSessionSeconds`: a live API that caps one session's lifetime (Gemini
+ *   Live, ~10 min) gets a fresh session before the cap, so long recordings and
+ *   long dictation keep going.
+ *
+ * @param {Object} provider
+ * @param {Object} model
+ * @returns {{ maxRealtimeFactor: number, maxSessionSeconds: number }}
+ */
+export function getStreamLimits(provider, model) {
+  const pick = key => {
+    const val = Number(model?.config?.[key] ?? provider?.[key]);
+    return Number.isFinite(val) && val > 0 ? val : 0;
+  };
+  return {
+    maxRealtimeFactor: pick('maxRealtimeFactor'),
+    maxSessionSeconds: pick('maxSessionSeconds')
+  };
 }
 
 // --- Upstream error diagnostics (pure, unit-tested) ---
@@ -448,15 +497,16 @@ export function diagnoseUnexpectedResponse(res = {}, { url = '' } = {}) {
 
 /**
  * Client-facing message for an upstream close, or null when the close is
- * expected. A clean close (code 1000) is expected; so is a clean close after we
- * already delivered transcription. Report only genuinely-abnormal closes:
- * before the handshake completed, or a non-normal code with nothing transcribed.
+ * expected. Only a normal close (1000, or 1005 = no status) of an established
+ * session is expected. Any other code is a failure even after some text came
+ * back: an upstream that drops the session mid-recording (Gemini Live's 1011
+ * "Resource has been exhausted") would otherwise end silently and leave a
+ * truncated transcript looking complete.
  */
 export function diagnoseUpstreamClose({ gotTranscription, upstreamReady, code, reason } = {}) {
-  if (!gotTranscription && (!upstreamReady || code !== 1000)) {
-    return `Transcription service closed the connection (code ${code}${reason ? `: ${reason}` : ''})`;
-  }
-  return null;
+  const normal = code === 1000 || code === 1005;
+  if (normal && (gotTranscription || upstreamReady)) return null;
+  return `Transcription service closed the connection (code ${code}${reason ? `: ${reason}` : ''})`;
 }
 
 function sendJson(ws, obj) {
@@ -504,6 +554,7 @@ export function bridgeConnection(clientWs, user, limiter, options = {}) {
   let appendedFrames = 0; // audio frames relayed upstream (diagnostics)
   let errorSent = false; // guard so we report a failure at most once
   let released = false; // guard so we release the limiter slot at most once
+  let tornDown = false; // cleanup ran: closes we caused are not diagnosed
   let idleTimer = null;
   let graceTimer = null;
   let postStopSettleTimer = null; // fires once the upstream goes quiet after `stop`
@@ -521,6 +572,23 @@ export function bridgeConnection(clientWs, user, limiter, options = {}) {
   let batchBytes = 0; // bytes this connection has added to batchBytesInFlight
   let batchRunning = false; // a transcription request is in flight
   const abortController = new AbortController(); // cancels an in-flight request
+  // `file`: a whole recording streamed faster than real time (paced upstream
+  // when the model has a maxRealtimeFactor); `mic`: live audio (never paced).
+  let source = 'mic';
+  let limits = { maxRealtimeFactor: 0, maxSessionSeconds: 0 };
+  const paced = []; // file audio waiting for its turn upstream
+  let pacedBytes = 0;
+  let paceTimer = null;
+  let paceCredit = 0; // bytes the pacer may still send now
+  let paceLast = 0;
+  let pacePaused = false; // client socket paused because the paced queue is full
+  let stopSentUpstream = false; // the provider's stop frames went out
+  let clientReadySent = false; // `ready` goes to the client once, not per session
+  let sessionStartedAt = 0; // current upstream session: wall clock …
+  let sessionAudioBytes = 0; // … and audio sent, for rotation
+  let retiring = null; // previous upstream session finishing its tail
+  let retireQuietTimer = null;
+  let retireMaxTimer = null;
 
   const isBatch = () => provider?.mode === 'batch';
 
@@ -547,6 +615,7 @@ export function bridgeConnection(clientWs, user, limiter, options = {}) {
   };
 
   const cleanup = () => {
+    tornDown = true;
     if (idleTimer) clearTimeout(idleTimer);
     idleTimer = null;
     if (graceTimer) clearTimeout(graceTimer);
@@ -561,12 +630,29 @@ export function bridgeConnection(clientWs, user, limiter, options = {}) {
     sessionTimer = null;
     if (backpressureTimer) clearInterval(backpressureTimer);
     backpressureTimer = null;
+    if (paceTimer) clearInterval(paceTimer);
+    paceTimer = null;
+    paced.length = 0;
+    pacedBytes = 0;
+    if (retireQuietTimer) clearTimeout(retireQuietTimer);
+    retireQuietTimer = null;
+    if (retireMaxTimer) clearTimeout(retireMaxTimer);
+    retireMaxTimer = null;
+    if (retiring && retiring.readyState <= WebSocket.OPEN) {
+      try {
+        retiring.close();
+      } catch {
+        /* ignore */
+      }
+    }
+    retiring = null;
     // Cancel an in-flight batch request and free its buffered audio, so a
     // client that walks away doesn't leave a fetch (and 30 MB) hanging around.
     abortController.abort();
     releaseBatchBytes();
-    if (clientPaused) {
+    if (clientPaused || pacePaused) {
       clientPaused = false;
+      pacePaused = false;
       // Un-pause before closing so the close handshake can complete.
       try {
         if (typeof clientWs.resume === 'function') clientWs.resume();
@@ -616,12 +702,150 @@ export function bridgeConnection(clientWs, user, limiter, options = {}) {
       clearInterval(backpressureTimer);
       backpressureTimer = null;
       clientPaused = false;
+      if (pacePaused) return; // the pacer resumes the client once its queue drains
       try {
         if (typeof clientWs.resume === 'function') clientWs.resume();
       } catch {
         /* ignore */
       }
     }, BACKPRESSURE_POLL_MS);
+  };
+
+  const upstreamOpen = () => upstreamReady && upstream?.readyState === WebSocket.OPEN;
+
+  // One chunk of PCM to the current upstream session.
+  const sendUpstreamAudio = chunk => {
+    sendJson(upstream, provider.audioFrame(chunk.toString('base64'), cfg));
+    appendedFrames += 1;
+    sessionAudioBytes += chunk.length;
+    resetIdle();
+    // If the upstream is the slow hop, stop reading the client socket until
+    // the upstream send buffer drains (bounds per-connection memory).
+    applyUpstreamBackpressure();
+    maybeRotate();
+  };
+
+  // End of audio for the upstream: only once every paced chunk went out, and
+  // never to a session that is being replaced (the next one gets it).
+  const sendStopUpstreamWhenDrained = () => {
+    if (!stopRequested || stopSentUpstream || paced.length || !upstreamOpen()) return;
+    stopSentUpstream = true;
+    for (const frame of provider.stopFrames(cfg)) sendJson(upstream, frame);
+  };
+
+  const isPacing = () => source === 'file' && limits.maxRealtimeFactor > 0;
+
+  // Release queued file audio: at `maxRealtimeFactor` × real time when the
+  // model has one, otherwise as fast as the upstream takes it. File audio is
+  // always queued (not `pending`, which is capped), so a session rotation in
+  // the middle of a file loses nothing.
+  const drainPaced = () => {
+    if (isPacing()) {
+      const now = Date.now();
+      // The first drain starts with a full second of credit: a short burst
+      // (measured fine) gets the transcript going without waiting a tick.
+      if (!paceLast) paceLast = now - 1000;
+      const bytesPerSecond = BYTES_PER_SECOND * limits.maxRealtimeFactor;
+      paceCredit = Math.min(
+        paceCredit + ((now - paceLast) / 1000) * bytesPerSecond,
+        bytesPerSecond
+      );
+      paceLast = now;
+    } else {
+      paceCredit = Infinity;
+    }
+    while (paced.length && paceCredit > 0 && upstreamOpen()) {
+      const chunk = paced.shift();
+      pacedBytes -= chunk.length;
+      paceCredit -= chunk.length;
+      sendUpstreamAudio(chunk);
+    }
+    if (pacePaused && pacedBytes <= PACE_LOW_BYTES) {
+      pacePaused = false;
+      if (!clientPaused) {
+        try {
+          clientWs.resume();
+        } catch {
+          /* ignore */
+        }
+      }
+    }
+    sendStopUpstreamWhenDrained();
+  };
+
+  const enqueuePaced = chunk => {
+    paced.push(chunk);
+    pacedBytes += chunk.length;
+    if (!isPacing()) drainPaced();
+    else if (!paceTimer) paceTimer = setInterval(drainPaced, PACE_TICK_MS);
+    if (!pacePaused && pacedBytes > PACE_HIGH_BYTES && typeof clientWs.pause === 'function') {
+      pacePaused = true;
+      try {
+        clientWs.pause();
+      } catch {
+        pacePaused = false;
+      }
+    }
+  };
+
+  // --- Upstream session rotation ---
+  // A live API that caps a session's lifetime gets a fresh session before the
+  // cap (or when it announces the end itself, Gemini's `goAway`). The old one
+  // is told the audio ended and keeps delivering its last segments; audio that
+  // arrives meanwhile waits in `pending` / the paced queue. The browser sees
+  // one uninterrupted session.
+  const maybeRotate = () => {
+    const cap = limits.maxSessionSeconds;
+    if (!cap || stopSentUpstream || !upstreamOpen()) return;
+    const elapsed = (Date.now() - sessionStartedAt) / 1000;
+    const audioSeconds = sessionAudioBytes / BYTES_PER_SECOND;
+    if (elapsed >= cap || audioSeconds >= cap) rotateUpstream('session-limit');
+  };
+
+  const finishRotation = () => {
+    if (retireQuietTimer) clearTimeout(retireQuietTimer);
+    retireQuietTimer = null;
+    if (retireMaxTimer) clearTimeout(retireMaxTimer);
+    retireMaxTimer = null;
+    const old = retiring;
+    retiring = null;
+    if (old && old.readyState <= WebSocket.OPEN) {
+      try {
+        old.close();
+      } catch {
+        /* ignore */
+      }
+    }
+    if (errorSent || clientWs.readyState > WebSocket.OPEN) return;
+    openUpstream();
+  };
+
+  const armRetireQuiet = () => {
+    if (retireQuietTimer) clearTimeout(retireQuietTimer);
+    retireQuietTimer = setTimeout(finishRotation, RETIRE_QUIET_MS);
+  };
+
+  const rotateUpstream = reason => {
+    if (retiring || !upstream || stopSentUpstream) return;
+    logger.info('Realtime STT: rotating upstream session', {
+      component: 'RealtimeSTT',
+      userId: user.id,
+      provider: provider.id,
+      reason,
+      sessionSeconds: Math.round((Date.now() - sessionStartedAt) / 1000),
+      audioSeconds: Math.round(sessionAudioBytes / BYTES_PER_SECOND)
+    });
+    retiring = upstream;
+    if (retiring.readyState === WebSocket.OPEN) {
+      for (const frame of provider.stopFrames(cfg)) sendJson(retiring, frame);
+    }
+    upstream = null;
+    upstreamReady = false;
+    sessionInitDone = false;
+    if (sessionInitTimer) clearTimeout(sessionInitTimer);
+    sessionInitTimer = null;
+    armRetireQuiet();
+    retireMaxTimer = setTimeout(finishRotation, RETIRE_MAX_MS);
   };
 
   // (Re)arm the post-stop quiet timer. Called on each transcription segment that
@@ -675,26 +899,41 @@ export function bridgeConnection(clientWs, user, limiter, options = {}) {
     }
     for (const frame of provider.readyFrames(cfg)) sendJson(upstream, frame);
     upstreamReady = true;
+    sessionStartedAt = Date.now();
+    sessionAudioBytes = 0;
     logger.info('Realtime STT: upstream ready', {
       component: 'RealtimeSTT',
       userId: user.id,
       provider: provider.id,
       model: cfg.model,
-      trigger
+      trigger,
+      source,
+      ...(isPacing() ? { realtimeFactor: limits.maxRealtimeFactor } : {}),
+      ...(limits.maxSessionSeconds ? { maxSessionSeconds: limits.maxSessionSeconds } : {})
     });
-    sendJson(clientWs, readyFrame(provider.mode));
-    // Flush any audio captured during the handshake.
-    for (const chunk of pending) {
-      sendJson(upstream, provider.audioFrame(chunk.toString('base64'), cfg));
+    // A rotated session is invisible to the client: `ready` goes out once.
+    if (!clientReadySent) {
+      clientReadySent = true;
+      sendJson(
+        clientWs,
+        readyFrame(provider.mode, isPacing() ? limits.maxRealtimeFactor : undefined)
+      );
     }
-    pending.length = 0;
+    // Flush any audio captured during the handshake (or a rotation).
+    const held = pending.splice(0);
     pendingBytes = 0;
+    for (const chunk of held) {
+      if (!upstreamOpen()) {
+        pending.push(chunk); // a rotation started mid-flush; the next session gets it
+        pendingBytes += chunk.length;
+      } else sendUpstreamAudio(chunk);
+    }
     // If the client already said `stop` while the handshake was still in flight
     // (a very short dictation), the stop handler couldn't send the end-of-audio
     // frames — send them now, after the flushed audio, so the tail isn't lost.
-    if (stopRequested) {
-      for (const frame of provider.stopFrames(cfg)) sendJson(upstream, frame);
-    }
+    // A paced file sends them once its queue is empty.
+    if (source === 'file') drainPaced();
+    else sendStopUpstreamWhenDrained();
     resetIdle();
   };
 
@@ -707,10 +946,10 @@ export function bridgeConnection(clientWs, user, limiter, options = {}) {
 
     // The provider decides what to dial and how to authenticate. `cfg.url` stays
     // credential-free for logging; `connect()` may return a URL that is not.
-    let dial;
+    let sock;
     try {
-      dial = provider.connect(cfg);
-      upstream = createUpstream(dial.url, dial.options || {});
+      const dial = provider.connect(cfg);
+      sock = createUpstream(dial.url, dial.options || {});
     } catch (err) {
       failBridge('upstream-unreachable', 'Failed to reach transcription service', {
         reason: 'construct error',
@@ -718,17 +957,24 @@ export function bridgeConnection(clientWs, user, limiter, options = {}) {
       });
       return;
     }
+    upstream = sock;
+    // Handlers are bound to this socket. After a rotation it is `retiring`: its
+    // last segments still reach the client, but it can no longer fail or end
+    // the bridge. Any other socket is stale and ignored.
+    const isCurrent = () => sock === upstream;
+    const isRetiring = () => sock === retiring;
 
     // Arm the idle timer for the connecting phase too, so a handshake that hangs
     // in CONNECTING (no 'open', no 'error') can't leave the bridge timer-less.
     // It is reset on 'open' and on every subsequent frame.
     resetIdle();
 
-    upstream.on('open', () => {
+    sock.on('open', () => {
+      if (!isCurrent()) return;
       resetIdle();
       // Frames the provider needs on the wire immediately (Gemini's `setup`
       // must be the first message; vLLM sends nothing and waits instead).
-      for (const frame of provider.openFrames(cfg)) sendJson(upstream, frame);
+      for (const frame of provider.openFrames(cfg)) sendJson(sock, frame);
       // Wait for the provider's session-ready frame before initializing — see
       // initUpstreamSession. Providers whose readiness signal is guaranteed set
       // readyFallbackMs to 0 and rely on the idle timer for a hung handshake.
@@ -740,8 +986,11 @@ export function bridgeConnection(clientWs, user, limiter, options = {}) {
       }
     });
 
-    upstream.on('message', data => {
+    sock.on('message', data => {
+      const retiringNow = isRetiring();
+      if (!isCurrent() && !retiringNow) return;
       resetIdle();
+      if (retiringNow) armRetireQuiet();
       let msg;
       try {
         msg = JSON.parse(data.toString());
@@ -761,7 +1010,7 @@ export function bridgeConnection(clientWs, user, limiter, options = {}) {
           sendJson(clientWs, { type: 'delta', text: event.text || '' });
           // A file blasted at once can produce many segments after `stop`;
           // keep the completion window open while segments are still arriving.
-          if (stopRequested) armPostStopSettle();
+          if (stopSentUpstream) armPostStopSettle();
           break;
         }
         case 'final': {
@@ -777,17 +1026,26 @@ export function bridgeConnection(clientWs, user, limiter, options = {}) {
           // per utterance, and a whole file streamed faster than realtime
           // produces several after `stop`. Closing on the FIRST would truncate
           // the transcript, so instead we (re)arm a short quiet timer on each
-          // post-stop segment and only send {type:'done'} + close once the
-          // upstream has gone quiet. Dictation clients ignore the `done` frame,
-          // so this stays backward-compatible.
-          if (stopRequested) armPostStopSettle();
+          // segment after the end of audio went upstream (not merely after the
+          // client's `stop`: a paced file may still be feeding for minutes),
+          // and only send {type:'done'} + close once the upstream has gone
+          // quiet. Dictation clients ignore the `done` frame.
+          if (stopSentUpstream) armPostStopSettle();
           break;
         }
         case 'session-ready':
           // Session exists now — safe to configure it and start transcription.
-          initUpstreamSession('session-ready');
+          if (!retiringNow) initUpstreamSession('session-ready');
+          break;
+        case 'go-away':
+          // The upstream announced it will end this session soon.
+          if (!retiringNow) rotateUpstream('go-away');
           break;
         case 'error':
+          if (retiringNow) {
+            finishRotation();
+            break;
+          }
           failBridge('upstream-error', `Transcription error: ${event.error || 'unknown'}`, {
             reason: 'upstream error frame',
             upstreamError: event.error
@@ -800,14 +1058,20 @@ export function bridgeConnection(clientWs, user, limiter, options = {}) {
 
     // The upstream rejected the WebSocket upgrade with an HTTP response
     // (e.g. 404 wrong path, 401/403 auth, 502 bad gateway) — very actionable.
-    upstream.on('unexpected-response', (_req, res) => {
+    sock.on('unexpected-response', (_req, res) => {
+      if (!isCurrent()) return;
       failBridge('upstream-rejected', diagnoseUnexpectedResponse(res, { url: cfg.url }), {
         reason: 'unexpected-response',
         statusCode: res.statusCode
       });
     });
 
-    upstream.on('error', err => {
+    sock.on('error', err => {
+      if (isRetiring()) {
+        finishRotation();
+        return;
+      }
+      if (!isCurrent()) return;
       // The full err.message (which may embed the internal upstream address)
       // goes to the log only; the client gets the bare code via diagnose.
       failBridge('upstream-unreachable', diagnoseSocketError(err), {
@@ -817,7 +1081,12 @@ export function bridgeConnection(clientWs, user, limiter, options = {}) {
       });
     });
 
-    upstream.on('close', (code, reasonBuf) => {
+    sock.on('close', (code, reasonBuf) => {
+      if (isRetiring()) {
+        finishRotation();
+        return;
+      }
+      if (!isCurrent() || tornDown) return;
       const reason = reasonBuf ? reasonBuf.toString() : '';
       const message = errorSent
         ? null
@@ -827,7 +1096,9 @@ export function bridgeConnection(clientWs, user, limiter, options = {}) {
           reason: 'abnormal close',
           closeCode: code,
           closeReason: reason,
-          upstreamReady
+          upstreamReady,
+          source,
+          audioSeconds: Math.round(sessionAudioBytes / BYTES_PER_SECOND)
         });
         return;
       }
@@ -947,6 +1218,7 @@ export function bridgeConnection(clientWs, user, limiter, options = {}) {
     }
     cfg = result.upstream;
     provider = result.provider;
+    limits = result.limits || limits;
 
     if (isBatch()) {
       // Nothing to dial: the client is cleared to stream straight away and the
@@ -987,12 +1259,10 @@ export function bridgeConnection(clientWs, user, limiter, options = {}) {
         return;
       }
       if (upstreamReady) resetIdle();
-      if (upstreamReady && upstream.readyState === WebSocket.OPEN) {
-        sendJson(upstream, provider.audioFrame(chunk.toString('base64'), cfg));
-        appendedFrames += 1;
-        // If the upstream is the slow hop, stop reading the client socket until
-        // the upstream send buffer drains (bounds per-connection memory).
-        applyUpstreamBackpressure();
+      if (source === 'file' && provider) {
+        enqueuePaced(chunk);
+      } else if (upstreamOpen()) {
+        sendUpstreamAudio(chunk);
       } else if (pendingBytes + chunk.length <= MAX_PENDING_BYTES) {
         pending.push(chunk);
         pendingBytes += chunk.length;
@@ -1011,6 +1281,8 @@ export function bridgeConnection(clientWs, user, limiter, options = {}) {
       // audio flows; the upstream opens as soon as the model resolves.
       // `msg.lang` is accepted but unused — the models auto-detect the
       // language; the field is kept for future language-pinned backends.
+      // `source: 'file'` marks a whole recording sent faster than real time.
+      if (msg.source === 'file') source = 'file';
       void resolveAndPrepare(msg.modelId);
     } else if (msg.type === 'stop') {
       stopRequested = true;
@@ -1020,14 +1292,16 @@ export function bridgeConnection(clientWs, user, limiter, options = {}) {
         provider: provider?.id,
         appendedFrames,
         pendingFrames: pending.length,
+        queuedSeconds: Math.round(pacedBytes / BYTES_PER_SECOND),
         upstreamReady
       });
       if (isBatch()) {
         // The whole recording is buffered — transcribe it in one request. If
         // config is still resolving, resolveAndPrepare picks this up instead.
         if (cfg) void runBatchTranscription();
-      } else if (upstreamReady && upstream.readyState === WebSocket.OPEN) {
-        for (const frame of provider.stopFrames(cfg)) sendJson(upstream, frame);
+      } else {
+        // Straight away, or once the paced queue / a rotation is through.
+        sendStopUpstreamWhenDrained();
       }
     }
   });

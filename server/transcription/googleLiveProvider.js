@@ -17,9 +17,14 @@
  * Audio must be raw little-endian 16-bit PCM at 16 kHz mono — exactly what the
  * browser already streams for Voxtral, so no client change is needed.
  *
- * Limits worth knowing (they are Google's, not ours): a Live API session runs
- * for at most 10 minutes, so longer recordings belong on the batch provider
- * (`google-transcribe`).
+ * Limits worth knowing (they are Google's, not ours):
+ *   - A Live API session runs for about 10 minutes and announces its end with
+ *     `goAway`. The bridge opens a fresh session before that
+ *     (`maxSessionSeconds`), so long recordings and dictation keep going.
+ *   - Audio is rate-limited: a file sent at ~8x real time is cut off after a
+ *     few minutes with close code 1011 "Resource has been exhausted"; ~4x held
+ *     for ten minutes of audio (measured 2026-10-16). The bridge paces files at
+ *     `maxRealtimeFactor`. Both are overridable per model in `config`.
  *
  * Docs: https://ai.google.dev/gemini-api/docs/live-api/live-transcribe
  */
@@ -119,7 +124,7 @@ export function formatUpstreamError(error) {
  * and maps to `final`, which is what the client keeps.
  *
  * @param {Object} msg
- * @returns {{ kind: 'session-ready'|'delta'|'final'|'error'|'ignore', text?: string, error?: string }}
+ * @returns {{ kind: 'session-ready'|'delta'|'final'|'error'|'go-away'|'ignore', text?: string, error?: string }}
  */
 export function interpret(msg = {}) {
   if (msg.setupComplete) return { kind: 'session-ready' };
@@ -133,8 +138,10 @@ export function interpret(msg = {}) {
     if (typeof finalText === 'string' && finalText.length)
       return { kind: 'final', text: finalText };
   }
-  // goAway, sessionResumptionUpdate, usageMetadata, turnComplete, … need no
-  // client action; the bridge's own timers govern the session.
+  // The session ends soon: the bridge moves on to a fresh one.
+  if (msg.goAway) return { kind: 'go-away' };
+  // sessionResumptionUpdate, usageMetadata, turnComplete, … need no client
+  // action; the bridge's own timers govern the session.
   return { kind: 'ignore' };
 }
 
@@ -145,6 +152,10 @@ export default {
   // arrives is an error — so there is no fallback window here. A handshake that
   // never completes is caught by the bridge's idle timer.
   readyFallbackMs: 0,
+  // Pace files at 3x real time (limit measured between 4x and 8x) and rotate
+  // the session at 9 minutes, ahead of Google's ~10-minute cap.
+  maxRealtimeFactor: 3,
+  maxSessionSeconds: 540,
   resolveUpstream,
   connect,
   openFrames,
