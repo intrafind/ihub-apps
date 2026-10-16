@@ -1366,21 +1366,26 @@ function ChatMessage({
 
           {isUser && editable && (
             <>
-              <button
-                onClick={handleEdit}
-                className="flex items-center gap-1 hover:text-gray-700 transition-colors duration-150"
-                title={t('chatMessage.editMessage', 'Edit message')}
-              >
-                <Icon name="edit" size="sm" />
-              </button>
+              {/* A transcription turn's audio is not kept: nothing to edit or resend. */}
+              {!message.transcription && (
+                <button
+                  onClick={handleEdit}
+                  className="flex items-center gap-1 hover:text-gray-700 transition-colors duration-150"
+                  title={t('chatMessage.editMessage', 'Edit message')}
+                >
+                  <Icon name="edit" size="sm" />
+                </button>
+              )}
 
-              <button
-                onClick={handleResend}
-                className="flex items-center gap-1 hover:text-gray-700 transition-colors duration-150"
-                title={t('chatMessage.resendMessage', 'Resend message')}
-              >
-                <Icon name="refresh" size="sm" />
-              </button>
+              {!message.transcription && (
+                <button
+                  onClick={handleResend}
+                  className="flex items-center gap-1 hover:text-gray-700 transition-colors duration-150"
+                  title={t('chatMessage.resendMessage', 'Resend message')}
+                >
+                  <Icon name="refresh" size="sm" />
+                </button>
+              )}
 
               <button
                 onClick={handleCopyLink}
@@ -1429,9 +1434,9 @@ function ChatMessage({
                 <StarRating
                   rating={activeFeedback}
                   onRatingChange={handleStarRatingClick}
-                  allowHalfStars={true}
+                  allowHalfStars
                   size="w-4 h-4"
-                  showTooltip={true}
+                  showTooltip
                   className="shrink-0"
                 />
               </div>

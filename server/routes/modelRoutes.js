@@ -145,7 +145,7 @@ export default function registerModelRoutes(app, { getLocalizedError }) {
             .split(',')
             .map(type => type.trim())
         )
-      ].sort();
+      ].sort((a, b) => a.localeCompare(b));
       const unknownType = requestedTypes.find(type => !MODEL_TYPES.has(type));
       if (unknownType !== undefined) {
         return res.status(400).json({ error: `Unknown model type: ${unknownType}` });

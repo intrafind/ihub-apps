@@ -28,6 +28,35 @@ export const description = 'remove_app_transcription_pipeline';
 
 const PLATFORM_PATH = 'config/platform.json';
 
+/** The model an app transcribed with, when its transcription was on. */
+function transcriptionModelOf(app, platformDefault) {
+  const block = app.transcription;
+  if (block?.enabled !== true) return '';
+  return block.modelId || platformDefault || '';
+}
+
+async function migrateApp(ctx, relativePath, platformDefault) {
+  let app;
+  try {
+    app = await ctx.readJson(relativePath);
+  } catch (error) {
+    ctx.warn(`Skipping ${relativePath}: ${error.message}`);
+    return;
+  }
+  if (!app || typeof app !== 'object' || Array.isArray(app)) return;
+  if (!Object.hasOwn(app, 'transcription')) return;
+
+  const modelId = transcriptionModelOf(app, platformDefault);
+  const restricted = Array.isArray(app.allowedModels) && app.allowedModels.length > 0;
+  if (modelId && restricted && !app.allowedModels.includes(modelId)) {
+    app.allowedModels.push(modelId);
+    ctx.log(`Added transcription model ${modelId} to allowedModels of ${relativePath}`);
+  }
+  delete app.transcription;
+  await ctx.writeJson(relativePath, app);
+  ctx.log(`Removed transcription block from ${relativePath}`);
+}
+
 export async function up(ctx) {
   let platform = null;
   if (await ctx.fileExists(PLATFORM_PATH)) {
@@ -40,33 +69,8 @@ export async function up(ctx) {
   const platformDefault = platform?.speech?.transcription?.defaultModelId;
 
   const files = await ctx.listFiles('apps', '*.json');
-  for (const file of files) {
-    const relativePath = `apps/${file}`;
-    let app;
-    try {
-      app = await ctx.readJson(relativePath);
-    } catch (error) {
-      ctx.warn(`Skipping ${relativePath}: ${error.message}`);
-      continue;
-    }
-    if (!app || typeof app !== 'object' || Array.isArray(app)) continue;
-    if (!Object.prototype.hasOwnProperty.call(app, 'transcription')) continue;
-
-    const block = app.transcription;
-    const modelId = (block?.enabled === true && (block.modelId || platformDefault)) || '';
-    if (
-      modelId &&
-      Array.isArray(app.allowedModels) &&
-      app.allowedModels.length > 0 &&
-      !app.allowedModels.includes(modelId)
-    ) {
-      app.allowedModels.push(modelId);
-      ctx.log(`Added transcription model ${modelId} to allowedModels of ${relativePath}`);
-    }
-    delete app.transcription;
-    await ctx.writeJson(relativePath, app);
-    ctx.log(`Removed transcription block from ${relativePath}`);
-  }
+  // One app at a time: the log reads in file order.
+  for (const file of files) await migrateApp(ctx, `apps/${file}`, platformDefault);
 
   if (
     platform?.speech &&

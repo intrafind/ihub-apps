@@ -82,6 +82,8 @@ export function transformStoredMessage(msg) {
   }
   if (msg.usage) message.usage = msg.usage;
   if (msg.finishReason) message.finishReason = msg.finishReason;
+  // A transcription turn (its audio is not kept: no edit, no resend).
+  if (msg.transcription === true) message.transcription = true;
   if (Array.isArray(msg.attachments) && msg.attachments.length > 0) {
     message.attachments = msg.attachments;
   }

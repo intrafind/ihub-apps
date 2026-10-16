@@ -17,7 +17,7 @@
  */
 import configCache from '../../configCache.js';
 import logger from '../../utils/logger.js';
-import runLog, { newRunId } from '../loop/RunLog.js';
+import runLog from '../loop/RunLog.js';
 import { resolvePrincipal } from '../loop/runIdentity.js';
 import { authorizeChat } from './chatAccess.js';
 import { getChatRepository, isPersistableChatId } from './ChatRepository.js';
@@ -80,7 +80,15 @@ export async function beginTranscriptionTurn({
 
   const identityMode = access.chat?.identityMode || runLog.identityMode();
   const principal = await resolvePrincipal(user, { mode: identityMode });
-  const runId = newRunId('chat');
+  // A run of the ledger like any chat turn: while it lasts, every worker sees
+  // the chat's `activeRunId` as alive (`chatRecovery.isChatRunAlive`), so a
+  // long recording is not settled as interrupted under the user.
+  const { runId } = await runLog.startRun({
+    kind: 'chat',
+    principal,
+    refs: { chatId },
+    model: modelId
+  });
   const label = String(attachment?.name || '').slice(0, MAX_LABEL_CHARS);
   const question = await materializeUserTurn({
     repository,
@@ -92,10 +100,24 @@ export async function beginTranscriptionTurn({
     runId,
     content: label,
     clientMessageId,
-    attachments: attachment ? [attachment] : []
+    attachments: attachment ? [attachment] : [],
+    // The audio is not kept, so the question cannot be edited or resent.
+    message: { transcription: true }
   });
-  if (!question) return { ok: true, turn: null };
+  if (!question) {
+    runLog.endRun(runId, {
+      status: 'error',
+      error: { code: 'NOT_STORED', message: 'question not stored' }
+    });
+    return { ok: true, turn: null };
+  }
   return { ok: true, turn: { repository, chatId, runId, modelId } };
+}
+
+/** The stored outcome of a transcription: an error wins over an abort. */
+function outcomeStatus({ error, aborted }) {
+  if (error) return 'error';
+  return aborted ? 'aborted' : 'success';
 }
 
 /**
@@ -108,7 +130,7 @@ export async function beginTranscriptionTurn({
  */
 export async function endTranscriptionTurn(turn, { content, error = null, aborted = false }) {
   if (!turn) return;
-  const status = error ? 'error' : aborted ? 'aborted' : 'success';
+  const status = outcomeStatus({ error, aborted });
   try {
     await settleAssistantTurn({
       repository: turn.repository,
@@ -121,7 +143,7 @@ export async function endTranscriptionTurn(turn, { content, error = null, aborte
         ...(error ? { error } : {})
       },
       clientConnected: !aborted,
-      message: { model: turn.modelId }
+      message: { model: turn.modelId, transcription: true }
     });
   } catch (err) {
     logger.error('Transcription turn not settled', {
@@ -129,6 +151,13 @@ export async function endTranscriptionTurn(turn, { content, error = null, aborte
       chatId: turn.chatId,
       runId: turn.runId,
       error: err.message
+    });
+  } finally {
+    // After the answer is stored, as for any chat turn (see settleAssistantTurn).
+    runLog.endRun(turn.runId, {
+      status: status === 'success' ? 'completed' : status,
+      finishReason: status === 'success' ? 'stop' : status,
+      ...(error ? { error: { code: 'TRANSCRIPTION_FAILED', message: String(error) } } : {})
     });
   }
 }

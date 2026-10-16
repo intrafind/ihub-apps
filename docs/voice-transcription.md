@@ -354,7 +354,7 @@ The Azure **Test connection** button checks the key from the iHub server instead
 
 ## Runtime limits and tuning
 
-All knobs live under `platform.json` → `speech.realtime` and apply to the whole realtime endpoint (dictation with a model, and transcription):
+These knobs live under `platform.json` → `speech.realtime` and apply to the whole realtime endpoint (dictation with a model, and transcription). Limits of a single live model are set on that model instead; see [Live model limits](#live-model-limits-pacing-and-session-rotation):
 
 | Setting                 | Default   | Applies             | Notes                                                                 |
 | ----------------------- | --------- | ------------------- | --------------------------------------------------------------------- |
@@ -369,7 +369,7 @@ A recording that is allowed to last as long as the session does is lost: the ses
 
 ### Live model limits: pacing and session rotation
 
-Hosted live APIs limit how fast audio may arrive and how long one session may last. Two per-model settings in the transcription model's `config` tell iHub about them; the provider supplies defaults, and `0` turns a limit off:
+Hosted live APIs limit how fast audio may arrive and how long one session may last. Two settings in the transcription model's own `config` (not in `platform.json`) tell iHub about them; the provider supplies defaults, and `0` turns a limit off. The model's `maxSessionSeconds` is the lifetime of one **upstream** session, after which iHub continues in a fresh one; the platform's `speech.realtime.maxSessionSeconds` above caps the whole browser connection, across all upstream sessions:
 
 | `config` key          | `google-live` default | Effect |
 | --------------------- | --------------------- | ------ |

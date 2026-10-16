@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo, Suspense } from 'react';
+import { v4 as uuidv4 } from 'uuid';
 import {
   getOrCreateChatId,
   mintChatId,
@@ -165,6 +166,16 @@ const renderStartupState = (
 // The query string an embedded chat reads: none. Module-level, so its identity
 // is stable across renders like the router's own.
 const NO_SEARCH_PARAMS = new URLSearchParams();
+
+/** The name a file's transcription turn is shown under. */
+const audioFileLabel = (file, fallback) =>
+  (file.extractedFromVideo && file.originalVideoName) || file.fileName || fallback;
+
+/** Release the microphone of a recording that is thrown away. */
+const cancelRecording = recording => {
+  if (recording?.kind === 'transcribe') recording.session.cancel();
+  else if (recording?.kind === 'attach') recording.recorder.cancel();
+};
 
 // Longest audio sent to a transcription model (the server holds up to ~70
 // minutes for a batch model and caps a session at 70 minutes).
@@ -1675,6 +1686,9 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
   };
 
   const handleResendMessage = (messageId, editedContent) => {
+    // A transcription turn's audio is not kept: there is nothing to resend,
+    // and preparing a resend would already remove the transcript.
+    if (messages.find(message => message.id === messageId)?.transcription) return;
     const resendData = prepareResend(messageId, editedContent);
     const {
       content: contentToResend,
@@ -1936,15 +1950,19 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
   /**
    * Open a transcription turn on screen: the audio's name as the question and
    * an answer that grows with the transcript. `chat` goes in the session's
-   * `start` frame, so the server stores the same turn.
+   * `start` frame, so the server stores the same turn — under the same
+   * exchange id, which is what lets deleting it here fork the stored history.
    *
    * @param {string} label - What the question shows (the file name).
    * @param {{name: string, type?: string, bytes?: number}} attachment
    */
   const openTranscriptionTurn = useCallback(
     (label, attachment) => {
-      const answerId = `msg-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+      const answerId = `msg-${uuidv4()}`;
       let shown = '';
+      // Both halves are marked: the audio is not kept, so the question can be
+      // neither edited nor resent (the stored turn carries the same mark).
+      const mark = { transcription: true };
       return {
         chat: {
           chatId,
@@ -1954,23 +1972,20 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
           attachment
         },
         open() {
-          addUserMessage(label);
+          addUserMessage(label, { ...mark, clientMessageId: answerId });
           addAssistantMessage(answerId);
+          updateAssistantMessage(answerId, '', true, mark);
           setSentInChatId(chatId);
         },
         show(text) {
           shown = text;
-          updateAssistantMessage(answerId, text, true);
+          updateAssistantMessage(answerId, text, true, mark);
         },
         // Ends the answer. A failure keeps what was transcribed so far.
         finish(text, failure) {
           const transcript = (text || shown || '').trim();
-          updateAssistantMessage(
-            answerId,
-            transcript ||
-              (failure ? '' : t('transcription.noSpeechInFile', '(no speech detected)')),
-            false
-          );
+          const noSpeech = failure ? '' : t('transcription.noSpeechInFile', '(no speech detected)');
+          updateAssistantMessage(answerId, transcript || noSpeech, false, mark);
           if (failure && failure.code !== 'aborted' && !disposedRef.current) {
             addSystemMessage(transcriptionErrorText(failure), true);
           }
@@ -1999,6 +2014,32 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
     return true;
   }, [addSystemMessage, t]);
 
+  /** Transcribe one audio attachment into its turn; resolves with the transcript. */
+  const transcribeFile = useCallback(
+    async (file, turn, signal) => {
+      // Audio extracted from a video keeps its WAV Blob: decoding that skips
+      // re-parsing the base64 data URL.
+      const audioBuffer = await decodeAudioFileToBuffer(
+        file.blob instanceof Blob ? file.blob : file.base64
+      );
+      if (audioBuffer?.duration > MAX_TRANSCRIPTION_SECONDS) {
+        throw Object.assign(new Error('too-long'), {
+          code: 'too-long',
+          duration: audioBuffer.duration,
+          max: MAX_TRANSCRIPTION_SECONDS
+        });
+      }
+      turn.show('');
+      return transcribeAudioBuffer(audioBuffer, {
+        modelId: transcriptionModel.id,
+        signal,
+        chat: turn.chat,
+        onDelta: partial => turn.show(partial)
+      });
+    },
+    [transcriptionModel]
+  );
+
   /**
    * Transcribe uploaded audio (or the audio of a video) with the selected
    * transcription model, one turn per file.
@@ -2017,10 +2058,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
       setIsTranscribing(true);
       try {
         for (const file of files) {
-          const name =
-            (file.extractedFromVideo ? file.originalVideoName : null) ||
-            file.fileName ||
-            t('transcription.recording', 'Recording');
+          const name = audioFileLabel(file, t('transcription.recording', 'Recording'));
           const turn = openTranscriptionTurn(name, {
             name,
             type: file.fileType || 'audio',
@@ -2030,25 +2068,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
           let text = '';
           let failure = null;
           try {
-            // Audio extracted from a video keeps its WAV Blob: decoding that
-            // skips re-parsing the base64 data URL.
-            const audioBuffer = await decodeAudioFileToBuffer(
-              file.blob instanceof Blob ? file.blob : file.base64
-            );
-            if (audioBuffer?.duration > MAX_TRANSCRIPTION_SECONDS) {
-              throw Object.assign(new Error('too-long'), {
-                code: 'too-long',
-                duration: audioBuffer.duration,
-                max: MAX_TRANSCRIPTION_SECONDS
-              });
-            }
-            turn.show('');
-            text = await transcribeAudioBuffer(audioBuffer, {
-              modelId: transcriptionModel.id,
-              signal: abortController.signal,
-              chat: turn.chat,
-              onDelta: partial => turn.show(partial)
-            });
+            text = await transcribeFile(file, turn, abortController.signal);
           } catch (err) {
             failure = err;
           }
@@ -2061,21 +2081,16 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
         setIsTranscribing(false);
       }
     },
-    [transcriptionModel, busyWithAudio, fileUploadHandler, openTranscriptionTurn, t]
+    [transcriptionModel, busyWithAudio, fileUploadHandler, openTranscriptionTurn, transcribeFile, t]
   );
 
-  const stopRecording = useCallback(async () => {
-    const recording = recordingRef.current;
-    if (!recording) return;
-    recordingRef.current = null;
-    setIsRecordingTranscription(false);
-
-    if (recording.kind === 'attach') {
-      // A chat model that takes audio: attach the recording and send it with
-      // whatever is typed, once React has committed the attachment.
+  // A chat model that takes audio: attach the recording and send it with
+  // whatever is typed, once React has committed the attachment.
+  const sendRecordingAsAttachment = useCallback(
+    async recorder => {
       let attachment = null;
       try {
-        const { audioBuffer } = await recording.recorder.stop();
+        const { audioBuffer } = await recorder.stop();
         if (audioBuffer) {
           attachment = await recordingToAudioAttachment(
             audioBuffer,
@@ -2088,32 +2103,90 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
       }
       if (disposedRef.current || !attachment) return;
       const held = fileUploadHandler.selectedFile;
-      const others = held ? (Array.isArray(held) ? held : [held]) : [];
+      const others = held ? [held].flat() : [];
       fileUploadHandler.setSelectedFile(others.length ? [...others, attachment] : attachment);
       setPendingAutoSubmit(true);
-      return;
-    }
+    },
+    [fileUploadHandler, addSystemMessage, transcriptionErrorText, t]
+  );
 
-    // A transcription model: the microphone is off now; Stop cancels what is
-    // left of the transcription.
-    const { session, turn } = recording;
-    setIsTranscribing(true);
-    transcribeAbortRef.current = { abort: () => session.cancel() };
-    if (!session.text()) turn.show(t('transcription.transcribing', 'Transcribing…'));
-    let text = '';
-    let failure = null;
+  // A transcription model: the microphone is off now; Stop cancels what is
+  // left of the transcription.
+  const finishRecordedTranscription = useCallback(
+    async (session, turn) => {
+      setIsTranscribing(true);
+      transcribeAbortRef.current = { abort: () => session.cancel() };
+      if (!session.text()) turn.show(t('transcription.transcribing', 'Transcribing…'));
+      let text = '';
+      let failure = null;
+      try {
+        text = await session.stop();
+      } catch (err) {
+        failure = err;
+        text = err?.partialText || '';
+      } finally {
+        transcribeAbortRef.current = null;
+        setIsTranscribing(false);
+      }
+      if (!disposedRef.current) turn.finish(text, failure);
+    },
+    [t]
+  );
+
+  const stopRecording = useCallback(async () => {
+    const recording = recordingRef.current;
+    if (!recording) return;
+    recordingRef.current = null;
+    setIsRecordingTranscription(false);
+    if (recording.kind === 'attach') await sendRecordingAsAttachment(recording.recorder);
+    else await finishRecordedTranscription(recording.session, recording.turn);
+  }, [sendRecordingAsAttachment, finishRecordedTranscription]);
+
+  // Record for a transcription model: its transcript grows in the answer.
+  const startTranscribedRecording = useCallback(
+    async onMaxDuration => {
+      const label = t('transcription.recording', 'Recording');
+      const turn = openTranscriptionTurn(label, { name: label, type: 'audio/wav' });
+      const listening = t('transcription.listening', 'Listening…');
+      let session = null;
+      session = await startLiveTranscription({
+        modelId: transcriptionModel.id,
+        chat: turn.chat,
+        onText: text => turn.show(text || listening),
+        // The session failed while the user was still speaking.
+        onError: err => {
+          if (!session || recordingRef.current?.session !== session) return;
+          recordingRef.current = null;
+          setIsRecordingTranscription(false);
+          turn.finish(err.partialText || '', err);
+        },
+        onTick: setRecordElapsed,
+        maxDurationSeconds: MAX_TRANSCRIPTION_SECONDS,
+        onMaxDuration
+      });
+      if (!disposedRef.current) {
+        turn.open();
+        turn.show(listening);
+      }
+      return { kind: 'transcribe', session, turn };
+    },
+    [transcriptionModel, openTranscriptionTurn, t]
+  );
+
+  // Record for a chat model that takes audio: the audio is kept in the tab.
+  const startAttachedRecording = useCallback(async onMaxDuration => {
+    const recorder = new AudioBufferRecorder({
+      maxDurationSeconds: MAX_ATTACHED_RECORDING_SECONDS,
+      onTick: setRecordElapsed,
+      onMaxDuration
+    });
     try {
-      text = await session.stop();
+      await recorder.start();
     } catch (err) {
-      failure = err;
-      text = err?.partialText || '';
-    } finally {
-      transcribeAbortRef.current = null;
-      setIsTranscribing(false);
+      throw Object.assign(err instanceof Error ? err : new Error('mic'), { code: 'mic' });
     }
-    if (disposedRef.current) return;
-    turn.finish(text, failure);
-  }, [fileUploadHandler, addSystemMessage, transcriptionErrorText, t]);
+    return { kind: 'attach', recorder };
+  }, []);
 
   const startRecording = useCallback(async () => {
     // Re-entrancy: a second click while the permission prompt is open would
@@ -2121,46 +2194,11 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
     if (recorderStartingRef.current || busyWithAudio()) return;
     const onMaxDuration = () => stopRecording();
     recorderStartingRef.current = true;
-    let recording;
+    let recording = null;
     try {
-      if (transcriptionModel) {
-        const label = t('transcription.recording', 'Recording');
-        const turn = openTranscriptionTurn(label, { name: label, type: 'audio/wav' });
-        const listening = t('transcription.listening', 'Listening…');
-        let session = null;
-        session = await startLiveTranscription({
-          modelId: transcriptionModel.id,
-          chat: turn.chat,
-          onText: text => turn.show(text || listening),
-          // The session failed while the user was still speaking.
-          onError: err => {
-            if (!session || recordingRef.current?.session !== session) return;
-            recordingRef.current = null;
-            setIsRecordingTranscription(false);
-            turn.finish(err.partialText || '', err);
-          },
-          onTick: setRecordElapsed,
-          maxDurationSeconds: MAX_TRANSCRIPTION_SECONDS,
-          onMaxDuration
-        });
-        recording = { kind: 'transcribe', session, turn };
-        if (!disposedRef.current) {
-          turn.open();
-          turn.show(listening);
-        }
-      } else {
-        const recorder = new AudioBufferRecorder({
-          maxDurationSeconds: MAX_ATTACHED_RECORDING_SECONDS,
-          onTick: setRecordElapsed,
-          onMaxDuration
-        });
-        try {
-          await recorder.start();
-        } catch (err) {
-          throw Object.assign(err instanceof Error ? err : new Error('mic'), { code: 'mic' });
-        }
-        recording = { kind: 'attach', recorder };
-      }
+      recording = transcriptionModel
+        ? await startTranscribedRecording(onMaxDuration)
+        : await startAttachedRecording(onMaxDuration);
     } catch (err) {
       if (!disposedRef.current) addSystemMessage(transcriptionErrorText(err), true);
       return;
@@ -2169,8 +2207,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
     }
     if (disposedRef.current) {
       // Unmounted while the permission prompt was open — release the mic.
-      if (recording.kind === 'transcribe') recording.session.cancel();
-      else recording.recorder.cancel();
+      cancelRecording(recording);
       return;
     }
     recordingRef.current = recording;
@@ -2179,11 +2216,11 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
   }, [
     transcriptionModel,
     busyWithAudio,
-    openTranscriptionTurn,
     stopRecording,
+    startTranscribedRecording,
+    startAttachedRecording,
     addSystemMessage,
-    transcriptionErrorText,
-    t
+    transcriptionErrorText
   ]);
 
   const handleRecordTranscription = useCallback(() => {
@@ -2202,10 +2239,8 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
     disposedRef.current = false;
     return () => {
       disposedRef.current = true;
-      const recording = recordingRef.current;
+      cancelRecording(recordingRef.current);
       recordingRef.current = null;
-      if (recording?.kind === 'transcribe') recording.session.cancel();
-      else if (recording?.kind === 'attach') recording.recorder.cancel();
       if (transcribeAbortRef.current) {
         transcribeAbortRef.current.abort();
         transcribeAbortRef.current = null;
@@ -2270,18 +2305,17 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
     if (compareModeActive ? compareIsProcessing : processing) return;
 
     // Audio goes to the selected model. A transcription model answers each
-    // audio file with its transcript (there is nothing typed to send to it);
-    // any other model has to take audio itself.
-    if (!compareModeActive && fileUploadHandler.selectedFile) {
-      const selected = Array.isArray(fileUploadHandler.selectedFile)
-        ? fileUploadHandler.selectedFile
-        : [fileUploadHandler.selectedFile];
-      const audioFiles = selected.filter(f => f?.type === 'audio');
-      if (transcriptionModel) {
-        if (audioFiles.length > 0) transcribeFiles(audioFiles);
-        return;
-      }
-      if (audioFiles.length > 0 && currentModelObject?.supportsAudio !== true) {
+    // audio file with its transcript and nothing else: no text reaches it, from
+    // the composer, an auto-send or a resend. Any other model has to take
+    // audio itself.
+    const selected = fileUploadHandler.selectedFile ? [fileUploadHandler.selectedFile].flat() : [];
+    const audioFiles = selected.filter(f => f?.type === 'audio');
+    if (!compareModeActive && transcriptionModel) {
+      if (audioFiles.length > 0) transcribeFiles(audioFiles);
+      return;
+    }
+    if (!compareModeActive && audioFiles.length > 0) {
+      if (currentModelObject?.supportsAudio !== true) {
         addSystemMessage(
           t(
             'transcription.errors.modelTakesNoAudio',
@@ -2594,11 +2628,11 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
         (app?.inputMode?.microphone?.enabled ?? app?.microphone?.enabled) !== false
           ? handleVoiceCommand
           : undefined,
-      audioOnly: !compareModeActive && !!transcriptionModel,
+      audioOnly: !compareModeActive && Boolean(transcriptionModel),
       // Record (separate from the dictation mic above): the recording goes to
       // the selected model, so only to one that takes audio.
       transcriptionRecordEnabled:
-        !compareModeActive && (!!transcriptionModel || currentModel?.supportsAudio === true),
+        !compareModeActive && (Boolean(transcriptionModel) || currentModel?.supportsAudio === true),
       // Not while a transcription finishes or an answer streams — except to
       // stop the recording that is running.
       onRecordTranscription:

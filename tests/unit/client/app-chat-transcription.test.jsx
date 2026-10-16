@@ -525,6 +525,49 @@ describe('a transcription model selected in the chat', () => {
     expect(mockStream.opened).toBe(0);
   });
 
+  test('both halves of the turn are marked, under the exchange id the server stores', async () => {
+    transcribeAudioBuffer.mockResolvedValue('We ship on Friday.');
+    renderApp();
+    await attach(AUDIO);
+    await send();
+    await waitFor(() => expect(shownTurns()).toHaveLength(2));
+
+    const [question, answer] = shownMessages().filter(m => m.role !== 'system');
+    const { chat } = transcribeAudioBuffer.mock.calls[0][1];
+    // Deleting the turn forks the stored history by this id.
+    expect(question.clientMessageId).toBe(chat.clientMessageId);
+    expect(answer.id).toBe(chat.clientMessageId);
+    // The audio is not kept: no edit or resend of the question.
+    expect(question.transcription).toBe(true);
+    expect(answer.transcription).toBe(true);
+  });
+
+  test('a resend of a transcription turn is refused, and the transcript stays', async () => {
+    transcribeAudioBuffer.mockResolvedValue('We ship on Friday.');
+    renderApp();
+    await attach(AUDIO);
+    await send();
+    await waitFor(() => expect(shownTurns()).toHaveLength(2));
+    const question = shownMessages().find(m => m.role === 'user');
+    await act(async () => {
+      mockMessageList.props.onResend(question.id);
+    });
+    expect(shownTurns()).toEqual([
+      ['user', 'memo.mp3'],
+      ['assistant', 'We ship on Friday.']
+    ]);
+    expect(sendAppChatMessage).not.toHaveBeenCalled();
+  });
+
+  test('typed text is never sent to a transcription model', async () => {
+    renderApp();
+    await type('Hello?');
+    await send();
+    expect(sendAppChatMessage).not.toHaveBeenCalled();
+    expect(mockStream.opened).toBe(0);
+    expect(transcribeAudioBuffer).not.toHaveBeenCalled();
+  });
+
   test('the transcript streams into the answer', async () => {
     const transcription = controlledTranscription();
     renderApp();

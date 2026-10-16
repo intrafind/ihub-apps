@@ -288,7 +288,7 @@ Example configurations for the most common Bedrock models live in `examples/mode
 
 ### Transcription Models
 
-Models with `modelType: "transcription"` are **speech-to-text** models, not chat models. They convert a complete audio buffer — from an uploaded audio file, an uploaded video (audio track extracted client-side), or a browser recording — into text that becomes the user's message, which the selected chat model then answers. Any of them can also take **dictation**: the microphone button streams to it and the text lands in the input field. See [Realtime Voice & Transcription](voice-transcription.md) for the full deployment guide (vLLM setup, reverse proxy, limits, security) and [Audio File Support](audio-file-support.md) for how apps use them.
+Models with `modelType: "transcription"` are **speech-to-text** models, not chat models. Users select them in the chat's model selector: an uploaded audio file, an uploaded video (audio track extracted client-side) or a recording is then answered with its transcript, which is stored in the chat as the answer — a chat model selected afterwards can work with it. The streaming ones (`vllm-realtime`, `mistral`, `google-live`) can also take **dictation**: the microphone button streams to the configured one and the text lands in the input field. See [Realtime Voice & Transcription](voice-transcription.md) for the full deployment guide (vLLM setup, reverse proxy, limits, security) and [Audio File Support](audio-file-support.md) for how apps use them.
 
 Transcription models are **not** routed through the LLM adapter pipeline. They use a parallel transcription provider registry (`server/transcription/`) and are streamed over the same authenticated realtime WebSocket (`/api/voice/realtime`) that dictation uses.
 
@@ -298,7 +298,7 @@ Five transcription providers ship. All of them speak the same browser-facing pro
 | --- | --- | --- | --- |
 | `vllm-realtime` | `voxtral-mini-realtime` | Streaming (WebSocket) | Self-hosted, fully private transcription |
 | `mistral` | `voxtral-mini-transcribe-realtime` | Streaming (Mistral realtime API) | The same Voxtral model, hosted by Mistral |
-| `google-live` | `gemini-3.5-transcribe-live` | Streaming (Gemini Live API) | Hosted realtime transcription, recordings up to 10 min |
+| `google-live` | `gemini-3.5-transcribe-live` | Streaming (Gemini Live API) | Hosted realtime transcription; Google ends a session after ~10 min, iHub continues in a fresh one, so recordings and files up to 1 h work |
 | `google-transcribe` | `gemini-3.5-transcribe` | Batch (one request) | Hosted transcription of complete recordings, up to 1 h |
 | `openai` / `local` | any Whisper-style model (`whisper-large-v3-turbo` on LLM Hub, `whisper-1`) | Batch (OpenAI `/audio/transcriptions`) | Whisper on T-Systems LLM Hub, OpenAI, vLLM or another OpenAI-compatible server |
 

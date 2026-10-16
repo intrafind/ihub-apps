@@ -15,6 +15,8 @@ import {
   beginTranscriptionTurn,
   endTranscriptionTurn
 } from '../services/chat/transcriptionTurn.js';
+import { INTERRUPTED_RUN_GRACE_MS, isChatRunAlive } from '../services/chat/chatRecovery.js';
+import runLog from '../services/loop/RunLog.js';
 
 const user = { id: 'alice', permissions: { apps: new Set(['notes']), models: new Set(['*']) } };
 const attachment = { name: 'meeting.mp3', type: 'audio/mpeg', bytes: 1234 };
@@ -64,7 +66,13 @@ describe('transcription turn', () => {
       const chat = await repository.getChat('chat-transcribe');
       assert.equal(chat.activeRunId, result.turn.runId);
 
+      // A long recording is a live run, not one interrupted after the grace period.
+      const later = Date.now() + INTERRUPTED_RUN_GRACE_MS + 60_000;
+      assert.equal(isChatRunAlive(chat, { now: later }), true);
+      assert.equal(runLog.getRunMeta(result.turn.runId)?.ended, false);
+
       await endTranscriptionTurn(result.turn, { content: 'Hello everyone, welcome.' });
+      assert.equal(runLog.getRunMeta(result.turn.runId)?.ended, true);
 
       const { messages } = await repository.getMessages('chat-transcribe');
       assert.equal(messages.length, 2);
@@ -77,6 +85,9 @@ describe('transcription turn', () => {
       assert.equal(messages[1].role, 'assistant');
       assert.equal(messages[1].content, 'Hello everyone, welcome.');
       assert.equal(messages[1].model, 'gemini-3.5-transcribe');
+      // Marked, so the client offers no edit or resend: the audio is not kept.
+      assert.equal(messages[0].transcription, true);
+      assert.equal(messages[1].transcription, true);
       assert.equal((await repository.getChat('chat-transcribe')).activeRunId ?? null, null);
     });
   });

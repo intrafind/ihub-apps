@@ -1427,6 +1427,24 @@ describe('bridgeConnection — Gemini Live pacing and session rotation (fake soc
     expect(streamEnds(upstreams[1])).toBe(1);
   });
 
+  test('an upstream that closes normally after the end of audio completes the session', async () => {
+    const { client, upstreams } = setup();
+    await start(client);
+    await openSession(upstreams[0]);
+    client.emit('message', SECOND, true);
+    client.emit('message', JSON.stringify({ type: 'stop' }), false);
+    expect(streamEnds(upstreams[0])).toBe(1);
+    upstreams[0].emit(
+      'message',
+      JSON.stringify({ serverContent: { inputTranscription: { text: 'done talking' } } })
+    );
+    upstreams[0].emit('close', 1000, Buffer.from(''));
+    await jest.advanceTimersByTimeAsync(0);
+    expect(client.framesOfType('done')).toHaveLength(1);
+    expect(client.framesOfType('error')).toHaveLength(0);
+    expect(client.readyState).toBe(WebSocket.CLOSED);
+  });
+
   test("Gemini's goAway starts a fresh session", async () => {
     const { client, upstreams, createUpstream } = setup();
     await start(client);

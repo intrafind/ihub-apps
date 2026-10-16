@@ -598,7 +598,6 @@ export function bridgeConnection(clientWs, user, limiter, options = {}) {
   // names the chat, the bridge stores the transcript as the answer.
   let turnRequest = null; // { chatId, appId, ephemeral, clientMessageId, attachment }
   let turnPromise = null; // resolves to the begun turn, or null
-  let turnEnded = false;
   let transcriptCommitted = ''; // the transcript, assembled like the client does
   let transcriptPartial = '';
   let completed = false; // `done` went to the client
@@ -634,8 +633,12 @@ export function bridgeConnection(clientWs, user, limiter, options = {}) {
     transcriptPartial = '';
   };
 
+  // Resolves once the chat is authorized and the question stored (or nothing
+  // is stored); the provider starts only after it, so a refused chat costs no
+  // upstream session.
   const startTurn = modelId => {
-    if (!turnRequest || turnPromise) return;
+    if (!turnRequest) return Promise.resolve(null);
+    if (turnPromise) return turnPromise;
     turnPromise = beginTranscriptionTurn({ user, modelId, ...turnRequest })
       .then(result => {
         if (result.ok) return result.turn;
@@ -655,13 +658,26 @@ export function bridgeConnection(clientWs, user, limiter, options = {}) {
       });
   };
 
-  // Store the answer once, however the session ends.
+  // Store the answer once, however the session ends. Resolves when it is
+  // stored, so a success is only acknowledged with the transcript in place.
+  let turnEndPromise = null;
   const endTurn = () => {
-    if (!turnPromise || turnEnded) return;
-    turnEnded = true;
+    if (!turnPromise) return Promise.resolve();
+    if (turnEndPromise) return turnEndPromise;
     const content = `${transcriptCommitted} ${transcriptPartial}`.replace(/\s+/g, ' ').trim();
     const outcome = { content, error: failure, aborted: !completed && !failure };
-    void turnPromise.then(turn => endTranscriptionTurn(turn, outcome));
+    turnEndPromise = turnPromise.then(turn => endTranscriptionTurn(turn, outcome));
+    return turnEndPromise;
+  };
+
+  // The transcript is complete: store it, then tell the client and close.
+  // A chat model asked about it right after `done` reads it from the store.
+  const finishCompleted = async () => {
+    if (completed || tornDown) return;
+    completed = true;
+    await endTurn();
+    sendJson(clientWs, { type: 'done' });
+    cleanup();
   };
 
   const cleanup = () => {
@@ -908,9 +924,7 @@ export function bridgeConnection(clientWs, user, limiter, options = {}) {
     if (postStopSettleTimer) clearTimeout(postStopSettleTimer);
     postStopSettleTimer = setTimeout(() => {
       postStopSettleTimer = null;
-      completed = true;
-      sendJson(clientWs, { type: 'done' });
-      cleanup();
+      void finishCompleted();
     }, POST_STOP_SETTLE_MS);
   };
 
@@ -1157,6 +1171,12 @@ export function bridgeConnection(clientWs, user, limiter, options = {}) {
         });
         return;
       }
+      // A normal close after the end of audio went upstream is the upstream
+      // finishing the transcript, which the client takes as completion too.
+      if (stopSentUpstream && !errorSent) {
+        void finishCompleted();
+        return;
+      }
       cleanup();
     });
   };
@@ -1236,9 +1256,7 @@ export function bridgeConnection(clientWs, user, limiter, options = {}) {
       gotTranscription = true;
       commitTranscript(result?.text);
       sendJson(clientWs, { type: 'final', text: result?.text || '' });
-      completed = true;
-      sendJson(clientWs, { type: 'done' });
-      cleanup();
+      await finishCompleted();
     } catch (err) {
       if (abortController.signal.aborted) return; // teardown already in progress
       failBridge('upstream-error', `Transcription failed: ${err.message}`, {
@@ -1276,7 +1294,8 @@ export function bridgeConnection(clientWs, user, limiter, options = {}) {
     cfg = result.upstream;
     provider = result.provider;
     limits = result.limits || limits;
-    startTurn(modelId);
+    await startTurn(modelId);
+    if (errorSent || clientWs.readyState > WebSocket.OPEN) return; // refused, or the client left
 
     if (isBatch()) {
       // Nothing to dial: the client is cleared to stream straight away and the

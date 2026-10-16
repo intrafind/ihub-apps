@@ -8,11 +8,10 @@ import cache, { CACHE_KEYS, DEFAULT_CACHE_TTL, buildCacheKey } from '../../utils
 export const fetchModels = async (options = {}) => {
   const { skipCache = false, withTranscription = false } = options;
   const type = withTranscription ? 'chat,transcription' : null;
-  const cacheKey = skipCache
-    ? null
-    : type
-      ? buildCacheKey(CACHE_KEYS.MODELS_LIST, { type })
-      : CACHE_KEYS.MODELS_LIST;
+  let cacheKey = null;
+  if (!skipCache) {
+    cacheKey = type ? buildCacheKey(CACHE_KEYS.MODELS_LIST, { type }) : CACHE_KEYS.MODELS_LIST;
+  }
 
   return handleApiResponse(
     () => {

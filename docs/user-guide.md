@@ -146,7 +146,8 @@ be renamed and deleted from the sidebar.
 Transcription models appear in the chat's model selector next to the chat models. With one
 selected, the text box is disabled and the chat transcribes instead of answering:
 
-- **Record**: press the red dot, speak, and press stop. The transcript appears while you speak.
+- **Record**: press the red dot, speak, and press stop. With a live model the transcript appears
+  while you speak; a whole-file model writes it after you press stop.
 - **Upload**: attach an audio or video file. Long recordings such as meetings are supported.
 
 The transcript is the answer and is stored in the chat like any other turn. Switch back to a chat
