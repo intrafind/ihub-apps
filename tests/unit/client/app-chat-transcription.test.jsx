@@ -568,6 +568,15 @@ describe('a transcription model selected in the chat', () => {
     expect(transcribeAudioBuffer).not.toHaveBeenCalled();
   });
 
+  test('other attachments stay attached for the model selected next', async () => {
+    transcribeAudioBuffer.mockResolvedValue('We ship on Friday.');
+    renderApp();
+    await attach([AUDIO, DOC]);
+    await send();
+    await waitFor(() => expect(shownTurns()).toHaveLength(2));
+    expect(mockUpload.selected).toEqual([DOC]);
+  });
+
   test('the transcript streams into the answer', async () => {
     const transcription = controlledTranscription();
     renderApp();

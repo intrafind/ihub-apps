@@ -4886,7 +4886,8 @@
       "mic": "Auf das Mikrofon konnte nicht zugegriffen werden. Bitte erteilen Sie die Berechtigung und versuchen Sie es erneut.",
       "busy": "Es läuft bereits eine Transkription. Bitte zuerst stoppen.",
       "noSpeech": "Es wurde keine Sprache erkannt. Es wurde nichts gesendet.",
-      "modelTakesNoAudio": "Das ausgewählte Modell kann kein Audio verarbeiten. Wählen Sie ein Modell, das es kann, oder ein Transkriptionsmodell, oder entfernen Sie den Audio-Anhang."
+      "modelTakesNoAudio": "Das ausgewählte Modell kann kein Audio verarbeiten. Wählen Sie ein Modell, das es kann, oder ein Transkriptionsmodell, oder entfernen Sie den Audio-Anhang.",
+      "notStored": "Das Transkript konnte nicht im Chat gespeichert werden. Kopieren Sie es, bevor Sie die Seite verlassen."
     },
     "audioOnlyPlaceholder": "Laden Sie eine Audio- oder Videodatei hoch oder nehmen Sie auf, um das Transkript zu erhalten",
     "modelBadgeLive": "Transkription · live",

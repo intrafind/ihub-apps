@@ -141,6 +141,12 @@ const MAX_PENDING_BYTES = 1024 * 1024;
 const DEFAULT_MAX_BATCH_BYTES = 128 * 1024 * 1024;
 const DEFAULT_MAX_BATCH_BYTES_TOTAL = 512 * 1024 * 1024;
 
+// What the client is told when the chat cannot take a transcription turn.
+const TURN_REFUSALS = {
+  'not-permitted': 'Not permitted to add to this chat',
+  'not-stored': 'The transcript could not be saved in the chat'
+};
+
 // Pacing a file into a rate-limited live upstream (see getStreamLimits): the
 // queue drains every tick, with at most one second of audio as burst credit.
 // The client socket is paused while the queue holds more than the high mark,
@@ -642,7 +648,7 @@ export function bridgeConnection(clientWs, user, limiter, options = {}) {
     turnPromise = beginTranscriptionTurn({ user, modelId, ...turnRequest })
       .then(result => {
         if (result.ok) return result.turn;
-        failBridge(result.code, 'Not permitted to add to this chat', {
+        failBridge(result.code, TURN_REFUSALS[result.code] || TURN_REFUSALS['not-permitted'], {
           reason: 'chat turn refused',
           chatId: turnRequest.chatId
         });
@@ -656,13 +662,14 @@ export function bridgeConnection(clientWs, user, limiter, options = {}) {
         });
         return null;
       });
+    return turnPromise;
   };
 
   // Store the answer once, however the session ends. Resolves when it is
   // stored, so a success is only acknowledged with the transcript in place.
   let turnEndPromise = null;
   const endTurn = () => {
-    if (!turnPromise) return Promise.resolve();
+    if (!turnPromise) return Promise.resolve(true);
     if (turnEndPromise) return turnEndPromise;
     const content = `${transcriptCommitted} ${transcriptPartial}`.replace(/\s+/g, ' ').trim();
     const outcome = { content, error: failure, aborted: !completed && !failure };
@@ -675,14 +682,17 @@ export function bridgeConnection(clientWs, user, limiter, options = {}) {
   const finishCompleted = async () => {
     if (completed || tornDown) return;
     completed = true;
-    await endTurn();
+    if (!(await endTurn())) {
+      failBridge('not-stored', TURN_REFUSALS['not-stored'], { reason: 'answer not stored' });
+      return;
+    }
     sendJson(clientWs, { type: 'done' });
     cleanup();
   };
 
   const cleanup = () => {
     tornDown = true;
-    endTurn();
+    void endTurn();
     if (idleTimer) clearTimeout(idleTimer);
     idleTimer = null;
     if (graceTimer) clearTimeout(graceTimer);

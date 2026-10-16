@@ -133,4 +133,32 @@ describe('transcription turn', () => {
       assert.equal(messages.length, 2);
     });
   });
+
+  it('a question that cannot be stored refuses the turn instead of transcribing for nothing', async () => {
+    await withRepository(async repository => {
+      const failing = Object.create(repository);
+      failing.appendMessage = async () => null;
+      assert.deepEqual(await begin(failing), { ok: false, code: 'not-stored' });
+    });
+  });
+
+  it('an answer that cannot be stored is reported, and its run ends as an error', async () => {
+    await withRepository(async repository => {
+      const { turn } = await begin(repository);
+      const original = repository.appendMessage.bind(repository);
+      repository.appendMessage = async () => null;
+      const stored = await endTranscriptionTurn(turn, { content: 'Hello everyone.' });
+      repository.appendMessage = original;
+      assert.equal(stored, false);
+      assert.equal(runLog.getRunMeta(turn.runId)?.ended, true);
+    });
+  });
+
+  it('a stored answer reports so', async () => {
+    await withRepository(async repository => {
+      const { turn } = await begin(repository);
+      assert.equal(await endTranscriptionTurn(turn, { content: 'Hello.' }), true);
+      assert.equal(await endTranscriptionTurn(null, { content: 'x' }), true);
+    });
+  });
 });

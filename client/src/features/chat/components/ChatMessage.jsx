@@ -1366,7 +1366,8 @@ function ChatMessage({
 
           {isUser && editable && (
             <>
-              {/* A transcription turn's audio is not kept: nothing to edit or resend. */}
+              {/* A transcription turn's audio is not kept: nothing to edit, resend or
+                  link to (a link would send its name, not the recording). */}
               {!message.transcription && (
                 <button
                   onClick={handleEdit}
@@ -1387,13 +1388,15 @@ function ChatMessage({
                 </button>
               )}
 
-              <button
-                onClick={handleCopyLink}
-                className="flex items-center gap-1 hover:text-blue-600 transition-colors duration-150"
-                title={t('chatMessage.copyLink', 'Copy link')}
-              >
-                {linkCopied ? <Icon name="check" size="sm" /> : <Icon name="link" size="sm" />}
-              </button>
+              {!message.transcription && (
+                <button
+                  onClick={handleCopyLink}
+                  className="flex items-center gap-1 hover:text-blue-600 transition-colors duration-150"
+                  title={t('chatMessage.copyLink', 'Copy link')}
+                >
+                  {linkCopied ? <Icon name="check" size="sm" /> : <Icon name="link" size="sm" />}
+                </button>
+              )}
 
               <ScheduleThisAction
                 content={

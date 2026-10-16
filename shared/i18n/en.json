@@ -4921,7 +4921,8 @@
       "mic": "Could not access the microphone. Please grant permission and try again.",
       "busy": "A transcription is already running. Stop it first.",
       "noSpeech": "No speech was detected. Nothing was sent.",
-      "modelTakesNoAudio": "The selected model cannot process audio. Select a model that can, or a transcription model, or remove the audio attachment."
+      "modelTakesNoAudio": "The selected model cannot process audio. Select a model that can, or a transcription model, or remove the audio attachment.",
+      "notStored": "The transcript could not be saved in the chat. Copy it before you leave the page."
     },
     "audioOnlyPlaceholder": "Upload an audio or video file, or press record, to get its transcript",
     "modelBadgeLive": "Transcription · live",

@@ -53,8 +53,9 @@ function appPermitted(user, appId) {
  * @param {boolean} [params.persist] - Whether this turn is stored; decided from
  *   the live config (`isChatPersistenceActive`) when omitted.
  * @returns {Promise<{ok: true, turn: Object|null}|{ok: false, code: string}>}
- *   `turn` is null when nothing is stored (no chat named, persistence off);
- *   `ok: false` when the chat named is not the user's to write.
+ *   `turn` is null when nothing is to be stored (no chat named, persistence
+ *   off); `ok: false` when the chat named is not the user's to write
+ *   (`not-permitted`) or the question could not be stored (`not-stored`).
  */
 export async function beginTranscriptionTurn({
   user,
@@ -109,7 +110,9 @@ export async function beginTranscriptionTurn({
       status: 'error',
       error: { code: 'NOT_STORED', message: 'question not stored' }
     });
-    return { ok: true, turn: null };
+    // Not "nothing to store": transcribing on would end in a `done` for a
+    // turn the chat does not have.
+    return { ok: false, code: 'not-stored' };
   }
   return { ok: true, turn: { repository, chatId, runId, modelId } };
 }
@@ -127,12 +130,16 @@ function outcomeStatus({ error, aborted }) {
  *
  * @param {Object|null} turn - From {@link beginTranscriptionTurn}.
  * @param {{content: string, error?: string|null, aborted?: boolean}} outcome
+ * @returns {Promise<boolean>} Whether the answer is stored (true when there was
+ *   nothing to store) — a success is only acknowledged when it is.
  */
 export async function endTranscriptionTurn(turn, { content, error = null, aborted = false }) {
-  if (!turn) return;
+  if (!turn) return true;
   const status = outcomeStatus({ error, aborted });
+  let stored = false;
   try {
-    await settleAssistantTurn({
+    // A storage failure is reported, not thrown: no stored message.
+    const settled = await settleAssistantTurn({
       repository: turn.repository,
       chatId: turn.chatId,
       runId: turn.runId,
@@ -145,6 +152,14 @@ export async function endTranscriptionTurn(turn, { content, error = null, aborte
       clientConnected: !aborted,
       message: { model: turn.modelId, transcription: true }
     });
+    stored = Boolean(settled.message) || settled.skipped;
+    if (!stored) {
+      logger.error('Transcription answer not stored', {
+        component: COMPONENT,
+        chatId: turn.chatId,
+        runId: turn.runId
+      });
+    }
   } catch (err) {
     logger.error('Transcription turn not settled', {
       component: COMPONENT,
@@ -154,10 +169,18 @@ export async function endTranscriptionTurn(turn, { content, error = null, aborte
     });
   } finally {
     // After the answer is stored, as for any chat turn (see settleAssistantTurn).
-    runLog.endRun(turn.runId, {
-      status: status === 'success' ? 'completed' : status,
-      finishReason: status === 'success' ? 'stop' : status,
-      ...(error ? { error: { code: 'TRANSCRIPTION_FAILED', message: String(error) } } : {})
-    });
+    runLog.endRun(turn.runId, runEndOf(status, error, stored));
   }
+  return stored;
+}
+
+/** The ledger's `run/end` for a transcription: a lost answer is an error too. */
+function runEndOf(status, error, stored) {
+  if (status === 'success' && stored) return { status: 'completed', finishReason: 'stop' };
+  const message = error ? String(error) : 'answer not stored';
+  return {
+    status: status === 'aborted' ? 'aborted' : 'error',
+    finishReason: status === 'success' ? 'error' : status,
+    error: { code: error ? 'TRANSCRIPTION_FAILED' : 'NOT_STORED', message }
+  };
 }

@@ -2045,12 +2045,15 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
    * transcription model, one turn per file.
    *
    * @param {Object[]} files - The audio attachments.
+   * @param {Object[]} [others] - The other attachments: they stay attached, for
+   *   a chat model the user may switch to next.
    */
   const transcribeFiles = useCallback(
-    async files => {
+    async (files, others = []) => {
       if (!transcriptionModel || busyWithAudio()) return;
       setInput('');
-      fileUploadHandler.clearSelectedFile();
+      if (others.length > 0) fileUploadHandler.setSelectedFile(others);
+      else fileUploadHandler.clearSelectedFile();
       fileUploadHandler.hideUploader();
 
       const abortController = new AbortController();
@@ -2311,7 +2314,12 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
     const selected = fileUploadHandler.selectedFile ? [fileUploadHandler.selectedFile].flat() : [];
     const audioFiles = selected.filter(f => f?.type === 'audio');
     if (!compareModeActive && transcriptionModel) {
-      if (audioFiles.length > 0) transcribeFiles(audioFiles);
+      if (audioFiles.length > 0) {
+        transcribeFiles(
+          audioFiles,
+          selected.filter(f => f?.type !== 'audio')
+        );
+      }
       return;
     }
     if (!compareModeActive && audioFiles.length > 0) {

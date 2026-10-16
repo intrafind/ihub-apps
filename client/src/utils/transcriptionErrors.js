@@ -75,6 +75,11 @@ export const getTranscriptionErrorMessage = (err, t) => {
         'You are not permitted to use this transcription model. Please contact your administrator.'
       );
     // The bridge caps how long one session may last, however long the audio.
+    case 'not-stored':
+      return t(
+        'transcription.errors.notStored',
+        'The transcript could not be saved in the chat. Copy it before you leave the page.'
+      );
     case 'session-limit':
       return t(
         'transcription.errors.sessionLimit',
