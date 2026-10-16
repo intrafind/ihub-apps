@@ -6,7 +6,7 @@
 // shared link keeps working without relying on this volatile state.
 //
 // The same channel carries the feature toggles the user picked in the start
-// page's actions menu (web search, tools, image settings, transcription).
+// page's actions menu (web search, tools, image settings).
 // Those are per-chat choices rather than shareable link state, so they ride
 // along here instead of bloating the query string — AppChat applies them once
 // its own settings have been seeded from the app config.
@@ -23,7 +23,6 @@ let pending = null;
  * @param {{ appId: string, files?: any, settings?: {
  *   enabledTools?: string[],
  *   websearchEnabled?: boolean,
- *   transcriptionEnabled?: boolean,
  *   imageAspectRatio?: string,
  *   imageQuality?: string
  * },

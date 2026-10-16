@@ -3,15 +3,14 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 
 /**
- * `AppChat` turning audio into the user's message with the app's
- * transcription model.
+ * `AppChat` sending audio to the selected model.
  *
- * Uploaded audio (or audio extracted from a video) is transcribed on send: the
- * transcript streams into a user bubble after the typed text and then goes to
- * the chat model as the message, in place of the audio. A recording streams
- * live: the user bubble grows while the user speaks and is sent on stop. The
- * bubble is local (`isLiveTranscript`); what the server sees is the one message
- * it turns into.
+ * A transcription model selected in the chat answers each uploaded audio file
+ * (or the audio of a video, or a recording) with its transcript: the file's
+ * name is the question, the transcript streams into the answer, and nothing
+ * goes through the chat request — the audio travels over the realtime socket,
+ * which names the chat so the server can store the turn. A chat model gets
+ * audio only when it takes audio itself: uploaded or recorded, as `audioData`.
  *
  * The mock setup mirrors app-chat-start-form.test.jsx; `useAppChat` is real.
  */
@@ -214,9 +213,22 @@ jest.mock('../../../client/src/utils/appSettings', () => ({
 jest.mock('../../../client/src/features/upload/utils/fileProcessing', () => ({
   __esModule: true,
   processDocumentFile: jest.fn(),
-  decodeAudioFileToBuffer: jest.fn()
+  decodeAudioFileToBuffer: jest.fn(),
+  recordingToAudioAttachment: jest.fn()
 }));
-// Admin → Voice Input can set a platform-wide default transcription model.
+const mockRecorders = [];
+jest.mock('../../../client/src/utils/audioRecorder', () => ({
+  __esModule: true,
+  AudioBufferRecorder: jest.fn().mockImplementation(() => {
+    const recorder = {
+      start: jest.fn().mockResolvedValue(undefined),
+      stop: jest.fn().mockResolvedValue({ audioBuffer: { duration: 4 }, durationSeconds: 4 }),
+      cancel: jest.fn()
+    };
+    mockRecorders.push(recorder);
+    return recorder;
+  })
+}));
 const mockPlatform = { config: null };
 jest.mock('../../../client/src/shared/contexts/PlatformConfigContext', () => ({
   ...jest.requireActual('../../../client/src/shared/contexts/PlatformConfigContext'),
@@ -312,6 +324,9 @@ const {
 } = require('../../../client/src/features/upload/utils/fileProcessing');
 const { transcribeAudioBuffer } = require('../../../client/src/utils/transcribeAudioBuffer');
 const { startLiveTranscription } = require('../../../client/src/utils/liveTranscription');
+const {
+  recordingToAudioAttachment
+} = require('../../../client/src/features/upload/utils/fileProcessing');
 
 const TRANSCRIPTION_APP = {
   id: 'acme',
@@ -319,9 +334,24 @@ const TRANSCRIPTION_APP = {
   description: { en: 'An app' },
   color: '#4f46e5',
   icon: 'microphone',
-  variables: [],
-  transcription: { enabled: true, modelId: 'voxtral', streaming: true }
+  variables: []
 };
+
+const CHAT_MODEL = { id: 'model-x', name: { en: 'Model X' }, contextWindow: 8192 };
+const AUDIO_MODEL = { id: 'gemini-flash', name: { en: 'Gemini Flash' }, supportsAudio: true };
+const LIVE_MODEL = {
+  id: 'gemini-live',
+  name: { en: 'Gemini Live' },
+  modelType: 'transcription',
+  transcriptionMode: 'stream'
+};
+const MODELS = [CHAT_MODEL, AUDIO_MODEL, LIVE_MODEL];
+
+/** The model selected in the chat (the settings hook is stubbed). */
+function selectModel(id) {
+  mockSettings.selectedModel = id;
+  mockSettings.models = MODELS;
+}
 
 const AUDIO = { type: 'audio', fileName: 'memo.mp3', base64: 'AAAA' };
 const VIDEO_AUDIO = {
@@ -371,7 +401,10 @@ const requestMessages = index => sendAppChatMessage.mock.calls[index][2];
 // Without messages the list is not rendered at all; its last props are stale then.
 const shownMessages = () =>
   screen.queryAllByTestId('transcript').length > 0 ? (mockMessageList.props?.messages ?? []) : [];
-const liveBubble = () => shownMessages().find(message => message.isLiveTranscript);
+const shownTurns = () =>
+  shownMessages()
+    .filter(message => message.role !== 'system')
+    .map(message => [message.role, message.content]);
 const systemMessages = () => shownMessages().filter(message => message.role === 'system');
 const composerValue = () => screen.getAllByTestId('composer-input')[0].value;
 
@@ -399,6 +432,7 @@ function controlledTranscription() {
       new Promise((resolve, reject) => {
         control.delta = text => act(() => onDelta?.(text));
         control.finish = text => act(async () => resolve(text));
+        control.fail = err => reject(err);
         // Like the real one: an already-cancelled run fails at once.
         const abort = () => reject(Object.assign(new Error('cancelled'), { code: 'aborted' }));
         if (signal?.aborted) abort();
@@ -459,344 +493,290 @@ beforeEach(() => {
   jest.clearAllMocks();
   sessionStorage.clear();
   decodeAudioFileToBuffer.mockResolvedValue({ duration: 3 });
+  mockRecorders.length = 0;
+  selectModel('model-x');
 });
 
-describe('uploaded audio becomes the user message', () => {
-  test('the transcript follows the typed text and the chat model answers it', async () => {
+describe('a transcription model selected in the chat', () => {
+  beforeEach(() => selectModel('gemini-live'));
+
+  test('an uploaded file is a turn: its name as the question, the transcript as the answer', async () => {
     transcribeAudioBuffer.mockResolvedValue('We ship on Friday.');
     renderApp();
-    await type('Summarize the call');
-    await attach(AUDIO);
-    await send();
-
-    await waitFor(() => expect(mockStream.opened).toBe(1));
-    await answerTurn('run-1');
-    const [message] = requestMessages(0);
-    expect(message).toMatchObject({
-      role: 'user',
-      content: 'Summarize the call\n\nTranscript of memo.mp3:\nWe ship on Friday.',
-      // Labels the answer "Based on audio recording" on the server.
-      audioTranscript: true
-    });
-    expect(message.audioData).toBeFalsy();
-    expect(requestMessages(0)).toHaveLength(1);
-    // One user message on screen, the answer below it — no transcript turn.
-    expect(shownMessages().map(m => m.role)).toEqual(['user', 'assistant']);
-    expect(liveBubble()).toBeUndefined();
-    expect(composerValue()).toBe('');
-  });
-
-  test('the transcript grows in the user bubble before anything is sent', async () => {
-    const transcription = controlledTranscription();
-    renderApp();
-    await type('Summarize the call');
-    await attach(AUDIO);
-    await send();
-
-    await waitFor(() => expect(liveBubble()).toBeDefined());
-    expect(liveBubble()).toMatchObject({ role: 'user', loading: true });
-    // The composer's content is the message being built.
-    expect(composerValue()).toBe('');
-
-    await transcription.delta('We ship');
-    expect(liveBubble().content).toBe('Summarize the call\n\nTranscript of memo.mp3:\nWe ship');
-    expect(mockStream.opened).toBe(0);
-    // Stop cancels the transcription while it runs.
-    expect(mockComposer.props.isProcessing).toBe(true);
-
-    await transcription.finish('We ship on Friday.');
-    await waitFor(() => expect(mockStream.opened).toBe(1));
-    expect(liveBubble()).toBeUndefined();
-  });
-
-  test('a video is named by the video, and other attachments go along', async () => {
-    transcribeAudioBuffer.mockResolvedValue('Standup notes.');
-    renderApp();
-    await attach([VIDEO_AUDIO, DOC]);
-    await send();
-
-    await waitFor(() => expect(mockStream.opened).toBe(1));
-    await answerTurn('run-1');
-    const [message] = requestMessages(0);
-    expect(message.content).toBe('Transcript of standup.mp4:\nStandup notes.');
-    expect(message.fileData).toEqual(DOC);
-    expect(message.audioData).toBeFalsy();
-  });
-
-  test("a video's audio is decoded from its WAV Blob, not from the base64 string", async () => {
-    transcribeAudioBuffer.mockResolvedValue('Standup notes.');
-    const blob = new Blob(['RIFF'], { type: 'audio/wav' });
-    // Like UnifiedUploader hands it over: the Blob is not an enumerable field.
-    const attachment = { ...VIDEO_AUDIO };
-    Object.defineProperty(attachment, 'blob', { value: blob, enumerable: false });
-    renderApp();
-    await attach(attachment);
-    await send();
-
-    await waitFor(() => expect(mockStream.opened).toBe(1));
-    expect(decodeAudioFileToBuffer).toHaveBeenCalledTimes(1);
-    expect(decodeAudioFileToBuffer).toHaveBeenCalledWith(blob);
-  });
-
-  test('without a Blob (an attachment restored from a stored message) it decodes the base64', async () => {
-    transcribeAudioBuffer.mockResolvedValue('Standup notes.');
-    // What JSON makes of a Blob that was serialized with the attachment.
-    renderApp();
-    await attach({ ...VIDEO_AUDIO, blob: {} });
-    await send();
-
-    await waitFor(() => expect(mockStream.opened).toBe(1));
-    expect(decodeAudioFileToBuffer).toHaveBeenCalledWith(VIDEO_AUDIO.base64);
-  });
-
-  test('uploaded audio is decoded from its base64', async () => {
-    transcribeAudioBuffer.mockResolvedValue('Memo.');
-    renderApp();
-    await attach(AUDIO);
-    await send();
-
-    await waitFor(() => expect(mockStream.opened).toBe(1));
-    expect(decodeAudioFileToBuffer).toHaveBeenCalledWith(AUDIO.base64);
-  });
-
-  test('several files each get a section; one without speech says so', async () => {
-    transcribeAudioBuffer.mockResolvedValueOnce('First part.').mockResolvedValueOnce('');
-    renderApp();
-    await attach([AUDIO, { ...AUDIO, fileName: 'silence.mp3' }]);
-    await send();
-
-    await waitFor(() => expect(mockStream.opened).toBe(1));
-    await answerTurn('run-1');
-    expect(requestMessages(0)[0].content).toBe(
-      'Transcript of memo.mp3:\nFirst part.\n\nTranscript of silence.mp3:\n(no speech detected)'
-    );
-  });
-
-  test('a failed transcription sends nothing and gives the composer back', async () => {
-    transcribeAudioBuffer.mockRejectedValue(Object.assign(new Error('down'), { code: 'connect' }));
-    renderApp();
-    await type('Summarize the call');
-    await attach(AUDIO);
-    await send();
-
-    await waitFor(() => expect(systemMessages()).toHaveLength(1));
-    expect(systemMessages()[0].error).toBe(true);
-    expect(mockStream.opened).toBe(0);
-    expect(liveBubble()).toBeUndefined();
-    expect(composerValue()).toBe('Summarize the call');
-    expect(mockUpload.selected).toEqual(AUDIO);
-  });
-
-  test('audio without any speech sends nothing', async () => {
-    transcribeAudioBuffer.mockResolvedValue('');
-    renderApp();
-    await type('Summarize the call');
     await attach(AUDIO);
     await send();
 
     await waitFor(() =>
-      expect(systemMessages()[0]?.content).toBe('No speech was detected. Nothing was sent.')
+      expect(shownTurns()).toEqual([
+        ['user', 'memo.mp3'],
+        ['assistant', 'We ship on Friday.']
+      ])
     );
+    const [, options] = transcribeAudioBuffer.mock.calls[0];
+    expect(options.modelId).toBe('gemini-live');
+    // The socket names the chat, so a stored chat gets the same turn.
+    expect(options.chat).toMatchObject({
+      chatId: mockHeader.props.chatId,
+      appId: 'acme',
+      attachment: { name: 'memo.mp3' }
+    });
+    // No chat request: the transcription model answered.
+    expect(sendAppChatMessage).not.toHaveBeenCalled();
     expect(mockStream.opened).toBe(0);
-    expect(composerValue()).toBe('Summarize the call');
-    expect(mockUpload.selected).toEqual(AUDIO);
   });
 
-  test('Stop cancels: nothing is sent, the composer is restored, no error', async () => {
-    controlledTranscription();
+  test('both halves of the turn are marked, under the exchange id the server stores', async () => {
+    transcribeAudioBuffer.mockResolvedValue('We ship on Friday.');
     renderApp();
-    await type('Summarize the call');
     await attach(AUDIO);
     await send();
-    await waitFor(() => expect(liveBubble()).toBeDefined());
+    await waitFor(() => expect(shownTurns()).toHaveLength(2));
 
+    const [question, answer] = shownMessages().filter(m => m.role !== 'system');
+    const { chat } = transcribeAudioBuffer.mock.calls[0][1];
+    // Deleting the turn forks the stored history by this id.
+    expect(question.clientMessageId).toBe(chat.clientMessageId);
+    expect(answer.id).toBe(chat.clientMessageId);
+    // The audio is not kept: no edit or resend of the question.
+    expect(question.transcription).toBe(true);
+    expect(answer.transcription).toBe(true);
+  });
+
+  test('a resend of a transcription turn is refused, and the transcript stays', async () => {
+    transcribeAudioBuffer.mockResolvedValue('We ship on Friday.');
+    renderApp();
+    await attach(AUDIO);
+    await send();
+    await waitFor(() => expect(shownTurns()).toHaveLength(2));
+    const question = shownMessages().find(m => m.role === 'user');
+    await act(async () => {
+      mockMessageList.props.onResend(question.id);
+    });
+    expect(shownTurns()).toEqual([
+      ['user', 'memo.mp3'],
+      ['assistant', 'We ship on Friday.']
+    ]);
+    expect(sendAppChatMessage).not.toHaveBeenCalled();
+  });
+
+  test('typed text is never sent to a transcription model', async () => {
+    renderApp();
+    await type('Hello?');
+    await send();
+    expect(sendAppChatMessage).not.toHaveBeenCalled();
+    expect(mockStream.opened).toBe(0);
+    expect(transcribeAudioBuffer).not.toHaveBeenCalled();
+  });
+
+  test('other attachments stay attached for the model selected next', async () => {
+    transcribeAudioBuffer.mockResolvedValue('We ship on Friday.');
+    renderApp();
+    await attach([AUDIO, DOC]);
+    await send();
+    await waitFor(() => expect(shownTurns()).toHaveLength(2));
+    expect(mockUpload.selected).toEqual(DOC);
+  });
+
+  test('the transcript streams into the answer', async () => {
+    const transcription = controlledTranscription();
+    renderApp();
+    await attach(AUDIO);
+    await send();
+
+    await waitFor(() => expect(transcribeAudioBuffer).toHaveBeenCalled());
+    await transcription.delta('We ship');
+    const answer = () => shownMessages().find(m => m.role === 'assistant');
+    expect(answer()).toMatchObject({ content: 'We ship', loading: true });
+    await transcription.finish('We ship on Friday.');
+    await waitFor(() => expect(answer()).toMatchObject({ content: 'We ship on Friday.' }));
+    expect(answer().loading).toBe(false);
+  });
+
+  test('the audio of a video is named by the video, each file gets a turn', async () => {
+    transcribeAudioBuffer.mockResolvedValueOnce('Standup.').mockResolvedValueOnce('');
+    renderApp();
+    await attach([VIDEO_AUDIO, AUDIO]);
+    await send();
+
+    await waitFor(() =>
+      expect(shownTurns()).toEqual([
+        ['user', 'standup.mp4'],
+        ['assistant', 'Standup.'],
+        ['user', 'memo.mp3'],
+        ['assistant', '(no speech detected)']
+      ])
+    );
+  });
+
+  test("a video's audio is decoded from its WAV Blob", async () => {
+    transcribeAudioBuffer.mockResolvedValue('Hello.');
+    const blob = new Blob(['RIFF'], { type: 'audio/wav' });
+    const withBlob = { ...VIDEO_AUDIO };
+    Object.defineProperty(withBlob, 'blob', { value: blob, enumerable: false });
+    renderApp();
+    await attach(withBlob);
+    await send();
+    await waitFor(() => expect(decodeAudioFileToBuffer).toHaveBeenCalledWith(blob));
+  });
+
+  test('a failure keeps the transcript so far and says why', async () => {
+    const transcription = controlledTranscription();
+    renderApp();
+    await attach(AUDIO);
+    await send();
+    await waitFor(() => expect(transcribeAudioBuffer).toHaveBeenCalled());
+    await transcription.delta('We ship');
+    await act(async () => {
+      transcription.fail(Object.assign(new Error('closed'), { code: 'interrupted' }));
+    });
+
+    await waitFor(() => expect(systemMessages()).toHaveLength(1));
+    expect(shownTurns()).toEqual([
+      ['user', 'memo.mp3'],
+      ['assistant', 'We ship']
+    ]);
+  });
+
+  test('Stop cancels without an error', async () => {
+    controlledTranscription();
+    renderApp();
+    await attach(AUDIO);
+    await send();
+    await waitFor(() => expect(mockComposer.props.isProcessing).toBe(true));
     await act(async () => {
       mockComposer.props.onCancel();
     });
-
-    await waitFor(() => expect(liveBubble()).toBeUndefined());
+    await waitFor(() => expect(mockComposer.props.isProcessing).toBe(false));
     expect(systemMessages()).toHaveLength(0);
-    expect(mockStream.opened).toBe(0);
-    expect(composerValue()).toBe('Summarize the call');
-    expect(mockUpload.selected).toEqual(AUDIO);
   });
 
   test('audio over the length limit is refused before transcribing', async () => {
-    // The limit is an hour unless the app sets its own
     decodeAudioFileToBuffer.mockResolvedValue({ duration: 4000 });
     renderApp();
     await attach(AUDIO);
     await send();
-
-    await waitFor(() =>
-      expect(systemMessages()[0]?.content).toBe(
-        'This audio is 4000s long, which exceeds the 3600s limit for transcription.'
-      )
-    );
-    expect(transcribeAudioBuffer).not.toHaveBeenCalled();
-    expect(mockStream.opened).toBe(0);
-  });
-
-  test('half an hour of audio is within the default limit', async () => {
-    decodeAudioFileToBuffer.mockResolvedValue({ duration: 1800 });
-    transcribeAudioBuffer.mockResolvedValue('We ship on Friday.');
-    renderApp();
-    await attach(AUDIO);
-    await send();
-
-    await waitFor(() => expect(transcribeAudioBuffer).toHaveBeenCalledTimes(1));
-    expect(systemMessages()).toHaveLength(0);
-  });
-
-  test("an app's own limit is kept", async () => {
-    decodeAudioFileToBuffer.mockResolvedValue({ duration: 1200 });
-    renderApp({
-      ...TRANSCRIPTION_APP,
-      transcription: { enabled: true, modelId: 'voxtral', streaming: true, maxDurationSeconds: 900 }
-    });
-    await attach(AUDIO);
-    await send();
-
-    await waitFor(() =>
-      expect(systemMessages()[0]?.content).toBe(
-        'This audio is 1200s long, which exceeds the 900s limit for transcription.'
-      )
-    );
+    await waitFor(() => expect(systemMessages()).toHaveLength(1));
     expect(transcribeAudioBuffer).not.toHaveBeenCalled();
   });
-});
 
-describe('a recording becomes the user message', () => {
-  test('the message grows while speaking and is sent on stop', async () => {
-    const sessions = fakeLiveSessions();
+  test('the composer takes audio only: no dictation, record goes to the model', async () => {
     renderApp();
     await screen.findAllByTestId('composer');
+    expect(mockComposer.props.audioOnly).toBe(true);
+    expect(mockComposer.props.onVoiceInput).toBeUndefined();
     expect(mockComposer.props.transcriptionRecordEnabled).toBe(true);
-
-    await clickRecord();
-    expect(startLiveTranscription.mock.calls[0][0].modelId).toBe('voxtral');
-    expect(mockComposer.props.isRecordingTranscription).toBe(true);
-    expect(liveBubble()).toMatchObject({ role: 'user', content: 'Listening…', loading: true });
-
-    const [session] = sessions;
-    await session.speak('Hello there');
-    expect(liveBubble().content).toBe('Hello there');
-    await session.speak('Hello there, what is new?');
-    expect(liveBubble().content).toBe('Hello there, what is new?');
-    expect(mockStream.opened).toBe(0);
-
-    await clickRecord();
-    expect(session.stop).toHaveBeenCalledTimes(1);
-    expect(mockComposer.props.isRecordingTranscription).toBe(false);
-    await session.finish('Hello there, what is new?');
-
-    await waitFor(() => expect(mockStream.opened).toBe(1));
-    await answerTurn('run-1');
-    // Exactly one user message: the bubble never reaches the history.
-    expect(requestMessages(0)).toEqual([
-      expect.objectContaining({ role: 'user', content: 'Hello there, what is new?' })
-    ]);
-    // Spoken words are the user's own message, not audio material.
-    expect(requestMessages(0)[0].audioTranscript).toBeUndefined();
-    expect(shownMessages().map(m => m.role)).toEqual(['user', 'assistant']);
-    expect(liveBubble()).toBeUndefined();
   });
 
-  test('what is typed leads the spoken message', async () => {
-    const sessions = fakeLiveSessions();
-    renderApp();
-    await type('Translate to German:');
-    await clickRecord();
-    await clickRecord();
-    await sessions[0].finish('Good morning');
-
-    await waitFor(() => expect(mockStream.opened).toBe(1));
-    await answerTurn('run-1');
-    expect(requestMessages(0)[0].content).toBe('Translate to German:\n\nGood morning');
-  });
-
-  test('sending while recording stops the recording and sends it', async () => {
+  test('a recording streams its transcript into the answer and ends on stop', async () => {
     const sessions = fakeLiveSessions();
     renderApp();
     await screen.findAllByTestId('composer');
-    expect(mockComposer.props.allowEmptySubmit).toBe(false);
     await clickRecord();
-    // Send is enabled with nothing typed: it stops and sends the recording.
-    expect(mockComposer.props.allowEmptySubmit).toBe(true);
-    await send();
-    expect(sessions[0].stop).toHaveBeenCalledTimes(1);
-    await sessions[0].finish('Spoken');
 
-    await waitFor(() => expect(mockStream.opened).toBe(1));
-  });
+    expect(startLiveTranscription).toHaveBeenCalledWith(
+      expect.objectContaining({
+        modelId: 'gemini-live',
+        chat: expect.objectContaining({
+          appId: 'acme',
+          attachment: { name: 'Recording', type: 'audio/wav' }
+        })
+      })
+    );
+    await sessions[0].speak('Hello every');
+    expect(shownTurns()).toEqual([
+      ['user', 'Recording'],
+      ['assistant', 'Hello every']
+    ]);
 
-  test('a recording without speech sends nothing', async () => {
-    const sessions = fakeLiveSessions();
-    renderApp();
-    await clickRecord();
-    await clickRecord();
-    await sessions[0].finish('');
-
+    await clickRecord(); // stop
+    await sessions[0].finish('Hello everyone.');
     await waitFor(() =>
-      expect(systemMessages()[0]?.content).toBe('No speech was detected. Nothing was sent.')
+      expect(shownTurns()).toEqual([
+        ['user', 'Recording'],
+        ['assistant', 'Hello everyone.']
+      ])
     );
-    expect(liveBubble()).toBeUndefined();
-    expect(mockStream.opened).toBe(0);
+    expect(sendAppChatMessage).not.toHaveBeenCalled();
   });
 
-  test('a session that fails while speaking leaves the text so far in the composer', async () => {
-    const sessions = fakeLiveSessions();
-    renderApp();
-    await clickRecord();
-    await sessions[0].speak('Half a sentence');
-    await sessions[0].failWhileSpeaking(new Error('closed'));
+  test('the transcript is history for the chat model selected next', async () => {
+    transcribeAudioBuffer.mockResolvedValue('We ship on Friday.');
+    const view = renderApp();
+    await attach(AUDIO);
+    await send();
+    await waitFor(() => expect(shownTurns()).toHaveLength(2));
 
-    expect(liveBubble()).toBeUndefined();
-    expect(mockComposer.props.isRecordingTranscription).toBe(false);
-    expect(composerValue()).toBe('Half a sentence');
-    expect(systemMessages()[0].error).toBe(true);
-    expect(systemMessages()[0].content).toContain(
-      'What was transcribed so far is in the input field.'
+    selectModel('model-x');
+    view.rerender(
+      <MemoryRouter initialEntries={['/apps/acme']}>
+        <Routes>
+          <Route path="/apps/:appId" element={<AppChat preloadedApp={TRANSCRIPTION_APP} />} />
+        </Routes>
+      </MemoryRouter>
     );
-    expect(mockStream.opened).toBe(0);
-  });
+    await type('Summarize it');
+    await send();
+    await waitFor(() => expect(mockStream.opened).toBe(1));
+    await answerTurn('run-1');
 
-  test('a microphone that cannot be opened shows an error and no bubble', async () => {
-    startLiveTranscription.mockRejectedValue(Object.assign(new Error('denied'), { code: 'mic' }));
-    renderApp();
-    await clickRecord();
-
-    expect(systemMessages()[0].content).toBe(
-      'Could not access the microphone. Please grant permission and try again.'
-    );
-    expect(liveBubble()).toBeUndefined();
-    expect(mockComposer.props.isRecordingTranscription).toBe(false);
+    expect(requestMessages(0).map(m => [m.role, m.content])).toEqual([
+      ['user', 'memo.mp3'],
+      ['assistant', 'We ship on Friday.'],
+      ['user', 'Summarize it']
+    ]);
   });
 });
 
-describe('which transcription model is used', () => {
-  const PLATFORM_DEFAULT = { speech: { transcription: { defaultModelId: 'platform-voxtral' } } };
-
-  test('an app without a model of its own uses the platform default', async () => {
-    mockPlatform.config = PLATFORM_DEFAULT;
-    transcribeAudioBuffer.mockResolvedValue('hello');
-    renderApp({ ...TRANSCRIPTION_APP, transcription: { enabled: true, streaming: true } });
-    await attach(AUDIO);
-    await send();
-
-    await waitFor(() => expect(transcribeAudioBuffer).toHaveBeenCalled());
-    expect(transcribeAudioBuffer.mock.calls[0][1].modelId).toBe('platform-voxtral');
-  });
-
-  test("the app's own model wins over the platform default", async () => {
-    mockPlatform.config = PLATFORM_DEFAULT;
-    fakeLiveSessions();
-    transcribeAudioBuffer.mockResolvedValue('hello');
+describe('a chat model', () => {
+  test('audio for a model that cannot take it is refused with a hint', async () => {
     renderApp();
     await attach(AUDIO);
     await send();
+    await waitFor(() => expect(systemMessages()).toHaveLength(1));
+    expect(sendAppChatMessage).not.toHaveBeenCalled();
+    expect(transcribeAudioBuffer).not.toHaveBeenCalled();
+  });
 
-    await waitFor(() => expect(transcribeAudioBuffer).toHaveBeenCalled());
-    expect(transcribeAudioBuffer.mock.calls[0][1].modelId).toBe('voxtral');
+  test('record is offered only for a model that takes audio', async () => {
+    renderApp();
+    await screen.findAllByTestId('composer');
+    expect(mockComposer.props.transcriptionRecordEnabled).toBe(false);
+    expect(mockComposer.props.audioOnly).toBe(false);
+  });
+
+  test('a model that takes audio gets the upload as audioData', async () => {
+    selectModel('gemini-flash');
+    renderApp();
+    await type('What is said?');
+    await attach(AUDIO);
+    await send();
+    await waitFor(() => expect(mockStream.opened).toBe(1));
+    await answerTurn('run-1');
+    const [message] = requestMessages(0);
+    expect(message.content).toBe('What is said?');
+    expect(message.audioData).toBeTruthy();
+    expect(transcribeAudioBuffer).not.toHaveBeenCalled();
+  });
+
+  test('a recording is attached and sent with what is typed', async () => {
+    selectModel('gemini-flash');
+    recordingToAudioAttachment.mockResolvedValue({
+      type: 'audio',
+      fileName: 'Recording.wav',
+      fileType: 'audio/wav',
+      base64: 'data:audio/wav;base64,CCCC'
+    });
+    renderApp();
+    await type('What is said?');
+    await clickRecord();
+    expect(mockRecorders).toHaveLength(1);
+    expect(startLiveTranscription).not.toHaveBeenCalled();
+    await clickRecord(); // stop
+
+    await waitFor(() => expect(mockStream.opened).toBe(1));
+    await answerTurn('run-1');
+    const [message] = requestMessages(0);
+    expect(message.content).toBe('What is said?');
+    expect(message.audioData).toBeTruthy();
   });
 });

@@ -31,6 +31,12 @@
  *                             kind: session-ready | delta | final | error | ignore
  *   readyFallbackMs         → number             assume ready after this long with
  *                                                no session-ready frame (0 = never)
+ *   maxRealtimeFactor       → number (optional)  pace a file (`start.source: 'file'`)
+ *                                                at this multiple of real time
+ *   maxSessionSeconds       → number (optional)  open a fresh upstream session
+ *                                                before this; `interpret` may also
+ *                                                return kind `go-away` to ask for it
+ *   Both can be overridden per model in `config`.
  *
  * Batch providers (`mode: 'batch'`) have no upstream protocol. The bridge
  * buffers the audio the browser streams and calls, once, on `stop`:

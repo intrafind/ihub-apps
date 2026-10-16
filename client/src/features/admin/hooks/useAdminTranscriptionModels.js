@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import { makeAdminApiCall } from '../../../api/adminApi';
+import { isStreamingTranscriptionModel } from '../utils/transcriptionMode';
 
 /**
- * The enabled transcription models (`modelType: 'transcription'`), for the
- * app editor's transcription and voice input pickers. From the admin model
+ * The enabled streaming transcription models (`modelType: 'transcription'`),
+ * for the app editor's voice input picker: dictation needs a live model. From the admin model
  * list, not the public /api/models: that one is filtered by the admin's own
  * model permissions, and admin access does not imply them.
  *
@@ -18,7 +19,14 @@ export default function useAdminTranscriptionModels() {
       .then(response => {
         if (!active) return;
         const all = Array.isArray(response?.data) ? response.data : [];
-        setModels(all.filter(m => m.modelType === 'transcription' && m.enabled !== false));
+        setModels(
+          all.filter(
+            m =>
+              m.modelType === 'transcription' &&
+              m.enabled !== false &&
+              isStreamingTranscriptionModel(m)
+          )
+        );
       })
       .catch(err => console.error('Failed to load transcription models:', err));
     return () => {

@@ -69,7 +69,7 @@ The page is kept free while the extraction runs. Reading, decoding and resamplin
 ### 3. Model Processing
 The extracted audio is sent to the AI model as if it were a regular audio file upload.
 
-For **transcription-enabled apps** (see [Transcription Models](models.md#transcription-models)), the extracted audio is instead transcribed by the app's transcription model, and the transcript takes the audio's place in the user's message. The extracted audio is already 16 kHz mono, which is what the transcription client streams (the vLLM realtime endpoint requires 16 kHz mono PCM16), so it is decoded from the attachment's WAV `Blob` and streamed as it is.
+With a **transcription model selected** in the chat (see [Transcription Models](models.md#transcription-models)), the extracted audio is instead transcribed by that model: the video's name is the question and the transcript is the answer. The extracted audio is already 16 kHz mono, which is what the transcription client streams (the vLLM realtime endpoint requires 16 kHz mono PCM16), so it is decoded from the attachment's WAV `Blob` and streamed as it is.
 
 ## Browser Compatibility
 
@@ -206,7 +206,7 @@ The extracted audio is attached as `<video name>.wav`, a file the user does not 
 - Only audio extracted from a video gets the button. Audio files the user uploads themselves are already on their disk
 - The button saves the attachment's WAV `Blob`. An attachment that lost it, for example a copy of the attachment that was serialized and restored, is rebuilt from its base64 data URL
 - The button is available while the chat input is busy, so the audio can still be saved while an answer is running
-- In a transcription-enabled app the audio is replaced by its transcript when the message is sent, so save it before sending
+- With a transcription model selected, the audio is transcribed when the message is sent and only the transcript stays in the chat, so save it before sending
 
 ## Testing
 
@@ -279,7 +279,7 @@ const renderedBuffer = await offlineContext.startRendering();
 
 ## Performance Considerations
 
-- **Memory Usage**: What is read of an MP4/MOV is the index and the audio, so the memory is proportional to the audio (30 minutes of AAC: about 30 MB read), not to the video. Beyond that, the decoded audio takes memory. The video's whole audio track is decoded first (see the memory note in [Realtime Voice & Transcription](voice-transcription.md#enabling-transcription-on-an-app)) before it is reduced to mono. It is decoded at 16 kHz, so for a stereo video it takes 290 MB per 40 minutes instead of the 810 MB it takes at 44.1 kHz (a browser that cannot run a context at 16 kHz decodes at its own rate). The result differs from decoding at the video's rate and resampling afterwards by about -70 dB, which is inaudible
+- **Memory Usage**: What is read of an MP4/MOV is the index and the audio, so the memory is proportional to the audio (30 minutes of AAC: about 30 MB read), not to the video. Beyond that, the decoded audio takes memory. The video's whole audio track is decoded first (see the memory note in [Realtime Voice & Transcription](voice-transcription.md#using-transcription-in-a-chat)) before it is reduced to mono. It is decoded at 16 kHz, so for a stereo video it takes 290 MB per 40 minutes instead of the 810 MB it takes at 44.1 kHz (a browser that cannot run a context at 16 kHz decodes at its own rate). The result differs from decoding at the video's rate and resampling afterwards by about -70 dB, which is inaudible
 - **Processing Time**: Proportional to video duration (typically 1-5 seconds for short clips). Decoding is the longest step: about 7.5 s for 40 minutes of audio, of about 9 s in all
 - **File Size**: The extracted WAV is about 1.9 MB per minute, still larger than compressed audio formats
 - **Large videos**: The picture is never read. Measured in Chromium with 4 minutes of 1280×720 video and 48 kHz stereo PCM in a MOV: a 3.4 GB file was attached in about 3 s and a 5.6 GB one (64-bit box sizes) in about 6 s, reading 1.4 % of the file in 2,400 and 4,000 reads of about 19 KB (the audio chunks between the video frames), without a freeze of the page longer than 0.3 s. Uncompressed PCM audio takes memory at its own sample rate as mono floats (345 MB for 30 minutes at 48 kHz) until it is resampled
@@ -287,7 +287,7 @@ const renderedBuffer = await offlineContext.startRendering();
 
 ### Recommended Limits
 - Maximum video file size: up to 50 GB as MP4 or MOV (`maxFileSizeMB` up to 51200), about 2 GB for other containers
-- Maximum video duration: as long as the audio the model takes: an app transcribes an hour by default (`transcription.maxDurationSeconds`, at most 7200). Audio sent to a multimodal model must fit in the request body (`requestBodyLimitMB`, 50 MB by default, about 20 minutes of 16 kHz mono WAV)
+- Maximum video duration: as long as the audio the model takes: a transcription takes an hour by default. Audio sent to a multimodal model must fit in the request body (`requestBodyLimitMB`, 50 MB by default, about 20 minutes of 16 kHz mono WAV)
 
 ## Future Enhancements
 

@@ -61,17 +61,15 @@ function ChatInput({
   onCancel,
   onVoiceInput,
   onVoiceCommand,
-  // Record→send control (distinct from dictation onVoiceInput): what is said
-  // grows a user message while recording and is sent when it stops.
+  // Record (distinct from dictation onVoiceInput): the recording goes to the
+  // selected model like an uploaded audio file.
   onRecordTranscription = null,
   transcriptionRecordEnabled = false,
   isRecordingTranscription = false,
   recordTranscriptionElapsed = 0,
-  // Per-chat transcription toggle (like websearch): when on, audio/video
-  // uploads are transcribed into the message before the chat model sees it.
-  transcriptionAvailable = false,
-  transcriptionEnabled = false,
-  onTranscriptionEnabledChange = null,
+  // A transcription model is selected: it takes audio and video only, so there
+  // is nothing to type.
+  audioOnly = false,
   onFileSelect,
   allowEmptySubmit = false,
   inputRef = null,
@@ -297,6 +295,11 @@ function ChatInput({
     );
   } else if (isProcessing) {
     defaultPlaceholder = t('pages.appChat.thinking');
+  } else if (audioOnly) {
+    defaultPlaceholder = t(
+      'transcription.audioOnlyPlaceholder',
+      'Upload an audio or video file, or press record, to get its transcript'
+    );
   } else if (customPlaceholder) {
     defaultPlaceholder = customPlaceholder;
   } else if (allowEmptySubmit) {
@@ -721,7 +724,7 @@ function ChatInput({
               value={value}
               onChange={handleInputChange}
               onKeyDown={handleKeyDown}
-              disabled={isInputDisabled || isProcessing}
+              disabled={isInputDisabled || isProcessing || audioOnly}
               className="w-full px-3 py-2 pr-10 bg-transparent border-0 focus:ring-0 focus:outline-hidden resize-none dark:text-gray-100 rounded-t-2xl"
               placeholder={defaultPlaceholder}
               ref={actualInputRef}
@@ -785,9 +788,6 @@ function ChatInput({
               onImageQualityChange={onImageQualityChange}
               websearchEnabled={websearchEnabled}
               onWebsearchEnabledChange={onWebsearchEnabledChange}
-              transcriptionAvailable={transcriptionAvailable}
-              transcriptionEnabled={transcriptionEnabled}
-              onTranscriptionEnabledChange={onTranscriptionEnabledChange}
               hostContextFlags={hostContextFlags}
               onHostContextFlagChange={onHostContextFlagChange}
             />
@@ -869,8 +869,9 @@ function ChatInput({
               </div>
             )}
 
-            {/* Record → send. Distinct from dictation: what is said grows a
-                user message and is sent when the recording stops. */}
+            {/* Record. Distinct from dictation: the recording goes to the
+                selected model — a transcription model answers with the
+                transcript, a chat model that takes audio gets it attached. */}
             {transcriptionRecordEnabled && onRecordTranscription && (
               <button
                 type="button"
@@ -880,7 +881,7 @@ function ChatInput({
                 title={
                   isRecordingTranscription
                     ? t('transcription.stopRecording', 'Stop recording and send')
-                    : t('transcription.record', 'Record a spoken message')
+                    : t('transcription.record', 'Record audio for the selected model')
                 }
                 className={`flex items-center gap-1.5 p-2 rounded-lg transition-colors disabled:opacity-50 ${
                   isRecordingTranscription

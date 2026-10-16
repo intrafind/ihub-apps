@@ -1,0 +1,186 @@
+/**
+ * A transcription turn: a recording or an audio/video file sent to a
+ * transcription model selected in a chat. The audio travels over the realtime
+ * WebSocket (`websocket/realtimeTranscription.js`), not the chat POST, so the
+ * bridge stores the turn itself: the file as the question, the transcript as
+ * the answer, written by the transcription model.
+ *
+ * Stored, the transcript is chat history like any other answer — a chat model
+ * selected next answers "summarize this" from it. With durable chats the
+ * server owns the history, so a transcript only the browser held would never
+ * reach that model.
+ *
+ * Best effort, like all materialization: a storage failure costs the stored
+ * turn, never the transcript the user is watching arrive.
+ *
+ * @module services/chat/transcriptionTurn
+ */
+import configCache from '../../configCache.js';
+import logger from '../../utils/logger.js';
+import runLog from '../loop/RunLog.js';
+import { resolvePrincipal } from '../loop/runIdentity.js';
+import { authorizeChat } from './chatAccess.js';
+import { getChatRepository, isPersistableChatId } from './ChatRepository.js';
+import { isChatPersistenceActive } from './chatPersistence.js';
+import { materializeUserTurn, settleAssistantTurn } from './chatMaterializer.js';
+
+const COMPONENT = 'TranscriptionTurn';
+const MAX_LABEL_CHARS = 300;
+
+/**
+ * Whether the user may use the app the chat belongs to: the same group
+ * permissions the chat POST's `chatAuthRequired` enforces.
+ */
+function appPermitted(user, appId) {
+  const apps = user?.permissions?.apps;
+  if (!apps) return false;
+  const has = value => (apps instanceof Set ? apps.has(value) : apps.includes?.(value));
+  return has('*') || has(appId);
+}
+
+/**
+ * Store the question half of a transcription turn when the chat is stored.
+ *
+ * @param {Object} params
+ * @param {Object} params.user - The bridge's authenticated user (with permissions).
+ * @param {string} [params.chatId]
+ * @param {string} [params.appId]
+ * @param {string} params.modelId - The transcription model.
+ * @param {boolean} [params.ephemeral]
+ * @param {string} [params.clientMessageId] - The client's exchange id.
+ * @param {{name?: string, type?: string, bytes?: number}} [params.attachment]
+ * @param {Object} [params.repository] - Defaults to the process-wide one.
+ * @param {boolean} [params.persist] - Whether this turn is stored; decided from
+ *   the live config (`isChatPersistenceActive`) when omitted.
+ * @returns {Promise<{ok: true, turn: Object|null}|{ok: false, code: string}>}
+ *   `turn` is null when nothing is to be stored (no chat named, persistence
+ *   off); `ok: false` when the chat named is not the user's to write
+ *   (`not-permitted`) or the question could not be stored (`not-stored`).
+ */
+export async function beginTranscriptionTurn({
+  user,
+  chatId,
+  appId,
+  modelId,
+  ephemeral,
+  clientMessageId,
+  attachment,
+  repository = getChatRepository(),
+  persist = isChatPersistenceActive({
+    features: configCache.getFeatures(),
+    platformConfig: configCache.getPlatform(),
+    user,
+    ephemeral
+  })
+}) {
+  if (!chatId || !appId || !isPersistableChatId(chatId)) return { ok: true, turn: null };
+  if (!persist || !repository) return { ok: true, turn: null };
+  if (!appPermitted(user, appId)) return { ok: false, code: 'not-permitted' };
+  const access = await authorizeChat(chatId, user, { repository, intent: 'write' });
+  if (!access.ok) return { ok: false, code: 'not-permitted' };
+
+  const identityMode = access.chat?.identityMode || runLog.identityMode();
+  const principal = await resolvePrincipal(user, { mode: identityMode });
+  // A run of the ledger like any chat turn: while it lasts, every worker sees
+  // the chat's `activeRunId` as alive (`chatRecovery.isChatRunAlive`), so a
+  // long recording is not settled as interrupted under the user.
+  const { runId } = await runLog.startRun({
+    kind: 'chat',
+    principal,
+    refs: { chatId },
+    model: modelId
+  });
+  const label = String(attachment?.name || '').slice(0, MAX_LABEL_CHARS);
+  const question = await materializeUserTurn({
+    repository,
+    chatId,
+    ownerId: principal.id,
+    identityMode: principal.mode || identityMode,
+    appId,
+    modelId,
+    runId,
+    content: label,
+    clientMessageId,
+    attachments: attachment ? [attachment] : [],
+    // The audio is not kept, so the question cannot be edited or resent.
+    message: { transcription: true }
+  });
+  if (!question) {
+    runLog.endRun(runId, {
+      status: 'error',
+      error: { code: 'NOT_STORED', message: 'question not stored' }
+    });
+    // Not "nothing to store": transcribing on would end in a `done` for a
+    // turn the chat does not have.
+    return { ok: false, code: 'not-stored' };
+  }
+  return { ok: true, turn: { repository, chatId, runId, modelId } };
+}
+
+/** The stored outcome of a transcription: an error wins over an abort. */
+function outcomeStatus({ error, aborted }) {
+  if (error) return 'error';
+  return aborted ? 'aborted' : 'success';
+}
+
+/**
+ * Store the transcript as the answer and release the chat. Called once, on
+ * every ending: done, failure, or a client that went away — a partial
+ * transcript is stored with the error that cut it short.
+ *
+ * @param {Object|null} turn - From {@link beginTranscriptionTurn}.
+ * @param {{content: string, error?: string|null, aborted?: boolean}} outcome
+ * @returns {Promise<boolean>} Whether the answer is stored (true when there was
+ *   nothing to store) — a success is only acknowledged when it is.
+ */
+export async function endTranscriptionTurn(turn, { content, error = null, aborted = false }) {
+  if (!turn) return true;
+  const status = outcomeStatus({ error, aborted });
+  let stored = false;
+  try {
+    // A storage failure is reported, not thrown: no stored message.
+    const settled = await settleAssistantTurn({
+      repository: turn.repository,
+      chatId: turn.chatId,
+      runId: turn.runId,
+      summary: {
+        status,
+        content,
+        finishReason: status === 'success' ? 'stop' : status,
+        ...(error ? { error } : {})
+      },
+      clientConnected: !aborted,
+      message: { model: turn.modelId, transcription: true }
+    });
+    stored = Boolean(settled.message) || settled.skipped;
+    if (!stored) {
+      logger.error('Transcription answer not stored', {
+        component: COMPONENT,
+        chatId: turn.chatId,
+        runId: turn.runId
+      });
+    }
+  } catch (err) {
+    logger.error('Transcription turn not settled', {
+      component: COMPONENT,
+      chatId: turn.chatId,
+      runId: turn.runId,
+      error: err.message
+    });
+  } finally {
+    // After the answer is stored, as for any chat turn (see settleAssistantTurn).
+    runLog.endRun(turn.runId, runEndOf(status, error, stored));
+  }
+  return stored;
+}
+
+/** The ledger's `run/end` for a transcription: a lost answer is an error too. */
+function runEndOf(status, error, stored) {
+  if (status === 'success' && stored) return { status: 'completed', finishReason: 'stop' };
+  const message = error ? String(error) : 'answer not stored';
+  return {
+    status: status === 'aborted' ? 'aborted' : 'error',
+    finishReason: status === 'success' ? 'error' : status,
+    error: { code: error ? 'TRANSCRIPTION_FAILED' : 'NOT_STORED', message }
+  };
+}

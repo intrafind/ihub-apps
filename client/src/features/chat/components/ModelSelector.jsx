@@ -5,6 +5,7 @@ import Icon from '../../../shared/components/Icon';
 import { useKeyboardNavigation } from '../../../shared/hooks/useKeyboardNavigation';
 import { modelSupportsWebSearch } from '../webSearch';
 import { matchesModelFilter, modelSupportsTools } from '../../../../../shared/modelCapabilities.js';
+import { isTranscriptionModel } from '../../../utils/modelFiltering';
 
 /**
  * Inline model selector component for next-gen chat input
@@ -33,9 +34,11 @@ function ModelSelector({
   // Apply additional filters from settings
   let filteredModels = availableModels;
 
-  // Filter by tools requirement
+  // Filter by tools requirement (a transcription model uses no tools)
   if (app?.tools && app.tools.length > 0) {
-    filteredModels = filteredModels.filter(modelSupportsTools);
+    filteredModels = filteredModels.filter(
+      model => isTranscriptionModel(model) || modelSupportsTools(model)
+    );
   }
 
   // Apply model settings filter if specified
@@ -191,6 +194,15 @@ function ModelSelector({
                         >
                           {name}
                         </div>
+                        {isTranscriptionModel(model) && (
+                          /* Selecting one turns the chat into transcription:
+                             audio and video in, the transcript as the answer. */
+                          <div className="mt-0.5 text-xs font-medium text-indigo-600 dark:text-indigo-400">
+                            {model.transcriptionMode === 'batch'
+                              ? t('transcription.modelBadgeBatch', 'Transcription · whole file')
+                              : t('transcription.modelBadgeLive', 'Transcription · live')}
+                          </div>
+                        )}
                         {desc && (
                           /* Mobile uses `truncate` (nowrap + ellipsis) rather
                              than line-clamp-1: an element with

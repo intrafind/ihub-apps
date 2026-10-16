@@ -1,5 +1,8 @@
 import { matchesModelFilter, modelSupportsTools } from '../../../shared/modelCapabilities.js';
 
+/** A transcription model: answers audio with its transcript, never a prompt. */
+export const isTranscriptionModel = model => model?.modelType === 'transcription';
+
 /**
  * Filter models based on app requirements.
  * Mirrors the server-side filterModelsForApp logic in
@@ -8,7 +11,8 @@ import { matchesModelFilter, modelSupportsTools } from '../../../shared/modelCap
  *
  * Applies, in order:
  *   1. app.allowedModels — restrict to listed model IDs
- *   2. app.tools / app.websearch.enabled — require model.supportsTools
+ *   2. app.tools / app.websearch.enabled — require model.supportsTools (not of a
+ *      transcription model: it never answers a prompt, so it uses no tools)
  *   3. app.settings.model.filter — match arbitrary model properties
  *
  * @param {Array<Object>} models - Full list of available models
@@ -24,7 +28,7 @@ export function filterModelsForApp(models, app) {
   }
 
   if ((app?.tools && app.tools.length > 0) || app?.websearch?.enabled) {
-    filtered = filtered.filter(modelSupportsTools);
+    filtered = filtered.filter(model => isTranscriptionModel(model) || modelSupportsTools(model));
   }
 
   if (app?.settings?.model?.filter) {
@@ -38,7 +42,8 @@ export function filterModelsForApp(models, app) {
 /**
  * Pick the initial model ID for an app from a list of available models.
  * Prefers, in order: app.preferredModel (if compatible), a compatible model
- * flagged default, then the first compatible model. Falls back to the full
+ * flagged default, then the first compatible model. Transcription models are
+ * only picked as the app's preferred model: a chat opens on a chat model. Falls back to the full
  * list's default or first entry when no compatible model exists, to avoid
  * leaving the chat without any selection.
  *
@@ -56,8 +61,10 @@ export function pickInitialModelForApp(models, app) {
     return app.preferredModel;
   }
 
-  const defaultModel = pool.find(m => m.default);
+  const chatPool = pool.filter(m => !isTranscriptionModel(m));
+  const candidates = chatPool.length > 0 ? chatPool : pool;
+  const defaultModel = candidates.find(m => m.default);
   if (defaultModel) return defaultModel.id;
 
-  return pool[0]?.id || null;
+  return candidates[0]?.id || null;
 }

@@ -36,12 +36,19 @@ import { useUIConfig } from '../contexts/UIConfigContext';
  * @param {Object} [options]
  * @param {Object|null} [options.chatSettings] - Settings stored on the chat being
  *   opened, or null for a new or non-persisted chat.
+ * @param {boolean} [options.withTranscription=false] - Offer transcription models
+ *   in the model list too (the chat, where one answers an audio file with its
+ *   transcript).
  * @param {boolean} [options.isolated=false] - Skip layer 2 and leave the page
  *   alone: nothing this browser saved for the app is read or written, and the
  *   header color is not changed. The admin app editor's test panel uses it so a
  *   test starts from the app's own defaults, as a new user would see it.
  */
-function useAppSettings(appId, app, { chatSettings = null, isolated = false } = {}) {
+function useAppSettings(
+  appId,
+  app,
+  { chatSettings = null, isolated = false, withTranscription = false } = {}
+) {
   const { setHeaderColor } = useUIConfig();
 
   // Configuration states
@@ -79,7 +86,10 @@ function useAppSettings(appId, app, { chatSettings = null, isolated = false } = 
         setModelsLoading(true);
         setStylesLoading(true);
 
-        const [modelsData, stylesData] = await Promise.all([fetchModels(), fetchStyles()]);
+        const [modelsData, stylesData] = await Promise.all([
+          fetchModels({ withTranscription }),
+          fetchStyles()
+        ]);
 
         setModels(modelsData || []);
         setStyles(stylesData || []);
@@ -92,7 +102,7 @@ function useAppSettings(appId, app, { chatSettings = null, isolated = false } = 
     };
 
     void loadModelsAndStyles();
-  }, []);
+  }, [withTranscription]);
 
   // The app these settings belong to. `appId` is what was *asked* for, and
   // following a link to another app changes it a render before the fetch that

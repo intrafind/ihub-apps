@@ -317,10 +317,6 @@ jest.mock('../../../client/src/features/chat/components/ChatInput', () => ({
 
 const AppChat = require('../../../client/src/features/apps/pages/AppChat').default;
 const { fetchChat, sendAppChatMessage } = require('../../../client/src/api');
-const {
-  decodeAudioFileToBuffer
-} = require('../../../client/src/features/upload/utils/fileProcessing');
-const { transcribeAudioBuffer } = require('../../../client/src/utils/transcribeAudioBuffer');
 
 const APP = {
   id: 'acme',
@@ -511,58 +507,6 @@ describe('AppChat with a start form', () => {
       content: 'Write to Ada about the Q3 report.',
       fileData: DROPPED
     });
-  });
-
-  test('a file dropped on the form is transcribed into the rendered prompt, sent once', async () => {
-    const audio = { type: 'audio', fileName: 'call.mp3', base64: 'data:audio/mpeg;base64,AA' };
-    mockUpload.config = { enabled: true, localUploadEnabled: true };
-    mockUpload.dropped = audio;
-    decodeAudioFileToBuffer.mockResolvedValue({ duration: 5 });
-    transcribeAudioBuffer.mockResolvedValue('Notes from the call');
-    renderApp({ ...APP, transcription: { enabled: true, modelId: 'voxtral' } });
-    await screen.findByTestId('start-form');
-    fireEvent.click(screen.getByRole('button', { name: 'drop a file' }));
-
-    await fillAndSend();
-    // The transcript takes the audio's place in the form's message.
-    await waitFor(() => expect(mockStream.opened).toBe(1));
-    await answerTurn('run-1');
-    const sent = requestMessages(0);
-    expect(sent).toHaveLength(1);
-    expect(sent[0]).toMatchObject({
-      role: 'user',
-      content: 'Write to Ada about the Q3 report.\n\nTranscript of call.mp3:\nNotes from the call',
-      promptTemplate: null,
-      // Still the form's message, so it sets the chat's variables.
-      variables: { recipient: 'Ada', subject: 'the Q3 report' },
-      audioTranscript: true
-    });
-    expect(sent[0].audioData).toBeFalsy();
-    expect(transcribeAudioBuffer).toHaveBeenCalledTimes(1);
-    expect(screen.queryByTestId('start-form')).toBeNull();
-  });
-
-  test('when transcription yields nothing, nothing is sent and the form comes back with the file', async () => {
-    const audio = { type: 'audio', fileName: 'call.mp3', base64: 'data:audio/mpeg;base64,AA' };
-    mockUpload.config = { enabled: true, localUploadEnabled: true };
-    mockUpload.dropped = audio;
-    decodeAudioFileToBuffer.mockResolvedValue({ duration: 5 });
-    transcribeAudioBuffer.mockResolvedValue('');
-    renderApp({ ...APP, transcription: { enabled: true, modelId: 'voxtral' } });
-    await screen.findByTestId('start-form');
-    fireEvent.click(screen.getByRole('button', { name: 'drop a file' }));
-    fireEvent.change(screen.getByPlaceholderText('Who'), { target: { value: 'Ada' } });
-    fireEvent.submit(screen.getByTestId('start-form'));
-
-    await waitFor(() =>
-      expect(screen.getByRole('alert')).toHaveTextContent(
-        'No speech was detected. Nothing was sent.'
-      )
-    );
-    expect(screen.getByTestId('start-form')).toBeInTheDocument();
-    expect(screen.getByTestId('attached')).toHaveTextContent('call.mp3');
-    expect(screen.getByPlaceholderText('Who')).toHaveValue('Ada');
-    expect(mockStream.opened).toBe(0);
   });
 
   test('text the chat was opened with is shown in the form and sent as {{content}}', async () => {

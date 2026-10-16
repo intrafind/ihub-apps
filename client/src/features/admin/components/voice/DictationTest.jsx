@@ -27,7 +27,7 @@ const BUSY = new Set(['starting', 'listening', 'stopping']);
  *
  * @param {object} props
  * @param {object} props.speech Saved speech config in the public client shape.
- * @param {Array|null} props.models Enabled transcription models (null while loading).
+ * @param {Array|null} props.models Enabled streaming transcription models (null while loading).
  * @param {Function} props.t
  * @param {string} props.language UI language, preselects the recognition locale.
  */

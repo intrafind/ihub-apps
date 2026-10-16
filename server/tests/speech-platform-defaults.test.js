@@ -1,6 +1,6 @@
 /**
  * Schema specs for the platform-wide voice-input defaults (issue #2622):
- * platform.speech.defaultService / speech.transcription.defaultModelId, and
+ * platform.speech.defaultService, and
  * the app-level "browser" service that pins the Web Speech API now that
  * "default" follows the platform default, and "model" dictation, which names a
  * transcription model (`speech.dictation.modelId`, app `speechRecognition.modelId`).
@@ -23,7 +23,7 @@ describe('platform speech defaults', () => {
     const { speech } = platformConfigSchema.parse({});
     expect(speech.defaultService).toBe('browser');
     expect(speech.dictation).toEqual({ modelId: '' });
-    expect(speech.transcription).toEqual({ defaultModelId: '' });
+    expect(speech.transcription).toBeUndefined();
   });
 
   test('accept every dictation backend', () => {
@@ -45,13 +45,6 @@ describe('platform speech defaults', () => {
       speech: { defaultService: 'model', dictation: { modelId: 'gemini-3.5-transcribe-live' } }
     });
     expect(parsed.speech.dictation.modelId).toBe('gemini-3.5-transcribe-live');
-  });
-
-  test('keep the default transcription model', () => {
-    const parsed = platformConfigSchema.parse({
-      speech: { transcription: { defaultModelId: 'voxtral-mini-realtime' } }
-    });
-    expect(parsed.speech.transcription.defaultModelId).toBe('voxtral-mini-realtime');
   });
 });
 

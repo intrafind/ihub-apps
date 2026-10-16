@@ -622,9 +622,10 @@ export const platformConfigSchema = z
       })
       .passthrough()
       .prefault({}),
-    // Voice: dictation (the microphone button), transcription (record/upload)
-    // and read aloud. Transcription and TTS endpoints and keys live on their
-    // models (Admin → Models); this block only picks which ones are used.
+    // Voice: dictation (the microphone button) and read aloud. Transcription
+    // and TTS endpoints and keys live on their models (Admin → Models); this
+    // block only picks which ones are used. Record/upload transcription uses
+    // the transcription model selected in the chat.
     speech: z
       .object({
         // Dictation service for every app whose settings.speechRecognition.service
@@ -636,14 +637,6 @@ export const platformConfigSchema = z
             // A `modelType: "transcription"` model; used when defaultService
             // is "model".
             modelId: z.string().prefault('')
-          })
-          .passthrough()
-          .prefault({}),
-        // Record/upload transcription: the model used when an app enables
-        // transcription but sets no transcription.modelId of its own.
-        transcription: z
-          .object({
-            defaultModelId: z.string().prefault('')
           })
           .passthrough()
           .prefault({}),

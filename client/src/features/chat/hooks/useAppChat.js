@@ -597,12 +597,7 @@ function useAppChat({
           ...(serverBacked ? { clientMessageId: exchangeId } : {}),
           imageData: apiMessage.imageData,
           fileData: apiMessage.fileData,
-          audioData: apiMessage.audioData,
-          // The text holds the transcript of uploaded audio. Kept on the
-          // message, so a chat whose history is posted from the browser keeps
-          // saying so on later turns. A stored chat's history is rebuilt from
-          // role and content only — for this flag as for uploaded files.
-          ...(apiMessage.audioTranscript ? { audioTranscript: true } : {})
+          audioData: apiMessage.audioData
         });
         addAssistantMessage(exchangeId);
 
@@ -615,7 +610,6 @@ function useAppChat({
           imageData: apiMessage.imageData,
           fileData: apiMessage.fileData,
           audioData: apiMessage.audioData,
-          ...(apiMessage.audioTranscript ? { audioTranscript: true } : {}),
           // The host item (Outlook email/meeting, the extension's page); the
           // server renders it as tagged blocks around `content`.
           ...(apiMessage.hostContext ? { hostContext: apiMessage.hostContext } : {})
@@ -1046,9 +1040,9 @@ function useAppChat({
     loadServerMessages,
     reattachToRun,
     resetConversationState,
-    // Local turns built outside the chat pipeline. The transcription flow
-    // grows a user bubble (`isLiveTranscript`) with these until it is sent as
-    // the real message.
+    // Local turns built outside the chat pipeline: a transcription model's
+    // turn (the audio's name, then the transcript as the answer), whose audio
+    // goes over the realtime socket rather than the chat request.
     addUserMessage,
     addAssistantMessage,
     updateAssistantMessage,

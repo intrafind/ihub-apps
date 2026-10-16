@@ -5,7 +5,8 @@ import {
   createTranscriptAssembler,
   downsample,
   floatTo16BitPCM,
-  isCompletionClose
+  isCompletionClose,
+  startFrame
 } from './realtimeTranscriptionCore';
 
 // Wait this long for the upstream to become ready (the first session after a
@@ -56,6 +57,7 @@ const transcriptionError = (code, message, partialText) =>
  * @param {(elapsedSeconds: number) => void} [opts.onTick] - Recording time, every 250 ms.
  * @param {number} [opts.maxDurationSeconds] - Calls `onMaxDuration` once when reached.
  * @param {() => void} [opts.onMaxDuration]
+ * @param {Object} [opts.chat] - The chat the recording is a turn of (see `startFrame`).
  * @returns {Promise<{ stop: () => Promise<string>, cancel: () => void, text: () => string }>}
  *   Rejects with `code: 'mic'` when the microphone is unavailable and
  *   `code: 'connect'` when the socket cannot be opened.
@@ -66,7 +68,8 @@ export async function startLiveTranscription({
   onError,
   onTick,
   maxDurationSeconds,
-  onMaxDuration
+  onMaxDuration,
+  chat
 } = {}) {
   let mediaStream;
   try {
@@ -225,7 +228,7 @@ export async function startLiveTranscription({
       let opened = false;
       ws.onopen = () => {
         opened = true;
-        ws.send(JSON.stringify({ type: 'start', modelId }));
+        ws.send(startFrame(modelId, { chat }));
         resolve();
       };
       ws.onerror = () => {

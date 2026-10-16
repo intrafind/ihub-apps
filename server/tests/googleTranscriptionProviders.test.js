@@ -218,12 +218,15 @@ describe('googleLiveProvider — wire protocol', () => {
     expect(formatUpstreamError({})).toBe('unknown');
   });
 
+  test('interpret asks the bridge for a fresh session on goAway', () => {
+    expect(googleLive.interpret({ goAway: { timeLeft: '10s' } })).toEqual({ kind: 'go-away' });
+  });
+
   test('interpret ignores control frames that need no client action', () => {
     for (const frame of [
       {},
       { serverContent: { turnComplete: true } },
       { serverContent: {} },
-      { goAway: { timeLeft: '10s' } },
       { usageMetadata: { totalTokenCount: 1 } }
     ]) {
       expect(googleLive.interpret(frame)).toEqual({ kind: 'ignore' });

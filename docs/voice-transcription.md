@@ -199,10 +199,12 @@ they are off by default.
 ```
 
 - **`gemini-3.5-transcribe-live`** (`provider: "google-live"`) streams the
-  transcript as the audio arrives, like Voxtral. A Live API **session runs for at
-  most 10 minutes**; a longer recording is cut off, so use the batch model for
-  those. `config.languageCodes` pins languages (BCP-47); empty means auto-detect
-  across 85+ languages, including mid-sentence code-switching.
+  transcript as the audio arrives, like Voxtral. `config.languageCodes` pins
+  languages (BCP-47); empty means auto-detect across 85+ languages, including
+  mid-sentence code-switching. Google limits a Live API session in two ways, and
+  iHub handles both (see [Live model limits](#live-model-limits-pacing-and-session-rotation)):
+  a session lasts about 10 minutes, and audio sent much faster than real time
+  ends the session with `1011 Resource has been exhausted`.
 - **`gemini-3.5-transcribe`** (`provider: "google-transcribe"`) handles complete
   recordings up to **one hour**. It is a batch provider: the transcript arrives
   in one piece at the end rather than word by word, and the audio is uploaded to
@@ -248,22 +250,14 @@ Speaker diarization and word-level timestamps are **not** exposed. iHub renders
 a plain transcript into a chat bubble with nowhere to show them, and Gemini
 rejects both in combination with `smart` mode and with custom vocabulary.
 
-Transcription models are deliberately invisible to the chat stack: `GET /api/models` returns chat models only (transcription models via the explicit `?type=transcription` query, with `url`/`apiKey` stripped), so they can never be picked as a chat model, magic-prompt model, or workflow model.
+Transcription models never answer a prompt: they are listed in the chat's model selector (with `url`/`apiKey` stripped) so users can pick them to transcribe, but never as a magic-prompt, compare-mode or workflow model.
 
-## Enabling transcription on an app
+## Using transcription in a chat
 
-Add a `transcription` block to the app config (Admin → Apps → Edit → Transcription section):
+There is no per-app transcription switch: a transcription model is picked in the chat's **model selector**, like any chat model, and audio always goes to the selected model. Users need permission for the model (see [Permissions](#permissions)); an app that restricts `allowedModels` must list it, and an app dedicated to transcription can set it as its `preferredModel`. To accept uploaded videos, enable `upload.videoUpload` on the app:
 
 ```json
 {
-  "transcription": {
-    "enabled": true,
-    "modelId": "voxtral-mini-realtime",
-    "defaultEnabled": true,
-    "streaming": true,
-    "maxDurationSeconds": 3600,
-    "inputs": { "upload": true, "record": true, "video": true }
-  },
   "upload": {
     "enabled": true,
     "videoUpload": {
@@ -276,45 +270,21 @@ Add a `transcription` block to the app config (Admin → Apps → Edit → Trans
 }
 ```
 
-| Field                | Default | Meaning                                                                                     |
-| -------------------- | ------- | ------------------------------------------------------------------------------------------- |
-| `enabled`            | `false` | Master switch for the app.                                                                   |
-| `modelId`            | `""`    | Which `modelType: "transcription"` model to route to. Empty uses the platform default (`speech.transcription.defaultModelId`, see below). |
-| `defaultEnabled`     | `true`  | Whether the per-chat **Transcription** toggle starts on. Users can flip it per conversation (like web search). When off, audio/video submissions fall through to the multimodal chat path instead. |
-| `streaming`          | `true`  | Show the transcript growing in the user's message while it is produced. When off, the message shows "Listening…" / "Transcribing…" until the transcript is complete. |
-| `maxDurationSeconds` | `3600`  | Client-enforced cap on recording length / decoded audio duration (max `7200`). One hour by default, so a 30-minute video transcribes out of the box. An app that saved its own value keeps it. Live recordings also run inside the server's session cap, `speech.realtime.maxSessionSeconds` (4200 s by default), which has to stay larger than this value plus a margin, see [Runtime limits and tuning](#runtime-limits-and-tuning). |
-| `inputs.upload`      | `true`  | Allow transcribing uploaded audio files.                                                     |
-| `inputs.record`      | `true`  | Show the record → send button.                                                              |
-| `inputs.video`       | `true`  | Allow transcribing uploaded videos (audio track extracted in the browser).                   |
+> **Breaking change.** The app block `transcription` (`enabled`, `defaultEnabled`, `modelId`, `inputs`, `streaming`, `maxDurationSeconds`) and the platform setting `speech.transcription.defaultModelId` are gone. Migration V167 removes them and adds the model an app transcribed with to its `allowedModels` when the app restricts models.
 
-### Platform default transcription model
-
-![Admin → Voice Input: platform defaults for dictation and transcription](assets/screenshots/admin-voice-input.png)
-
-Instead of picking the same model in every app, set it once under **Admin → Voice Input → Transcription → Model** (`platform.json` → `speech.transcription.defaultModelId`). Apps that enable transcription but leave `modelId` empty use it; an app's own `modelId` always wins. The app editor then shows **Platform default (…)** as the model choice.
-
-```json
-{
-  "speech": {
-    "transcription": { "defaultModelId": "voxtral-mini-realtime" }
-  }
-}
-```
-
-`upload.videoUpload.maxFileSizeMB` accepts up to `51200` (50 GB): half an hour of video is 10 GB and more. The video is never uploaded, and an **MP4 or MOV of any size** is not read whole: only its index and its audio are (see [Audio Extraction](audio-extraction.md#large-videos-mp4-and-mov-up-to-50-gb)), so the memory used follows the audio, not the video. Other containers (WebM, MKV, ...) are decoded from the whole file in memory, which a browser can do up to about 2 GB; above that they are refused with a message that asks for MP4 or MOV. What stays attached is only the 16 kHz mono WAV of the audio track (about 1.9 MB per minute; see [Audio Extraction](audio-extraction.md#extracted-audio-format)). The `maxDurationSeconds` cap is the lever for bounding work: an hour of audio is a WAV of 115 MB.
+`upload.videoUpload.maxFileSizeMB` accepts up to `51200` (50 GB): half an hour of video is 10 GB and more. The video is never uploaded, and an **MP4 or MOV of any size** is not read whole: only its index and its audio are (see [Audio Extraction](audio-extraction.md#large-videos-mp4-and-mov-up-to-50-gb)), so the memory used follows the audio, not the video. Other containers (WebM, MKV, ...) are decoded from the whole file in memory, which a browser can do up to about 2 GB; above that they are refused with a message that asks for MP4 or MOV. What stays attached is only the 16 kHz mono WAV of the audio track (about 1.9 MB per minute; see [Audio Extraction](audio-extraction.md#extracted-audio-format)). An hour of audio is a WAV of 115 MB.
 
 ### What users see
 
 <p align="center">
   <img src="assets/screenshots/transcription-upload.png" alt="An audio file attached to the chat input, with the record button (red dot) next to the microphone" width="49%">
-  <img src="assets/screenshots/chat-input-menu.png" alt="The Transcription switch in the chat input's options menu" width="49%">
 </p>
 
-- A **Transcription** toggle in the chat input's actions menu (when the app has it enabled): on, uploaded audio and video are transcribed into the message before the chat model sees it.
-- A **record button** (red dot → elapsed timer → stop square). While recording, a user message shows "Listening…" and grows with the transcript as the user speaks. Stopping (the button, Send, or reaching `maxDurationSeconds`) sends it to the selected chat model, which answers. Anything already typed in the input field leads the message, and attachments in the input go along. A batch model (`google-transcribe`) fills the message in one piece after stop.
-- Attaching an audio/video file and sending shows the typed text as the user message, followed by `Transcript of <file>:` and the transcript growing below it; one section per file. When every file is done the message goes to the chat model, with any non-audio attachments. A file without speech is marked `(no speech detected)`.
-- Nothing is sent when something goes wrong: a failed or **cancelled** (Stop) upload transcription, or audio without any speech, gives the input field back its text and files. A recording that fails or is cancelled part-way leaves the text transcribed so far in the input field, to check and send.
-- When the message holds the transcript of an uploaded file, the answer is labelled **Based on audio recording**. A spoken message is the user's own words, like typed text, and gets no such label.
+- With a transcription model selected, the text box is disabled. The user uploads an audio or video file or presses the **record button** (red dot → elapsed timer → stop square). Each file (or recording) is a turn of its own: its name is the question and the transcript is the answer, growing while it is produced (a batch model such as `google-transcribe` fills it in one piece at the end). A file without speech is answered `(no speech detected)`. Audio is limited to an hour per file or recording.
+- The transcript is the answer: it is stored in the chat as a turn, labelled **Based on audio recording**, and a chat model picked afterwards can work with it.
+- The **microphone** button is dictation: it types into the input field through the configured dictation service (see [Microphone Feature](microphone-feature.md)), independent of the selected model.
+- **Record** with an audio-capable chat model (`supportsAudio: true`) attaches the recording (16 kHz WAV, up to 15 minutes) and sends it with whatever is typed; that model answers the audio directly. Chat models that do not take audio offer neither record nor audio upload.
+- A transcription that fails or is stopped part-way keeps the text transcribed so far as its answer, and a failure says why below it.
 
 ## Permissions
 
@@ -384,18 +354,31 @@ The Azure **Test connection** button checks the key from the iHub server instead
 
 ## Runtime limits and tuning
 
-All knobs live under `platform.json` → `speech.realtime` and apply to the whole realtime endpoint (dictation with a model, and transcription):
+These knobs live under `platform.json` → `speech.realtime` and apply to the whole realtime endpoint (dictation with a model, and transcription). Limits of a single live model are set on that model instead; see [Live model limits](#live-model-limits-pacing-and-session-rotation):
 
 | Setting                 | Default   | Applies             | Notes                                                                 |
 | ----------------------- | --------- | ------------------- | --------------------------------------------------------------------- |
 | `maxConnections`        | `50`      | on server start     | Global concurrent realtime connections per iHub **worker process**.   |
 | `maxConnectionsPerUser` | `3`       | on server start     | Per-user concurrent connections per worker process.                   |
 | `maxFrameBytes`         | `262144`  | on server start     | Max size of one inbound WebSocket frame.                              |
-| `maxSessionSeconds`     | `4200`    | per new connection  | Hard cap on one session's lifetime, counted from the connection. Must be larger than the longest recording an app allows (`transcription.maxDurationSeconds`, 3600 s by default, up to 7200 s) plus a margin for the setup and, with a batch provider, the transcription after Stop (10 minutes is enough for an hour of audio). Hot-reloaded (no restart needed). |
+| `maxSessionSeconds`     | `4200`    | per new connection  | Hard cap on one session's lifetime, counted from the connection. Must be larger than the longest recording (an hour by default) plus a margin for the setup and, with a batch provider, the transcription after Stop (10 minutes is enough for an hour of audio). Hot-reloaded (no restart needed). |
 | `maxBufferedAudioBytes` | `134217728` | per new connection | Batch providers only: audio one connection may buffer (128 MiB ≈ 70 min of 16 kHz PCM16). Hot-reloaded. |
 | `maxBufferedAudioBytesTotal` | `536870912` | per new connection | Batch providers only: audio buffered across the whole process (512 MiB). Hot-reloaded. |
 
-A recording that is allowed to last as long as the session does is lost: the session's clock starts when the connection opens, the recording's a little later (microphone permission, connecting), and a batch provider (one that returns the transcript in one piece) transcribes only after Stop, so a cap equal to `maxDurationSeconds` can end the session (`session-limit`) before the automatic Stop or while the transcript is still pending. The default of 4200 s leaves 10 minutes for that beyond the default 60-minute recording. An app that sets `transcription.maxDurationSeconds` above 3600 s needs `maxSessionSeconds` raised to match (for the maximum of 7200 s, for example 7800).
+A recording that is allowed to last as long as the session does is lost: the session's clock starts when the connection opens, the recording's a little later (microphone permission, connecting), and a batch provider (one that returns the transcript in one piece) transcribes only after Stop, so a cap equal to the recording length can end the session (`session-limit`) before the automatic Stop or while the transcript is still pending. The default of 4200 s leaves 10 minutes for that beyond the 60 minutes the chat transcribes at most.
+
+### Live model limits: pacing and session rotation
+
+Hosted live APIs limit how fast audio may arrive and how long one session may last. Two settings in the transcription model's own `config` (not in `platform.json`) tell iHub about them; the provider supplies defaults, and `0` turns a limit off. The model's `maxSessionSeconds` is the lifetime of one **upstream** session, after which iHub continues in a fresh one; the platform's `speech.realtime.maxSessionSeconds` above caps the whole browser connection, across all upstream sessions:
+
+| `config` key          | `google-live` default | Effect |
+| --------------------- | --------------------- | ------ |
+| `maxRealtimeFactor`   | `3`                   | An uploaded file (or the audio of a video) is fed to the model at most this many times faster than real time. A 30-minute file then takes about 10 minutes. Recordings from the microphone are real time already and are never paced. Measured for Gemini Live: about 4× holds for ten minutes of audio, about 8× is cut off with `1011 Resource has been exhausted`. |
+| `maxSessionSeconds`   | `540`                 | Before a session is this old (or has received this much audio), iHub ends it and continues in a fresh one; the browser keeps one uninterrupted transcript. A model that announces its end itself (Gemini's `goAway`) is moved to a fresh session as well. |
+
+Self-hosted Voxtral (`vllm-realtime`) and Mistral have no defaults: files are sent as fast as the model takes them, and sessions are not rotated.
+
+An upstream that closes a session with an error code is reported to the user (`upstream-closed`, with the code and Google's reason) instead of ending the transcript silently.
 
 Sizing guidance: each concurrent connection holds one vLLM realtime session, so set `maxConnections` to what your GPU deployment sustains. Per-connection server memory is bounded by the backpressure high-water mark (~4 MB worst case, typically far less).
 
@@ -472,7 +455,7 @@ Notes:
 
 | Symptom                                                        | Cause / fix                                                                                      |
 | -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| Record/mic button missing                                      | Page not a secure context (HTTPS), app's `transcription.inputs.record` off, or feature disabled.  |
+| Record/mic button missing                                      | Page not a secure context (HTTPS), or feature disabled.                                            |
 | Upgrade fails with **503**                                     | No enabled transcription model.                                                                   |
 | Upgrade fails with **401**                                     | Missing/expired JWT and anonymous access disabled.                                                |
 | Upgrade fails with **403**                                     | Origin rejected (CSWSH guard). Add the browser origin to `ALLOWED_ORIGINS`, or set `X-Forwarded-Host` at the proxy. |
@@ -484,7 +467,7 @@ Notes:
 | `…rejected the connection (HTTP 401/403)`                      | Upstream auth — set/fix the model `apiKey`.                                                       |
 | Empty transcript / "no speech detected"                        | Clip silent or extremely short; check the input device with the admin **Microphone check** and the vLLM logs. |
 | Transcript stops mid-file behind a proxy                       | Proxy killing the WebSocket — verify Upgrade headers and raise `proxy_read_timeout` (see above).   |
-| `Transcription session exceeded the maximum duration`          | Session hit `maxSessionSeconds` — raise it for very long recordings. It has to exceed the longest app recording limit (`transcription.maxDurationSeconds`) plus a margin; see [Runtime limits and tuning](#runtime-limits-and-tuning). |
+| `Transcription session exceeded the maximum duration`          | Session hit `maxSessionSeconds` — raise it for very long recordings. It has to exceed the longest recording plus a margin; see [Runtime limits and tuning](#runtime-limits-and-tuning). |
 | Chat stuck on "generating"                                     | The `{"type":"done"}` frame never arrived — usually a proxy dropping the socket after `stop`; check proxy timeouts, then server logs (`component: RealtimeSTT`). |
 
 The messages quoted in the first column are what the bridge sends to the browser, and the chat shows them as they are: `Transcription failed: <message>`. A not-permitted model and an exhausted session have their own wording instead of the bridge's message.

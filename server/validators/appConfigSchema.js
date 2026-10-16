@@ -257,40 +257,6 @@ const uploadSchema = z
   })
   .optional();
 
-// Transcription configuration schema (routes audio to a modelType:'transcription' model).
-//
-// When enabled, audio sources (uploaded audio, audio extracted from an uploaded
-// video, or a browser recording) are transcribed by the referenced
-// `modelType: "transcription"` model and the text becomes the user's message,
-// which the chat model answers — instead of the audio being sent as
-// `audioData` to a multimodal chat model. Coexists with the multimodal
-// `audioUpload` path; both never fire for one submission.
-const transcriptionSchema = z
-  .object({
-    enabled: z.boolean().optional().prefault(false),
-    // Whether the per-chat transcription toggle starts on. When on, audio/video
-    // submissions are transcribed into the message; when off they fall through
-    // to the multimodal chat path. Users can flip it per conversation.
-    defaultEnabled: z.boolean().optional().prefault(true),
-    // Id of the transcription model (modelType: 'transcription') to route to.
-    modelId: z.string().optional().prefault(''),
-    inputs: z
-      .object({
-        upload: z.boolean().optional().prefault(true),
-        record: z.boolean().optional().prefault(true),
-        video: z.boolean().optional().prefault(true)
-      })
-      .optional()
-      .prefault({}),
-    // Show the transcript growing in the user's message while it is produced.
-    streaming: z.boolean().optional().prefault(true),
-    // Client-enforced cap on decoded audio / recording length (seconds). One hour
-    // by default: a 30-minute video transcribes out of the box. Apps that set
-    // their own value keep it.
-    maxDurationSeconds: z.number().int().min(1).max(7200).optional().prefault(3600)
-  })
-  .optional();
-
 // Image generation configuration schema for app-level defaults
 const imageGenerationConfigSchema = z
   .object({
@@ -473,7 +439,6 @@ const baseAppConfigSchema = z.object({
   settings: settingsSchema.optional(),
   inputMode: inputModeSchema.optional(),
   upload: uploadSchema.optional(),
-  transcription: transcriptionSchema,
   features: featuresSchema.optional(),
   greeting: localizedGreetingSchema.optional(),
   starterPrompts: z.array(starterPromptSchema).optional(),

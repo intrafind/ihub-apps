@@ -171,7 +171,10 @@ const OPTIONAL_MESSAGE_FIELDS = [
   // (see services/chat/runActivity.js).
   'activity',
   // What an assistant answer found: pages, documents, records (see services/chat/chatSources.js).
-  'sources'
+  'sources',
+  // A transcription turn (see services/chat/transcriptionTurn.js): its audio is
+  // not kept, so the question can be neither edited nor resent.
+  'transcription'
 ];
 
 /** Variables kept per message, and the longest value kept. */

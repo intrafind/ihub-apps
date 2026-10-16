@@ -13,6 +13,7 @@ import {
 import { buildServerPath } from '../utils/basePath.js';
 import { validateIdForPath } from '../utils/pathSecurity.js';
 import { findByIdCaseInsensitive } from '../utils/resourceLookup.js';
+import { getTranscriptionProvider } from '../transcription/index.js';
 
 /**
  * Strip server-side secrets before a model is sent to the browser.
@@ -27,6 +28,12 @@ function sanitizeModelForPublic(model) {
   delete clean.apiKey;
   if (clean.modelType === 'transcription' || clean.modelType === 'tts') {
     delete clean.url;
+  }
+  // A transcription model selected in a chat answers live while the audio
+  // arrives (`stream`) or once it is all there (`batch`); the chat shows which.
+  if (clean.modelType === 'transcription') {
+    const mode = getTranscriptionProvider(clean.provider)?.mode;
+    if (mode) clean.transcriptionMode = mode;
   }
   return clean;
 }
@@ -128,12 +135,23 @@ export default function registerModelRoutes(app, { getLocalizedError }) {
       // returns the permitted transcription models,
       // `?type=tts` the permitted text-to-speech models (read aloud).
       // Unknown types are a 400, not a silent fallback to chat — otherwise a
-      // future model type would silently return the wrong list.
-      const requestedType = req.query.type ?? 'chat';
-      if (!MODEL_TYPES.has(requestedType)) {
-        return res.status(400).json({ error: `Unknown model type: ${requestedType}` });
+      // future model type would silently return the wrong list. A
+      // comma-separated list asks for several: the chat's model selector asks
+      // for `chat,transcription`, since a transcription model can be selected
+      // there to transcribe an audio or video file.
+      const requestedTypes = [
+        ...new Set(
+          String(req.query.type ?? 'chat')
+            .split(',')
+            .map(type => type.trim())
+        )
+      ].sort((a, b) => a.localeCompare(b));
+      const unknownType = requestedTypes.find(type => !MODEL_TYPES.has(type));
+      if (unknownType !== undefined) {
+        return res.status(400).json({ error: `Unknown model type: ${unknownType}` });
       }
-      const typedModels = models.filter(m => (m.modelType || 'chat') === requestedType);
+      const requestedType = requestedTypes.join(',');
+      const typedModels = models.filter(m => requestedTypes.includes(m.modelType || 'chat'));
 
       // Strip server-side secrets (encrypted apiKey for all; url for
       // transcription and TTS models) so they never reach the browser (G2).

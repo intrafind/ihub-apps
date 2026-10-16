@@ -4,9 +4,6 @@
     "dictation": {
       "modelId": ""
     },
-    "transcription": {
-      "defaultModelId": ""
-    },
     "tts": {
       "enabled": false,
       "defaultModelId": ""

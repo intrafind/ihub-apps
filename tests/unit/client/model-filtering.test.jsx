@@ -1,5 +1,8 @@
 import { describe, it, expect } from '@jest/globals';
-import { filterModelsForApp } from '../../../client/src/utils/modelFiltering';
+import {
+  filterModelsForApp,
+  pickInitialModelForApp
+} from '../../../client/src/utils/modelFiltering';
 
 const models = [
   { id: 'plain', supportsTools: 'none' },
@@ -39,5 +42,29 @@ describe('filterModelsForApp', () => {
       'chooser',
       'forced'
     ]);
+  });
+});
+
+describe('transcription models', () => {
+  const live = { id: 'gemini-live', modelType: 'transcription', default: true };
+  const withLive = [...models, live];
+
+  it('stay selectable in an app with tools: they never answer a prompt', () => {
+    expect(filterModelsForApp(withLive, { tools: ['braveSearch'] }).map(m => m.id)).toEqual([
+      'chooser',
+      'forced',
+      'gemini-live'
+    ]);
+  });
+
+  it('are still bound by allowedModels', () => {
+    expect(filterModelsForApp(withLive, { allowedModels: ['plain'] }).map(m => m.id)).toEqual([
+      'plain'
+    ]);
+  });
+
+  it('are not where a chat opens, unless the app prefers one', () => {
+    expect(pickInitialModelForApp(withLive, {})).toBe('plain');
+    expect(pickInitialModelForApp(withLive, { preferredModel: 'gemini-live' })).toBe('gemini-live');
   });
 });

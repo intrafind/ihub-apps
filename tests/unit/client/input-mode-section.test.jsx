@@ -3,8 +3,8 @@ import '@testing-library/jest-dom';
 
 /**
  * App editor → Input Mode & Microphone: an app's voice input can be the
- * platform default, the browser, Azure Speech or any enabled transcription
- * model. A model choice is stored as `service: "model"` plus its `modelId`.
+ * platform default, the browser, Azure Speech or any enabled streaming
+ * transcription model. A model choice is stored as `service: "model"` plus its `modelId`.
  */
 
 // The recognizers speechService builds are not used here (import.meta, not CJS-safe).
@@ -88,7 +88,7 @@ test('picking a service drops the model id', () => {
 test('flags a model that is no longer offered', () => {
   renderSection({ service: 'model', modelId: 'old-whisper' });
   expect(serviceSelect()).toHaveValue('model:old-whisper');
-  expect(screen.getByText(/disabled or no longer exists/)).toBeInTheDocument();
+  expect(screen.getByText(/disabled, no longer exists or does not stream/)).toBeInTheDocument();
 });
 
 test('names the platform default model', () => {

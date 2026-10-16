@@ -660,7 +660,7 @@
     },
     "voiceInput": {
       "title": "Voice Input (Speech-to-Text)",
-      "description": "Choose what apps use for voice input, transcription and read aloud. Apps follow these choices unless they pick their own in the app editor. Endpoints and keys of transcription and text-to-speech models are set under Admin → Models.",
+      "description": "Choose what apps use for voice input and read aloud. Apps follow these choices unless they pick their own in the app editor. Endpoints and keys of transcription and text-to-speech models are set under Admin → Models.",
       "loadError": "Failed to load voice input settings",
       "saveSuccess": "Voice input settings saved.",
       "saveError": "Failed to save voice input settings",
@@ -669,16 +669,10 @@
         "description": "What turns speech into text when users press the microphone button in a chat. Used by every app whose Speech Recognition Service is \"Platform default\".",
         "service": "Speech recognition",
         "azureNotEnabled": "Azure Speech is not enabled below. Until it is, apps that follow the platform default use the browser.",
-        "modelUnavailable": "This model is disabled or no longer exists. Until it is enabled, apps that follow the platform default use the browser.",
-        "modelHint": "The microphone streams through the iHub server to this model; its endpoint and key stay on the server. Streaming models show the text while the user speaks, others insert it when they stop. Users need access to the model through their groups.",
+        "modelUnavailable": "This model is disabled, no longer exists or does not stream. Until a streaming model is chosen, apps that follow the platform default use the browser.",
+        "modelHint": "The microphone streams through the iHub server to this model; its endpoint and key stay on the server, and the text shows while the user speaks. Users need access to the model through their groups.",
         "browserHint": "Runs in the browser with the Web Speech API. Which browsers support it, and where they send the audio, is up to the browser.",
-        "noModels": "Enable a transcription model under Admin → Models to offer it here."
-      },
-      "transcription": {
-        "title": "Transcription (recording and uploads)",
-        "description": "The model that transcribes recordings and audio/video uploads in apps that enable transcription without choosing a model of their own.",
-        "model": "Model",
-        "modelUnavailable": "This model is disabled or no longer exists, so recording fails in apps that rely on the default."
+        "noModels": "Enable a streaming transcription model (vLLM Realtime, Gemini Live or Mistral) under Admin → Models to offer it here."
       },
       "azure": {
         "title": "Azure Speech",
@@ -743,7 +737,6 @@
           "title": "Recording (record → transcribe)",
           "description": "Record a short clip (up to {{seconds}} seconds) and transcribe it with a transcription model over the same connection a chat uses, then see how long the transcript took.",
           "model": "Transcription model",
-          "platformDefault": "platform default",
           "start": "Start recording",
           "stop": "Stop and transcribe",
           "recording": "Recording… {{elapsed}} s",
@@ -2888,19 +2881,7 @@
         "iassistantExtraContextDesc": "Additional context to be added to the response state prompt. Supports prompt variables like {{user_name}}, {{user_email}}, {{date}} and custom global variables. Use with care as changes can impact answer quality.",
         "iassistantSystemPromptPreamble": "System Prompt Preamble",
         "iassistantSystemPromptPreambleDesc": "The prompt preamble used in the response state system prompt. This is ideal for changing the identity of the iAssistant. Supports prompt variables like {{user_name}}, {{user_email}}, {{date}} and custom global variables. Use with care.",
-        "transcription": "Transcription",
-        "transcriptionDesc": "Turn uploaded audio, uploaded video or a browser recording into text with a transcription model (e.g. Voxtral). The text becomes the user's message, and the chat model answers it.",
-        "enableTranscription": "Enable transcription",
-        "transcriptionModel": "Transcription model",
-        "selectTranscriptionModel": "Select a model…",
         "noTranscriptionModels": "No transcription models configured. Add one under Admin → Models (model type \"transcription\").",
-        "transcriptionInputs": "Input sources",
-        "transcriptionUpload": "Audio upload",
-        "transcriptionVideo": "Video upload",
-        "transcriptionRecord": "Record audio",
-        "transcriptionInputsHint": "Audio/video upload also requires the matching upload toggle under Upload Configuration.",
-        "transcriptionStreaming": "Stream transcript as it is produced",
-        "transcriptionMaxDuration": "Max duration (seconds)",
         "enableVideoUpload": "Enable Video Upload",
         "trackedChanges": "Word: tracked changes",
         "trackedChangesHelp": "How tracked changes in Word documents reach the model. Marked changes are written as {++added++} and {--removed--}.",
@@ -2918,7 +2899,6 @@
         "maxVideoSize": "Max Video File Size (MB)",
         "maxVideoSizeHelp": "Up to 51200 MB (50 GB). With audio extraction, an MP4 or MOV can be any size: only its audio is read. Other formats (WebM, MKV, ...) and videos sent as they are work up to 2 GB. Each file type has its own limit.",
         "supportedVideoFormats": "Supported Video Formats",
-        "transcriptionDefaultEnabled": "On by default (users can toggle it per chat)",
         "appsAsTools": "Apps as Tools",
         "appsAsToolsDesc": "Let this app delegate to other apps. The model can call each selected app as a tool and use its answer (concierge pattern).",
         "appsAsToolsHelper": "Each selected app becomes a tool (app__<id>) the model can call. Users only reach apps they have permission for, and a called app cannot call further apps.",
@@ -2934,9 +2914,7 @@
         "browserService": "Browser (Web Speech API)",
         "platformDefaultServiceHint": "Follows the default set under Admin → Voice Input, including later changes.",
         "dictationModelHint": "The microphone streams through the iHub server to this transcription model. Users need access to the model through their groups.",
-        "dictationModelUnavailable": "This model is disabled or no longer exists, so voice input fails in this app.",
-        "platformDefaultTranscriptionModel": "Platform default ({{model}})",
-        "transcriptionModelRequired": "Select a model, or set a default transcription model under Admin → Voice Input.",
+        "dictationModelUnavailable": "This model is disabled, no longer exists or does not stream, so voice input fails in this app.",
         "websearchMaxPageReads": "Max Page Reads per Answer",
         "websearchMaxPageReadsDesc": "Caps how many pages the model may open with the page reader for one answer. Pages the search itself fetches for its excerpts do not count. 1–50, default 5."
       },
@@ -4918,16 +4896,13 @@
     "scheduled": "Scheduled"
   },
   "transcription": {
-    "record": "Record a spoken message",
+    "record": "Record audio for the selected model",
     "stopRecording": "Stop recording and send",
     "recording": "Recording",
     "listening": "Listening…",
     "transcribing": "Transcribing…",
-    "transcriptOf": "Transcript of {{name}}:",
     "noSpeechInFile": "(no speech detected)",
-    "partialInInput": "What was transcribed so far is in the input field.",
     "errors": {
-      "noModel": "No transcription model is configured for this app.",
       "decode": "Could not decode this audio in your browser. The format or codec may be unsupported (e.g. OGG in Safari).",
       "empty": "No audio could be read from this file.",
       "notReady": "The transcription service did not become ready. Please check the model configuration and try again.",
@@ -4946,10 +4921,12 @@
       "mic": "Could not access the microphone. Please grant permission and try again.",
       "busy": "A transcription is already running. Stop it first.",
       "noSpeech": "No speech was detected. Nothing was sent.",
-      "audioNeedsTranscription": "The selected chat model cannot process audio directly. Enable Transcription in the actions menu, or remove the audio attachment."
+      "modelTakesNoAudio": "The selected model cannot process audio. Select a model that can, or a transcription model, or remove the audio attachment.",
+      "notStored": "The transcript could not be saved in the chat. Copy it before you leave the page."
     },
-    "toggleLabel": "Transcription",
-    "toggleDescription": "Uploaded audio and video are transcribed into your message, and the chat model answers the text"
+    "audioOnlyPlaceholder": "Upload an audio or video file, or press record, to get its transcript",
+    "modelBadgeLive": "Transcription · live",
+    "modelBadgeBatch": "Transcription · whole file"
   },
   "documentPreview": {
     "title": "Document preview",

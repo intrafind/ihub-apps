@@ -5,13 +5,14 @@ import {
   createTranscriptAssembler,
   isCompletionClose,
   resampleTo16kMono,
+  startFrame,
   floatTo16BitPCM
 } from './realtimeTranscriptionCore';
 
 /**
  * Stream a complete decoded audio buffer to the iHub `/api/voice/realtime`
- * WebSocket for transcription by a self-hosted Voxtral (vLLM) transcription
- * model, and reassemble the streamed deltas/finals into one transcript.
+ * WebSocket for transcription by the selected transcription model, and
+ * reassemble the streamed deltas/finals into one transcript.
  *
  * Unlike the microphone dictation service (which trickles audio in real time),
  * this blasts a whole buffer, so it must respect backpressure:
@@ -35,6 +36,7 @@ import {
  * @param {(sources: string[]) => void} [opts.onSources] - What the server says the
  *   transcript is based on (`ready.knowledgeSources`), for the answer badge.
  * @param {AbortSignal} [opts.signal] - Abort/cancel the transcription.
+ * @param {Object} [opts.chat] - The chat this file is a turn of (see `startFrame`).
  * @returns {Promise<string>} Resolves with the final transcript.
  */
 
@@ -58,7 +60,7 @@ const overallTimeoutFor = durationSeconds =>
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 export async function transcribeAudioBuffer(audioBuffer, opts = {}) {
-  const { modelId, onDelta, onFinal, onError, onSources, signal } = opts;
+  const { modelId, onDelta, onFinal, onError, onSources, signal, chat } = opts;
 
   const float32 = await resampleTo16kMono(audioBuffer);
   if (!float32.length) {
@@ -164,7 +166,9 @@ export async function transcribeAudioBuffer(audioBuffer, opts = {}) {
 
     ws.onopen = () => {
       try {
-        ws.send(JSON.stringify({ type: 'start', modelId }));
+        // `file`: the server feeds a rate-limited live model at the pace it
+        // accepts, so sending at full speed below is fine.
+        ws.send(startFrame(modelId, { source: 'file', chat }));
       } catch (err) {
         fail('connect', err.message);
         return;
