@@ -167,6 +167,25 @@ const renderStartupState = (
 // is stable across renders like the router's own.
 const NO_SEARCH_PARAMS = new URLSearchParams();
 
+/** A message's images, audio and documents (each one or a list) as one list. */
+const attachmentsOf = ({ imageData, audioData, fileData }) =>
+  [imageData, audioData, fileData].flatMap(data => (data ? [data].flat() : []));
+
+/** The first non-empty text, trimmed ('' when there is none). */
+const firstText = (...texts) => (texts.find(Boolean) || '').trim();
+
+/** Stop a recorder and turn its recording into an audio attachment (null: nothing recorded). */
+const recordedAttachment = async (recorder, fileName) => {
+  const { audioBuffer } = await recorder.stop();
+  return audioBuffer ? recordingToAudioAttachment(audioBuffer, fileName) : null;
+};
+
+/** The selection with one more attachment: a single one stays an object. */
+const withAttachment = (held, attachment) => {
+  const others = held ? [held].flat() : [];
+  return others.length > 0 ? [...others, attachment] : attachment;
+};
+
 /** The name a file's transcription turn is shown under. */
 const audioFileLabel = (file, fallback) =>
   (file.extractedFromVideo && file.originalVideoName) || file.fileName || fallback;
@@ -1690,75 +1709,28 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
     // and preparing a resend would already remove the transcript.
     if (messages.find(message => message.id === messageId)?.transcription) return;
     const resendData = prepareResend(messageId, editedContent);
-    const {
-      content: contentToResend,
-      variables: variablesToRestore,
-      imageData: imageDataToRestore,
-      audioData: audioDataToRestore,
-      fileData: fileDataToRestore
-    } = resendData;
+    const contentToResend = resendData.content;
+    const filesToRestore = attachmentsOf(resendData);
 
     // Allow resending if there's content OR if the app allows empty content (for variable-only messages)
-    if (
-      !contentToResend &&
-      !imageDataToRestore &&
-      !audioDataToRestore &&
-      !fileDataToRestore &&
-      !app?.allowEmptyContent
-    )
-      return;
+    if (!contentToResend && filesToRestore.length === 0 && !app?.allowEmptyContent) return;
 
     setInput(contentToResend || '');
 
     // Restore variables if they exist
-    if (variablesToRestore) {
-      setVariables(variablesToRestore);
+    if (resendData.variables) {
+      setVariables(resendData.variables);
       // Store variables in ref to ensure they're available for validation
       // This avoids race condition with async state updates
-      pendingVariablesRef.current = variablesToRestore;
+      pendingVariablesRef.current = resendData.variables;
     }
 
-    // Clear any existing selected files first
+    // The message's images, audio and documents become the selection again.
     fileUploadHandler.clearSelectedFile();
-
-    // Restore file data (images, audio, and/or documents) if they exist
-    if (imageDataToRestore || audioDataToRestore || fileDataToRestore) {
-      // Reconstruct the selectedFile state from imageData, audioData, and fileData
-      let filesToRestore = [];
-
-      // Add images to the array
-      if (imageDataToRestore) {
-        if (Array.isArray(imageDataToRestore)) {
-          filesToRestore = [...filesToRestore, ...imageDataToRestore];
-        } else {
-          filesToRestore.push(imageDataToRestore);
-        }
-      }
-
-      // Add audio files to the array
-      if (audioDataToRestore) {
-        if (Array.isArray(audioDataToRestore)) {
-          filesToRestore = [...filesToRestore, ...audioDataToRestore];
-        } else {
-          filesToRestore.push(audioDataToRestore);
-        }
-      }
-
-      // Add documents to the array
-      if (fileDataToRestore) {
-        if (Array.isArray(fileDataToRestore)) {
-          filesToRestore = [...filesToRestore, ...fileDataToRestore];
-        } else {
-          filesToRestore.push(fileDataToRestore);
-        }
-      }
-
-      // Set the selected file(s)
-      if (filesToRestore.length === 1) {
-        fileUploadHandler.setSelectedFile(filesToRestore[0]);
-      } else if (filesToRestore.length > 1) {
-        fileUploadHandler.setSelectedFile(filesToRestore);
-      }
+    if (filesToRestore.length > 0) {
+      fileUploadHandler.setSelectedFile(
+        filesToRestore.length === 1 ? filesToRestore[0] : filesToRestore
+      );
     }
 
     // Held from here on: resending the first exchange of a form-started chat
@@ -1947,6 +1919,15 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
     [t]
   );
 
+  // A transcription that failed says why; a cancelled one does not.
+  const reportTranscriptionFailure = useCallback(
+    failure => {
+      if (!failure || failure.code === 'aborted' || disposedRef.current) return;
+      addSystemMessage(transcriptionErrorText(failure), true);
+    },
+    [addSystemMessage, transcriptionErrorText]
+  );
+
   /**
    * Open a transcription turn on screen: the audio's name as the question and
    * an answer that grows with the transcript. `chat` goes in the session's
@@ -1983,12 +1964,9 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
         },
         // Ends the answer. A failure keeps what was transcribed so far.
         finish(text, failure) {
-          const transcript = (text || shown || '').trim();
           const noSpeech = failure ? '' : t('transcription.noSpeechInFile', '(no speech detected)');
-          updateAssistantMessage(answerId, transcript || noSpeech, false, mark);
-          if (failure && failure.code !== 'aborted' && !disposedRef.current) {
-            addSystemMessage(transcriptionErrorText(failure), true);
-          }
+          updateAssistantMessage(answerId, firstText(text, shown) || noSpeech, false, mark);
+          reportTranscriptionFailure(failure);
         }
       };
     },
@@ -1999,8 +1977,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
       addUserMessage,
       addAssistantMessage,
       updateAssistantMessage,
-      addSystemMessage,
-      transcriptionErrorText,
+      reportTranscriptionFailure,
       t
     ]
   );
@@ -2041,8 +2018,33 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
   );
 
   /**
+   * One file's turn: open it, transcribe the file into it, end it.
+   * Resolves with the failure, or null.
+   */
+  const transcribeOneFile = useCallback(
+    async (file, signal) => {
+      const name = audioFileLabel(file, t('transcription.recording', 'Recording'));
+      const turn = openTranscriptionTurn(name, {
+        name,
+        type: file.fileType || 'audio',
+        bytes: file.fileSize
+      });
+      turn.open();
+      try {
+        const text = await transcribeFile(file, turn, signal);
+        if (!disposedRef.current) turn.finish(text, null);
+        return null;
+      } catch (err) {
+        if (!disposedRef.current) turn.finish('', err);
+        return err;
+      }
+    },
+    [openTranscriptionTurn, transcribeFile, t]
+  );
+
+  /**
    * Transcribe uploaded audio (or the audio of a video) with the selected
-   * transcription model, one turn per file.
+   * transcription model, one turn per file; stops at the first failure.
    *
    * @param {Object[]} files - The audio attachments.
    * @param {Object[]} [others] - The other attachments: they stay attached, for
@@ -2061,30 +2063,15 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
       setIsTranscribing(true);
       try {
         for (const file of files) {
-          const name = audioFileLabel(file, t('transcription.recording', 'Recording'));
-          const turn = openTranscriptionTurn(name, {
-            name,
-            type: file.fileType || 'audio',
-            bytes: file.fileSize
-          });
-          turn.open();
-          let text = '';
-          let failure = null;
-          try {
-            text = await transcribeFile(file, turn, abortController.signal);
-          } catch (err) {
-            failure = err;
-          }
-          if (disposedRef.current) return;
-          turn.finish(text, failure);
-          if (failure) break;
+          const failure = await transcribeOneFile(file, abortController.signal);
+          if (failure || disposedRef.current) break;
         }
       } finally {
         transcribeAbortRef.current = null;
         setIsTranscribing(false);
       }
     },
-    [transcriptionModel, busyWithAudio, fileUploadHandler, openTranscriptionTurn, transcribeFile, t]
+    [transcriptionModel, busyWithAudio, fileUploadHandler, transcribeOneFile]
   );
 
   // A chat model that takes audio: attach the recording and send it with
@@ -2093,24 +2080,19 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
     async recorder => {
       let attachment = null;
       try {
-        const { audioBuffer } = await recorder.stop();
-        if (audioBuffer) {
-          attachment = await recordingToAudioAttachment(
-            audioBuffer,
-            `${t('transcription.recording', 'Recording')}.wav`
-          );
-        }
+        attachment = await recordedAttachment(
+          recorder,
+          `${t('transcription.recording', 'Recording')}.wav`
+        );
       } catch (err) {
-        if (!disposedRef.current) addSystemMessage(transcriptionErrorText(err), true);
+        reportTranscriptionFailure(err);
         return;
       }
       if (disposedRef.current || !attachment) return;
-      const held = fileUploadHandler.selectedFile;
-      const others = held ? [held].flat() : [];
-      fileUploadHandler.setSelectedFile(others.length ? [...others, attachment] : attachment);
+      fileUploadHandler.setSelectedFile(withAttachment(fileUploadHandler.selectedFile, attachment));
       setPendingAutoSubmit(true);
     },
-    [fileUploadHandler, addSystemMessage, transcriptionErrorText, t]
+    [fileUploadHandler, reportTranscriptionFailure, t]
   );
 
   // A transcription model: the microphone is off now; Stop cancels what is
@@ -2197,13 +2179,13 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
     if (recorderStartingRef.current || busyWithAudio()) return;
     const onMaxDuration = () => stopRecording();
     recorderStartingRef.current = true;
+    // A transcription model gets the recording live; a chat model gets it attached.
+    const begin = transcriptionModel ? startTranscribedRecording : startAttachedRecording;
     let recording = null;
     try {
-      recording = transcriptionModel
-        ? await startTranscribedRecording(onMaxDuration)
-        : await startAttachedRecording(onMaxDuration);
+      recording = await begin(onMaxDuration);
     } catch (err) {
-      if (!disposedRef.current) addSystemMessage(transcriptionErrorText(err), true);
+      reportTranscriptionFailure(err);
       return;
     } finally {
       recorderStartingRef.current = false;
@@ -2222,8 +2204,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
     stopRecording,
     startTranscribedRecording,
     startAttachedRecording,
-    addSystemMessage,
-    transcriptionErrorText
+    reportTranscriptionFailure
   ]);
 
   const handleRecordTranscription = useCallback(() => {

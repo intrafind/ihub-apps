@@ -174,7 +174,7 @@ function ChatInputActionsMenu({
   // The references the menu shows: one toggle per MCP server plus plain tools.
   const menuToolRefs = [...grouped.flatMap(g => g.matchedTools), ...individual];
   const toolCount = menuToolRefs.length;
-  const enabledCount = hasTools ? menuToolRefs.filter(t => enabledTools.includes(t)).length : 0;
+  const enabledCount = hasTools ? menuToolRefs.filter(ref => enabledTools.includes(ref)).length : 0;
   const hasWebsearch = app?.websearch?.enabled === true && onWebsearchEnabledChange !== null;
 
   // Local upload covers the paper-clip / drop-zone affordance. Cloud storage
