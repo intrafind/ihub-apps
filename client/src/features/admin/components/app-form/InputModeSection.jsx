@@ -88,6 +88,16 @@ const serviceFromValue = value =>
     ? { service: value, modelId: '' }
     : fromDictationValue(value);
 
+/** The app's speech recognition setting, and the model it dictates with (if any). */
+const recognitionOf = (app, transcriptionModels) => {
+  const recognition = app.settings?.speechRecognition || {};
+  const speechService = recognition.service || 'default';
+  const selectedModelId = speechService === 'model' ? recognition.modelId || '' : '';
+  const selectedModelMissing =
+    Boolean(selectedModelId) && !transcriptionModels.some(m => m.id === selectedModelId);
+  return { recognition, speechService, selectedModelId, selectedModelMissing };
+};
+
 /** The picker's value for what the app has chosen. */
 const pickerValue = (speechService, modelId) =>
   speechService === 'model' ? toDictationValue({ service: 'model', modelId }) : speechService;
@@ -171,11 +181,10 @@ function SpeechServiceField({
   currentLanguage
 }) {
   const { platformConfig } = usePlatformConfig();
-  const recognition = app.settings?.speechRecognition || {};
-  const speechService = recognition.service || 'default';
-  const selectedModelId = speechService === 'model' ? recognition.modelId || '' : '';
-  const selectedModelMissing =
-    Boolean(selectedModelId) && !transcriptionModels.some(m => m.id === selectedModelId);
+  const { recognition, speechService, selectedModelId, selectedModelMissing } = recognitionOf(
+    app,
+    transcriptionModels
+  );
   const modelName = id =>
     getLocalizedContent(transcriptionModels.find(m => m.id === id)?.name, currentLanguage) || id;
   const platformDefault = getPlatformDefaultService(platformConfig?.speech);

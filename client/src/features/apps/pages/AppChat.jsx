@@ -2051,6 +2051,17 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
     [openTranscriptionTurn, transcribeFile, t]
   );
 
+  // The files in order, until one fails or the chat is left.
+  const transcribeEach = useCallback(
+    async (files, signal) => {
+      for (const file of files) {
+        if (disposedRef.current) return;
+        if (await transcribeOneFile(file, signal)) return;
+      }
+    },
+    [transcribeOneFile]
+  );
+
   /**
    * Transcribe uploaded audio (or the audio of a video) with the selected
    * transcription model, one turn per file; stops at the first failure.
@@ -2061,7 +2072,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
    */
   const transcribeFiles = useCallback(
     async (files, others = []) => {
-      if (!transcriptionModel || busyWithAudio()) return;
+      if (busyWithAudio()) return;
       setInput('');
       fileUploadHandler.setSelectedFile(asSelection(others));
       fileUploadHandler.hideUploader();
@@ -2070,16 +2081,13 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
       transcribeAbortRef.current = abortController;
       setIsTranscribing(true);
       try {
-        for (const file of files) {
-          const failure = await transcribeOneFile(file, abortController.signal);
-          if (failure || disposedRef.current) break;
-        }
+        await transcribeEach(files, abortController.signal);
       } finally {
         transcribeAbortRef.current = null;
         setIsTranscribing(false);
       }
     },
-    [transcriptionModel, busyWithAudio, fileUploadHandler, transcribeOneFile]
+    [busyWithAudio, fileUploadHandler, transcribeEach]
   );
 
   // A chat model that takes audio: attach the recording and send it with
