@@ -54,6 +54,8 @@ function UsageGuideActions({
         <button
           type="button"
           onClick={onDelete}
+          // A guide deleted mid-generation would come back with the answer.
+          disabled={generating}
           className={`${BUTTON_CLASS} text-red-600 dark:text-red-400`}
         >
           <Icon name="trash" size="sm" />
@@ -129,7 +131,7 @@ function UsageGuideSection({ app, onChange }) {
   const confirmPending = () => {
     const action = pending;
     setPending(null);
-    if (action === 'regenerate') void generate();
+    if (action === 'regenerate') generate();
     if (action === 'delete') remove();
   };
 
@@ -155,7 +157,7 @@ function UsageGuideSection({ app, onChange }) {
             hasGuide={Boolean(guide)}
             hasText={hasText}
             generating={generating}
-            onGenerate={() => (hasText ? setPending('regenerate') : void generate())}
+            onGenerate={() => (hasText ? setPending('regenerate') : generate())}
             onWrite={() => updateGuide({ content: { [language]: '' } })}
             onDelete={() => setPending('delete')}
           />

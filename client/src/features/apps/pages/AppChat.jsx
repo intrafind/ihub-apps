@@ -927,7 +927,10 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
 
   // A durable chat can be shared as a read-only link once it has a message.
   const chatShareOffered = chatSharingEnabled && serverBackedChat;
-  const chatShareReady = chatShareOffered && Boolean(chatId) && messages.length > 0;
+  // A usage guide exchange is local only (`isGreeting`): it is not stored, so it
+  // neither makes a chat shareable nor starts one below.
+  const chatShareReady =
+    chatShareOffered && Boolean(chatId) && messages.some(message => !message.isGreeting);
 
   // `/apps/:appId` always opens a new durable chat, so once this one has been
   // started the URL has to name it — otherwise a reload would leave it for a
@@ -938,7 +941,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
   // the bare route keeps the chat that was left — its id first, then its
   // messages — on screen for a render, and pinning it would send the user
   // straight back into it.
-  const chatStarted = messages.some(message => message.role === 'user');
+  const chatStarted = messages.some(message => message.role === 'user' && !message.isGreeting);
   useEffect(() => {
     if (
       embedded ||
