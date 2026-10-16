@@ -1,11 +1,73 @@
 import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import DynamicLanguageEditor from '../../../../shared/components/DynamicLanguageEditor';
+import ConfirmDialog from '../../../../shared/components/ConfirmDialog';
 import Icon from '../../../../shared/components/Icon';
 import { generateAppUsageGuide, getAdminApiErrorMessage } from '../../../../api/adminApi';
 
 const BUTTON_CLASS =
   'inline-flex items-center gap-2 px-3 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm font-medium rounded-md text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50';
+
+/** Text of the generate button: what a click does for the chosen language. */
+function generateLabel(t, generating, hasText) {
+  if (generating) return t('admin.apps.edit.usageGuide.generating', 'Generating…');
+  return hasText
+    ? t('admin.apps.edit.usageGuide.regenerate', 'Regenerate with AI')
+    : t('admin.apps.edit.usageGuide.generate', 'Generate with AI');
+}
+
+/** Language picker and the generate / write / delete buttons. */
+function UsageGuideActions({
+  languages,
+  language,
+  onLanguageChange,
+  hasGuide,
+  hasText,
+  generating,
+  onGenerate,
+  onWrite,
+  onDelete
+}) {
+  const { t } = useTranslation();
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <label htmlFor="usage-guide-language" className="text-sm text-gray-700 dark:text-gray-300">
+        {t('admin.apps.edit.usageGuide.language', 'Language')}
+      </label>
+      <select
+        id="usage-guide-language"
+        value={language}
+        onChange={e => onLanguageChange(e.target.value)}
+        className="rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 text-sm px-2 py-1.5"
+      >
+        {languages.map(lang => (
+          <option key={lang} value={lang}>
+            {lang}
+          </option>
+        ))}
+      </select>
+      <button type="button" onClick={onGenerate} disabled={generating} className={BUTTON_CLASS}>
+        <Icon name="sparkles" size="sm" />
+        {generateLabel(t, generating, hasText)}
+      </button>
+      {hasGuide ? (
+        <button
+          type="button"
+          onClick={onDelete}
+          className={`${BUTTON_CLASS} text-red-600 dark:text-red-400`}
+        >
+          <Icon name="trash" size="sm" />
+          {t('admin.apps.edit.usageGuide.delete', 'Delete guide')}
+        </button>
+      ) : (
+        <button type="button" onClick={onWrite} className={BUTTON_CLASS}>
+          <Icon name="edit" size="sm" />
+          {t('admin.apps.edit.usageGuide.write', 'Write manually')}
+        </button>
+      )}
+    </div>
+  );
+}
 
 /**
  * UsageGuideSection - the app's usage guide (issue #2838): a pre-written answer
@@ -21,11 +83,14 @@ function UsageGuideSection({ app, onChange }) {
   const [language, setLanguage] = useState((i18n.language || 'en').split('-')[0]);
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState(null);
+  // 'regenerate' or 'delete' while its confirmation is open.
+  const [pending, setPending] = useState(null);
   // The model answers seconds later; edits made meanwhile must not be lost.
   const appRef = useRef(app);
   appRef.current = app;
 
   const guide = app.usageGuide;
+  const hasText = Boolean(guide?.content?.[language]);
   const languages = [
     ...new Set([
       'en',
@@ -42,18 +107,6 @@ function UsageGuideSection({ app, onChange }) {
   };
 
   const generate = async () => {
-    const existing = guide?.content?.[language];
-    if (
-      existing &&
-      !window.confirm(
-        t(
-          'admin.apps.edit.usageGuide.confirmRegenerate',
-          'Replace the current guide text for this language with a newly generated one?'
-        )
-      )
-    ) {
-      return;
-    }
     setGenerating(true);
     setError(null);
     try {
@@ -69,15 +122,15 @@ function UsageGuideSection({ app, onChange }) {
   };
 
   const remove = () => {
-    if (
-      !window.confirm(
-        t('admin.apps.edit.usageGuide.confirmDelete', 'Delete the usage guide of this app?')
-      )
-    ) {
-      return;
-    }
     const { usageGuide: _usageGuide, ...rest } = appRef.current;
     onChange(rest);
+  };
+
+  const confirmPending = () => {
+    const action = pending;
+    setPending(null);
+    if (action === 'regenerate') void generate();
+    if (action === 'delete') remove();
   };
 
   return (
@@ -95,54 +148,17 @@ function UsageGuideSection({ app, onChange }) {
           </p>
         </div>
         <div className="mt-5 md:col-span-2 md:mt-0 space-y-4">
-          <div className="flex flex-wrap items-center gap-2">
-            <label
-              htmlFor="usage-guide-language"
-              className="text-sm text-gray-700 dark:text-gray-300"
-            >
-              {t('admin.apps.edit.usageGuide.language', 'Language')}
-            </label>
-            <select
-              id="usage-guide-language"
-              value={language}
-              onChange={e => setLanguage(e.target.value)}
-              className="rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 text-sm px-2 py-1.5"
-            >
-              {languages.map(lang => (
-                <option key={lang} value={lang}>
-                  {lang}
-                </option>
-              ))}
-            </select>
-            <button type="button" onClick={generate} disabled={generating} className={BUTTON_CLASS}>
-              <Icon name="sparkles" size="sm" />
-              {generating
-                ? t('admin.apps.edit.usageGuide.generating', 'Generating…')
-                : guide?.content?.[language]
-                  ? t('admin.apps.edit.usageGuide.regenerate', 'Regenerate with AI')
-                  : t('admin.apps.edit.usageGuide.generate', 'Generate with AI')}
-            </button>
-            {!guide && (
-              <button
-                type="button"
-                onClick={() => updateGuide({ content: { [language]: '' } })}
-                className={BUTTON_CLASS}
-              >
-                <Icon name="edit" size="sm" />
-                {t('admin.apps.edit.usageGuide.write', 'Write manually')}
-              </button>
-            )}
-            {guide && (
-              <button
-                type="button"
-                onClick={remove}
-                className={`${BUTTON_CLASS} text-red-600 dark:text-red-400`}
-              >
-                <Icon name="trash" size="sm" />
-                {t('admin.apps.edit.usageGuide.delete', 'Delete guide')}
-              </button>
-            )}
-          </div>
+          <UsageGuideActions
+            languages={languages}
+            language={language}
+            onLanguageChange={setLanguage}
+            hasGuide={Boolean(guide)}
+            hasText={hasText}
+            generating={generating}
+            onGenerate={() => (hasText ? setPending('regenerate') : void generate())}
+            onWrite={() => updateGuide({ content: { [language]: '' } })}
+            onDelete={() => setPending('delete')}
+          />
           <p className="text-xs text-gray-500 dark:text-gray-400">
             {t(
               'admin.apps.edit.usageGuide.generateHint',
@@ -179,6 +195,26 @@ function UsageGuideSection({ app, onChange }) {
           )}
         </div>
       </div>
+      <ConfirmDialog
+        isOpen={pending !== null}
+        title={t('admin.apps.edit.usageGuide.title', 'Usage Guide')}
+        message={
+          pending === 'delete'
+            ? t('admin.apps.edit.usageGuide.confirmDelete', 'Delete the usage guide of this app?')
+            : t(
+                'admin.apps.edit.usageGuide.confirmRegenerate',
+                'Replace the current guide text for this language with a newly generated one?'
+              )
+        }
+        confirmLabel={
+          pending === 'delete'
+            ? t('admin.apps.edit.usageGuide.delete', 'Delete guide')
+            : t('admin.apps.edit.usageGuide.regenerate', 'Regenerate with AI')
+        }
+        danger
+        onConfirm={confirmPending}
+        onDeny={() => setPending(null)}
+      />
     </div>
   );
 }

@@ -37,6 +37,66 @@ function languageName(code) {
   }
 }
 
+/** Lines naming the input fields a user fills in, with their choices. */
+function describeVariables(app, text) {
+  const variables = Array.isArray(app.variables) ? app.variables : [];
+  if (variables.length === 0) return [];
+  const lines = ['Input fields the user fills in above the message box:'];
+  for (const variable of variables) {
+    const choices = (variable.predefinedValues || [])
+      .map(choice => text(choice.label) || choice.value)
+      .filter(Boolean);
+    const details = [
+      variable.type,
+      variable.required ? 'required' : 'optional',
+      text(variable.description),
+      choices.length ? `choices: ${choices.join(', ')}` : ''
+    ].filter(Boolean);
+    lines.push(`- ${text(variable.label) || variable.name} (${details.join('; ')})`);
+  }
+  if (app.startForm?.enabled) {
+    lines.push('A new chat starts with these fields as a form instead of the message box.');
+  }
+  return lines;
+}
+
+/** What the user can attach, or an empty string. */
+function describeAttachments(upload) {
+  if (!upload?.enabled) return '';
+  return [
+    upload.imageUpload?.enabled && 'images',
+    upload.fileUpload?.enabled && 'documents (PDF, Word, text and similar)',
+    upload.audioUpload?.enabled && 'audio files',
+    upload.videoUpload?.enabled && 'videos',
+    upload.cloudStorageUpload?.enabled && 'files from cloud storage'
+  ]
+    .filter(Boolean)
+    .join(', ');
+}
+
+/** Lines naming the tools the app's assistant can call. */
+function describeTools(app, tools, text) {
+  const toolIds = Array.isArray(app.tools) ? app.tools : [];
+  if (toolIds.length === 0) return [];
+  const described = toolIds.map(id => {
+    const tool = tools.find(t => t.id === id);
+    const name = text(tool?.name) || id;
+    const description = text(tool?.description);
+    return description ? `- ${name}: ${description}` : `- ${name}`;
+  });
+  return ['Tools the assistant can use:', ...described];
+}
+
+/** Lines for the switches a user sees in the chat. */
+function describeChatFeatures(app) {
+  return [
+    app.websearch?.enabled && 'The app can search the web.',
+    app.features?.magicPrompt?.enabled &&
+      'A "magic prompt" button rewrites the user\'s message into a better prompt.',
+    app.inputMode?.microphone?.enabled && 'The user can dictate messages with the microphone.'
+  ].filter(Boolean);
+}
+
 /**
  * Describe what a user can do with an app, from its configuration, as input
  * for the model that writes the guide.
@@ -65,26 +125,7 @@ export function describeAppForGuide(app, language, { tools = [], sources = [] } 
     );
   }
   add('Template applied to every user message', text(app.prompt));
-
-  const variables = Array.isArray(app.variables) ? app.variables : [];
-  if (variables.length > 0) {
-    lines.push('Input fields the user fills in above the message box:');
-    for (const variable of variables) {
-      const choices = (variable.predefinedValues || [])
-        .map(choice => text(choice.label) || choice.value)
-        .filter(Boolean);
-      const details = [
-        variable.type,
-        variable.required ? 'required' : 'optional',
-        text(variable.description),
-        choices.length ? `choices: ${choices.join(', ')}` : ''
-      ].filter(Boolean);
-      lines.push(`- ${text(variable.label) || variable.name} (${details.join('; ')})`);
-    }
-  }
-  if (app.startForm?.enabled) {
-    lines.push('A new chat starts with these fields as a form instead of the message box.');
-  }
+  lines.push(...describeVariables(app, text));
 
   const starterPrompts = Array.isArray(app.starterPrompts) ? app.starterPrompts : [];
   if (starterPrompts.length > 0) {
@@ -94,46 +135,14 @@ export function describeAppForGuide(app, language, { tools = [], sources = [] } 
     }
   }
 
-  const upload = app.upload?.enabled ? app.upload : null;
-  if (upload) {
-    const kinds = [
-      upload.imageUpload?.enabled && 'images',
-      upload.fileUpload?.enabled && 'documents (PDF, Word, text and similar)',
-      upload.audioUpload?.enabled && 'audio files',
-      upload.videoUpload?.enabled && 'videos',
-      upload.cloudStorageUpload?.enabled && 'files from cloud storage'
-    ].filter(Boolean);
-    if (kinds.length > 0) add('The user can attach', kinds.join(', '));
-  }
-
-  if (app.websearch?.enabled) lines.push('The app can search the web.');
-
-  const toolIds = Array.isArray(app.tools) ? app.tools : [];
-  if (toolIds.length > 0) {
-    const described = toolIds.map(id => {
-      const tool = tools.find(t => t.id === id);
-      const name = text(tool?.name) || id;
-      const description = text(tool?.description);
-      return description ? `- ${name}: ${description}` : `- ${name}`;
-    });
-    lines.push('Tools the assistant can use:', ...described);
-  }
+  add('The user can attach', describeAttachments(app.upload));
+  lines.push(...describeTools(app, tools, text));
 
   const sourceIds = Array.isArray(app.sources) ? app.sources : [];
-  if (sourceIds.length > 0) {
-    const names = sourceIds
-      .map(id => text(sources.find(s => s.id === id)?.name) || id)
-      .filter(Boolean);
-    add('Knowledge the assistant answers from', names.join(', '));
-  }
+  const sourceNames = sourceIds.map(id => text(sources.find(s => s.id === id)?.name) || id);
+  add('Knowledge the assistant answers from', sourceNames.join(', '));
 
-  if (app.features?.magicPrompt?.enabled) {
-    lines.push('A "magic prompt" button rewrites the user\'s message into a better prompt.');
-  }
-  if (app.inputMode?.microphone?.enabled) {
-    lines.push('The user can dictate messages with the microphone.');
-  }
-
+  lines.push(...describeChatFeatures(app));
   return lines.join('\n');
 }
 

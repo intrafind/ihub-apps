@@ -1003,7 +1003,7 @@ export default function registerAdminAppsRoutes(app) {
         return sendBadRequest(res, 'Invalid language code');
       }
       const content = await generateUsageGuide({ app: appConfig, language, user: req.user });
-      res.json({ content });
+      return res.json({ content });
     } catch (error) {
       if (isLLMError(error)) {
         return sendLLMError(res, error, { context: 'write usage guide' });

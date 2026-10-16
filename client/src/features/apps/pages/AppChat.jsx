@@ -153,19 +153,17 @@ const renderStartupState = (
   }
 
   const starterPrompts = app?.starterPrompts || [];
-  let view;
-  if (starterPrompts.length > 0) {
-    view = (
+  const view =
+    starterPrompts.length > 0 ? (
       <StarterPromptsView
         starterPrompts={starterPrompts}
         onSelectPrompt={handleStarterPromptClick}
       />
+    ) : welcomeMessage ? (
+      <GreetingView welcomeMessage={welcomeMessage} />
+    ) : (
+      <NoMessagesView />
     );
-  } else if (welcomeMessage) {
-    view = <GreetingView welcomeMessage={welcomeMessage} />;
-  } else {
-    view = <NoMessagesView />;
-  }
   if (!usageGuideHint) return view;
   return (
     <>
