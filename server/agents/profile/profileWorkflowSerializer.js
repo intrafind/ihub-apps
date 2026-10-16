@@ -330,7 +330,7 @@ function buildSimpleWorkflow(profile) {
           _persistAsArtifact: true
         }
       },
-      { id: 'end', type: 'end' }
+      { id: 'end', type: 'end', config: { output: '$.data.nodeResults.agent.content' } }
     ],
     edges: [
       { source: 'start', target: 'agent' },
@@ -376,7 +376,7 @@ function buildDrainOnlyWorkflow(profile) {
           maxIterations: 50
         }
       },
-      { id: 'end', type: 'end' }
+      { id: 'end', type: 'end', config: { output: '_taskResults' } }
     ],
     edges: [
       { source: 'start', target: 'seed' },
@@ -707,7 +707,11 @@ function buildPlannerWorkflow(profile) {
     edges.push({ source: lastWorkflowNodeId, target: 'end' });
   }
 
-  nodes.push({ id: 'end', type: 'end' });
+  nodes.push({
+    id: 'end',
+    type: 'end',
+    config: { output: useSynth ? '_synthesizerOutput' : '_taskResults' }
+  });
   return { nodes, edges };
 }
 
@@ -889,7 +893,11 @@ function buildInboxWorkerWorkflow(profile) {
   edges.push({ source: lastId, target: 'inbox-finalize' });
   edges.push({ source: 'inbox-finalize', target: 'end' });
 
-  nodes.push({ id: 'end', type: 'end' });
+  nodes.push({
+    id: 'end',
+    type: 'end',
+    config: { output: useSynth ? '_synthesizerOutput' : '$.data.nodeResults.agent.content' }
+  });
   return { nodes, edges };
 }
 

@@ -3679,6 +3679,31 @@
         "provider": "stored on the provider",
         "model": "stored on the model"
       }
+    },
+    "workflows": {
+      "chatIntegration": {
+        "title": "Chat integration",
+        "description": "How this workflow can be used from the chat of the apps it is assigned to. The chat shows the Output of its end step as the answer.",
+        "enabled": "Available in chat",
+        "enabledHelp": "Users can start it with @ in the chat of the apps it is assigned to, and the app’s model can call it as a tool. It is also offered to MCP and A2A clients whose groups may run it.",
+        "assignedApps": "Assigned to: {{apps}}",
+        "noAssignedApps": "Not assigned to any app yet. Assign it under Admin → Apps → Workflows.",
+        "outputFormat": "Output format",
+        "outputFormatDefault": "Default (Markdown)",
+        "outputFormatHelp": "How the chat shows the answer. An answer that is JSON is always shown as JSON.",
+        "formats": {
+          "markdown": "Markdown",
+          "text": "Plain text",
+          "json": "JSON"
+        },
+        "toolDescription": "Description for the model",
+        "toolDescriptionHelp": "Tells the app’s model when to call this workflow. Leave empty to use the workflow description.",
+        "warnings": {
+          "assignedButDisabled": "This workflow is assigned to the apps {{apps}}, but it is not available in chat, so it does not appear there.",
+          "endWithoutOutput": "The end step {{nodes}} has no output. The workflow cannot be saved, and a run that reaches that step fails, until you set its Output in the visual editor."
+        },
+        "jsonInvalid": "Fix the JSON below to change these settings."
+      }
     }
   },
   "cloudStorage": {
@@ -4500,6 +4525,8 @@
       "autoLayout": "Auto Layout",
       "back": "Back",
       "boundaryEdgesRemoved": "Connections crossing the loop boundary were removed — reconnect inside or outside the loop.",
+      "chatIntegrationLink": "Chat integration",
+      "chatIntegrationLinkHint": "Availability in chat, how the answer is shown and its description are set on the workflow page. Unsaved changes on the canvas are lost.",
       "chatVisible": "Show progress in chat",
       "config": "Configuration",
       "configJson": "Config (JSON)",
@@ -4517,6 +4544,17 @@
       "edgeValueText": "Compared as text.",
       "edgeValueTyped": "Compared as {{kind}}.",
       "edgeWhen": "Follow this connection",
+      "endOutput": "Output",
+      "endOutputHelp": "The answer of the workflow, which the chat shows as it is: a variable (finalReport), a path into one (report.markdown) or a text with variables ({{summary}}). JSON stays JSON. Everything below is additional information.",
+      "endOutputMissing": "Every end step needs an output: the workflow cannot be saved, and a run that reaches this step fails, without one.",
+      "endOutputMissingShort": "No output set",
+      "endOutputOneValue": "One value",
+      "endOutputSeveralFields": "Several fields",
+      "endOutputFieldName": "Field name",
+      "endOutputFieldValue": "Variable or text",
+      "endOutputAddField": "Add field",
+      "endOutputRemoveField": "Remove field",
+      "endOutputFieldsHelp": "The answer is a JSON object with these fields. Each value is a variable (finalReport), a path into one (report.markdown) or a text with variables ({{summary}}). A field whose variable was never set is left out. Everything below is additional information.",
       "filterVariables": "Filter variables…",
       "formTab": "Form",
       "groups": {

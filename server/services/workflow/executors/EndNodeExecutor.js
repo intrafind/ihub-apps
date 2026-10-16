@@ -9,14 +9,25 @@
  */
 
 import { BaseNodeExecutor } from './BaseNodeExecutor.js';
+import renderTemplate from '../../templating/renderTemplate.js';
+import {
+  UNSAFE_OUTPUT_KEYS,
+  hasEndOutput,
+  isOutputObject
+} from '../../../../shared/workflowEndOutput.js';
 
 /**
  * End node configuration
  * @typedef {Object} EndNodeConfig
+ * @property {string|Object} output - The end step's output, the answer the workflow gives (the chat
+ *   shows exactly this): a variable (`finalReport`), a path into one (`report.markdown`), a state
+ *   path (`$.data.finalReport`) or a text with variables (`{{summary}}`); or an object of those,
+ *   `{ topic: 'topic', report: 'finalReport' }`, which gives a JSON object. Required.
  * @property {Object} [outputMapping] - Map state fields to output fields
  * @property {Array<string>} [includeFields] - Specific fields to include in output
  * @property {Array<string>} [excludeFields] - Fields to exclude from output
- * @property {string} [outputFormat] - Output format ('json', 'text', 'raw')
+ * @property {string} [outputFormat] - What the output holds next to the answer: 'json' (the default) the
+ *   additional information too, 'text' the answer alone as text, 'raw' the answer alone as it is
  * @property {string} [status] - Custom workflow status (e.g., 'approved', 'rejected')
  * @property {string} [statusCode] - Custom status code for the workflow result (deprecated, use status)
  */
@@ -25,7 +36,9 @@ import { BaseNodeExecutor } from './BaseNodeExecutor.js';
  * Executor for end nodes.
  *
  * End nodes are responsible for:
- * - Collecting final workflow output
+ * - Giving the workflow its output: every end node has an `output`, and what a chat
+ *   or an API caller gets as the answer is exactly that
+ * - Collecting additional information next to it (variables, mapping, metadata)
  * - Applying output mapping/transformation
  * - Signaling workflow completion
  * - Formatting the final result
@@ -39,6 +52,7 @@ import { BaseNodeExecutor } from './BaseNodeExecutor.js';
  *   type: 'end',
  *   name: 'Success Exit',
  *   config: {
+ *     output: '$.data.processedResult',
  *     outputMapping: {
  *       result: '$.data.processedResult',
  *       summary: '$.nodeOutputs.summarizer.content'
@@ -74,7 +88,12 @@ export class EndNodeExecutor extends BaseNodeExecutor {
 
     const { config = {} } = node;
 
-    // Determine the output based on configuration
+    // The output comes first: an end step without one cannot give the workflow
+    // an answer, and a run that ends without one is a configuration error to
+    // surface, not something to guess a replacement for.
+    const answer = this.resolveAnswer(node, state);
+
+    // Determine the additional information next to it based on configuration
     let output;
 
     if (config.outputMapping) {
@@ -115,6 +134,10 @@ export class EndNodeExecutor extends BaseNodeExecutor {
       }
     }
 
+    // The output is the answer, whatever else the end step passes on: it wins
+    // over a mapped or listed variable of the same name.
+    output.output = answer;
+
     // Add node outputs if requested
     if (config.includeNodeOutputs) {
       output._nodeOutputs = { ...state.nodeOutputs };
@@ -149,6 +172,92 @@ export class EndNodeExecutor extends BaseNodeExecutor {
       isTerminal: true,
       workflowStatus // Pass custom status to WorkflowEngine
     });
+  }
+
+  /**
+   * The end step's output, from its `output` setting.
+   *
+   * The setting is a text, or an object of texts. A text is one of
+   *   - a state path: `$.data.finalReport`
+   *   - a text with variables: `{{summary}}` or `Done: {{count}} items`. A text that
+   *     is a single `{{variable}}` is the variable itself, so JSON stays JSON
+   *   - a variable or a path into one: `finalReport`, `report.markdown`
+   * An object gives an object: each field is resolved like a text, and a field whose
+   * value is not there is left out of it.
+   * A value that is not there yet (a branch that never set the variable) is an
+   * empty output, not an error: the run still ends, the answer is just empty.
+   *
+   * @param {Object} node - The end node
+   * @param {Object} state - Workflow state
+   * @returns {*} The output value: text, an object, or any other value as it is
+   * @throws {Error} `END_OUTPUT_MISSING` when the end step has no `output` set
+   * @private
+   */
+  resolveAnswer(node, state) {
+    const spec = node.config?.output;
+    if (!hasEndOutput(spec)) {
+      const error = new Error(
+        `The end step '${node.id}' has no output. Set its Output to the variable that holds the answer, or to an object of fields.`
+      );
+      error.code = 'END_OUTPUT_MISSING';
+      throw error;
+    }
+
+    const value = this.resolveOutputSpec(spec, state);
+    return value === undefined || value === null ? '' : value;
+  }
+
+  /**
+   * One text or object of an `output` setting, resolved against the run.
+   *
+   * @param {string|Object} spec - A text, or an object of texts
+   * @param {Object} state - Workflow state
+   * @returns {*} The value; undefined or null when it is not there
+   * @private
+   */
+  resolveOutputSpec(spec, state) {
+    if (isOutputObject(spec)) {
+      const fields = {};
+      for (const [name, field] of Object.entries(spec)) {
+        if (UNSAFE_OUTPUT_KEYS.includes(name)) continue;
+        const value = this.resolveOutputSpec(field, state);
+        if (value !== undefined && value !== null) fields[name] = value;
+      }
+      return fields;
+    }
+
+    const text = spec.trim();
+    const data = state.data || {};
+    // A text that is a single `{{variable}}` is that variable, not a rendering
+    // of it: JSON stays JSON. Only a text with more in it is built as text.
+    const single = /^\{\{\s*([^#/@}][^}]*?)\s*\}\}$/.exec(text);
+    if (single) return this.valueAt(data, single[1]);
+    if (text.includes('{{')) return renderTemplate(text, data);
+    if (text.startsWith('$')) return this.resolveVariable(text, state);
+    return this.valueAt(data, text);
+  }
+
+  /**
+   * The value at a dotted path in the workflow data (`report.markdown`).
+   *
+   * @param {*} data - Workflow data. Typed loosely on purpose: a path runs into values of any
+   *   type, null and undefined included, and a narrower type makes a static analyzer take the
+   *   checks for them as always false
+   * @param {string} path - Variable name or dotted path into one
+   * @returns {*} The value as it is, of whatever type; undefined when it is not there
+   * @private
+   */
+  valueAt(data, path) {
+    return path
+      .trim()
+      .split('.')
+      .reduce((current, key) => {
+        if (current === null || current === undefined) return undefined;
+        // Only what the value itself holds: never a prototype member such as `constructor`
+        return Object.prototype.hasOwnProperty.call(Object(current), key)
+          ? current[key]
+          : undefined;
+      }, data);
   }
 
   /**
@@ -216,35 +325,28 @@ export class EndNodeExecutor extends BaseNodeExecutor {
   }
 
   /**
-   * Format output according to specified format.
+   * Format the output of the end step according to its `outputFormat`.
    *
-   * @param {Object} output - Output object
+   * The answer stays in `output`, whatever the format: a caller finds it there
+   * and never has to tell an answer from the object around it.
+   *   - `json` (the default): the answer and the additional information
+   *   - `text`: the answer alone, as text. A JSON answer is written out
+   *   - `raw`: the answer alone, as the value it is
+   *
+   * @param {Object} output - The end step's output: its `output` and what else it passes on
    * @param {string} format - Output format ('json', 'text', 'raw')
-   * @returns {*} Formatted output
+   * @returns {Object} The output
    * @private
    */
   formatOutput(output, format) {
     switch (format) {
-      case 'json':
-        return output;
-
-      case 'text':
-        // Convert to human-readable text
-        if (typeof output === 'string') {
-          return output;
-        }
-        if (output.content || output.text || output.message) {
-          return output.content || output.text || output.message;
-        }
-        return JSON.stringify(output, null, 2);
+      case 'text': {
+        const answer = output.output;
+        return { output: typeof answer === 'string' ? answer : JSON.stringify(answer, null, 2) };
+      }
 
       case 'raw':
-        // Return first value if single-key object
-        const keys = Object.keys(output);
-        if (keys.length === 1) {
-          return output[keys[0]];
-        }
-        return output;
+        return { output: output.output };
 
       default:
         return output;

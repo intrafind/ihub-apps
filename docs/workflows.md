@@ -254,6 +254,134 @@ Like all defaults, these files live in `server/defaults/workflows/` and are copi
 
 All of them run **sequentially** — none sets `concurrency`. Each round accumulates shared state (collected evidence records, the coverage counter, the merged corpus), and as described under **Parallel mode caveat** above, body state updates are not propagated in parallel mode. Raising `concurrency` on these loops would silently discard that accumulated state.
 
+## The output of a workflow
+
+Every workflow ends with an output. Each **end step** has an **Output**, the answer of the
+workflow: it is what a chat shows as it is, and what an API, MCP or A2A caller receives. There is
+nothing to select and nothing that is guessed. An end step can pass on more next to it, such as
+variables or metadata, but that is additional information; the answer is always its Output.
+
+```json
+{
+  "id": "end",
+  "type": "end",
+  "config": { "output": "finalReport", "outputVariables": ["topic", "finalReport"] }
+}
+```
+
+In the visual editor the Output is the first field of the end step, with the variables that reach
+the step as suggestions. The step's card says **No output set** while it has none.
+
+`output` is one of:
+
+| Form                      | Example                 | The output is                                    |
+| ------------------------- | ----------------------- | ------------------------------------------------ |
+| A variable                | `finalReport`           | the variable, as it is                           |
+| A path into a variable    | `report.markdown`       | the field                                        |
+| A state path              | `$.data.finalReport`    | the value at that path                           |
+| A single `{{variable}}`   | `{{findings}}`          | the variable, as it is (same as the first row)   |
+| A text with variables     | `Done: {{count}} items` | the text, built from the variables               |
+| An object of those        | `{ "topic": "topic", "report": "finalReport" }` | a JSON object with those fields |
+
+- **JSON stays JSON.** A variable, a path or a single `{{variable}}` keeps its type: an object stays
+  an object and a list stays a list. Only a text with more in it than one variable is text.
+- **An object gives a JSON object.** Each field is a variable, a path, a state path or a text with
+  variables, resolved like a text output, and may itself be an object. A field whose variable was
+  never set is left out, as a listed variable always was. In the visual editor choose **Several
+  fields** under the Output and give each field a name and a value.
+
+  ```json
+  { "id": "end", "type": "end", "config": { "output": { "topic": "topic", "report": "finalReport" } } }
+  ```
+
+- **It is required.** A workflow with an end step without an output is refused when it is saved,
+  and a run that reaches such a step fails with a message that names the step.
+- A variable that was never set (a branch that did not run) gives an empty output, not an error.
+- An end step's own `outputFormat` shapes what is passed on next to the answer, never where the
+  answer is: it is always the `output` of the result. `json` (the default) passes the answer and
+  the additional information, `raw` the answer alone as it is, and `text` the answer alone as text
+  (a JSON answer is written out).
+
+## Chat integration
+
+Whether and how a workflow can be used from an app chat is set in its `chatIntegration` block, and
+on the workflow page under **Admin → Workflows → a workflow → Chat integration**:
+
+```json
+{
+  "chatIntegration": {
+    "enabled": true,
+    "outputFormat": "markdown",
+    "toolDescription": { "en": "Checks a text against the house rules and corrects it." }
+  }
+}
+```
+
+| Field | Default | Effect |
+| ----- | ------- | ------ |
+| `enabled` | `false` | The workflow can be started with `@` in the apps that list it under `workflows`, and the app's model can call it as a tool (`workflow_<id>`). Both only work for a user whose groups grant the workflow (`permissions.workflows`): the model acts with the rights of the person who chats and is not even offered a workflow that person may not run. It is also offered to MCP and A2A clients whose groups may run it. |
+| `outputFormat` | `markdown` | How the chat renders the answer: `markdown`, `text` or `json`. An answer that is JSON is always shown as JSON, whatever this says. |
+| `toolDescription` | the workflow description | What the app's model is told about when to call the workflow. |
+
+The answer needs no setting here: it is the Output of the end step. The workflow page warns about
+a workflow that is assigned to apps but not available in chat, and about an end step without an
+output.
+
+A workflow called from chat always shows its answer as it is: the app's model does not rewrite it.
+
+The visual editor keeps the block as it is when it saves, but has no fields for it: the **Chat
+integration** link in its header opens the workflow page. Unsaved changes on the canvas are lost
+when following it, so save first.
+
+### How a JSON answer travels
+
+A chat bubble holds text, so there the JSON is written out and shown as a JSON block. Everywhere
+else it stays JSON, and callers get the answer and nothing else, not the run around it:
+
+| Caller | Text answer | JSON answer |
+| ------ | ----------- | ----------- |
+| Web chat | the text, in the workflow's `outputFormat` | a formatted JSON block |
+| Workflow result and tool endpoint | `output.output` | `output.output`, the JSON itself |
+| MCP | a text content | `structuredContent` `{ "output": <the JSON> }`, plus the same JSON as a text content for clients that read only text |
+| A2A | a text part | a `data` part `{ "output": <the JSON> }`, plus the same JSON as a text part |
+
+A run that did not finish with an answer (failed, cancelled, timed out) is an error for MCP and
+fails the A2A task.
+
+### Upgrading
+
+Migration V166 gives every end step of an existing workflow an `output` and removes
+`chatIntegration.primaryOutput`, which no longer exists, and `chatIntegration.passthroughResult`,
+which no code ever read. For an end step without an `output` it takes, in this order:
+
+1. the `primaryOutput` of the workflow (translated through the `outputMapping` of an end step that
+   has one);
+2. the first of `finalReport`, `report`, `content`, `output`, `result`, `summary`, `text` and
+   `message` that the end step passes on. This is what the chat looked for before;
+3. for the workflows that ship with iHub, the answer the migration knows for the few that name it
+   differently (`answer`, `draft`);
+4. otherwise an object of what the end step passes on, one field per variable:
+   `{ "topic": "topic", "findings": "findings" }`. A workflow that passed on several variables and
+   named none of them as its answer used to give them all as one JSON object, and it still does.
+   The migration logs these end steps; name the single answer in the workflow editor if you want to.
+
+The variables of an end step that passes on everything are the ones the steps of the workflow
+define, as the visual editor lists them: the output variable of a step, what a transform sets, the
+counter of a loop, the values a start step defaults, and so on. A path that starts at the run
+state (`$.executionId`, `$.data.x`) keeps its meaning; one that starts at nothing (`$.finalReport`)
+never found anything and names the variable.
+
+Some end steps cannot be decided: one that passes on nothing that can be named, one that maps a key
+to a literal instead of to a `$.` path (also when that key is the `primaryOutput`), and one that
+passes on everything of a workflow with a planner, a memory or inbox finalizer or a quote
+validator, whose variables cannot all be listed. They are listed in the server log and left
+without an output. The workflow keeps loading, a run that reaches that step fails with a message
+that names it, and it cannot be saved until you set the step's Output in the visual editor.
+
+What callers receive changes in one way: for MCP and A2A, a JSON answer now arrives as JSON
+(`structuredContent`, a `data` part) next to the text, and the answer is the Output only, not the
+run around it.
+
 ## Schedule triggers
 
 A workflow runs on a schedule with a `schedule` trigger:

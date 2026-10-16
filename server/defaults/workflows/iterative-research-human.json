@@ -391,6 +391,7 @@
         "y": 930
       },
       "config": {
+        "output": "finalReport",
         "outputVariables": ["task", "researchPlan", "allFindings", "finalReport"]
       }
     }

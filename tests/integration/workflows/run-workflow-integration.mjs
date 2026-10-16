@@ -45,6 +45,7 @@ const simpleLinearWorkflow = {
       type: 'end',
       name: { en: 'End' },
       config: {
+        output: 'result',
         outputVariables: ['result']
       }
     }
@@ -84,6 +85,7 @@ const simpleAgentWorkflow = {
       type: 'end',
       name: { en: 'End' },
       config: {
+        output: 'summary',
         outputVariables: ['summary']
       }
     }
@@ -129,6 +131,7 @@ const toolCallingWorkflow = {
       type: 'end',
       name: { en: 'End' },
       config: {
+        output: 'searchResults',
         outputVariables: ['searchResults']
       }
     }

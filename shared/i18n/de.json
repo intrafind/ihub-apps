@@ -3951,6 +3951,31 @@
         "provider": "beim Anbieter gespeichert",
         "model": "beim Modell gespeichert"
       }
+    },
+    "workflows": {
+      "chatIntegration": {
+        "title": "Chat-Anbindung",
+        "description": "Wie dieser Workflow im Chat der Apps genutzt werden kann, denen er zugewiesen ist. Der Chat zeigt die Ausgabe seines End-Schritts als Antwort.",
+        "enabled": "Im Chat verfügbar",
+        "enabledHelp": "Nutzer können ihn im Chat der zugewiesenen Apps mit @ starten, und das Modell der App kann ihn als Tool aufrufen. Er wird außerdem MCP- und A2A-Clients angeboten, deren Gruppen ihn ausführen dürfen.",
+        "assignedApps": "Zugewiesen an: {{apps}}",
+        "noAssignedApps": "Noch keiner App zugewiesen. Zuweisen unter Admin → Apps → Workflows.",
+        "outputFormat": "Ausgabeformat",
+        "outputFormatDefault": "Standard (Markdown)",
+        "outputFormatHelp": "Wie der Chat die Antwort anzeigt. Eine Antwort, die JSON ist, wird immer als JSON angezeigt.",
+        "formats": {
+          "markdown": "Markdown",
+          "text": "Reiner Text",
+          "json": "JSON"
+        },
+        "toolDescription": "Beschreibung für das Modell",
+        "toolDescriptionHelp": "Sagt dem Modell der App, wann es diesen Workflow aufrufen soll. Leer lassen, um die Beschreibung des Workflows zu verwenden.",
+        "warnings": {
+          "assignedButDisabled": "Dieser Workflow ist den Apps {{apps}} zugewiesen, aber nicht im Chat verfügbar und erscheint dort deshalb nicht.",
+          "endWithoutOutput": "Der End-Schritt {{nodes}} hat keine Ausgabe. Der Workflow lässt sich nicht speichern, und ein Lauf, der diesen Schritt erreicht, schlägt fehl, bis Sie seine Ausgabe im visuellen Editor setzen."
+        },
+        "jsonInvalid": "Korrigieren Sie das JSON unten, um diese Einstellungen zu ändern."
+      }
     }
   },
   "cloudStorage": {
@@ -4465,6 +4490,8 @@
       "autoLayout": "Auto-Layout",
       "back": "Zurück",
       "boundaryEdgesRemoved": "Verbindungen über die Schleifengrenze wurden entfernt — bitte innerhalb oder außerhalb der Schleife neu verbinden.",
+      "chatIntegrationLink": "Chat-Anbindung",
+      "chatIntegrationLinkHint": "Verfügbarkeit im Chat, die Darstellung der Antwort und ihre Beschreibung werden auf der Workflow-Seite festgelegt. Nicht gespeicherte Änderungen auf der Arbeitsfläche gehen verloren.",
       "chatVisible": "Fortschritt im Chat anzeigen",
       "config": "Konfiguration",
       "configJson": "Konfiguration (JSON)",
@@ -4482,6 +4509,17 @@
       "edgeValueText": "Wird als Text verglichen.",
       "edgeValueTyped": "Wird als {{kind}} verglichen.",
       "edgeWhen": "Dieser Verbindung folgen",
+      "endOutput": "Ausgabe",
+      "endOutputHelp": "Die Antwort des Workflows, die der Chat unverändert anzeigt: eine Variable (finalReport), ein Pfad in eine Variable (report.markdown) oder ein Text mit Variablen ({{summary}}). JSON bleibt JSON. Alles darunter sind zusätzliche Informationen.",
+      "endOutputMissing": "Jeder End-Schritt braucht eine Ausgabe: Ohne sie lässt sich der Workflow nicht speichern, und ein Lauf, der diesen Schritt erreicht, schlägt fehl.",
+      "endOutputMissingShort": "Keine Ausgabe gesetzt",
+      "endOutputOneValue": "Ein Wert",
+      "endOutputSeveralFields": "Mehrere Felder",
+      "endOutputFieldName": "Feldname",
+      "endOutputFieldValue": "Variable oder Text",
+      "endOutputAddField": "Feld hinzufügen",
+      "endOutputRemoveField": "Feld entfernen",
+      "endOutputFieldsHelp": "Die Antwort ist ein JSON-Objekt mit diesen Feldern. Jeder Wert ist eine Variable (finalReport), ein Pfad in eine Variable (report.markdown) oder ein Text mit Variablen ({{summary}}). Ein Feld, dessen Variable nie gesetzt wurde, entfällt. Alles darunter sind zusätzliche Informationen.",
       "filterVariables": "Variablen filtern…",
       "formTab": "Formular",
       "groups": {

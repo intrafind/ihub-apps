@@ -13,6 +13,7 @@ import { getVisibleToolIds, toolVisibleInSet } from './permissions.js';
 import { MCP_SCOPES } from './scopes.js';
 import logger from '../../utils/logger.js';
 import { getLocalizedString } from '../../utils/localize.js';
+import { workflowAnswerParts } from '../workflow/answerParts.js';
 
 /**
  * Builds and serves the iHub MCP gateway. Each incoming HTTP/SSE request
@@ -403,7 +404,7 @@ export async function buildMcpServer({ user, platform }) {
               `workflow_${wf.id}`,
               withTrustedToolContext(args, { user, chatId: `mcp-${Date.now()}` })
             );
-            return toolSuccessResult(result);
+            return workflowToolResult(result);
           } catch (err) {
             logger.warn('MCP gateway workflow run failed', {
               component: 'McpServerService',
@@ -495,6 +496,24 @@ function toolSuccessResult(payload) {
     return { content: [{ type: 'text', text: payload }] };
   }
   return { content: [{ type: 'text', text: JSON.stringify(payload) }] };
+}
+
+/**
+ * The MCP result of a workflow run: its answer and nothing else. Text comes as
+ * text; JSON comes as `structuredContent` (`{ output: <the JSON> }`), with the
+ * same JSON written out as text for a client that reads only text. A run that
+ * did not finish with an answer is an error.
+ *
+ * @param {Object|string} result - What `workflowRunner` resolved with
+ * @returns {Object} An MCP tool result
+ */
+export function workflowToolResult(result) {
+  const answer = workflowAnswerParts(result);
+  if (!answer.ok) return toolErrorResult(answer.error);
+  return {
+    content: [{ type: 'text', text: answer.text }],
+    ...(answer.json ? { structuredContent: answer.json } : {})
+  };
 }
 
 function toolErrorResult(message) {

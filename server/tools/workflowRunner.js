@@ -12,6 +12,7 @@
  */
 
 import { getWorkflowEngine } from '../services/workflow/WorkflowEngine.js';
+import { runnerAccess } from '../services/workflow/workflowAccess.js';
 import { isValidRunId } from '../services/loop/RunLog.js';
 import { getExecutionRegistry } from '../services/workflow/ExecutionRegistry.js';
 import { recordPendingFinish, buildReplayStepsFromState } from '../services/workflow/chatBridge.js';
@@ -25,6 +26,7 @@ import {
   getStreamRun
 } from '../services/loop/RunStream.js';
 import { SSE_V2_EVENTS } from '../../shared/runEvents.js';
+import { chatAnswerFormat, chatAnswerOf } from '../../shared/workflowChatOutput.js';
 import { hasChatClient } from '../sse.js';
 import { createPresenceMap, hasRemote, publish, subscribe } from '../clusterBus.js';
 import configCache from '../configCache.js';
@@ -161,11 +163,6 @@ function resolveLocalized(value, lang = 'en') {
 }
 
 /**
- * Extract a human-readable string from workflow output.
- * If the output is already a string, return it.
- * If it's an object, look for common report/content fields.
- */
-/**
  * Coerce an error-shaped value into a readable string. Workflow events may
  * carry `error` as a string, a plain {message,code,...} object, or a real
  * Error instance — direct interpolation produces `[object Object]` for the
@@ -187,53 +184,6 @@ function coerceErrorMessage(value) {
   } catch {
     return 'Unknown error';
   }
-}
-
-function getNestedField(obj, path) {
-  if (!obj || !path || typeof path !== 'string') return undefined;
-  const parts = path.split('.');
-  let cur = obj;
-  for (const p of parts) {
-    if (cur === null || cur === undefined) return undefined;
-    cur = cur[p];
-  }
-  return cur;
-}
-
-function extractReadableOutput(output, primaryOutput) {
-  if (!output) return null;
-  if (typeof output === 'string') return output;
-  if (typeof output !== 'object') return String(output);
-
-  // Workflow-declared primary output field. Supports dot-notation paths
-  // (e.g. "_report.markdown") so workflows can emit a structured object
-  // and still expose a flat string to the chat output.
-  const primaryVal = primaryOutput ? getNestedField(output, primaryOutput) : undefined;
-
-  if (primaryVal !== undefined && primaryVal !== null) {
-    if (typeof primaryVal === 'string' && primaryVal.length > 0) return primaryVal;
-    if (typeof primaryVal === 'object') return JSON.stringify(primaryVal, null, 2);
-  }
-
-  // Fallback: look for common content field names
-  const contentFields = [
-    'finalReport',
-    'report',
-    'content',
-    'output',
-    'result',
-    'summary',
-    'text',
-    'message'
-  ];
-  for (const field of contentFields) {
-    if (typeof output[field] === 'string' && output[field].length > 0) {
-      return output[field];
-    }
-  }
-
-  // Fallback: JSON dump
-  return JSON.stringify(output, null, 2);
 }
 
 /**
@@ -273,6 +223,19 @@ export default async function workflowRunner(params = {}) {
   // 1. Load workflow definition
   const workflow = configCache.getWorkflowById(workflowId);
   if (!workflow) {
+    throw new Error(`Workflow '${workflowId}' not found`);
+  }
+  // Whoever starts a run, a person or a model acting for one, may only run what
+  // that person may run (`workflowAccess.js`). Checked before anything else is
+  // said about the workflow, and answered like a workflow that does not exist,
+  // so a refusal does not confirm that it does.
+  if (!runnerAccess({ user, app: _appConfig, workflow })) {
+    logger.warn('Workflow run refused: the caller may not run this workflow', {
+      component: 'workflowRunner',
+      workflowId,
+      userId: user?.id || null,
+      appId: _appConfig?.id || null
+    });
     throw new Error(`Workflow '${workflowId}' not found`);
   }
   if (workflow.enabled === false) {
@@ -658,14 +621,16 @@ export default async function workflowRunner(params = {}) {
           /* non-fatal */
         }
 
-        const primaryOutput = workflow.chatIntegration?.primaryOutput;
-        const outputText = event.output ? extractReadableOutput(event.output, primaryOutput) : null;
+        // The answer is the `output` of the end step the run finished at. A
+        // bubble holds text, so JSON is written out for it and shown as JSON.
+        const outputText = chatAnswerOf(event.output);
+        const answerFormat = chatAnswerFormat(
+          event.output,
+          workflow.chatIntegration?.outputFormat || 'markdown'
+        );
 
         if (chatId) {
-          emitResult({
-            status: 'completed',
-            outputFormat: workflow.chatIntegration?.outputFormat || 'markdown'
-          });
+          emitResult({ status: 'completed', outputFormat: answerFormat });
 
           // In passthrough mode the chat turn streams the answer and ends the
           // run. In @mention / direct mode we own the run.
@@ -680,7 +645,7 @@ export default async function workflowRunner(params = {}) {
               runId: stream?.runId || null,
               status: 'completed',
               outputText,
-              outputFormat: workflow.chatIntegration?.outputFormat || 'markdown',
+              outputFormat: answerFormat,
               passthrough
             });
           }

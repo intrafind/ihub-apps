@@ -253,7 +253,8 @@ export class SubWorkflowMaterializer {
     nodes.push(...taskNodes);
 
     // Optional synthesizer node before end
-    if (parentConfig.synthesize && taskNodes.length > 0) {
+    const hasSynthesizer = !!parentConfig.synthesize && taskNodes.length > 0;
+    if (hasSynthesizer) {
       const synthId = 'synthesizer';
       nodes.push({
         id: synthId,
@@ -315,7 +316,9 @@ export class SubWorkflowMaterializer {
       type: 'end',
       name: { en: 'Sub-workflow End' },
       position: { x: 0, y: nodes.length * 100 },
-      config: {}
+      // Every end step has an output. The parent reads the task results out of
+      // the child's state, so this is only the child's own answer.
+      config: { output: hasSynthesizer ? 'synthesized_result' : '_taskResults' }
     });
 
     // Build edges connecting the nodes

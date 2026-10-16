@@ -10,6 +10,7 @@ import logger from '../../utils/logger.js';
 import { getLocalizedString } from '../../utils/localize.js';
 import { getAppVersion } from '../../utils/versionHelper.js';
 import { getA2aTaskStore, taskStatus } from './a2aTaskStore.js';
+import { workflowAnswerParts } from '../workflow/answerParts.js';
 
 /**
  * Agent-to-Agent (A2A) protocol handler.
@@ -497,6 +498,8 @@ async function runTask({ task, skill, text, data, userMessage, user, platform, s
   let statusMessage = null;
   try {
     let answer;
+    // A workflow's JSON answer, as a `data` part next to its text
+    let answerData = null;
     if (skill._kind === 'app') {
       const history = contextMessages(await store.getContext(contextId, user.id));
       const { text: result } = await invokeApp({
@@ -532,11 +535,24 @@ async function runTask({ task, skill, text, data, userMessage, user, platform, s
           { user, chatId: `a2a-${task.id}`, language }
         )
       );
-      answer = typeof output === 'string' ? output : JSON.stringify(output);
+      // The answer and nothing else: text as text, JSON as a `data` part
+      // (with the same JSON written out as text for a client that reads
+      // only text). A run that did not finish with an answer fails the task.
+      const parts = workflowAnswerParts(output);
+      if (!parts.ok) throw new Error(parts.error);
+      answer = parts.text;
+      answerData = parts.json;
     }
     if (controller.signal.aborted) throw new A2aError(A2A_ERRORS.INTERNAL, 'Task cancelled');
 
-    const artifact = { artifactId, name: 'response', parts: [{ kind: 'text', text: answer }] };
+    const artifact = {
+      artifactId,
+      name: 'response',
+      parts: [
+        { kind: 'text', text: answer },
+        ...(answerData ? [{ kind: 'data', data: answerData }] : [])
+      ]
+    };
     // Streamed fragments came from every model step; the artifact is the
     // final answer. When they differ, the last event replaces what was
     // streamed (append: false); otherwise it just closes the artifact.

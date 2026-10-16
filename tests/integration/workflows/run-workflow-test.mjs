@@ -34,6 +34,7 @@ const simpleLinearWorkflow = {
       type: 'end',
       name: { en: 'End' },
       config: {
+        output: 'result',
         outputVariables: ['result']
       }
     }

@@ -4,6 +4,7 @@ import { emitNodeProgress } from './nodeProgress.js';
 import { getStateManager, WorkflowStatus } from './StateManager.js';
 import { getExecutor as getDefaultExecutor } from './executors/index.js';
 import { getExecutionRegistry } from './ExecutionRegistry.js';
+import { finalOutputOf } from './finalOutput.js';
 import { actionTracker } from '../../actionTracker.js';
 import { summarizePlanForEvent } from '../../agents/runtime/taskRecord.js';
 import runLog from '../loop/RunLog.js';
@@ -686,7 +687,7 @@ export class WorkflowEngine {
             const customStatus = lastNodeResult?.workflowStatus || null;
 
             // Workflow complete
-            await this._completeWorkflow(executionId, state, customStatus);
+            await this._completeWorkflow(executionId, state, customStatus, workflow);
           } else {
             // Nodes are blocked (shouldn't happen in valid workflow)
             logger.warn('Workflow has blocked nodes', {
@@ -1206,9 +1207,11 @@ export class WorkflowEngine {
    * @param {string} executionId - The execution identifier
    * @param {Object} state - Current execution state
    * @param {string} [customStatus] - Custom status from end node (e.g., 'approved', 'rejected')
+   * @param {Object} [workflow] - The workflow definition that ran; the definition in the
+   *   state is used when a caller leaves it out
    * @private
    */
-  async _completeWorkflow(executionId, state, customStatus = null) {
+  async _completeWorkflow(executionId, state, customStatus = null, workflow = null) {
     // Use custom status if provided, otherwise default to COMPLETED
     const finalStatus = customStatus || WorkflowStatus.COMPLETED;
 
@@ -1235,25 +1238,9 @@ export class WorkflowEngine {
     const registry = getExecutionRegistry();
     registry.updateStatus(executionId, finalStatus, { currentNode: null });
 
-    // Extract output from state.data using end node's outputVariables config
-    const workflow = state.data._workflowDefinition;
-    const lastNodeId = state.completedNodes[state.completedNodes.length - 1];
-    const endNode = workflow?.nodes?.find(n => n.id === lastNodeId);
-    const outputVars = endNode?.config?.outputVariables;
-
-    let output;
-    if (outputVars && Array.isArray(outputVars)) {
-      // Build output from state.data using the end node's outputVariables
-      output = {};
-      for (const varName of outputVars) {
-        if (state.data[varName] !== undefined) {
-          output[varName] = state.data[varName];
-        }
-      }
-    } else {
-      // Fallback to legacy behavior for backwards compatibility
-      output = state.data.nodeResults?.[lastNodeId];
-    }
+    // The workflow's output is the output of the end step the run finished at,
+    // `output` and all (see finalOutput.js).
+    const output = finalOutputOf(state, workflow);
 
     this._emitEvent('workflow.complete', {
       executionId,

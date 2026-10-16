@@ -22,6 +22,7 @@ import { isStaanSearchConfigured } from './services/search/staanApiKey.js';
 import logger from './utils/logger.js';
 import { getLocalizedString } from './utils/localize.js';
 import { filterSchedulingTools } from './services/scheduler/tasks/toolGate.js';
+import { mentionAccess } from './services/workflow/workflowAccess.js';
 import {
   isSystemSkillTool,
   runSystemSkillTool,
@@ -652,6 +653,10 @@ export async function getToolsForApp(app, language = null, context = {}) {
         if (typeof wfId !== 'string' || !wfId) continue;
         const wf = configCache.getWorkflowById(wfId);
         if (!wf || wf.enabled === false || !wf.chatIntegration?.enabled) continue;
+        // The model acts for the person who chats, so it is only offered what
+        // that person may run: the same rule as an `@mention` of the workflow.
+        // The runner holds the line again when the tool is called.
+        if (!mentionAccess({ user: context.user, app, workflow: wf }).allowed) continue;
 
         let toolDescription = getLocalizedString(
           wf.chatIntegration?.toolDescription || wf.description,

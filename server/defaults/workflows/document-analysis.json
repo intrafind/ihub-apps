@@ -206,6 +206,7 @@
         "y": 600
       },
       "config": {
+        "output": "finalReport",
         "outputVariables": ["insights", "finalReport", "analysisType"]
       }
     }
@@ -230,8 +231,6 @@
   "allowedGroups": [],
   "chatIntegration": {
     "enabled": true,
-    "passthroughResult": false,
-    "primaryOutput": "finalReport",
     "outputFormat": "markdown"
   }
 }

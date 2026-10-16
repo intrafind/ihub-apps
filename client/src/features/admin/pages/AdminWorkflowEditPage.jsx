@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
@@ -7,14 +7,17 @@ import AdminBreadcrumb from '../components/AdminBreadcrumb';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import ContentAccessSection from '../components/ContentAccessSection';
+import WorkflowChatIntegrationSection from '../components/WorkflowChatIntegrationSection';
 import {
   createAdminWorkflow,
   deleteAdminWorkflow,
+  fetchAdminApps,
   fetchAdminWorkflow,
   getAdminApiErrorMessage,
   updateAdminWorkflow
 } from '../../../api/adminApi';
 import { createStarterWorkflow } from '../../workflows/editor/workflowEditorUtils';
+import { appsUsingWorkflow, withCleanToolDescription } from '../../workflows/utils/chatIntegration';
 /**
  * Admin page for editing or creating a single workflow definition.
  * Provides metadata editing, group-based permissions, and a full JSON editor.
@@ -43,7 +46,29 @@ function AdminWorkflowEditPage() {
   const [workflowData, setWorkflowData] = useState(null);
   const [initialData, setInitialData] = useState(null);
 
+  // All app configs, to tell which apps list this workflow. Null while
+  // loading or when the list could not be read — the section then simply
+  // does not warn about assignments.
+  const [apps, setApps] = useState(null);
+
   const { blocker, markSaved } = useUnsavedChanges(initialData, workflowData);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchAdminApps()
+      .then(data => {
+        if (!cancelled) setApps(Array.isArray(data) ? data : []);
+      })
+      .catch(err => console.warn('Could not load apps for the chat integration check:', err));
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const assignedApps = useMemo(
+    () => (apps ? appsUsingWorkflow(apps, workflowData?.id) : null),
+    [apps, workflowData?.id]
+  );
 
   /**
    * Returns the template used for new workflows. It already contains the
@@ -157,6 +182,30 @@ function AdminWorkflowEditPage() {
   };
 
   /**
+   * Merges a patch into `chatIntegration`. Built immutably (unlike
+   * handleMetadataChange, which writes into the nested object it shares with
+   * the previous state) so the unsaved-changes check sees the edit. A key
+   * patched to `undefined` is removed, so the default output format leaves no
+   * `outputFormat` behind.
+   *
+   * Refused while the JSON editor holds invalid JSON: `workflowData` is then
+   * the last valid parse, and rewriting the JSON from it would throw away
+   * everything typed since. The section is disabled meanwhile.
+   * @param {Object} patch - Fields to set on chatIntegration
+   */
+  const handleChatIntegrationChange = patch => {
+    if (jsonError) return;
+    const chatIntegration = { ...workflowData.chatIntegration, ...patch };
+    Object.keys(patch).forEach(key => {
+      if (patch[key] === undefined) delete chatIntegration[key];
+    });
+    const updated = { ...workflowData, chatIntegration };
+    setWorkflowData(updated);
+    setJsonText(JSON.stringify(updated, null, 2));
+    setJsonError(null);
+  };
+
+  /**
    * Saves the workflow to the server.
    * Creates a new workflow or updates an existing one.
    */
@@ -177,6 +226,9 @@ function AdminWorkflowEditPage() {
       } catch (err) {
         throw new Error(`Invalid JSON: ${err.message}`);
       }
+      // A language added under "Description for the model" but left empty
+      // would be rejected by the schema; drop it instead.
+      dataToSave = withCleanToolDescription(dataToSave);
 
       // Validate required fields
       if (!dataToSave.id) {
@@ -440,6 +492,13 @@ function AdminWorkflowEditPage() {
                 </div>
               </div>
             </div>
+
+            <WorkflowChatIntegrationSection
+              workflow={workflowData}
+              onChange={handleChatIntegrationChange}
+              assignedApps={assignedApps}
+              disabled={Boolean(jsonError)}
+            />
 
             {/* JSON Editor Section */}
             <div className="bg-white dark:bg-gray-800 shadow-sm rounded-lg p-6 mb-6 border border-gray-200 dark:border-gray-700">

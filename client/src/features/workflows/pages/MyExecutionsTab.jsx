@@ -7,7 +7,7 @@ import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import Icon from '../../../shared/components/Icon';
 import { apiClient } from '../../../api/client';
-import { getDisplayableOutput } from '../utils/filterInternalFields';
+import { executionDownload } from '../utils/executionDownload';
 
 /**
  * Tab content showing the user's workflow executions.
@@ -48,41 +48,18 @@ function MyExecutionsTab({ onBrowseWorkflows }) {
       try {
         const response = await apiClient.get(`/workflows/executions/${execution.executionId}`);
         const state = response.data || {};
-        const output = getDisplayableOutput(state.data);
-        const outputKeys = Object.keys(output);
+        const download = executionDownload(state);
+        if (!download) {
+          setActionError(
+            t('workflows.errors.noResultToDownload', 'This run has no result to download yet.')
+          );
+          return;
+        }
+        const { content, extension } = download;
 
         const shortId =
           execution.executionId.replace(/^wf-exec-/, '').slice(0, 8) || execution.executionId;
         const workflowSlug = (execution.workflowId || 'workflow').replace(/[^a-zA-Z0-9._-]/g, '_');
-
-        // Prefer the workflow-declared primary output. Fall back to a single
-        // string field, then to a Markdown bundle of all string outputs, and
-        // finally to a JSON dump of whatever is left.
-        const primaryKey = state.data?._workflowDefinition?.chatIntegration?.primaryOutput;
-        let content = null;
-        let extension = 'md';
-
-        if (primaryKey && typeof output[primaryKey] === 'string') {
-          content = output[primaryKey];
-        } else {
-          const stringKeys = outputKeys.filter(k => typeof output[k] === 'string');
-          if (stringKeys.length === 1) {
-            content = output[stringKeys[0]];
-          } else if (stringKeys.length > 1) {
-            content = stringKeys.map(k => `# ${k}\n\n${output[k]}`).join('\n\n');
-          }
-        }
-
-        if (content === null) {
-          if (outputKeys.length === 0) {
-            setActionError(
-              t('workflows.errors.noResultToDownload', 'This run has no result to download yet.')
-            );
-            return;
-          }
-          content = JSON.stringify(output, null, 2);
-          extension = 'json';
-        }
 
         const filename = `${workflowSlug}-${shortId}.${extension}`;
         const mime = extension === 'json' ? 'application/json' : 'text/markdown';

@@ -6,7 +6,6 @@
   },
   "chatIntegration": {
     "enabled": true,
-    "primaryOutput": "finalReport",
     "outputFormat": "markdown"
   },
   "description": {
@@ -199,6 +198,7 @@
       },
       "position": { "x": 100, "y": 850 },
       "config": {
+        "output": "finalReport",
         "outputVariables": ["task", "findings", "finalReport", "researchState"]
       }
     }

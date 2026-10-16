@@ -1,7 +1,9 @@
 import { memo } from 'react';
 import { Handle, Position } from '@xyflow/react';
 import { NODE_TYPE_COLORS, NODE_TYPE_META } from '../workflowEditorUtils';
+import { useTranslation } from 'react-i18next';
 import { NodeTypeIcon } from './nodeIcons';
+import { endOutputLabel } from '../../../../../../shared/workflowEndOutput.js';
 
 /** Extracts a plain string from a localized object or scalar. */
 function localizedText(value) {
@@ -20,8 +22,10 @@ function nodeSummary(type, cfg) {
       const count = Array.isArray(cfg.inputVariables) ? cfg.inputVariables.length : 0;
       return count > 0 ? `${count} input${count === 1 ? '' : 's'}` : '';
     }
-    case 'end':
-      return cfg.outputMapping ? `${Object.keys(cfg.outputMapping).length} outputs` : '';
+    case 'end': {
+      const label = endOutputLabel(cfg.output);
+      return label ? `→ ${label}` : '';
+    }
     case 'prompt':
     case 'planner':
     case 'verifier':
@@ -84,7 +88,11 @@ export const WorkflowNode = memo(function WorkflowNode({ data, selected }) {
   const isEnd = data.nodeType === 'end';
   const isDecision = data.nodeType === 'decision';
 
+  const { t } = useTranslation();
   let preview = nodeSummary(data.nodeType, data.nodeConfig || {});
+  // An end step without an output cannot be saved: say so on the card.
+  const lacksOutput = isEnd && !preview;
+  if (lacksOutput) preview = t('workflows.editor.endOutputMissingShort', 'No output set');
   if (preview.length > 64) preview = preview.slice(0, 61) + '...';
 
   return (
@@ -124,7 +132,15 @@ export const WorkflowNode = memo(function WorkflowNode({ data, selected }) {
           {data.nodeName || meta.label || data.nodeType}
         </div>
         {preview && (
-          <div className="text-xs text-gray-500 dark:text-gray-400 mt-1 truncate">{preview}</div>
+          <div
+            className={`text-xs mt-1 truncate ${
+              lacksOutput
+                ? 'text-amber-700 dark:text-amber-400'
+                : 'text-gray-500 dark:text-gray-400'
+            }`}
+          >
+            {preview}
+          </div>
         )}
       </div>
 

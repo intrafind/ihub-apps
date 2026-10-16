@@ -123,6 +123,7 @@
       },
       "position": { "x": 100, "y": 600 },
       "config": {
+        "output": "answer",
         "outputVariables": ["question", "classification", "answer"]
       }
     }

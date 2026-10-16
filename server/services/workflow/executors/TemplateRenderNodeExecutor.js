@@ -131,8 +131,7 @@ export class TemplateRenderNodeExecutor extends BaseNodeExecutor {
     if (outputVariable) {
       // Primary output: the rendered markdown string. Mirrors the prompt
       // node's `outputVariable` convention so workflows can wire this
-      // straight into `chatIntegration.primaryOutput` without an extra
-      // transform.
+      // straight into an end step's `output` without an extra transform.
       stateUpdates[outputVariable] = markdown;
     }
     if (reportVar) {

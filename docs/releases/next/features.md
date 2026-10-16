@@ -1,5 +1,35 @@
 # Features — Unreleased
 
+## Workflows: Every Workflow Ends With an Output, and Chat Shows Exactly That
+
+Every end step now has an **Output**: the variable, path or text that is the answer of the
+workflow. A chat shows it as it is, and an API, MCP or A2A caller receives it. There is nothing to
+select and nothing to guess: no result to pick in the chat settings, no "Automatic" that looks for
+an output named `report` or `result`. Whatever else the end step passes on, such as the other
+variables or the run's metadata, travels next to the answer as additional information.
+
+- **The Output of an end step** is set in the visual editor, first in the end step's form, with the
+  variables that reach the step as suggestions. It takes a variable (`finalReport`), a path into
+  one (`result.summary`), a state path (`$.data.nodeResults.compose.content`) or text with
+  placeholders (`Rejected: {{topic}}`). A single placeholder keeps the type of the variable.
+- **Several fields make the answer a JSON object.** Choose **Several fields** under the Output and
+  give each field a name and a variable, path or text, for example `topic` → `topic` and `report` →
+  `finalReport`. A field whose variable was never set is left out.
+- **JSON stays JSON.** An answer that is an object or a list is not turned into text on the way
+  out: the chat shows a JSON block, an MCP client receives it as structured content next to the
+  text, and an A2A client receives it as a data part. The model that called the workflow as a tool
+  gets the JSON text.
+- **The page of a workflow** (**Admin → Workflows → a workflow**) has a **Chat integration**
+  section with what is left to set: whether the workflow is **available in chat**, the **output
+  format** and the description the app's model sees. It lists the apps the workflow is assigned to
+  and warns about a workflow that is assigned to apps but not available in chat, and about an end
+  step without an Output.
+- A workflow whose end step has no Output **cannot be saved**, and a run that reaches such an end
+  step fails with a message that names the step. A new workflow starts with an end step that
+  answers with its input.
+- The visual editor keeps the chat integration settings when it saves and links to the workflow
+  page from its header (a saved workflow only).
+
 ## Stopped Chats and Scheduled Runs Say Who Stopped Them
 
 A chat answer or scheduled run that ends early now says why, who stopped it and when, instead of

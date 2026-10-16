@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { Link, useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { apiClient } from '../../../api/client';
 import { WorkflowEditor } from '../../workflows/editor/WorkflowEditor';
@@ -212,9 +212,27 @@ function WorkflowEditorPage() {
             </span>
           )}
         </div>
-        {saving && (
-          <span className="text-sm text-gray-500">{t('workflows.editor.saving', 'Saving...')}</span>
-        )}
+        <div className="flex items-center gap-4">
+          {saving && (
+            <span className="text-sm text-gray-500">
+              {t('workflows.editor.saving', 'Saving...')}
+            </span>
+          )}
+          {/* The canvas has no fields for chatIntegration. A new workflow has no
+              page of its own yet: /admin/workflows/new is a separate, empty form. */}
+          {!isNew && (
+            <Link
+              to={`/admin/workflows/${id}`}
+              title={t(
+                'workflows.editor.chatIntegrationLinkHint',
+                'Availability in chat, the result shown there and its format are set on the workflow page. Unsaved changes on the canvas are lost.'
+              )}
+              className="text-sm text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300"
+            >
+              {t('workflows.editor.chatIntegrationLink', 'Chat integration')}
+            </Link>
+          )}
+        </div>
       </div>
 
       <div className="flex-1 relative min-h-0">

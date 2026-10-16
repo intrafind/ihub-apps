@@ -17,19 +17,11 @@ import { randomUUID } from 'node:crypto';
 import { newRunId } from '../loop/RunLog.js';
 import { materializeAssistantTurn, materializeUserTurn } from '../chat/chatMaterializer.js';
 import { getLocalizedString } from '../../utils/localize.js';
-
-/** State fields that are engine bookkeeping, never a result (client: `filterInternalFields.js`). */
-const INTERNAL_FIELDS = new Set([
-  'nodeResults',
-  '_nodeIterations',
-  '_workflowDefinition',
-  '_workflow',
-  'pendingCheckpoint',
-  '_pausedAt',
-  '_pauseReason',
-  '_resumedAt',
-  '_modelOverride'
-]);
+import {
+  chatAnswerFormat,
+  chatAnswerOf,
+  executionOutputOf
+} from '../../../shared/workflowChatOutput.js';
 
 /** Execution statuses whose state holds the workflow's result. */
 const FINISHED_STATUSES = new Set(['completed', 'approved']);
@@ -37,26 +29,10 @@ const FINISHED_STATUSES = new Set(['completed', 'approved']);
 /** Longest question stored for the chat's opening turn. */
 const MAX_INPUT_CHARS = 20_000;
 
-function displayableOutput(data) {
-  const output = {};
-  for (const [key, value] of Object.entries(data || {})) {
-    if (
-      INTERNAL_FIELDS.has(key) ||
-      key.startsWith('_') ||
-      key.startsWith('humanResponse_') ||
-      key.startsWith('_humanResult_')
-    ) {
-      continue;
-    }
-    output[key] = value;
-  }
-  return output;
-}
-
 /**
  * The opening exchange of a chat about an execution: what it was asked (its
- * text start inputs) and what it answered (the workflow's declared primary
- * output, else its longest text result, else all of its results as JSON).
+ * text start inputs) and what it answered (the `output` of the end step it
+ * finished at).
  *
  * @param {Object} state - Workflow execution state (`WorkflowEngine.getState`).
  * @returns {{ userInput: string, outputText: string, workflow: Object|null,
@@ -66,32 +42,10 @@ export function executionHandoff(state) {
   const data = state?.data || {};
   const workflow = data._workflowDefinition || null;
 
-  let outputText = '';
-  const primaryOutputKey = workflow?.chatIntegration?.primaryOutput;
-  // A dotted path (`_report.markdown`) names a nested field, as it does for
-  // the answer of an `@workflow` run (`tools/workflowRunner.js`).
-  const primaryValue =
-    typeof primaryOutputKey === 'string' && primaryOutputKey
-      ? primaryOutputKey.split('.').reduce((value, key) => value?.[key], data)
-      : undefined;
-  if (
-    primaryValue !== undefined &&
-    primaryValue !== null &&
-    (typeof primaryValue !== 'string' || primaryValue.length > 0)
-  ) {
-    outputText =
-      typeof primaryValue === 'object'
-        ? JSON.stringify(primaryValue, null, 2)
-        : String(primaryValue);
-  } else {
-    const output = displayableOutput(data);
-    for (const value of Object.values(output)) {
-      if (typeof value === 'string' && value.length > outputText.length) outputText = value;
-    }
-    if (!outputText && Object.keys(output).length > 0) {
-      outputText = JSON.stringify(output, null, 2);
-    }
-  }
+  // The same answer, in the same format, as a chat of the workflow shows
+  // (`tools/workflowRunner.js`).
+  const output = executionOutputOf(state);
+  const outputText = chatAnswerOf(output) || '';
 
   const startNode = (workflow?.nodes || []).find(node => node.type === 'start');
   const inputVariables = startNode?.config?.inputVariables || [];
@@ -105,7 +59,7 @@ export function executionHandoff(state) {
     userInput,
     outputText,
     workflow,
-    outputFormat: workflow?.chatIntegration?.outputFormat || 'markdown'
+    outputFormat: chatAnswerFormat(output, workflow?.chatIntegration?.outputFormat || 'markdown')
   };
 }
 
