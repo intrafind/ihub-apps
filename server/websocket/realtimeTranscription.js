@@ -63,6 +63,10 @@ import {
 } from '../utils/authorization.js';
 import { buildApiPath } from '../utils/basePath.js';
 import { getTranscriptionProvider } from '../transcription/index.js';
+import {
+  beginTranscriptionTurn,
+  endTranscriptionTurn
+} from '../services/chat/transcriptionTurn.js';
 
 // What a session produces is text transcribed from the user's audio: `ready`
 // says so, like `run/ended.knowledgeSources` does for a chat turn, so a
@@ -589,6 +593,16 @@ export function bridgeConnection(clientWs, user, limiter, options = {}) {
   let retiring = null; // previous upstream session finishing its tail
   let retireQuietTimer = null;
   let retireMaxTimer = null;
+  // A file or recording sent to a transcription model selected in a stored
+  // chat is a chat turn (see services/chat/transcriptionTurn.js): `start`
+  // names the chat, the bridge stores the transcript as the answer.
+  let turnRequest = null; // { chatId, appId, ephemeral, clientMessageId, attachment }
+  let turnPromise = null; // resolves to the begun turn, or null
+  let turnEnded = false;
+  let transcriptCommitted = ''; // the transcript, assembled like the client does
+  let transcriptPartial = '';
+  let completed = false; // `done` went to the client
+  let failure = null; // what a failure told the client
 
   const isBatch = () => provider?.mode === 'batch';
 
@@ -614,8 +628,45 @@ export function bridgeConnection(clientWs, user, limiter, options = {}) {
     }, IDLE_TIMEOUT_MS);
   };
 
+  // A `final` replaces the deltas of its utterance (the client does the same).
+  const commitTranscript = text => {
+    transcriptCommitted = `${transcriptCommitted} ${text || transcriptPartial}`.trim();
+    transcriptPartial = '';
+  };
+
+  const startTurn = modelId => {
+    if (!turnRequest || turnPromise) return;
+    turnPromise = beginTranscriptionTurn({ user, modelId, ...turnRequest })
+      .then(result => {
+        if (result.ok) return result.turn;
+        failBridge(result.code, 'Not permitted to add to this chat', {
+          reason: 'chat turn refused',
+          chatId: turnRequest.chatId
+        });
+        return null;
+      })
+      .catch(err => {
+        logger.error('Realtime STT: chat turn not stored', {
+          component: 'RealtimeSTT',
+          userId: user.id,
+          error: err.message
+        });
+        return null;
+      });
+  };
+
+  // Store the answer once, however the session ends.
+  const endTurn = () => {
+    if (!turnPromise || turnEnded) return;
+    turnEnded = true;
+    const content = `${transcriptCommitted} ${transcriptPartial}`.replace(/\s+/g, ' ').trim();
+    const outcome = { content, error: failure, aborted: !completed && !failure };
+    void turnPromise.then(turn => endTranscriptionTurn(turn, outcome));
+  };
+
   const cleanup = () => {
     tornDown = true;
+    endTurn();
     if (idleTimer) clearTimeout(idleTimer);
     idleTimer = null;
     if (graceTimer) clearTimeout(graceTimer);
@@ -857,6 +908,7 @@ export function bridgeConnection(clientWs, user, limiter, options = {}) {
     if (postStopSettleTimer) clearTimeout(postStopSettleTimer);
     postStopSettleTimer = setTimeout(() => {
       postStopSettleTimer = null;
+      completed = true;
       sendJson(clientWs, { type: 'done' });
       cleanup();
     }, POST_STOP_SETTLE_MS);
@@ -877,6 +929,7 @@ export function bridgeConnection(clientWs, user, limiter, options = {}) {
     });
     if (!errorSent) {
       errorSent = true;
+      failure = clientMessage;
       sendJson(clientWs, { type: 'error', code, message: clientMessage });
     }
     cleanup();
@@ -1007,6 +1060,7 @@ export function bridgeConnection(clientWs, user, limiter, options = {}) {
             provider: provider.id,
             textLen: event.text?.length || 0
           });
+          transcriptPartial += event.text || '';
           sendJson(clientWs, { type: 'delta', text: event.text || '' });
           // A file blasted at once can produce many segments after `stop`;
           // keep the completion window open while segments are still arriving.
@@ -1021,6 +1075,7 @@ export function bridgeConnection(clientWs, user, limiter, options = {}) {
             provider: provider.id,
             textLen: event.text?.length || 0
           });
+          commitTranscript(event.text);
           sendJson(clientWs, { type: 'final', text: event.text || '' });
           // Completion signaling (G8): an upstream emits one finalized segment
           // per utterance, and a whole file streamed faster than realtime
@@ -1179,7 +1234,9 @@ export function bridgeConnection(clientWs, user, limiter, options = {}) {
       });
       if (clientWs.readyState > WebSocket.OPEN) return; // client walked away
       gotTranscription = true;
+      commitTranscript(result?.text);
       sendJson(clientWs, { type: 'final', text: result?.text || '' });
+      completed = true;
       sendJson(clientWs, { type: 'done' });
       cleanup();
     } catch (err) {
@@ -1219,6 +1276,7 @@ export function bridgeConnection(clientWs, user, limiter, options = {}) {
     cfg = result.upstream;
     provider = result.provider;
     limits = result.limits || limits;
+    startTurn(modelId);
 
     if (isBatch()) {
       // Nothing to dial: the client is cleared to stream straight away and the
@@ -1283,6 +1341,23 @@ export function bridgeConnection(clientWs, user, limiter, options = {}) {
       // language; the field is kept for future language-pinned backends.
       // `source: 'file'` marks a whole recording sent faster than real time.
       if (msg.source === 'file') source = 'file';
+      if (typeof msg.chatId === 'string' && typeof msg.appId === 'string') {
+        const attachment =
+          msg.attachment && typeof msg.attachment === 'object' ? msg.attachment : null;
+        turnRequest = {
+          chatId: msg.chatId,
+          appId: msg.appId,
+          ephemeral: msg.ephemeral === true,
+          clientMessageId: typeof msg.clientMessageId === 'string' ? msg.clientMessageId : null,
+          attachment: attachment && {
+            name: String(attachment.name || '').slice(0, 300),
+            type: String(attachment.type || 'audio'),
+            ...(Number.isFinite(Number(attachment.bytes))
+              ? { bytes: Number(attachment.bytes) }
+              : {})
+          }
+        };
+      }
       void resolveAndPrepare(msg.modelId);
     } else if (msg.type === 'stop') {
       stopRequested = true;
