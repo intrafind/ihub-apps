@@ -6,6 +6,7 @@ import registerAdminOAuthConnectionRoutes from './admin/oauthConnections.js';
 import registerAdminCacheRoutes from './admin/cache.js';
 import registerAdminConfigRoutes from './admin/configs.js';
 import registerAdminAppsRoutes from './admin/apps.js';
+import registerAdminAppUsageGuideRoute from './admin/appUsageGuide.js';
 import registerAdminModelsRoutes from './admin/models.js';
 import registerAdminProvidersRoutes from './admin/providers.js';
 import registerAdminPromptsRoutes from './admin/prompts.js';
@@ -58,6 +59,7 @@ export default async function registerAdminRoutes(app) {
   registerAdminCacheRoutes(app);
   registerAdminConfigRoutes(app);
   registerAdminAppsRoutes(app);
+  registerAdminAppUsageGuideRoute(app);
   registerAdminModelsRoutes(app);
   registerAdminProvidersRoutes(app);
   registerAdminPromptsRoutes(app);
