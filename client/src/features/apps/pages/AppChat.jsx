@@ -3105,7 +3105,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
                           onDelete={handleDeleteMessage}
                           onEdit={handleEditMessage}
                           onResend={handleResendMessage}
-                          editable={true}
+                          editable
                           appId={appId}
                           chatId={chatId}
                           modelId={selectedModel}
@@ -3160,7 +3160,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
                           onDelete={handleDeleteMessage}
                           onEdit={handleEditMessage}
                           onResend={handleResendMessage}
-                          editable={true}
+                          editable
                           appId={appId}
                           chatId={chatId}
                           modelId={selectedModel}
@@ -3210,7 +3210,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
                       onDelete={handleDeleteMessage}
                       onEdit={handleEditMessage}
                       onResend={handleResendMessage}
-                      editable={true}
+                      editable
                       appId={appId}
                       chatId={chatId}
                       modelId={selectedModel}
@@ -3246,7 +3246,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
                     onDelete={handleDeleteMessage}
                     onEdit={handleEditMessage}
                     onResend={handleResendMessage}
-                    editable={true}
+                    editable
                     appId={appId}
                     chatId={chatId}
                     modelId={selectedModel}

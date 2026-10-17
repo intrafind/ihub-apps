@@ -46,7 +46,7 @@ export const BUILT_IN_VOICE_PROMPTS = {
     'es in den Chat gestellt hast.'
 };
 
-const isPlainObject = value => !!value && typeof value === 'object' && !Array.isArray(value);
+const isPlainObject = value => Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 
 /** Whole number inside the range; the default when the value is no number. */
 export const clampNumber = (value, { min, max }, fallback) => {
@@ -82,13 +82,13 @@ export function toSavedVoiceMode(form, stored) {
   }
   return {
     ...(isPlainObject(stored) ? stored : {}),
-    enabled: !!form.enabled,
-    appDefault: !!form.appDefault,
+    enabled: Boolean(form.enabled),
+    appDefault: Boolean(form.appDefault),
     ttsModelId: form.ttsModelId || '',
     listeningStyle: VOICE_LISTENING_STYLES.includes(form.listeningStyle)
       ? form.listeningStyle
       : DEFAULT_VOICE_MODE.listeningStyle,
-    bargeIn: !!form.bargeIn,
+    bargeIn: Boolean(form.bargeIn),
     endOfTurnSilenceMs: clampNumber(
       form.endOfTurnSilenceMs,
       END_OF_TURN_SILENCE_RANGE,

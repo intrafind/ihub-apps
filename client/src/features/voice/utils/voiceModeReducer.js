@@ -105,7 +105,7 @@ export function initialVoiceModeState({ listeningStyle, bargeIn, captions = true
  * is the state. Talking over the app (`force` false) means the user is speaking;
  * a tap on the orb (`force`) stops the app but nobody speaks yet, so it listens.
  */
-function bargeIn(state, force) {
+function bargeInState(state, force) {
   if (state.status !== THINKING && state.status !== SPEAKING) return state;
   if (!state.bargeIn && !force) return state;
   return {
@@ -159,7 +159,7 @@ export function voiceModeReducer(state, action) {
       if (state.status === LISTENING) {
         return { ...state, status: USER_SPEAKING, userCaption: EMPTY_USER_CAPTION, notice: null };
       }
-      if (state.status === THINKING || state.status === SPEAKING) return bargeIn(state, false);
+      if (state.status === THINKING || state.status === SPEAKING) return bargeInState(state, false);
       return state;
 
     case 'INTERIM': {
@@ -255,7 +255,7 @@ export function voiceModeReducer(state, action) {
     }
 
     case 'BARGE_IN':
-      return bargeIn(state, action.force === true);
+      return bargeInState(state, action.force === true);
 
     case 'NOTICE':
       if (!NOTICES.includes(action.notice) || state.notice === action.notice) return state;

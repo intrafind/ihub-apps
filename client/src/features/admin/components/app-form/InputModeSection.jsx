@@ -337,7 +337,7 @@ function VoiceModeFields({
   const models = ttsModels || [];
   const chosenModelListed = models.some(m => m.id === ttsModelId);
   // Only a loaded list can say the model is gone; until then it is just not known.
-  const chosenModelMissing = Array.isArray(ttsModels) && !!ttsModelId && !chosenModelListed;
+  const chosenModelMissing = Array.isArray(ttsModels) && Boolean(ttsModelId) && !chosenModelListed;
   const effectiveModelId =
     ttsModelId || platformVoiceMode?.ttsModelId || platformConfig?.speech?.tts?.defaultModelId;
   const voiceSuggestions = voiceSuggestionsOf(models.find(m => m.id === effectiveModelId));
@@ -478,7 +478,7 @@ function VoiceModeFields({
                       )
                     : t('admin.apps.edit.voiceMode.platformDefault', 'Platform default')}
                 </option>
-                {!!ttsModelId && !chosenModelListed && (
+                {Boolean(ttsModelId) && !chosenModelListed && (
                   <option value={ttsModelId}>{ttsModelId}</option>
                 )}
                 {models.map(m => (

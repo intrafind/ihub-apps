@@ -55,8 +55,8 @@ function VoiceModeSettings({
   const ttsModelId = voiceMode.ttsModelId;
   const chosenModel = models.find(m => m.id === ttsModelId);
   const defaultModel = models.find(m => m.id === defaultTtsModelId);
-  const chosenMissing = !!ttsModelId && Array.isArray(ttsModels) && !chosenModel;
-  const chosenDisabled = !!chosenModel && chosenModel.enabled === false;
+  const chosenMissing = Boolean(ttsModelId) && Array.isArray(ttsModels) && !chosenModel;
+  const chosenDisabled = Boolean(chosenModel) && chosenModel.enabled === false;
   const noTtsModel = !ttsModelId && !defaultTtsModelId;
   const defaultOptionLabel = defaultTtsModelId
     ? t(
@@ -160,7 +160,7 @@ function VoiceModeSettings({
           <input
             id="voice-mode-enabled"
             type="checkbox"
-            checked={!!voiceMode.enabled}
+            checked={Boolean(voiceMode.enabled)}
             onChange={e => onChange({ enabled: e.target.checked })}
             className={checkboxClass}
           />
@@ -170,7 +170,7 @@ function VoiceModeSettings({
           <input
             id="voice-mode-app-default"
             type="checkbox"
-            checked={!!voiceMode.appDefault}
+            checked={Boolean(voiceMode.appDefault)}
             onChange={e => onChange({ appDefault: e.target.checked })}
             className={checkboxClass}
           />
@@ -320,7 +320,7 @@ function VoiceModeSettings({
           <input
             id="voice-mode-barge-in"
             type="checkbox"
-            checked={!!voiceMode.bargeIn}
+            checked={Boolean(voiceMode.bargeIn)}
             onChange={e => onChange({ bargeIn: e.target.checked })}
             className={checkboxClass}
           />
