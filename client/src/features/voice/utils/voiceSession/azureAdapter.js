@@ -286,7 +286,7 @@ export function createAzureAdapter({
       };
       active = turn;
       if (preRoll?.length) pushStream.write(pcmToArrayBuffer(preRoll));
-      openRecognizer(turn);
+      openRecognizer(turn).catch(err => turnFailed(turn, err));
     },
 
     pushAudio(pcm) {

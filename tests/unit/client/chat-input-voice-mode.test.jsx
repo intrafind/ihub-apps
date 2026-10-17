@@ -166,7 +166,8 @@ describe('focus after an answer (voice mode owns the keyboard while it is open)'
 describe('the bottom bar on a 320 px phone', () => {
   // jsdom has no layout, so these pin the classes that make the row shrink the
   // model selector (it has a min-content width) instead of pushing Send out of
-  // the card. Checked in Chromium at 320 and 375 px by the author.
+  // the card. Measured once in Chromium with a long model name: without them
+  // Send ends 58 px outside the card at 320 px; with them it stays inside.
   const models = [
     { id: 'm1', name: { en: 'A model with a really quite long name' } },
     { id: 'm2', name: { en: 'Another one' } }
