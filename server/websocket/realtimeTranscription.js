@@ -1084,11 +1084,7 @@ export function bridgeConnection(clientWs, user, limiter, options = {}) {
       clientReadySent = true;
       sendJson(
         clientWs,
-        readyFrame(
-          provider.mode,
-          isPacing() ? limits.maxRealtimeFactor : undefined,
-          conversation
-        )
+        readyFrame(provider.mode, isPacing() ? limits.maxRealtimeFactor : undefined, conversation)
       );
     }
     // Flush any audio captured during the handshake (or a rotation).
@@ -1611,7 +1607,17 @@ export function bridgeConnection(clientWs, user, limiter, options = {}) {
     const bytes = batchOpenBytes;
     batchOpenBytes = 0;
     batchTurnsPending += 1;
-    batchTurnQueue = batchTurnQueue.then(() => runBatchTurn({ n, pcm, bytes }));
+    // `runBatchTurn` reports its own failures; the catch only keeps the queue
+    // alive should something unexpected escape it.
+    batchTurnQueue = batchTurnQueue
+      .then(() => runBatchTurn({ n, pcm, bytes }))
+      .catch(err => {
+        logger.error('Realtime STT: batch turn failed unexpectedly', {
+          component: 'RealtimeSTT',
+          userId: user.id,
+          error: err.message
+        });
+      });
   };
 
   const runBatchTurn = async turn => {
@@ -1728,7 +1734,10 @@ export function bridgeConnection(clientWs, user, limiter, options = {}) {
     // keepalives govern a conversation.
     if (graceTimer) clearTimeout(graceTimer);
     graceTimer = null;
-    armSessionTimer(Math.min(settings.maxSessionSeconds, getMaxSessionSeconds()));
+    armSessionTimer(
+      Math.min(settings.maxSessionSeconds, getMaxSessionSeconds()),
+      Date.now() - connectedAt
+    );
     resetIdle();
   };
 
@@ -1768,7 +1777,12 @@ export function bridgeConnection(clientWs, user, limiter, options = {}) {
       // audio is held here until `stop`. Audio captured while resolving moves
       // into the batch buffer so nothing is lost.
       upstreamReady = true;
-      sendJson(clientWs, readyFrame(provider.mode));
+      sendJson(clientWs, readyFrame(provider.mode, undefined, conversation));
+      if (conversation) {
+        // The outbox holds what arrived while resolving, commits included.
+        pumpOutbox();
+        return;
+      }
       for (const chunk of pending) bufferBatchAudio(chunk);
       pending.length = 0;
       pendingBytes = 0;
@@ -1795,6 +1809,10 @@ export function bridgeConnection(clientWs, user, limiter, options = {}) {
       // answers it with a `no-model` error.
       if (!cfg && !resolvingCfg) void resolveAndPrepare(undefined);
       const chunk = Buffer.from(data);
+      if (conversation) {
+        acceptConversationAudio(chunk);
+        return;
+      }
       if (isBatch()) {
         resetIdle();
         appendedFrames += 1;
@@ -1820,13 +1838,28 @@ export function bridgeConnection(clientWs, user, limiter, options = {}) {
       return;
     }
     if (msg.type === 'start') {
+      // The first `start` decides whether this is a conversation (voice mode).
+      // It is refused before anything is resolved or dialled unless voice mode
+      // is on; a later `start` cannot turn a session into one.
+      if (!startSeen) {
+        startSeen = true;
+        if (msg.conversation === true) {
+          const gate = getConversationGate();
+          if (!gate.ok) {
+            failBridge(gate.code, gate.error, { reason: 'conversation refused' });
+            return;
+          }
+          enterConversation(gate);
+        }
+      }
       // Resolve upstream now so unknown/forbidden-model errors surface before
       // audio flows; the upstream opens as soon as the model resolves.
       // `msg.lang` is accepted but unused — the models auto-detect the
       // language; the field is kept for future language-pinned backends.
       // `source: 'file'` marks a whole recording sent faster than real time.
-      if (msg.source === 'file') source = 'file';
-      if (typeof msg.chatId === 'string' && typeof msg.appId === 'string') {
+      // A conversation is live microphone audio and never a stored chat turn.
+      if (!conversation && msg.source === 'file') source = 'file';
+      if (!conversation && typeof msg.chatId === 'string' && typeof msg.appId === 'string') {
         const attachment =
           msg.attachment && typeof msg.attachment === 'object' ? msg.attachment : null;
         turnRequest = {
@@ -1844,7 +1877,17 @@ export function bridgeConnection(clientWs, user, limiter, options = {}) {
         };
       }
       void resolveAndPrepare(msg.modelId);
+    } else if (msg.type === 'commit') {
+      handleCommit();
+    } else if (msg.type === 'keepalive') {
+      // Only a conversation sends these; elsewhere they are ignored, so they
+      // can never keep a one-utterance session open.
+      if (conversation && !errorSent && !tornDown) resetIdle();
     } else if (msg.type === 'stop') {
+      if (conversation) {
+        handleConversationStop();
+        return;
+      }
       stopRequested = true;
       logger.info('Realtime STT: stop received', {
         component: 'RealtimeSTT',
@@ -1926,19 +1969,48 @@ export function bridgeConnection(clientWs, user, limiter, options = {}) {
   // Hard cap on the whole session so a client streaming forever can't pin a
   // GPU-backed upstream session indefinitely (per-user caps bound how many, this
   // bounds how long). Configurable via platform.speech.realtime.maxSessionSeconds.
-  const maxSessionSeconds = getMaxSessionSeconds();
-  sessionTimer = setTimeout(() => {
-    failBridge(
-      'session-limit',
-      `Transcription session exceeded the maximum duration (${maxSessionSeconds}s)`,
-      { maxSessionSeconds }
+  // A conversation re-arms it on `start` with its own (shorter) cap, counted
+  // from the connection like this one.
+  const armSessionTimer = (maxSessionSeconds, elapsedMs = 0) => {
+    if (sessionTimer) clearTimeout(sessionTimer);
+    sessionTimer = setTimeout(
+      () => {
+        failBridge(
+          'session-limit',
+          `Transcription session exceeded the maximum duration (${maxSessionSeconds}s)`,
+          { maxSessionSeconds }
+        );
+      },
+      Math.max(0, maxSessionSeconds * 1000 - elapsedMs)
     );
-  }, maxSessionSeconds * 1000);
+  };
+  armSessionTimer(getMaxSessionSeconds());
 
   logger.info('Realtime STT: bridge established', {
     component: 'RealtimeSTT',
     userId: user.id
   });
+}
+
+/**
+ * Whether a session may be a conversation (voice mode): the `voiceMode` feature
+ * flag is on (`server/featureRegistry.js`, off by default) and the admin
+ * switched voice mode on for the instance (`speech.voiceMode.enabled`). Also
+ * yields the longest such a session may run, `speech.voiceMode.maxSessionMinutes`
+ * in seconds (clamped like the client reads it); the bridge never lets it exceed
+ * the hard cap of `getMaxSessionSeconds`. Exported for tests.
+ *
+ * @returns {{ ok: true, maxSessionSeconds: number } | { ok: false, code: string, error: string }}
+ */
+export function getConversationGate() {
+  if (!isFeatureEnabled('voiceMode', configCache.getFeatures())) {
+    return { ok: false, code: 'feature-disabled', error: 'Voice mode is not enabled' };
+  }
+  const settings = resolveVoiceModeSettings({ platform: configCache.getPlatform() || {} });
+  if (!settings.platformEnabled) {
+    return { ok: false, code: 'voice-mode-disabled', error: 'Voice mode is disabled' };
+  }
+  return { ok: true, maxSessionSeconds: settings.maxSessionMinutes * 60 };
 }
 
 /**
