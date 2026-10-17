@@ -1599,7 +1599,10 @@ export function bridgeConnection(clientWs, user, limiter, options = {}) {
   // Batch: audio of the open turn is buffered as it comes; a commit hands what
   // was buffered to the transcription queue.
   const pumpBatchOutbox = () => {
-    while (outbox.length && !errorSent && !tornDown) {
+    while (outbox.length) {
+      // Buffering audio or queueing a turn can fail the bridge (a byte cap) or
+      // tear it down while this drains.
+      if (errorSent || tornDown) break;
       const item = outbox.shift();
       if (item.commit) {
         queuedCommits -= 1;

@@ -140,7 +140,7 @@ export function appendVoiceInstruction(llmMessages, instruction) {
  * @param {Object} [params.platform] - Platform config
  * @param {Object} [params.model] - The resolved chat model
  * @param {Object} [params.app] - The app config
- * @param {string} [params.thinkingLevel] - `thinkingLevel` of the request
+ * @param {string|null} [params.thinkingLevel] - `thinkingLevel` of the request (null when unset)
  * @param {boolean} [params.thinkingEnabled] - `thinkingEnabled` of the request
  * @returns {string|undefined}
  */
