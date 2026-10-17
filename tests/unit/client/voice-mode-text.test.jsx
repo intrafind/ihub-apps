@@ -100,17 +100,151 @@ describe('answerForClarification', () => {
     });
   });
 
-  test('something else is passed on as said', () => {
-    expect(answerForClarification('medium', clarification)).toEqual({
+  test('something else is passed on as said when the question allows another answer', () => {
+    expect(answerForClarification('medium', { ...clarification, allowOther: true })).toEqual({
       value: 'medium',
       displayText: 'medium'
     });
+    expect(answerForClarification('medium', { ...clarification, inputType: 'text' })).toEqual({
+      value: 'medium',
+      displayText: 'medium'
+    });
+  });
+
+  test('something else is not an answer when the question has a fixed set of options', () => {
+    expect(answerForClarification('medium', clarification)).toBeNull();
+    expect(answerForClarification('', clarification)).toBeNull();
   });
 
   test('accepts plain-string options', () => {
     expect(answerForClarification('blue', { options: ['Red', 'Blue'] })).toEqual({
       value: 'Blue',
       displayText: 'Blue'
+    });
+  });
+
+  describe('Yes / No', () => {
+    const yesNo = {
+      inputType: 'single_select',
+      options: [
+        { value: 'yes', label: 'Yes' },
+        { value: 'no', label: 'No' }
+      ]
+    };
+    const answerOf = said => answerForClarification(said, yesNo)?.value ?? null;
+
+    test.each([
+      ['yes', 'yes'],
+      ['Yes.', 'yes'],
+      ['yes please', 'yes'],
+      ['Yes, go ahead', 'yes'],
+      ['no', 'no'],
+      ['No thanks', 'no'],
+      ['no, I do not want that', 'no']
+    ])('%j answers %s', (said, value) => {
+      expect(answerOf(said)).toBe(value);
+    });
+
+    // Each of these used to be read as Yes or No by looking for the letters
+    // inside the words: "know" holds "no", "yesterday" holds "yes".
+    test.each([['I do not know yet'], ['yesterday'], ['not now'], ['maybe'], ['notable']])(
+      '%j is not understood',
+      said => {
+        expect(answerForClarification(said, yesNo)).toBeNull();
+      }
+    );
+
+    test('naming both options is ambiguous, not a guess', () => {
+      expect(answerForClarification('yes or no', yesNo)).toBeNull();
+      expect(answerForClarification('no, yes, I mean no', yesNo)).toBeNull();
+    });
+
+    test('a question that allows another answer takes unclear words as that answer', () => {
+      const open = { ...yesNo, allowOther: true };
+      for (const said of ['I do not know yet', 'yes or no', 'maybe']) {
+        expect(answerForClarification(said, open)).toEqual({ value: said, displayText: said });
+      }
+      // A clear option still wins over the free text.
+      expect(answerForClarification('yes please', open)).toEqual({
+        value: 'yes',
+        displayText: 'Yes'
+      });
+    });
+
+    test('works in German too', () => {
+      const ja = {
+        options: [
+          { value: 'ja', label: 'Ja' },
+          { value: 'nein', label: 'Nein' }
+        ]
+      };
+      expect(answerForClarification('Nein, danke', ja).value).toBe('nein');
+      expect(answerForClarification('ja bitte', ja).value).toBe('ja');
+      expect(answerForClarification('Ich weiß nicht', ja)).toBeNull();
+      expect(answerForClarification('janein', ja)).toBeNull();
+    });
+  });
+
+  describe('options with several words', () => {
+    const sizes = {
+      options: [
+        { value: 'large', label: 'Large' },
+        { value: 'xl', label: 'Extra large' },
+        { value: 'small', label: 'Small' }
+      ]
+    };
+
+    test('the longest label wins over a label it contains', () => {
+      expect(answerForClarification('extra large please', sizes).value).toBe('xl');
+      expect(answerForClarification('the large one', sizes).value).toBe('large');
+    });
+
+    test('two unrelated options in one sentence are ambiguous', () => {
+      expect(answerForClarification('small or large', sizes)).toBeNull();
+    });
+
+    test('accents do not split words', () => {
+      const options = {
+        options: [
+          { value: 'für', label: 'Für mich' },
+          { value: 'x', label: 'X' }
+        ]
+      };
+      expect(answerForClarification('für mich', options).value).toBe('für');
+      expect(answerForClarification('fur mich bitte', options).value).toBe('für');
+    });
+  });
+
+  describe('single-character options', () => {
+    const letters = {
+      options: [
+        { value: 'a', label: 'A' },
+        { value: 'b', label: 'B' }
+      ]
+    };
+
+    test('are answered by saying just the letter or "option a"', () => {
+      expect(answerForClarification('A', letters).value).toBe('a');
+      expect(answerForClarification('b.', letters).value).toBe('b');
+      expect(answerForClarification('Option B', letters).value).toBe('b');
+      expect(answerForClarification('Antwort a', letters).value).toBe('a');
+    });
+
+    test('are not found inside a sentence: every sentence has an "a"', () => {
+      expect(answerForClarification('I want a large one', letters)).toBeNull();
+      expect(answerForClarification('what is b', letters)).toBeNull();
+    });
+
+    test('numbers work the same way', () => {
+      const numbers = {
+        options: [
+          { value: '1', label: '1' },
+          { value: '2', label: '2' }
+        ]
+      };
+      expect(answerForClarification('two', numbers)).toBeNull();
+      expect(answerForClarification('2', numbers).value).toBe('2');
+      expect(answerForClarification('I have 2 kids', numbers)).toBeNull();
     });
   });
 });
