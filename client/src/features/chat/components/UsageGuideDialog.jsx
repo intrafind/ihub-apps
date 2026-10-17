@@ -1,8 +1,8 @@
-import { useId, useMemo, useRef } from 'react';
+import { useId, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import Modal from '../../../shared/components/Modal';
 import Icon from '../../../shared/components/Icon';
-import { renderMarkdown } from '../../../config/marked.config';
+import StreamingMarkdown from './StreamingMarkdown';
 
 /**
  * An app's usage guide in a dialog (issue #2838), for the start form and
@@ -19,8 +19,6 @@ function UsageGuideDialog({ isOpen, question, content, onClose }) {
   const { t } = useTranslation();
   const headingId = useId();
   const closeRef = useRef(null);
-  // renderMarkdown sanitizes with DOMPurify.
-  const html = useMemo(() => renderMarkdown(content || '', { t }), [content, t]);
 
   return (
     <Modal
@@ -44,10 +42,11 @@ function UsageGuideDialog({ isOpen, question, content, onClose }) {
           <Icon name="close" size="sm" aria-hidden="true" />
         </button>
       </div>
-      <div
-        className="overflow-y-auto px-6 py-5 prose dark:prose-invert max-w-none"
-        dangerouslySetInnerHTML={{ __html: html }}
-      />
+      {/* The chat's own markdown renderer (sanitized), so the guide reads the
+          same here as in the chat. */}
+      <div className="overflow-y-auto px-6 py-5">
+        <StreamingMarkdown content={content || ''} />
+      </div>
     </Modal>
   );
 }

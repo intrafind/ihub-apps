@@ -27,8 +27,8 @@ import { buildUsageGuideMessages, selectGuideModel, unwrapFence } from '../utils
  *   it; LLM errors (see `isLLMError`) when the model call fails.
  */
 export async function generateUsageGuide({ app, language, user }) {
-  const model = selectGuideModel(configCache.getModels().data, model =>
-    canUserAccessResource(user, 'models', model.id)
+  const model = selectGuideModel(configCache.getModels().data, candidate =>
+    canUserAccessResource(user, 'models', candidate.id)
   );
   if (!model) {
     const error = new Error('No chat model you may use is available to write the guide');
