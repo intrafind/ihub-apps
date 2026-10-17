@@ -88,7 +88,8 @@ Error frames carry a stable machine-readable `code` alongside the human-readable
 | `audio-too-long`                                | Batch providers only: the recording exceeded `maxBufferedAudioBytes` |
 | `server-busy`                                   | Batch providers only: process-wide `maxBufferedAudioBytesTotal` reached |
 | `feature-disabled` / `voice-mode-disabled`      | Conversation mode only: the `voiceMode` feature flag is off / voice mode is off on the platform |
-| `turn-backlog`                                  | Conversation mode only: more than 32 commits are waiting for the turns before them |
+| `turn-backlog`                                  | Conversation mode only: more than 32 turns are waiting for the ones before them (commits not yet sent upstream, or, for a batch provider, turns waiting for their transcription) |
+| `no-speech`                                     | Conversation mode only: ten minutes without audio or `commit`, only keepalives |
 
 ### Connection lifecycle and guards
 
@@ -141,7 +142,7 @@ Details that clients can rely on:
 - `delta` and `final` frames carry text of one turn only. Segments that an upstream completes in the middle of a turn (Gemini Live) are not forwarded as `final` frames: the turn's `final` has the whole text.
 - A `commit`, a `keepalive` or binary audio before `ready` is held and handled once the session exists.
 - `stop` ends the session: audio after the last `commit` belongs to a turn the client never ended and is dropped, turns that were committed still get their `final`, then `done` is sent and the socket closes. A client that closes the socket instead loses the turns that have no `final` yet.
-- A failing upstream or transcription ends the session with an `error` frame (see the table above). Unlike a one-utterance session, even a **normal** close of the upstream socket in the middle of a conversation is an error (`upstream-closed`), so the client can reconnect instead of waiting for turns that never come.
+- A failing upstream or transcription ends the session with an `error` frame (see the table above). Unlike a one-utterance session, even a **normal** close of the upstream socket in the middle of a conversation is an error (`upstream-closed`), so the client does not wait for turns that never come. After `stop`, a normal close with a committed turn still waiting is reported the same way. (The browser client reconnects once after an unexpected close of the socket and starts a new session on the same connection budget; any `error` frame from the server, such as `session-limit` or `no-speech`, ends the voice session with a message.)
 
 ### Idle timeout and keepalive
 
@@ -149,6 +150,9 @@ A conversation spends most of its time without audio: while the app thinks and s
 
 - **The client sends `{"type":"keepalive"}` at least every 20 s for the whole session**, whether the app is listening, thinking or speaking. Idle means: no audio, no `commit` and no `keepalive` for **60 s**, which closes the session. What the upstream says does not count, so an abandoned tab is not kept open by an upstream that chatters.
 - The 15 s no-audio grace does not apply: the user may take as long as they like to say the first thing, as long as the client keeps sending keepalives. (The socket's own ping every 25 s still detects a dead browser.)
+
+- Keepalives alone do not keep a session open for ever: when no audio and no `commit` arrived for **ten minutes** (`CONVERSATION_TIMINGS.noSpeechMs`), the next `keepalive` ends the session with `{"type":"error","code":"no-speech"}`. A microphone left open, or a client that only sends keepalives, therefore cannot hold an upstream connection and a connection slot for the whole session length. Every `commit` and every audio frame starts the ten minutes over.
+- Control frames (the JSON text frames) over 8 KB are ignored, and so is text that is not a JSON object (`null`, a number, an array).
 
 A `keepalive` outside a conversation, like `commit`, is ignored silently, so it can never keep a one-utterance session open.
 

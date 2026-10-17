@@ -258,8 +258,8 @@ Voice mode turns a chat into a spoken conversation. The user talks, the app answ
 - **Start.** Click the **waveform button** next to **Send**. The first click asks the browser for the microphone, because audio needs a click to start. The button only shows when voice mode is available for the app (see [When voice mode is available](#when-voice-mode-is-available)).
 - **The voice view.** It covers the messages and leaves the chat header visible. An orb moves with your voice and the app's, a label says what is going on (*Listening…*, *Thinking…*, *Speaking…*, *Microphone is muted*), and captions show what you said and what the app is saying. **Mute** switches the microphone off for a moment, **End** closes the view.
 - **Hands-free** (default). Just speak. After a short pause, 0.8 seconds by default, your turn ends and the app answers. Your own words show as a caption while you speak, and a turn with nothing but a cough or "um" is dropped without sending anything.
-- **Push-to-talk.** Hold the on-screen button or the **Space** bar while you speak. Letting go sends your turn. Space is not push-to-talk while you are typing into a field.
-- **Interrupting.** When you speak while the app is answering, it stops within a fraction of a second, stops the answer that is still being written, and listens to you. A tap on the orb also stops the answer. Turn **Let me interrupt by speaking** off if the app keeps cutting itself off.
+- **Push-to-talk.** Hold the on-screen button or the **Space** bar while you speak. Letting go sends your turn. Space is not push-to-talk while you are typing into a field or while a button has the focus (it presses that button then). Keyboard and screen reader users: pressing **Space** or **Enter** on the on-screen button holds it, and a single activation by a screen reader starts the turn and a second one sends it. The turn also ends when the window loses focus, so the microphone is never left open in the background.
+- **Interrupting.** When you speak while the app is answering, it stops about a third of a second after you begin (the detector waits for 350 ms of speech so that a cough or a click does not interrupt), stops the answer that is still being written, and listens to you. A tap on the orb also stops the answer. Turn **Let me interrupt by speaking** off if the app keeps cutting itself off.
 - **Headphones.** The microphone cancels echo, but laptop speakers can still be picked up as a voice. With headphones interrupting works best. Without, switch interrupting off in the settings and use push-to-talk or the tap.
 - **Captions** are on by default. They are the alternative to audio for people who cannot hear it and for noisy places, and the whole conversation is also in the chat behind the view. Switch them off in the settings.
 - **Settings (⚙).** Listening style, interrupting and captions. They are stored in the browser of each user and win over the defaults of the admin.
@@ -290,7 +290,7 @@ In hands-free mode a voice-activity detector runs in the browser and finds where
 
 1. **Switch the feature on.** **Admin → Features → Voice Mode** (a preview feature, off by default). Without it nobody sees the button and the server refuses voice sessions.
 2. **Prepare the speech services.** Voice input for the apps that should have voice mode (see [Speech Recognition Services](#speech-recognition-services)), and a text-to-speech model (see [Read Aloud](text-to-speech.md#setting-it-up) for adding one; read aloud itself does not have to be switched on when voice mode names its own model).
-3. **Open Admin → Voice Input → Voice mode.** Tick **Enable voice mode**, optionally choose a text-to-speech model, and set the listening style, the length of the pause, interrupting, the reasoning effort and the longest session. Use **Try it** to hold a conversation from the admin page, with the settings in the form and the speech service chosen under **Voice input**, before you save.
+3. **Open Admin → Voice Input → Voice mode.** Tick **Enable voice mode**, optionally choose a text-to-speech model, and set the listening style, the length of the pause, interrupting, the reasoning effort and the longest session. Use **Try it** to hold a conversation from the admin page with the settings in the form (before you save them) and the speech service chosen under **Voice input**. The app repeats what it heard. One exception: with a transcription model as the speech service, **Enable voice mode** must have been saved once, because that conversation socket checks the saved switch like it does for every user. **Try it** says so until then.
 4. **Decide per app.** With **Turn voice mode on for apps that do not decide themselves** (`appDefault`) off, voice mode is opt-in: open an app in the app editor, and under **Input Mode & Microphone** set **Voice mode** to **On**. With it on, every app that allows voice input has voice mode unless the app sets it to **Off**.
 5. **Permissions.** No new permission is needed. Users need the app, the speech model (when the app uses one) and the text-to-speech model through their groups.
 
@@ -303,6 +303,15 @@ The button shows when all of these hold:
 3. a text-to-speech model is set for the app, for voice mode, or as the read-aloud default, and the user may use it;
 4. the app's speech service works: a transcription model is set, Azure Speech is enabled, or the browser has the Web Speech API;
 5. the browser has microphone access (`getUserMedia`) and `AudioWorklet`, which needs HTTPS or `localhost`.
+
+### Deployment notes
+
+- **Voice detection files.** Hands-free listening runs a voice-activity detector (Silero VAD on ONNX Runtime Web) in the browser. Its files (`silero_vad_v5.onnx` about 2.3 MB, the ONNX Runtime WebAssembly binary about 14 MB, and two small scripts) are built into the client and served by iHub under `<base path>/vad/`. Nothing is loaded from a CDN, so air-gapped installs work. They are fetched once when voice mode first starts and then come from the browser cache. iHub does not compress responses itself: let your reverse proxy compress `application/wasm` (gzip or brotli makes the WebAssembly file considerably smaller) and cache `/vad/*` for a long time (the file names do not change within a release).
+- **Content Security Policy.** iHub sets none. If your proxy sets one, voice mode needs `script-src 'self' blob: 'wasm-unsafe-eval'` (the audio worklets are created from blob URLs and ONNX Runtime compiles WebAssembly), `worker-src 'self' blob:` and `connect-src 'self'` (plus the Azure Speech hosts when Azure is the speech service). Without them the voice view reports that voice detection could not be loaded.
+- **Microphone permission.** A proxy that sends `Permissions-Policy` must allow `microphone=(self)`. Voice mode is not offered in an embedded chat. Send `frame-ancestors 'self'` and `X-Frame-Options: SAMEORIGIN` (unless you embed iHub on purpose) so that no other site can frame iHub and start recording with a click.
+- **HTTPS.** The browser grants the microphone and `AudioWorklet` only on HTTPS or `localhost`.
+- **Sub-paths.** Behind a base path (`/ihub/`) the files are served from `/ihub/vad/`; the client works the path out like it does for the API.
+- **Rate limits.** Every answer is read in several requests (three to six). They count against `rateLimit.inferenceApi`, which is keyed by IP address: many users behind one NAT share it, so raise its `limit` when voice mode is used widely. A request the user stops by interrupting is not counted by that limiter, so a user can additionally have at most six syntheses running at once (`429` with `too-many-requests`).
 
 ### Configuration reference
 
@@ -371,6 +380,7 @@ An app without `inputMode.voiceMode` simply follows the platform, and nothing ne
 
 - **Session length:** `maxSessionMinutes`, then the voice view closes with a message.
 - **Connections:** voice mode counts against the realtime limits (`speech.realtime.maxConnectionsPerUser` and `maxConnections`, see [Runtime limits and tuning](voice-transcription.md#runtime-limits-and-tuning)). A session sends keepalive messages while the app thinks and speaks, so a long answer does not end it.
+- **Nobody speaking:** a session in which nothing was said for ten minutes (no audio and no turn, only keepalives, for example a microphone left open or muted) ends with a message, so that it does not hold a connection for the whole session length.
 - **Speech output:** every piece of an answer is a request to `/api/voice/speech`, counted by the inference rate limit (`rateLimit.inferenceApi`). Interrupting aborts the requests of the interrupted answer.
 
 ### Troubleshooting
@@ -382,4 +392,7 @@ An app without `inputMode.voiceMode` simply follows the platform, and nothing ne
 | The app answers its own voice | Laptop speakers without headphones. Use headphones, turn interrupting off, or use push-to-talk. |
 | Turns end too early or too late | Change **End of turn after silence** (`endOfTurnSilenceMs`). Noisy rooms need a longer pause. |
 | Answers start slowly | A reasoning model: set **Reasoning effort** to `minimal` or `low`, or use an app model that does not reason. |
-| "The connection to speech recognition was lost" | The transcription socket broke twice in a row. Check the model under **Admin → Models → Test**, and the realtime limits. |
+| "The connection to speech recognition was lost" | The transcription socket broke and one reconnect did not bring it back. Check the model under **Admin → Models → Test**, and the realtime limits. |
+| "Voice mode ended because nothing was said for a while" | Ten minutes without speech (see [Limits](#limits)). Start it again. |
+| "Voice detection could not be loaded" | `/vad/` is blocked or not reachable: a proxy rule, a Content Security Policy without `'wasm-unsafe-eval'`, or a very slow first download. See [Deployment notes](#deployment-notes). |
+| The app answers but nothing is heard, a note says the answer could not be spoken | The text-to-speech model failed (no API key, no permission, rate limit). The answer is in the chat. Check the model under **Admin → Models → Test**. |

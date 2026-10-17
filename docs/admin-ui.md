@@ -290,6 +290,7 @@ See [Scheduled Tasks](scheduled-tasks.md).
 - **Defaults** — the dictation service of the microphone button (Browser, Azure Speech or vLLM Realtime) and the transcription model for recordings and audio/video uploads. Apps follow the defaults unless they choose a service or model of their own.
 - **vLLM Realtime** and **Azure Speech** — endpoints and keys, each with **Test connection**.
 - **Read aloud (text-to-speech)** — the play button on chat messages and its model, with a test field.
+- **Voice mode (preview)** — the spoken conversation with an app: switch, default for apps, text-to-speech model, listening style, pause length, interrupting, reasoning effort, longest session, voice style instruction and a **Try it** button. Needs the **Voice Mode** preview feature under Features. See [Voice Mode](microphone-feature.md#voice-mode-spoken-conversation).
 - **Test voice input** — microphone check, live dictation and a record-and-transcribe test, run in your own browser against the saved configuration.
 
 <p align="center">

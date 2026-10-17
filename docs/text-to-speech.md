@@ -236,7 +236,12 @@ mode names its own model. Which model speaks, in this order:
 2. `speech.voiceMode.ttsModelId` of the platform,
 3. `speech.tts.defaultModelId`, the read-aloud model.
 
-An app can also name a `voice` of that model in `inputMode.voiceMode.voice`.
+An app can also name a `voice` of that model in `inputMode.voiceMode.voice`
+(up to 200 characters). A request to `/api/voice/speech` may only pick a voice
+the admin configured: one of the model's own (`tts.voice`, `tts.voices`) or the
+voice of an app the caller may use whose voice mode is on and speaks with that
+model. A user can have at most six syntheses running at once (`429` with
+`too-many-requests`); voice mode keeps two running for one answer.
 Users need access to the model through their groups, as for read aloud. See
 [Voice mode](microphone-feature.md#voice-mode-spoken-conversation) for all
 settings.
