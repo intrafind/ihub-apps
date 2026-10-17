@@ -91,6 +91,8 @@ in the form again. The values stay with the chat, so they are still there when y
 - **📎** attaches files: documents, images, audio or video, depending on the app.
 - **🎙️** dictates into the input field; the **red dot** records audio for the selected
   model (see [Transcription](#transcription-and-voice)).
+- The **waveform button** next to **Send** starts a spoken conversation with the app, when your
+  administrator enabled voice mode (see [Voice mode](#transcription-and-voice)).
 - The **model selector** on the right chooses the model for this chat, when the app allows it.
   It also lists transcription models, which turn audio into text.
   Hover a model to read its description; some models carry a hint or a notice from the
@@ -161,13 +163,20 @@ audio, and it answers directly.
 A transcript is marked **Based on audio recording**. Typical uses: meeting notes from a recording,
 an email from a voice memo, a summary of an interview.
 
-Two more voice features may be available:
+Three more voice features may be available:
 
 - **Dictation** — the microphone button types what you say into the input field, so you can check
   it before sending. It uses the dictation service the administrator configured, whichever model
   is selected.
 - **Read aloud** — the play button on a message reads it to you. Click again to pause, the square
   stops.
+- **Voice mode** (preview) — the waveform button next to Send starts a spoken conversation: you
+  talk, the app answers out loud, and you can interrupt it by speaking. In *hands-free* mode the
+  app answers when you pause; in *push-to-talk* mode you hold the button or the Space bar while you
+  speak. Captions show both sides, **Esc** ends it, and the conversation stays in the chat so you
+  can carry on by typing. Headphones work best. Your voice is never stored. See
+  [Voice mode](microphone-feature.md#voice-mode-spoken-conversation) for the details and the
+  admin setup.
 
 ## Prompt library
 

@@ -424,7 +424,7 @@ describe('speakableChunker: chunk sizes', () => {
     expect(chunker.update(`${first} `)).toEqual([first]);
     const medium = 'A medium sentence that is not long enough alone. ';
     expect(chunker.update(`${first} ${medium}`)).toEqual([]);
-    const more = Array.from({ length: 10 }, (_, i) => `Another sentence number ${i}.`).join(' ');
+    const more = Array.from({ length: 10 }, (_, i) => `Another sentence about ${'abcdefghij'[i]}x.`).join(' ');
     const out = chunker.update(`${first} ${medium}${more} `);
     expect(out).toHaveLength(1);
     expect(out[0].length).toBeGreaterThanOrEqual(250);
