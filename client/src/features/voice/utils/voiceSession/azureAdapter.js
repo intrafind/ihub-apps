@@ -196,7 +196,7 @@ export function createAzureAdapter({
     switch (event.errorCode) {
       case sdk.CancellationErrorCode.ServiceTimeout:
       case sdk.CancellationErrorCode.ConnectionFailure:
-        return 'network';
+        return 'connection';
       default:
         return 'service';
     }

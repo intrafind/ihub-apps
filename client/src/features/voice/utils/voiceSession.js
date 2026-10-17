@@ -122,8 +122,9 @@ function createAdapter({ service, modelId, language, listeningStyle, speech, emi
  *    session has been shut down (`closed` follows; start a new one). `recoverable:
  *    true`: the session lives on but captures nothing, as for `mic-lost` (tab hidden,
  *    microphone muted or unplugged); `setMuted(false)` resumes it if the microphone
- *    is back. Codes: `mic-lost`, `connection-lost`, `service`, `network`,
- *    `unsupported`, `mic-denied`, `mic-missing`, `vad-unavailable`, `speech-unavailable`.
+ *    is back. Codes: `mic-lost`, `connection` (socket or network lost), `service` (the
+ *    speech service refused or failed; `message` says why), `unsupported` (no Web
+ *    Speech API), `mic-denied`, `mic-missing`, `vad-unavailable`.
  *  - `{type:'closed'}`: the session ended by itself (after an unrecoverable error).
  *    Not sent after `stop()`.
  *

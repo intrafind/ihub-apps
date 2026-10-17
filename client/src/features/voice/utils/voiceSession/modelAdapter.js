@@ -198,12 +198,12 @@ export function createModelAdapter({
     clearInterval(keepaliveTimer);
     keepaliveTimer = null;
     if (!startSettled) {
-      fail('connection-lost', 'The speech connection could not be opened');
+      fail('connection', 'The speech connection could not be opened');
       return;
     }
     if (sawServerError || isRefusalClose(event?.code) || reconnects >= 1) {
       abandonPending();
-      fail('connection-lost', 'The speech connection was lost');
+      fail('connection', 'The speech connection was lost');
       return;
     }
     reconnects += 1;
@@ -220,7 +220,7 @@ export function createModelAdapter({
     try {
       socket = createWebSocket(getUrl());
     } catch (err) {
-      fail('connection-lost', err?.message || 'The speech connection could not be opened');
+      fail('connection', err?.message || 'The speech connection could not be opened');
       return;
     }
     socket.binaryType = 'arraybuffer';
@@ -242,7 +242,7 @@ export function createModelAdapter({
     };
     if (isReconnect) {
       readyTimer = setTimeout(
-        () => fail('connection-lost', 'The speech connection could not be restored'),
+        () => fail('connection', 'The speech connection could not be restored'),
         readyTimeoutMs
       );
     }
@@ -255,7 +255,7 @@ export function createModelAdapter({
         resolveStart = resolve;
         rejectStart = reject;
         readyTimer = setTimeout(
-          () => fail('connection-lost', 'The speech service did not answer'),
+          () => fail('connection', 'The speech service did not answer'),
           readyTimeoutMs
         );
         connect(false);

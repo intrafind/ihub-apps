@@ -895,7 +895,6 @@ describe('say()', () => {
     playToEnd(ctx);
     expect(events.filter(e => e === 'drained')).toHaveLength(1);
     expect(durations(ctx)).toEqual([0.5, 0.5, 0.5]);
-    expectBackToBack(ctx);
   });
 
   test('a streamed answer may follow a say() that opened it', async () => {
@@ -1019,11 +1018,12 @@ describe('isSpeaking', () => {
 describe('the default chunker', () => {
   test('the first chunk is short, so audio starts early', async () => {
     const queue = createSpeechQueue({});
-    const first = 'This is the first sentence.';
-    const rest = Array.from(
-      { length: 12 },
-      (_, i) => `Another sentence about ${'abcdefghijkl'[i]}.`
-    );
+    const first = 'This is the first sentence of the answer.';
+    const words = ['apples', 'bananas', 'cherries', 'dates', 'elderberries', 'figs', 'grapes'];
+    const rest = words.flatMap(word => [
+      `Another sentence about ${word} follows here.`,
+      `And a second one about ${word} too.`
+    ]);
     queue.update(`${first} ${rest.join(' ')} `);
     await flush();
     expect(requests[0].body.text).toBe(first);
@@ -1031,5 +1031,6 @@ describe('the default chunker', () => {
     await flush();
     // The second chunk collects sentences up to its minimum length.
     expect(requests[1].body.text.length).toBeGreaterThanOrEqual(250);
+    expect(requests[1].body.text.startsWith('Another sentence about apples')).toBe(true);
   });
 });

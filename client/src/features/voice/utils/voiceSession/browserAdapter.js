@@ -169,10 +169,10 @@ export function createBrowserAdapter({
     }
   };
 
-  function noteFailure(message) {
+  function noteFailure(message, code = 'service') {
     failures += 1;
     if (failures >= MAX_FAILURES) {
-      fail('speech-unavailable', message || 'Speech recognition keeps stopping');
+      fail(code, message || 'Speech recognition keeps stopping');
     }
   }
 
@@ -192,6 +192,9 @@ export function createBrowserAdapter({
         break;
       case 'audio-capture':
         fail('mic-missing', 'No microphone found');
+        break;
+      case 'network':
+        noteFailure('The browser could not reach its speech recognition service', 'connection');
         break;
       default:
         noteFailure(event?.message || event?.error);
