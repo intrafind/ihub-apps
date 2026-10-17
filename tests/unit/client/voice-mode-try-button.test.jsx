@@ -28,12 +28,14 @@ jest.mock('../../../client/src/features/voice/hooks/useVoiceModeAvailability', (
   isSpeechChoiceUsable: () => true
 }));
 const mockEnded = [];
+const mockHookInput = { availability: null };
 jest.mock('../../../client/src/features/voice/hooks/useVoiceMode', () => {
   const React = require('react');
   const reducer = jest.requireActual('../../../client/src/features/voice/utils/voiceModeReducer');
   return {
     __esModule: true,
-    default: () => {
+    default: ({ availability }) => {
+      mockHookInput.availability = availability;
       const [active, setActive] = React.useState(false);
       const noop = () => {};
       return {
@@ -165,5 +167,48 @@ describe('Tab stays inside the dialog', () => {
     const last = screen.getByRole('button', { name: 'End' });
     last.focus();
     expect(fireEvent.keyDown(last, { key: 'a' })).toBe(true);
+  });
+});
+
+describe('the speech settings the voice session is given', () => {
+  const azure = (extra = {}) => ({
+    defaultService: 'azure',
+    tts: { defaultModelId: 'tts-1' },
+    azure: { enabled: true, host: '', region: 'westeurope', subscriptionKey: '', ...extra }
+  });
+
+  test('Azure with a saved key says so, in the shape the adapter reads, without the key', () => {
+    render(<VoiceModeTryButton speech={azure({ subscriptionKey: '***REDACTED***' })} />);
+    expect(mockHookInput.availability.platformSpeech.azure).toEqual({
+      enabled: true,
+      host: '',
+      region: 'westeurope',
+      keyConfigured: true
+    });
+    expect(JSON.stringify(mockHookInput.availability)).not.toContain('REDACTED');
+  });
+
+  test('a key that was typed is never handed on either', () => {
+    render(<VoiceModeTryButton speech={azure({ subscriptionKey: 'sk-secret-typed' })} />);
+    expect(JSON.stringify(mockHookInput.availability)).not.toContain('sk-secret-typed');
+  });
+
+  test('no key: the adapter is told there is none', () => {
+    render(<VoiceModeTryButton speech={azure()} />);
+    expect(mockHookInput.availability.platformSpeech.azure.keyConfigured).toBe(false);
+  });
+
+  test('a public-shaped section keeps its flag', () => {
+    render(<VoiceModeTryButton speech={azure({ keyConfigured: true })} />);
+    expect(mockHookInput.availability.platformSpeech.azure.keyConfigured).toBe(true);
+  });
+
+  test('the rest of the section is passed on, and a section without Azure does not break', () => {
+    render(<VoiceModeTryButton speech={SPEECH} />);
+    expect(mockHookInput.availability.platformSpeech).toMatchObject({
+      defaultService: 'browser',
+      tts: { defaultModelId: 'tts-1' },
+      azure: { enabled: false, keyConfigured: false }
+    });
   });
 });

@@ -32,6 +32,7 @@ const state = {
   apps: [],
   visibleApps: null,
   permissions: new Set(['*']),
+  userId: 'u1',
   calls: [],
   resolved: [],
   hold: null
@@ -39,7 +40,7 @@ const state = {
 
 jest.unstable_mockModule('../middleware/authRequired.js', () => ({
   authRequired: (req, res, next) => {
-    req.user = { id: 'u1', permissions: { models: state.permissions } };
+    req.user = { id: state.userId, permissions: { models: state.permissions } };
     next();
   }
 }));
@@ -79,6 +80,8 @@ jest.unstable_mockModule('../tts/mistralTtsProvider.js', () => ({
 const { default: registerVoiceRoutes } = await import('../routes/voiceRoutes.js');
 
 const app = express();
+// As a deployment behind a proxy: the client address comes from X-Forwarded-For.
+app.set('trust proxy', true);
 app.use(express.json({ limit: '2mb' }));
 registerVoiceRoutes(app);
 
@@ -99,6 +102,7 @@ beforeEach(() => {
   state.apps = [];
   state.visibleApps = null;
   state.permissions = new Set(['*']);
+  state.userId = 'u1';
   state.calls = [];
   state.resolved = [];
   state.hold = null;
@@ -391,5 +395,69 @@ describe('syntheses at once', () => {
 
     state.hold = null;
     expect((await speak({ text: GERMAN })).status).toBe(200);
+  });
+
+  /**
+   * A synthesis request as visitor `from` that stays running until the hold is
+   * released. (A supertest request only starts once something waits for it.)
+   */
+  const speakAs = from =>
+    Promise.resolve(
+      request(app)
+        .post('/api/voice/speech')
+        .set('X-Forwarded-For', from)
+        .send({ text: GERMAN })
+        .buffer(true)
+        .parse(binary)
+    );
+
+  /** Fill the six slots of `from`, run `during` while they are held, then let them finish. */
+  async function withSixHeldBy(from, during) {
+    let release;
+    state.hold = new Promise(resolve => {
+      release = resolve;
+    });
+    const running = Array.from({ length: 6 }, () => speakAs(from));
+    await until(() => state.calls.length === 6);
+    const later = [];
+    try {
+      await during(request => later.push(request));
+    } finally {
+      release();
+      await Promise.all([...running, ...later]);
+    }
+  }
+
+  test('anonymous visitors do not share slots: one address is capped, another is not', async () => {
+    state.userId = 'anonymous';
+    await withSixHeldBy('10.0.0.1', async started => {
+      const sameAddress = await request(app)
+        .post('/api/voice/speech')
+        .set('X-Forwarded-For', '10.0.0.1')
+        .send({ text: GERMAN });
+      expect(sameAddress.status).toBe(429);
+
+      // Another visitor is served, although the first one has used all six.
+      started(speakAs('10.0.0.2'));
+      await until(() => state.calls.length === 7);
+    });
+  });
+
+  test('a signed-in user is not counted with the anonymous visitors of the same address', async () => {
+    state.userId = 'anonymous';
+    await withSixHeldBy('10.0.0.1', async started => {
+      state.userId = 'u1';
+      started(speakAs('10.0.0.1'));
+      await until(() => state.calls.length === 7);
+    });
+  });
+
+  test('a user id that looks like an address does not use the slots of that address', async () => {
+    state.userId = 'anonymous';
+    await withSixHeldBy('10.0.0.1', async started => {
+      state.userId = '10.0.0.1';
+      started(speakAs('10.0.0.9'));
+      await until(() => state.calls.length === 7);
+    });
   });
 });

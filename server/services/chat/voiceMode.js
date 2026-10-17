@@ -154,7 +154,8 @@ export function resolveVoiceThinkingLevel({
   if (app?.thinking?.level || app?.thinking?.enabled === false) return undefined;
   if (!model?.thinking?.enabled) return undefined;
   const voiceLevel = resolveVoiceModeSettings({ platform }).thinkingLevel;
-  const own = VOICE_THINKING_LEVELS.indexOf(model.thinking.level);
+  // The model schema also takes the SDK spellings (`MINIMAL`).
+  const own = VOICE_THINKING_LEVELS.indexOf(String(model.thinking.level).toLowerCase());
   if (own !== -1 && own <= VOICE_THINKING_LEVELS.indexOf(voiceLevel)) return undefined;
   return voiceLevel;
 }

@@ -29,15 +29,37 @@ function defaultChoiceOf(speech) {
 }
 
 /**
+ * The speech section the way the speech adapters read it. The form holds the
+ * Azure subscription key itself (redacted after a save, typed before one);
+ * the adapter wants to know whether the server holds one (`keyConfigured`),
+ * because it then fetches its tokens from the server, which uses the SAVED key.
+ * The key is never passed on.
+ */
+function toPublicSpeech(speech) {
+  const azure = speech?.azure || {};
+  return {
+    ...speech,
+    azure: {
+      enabled: Boolean(azure.enabled),
+      host: azure.host || '',
+      region: azure.region || '',
+      keyConfigured: Boolean(azure.keyConfigured ?? azure.subscriptionKey)
+    }
+  };
+}
+
+/**
  * Admin → Voice Input: try voice mode with the settings on the page, before
  * saving them. It runs a real session — microphone, the platform's default
  * speech service, turn detection, text-to-speech — but without a chat model:
  * the app repeats what it heard, so an admin hears the whole loop (and the
  * latency of it) without picking an app.
  *
- * Everything runs with the form's settings except one thing: the conversation
+ * Everything runs with the form's settings except two things: the conversation
  * socket of a transcription model checks the SAVED switch (`speech.voiceMode.
- * enabled`) like it does for every user, so that service needs it saved once.
+ * enabled`) like it does for every user, so that service needs it saved once;
+ * and Azure Speech signs in with the SAVED subscription key, so a key that was
+ * just typed has to be saved before it is tried.
  *
  * @param {Object} props
  * @param {object} props.speech - The `speech` section as it is in the form (unsaved).
@@ -61,7 +83,7 @@ export default function VoiceModeTryButton({ speech, savedEnabled = true }) {
       reason: needsSave ? 'save-first' : null,
       settings,
       speech: choice,
-      platformSpeech: speech,
+      platformSpeech: toPublicSpeech(speech),
       ttsModelId: settings.ttsModelId
     };
   }, [speech, savedEnabled]);

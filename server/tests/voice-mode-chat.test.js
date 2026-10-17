@@ -298,6 +298,15 @@ describe('resolveVoiceThinkingLevel', () => {
     expect(resolveVoiceThinkingLevel({ platform, model: own('turbo') })).toBe('low');
   });
 
+  test('reads the SDK spellings of a level (the model schema takes them in capitals)', () => {
+    const own = level => ({ ...thinkingModel, thinking: { enabled: true, level } });
+    // MINIMAL and LOW are not above what voice asks for: left as they are.
+    expect(resolveVoiceThinkingLevel({ platform, model: own('MINIMAL') })).toBeUndefined();
+    expect(resolveVoiceThinkingLevel({ platform, model: own('LOW') })).toBeUndefined();
+    expect(resolveVoiceThinkingLevel({ platform, model: own('MEDIUM') })).toBe('low');
+    expect(resolveVoiceThinkingLevel({ platform, model: own('HIGH') })).toBe('low');
+  });
+
   test('leaves thinking that is turned off alone', () => {
     expect(
       resolveVoiceThinkingLevel({ platform, model: thinkingModel, thinkingEnabled: false })

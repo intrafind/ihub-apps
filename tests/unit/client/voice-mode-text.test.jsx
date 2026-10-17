@@ -247,4 +247,69 @@ describe('answerForClarification', () => {
       expect(answerForClarification('I have 2 kids', numbers)).toBeNull();
     });
   });
+
+  describe('multi-select questions', () => {
+    const colours = {
+      inputType: 'multi_select',
+      options: [
+        { value: 'red', label: 'Red' },
+        { value: 'blue', label: 'Blue' },
+        { value: 'dark-green', label: 'Dark green' },
+        { value: 'green', label: 'Green' }
+      ]
+    };
+
+    test('every option named is selected, as an array in the order of the options', () => {
+      expect(answerForClarification('Red and blue', colours)).toEqual({
+        value: ['red', 'blue'],
+        displayText: 'Red, Blue'
+      });
+      expect(answerForClarification('blue, then red please', colours)).toEqual({
+        value: ['red', 'blue'],
+        displayText: 'Red, Blue'
+      });
+    });
+
+    test('one option is still an array, so the server sees a selection', () => {
+      expect(answerForClarification('Red', colours)).toEqual({
+        value: ['red'],
+        displayText: 'Red'
+      });
+    });
+
+    test('a longer label wins over the shorter one inside it', () => {
+      expect(answerForClarification('dark green and red', colours).value).toEqual([
+        'red',
+        'dark-green'
+      ]);
+      expect(answerForClarification('green', colours).value).toEqual(['green']);
+    });
+
+    test('an option said twice is selected once', () => {
+      expect(answerForClarification('red, red and blue', colours).value).toEqual(['red', 'blue']);
+    });
+
+    test('the number of selections the question allows is respected', () => {
+      const atLeastTwo = { ...colours, validation: { min: 2 } };
+      expect(answerForClarification('Red', atLeastTwo)).toBeNull();
+      expect(answerForClarification('Red and blue', atLeastTwo).value).toEqual(['red', 'blue']);
+      const atMostOne = { ...colours, validation: { max: 1 } };
+      expect(answerForClarification('Red and blue', atMostOne)).toBeNull();
+      expect(answerForClarification('Blue', atMostOne).value).toEqual(['blue']);
+    });
+
+    test('no option named: not understood, unless another answer is allowed', () => {
+      expect(answerForClarification('whatever you like', colours)).toBeNull();
+      expect(answerForClarification('purple', { ...colours, allowOther: true })).toEqual({
+        value: ['purple'],
+        displayText: 'purple'
+      });
+    });
+
+    test('single-select questions still take one option only', () => {
+      const single = { ...colours, inputType: 'single_select' };
+      expect(answerForClarification('Red and blue', single)).toBeNull();
+      expect(answerForClarification('Red', single).value).toBe('red');
+    });
+  });
 });

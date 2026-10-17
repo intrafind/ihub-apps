@@ -100,26 +100,52 @@ const allowsFreeText = clarification =>
   clarification?.allowOther === true || FREE_TEXT_INPUT_TYPES.includes(clarification?.inputType);
 
 /**
- * The one option the spoken words name, or null when none or several do. An
+ * The options the spoken words name: the one whose label (or value) is what was
+ * said, else every option whose label the words contain as whole words. An
  * option whose label is part of a longer matching label does not count on its
- * own ("large" in "extra large"); two different options that both match are
- * ambiguous ("yes or no").
+ * own ("large" in "extra large").
  */
-function matchOption(entries, said) {
+function namedOptions(entries, said) {
   const labelled = entries.map(entry => ({ entry, label: normalize(entry.label) }));
   if (said) {
     const exact = labelled.find(
       ({ entry, label }) => label === said || normalize(entry.value) === said
     );
-    if (exact) return exact.entry;
+    if (exact) return [exact.entry];
   }
   const hits = labelled.filter(({ label }) => isSaid(said, label));
   const specific = hits.filter(
     hit =>
       !hits.some(other => other.label.length > hit.label.length && isSaid(other.label, hit.label))
   );
-  const values = new Set(specific.map(({ entry }) => String(entry.value)));
-  return values.size === 1 ? specific[0].entry : null;
+  return [...new Map(specific.map(({ entry }) => [String(entry.value), entry])).values()];
+}
+
+/** The one option the spoken words name, or null when none or several do ("yes or no"). */
+function matchOption(entries, said) {
+  const named = namedOptions(entries, said);
+  return named.length === 1 ? named[0] : null;
+}
+
+/**
+ * The answer to a multi-select question: every option the words name, in the
+ * order of the options ("red and blue"). The server turns an answer with fewer
+ * or more selections than the question allows (`validation.min` / `max`) down,
+ * and a person who cannot see the options would not know why, so such an answer
+ * is not understood and the question is asked again.
+ */
+function answerForMultiSelect(words, entries, clarification) {
+  const named = namedOptions(entries, normalize(words));
+  if (named.length === 0) {
+    return allowsFreeText(clarification) ? { value: [words], displayText: words } : null;
+  }
+  const { min, max } = clarification.validation || {};
+  if (typeof min === 'number' && named.length < min) return null;
+  if (typeof max === 'number' && named.length > max) return null;
+  return {
+    value: named.map(entry => entry.value),
+    displayText: named.map(entry => String(entry.label)).join(', ')
+  };
 }
 
 /**
@@ -130,10 +156,11 @@ function matchOption(entries, said) {
  * it, so a sentence that names no option, or two, is not guessed at: the words
  * themselves are the answer when the question allows another answer, otherwise
  * `null` ("not understood") and the caller asks again. Without options the
- * words are the answer.
+ * words are the answer. A multi-select question takes every option named, as an
+ * array (see `answerForMultiSelect`).
  *
  * @param {string} spoken - The final transcript.
- * @param {{ options?: Array<{ value?: any, label?: any }|string>, allowOther?: boolean, inputType?: string }|null} clarification
+ * @param {{ options?: Array<{ value?: any, label?: any }|string>, allowOther?: boolean, inputType?: string, validation?: { min?: number, max?: number } }|null} clarification
  * @returns {{ value: any, displayText: string }|null} `null`: not understood.
  */
 export function answerForClarification(spoken, clarification) {
@@ -146,6 +173,9 @@ export function answerForClarification(spoken, clarification) {
       ? { value: option, label: option }
       : { value: option?.value ?? option?.label, label: option?.label ?? String(option?.value) }
   );
+  if (clarification?.inputType === 'multi_select') {
+    return answerForMultiSelect(words, entries, clarification);
+  }
   const matched = matchOption(entries, normalize(words));
   if (matched) return { value: matched.value, displayText: String(matched.label) };
   return allowsFreeText(clarification) ? { value: words, displayText: words } : null;

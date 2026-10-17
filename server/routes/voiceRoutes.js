@@ -47,6 +47,18 @@ const MAX_CONCURRENT_SPEECH_PER_USER = 6;
 const speechInFlight = new Map();
 
 /**
+ * Whose syntheses are counted together. A signed-in user is one key; anonymous
+ * visitors all carry the one principal `anonymous`, so they are told apart by
+ * address (Express resolves it through the `trust proxy` setting) and do not
+ * use up each other's slots. The prefixes keep a user id and an address apart.
+ */
+function speechSlotKey(req) {
+  const id = req.user?.id;
+  if (id && id !== 'anonymous') return `user:${id}`;
+  return `ip:${req.ip || 'unknown'}`;
+}
+
+/**
  * The voices a request may pick for a text-to-speech model: the ones the admin
  * set up on the model (`tts.voice`, `tts.voices`) and the ones an app names for
  * it as its voice mode voice (`inputMode.voiceMode.voice`, on an app the user may
@@ -169,7 +181,7 @@ export default function registerVoiceRoutes(app) {
     }
     const { model, provider } = resolved;
 
-    const speechKey = req.user?.id || req.ip || 'unknown';
+    const speechKey = speechSlotKey(req);
     const running = speechInFlight.get(speechKey) || 0;
     if (running >= MAX_CONCURRENT_SPEECH_PER_USER) {
       return res
