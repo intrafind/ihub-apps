@@ -36,12 +36,7 @@ function sessionError(code, message) {
   return error;
 }
 
-const joinText = (...parts) =>
-  parts
-    .filter(Boolean)
-    .join(' ')
-    .replace(/\s+/g, ' ')
-    .trim();
+const joinText = (...parts) => parts.filter(Boolean).join(' ').replace(/\s+/g, ' ').trim();
 
 /** The recognizer constructor of this browser, if any. */
 export function getSpeechRecognitionCtor() {

@@ -22,10 +22,7 @@ import {
   vadThresholds
 } from '../../../client/src/features/voice/utils/voiceSession/vad';
 import { getVadAssetBaseUrl } from '../../../client/src/features/voice/utils/voiceSession/vadAssets';
-import {
-  VAD_ASSETS,
-  VAD_ASSET_DIR
-} from '../../../client/vite-plugins/vad-asset-files';
+import { VAD_ASSETS, VAD_ASSET_DIR } from '../../../client/vite-plugins/vad-asset-files';
 
 /** A detector the test drives by hand. */
 function fakeVadFactory() {
