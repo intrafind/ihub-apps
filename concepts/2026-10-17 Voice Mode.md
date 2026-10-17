@@ -25,8 +25,9 @@ product.
   orb (or the chat with live captions). The user can interrupt at any time. Camera and screen
   sharing work on mobile. When voice ends, the transcript stays in the conversation.
 - **Architecture: native speech-to-speech.** One model hears audio and produces audio, without an
-  STT → LLM → TTS chain. *Advanced Voice Mode* was turn-based. In July 2026 it was replaced by
-  **GPT-Live**, which is *full-duplex*: it listens and speaks at the same time.
+  STT → LLM → TTS chain. *Advanced Voice Mode* was turn-based. In July 2026 **GPT-Live** replaced
+  it as the default ChatGPT Voice experience. GPT-Live is *full-duplex*: it listens and speaks at
+  the same time.
 - **Delegation.** GPT-Live answers simple questions itself. For web search, deeper reasoning or
   bigger tasks it **hands the request to the frontier text model (GPT-5.5) in the background** and
   speaks the result when it arrives. A fast voice model handles the conversation, and a strong
@@ -330,8 +331,12 @@ chunks and synthesizes them in order** (`speechQueue.js`):
      than real time, so playback stays gap-free after the first chunk.
    - At most **2 requests are in flight**.
    - All chunks feed **one** `PcmStreamPlayer`, which already schedules buffers back to back.
-   - `language` is fixed for the whole answer (detected from the first chunk), so the voice does
-     not change in mid-answer.
+   - **One language, so one voice, for the whole answer.** Today `language` is only a fallback
+     hint: the endpoint detects the language from each request's own text
+     (`voiceRoutes.js`, `detectSpeechLanguage`). A short chunk could therefore get a different
+     voice. The first chunk's response states the language it picked (`X-Speech-Language`). The
+     client sends it with every later chunk as `{ language, languageFixed: true }`, and the
+     endpoint then uses it as given instead of detecting again.
 5. On `run/ended`, the rest of the buffer is flushed. When the player drains, the state returns to
    `listening`.
 6. **Barge-in or End** aborts all in-flight TTS fetches (the server aborts upstream on close),
@@ -339,7 +344,7 @@ chunks and synthesizes them in order** (`speechQueue.js`):
 
 **Load.** A typical answer of 3–6 chunks is well inside the inference limiter (500 requests/min).
 Voice answers are short by prompt, and `maxCharacters` still caps every request. No new server
-endpoint is needed in Phase 1.
+endpoint is needed in Phase 1. The only change to `/api/voice/speech` is the `languageFixed` flag.
 
 *Rejected for Phase 1:* a server-side endpoint that taps the run's text deltas and synthesizes them
 in one stream. It is fewer round trips, but it couples TTS to `RunStream` and needs run-to-TTS
@@ -421,6 +426,7 @@ route**, so the `KNOWN_ROUTES` / `index.html` rule does not apply. The Office pa
 | --- | --- |
 | `server/websocket/realtimeTranscription.js` | `conversation` mode, `commit`, `keepalive`, turn-numbered `final`, feature check |
 | `server/transcription/*Provider.js` | A `commitFrames()` per streaming provider; batch providers transcribe per commit |
+| `server/routes/voiceRoutes.js` | `languageFixed` on `/api/voice/speech`: use `language` as given, skip detection |
 | `server/validators/index.js` | `voiceMode` in `chatPostSchema` |
 | `server/services/chat/RequestBuilder.js` | Voice style instruction, thinking level |
 | `server/validators/platformConfigSchema.js`, `appConfigSchema.js` | New fields |
