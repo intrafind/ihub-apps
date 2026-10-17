@@ -11,7 +11,8 @@ import {
   TTS_AUDIO_ENCODING,
   DEFAULT_MAX_CHARACTERS
 } from '../tts/index.js';
-import { detectSpeechLanguage } from '../tts/language.js';
+import { detectSpeechLanguage, normalizeLanguage } from '../tts/language.js';
+import { resolveVoiceModeSettings } from '../../shared/voiceMode.js';
 
 /** Longest message body `/api/voice/speech` accepts, before markup is stripped. */
 const MAX_INPUT_CHARACTERS = 200_000;
@@ -33,6 +34,60 @@ function writeWithBackpressure(res, chunk) {
   });
 }
 
+/** Longest `voice` id `/api/voice/speech` accepts (the model schema's limit). */
+const MAX_VOICE_ID_LENGTH = 200;
+
+/**
+ * Syntheses running per user. Voice mode keeps two in flight for one answer; the
+ * cap is for a client that opens far more than any player would. An aborted
+ * request is not counted by the rate limiter (it answers 'failed' requests for
+ * free), so this is what bounds how much a user can have the provider do at once.
+ */
+const MAX_CONCURRENT_SPEECH_PER_USER = 6;
+const speechInFlight = new Map();
+
+/**
+ * Whose syntheses are counted together. A signed-in user is one key; anonymous
+ * visitors all carry the one principal `anonymous`, so they are told apart by
+ * address (Express resolves it through the `trust proxy` setting) and do not
+ * use up each other's slots. The prefixes keep a user id and an address apart.
+ */
+function speechSlotKey(req) {
+  const id = req.user?.id;
+  if (id && id !== 'anonymous') return `user:${id}`;
+  return `ip:${req.ip || 'unknown'}`;
+}
+
+/**
+ * The voices a request may pick for a text-to-speech model: the ones the admin
+ * set up on the model (`tts.voice`, `tts.voices`) and the ones an app names for
+ * it as its voice mode voice (`inputMode.voiceMode.voice`, on an app the user may
+ * use whose voice mode is on and speaks with this model). A request cannot reach
+ * any other voice of the provider account.
+ *
+ * @param {Object} model - The text-to-speech model
+ * @param {Object} platform - Platform config
+ * @param {Object} user - The caller, whose apps count
+ * @returns {Promise<Set<string>>}
+ */
+async function configuredVoices(model, platform, user) {
+  const voices = new Set();
+  const add = value => {
+    if (typeof value === 'string' && value.trim()) voices.add(value.trim());
+  };
+  add(model?.tts?.voice);
+  Object.values(model?.tts?.voices || {}).forEach(add);
+  const { data: apps } = (await configCache.getAppsForUser(user, platform)) || {};
+  for (const app of Array.isArray(apps) ? apps : []) {
+    if (!app?.inputMode?.voiceMode?.voice) continue;
+    const settings = resolveVoiceModeSettings({ platform, app });
+    if (settings.enabled && settings.ttsModelId === model.id) {
+      add(app.inputMode.voiceMode.voice);
+    }
+  }
+  return voices;
+}
+
 /**
  * User-facing voice / speech-to-text routes.
  *
@@ -47,10 +102,18 @@ function writeWithBackpressure(res, chunk) {
  */
 export default function registerVoiceRoutes(app) {
   /**
-   * Read a message aloud: `POST /api/voice/speech` `{ text, modelId?, language? }`.
+   * Read a message aloud: `POST /api/voice/speech`
+   * `{ text, modelId?, language?, languageFixed?, voice? }`.
    * `language` is a hint (the user's UI language) for when the message's own
    * language cannot be told from its text; it picks the voice from the
    * model's `tts.voices` (see server/tts/language.js).
+   *
+   * Voice mode reads one answer in several requests (a chunk each). With
+   * `languageFixed: true` the `language` is used as given and nothing is
+   * detected, so every chunk of the answer gets the voice the first one got
+   * (its `X-Speech-Language`) even when a short chunk would be told differently.
+   * `voice` picks one of the model's configured voices for the request (see
+   * `configuredVoices`); without it the voice follows the language.
    *
    * Streams the speech as it is generated — raw 16-bit signed little-endian
    * mono PCM (`X-Audio-Encoding: pcm_s16le`, rate in `X-Audio-Sample-Rate`)
@@ -78,7 +141,13 @@ export default function registerVoiceRoutes(app) {
       req.user = enhanceUserWithPermissions(req.user, platform.auth || {}, platform);
     }
 
-    const { text, modelId, language: languageHint } = req.body || {};
+    const {
+      text,
+      modelId,
+      language: languageHint,
+      languageFixed,
+      voice: requestedVoice
+    } = req.body || {};
     if (typeof text !== 'string' || !text.trim()) {
       return res.status(400).json({ error: 'text is required', code: 'invalid-text' });
     }
@@ -88,6 +157,23 @@ export default function registerVoiceRoutes(app) {
     if (modelId !== undefined && typeof modelId !== 'string') {
       return res.status(400).json({ error: 'modelId must be a string', code: 'invalid-model' });
     }
+    if (languageFixed !== undefined && typeof languageFixed !== 'boolean') {
+      return res
+        .status(400)
+        .json({ error: 'languageFixed must be a boolean', code: 'invalid-language' });
+    }
+    if (languageFixed === true && typeof languageHint !== 'string') {
+      return res.status(400).json({
+        error: 'language is required when languageFixed is true',
+        code: 'invalid-language'
+      });
+    }
+    if (
+      requestedVoice !== undefined &&
+      (typeof requestedVoice !== 'string' || requestedVoice.length > MAX_VOICE_ID_LENGTH)
+    ) {
+      return res.status(400).json({ error: 'voice must be a string', code: 'invalid-voice' });
+    }
 
     const resolved = resolveTtsModel({ modelId, user: req.user, platform });
     if (!resolved.ok) {
@@ -95,17 +181,49 @@ export default function registerVoiceRoutes(app) {
     }
     const { model, provider } = resolved;
 
+    const speechKey = speechSlotKey(req);
+    const running = speechInFlight.get(speechKey) || 0;
+    if (running >= MAX_CONCURRENT_SPEECH_PER_USER) {
+      return res
+        .status(429)
+        .json({ error: 'Too many speech requests at once', code: 'too-many-requests' });
+    }
+    speechInFlight.set(speechKey, running + 1);
+    let slotReleased = false;
+    const releaseSlot = () => {
+      if (slotReleased) return;
+      slotReleased = true;
+      const left = (speechInFlight.get(speechKey) || 1) - 1;
+      if (left > 0) speechInFlight.set(speechKey, left);
+      else speechInFlight.delete(speechKey);
+    };
+    res.once('close', releaseSlot);
+    if (res.destroyed) releaseSlot();
+
+    // A voice the request picks has to be one the admin configured; it replaces
+    // the one the language chooses.
+    const voice = typeof requestedVoice === 'string' ? requestedVoice.trim() : '';
+    if (voice && !(await configuredVoices(model, platform, req.user)).has(voice)) {
+      return res.status(400).json({ error: 'Unknown voice for this model', code: 'invalid-voice' });
+    }
+
     const maxCharacters = platform.speech?.tts?.maxCharacters || DEFAULT_MAX_CHARACTERS;
     const { chunks, characters, truncated } = prepareSpeech(text, { maxCharacters });
     if (!chunks.length) {
       return res.status(422).json({ error: 'Nothing to read aloud', code: 'no-speakable-text' });
     }
 
-    // One voice for the whole message: its language decides it once.
-    const language = detectSpeechLanguage(chunks.join('\n\n'), {
-      hint: typeof languageHint === 'string' ? languageHint : undefined
-    });
-    const cfg = provider.resolveUpstream(model, { language });
+    // One voice for the whole message: its language decides it once. A caller
+    // that already knows the language (the rest of an answer read in chunks)
+    // fixes it, and nothing is detected. A language the speech models do not
+    // list is not a failure mid-answer: it simply gets the model's own voice.
+    const language = languageFixed
+      ? normalizeLanguage(languageHint)
+      : detectSpeechLanguage(chunks.join('\n\n'), {
+          hint: typeof languageHint === 'string' ? languageHint : undefined
+        });
+    const upstream = provider.resolveUpstream(model, { language });
+    const cfg = voice ? { ...upstream, voice } : upstream;
 
     let started = false;
     const start = () => {

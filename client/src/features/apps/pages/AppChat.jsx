@@ -26,6 +26,9 @@ import lazyWithRetry from '../../../utils/lazyWithRetry';
 import { fetchSourceFile } from '../../chat/sources/sourceActions';
 import useAppChat from '../../chat/hooks/useAppChat';
 import useVoiceCommands from '../../voice/hooks/useVoiceCommands';
+import useVoiceMode from '../../voice/hooks/useVoiceMode';
+import useVoiceModeAvailability from '../../voice/hooks/useVoiceModeAvailability';
+import VoiceModeOverlay from '../../voice/components/VoiceModeOverlay';
 import useAppSettings from '../../../shared/hooks/useAppSettings';
 import useFileUploadHandler from '../../../shared/hooks/useFileUploadHandler';
 import { consumePendingChatStart } from '../../chat/startChatHandoff';
@@ -2318,14 +2321,25 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
    * @param {Event} e
    * @param {string|null} [startFormMessage]
    */
-  const handleSubmit = async (e, startFormMessage = null) => {
+  /**
+   * Send the message. `startFormMessage` is a start form's rendered prompt.
+   * `voiceText` is a spoken turn from voice mode: it goes out like typed text
+   * (same prompt, model, tools and variables), flagged as a voice turn, and
+   * leaves whatever is typed in the composer alone.
+   */
+  const handleSubmit = async (e, startFormMessage = null, { voiceText } = {}) => {
     e.preventDefault();
+    const isVoiceTurn = typeof voiceText === 'string';
+    // A spoken turn is its own message: a file staged in the composer belongs
+    // to the typed message it was added for, so it neither goes out with an
+    // unrelated sentence nor is cleared from the composer by it.
+    const selectedFile = isVoiceTurn ? null : fileUploadHandler.selectedFile;
     // An attachment is still being processed (e.g. the audio of a video is
     // extracted), in whichever composer it was added: the message would go
     // without it. Each composer holds back its own Send; this is the backstop
     // for the one that was not told.
     if (fileUploadHandler.isAttachmentProcessing) return;
-    const typed = startFormMessage ?? input;
+    const typed = startFormMessage ?? (isVoiceTurn ? voiceText : input);
 
     // While recording, "send" means: finish the recording — sent to the
     // selected model, with anything typed when that is a chat model.
@@ -2336,7 +2350,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
     // Audio is still being transcribed.
     if (transcribeAbortRef.current) return;
 
-    if (!typed.trim() && !fileUploadHandler.selectedFile && !app?.allowEmptyContent) {
+    if (!typed.trim() && !selectedFile && !app?.allowEmptyContent) {
       return;
     }
 
@@ -2371,7 +2385,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
     // audio file with its transcript and nothing else: no text reaches it, from
     // the composer, an auto-send or a resend. Any other model has to take
     // audio itself.
-    const selected = fileUploadHandler.selectedFile ? [fileUploadHandler.selectedFile].flat() : [];
+    const selected = selectedFile ? [selectedFile].flat() : [];
     const audioFiles = selected.filter(f => f?.type === 'audio');
     if (!compareModeActive && transcriptionModel) {
       if (audioFiles.length > 0) {
@@ -2399,12 +2413,12 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
     let messageContent = finalInput;
     let messageData = {};
 
-    if (fileUploadHandler.selectedFile) {
+    if (selectedFile) {
       // Handle multiple files
-      if (Array.isArray(fileUploadHandler.selectedFile)) {
-        const images = fileUploadHandler.selectedFile.filter(f => f.type === 'image');
-        const audioFiles = fileUploadHandler.selectedFile.filter(f => f.type === 'audio');
-        const documents = fileUploadHandler.selectedFile.filter(f => f.type === 'document');
+      if (Array.isArray(selectedFile)) {
+        const images = selectedFile.filter(f => f.type === 'image');
+        const audioFiles = selectedFile.filter(f => f.type === 'audio');
+        const documents = selectedFile.filter(f => f.type === 'document');
 
         let contentParts = [finalInput];
 
@@ -2449,18 +2463,18 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
         };
       } else {
         // Handle single file (legacy behavior)
-        if (fileUploadHandler.selectedFile.type === 'image') {
-          const imgPreview = `<img src="${fileUploadHandler.selectedFile.base64}" alt="${t('common.uploadedImage', 'Uploaded image')}" style="max-width: 100%; max-height: 300px; margin-top: 8px;" />`;
+        if (selectedFile.type === 'image') {
+          const imgPreview = `<img src="${selectedFile.base64}" alt="${t('common.uploadedImage', 'Uploaded image')}" style="max-width: 100%; max-height: 300px; margin-top: 8px;" />`;
           messageContent = finalInput ? `${finalInput}\n\n${imgPreview}` : imgPreview;
-          messageData = { imageData: fileUploadHandler.selectedFile };
-        } else if (fileUploadHandler.selectedFile.type === 'audio') {
-          const audioIndicator = `<div style="display: inline-flex; align-items: center; background-color: #4b5563; border: 1px solid #d1d5db; border-radius: 6px; padding: 4px 8px; margin-left: 8px; font-size: 0.875em; color: #ffffff;">\n        <span style="margin-right: 4px;">🎵</span>\n        <span>${fileUploadHandler.selectedFile.fileName}</span>\n      </div>`;
+          messageData = { imageData: selectedFile };
+        } else if (selectedFile.type === 'audio') {
+          const audioIndicator = `<div style="display: inline-flex; align-items: center; background-color: #4b5563; border: 1px solid #d1d5db; border-radius: 6px; padding: 4px 8px; margin-left: 8px; font-size: 0.875em; color: #ffffff;">\n        <span style="margin-right: 4px;">🎵</span>\n        <span>${selectedFile.fileName}</span>\n      </div>`;
           messageContent = finalInput ? `${finalInput} ${audioIndicator}` : audioIndicator;
-          messageData = { audioData: fileUploadHandler.selectedFile };
+          messageData = { audioData: selectedFile };
         } else {
-          const fileIndicator = `<div style="display: inline-flex; align-items: center; background-color: #4b5563; border: 1px solid #d1d5db; border-radius: 6px; padding: 4px 8px; margin-left: 8px; font-size: 0.875em; color: #ffffff;">\n        <span style="margin-right: 4px;">📎</span>\n        <span>${fileUploadHandler.selectedFile.fileName}</span>\n      </div>`;
+          const fileIndicator = `<div style="display: inline-flex; align-items: center; background-color: #4b5563; border: 1px solid #d1d5db; border-radius: 6px; padding: 4px 8px; margin-left: 8px; font-size: 0.875em; color: #ffffff;">\n        <span style="margin-right: 4px;">📎</span>\n        <span>${selectedFile.fileName}</span>\n      </div>`;
           messageContent = finalInput ? `${finalInput} ${fileIndicator}` : fileIndicator;
-          messageData = { fileData: fileUploadHandler.selectedFile };
+          messageData = { fileData: selectedFile };
         }
       }
     }
@@ -2480,7 +2494,8 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
       ...(app?.websearch?.enabled ? { websearchEnabled } : {}),
       ...(imageAspectRatio ? { imageAspectRatio } : {}),
       ...(imageQuality ? { imageQuality } : {}),
-      ...(documentId ? { documentIds: [documentId] } : {})
+      ...(documentId ? { documentIds: [documentId] } : {}),
+      ...(isVoiceTurn ? { voiceMode: true } : {})
     };
 
     debugLog('📤 Sending message with params:', params);
@@ -2524,6 +2539,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
           rawContent: typed,
           variables:
             carriesVariables && app?.variables?.length > 0 ? { ...validatedVariables } : undefined,
+          ...(isVoiceTurn ? { inputMode: 'voice' } : {}),
           ...messageData
         }
       },
@@ -2535,10 +2551,10 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
         variables: carriesVariables ? { ...validatedVariables } : undefined,
         imageData: (() => {
           // Handle image data: convert to object/array/null based on count
-          const imageFiles = Array.isArray(fileUploadHandler.selectedFile)
-            ? fileUploadHandler.selectedFile.filter(f => f.type === 'image')
-            : fileUploadHandler.selectedFile?.type === 'image'
-              ? [fileUploadHandler.selectedFile]
+          const imageFiles = Array.isArray(selectedFile)
+            ? selectedFile.filter(f => f.type === 'image')
+            : selectedFile?.type === 'image'
+              ? [selectedFile]
               : [];
           // Return single object for 1 file, array for multiple, null for none
           return imageFiles.length === 1
@@ -2549,10 +2565,10 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
         })(),
         audioData: (() => {
           // Handle audio data: convert to object/array/null based on count
-          const audioFiles = Array.isArray(fileUploadHandler.selectedFile)
-            ? fileUploadHandler.selectedFile.filter(f => f.type === 'audio')
-            : fileUploadHandler.selectedFile?.type === 'audio'
-              ? [fileUploadHandler.selectedFile]
+          const audioFiles = Array.isArray(selectedFile)
+            ? selectedFile.filter(f => f.type === 'audio')
+            : selectedFile?.type === 'audio'
+              ? [selectedFile]
               : [];
           // Return single object for 1 file, array for multiple, null for none
           return audioFiles.length === 1
@@ -2563,10 +2579,10 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
         })(),
         fileData: (() => {
           // Handle file data: convert to object/array/null based on count
-          const documentFiles = Array.isArray(fileUploadHandler.selectedFile)
-            ? fileUploadHandler.selectedFile.filter(f => f.type === 'document')
-            : fileUploadHandler.selectedFile?.type === 'document'
-              ? [fileUploadHandler.selectedFile]
+          const documentFiles = Array.isArray(selectedFile)
+            ? selectedFile.filter(f => f.type === 'document')
+            : selectedFile?.type === 'document'
+              ? [selectedFile]
               : [];
           // Return single object for 1 file, array for multiple, null for none
           return documentFiles.length === 1
@@ -2591,12 +2607,15 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
     } else {
       sendChatMessage(messageStructure);
       setSentInChatId(chatId);
+      voiceTurnSentRef.current = true;
     }
 
-    setInput('');
-    magicPromptHandler.resetMagicPrompt();
-    fileUploadHandler.clearSelectedFile();
-    fileUploadHandler.hideUploader();
+    if (!isVoiceTurn) {
+      setInput('');
+      magicPromptHandler.resetMagicPrompt();
+      fileUploadHandler.clearSelectedFile();
+      fileUploadHandler.hideUploader();
+    }
     // Clear pending variables ref after successful submission
     pendingVariablesRef.current = null;
   };
@@ -2612,6 +2631,62 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
       )
     : '';
   const handleStartFormSubmit = e => handleSubmit(e, startFormMessage);
+
+  // Voice mode: a hands-free spoken conversation, a different way of talking to
+  // this same chat. Not in compare mode (one turn, two models), on the start
+  // form, with a transcription model (audio files only) or embedded in a host.
+  const voiceAvailability = useVoiceModeAvailability(app);
+  const voiceModeAllowed =
+    voiceAvailability.available &&
+    !embedded &&
+    !compareModeActive &&
+    !showStartForm &&
+    !transcriptionModel;
+  const voiceTurnSentRef = useRef(false);
+  // A spoken turn: resolves to whether the chat took it (a missing required
+  // variable, a recording in progress or a running turn all turn it away).
+  const sendVoiceTurn = async text => {
+    voiceTurnSentRef.current = false;
+    await handleSubmit({ preventDefault() {} }, null, { voiceText: text });
+    return voiceTurnSentRef.current;
+  };
+  // The answer to a question the app asked, spoken.
+  const answerVoiceClarification = answer =>
+    submitClarificationResponse(answer, {
+      modelId: selectedModel,
+      style: selectedStyle,
+      temperature,
+      outputFormat: selectedOutputFormat,
+      language: currentLanguage,
+      voiceMode: true
+    });
+  const voiceMode = useVoiceMode({
+    availability: voiceAvailability,
+    language: currentLanguage,
+    messages,
+    processing,
+    clarificationPending,
+    sendTurn: sendVoiceTurn,
+    answerClarification: answerVoiceClarification,
+    cancelGeneration,
+    onEnded: reason => {
+      if (reason === 'time-limit') {
+        addSystemMessage(
+          t('voiceMode.timeLimit', {
+            defaultValue_one: 'Voice mode ended after {{count}} minute.',
+            defaultValue_other: 'Voice mode ended after {{count}} minutes.',
+            count: voiceAvailability.settings.maxSessionMinutes
+          }),
+          false
+        );
+      }
+    }
+  });
+  // Another chat or app is not the conversation voice mode was started in.
+  const endVoiceMode = voiceMode.end;
+  useEffect(() => {
+    endVoiceMode('user');
+  }, [chatId, appId, endVoiceMode]);
 
   // Function to reload the current app
   const clearAppCache = useCallback(() => {
@@ -2697,6 +2772,9 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
           ? handleVoiceCommand
           : undefined,
       audioOnly: !compareModeActive && Boolean(transcriptionModel),
+      // Voice mode: the waveform button next to Send.
+      onVoiceMode: voiceModeAllowed ? voiceMode.toggle : undefined,
+      voiceModeActive: voiceMode.active,
       // Record (separate from the dictation mic above): the recording goes to
       // the selected model, so only to one that takes audio.
       transcriptionRecordEnabled:
@@ -2968,156 +3046,198 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
         className={`flex flex-col flex-1 gap-4 overflow-hidden mx-auto w-full ${embedded ? '' : 'md:flex-row'}`}
       >
         <div
-          className={`flex flex-col max-w-6xl mx-auto w-full ${embedded ? 'flex-1 min-h-0' : 'h-full'}`}
+          className={`relative flex flex-col max-w-6xl mx-auto w-full ${embedded ? 'flex-1 min-h-0' : 'h-full'}`}
         >
-          {compareModeActive ? (
-            /* Compare Mode View */
-            <>
-              <div className="flex-1 min-h-0 overflow-hidden">
-                <CompareModeView
-                  ref={compareViewRef}
-                  app={app}
-                  appId={appId}
-                  models={chatModels}
-                  currentLanguage={currentLanguage}
-                  outputFormat={selectedOutputFormat}
-                  sendChatHistory={sendChatHistory}
-                  onPanelProcessingChange={handlePanelProcessingChange}
-                  onMessageComplete={handleMessageComplete}
-                  onOpenInCanvas={handleOpenInCanvas}
-                  canvasEnabled={app?.features?.canvas === true}
-                  requiredIntegrations={requiredIntegrations}
-                  onConnectIntegration={connectIntegration}
-                  onClarificationSubmit={handleClarificationSubmit}
-                  onClarificationSkip={handleClarificationSkip}
-                  onOpenSourceInApp={handleOpenSourceInApp}
-                  linkPath={appPagePath}
-                  ephemeral={ephemeral}
-                  startForm={showStartForm ? renderStartForm() : null}
-                />
-              </div>
-              {!showStartForm && (
-                <div className="shrink-0 px-4 pt-2">
-                  <div className="w-full max-w-4xl mx-auto">{renderChatInput()}</div>
+          {/* `contents`: no box of its own, so the layouts below stay the children
+              of the column as before. `inert` takes the transcript and the
+              composer out of the tab order and the accessibility tree while the
+              voice view is open: Shift+Tab must not leave it for a copy button,
+              nor a screen reader read the chat behind it. */}
+          <div className="contents" inert={voiceMode.active}>
+            {compareModeActive ? (
+              /* Compare Mode View */
+              <>
+                <div className="flex-1 min-h-0 overflow-hidden">
+                  <CompareModeView
+                    ref={compareViewRef}
+                    app={app}
+                    appId={appId}
+                    models={chatModels}
+                    currentLanguage={currentLanguage}
+                    outputFormat={selectedOutputFormat}
+                    sendChatHistory={sendChatHistory}
+                    onPanelProcessingChange={handlePanelProcessingChange}
+                    onMessageComplete={handleMessageComplete}
+                    onOpenInCanvas={handleOpenInCanvas}
+                    canvasEnabled={app?.features?.canvas === true}
+                    requiredIntegrations={requiredIntegrations}
+                    onConnectIntegration={connectIntegration}
+                    onClarificationSubmit={handleClarificationSubmit}
+                    onClarificationSkip={handleClarificationSkip}
+                    onOpenSourceInApp={handleOpenSourceInApp}
+                    linkPath={appPagePath}
+                    ephemeral={ephemeral}
+                    startForm={showStartForm ? renderStartForm() : null}
+                  />
                 </div>
-              )}
-            </>
-          ) : showStartForm ? (
-            /* Start form, in place of the transcript and the composer */
-            <div className="flex-1 min-h-0 overflow-y-auto">{renderStartForm()}</div>
-          ) : shouldCenterInput ? (
-            /* Centered layout for example prompts */
-            <>
-              {/* Mobile layout: content centers, input at bottom */}
-              <div className="flex flex-col h-full md:hidden">
-                <div className="flex-1 overflow-hidden flex flex-col">
-                  {messages.length > 0 ? (
-                    <div className="w-full h-full overflow-y-auto bg-gray-50 dark:bg-gray-800/50 rounded-lg flex flex-col">
-                      <ChatMessageList
-                        scheduleEnabledTools={effectiveEnabledTools}
-                        messages={messages}
-                        mcpAppHost={mcpAppHost}
-                        outputFormat={selectedOutputFormat}
-                        onDelete={handleDeleteMessage}
-                        onEdit={handleEditMessage}
-                        onResend={handleResendMessage}
-                        editable={true}
-                        appId={appId}
-                        chatId={chatId}
-                        modelId={selectedModel}
-                        imagesPersisted={serverBackedChat}
-                        onOpenInCanvas={handleOpenInCanvas}
-                        onSaveAsPrompt={handleSaveAsPrompt}
-                        onSaveAsSkill={handleSaveAsSkill}
-                        canvasEnabled={app?.features?.canvas === true}
-                        requiredIntegrations={requiredIntegrations}
-                        onConnectIntegration={connectIntegration}
-                        app={app}
-                        models={models}
-                        onClarificationSubmit={handleClarificationSubmit}
-                        onClarificationSkip={handleClarificationSkip}
-                        onOpenSourceInApp={handleOpenSourceInApp}
-                        linkPath={appPagePath}
-                      />
-                    </div>
-                  ) : (
-                    <div className="w-full h-full overflow-y-auto">
-                      <div className="min-h-full flex items-center justify-center p-4">
-                        <div className="w-full max-w-4xl">
-                          {renderStartupState(
-                            app,
-                            welcomeMessage,
-                            handleStarterPromptClick,
-                            hydrating,
-                            chatModeResolving,
-                            t,
-                            renderUsageGuideButton('hint')
-                          )}
+                {!showStartForm && (
+                  <div className="shrink-0 px-4 pt-2">
+                    <div className="w-full max-w-4xl mx-auto">{renderChatInput()}</div>
+                  </div>
+                )}
+              </>
+            ) : showStartForm ? (
+              /* Start form, in place of the transcript and the composer */
+              <div className="flex-1 min-h-0 overflow-y-auto">{renderStartForm()}</div>
+            ) : shouldCenterInput ? (
+              /* Centered layout for example prompts */
+              <>
+                {/* Mobile layout: content centers, input at bottom */}
+                <div className="flex flex-col h-full md:hidden">
+                  <div className="flex-1 overflow-hidden flex flex-col">
+                    {messages.length > 0 ? (
+                      <div className="w-full h-full overflow-y-auto bg-gray-50 dark:bg-gray-800/50 rounded-lg flex flex-col">
+                        <ChatMessageList
+                          scheduleEnabledTools={effectiveEnabledTools}
+                          messages={messages}
+                          mcpAppHost={mcpAppHost}
+                          outputFormat={selectedOutputFormat}
+                          onDelete={handleDeleteMessage}
+                          onEdit={handleEditMessage}
+                          onResend={handleResendMessage}
+                          editable
+                          appId={appId}
+                          chatId={chatId}
+                          modelId={selectedModel}
+                          imagesPersisted={serverBackedChat}
+                          onOpenInCanvas={handleOpenInCanvas}
+                          onSaveAsPrompt={handleSaveAsPrompt}
+                          onSaveAsSkill={handleSaveAsSkill}
+                          canvasEnabled={app?.features?.canvas === true}
+                          requiredIntegrations={requiredIntegrations}
+                          onConnectIntegration={connectIntegration}
+                          app={app}
+                          models={models}
+                          onClarificationSubmit={handleClarificationSubmit}
+                          onClarificationSkip={handleClarificationSkip}
+                          onOpenSourceInApp={handleOpenSourceInApp}
+                          linkPath={appPagePath}
+                        />
+                      </div>
+                    ) : (
+                      <div className="w-full h-full overflow-y-auto">
+                        <div className="min-h-full flex items-center justify-center p-4">
+                          <div className="w-full max-w-4xl">
+                            {renderStartupState(
+                              app,
+                              welcomeMessage,
+                              handleStarterPromptClick,
+                              hydrating,
+                              chatModeResolving,
+                              t,
+                              renderUsageGuideButton('hint')
+                            )}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  )}
+                    )}
+                  </div>
+                  <div className="shrink-0 px-4 pt-2">
+                    <div className="w-full max-w-4xl mx-auto">{renderChatInput()}</div>
+                  </div>
                 </div>
-                <div className="shrink-0 px-4 pt-2">
-                  <div className="w-full max-w-4xl mx-auto">{renderChatInput()}</div>
-                </div>
-              </div>
 
-              {/* Desktop layout: everything centered together */}
-              <div className="hidden md:flex md:flex-col md:h-full md:items-center md:justify-center">
-                <div className="w-full max-w-4xl">
-                  {messages.length > 0 ? (
-                    <div className="mb-8">
-                      <ChatMessageList
-                        scheduleEnabledTools={effectiveEnabledTools}
-                        messages={messages}
-                        mcpAppHost={mcpAppHost}
-                        outputFormat={selectedOutputFormat}
-                        onDelete={handleDeleteMessage}
-                        onEdit={handleEditMessage}
-                        onResend={handleResendMessage}
-                        editable={true}
-                        appId={appId}
-                        chatId={chatId}
-                        modelId={selectedModel}
-                        imagesPersisted={serverBackedChat}
-                        onOpenInCanvas={handleOpenInCanvas}
-                        onSaveAsPrompt={handleSaveAsPrompt}
-                        onSaveAsSkill={handleSaveAsSkill}
-                        canvasEnabled={app?.features?.canvas === true}
-                        requiredIntegrations={requiredIntegrations}
-                        onConnectIntegration={connectIntegration}
-                        app={app}
-                        models={models}
-                        onClarificationSubmit={handleClarificationSubmit}
-                        onClarificationSkip={handleClarificationSkip}
-                        onOpenSourceInApp={handleOpenSourceInApp}
-                        linkPath={appPagePath}
-                      />
-                    </div>
-                  ) : (
-                    <div className="mb-8">
-                      {renderStartupState(
-                        app,
-                        welcomeMessage,
-                        handleStarterPromptClick,
-                        hydrating,
-                        chatModeResolving,
-                        t,
-                        renderUsageGuideButton('hint')
-                      )}
-                    </div>
-                  )}
-                  <div>{renderChatInput()}</div>
+                {/* Desktop layout: everything centered together */}
+                <div className="hidden md:flex md:flex-col md:h-full md:items-center md:justify-center">
+                  <div className="w-full max-w-4xl">
+                    {messages.length > 0 ? (
+                      <div className="mb-8">
+                        <ChatMessageList
+                          scheduleEnabledTools={effectiveEnabledTools}
+                          messages={messages}
+                          mcpAppHost={mcpAppHost}
+                          outputFormat={selectedOutputFormat}
+                          onDelete={handleDeleteMessage}
+                          onEdit={handleEditMessage}
+                          onResend={handleResendMessage}
+                          editable
+                          appId={appId}
+                          chatId={chatId}
+                          modelId={selectedModel}
+                          imagesPersisted={serverBackedChat}
+                          onOpenInCanvas={handleOpenInCanvas}
+                          onSaveAsPrompt={handleSaveAsPrompt}
+                          onSaveAsSkill={handleSaveAsSkill}
+                          canvasEnabled={app?.features?.canvas === true}
+                          requiredIntegrations={requiredIntegrations}
+                          onConnectIntegration={connectIntegration}
+                          app={app}
+                          models={models}
+                          onClarificationSubmit={handleClarificationSubmit}
+                          onClarificationSkip={handleClarificationSkip}
+                          onOpenSourceInApp={handleOpenSourceInApp}
+                          linkPath={appPagePath}
+                        />
+                      </div>
+                    ) : (
+                      <div className="mb-8">
+                        {renderStartupState(
+                          app,
+                          welcomeMessage,
+                          handleStarterPromptClick,
+                          hydrating,
+                          chatModeResolving,
+                          t,
+                          renderUsageGuideButton('hint')
+                        )}
+                      </div>
+                    )}
+                    <div>{renderChatInput()}</div>
+                  </div>
                 </div>
-              </div>
-            </>
-          ) : (
-            /* Standard layout for normal chat and starter prompts */
-            <>
-              {/* Mobile layout: content scrollable, input at bottom */}
-              <div className="flex flex-col h-full md:hidden">
-                <div className="flex-1 overflow-hidden flex flex-col">
+              </>
+            ) : (
+              /* Standard layout for normal chat and starter prompts */
+              <>
+                {/* Mobile layout: content scrollable, input at bottom */}
+                <div className="flex flex-col h-full md:hidden">
+                  <div className="flex-1 overflow-hidden flex flex-col">
+                    <ChatMessageList
+                      scheduleEnabledTools={effectiveEnabledTools}
+                      messages={messages}
+                      mcpAppHost={mcpAppHost}
+                      outputFormat={selectedOutputFormat}
+                      onDelete={handleDeleteMessage}
+                      onEdit={handleEditMessage}
+                      onResend={handleResendMessage}
+                      editable
+                      appId={appId}
+                      chatId={chatId}
+                      modelId={selectedModel}
+                      imagesPersisted={serverBackedChat}
+                      starterPrompts={app?.starterPrompts || []}
+                      onSelectPrompt={handleStarterPromptClick}
+                      welcomeMessage={welcomeMessage}
+                      showCenteredInput={shouldCenterInput}
+                      onOpenInCanvas={handleOpenInCanvas}
+                      onSaveAsPrompt={handleSaveAsPrompt}
+                      onSaveAsSkill={handleSaveAsSkill}
+                      canvasEnabled={app?.features?.canvas === true}
+                      requiredIntegrations={requiredIntegrations}
+                      onConnectIntegration={connectIntegration}
+                      app={app}
+                      models={models}
+                      onClarificationSubmit={handleClarificationSubmit}
+                      onClarificationSkip={handleClarificationSkip}
+                      onOpenSourceInApp={handleOpenSourceInApp}
+                      linkPath={appPagePath}
+                    />
+                  </div>
+                  <div className="shrink-0 px-4 pt-2">{renderChatInput()}</div>
+                </div>
+
+                {/* Desktop layout: normal flex column */}
+                <div className="hidden md:flex md:flex-col md:h-full">
                   <ChatMessageList
                     scheduleEnabledTools={effectiveEnabledTools}
                     messages={messages}
@@ -3126,7 +3246,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
                     onDelete={handleDeleteMessage}
                     onEdit={handleEditMessage}
                     onResend={handleResendMessage}
-                    editable={true}
+                    editable
                     appId={appId}
                     chatId={chatId}
                     modelId={selectedModel}
@@ -3148,46 +3268,20 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
                     onOpenSourceInApp={handleOpenSourceInApp}
                     linkPath={appPagePath}
                   />
+
+                  {renderChatInput()}
                 </div>
-                <div className="shrink-0 px-4 pt-2">{renderChatInput()}</div>
-              </div>
+              </>
+            )}
+          </div>
 
-              {/* Desktop layout: normal flex column */}
-              <div className="hidden md:flex md:flex-col md:h-full">
-                <ChatMessageList
-                  scheduleEnabledTools={effectiveEnabledTools}
-                  messages={messages}
-                  mcpAppHost={mcpAppHost}
-                  outputFormat={selectedOutputFormat}
-                  onDelete={handleDeleteMessage}
-                  onEdit={handleEditMessage}
-                  onResend={handleResendMessage}
-                  editable={true}
-                  appId={appId}
-                  chatId={chatId}
-                  modelId={selectedModel}
-                  imagesPersisted={serverBackedChat}
-                  starterPrompts={app?.starterPrompts || []}
-                  onSelectPrompt={handleStarterPromptClick}
-                  welcomeMessage={welcomeMessage}
-                  showCenteredInput={shouldCenterInput}
-                  onOpenInCanvas={handleOpenInCanvas}
-                  onSaveAsPrompt={handleSaveAsPrompt}
-                  onSaveAsSkill={handleSaveAsSkill}
-                  canvasEnabled={app?.features?.canvas === true}
-                  requiredIntegrations={requiredIntegrations}
-                  onConnectIntegration={connectIntegration}
-                  app={app}
-                  models={models}
-                  onClarificationSubmit={handleClarificationSubmit}
-                  onClarificationSkip={handleClarificationSkip}
-                  onOpenSourceInApp={handleOpenSourceInApp}
-                  linkPath={appPagePath}
-                />
-
-                {renderChatInput()}
-              </div>
-            </>
+          {/* Voice mode covers the transcript and the composer; the header stays.
+              The messages stay mounted underneath and receive every turn. */}
+          {voiceMode.active && (
+            <VoiceModeOverlay
+              voiceMode={voiceMode}
+              appName={getLocalizedContent(app?.name, currentLanguage)}
+            />
           )}
         </div>
 

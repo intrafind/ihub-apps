@@ -1,0 +1,164 @@
+/* Voice mode overlay: the orb and its states. The mic level reaches the orb as
+   --voice-level (0..1), written by the overlay without re-rendering it. */
+.voice-orb {
+  --voice-level: 0;
+  --orb-core: #6366f1;
+  --orb-glow: rgba(99, 102, 241, 0.35);
+  position: relative;
+  /* A flex item in a column that can be shorter than the orb: it must keep its
+     shape (a phone in landscape squeezed it to 149x11 px) and shrink with the
+     screen height instead. */
+  flex-shrink: 0;
+  width: min(9rem, 28vh);
+  aspect-ratio: 1;
+  border-radius: 9999px;
+  border: 0;
+  padding: 0;
+  cursor: default;
+  /* Plain colour first, for a browser without color-mix. The highlight and the
+     shade come from the state's colour, so the error and muted orbs are not
+     tinted indigo. */
+  background: var(--orb-core);
+  background: radial-gradient(
+    circle at 35% 30%,
+    color-mix(in srgb, var(--orb-core) 55%, white) 0%,
+    var(--orb-core) 55%,
+    color-mix(in srgb, var(--orb-core) 72%, black) 100%
+  );
+  box-shadow: 0 0 calc(2rem + var(--voice-level) * 3rem) calc(var(--voice-level) * 1rem)
+    var(--orb-glow);
+  transform: scale(calc(1 + var(--voice-level) * 0.12));
+  transition:
+    transform 80ms linear,
+    box-shadow 80ms linear,
+    background-color 200ms ease;
+}
+
+.voice-orb[data-clickable='true'] {
+  cursor: pointer;
+}
+
+.voice-orb:focus-visible {
+  outline: 3px solid #818cf8;
+  outline-offset: 4px;
+}
+
+.voice-orb[data-status='connecting'] {
+  --orb-core: #9ca3af;
+  --orb-glow: rgba(156, 163, 175, 0.3);
+  animation: voice-orb-breathe 1.6s ease-in-out infinite;
+}
+
+.voice-orb[data-status='listening'] {
+  animation: voice-orb-breathe 3s ease-in-out infinite;
+}
+
+.voice-orb[data-status='user-speaking'] {
+  --orb-core: #4f46e5;
+  --orb-glow: rgba(79, 70, 229, 0.5);
+}
+
+.voice-orb[data-status='thinking'] {
+  --orb-core: #8b5cf6;
+  --orb-glow: rgba(139, 92, 246, 0.4);
+  animation: voice-orb-think 1.4s ease-in-out infinite;
+}
+
+.voice-orb[data-status='speaking'] {
+  --orb-core: #0ea5e9;
+  --orb-glow: rgba(14, 165, 233, 0.45);
+  animation: voice-orb-speak 0.9s ease-in-out infinite;
+}
+
+.voice-orb[data-status='paused'] {
+  --orb-core: #9ca3af;
+  --orb-glow: rgba(156, 163, 175, 0.15);
+  filter: grayscale(0.6);
+}
+
+.voice-orb[data-status='error'] {
+  --orb-core: #ef4444;
+  --orb-glow: rgba(239, 68, 68, 0.35);
+}
+
+@keyframes voice-orb-breathe {
+  0%,
+  100% {
+    transform: scale(calc(1 + var(--voice-level) * 0.12));
+  }
+  50% {
+    transform: scale(calc(1.04 + var(--voice-level) * 0.12));
+  }
+}
+
+@keyframes voice-orb-think {
+  0%,
+  100% {
+    transform: scale(0.96);
+    opacity: 0.85;
+  }
+  50% {
+    transform: scale(1.04);
+    opacity: 1;
+  }
+}
+
+@keyframes voice-orb-speak {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  25% {
+    transform: scale(1.07);
+  }
+  60% {
+    transform: scale(0.97);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .voice-orb,
+  .voice-orb[data-status] {
+    animation: none;
+    transition: none;
+    transform: none;
+  }
+}
+
+/* The waveform button's bars: a short wave while voice mode is open. */
+.voice-wave-icon rect {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.voice-wave-icon[data-active='true'] rect {
+  animation: voice-wave-bar 1s ease-in-out infinite;
+}
+
+.voice-wave-icon[data-active='true'] rect:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.voice-wave-icon[data-active='true'] rect:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+.voice-wave-icon[data-active='true'] rect:nth-child(4) {
+  animation-delay: 0.45s;
+}
+
+@keyframes voice-wave-bar {
+  0%,
+  100% {
+    transform: scaleY(0.5);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .voice-wave-icon[data-active='true'] rect {
+    animation: none;
+  }
+}

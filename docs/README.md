@@ -85,7 +85,7 @@ New here? Start with [Getting Started](GETTING_STARTED.md), then take the tour i
 - [Audio File Support](audio-file-support.md) - Audio file processing
 - [Audio Extraction](audio-extraction.md) - Audio content extraction
 - [Audio UI Guide](AUDIO_UI_GUIDE.md) - Audio feature user interface
-- [Microphone Feature](microphone-feature.md) - Voice input capabilities
+- [Microphone Feature](microphone-feature.md) - Voice input capabilities and voice mode (spoken conversation)
 - [Realtime Voice & Transcription](voice-transcription.md) - Recording and file transcription, dictation, Voxtral and Gemini backends
 - [Read Aloud (Text-to-Speech)](text-to-speech.md) - Read chat messages aloud
 - [Web Tools](web-tools.md) - Web search and content extraction

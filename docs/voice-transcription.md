@@ -12,6 +12,8 @@ Three user-facing features share one server-side pipeline:
 
 In all three the transcript is **user input**. The selected chat model answers it like any typed message — the transcription model only turns speech into text.
 
+[Voice mode](#conversation-mode-voice-mode) (preview) is a fourth user of the same endpoint: one session stays open for a whole spoken conversation with an app, one transcript per turn.
+
 ![A recorded meeting transcribed into the user's message and answered with meeting notes](assets/screenshots/transcription-chat.png)
 
 All three send audio to the same iHub WebSocket endpoint, `/api/voice/realtime`, naming a transcription model; iHub relays it to that model's endpoint (e.g. Voxtral on vLLM). The browser **never** connects to the endpoint directly, and its URL / API key **never** reach the browser.
@@ -71,6 +73,8 @@ The protocol is iHub-defined (both ends are ours):
 | server → client  | `{"type":"done"}`                    | Transcript complete (sent after `stop` once the upstream settles) |
 | server → client  | `{"type":"error","code","message"}`  | Setup or upstream failure (connection closes afterwards)        |
 
+This is the protocol of a **one-utterance session**: `start`, audio, `stop`, then `done` and the socket closes. [Voice mode](#conversation-mode-voice-mode) extends it with `commit`, `keepalive` and turn-numbered `final` frames for many turns over one socket; a session that does not ask for it with `"conversation": true` never sees any of that.
+
 Error frames carry a stable machine-readable `code` alongside the human-readable `message`:
 
 | `code`                                          | Meaning                                                     |
@@ -83,6 +87,9 @@ Error frames carry a stable machine-readable `code` alongside the human-readable
 | `session-limit`                                 | The `maxSessionSeconds` cap was hit                          |
 | `audio-too-long`                                | Batch providers only: the recording exceeded `maxBufferedAudioBytes` |
 | `server-busy`                                   | Batch providers only: process-wide `maxBufferedAudioBytesTotal` reached |
+| `feature-disabled` / `voice-mode-disabled`      | Conversation mode only: the `voiceMode` feature flag is off / voice mode is off on the platform |
+| `turn-backlog`                                  | Conversation mode only: more than 32 turns are waiting for the ones before them (commits not yet sent upstream, or, for a batch provider, turns waiting for their transcription) |
+| `no-speech`                                     | Conversation mode only: ten minutes without audio or `commit`, only keepalives |
 
 ### Connection lifecycle and guards
 
@@ -91,8 +98,8 @@ A transcription session pins a GPU-backed upstream socket, so the bridge is deli
 | Guard                       | Default   | Behavior                                                                                       |
 | --------------------------- | --------- | ---------------------------------------------------------------------------------------------- |
 | Upstream opens on `start`   | —         | The upstream socket opens only once the client names a model; with the no-audio grace below, an idle browser tab cannot pin a GPU session for long. |
-| No-audio grace              | 15 s      | A connection that never sends audio is closed.                                                 |
-| Idle timeout                | 60 s      | No audio and no upstream activity → close both legs.                                           |
+| No-audio grace              | 15 s      | A connection that never sends audio is closed. (Not in conversation mode, where the user may take their time: see [Idle timeout and keepalive](#idle-timeout-and-keepalive).) |
+| Idle timeout                | 60 s      | No audio and no upstream activity → close both legs. (A conversation counts the client's audio, `commit` and `keepalive` only.) |
 | Keepalive ping/pong         | every 25 s| Server pings the browser (browsers auto-pong). A client that misses a whole interval (crashed tab, suspended laptop) is terminated. Pings also keep reverse-proxy read timeouts from killing quiet sessions while the GPU processes a long tail. |
 | Post-stop settle            | 2.5 s     | After `stop`, the transcript is complete once the upstream stays quiet this long (long files produce many segments). Then `{"type":"done"}` is sent and the session closes. |
 | Session duration cap        | 4200 s    | Hard ceiling on one session's lifetime, counted from the connection (configurable, see below). The default is the 3600 s an app records by default plus 10 minutes for the setup and the final transcription. |
@@ -102,6 +109,94 @@ A transcription session pins a GPU-backed upstream socket, so the bridge is deli
 | Browser send queue (live recording) | 8 MB | While the server holds the client socket paused, a recording's audio queues in the browser. Past ~4 minutes of queued audio the recording stops with a "service is busy" error and the text transcribed so far goes into the input field, instead of buffering the rest of the recording in the tab. |
 
 Everything on the relay path is asynchronous and O(one frame): per-frame work is a ≤256 KB base64 encode and a JSON stringify. The Node.js event loop is never blocked by file-sized work.
+
+## Conversation mode (voice mode)
+
+[Voice mode](text-to-speech.md) is a spoken conversation with an app: the user talks, the answer is read aloud, and the user can interrupt. Its speech-to-text leg uses this endpoint with the transcription model the app's voice input is configured with, but a session lasts for the whole conversation instead of one utterance. The client (voice activity detection in the browser) sends audio **only while the user speaks**, ends every turn with `commit`, and gets the text of that turn back. The upstream session stays open across turns, so a GPU-backed model is not fed silence while the app thinks or speaks.
+
+Conversation mode is a preview feature. A session may only ask for it when **both** hold:
+
+- the `voiceMode` feature flag is on (**Admin → Features**; it is off by default), and
+- voice mode is switched on for the instance (`speech.voiceMode.enabled` in `platform.json`, **Admin → Voice Input**).
+
+Otherwise `start` is answered with `{"type":"error","code":"feature-disabled"|"voice-mode-disabled","message":…}` and the socket closes before anything is resolved or dialled. Every other guard (permissions for the model, connection caps, frame size, backpressure, authentication) applies as for any session.
+
+### Frames
+
+| Direction       | Frame                                                              | Meaning |
+| --------------- | ------------------------------------------------------------------ | ------- |
+| client → server | `{"type":"start","modelId","lang?","conversation":true}`           | Multi-turn session. Only the **first** `start` decides the mode. `chatId`, `appId` and `source` are ignored: a conversation is live microphone audio, and the client sends each final transcript to the chat itself. |
+| client → server | binary PCM16, 16 kHz mono                                          | Audio of the turn being spoken. Sent only while voice activity detection reports speech (plus a short pre-roll). |
+| client → server | `{"type":"commit"}`                                                | End of this user turn: flush the upstream and return the turn's final text. |
+| client → server | `{"type":"keepalive"}`                                             | Resets the idle timeout, nothing else. |
+| client → server | `{"type":"stop"}`                                                  | End of the session. |
+| server → client | `{"type":"ready","mode","knowledgeSources","conversation":true}`    | Once, when the upstream session exists (a batch provider: at once). `conversation: true` tells a client that the server understood the mode; an older server answers without it. |
+| server → client | `{"type":"delta","text","turn":n}`                                 | Interim text of turn *n*, the turn being spoken (streaming providers only). |
+| server → client | `{"type":"final","text","turn":n}`                                 | The final transcript of turn *n*. Exactly one per `commit`, **in order**; `n` counts commits from 1. `text` is `""` for a turn without speech. |
+| server → client | `{"type":"done"}`                                                  | After `stop`, once the turns already committed have their final. The socket closes after it. |
+| server → client | `{"type":"error","code","message"}`                                | As for any session; the socket closes afterwards. |
+
+Details that clients can rely on:
+
+- A `commit` with no audio since the previous one is answered with an immediate `final` with `"text": ""`, and nothing goes upstream. It still comes after the finals of the turns before it.
+- `delta` and `final` frames carry text of one turn only. Segments that an upstream completes in the middle of a turn (Gemini Live) are not forwarded as `final` frames: the turn's `final` has the whole text.
+- A `commit`, a `keepalive` or binary audio before `ready` is held and handled once the session exists.
+- `stop` ends the session: audio after the last `commit` belongs to a turn the client never ended and is dropped, turns that were committed still get their `final`, then `done` is sent and the socket closes. A client that closes the socket instead loses the turns that have no `final` yet.
+- A failing upstream or transcription ends the session with an `error` frame (see the table above). Unlike a one-utterance session, even a **normal** close of the upstream socket in the middle of a conversation is an error (`upstream-closed`), so the client does not wait for turns that never come. After `stop`, a normal close with a committed turn still waiting is reported the same way. (The browser client reconnects once after an unexpected close of the socket and starts a new session on the same connection budget; any `error` frame from the server, such as `session-limit` or `no-speech`, ends the voice session with a message.)
+
+### Idle timeout and keepalive
+
+A conversation spends most of its time without audio: while the app thinks and speaks, and while it listens and the user has not started to speak yet. Two rules replace the guards of a one-utterance session:
+
+- **The client sends `{"type":"keepalive"}` at least every 20 s for the whole session**, whether the app is listening, thinking or speaking. Idle means: no audio, no `commit` and no `keepalive` for **60 s**, which closes the session. What the upstream says does not count, so an abandoned tab is not kept open by an upstream that chatters.
+- The 15 s no-audio grace does not apply: the user may take as long as they like to say the first thing, as long as the client keeps sending keepalives. (The socket's own ping every 25 s still detects a dead browser.)
+
+- Keepalives alone do not keep a session open for ever: when no audio and no `commit` arrived for **ten minutes** (`CONVERSATION_TIMINGS.noSpeechMs`), the next `keepalive` ends the session with `{"type":"error","code":"no-speech"}`. A microphone left open, or a client that only sends keepalives, therefore cannot hold an upstream connection and a connection slot for the whole session length. Every `commit` and every audio frame starts the ten minutes over.
+- Control frames (the JSON text frames) over 8 KB are ignored, and so is text that is not a JSON object (`null`, a number, an array).
+
+A `keepalive` outside a conversation, like `commit`, is ignored silently, so it can never keep a one-utterance session open.
+
+### Session length
+
+A conversation session ends at `min(speech.voiceMode.maxSessionMinutes × 60, speech.realtime.maxSessionSeconds)` seconds, counted from the moment the connection opened, with `{"type":"error","code":"session-limit"}` (a client may reconnect and carry on, or end the voice session). `maxSessionMinutes` is 30 by default and clamped to 1–240; `maxSessionSeconds` is the [hard cap of every session](#runtime-limits-and-tuning) (4200 s by default) and is never exceeded.
+
+An idle conversation still holds its upstream session, and with it one place of the per-user and global [connection caps](#connection-lifecycle-and-guards), for as long as it lasts. Size `maxConnections` with that in mind.
+
+### What a commit does, per provider
+
+| Provider | On `commit` | Where the turn's text comes from |
+| --- | --- | --- |
+| `vllm-realtime` | `input_audio_buffer.commit` with `final: true`, which ends the audio of the current generation | `transcription.done` carries the turn's whole text. The bridge waits for it (up to 2.5 s, then the turn ends with the deltas it has and the upstream gets a fresh session). Before the first audio of the next turn it sends a plain `input_audio_buffer.commit`, which starts the next generation; the initial commit of the session did that for turn 1. |
+| `mistral` | `input_audio.flush` (the stream is **not** ended, which would finish the session) | The `transcription.text.delta` frames that follow, until they stop |
+| `google-live` | `realtimeInput.audioStreamEnd`, which makes Gemini finalize what it holds; the same session takes the next audio | The `inputTranscription` segments (and interim text) that follow, until they stop |
+| `google-transcribe`, `openai`, `local` (batch) | Nothing is sent: there is no upstream socket | The audio buffered since the last commit is transcribed in one request and the result is the `final`. Adds roughly 0.5–1.5 s over a streaming model. |
+
+A streaming turn ends when its text has settled after the `commit`. These values are constants of the bridge (`CONVERSATION_TIMINGS` in `server/websocket/realtimeTranscription.js`):
+
+| Constant | Default | Meaning |
+| --- | --- | --- |
+| `turnQuietMs` | 700 ms | The turn has text, or the upstream has answered, and then falls quiet |
+| `turnFinalQuietMs` | 200 ms | Quiet after the upstream's own end-of-turn `final` |
+| `turnEmptyWaitMs` | 1500 ms | Nothing was transcribed yet (a cough, or a slow upstream): wait this long before answering with `""` |
+| `turnExplicitWaitMs` | 2500 ms | A provider that answers a commit with a `final` (vLLM) has not done so |
+| `turnMaxWaitMs` | 6000 ms | Hard limit from the `commit`, whatever the upstream is still saying |
+| `idleMs` | 60 000 ms | The idle timeout above |
+
+A provider without commit support is safe: nothing is sent at the end of a turn and the turn settles on quiet.
+
+**Batch providers** transcribe the turns **one at a time**: a second `commit` while the first is being transcribed waits, and the finals stay in order. Audio of less than 100 ms is treated as silence (OpenAI-compatible endpoints refuse shorter clips). A failed transcription ends the session with an `error` frame.
+
+### How turns are kept apart
+
+Everything the client sends goes through one ordered queue, which is what keeps a late word of one turn from landing in the next:
+
+- The audio of turn *n*+1 is not sent upstream while turn *n* is still settling. A user who starts to speak again at once has their audio held for the few hundred milliseconds that takes, so the text the upstream still produces for turn *n* cannot be mistaken for turn *n*+1.
+- Text that reaches the bridge belongs to the turn that is settling, or else to the turn whose audio has been sent upstream. Anything else is a straggler of a turn that has already ended and is dropped (and not shown as the first words of the next turn). Only a straggler that arrives after the next turn's audio has gone out cannot be told apart from its text; the settle times above are what make that unlikely.
+- The text of a turn is assembled per turn and reset when its `final` goes out. Nothing carries over.
+
+### Memory limits
+
+The [batch byte caps](#runtime-limits-and-tuning) apply to a conversation per turn: `maxBufferedAudioBytes` bounds the audio of one turn together with the turns still waiting to be transcribed, and every turn gives its bytes back to it and to `maxBufferedAudioBytesTotal` as soon as its transcription is done, so a long conversation never adds up against them. Audio that waits for the upstream (not ready yet, or a turn still settling) is held up to 1 MB, like that of a one-utterance session.
 
 ## Deploying Voxtral with vLLM
 
@@ -361,8 +456,8 @@ These knobs live under `platform.json` → `speech.realtime` and apply to the wh
 | `maxConnections`        | `50`      | on server start     | Global concurrent realtime connections per iHub **worker process**.   |
 | `maxConnectionsPerUser` | `3`       | on server start     | Per-user concurrent connections per worker process.                   |
 | `maxFrameBytes`         | `262144`  | on server start     | Max size of one inbound WebSocket frame.                              |
-| `maxSessionSeconds`     | `4200`    | per new connection  | Hard cap on one session's lifetime, counted from the connection. Must be larger than the longest recording (an hour by default) plus a margin for the setup and, with a batch provider, the transcription after Stop (10 minutes is enough for an hour of audio). Hot-reloaded (no restart needed). |
-| `maxBufferedAudioBytes` | `134217728` | per new connection | Batch providers only: audio one connection may buffer (128 MiB ≈ 70 min of 16 kHz PCM16). Hot-reloaded. |
+| `maxSessionSeconds`     | `4200`    | per new connection  | Hard cap on one session's lifetime, counted from the connection (a [conversation](#session-length) is also bounded by `speech.voiceMode.maxSessionMinutes`, whichever is shorter). Must be larger than the longest recording (an hour by default) plus a margin for the setup and, with a batch provider, the transcription after Stop (10 minutes is enough for an hour of audio). Hot-reloaded (no restart needed). |
+| `maxBufferedAudioBytes` | `134217728` | per new connection | Batch providers only: audio one connection may buffer (128 MiB ≈ 70 min of 16 kHz PCM16). In [conversation mode](#conversation-mode-voice-mode) it applies per turn. Hot-reloaded. |
 | `maxBufferedAudioBytesTotal` | `536870912` | per new connection | Batch providers only: audio buffered across the whole process (512 MiB). Hot-reloaded. |
 
 A recording that is allowed to last as long as the session does is lost: the session's clock starts when the connection opens, the recording's a little later (microphone permission, connecting), and a batch provider (one that returns the transcript in one piece) transcribes only after Stop, so a cap equal to the recording length can end the session (`session-limit`) before the automatic Stop or while the transcript is still pending. The default of 4200 s leaves 10 minutes for that beyond the 60 minutes the chat transcribes at most.

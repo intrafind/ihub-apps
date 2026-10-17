@@ -215,6 +215,17 @@ export const featureRegistry = [
     preview: true
   },
   {
+    id: 'voiceMode',
+    name: { en: 'Voice Mode', de: 'Sprachmodus' },
+    description: {
+      en: 'Spoken conversation with an app: talk, hear the answer read aloud, and interrupt at any time. Needs a speech-to-text and a text-to-speech model (Admin → Voice Input).',
+      de: 'Gesprochene Unterhaltung mit einer App: sprechen, die Antwort vorgelesen bekommen und jederzeit unterbrechen. Benötigt ein Speech-to-Text- und ein Text-to-Speech-Modell (Admin → Spracheingabe).'
+    },
+    category: 'preview',
+    default: false,
+    preview: true
+  },
+  {
     id: 'runLog',
     name: { en: 'Run Ledger (RunLog)', de: 'Run-Ledger (RunLog)' },
     description: {

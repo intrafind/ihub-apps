@@ -16,6 +16,7 @@ import ImageGenerationControls from './ImageGenerationControls';
 import ModelSelector from './ModelSelector';
 import ModelHintBanner from './ModelHintBanner';
 import { VoiceInputComponent } from '../../voice/components';
+import VoiceModeButton from '../../voice/components/VoiceModeButton';
 import { useUIConfig } from '../../../shared/contexts/UIConfigContext';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
 import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
@@ -61,6 +62,12 @@ function ChatInput({
   onCancel,
   onVoiceInput,
   onVoiceCommand,
+  // Voice mode (a spoken conversation with the app): `onVoiceMode` starts it and
+  // is only passed when voice mode is available here. The button sits right next
+  // to Send; `voiceModeActive` is true while the voice view is open, which owns
+  // the input area, so dictation is held back.
+  onVoiceMode = null,
+  voiceModeActive = false,
   // Record (distinct from dictation onVoiceInput): the recording goes to the
   // selected model like an uploaded audio file.
   onRecordTranscription = null,
@@ -456,9 +463,16 @@ function ChatInput({
     [selectedFile, onFileSelect]
   );
 
-  // When processing finishes, refocus the input field
+  // When processing finishes, refocus the input field. Not while voice mode is
+  // open: the composer is covered then, and a focused textarea behind the view
+  // takes the Space of the next push-to-talk turn, announces "Type your
+  // message" and sends a typed turn voice mode knows nothing about. Read
+  // through a ref, not as a dependency: ending voice mode must not refocus the
+  // input either, the voice view hands focus back to the button that opened it.
+  const voiceModeActiveRef = useRef(voiceModeActive);
+  voiceModeActiveRef.current = voiceModeActive;
   useEffect(() => {
-    if (!isProcessing) {
+    if (!isProcessing && !voiceModeActiveRef.current) {
       focusInputAtEnd();
     }
   }, [isProcessing, focusInputAtEnd]);
@@ -866,7 +880,7 @@ function ChatInput({
                   app={app}
                   onSpeechResult={onVoiceInput}
                   inputRef={actualInputRef}
-                  disabled={isInputDisabled || isProcessing}
+                  disabled={isInputDisabled || isProcessing || voiceModeActive}
                   onCommand={onVoiceCommand}
                 />
               </div>
@@ -947,6 +961,21 @@ function ChatInput({
               />
             )}
 
+            {/* Voice mode: a hands-free spoken conversation. Right next to Send;
+                not while a turn streams or a recording runs. */}
+            {onVoiceMode && (
+              <VoiceModeButton
+                onClick={onVoiceMode}
+                active={voiceModeActive}
+                disabled={
+                  disabled ||
+                  requiresAlertAcknowledgment ||
+                  isRecordingTranscription ||
+                  (isProcessing && !voiceModeActive)
+                }
+              />
+            )}
+
             {/* Send/Stop Button */}
             <button
               type="button"
@@ -956,7 +985,7 @@ function ChatInput({
                 sendBlockedByAttachment ||
                 (!allowEmptySubmit && !value.trim() && !isProcessing)
               }
-              className={`p-2 sm:p-2.5 rounded-lg font-medium flex items-center justify-center transition-colors ${
+              className={`shrink-0 p-2 sm:p-2.5 rounded-lg font-medium flex items-center justify-center transition-colors ${
                 disabled ||
                 sendBlockedByAttachment ||
                 (!allowEmptySubmit && !value.trim() && !isProcessing)

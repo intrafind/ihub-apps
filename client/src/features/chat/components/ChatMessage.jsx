@@ -72,6 +72,7 @@ import GeneratedFiles from './GeneratedFiles';
 import { findSkillDraft } from '../../skills/utils/skillDraft';
 import { matchesModelFilter, modelSupportsTools } from '../../../../../shared/modelCapabilities.js';
 import './ChatMessage.css';
+import { VoiceWaveIcon } from '../../voice/components/VoiceModeButton';
 
 /** How an answer ends when it stopped before it was complete. */
 const INTERRUPTED_FINISH_REASONS = new Set(['length', 'connection_closed', 'error']);
@@ -873,6 +874,19 @@ function ChatMessage({
             : 'w-full'
         }
       >
+        {/* A turn the user spoke in voice mode: live turns carry `inputMode`,
+            hydrated ones `metadata.inputMode`. */}
+        {isUser && (message.inputMode === 'voice' || message.metadata?.inputMode === 'voice') && (
+          <span
+            className="mr-1.5 inline-flex align-text-bottom opacity-70"
+            title={t('voiceMode.voiceMessage', 'Spoken message')}
+          >
+            <VoiceWaveIcon className="h-3.5 w-3.5" />
+            {/* The colon and space: without them a screen reader (or a manual
+                copy) runs the marker into the text, "Spoken messageWhat is". */}
+            <span className="sr-only">{t('voiceMode.voiceMessage', 'Spoken message')}: </span>
+          </span>
+        )}
         {/* Unified workflow step progress indicator. A result alone is enough:
             a workflow interrupted before it reported a step still names itself
             and links its execution. */}

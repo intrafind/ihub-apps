@@ -222,6 +222,43 @@ describe('POST /api/admin/configs/platform section persistence', () => {
     });
   });
 
+  test('persists speech.voiceMode (Admin → Voice Input → Voice mode), prompt included', async () => {
+    const app = createTestApp();
+    const existing = await readPlatform();
+    const voiceMode = {
+      enabled: true,
+      appDefault: true,
+      ttsModelId: 'voxtral-mini-tts',
+      listeningStyle: 'push-to-talk',
+      bargeIn: false,
+      endOfTurnSilenceMs: 1200,
+      thinkingLevel: 'minimal',
+      maxSessionMinutes: 45,
+      systemPrompt: { en: 'Be brief.', de: 'Fasse dich kurz.' }
+    };
+
+    const response = await request(app)
+      .post('/api/admin/configs/platform')
+      .send({ ...existing, speech: { defaultService: 'browser', voiceMode } });
+
+    expect(response.status).toBe(200);
+    expect((await readPlatform()).speech.voiceMode).toEqual(voiceMode);
+  });
+
+  test('keeps the stored speech.voiceMode when a save omits speech', async () => {
+    const voiceMode = { enabled: true, appDefault: false, systemPrompt: { de: 'Kurz.' } };
+    await fs.writeFile(
+      platformPath(),
+      JSON.stringify({ ...(await readPlatform()), speech: { voiceMode } })
+    );
+    const app = createTestApp();
+    const { speech: _omitted, ...withoutSpeech } = await readPlatform();
+
+    await request(app).post('/api/admin/configs/platform').send(withoutSpeech);
+
+    expect((await readPlatform()).speech.voiceMode).toEqual(voiceMode);
+  });
+
   test('a save carrying only globalPromptVariables leaves every other section as stored', async () => {
     const app = createTestApp();
     const before = await readPlatform();

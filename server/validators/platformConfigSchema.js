@@ -1,5 +1,13 @@
 import { z } from 'zod';
 import { cloudStorageConfigSchema } from './cloudStorageSchema.js';
+import { LANGUAGE_CODE_PATTERN } from '../../shared/validationPatterns.js';
+import {
+  VOICE_LISTENING_STYLES,
+  VOICE_THINKING_LEVELS,
+  VOICE_END_OF_TURN_SILENCE_RANGE_MS,
+  VOICE_MAX_SESSION_RANGE_MINUTES,
+  VOICE_INSTRUCTION_MAX_CHARS
+} from '../../shared/voiceMode.js';
 
 const jwtProviderSchema = z.object({
   name: z.string(),
@@ -651,6 +659,49 @@ export const platformConfigSchema = z
             // one message may be read; the rest is cut. Optional; the code
             // default is 20,000.
             maxCharacters: z.number().int().positive().max(200000).optional()
+          })
+          .passthrough()
+          .prefault({}),
+        // Voice mode: a spoken conversation with an app (feature flag
+        // `voiceMode`). It uses the speech service the app's voice input
+        // resolves to for listening and the `modelType: "tts"` model below for
+        // speaking. Resolved against the app's `inputMode.voiceMode` by
+        // shared/voiceMode.js.
+        voiceMode: z
+          .object({
+            enabled: z.boolean().prefault(false),
+            // Voice mode for apps that do not set inputMode.voiceMode.enabled.
+            appDefault: z.boolean().prefault(false),
+            // A `modelType: "tts"` model; empty uses speech.tts.defaultModelId.
+            ttsModelId: z.string().prefault(''),
+            listeningStyle: z.enum(VOICE_LISTENING_STYLES).prefault('hands-free'),
+            // Speaking over the app stops it.
+            bargeIn: z.boolean().prefault(true),
+            // How long a pause ends the user's turn (hands-free).
+            endOfTurnSilenceMs: z
+              .number()
+              .int()
+              .min(VOICE_END_OF_TURN_SILENCE_RANGE_MS.min)
+              .max(VOICE_END_OF_TURN_SILENCE_RANGE_MS.max)
+              .prefault(800),
+            // Reasoning level for voice turns; reasoning models add seconds of
+            // silence. Used only when the request and the app set none.
+            thinkingLevel: z.enum(VOICE_THINKING_LEVELS).prefault('low'),
+            maxSessionMinutes: z
+              .number()
+              .int()
+              .min(VOICE_MAX_SESSION_RANGE_MINUTES.min)
+              .max(VOICE_MAX_SESSION_RANGE_MINUTES.max)
+              .prefault(30),
+            // Replaces the built-in voice style instruction, per language:
+            // { "en": "...", "de": "..." }. The request language wins, then
+            // "en", then the built-in text. Blank entries are ignored.
+            systemPrompt: z
+              .record(
+                z.string().regex(LANGUAGE_CODE_PATTERN),
+                z.string().max(VOICE_INSTRUCTION_MAX_CHARS)
+              )
+              .prefault({})
           })
           .passthrough()
           .prefault({}),

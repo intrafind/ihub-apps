@@ -112,6 +112,13 @@ export const chatPostSchema = {
      * so out loud or the server would prepend the stored transcript anyway.
      * Like the app-level flag it can only ever remove history, never add it.
      */
-    sendChatHistory: z.boolean().optional()
+    sendChatHistory: z.boolean().optional(),
+    /**
+     * The message was spoken in voice mode and the answer will be read aloud:
+     * the server adds the voice style instruction, a low thinking level and
+     * marks the stored message (services/chat/voiceMode.js). Ignored unless
+     * voice mode is enabled on the platform.
+     */
+    voiceMode: z.boolean().optional()
   })
 };

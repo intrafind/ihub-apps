@@ -4,6 +4,7 @@ import { getAppVersion } from '../../utils/versionHelper.js';
 import { buildServerPath } from '../../utils/basePath.js';
 import { isValidLanguageCode } from '../../utils/pathSecurity.js';
 import { resolveFeatures } from '../../featureRegistry.js';
+import { resolveVoiceModeSettings } from '../../../shared/voiceMode.js';
 import { isChatPersistenceConfigured } from '../../services/chat/chatPersistence.js';
 import { chatSharingClientConfig } from '../../services/chat/chatSharing.js';
 import { scheduledTasksClientConfig } from '../../services/scheduler/tasks/taskPolicy.js';
@@ -30,6 +31,30 @@ export function dictationClientConfig(dictation) {
   return {
     modelId,
     available: !!modelId && models.some(m => m.id === modelId && m.modelType === 'transcription')
+  };
+}
+
+/**
+ * The voice mode platform settings as the client sees them: the non-secret
+ * values, clamped to their ranges. The voice style instruction
+ * (`systemPrompt`) stays on the server, which is the only one to use it.
+ *
+ * @param {Object} [voiceMode] `platform.speech.voiceMode`
+ * @returns {Object}
+ */
+export function voiceModeClientConfig(voiceMode) {
+  const resolved = resolveVoiceModeSettings({ platform: { speech: { voiceMode } } });
+  return {
+    enabled: resolved.platformEnabled,
+    appDefault: voiceMode?.appDefault === true,
+    // As configured: empty follows `speech.tts.defaultModelId`, which the
+    // client reads next to it.
+    ttsModelId: typeof voiceMode?.ttsModelId === 'string' ? voiceMode.ttsModelId.trim() : '',
+    listeningStyle: resolved.listeningStyle,
+    bargeIn: resolved.bargeIn,
+    endOfTurnSilenceMs: resolved.endOfTurnSilenceMs,
+    thinkingLevel: resolved.thinkingLevel,
+    maxSessionMinutes: resolved.maxSessionMinutes
   };
 }
 
@@ -866,6 +891,8 @@ export default function registerDataRoutes(app) {
         // to when they pick none of their own.
         // tts says whether read aloud is on and with which model; whether this
         // user may use that model is the client's /api/models?type=tts list.
+        // voiceMode is the platform side of the spoken conversation with an app
+        // (shared/voiceMode.js resolves it against the app's own settings).
         speech: platform.speech
           ? {
               defaultService: platform.speech.defaultService,
@@ -874,6 +901,9 @@ export default function registerDataRoutes(app) {
                     enabled: platform.speech.tts.enabled === true,
                     defaultModelId: platform.speech.tts.defaultModelId || ''
                   }
+                : undefined,
+              voiceMode: platform.speech.voiceMode
+                ? voiceModeClientConfig(platform.speech.voiceMode)
                 : undefined,
               dictation: dictationClientConfig(platform.speech.dictation),
               azure: platform.speech.azure
