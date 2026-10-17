@@ -5793,6 +5793,9 @@
   },
   "usageGuide": {
     "question": "How do I use this app?",
-    "inlineLabel": "Usage guide"
+    "inlineLabel": "Usage guide",
+    "badge": "Usage guide · pre-written",
+    "badgeHint": "Written by the app's administrators. Not sent to the AI, so follow-up questions can't refer to it.",
+    "inlineLabelShort": "Guide"
   }
 }

@@ -172,7 +172,7 @@ const renderStartupState = (
   return (
     <>
       {view}
-      <div className="flex justify-center px-4 pb-4">{usageGuideHint}</div>
+      <div className="flex justify-center px-4 pt-2 pb-4">{usageGuideHint}</div>
     </>
   );
 };
@@ -238,7 +238,7 @@ const PromptEditorModal = lazyWithRetry(() => import('../../prompts/components/P
 const SkillEditorModal = lazyWithRetry(() => import('../../skills/components/SkillEditorModal'));
 // Loaded on first use too: the usage guide opens in it only from a start form
 // or compare mode.
-const MarkdownViewer = lazyWithRetry(() => import('../../../shared/components/MarkdownViewer'));
+const UsageGuideDialog = lazyWithRetry(() => import('../../chat/components/UsageGuideDialog'));
 
 /**
  * The chat page of an app.
@@ -1761,6 +1761,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
         onClick={showUsageGuide}
         disabled={processing}
         variant={variant}
+        opensDialog={showStartForm || compareModeActive}
       />
     ) : null;
 
@@ -3249,11 +3250,14 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
           })}
         </div>
       )}
-      {usageGuideViewerOpen && (
+      {/* Mounted while the app has a guide and opened by state, like the other
+          dialogs, so its focus trap sees the open transition. */}
+      {usageGuide.available && (
         <Suspense fallback={null}>
-          <MarkdownViewer
+          <UsageGuideDialog
+            isOpen={usageGuideViewerOpen}
+            question={usageGuide.question}
             content={usageGuide.content}
-            name={usageGuide.question}
             onClose={() => setUsageGuideViewerOpen(false)}
           />
         </Suspense>

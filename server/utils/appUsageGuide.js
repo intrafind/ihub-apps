@@ -188,3 +188,25 @@ export function unwrapFence(content) {
   if (!['', 'markdown', 'md'].includes(fenceLanguage)) return text;
   return text.slice(firstLineEnd + 1, -3).trim();
 }
+
+/**
+ * The model that writes a guide: the default chat model, else the first chat
+ * model — among the models the admin may use (a content admin can be limited
+ * to some models, and the call runs on the server's credentials). Image
+ * models and conversation-backed providers (iAssistant Conversation, which
+ * needs a chat of its own) cannot answer a one-off prompt.
+ *
+ * @param {Array<object>} models - Configured, enabled models.
+ * @param {(model: object) => boolean} mayUse - Whether the admin may use a model.
+ * @returns {object|undefined} Model configuration.
+ */
+export function selectGuideModel(models, mayUse) {
+  const usable = (models || []).filter(
+    model =>
+      (model.modelType || 'chat') === 'chat' &&
+      !model.supportsImageGeneration &&
+      String(model.provider || '').toLowerCase() !== 'iassistant-conversation' &&
+      mayUse(model)
+  );
+  return usable.find(model => model.default) || usable[0];
+}

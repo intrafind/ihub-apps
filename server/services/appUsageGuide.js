@@ -10,29 +10,28 @@
  * @module services/appUsageGuide
  */
 import configCache from '../configCache.js';
+import { canUserAccessResource } from '../utils/authorization.js';
 import llmClient from './loop/LLMClient.js';
-import { buildUsageGuideMessages, unwrapFence } from '../utils/appUsageGuide.js';
+import { buildUsageGuideMessages, selectGuideModel, unwrapFence } from '../utils/appUsageGuide.js';
 
 /**
- * Have the platform's default model write an app's usage guide. Nothing is
+ * Have a chat model the admin may use write an app's usage guide. Nothing is
  * stored; the admin reviews and saves the text.
  *
  * @param {object} params
  * @param {object} params.app - App configuration (may be an unsaved draft).
  * @param {string} params.language - Language code the guide is written in.
- * @param {object} [params.user] - Admin requesting it, for the run ledger.
+ * @param {object} params.user - Admin requesting it; limits the models.
  * @returns {Promise<string>} The guide's markdown.
- * @throws {Error} With `status` 503 when no model is configured; LLM errors
- *   (see `isLLMError`) when the model call fails.
+ * @throws {Error} With `status` 503 when no model the admin may use can write
+ *   it; LLM errors (see `isLLMError`) when the model call fails.
  */
 export async function generateUsageGuide({ app, language, user }) {
-  const { data: models = [] } = configCache.getModels();
-  const chatModels = (models || []).filter(
-    m => (m.modelType || 'chat') === 'chat' && !m.supportsImageGeneration
+  const model = selectGuideModel(configCache.getModels().data, model =>
+    canUserAccessResource(user, 'models', model.id)
   );
-  const model = chatModels.find(m => m.default) || chatModels[0];
   if (!model) {
-    const error = new Error('No chat model is available to write the guide');
+    const error = new Error('No chat model you may use is available to write the guide');
     error.status = 503;
     throw error;
   }

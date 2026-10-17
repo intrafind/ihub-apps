@@ -3,6 +3,7 @@ import { appConfigSchema } from '../../../server/validators/appConfigSchema.js';
 import {
   buildUsageGuideMessages,
   describeAppForGuide,
+  selectGuideModel,
   unwrapFence,
   withoutUsageGuideContent
 } from '../../../server/utils/appUsageGuide.js';
@@ -111,7 +112,7 @@ describe('unwrapFence', () => {
     );
     expect(unwrapFence('```js\ncode\n```')).toBe('```js\ncode\n```');
     expect(unwrapFence('```markdown\nnot closed')).toBe('```markdown\nnot closed');
-    expect(unwrapFence(undefined)).toBe('');
+    expect(unwrapFence()).toBe('');
   });
 
   it('stays fast on long input', () => {
@@ -119,5 +120,30 @@ describe('unwrapFence', () => {
     const started = Date.now();
     unwrapFence(long);
     expect(Date.now() - started).toBeLessThan(100);
+  });
+});
+
+describe('selectGuideModel', () => {
+  const models = [
+    { id: 'image', modelType: 'chat', supportsImageGeneration: true, default: true },
+    { id: 'conversation', provider: 'iassistant-conversation' },
+    { id: 'speech', modelType: 'transcription' },
+    { id: 'chat-a' },
+    { id: 'chat-b', default: true }
+  ];
+  const all = () => true;
+
+  it('takes the default chat model', () => {
+    expect(selectGuideModel(models, all).id).toBe('chat-b');
+  });
+
+  it('only takes models the admin may use', () => {
+    expect(selectGuideModel(models, model => model.id !== 'chat-b').id).toBe('chat-a');
+    expect(selectGuideModel(models, () => false)).toBeUndefined();
+  });
+
+  it('never takes image, transcription or conversation-backed models', () => {
+    const others = models.filter(model => !model.id.startsWith('chat-'));
+    expect(selectGuideModel(others, all)).toBeUndefined();
   });
 });

@@ -1431,6 +1431,27 @@ function ChatMessage({
             </button>
           )}
 
+          {/* A usage guide answer is pre-written and never reached the model:
+              say so, where an AI answer would offer its rating. */}
+          {!isUser && message.usageGuide && (
+            <span
+              className="inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-gray-100 dark:bg-gray-700 px-2 py-0.5 text-xs text-gray-600 dark:text-gray-300"
+              title={t(
+                'usageGuide.badgeHint',
+                "Written by the app's administrators. Not sent to the AI, so follow-up questions can't refer to it."
+              )}
+            >
+              <Icon name="information-circle" size="sm" aria-hidden="true" />
+              {t('usageGuide.badge', 'Usage guide · pre-written')}
+              <span className="sr-only">
+                {t(
+                  'usageGuide.badgeHint',
+                  "Written by the app's administrators. Not sent to the AI, so follow-up questions can't refer to it."
+                )}
+              </span>
+            </span>
+          )}
+
           {/* Add star rating for AI responses only */}
           {feedbackEnabled &&
             !readOnly &&
