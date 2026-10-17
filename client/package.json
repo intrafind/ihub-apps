@@ -10,7 +10,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@babel/standalone": "^8.0.6",
+    "@babel/standalone": "^8.0.7",
     "@dagrejs/dagre": "^3.1.1",
     "@heroicons/react": "2.2.0",
     "@kenjiuno/decompressrtf": "^0.1.4",
@@ -28,7 +28,7 @@
     "file-saver": "^2.0.5",
     "fuse.js": "^7.4.2",
     "gpt-tokenizer": "^4.0.0",
-    "i18next": "^26.4.2",
+    "i18next": "^26.4.3",
     "i18next-browser-languagedetector": "^8.2.1",
     "jszip": "^3.10.2",
     "mammoth": "^1.12.3",
@@ -41,7 +41,7 @@
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "react-error-boundary": "^6.1.6",
-    "react-i18next": "^17.0.15",
+    "react-i18next": "^17.0.16",
     "react-markdown": "^10.1.0",
     "react-quill-new": "^3.8.3",
     "react-router-dom": "^7.18.4",
@@ -49,7 +49,7 @@
     "tailwindcss": "^4.3.3",
     "turndown": "^7.2.4",
     "utif2": "^4.1.0",
-    "uuid": "^14.0.2",
+    "uuid": "^14.0.3",
     "write-excel-file": "^4.1.1",
     "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
   },
@@ -68,9 +68,9 @@
     "@microsoft/office-js": "^1.1.110",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
-    "@vitejs/plugin-react": "^6.1.1",
-    "postcss": "^8.5.28",
-    "vite": "^8.3.2"
+    "@vitejs/plugin-react": "^6.1.2",
+    "postcss": "^8.5.29",
+    "vite": "^8.3.4"
   },
   "allowScripts": {
     "fsevents@2.3.3": true
