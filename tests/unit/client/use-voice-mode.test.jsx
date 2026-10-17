@@ -353,6 +353,18 @@ describe('a spoken turn', () => {
     expect(mockQueue.say).toHaveBeenCalledWith('I could not send that. Please try again.');
     expect(mockSession.setAgentState).toHaveBeenLastCalledWith('idle');
   });
+
+  test('a send that throws ends the turn the same way, instead of leaving the app thinking', async () => {
+    const sendTurn = jest.fn(async () => {
+      throw new Error('network down');
+    });
+    const hook = setup({ sendTurn });
+    await startAndReady(hook);
+    await speakTurn();
+    expect(hook.result.current.state.runActive).toBe(false);
+    expect(status(hook)).toBe('listening');
+    expect(mockQueue.say).toHaveBeenCalledWith('I could not send that. Please try again.');
+  });
 });
 
 describe('transcripts that are not turns', () => {

@@ -116,18 +116,20 @@ export function createAzureAdapter({
     return authPromise;
   };
 
-  const buildSpeechConfig = ({ token, region }) => {
-    let config;
+  const createSpeechConfig = ({ token, region }) => {
     if (host) {
       // A custom host (private endpoint, on-premise container) wins over the region.
       const url = new URL(`${host}/speech/recognition/interactive/cognitiveservices/v1`);
-      config = sdk.SpeechConfig.fromHost(url);
-      if (token) config.authorizationToken = token;
-    } else if (token) {
-      config = sdk.SpeechConfig.fromAuthorizationToken(token, region);
-    } else {
-      throw sessionError('service', 'Azure subscription key is not configured');
+      const hosted = sdk.SpeechConfig.fromHost(url);
+      if (token) hosted.authorizationToken = token;
+      return hosted;
     }
+    if (token) return sdk.SpeechConfig.fromAuthorizationToken(token, region);
+    throw sessionError('service', 'Azure subscription key is not configured');
+  };
+
+  const buildSpeechConfig = credentials => {
+    const config = createSpeechConfig(credentials);
     config.speechRecognitionLanguage = toRecognitionLang(language);
     return config;
   };
@@ -244,7 +246,9 @@ export function createAzureAdapter({
       };
 
       recognizer.startContinuousRecognitionAsync(
-        () => {},
+        () => {
+          /* started: results arrive on the recognizer's events */
+        },
         err => turnFailed(turn, err)
       );
     } catch (err) {
@@ -282,7 +286,7 @@ export function createAzureAdapter({
       };
       active = turn;
       if (preRoll?.length) pushStream.write(pcmToArrayBuffer(preRoll));
-      void openRecognizer(turn);
+      openRecognizer(turn);
     },
 
     pushAudio(pcm) {
@@ -314,8 +318,12 @@ export function createAzureAdapter({
       finalize(turn);
     },
 
-    setAgentState() {},
-    setListeningStyle() {},
+    setAgentState() {
+      /* the SDK has no use for the agent's state */
+    },
+    setListeningStyle() {
+      /* the VAD decides turns; the SDK does not care how they start */
+    },
 
     setMuted(value) {
       muted = Boolean(value);

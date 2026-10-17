@@ -304,13 +304,13 @@ const selectClass =
  * left out when no setting is made.
  *
  * @param {object} props
- * @param {Array} [props.ttsModels] Enabled text-to-speech models.
+ * @param {Array|null} [props.ttsModels] Enabled text-to-speech models (null until loaded).
  */
 function VoiceModeFields({
   app,
   onInputChange: handleInputChange,
   t,
-  ttsModels = [],
+  ttsModels = null,
   currentLanguage
 }) {
   const { platformConfig } = usePlatformConfig();
@@ -334,11 +334,14 @@ function VoiceModeFields({
 
   const modelName = model => getLocalizedContent(model.name, currentLanguage) || model.id;
   const ttsModelId = voiceMode.ttsModelId || '';
-  const chosenModelMissing = !!ttsModelId && !ttsModels.some(m => m.id === ttsModelId);
+  const models = ttsModels || [];
+  const chosenModelListed = models.some(m => m.id === ttsModelId);
+  // Only a loaded list can say the model is gone; until then it is just not known.
+  const chosenModelMissing = Array.isArray(ttsModels) && !!ttsModelId && !chosenModelListed;
   const effectiveModelId =
     ttsModelId || platformVoiceMode?.ttsModelId || platformConfig?.speech?.tts?.defaultModelId;
-  const voiceSuggestions = voiceSuggestionsOf(ttsModels.find(m => m.id === effectiveModelId));
-  const platformModel = ttsModels.find(
+  const voiceSuggestions = voiceSuggestionsOf(models.find(m => m.id === effectiveModelId));
+  const platformModel = models.find(
     m => m.id === (platformVoiceMode?.ttsModelId || platformConfig?.speech?.tts?.defaultModelId)
   );
   const platformStyle = VOICE_LISTENING_STYLES.includes(platformVoiceMode?.listeningStyle)
@@ -475,8 +478,10 @@ function VoiceModeFields({
                       )
                     : t('admin.apps.edit.voiceMode.platformDefault', 'Platform default')}
                 </option>
-                {chosenModelMissing && <option value={ttsModelId}>{ttsModelId}</option>}
-                {ttsModels.map(m => (
+                {!!ttsModelId && !chosenModelListed && (
+                  <option value={ttsModelId}>{ttsModelId}</option>
+                )}
+                {models.map(m => (
                   <option key={m.id} value={m.id}>
                     {modelName(m)}
                   </option>
@@ -542,15 +547,15 @@ function VoiceModeFields({
  * @param {object} props
  * @param {Array} [props.transcriptionModels] Enabled streaming transcription
  *   models: each one can take the app's voice input.
- * @param {Array} [props.ttsModels] Enabled text-to-speech models: each one can
- *   speak the app's voice mode.
+ * @param {Array|null} [props.ttsModels] Enabled text-to-speech models: each one can
+ *   speak the app's voice mode (null until loaded).
  */
 function InputModeSection({
   app,
   onChange,
   t,
   transcriptionModels = [],
-  ttsModels = [],
+  ttsModels = null,
   currentLanguage
 }) {
   const handleInputChange = (field, value) => {

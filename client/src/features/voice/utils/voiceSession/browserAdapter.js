@@ -256,12 +256,15 @@ export function createBrowserAdapter({
 
   return {
     /** Check that the browser has the API and start listening (hands-free). */
-    async start() {
+    start() {
       if (!getRecognitionCtor()) {
-        throw sessionError('unsupported', 'Speech recognition is not supported in this browser');
+        return Promise.reject(
+          sessionError('unsupported', 'Speech recognition is not supported in this browser')
+        );
       }
       started = true;
       sync();
+      return Promise.resolve();
     },
 
     /** Speech was confirmed (or the push-to-talk key went down). */
@@ -285,8 +288,9 @@ export function createBrowserAdapter({
       sync();
     },
 
-    // The recognizer listens on its own; there is no audio to push.
-    pushAudio() {},
+    pushAudio() {
+      /* the recognizer listens on its own; there is no audio to push */
+    },
 
     /** The turn is over: stop the recognizer, its last result is the final transcript. */
     commitTurn() {

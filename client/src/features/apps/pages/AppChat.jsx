@@ -2669,8 +2669,9 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
       if (reason === 'time-limit') {
         addSystemMessage(
           t('voiceMode.timeLimit', {
-            defaultValue: 'Voice mode ended after {{minutes}} minutes.',
-            minutes: voiceAvailability.settings.maxSessionMinutes
+            defaultValue_one: 'Voice mode ended after {{count}} minute.',
+            defaultValue_other: 'Voice mode ended after {{count}} minutes.',
+            count: voiceAvailability.settings.maxSessionMinutes
           }),
           false
         );

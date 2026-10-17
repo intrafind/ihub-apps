@@ -7,10 +7,11 @@ import { makeAdminApiCall } from '../../../api/adminApi';
  * that one is filtered by the admin's own model permissions, and admin access
  * does not imply them.
  *
- * @returns {Array} Models; empty while loading or when the list fails.
+ * @returns {Array|null} Models; `null` while loading or when the list failed, so a
+ *   caller can tell "not known yet" from "no such model".
  */
 export default function useAdminTtsModels() {
-  const [models, setModels] = useState([]);
+  const [models, setModels] = useState(null);
 
   useEffect(() => {
     let active = true;

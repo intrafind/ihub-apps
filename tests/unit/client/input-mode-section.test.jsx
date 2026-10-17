@@ -299,6 +299,18 @@ describe('voice mode', () => {
     ).toBeInTheDocument();
   });
 
+  test('does not call the model gone while the list is still loading', () => {
+    renderVoiceMode(
+      { inputMode: { voiceMode: { ttsModelId: 'voxtral-tts' } } },
+      { ttsModels: null }
+    );
+    expect(optionValues(ttsModelSelect())).toEqual(['', 'voxtral-tts']);
+    expect(ttsModelSelect()).toHaveValue('voxtral-tts');
+    expect(
+      screen.queryByText(/This model is disabled or no longer exists/)
+    ).not.toBeInTheDocument();
+  });
+
   test('suggests the voices of the picked model', () => {
     renderVoiceMode({ inputMode: { voiceMode: { ttsModelId: 'voxtral-tts' } } });
     const list = document.getElementById(voiceInput().getAttribute('list'));

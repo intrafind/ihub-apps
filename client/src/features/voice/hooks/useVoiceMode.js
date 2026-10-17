@@ -222,7 +222,12 @@ export function useVoiceMode({
           ...answerForClarification(spoken, asked)
         });
       } else {
-        accepted = await current.sendTurn(spoken);
+        try {
+          accepted = await current.sendTurn(spoken);
+        } catch (error) {
+          debugLog('voiceMode: sending the turn failed', error);
+          accepted = false;
+        }
       }
       if (!accepted) {
         turnRef.current = null;
@@ -279,7 +284,7 @@ export function useVoiceMode({
           send({ type: 'TURN_ENDED' });
           break;
         case 'final':
-          void handleFinal(event.text);
+          handleFinal(event.text).catch(error => debugLog('voiceMode: final failed', error));
           break;
         case 'error':
           debugLog('voiceMode: session error', event);
@@ -307,10 +312,9 @@ export function useVoiceMode({
     generationRef.current = generation;
     const { availability: avail, language: lang, effective: options } = latestRef.current;
 
-    let queue;
     try {
       // Created in the click handler's call stack: it unlocks audio playback.
-      queue = createSpeechQueue({
+      queueRef.current = createSpeechQueue({
         modelId: avail.ttsModelId,
         language: lang,
         // The app's own voice (`inputMode.voiceMode.voice`), when it sets one.
@@ -339,7 +343,6 @@ export function useVoiceMode({
       send({ type: 'ERROR', code: 'audio-unsupported', message: error?.message || '' });
       return;
     }
-    queueRef.current = queue;
 
     try {
       const session = await createVoiceSession({

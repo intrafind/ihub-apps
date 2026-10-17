@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
+import { getTranscriptionErrorMessage } from '../../../utils/transcriptionErrors';
 import { VOICE_STATUS } from '../utils/voiceModeReducer';
 import './VoiceMode.css';
 
@@ -28,7 +29,11 @@ function useOrbLevel(orbRef, levelRef) {
   }, [orbRef, levelRef]);
 }
 
-/** The error shown for a code from the session, in the user's language. */
+/**
+ * The error shown for a code from the session, in the user's language. The
+ * message the session carries is never shown: it comes from the browser, an
+ * adapter or the server, in English, and is meant for the debug log.
+ */
 function errorMessage(error, t) {
   switch (error?.code) {
     case 'mic-denied':
@@ -38,18 +43,42 @@ function errorMessage(error, t) {
       );
     case 'mic-missing':
       return t('voiceMode.errors.micMissing', 'No microphone was found.');
+    case 'mic-busy':
+      return t(
+        'voiceInput.error.microphoneBusy',
+        'The microphone could not be started. It may be in use by another application.'
+      );
     case 'mic-lost':
       return t('voiceMode.errors.micLost', 'The microphone stopped working.');
     case 'unsupported':
     case 'audio-unsupported':
       return t('voiceMode.errors.unsupported', 'Voice mode is not supported in this browser.');
+    case 'vad-unavailable':
+      return t(
+        'voiceMode.errors.voiceDetection',
+        'Voice detection could not be loaded. Reload the page and try again.'
+      );
+    case 'feature-disabled':
+    case 'voice-mode-disabled':
+      return t('voiceMode.errors.disabled', 'Voice mode is switched off.');
     case 'closed':
     case 'connection':
       return t('voiceMode.errors.connection', 'The connection to speech recognition was lost.');
-    default:
-      return (
-        error?.message || t('voiceMode.errors.generic', 'Voice mode stopped because of an error.')
+    case 'not-permitted':
+    case 'server-busy':
+    case 'session-limit':
+      return getTranscriptionErrorMessage(error, t);
+    case 'service':
+    case 'no-model':
+    case 'unknown-model':
+    case 'model-disabled':
+    case 'no-endpoint':
+      return t(
+        'voiceMode.errors.service',
+        'The speech service is not available. Please try again.'
       );
+    default:
+      return t('voiceMode.errors.generic', 'Voice mode stopped because of an error.');
   }
 }
 

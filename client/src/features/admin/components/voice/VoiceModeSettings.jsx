@@ -278,7 +278,12 @@ function VoiceModeSettings({
           <p className={hintClass}>
             {t(
               'admin.voiceInput.voiceMode.endOfTurnSilenceMsHint',
-              'Hands-free only: how long the user must pause before the app answers. 300 to 3000, default 800.'
+              'Hands-free only: how long the user must pause before the app answers. {{min}} to {{max}}, default {{default}}.',
+              {
+                min: END_OF_TURN_SILENCE_RANGE.min,
+                max: END_OF_TURN_SILENCE_RANGE.max,
+                default: DEFAULT_VOICE_MODE.endOfTurnSilenceMs
+              }
             )}
           </p>
         </div>
@@ -296,7 +301,12 @@ function VoiceModeSettings({
           <p className={hintClass}>
             {t(
               'admin.voiceInput.voiceMode.maxSessionMinutesHint',
-              'A voice session ends after this time. 1 to 240, default 30.'
+              'A voice session ends after this time. {{min}} to {{max}}, default {{default}}.',
+              {
+                min: MAX_SESSION_MINUTES_RANGE.min,
+                max: MAX_SESSION_MINUTES_RANGE.max,
+                default: DEFAULT_VOICE_MODE.maxSessionMinutes
+              }
             )}
           </p>
         </div>

@@ -788,9 +788,9 @@
         },
         "thinkingLevelHint": "Reasoning models add seconds of silence before the answer. A low level keeps replies quick; an app that asks for more keeps its own level.",
         "endOfTurnSilenceMs": "End of turn after silence (ms)",
-        "endOfTurnSilenceMsHint": "Hands-free only: how long the user must pause before the app answers. 300 to 3000, default 800.",
+        "endOfTurnSilenceMsHint": "Hands-free only: how long the user must pause before the app answers. {{min}} to {{max}}, default {{default}}.",
         "maxSessionMinutes": "Longest session (minutes)",
-        "maxSessionMinutesHint": "A voice session ends after this time. 1 to 240, default 30.",
+        "maxSessionMinutesHint": "A voice session ends after this time. {{min}} to {{max}}, default {{default}}.",
         "bargeIn": "Let users interrupt the answer by speaking",
         "bargeInHint": "Turn this off for laptop speakers without headphones, where the app could hear itself. Users can still stop an answer with a tap.",
         "systemPrompt": {
@@ -4896,7 +4896,7 @@
       "title": "Voice settings",
       "listeningStyle": "Listening",
       "handsFree": "Hands-free: I answer when you pause",
-      "pushToTalk": "Push to talk: hold Space or the button",
+      "pushToTalk": "Push-to-talk: hold Space or the button",
       "bargeIn": "Let me interrupt by speaking",
       "bargeInHint": "Turn this off on laptop speakers if the answer cuts itself off. Headphones work best.",
       "captions": "Show captions"
@@ -4907,10 +4907,14 @@
       "micLost": "The microphone stopped working.",
       "unsupported": "Voice mode is not supported in this browser.",
       "connection": "The connection to speech recognition was lost.",
+      "service": "The speech service is not available. Please try again.",
+      "voiceDetection": "Voice detection could not be loaded. Reload the page and try again.",
+      "disabled": "Voice mode is switched off.",
       "generic": "Voice mode stopped because of an error.",
       "sendFailed": "I could not send that. Please try again."
     },
-    "timeLimit": "Voice mode ended after {{minutes}} minutes.",
+    "timeLimit_one": "Voice mode ended after {{count}} minute.",
+    "timeLimit_other": "Voice mode ended after {{count}} minutes.",
     "voiceMessage": "Spoken message",
     "try": {
       "button": "Try it",
