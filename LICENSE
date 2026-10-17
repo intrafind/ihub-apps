@@ -1,6 +1,7 @@
-BSD 3-Clause License with Mandatory Attribution
+iHub Apps License
+(BSD 3-Clause License with Mandatory Attribution)
 
-Copyright (c) 2025, IntraFind Software AG
+Copyright (c) 2025-2026, IntraFind Software AG
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -16,36 +17,80 @@ modification, are permitted provided that the following conditions are met:
    provided with the distribution.
 
 3. Attribution Requirements:
-   a) All products, services, or derivative works must display the 
-      following attribution prominently in user interfaces, documentation, 
+   a) All products, services, or derivative works must display the
+      following attribution prominently in user interfaces, documentation,
       and about pages: "Powered by IntraFind – https://intrafind.com/"
-   
-   b) For commercial use, monetization, or revenue-generating activities, 
+
+   b) For commercial use, monetization, or revenue-generating activities,
       additional attribution is required in:
-      - All marketing materials, sales documents, contracts, agreements, and legal documents: 
+      - All marketing materials, sales documents, contracts, agreements, and
+        legal documents:
         "Powered by IntraFind – https://intrafind.com/"
-         or 
-        "This product/service includes technology provided by IntraFind Software AG (https://intrafind.com/)"
-      - Sublicensing agreements (attribution requirements must be 
+         or
+        "This product/service includes technology provided by IntraFind
+         Software AG (https://intrafind.com/)"
+      - Sublicensing agreements (attribution requirements must be
         passed through)
 
 4. Neither the name of IntraFind Software AG nor the names of its
    contributors may be used to endorse or promote products derived from
    this software without specific prior written permission.
 
-5. Attribution Compliance: Failure to comply with attribution requirements 
-   may result in immediate termination of this license. Upon termination, 
-   the licensee must cease all use of the software and destroy all copies.
+5. Enterprise License:
+   IntraFind Software AG offers a separate commercial Enterprise License
+   for uses that this License does not permit or for organizations that
+   require additional assurances. Depending on the agreement, an Enterprise
+   License may include, among others:
+   - the right to use, redistribute, embed (OEM), or offer the software as
+     a hosted or managed service without, or with modified, attribution as
+     required by Section 3 (white-labeling);
+   - professional support, maintenance, service level agreements, and
+     security advisories;
+   - warranties, indemnification, and liability terms that differ from
+     the disclaimer below;
+   - additional enterprise features, custom development, and professional
+     services.
+   An Enterprise License is effective only when executed in writing by
+   IntraFind Software AG. Where an executed Enterprise License conflicts
+   with this License, the Enterprise License prevails for its licensee.
+   Contact: sales@intrafind.com – https://intrafind.com/
+
+6. Termination: Failure to comply with the attribution requirements of
+   Section 3 results in the immediate and automatic termination of all
+   rights granted under this License. Upon termination, the licensee must
+   cease all use and distribution of the software and destroy all copies
+   in its possession or control. Rights may be reinstated only by written
+   notice from IntraFind Software AG. Termination does not limit any other
+   rights or remedies of IntraFind Software AG, including claims for
+   injunctive relief and damages.
+
+7. Trademarks: This License does not grant any right to use the trade
+   names, trademarks, service marks, or logos of IntraFind Software AG,
+   except as required to comply with the attribution requirements of
+   Section 3 and to describe the origin of the software.
+
+8. Contributions: By contributing to this project, you agree to the
+   project's Contributor License Agreement (CONTRIBUTOR_LICENSE_AGREEMENT.md).
+
+9. Governing Law: This License is governed by the laws of the Federal
+   Republic of Germany, excluding the United Nations Convention on
+   Contracts for the International Sale of Goods (CISG). If the licensee
+   is a merchant, a legal entity under public law, or a special fund under
+   public law, the exclusive place of jurisdiction for all disputes
+   arising from or in connection with this License is Munich, Germany.
+   If any provision of this License is held invalid or unenforceable, the
+   remaining provisions remain in full force and effect.
 
 DISCLAIMER:
 THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
 AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
 IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
-ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-POSSIBILITY OF SUCH DAMAGE.
+ARE DISCLAIMED. TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, IN NO
+EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT,
+INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+(INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
+OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH
+DAMAGE.

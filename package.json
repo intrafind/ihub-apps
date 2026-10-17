@@ -1,6 +1,7 @@
 {
   "name": "ihub-apps",
   "version": "5.5.39",
+  "license": "SEE LICENSE IN LICENSE",
   "description": "iHub Applications Platform",
   "type": "module",
   "bin": {

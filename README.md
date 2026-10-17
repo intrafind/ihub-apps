@@ -479,12 +479,20 @@ The server is stateless — all configuration lives in the `contents/` directory
 
 ## 🤝 Contributing
 
-Contributions, issues, and feature requests are welcome! See [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) for community guidelines.
+Contributions, issues, and feature requests are welcome! See [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) for community guidelines. By contributing, you agree to the [Contributor License Agreement](CONTRIBUTOR_LICENSE_AGREEMENT.md).
 
 - 🐛 **Report bugs**: [GitHub Issues](https://github.com/intrafind/ihub-apps/issues)
 - 💡 **Request features**: [GitHub Issues](https://github.com/intrafind/ihub-apps/issues)
 - 📖 **Full documentation**: [docs/README.md](docs/README.md)
 - 💬 **Enterprise inquiries**: [sales@intrafind.com](mailto:sales@intrafind.com)
+
+---
+
+## ⚖️ License
+
+iHub Apps is free and open source under the [iHub Apps License](LICENSE) — the BSD 3-Clause License with mandatory attribution: products, services, and derivative works must show "Powered by IntraFind – https://intrafind.com/" in the user interface, documentation, and about pages.
+
+Need to white-label iHub Apps without the attribution, or want support, SLAs, warranties, and enterprise features? The **Enterprise License** covers this — contact [sales@intrafind.com](mailto:sales@intrafind.com).
 
 ---
 
