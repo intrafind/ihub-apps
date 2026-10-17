@@ -251,7 +251,7 @@ The microphone feature surfaces errors directly in the chat input placeholder fo
 
 > **Preview.** Voice mode is off until an admin enables the **Voice Mode** feature under **Admin → Features** (`voiceMode`) and switches it on under **Admin → Voice Input**.
 
-Voice mode turns a chat into a spoken conversation. The user talks, the app answers out loud, and the user can interrupt at any time. It is the **same chat**: same app, model, tools and sources, and the same history. Nothing is added to the answer except an instruction that keeps it short and easy to listen to. Voice mode is part of voice input: it listens with the app's speech recognition service (see [Speech Recognition Services](#speech-recognition-services)) and speaks with a [text-to-speech model](text-to-speech.md).
+Voice mode turns a chat into a spoken conversation. The user talks, the app answers out loud, and the user can interrupt at any time. It is the **same chat**: same app, model, tools and sources, and the same history. The only difference is an instruction added to the app's system prompt that keeps answers short and easy to listen to. Voice mode is part of voice input: it listens with the app's speech recognition service (see [Speech Recognition Services](#speech-recognition-services)) and speaks with a [text-to-speech model](text-to-speech.md).
 
 ### Using it
 
@@ -338,7 +338,7 @@ The button shows when all of these hold:
 | `maxSessionMinutes` | `30` | A voice session ends after this many minutes, 1 to 240. The session also stays under the hard limit `speech.realtime.maxSessionSeconds`. |
 | `systemPrompt` | `{}` | Optional voice style instruction per language (`{ "en": "…", "de": "…" }`). It replaces the built-in text. |
 
-These settings are read when a session starts, without a restart. The text-to-speech model and the other speech settings are described under [Text-to-Speech](text-to-speech.md#voice-mode).
+Saved in the admin page, they take effect without a restart. The text-to-speech model and the other speech settings are described under [Text-to-Speech](text-to-speech.md#voice-mode).
 
 **The voice style instruction.** In voice mode the server adds a short instruction after the app's own system prompt: answer conversationally and briefly, lead with the answer, usually one to four sentences, no tables, code blocks, headings, lists, URLs or emoji unless asked, say numbers the way they are spoken, and say when something was put in the chat. The built-in text exists in English and German and is shown under the fields in the admin page. `systemPrompt` replaces it. The text for the user's language is used first, then the English one, then the built-in text for the language. Leave a language out to keep the built-in text.
 
@@ -363,7 +363,7 @@ These settings are read when a session starts, without a restart. The text-to-sp
 | `enabled` | the platform `appDefault` | `true` turns voice mode on for this app, `false` off. |
 | `listeningStyle` | the platform value | `"hands-free"` or `"push-to-talk"`. |
 | `ttsModelId` | the platform value | The text-to-speech model of this app, for example a German voice model for a German app. |
-| `voice` | the model's voice | A voice of that model. It has to be a voice the model configures (`tts.voice`, `tts.voices`) or the voice named here; other voices are refused. |
+| `voice` | the model's voice | A voice id of that model, for example a custom voice. Empty uses the voice settings of the model (`tts.voice`, `tts.voices`). |
 
 An app without `inputMode.voiceMode` simply follows the platform, and nothing needs migrating. An app with `inputMode.microphone.enabled: false` has no voice mode, whatever it sets here. The app editor shows the voice mode controls greyed out in that case, and leaves out every field that follows the platform.
 
@@ -372,7 +372,6 @@ An app without `inputMode.voiceMode` simply follows the platform, and nothing ne
 - **Session length:** `maxSessionMinutes`, then the voice view closes with a message.
 - **Connections:** voice mode counts against the realtime limits (`speech.realtime.maxConnectionsPerUser` and `maxConnections`, see [Runtime limits and tuning](voice-transcription.md#runtime-limits-and-tuning)). A session sends keepalive messages while the app thinks and speaks, so a long answer does not end it.
 - **Speech output:** every piece of an answer is a request to `/api/voice/speech`, counted by the inference rate limit (`rateLimit.inferenceApi`). Interrupting aborts the requests of the interrupted answer.
-- **Answers** longer than `speech.tts.maxCharacters` are spoken up to that limit.
 
 ### Troubleshooting
 
