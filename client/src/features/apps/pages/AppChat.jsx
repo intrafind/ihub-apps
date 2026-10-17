@@ -2330,6 +2330,10 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
   const handleSubmit = async (e, startFormMessage = null, { voiceText } = {}) => {
     e.preventDefault();
     const isVoiceTurn = typeof voiceText === 'string';
+    // A spoken turn is its own message: a file staged in the composer belongs
+    // to the typed message it was added for, so it neither goes out with an
+    // unrelated sentence nor is cleared from the composer by it.
+    const selectedFile = isVoiceTurn ? null : fileUploadHandler.selectedFile;
     // An attachment is still being processed (e.g. the audio of a video is
     // extracted), in whichever composer it was added: the message would go
     // without it. Each composer holds back its own Send; this is the backstop
@@ -2346,7 +2350,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
     // Audio is still being transcribed.
     if (transcribeAbortRef.current) return;
 
-    if (!typed.trim() && !fileUploadHandler.selectedFile && !app?.allowEmptyContent) {
+    if (!typed.trim() && !selectedFile && !app?.allowEmptyContent) {
       return;
     }
 
@@ -2381,7 +2385,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
     // audio file with its transcript and nothing else: no text reaches it, from
     // the composer, an auto-send or a resend. Any other model has to take
     // audio itself.
-    const selected = fileUploadHandler.selectedFile ? [fileUploadHandler.selectedFile].flat() : [];
+    const selected = selectedFile ? [selectedFile].flat() : [];
     const audioFiles = selected.filter(f => f?.type === 'audio');
     if (!compareModeActive && transcriptionModel) {
       if (audioFiles.length > 0) {
@@ -2409,12 +2413,12 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
     let messageContent = finalInput;
     let messageData = {};
 
-    if (fileUploadHandler.selectedFile) {
+    if (selectedFile) {
       // Handle multiple files
-      if (Array.isArray(fileUploadHandler.selectedFile)) {
-        const images = fileUploadHandler.selectedFile.filter(f => f.type === 'image');
-        const audioFiles = fileUploadHandler.selectedFile.filter(f => f.type === 'audio');
-        const documents = fileUploadHandler.selectedFile.filter(f => f.type === 'document');
+      if (Array.isArray(selectedFile)) {
+        const images = selectedFile.filter(f => f.type === 'image');
+        const audioFiles = selectedFile.filter(f => f.type === 'audio');
+        const documents = selectedFile.filter(f => f.type === 'document');
 
         let contentParts = [finalInput];
 
@@ -2459,18 +2463,18 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
         };
       } else {
         // Handle single file (legacy behavior)
-        if (fileUploadHandler.selectedFile.type === 'image') {
-          const imgPreview = `<img src="${fileUploadHandler.selectedFile.base64}" alt="${t('common.uploadedImage', 'Uploaded image')}" style="max-width: 100%; max-height: 300px; margin-top: 8px;" />`;
+        if (selectedFile.type === 'image') {
+          const imgPreview = `<img src="${selectedFile.base64}" alt="${t('common.uploadedImage', 'Uploaded image')}" style="max-width: 100%; max-height: 300px; margin-top: 8px;" />`;
           messageContent = finalInput ? `${finalInput}\n\n${imgPreview}` : imgPreview;
-          messageData = { imageData: fileUploadHandler.selectedFile };
-        } else if (fileUploadHandler.selectedFile.type === 'audio') {
-          const audioIndicator = `<div style="display: inline-flex; align-items: center; background-color: #4b5563; border: 1px solid #d1d5db; border-radius: 6px; padding: 4px 8px; margin-left: 8px; font-size: 0.875em; color: #ffffff;">\n        <span style="margin-right: 4px;">🎵</span>\n        <span>${fileUploadHandler.selectedFile.fileName}</span>\n      </div>`;
+          messageData = { imageData: selectedFile };
+        } else if (selectedFile.type === 'audio') {
+          const audioIndicator = `<div style="display: inline-flex; align-items: center; background-color: #4b5563; border: 1px solid #d1d5db; border-radius: 6px; padding: 4px 8px; margin-left: 8px; font-size: 0.875em; color: #ffffff;">\n        <span style="margin-right: 4px;">🎵</span>\n        <span>${selectedFile.fileName}</span>\n      </div>`;
           messageContent = finalInput ? `${finalInput} ${audioIndicator}` : audioIndicator;
-          messageData = { audioData: fileUploadHandler.selectedFile };
+          messageData = { audioData: selectedFile };
         } else {
-          const fileIndicator = `<div style="display: inline-flex; align-items: center; background-color: #4b5563; border: 1px solid #d1d5db; border-radius: 6px; padding: 4px 8px; margin-left: 8px; font-size: 0.875em; color: #ffffff;">\n        <span style="margin-right: 4px;">📎</span>\n        <span>${fileUploadHandler.selectedFile.fileName}</span>\n      </div>`;
+          const fileIndicator = `<div style="display: inline-flex; align-items: center; background-color: #4b5563; border: 1px solid #d1d5db; border-radius: 6px; padding: 4px 8px; margin-left: 8px; font-size: 0.875em; color: #ffffff;">\n        <span style="margin-right: 4px;">📎</span>\n        <span>${selectedFile.fileName}</span>\n      </div>`;
           messageContent = finalInput ? `${finalInput} ${fileIndicator}` : fileIndicator;
-          messageData = { fileData: fileUploadHandler.selectedFile };
+          messageData = { fileData: selectedFile };
         }
       }
     }
@@ -2547,10 +2551,10 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
         variables: carriesVariables ? { ...validatedVariables } : undefined,
         imageData: (() => {
           // Handle image data: convert to object/array/null based on count
-          const imageFiles = Array.isArray(fileUploadHandler.selectedFile)
-            ? fileUploadHandler.selectedFile.filter(f => f.type === 'image')
-            : fileUploadHandler.selectedFile?.type === 'image'
-              ? [fileUploadHandler.selectedFile]
+          const imageFiles = Array.isArray(selectedFile)
+            ? selectedFile.filter(f => f.type === 'image')
+            : selectedFile?.type === 'image'
+              ? [selectedFile]
               : [];
           // Return single object for 1 file, array for multiple, null for none
           return imageFiles.length === 1
@@ -2561,10 +2565,10 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
         })(),
         audioData: (() => {
           // Handle audio data: convert to object/array/null based on count
-          const audioFiles = Array.isArray(fileUploadHandler.selectedFile)
-            ? fileUploadHandler.selectedFile.filter(f => f.type === 'audio')
-            : fileUploadHandler.selectedFile?.type === 'audio'
-              ? [fileUploadHandler.selectedFile]
+          const audioFiles = Array.isArray(selectedFile)
+            ? selectedFile.filter(f => f.type === 'audio')
+            : selectedFile?.type === 'audio'
+              ? [selectedFile]
               : [];
           // Return single object for 1 file, array for multiple, null for none
           return audioFiles.length === 1
@@ -2575,10 +2579,10 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
         })(),
         fileData: (() => {
           // Handle file data: convert to object/array/null based on count
-          const documentFiles = Array.isArray(fileUploadHandler.selectedFile)
-            ? fileUploadHandler.selectedFile.filter(f => f.type === 'document')
-            : fileUploadHandler.selectedFile?.type === 'document'
-              ? [fileUploadHandler.selectedFile]
+          const documentFiles = Array.isArray(selectedFile)
+            ? selectedFile.filter(f => f.type === 'document')
+            : selectedFile?.type === 'document'
+              ? [selectedFile]
               : [];
           // Return single object for 1 file, array for multiple, null for none
           return documentFiles.length === 1
@@ -2609,9 +2613,9 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
     if (!isVoiceTurn) {
       setInput('');
       magicPromptHandler.resetMagicPrompt();
+      fileUploadHandler.clearSelectedFile();
+      fileUploadHandler.hideUploader();
     }
-    fileUploadHandler.clearSelectedFile();
-    fileUploadHandler.hideUploader();
     // Clear pending variables ref after successful submission
     pendingVariablesRef.current = null;
   };

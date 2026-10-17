@@ -49,24 +49,92 @@ export function toolStatusLabel(tool, t) {
   return t('voiceMode.tools.working', 'Working on it…');
 }
 
+/**
+ * Lower case, no accents, letters and digits only, single spaces. Accents are
+ * dropped rather than turned into separators: a combining mark that became a
+ * space would cut "für" into "fu r" and let a one-letter option match inside it.
+ */
 const normalize = value =>
   String(value ?? '')
     .toLowerCase()
     .normalize('NFKD')
+    .replace(/\p{M}/gu, '')
     .replace(/[^\p{L}\p{N}\s]/gu, ' ')
     .replace(/\s+/g, ' ')
     .trim();
 
+/** Words that may stand in front of a one-character option ("option a", "Antwort b"). */
+const CHOICE_PREFIXES = [
+  'option',
+  'choice',
+  'letter',
+  'answer',
+  'number',
+  'variant',
+  'antwort',
+  'nummer',
+  'buchstabe',
+  'variante',
+  'wahl'
+];
+
+/** Input types whose answer is free text, whatever options came with the question. */
+const FREE_TEXT_INPUT_TYPES = ['text', 'number', 'date', 'date_range'];
+
+/**
+ * Whether `label` (normalised) is said in `said` (normalised). Whole words only:
+ * "no" is not in "know", "yes" is not in "yesterday". A one-character label
+ * ("A", "2") is in every other sentence ("I want a large one"), so it only counts
+ * when it is the whole answer or follows a word such as "option".
+ */
+function isSaid(said, label) {
+  if (!label) return false;
+  if (label.length < 2) {
+    return said === label || CHOICE_PREFIXES.some(prefix => said === `${prefix} ${label}`);
+  }
+  return ` ${said} `.includes(` ${label} `);
+}
+
+/** Whether the question can be answered with words that are none of its options. */
+const allowsFreeText = clarification =>
+  clarification?.allowOther === true || FREE_TEXT_INPUT_TYPES.includes(clarification?.inputType);
+
+/**
+ * The one option the spoken words name, or null when none or several do. An
+ * option whose label is part of a longer matching label does not count on its
+ * own ("large" in "extra large"); two different options that both match are
+ * ambiguous ("yes or no").
+ */
+function matchOption(entries, said) {
+  const labelled = entries.map(entry => ({ entry, label: normalize(entry.label) }));
+  if (said) {
+    const exact = labelled.find(
+      ({ entry, label }) => label === said || normalize(entry.value) === said
+    );
+    if (exact) return exact.entry;
+  }
+  const hits = labelled.filter(({ label }) => isSaid(said, label));
+  const specific = hits.filter(
+    hit =>
+      !hits.some(other => other.label.length > hit.label.length && isSaid(other.label, hit.label))
+  );
+  const values = new Set(specific.map(({ entry }) => String(entry.value)));
+  return values.size === 1 ? specific[0].entry : null;
+}
+
 /**
  * The answer to a spoken question the app asked (`ask_user`). A question with
- * options is answered by saying one: the first option whose label (or value)
- * equals what was said, else the one the spoken words contain, else — when
- * the question allows another answer — the words themselves. Without options
- * the words are the answer.
+ * options is answered by saying one: the option whose label (or value) is what
+ * was said, else the single option whose label the spoken words contain as
+ * whole words. A wrong answer would reach the model as if the user had given
+ * it, so a sentence that names no option, or two, is not guessed at: the words
+ * themselves are the answer when the question allows another answer, otherwise
+ * `null` ("not understood") and the caller asks again. Without options the
+ * words are the answer.
  *
  * @param {string} spoken - The final transcript.
- * @param {{ options?: Array<{ value?: any, label?: any }|string>, allowOther?: boolean }|null} clarification
- * @returns {{ value: any, displayText: string }}
+ * @param {{ options?: Array<{ value?: any, label?: any }|string>, allowOther?: boolean, inputType?: string }|null} clarification
+ * @returns {{ value: any, displayText: string }|null} `null`: not understood.
  */
 export function answerForClarification(spoken, clarification) {
   const words = String(spoken ?? '').trim();
@@ -78,16 +146,7 @@ export function answerForClarification(spoken, clarification) {
       ? { value: option, label: option }
       : { value: option?.value ?? option?.label, label: option?.label ?? String(option?.value) }
   );
-  const said = normalize(words);
-  const byLabel = entries.find(
-    entry => normalize(entry.label) === said || normalize(entry.value) === said
-  );
-  const contained =
-    byLabel ||
-    entries.find(entry => {
-      const label = normalize(entry.label);
-      return label.length > 0 && said.includes(label);
-    });
-  if (contained) return { value: contained.value, displayText: String(contained.label) };
-  return { value: words, displayText: words };
+  const matched = matchOption(entries, normalize(words));
+  if (matched) return { value: matched.value, displayText: String(matched.label) };
+  return allowsFreeText(clarification) ? { value: words, displayText: words } : null;
 }
