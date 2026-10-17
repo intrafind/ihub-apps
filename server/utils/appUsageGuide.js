@@ -23,7 +23,8 @@ export function withoutUsageGuideContent(apps) {
   if (!Array.isArray(apps)) return apps;
   return apps.map(app => {
     if (!app?.usageGuide?.content) return app;
-    const { content: _content, ...guide } = app.usageGuide;
+    const guide = { ...app.usageGuide };
+    delete guide.content;
     return { ...app, usageGuide: guide };
   });
 }
@@ -174,8 +175,16 @@ export function buildUsageGuideMessages(app, language, catalog = {}) {
   ];
 }
 
-/** Strip a code fence a model may wrap its whole answer in. */
+/**
+ * Strip a code fence a model may wrap its whole answer in (```` ``` ````,
+ * ```` ```markdown ```` or ```` ```md ````). Plain string checks instead of a
+ * regular expression, which would backtrack on long answers.
+ */
 export function unwrapFence(content) {
-  const match = /^\s*```(?:markdown|md)?\s*\n([\s\S]*?)\n```\s*$/i.exec(content);
-  return (match ? match[1] : content).trim();
+  const text = String(content ?? '').trim();
+  const firstLineEnd = text.indexOf('\n');
+  if (!text.startsWith('```') || !text.endsWith('```') || firstLineEnd === -1) return text;
+  const fenceLanguage = text.slice(3, firstLineEnd).trim().toLowerCase();
+  if (!['', 'markdown', 'md'].includes(fenceLanguage)) return text;
+  return text.slice(firstLineEnd + 1, -3).trim();
 }

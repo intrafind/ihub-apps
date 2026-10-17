@@ -105,7 +105,7 @@ function UsageGuideSection({ app, onChange }) {
 
   const updateGuide = changes => {
     const current = appRef.current;
-    onChange({ ...current, usageGuide: { ...(current.usageGuide || {}), ...changes } });
+    onChange({ ...current, usageGuide: { ...current.usageGuide, ...changes } });
   };
 
   const generate = async () => {
@@ -113,25 +113,26 @@ function UsageGuideSection({ app, onChange }) {
     setError(null);
     try {
       const { content } = await generateAppUsageGuide(appRef.current, language);
-      updateGuide({
-        content: { ...(appRef.current.usageGuide?.content || {}), [language]: content }
-      });
-    } catch (err) {
-      setError(getAdminApiErrorMessage(err));
+      updateGuide({ content: { ...appRef.current.usageGuide?.content, [language]: content } });
     } finally {
       setGenerating(false);
     }
   };
+  // A failed generation is shown in the section; the click handlers need no promise.
+  const startGenerate = () => {
+    generate().catch(err => setError(getAdminApiErrorMessage(err)));
+  };
 
   const remove = () => {
-    const { usageGuide: _usageGuide, ...rest } = appRef.current;
+    const rest = { ...appRef.current };
+    delete rest.usageGuide;
     onChange(rest);
   };
 
   const confirmPending = () => {
     const action = pending;
     setPending(null);
-    if (action === 'regenerate') generate();
+    if (action === 'regenerate') startGenerate();
     if (action === 'delete') remove();
   };
 
@@ -157,7 +158,7 @@ function UsageGuideSection({ app, onChange }) {
             hasGuide={Boolean(guide)}
             hasText={hasText}
             generating={generating}
-            onGenerate={() => (hasText ? setPending('regenerate') : generate())}
+            onGenerate={() => (hasText ? setPending('regenerate') : startGenerate())}
             onWrite={() => updateGuide({ content: { [language]: '' } })}
             onDelete={() => setPending('delete')}
           />

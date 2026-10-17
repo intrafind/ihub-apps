@@ -3,6 +3,7 @@ import { appConfigSchema } from '../../../server/validators/appConfigSchema.js';
 import {
   buildUsageGuideMessages,
   describeAppForGuide,
+  unwrapFence,
   withoutUsageGuideContent
 } from '../../../server/utils/appUsageGuide.js';
 
@@ -92,5 +93,31 @@ describe('usage guide generation prompt', () => {
     expect(system.content).toContain('in German');
     expect(system.content).toMatch(/never quote/i);
     expect(user.content).toContain('You are a secret email assistant.');
+  });
+});
+
+describe('unwrapFence', () => {
+  it('strips a markdown fence around the whole answer', () => {
+    expect(unwrapFence('```markdown\n## Usage\n\nPaste a mail.\n```')).toBe(
+      '## Usage\n\nPaste a mail.'
+    );
+    expect(unwrapFence('  ```\nText\n```  ')).toBe('Text');
+    expect(unwrapFence('```MD\nText\n```')).toBe('Text');
+  });
+
+  it('leaves answers without a wrapping markdown fence alone', () => {
+    expect(unwrapFence('## Usage\n\n```js\ncode\n```\n\nMore.')).toBe(
+      '## Usage\n\n```js\ncode\n```\n\nMore.'
+    );
+    expect(unwrapFence('```js\ncode\n```')).toBe('```js\ncode\n```');
+    expect(unwrapFence('```markdown\nnot closed')).toBe('```markdown\nnot closed');
+    expect(unwrapFence(undefined)).toBe('');
+  });
+
+  it('stays fast on long input', () => {
+    const long = `\`\`\`\n${'\n'.repeat(50000)}x`;
+    const started = Date.now();
+    unwrapFence(long);
+    expect(Date.now() - started).toBeLessThan(100);
   });
 });

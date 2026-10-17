@@ -127,6 +127,21 @@ const getInitializedVariables = (app, currentLanguage) => {
   return initialVars;
 };
 
+/** Starter prompts, else the greeting, else the empty-chat note. */
+const startupView = (app, welcomeMessage, handleStarterPromptClick) => {
+  const starterPrompts = app?.starterPrompts || [];
+  if (starterPrompts.length > 0) {
+    return (
+      <StarterPromptsView
+        starterPrompts={starterPrompts}
+        onSelectPrompt={handleStarterPromptClick}
+      />
+    );
+  }
+  if (welcomeMessage) return <GreetingView welcomeMessage={welcomeMessage} />;
+  return <NoMessagesView />;
+};
+
 const renderStartupState = (
   app,
   welcomeMessage,
@@ -152,18 +167,7 @@ const renderStartupState = (
     return <LoadingSpinner message={t('pages.appChat.loadingChat', 'Loading chat...')} />;
   }
 
-  const starterPrompts = app?.starterPrompts || [];
-  const view =
-    starterPrompts.length > 0 ? (
-      <StarterPromptsView
-        starterPrompts={starterPrompts}
-        onSelectPrompt={handleStarterPromptClick}
-      />
-    ) : welcomeMessage ? (
-      <GreetingView welcomeMessage={welcomeMessage} />
-    ) : (
-      <NoMessagesView />
-    );
+  const view = startupView(app, welcomeMessage, handleStarterPromptClick);
   if (!usageGuideHint) return view;
   return (
     <>
