@@ -15,7 +15,7 @@
  * @module services/chat/voiceMode
  */
 import { isFeatureEnabled } from '../../featureRegistry.js';
-import { resolveVoiceModeSettings } from '../../../shared/voiceMode.js';
+import { VOICE_THINKING_LEVELS, resolveVoiceModeSettings } from '../../../shared/voiceMode.js';
 
 /**
  * Built-in voice style instruction, per language. The platform can replace it
@@ -62,11 +62,19 @@ function baseLanguage(language) {
   return typeof language === 'string' ? language.trim().toLowerCase().split(/[-_]/)[0] : '';
 }
 
+/**
+ * Longest voice instruction used. The platform schema enforces it on save; this
+ * keeps a config that was edited by hand from adding pages to every voice turn.
+ */
+const MAX_INSTRUCTION_CHARS = 4000;
+
 /** The first non-blank string among the entries of `texts` under `keys`. */
 function pickText(texts, keys) {
   for (const key of keys) {
     const value = key && texts?.[key];
-    if (typeof value === 'string' && value.trim()) return value.trim();
+    if (typeof value === 'string' && value.trim()) {
+      return value.trim().slice(0, MAX_INSTRUCTION_CHARS);
+    }
   }
   return null;
 }
@@ -125,7 +133,8 @@ export function appendVoiceInstruction(llmMessages, instruction) {
  * ask for `speech.voiceMode.thinkingLevel` (default `low`). That is a default,
  * never an override: a level the request or the app already set stays, thinking
  * the request or the app turned off stays off, and a model that does not think
- * is never sent a level.
+ * is never sent a level. A model the admin set to a level at or below the voice
+ * level keeps it: the voice level never raises one.
  *
  * @param {Object} params
  * @param {Object} [params.platform] - Platform config
@@ -146,7 +155,10 @@ export function resolveVoiceThinkingLevel({
   if (thinkingEnabled === false) return undefined;
   if (app?.thinking?.level || app?.thinking?.enabled === false) return undefined;
   if (!model?.thinking?.enabled) return undefined;
-  return resolveVoiceModeSettings({ platform }).thinkingLevel;
+  const voiceLevel = resolveVoiceModeSettings({ platform }).thinkingLevel;
+  const own = VOICE_THINKING_LEVELS.indexOf(model.thinking.level);
+  if (own !== -1 && own <= VOICE_THINKING_LEVELS.indexOf(voiceLevel)) return undefined;
+  return voiceLevel;
 }
 
 /**

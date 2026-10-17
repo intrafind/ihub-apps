@@ -38,29 +38,38 @@ function writeWithBackpressure(res, chunk) {
 const MAX_VOICE_ID_LENGTH = 200;
 
 /**
+ * Syntheses running per user. Voice mode keeps two in flight for one answer; the
+ * cap is for a client that opens far more than any player would. An aborted
+ * request is not counted by the rate limiter (it answers 'failed' requests for
+ * free), so this is what bounds how much a user can have the provider do at once.
+ */
+const MAX_CONCURRENT_SPEECH_PER_USER = 6;
+const speechInFlight = new Map();
+
+/**
  * The voices a request may pick for a text-to-speech model: the ones the admin
  * set up on the model (`tts.voice`, `tts.voices`) and the ones an app names for
- * it as its voice mode voice (`inputMode.voiceMode.voice`, on an app whose voice
- * mode speaks with this model). A request cannot reach any other voice of the
- * provider account.
+ * it as its voice mode voice (`inputMode.voiceMode.voice`, on an app the user may
+ * use whose voice mode is on and speaks with this model). A request cannot reach
+ * any other voice of the provider account.
  *
  * @param {Object} model - The text-to-speech model
  * @param {Object} platform - Platform config
- * @returns {Set<string>}
+ * @param {Object} user - The caller, whose apps count
+ * @returns {Promise<Set<string>>}
  */
-function configuredVoices(model, platform) {
+async function configuredVoices(model, platform, user) {
   const voices = new Set();
   const add = value => {
     if (typeof value === 'string' && value.trim()) voices.add(value.trim());
   };
   add(model?.tts?.voice);
   Object.values(model?.tts?.voices || {}).forEach(add);
-  const { data: apps } = configCache.getApps?.() || {};
+  const { data: apps } = (await configCache.getAppsForUser(user, platform)) || {};
   for (const app of Array.isArray(apps) ? apps : []) {
-    if (
-      app?.inputMode?.voiceMode?.voice &&
-      resolveVoiceModeSettings({ platform, app }).ttsModelId === model.id
-    ) {
+    if (!app?.inputMode?.voiceMode?.voice) continue;
+    const settings = resolveVoiceModeSettings({ platform, app });
+    if (settings.enabled && settings.ttsModelId === model.id) {
       add(app.inputMode.voiceMode.voice);
     }
   }
@@ -160,10 +169,29 @@ export default function registerVoiceRoutes(app) {
     }
     const { model, provider } = resolved;
 
+    const speechKey = req.user?.id || req.ip || 'unknown';
+    const running = speechInFlight.get(speechKey) || 0;
+    if (running >= MAX_CONCURRENT_SPEECH_PER_USER) {
+      return res
+        .status(429)
+        .json({ error: 'Too many speech requests at once', code: 'too-many-requests' });
+    }
+    speechInFlight.set(speechKey, running + 1);
+    let slotReleased = false;
+    const releaseSlot = () => {
+      if (slotReleased) return;
+      slotReleased = true;
+      const left = (speechInFlight.get(speechKey) || 1) - 1;
+      if (left > 0) speechInFlight.set(speechKey, left);
+      else speechInFlight.delete(speechKey);
+    };
+    res.once('close', releaseSlot);
+    if (res.destroyed) releaseSlot();
+
     // A voice the request picks has to be one the admin configured; it replaces
     // the one the language chooses.
     const voice = typeof requestedVoice === 'string' ? requestedVoice.trim() : '';
-    if (voice && !configuredVoices(model, platform).has(voice)) {
+    if (voice && !(await configuredVoices(model, platform, req.user)).has(voice)) {
       return res.status(400).json({ error: 'Unknown voice for this model', code: 'invalid-voice' });
     }
 

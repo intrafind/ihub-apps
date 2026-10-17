@@ -653,7 +653,11 @@ class RequestBuilder {
       if (voiceMode === true) {
         const platform = configCache.getPlatform();
         if (isVoiceTurn({ voiceMode, platform, features: configCache.getFeatures() })) {
-          appendVoiceInstruction(llmMessages, resolveVoiceInstruction({ platform, language }));
+          // Not on top of a JSON answer: "answer conversationally" would fight
+          // the schema the app asks for.
+          if (!app.outputSchema && outputFormat !== 'json') {
+            appendVoiceInstruction(llmMessages, resolveVoiceInstruction({ platform, language }));
+          }
           effectiveThinkingLevel =
             resolveVoiceThinkingLevel({ platform, model, app, thinkingLevel, thinkingEnabled }) ??
             thinkingLevel;

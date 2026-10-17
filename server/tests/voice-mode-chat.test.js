@@ -202,6 +202,11 @@ describe('resolveVoiceInstruction', () => {
     }
   });
 
+  test('a platform text is cut at 4000 characters', () => {
+    const platform = { speech: { voiceMode: { systemPrompt: { en: `${'a'.repeat(5000)}` } } } };
+    expect(resolveVoiceInstruction({ platform, language: 'en' })).toHaveLength(4000);
+  });
+
   test('a blank text of the request language falls through to the next one in the chain', () => {
     const platform = { speech: { voiceMode: { systemPrompt: { de: ' ', en: 'Short answers.' } } } };
     expect(resolveVoiceInstruction({ platform, language: 'de' })).toBe('Short answers.');
@@ -280,6 +285,19 @@ describe('resolveVoiceThinkingLevel', () => {
     expect(resolveVoiceThinkingLevel({ platform, model: thinkingModel, app })).toBeUndefined();
   });
 
+  test('never raises the level the model is set to', () => {
+    const own = level => ({ ...thinkingModel, thinking: { enabled: true, level } });
+    // Voice asks for low: a model at minimal or low keeps its own.
+    expect(resolveVoiceThinkingLevel({ platform, model: own('minimal') })).toBeUndefined();
+    expect(resolveVoiceThinkingLevel({ platform, model: own('low') })).toBeUndefined();
+    // A model above it is brought down.
+    expect(resolveVoiceThinkingLevel({ platform, model: own('medium') })).toBe('low');
+    expect(resolveVoiceThinkingLevel({ platform, model: own('high') })).toBe('low');
+    // No level, or one that is not a level: the voice level.
+    expect(resolveVoiceThinkingLevel({ platform, model: own(undefined) })).toBe('low');
+    expect(resolveVoiceThinkingLevel({ platform, model: own('turbo') })).toBe('low');
+  });
+
   test('leaves thinking that is turned off alone', () => {
     expect(
       resolveVoiceThinkingLevel({ platform, model: thinkingModel, thinkingEnabled: false })
@@ -350,6 +368,21 @@ describe('RequestBuilder with voiceMode', () => {
 
     const de = await builder.prepareChatRequest(request({ voiceMode: true, language: 'de' }));
     expect(systemOf(de)).toBe('Du bist der HR-Assistent.\n\nSprich wie ein Pirat.');
+  });
+
+  test('an app that answers in JSON does not get the conversational instruction', async () => {
+    voiceOn();
+    state.apps = [{ ...baseApp, outputSchema: { type: 'object', properties: {} } }];
+    const schema = await builder.prepareChatRequest(request({ voiceMode: true }));
+    expect(systemOf(schema)).toBe(APP_PROMPT);
+
+    state.apps = [baseApp];
+    const json = await builder.prepareChatRequest(
+      request({ voiceMode: true, outputFormat: 'json' })
+    );
+    expect(systemOf(json)).toBe(APP_PROMPT);
+    // Reasoning is still kept short.
+    expect(json.data.llmOptions.thinkingLevel).toBe('low');
   });
 
   test('an app without a system prompt still gets the instruction', async () => {

@@ -30,9 +30,11 @@ const state = {
   platform: {},
   models: [],
   apps: [],
+  visibleApps: null,
   permissions: new Set(['*']),
   calls: [],
-  resolved: []
+  resolved: [],
+  hold: null
 };
 
 jest.unstable_mockModule('../middleware/authRequired.js', () => ({
@@ -46,7 +48,9 @@ jest.unstable_mockModule('../configCache.js', () => ({
   default: {
     getPlatform: () => state.platform,
     getModels: () => ({ data: state.models }),
-    getApps: () => ({ data: state.apps })
+    getApps: () => ({ data: state.apps }),
+    // What the caller may use: every app, unless a test narrows it.
+    getAppsForUser: async () => ({ data: state.visibleApps ?? state.apps })
   }
 }));
 
@@ -65,6 +69,7 @@ jest.unstable_mockModule('../tts/mistralTtsProvider.js', () => ({
     },
     synthesize: async ({ cfg, text, onAudio }) => {
       state.calls.push({ text, voice: cfg.voice });
+      if (state.hold) await state.hold;
       await onAudio(Buffer.from([1, 0, 2, 0]));
       return { usage: null };
     }
@@ -92,9 +97,11 @@ beforeEach(() => {
   state.platform = { speech: { tts: { enabled: true, defaultModelId: 'voxtral-mini-tts' } } };
   state.models = [ttsModel, otherTtsModel];
   state.apps = [];
+  state.visibleApps = null;
   state.permissions = new Set(['*']);
   state.calls = [];
   state.resolved = [];
+  state.hold = null;
 });
 
 describe('languageFixed', () => {
@@ -275,7 +282,17 @@ describe('voice', () => {
   describe('the voice an app names for voice mode', () => {
     const appWithVoice = (id, inputModeVoice) => ({
       id,
-      inputMode: { voiceMode: inputModeVoice }
+      inputMode: { voiceMode: { enabled: true, ...inputModeVoice } }
+    });
+
+    // An app's voice counts only while voice mode is on for the instance.
+    beforeEach(() => {
+      state.platform = {
+        speech: {
+          tts: { enabled: true, defaultModelId: 'voxtral-mini-tts' },
+          voiceMode: { enabled: true }
+        }
+      };
     });
 
     test('is allowed when that app speaks with this model', async () => {
@@ -293,7 +310,7 @@ describe('voice', () => {
       state.platform = {
         speech: {
           tts: { enabled: true, defaultModelId: 'voxtral-mini-tts' },
-          voiceMode: { ttsModelId: 'other-tts' }
+          voiceMode: { enabled: true, ttsModelId: 'other-tts' }
         }
       };
       const moved = await request(app)
@@ -311,6 +328,33 @@ describe('voice', () => {
       expect(res.body.code).toBe('invalid-voice');
     });
 
+    test('is not allowed when the app is not one the caller may use', async () => {
+      state.apps = [appWithVoice('hr', { ttsModelId: 'voxtral-mini-tts', voice: 'hr_voice_id' })];
+      state.visibleApps = [];
+      const res = await request(app)
+        .post('/api/voice/speech')
+        .send({ text: GERMAN, voice: 'hr_voice_id' });
+      expect(res.status).toBe(400);
+      expect(res.body.code).toBe('invalid-voice');
+    });
+
+    test('is not allowed when voice mode is off for the app or for the instance', async () => {
+      state.apps = [
+        appWithVoice('hr', { enabled: false, ttsModelId: 'voxtral-mini-tts', voice: 'hr_voice_id' })
+      ];
+      expect(
+        (await request(app).post('/api/voice/speech').send({ text: GERMAN, voice: 'hr_voice_id' }))
+          .status
+      ).toBe(400);
+
+      state.apps = [appWithVoice('hr', { ttsModelId: 'voxtral-mini-tts', voice: 'hr_voice_id' })];
+      state.platform = { speech: { tts: { enabled: true, defaultModelId: 'voxtral-mini-tts' } } };
+      expect(
+        (await request(app).post('/api/voice/speech').send({ text: GERMAN, voice: 'hr_voice_id' }))
+          .status
+      ).toBe(400);
+    });
+
     test('apps that name no voice add nothing', async () => {
       state.apps = [{ id: 'plain' }, appWithVoice('mute', { enabled: true, voice: '' })];
       const res = await request(app)
@@ -318,5 +362,34 @@ describe('voice', () => {
         .send({ text: GERMAN, voice: 'anything' });
       expect(res.status).toBe(400);
     });
+  });
+});
+
+describe('syntheses at once', () => {
+  const until = async predicate => {
+    for (let i = 0; i < 200 && !predicate(); i += 1) {
+      await new Promise(resolve => setTimeout(resolve, 10));
+    }
+    expect(predicate()).toBe(true);
+  };
+
+  test('one user cannot have more than six running; a finished one frees its slot', async () => {
+    let release;
+    state.hold = new Promise(resolve => {
+      release = resolve;
+    });
+    const running = Array.from({ length: 6 }, () => speak({ text: GERMAN }).then(res => res));
+    await until(() => state.calls.length === 6);
+
+    const refused = await request(app).post('/api/voice/speech').send({ text: GERMAN });
+    expect(refused.status).toBe(429);
+    expect(refused.body.code).toBe('too-many-requests');
+
+    release();
+    const done = await Promise.all(running);
+    expect(done.map(res => res.status)).toEqual([200, 200, 200, 200, 200, 200]);
+
+    state.hold = null;
+    expect((await speak({ text: GERMAN })).status).toBe(200);
   });
 });

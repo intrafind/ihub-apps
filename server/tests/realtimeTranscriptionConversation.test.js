@@ -193,6 +193,48 @@ const countOf = (ws, predicate) => ws.frames().filter(predicate).length;
 const isCommit = f => f.type === 'input_audio_buffer.commit';
 const isAppend = f => f.type === 'input_audio_buffer.append';
 
+describe('conversation mode: frames that are not a control message', () => {
+  test.each([['null'], ['[]'], ['1'], ['"start"'], ['true']])(
+    'the text frame %s is ignored: no crash, the session goes on',
+    async frame => {
+      const { client, upstreams } = setup(vllmModel);
+      await startSession(client, 'vllm');
+      await openSession(upstreams[0], VLLM_READY);
+
+      expect(() => client.emit('message', frame, false)).not.toThrow();
+      sendAudio(client);
+      sendJson(client, { type: 'commit' });
+      await tick();
+
+      expect(client.framesOfType('error')).toHaveLength(0);
+      expect(client.readyState).toBe(WebSocket.OPEN);
+      expect(countOf(upstreams[0], isAppend)).toBe(1);
+    }
+  );
+
+  test('a control frame over 8 KB is not parsed', async () => {
+    const { client, upstreams } = setup(vllmModel);
+    await startSession(client, 'vllm');
+    await openSession(upstreams[0], VLLM_READY);
+
+    sendJson(client, { type: 'commit', padding: 'x'.repeat(9_000) });
+    await tick();
+
+    // Had it been taken for a commit, the turn would have an (empty) final.
+    expect(finals(client)).toEqual([]);
+    expect(client.readyState).toBe(WebSocket.OPEN);
+  });
+
+  test('a malformed frame from the upstream is ignored too', async () => {
+    const { client, upstreams } = setup(vllmModel);
+    await startSession(client, 'vllm');
+    await openSession(upstreams[0], VLLM_READY);
+
+    expect(() => upstreams[0].emit('message', 'null')).not.toThrow();
+    expect(client.readyState).toBe(WebSocket.OPEN);
+  });
+});
+
 describe('conversation mode: who may start one', () => {
   test('the feature flag is off by default: an error frame, a close, nothing dialled', async () => {
     useFeatures({});
@@ -423,6 +465,35 @@ describe('conversation mode: streaming provider, vLLM', () => {
     ]);
   });
 
+  test('text that arrives after the commit still belongs to the turn that was committed', async () => {
+    const { client, upstreams } = setup(vllmModel);
+    await startSession(client, 'vllm');
+    await openSession(upstreams[0], VLLM_READY);
+
+    sendAudio(client);
+    sendJson(client, { type: 'commit' });
+    await tick();
+    upstreamSend(upstreams[0], { type: 'transcription.delta', delta: 'late' });
+    await tick();
+
+    expect(client.framesOfType('delta')).toEqual([{ type: 'delta', text: 'late', turn: 1 }]);
+  });
+
+  test('a commit after stop starts no new turn', async () => {
+    const { client, upstreams } = setup(vllmModel);
+    await startSession(client, 'vllm');
+    await openSession(upstreams[0], VLLM_READY);
+
+    sendAudio(client);
+    sendJson(client, { type: 'commit' });
+    sendJson(client, { type: 'stop' });
+    sendJson(client, { type: 'commit' });
+    upstreamSend(upstreams[0], { type: 'transcription.done', text: 'said' });
+    await tick(250);
+
+    expect(finals(client)).toEqual([{ turn: 1, text: 'said' }]);
+  });
+
   test('a commit with no audio since the last one answers at once with an empty final', async () => {
     const { client, upstreams } = setup(vllmModel);
     await startSession(client, 'vllm');
@@ -607,6 +678,22 @@ describe('conversation mode: streaming provider, vLLM', () => {
     const [error] = client.framesOfType('error');
     expect(error.code).toBe('upstream-closed');
     expect(client.readyState).toBe(WebSocket.CLOSED);
+    expect(limiter.total).toBe(0);
+  });
+
+  test('an upstream that closes normally after stop, with a turn still waiting, is reported', async () => {
+    const { client, upstreams, limiter } = setup(vllmModel);
+    await startSession(client, 'vllm');
+    await openSession(upstreams[0], VLLM_READY);
+
+    sendAudio(client);
+    sendJson(client, { type: 'commit' });
+    sendJson(client, { type: 'stop' });
+    upstreams[0].emit('close', 1000, Buffer.from(''));
+    await tick();
+
+    // The turn will not get its text any more: say so instead of a bare close.
+    expect(client.framesOfType('error')[0].code).toBe('upstream-closed');
     expect(limiter.total).toBe(0);
   });
 
@@ -901,6 +988,43 @@ describe('conversation mode: timeouts and limits', () => {
     expect(client.framesOfType('error')).toHaveLength(0);
   });
 
+  test('keepalives alone do not hold a session open for ever: no-speech ends it', async () => {
+    const { client, upstreams, limiter } = setup(vllmModel);
+    await startSession(client, 'vllm');
+    await openSession(upstreams[0], VLLM_READY);
+
+    // 31 keepalives, 20 s apart: past the ten minutes without audio or commit.
+    for (let i = 0; i < 31 && client.readyState === WebSocket.OPEN; i += 1) {
+      await tick(20_000);
+      sendJson(client, { type: 'keepalive' });
+    }
+
+    expect(client.framesOfType('error')[0].code).toBe('no-speech');
+    expect(client.readyState).toBe(WebSocket.CLOSED);
+    expect(upstreams[0].readyState).toBe(WebSocket.CLOSED);
+    expect(limiter.total).toBe(0);
+  });
+
+  test('a commit starts the no-speech window over', async () => {
+    const { client, upstreams } = setup(vllmModel);
+    await startSession(client, 'vllm');
+    await openSession(upstreams[0], VLLM_READY);
+
+    for (let i = 0; i < 27; i += 1) {
+      await tick(20_000);
+      sendJson(client, { type: 'keepalive' });
+    }
+    sendAudio(client);
+    sendJson(client, { type: 'commit' }); // nine minutes in
+    for (let i = 0; i < 27; i += 1) {
+      await tick(20_000);
+      sendJson(client, { type: 'keepalive' });
+    }
+
+    expect(client.framesOfType('error')).toHaveLength(0);
+    expect(client.readyState).toBe(WebSocket.OPEN);
+  });
+
   test('without keepalive, audio or commit the session closes after the idle timeout', async () => {
     const { client, upstreams, limiter } = setup(vllmModel);
     await startSession(client, 'vllm');
@@ -995,6 +1119,11 @@ describe('conversation mode: timeouts and limits', () => {
     usePlatform({ voiceMode: { enabled: true, maxSessionMinutes: 1 } });
     const { client } = setup(vllmModel);
     await tick(10_000); // connected, `start` comes late
+    // Ten seconds of fake time let the config cache's refresh timer run, which
+    // reloads the configs from disk: put the test's models back before `start`.
+    useModel(vllmModel);
+    usePlatform({ voiceMode: { enabled: true, maxSessionMinutes: 1 } });
+    useFeatures({ voiceMode: true });
     await startSession(client, 'vllm');
 
     await tick(49_000);
@@ -1116,6 +1245,22 @@ describe('conversation mode: batch provider', () => {
       { turn: 2, text: 'two' },
       { turn: 3, text: '' }
     ]);
+  });
+
+  test('commits that pile up behind a slow transcription end the session', async () => {
+    transcribe.mockImplementation(() => new Promise(() => {})); // never answers
+    const { client, limiter } = setup(batchModel);
+    await startSession(client, 'whisper');
+
+    for (let turn = 1; turn <= 40; turn += 1) {
+      turnAudio(client, 1);
+      sendJson(client, { type: 'commit' });
+    }
+    await tick();
+
+    expect(client.framesOfType('error')[0].code).toBe('turn-backlog');
+    expect(client.readyState).toBe(WebSocket.CLOSED);
+    expect(limiter.total).toBe(0);
   });
 
   test('a commit with no audio is an empty final and never reaches the provider', async () => {

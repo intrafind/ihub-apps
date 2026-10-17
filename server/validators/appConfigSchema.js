@@ -185,9 +185,10 @@ const inputModeSchema = z
         enabled: z.boolean().optional(),
         listeningStyle: z.enum(VOICE_LISTENING_STYLES).optional(),
         // A `modelType: "tts"` model; empty follows the platform's.
-        ttsModelId: z.string().optional(),
+        ttsModelId: z.string().trim().max(200).optional(),
         // A voice of that model; empty uses the model's voice for the language.
-        voice: z.string().optional()
+        // The speech route takes ids up to 200 characters.
+        voice: z.string().trim().max(200).optional()
       })
       .optional()
   })

@@ -188,6 +188,9 @@ const BYTES_PER_SECOND = 32_000;
  *   must not be kept alive by what the upstream says. The client sends a
  *   `keepalive` at least every 20 s for the whole session (also while it
  *   listens and nothing else is sent), so this tolerates two lost ones.
+ * - `noSpeechMs`: keepalives alone do not keep a session open for ever. When no
+ *   audio and no `commit` came for this long, the next `keepalive` ends it with
+ *   `no-speech` (a microphone left open, or a client that only pretends).
  * - A turn ends once its text has settled after the `commit`, whichever comes
  *   first: `turnQuietMs` without upstream text (the turn already produced some
  *   or the upstream already answered), `turnFinalQuietMs` after the upstream's
@@ -198,6 +201,7 @@ const BYTES_PER_SECOND = 32_000;
  */
 export const CONVERSATION_TIMINGS = Object.freeze({
   idleMs: 60_000,
+  noSpeechMs: 600_000,
   turnQuietMs: 700,
   turnFinalQuietMs: 200,
   turnEmptyWaitMs: 1_500,
@@ -207,6 +211,9 @@ export const CONVERSATION_TIMINGS = Object.freeze({
 // Commits that may wait in a conversation for the turns before them. A real
 // client has one or two: it ends a turn when the user falls silent.
 const MAX_QUEUED_COMMITS = 32;
+// Control frames are tiny (`start` is the biggest, well under 1 KB). Anything
+// larger is not parsed.
+const MAX_CONTROL_FRAME_BYTES = 8 * 1024;
 // A batch provider is not asked to transcribe less than this (100 ms of PCM16 at
 // 16 kHz): OpenAI-compatible endpoints refuse shorter clips, which would end the
 // session. Such a turn is silence.
@@ -609,6 +616,7 @@ export function bridgeConnection(clientWs, user, limiter, options = {}) {
   } = options;
   const timings = { ...CONVERSATION_TIMINGS, ...conversationTimings };
   const connectedAt = Date.now();
+  let lastTurnActivityAt = connectedAt; // conversation: last audio or commit from the client
   let cfg = null; // resolved upstream { url, apiKey, model }; set on start/first-audio
   let provider = null; // resolved transcription provider (protocol / batch call)
   let resolvingCfg = false; // guard so upstream config is resolved at most once
@@ -1172,6 +1180,7 @@ export function bridgeConnection(clientWs, user, limiter, options = {}) {
       } catch {
         return; // upstream frames are JSON; ignore anything else
       }
+      if (!msg || typeof msg !== 'object') return;
       const event = provider.interpret(msg);
       switch (event.kind) {
         case 'delta': {
@@ -1290,7 +1299,11 @@ export function bridgeConnection(clientWs, user, limiter, options = {}) {
       // A conversation keeps its upstream open for as long as it runs: even a
       // normal close is the session ending under the client, which must hear
       // of it (and can reconnect) rather than wait for turns that never come.
-      if (conversation && !stopRequested && !errorSent) {
+      if (
+        conversation &&
+        !errorSent &&
+        (!stopRequested || activeTurn || batchTurnsPending > 0 || queuedCommits > 0)
+      ) {
         failBridge(
           'upstream-closed',
           `Transcription service closed the connection (code ${code}${reason ? `: ${reason}` : ''})`,
@@ -1688,6 +1701,7 @@ export function bridgeConnection(clientWs, user, limiter, options = {}) {
   const acceptConversationAudio = chunk => {
     if (errorSent || tornDown || stopRequested) return;
     resetIdle();
+    lastTurnActivityAt = Date.now();
     if (outboxBytes + chunk.length > MAX_PENDING_BYTES) {
       logger.debug('Realtime STT: conversation audio over the hold limit dropped', {
         component: 'RealtimeSTT',
@@ -1705,11 +1719,15 @@ export function bridgeConnection(clientWs, user, limiter, options = {}) {
   const handleCommit = () => {
     if (!conversation || errorSent || tornDown || stopRequested) return;
     resetIdle();
+    lastTurnActivityAt = Date.now();
     // A client that ends turns faster than they can be transcribed (the next
-    // starts only when the one before has its text) is not a voice client.
-    if (queuedCommits >= MAX_QUEUED_COMMITS) {
+    // starts only when the one before has its text) is not a voice client. A
+    // batch provider takes each commit out of the outbox at once, so there the
+    // turns waiting for their transcription are the backlog.
+    if (queuedCommits + batchTurnsPending >= MAX_QUEUED_COMMITS) {
       failBridge('turn-backlog', 'Too many turns are waiting to be transcribed', {
-        queuedCommits
+        queuedCommits,
+        batchTurnsPending
       });
       return;
     }
@@ -1760,6 +1778,7 @@ export function bridgeConnection(clientWs, user, limiter, options = {}) {
       Math.min(settings.maxSessionSeconds, getMaxSessionSeconds()),
       Date.now() - connectedAt
     );
+    lastTurnActivityAt = Date.now();
     resetIdle();
   };
 
@@ -1853,12 +1872,15 @@ export function bridgeConnection(clientWs, user, limiter, options = {}) {
       return;
     }
     // Text control frame from the browser.
+    if (data.length > MAX_CONTROL_FRAME_BYTES) return;
     let msg;
     try {
       msg = JSON.parse(data.toString());
     } catch {
       return;
     }
+    // `null`, a number or an array parses fine and has no `type`.
+    if (!msg || typeof msg !== 'object' || Array.isArray(msg)) return;
     if (msg.type === 'start') {
       // The first `start` decides whether this is a conversation (voice mode).
       // It is refused before anything is resolved or dialled unless voice mode
@@ -1904,7 +1926,16 @@ export function bridgeConnection(clientWs, user, limiter, options = {}) {
     } else if (msg.type === 'keepalive') {
       // Only a conversation sends these; elsewhere they are ignored, so they
       // can never keep a one-utterance session open.
-      if (conversation && !errorSent && !tornDown) resetIdle();
+      if (conversation && !errorSent && !tornDown) {
+        if (Date.now() - lastTurnActivityAt >= timings.noSpeechMs) {
+          failBridge('no-speech', 'Nothing was said for a long time, so the session was closed', {
+            reason: 'conversation without speech',
+            silentSeconds: Math.round((Date.now() - lastTurnActivityAt) / 1000)
+          });
+          return;
+        }
+        resetIdle();
+      }
     } else if (msg.type === 'stop') {
       if (conversation) {
         handleConversationStop();
