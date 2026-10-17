@@ -169,7 +169,15 @@ function continuesSentence(text, dot, spaceAt) {
     // decimal at the end of a sentence ("in 2024.", "version 3.5.") still ends it.
     if (/^\d{1,3}$/.test(token) && isHorizontalSpace(text[spaceAt])) return true;
   }
-  // A lowercase word next: an abbreviation we do not know ("approx. five").
+  return startsLowercase(text, spaceAt);
+}
+
+/**
+ * Whether the next word, after the horizontal whitespace at `spaceAt`, starts
+ * in lower case: the sentence evidently goes on ("approx. five", "Well... it
+ * depends"). A line break in between is a break, whatever follows.
+ */
+function startsLowercase(text, spaceAt) {
   let next = spaceAt;
   while (isHorizontalSpace(text[next])) next++;
   return isLowerLetter(text[next]);
@@ -272,8 +280,16 @@ function scanSentences(text, from, lineEnd, complete, addEnd) {
     // At the end of the line only a complete line (newline follows) counts: the
     // last line of the text may still be growing ("3." may become "3.5").
     const followedBySpace = end === lineEnd ? complete : isSpace(text[end]);
-    const singleDot = runEnd === i + 1 && text[i] === '.';
-    if (followedBySpace && !(singleDot && continuesSentence(text, i, end))) addEnd(end);
+    if (followedBySpace) {
+      const run = text.slice(i, runEnd);
+      // "?!" and "!!" end a sentence for sure; a full stop needs the checks
+      // above; an ellipsis only gives way to a lowercase word after it.
+      const continues =
+        run === '.'
+          ? continuesSentence(text, i, end)
+          : /^[.…]+$/.test(run) && startsLowercase(text, end);
+      if (!continues) addEnd(end);
+    }
     i = end;
   }
 }

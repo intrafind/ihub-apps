@@ -226,8 +226,13 @@ describe('speakableChunker: ellipsis, quotes and brackets', () => {
     expect(chunksOf('Well... I think so. Maybe')).toEqual(['Well...', 'I think so.', 'Maybe']);
   });
 
-  test('an ellipsis inside a word run is not three sentence ends', () => {
-    expect(chunksOf('Wait.... what? Yes.')).toEqual(['Wait....', 'what?', 'Yes.']);
+  test('an ellipsis is not three sentence ends', () => {
+    expect(chunksOf('Wait.... Really? Yes.')).toEqual(['Wait....', 'Really?', 'Yes.']);
+  });
+
+  test('a lowercase word after an ellipsis means the sentence goes on', () => {
+    expect(chunksOf('In short... it depends. Next.')).toEqual(['In short... it depends.', 'Next.']);
+    expect(chunksOf('Hmm… let me think. Done.')).toEqual(['Hmm… let me think.', 'Done.']);
   });
 
   test('closing quotes and brackets belong to the sentence', () => {
