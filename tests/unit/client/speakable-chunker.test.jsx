@@ -293,11 +293,8 @@ describe('speakableChunker: code fences', () => {
     ).toEqual(['After it.']);
   });
 
-  test('a fence that opens in the same update as its text and closes later', () => {
-    const chunker = eager();
-    // The sentence before the fence is complete; the fence is not.
-    expect(chunker.update('Look at this. ```js\nlet a')).toEqual([]);
-    expect(chunker.update('Look at this. ```js\nlet a = 1;\n```\n')).toEqual([]);
+  test('a fence mark in the middle of a line is no fence', () => {
+    expect(chunksOf('Say ```hi``` now. Then go.')).toEqual(['Say ```hi``` now.', 'Then go.']);
   });
 
   test('the closing fence is only recognised once its line is complete', () => {
@@ -410,8 +407,8 @@ describe('speakableChunker: chunk sizes', () => {
   test('the first chunk waits for firstMinChars', () => {
     const chunker = createSpeakableChunker({ firstMinChars: 30, laterMinChars: 120 });
     expect(chunker.update('Short one. ')).toEqual([]);
-    expect(chunker.update('Short one. Another short one. ')).toEqual([
-      'Short one. Another short one.'
+    expect(chunker.update('Short one. Another one that is longer. ')).toEqual([
+      'Short one. Another one that is longer.'
     ]);
   });
 
@@ -427,7 +424,7 @@ describe('speakableChunker: chunk sizes', () => {
     expect(chunker.update(`${first} `)).toEqual([first]);
     const medium = 'A medium sentence that is not long enough alone. ';
     expect(chunker.update(`${first} ${medium}`)).toEqual([]);
-    const more = Array.from({ length: 6 }, (_, i) => `Another sentence number ${i}.`).join(' ');
+    const more = Array.from({ length: 10 }, (_, i) => `Another sentence number ${i}.`).join(' ');
     const out = chunker.update(`${first} ${medium}${more} `);
     expect(out).toHaveLength(1);
     expect(out[0].length).toBeGreaterThanOrEqual(250);
@@ -500,8 +497,8 @@ describe('speakableChunker: state', () => {
   test('text that got shorter clamps the offset instead of throwing', () => {
     const chunker = eager();
     expect(chunker.update('Alpha. Beta. Gamma. ')).toEqual(['Alpha.', 'Beta.', 'Gamma.']);
-    expect(() => chunker.update('Al')).not.toThrow();
-    expect(chunker.update('Al')).toEqual([]);
+    expect(() => chunker.update('Al. ')).not.toThrow();
+    expect(chunker.update('Al. ')).toEqual([]);
     // Growing again continues from the clamped offset.
     expect(chunker.update('Al. New text here. ')).toEqual(['New text here.']);
   });

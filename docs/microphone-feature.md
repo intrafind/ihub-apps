@@ -6,6 +6,8 @@ The microphone feature allows users to dictate messages instead of typing. It su
 
 > **Dictation vs. transcription.** This page covers **dictation** — live microphone speech dropped into the **input field** for the user to edit and send. A separate feature, **transcription**, turns a recording or an uploaded audio/video clip into the **user's message** — a recording grows the message while the user speaks and sends it on stop — using a `modelType: "transcription"` model; the chat model then answers it. Both can be enabled on the same app and share the same authenticated `/api/voice/realtime` WebSocket. See [Transcription Models](models.md#transcription-models) and [Audio File Support](audio-file-support.md#two-audio-paths-multimodal-vs-voxtral-transcription).
 
+> **Voice mode.** A third feature builds on the same voice input: **[voice mode](#voice-mode-spoken-conversation)** is a spoken conversation with the app. The user talks, the app answers out loud and can be interrupted. It is a preview feature and listens with the speech service configured on this page.
+
 ## Modes
 
 - `automatic` — Speech recognition stops automatically when the user pauses speaking. The transcribed text is placed in the input field and the listener shuts down. This is the default mode.
@@ -90,6 +92,7 @@ instead of editing `platform.json` by hand:
   without picking one (see
   [Realtime Voice & Transcription](voice-transcription.md#platform-default-transcription-model)).
 - **Read aloud**: the text-to-speech model (see [Text-to-Speech](text-to-speech.md)).
+- **Voice mode**: the platform switch and settings of the spoken conversation (see [Voice mode](#voice-mode-spoken-conversation)).
 - **Azure Speech** — enable/disable, default host/endpoint, region, and the subscription
   **key**. The key is stored **encrypted at rest** on the server and exchanged for a
   short-lived authorization token per session via `/api/voice/azure/token`, so it never
@@ -243,3 +246,141 @@ The microphone feature surfaces errors directly in the chat input placeholder fo
 | No speech detected | "No speech detected. Please try again." |
 | Network error | "Network error. Please check your connection." |
 | Generic error | "Voice input error. Please try again." |
+
+## Voice Mode (Spoken Conversation)
+
+> **Preview.** Voice mode is off until an admin enables the **Voice Mode** feature under **Admin → Features** (`voiceMode`) and switches it on under **Admin → Voice Input**.
+
+Voice mode turns a chat into a spoken conversation. The user talks, the app answers out loud, and the user can interrupt at any time. It is the **same chat**: same app, model, tools and sources, and the same history. Nothing is added to the answer except an instruction that keeps it short and easy to listen to. Voice mode is part of voice input: it listens with the app's speech recognition service (see [Speech Recognition Services](#speech-recognition-services)) and speaks with a [text-to-speech model](text-to-speech.md).
+
+### Using it
+
+- **Start.** Click the **waveform button** next to **Send**. The first click asks the browser for the microphone, because audio needs a click to start. The button only shows when voice mode is available for the app (see [When voice mode is available](#when-voice-mode-is-available)).
+- **The voice view.** It covers the messages and leaves the chat header visible. An orb moves with your voice and the app's, a label says what is going on (*Listening…*, *Thinking…*, *Speaking…*, *Microphone is muted*), and captions show what you said and what the app is saying. **Mute** switches the microphone off for a moment, **End** closes the view.
+- **Hands-free** (default). Just speak. After a short pause, 0.8 seconds by default, your turn ends and the app answers. Your own words show as a caption while you speak, and a turn with nothing but a cough or "um" is dropped without sending anything.
+- **Push-to-talk.** Hold the on-screen button or the **Space** bar while you speak. Letting go sends your turn. Space is not push-to-talk while you are typing into a field.
+- **Interrupting.** When you speak while the app is answering, it stops within a fraction of a second, stops the answer that is still being written, and listens to you. A tap on the orb also stops the answer. Turn **Let me interrupt by speaking** off if the app keeps cutting itself off.
+- **Headphones.** The microphone cancels echo, but laptop speakers can still be picked up as a voice. With headphones interrupting works best. Without, switch interrupting off in the settings and use push-to-talk or the tap.
+- **Captions** are on by default. They are the alternative to audio for people who cannot hear it and for noisy places, and the whole conversation is also in the chat behind the view. Switch them off in the settings.
+- **Settings (⚙).** Listening style, interrupting and captions. They are stored in the browser of each user and win over the defaults of the admin.
+- **Tools and long answers.** While the app searches or reads, the label says so (*Searching the web…*, *Looking in the documents…*). Tables, images and charts cannot be spoken: they appear in the chat, and the app tells you so. If the app has a question for you (a clarification), it asks it out loud and your next sentence is the answer.
+- **End.** **✕**, **End** or **Esc** closes the microphone and the audio and returns to the normal chat. You can carry on by typing, and start voice mode again later in the same chat.
+- Spoken turns are saved as ordinary messages, marked as spoken, so the history shows what was said.
+
+### Speech services
+
+Voice mode listens with the service its app uses for voice input: `settings.speechRecognition.service`, or the platform default under **Admin → Voice Input**. No separate speech-to-text setting exists.
+
+| Service | How voice mode works with it |
+| ------- | ---------------------------- |
+| **Transcription model** (`model`) | The browser sends only the audio of speech, plus a short run-up, through iHub to the model, and ends each turn with a `commit`. A streaming model shows the words while you speak; a batch model (Whisper, Gemini Transcribe) shows them after each turn. Details: [Realtime Voice & Transcription](voice-transcription.md). |
+| **Azure Speech** (`azure`) | The browser streams the audio to Azure Speech with a short-lived token from iHub. The subscription key never reaches the browser. |
+| **Browser** (`browser`) | The browser's own Web Speech API. Chrome, Edge and Safari have it, Firefox does not. The recognizer pauses while the app speaks and restarts when you interrupt. |
+
+In hands-free mode a voice-activity detector runs in the browser and finds where your turn ends. It is served from iHub itself, so voice mode works without internet access to other hosts.
+
+### Privacy
+
+- **Audio is never stored.** iHub keeps neither what the microphone hears nor what the app speaks, as with dictation and transcription.
+- The microphone audio goes **only to the speech service of the app**: the browser vendor's recognizer, Azure Speech, or iHub and from there the transcription model you configured. The text of the answer goes to the text-to-speech model.
+- The microphone is open only while the voice view is open.
+- What you said is kept as text in the chat, like a typed message. [Incognito chats](user-guide.md) stay unsaved.
+
+### Setting it up
+
+1. **Switch the feature on.** **Admin → Features → Voice Mode** (a preview feature, off by default). Without it nobody sees the button and the server refuses voice sessions.
+2. **Prepare the speech services.** Voice input for the apps that should have voice mode (see [Speech Recognition Services](#speech-recognition-services)), and a text-to-speech model with read aloud switched on (see [Read Aloud](text-to-speech.md#setting-it-up)).
+3. **Open Admin → Voice Input → Voice mode.** Tick **Enable voice mode**, optionally choose a text-to-speech model, and set the listening style, the length of the pause, interrupting, the reasoning effort and the longest session. Use **Try it** to hold a conversation from the admin page, with the settings in the form and the speech service chosen under **Voice input**, before you save.
+4. **Decide per app.** With **Turn voice mode on for apps that do not decide themselves** (`appDefault`) off, voice mode is opt-in: open an app in the app editor, and under **Input Mode & Microphone** set **Voice mode** to **On**. With it on, every app that allows voice input has voice mode unless the app sets it to **Off**.
+5. **Permissions.** No new permission is needed. Users need the app, the speech model (when the app uses one) and the text-to-speech model through their groups.
+
+### When voice mode is available
+
+The button shows when all of these hold:
+
+1. the `voiceMode` feature is on and `speech.voiceMode.enabled` is `true`;
+2. the app allows voice input (`inputMode.microphone.enabled` is not `false`) and voice mode is on for the app (`inputMode.voiceMode.enabled`, else `appDefault`);
+3. read aloud is on, a text-to-speech model is set for the app or the platform, and the user may use it;
+4. the app's speech service works: a transcription model is set, Azure Speech is enabled, or the browser has the Web Speech API;
+5. the browser has microphone access (`getUserMedia`) and `AudioWorklet`, which needs HTTPS or `localhost`.
+
+### Configuration reference
+
+**Platform** (`contents/config/platform.json`, **Admin → Voice Input → Voice mode**):
+
+```json
+{
+  "speech": {
+    "voiceMode": {
+      "enabled": true,
+      "appDefault": false,
+      "ttsModelId": "",
+      "listeningStyle": "hands-free",
+      "bargeIn": true,
+      "endOfTurnSilenceMs": 800,
+      "thinkingLevel": "low",
+      "maxSessionMinutes": 30,
+      "systemPrompt": {}
+    }
+  }
+}
+```
+
+| Field | Default | Meaning |
+| ----- | ------- | ------- |
+| `enabled` | `false` | Turns voice mode on for the instance (the `voiceMode` feature must be on as well). |
+| `appDefault` | `false` | Whether apps that do not set `inputMode.voiceMode.enabled` have voice mode. |
+| `ttsModelId` | `""` | The text-to-speech model that speaks. Empty uses `speech.tts.defaultModelId`. |
+| `listeningStyle` | `"hands-free"` | `"hands-free"` or `"push-to-talk"`. Users can change it in the voice settings. |
+| `bargeIn` | `true` | Whether the user can interrupt the answer by speaking. Users can change it in the voice settings. |
+| `endOfTurnSilenceMs` | `800` | Hands-free: the pause that ends the user's turn, 300 to 3000. |
+| `thinkingLevel` | `"low"` | `"minimal"`, `"low"`, `"medium"` or `"high"`. Reasoning models add seconds of silence before the answer, so a spoken turn asks for this level. A level that the app or the request already sets stays, and models that do not reason are not sent one. |
+| `maxSessionMinutes` | `30` | A voice session ends after this many minutes, 1 to 240. The session also stays under the hard limit `speech.realtime.maxSessionSeconds`. |
+| `systemPrompt` | `{}` | Optional voice style instruction per language (`{ "en": "…", "de": "…" }`). It replaces the built-in text. |
+
+These settings are read when a session starts, without a restart. The text-to-speech model and the other speech settings are described under [Text-to-Speech](text-to-speech.md#voice-mode).
+
+**The voice style instruction.** In voice mode the server adds a short instruction after the app's own system prompt: answer conversationally and briefly, lead with the answer, usually one to four sentences, no tables, code blocks, headings, lists, URLs or emoji unless asked, say numbers the way they are spoken, and say when something was put in the chat. The built-in text exists in English and German and is shown under the fields in the admin page. `systemPrompt` replaces it. The text for the user's language is used first, then the English one, then the built-in text for the language. Leave a language out to keep the built-in text.
+
+**App** (`contents/apps/*.json`, next to `inputMode.microphone`; the app editor writes it):
+
+```json
+{
+  "inputMode": {
+    "microphone": { "enabled": true, "mode": "manual", "showTranscript": true },
+    "voiceMode": {
+      "enabled": true,
+      "listeningStyle": "push-to-talk",
+      "ttsModelId": "voxtral-mini-tts",
+      "voice": "de_anna"
+    }
+  }
+}
+```
+
+| Field | Default | Meaning |
+| ----- | ------- | ------- |
+| `enabled` | the platform `appDefault` | `true` turns voice mode on for this app, `false` off. |
+| `listeningStyle` | the platform value | `"hands-free"` or `"push-to-talk"`. |
+| `ttsModelId` | the platform value | The text-to-speech model of this app, for example a German voice model for a German app. |
+| `voice` | the model's voice | A voice of that model. It has to be a voice the model configures (`tts.voice`, `tts.voices`) or the voice named here; other voices are refused. |
+
+An app without `inputMode.voiceMode` simply follows the platform, and nothing needs migrating. An app with `inputMode.microphone.enabled: false` has no voice mode, whatever it sets here. The app editor shows the voice mode controls greyed out in that case, and leaves out every field that follows the platform.
+
+### Limits
+
+- **Session length:** `maxSessionMinutes`, then the voice view closes with a message.
+- **Connections:** voice mode counts against the realtime limits (`speech.realtime.maxConnectionsPerUser` and `maxConnections`, see [Runtime limits and tuning](voice-transcription.md#runtime-limits-and-tuning)). A session sends keepalive messages while the app thinks and speaks, so a long answer does not end it.
+- **Speech output:** every piece of an answer is a request to `/api/voice/speech`, counted by the inference rate limit (`rateLimit.inferenceApi`). Interrupting aborts the requests of the interrupted answer.
+- **Answers** longer than `speech.tts.maxCharacters` are spoken up to that limit.
+
+### Troubleshooting
+
+| Symptom | Cause |
+| ------- | ----- |
+| No waveform button | One of the conditions in [When voice mode is available](#when-voice-mode-is-available) fails: the feature is off, the platform switch is off, the app has voice mode or the microphone off, no text-to-speech model, the user's groups may not use it, or the browser has no microphone or `AudioWorklet` (HTTP instead of HTTPS). |
+| "Microphone access was blocked" | The browser denied the microphone. Allow it for the site in the browser settings. |
+| The app answers its own voice | Laptop speakers without headphones. Use headphones, turn interrupting off, or use push-to-talk. |
+| Turns end too early or too late | Change **End of turn after silence** (`endOfTurnSilenceMs`). Noisy rooms need a longer pause. |
+| Answers start slowly | A reasoning model: set **Reasoning effort** to `minimal` or `low`, or use an app model that does not reason. |
+| "The connection to speech recognition was lost" | The transcription socket broke twice in a row. Check the model under **Admin → Models → Test**, and the realtime limits. |
