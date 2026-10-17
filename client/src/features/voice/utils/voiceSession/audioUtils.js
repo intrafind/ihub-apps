@@ -71,14 +71,14 @@ export function pcmToArrayBuffer(pcm) {
 
 /**
  * Throttled mic level: remembers the loudest frame since the last report and
- * reports it at most every `intervalMs` (about 15 reports a second by default).
+ * reports it at most every `intervalMs` (about 15 reports a second by default (every second 32 ms frame)).
  *
  * @param {Object} options
  * @param {(level: number) => void} options.onLevel
  * @param {number} [options.intervalMs]
  * @param {() => number} [options.now] - Clock in ms (tests).
  */
-export function createLevelMeter({ onLevel, intervalMs = 66, now = () => Date.now() }) {
+export function createLevelMeter({ onLevel, intervalMs = 60, now = () => Date.now() }) {
   let peak = 0;
   let lastReport = -Infinity;
   return {
