@@ -5,11 +5,11 @@
  *
  * Only what the user changed is stored, so a platform or app default that
  * changes later still reaches everyone who never touched the setting:
- * `{ listeningStyle?, bargeIn?, captions?, voice? }`.
+ * `{ listeningStyle?, bargeIn?, captions? }`.
  */
 const STORAGE_KEY = 'ihub.voiceMode.prefs';
 
-/** @returns {{ listeningStyle?: string, bargeIn?: boolean, captions?: boolean, voice?: string }} */
+/** @returns {{ listeningStyle?: string, bargeIn?: boolean, captions?: boolean }} */
 export function loadVoiceModePrefs() {
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
@@ -21,7 +21,6 @@ export function loadVoiceModePrefs() {
     }
     if (typeof parsed.bargeIn === 'boolean') prefs.bargeIn = parsed.bargeIn;
     if (typeof parsed.captions === 'boolean') prefs.captions = parsed.captions;
-    if (typeof parsed.voice === 'string' && parsed.voice.length <= 128) prefs.voice = parsed.voice;
     return prefs;
   } catch {
     return {};

@@ -85,8 +85,7 @@ export function useVoiceMode({
   const effective = {
     listeningStyle: prefs.listeningStyle ?? settings?.listeningStyle ?? 'hands-free',
     bargeIn: prefs.bargeIn ?? settings?.bargeIn ?? true,
-    captions: prefs.captions ?? true,
-    voice: prefs.voice ?? settings?.voice ?? ''
+    captions: prefs.captions ?? true
   };
 
   const [active, setActive] = useState(false);
@@ -190,12 +189,23 @@ export function useVoiceMode({
       const spoken = String(text ?? '').trim();
       const turn = turnRef.current;
       if (turn?.timing) turn.timing.final = performance.now();
+      const before = stateRef.current;
       send({ type: 'FINAL', text: spoken });
       const session = sessionRef.current;
       if (isDroppedTranscript(spoken)) {
         session?.setAgentState('idle');
         return;
       }
+      // The state machine decides whether this transcript is a turn: while the
+      // app speaks (or answers) and nobody interrupted it, a late transcript is
+      // not, and sending it would start a second run on top of the first.
+      const after = stateRef.current;
+      const isTurn =
+        after !== before &&
+        after.status === VOICE_STATUS.THINKING &&
+        after.userCaption.final &&
+        !after.runActive;
+      if (!isTurn) return;
 
       const current = latestRef.current;
       const base = { sent: true, baseCount: current.messages.length, timing: turn?.timing || {} };
@@ -204,8 +214,13 @@ export function useVoiceMode({
 
       let accepted = true;
       if (current.clarificationPending) {
-        const message = [...current.messages].reverse().find(m => m.clarification);
-        current.answerClarification(answerForClarification(spoken, message?.clarification));
+        const asked = [...current.messages].reverse().find(m => m.clarification)?.clarification;
+        current.answerClarification({
+          questionId: asked?.questionId,
+          answered: true,
+          skipped: false,
+          ...answerForClarification(spoken, asked)
+        });
       } else {
         accepted = await current.sendTurn(spoken);
       }
@@ -298,7 +313,8 @@ export function useVoiceMode({
       queue = createSpeechQueue({
         modelId: avail.ttsModelId,
         language: lang,
-        voice: options.voice || undefined,
+        // The app's own voice (`inputMode.voiceMode.voice`), when it sets one.
+        voice: avail.settings.voice || undefined,
         onSpeakingStart: () => {
           if (generation !== generationRef.current) return;
           const turn = turnRef.current;
@@ -370,6 +386,8 @@ export function useVoiceMode({
     const turn = turnRef.current;
     const queue = queueRef.current;
     if (!active || !turn?.sent || !queue) return;
+    // Feeding the queue after the final text would start a second answer.
+    if (turn.answered) return;
     const assistant = findTurnAssistant(messages, turn.baseCount);
     if (!assistant) return;
 
@@ -474,8 +492,7 @@ export function useVoiceMode({
         send({ type: 'SET_BARGE_IN', value });
       }),
     setCaptions: value =>
-      updatePref({ captions: value }, () => send({ type: 'SET_CAPTIONS', value })),
-    setVoice: voice => updatePref({ voice })
+      updatePref({ captions: value }, () => send({ type: 'SET_CAPTIONS', value }))
   };
 }
 

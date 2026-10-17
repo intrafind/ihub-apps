@@ -36,12 +36,7 @@ function sessionError(code, message) {
   return error;
 }
 
-const joinText = (...parts) =>
-  parts
-    .filter(Boolean)
-    .join(' ')
-    .replace(/\s+/g, ' ')
-    .trim();
+const joinText = (...parts) => parts.filter(Boolean).join(' ').replace(/\s+/g, ' ').trim();
 
 /** The recognizer constructor of this browser, if any. */
 export function getSpeechRecognitionCtor() {
@@ -142,6 +137,7 @@ export function createBrowserAdapter({
       finalCount: 0,
       lastResults: null,
       dead: false,
+      errored: false,
       stopping: false,
       finalizing: false,
       gotResult: false,
@@ -194,9 +190,11 @@ export function createBrowserAdapter({
         fail('mic-missing', 'No microphone found');
         break;
       case 'network':
+        record.errored = true;
         noteFailure('The browser could not reach its speech recognition service', 'connection');
         break;
       default:
+        record.errored = true;
         noteFailure(event?.message || event?.error);
         break;
     }
@@ -214,7 +212,8 @@ export function createBrowserAdapter({
       // keep what was heard, the next recognition continues the turn.
       turn.carry = turn.text;
     }
-    if (!record.gotResult && now() - record.startedAt < MIN_HEALTHY_RUN_MS && !record.stopping) {
+    const endedAtOnce = now() - record.startedAt < MIN_HEALTHY_RUN_MS;
+    if (!record.gotResult && endedAtOnce && !record.stopping && !record.errored) {
       noteFailure('Speech recognition ended right after it started');
     }
     scheduleSync();
