@@ -395,7 +395,7 @@ export function useVoiceMode({
     if (!processing && !turn.answered) {
       turn.answered = true;
       queue.update(spoken, { final: true });
-      send({ type: 'RUN_ENDED', speechPending: queue.isSpeaking() });
+      send({ type: 'RUN_ENDED', pendingAudio: queue.isSpeaking() });
       // The app asked a question: say it. The next utterance answers it.
       const question = assistant.awaitingInput ? assistant.clarification : null;
       if (question?.question && turn.askedQuestionId !== question.questionId) {
