@@ -61,7 +61,11 @@ function makeSdk() {
       this.close = jest.fn();
       recognizers.push(this);
     }),
-    ResultReason: { RecognizingSpeech: 'recognizing', RecognizedSpeech: 'recognized', NoMatch: 'nomatch' },
+    ResultReason: {
+      RecognizingSpeech: 'recognizing',
+      RecognizedSpeech: 'recognized',
+      NoMatch: 'nomatch'
+    },
     CancellationReason: { Error: 0, EndOfStream: 1 },
     CancellationErrorCode: {
       NoError: 0,
@@ -74,7 +78,10 @@ function makeSdk() {
 }
 
 const pcm = (value, length = 160) => new Int16Array(length).fill(value);
-const flush = () => Promise.resolve().then(() => Promise.resolve()).then(() => Promise.resolve());
+const flush = () =>
+  Promise.resolve()
+    .then(() => Promise.resolve())
+    .then(() => Promise.resolve());
 const tokenFor = (n = 1) => ({ token: `token-${n}`, region: 'westeurope' });
 
 function setup(options = {}) {
@@ -99,8 +106,7 @@ const hear = (recognizer, text, reason = 'recognizing') =>
   recognizer.recognizing?.(recognizer, { result: { reason, text } });
 const recognized = (recognizer, text, reason = 'recognized') =>
   recognizer.recognized?.(recognizer, { result: { reason, text } });
-const endOfStream = recognizer =>
-  recognizer.canceled?.(recognizer, { reason: 1, errorCode: 0 });
+const endOfStream = recognizer => recognizer.canceled?.(recognizer, { reason: 1, errorCode: 0 });
 const texts = (events, type) => events.filter(event => event.type === type).map(e => e.text);
 
 afterEach(() => jest.useRealTimers());
@@ -443,7 +449,11 @@ describe('azure adapter: failures', () => {
     });
     adapter.beginTurn(pcm(1));
     await flush();
-    expect(events[0]).toMatchObject({ type: 'error', recoverable: false, message: 'socket refused' });
+    expect(events[0]).toMatchObject({
+      type: 'error',
+      recoverable: false,
+      message: 'socket refused'
+    });
     adapter.stop();
   });
 

@@ -138,7 +138,11 @@ describe('model adapter: the conversation socket', () => {
     adapter.beginTurn(pcm(2, 480)); // the pre-roll
     adapter.pushAudio(pcm(3));
     adapter.pushAudio(pcm(4));
-    expect(socket().audio().map(buffer => new Int16Array(buffer)[0])).toEqual([2, 3, 4]);
+    expect(
+      socket()
+        .audio()
+        .map(buffer => new Int16Array(buffer)[0])
+    ).toEqual([2, 3, 4]);
     expect(socket().audio()[0].byteLength).toBe(960);
 
     adapter.commitTurn();
@@ -154,7 +158,11 @@ describe('model adapter: the conversation socket', () => {
     adapter.beginTurn(pcm(1));
     adapter.commitTurn();
     adapter.commitTurn();
-    expect(socket().json().filter(frame => frame.type === 'commit')).toHaveLength(1);
+    expect(
+      socket()
+        .json()
+        .filter(frame => frame.type === 'commit')
+    ).toHaveLength(1);
     adapter.stop();
   });
 
@@ -294,7 +302,10 @@ describe('model adapter: the conversation socket', () => {
     jest.useFakeTimers();
     const { adapter, socket, connect } = setup();
     await connect();
-    const keepalives = () => socket().json().filter(frame => frame.type === 'keepalive').length;
+    const keepalives = () =>
+      socket()
+        .json()
+        .filter(frame => frame.type === 'keepalive').length;
 
     expect(KEEPALIVE_INTERVAL_MS).toBeLessThanOrEqual(20_000);
     expect(keepalives()).toBe(0);
