@@ -41,12 +41,7 @@ function sessionError(code, message) {
   return error;
 }
 
-const joinText = (...parts) =>
-  parts
-    .filter(Boolean)
-    .join(' ')
-    .replace(/\s+/g, ' ')
-    .trim();
+const joinText = (...parts) => parts.filter(Boolean).join(' ').replace(/\s+/g, ' ').trim();
 
 // `import()` of the CommonJS-style SDK: named exports on the namespace or on `default`.
 const resolveSdk = mod => (mod?.SpeechRecognizer ? mod : mod?.default || mod);
@@ -231,7 +226,10 @@ export function createAzureAdapter({
         if (event.reason === sdk.CancellationReason.Error) {
           turnFailed(
             turn,
-            sessionError(classifyCancellation(event), event.errorDetails || 'Azure recognition failed')
+            sessionError(
+              classifyCancellation(event),
+              event.errorDetails || 'Azure recognition failed'
+            )
           );
           return;
         }
