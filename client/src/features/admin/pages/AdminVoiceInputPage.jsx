@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { makeAdminApiCall } from '../../../api/adminApi';
@@ -89,16 +89,6 @@ function AdminVoiceInputPage() {
   const [ttsSample, setTtsSample] = useState('');
   const readAloudTest = useReadAloudPlayback(READ_ALOUD_TEST_ID);
   const voiceModeFlagEnabled = useFeatureFlags().isEnabled('voiceMode', false);
-
-  // What "Try it" runs with: the unsaved form in the shape a chat reads from
-  // the platform config, so the session resolves its speech service like one.
-  const trySpeech = useMemo(
-    () => ({
-      ...toPublicSpeech(config, (transcriptionModels || []).filter(isStreamingTranscriptionModel)),
-      voiceMode: config.voiceMode
-    }),
-    [config, transcriptionModels]
-  );
 
   useEffect(() => {
     void loadConfig();
@@ -570,7 +560,7 @@ function AdminVoiceInputPage() {
           defaultTtsModelId={config.tts.defaultModelId}
           readAloudEnabled={!!config.tts.enabled}
           flagEnabled={voiceModeFlagEnabled}
-          trySpeech={trySpeech}
+          speech={config}
           t={t}
           language={i18n.language}
         />

@@ -34,7 +34,8 @@ const THINKING_LABELS = { minimal: 'Minimal', low: 'Low', medium: 'Medium', high
  * @param {boolean} props.readAloudEnabled `speech.tts.enabled` of the form: voice mode
  *   is offered only while read aloud, which owns the text-to-speech setup, is on.
  * @param {boolean} props.flagEnabled The `voiceMode` preview feature flag is on.
- * @param {object} props.trySpeech Unsaved speech config in the public client shape.
+ * @param {object} props.speech The `speech` section as the form holds it, unsaved: what "Try it"
+ *   runs with.
  * @param {Function} props.t
  * @param {string} props.language UI language.
  */
@@ -45,7 +46,7 @@ function VoiceModeSettings({
   defaultTtsModelId,
   readAloudEnabled,
   flagEnabled,
-  trySpeech,
+  speech,
   t,
   language
 }) {
@@ -389,7 +390,7 @@ function VoiceModeSettings({
       <div className="pt-2 border-t border-gray-100 dark:border-gray-700 space-y-2">
         <div className="flex items-center gap-3">
           {flagEnabled ? (
-            <VoiceModeTryButton speech={trySpeech} />
+            <VoiceModeTryButton speech={speech} />
           ) : (
             <button
               type="button"

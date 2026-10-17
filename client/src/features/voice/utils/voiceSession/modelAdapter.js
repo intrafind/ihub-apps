@@ -1,5 +1,5 @@
 import { buildWsUrl } from '../../../../utils/runtimeBasePath';
-import { pcmToArrayBuffer, concatInt16 } from './audioUtils';
+import { pcmToArrayBuffer } from './audioUtils';
 import { toRecognitionLang } from '../speechService';
 
 /**
@@ -11,29 +11,31 @@ import { toRecognitionLang } from '../speechService';
  *   start {modelId, lang, conversation: true}  ->  ready
  *   PCM16 16 kHz binary frames                 ->  delta {text}*   (streaming models)
  *   commit  (end of one user turn)             ->  final {text, turn}
- *   keepalive (about every 15 s, the whole session)
+ *   keepalive (every 15 s, the whole session)
  *   stop
  *
  * Audio only goes up while the user speaks (the session hands the adapter the
  * pre-roll when a turn starts, then each frame until it ends), so a GPU-backed
  * model is not fed the silence while the app talks. `final` frames carry the
- * number of the turn (the n-th `commit` of the socket): a final of a turn that is
- * no longer waited for is ignored.
+ * number of the turn (the n-th `commit` of the socket): a final of a turn that
+ * nobody waits for is ignored.
  *
  * An unexpected close is answered with one reconnect (a fresh `start`); after
  * that the session fails with an unrecoverable error.
  */
 
-/** The server's idle timeout is 60 s; keep well inside it. */
+/** The server's idle timeout is 60 s; it asks for a keepalive at least every 20 s. */
 export const KEEPALIVE_INTERVAL_MS = 15_000;
 /** Above this many queued bytes (about 8 s of audio) frames are dropped, not queued. */
 export const MAX_BUFFERED_BYTES = 256 * 1024;
 const READY_TIMEOUT_MS = 15_000;
 const RECONNECT_DELAY_MS = 250;
+const OPEN = 1; // WebSocket.OPEN, also on fakes
+
 // Close codes that are an answer, not a failure of the network: policy
-// violation (not logged in, origin refused), unsupported data, message too big,
-// and the application range (which the bridge uses for refusals).
-const NO_RECONNECT_CLOSE = code => code === 1008 || code === 1003 || code === 1009 || code >= 4000;
+// violation (not signed in, origin refused), unsupported data, message too big,
+// and the application range.
+const isRefusalClose = code => code === 1008 || code === 1003 || code === 1009 || code >= 4000;
 
 function sessionError(code, message) {
   const error = new Error(message);
@@ -64,9 +66,9 @@ export function createModelAdapter({
   readyTimeoutMs = READY_TIMEOUT_MS,
   reconnectDelayMs = RECONNECT_DELAY_MS
 }) {
-  const OPEN = 1; // WebSocket.OPEN, also on fakes
   let ws = null;
   let stopped = false;
+  let failed = false;
   let reconnects = 0;
   let keepaliveTimer = null;
   let reconnectTimer = null;
@@ -75,18 +77,18 @@ export function createModelAdapter({
   let resolveStart = null;
   let rejectStart = null;
   let muted = false;
-  // Is audio flowing to the socket for a turn right now?
+  // Is audio flowing to the socket for a user turn right now?
   let turnOpen = false;
-  // Turns committed on the current socket (the server counts the same way) and
-  // the ones whose `final` is still awaited, oldest first.
+  // Commits sent on the current socket (the server counts them the same way)
+  // and the ones whose `final` is still awaited, oldest first. `discard`: the
+  // user dropped the turn (muted mid-sentence), so its answer is not wanted.
   let committed = 0;
   let pending = [];
-  // Turns to answer with nothing: cancelled by the user (mute) or lost with a socket.
   let interimText = '';
   let sawServerError = false;
   let droppedFrames = 0;
 
-  const isOpen = () => ws && ws.readyState === OPEN;
+  const isOpen = () => Boolean(ws) && ws.readyState === OPEN;
 
   const sendJson = payload => {
     if (!isOpen()) return false;
@@ -131,13 +133,14 @@ export function createModelAdapter({
     else resolveStart?.();
   };
 
+  // Report a failure once: as the rejection of `start()` while the session is
+  // coming up, as an unrecoverable `error` event afterwards.
   const fail = (code, message) => {
-    if (stopped) return;
-    if (!startSettled) {
-      settleStart(sessionError(code, message));
-      return;
-    }
-    emit({ type: 'error', code, message, recoverable: false });
+    if (stopped || failed) return;
+    failed = true;
+    clearTimers();
+    if (!startSettled) settleStart(sessionError(code, message));
+    else emit({ type: 'error', code, message, recoverable: false });
   };
 
   // Turns whose `final` can no longer arrive (the socket they were committed on
@@ -146,7 +149,7 @@ export function createModelAdapter({
     const lost = pending.filter(entry => !entry.discard);
     pending = [];
     committed = 0;
-    for (const entry of lost) emit({ type: 'final', text: '' });
+    for (let i = 0; i < lost.length; i++) emit({ type: 'final', text: '' });
   };
 
   const handleMessage = raw => {
@@ -158,10 +161,12 @@ export function createModelAdapter({
     }
     switch (msg.type) {
       case 'ready':
+        clearTimeout(readyTimer);
+        readyTimer = null;
         settleStart();
         break;
       case 'delta':
-        if (turnOpen || pending.length) {
+        if (turnOpen || pending.some(entry => !entry.discard)) {
           interimText = `${interimText}${msg.text || ''}`;
           emit({ type: 'interim', text: interimText.replace(/\s+/g, ' ').trim() });
         }
@@ -169,10 +174,10 @@ export function createModelAdapter({
       case 'final': {
         const turn = Number.isInteger(msg.turn) ? msg.turn : pending[0]?.turn;
         const index = pending.findIndex(entry => entry.turn === turn);
-        // A turn nobody waits for (already answered, from before a reconnect).
+        // A turn nobody waits for: answered already, or from before a reconnect.
         if (index === -1) break;
         const [entry] = pending.splice(index, 1);
-        // Older commits cannot be answered after a newer one: end them empty.
+        // Commits older than the answered one cannot be answered any more.
         const skipped = pending.splice(0, index).filter(other => !other.discard);
         interimText = '';
         for (let i = 0; i < skipped.length; i++) emit({ type: 'final', text: '' });
@@ -188,28 +193,20 @@ export function createModelAdapter({
     }
   };
 
-  const startKeepalive = () => {
-    clearInterval(keepaliveTimer);
-    keepaliveTimer = setInterval(() => sendJson({ type: 'keepalive' }), keepaliveMs);
-  };
-
   const handleClose = event => {
-    if (stopped) return;
+    if (stopped || failed) return;
     clearInterval(keepaliveTimer);
     keepaliveTimer = null;
-    const code = event?.code;
-    if (sawServerError || NO_RECONNECT_CLOSE(code) || reconnects >= 1) {
+    if (!startSettled) {
+      fail('connection-lost', 'The speech connection could not be opened');
+      return;
+    }
+    if (sawServerError || isRefusalClose(event?.code) || reconnects >= 1) {
       abandonPending();
       fail('connection-lost', 'The speech connection was lost');
       return;
     }
-    if (!startSettled) {
-      // Closed while connecting: the session never came up.
-      fail('connection-lost', 'The speech connection could not be opened');
-      return;
-    }
     reconnects += 1;
-    clearTimeout(reconnectTimer);
     reconnectTimer = setTimeout(() => {
       reconnectTimer = null;
       abandonPending();
@@ -217,8 +214,8 @@ export function createModelAdapter({
     }, reconnectDelayMs);
   };
 
-  function connect(isReconnect = false) {
-    if (stopped) return;
+  function connect(isReconnect) {
+    if (stopped || failed) return;
     let socket;
     try {
       socket = createWebSocket(getUrl());
@@ -231,25 +228,19 @@ export function createModelAdapter({
     sawServerError = false;
     socket.onopen = () => {
       if (socket !== ws || stopped) return;
-      sendJson({
-        type: 'start',
-        modelId,
-        lang: toRecognitionLang(language),
-        conversation: true
-      });
-      startKeepalive();
+      sendJson({ type: 'start', modelId, lang: toRecognitionLang(language), conversation: true });
+      clearInterval(keepaliveTimer);
+      keepaliveTimer = setInterval(() => sendJson({ type: 'keepalive' }), keepaliveMs);
     };
     socket.onmessage = event => {
       if (socket === ws) handleMessage(event.data);
     };
-    socket.onerror = () => {
-      // The close that follows carries the outcome.
-    };
+    // The close that follows an error carries the outcome.
+    socket.onerror = () => {};
     socket.onclose = event => {
       if (socket === ws) handleClose(event);
     };
     if (isReconnect) {
-      // The server holds audio sent before `ready`, so streaming can go on.
       readyTimer = setTimeout(
         () => fail('connection-lost', 'The speech connection could not be restored'),
         readyTimeoutMs
@@ -264,37 +255,36 @@ export function createModelAdapter({
         resolveStart = resolve;
         rejectStart = reject;
         readyTimer = setTimeout(
-          () => settleStart(sessionError('connection-lost', 'The speech service did not answer')),
+          () => fail('connection-lost', 'The speech service did not answer'),
           readyTimeoutMs
         );
         connect(false);
       });
     },
 
-    /** Speech was confirmed: send what came before, then audio as it arrives. */
+    /** Speech was confirmed: send what came before it, then audio as it arrives. */
     beginTurn(preRoll) {
       if (muted || stopped) return;
       turnOpen = true;
       interimText = '';
-      if (preRoll?.length) sendAudio(preRoll);
+      sendAudio(preRoll);
     },
 
     pushAudio(pcm) {
-      if (!turnOpen || muted || stopped) return;
-      sendAudio(pcm);
+      if (turnOpen && !muted && !stopped) sendAudio(pcm);
     },
 
     /** End of the user's turn: the server answers with `final` for it. */
     commitTurn() {
       if (!turnOpen) return;
       turnOpen = false;
-      if (!sendJson({ type: 'commit' })) {
+      if (sendJson({ type: 'commit' })) {
+        committed += 1;
+        pending.push({ turn: committed, discard: false });
+      } else {
         // No socket right now (reconnecting): nothing will answer this turn.
         emit({ type: 'final', text: '' });
-        return;
       }
-      committed += 1;
-      pending.push({ turn: committed, discard: false });
     },
 
     /** The turn is dropped (muted mid-sentence): flush the server, ignore its answer. */
@@ -308,41 +298,29 @@ export function createModelAdapter({
       }
     },
 
-    setAgentState() {
-      // Keepalives run the whole session, whatever the app is doing.
-    },
+    // Keepalives run the whole session, whatever the app is doing.
+    setAgentState() {},
+    setListeningStyle() {},
 
     setMuted(value) {
       muted = Boolean(value);
     },
 
-    setListeningStyle() {},
-
     stop() {
       if (stopped) return;
+      sendJson({ type: 'stop' });
       stopped = true;
       clearTimers();
       pending = [];
-      if (ws) {
-        const socket = ws;
-        ws = null;
-        sendJson.call(null, {}); // no-op placeholder to keep the shape simple
-        try {
-          if (socket.readyState === OPEN) socket.send(JSON.stringify({ type: 'stop' }));
-        } catch {
-          /* ignore */
-        }
+      const socket = ws;
+      ws = null;
+      if (socket) {
         try {
           socket.close();
         } catch {
           /* ignore */
         }
       }
-    },
-
-    // For tests: how the adapter sees the world.
-    _debug: () => ({ committed, pending: pending.length, reconnects, droppedFrames })
+    }
   };
 }
-
-export { concatInt16 };

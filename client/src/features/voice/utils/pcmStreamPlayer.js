@@ -15,6 +15,14 @@
  * Works the same in every browser with Web Audio and streaming `fetch`, and
  * needs no media container: the server can switch providers without the
  * player noticing.
+ *
+ * Multi-stream mode (voice mode): one player plays several fetched streams
+ * back to back. `enqueueStream()` takes one request per piece of an answer;
+ * the requests run concurrently, but their audio is scheduled strictly in the
+ * order they were enqueued, gap-free, whichever response arrives first. A
+ * failed stream is skipped without ending the player, and `finish()` says that
+ * no more streams follow. The audio context can be passed in and is then left
+ * open, so one context serves a whole voice session.
  */
 
 const DEFAULT_SAMPLE_RATE = 24000;
@@ -48,10 +56,28 @@ export class SpeechRequestError extends Error {
   }
 }
 
-function createAudioContext() {
+/**
+ * A new `AudioContext`. Call it from a click handler: browsers only let a user
+ * gesture start audio. Throws where Web Audio is missing.
+ */
+export function createAudioContext() {
   const Ctx = typeof window !== 'undefined' && (window.AudioContext || window.webkitAudioContext);
   if (!Ctx) throw new Error('Audio playback is not supported in this browser');
   return new Ctx();
+}
+
+/** The error for a response that is not `ok`: the server's own message when it sent one. */
+async function responseError(response) {
+  let body = {};
+  try {
+    body = await response.json();
+  } catch {
+    // Not JSON — keep the status alone.
+  }
+  return new SpeechRequestError(body.error || `HTTP ${response.status}`, {
+    status: response.status,
+    code: body.code
+  });
 }
 
 /**
@@ -65,13 +91,18 @@ export class PcmStreamPlayer {
   /**
    * @param {Object} [opts]
    * @param {(state: string, info?: Object) => void} [opts.onStateChange]
+   * @param {AudioContext} [opts.context] - Play on this context instead of
+   *   creating one. The player never closes a context it was given.
+   * @param {boolean} [opts.multiStream] - Play several streams back to back
+   *   (`enqueueStream` + `finish`) instead of one (`start`).
    */
-  constructor({ onStateChange } = {}) {
+  constructor({ onStateChange, context, multiStream = false } = {}) {
     this.onStateChange = onStateChange || (() => {});
     this.state = 'idle';
-    this.context = createAudioContext();
+    this.ownsContext = !context;
+    this.context = context || createAudioContext();
     // A context created in a gesture may still start suspended (Safari).
-    this.context.resume?.().catch(() => {});
+    if (this.ownsContext) this.context.resume?.().catch(() => {});
     this.controller = new AbortController();
     this.sampleRate = DEFAULT_SAMPLE_RATE;
     this.sources = new Set();
@@ -89,7 +120,14 @@ export class PcmStreamPlayer {
     // Everything received, so a finished stream replays without a request.
     this.recording = [];
     this.recordedBytes = 0;
-    this.recordingDropped = false;
+    // A multi-stream player plays and forgets: no recording for a replay.
+    this.recordingDropped = multiStream;
+    this.multiStream = multiStream;
+    // Multi-stream: the streams enqueued and not yet fully handed to the queue,
+    // in play order; `streams[0]` is the one feeding the queue.
+    this.streams = [];
+    this.finishing = false;
+    this.rateLocked = false;
   }
 
   setState(state, info) {
@@ -120,18 +158,7 @@ export class PcmStreamPlayer {
     }
     if (this.isFinal()) return;
     if (!response.ok) {
-      let body = {};
-      try {
-        body = await response.json();
-      } catch {
-        // Not JSON — keep the status alone.
-      }
-      this.fail(
-        new SpeechRequestError(body.error || `HTTP ${response.status}`, {
-          status: response.status,
-          code: body.code
-        })
-      );
+      this.fail(await responseError(response));
       return;
     }
     if (!response.body?.getReader) {
@@ -169,6 +196,136 @@ export class PcmStreamPlayer {
     for (const chunk of recording.chunks) this.enqueue(chunk);
     this.streamDone = true;
     this.pump();
+  }
+
+  /**
+   * Multi-stream mode: fetch one more stream and play it after the ones
+   * enqueued before it. Requests may run concurrently; the audio is scheduled
+   * in enqueue order, so a stream whose response arrives early waits for its
+   * turn. A stream that fails is skipped (what arrived of it still plays) and
+   * the player carries on: the outcome is the promise's value, never a
+   * rejection or a player `error` state.
+   *
+   * @param {(signal: AbortSignal) => Promise<Response>} request - Called at once.
+   *   Its signal aborts with `stop()`, so every request in flight is cancelled.
+   * @param {Object} [opts]
+   * @param {(response: Response) => void} [opts.onResponse] - Called with an
+   *   `ok` response before its body is read, so the caller can read its headers
+   *   (for speech: `X-Speech-Language`).
+   * @returns {Promise<{ status: 'ok' | 'error' | 'aborted', error?: Error }>}
+   *   Settles once the stream was fully received, failed, or was cancelled.
+   */
+  enqueueStream(request, { onResponse } = {}) {
+    if (!this.multiStream) {
+      return Promise.reject(new Error('enqueueStream needs a multi-stream player'));
+    }
+    if (this.isFinal() || this.finishing) return Promise.resolve({ status: 'aborted' });
+    const stream = { pending: [], total: 0, done: false };
+    this.streams.push(stream);
+    if (this.state === 'idle') this.setState('loading');
+    return this.runStream(stream, request, onResponse);
+  }
+
+  /** Multi-stream mode: no more streams follow; the player ends once all audio has played. */
+  finish() {
+    if (!this.multiStream || this.isFinal()) return;
+    this.finishing = true;
+    this.pump();
+  }
+
+  async runStream(stream, request, onResponse) {
+    const aborted = () => this.controller.signal.aborted || this.isFinal();
+    let response;
+    try {
+      response = await request(this.controller.signal);
+    } catch (error) {
+      return this.settleStream(stream, aborted() ? null : error);
+    }
+    if (aborted()) return this.settleStream(stream, null);
+    if (!response.ok) {
+      const error = await responseError(response);
+      return this.settleStream(stream, aborted() ? null : error);
+    }
+    if (!response.body?.getReader) {
+      return this.settleStream(stream, new Error('Streaming audio is not supported in this browser'));
+    }
+    // One sample rate for the whole player: the queue holds plain bytes.
+    const rate =
+      Number.parseInt(response.headers.get('X-Audio-Sample-Rate'), 10) || DEFAULT_SAMPLE_RATE;
+    if (this.rateLocked && rate !== this.sampleRate) {
+      return this.settleStream(stream, new Error('The sample rate changed between streams'));
+    }
+    this.sampleRate = rate;
+    this.rateLocked = true;
+    try {
+      onResponse?.(response);
+    } catch {
+      // The caller's problem; the audio still plays.
+    }
+
+    const reader = response.body.getReader();
+    let streamError = null;
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        if (aborted()) return this.settleStream(stream, null);
+        this.feed(stream, value);
+      }
+    } catch (error) {
+      if (aborted()) return this.settleStream(stream, null);
+      // Interrupted mid-stream: play what arrived, then report it.
+      streamError = error;
+    }
+    return this.settleStream(stream, streamError);
+  }
+
+  /** Bytes of a stream: straight into the queue when it is the one playing, else held back. */
+  feed(stream, bytes) {
+    if (!bytes?.byteLength) return;
+    stream.total += bytes.byteLength;
+    if (stream === this.streams[0]) this.enqueue(bytes);
+    else stream.pending.push(bytes);
+  }
+
+  settleStream(stream, error) {
+    stream.done = true;
+    this.advance();
+    if (error) return { status: 'error', error };
+    return { status: this.isFinal() && !this.streams.length ? 'aborted' : 'ok' };
+  }
+
+  /**
+   * Hand over to the next stream once the one playing is fully received: its
+   * held-back bytes go into the queue, and so on while that one is complete too.
+   */
+  advance() {
+    while (this.streams.length && this.streams[0].done) {
+      const finished = this.streams.shift();
+      // A half sample at the end of a stream must not shift the next one by a byte.
+      if (finished.total % 2) this.dropTrailingByte();
+      const next = this.streams[0];
+      if (next) {
+        const held = next.pending;
+        next.pending = [];
+        for (const bytes of held) this.enqueue(bytes);
+      }
+    }
+    this.pump();
+  }
+
+  /** Remove the last byte of the queue (the odd one of a stream's end). */
+  dropTrailingByte() {
+    const last = this.queue.length - 1;
+    if (last < 0) return;
+    if (this.queue[last].byteLength <= 1) this.queue.pop();
+    else this.queue[last] = this.queue[last].subarray(0, -1);
+    this.queuedBytes -= 1;
+  }
+
+  /** Whether the bytes still to come could extend what is queued. */
+  moreComing() {
+    return this.multiStream ? this.streams.length > 0 : !this.streamDone;
   }
 
   enqueue(bytes) {
@@ -217,7 +374,7 @@ export class PcmStreamPlayer {
     const maxBytes = Math.round(this.sampleRate * MAX_BUFFER_SECONDS) * 2;
     while (this.nextStartTime - ctx.currentTime < SCHEDULE_AHEAD_SECONDS) {
       const available = this.queuedBytes - (this.queuedBytes % 2);
-      if (!available || (!this.streamDone && available < minBytes)) break;
+      if (!available || (this.moreComing() && available < minBytes)) break;
       this.schedule(pcm16ToFloat32(this.dequeue(maxBytes)));
     }
     this.maybeFinish();
@@ -244,6 +401,14 @@ export class PcmStreamPlayer {
   }
 
   maybeFinish() {
+    if (this.multiStream) {
+      if (!this.finishing || this.streams.length || this.queuedBytes > 1) return;
+      if (this.sources.size > 0 || this.isFinal()) return;
+      // Skipped streams are the caller's to report; the player just ends.
+      this.setState('ended');
+      this.close();
+      return;
+    }
     if (!this.streamDone || this.queuedBytes > 1 || this.sources.size > 0 || this.isFinal()) {
       return;
     }
@@ -306,7 +471,10 @@ export class PcmStreamPlayer {
     this.sources.clear();
     this.queue = [];
     this.queuedBytes = 0;
-    if (this.context.state !== 'closed') this.context.close?.().catch(() => {});
+    this.streams = [];
+    if (this.ownsContext && this.context.state !== 'closed') {
+      this.context.close?.().catch(() => {});
+    }
   }
 }
 
