@@ -145,9 +145,9 @@ function closesFence(line, fence) {
   const marker = line.match(FENCE_LINE);
   return Boolean(
     marker &&
-      marker[1][0] === fence[0] &&
-      marker[1].length >= fence.length &&
-      !line.slice(marker[0].length).trim()
+    marker[1][0] === fence[0] &&
+    marker[1].length >= fence.length &&
+    !line.slice(marker[0].length).trim()
   );
 }
 

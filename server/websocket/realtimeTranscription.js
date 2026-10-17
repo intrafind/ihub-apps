@@ -204,6 +204,9 @@ export const CONVERSATION_TIMINGS = Object.freeze({
   turnExplicitWaitMs: 2_500,
   turnMaxWaitMs: 6_000
 });
+// Commits that may wait in a conversation for the turns before them. A real
+// client has one or two: it ends a turn when the user falls silent.
+const MAX_QUEUED_COMMITS = 32;
 // A batch provider is not asked to transcribe less than this (100 ms of PCM16 at
 // 16 kHz): OpenAI-compatible endpoints refuse shorter clips, which would end the
 // session. Such a turn is silence.
@@ -668,6 +671,7 @@ export function bridgeConnection(clientWs, user, limiter, options = {}) {
   let turnSeq = 0; // commits received so far: the `turn` of the next final
   let openTurnBytes = 0; // audio the client sent for the turn being spoken
   const outbox = []; // audio and commits in arrival order, until they can go on
+  let queuedCommits = 0; // commit markers in `outbox` (bounded: MAX_QUEUED_COMMITS)
   let outboxBytes = 0; // byte-bound on the audio in `outbox` (MAX_PENDING_BYTES)
   let activeTurn = null; // streaming: the committed turn whose text is settling
   let turnText = { committed: '', partial: '' }; // text of the turn being collected
@@ -809,6 +813,7 @@ export function bridgeConnection(clientWs, user, limiter, options = {}) {
     }
     outbox.length = 0;
     outboxBytes = 0;
+    queuedCommits = 0;
     // Cancel an in-flight batch request and free its buffered audio, so a
     // client that walks away doesn't leave a fetch (and 30 MB) hanging around.
     abortController.abort();
@@ -1437,13 +1442,15 @@ export function bridgeConnection(clientWs, user, limiter, options = {}) {
 
   // The number of the turn the bridge is collecting text for right now: the one
   // settling, else the first one committed and waiting, else the one being spoken.
-  const currentTurnNumber = () =>
-    activeTurn ? activeTurn.n : (outbox.find(item => item.commit)?.commit ?? turnSeq + 1);
+  const currentTurnNumber = () => {
+    if (activeTurn) return activeTurn.n;
+    return (queuedCommits > 0 && outbox.find(item => item.commit)?.commit) || turnSeq + 1;
+  };
 
   // After `stop`, the session ends once every committed turn has its final.
   const maybeFinishConversation = () => {
     if (!conversation || !stopRequested || completed || tornDown || errorSent) return;
-    if (activeTurn || batchTurnsPending > 0 || outbox.some(item => item.commit)) return;
+    if (activeTurn || batchTurnsPending > 0 || queuedCommits > 0) return;
     void finishCompleted();
   };
 
@@ -1508,6 +1515,9 @@ export function bridgeConnection(clientWs, user, limiter, options = {}) {
     // session is doing is unknown (a generation may still be reading audio, and
     // a second commit would start another), so the next turn gets a fresh one.
     if (turn.explicit && !turn.sawFinal) rotateUpstream('turn-no-final');
+    // A session that reached its lifetime cap is replaced now, between turns,
+    // while the user listens: not at the first words of the next one.
+    maybeRotate();
     pumpOutbox();
   };
 
@@ -1556,11 +1566,13 @@ export function bridgeConnection(clientWs, user, limiter, options = {}) {
       if (item.commit) {
         if (!item.hadAudio) {
           outbox.shift();
+          queuedCommits -= 1;
           sendTurnFinal(item.commit, '');
           continue;
         }
         if (!upstreamOpen()) break;
         outbox.shift();
+        queuedCommits -= 1;
         beginTurnCommit(item.commit);
         break;
       }
@@ -1577,6 +1589,7 @@ export function bridgeConnection(clientWs, user, limiter, options = {}) {
     while (outbox.length && !errorSent && !tornDown) {
       const item = outbox.shift();
       if (item.commit) {
+        queuedCommits -= 1;
         enqueueBatchTurn(item.commit);
         continue;
       }
@@ -1692,8 +1705,17 @@ export function bridgeConnection(clientWs, user, limiter, options = {}) {
   const handleCommit = () => {
     if (!conversation || errorSent || tornDown || stopRequested) return;
     resetIdle();
+    // A client that ends turns faster than they can be transcribed (the next
+    // starts only when the one before has its text) is not a voice client.
+    if (queuedCommits >= MAX_QUEUED_COMMITS) {
+      failBridge('turn-backlog', 'Too many turns are waiting to be transcribed', {
+        queuedCommits
+      });
+      return;
+    }
     turnSeq += 1;
     outbox.push({ commit: turnSeq, hadAudio: openTurnBytes > 0 });
+    queuedCommits += 1;
     openTurnBytes = 0;
     pumpOutbox();
   };

@@ -558,7 +558,6 @@ function AdminVoiceInputPage() {
           onChange={setVoiceMode}
           ttsModels={ttsModels}
           defaultTtsModelId={config.tts.defaultModelId}
-          readAloudEnabled={!!config.tts.enabled}
           flagEnabled={voiceModeFlagEnabled}
           speech={config}
           t={t}

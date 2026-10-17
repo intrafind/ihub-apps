@@ -1021,7 +1021,6 @@
         "ttsModelDisabledHint": "Dieses Modell ist deaktiviert, daher wird der Sprachmodus nicht angeboten. Aktivieren Sie es unter Admin → Modelle und hinterlegen Sie einen API-Schlüssel.",
         "ttsModelNone": "Weder hier noch oben unter „Vorlesen“ ist ein Sprachausgabemodell gewählt, daher wird der Sprachmodus nicht angeboten.",
         "ttsModelHint": "Beim Standard wird das Vorlese-Modell verwendet. Apps können ein eigenes wählen, zum Beispiel ein deutsches Sprachmodell. Nutzer brauchen über ihre Gruppen Zugriff auf das Modell.",
-        "readAloudOff": "Vorlesen ist oben ausgeschaltet. Der Sprachmodus nutzt dieselbe Sprachausgabe-Einrichtung, schalten Sie sie also ebenfalls ein, sonst wird der Sprachmodus nicht angeboten.",
         "listeningStyle": "Zuhörmodus",
         "handsFree": "Freisprechen",
         "pushToTalk": "Push-to-Talk",
@@ -1049,8 +1048,7 @@
         },
         "tryIt": "Ausprobieren",
         "tryFlagOff": "Aktivieren Sie zuerst die Vorschau-Funktion „Sprachmodus“",
-        "tryItHint": "Startet in diesem Browser eine Sprachsitzung mit dem unter „Spracheingabe“ oben gewählten Dienst, dem Sprachausgabemodell und den Einstellungen dieses Formulars. Funktioniert schon vor dem Speichern; es braucht das Mikrofon und ein aktiviertes Sprachausgabemodell.",
-        "trySoon": "Bald verfügbar"
+        "tryItHint": "Startet in diesem Browser eine Sprachsitzung mit dem unter „Spracheingabe“ oben gewählten Dienst, dem Sprachausgabemodell und den Einstellungen dieses Formulars. Funktioniert schon vor dem Speichern; es braucht das Mikrofon und ein aktiviertes Sprachausgabemodell."
       }
     },
     "agents": {

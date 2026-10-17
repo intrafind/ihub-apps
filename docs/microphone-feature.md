@@ -289,7 +289,7 @@ In hands-free mode a voice-activity detector runs in the browser and finds where
 ### Setting it up
 
 1. **Switch the feature on.** **Admin → Features → Voice Mode** (a preview feature, off by default). Without it nobody sees the button and the server refuses voice sessions.
-2. **Prepare the speech services.** Voice input for the apps that should have voice mode (see [Speech Recognition Services](#speech-recognition-services)), and a text-to-speech model with read aloud switched on (see [Read Aloud](text-to-speech.md#setting-it-up)).
+2. **Prepare the speech services.** Voice input for the apps that should have voice mode (see [Speech Recognition Services](#speech-recognition-services)), and a text-to-speech model (see [Read Aloud](text-to-speech.md#setting-it-up) for adding one; read aloud itself does not have to be switched on when voice mode names its own model).
 3. **Open Admin → Voice Input → Voice mode.** Tick **Enable voice mode**, optionally choose a text-to-speech model, and set the listening style, the length of the pause, interrupting, the reasoning effort and the longest session. Use **Try it** to hold a conversation from the admin page, with the settings in the form and the speech service chosen under **Voice input**, before you save.
 4. **Decide per app.** With **Turn voice mode on for apps that do not decide themselves** (`appDefault`) off, voice mode is opt-in: open an app in the app editor, and under **Input Mode & Microphone** set **Voice mode** to **On**. With it on, every app that allows voice input has voice mode unless the app sets it to **Off**.
 5. **Permissions.** No new permission is needed. Users need the app, the speech model (when the app uses one) and the text-to-speech model through their groups.
@@ -300,7 +300,7 @@ The button shows when all of these hold:
 
 1. the `voiceMode` feature is on and `speech.voiceMode.enabled` is `true`;
 2. the app allows voice input (`inputMode.microphone.enabled` is not `false`) and voice mode is on for the app (`inputMode.voiceMode.enabled`, else `appDefault`);
-3. read aloud is on, a text-to-speech model is set for the app or the platform, and the user may use it;
+3. a text-to-speech model is set for the app, for voice mode, or as the read-aloud default, and the user may use it;
 4. the app's speech service works: a transcription model is set, Azure Speech is enabled, or the browser has the Web Speech API;
 5. the browser has microphone access (`getUserMedia`) and `AudioWorklet`, which needs HTTPS or `localhost`.
 

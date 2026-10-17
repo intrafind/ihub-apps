@@ -239,15 +239,18 @@ export class PcmStreamPlayer {
     try {
       response = await request(this.controller.signal);
     } catch (error) {
-      return this.settleStream(stream, aborted() ? null : error);
+      return aborted() ? this.abortStream(stream) : this.settleStream(stream, error);
     }
-    if (aborted()) return this.settleStream(stream, null);
+    if (aborted()) return this.abortStream(stream);
     if (!response.ok) {
       const error = await responseError(response);
-      return this.settleStream(stream, aborted() ? null : error);
+      return aborted() ? this.abortStream(stream) : this.settleStream(stream, error);
     }
     if (!response.body?.getReader) {
-      return this.settleStream(stream, new Error('Streaming audio is not supported in this browser'));
+      return this.settleStream(
+        stream,
+        new Error('Streaming audio is not supported in this browser')
+      );
     }
     // One sample rate for the whole player: the queue holds plain bytes.
     const rate =
@@ -269,11 +272,11 @@ export class PcmStreamPlayer {
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
-        if (aborted()) return this.settleStream(stream, null);
+        if (aborted()) return this.abortStream(stream);
         this.feed(stream, value);
       }
     } catch (error) {
-      if (aborted()) return this.settleStream(stream, null);
+      if (aborted()) return this.abortStream(stream);
       // Interrupted mid-stream: play what arrived, then report it.
       streamError = error;
     }
@@ -288,11 +291,17 @@ export class PcmStreamPlayer {
     else stream.pending.push(bytes);
   }
 
-  settleStream(stream, error) {
+  /** A stream is fully received (`error` set when it failed): move on to the next one. */
+  settleStream(stream, error = null) {
     stream.done = true;
     this.advance();
-    if (error) return { status: 'error', error };
-    return { status: this.isFinal() && !this.streams.length ? 'aborted' : 'ok' };
+    return error ? { status: 'error', error } : { status: 'ok' };
+  }
+
+  /** The player was stopped while this stream was in flight. */
+  abortStream(stream) {
+    stream.done = true;
+    return { status: 'aborted' };
   }
 
   /**
@@ -323,9 +332,15 @@ export class PcmStreamPlayer {
     this.queuedBytes -= 1;
   }
 
-  /** Whether the bytes still to come could extend what is queued. */
+  /**
+   * Whether more bytes are on the way that continue what is queued, so a short
+   * rest should wait for them. Multi-stream: only while the stream playing has
+   * put bytes into the queue — the tail of a stream that is complete plays at
+   * once, however long the next one takes to start.
+   */
   moreComing() {
-    return this.multiStream ? this.streams.length > 0 : !this.streamDone;
+    if (!this.multiStream) return !this.streamDone;
+    return this.streams.length > 0 && this.streams[0].total > 0;
   }
 
   enqueue(bytes) {

@@ -69,7 +69,9 @@ describe('speakableChunker: sentences', () => {
   });
 
   test('a single line break is not a paragraph break', () => {
-    expect(chunksOf('Soft wrapped line\nthat goes on')).toEqual(['Soft wrapped line\nthat goes on']);
+    expect(chunksOf('Soft wrapped line\nthat goes on')).toEqual([
+      'Soft wrapped line\nthat goes on'
+    ]);
   });
 
   test('a sentence end before a line break counts', () => {
@@ -101,7 +103,11 @@ describe('speakableChunker: sentences', () => {
 
 describe('speakableChunker: where a full stop does not end a sentence', () => {
   test.each([
-    ['English "e.g."', 'Use fruit, e.g. apples or pears. Then eat.', 'Use fruit, e.g. apples or pears.'],
+    [
+      'English "e.g."',
+      'Use fruit, e.g. apples or pears. Then eat.',
+      'Use fruit, e.g. apples or pears.'
+    ],
     ['English "i.e."', 'It is cheap, i.e. free. Nice.', 'It is cheap, i.e. free.'],
     ['"etc."', 'Bring pens, paper, etc. Then sit down.', 'Bring pens, paper, etc. Then sit down.'],
     ['"vs."', 'Cats vs. dogs is a classic. Next.', 'Cats vs. dogs is a classic.'],
@@ -111,7 +117,11 @@ describe('speakableChunker: where a full stop does not end a sentence', () => {
     ['German "z. B."', 'Nimm Obst, z. B. Äpfel. Danke.', 'Nimm Obst, z. B. Äpfel.'],
     ['German "d. h."', 'Es ist gratis, d. h. kostenlos. Super.', 'Es ist gratis, d. h. kostenlos.'],
     ['German "u. a."', 'Wir sprachen u. a. über Preise. Gut.', 'Wir sprachen u. a. über Preise.'],
-    ['German "bzw."', 'Das gilt für Sie bzw. für Ihre Firma. Gut.', 'Das gilt für Sie bzw. für Ihre Firma.'],
+    [
+      'German "bzw."',
+      'Das gilt für Sie bzw. für Ihre Firma. Gut.',
+      'Das gilt für Sie bzw. für Ihre Firma.'
+    ],
     ['"z.B." without spaces', 'Nimm Obst, z.B. Äpfel. Danke.', 'Nimm Obst, z.B. Äpfel.'],
     ['initials', 'Ask J. R. Smith about it. Done.', 'Ask J. R. Smith about it.'],
     ['"U.S."', 'The U.S. economy grew. Good.', 'The U.S. economy grew.']
@@ -136,7 +146,10 @@ describe('speakableChunker: where a full stop does not end a sentence', () => {
   });
 
   test('a decimal at the end of a sentence still ends it', () => {
-    expect(chunksOf('The version is 3.5. It is new.')).toEqual(['The version is 3.5.', 'It is new.']);
+    expect(chunksOf('The version is 3.5. It is new.')).toEqual([
+      'The version is 3.5.',
+      'It is new.'
+    ]);
     expect(chunksOf('Das macht 3,5. Danach geht es weiter.')).toEqual([
       'Das macht 3,5.',
       'Danach geht es weiter.'
@@ -151,7 +164,11 @@ describe('speakableChunker: where a full stop does not end a sentence', () => {
   });
 
   test.each([
-    ['am 3. Oktober', 'Wir treffen uns am 3. Oktober im Büro. Bis dann.', 'Wir treffen uns am 3. Oktober im Büro.'],
+    [
+      'am 3. Oktober',
+      'Wir treffen uns am 3. Oktober im Büro. Bis dann.',
+      'Wir treffen uns am 3. Oktober im Büro.'
+    ],
     ['am 21. Mai', 'Das war am 21. Mai 2024 so. Bis dann.', 'Das war am 21. Mai 2024 so.'],
     ['im 2. Quartal', 'Im 2. Quartal stieg der Umsatz. Gut.', 'Im 2. Quartal stieg der Umsatz.']
   ])('German ordinal %s', (_name, text, first) => {
@@ -163,8 +180,12 @@ describe('speakableChunker: where a full stop does not end a sentence', () => {
   });
 
   test('a lowercase word after the full stop means the sentence goes on', () => {
-    expect(chunksOf('It takes approx. five minutes. Done.')[0]).toBe('It takes approx. five minutes.');
-    expect(chunksOf('Siehe auch sog. Standardfälle. Ende.')[0]).toBe('Siehe auch sog. Standardfälle.');
+    expect(chunksOf('It takes approx. five minutes. Done.')[0]).toBe(
+      'It takes approx. five minutes.'
+    );
+    expect(chunksOf('Siehe auch sog. Standardfälle. Ende.')[0]).toBe(
+      'Siehe auch sog. Standardfälle.'
+    );
     // An unknown abbreviation followed by a lowercase word is still not cut.
     expect(chunksOf('Das Gerät der Fa. mustermann ist hier. Ende.')[0]).toBe(
       'Das Gerät der Fa. mustermann ist hier.'
@@ -182,7 +203,10 @@ describe('speakableChunker: where a full stop does not end a sentence', () => {
   });
 
   test('a URL at the end of a sentence ends it', () => {
-    expect(chunksOf('Visit example.com. Then relax.')).toEqual(['Visit example.com.', 'Then relax.']);
+    expect(chunksOf('Visit example.com. Then relax.')).toEqual([
+      'Visit example.com.',
+      'Then relax.'
+    ]);
   });
 
   test('"e.g.," and a dot before a comma are no boundaries', () => {
@@ -212,8 +236,14 @@ describe('speakableChunker: ellipsis, quotes and brackets', () => {
       'It is true (see above.)',
       'Then more.'
     ]);
-    expect(chunksOf('Er sagte „Halt.“ Dann ging er.')).toEqual(['Er sagte „Halt.“', 'Dann ging er.']);
-    expect(chunksOf('Sie sagte »Nein!« Dann ging sie.')).toEqual(['Sie sagte »Nein!«', 'Dann ging sie.']);
+    expect(chunksOf('Er sagte „Halt.“ Dann ging er.')).toEqual([
+      'Er sagte „Halt.“',
+      'Dann ging er.'
+    ]);
+    expect(chunksOf('Sie sagte »Nein!« Dann ging sie.')).toEqual([
+      'Sie sagte »Nein!«',
+      'Dann ging sie.'
+    ]);
     expect(chunksOf("They said 'No.' Then left.")).toEqual(["They said 'No.'", 'Then left.']);
   });
 
@@ -283,9 +313,9 @@ describe('speakableChunker: code fences', () => {
     expect(chunker.update('Intro text. ')).toEqual(['Intro text.']);
     expect(chunker.update('Intro text. \n```py\nprint(1)\n')).toEqual([]);
     expect(chunker.update('Intro text. \n```py\nprint(1)\nprint(2). Yes.\n\nmore')).toEqual([]);
-    expect(chunker.update('Intro text. \n```py\nprint(1)\nprint(2). Yes.\n\nmore\n```\nAfter it.')).toEqual(
-      ['```py\nprint(1)\nprint(2). Yes.\n\nmore\n```']
-    );
+    expect(
+      chunker.update('Intro text. \n```py\nprint(1)\nprint(2). Yes.\n\nmore\n```\nAfter it.')
+    ).toEqual(['```py\nprint(1)\nprint(2). Yes.\n\nmore\n```']);
     expect(
       chunker.update('Intro text. \n```py\nprint(1)\nprint(2). Yes.\n\nmore\n```\nAfter it.', {
         final: true
@@ -397,7 +427,11 @@ describe('speakableChunker: chunk sizes', () => {
   const text = Array.from({ length: 12 }, (_, i) => sentence(i + 1)).join(' ');
 
   test('the first chunk is short, later chunks are longer', () => {
-    const chunker = createSpeakableChunker({ firstMinChars: 30, laterMinChars: 120, maxChars: 500 });
+    const chunker = createSpeakableChunker({
+      firstMinChars: 30,
+      laterMinChars: 120,
+      maxChars: 500
+    });
     const chunks = [...chunker.update(`${text} `), ...chunker.update(text, { final: true })];
     expect(chunks[0]).toBe(sentence(1));
     for (const later of chunks.slice(1, -1)) expect(later.length).toBeGreaterThanOrEqual(120);
@@ -424,7 +458,10 @@ describe('speakableChunker: chunk sizes', () => {
     expect(chunker.update(`${first} `)).toEqual([first]);
     const medium = 'A medium sentence that is not long enough alone. ';
     expect(chunker.update(`${first} ${medium}`)).toEqual([]);
-    const more = Array.from({ length: 10 }, (_, i) => `Another sentence about ${'abcdefghij'[i]}x.`).join(' ');
+    const more = Array.from(
+      { length: 10 },
+      (_, i) => `Another sentence about ${'abcdefghij'[i]}x.`
+    ).join(' ');
     const out = chunker.update(`${first} ${medium}${more} `);
     expect(out).toHaveLength(1);
     expect(out[0].length).toBeGreaterThanOrEqual(250);
@@ -433,7 +470,10 @@ describe('speakableChunker: chunk sizes', () => {
   test('a long sentence is hard-split at a space, at most maxChars', () => {
     const words = Array.from({ length: 60 }, (_, i) => `word${i}`).join(' ');
     const chunker = createSpeakableChunker({ firstMinChars: 1, laterMinChars: 1, maxChars: 80 });
-    const chunks = [...chunker.update(`${words}.`), ...chunker.update(`${words}.`, { final: true })];
+    const chunks = [
+      ...chunker.update(`${words}.`),
+      ...chunker.update(`${words}.`, { final: true })
+    ];
     expect(chunks.length).toBeGreaterThan(3);
     for (const chunk of chunks) {
       expect(chunk.length).toBeLessThanOrEqual(80);
@@ -471,7 +511,11 @@ describe('speakableChunker: chunk sizes', () => {
   test('an earlier boundary is used when the next sentence would overflow maxChars', () => {
     const a = 'Alpha beta gamma delta epsilon.';
     const b = 'Zeta eta theta iota kappa lambda mu nu.';
-    const chunker = createSpeakableChunker({ firstMinChars: 100, laterMinChars: 100, maxChars: 60 });
+    const chunker = createSpeakableChunker({
+      firstMinChars: 100,
+      laterMinChars: 100,
+      maxChars: 60
+    });
     const chunks = chunker.update(`${a} ${b} `);
     expect(chunks).toEqual([a]);
     expect(chunker.update(`${a} ${b} `, { final: true })).toEqual([b]);

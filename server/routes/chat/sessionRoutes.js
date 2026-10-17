@@ -266,6 +266,15 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
    *           description: |
    *             Do not persist this turn. Advisory: it can only turn persistence
    *             off, never on.
+   *         voiceMode:
+   *           type: boolean
+   *           description: |
+   *             The message was spoken in voice mode and the answer is read
+   *             aloud. The server adds a short voice style instruction after the
+   *             app's system prompt, asks for a low thinking level when the
+   *             request and the app set none, and marks the stored message as
+   *             spoken. Ignored unless the `voiceMode` feature and
+   *             `speech.voiceMode.enabled` are on.
    *
    *     ChatStreamingResponse:
    *       type: object

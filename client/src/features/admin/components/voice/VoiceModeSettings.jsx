@@ -31,8 +31,6 @@ const THINKING_LABELS = { minimal: 'Minimal', low: 'Low', medium: 'Medium', high
  * @param {(patch: object) => void} props.onChange Merges `patch` into `voiceMode`.
  * @param {Array|null} props.ttsModels Every text-to-speech model (null while loading).
  * @param {string} props.defaultTtsModelId `speech.tts.defaultModelId` of the form.
- * @param {boolean} props.readAloudEnabled `speech.tts.enabled` of the form: voice mode
- *   is offered only while read aloud, which owns the text-to-speech setup, is on.
  * @param {boolean} props.flagEnabled The `voiceMode` preview feature flag is on.
  * @param {object} props.speech The `speech` section as the form holds it, unsaved: what "Try it"
  *   runs with.
@@ -44,7 +42,6 @@ function VoiceModeSettings({
   onChange,
   ttsModels,
   defaultTtsModelId,
-  readAloudEnabled,
   flagEnabled,
   speech,
   t,
@@ -92,15 +89,6 @@ function VoiceModeSettings({
         text: t(
           'admin.voiceInput.voiceMode.ttsModelNone',
           'No text-to-speech model is set here or under "Read aloud" above, so voice mode is not offered.'
-        )
-      };
-    }
-    if (!readAloudEnabled) {
-      return {
-        warn: true,
-        text: t(
-          'admin.voiceInput.voiceMode.readAloudOff',
-          'Read aloud is switched off above. Voice mode uses the same text-to-speech setup, so switch it on too, or voice mode is not offered.'
         )
       };
     }

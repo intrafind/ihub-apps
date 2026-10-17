@@ -775,7 +775,6 @@
         "ttsModelDisabledHint": "This model is disabled, so voice mode is not offered. Enable it under Admin → Models and make sure it has an API key.",
         "ttsModelNone": "No text-to-speech model is set here or under \"Read aloud\" above, so voice mode is not offered.",
         "ttsModelHint": "Leave on the default to use the read-aloud model. Apps can pick their own, for example a German voice model. Users need access to the model through their groups.",
-        "readAloudOff": "Read aloud is switched off above. Voice mode uses the same text-to-speech setup, so switch it on too, or voice mode is not offered.",
         "listeningStyle": "Listening style",
         "handsFree": "Hands-free",
         "pushToTalk": "Push-to-talk",
@@ -803,8 +802,7 @@
         },
         "tryIt": "Try it",
         "tryFlagOff": "Enable the \"Voice Mode\" preview feature first",
-        "tryItHint": "Starts a voice session in this browser with the speech service chosen under \"Voice input\" above, the text-to-speech model and the settings in this form. Works before saving; it needs the microphone and a text-to-speech model that is enabled.",
-        "trySoon": "Available soon"
+        "tryItHint": "Starts a voice session in this browser with the speech service chosen under \"Voice input\" above, the text-to-speech model and the settings in this form. Works before saving; it needs the microphone and a text-to-speech model that is enabled."
       }
     },
     "agents": {

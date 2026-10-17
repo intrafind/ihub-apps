@@ -40,7 +40,9 @@ export function isSpeechChoiceUsable(choice, speech) {
  * Available when all of these hold: the `voiceMode` feature flag is on and
  * `speech.voiceMode.enabled` is true; the app allows voice input and voice mode
  * is on for it (`inputMode.voiceMode.enabled`, else `appDefault`); a
- * text-to-speech model is configured and this user may use it; the app's speech
+ * text-to-speech model is configured (the app's, the platform's voice mode
+ * model, or the read-aloud default; read aloud itself need not be switched on,
+ * the speech endpoint takes a named model either way) and this user may use it; the app's speech
  * service works here; the browser has a microphone and `AudioWorklet`.
  *
  * `reason` names the first failed condition (for the admin and for tests); the
@@ -66,7 +68,6 @@ export function useVoiceModeAvailability(app) {
   const speech = useMemo(() => resolveSpeechService(app, platformConfig), [app, platformConfig]);
   const ttsModelId = settings.ttsModelId;
   const flagOn = featureFlags.isEnabled('voiceMode', false);
-  const ttsEnabled = platformConfig?.speech?.tts?.enabled === true;
   // The list of permitted TTS models is one request per page, shared with read
   // aloud and keyed by the platform default model, whichever model this app uses.
   const ttsListKey = platformConfig?.speech?.tts?.defaultModelId || '';
@@ -77,7 +78,7 @@ export function useVoiceModeAvailability(app) {
       ? 'platform-off'
       : !settings.enabled
         ? 'app-off'
-        : !ttsEnabled || !ttsModelId
+        : !ttsModelId
           ? 'no-tts-model'
           : !isSpeechChoiceUsable(speech, platformConfig?.speech)
             ? 'speech-service-unavailable'

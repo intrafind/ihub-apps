@@ -113,6 +113,17 @@ describe('useVoiceModeAvailability', () => {
     expect(hook.result.current.available).toBe(false);
   });
 
+  test('read aloud itself does not have to be switched on', async () => {
+    mockTtsModels = [{ id: 'voice-model' }];
+    mockPlatformConfig = platform(
+      { ttsModelId: 'voice-model' },
+      { tts: { enabled: false, defaultModelId: '' } }
+    );
+    const hook = renderHook(() => useVoiceModeAvailability({ id: 'a' }));
+    await waitFor(() => expect(hook.result.current.available).toBe(true));
+    expect(hook.result.current.ttsModelId).toBe('voice-model');
+  });
+
   test('an app can use its own text-to-speech model', async () => {
     mockTtsModels = [{ id: 'german-voice' }];
     const hook = renderHook(() =>

@@ -227,9 +227,9 @@ platform switch.
 
 ### Voice mode
 
-Voice mode speaks with a TTS model too, and it needs the setup above (an
-enabled model with a key, and read aloud switched on). Which model speaks, in
-this order:
+Voice mode speaks with a TTS model too, and it needs an enabled model with a
+key (see above). Read aloud itself does not have to be switched on when voice
+mode names its own model. Which model speaks, in this order:
 
 1. `inputMode.voiceMode.ttsModelId` of the app, for example a German voice
    model for a German app,

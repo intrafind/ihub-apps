@@ -498,14 +498,12 @@ describe('voice mode', () => {
     ).toBeInTheDocument();
   });
 
-  test('points out that voice mode needs read aloud switched on', async () => {
+  test('does not need read aloud: the hint is about a missing model only', async () => {
     platformOnDisk.speech.tts = { enabled: false, defaultModelId: 'voxtral-tts' };
     await renderPage();
     const section = voiceModeSection();
-    expect(section.getByText(/Read aloud is switched off above/)).toBeInTheDocument();
-
-    fireEvent.click(screen.getByLabelText('Show a read-aloud button on chat messages'));
-    expect(section.queryByText(/Read aloud is switched off above/)).not.toBeInTheDocument();
+    expect(section.queryByText(/Read aloud is switched off/)).not.toBeInTheDocument();
+    expect(section.queryByText(/no text-to-speech model is set/i)).not.toBeInTheDocument();
   });
 
   describe('feature flag', () => {
