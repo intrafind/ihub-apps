@@ -282,6 +282,13 @@ async function setSpeech(speech) {
 }
 
 test.beforeAll(async () => {
+  // The fake microphone and the permission grant are Chromium's, and the stub
+  // server and the shared platform config allow one run at a time. `npm run
+  // test:e2e` walks every project, so only the plain Chromium one takes part.
+  test.skip(
+    test.info().project.name !== 'chromium',
+    'Voice mode E2E runs in the desktop Chromium project only'
+  );
   test.setTimeout(150_000);
   stubServer = await startStubs(seen);
   const baseURL = test.info().project.use.baseURL || 'http://localhost:5173';

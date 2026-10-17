@@ -802,7 +802,7 @@
         },
         "tryIt": "Try it",
         "tryFlagOff": "Enable the \"Voice Mode\" preview feature first",
-        "tryItHint": "Starts a voice session in this browser with the speech service chosen under \"Voice input\" above, the text-to-speech model and the settings in this form. Works before saving; it needs the microphone and a text-to-speech model that is enabled."
+        "tryItHint": "Starts a voice session in this browser with the speech service chosen under \"Voice input\" above, the text-to-speech model and the settings in this form, without saving them. With a transcription model, \"Enable voice mode\" must have been saved once; it needs the microphone and a text-to-speech model that is enabled."
       }
     },
     "agents": {
@@ -4873,7 +4873,8 @@
       "thinking": "Thinking…",
       "speaking": "Speaking…",
       "paused": "Microphone is muted",
-      "holdToTalk": "Hold Space or the button to talk"
+      "holdToTalk": "Hold Space or the button to talk",
+      "holdToTalkTouch": "Hold the button to talk"
     },
     "tools": {
       "searchWeb": "Searching the web…",
@@ -4888,7 +4889,7 @@
       "release": "Release to send",
       "end": "End",
       "endTitle": "End voice mode (Esc)",
-      "retry": "Tap to retry",
+      "retry": "Try again",
       "stopAnswer": "Stop the answer and talk"
     },
     "settings": {
@@ -4910,8 +4911,13 @@
       "service": "The speech service is not available. Please try again.",
       "voiceDetection": "Voice detection could not be loaded. Reload the page and try again.",
       "disabled": "Voice mode is switched off.",
+      "noSpeech": "Voice mode ended because nothing was said for a while.",
       "generic": "Voice mode stopped because of an error.",
-      "sendFailed": "I could not send that. Please try again."
+      "sendFailed": "I could not send that. Please try again.",
+      "notUnderstood": "I did not catch which option you meant. Please say it again."
+    },
+    "notice": {
+      "ttsFailed": "I could not speak this answer. It is in the chat."
     },
     "timeLimit_one": "Voice mode ended after {{count}} minute.",
     "timeLimit_other": "Voice mode ended after {{count}} minutes.",
@@ -4920,6 +4926,7 @@
       "button": "Try it",
       "title": "Talk to the app with the settings on this page",
       "unavailable": "Needs a text-to-speech model, a working speech service and a browser with microphone support",
+      "saveFirst": "Save the page with \"Enable voice mode\" ticked first: a transcription model checks the saved setting",
       "heading": "Voice mode test",
       "echo": "You said: {{text}}"
     }

@@ -31,10 +31,15 @@ function defaultChoiceOf(speech) {
  * the app repeats what it heard, so an admin hears the whole loop (and the
  * latency of it) without picking an app.
  *
+ * Everything runs with the form's settings except one thing: the conversation
+ * socket of a transcription model checks the SAVED switch (`speech.voiceMode.
+ * enabled`) like it does for every user, so that service needs it saved once.
+ *
  * @param {Object} props
  * @param {object} props.speech - The `speech` section as it is in the form (unsaved).
+ * @param {boolean} [props.savedEnabled] - `speech.voiceMode.enabled` is saved as true.
  */
-export default function VoiceModeTryButton({ speech }) {
+export default function VoiceModeTryButton({ speech, savedEnabled = true }) {
   const { t, i18n } = useTranslation();
   const [messages, setMessages] = useState([]);
 
@@ -45,15 +50,16 @@ export default function VoiceModeTryButton({ speech }) {
     };
     const choice = defaultChoiceOf(speech);
     const usable = isSpeechChoiceUsable(choice, speech) && isVoiceModeBrowserSupported();
+    const needsSave = choice.service === 'model' && !savedEnabled;
     return {
-      available: usable && Boolean(settings.ttsModelId),
-      reason: null,
+      available: usable && Boolean(settings.ttsModelId) && !needsSave,
+      reason: needsSave ? 'save-first' : null,
       settings,
       speech: choice,
       platformSpeech: speech,
       ttsModelId: settings.ttsModelId
     };
-  }, [speech]);
+  }, [speech, savedEnabled]);
 
   // No chat model behind it: the answer is the transcript, said back.
   const sendTurn = useCallback(
@@ -88,20 +94,26 @@ export default function VoiceModeTryButton({ speech }) {
     cancelGeneration: () => {}
   });
 
+  let tryTitle = t('voiceMode.try.title', 'Talk to the app with the settings on this page');
+  if (availability.reason === 'save-first') {
+    tryTitle = t(
+      'voiceMode.try.saveFirst',
+      'Save the page with "Enable voice mode" ticked first: a transcription model checks the saved setting'
+    );
+  } else if (!availability.available) {
+    tryTitle = t(
+      'voiceMode.try.unavailable',
+      'Needs a text-to-speech model, a working speech service and a browser with microphone support'
+    );
+  }
+
   return (
     <>
       <button
         type="button"
         onClick={voiceMode.toggle}
         disabled={!availability.available}
-        title={
-          availability.available
-            ? t('voiceMode.try.title', 'Talk to the app with the settings on this page')
-            : t(
-                'voiceMode.try.unavailable',
-                'Needs a text-to-speech model, a working speech service and a browser with microphone support'
-              )
-        }
+        title={tryTitle}
         className="inline-flex items-center gap-2 rounded-md bg-indigo-600 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
       >
         <VoiceWaveIcon className="h-4 w-4" />

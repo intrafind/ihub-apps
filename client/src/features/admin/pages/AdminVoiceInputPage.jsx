@@ -560,6 +560,7 @@ function AdminVoiceInputPage() {
           defaultTtsModelId={config.tts.defaultModelId}
           flagEnabled={voiceModeFlagEnabled}
           speech={config}
+          savedEnabled={savedConfig.voiceMode?.enabled === true}
           t={t}
           language={i18n.language}
         />

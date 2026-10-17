@@ -84,6 +84,10 @@ export function transformStoredMessage(msg) {
   if (msg.finishReason) message.finishReason = msg.finishReason;
   // A transcription turn (its audio is not kept: no edit, no resend).
   if (msg.transcription === true) message.transcription = true;
+  // A turn spoken in voice mode: the bubble marks it with the waveform icon.
+  if (msg.role === 'user' && msg.metadata?.inputMode === 'voice') {
+    message.metadata = { inputMode: 'voice' };
+  }
   if (Array.isArray(msg.attachments) && msg.attachments.length > 0) {
     message.attachments = msg.attachments;
   }

@@ -1020,7 +1020,7 @@
         "ttsModelMissing": "Dieses Modell existiert nicht mehr, daher wird der Sprachmodus nicht angeboten.",
         "ttsModelDisabledHint": "Dieses Modell ist deaktiviert, daher wird der Sprachmodus nicht angeboten. Aktivieren Sie es unter Admin → Modelle und hinterlegen Sie einen API-Schlüssel.",
         "ttsModelNone": "Weder hier noch oben unter „Vorlesen“ ist ein Sprachausgabemodell gewählt, daher wird der Sprachmodus nicht angeboten.",
-        "ttsModelHint": "Beim Standard wird das Vorlese-Modell verwendet. Apps können ein eigenes wählen, zum Beispiel ein deutsches Sprachmodell. Benutzer brauchen über ihre Gruppen Zugriff auf das Modell.",
+        "ttsModelHint": "Beim Standard wird das Vorlesemodell verwendet. Apps können ein eigenes wählen, zum Beispiel ein deutsches Sprachmodell. Benutzer brauchen über ihre Gruppen Zugriff auf das Modell.",
         "listeningStyle": "Zuhörmodus",
         "handsFree": "Freisprechen",
         "pushToTalk": "Push-to-Talk",
@@ -1043,12 +1043,12 @@
           "title": "Anweisung zum Sprechstil",
           "description": "Wird im Sprachmodus hinter dem System-Prompt der App eingefügt, damit Antworten sich zum Zuhören eignen. Lassen Sie eine Sprache leer, um den eingebauten Text zu verwenden, der unter jedem Feld steht.",
           "language": "Anweisung ({{language}})",
-          "reset": "Auf eingebaut zurücksetzen",
-          "builtIn": "Eingebaut:"
+          "reset": "Auf Standard zurücksetzen",
+          "builtIn": "Standard:"
         },
         "tryIt": "Ausprobieren",
         "tryFlagOff": "Aktivieren Sie zuerst die Vorschau-Funktion „Sprachmodus“",
-        "tryItHint": "Startet in diesem Browser eine Sprachsitzung mit dem unter „Spracheingabe“ oben gewählten Dienst, dem Sprachausgabemodell und den Einstellungen dieses Formulars. Funktioniert schon vor dem Speichern; es braucht das Mikrofon und ein aktiviertes Sprachausgabemodell."
+        "tryItHint": "Startet in diesem Browser eine Sprachsitzung mit dem unter „Spracheingabe“ oben gewählten Dienst, dem Sprachausgabemodell und den Einstellungen dieses Formulars, ohne sie zu speichern. Bei einem Transkriptionsmodell muss „Sprachmodus aktivieren“ einmal gespeichert sein; es braucht das Mikrofon und ein aktiviertes Sprachausgabemodell."
       }
     },
     "agents": {
@@ -4838,7 +4838,8 @@
       "thinking": "Denkt nach…",
       "speaking": "Spricht…",
       "paused": "Mikrofon ist stummgeschaltet",
-      "holdToTalk": "Zum Sprechen die Leertaste oder die Schaltfläche gedrückt halten"
+      "holdToTalk": "Zum Sprechen die Leertaste oder die Schaltfläche gedrückt halten",
+      "holdToTalkTouch": "Zum Sprechen die Schaltfläche gedrückt halten"
     },
     "tools": {
       "searchWeb": "Durchsucht das Web…",
@@ -4853,7 +4854,7 @@
       "release": "Loslassen zum Senden",
       "end": "Beenden",
       "endTitle": "Sprachmodus beenden (Esc)",
-      "retry": "Tippen für neuen Versuch",
+      "retry": "Erneut versuchen",
       "stopAnswer": "Antwort stoppen und sprechen"
     },
     "settings": {
@@ -4875,8 +4876,13 @@
       "service": "Der Sprachdienst ist nicht verfügbar. Bitte versuchen Sie es erneut.",
       "voiceDetection": "Die Sprachaktivitätserkennung konnte nicht geladen werden. Laden Sie die Seite neu und versuchen Sie es erneut.",
       "disabled": "Der Sprachmodus ist ausgeschaltet.",
+      "noSpeech": "Der Sprachmodus wurde beendet, weil längere Zeit nichts gesagt wurde.",
       "generic": "Der Sprachmodus wurde wegen eines Fehlers beendet.",
-      "sendFailed": "Das konnte ich nicht senden. Bitte versuchen Sie es erneut."
+      "sendFailed": "Das konnte ich nicht senden. Bitte versuchen Sie es erneut.",
+      "notUnderstood": "Ich habe nicht verstanden, welche Option Sie meinen. Bitte sagen Sie es noch einmal."
+    },
+    "notice": {
+      "ttsFailed": "Diese Antwort konnte nicht vorgelesen werden. Sie steht im Chat."
     },
     "timeLimit_one": "Der Sprachmodus wurde nach {{count}} Minute beendet.",
     "timeLimit_other": "Der Sprachmodus wurde nach {{count}} Minuten beendet.",
@@ -4885,6 +4891,7 @@
       "button": "Ausprobieren",
       "title": "Mit den Einstellungen dieser Seite sprechen",
       "unavailable": "Benötigt ein Sprachausgabemodell, einen funktionierenden Sprachdienst und einen Browser mit Mikrofonunterstützung",
+      "saveFirst": "Speichern Sie die Seite zuerst mit aktiviertem „Sprachmodus aktivieren“: Ein Transkriptionsmodell prüft die gespeicherte Einstellung",
       "heading": "Sprachmodus-Test",
       "echo": "Sie sagten: {{text}}"
     }

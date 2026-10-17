@@ -34,6 +34,7 @@ const THINKING_LABELS = { minimal: 'Minimal', low: 'Low', medium: 'Medium', high
  * @param {boolean} props.flagEnabled The `voiceMode` preview feature flag is on.
  * @param {object} props.speech The `speech` section as the form holds it, unsaved: what "Try it"
  *   runs with.
+ * @param {boolean} [props.savedEnabled] Voice mode is switched on in the saved config.
  * @param {Function} props.t
  * @param {string} props.language UI language.
  */
@@ -44,6 +45,7 @@ function VoiceModeSettings({
   defaultTtsModelId,
   flagEnabled,
   speech,
+  savedEnabled = true,
   t,
   language
 }) {
@@ -388,7 +390,7 @@ function VoiceModeSettings({
       <div className="pt-2 border-t border-gray-100 dark:border-gray-700 space-y-2">
         <div className="flex items-center gap-3">
           {flagEnabled ? (
-            <VoiceModeTryButton speech={speech} />
+            <VoiceModeTryButton speech={speech} savedEnabled={savedEnabled} />
           ) : (
             <button
               type="button"
@@ -406,7 +408,7 @@ function VoiceModeSettings({
         <p className={hintClass}>
           {t(
             'admin.voiceInput.voiceMode.tryItHint',
-            'Starts a voice session in this browser with the speech service chosen under "Voice input" above, the text-to-speech model and the settings in this form. Works before saving; it needs the microphone and a text-to-speech model that is enabled.'
+            'Starts a voice session in this browser with the speech service chosen under "Voice input" above, the text-to-speech model and the settings in this form, without saving them. With a transcription model, "Enable voice mode" must have been saved once; it needs the microphone and a text-to-speech model that is enabled.'
           )}
         </p>
       </div>
