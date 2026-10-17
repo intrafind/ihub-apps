@@ -43,18 +43,22 @@
 /** Sentence-ending characters. */
 const TERMINATORS = new Set(['.', '!', '?', '…']);
 
-/** Characters that may close a sentence after its end mark: quotes, brackets, emphasis. */
+/**
+ * Characters that may close a sentence after its end mark: straight and curly
+ * quotes (English “…” ‘…’ and German „…“ ‚…‘), guillemets (»…« and «…»),
+ * brackets and Markdown emphasis.
+ */
 const CLOSERS = new Set([
   '"',
   "'",
-  '”',
-  '“',
-  '’',
-  '‘',
-  '»',
-  '«',
-  '›',
-  '‹',
+  '\u201d', // ”
+  '\u201c', // “ (German closing quote)
+  '\u2019', // ’
+  '\u2018', // ‘ (German closing single quote)
+  '\u00bb', // »
+  '\u00ab', // «
+  '\u203a', // ›
+  '\u2039', // ‹
   ')',
   ']',
   '}',
@@ -125,7 +129,7 @@ const TOKEN_CHAR = /[\p{L}\p{N}.,'’-]/u;
 const FENCE_LINE = /^[^\S\n]*(`{3,}|~{3,})/;
 
 const isSpace = ch => ch !== undefined && /\s/.test(ch);
-const isHorizontalSpace = ch => ch === ' ' || ch === '\t' || ch === ' ';
+const isHorizontalSpace = ch => ch === ' ' || ch === '\t' || ch === '\u00a0';
 const isLowerLetter = ch => ch !== undefined && /\p{Ll}/u.test(ch);
 
 /** Index of the first non-whitespace character at or after `from` (or the text length). */
