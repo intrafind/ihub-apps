@@ -195,7 +195,9 @@ describe('PcmStreamPlayer multi-stream mode', () => {
     first.push(pcm(1));
     first.end();
     await p1;
-    expect(durations(context).map(d => Math.round(d * 10) / 10)).toEqual([1, 2, 3]);
+    // 1 s, 2 s and 3 s (a buffer holds at most 2 s, so the last one is 2 + 1).
+    expect(durations(context).map(d => Math.round(d * 10) / 10)).toEqual([1, 2, 2, 1]);
+    expect(totalSeconds(context)).toBeCloseTo(6, 3);
     expectBackToBack(context);
   });
 
@@ -448,6 +450,10 @@ describe('PcmStreamPlayer multi-stream mode', () => {
     const results = [
       player.enqueueStream(async signal => {
         signals.push(signal);
+        // A real response body fails its pending read when the request is aborted.
+        signal.addEventListener('abort', () =>
+          playing.fail(new DOMException('Aborted', 'AbortError'))
+        );
         return playing.response;
       }),
       player.enqueueStream(

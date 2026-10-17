@@ -182,6 +182,26 @@ jest.mock('../../../client/src/features/chat/hooks/useIntegrationAuth', () => ({
   useIntegrationAuth: () => mockIntegrationAuth
 }));
 const mockVoice = { handleVoiceInput: mockNoop, handleVoiceCommand: mockNoop };
+// Voice mode (issue #2868) has its own tests; the chat page only renders its
+// button and overlay, so it is switched off here.
+jest.mock('../../../client/src/features/voice/hooks/useVoiceModeAvailability', () => ({
+  __esModule: true,
+  default: () => ({
+    available: false,
+    reason: 'feature-off',
+    settings: { maxSessionMinutes: 30 },
+    speech: { service: 'browser', modelId: '' },
+    ttsModelId: ''
+  })
+}));
+jest.mock('../../../client/src/features/voice/hooks/useVoiceMode', () => ({
+  __esModule: true,
+  default: () => ({ active: false, toggle: () => {}, end: () => {} })
+}));
+jest.mock('../../../client/src/features/voice/components/VoiceModeOverlay', () => ({
+  __esModule: true,
+  default: () => null
+}));
 jest.mock('../../../client/src/features/voice/hooks/useVoiceCommands', () => ({
   __esModule: true,
   default: () => mockVoice
