@@ -4,7 +4,7 @@
 
 **Ready-to-use AI apps for your team. Self-hosted. Any model. No prompting expertise needed.**
 
-[![License: iHub Apps License](https://img.shields.io/badge/License-BSD--3--Clause%20%2B%20Attribution%20%2B%20Branding-blue.svg)](LICENSE)
+[![License: BSD-3-Clause with Attribution](https://img.shields.io/badge/License-BSD--3--Clause%20with%20Attribution-blue.svg)](LICENSE)
 [![Latest Release](https://img.shields.io/github/v/release/intrafind/ihub-apps)](https://github.com/intrafind/ihub-apps/releases)
 [![Docker Image](https://img.shields.io/badge/Docker-ghcr.io%2Fintrafind%2Fihub--apps-blue?logo=docker)](https://github.com/intrafind/ihub-apps/pkgs/container/ihub-apps)
 
@@ -490,12 +490,9 @@ Contributions, issues, and feature requests are welcome! See [CODE_OF_CONDUCT.md
 
 ## ⚖️ License
 
-iHub Apps is free to use under the [iHub Apps License](LICENSE) — the BSD 3-Clause License with two additions:
+iHub Apps is free and open source under the [iHub Apps License](LICENSE) — the BSD 3-Clause License with mandatory attribution: products, services, and derivative works must show "Powered by IntraFind – https://intrafind.com/" in the user interface, documentation, and about pages.
 
-- **Attribution**: products, services, and derivative works must show "Powered by IntraFind – https://intrafind.com/" in the user interface, documentation, and about pages.
-- **Branding protection**: you may not rebrand iHub Apps — remove or replace the IntraFind and iHub names and logos, or offer the software or a product or service built on it under another name — without IntraFind's prior written permission. Organizations running iHub Apps for their own employees may still adjust logos, colors, and texts through the built-in configuration, as long as the attribution stays visible.
-
-Need to white-label, resell, embed, or host iHub Apps for your customers, or want support, SLAs, and warranties? The **Enterprise License** covers this — contact [sales@intrafind.com](mailto:sales@intrafind.com).
+Need to white-label iHub Apps without the attribution, or want support, SLAs, warranties, and enterprise features? The **Enterprise License** covers this — contact [sales@intrafind.com](mailto:sales@intrafind.com).
 
 ---
 
