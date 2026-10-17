@@ -290,6 +290,9 @@ export function useVoiceMode({
    */
   const bargeIn = useCallback(
     (force = false) => {
+      // The state machine would turn the interruption down; the audio and the
+      // run must not be stopped behind its back.
+      if (force !== true && !stateRef.current.bargeIn) return;
       queueRef.current?.interrupt();
       const turn = turnRef.current;
       turnRef.current = null;
@@ -444,7 +447,6 @@ export function useVoiceMode({
   const handleSessionError = useCallback(
     event => {
       debugLog('voiceMode: session error', event);
-      prefixRef.current = '';
       if (!event.recoverable) {
         silenceAudio();
         sessionRef.current?.stop();

@@ -29,6 +29,7 @@ jest.mock('../../../client/src/features/voice/utils/speechQueue', () => ({
   })
 }));
 
+import { debugLog } from '../../../client/src/utils/debugLog';
 import useVoiceMode from '../../../client/src/features/voice/hooks/useVoiceMode';
 import { createVoiceSession } from '../../../client/src/features/voice/utils/voiceSession';
 import { createSpeechQueue } from '../../../client/src/features/voice/utils/speechQueue';
@@ -453,11 +454,54 @@ describe('interrupting', () => {
     expect(hook.calls.cancelGeneration).not.toHaveBeenCalled();
   });
 
-  test('a tap on the orb stops the answer even with interrupting off', async () => {
+  test('a tap on the orb stops the answer even with interrupting off, and the app listens', async () => {
     const hook = setup({ availability: availability({ bargeIn: false }) });
     await speaking(hook);
+    expect(status(hook)).toBe('speaking');
     act(() => hook.result.current.interrupt());
     expect(mockQueue.interrupt).toHaveBeenCalled();
+    expect(hook.calls.cancelGeneration).toHaveBeenCalledWith('voice-barge-in');
+    // Not stuck in "speaking" with the audio gone: nobody speaks yet, so it listens.
+    expect(status(hook)).toBe('listening');
+    expect(hook.result.current.state.runActive).toBe(false);
+    expect(hook.result.current.state.assistantCaption).toBe('');
+    expect(mockSession.setAgentState).toHaveBeenLastCalledWith('idle');
+  });
+
+  test('a tap on the orb while the app is still thinking stops the run too, interrupting off', async () => {
+    const hook = setup({ availability: availability({ bargeIn: false }) });
+    await startAndReady(hook);
+    await speakTurn();
+    hook.setProps({ messages: [USER, assistant()], processing: true });
+    expect(status(hook)).toBe('thinking');
+    act(() => hook.result.current.interrupt());
+    expect(hook.calls.cancelGeneration).toHaveBeenCalledWith('voice-barge-in');
+    expect(status(hook)).toBe('listening');
+    expect(hook.result.current.state.runActive).toBe(false);
+
+    // The next thing the user says is a turn of its own.
+    hook.calls.sendTurn.mockClear();
+    await speakTurn('Never mind, something else');
+    expect(hook.calls.sendTurn).toHaveBeenCalledWith('Never mind, something else');
+  });
+
+  test('the click event of the orb is not mistaken for a forced interruption by the session', async () => {
+    const hook = setup({ availability: availability({ bargeIn: false }) });
+    await speaking(hook);
+    // What the overlay does: `onClick={voiceMode.interrupt}` hands over the event.
+    act(() => hook.result.current.interrupt({ type: 'click', force: false }));
+    expect(status(hook)).toBe('listening');
+  });
+
+  test('speaking while the app answers is still ignored with interrupting off (only the tap forces)', async () => {
+    const hook = setup({ availability: availability({ bargeIn: false }) });
+    await speaking(hook);
+    mockQueue.interrupt.mockClear();
+    emit({ type: 'barge-in' });
+    expect(status(hook)).toBe('speaking');
+    // Nothing is stopped behind the state machine's back either.
+    expect(mockQueue.interrupt).not.toHaveBeenCalled();
+    expect(hook.calls.cancelGeneration).not.toHaveBeenCalled();
   });
 });
 
@@ -603,6 +647,46 @@ describe('a question the app asks', () => {
     expect(mockQueue.say).not.toHaveBeenCalledWith(expect.stringContaining('did not catch'));
   });
 
+  test('is not spoken before the session is up (the audio would play while the state ignores it)', async () => {
+    const hook = setup({
+      messages: [USER, asking()],
+      clarificationPending: true
+    });
+    await act(async () => {
+      await hook.result.current.start();
+    });
+    expect(status(hook)).toBe('connecting');
+    expect(mockQueue.say).not.toHaveBeenCalled();
+
+    emit({ type: 'ready' });
+    expect(mockQueue.say).toHaveBeenCalledWith('Which size?');
+    expect(mockQueue.say).toHaveBeenCalledTimes(1);
+    // The audio starts in a state that takes it: the orb shows the app speaking.
+    act(() => mockHandlers.queue.onSpeakingStart());
+    expect(status(hook)).toBe('speaking');
+    expect(mockSession.setAgentState).toHaveBeenLastCalledWith('speaking');
+  });
+
+  test('is not spoken again when the user talks over it and the chat re-renders', async () => {
+    const hook = setup({ messages: [USER, asking()], clarificationPending: true });
+    await startAndReady(hook);
+    expect(mockQueue.say).toHaveBeenCalledTimes(1);
+    act(() => mockHandlers.queue.onSpeakingStart());
+    emit({ type: 'barge-in' });
+    hook.setProps({ messages: [USER, asking()] });
+    hook.setProps({ messages: [USER, asking({ content: 'I need one thing, really.' })] });
+    expect(mockQueue.say).toHaveBeenCalledTimes(1);
+  });
+
+  test('is not spoken again after a turn that was understood or not', async () => {
+    const hook = setup({ messages: [USER, asking()], clarificationPending: true });
+    await startAndReady(hook);
+    await speakTurn('not sure');
+    hook.setProps({ messages: [USER, asking()] });
+    const questionSpoken = mockQueue.say.mock.calls.filter(([said]) => said === 'Which size?');
+    expect(questionSpoken).toHaveLength(1);
+  });
+
   test('is spoken once, however often the chat re-renders', async () => {
     const hook = setup();
     await startAndReady(hook);
@@ -660,5 +744,662 @@ describe('settings', () => {
     act(() => hook.result.current.pushToTalkEnd());
     expect(mockSession.pushToTalkStart).toHaveBeenCalled();
     expect(mockSession.pushToTalkEnd).toHaveBeenCalled();
+  });
+});
+
+describe('sound while the app works on the answer, interrupting off', () => {
+  async function thinkingWithRun(hook) {
+    await startAndReady(hook);
+    await speakTurn('Hello there');
+    hook.setProps({ messages: [USER, assistant({ content: 'Partial.' })], processing: true });
+    expect(status(hook)).toBe('thinking');
+  }
+
+  test('a turn end of no turn of ours does not lose the answer that is on its way', async () => {
+    const hook = setup({ availability: availability({ bargeIn: false }) });
+    await thinkingWithRun(hook);
+
+    // Something passes the detector while the app thinks: the state machine
+    // ignores the speech start, the turn end and the transcript.
+    emit({ type: 'speech-start' });
+    emit({ type: 'turn-end' });
+    await act(async () => {
+      mockHandlers.onEvent({ type: 'final', text: 'and another thing' });
+    });
+    expect(hook.calls.sendTurn).toHaveBeenCalledTimes(1);
+    expect(status(hook)).toBe('thinking');
+    expect(hook.result.current.state.runActive).toBe(true);
+
+    // The answer is still read out, to the end.
+    hook.setProps({
+      messages: [USER, assistant({ content: 'Partial. Complete answer.', loading: false })],
+      processing: false
+    });
+    expect(mockQueue.update).toHaveBeenLastCalledWith('Partial. Complete answer.', {
+      final: true
+    });
+    expect(hook.result.current.state.runActive).toBe(false);
+    expect(status(hook)).toBe('listening');
+  });
+
+  test('an empty transcript during the run does not tell the session the app is idle', async () => {
+    const hook = setup({ availability: availability({ bargeIn: false }) });
+    await thinkingWithRun(hook);
+    emit({ type: 'speech-start' });
+    emit({ type: 'turn-end' });
+    await act(async () => {
+      mockHandlers.onEvent({ type: 'final', text: '' });
+    });
+    expect(mockSession.setAgentState).toHaveBeenLastCalledWith('thinking');
+    expect(status(hook)).toBe('thinking');
+  });
+
+  test('the app counts as busy from the turn end on, so the next sound starts no turn', async () => {
+    const hook = setup({ availability: availability({ bargeIn: false }) });
+    await startAndReady(hook);
+    emit({ type: 'speech-start' });
+    mockSession.setAgentState.mockClear();
+    emit({ type: 'turn-end' });
+    expect(mockSession.setAgentState).toHaveBeenLastCalledWith('thinking');
+    // A transcript without words ends it.
+    await act(async () => {
+      mockHandlers.onEvent({ type: 'final', text: '' });
+    });
+    expect(mockSession.setAgentState).toHaveBeenLastCalledWith('idle');
+    expect(status(hook)).toBe('listening');
+  });
+
+  test('when the audio catches up with an answer that is still being written the app stays busy', async () => {
+    const hook = setup();
+    await startAndReady(hook);
+    await speakTurn();
+    hook.setProps({ messages: [USER, assistant({ content: 'One. Two' })], processing: true });
+    act(() => mockHandlers.queue.onSpeakingStart());
+    act(() => mockHandlers.queue.onDrained());
+    expect(status(hook)).toBe('thinking');
+    expect(mockSession.setAgentState).toHaveBeenLastCalledWith('thinking');
+  });
+});
+
+describe('speech that resumes while the transcript of the first part is on its way', () => {
+  /** The user paused, the silence ended turn 1, and they went on. */
+  function pausedAndResumed() {
+    emit({ type: 'speech-start' });
+    emit({ type: 'turn-end' });
+    emit({ type: 'speech-start' });
+  }
+
+  test('the first part is not sent as a turn: one send with both parts, in order', async () => {
+    const hook = setup();
+    await startAndReady(hook);
+    pausedAndResumed();
+    expect(status(hook)).toBe('user-speaking');
+
+    // The transcript of the first part comes back while the user talks.
+    await act(async () => {
+      mockHandlers.onEvent({ type: 'final', text: 'Please tell me about' });
+    });
+    expect(hook.calls.sendTurn).not.toHaveBeenCalled();
+    expect(status(hook)).toBe('user-speaking');
+    expect(hook.result.current.state.userCaption).toEqual({
+      text: 'Please tell me about',
+      final: false
+    });
+
+    // The caption goes on with the whole sentence.
+    emit({ type: 'interim', text: 'the weather' });
+    expect(hook.result.current.state.userCaption.text).toBe('Please tell me about the weather');
+
+    emit({ type: 'turn-end' });
+    await act(async () => {
+      mockHandlers.onEvent({ type: 'final', text: 'the weather in Berlin' });
+    });
+    expect(hook.calls.sendTurn).toHaveBeenCalledTimes(1);
+    expect(hook.calls.sendTurn).toHaveBeenCalledWith('Please tell me about the weather in Berlin');
+    expect(hook.result.current.state.userCaption).toEqual({
+      text: 'Please tell me about the weather in Berlin',
+      final: true
+    });
+
+    // The answer is spoken and the app returns to listening.
+    hook.setProps({
+      messages: [USER, assistant({ content: 'Sunny.', loading: false })],
+      processing: false
+    });
+    expect(mockQueue.update).toHaveBeenLastCalledWith('Sunny.', { final: true });
+    act(() => mockHandlers.queue.onSpeakingStart());
+    act(() => mockHandlers.queue.onDrained());
+    expect(status(hook)).toBe('listening');
+  });
+
+  test('the first part goes out alone when what follows is empty (a cough)', async () => {
+    const hook = setup();
+    await startAndReady(hook);
+    pausedAndResumed();
+    await act(async () => {
+      mockHandlers.onEvent({ type: 'final', text: 'Please tell me about Berlin' });
+    });
+    emit({ type: 'turn-end' });
+    await act(async () => {
+      mockHandlers.onEvent({ type: 'final', text: '' });
+    });
+    expect(hook.calls.sendTurn).toHaveBeenCalledTimes(1);
+    expect(hook.calls.sendTurn).toHaveBeenCalledWith('Please tell me about Berlin');
+  });
+
+  test('a first part that is only a filler word does not start a turn, nor does it stay in the way', async () => {
+    const hook = setup();
+    await startAndReady(hook);
+    pausedAndResumed();
+    await act(async () => {
+      mockHandlers.onEvent({ type: 'final', text: 'uh' });
+    });
+    expect(status(hook)).toBe('user-speaking');
+    emit({ type: 'turn-end' });
+    await act(async () => {
+      mockHandlers.onEvent({ type: 'final', text: 'What time is it' });
+    });
+    expect(hook.calls.sendTurn).toHaveBeenCalledWith('uh What time is it');
+  });
+
+  test('an empty first part changes nothing', async () => {
+    const hook = setup();
+    await startAndReady(hook);
+    pausedAndResumed();
+    await act(async () => {
+      mockHandlers.onEvent({ type: 'final', text: '' });
+    });
+    expect(status(hook)).toBe('user-speaking');
+    emit({ type: 'turn-end' });
+    await act(async () => {
+      mockHandlers.onEvent({ type: 'final', text: 'What time is it' });
+    });
+    expect(hook.calls.sendTurn).toHaveBeenCalledWith('What time is it');
+  });
+
+  test('the first part is used once: the turn after it starts clean', async () => {
+    const hook = setup();
+    await startAndReady(hook);
+    pausedAndResumed();
+    await act(async () => {
+      mockHandlers.onEvent({ type: 'final', text: 'First half' });
+    });
+    emit({ type: 'turn-end' });
+    await act(async () => {
+      mockHandlers.onEvent({ type: 'final', text: 'second half' });
+    });
+    hook.setProps({
+      messages: [USER, assistant({ content: 'Done.', loading: false })],
+      processing: false
+    });
+    hook.calls.sendTurn.mockClear();
+    await speakTurn('A new question');
+    expect(hook.calls.sendTurn).toHaveBeenCalledWith('A new question');
+  });
+
+  test('muting forgets it: what is said after the unmute is not glued to it', async () => {
+    const hook = setup();
+    await startAndReady(hook);
+    pausedAndResumed();
+    await act(async () => {
+      mockHandlers.onEvent({ type: 'final', text: 'Please tell me about' });
+    });
+    act(() => hook.result.current.setMuted(true));
+    act(() => hook.result.current.setMuted(false));
+    await speakTurn('Something else');
+    expect(hook.calls.sendTurn).toHaveBeenCalledTimes(1);
+    expect(hook.calls.sendTurn).toHaveBeenCalledWith('Something else');
+  });
+
+  test('a new session forgets it', async () => {
+    const hook = setup();
+    await startAndReady(hook);
+    pausedAndResumed();
+    await act(async () => {
+      mockHandlers.onEvent({ type: 'final', text: 'Please tell me about' });
+    });
+    emit({ type: 'error', code: 'connection', message: '', recoverable: false });
+    await act(async () => {
+      await hook.result.current.retry();
+    });
+    emit({ type: 'ready' });
+    await speakTurn('Hello again');
+    expect(hook.calls.sendTurn).toHaveBeenCalledWith('Hello again');
+  });
+
+  test('ending voice mode forgets it', async () => {
+    const hook = setup();
+    await startAndReady(hook);
+    pausedAndResumed();
+    await act(async () => {
+      mockHandlers.onEvent({ type: 'final', text: 'Please tell me about' });
+    });
+    act(() => hook.result.current.end('user'));
+    await startAndReady(hook);
+    await speakTurn('Hello again');
+    expect(hook.calls.sendTurn).toHaveBeenCalledWith('Hello again');
+  });
+
+  test('with interrupting off a resumed sentence is not part of a pending turn: the transcript is sent once', async () => {
+    const hook = setup({ availability: availability({ bargeIn: false }) });
+    await startAndReady(hook);
+    pausedAndResumed();
+    // The state machine does not move to user-speaking for sound while it waits.
+    expect(status(hook)).toBe('thinking');
+    await act(async () => {
+      mockHandlers.onEvent({ type: 'final', text: 'Please tell me about' });
+    });
+    expect(hook.calls.sendTurn).toHaveBeenCalledTimes(1);
+    // The turn end of the second burst does not lose the run.
+    emit({ type: 'turn-end' });
+    hook.setProps({
+      messages: [USER, assistant({ content: 'Sure.', loading: false })],
+      processing: false
+    });
+    expect(mockQueue.update).toHaveBeenLastCalledWith('Sure.', { final: true });
+    expect(status(hook)).toBe('listening');
+  });
+});
+
+describe('muting while the answer is still being written', () => {
+  const streamingAnswer = async hook => {
+    await startAndReady(hook);
+    await speakTurn();
+    hook.setProps({
+      messages: [USER, assistant({ content: 'First sentence here. Second sentence here.' })],
+      processing: true
+    });
+    act(() => mockHandlers.queue.onSpeakingStart());
+  };
+
+  test('the audio stays silent: the speech queue is not fed the text it forgot', async () => {
+    const hook = setup();
+    await streamingAnswer(hook);
+    expect(mockQueue.update).toHaveBeenCalledWith('First sentence here. Second sentence here.', {
+      final: false
+    });
+
+    mockQueue.update.mockClear();
+    act(() => hook.result.current.setMuted(true));
+    expect(mockQueue.interrupt).toHaveBeenCalledTimes(1);
+    expect(mockSession.setAgentState).toHaveBeenLastCalledWith('idle');
+
+    // More of the answer arrives. The queue forgot the first sentences when it
+    // was interrupted, so feeding it the whole text would read them again.
+    hook.setProps({
+      messages: [
+        USER,
+        assistant({ content: 'First sentence here. Second sentence here. Third one.' })
+      ],
+      processing: true
+    });
+    expect(mockQueue.update).not.toHaveBeenCalled();
+    // The caption still follows the answer.
+    expect(hook.result.current.state.assistantCaption).toBe(
+      'First sentence here. Second sentence here. Third one.'
+    );
+  });
+
+  test('the run ends cleanly: no audio at the end, no question read out, back to listening after the unmute', async () => {
+    const hook = setup();
+    await streamingAnswer(hook);
+    act(() => hook.result.current.setMuted(true));
+    mockQueue.update.mockClear();
+
+    hook.setProps({
+      messages: [
+        USER,
+        assistant({
+          content: 'First sentence here. Second sentence here. Which size?',
+          loading: false,
+          awaitingInput: true,
+          clarification: { questionId: 'q9', question: 'Which size?', options: [] }
+        })
+      ],
+      processing: false,
+      clarificationPending: true
+    });
+    expect(mockQueue.update).not.toHaveBeenCalled();
+    expect(mockQueue.say).not.toHaveBeenCalled();
+    expect(hook.result.current.state.runActive).toBe(false);
+    expect(status(hook)).toBe('paused');
+
+    act(() => hook.result.current.setMuted(false));
+    expect(status(hook)).toBe('listening');
+  });
+
+  test('unmuting while the run goes on waits for it instead of claiming to listen', async () => {
+    const hook = setup();
+    await streamingAnswer(hook);
+    act(() => hook.result.current.setMuted(true));
+    act(() => hook.result.current.setMuted(false));
+    expect(status(hook)).toBe('thinking');
+    expect(hook.result.current.state.runActive).toBe(true);
+    hook.setProps({
+      messages: [USER, assistant({ content: 'First sentence here. Done.', loading: false })],
+      processing: false
+    });
+    expect(status(hook)).toBe('listening');
+  });
+
+  test('the next turn after the unmute is spoken again', async () => {
+    const hook = setup();
+    await streamingAnswer(hook);
+    act(() => hook.result.current.setMuted(true));
+    hook.setProps({
+      messages: [USER, assistant({ content: 'First sentence here. Done.', loading: false })],
+      processing: false
+    });
+    act(() => hook.result.current.setMuted(false));
+
+    const finished = [USER, assistant({ content: 'First sentence here. Done.', loading: false })];
+    hook.setProps({ messages: finished });
+    await speakTurn('And one more thing');
+    mockQueue.update.mockClear();
+    hook.setProps({
+      messages: [
+        ...finished,
+        { id: 'u2', role: 'user', content: 'And one more thing' },
+        assistant({ id: 'a2', content: 'Gladly.' })
+      ],
+      processing: true
+    });
+    expect(mockQueue.update).toHaveBeenCalledWith('Gladly.', { final: false });
+  });
+
+  test('a session that fails mid-answer leaves the audio silent too', async () => {
+    const hook = setup();
+    await streamingAnswer(hook);
+    mockQueue.update.mockClear();
+    emit({ type: 'error', code: 'connection', message: 'lost', recoverable: false });
+    expect(status(hook)).toBe('error');
+    expect(mockQueue.interrupt).toHaveBeenCalled();
+    expect(mockSession.setAgentState).toHaveBeenCalledWith('idle');
+
+    hook.setProps({
+      messages: [
+        USER,
+        assistant({ content: 'First sentence here. Second sentence here. Third one.' })
+      ],
+      processing: true
+    });
+    expect(mockQueue.update).not.toHaveBeenCalled();
+    hook.setProps({
+      messages: [USER, assistant({ content: 'First. Second. Third.', loading: false })],
+      processing: false
+    });
+    expect(mockQueue.update).not.toHaveBeenCalled();
+  });
+});
+
+describe('a muted session', () => {
+  test('mute, error and retry: the new session is not muted, and the state says so', async () => {
+    const hook = setup();
+    await startAndReady(hook);
+    act(() => hook.result.current.setMuted(true));
+    emit({ type: 'error', code: 'connection', message: '', recoverable: false });
+    mockSession.setMuted.mockClear();
+
+    await act(async () => {
+      await hook.result.current.retry();
+    });
+    expect(hook.result.current.state.muted).toBe(false);
+    expect(mockSession.setMuted).not.toHaveBeenCalled();
+    emit({ type: 'ready' });
+    expect(status(hook)).toBe('listening');
+  });
+
+  test('muting while the session is still being created reaches the session', async () => {
+    let release;
+    createVoiceSession.mockImplementationOnce(
+      options =>
+        new Promise(resolve => {
+          mockHandlers.onEvent = options.onEvent;
+          release = () => resolve(mockSession);
+        })
+    );
+    const hook = setup();
+    let started;
+    await act(async () => {
+      started = hook.result.current.start();
+    });
+    act(() => hook.result.current.setMuted(true));
+    expect(status(hook)).toBe('connecting');
+    expect(mockSession.setMuted).not.toHaveBeenCalled();
+
+    await act(async () => {
+      release();
+      await started;
+    });
+    expect(mockSession.setMuted).toHaveBeenCalledWith(true);
+    emit({ type: 'ready' });
+    expect(status(hook)).toBe('paused');
+  });
+});
+
+describe('settings changed while the session is being created', () => {
+  test('the listening style and interrupting the user picked reach the session', async () => {
+    let release;
+    createVoiceSession.mockImplementationOnce(
+      options =>
+        new Promise(resolve => {
+          mockHandlers.onEvent = options.onEvent;
+          release = () => resolve(mockSession);
+        })
+    );
+    const hook = setup();
+    let started;
+    await act(async () => {
+      started = hook.result.current.start();
+    });
+    // The permission prompt is open; the user opens the settings.
+    act(() => hook.result.current.setListeningStyle('push-to-talk'));
+    act(() => hook.result.current.setBargeIn(false));
+    expect(mockSession.setListeningStyle).not.toHaveBeenCalled();
+
+    await act(async () => {
+      release();
+      await started;
+    });
+    expect(createVoiceSession).toHaveBeenCalledWith(
+      expect.objectContaining({ listeningStyle: 'hands-free', bargeIn: true })
+    );
+    expect(mockSession.setListeningStyle).toHaveBeenCalledWith('push-to-talk');
+    expect(mockSession.setBargeIn).toHaveBeenCalledWith(false);
+  });
+
+  test('settings that did not change are not sent again', async () => {
+    const hook = setup();
+    await startAndReady(hook);
+    expect(mockSession.setListeningStyle).not.toHaveBeenCalled();
+    expect(mockSession.setBargeIn).not.toHaveBeenCalled();
+    expect(mockSession.setMuted).not.toHaveBeenCalled();
+  });
+});
+
+describe('when the answer cannot be spoken', () => {
+  test('the user is told: a notice in the state, once per answer', async () => {
+    const hook = setup();
+    await startAndReady(hook);
+    await speakTurn();
+    hook.setProps({
+      messages: [USER, assistant({ content: 'Sure. More.', loading: false })],
+      processing: false
+    });
+    expect(hook.result.current.state.notice).toBeNull();
+
+    act(() => mockHandlers.queue.onError(new Error('Speech request failed: 403')));
+    expect(hook.result.current.state.notice).toBe('tts-failed');
+    const noticed = hook.result.current.state;
+    act(() => mockHandlers.queue.onError(new Error('Speech request failed: 403')));
+    expect(hook.result.current.state).toBe(noticed);
+    // The reason still goes to the log.
+    expect(debugLog).toHaveBeenCalledWith('voiceMode: text-to-speech failed', expect.any(Error));
+  });
+
+  test('the notice goes when the user speaks again', async () => {
+    const hook = setup();
+    await startAndReady(hook);
+    act(() => mockHandlers.queue.onError(new Error('429')));
+    expect(hook.result.current.state.notice).toBe('tts-failed');
+    emit({ type: 'speech-start' });
+    expect(hook.result.current.state.notice).toBeNull();
+  });
+
+  test('the notice goes with the next turn that is sent', async () => {
+    const hook = setup();
+    await startAndReady(hook);
+    emit({ type: 'speech-start' });
+    act(() => mockHandlers.queue.onError(new Error('500')));
+    emit({ type: 'turn-end' });
+    await act(async () => {
+      mockHandlers.onEvent({ type: 'final', text: 'Hello there' });
+    });
+    expect(hook.result.current.state.notice).toBeNull();
+  });
+
+  test('a failure of a session that was ended does not show up in the next one', async () => {
+    const hook = setup();
+    await startAndReady(hook);
+    const staleQueue = mockHandlers.queue;
+    act(() => hook.result.current.end('user'));
+    await startAndReady(hook);
+    act(() => staleQueue.onError(new Error('late')));
+    expect(hook.result.current.state.notice).toBeNull();
+  });
+
+  test('a retry starts without the notice', async () => {
+    const hook = setup();
+    await startAndReady(hook);
+    act(() => mockHandlers.queue.onError(new Error('500')));
+    emit({ type: 'error', code: 'connection', message: '', recoverable: false });
+    await act(async () => {
+      await hook.result.current.retry();
+    });
+    expect(hook.result.current.state.notice).toBeNull();
+  });
+});
+
+describe('the server ending a conversation nobody spoke in', () => {
+  test('no-speech reaches the state as the error code', async () => {
+    const hook = setup();
+    await startAndReady(hook);
+    emit({
+      type: 'error',
+      code: 'no-speech',
+      message: 'Nothing was said for a long time, so the session was closed',
+      recoverable: false
+    });
+    emit({ type: 'closed' });
+    expect(status(hook)).toBe('error');
+    expect(hook.result.current.state.error.code).toBe('no-speech');
+    expect(mockSession.stop).toHaveBeenCalled();
+  });
+});
+
+describe('the timing of a turn', () => {
+  let clock;
+  let spy;
+  beforeEach(() => {
+    clock = 10_000;
+    spy = jest.spyOn(performance, 'now').mockImplementation(() => clock);
+    debugLog.mockClear();
+  });
+  afterEach(() => spy.mockRestore());
+
+  const reports = () =>
+    debugLog.mock.calls.filter(
+      ([name, data]) => name === 'voiceMode.timing' && 'firstAudio' in data
+    );
+
+  test('is logged when the first audio starts, after the VAD speech end, with the silence that preceded it', async () => {
+    const hook = setup({ availability: availability({ endOfTurnSilenceMs: 700 }) });
+    await startAndReady(hook);
+    emit({ type: 'speech-start' });
+    clock = 12_000;
+    emit({ type: 'turn-end' });
+    clock = 12_300;
+    await act(async () => {
+      mockHandlers.onEvent({ type: 'final', text: 'Hello there' });
+    });
+    clock = 12_900;
+    hook.setProps({ messages: [USER, assistant({ content: 'Hi. How' })], processing: true });
+    clock = 13_100;
+    act(() => mockHandlers.queue.onTiming('firstChunk', 200));
+    expect(reports()).toHaveLength(0);
+
+    clock = 13_600;
+    act(() => mockHandlers.queue.onSpeakingStart());
+    expect(reports()).toEqual([
+      [
+        'voiceMode.timing',
+        {
+          endOfTurnSilenceMs: 700,
+          sttFinal: 300,
+          firstToken: 900,
+          firstChunk: 1100,
+          firstAudio: 1600
+        }
+      ]
+    ]);
+  });
+
+  test('an interrupted turn is logged too, once, and the drain adds nothing', async () => {
+    const hook = setup();
+    await startAndReady(hook);
+    emit({ type: 'speech-start' });
+    clock = 11_000;
+    emit({ type: 'turn-end' });
+    clock = 11_200;
+    await act(async () => {
+      mockHandlers.onEvent({ type: 'final', text: 'Hello there' });
+    });
+    hook.setProps({
+      messages: [USER, assistant({ content: 'A long one. Goes on' })],
+      processing: true
+    });
+    clock = 11_900;
+    act(() => mockHandlers.queue.onSpeakingStart());
+    emit({ type: 'barge-in' });
+    act(() => mockHandlers.queue.onDrained());
+    expect(reports()).toHaveLength(1);
+    expect(reports()[0][1]).toMatchObject({
+      endOfTurnSilenceMs: 800,
+      sttFinal: 200,
+      firstAudio: 900
+    });
+  });
+
+  test('stages that did not happen are null; audio that follows in the same turn is not logged again', async () => {
+    const hook = setup();
+    await startAndReady(hook);
+    emit({ type: 'speech-start' });
+    clock = 11_000;
+    emit({ type: 'turn-end' });
+    await act(async () => {
+      mockHandlers.onEvent({ type: 'final', text: 'Hello there' });
+    });
+    clock = 11_500;
+    act(() => mockHandlers.queue.onSpeakingStart());
+    act(() => mockHandlers.queue.onDrained());
+    clock = 12_500;
+    act(() => mockHandlers.queue.onSpeakingStart());
+    expect(reports()).toHaveLength(1);
+    expect(reports()[0][1]).toEqual({
+      endOfTurnSilenceMs: 800,
+      sttFinal: 0,
+      firstToken: null,
+      firstChunk: null,
+      firstAudio: 500
+    });
+  });
+
+  test('speech with no turn behind it (an error message) logs nothing', async () => {
+    const sendTurn = jest.fn(async () => false);
+    const hook = setup({ sendTurn });
+    await startAndReady(hook);
+    await speakTurn();
+    act(() => mockHandlers.queue.onSpeakingStart());
+    expect(reports()).toHaveLength(0);
   });
 });
