@@ -82,7 +82,7 @@
     "test:integration": "jest --config tests/config/jest.config.js tests/integration",
     "test:integration:ci": "jest --config tests/config/jest.config.js tests/integration --testPathIgnorePatterns=tests/integration/api/chat.test.js --testPathIgnorePatterns=tests/integration/models/model-integration.test.js",
     "test:e2e": "playwright test --config tests/config/playwright.config.js",
-    "test:e2e:voice": "playwright test --config tests/config/playwright.config.js tests/e2e/voice-mode.spec.js --project=chromium",
+    "test:e2e:voice": "cross-env VOICE_E2E=1 playwright test --config tests/config/playwright.config.js tests/e2e/voice-mode.spec.js --project=chromium",
     "test:a11y": "npx playwright test --config tests/config/playwright.config.js tests/e2e/accessibility.spec.js",
     "test:api": "jest --config tests/config/jest.config.js tests/integration/api",
     "test:models": "jest --config tests/config/jest.config.js tests/integration/models",

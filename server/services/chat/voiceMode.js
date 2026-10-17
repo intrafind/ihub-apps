@@ -15,7 +15,11 @@
  * @module services/chat/voiceMode
  */
 import { isFeatureEnabled } from '../../featureRegistry.js';
-import { VOICE_THINKING_LEVELS, resolveVoiceModeSettings } from '../../../shared/voiceMode.js';
+import {
+  VOICE_INSTRUCTION_MAX_CHARS,
+  VOICE_THINKING_LEVELS,
+  resolveVoiceModeSettings
+} from '../../../shared/voiceMode.js';
 
 /**
  * Built-in voice style instruction, per language. The platform can replace it
@@ -62,18 +66,12 @@ function baseLanguage(language) {
   return typeof language === 'string' ? language.trim().toLowerCase().split(/[-_]/)[0] : '';
 }
 
-/**
- * Longest voice instruction used. The platform schema enforces it on save; this
- * keeps a config that was edited by hand from adding pages to every voice turn.
- */
-const MAX_INSTRUCTION_CHARS = 4000;
-
 /** The first non-blank string among the entries of `texts` under `keys`. */
 function pickText(texts, keys) {
   for (const key of keys) {
     const value = key && texts?.[key];
     if (typeof value === 'string' && value.trim()) {
-      return value.trim().slice(0, MAX_INSTRUCTION_CHARS);
+      return value.trim().slice(0, VOICE_INSTRUCTION_MAX_CHARS);
     }
   }
   return null;

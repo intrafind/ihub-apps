@@ -6,6 +6,7 @@ import {
   DEFAULT_VOICE_MODE,
   END_OF_TURN_SILENCE_RANGE,
   MAX_SESSION_MINUTES_RANGE,
+  VOICE_INSTRUCTION_MAX_CHARS,
   VOICE_LISTENING_STYLES,
   VOICE_PROMPT_LANGUAGES,
   VOICE_THINKING_LEVELS,
@@ -371,6 +372,7 @@ function VoiceModeSettings({
               <textarea
                 id={`voice-mode-prompt-${code}`}
                 rows={4}
+                maxLength={VOICE_INSTRUCTION_MAX_CHARS}
                 value={text}
                 onChange={e => setPrompt(code, e.target.value)}
                 placeholder={BUILT_IN_VOICE_PROMPTS[code]}

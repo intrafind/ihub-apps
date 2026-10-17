@@ -35,6 +35,9 @@ export const VOICE_END_OF_TURN_SILENCE_RANGE_MS = Object.freeze({ min: 300, max:
 /** Accepted range of `maxSessionMinutes`: the longest one voice session runs. */
 export const VOICE_MAX_SESSION_RANGE_MINUTES = Object.freeze({ min: 1, max: 240 });
 
+/** Longest voice style instruction (`speech.voiceMode.systemPrompt`, per language), in characters. */
+export const VOICE_INSTRUCTION_MAX_CHARS = 4000;
+
 /** `platform.speech.voiceMode` as shipped (see `server/defaults/config/platform.json`). */
 export const VOICE_MODE_DEFAULTS = Object.freeze({
   enabled: false,

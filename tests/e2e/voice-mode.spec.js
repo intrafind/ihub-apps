@@ -282,9 +282,16 @@ async function setSpeech(speech) {
 }
 
 test.beforeAll(async () => {
+  // Opt-in: the run switches voice mode on and writes three models and the
+  // speech config of whatever instance Playwright points at, so the general
+  // `npm run test:e2e` leaves it out. `npm run test:e2e:voice` sets the flag.
+  test.skip(
+    !process.env.VOICE_E2E,
+    'Voice mode E2E rewrites config: run it with `npm run test:e2e:voice` on a throwaway instance'
+  );
   // The fake microphone and the permission grant are Chromium's, and the stub
-  // server and the shared platform config allow one run at a time. `npm run
-  // test:e2e` walks every project, so only the plain Chromium one takes part.
+  // server and the shared platform config allow one run at a time, so only the
+  // plain Chromium project takes part.
   test.skip(
     test.info().project.name !== 'chromium',
     'Voice mode E2E runs in the desktop Chromium project only'

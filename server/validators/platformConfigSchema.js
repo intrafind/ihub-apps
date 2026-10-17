@@ -5,7 +5,8 @@ import {
   VOICE_LISTENING_STYLES,
   VOICE_THINKING_LEVELS,
   VOICE_END_OF_TURN_SILENCE_RANGE_MS,
-  VOICE_MAX_SESSION_RANGE_MINUTES
+  VOICE_MAX_SESSION_RANGE_MINUTES,
+  VOICE_INSTRUCTION_MAX_CHARS
 } from '../../shared/voiceMode.js';
 
 const jwtProviderSchema = z.object({
@@ -696,7 +697,10 @@ export const platformConfigSchema = z
             // { "en": "...", "de": "..." }. The request language wins, then
             // "en", then the built-in text. Blank entries are ignored.
             systemPrompt: z
-              .record(z.string().regex(LANGUAGE_CODE_PATTERN), z.string().max(4000))
+              .record(
+                z.string().regex(LANGUAGE_CODE_PATTERN),
+                z.string().max(VOICE_INSTRUCTION_MAX_CHARS)
+              )
               .prefault({})
           })
           .passthrough()

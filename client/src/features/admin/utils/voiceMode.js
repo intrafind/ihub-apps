@@ -1,5 +1,6 @@
 import {
   VOICE_END_OF_TURN_SILENCE_RANGE_MS,
+  VOICE_INSTRUCTION_MAX_CHARS,
   VOICE_LISTENING_STYLES,
   VOICE_MAX_SESSION_RANGE_MINUTES,
   VOICE_MODE_DEFAULTS,
@@ -13,7 +14,7 @@ import {
  * object again before it is saved.
  */
 
-export { VOICE_LISTENING_STYLES, VOICE_THINKING_LEVELS };
+export { VOICE_INSTRUCTION_MAX_CHARS, VOICE_LISTENING_STYLES, VOICE_THINKING_LEVELS };
 export const END_OF_TURN_SILENCE_RANGE = { ...VOICE_END_OF_TURN_SILENCE_RANGE_MS, step: 50 };
 export const MAX_SESSION_MINUTES_RANGE = { ...VOICE_MAX_SESSION_RANGE_MINUTES, step: 1 };
 /** Languages with an editable system prompt override. Other keys are kept as stored. */
