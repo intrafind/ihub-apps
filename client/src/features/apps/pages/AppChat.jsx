@@ -47,6 +47,8 @@ import GreetingView from '../../chat/components/GreetingView';
 import NoMessagesView from '../../chat/components/NoMessagesView';
 import InputVariables from '../../chat/components/InputVariables';
 import ChatStartForm from '../../chat/components/ChatStartForm';
+import UsageGuideButton from '../../chat/components/UsageGuideButton';
+import useUsageGuide from '../../chat/hooks/useUsageGuide';
 import {
   isStartFormEnabled,
   localizeVariables,
@@ -125,13 +127,29 @@ const getInitializedVariables = (app, currentLanguage) => {
   return initialVars;
 };
 
+/** Starter prompts, else the greeting, else the empty-chat note. */
+const startupView = (app, welcomeMessage, handleStarterPromptClick) => {
+  const starterPrompts = app?.starterPrompts || [];
+  if (starterPrompts.length > 0) {
+    return (
+      <StarterPromptsView
+        starterPrompts={starterPrompts}
+        onSelectPrompt={handleStarterPromptClick}
+      />
+    );
+  }
+  if (welcomeMessage) return <GreetingView welcomeMessage={welcomeMessage} />;
+  return <NoMessagesView />;
+};
+
 const renderStartupState = (
   app,
   welcomeMessage,
   handleStarterPromptClick,
   hydrating,
   modeResolving,
-  t
+  t,
+  usageGuideHint = null
 ) => {
   // The app details can arrive before the platform config and the auth status
   // do, and until both have, nothing here knows whether this chat is
@@ -149,18 +167,14 @@ const renderStartupState = (
     return <LoadingSpinner message={t('pages.appChat.loadingChat', 'Loading chat...')} />;
   }
 
-  const starterPrompts = app?.starterPrompts || [];
-  if (starterPrompts.length > 0) {
-    return (
-      <StarterPromptsView
-        starterPrompts={starterPrompts}
-        onSelectPrompt={handleStarterPromptClick}
-      />
-    );
-  } else if (welcomeMessage) {
-    return <GreetingView welcomeMessage={welcomeMessage} />;
-  }
-  return <NoMessagesView />;
+  const view = startupView(app, welcomeMessage, handleStarterPromptClick);
+  if (!usageGuideHint) return view;
+  return (
+    <>
+      {view}
+      <div className="flex justify-center px-4 pt-2 pb-4">{usageGuideHint}</div>
+    </>
+  );
 };
 
 // The query string an embedded chat reads: none. Module-level, so its identity
@@ -222,6 +236,9 @@ const MAX_ATTACHED_RECORDING_SECONDS = 900;
 const PromptEditorModal = lazyWithRetry(() => import('../../prompts/components/PromptEditorModal'));
 // Loaded on first use too: "Save as skill" only shows under a drafted skill.
 const SkillEditorModal = lazyWithRetry(() => import('../../skills/components/SkillEditorModal'));
+// Loaded on first use too: the usage guide opens in it only from a start form
+// or compare mode.
+const UsageGuideDialog = lazyWithRetry(() => import('../../chat/components/UsageGuideDialog'));
 
 /**
  * The chat page of an app.
@@ -779,7 +796,8 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
     resetConversationState,
     addUserMessage,
     addAssistantMessage,
-    updateAssistantMessage
+    updateAssistantMessage,
+    removeMessage
   } = useAppChat({
     appId,
     chatId,
@@ -913,7 +931,10 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
 
   // A durable chat can be shared as a read-only link once it has a message.
   const chatShareOffered = chatSharingEnabled && serverBackedChat;
-  const chatShareReady = chatShareOffered && Boolean(chatId) && messages.length > 0;
+  // A usage guide exchange is local only (`isGreeting`): it is not stored, so it
+  // neither makes a chat shareable nor starts one below.
+  const chatShareReady =
+    chatShareOffered && Boolean(chatId) && messages.some(message => !message.isGreeting);
 
   // `/apps/:appId` always opens a new durable chat, so once this one has been
   // started the URL has to name it — otherwise a reload would leave it for a
@@ -924,7 +945,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
   // the bare route keeps the chat that was left — its id first, then its
   // messages — on screen for a render, and pinning it would send the user
   // straight back into it.
-  const chatStarted = messages.some(message => message.role === 'user');
+  const chatStarted = messages.some(message => message.role === 'user' && !message.isGreeting);
   useEffect(() => {
     if (
       embedded ||
@@ -1710,7 +1731,48 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
     }
   };
 
+  // Usage guide (issue #2838): the app's pre-written answer to "how do I use
+  // this app?", shown without a model call. In the chat it is a question and
+  // its answer, marked `isGreeting` so neither is sent to the model, stored or
+  // exported. The start form and compare mode have no single transcript to
+  // answer in, so there it opens in a viewer instead.
+  const usageGuide = useUsageGuide(app, currentLanguage);
+  const [usageGuideViewerOpen, setUsageGuideViewerOpen] = useState(false);
+  const showUsageGuide = () => {
+    if (!usageGuide.available) return;
+    if (showStartForm || compareModeActive) {
+      setUsageGuideViewerOpen(true);
+      return;
+    }
+    const pairId = uuidv4();
+    const answerId = `msg-${uuidv4()}`;
+    const mark = { isGreeting: true, usageGuide: pairId };
+    addUserMessage(usageGuide.question, mark);
+    addAssistantMessage(answerId);
+    updateAssistantMessage(answerId, usageGuide.content, false, {
+      ...mark,
+      outputFormat: 'markdown'
+    });
+  };
+  const renderUsageGuideButton = variant =>
+    usageGuide.available ? (
+      <UsageGuideButton
+        question={usageGuide.question}
+        onClick={showUsageGuide}
+        disabled={processing}
+        variant={variant}
+        opensDialog={showStartForm || compareModeActive}
+      />
+    ) : null;
+
   const handleDeleteMessage = messageId => {
+    // A guide exchange is not part of the conversation: removing it takes the
+    // question and its answer, and leaves the turns after it alone.
+    const pairId = messages.find(m => m.id === messageId)?.usageGuide;
+    if (pairId) {
+      messages.filter(m => m.usageGuide === pairId).forEach(m => removeMessage(m.id));
+      return;
+    }
     deleteMessage(messageId);
   };
 
@@ -2710,6 +2772,11 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
         // AI disclaimer shares the tight line below the input with the
         // ephemeral toggle; shown after the first submitted message.
         disclaimer={messages.length > 0 ? <AIDisclaimerBanner /> : null}
+        // Once the start screen with its centered guide button is gone, the
+        // guide stays one click away next to the input.
+        leadingAction={
+          messages.length > 0 || compareModeActive ? renderUsageGuideButton('inline') : null
+        }
       />
     );
   };
@@ -2760,6 +2827,9 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
             showModelSelector={modelSelectionAllowed}
             currentLanguage={currentLanguage}
           />
+          {usageGuide.available && (
+            <div className="flex justify-center mt-4">{renderUsageGuideButton('hint')}</div>
+          )}
         </div>
       </div>
     );
@@ -2980,7 +3050,8 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
                             handleStarterPromptClick,
                             hydrating,
                             chatModeResolving,
-                            t
+                            t,
+                            renderUsageGuideButton('hint')
                           )}
                         </div>
                       </div>
@@ -3032,7 +3103,8 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
                         handleStarterPromptClick,
                         hydrating,
                         chatModeResolving,
-                        t
+                        t,
+                        renderUsageGuideButton('hint')
                       )}
                     </div>
                   )}
@@ -3177,6 +3249,18 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
             name: savedSkillName
           })}
         </div>
+      )}
+      {/* Mounted while the app has a guide and opened by state, like the other
+          dialogs, so its focus trap sees the open transition. */}
+      {usageGuide.available && (
+        <Suspense fallback={null}>
+          <UsageGuideDialog
+            isOpen={usageGuideViewerOpen}
+            question={usageGuide.question}
+            content={usageGuide.content}
+            onClose={() => setUsageGuideViewerOpen(false)}
+          />
+        </Suspense>
       )}
       {showShare && (
         <ShareDialog

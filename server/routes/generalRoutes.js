@@ -9,6 +9,7 @@ import { buildServerPath, getRelativeRequestPath } from '../utils/basePath.js';
 import { findByIdCaseInsensitive } from '../utils/resourceLookup.js';
 import { getStorage, isStorageReady } from '../storage/bootstrap.js';
 import { describeWebSearchAvailability } from '../toolLoader.js';
+import { withoutUsageGuideContent } from '../utils/appUsageGuide.js';
 import {
   sendInternalError,
   sendFailedOperationError,
@@ -193,7 +194,7 @@ export default function registerGeneralRoutes(app, { getLocalizedError }) {
       }
 
       res.setHeader('ETag', userSpecificEtag);
-      res.json(apps);
+      res.json(withoutUsageGuideContent(apps));
     } catch (error) {
       return sendInternalError(res, error, 'fetch apps');
     }

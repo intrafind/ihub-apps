@@ -199,6 +199,21 @@ export const translateText = async ({ text, from, to }) => {
   return response.data;
 };
 
+/**
+ * Have the default model write a usage guide for an app (issue #2838).
+ * Nothing is stored.
+ * @param {Object} app - App configuration, possibly unsaved
+ * @param {string} language - Language code of the guide
+ * @returns {Promise<{content: string}>}
+ */
+export const generateAppUsageGuide = async (app, language) => {
+  const response = await makeAdminApiCall('/admin/apps/_usage-guide', {
+    method: 'POST',
+    body: { app, language }
+  });
+  return response.data;
+};
+
 export const toggleApps = async (ids, enabled) => {
   const idParam = Array.isArray(ids) ? ids.join(',') : ids;
   const response = await makeAdminApiCall(`/admin/apps/${idParam}/_toggle`, {
@@ -1014,6 +1029,7 @@ export const adminApi = {
   createPrompt,
   updatePrompt,
   translateText,
+  generateAppUsageGuide,
   toggleApps,
   reorderApps,
   fetchAdminPages,

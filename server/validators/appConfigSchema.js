@@ -56,6 +56,21 @@ const starterPromptSchema = z.object({
   autoSend: z.boolean().optional().prefault(false)
 });
 
+// Usage guide (issue #2838): pre-written "how to use this app" text, written
+// by an admin or generated once with a model in the app editor. The chat
+// offers `question` as a button and answers it with `content` as a local
+// exchange — no model call, and neither message is sent to the model. Kept in
+// the app itself so it travels with exports, backups and the marketplace.
+const usageGuideSchema = z
+  .object({
+    // Text of the button and of the question shown in the chat. An empty or
+    // missing language falls back to the built-in label.
+    question: z.record(z.string().regex(LANGUAGE_CODE_PATTERN), z.string()).optional(),
+    // The answer, as markdown per language.
+    content: localizedStringSchema
+  })
+  .optional();
+
 // Form-based start (issue #2581): a new chat opens with the app's variables,
 // plus a drop zone when uploads are on, as a form instead of the composer.
 // Submitting sends the `prompt` filled with the answers as the first user
@@ -442,6 +457,7 @@ const baseAppConfigSchema = z.object({
   features: featuresSchema.optional(),
   greeting: localizedGreetingSchema.optional(),
   starterPrompts: z.array(starterPromptSchema).optional(),
+  usageGuide: usageGuideSchema,
   sources: z.array(sourceReferenceSchema).optional(),
   allowedModels: z.array(z.string()).optional(),
   disallowModelSelection: z.boolean().optional().prefault(false),

@@ -96,6 +96,9 @@ function ChatInput({
   // Optional node (e.g. the AI disclaimer) rendered centered on the same
   // tight line as the ephemeral toggle, directly below the input box.
   disclaimer = null,
+  // Optional node (e.g. the usage guide button) rendered at the left of that
+  // line, opposite the ephemeral toggle.
+  leadingAction = null,
   // Per-message host-context toggles. Surfaced under the `+` menu when
   // the embedded host (Outlook taskpane / browser extension side panel)
   // declares any in its EmbeddedHostAdapter.contextToggles. Empty in the
@@ -973,9 +976,13 @@ function ChatInput({
         {/* Single tight line below the input: disclaimer centered, ephemeral
             (incognito) toggle right-aligned under the send button. The active
             "not saved" notice lives in the status line above the input. */}
-        {(ephemeralToggleAvailable || disclaimer) && (
+        {(ephemeralToggleAvailable || disclaimer || leadingAction) && (
           <div className="flex items-center justify-between gap-2 sm:grid sm:grid-cols-[1fr_auto_1fr]">
-            <span className="hidden sm:block" />
+            {leadingAction ? (
+              <div className="shrink-0 justify-self-start">{leadingAction}</div>
+            ) : (
+              <span className="hidden sm:block" />
+            )}
             <div className="min-w-0 flex-1 text-center sm:flex-none">{disclaimer}</div>
             <div className="shrink-0 justify-self-end">
               {ephemeralToggleAvailable && (

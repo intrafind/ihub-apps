@@ -1364,7 +1364,9 @@ function ChatMessage({
             </button>
           )}
 
-          {isUser && editable && (
+          {/* A usage guide question was never sent: nothing to edit, resend,
+              link to or schedule. */}
+          {isUser && editable && !message.usageGuide && (
             <>
               {/* A transcription turn's audio is not kept: nothing to edit, resend or
                   link to (a link would send its name, not the recording). */}
@@ -1408,7 +1410,7 @@ function ChatMessage({
             </>
           )}
 
-          {isUser && !readOnly && onSaveAsPrompt && (
+          {isUser && !readOnly && onSaveAsPrompt && !message.usageGuide && (
             <button
               onClick={() => onSaveAsPrompt(getEditableContent())}
               className="flex items-center gap-1 hover:text-indigo-600 transition-colors duration-150"
@@ -1429,22 +1431,48 @@ function ChatMessage({
             </button>
           )}
 
-          {/* Add star rating for AI responses only */}
-          {feedbackEnabled && !readOnly && !isUser && !isError && !message.loading && (
-            <>
-              {!compact && <div className="mx-2 h-4 border-l border-gray-300"></div>}
-              <div className="flex items-center gap-2">
-                <StarRating
-                  rating={activeFeedback}
-                  onRatingChange={handleStarRatingClick}
-                  allowHalfStars
-                  size="w-4 h-4"
-                  showTooltip
-                  className="shrink-0"
-                />
-              </div>
-            </>
+          {/* A usage guide answer is pre-written and never reached the model:
+              say so, where an AI answer would offer its rating. */}
+          {!isUser && message.usageGuide && (
+            <span
+              className="inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-gray-100 dark:bg-gray-700 px-2 py-0.5 text-xs text-gray-600 dark:text-gray-300"
+              title={t(
+                'usageGuide.badgeHint',
+                "Written by the app's administrators. Not sent to the AI, so follow-up questions can't refer to it."
+              )}
+            >
+              <Icon name="information-circle" size="sm" aria-hidden="true" />
+              {t('usageGuide.badge', 'Usage guide · pre-written')}
+              <span className="sr-only">
+                {t(
+                  'usageGuide.badgeHint',
+                  "Written by the app's administrators. Not sent to the AI, so follow-up questions can't refer to it."
+                )}
+              </span>
+            </span>
           )}
+
+          {/* Add star rating for AI responses only */}
+          {feedbackEnabled &&
+            !readOnly &&
+            !isUser &&
+            !isError &&
+            !message.loading &&
+            !message.usageGuide && (
+              <>
+                {!compact && <div className="mx-2 h-4 border-l border-gray-300"></div>}
+                <div className="flex items-center gap-2">
+                  <StarRating
+                    rating={activeFeedback}
+                    onRatingChange={handleStarRatingClick}
+                    allowHalfStars
+                    size="w-4 h-4"
+                    showTooltip
+                    className="shrink-0"
+                  />
+                </div>
+              </>
+            )}
         </div>
       </div>
 

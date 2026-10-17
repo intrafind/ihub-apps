@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import StarterPromptsSection from './app-form/StarterPromptsSection';
+import UsageGuideSection from './app-form/UsageGuideSection';
 import ToolsConfigSection from './app-form/ToolsConfigSection';
 import McpToolsConfigSection from './app-form/McpToolsConfigSection';
 import SkillsConfigSection from './app-form/SkillsConfigSection';
@@ -267,6 +268,9 @@ function AppFormEditor({
 
             {/* Starter Prompts */}
             <StarterPromptsSection app={app} onChange={onChange} />
+
+            {/* Usage Guide */}
+            <UsageGuideSection app={app} onChange={onChange} />
 
             {/* Upload Configuration */}
             <UploadConfigSection

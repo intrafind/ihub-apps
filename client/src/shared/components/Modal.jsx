@@ -13,7 +13,9 @@ function Modal({
   maxWidthClassName = 'max-w-lg',
   closeOnBackdropClick = true,
   initialFocusRef,
-  panelClassName = ''
+  panelClassName = '',
+  // Id of the element that names the dialog (its heading).
+  labelledBy
 }) {
   const containerRef = useRef(null);
 
@@ -48,6 +50,7 @@ function Modal({
         ref={containerRef}
         role="dialog"
         aria-modal="true"
+        aria-labelledby={labelledBy}
         className={`relative bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-h-[90vh] overflow-hidden flex flex-col ${maxWidthClassName} ${panelClassName}`}
       >
         {children}

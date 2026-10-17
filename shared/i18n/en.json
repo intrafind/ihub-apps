@@ -2916,7 +2916,22 @@
         "dictationModelHint": "The microphone streams through the iHub server to this transcription model. Users need access to the model through their groups.",
         "dictationModelUnavailable": "This model is disabled, no longer exists or does not stream, so voice input fails in this app.",
         "websearchMaxPageReads": "Max Page Reads per Answer",
-        "websearchMaxPageReadsDesc": "Caps how many pages the model may open with the page reader for one answer. Pages the search itself fetches for its excerpts do not count. 1–50, default 5."
+        "websearchMaxPageReadsDesc": "Caps how many pages the model may open with the page reader for one answer. Pages the search itself fetches for its excerpts do not count. 1–50, default 5.",
+        "usageGuide": {
+          "title": "Usage Guide",
+          "description": "A pre-written answer to \"How do I use this app?\". Users open it from a button in the chat. No model is called, and the guide is not sent to the model, so it costs nothing and leaves the context window free.",
+          "language": "Language",
+          "generate": "Generate with AI",
+          "regenerate": "Regenerate with AI",
+          "generating": "Generating…",
+          "write": "Write manually",
+          "delete": "Delete guide",
+          "generateHint": "Generating uses the default model once, with this form as it is now. Review the text — it is stored when you save the app.",
+          "question": "Button text / question",
+          "content": "Guide (Markdown)",
+          "confirmRegenerate": "Replace the current guide text for this language with a newly generated one?",
+          "confirmDelete": "Delete the usage guide of this app?"
+        }
       },
       "reorder": "Reorder",
       "reorderHelp": "Drag a row or use the arrows to set the order apps appear in for users — in the apps browser, on the start page and in the sidebar. Every app is listed, so search and filters do not apply here. Nothing is saved until you choose \"Save order\".",
@@ -5775,5 +5790,12 @@
     "keepEditing": "Keep editing",
     "versionConflict": "Conflict: memory was modified elsewhere. Reload to see the latest.",
     "staleNotice": "The notes changed since you started editing (a run may have updated them)."
+  },
+  "usageGuide": {
+    "question": "How do I use this app?",
+    "inlineLabel": "Usage guide",
+    "badge": "Usage guide · pre-written",
+    "badgeHint": "Written by the app's administrators. Not sent to the AI, so follow-up questions can't refer to it.",
+    "inlineLabelShort": "Guide"
   }
 }
