@@ -46,6 +46,7 @@ describe('initialVoiceModeState', () => {
       muted: false,
       userCaption: { text: '', final: false },
       assistantCaption: '',
+      spokenChars: null,
       toolStatus: null,
       error: null,
       notice: null,
@@ -740,5 +741,74 @@ describe('settings and unknown actions', () => {
     const state = Object.freeze({ ...thinking() });
     expect(() => voiceModeReducer(state, { type: 'BARGE_IN' })).not.toThrow();
     expect(state.status).toBe(S.THINKING);
+  });
+});
+
+describe('how much of the answer has been spoken', () => {
+  const answer = 'It is sunny today. Tomorrow it rains.';
+  const playing = () =>
+    run(thinking(), { type: 'ASSISTANT_TEXT', text: answer }, 'PLAYBACK_STARTED');
+
+  test('is not marked until the audio plays, and starts at nothing spoken', () => {
+    const waiting = run(thinking(), { type: 'ASSISTANT_TEXT', text: answer });
+    expect(waiting.spokenChars).toBeNull();
+    expect(playing().spokenChars).toBe(0);
+  });
+
+  test('moves forward with the audio and never back', () => {
+    const state = run(playing(), { type: 'SPOKEN_PROGRESS', chars: 8 });
+    expect(state.spokenChars).toBe(8);
+    expect(run(state, { type: 'SPOKEN_PROGRESS', chars: 18 }).spokenChars).toBe(18);
+    expect(run(state, { type: 'SPOKEN_PROGRESS', chars: 3 })).toBe(state);
+    expect(run(state, { type: 'SPOKEN_PROGRESS', chars: 8 })).toBe(state);
+  });
+
+  test('cannot pass the end of the caption, and ignores what is no number', () => {
+    expect(run(playing(), { type: 'SPOKEN_PROGRESS', chars: 9999 }).spokenChars).toBe(
+      answer.length
+    );
+    const state = playing();
+    expect(run(state, { type: 'SPOKEN_PROGRESS', chars: Number.NaN })).toBe(state);
+    expect(run(state, { type: 'SPOKEN_PROGRESS' })).toBe(state);
+  });
+
+  test('is only taken while speaking', () => {
+    const state = thinking();
+    expect(run(state, { type: 'SPOKEN_PROGRESS', chars: 5 })).toBe(state);
+    const listeningState = listening();
+    expect(run(listeningState, { type: 'SPOKEN_PROGRESS', chars: 5 })).toBe(listeningState);
+  });
+
+  test('stays put while more of the answer arrives, and is cut back if the text shrinks', () => {
+    const state = run(playing(), { type: 'SPOKEN_PROGRESS', chars: 12 });
+    expect(run(state, { type: 'ASSISTANT_TEXT', text: `${answer} More.` }).spokenChars).toBe(12);
+    expect(run(state, { type: 'ASSISTANT_TEXT', text: 'It is' }).spokenChars).toBe(5);
+  });
+
+  test('is cleared when the audio has all played, so the caption is not marked any more', () => {
+    const state = run(playing(), { type: 'SPOKEN_PROGRESS', chars: 12 });
+    expect(run(state, 'RUN_ENDED', 'PLAYBACK_DRAINED').spokenChars).toBeNull();
+    expect(run(state, 'PLAYBACK_DRAINED').spokenChars).toBeNull();
+  });
+
+  test.each([
+    ['a barge-in', { type: 'BARGE_IN' }],
+    ['a tap on the orb', { type: 'BARGE_IN', force: true }],
+    ['muting', { type: 'MUTE' }],
+    ['an error', { type: 'ERROR', code: 'closed' }]
+  ])('is cleared by %s', (_name, action) => {
+    const state = run(playing(), { type: 'SPOKEN_PROGRESS', chars: 12 });
+    expect(run(state, action).spokenChars).toBeNull();
+  });
+
+  test('is cleared when a new turn is sent and when a session is retried', () => {
+    const state = run(playing(), { type: 'SPOKEN_PROGRESS', chars: 12 }, 'RUN_ENDED');
+    const next = run(state, 'PLAYBACK_DRAINED', 'SPEECH_START', 'TURN_ENDED', {
+      type: 'FINAL',
+      text: 'And the day after?'
+    });
+    expect(run(next, 'SENT').spokenChars).toBeNull();
+    const failed = run(playing(), { type: 'ERROR', code: 'closed' }, 'RETRY');
+    expect(failed.spokenChars).toBeNull();
   });
 });

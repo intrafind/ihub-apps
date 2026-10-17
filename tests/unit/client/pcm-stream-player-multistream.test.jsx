@@ -537,3 +537,143 @@ describe('PcmStreamPlayer multi-stream mode', () => {
     expect(player.getRecording().bytes).toBe(pcm(0.5).byteLength);
   });
 });
+
+describe('PcmStreamPlayer.progress', () => {
+  /** The first buffer starts this long after the clock's time when it was scheduled. */
+  const LEAD = 0.05;
+  const enqueue = (player, stream, tag) =>
+    player.enqueueStream(async () => stream.response, { tag });
+  const at = (context, seconds) => {
+    context.currentTime = seconds;
+  };
+
+  test('knows nothing before the first audio', () => {
+    const { player } = multiPlayer();
+    expect(player.progress()).toBeNull();
+  });
+
+  test('says which stream is audible and how far into it the playhead is', async () => {
+    const { context, player } = multiPlayer();
+    await Promise.all([
+      enqueue(player, finished(1), 'a'),
+      enqueue(player, finished(2), 'b'),
+      enqueue(player, finished(0.5), 'c')
+    ]);
+
+    at(context, 0);
+    expect(player.progress()).toEqual({
+      tag: 'a',
+      playedSeconds: expect.closeTo(0, 3),
+      knownSeconds: 1,
+      complete: true
+    });
+    at(context, LEAD + 0.5);
+    expect(player.progress()).toMatchObject({
+      tag: 'a',
+      playedSeconds: expect.closeTo(0.5, 3),
+      knownSeconds: 1
+    });
+    // A buffer that straddles two streams (stream b starts at 1 s) is split correctly.
+    at(context, LEAD + 1);
+    expect(player.progress()).toMatchObject({
+      tag: 'b',
+      playedSeconds: expect.closeTo(0, 3),
+      knownSeconds: 2
+    });
+    at(context, LEAD + 2.5);
+    expect(player.progress()).toMatchObject({
+      tag: 'b',
+      playedSeconds: expect.closeTo(1.5, 3),
+      knownSeconds: 2
+    });
+    at(context, LEAD + 3.25);
+    expect(player.progress()).toMatchObject({
+      tag: 'c',
+      playedSeconds: expect.closeTo(0.25, 3),
+      knownSeconds: 0.5
+    });
+    // Everything has played: the last stream is at its end.
+    at(context, LEAD + 10);
+    expect(player.progress()).toMatchObject({
+      tag: 'c',
+      playedSeconds: expect.closeTo(0.5, 3),
+      knownSeconds: 0.5
+    });
+  });
+
+  test('a stream that is still arriving is not complete and its known length grows', async () => {
+    const { context, player } = multiPlayer();
+    const first = controlled();
+    const pending = enqueue(player, first, 'a');
+    first.push(pcm(0.5));
+    await flush();
+    at(context, LEAD + 0.25);
+    expect(player.progress()).toEqual({
+      tag: 'a',
+      playedSeconds: expect.closeTo(0.25, 3),
+      knownSeconds: 0.5,
+      complete: false
+    });
+    first.push(pcm(0.5));
+    await flush();
+    expect(player.progress()).toMatchObject({ knownSeconds: 1, complete: false });
+    first.end();
+    await pending;
+    expect(player.progress()).toMatchObject({ knownSeconds: 1, complete: true });
+  });
+
+  test('a stream that gave no audio is passed over', async () => {
+    const { context, player } = multiPlayer();
+    const empty = controlled();
+    empty.end();
+    const failing = controlled();
+    failing.fail(new Error('boom'));
+    await Promise.all([
+      enqueue(player, finished(1), 'a'),
+      enqueue(player, empty, 'empty'),
+      enqueue(player, failing, 'failed'),
+      enqueue(player, finished(1), 'd')
+    ]);
+    at(context, LEAD + 0.9);
+    expect(player.progress().tag).toBe('a');
+    at(context, LEAD + 1.1);
+    expect(player.progress()).toMatchObject({ tag: 'd', playedSeconds: expect.closeTo(0.1, 3) });
+  });
+
+  test('a half sample at the end of a stream does not shift the next stream', async () => {
+    const { context, player } = multiPlayer();
+    const odd = controlled();
+    odd.push(pcm(1));
+    odd.push(new Uint8Array(1));
+    odd.end();
+    await Promise.all([enqueue(player, odd, 'odd'), enqueue(player, finished(1), 'next')]);
+    at(context, LEAD + 1 - 0.01);
+    expect(player.progress().tag).toBe('odd');
+    at(context, LEAD + 1 + 0.01);
+    expect(player.progress()).toMatchObject({ tag: 'next' });
+  });
+
+  test('reports the position again and again as the clock runs, without losing track', async () => {
+    const { context, player } = multiPlayer();
+    await Promise.all([enqueue(player, finished(1), 'a'), enqueue(player, finished(1), 'b')]);
+    const seen = [];
+    for (let t = 0; t <= 2.2; t += 0.1) {
+      at(context, t);
+      const { tag, playedSeconds } = player.progress();
+      seen.push(`${tag}${Math.round(playedSeconds * 10)}`);
+    }
+    expect(seen[0]).toBe('a0');
+    expect(seen[seen.length - 1]).toBe('b10');
+    // The stream tags only ever advance.
+    const tags = seen.map(entry => entry[0]).join('');
+    expect(tags).toMatch(/^a+b+$/);
+  });
+
+  test('forgets everything when stopped', async () => {
+    const { context, player } = multiPlayer();
+    await enqueue(player, finished(1), 'a');
+    player.stop();
+    at(context, 0.5);
+    expect(player.progress()).toBeNull();
+  });
+});

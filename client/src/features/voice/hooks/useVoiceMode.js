@@ -537,6 +537,15 @@ export function useVoiceMode({
     [send]
   );
 
+  /** The audio has got this far into the caption's text: mark it as spoken. */
+  const handleSpeechProgress = useCallback(
+    (generation, chars) => {
+      if (generation !== generationRef.current) return;
+      send({ type: 'SPOKEN_PROGRESS', chars });
+    },
+    [send]
+  );
+
   const handleSpeechTiming = useCallback((stage, ms) => {
     const timing = turnRef.current?.timing;
     if (stage === 'firstChunk' && timing && !timing.firstChunk) {
@@ -560,6 +569,7 @@ export function useVoiceMode({
         onSpeakingStart: () => handleSpeakingStart(generation),
         onDrained: () => handleDrained(generation),
         onError: error => handleSpeechError(generation, error),
+        onProgress: chars => handleSpeechProgress(generation, chars),
         onTiming: handleSpeechTiming
       });
     } catch (error) {
@@ -596,6 +606,7 @@ export function useVoiceMode({
     handleSessionEvent,
     handleSpeakingStart,
     handleSpeechError,
+    handleSpeechProgress,
     handleSpeechTiming,
     send
   ]);

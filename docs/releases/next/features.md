@@ -17,7 +17,7 @@ model with later messages, so it costs nothing and leaves the context window fre
 
 Users can now talk to an app and hear it answer. A waveform button next to Send opens a spoken
 conversation in the same chat: speak, pause, and the app answers out loud, and speaking while it
-answers interrupts it. Captions show both sides, and the conversation stays in the chat history.
+answers interrupts it. Captions show both sides, the answer's text marks how far it has been spoken, and the conversation stays in the chat history.
 Audio is never stored; it goes only to the speech service the app already uses for voice input
 (a transcription model, Azure Speech or the browser).
 

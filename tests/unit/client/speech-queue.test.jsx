@@ -1034,3 +1034,182 @@ describe('the default chunker', () => {
     expect(requests[1].body.text.startsWith('Another sentence about apples')).toBe(true);
   });
 });
+
+describe('how far the answer has been spoken', () => {
+  /** Only the progress ticker runs on fake time; the tests' own `flush` stays real. */
+  const FAKE_TIMERS = {
+    doNotFake: [
+      'Date',
+      'hrtime',
+      'nextTick',
+      'performance',
+      'queueMicrotask',
+      'requestAnimationFrame',
+      'cancelAnimationFrame',
+      'requestIdleCallback',
+      'cancelIdleCallback',
+      'setImmediate',
+      'clearImmediate',
+      'setTimeout',
+      'clearTimeout'
+    ]
+  };
+  const LEAD = 0.05;
+  const TEXT = 'First one. Second one. ';
+
+  beforeEach(() => jest.useFakeTimers(FAKE_TIMERS));
+  afterEach(() => jest.useRealTimers());
+
+  /** A queue that reports progress; `spoken` collects what it says, `tick` runs the clock. */
+  function progressQueue(opts = {}) {
+    const spoken = [];
+    const made = makeQueue({ onProgress: chars => spoken.push(chars), ...opts });
+    const tick = seconds => {
+      made.ctx.currentTime = seconds;
+      jest.advanceTimersByTime(100);
+    };
+    return { ...made, spoken, tick };
+  }
+
+  /** Start the two-chunk answer and let both chunks arrive, a second of audio each. */
+  async function playTwoChunks(made) {
+    made.queue.update(TEXT, { final: true });
+    await flush();
+    requests[0].complete(1);
+    await flush();
+    requests[1].complete(1);
+    await flush();
+  }
+
+  test('follows the audio through the text, whole words at a time', async () => {
+    const made = progressQueue();
+    await playTwoChunks(made);
+
+    made.tick(LEAD + 0.2);
+    // 20% of "First one." is "Fi": no word is complete yet.
+    expect(made.spoken).toEqual([]);
+    made.tick(LEAD + 0.5);
+    // Half of it: "First" has been said.
+    expect(made.spoken).toEqual([5]);
+    expect(TEXT.slice(0, 5)).toBe('First');
+    made.tick(LEAD + 1);
+    // The second chunk begins: the first one is all said.
+    expect(made.spoken.at(-1)).toBe(11);
+    made.tick(LEAD + 1.75);
+    expect(made.spoken.at(-1)).toBe(17);
+    expect(TEXT.slice(0, 17)).toBe('First one. Second');
+  });
+
+  test('says nothing more while the position does not move, and never goes back', async () => {
+    const made = progressQueue();
+    await playTwoChunks(made);
+    made.tick(LEAD + 1.75);
+    const count = made.spoken.length;
+    made.tick(LEAD + 1.75);
+    made.tick(LEAD + 1.75);
+    expect(made.spoken).toHaveLength(count);
+    made.tick(LEAD + 1.2);
+    expect(made.spoken).toHaveLength(count);
+    expect(made.spoken).toEqual([...made.spoken].sort((a, b) => a - b));
+  });
+
+  test('a chunk still arriving is placed by the speaking pace', async () => {
+    const made = progressQueue();
+    made.queue.update('A sentence that is quite long indeed. ', { final: true });
+    await flush();
+    // 0.5 s of audio so far; the chunk's 38 characters need about 2.5 s.
+    const stream = requests[0].respond();
+    stream.push(pcm(0.5));
+    await flush();
+    made.tick(LEAD + 0.5);
+    // A fifth of 38 characters: "A sentence" is 10 of them.
+    expect(made.spoken.at(-1)).toBeGreaterThan(0);
+    expect(made.spoken.at(-1)).toBeLessThan(15);
+  });
+
+  test('text said by `say()` is not part of the answer and does not move the position', async () => {
+    const made = progressQueue();
+    made.queue.update('Hello there. ', { final: false });
+    await flush();
+    requests[0].complete(1);
+    await flush();
+    made.queue.say('Do you want tea?', { final: true });
+    await flush();
+    requests[1].complete(1);
+    await flush();
+    made.queue.update('Hello there. ', { final: true });
+
+    made.tick(LEAD + 1);
+    const atEndOfAnswer = made.spoken.at(-1);
+    expect(atEndOfAnswer).toBe('Hello there.'.length);
+    made.tick(LEAD + 1.5);
+    expect(made.spoken.at(-1)).toBe(atEndOfAnswer);
+  });
+
+  test('a chunk that failed is passed over when the next one begins', async () => {
+    const made = progressQueue({ onError: () => {} });
+    made.queue.update('One two. Three four. Five six. ', { final: true });
+    await flush();
+    requests[0].complete(1);
+    await flush();
+    requests[1].fail(500, 'boom');
+    requests[2].complete(1);
+    await flush();
+    made.tick(LEAD + 0.5);
+    expect(made.spoken.at(-1)).toBeLessThanOrEqual(7);
+    made.tick(LEAD + 1);
+    // The second sentence has no audio; the third is the one playing now.
+    expect(made.spoken.at(-1)).toBe('One two. Three four. '.length);
+  });
+
+  test('stops with the answer: drained, interrupted or disposed', async () => {
+    const drained = progressQueue();
+    await playTwoChunks(drained);
+    expect(jest.getTimerCount()).toBe(1);
+    playToEnd(drained.ctx);
+    expect(drained.events).toContain('drained');
+    expect(jest.getTimerCount()).toBe(0);
+
+    const interrupted = progressQueue();
+    await playTwoChunks(interrupted);
+    interrupted.queue.interrupt();
+    expect(jest.getTimerCount()).toBe(0);
+    const before = interrupted.spoken.length;
+    interrupted.tick(LEAD + 1.75);
+    expect(interrupted.spoken).toHaveLength(before);
+
+    const disposed = progressQueue();
+    await playTwoChunks(disposed);
+    disposed.queue.dispose();
+    expect(jest.getTimerCount()).toBe(0);
+  });
+
+  test('starts no timer without a listener, nor before there is audio', async () => {
+    const quiet = makeQueue();
+    await playTwoChunks({ ...quiet });
+    expect(jest.getTimerCount()).toBe(0);
+    quiet.queue.dispose();
+
+    const waiting = progressQueue();
+    waiting.queue.update(TEXT, { final: true });
+    await flush();
+    // The request is out, but no audio has come back.
+    expect(jest.getTimerCount()).toBe(0);
+  });
+
+  test('a new answer starts again from the beginning of its own text', async () => {
+    const made = progressQueue();
+    await playTwoChunks(made);
+    made.tick(LEAD + 1.75);
+    playToEnd(made.ctx);
+    made.spoken.length = 0;
+    made.ctx.currentTime = 0;
+
+    made.queue.update('Brand new. ', { final: true });
+    await flush();
+    requests[2].complete(1);
+    await flush();
+    made.tick(LEAD + 0.6);
+    expect(made.spoken.at(-1)).toBeLessThanOrEqual('Brand new.'.length);
+  });
+});

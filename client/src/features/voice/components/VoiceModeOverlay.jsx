@@ -201,6 +201,35 @@ function SettingsPopover({ voiceMode, onClose, id, labelledBy, triggerRef }) {
 }
 
 /**
+ * The app's answer as a caption. While it is being played, the part that has
+ * been spoken keeps the accent colour and the part still to come is muted, so
+ * the reader can follow along. The two differ in lightness as well as in hue
+ * (both pass AA contrast), so the mark does not depend on seeing colours. `spoken` is the number of characters said;
+ * null (or all of them) means no marking.
+ *
+ * @param {Object} props
+ * @param {string} props.text
+ * @param {number|null} [props.spoken]
+ * @param {{ current: HTMLElement|null }} props.boundaryRef - Set on the part still to come.
+ */
+function AssistantCaption({ text, spoken, boundaryRef }) {
+  const accent = 'mt-2 text-indigo-800 dark:text-indigo-200';
+  if (typeof spoken !== 'number' || spoken >= text.length) return <p className={accent}>{text}</p>;
+  return (
+    <p className={accent}>
+      {text.slice(0, spoken)}
+      <span
+        ref={boundaryRef}
+        data-testid="voice-mode-caption-unspoken"
+        className="text-gray-500 dark:text-gray-400"
+      >
+        {text.slice(spoken)}
+      </span>
+    </p>
+  );
+}
+
+/**
  * The voice view: it covers the message area (the header stays visible) while
  * voice mode is open. An orb that follows the microphone and the app's speech,
  * the state in words, live captions, and the controls — Mute, Hold to talk
@@ -222,6 +251,8 @@ export default function VoiceModeOverlay({ voiceMode, appName = '' }) {
   const rootRef = useRef(null);
   const orbRef = useRef(null);
   const captionRef = useRef(null);
+  // The part of the answer that has not been spoken yet (while it is marked).
+  const unspokenRef = useRef(null);
   const settingsButtonRef = useRef(null);
   const holdButtonRef = useRef(null);
   const retryRef = useRef(null);
@@ -340,11 +371,20 @@ export default function VoiceModeOverlay({ voiceMode, appName = '' }) {
     };
   }, [pushToTalk, ready, settingsOpen, beginHold, endHold, closeSettings, voiceMode]);
 
-  // Keep the newest words of the answer in view.
+  // Keep what is being read out in view: the spot the speech has reached while
+  // the answer is marked (the text runs ahead of the voice), else the newest words.
   useEffect(() => {
     const element = captionRef.current;
-    if (element) element.scrollTop = element.scrollHeight;
-  }, [state.assistantCaption]);
+    if (!element) return;
+    const unspoken = unspokenRef.current;
+    if (typeof state.spokenChars === 'number' && unspoken) {
+      const top = unspoken.getBoundingClientRect().top - element.getBoundingClientRect().top;
+      const height = element.clientHeight;
+      if (top < height * 0.1 || top > height * 0.7) element.scrollTop += top - height * 0.4;
+    } else {
+      element.scrollTop = element.scrollHeight;
+    }
+  }, [state.assistantCaption, state.spokenChars]);
 
   // A button clicked with the mouse keeps the focus, and then Space would press
   // it again instead of talking. Keyboard users (detail 0) stay where they are.
@@ -526,9 +566,11 @@ export default function VoiceModeOverlay({ voiceMode, appName = '' }) {
                 </p>
               )}
               {state.assistantCaption && (
-                <p className="mt-2 text-indigo-700 dark:text-indigo-300">
-                  {state.assistantCaption}
-                </p>
+                <AssistantCaption
+                  text={state.assistantCaption}
+                  spoken={state.spokenChars}
+                  boundaryRef={unspokenRef}
+                />
               )}
             </div>
           )}

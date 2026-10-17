@@ -635,3 +635,117 @@ describe('layout that jsdom cannot measure', () => {
     expect(overlayRoot().querySelector('footer').className).toMatch(/\bshrink-0\b/);
   });
 });
+
+describe('the answer as a caption', () => {
+  const answer = 'It is sunny today. Tomorrow it rains.';
+  const captions = () => screen.getByTestId('voice-mode-captions');
+  const unspoken = () => screen.queryByTestId('voice-mode-caption-unspoken');
+
+  test('is shown whole, unmarked, while nothing has been said', () => {
+    renderOverlay({
+      status: VOICE_STATUS.THINKING,
+      state: { assistantCaption: answer, spokenChars: null, runActive: true }
+    });
+    expect(captions()).toHaveTextContent(answer);
+    expect(unspoken()).toBeNull();
+  });
+
+  test('marks what has been spoken and mutes the rest', () => {
+    renderOverlay({
+      status: VOICE_STATUS.SPEAKING,
+      state: { assistantCaption: answer, spokenChars: 18 }
+    });
+    // The words together still read as the whole answer.
+    expect(captions()).toHaveTextContent(answer);
+    expect(unspoken()).toHaveTextContent('Tomorrow it rains.');
+    expect(unspoken().textContent).toBe(answer.slice(18));
+    expect(unspoken()).toHaveClass('text-gray-500');
+    expect(unspoken().parentElement).toHaveClass('text-indigo-800');
+    expect(unspoken().parentElement.firstChild.textContent).toBe(answer.slice(0, 18));
+  });
+
+  test('has everything still to come when the audio has just begun', () => {
+    renderOverlay({
+      status: VOICE_STATUS.SPEAKING,
+      state: { assistantCaption: answer, spokenChars: 0 }
+    });
+    expect(unspoken().textContent).toBe(answer);
+  });
+
+  test('moves the mark along as the voice goes on, without a new element', () => {
+    const view = renderOverlay({
+      status: VOICE_STATUS.SPEAKING,
+      state: { assistantCaption: answer, spokenChars: 5 }
+    });
+    const element = unspoken();
+    view.update({
+      status: VOICE_STATUS.SPEAKING,
+      state: { assistantCaption: answer, spokenChars: 18 }
+    });
+    expect(unspoken()).toBe(element);
+    expect(unspoken().textContent).toBe(answer.slice(18));
+  });
+
+  test('has no mark once it has all been said', () => {
+    const view = renderOverlay({
+      status: VOICE_STATUS.SPEAKING,
+      state: { assistantCaption: answer, spokenChars: 18 }
+    });
+    view.update({
+      status: VOICE_STATUS.SPEAKING,
+      state: { assistantCaption: answer, spokenChars: answer.length }
+    });
+    expect(unspoken()).toBeNull();
+    expect(captions()).toHaveTextContent(answer);
+  });
+
+  test('is not marked when it is not played (muted), whatever the state says', () => {
+    renderOverlay({
+      status: VOICE_STATUS.PAUSED,
+      state: { assistantCaption: answer, spokenChars: null, runActive: true, muted: true }
+    });
+    expect(unspoken()).toBeNull();
+  });
+
+  test('keeps the line being spoken in view while the text runs ahead of the voice', () => {
+    const view = renderOverlay({
+      status: VOICE_STATUS.SPEAKING,
+      state: { assistantCaption: answer, spokenChars: 5 }
+    });
+    const box = captions();
+    // A box 100 px high, the spot being read 200 px down inside it.
+    Object.defineProperty(box, 'clientHeight', { configurable: true, value: 100 });
+    box.getBoundingClientRect = () => ({ top: 0 });
+    unspoken().getBoundingClientRect = () => ({ top: 200 });
+    box.scrollTop = 0;
+    view.update({
+      status: VOICE_STATUS.SPEAKING,
+      state: { assistantCaption: answer, spokenChars: 8 }
+    });
+    // Put 40% of the way down the box: 200 - 40.
+    expect(box.scrollTop).toBe(160);
+  });
+
+  test('scrolls to the newest words when it is not marked', () => {
+    const view = renderOverlay({
+      status: VOICE_STATUS.THINKING,
+      state: { assistantCaption: 'First', spokenChars: null, runActive: true }
+    });
+    const box = captions();
+    Object.defineProperty(box, 'scrollHeight', { configurable: true, value: 500 });
+    view.update({
+      status: VOICE_STATUS.THINKING,
+      state: { assistantCaption: 'First and more', spokenChars: null, runActive: true }
+    });
+    expect(box.scrollTop).toBe(500);
+  });
+
+  test('a state from before the mark existed still shows the answer', () => {
+    renderOverlay({
+      status: VOICE_STATUS.SPEAKING,
+      state: { assistantCaption: answer, spokenChars: undefined }
+    });
+    expect(captions()).toHaveTextContent(answer);
+    expect(unspoken()).toBeNull();
+  });
+});

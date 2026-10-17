@@ -1403,3 +1403,81 @@ describe('the timing of a turn', () => {
     expect(reports()).toHaveLength(0);
   });
 });
+
+describe('marking what has been spoken of the answer', () => {
+  const ANSWER = 'It is sunny today. Tomorrow it rains.';
+
+  /** An answer that is complete and playing. */
+  async function playingAnswer() {
+    const hook = setup();
+    await startAndReady(hook);
+    await speakTurn();
+    hook.setProps({
+      messages: [USER, assistant({ content: ANSWER, loading: false })],
+      processing: false
+    });
+    act(() => mockHandlers.queue.onSpeakingStart());
+    return hook;
+  }
+
+  test('the queue is given a progress listener', async () => {
+    const hook = setup();
+    await startAndReady(hook);
+    expect(mockHandlers.queue.onProgress).toEqual(expect.any(Function));
+  });
+
+  test('the caption has nothing marked until the audio plays, then follows it', async () => {
+    const hook = setup();
+    await startAndReady(hook);
+    await speakTurn();
+    hook.setProps({
+      messages: [USER, assistant({ content: ANSWER, loading: false })],
+      processing: false
+    });
+    expect(hook.result.current.state.spokenChars).toBeNull();
+
+    act(() => mockHandlers.queue.onSpeakingStart());
+    expect(hook.result.current.state.spokenChars).toBe(0);
+    act(() => mockHandlers.queue.onProgress(5));
+    expect(hook.result.current.state.spokenChars).toBe(5);
+    act(() => mockHandlers.queue.onProgress(18));
+    expect(hook.result.current.state.spokenChars).toBe(18);
+    expect(hook.result.current.state.assistantCaption).toBe(ANSWER);
+  });
+
+  test('the mark is gone once the audio has drained', async () => {
+    const hook = await playingAnswer();
+    act(() => mockHandlers.queue.onProgress(18));
+    act(() => mockHandlers.queue.onDrained());
+    expect(hook.result.current.state.spokenChars).toBeNull();
+    expect(status(hook)).toBe('listening');
+  });
+
+  test('stopping the answer clears the mark: by speaking over it and by a tap on the orb', async () => {
+    const spoken = await playingAnswer();
+    act(() => mockHandlers.queue.onProgress(18));
+    emit({ type: 'barge-in' });
+    expect(spoken.result.current.state.spokenChars).toBeNull();
+
+    const tapped = await playingAnswer();
+    act(() => mockHandlers.queue.onProgress(18));
+    act(() => tapped.result.current.interrupt());
+    expect(tapped.result.current.state.spokenChars).toBeNull();
+  });
+
+  test('muting clears it: the rest of the answer is only text', async () => {
+    const hook = await playingAnswer();
+    act(() => mockHandlers.queue.onProgress(18));
+    act(() => hook.result.current.setMuted(true));
+    expect(hook.result.current.state.spokenChars).toBeNull();
+  });
+
+  test('progress of a session that was ended is not shown in the next one', async () => {
+    const hook = await playingAnswer();
+    const staleQueue = mockHandlers.queue;
+    act(() => hook.result.current.end('user'));
+    await startAndReady(hook);
+    act(() => staleQueue.onProgress(10));
+    expect(hook.result.current.state.spokenChars).toBeNull();
+  });
+});

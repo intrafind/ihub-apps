@@ -82,6 +82,11 @@ export function isDroppedTranscript(text) {
  *
  * `notice` is a hint the overlay shows next to the status: `'tts-failed'` (the
  * answer could not be spoken, the caption still has it) or null.
+ *
+ * `spokenChars` marks how much of `assistantCaption` has been spoken so far.
+ * It is a number only while the answer is being played (the rest of the
+ * caption is still to come); null means no marking: nothing is playing, or the
+ * answer was never played (muted, speech failed), or it has all been said.
  */
 export function initialVoiceModeState({ listeningStyle, bargeIn, captions = true } = {}) {
   return {
@@ -92,6 +97,7 @@ export function initialVoiceModeState({ listeningStyle, bargeIn, captions = true
     muted: false,
     userCaption: EMPTY_USER_CAPTION,
     assistantCaption: '',
+    spokenChars: null,
     toolStatus: null,
     error: null,
     notice: null,
@@ -113,6 +119,7 @@ function bargeInState(state, force) {
     status: force ? LISTENING : USER_SPEAKING,
     userCaption: EMPTY_USER_CAPTION,
     assistantCaption: '',
+    spokenChars: null,
     toolStatus: null,
     notice: null,
     runActive: false
@@ -137,6 +144,8 @@ function bargeInState(state, force) {
  *   - `ASSISTANT_TEXT {text}`: the answer so far (the caption).
  *   - `PLAYBACK_STARTED` / `PLAYBACK_DRAINED`: the first audio is playing / all
  *     of it has played.
+ *   - `SPOKEN_PROGRESS {chars}`: that many characters of the caption have been
+ *     spoken (only while speaking; it never moves back).
  *   - `RUN_ENDED {pendingAudio?}`: the answer is complete. While thinking this
  *     returns to listening, unless `pendingAudio` says speech is still queued.
  *   - `BARGE_IN {force?}`: the user interrupts (from the session's barge-in
@@ -205,6 +214,7 @@ export function voiceModeReducer(state, action) {
         ...state,
         status: state.status === PAUSED ? PAUSED : THINKING,
         assistantCaption: '',
+        spokenChars: null,
         toolStatus: null,
         notice: null,
         turn: state.turn + 1,
@@ -229,19 +239,31 @@ export function voiceModeReducer(state, action) {
         state.status === SPEAKING ||
         (state.status === PAUSED && state.runActive);
       if (!showing || state.assistantCaption === text) return state;
-      return { ...state, assistantCaption: text };
+      // Text that got shorter (replaced) cannot have more spoken than it has.
+      const spokenChars =
+        state.spokenChars === null ? null : Math.min(state.spokenChars, text.length);
+      return { ...state, assistantCaption: text, spokenChars };
     }
 
     case 'PLAYBACK_STARTED':
       if (state.status !== THINKING && state.status !== LISTENING) return state;
-      return { ...state, status: SPEAKING };
+      return { ...state, status: SPEAKING, spokenChars: 0 };
 
     case 'PLAYBACK_DRAINED':
       if (state.status === SPEAKING) {
-        return { ...state, status: state.runActive ? THINKING : LISTENING };
+        return { ...state, status: state.runActive ? THINKING : LISTENING, spokenChars: null };
       }
-      if (state.status === THINKING && !state.runActive) return { ...state, status: LISTENING };
+      if (state.status === THINKING && !state.runActive) {
+        return { ...state, status: LISTENING, spokenChars: null };
+      }
       return state;
+
+    case 'SPOKEN_PROGRESS': {
+      if (state.status !== SPEAKING || state.spokenChars === null) return state;
+      const chars = Math.min(Math.floor(Number(action.chars)), state.assistantCaption.length);
+      if (!(chars > state.spokenChars)) return state;
+      return { ...state, spokenChars: chars };
+    }
 
     case 'RUN_ENDED': {
       const toListening = state.status === THINKING && !action.pendingAudio;
@@ -268,6 +290,8 @@ export function voiceModeReducer(state, action) {
         ...state,
         muted: true,
         status,
+        // The audio stops with the mute: the caption has no spoken part any more.
+        spokenChars: null,
         // An utterance cut off by muting is not sent.
         userCaption: state.status === USER_SPEAKING ? EMPTY_USER_CAPTION : state.userCaption
       };
@@ -285,6 +309,7 @@ export function voiceModeReducer(state, action) {
         ...state,
         status: ERROR,
         error: { code: action.code || 'error', message: action.message || '' },
+        spokenChars: null,
         toolStatus: null,
         runActive: false
       };
@@ -300,6 +325,7 @@ export function voiceModeReducer(state, action) {
         muted: false,
         userCaption: EMPTY_USER_CAPTION,
         assistantCaption: '',
+        spokenChars: null,
         toolStatus: null,
         runActive: false
       };

@@ -173,8 +173,8 @@ Three more voice features may be available:
 - **Voice mode** (preview) — the waveform button next to Send starts a spoken conversation: you
   talk, the app answers out loud, and you can interrupt it by speaking. In *hands-free* mode the
   app answers when you pause; in *push-to-talk* mode you hold the button or the Space bar while you
-  speak. Captions show both sides, **Esc** ends it, and the conversation stays in the chat so you
-  can carry on by typing. Headphones work best. Your voice is never stored. See
+  speak. Captions show both sides and mark how far the answer has been spoken, **Esc** ends it,
+  and the conversation stays in the chat so you can carry on by typing. Headphones work best. Your voice is never stored. See
   [Voice mode](microphone-feature.md#voice-mode-spoken-conversation) for the details and the
   admin setup.
 
