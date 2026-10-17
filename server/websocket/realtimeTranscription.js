@@ -50,10 +50,24 @@
  *   The same protocol serves both provider modes and every use — dictation
  *   (the microphone button), live transcription (the record button) and file
  *   transcription — so they share this one code path.
+ *
+ * Conversation mode (voice mode, `start.conversation: true`) is an extension of
+ * that protocol for many user turns over one socket and one upstream session:
+ *   client -> server: `{type:'commit'}` ends the current user turn,
+ *                     `{type:'keepalive'}` resets the idle timeout only
+ *   server -> client: `{type:'final', text, turn:n}` once per commit, in order
+ *                     (n counts commits from 1; `text` is '' for silence),
+ *                     `{type:'delta', text, turn:n}` interim text of turn n
+ * A session without `conversation` never sees any of it. See
+ * `docs/voice-transcription.md` ("Conversation mode") for the full contract and
+ * the section "Conversation mode" below `bridgeConnection` for how turns are
+ * kept apart.
  */
 import { WebSocketServer, WebSocket } from 'ws';
 import configCache from '../configCache.js';
 import logger from '../utils/logger.js';
+import { isFeatureEnabled } from '../featureRegistry.js';
+import { resolveVoiceModeSettings } from '../../shared/voiceMode.js';
 import { verifyJwt } from '../utils/tokenService.js';
 import { tokenUserState } from '../utils/tokenUser.js';
 import {
@@ -74,11 +88,14 @@ import {
 // including a partial one, whose session never reaches `done`.
 // `realtimeFactor` is set only when a file is paced, so the client can tell the
 // user how long the transcript will take.
-const readyFrame = (mode, realtimeFactor) => ({
+// `conversation: true` is only sent to a conversation session, so a client can
+// tell a server that supports voice mode from an older one that ignored the flag.
+const readyFrame = (mode, realtimeFactor, conversation) => ({
   type: 'ready',
   mode,
   knowledgeSources: ['audio'],
-  ...(realtimeFactor ? { realtimeFactor } : {})
+  ...(realtimeFactor ? { realtimeFactor } : {}),
+  ...(conversation ? { conversation: true } : {})
 });
 
 // Close cleanly if the browser stops sending audio and no transcription is
@@ -160,6 +177,37 @@ const RETIRE_QUIET_MS = 1_500;
 const RETIRE_MAX_MS = 10_000;
 // PCM16 mono at 16 kHz.
 const BYTES_PER_SECOND = 32_000;
+
+/**
+ * Timings of conversation mode, in milliseconds. A bridge takes these as they
+ * are; `bridgeConnection` accepts `options.conversationTimings` to override
+ * single values (tests, tuning).
+ *
+ * - `idleMs`: no audio, no `commit` and no `keepalive` from the client for this
+ *   long closes the session. Upstream traffic does not count: an abandoned tab
+ *   must not be kept alive by what the upstream says. The client sends a
+ *   `keepalive` at least every 20 s for the whole session (also while it
+ *   listens and nothing else is sent), so this tolerates two lost ones.
+ * - A turn ends once its text has settled after the `commit`, whichever comes
+ *   first: `turnQuietMs` without upstream text (the turn already produced some
+ *   or the upstream already answered), `turnFinalQuietMs` after the upstream's
+ *   own `final`, `turnEmptyWaitMs` when nothing was transcribed at all yet (a
+ *   cough, or a slow upstream), `turnExplicitWaitMs` for a provider that
+ *   answers a commit with a `final` and has not done so (see
+ *   `commitEndsWithFinal`). `turnMaxWaitMs` is the hard limit from the commit.
+ */
+export const CONVERSATION_TIMINGS = Object.freeze({
+  idleMs: 60_000,
+  turnQuietMs: 700,
+  turnFinalQuietMs: 200,
+  turnEmptyWaitMs: 1_500,
+  turnExplicitWaitMs: 2_500,
+  turnMaxWaitMs: 6_000
+});
+// A batch provider is not asked to transcribe less than this (100 ms of PCM16 at
+// 16 kHz): OpenAI-compatible endpoints refuse shorter clips, which would end the
+// session. Such a turn is silence.
+const MIN_BATCH_TURN_BYTES = 3_200;
 
 // Process-wide accounting for audio buffered by batch-mode connections.
 let batchBytesInFlight = 0;
@@ -551,8 +599,13 @@ function sendJson(ws, obj) {
  * machine is testable with fake sockets.
  */
 export function bridgeConnection(clientWs, user, limiter, options = {}) {
-  const { limiterKey = user.id, createUpstream = (url, opts) => new WebSocket(url, opts) } =
-    options;
+  const {
+    limiterKey = user.id,
+    createUpstream = (url, opts) => new WebSocket(url, opts),
+    conversationTimings
+  } = options;
+  const timings = { ...CONVERSATION_TIMINGS, ...conversationTimings };
+  const connectedAt = Date.now();
   let cfg = null; // resolved upstream { url, apiKey, model }; set on start/first-audio
   let provider = null; // resolved transcription provider (protocol / batch call)
   let resolvingCfg = false; // guard so upstream config is resolved at most once
@@ -608,6 +661,22 @@ export function bridgeConnection(clientWs, user, limiter, options = {}) {
   let transcriptPartial = '';
   let completed = false; // `done` went to the client
   let failure = null; // what a failure told the client
+  // Conversation mode (see "Conversation mode" below): many user turns over one
+  // socket. All of this stays untouched in a session without `conversation`.
+  let startSeen = false; // the first `start` decides the mode; later ones cannot change it
+  let conversation = false;
+  let turnSeq = 0; // commits received so far: the `turn` of the next final
+  let openTurnBytes = 0; // audio the client sent for the turn being spoken
+  const outbox = []; // audio and commits in arrival order, until they can go on
+  let outboxBytes = 0; // byte-bound on the audio in `outbox` (MAX_PENDING_BYTES)
+  let activeTurn = null; // streaming: the committed turn whose text is settling
+  let turnText = { committed: '', partial: '' }; // text of the turn being collected
+  let turnAudioUpstream = false; // audio of that turn has reached the upstream
+  let upstreamArmed = true; // the upstream session takes a turn's audio (readyFrames armed it)
+  let batchOpenBytes = 0; // batch: bytes of the turn being spoken (inside batchBytes)
+  let batchTurnQueue = Promise.resolve(); // batch: one transcription at a time, in order
+  let batchTurnsPending = 0; // batch: turns committed whose final has not been sent
+  let pumping = false; // guard against re-entering the outbox pump
 
   const isBatch = () => provider?.mode === 'batch';
 
@@ -627,10 +696,20 @@ export function bridgeConnection(clientWs, user, limiter, options = {}) {
 
   const resetIdle = () => {
     if (idleTimer) clearTimeout(idleTimer);
-    idleTimer = setTimeout(() => {
-      logger.info('Realtime STT: idle timeout, closing', { component: 'RealtimeSTT' });
-      cleanup();
-    }, IDLE_TIMEOUT_MS);
+    idleTimer = setTimeout(
+      () => {
+        logger.info('Realtime STT: idle timeout, closing', { component: 'RealtimeSTT' });
+        cleanup();
+      },
+      conversation ? timings.idleMs : IDLE_TIMEOUT_MS
+    );
+  };
+
+  // What the upstream says keeps a one-utterance session alive. A conversation
+  // idles on the client alone (audio, commit, keepalive), so that an upstream
+  // that chatters cannot keep an abandoned session open.
+  const resetIdleFromUpstream = () => {
+    if (!conversation) resetIdle();
   };
 
   // A `final` replaces the deltas of its utterance (the client does the same).
@@ -723,6 +802,13 @@ export function bridgeConnection(clientWs, user, limiter, options = {}) {
       }
     }
     retiring = null;
+    if (activeTurn) {
+      clearTimeout(activeTurn.settleTimer);
+      clearTimeout(activeTurn.maxTimer);
+      activeTurn = null;
+    }
+    outbox.length = 0;
+    outboxBytes = 0;
     // Cancel an in-flight batch request and free its buffered audio, so a
     // client that walks away doesn't leave a fetch (and 30 MB) hanging around.
     abortController.abort();
@@ -805,7 +891,11 @@ export function bridgeConnection(clientWs, user, limiter, options = {}) {
   // End of audio for the upstream: only once every paced chunk went out, and
   // never to a session that is being replaced (the next one gets it).
   const sendStopUpstreamWhenDrained = () => {
-    if (!stopRequested || stopSentUpstream || paced.length || !upstreamOpen()) return;
+    // A conversation ends by closing the socket: every turn's tail was already
+    // flushed by its own commit.
+    if (conversation || !stopRequested || stopSentUpstream || paced.length || !upstreamOpen()) {
+      return;
+    }
     stopSentUpstream = true;
     for (const frame of provider.stopFrames(cfg)) sendJson(upstream, frame);
   };
@@ -976,6 +1066,7 @@ export function bridgeConnection(clientWs, user, limiter, options = {}) {
     }
     for (const frame of provider.readyFrames(cfg)) sendJson(upstream, frame);
     upstreamReady = true;
+    upstreamArmed = true; // `readyFrames` armed the first turn of this session
     sessionStartedAt = Date.now();
     sessionAudioBytes = 0;
     logger.info('Realtime STT: upstream ready', {
@@ -993,7 +1084,11 @@ export function bridgeConnection(clientWs, user, limiter, options = {}) {
       clientReadySent = true;
       sendJson(
         clientWs,
-        readyFrame(provider.mode, isPacing() ? limits.maxRealtimeFactor : undefined)
+        readyFrame(
+          provider.mode,
+          isPacing() ? limits.maxRealtimeFactor : undefined,
+          conversation
+        )
       );
     }
     // Flush any audio captured during the handshake (or a rotation).
@@ -1011,6 +1106,8 @@ export function bridgeConnection(clientWs, user, limiter, options = {}) {
     // A paced file sends them once its queue is empty.
     if (source === 'file') drainPaced();
     else sendStopUpstreamWhenDrained();
+    // A conversation's audio and commits waited in the outbox, not in `pending`.
+    pumpOutbox();
     resetIdle();
   };
 
@@ -1048,7 +1145,7 @@ export function bridgeConnection(clientWs, user, limiter, options = {}) {
 
     sock.on('open', () => {
       if (!isCurrent()) return;
-      resetIdle();
+      resetIdleFromUpstream();
       // Frames the provider needs on the wire immediately (Gemini's `setup`
       // must be the first message; vLLM sends nothing and waits instead).
       for (const frame of provider.openFrames(cfg)) sendJson(sock, frame);
@@ -1066,7 +1163,7 @@ export function bridgeConnection(clientWs, user, limiter, options = {}) {
     sock.on('message', data => {
       const retiringNow = isRetiring();
       if (!isCurrent() && !retiringNow) return;
-      resetIdle();
+      resetIdleFromUpstream();
       if (retiringNow) armRetireQuiet();
       let msg;
       try {
@@ -1084,6 +1181,10 @@ export function bridgeConnection(clientWs, user, limiter, options = {}) {
             provider: provider.id,
             textLen: event.text?.length || 0
           });
+          if (conversation) {
+            onConversationText('delta', event.text || '');
+            break;
+          }
           transcriptPartial += event.text || '';
           sendJson(clientWs, { type: 'delta', text: event.text || '' });
           // A file blasted at once can produce many segments after `stop`;
@@ -1099,6 +1200,10 @@ export function bridgeConnection(clientWs, user, limiter, options = {}) {
             provider: provider.id,
             textLen: event.text?.length || 0
           });
+          if (conversation) {
+            onConversationText('final', event.text || '');
+            break;
+          }
           commitTranscript(event.text);
           sendJson(clientWs, { type: 'final', text: event.text || '' });
           // Completion signaling (G8): an upstream emits one finalized segment
@@ -1181,6 +1286,17 @@ export function bridgeConnection(clientWs, user, limiter, options = {}) {
         });
         return;
       }
+      // A conversation keeps its upstream open for as long as it runs: even a
+      // normal close is the session ending under the client, which must hear
+      // of it (and can reconnect) rather than wait for turns that never come.
+      if (conversation && !stopRequested && !errorSent) {
+        failBridge(
+          'upstream-closed',
+          `Transcription service closed the connection (code ${code}${reason ? `: ${reason}` : ''})`,
+          { reason: 'conversation upstream closed', closeCode: code, closeReason: reason }
+        );
+        return;
+      }
       // A normal close after the end of audio went upstream is the upstream
       // finishing the transcript, which the client takes as completion too.
       if (stopSentUpstream && !errorSent) {
@@ -1225,6 +1341,7 @@ export function bridgeConnection(clientWs, user, limiter, options = {}) {
     batchChunks.push(chunk);
     batchBytes += chunk.length;
     batchBytesInFlight += chunk.length;
+    batchOpenBytes += chunk.length;
   };
 
   /**
@@ -1274,6 +1391,345 @@ export function bridgeConnection(clientWs, user, limiter, options = {}) {
         error: err.message
       });
     }
+  };
+
+  // --- Conversation mode ----------------------------------------------------
+  //
+  // Voice mode keeps one socket (and, for a streaming provider, one upstream
+  // session) open across many user turns. The client ends a turn with `commit`
+  // and gets exactly one `{type:'final', text, turn:n}` back, n = 1, 2, 3 … in
+  // the order of the commits.
+  //
+  // Everything the client sends goes through the `outbox`, in arrival order:
+  // audio chunks, and a commit marker for every `commit`. `pumpOutbox` forwards
+  // it. That one queue is what keeps the turns apart:
+  //
+  //  - A turn's audio is never sent upstream while the previous turn's commit
+  //    is still settling (`activeTurn`). It waits in the outbox, so the text
+  //    the upstream produces while a turn settles can only be that turn's.
+  //  - Text that reaches the bridge is attributed to the turn that is settling,
+  //    or else to the turn whose audio has been sent upstream. When neither
+  //    exists it is a straggler of a turn that already ended (an upstream that
+  //    answered after the settle window) and is dropped, not shown as the
+  //    start of the next turn. Only a straggler that arrives after the next
+  //    turn's audio went out cannot be told apart; the settle windows
+  //    (CONVERSATION_TIMINGS) are what make that unlikely.
+  //  - The text of a turn is assembled in `turnText`, which is reset when the
+  //    turn's final goes out, so nothing carries over.
+  //  - A turn's final is sent only after the previous one's: a commit stays in
+  //    the outbox until the turn before it settled, and a batch provider's
+  //    transcriptions run one at a time.
+
+  const hasTurnText = () => Boolean(turnText.committed || turnText.partial);
+
+  const takeTurnText = () => {
+    const text = `${turnText.committed} ${turnText.partial}`.replace(/\s+/g, ' ').trim();
+    turnText = { committed: '', partial: '' };
+    turnAudioUpstream = false;
+    return text;
+  };
+
+  // A segment the upstream completed replaces the deltas it was built from.
+  const commitTurnSegment = text => {
+    turnText.committed = `${turnText.committed} ${text || turnText.partial}`.trim();
+    turnText.partial = '';
+  };
+
+  const sendTurnFinal = (turn, text) => {
+    sendJson(clientWs, { type: 'final', text, turn });
+  };
+
+  // The number of the turn the bridge is collecting text for right now: the one
+  // settling, else the first one committed and waiting, else the one being spoken.
+  const currentTurnNumber = () =>
+    activeTurn ? activeTurn.n : (outbox.find(item => item.commit)?.commit ?? turnSeq + 1);
+
+  // After `stop`, the session ends once every committed turn has its final.
+  const maybeFinishConversation = () => {
+    if (!conversation || !stopRequested || completed || tornDown || errorSent) return;
+    if (activeTurn || batchTurnsPending > 0 || outbox.some(item => item.commit)) return;
+    void finishCompleted();
+  };
+
+  // Upstream text (streaming providers) for the current turn.
+  const onConversationText = (kind, text) => {
+    if (!activeTurn && !turnAudioUpstream) {
+      logger.debug('Realtime STT: dropped transcript text of an ended turn', {
+        component: 'RealtimeSTT',
+        userId: user.id,
+        kind,
+        textLen: text.length
+      });
+      return;
+    }
+    if (kind === 'delta') {
+      turnText.partial += text;
+      sendJson(clientWs, { type: 'delta', text, turn: currentTurnNumber() });
+    } else {
+      commitTurnSegment(text);
+    }
+    if (activeTurn) {
+      activeTurn.sawEvent = true;
+      if (kind === 'final') activeTurn.sawFinal = true;
+      armTurnSettle();
+    }
+  };
+
+  // How long the committed turn waits for more text, given what it has seen.
+  const armTurnSettle = () => {
+    const turn = activeTurn;
+    if (!turn) return;
+    if (turn.settleTimer) clearTimeout(turn.settleTimer);
+    let waitMs = timings.turnEmptyWaitMs;
+    if (turn.sawFinal) waitMs = timings.turnFinalQuietMs;
+    else if (turn.explicit) waitMs = timings.turnExplicitWaitMs;
+    else if (turn.sawEvent || hasTurnText()) waitMs = timings.turnQuietMs;
+    turn.settleTimer = setTimeout(
+      () => finishTurn(turn.explicit && !turn.sawFinal ? 'no-final' : 'settled'),
+      waitMs
+    );
+  };
+
+  // The turn's text has settled (or its hard limit passed): send its final.
+  const finishTurn = reason => {
+    const turn = activeTurn;
+    if (!turn || tornDown) return;
+    clearTimeout(turn.settleTimer);
+    clearTimeout(turn.maxTimer);
+    activeTurn = null;
+    const text = takeTurnText();
+    logger.info('Realtime STT: turn complete', {
+      component: 'RealtimeSTT',
+      userId: user.id,
+      provider: provider.id,
+      turn: turn.n,
+      reason,
+      textLen: text.length,
+      waitedMs: Date.now() - turn.committedAt
+    });
+    sendTurnFinal(turn.n, text);
+    // A provider that answers a commit with a `final` never did: what its
+    // session is doing is unknown (a generation may still be reading audio, and
+    // a second commit would start another), so the next turn gets a fresh one.
+    if (turn.explicit && !turn.sawFinal) rotateUpstream('turn-no-final');
+    pumpOutbox();
+  };
+
+  // Send the commit of the head turn upstream and wait for its text to settle.
+  const beginTurnCommit = turn => {
+    const frames = typeof provider.commitFrames === 'function' ? provider.commitFrames(cfg) : [];
+    for (const frame of frames) sendJson(upstream, frame);
+    if (typeof provider.turnStartFrames === 'function') upstreamArmed = false;
+    const committedAt = Date.now();
+    activeTurn = {
+      n: turn,
+      committedAt,
+      explicit: provider.commitEndsWithFinal === true,
+      sawEvent: false,
+      sawFinal: false,
+      settleTimer: null,
+      maxTimer: setTimeout(() => finishTurn('timeout'), timings.turnMaxWaitMs)
+    };
+    logger.info('Realtime STT: turn committed', {
+      component: 'RealtimeSTT',
+      userId: user.id,
+      provider: provider.id,
+      turn,
+      appendedFrames
+    });
+    armTurnSettle();
+  };
+
+  // One chunk of the open turn to the upstream, arming the session first when
+  // the previous turn's commit ended its generation.
+  const sendTurnAudio = chunk => {
+    if (!upstreamArmed && typeof provider.turnStartFrames === 'function') {
+      for (const frame of provider.turnStartFrames(cfg)) sendJson(upstream, frame);
+    }
+    upstreamArmed = true;
+    turnAudioUpstream = true;
+    sendUpstreamAudio(chunk);
+  };
+
+  // Streaming: forward the outbox while the upstream is open and no turn is
+  // settling. A commit with no audio is answered on the spot — nothing goes
+  // upstream for a turn without speech — but still after the turns before it.
+  const pumpStreamOutbox = () => {
+    while (outbox.length && !activeTurn && !errorSent && !tornDown) {
+      const item = outbox[0];
+      if (item.commit) {
+        if (!item.hadAudio) {
+          outbox.shift();
+          sendTurnFinal(item.commit, '');
+          continue;
+        }
+        if (!upstreamOpen()) break;
+        outbox.shift();
+        beginTurnCommit(item.commit);
+        break;
+      }
+      if (!upstreamOpen()) break;
+      outbox.shift();
+      outboxBytes -= item.audio.length;
+      sendTurnAudio(item.audio);
+    }
+  };
+
+  // Batch: audio of the open turn is buffered as it comes; a commit hands what
+  // was buffered to the transcription queue.
+  const pumpBatchOutbox = () => {
+    while (outbox.length && !errorSent && !tornDown) {
+      const item = outbox.shift();
+      if (item.commit) {
+        enqueueBatchTurn(item.commit);
+        continue;
+      }
+      outboxBytes -= item.audio.length;
+      appendedFrames += 1;
+      bufferBatchAudio(item.audio);
+    }
+  };
+
+  const pumpOutbox = () => {
+    if (!conversation || !provider || pumping || errorSent || tornDown) return;
+    pumping = true;
+    try {
+      if (isBatch()) pumpBatchOutbox();
+      else pumpStreamOutbox();
+    } finally {
+      pumping = false;
+    }
+    maybeFinishConversation();
+  };
+
+  // Batch: transcribe the audio buffered since the last commit. The turns run
+  // one after the other, so a second commit while the first is transcribing
+  // waits, and the finals keep the order of the commits.
+  const enqueueBatchTurn = n => {
+    const pcm = Buffer.concat(batchChunks);
+    batchChunks.length = 0;
+    const bytes = batchOpenBytes;
+    batchOpenBytes = 0;
+    batchTurnsPending += 1;
+    batchTurnQueue = batchTurnQueue.then(() => runBatchTurn({ n, pcm, bytes }));
+  };
+
+  const runBatchTurn = async turn => {
+    try {
+      if (tornDown || errorSent) return;
+      let text = '';
+      if (turn.pcm.length >= MIN_BATCH_TURN_BYTES) {
+        logger.info('Realtime STT: batch transcription started', {
+          component: 'RealtimeSTT',
+          userId: user.id,
+          provider: provider.id,
+          model: cfg.model,
+          turn: turn.n,
+          audioBytes: turn.pcm.length,
+          audioSeconds: Math.round(turn.pcm.length / (TARGET_SAMPLE_RATE * 2))
+        });
+        try {
+          const result = await provider.transcribe({
+            cfg,
+            pcm: turn.pcm,
+            sampleRate: TARGET_SAMPLE_RATE,
+            signal: abortController.signal
+          });
+          text = String(result?.text ?? '')
+            .replace(/\s+/g, ' ')
+            .trim();
+        } catch (err) {
+          if (abortController.signal.aborted) return; // teardown already in progress
+          failBridge('upstream-error', `Transcription failed: ${err.message}`, {
+            reason: 'batch transcription error',
+            error: err.message,
+            turn: turn.n
+          });
+          return;
+        }
+      }
+      if (tornDown || clientWs.readyState > WebSocket.OPEN) return; // client walked away
+      if (text) gotTranscription = true;
+      sendTurnFinal(turn.n, text);
+    } finally {
+      turn.pcm = null;
+      // The turn's audio is out of memory: give it back to the per-connection and
+      // process-wide budgets, so a long conversation never adds up against them.
+      // (After a teardown `cleanup` already gave back everything.)
+      if (!tornDown && turn.bytes) {
+        batchBytes = Math.max(0, batchBytes - turn.bytes);
+        batchBytesInFlight = Math.max(0, batchBytesInFlight - turn.bytes);
+      }
+      batchTurnsPending -= 1;
+      maybeFinishConversation();
+    }
+  };
+
+  // Audio of the turn being spoken. Held in the outbox, bounded like `pending`.
+  const acceptConversationAudio = chunk => {
+    if (errorSent || tornDown || stopRequested) return;
+    resetIdle();
+    if (outboxBytes + chunk.length > MAX_PENDING_BYTES) {
+      logger.debug('Realtime STT: conversation audio over the hold limit dropped', {
+        component: 'RealtimeSTT',
+        userId: user.id,
+        outboxBytes
+      });
+      return;
+    }
+    openTurnBytes += chunk.length;
+    outbox.push({ audio: chunk });
+    outboxBytes += chunk.length;
+    pumpOutbox();
+  };
+
+  const handleCommit = () => {
+    if (!conversation || errorSent || tornDown || stopRequested) return;
+    resetIdle();
+    turnSeq += 1;
+    outbox.push({ commit: turnSeq, hadAudio: openTurnBytes > 0 });
+    openTurnBytes = 0;
+    pumpOutbox();
+  };
+
+  // `stop` ends the session. Turns that were committed still get their final;
+  // audio after the last commit belongs to a turn the client never ended, and is
+  // dropped. Then `done`, and the socket closes.
+  const handleConversationStop = () => {
+    stopRequested = true;
+    logger.info('Realtime STT: stop received (conversation)', {
+      component: 'RealtimeSTT',
+      userId: user.id,
+      provider: provider?.id,
+      turns: turnSeq,
+      appendedFrames
+    });
+    resetIdle();
+    while (outbox.length && !outbox[outbox.length - 1].commit) {
+      outboxBytes -= outbox.pop().audio.length;
+    }
+    openTurnBytes = 0;
+    if (batchOpenBytes) {
+      batchBytes = Math.max(0, batchBytes - batchOpenBytes);
+      batchBytesInFlight = Math.max(0, batchBytesInFlight - batchOpenBytes);
+      batchOpenBytes = 0;
+      batchChunks.length = 0;
+    }
+    pumpOutbox();
+    maybeFinishConversation();
+  };
+
+  // The first `start` that asks for a conversation: refuse it unless voice mode
+  // is on, then take the longer-lived settings of a conversation session.
+  const enterConversation = settings => {
+    conversation = true;
+    // The user may take a long time to say the first thing: the no-audio grace
+    // is for one-utterance sessions. The idle timeout and the client's
+    // keepalives govern a conversation.
+    if (graceTimer) clearTimeout(graceTimer);
+    graceTimer = null;
+    armSessionTimer(Math.min(settings.maxSessionSeconds, getMaxSessionSeconds()));
+    resetIdle();
   };
 
   // Resolve upstream config (once) and open the upstream socket. A second

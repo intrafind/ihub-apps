@@ -26,6 +26,9 @@ import lazyWithRetry from '../../../utils/lazyWithRetry';
 import { fetchSourceFile } from '../../chat/sources/sourceActions';
 import useAppChat from '../../chat/hooks/useAppChat';
 import useVoiceCommands from '../../voice/hooks/useVoiceCommands';
+import useVoiceMode from '../../voice/hooks/useVoiceMode';
+import useVoiceModeAvailability from '../../voice/hooks/useVoiceModeAvailability';
+import VoiceModeOverlay from '../../voice/components/VoiceModeOverlay';
 import useAppSettings from '../../../shared/hooks/useAppSettings';
 import useFileUploadHandler from '../../../shared/hooks/useFileUploadHandler';
 import { consumePendingChatStart } from '../../chat/startChatHandoff';
@@ -2318,14 +2321,21 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
    * @param {Event} e
    * @param {string|null} [startFormMessage]
    */
-  const handleSubmit = async (e, startFormMessage = null) => {
+  /**
+   * Send the message. `startFormMessage` is a start form's rendered prompt.
+   * `voiceText` is a spoken turn from voice mode: it goes out like typed text
+   * (same prompt, model, tools and variables), flagged as a voice turn, and
+   * leaves whatever is typed in the composer alone.
+   */
+  const handleSubmit = async (e, startFormMessage = null, { voiceText } = {}) => {
     e.preventDefault();
+    const isVoiceTurn = typeof voiceText === 'string';
     // An attachment is still being processed (e.g. the audio of a video is
     // extracted), in whichever composer it was added: the message would go
     // without it. Each composer holds back its own Send; this is the backstop
     // for the one that was not told.
     if (fileUploadHandler.isAttachmentProcessing) return;
-    const typed = startFormMessage ?? input;
+    const typed = startFormMessage ?? (isVoiceTurn ? voiceText : input);
 
     // While recording, "send" means: finish the recording — sent to the
     // selected model, with anything typed when that is a chat model.
@@ -2480,7 +2490,8 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
       ...(app?.websearch?.enabled ? { websearchEnabled } : {}),
       ...(imageAspectRatio ? { imageAspectRatio } : {}),
       ...(imageQuality ? { imageQuality } : {}),
-      ...(documentId ? { documentIds: [documentId] } : {})
+      ...(documentId ? { documentIds: [documentId] } : {}),
+      ...(isVoiceTurn ? { voiceMode: true } : {})
     };
 
     debugLog('📤 Sending message with params:', params);
@@ -2524,6 +2535,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
           rawContent: typed,
           variables:
             carriesVariables && app?.variables?.length > 0 ? { ...validatedVariables } : undefined,
+          ...(isVoiceTurn ? { inputMode: 'voice' } : {}),
           ...messageData
         }
       },
@@ -2591,10 +2603,13 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
     } else {
       sendChatMessage(messageStructure);
       setSentInChatId(chatId);
+      voiceTurnSentRef.current = true;
     }
 
-    setInput('');
-    magicPromptHandler.resetMagicPrompt();
+    if (!isVoiceTurn) {
+      setInput('');
+      magicPromptHandler.resetMagicPrompt();
+    }
     fileUploadHandler.clearSelectedFile();
     fileUploadHandler.hideUploader();
     // Clear pending variables ref after successful submission
@@ -2612,6 +2627,61 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
       )
     : '';
   const handleStartFormSubmit = e => handleSubmit(e, startFormMessage);
+
+  // Voice mode: a hands-free spoken conversation, a different way of talking to
+  // this same chat. Not in compare mode (one turn, two models), on the start
+  // form, with a transcription model (audio files only) or embedded in a host.
+  const voiceAvailability = useVoiceModeAvailability(app);
+  const voiceModeAllowed =
+    voiceAvailability.available &&
+    !embedded &&
+    !compareModeActive &&
+    !showStartForm &&
+    !transcriptionModel;
+  const voiceTurnSentRef = useRef(false);
+  // A spoken turn: resolves to whether the chat took it (a missing required
+  // variable, a recording in progress or a running turn all turn it away).
+  const sendVoiceTurn = async text => {
+    voiceTurnSentRef.current = false;
+    await handleSubmit({ preventDefault() {} }, null, { voiceText: text });
+    return voiceTurnSentRef.current;
+  };
+  // The answer to a question the app asked, spoken.
+  const answerVoiceClarification = answer =>
+    submitClarificationResponse(answer, {
+      modelId: selectedModel,
+      style: selectedStyle,
+      temperature,
+      outputFormat: selectedOutputFormat,
+      language: currentLanguage,
+      voiceMode: true
+    });
+  const voiceMode = useVoiceMode({
+    availability: voiceAvailability,
+    language: currentLanguage,
+    messages,
+    processing,
+    clarificationPending,
+    sendTurn: sendVoiceTurn,
+    answerClarification: answerVoiceClarification,
+    cancelGeneration,
+    onEnded: reason => {
+      if (reason === 'time-limit') {
+        addSystemMessage(
+          t('voiceMode.timeLimit', {
+            defaultValue: 'Voice mode ended after {{minutes}} minutes.',
+            minutes: voiceAvailability.settings.maxSessionMinutes
+          }),
+          false
+        );
+      }
+    }
+  });
+  // Another chat or app is not the conversation voice mode was started in.
+  const endVoiceMode = voiceMode.end;
+  useEffect(() => {
+    endVoiceMode('user');
+  }, [chatId, appId, endVoiceMode]);
 
   // Function to reload the current app
   const clearAppCache = useCallback(() => {
@@ -2697,6 +2767,9 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
           ? handleVoiceCommand
           : undefined,
       audioOnly: !compareModeActive && Boolean(transcriptionModel),
+      // Voice mode: the waveform button next to Send.
+      onVoiceMode: voiceModeAllowed ? voiceMode.toggle : undefined,
+      voiceModeActive: voiceMode.active,
       // Record (separate from the dictation mic above): the recording goes to
       // the selected model, so only to one that takes audio.
       transcriptionRecordEnabled:
@@ -2968,7 +3041,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
         className={`flex flex-col flex-1 gap-4 overflow-hidden mx-auto w-full ${embedded ? '' : 'md:flex-row'}`}
       >
         <div
-          className={`flex flex-col max-w-6xl mx-auto w-full ${embedded ? 'flex-1 min-h-0' : 'h-full'}`}
+          className={`relative flex flex-col max-w-6xl mx-auto w-full ${embedded ? 'flex-1 min-h-0' : 'h-full'}`}
         >
           {compareModeActive ? (
             /* Compare Mode View */
@@ -3188,6 +3261,15 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
                 {renderChatInput()}
               </div>
             </>
+          )}
+
+          {/* Voice mode covers the transcript and the composer; the header stays.
+              The messages stay mounted underneath and receive every turn. */}
+          {voiceMode.active && (
+            <VoiceModeOverlay
+              voiceMode={voiceMode}
+              appName={getLocalizedContent(app?.name, currentLanguage)}
+            />
           )}
         </div>
 

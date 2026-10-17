@@ -42,6 +42,7 @@ import {
   normalizeChatVariables
 } from '../../services/chat/ChatRepository.js';
 import { isChatPersistenceActive } from '../../services/chat/chatPersistence.js';
+import { isVoiceTurn, VOICE_INPUT_MODE } from '../../services/chat/voiceMode.js';
 import validate from '../../validators/validate.js';
 import { chatTestSchema, chatPostSchema, chatConnectSchema } from '../../validators/index.js';
 import { buildServerPath } from '../../utils/basePath.js';
@@ -821,7 +822,8 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
           replaceFromMessageId,
           ephemeral,
           sendChatHistory,
-          mcpAppContext
+          mcpAppContext,
+          voiceMode
         } = req.body;
 
         // `chatAuthRequired` authorizes the app, never the chat id. Once chats
@@ -980,6 +982,15 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
             attachments: messageAttachments(newMessage),
             variables: turnVariables,
             replaceFromMessageId: forkStoredId,
+            // A message spoken in voice mode is marked, so the history can show
+            // it. Only when voice mode is on, like the request builder.
+            message: isVoiceTurn({
+              voiceMode,
+              platform: configCache.getPlatform(),
+              features: configCache.getFeatures()
+            })
+              ? { metadata: { inputMode: VOICE_INPUT_MODE } }
+              : undefined,
             // How this turn is being answered, so reopening the chat comes
             // back with the same setup rather than the app's defaults. Only
             // the keys this request actually carried: the repository merges
@@ -1040,6 +1051,7 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
           imageQuality,
           requestedSkills,
           documentIds,
+          voiceMode,
           user: req.user,
           chatId
         };

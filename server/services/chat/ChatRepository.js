@@ -549,6 +549,9 @@ export function storableMessageExtras(message = {}) {
     }
   }
   if (typeof model === 'string' && model) out.model = model.slice(0, MAX_MODEL_LABEL_CHARS);
+  // How a user turn was entered. `voice` is the only value there is; audio is
+  // never stored, this only lets the history mark the message as spoken.
+  if (message.metadata?.inputMode === 'voice') out.metadata = { inputMode: 'voice' };
   return out;
 }
 

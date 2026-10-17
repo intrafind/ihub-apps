@@ -1005,6 +1005,52 @@
         "test": "Test",
         "testHint": "Spricht den Text mit dem gewählten Modell, so wie eine Chat-Nachricht vorgelesen wird. Funktioniert schon vor dem Speichern, das Modell muss aber aktiviert sein.",
         "sampleText": "Hallo! So klingen Antworten, wenn sie vorgelesen werden."
+      },
+      "voiceMode": {
+        "title": "Sprachmodus",
+        "preview": "Vorschau",
+        "description": "Ein gesprochenes Gespräch mit einer App: Nutzer sprechen, die App antwortet laut, und sie können jederzeit unterbrechen. Die Spracherkennung ist die, die die App für die Spracheingabe nutzt (siehe oben); die Antwort spricht das unten gewählte Sprachausgabemodell. Audio wird nie gespeichert.",
+        "flagOff": "Der Sprachmodus ist eine Vorschau-Funktion und derzeit ausgeschaltet. Aktivieren Sie zuerst die Vorschau-Funktion „Sprachmodus“ unter Admin → Funktionen. Die Einstellungen können Sie hier schon vorbereiten, sie wirken aber erst danach.",
+        "enabled": "Sprachmodus aktivieren",
+        "appDefault": "Sprachmodus für Apps einschalten, die nichts anderes festlegen",
+        "appDefaultHint": "Aus: Der Sprachmodus ist Opt-in, jede App schaltet ihn im App-Editor ein. Ein: Jede App, die Spracheingabe erlaubt, hat ihn, sofern sie ihn nicht ausschaltet.",
+        "ttsModel": "Sprachausgabemodell",
+        "ttsModelDefault": "Standard-Sprachausgabemodell",
+        "ttsModelDefaultNamed": "Standard-Sprachausgabemodell ({{model}})",
+        "ttsModelMissing": "Dieses Modell existiert nicht mehr, daher wird der Sprachmodus nicht angeboten.",
+        "ttsModelDisabledHint": "Dieses Modell ist deaktiviert, daher wird der Sprachmodus nicht angeboten. Aktivieren Sie es unter Admin → Modelle und hinterlegen Sie einen API-Schlüssel.",
+        "ttsModelNone": "Weder hier noch oben unter „Vorlesen“ ist ein Sprachausgabemodell gewählt, daher wird der Sprachmodus nicht angeboten.",
+        "ttsModelHint": "Beim Standard wird das Vorlese-Modell verwendet. Apps können ein eigenes wählen, zum Beispiel ein deutsches Sprachmodell. Nutzer brauchen über ihre Gruppen Zugriff auf das Modell.",
+        "readAloudOff": "Vorlesen ist oben ausgeschaltet. Der Sprachmodus nutzt dieselbe Sprachausgabe-Einrichtung, schalten Sie sie also ebenfalls ein, sonst wird der Sprachmodus nicht angeboten.",
+        "listeningStyle": "Zuhörmodus",
+        "handsFree": "Freisprechen",
+        "pushToTalk": "Push-to-Talk",
+        "listeningStyleHint": "Freisprechen hört durchgehend zu und beendet einen Redebeitrag nach einer Pause. Push-to-Talk nimmt auf, solange die Schaltfläche oder die Leertaste gehalten wird.",
+        "thinkingLevel": "Denkaufwand",
+        "thinking": {
+          "minimal": "Minimal",
+          "low": "Niedrig",
+          "medium": "Mittel",
+          "high": "Hoch"
+        },
+        "thinkingLevelHint": "Reasoning-Modelle erzeugen vor der Antwort Sekunden der Stille. Ein niedriger Wert hält die Antworten flott; eine App, die mehr verlangt, behält ihren eigenen Wert.",
+        "endOfTurnSilenceMs": "Ende des Redebeitrags nach Stille (ms)",
+        "endOfTurnSilenceMsHint": "Nur beim Freisprechen: Wie lange der Nutzer pausieren muss, bevor die App antwortet. 300 bis 3000, Standard 800.",
+        "maxSessionMinutes": "Längste Sitzung (Minuten)",
+        "maxSessionMinutesHint": "Eine Sprachsitzung endet nach dieser Zeit. 1 bis 240, Standard 30.",
+        "bargeIn": "Nutzer dürfen die Antwort durch Sprechen unterbrechen",
+        "bargeInHint": "Schalten Sie dies bei Laptop-Lautsprechern ohne Kopfhörer aus, wenn die App sich sonst selbst hören könnte. Mit einem Tipp lässt sich eine Antwort weiterhin stoppen.",
+        "systemPrompt": {
+          "title": "Anweisung zum Sprechstil",
+          "description": "Wird im Sprachmodus hinter dem System-Prompt der App eingefügt, damit Antworten sich zum Zuhören eignen. Lassen Sie eine Sprache leer, um den eingebauten Text zu verwenden, der unter jedem Feld steht.",
+          "language": "Anweisung ({{language}})",
+          "reset": "Auf eingebaut zurücksetzen",
+          "builtIn": "Eingebaut:"
+        },
+        "tryIt": "Ausprobieren",
+        "tryFlagOff": "Aktivieren Sie zuerst die Vorschau-Funktion „Sprachmodus“",
+        "tryItHint": "Startet in diesem Browser eine Sprachsitzung mit dem unter „Spracheingabe“ oben gewählten Dienst, dem Sprachausgabemodell und den Einstellungen dieses Formulars. Funktioniert schon vor dem Speichern; es braucht das Mikrofon und ein aktiviertes Sprachausgabemodell.",
+        "trySoon": "Bald verfügbar"
       }
     },
     "agents": {
@@ -3187,6 +3233,31 @@
         "platformDefaultServiceHint": "Folgt dem unter Admin → Spracheingabe festgelegten Standard, auch bei späteren Änderungen.",
         "dictationModelHint": "Das Mikrofon wird über den iHub-Server an dieses Transkriptionsmodell gestreamt. Benutzer brauchen über ihre Gruppen Zugriff auf das Modell.",
         "dictationModelUnavailable": "Dieses Modell ist deaktiviert, existiert nicht mehr oder streamt nicht. Die Spracheingabe schlägt in dieser App daher fehl.",
+        "voiceMode": {
+          "title": "Sprachmodus",
+          "description": "Ein gesprochenes Gespräch mit dieser App: Nutzer sprechen und die App antwortet laut. Sie hört mit der oben gewählten Spracherkennung zu und spricht mit einem Sprachausgabemodell.",
+          "needsMicrophone": "Der Sprachmodus braucht die Spracheingabe. Aktivieren Sie oben das Mikrofon, um ihn in dieser App zu nutzen.",
+          "flagOff": "Der Sprachmodus ist eine Vorschau-Funktion und unter Admin → Funktionen ausgeschaltet. Diese Einstellungen wirken, sobald er eingeschaltet ist.",
+          "label": "Sprachmodus",
+          "platformDefault": "Plattform-Standard",
+          "platformDefaultOn": "Plattform-Standard (ein)",
+          "platformDefaultOff": "Plattform-Standard (aus)",
+          "platformDefaultNamed": "Plattform-Standard ({{value}})",
+          "on": "Ein",
+          "off": "Aus",
+          "defaultHint": "Folgt der Einstellung unter Admin → Spracheingabe, auch bei späteren Änderungen.",
+          "onHint": "Für diese App eingeschaltet. Der Sprachmodus muss zusätzlich unter Admin → Spracheingabe eingeschaltet sein.",
+          "offHint": "Der Sprachmodus wird in dieser App nicht angeboten.",
+          "listeningStyle": "Zuhörmodus",
+          "handsFree": "Freisprechen",
+          "pushToTalk": "Push-to-Talk",
+          "ttsModel": "Sprachausgabemodell",
+          "ttsModelHint": "Zum Beispiel ein deutsches Sprachmodell für eine deutsche App. Nutzer brauchen über ihre Gruppen Zugriff auf das Modell.",
+          "ttsModelUnavailable": "Dieses Modell ist deaktiviert oder existiert nicht mehr, daher wird der Sprachmodus in dieser App nicht angeboten.",
+          "voice": "Stimme",
+          "voicePlaceholder": "Stimme des Modells",
+          "voiceHint": "Optionale Stimmen-ID des Sprachausgabemodells. Leer verwendet die Stimmeneinstellungen des Modells."
+        },
         "websearchMaxPageReads": "Max. Seitenaufrufe pro Antwort",
         "websearchMaxPageReadsDesc": "Begrenzt, wie viele Seiten das Modell mit dem Seitenleser für eine Antwort öffnen darf. Seiten, die die Suche selbst für ihre Auszüge abruft, zählen nicht. 1–50, Standard 5.",
         "usageGuide": {
@@ -4751,6 +4822,69 @@
       "startError": "Fehler beim Starten der Spracheingabe. Bitte versuchen Sie es erneut.",
       "insecureContext": "Der Mikrofonzugriff erfordert eine sichere Verbindung (HTTPS oder localhost).",
       "microphoneBusy": "Das Mikrofon konnte nicht gestartet werden. Möglicherweise wird es von einer anderen Anwendung verwendet."
+    }
+  },
+  "voiceMode": {
+    "button": {
+      "start": "Sprachmodus starten",
+      "end": "Sprachmodus beenden"
+    },
+    "overlay": {
+      "label": "Sprachmodus",
+      "orb": "Sprachaktivität"
+    },
+    "status": {
+      "connecting": "Verbindung wird aufgebaut…",
+      "listening": "Ich höre zu…",
+      "userSpeaking": "Ich höre zu…",
+      "thinking": "Ich denke nach…",
+      "speaking": "Ich spreche…",
+      "paused": "Mikrofon ist stummgeschaltet",
+      "holdToTalk": "Zum Sprechen die Leertaste oder die Taste gedrückt halten"
+    },
+    "tools": {
+      "searchWeb": "Ich suche im Web…",
+      "searchDocuments": "Ich suche in den Dokumenten…",
+      "readPage": "Ich lese eine Seite…",
+      "working": "Ich arbeite daran…"
+    },
+    "controls": {
+      "mute": "Stummschalten",
+      "unmute": "Stummschaltung aufheben",
+      "holdToTalk": "Zum Sprechen halten",
+      "release": "Loslassen zum Senden",
+      "end": "Beenden",
+      "endTitle": "Sprachmodus beenden (Esc)",
+      "retry": "Tippen für neuen Versuch",
+      "stopAnswer": "Antwort stoppen und sprechen"
+    },
+    "settings": {
+      "open": "Spracheinstellungen",
+      "title": "Spracheinstellungen",
+      "listeningStyle": "Zuhören",
+      "handsFree": "Freisprechen: Ich antworte, wenn Sie eine Pause machen",
+      "pushToTalk": "Push-to-Talk: Leertaste oder Taste gedrückt halten",
+      "bargeIn": "Unterbrechen durch Sprechen erlauben",
+      "bargeInHint": "Schalten Sie das auf Laptop-Lautsprechern aus, wenn sich die Antwort selbst unterbricht. Mit Kopfhörern funktioniert es am besten.",
+      "captions": "Untertitel anzeigen"
+    },
+    "errors": {
+      "micDenied": "Der Mikrofonzugriff wurde blockiert. Erlauben Sie ihn in den Browsereinstellungen und versuchen Sie es erneut.",
+      "micMissing": "Es wurde kein Mikrofon gefunden.",
+      "micLost": "Das Mikrofon funktioniert nicht mehr.",
+      "unsupported": "Der Sprachmodus wird in diesem Browser nicht unterstützt.",
+      "connection": "Die Verbindung zur Spracherkennung wurde unterbrochen.",
+      "generic": "Der Sprachmodus wurde wegen eines Fehlers beendet.",
+      "sendFailed": "Das konnte ich nicht senden. Bitte versuchen Sie es erneut."
+    },
+    "timeLimit": "Der Sprachmodus wurde nach {{minutes}} Minuten beendet.",
+    "voiceMessage": "Gesprochene Nachricht",
+    "try": {
+      "button": "Ausprobieren",
+      "title": "Mit den Einstellungen dieser Seite sprechen",
+      "unavailable": "Benötigt ein Text-to-Speech-Modell, einen funktionierenden Sprachdienst und einen Browser mit Mikrofonunterstützung",
+      "heading": "Sprachmodus-Test",
+      "echo": "Sie sagten: {{text}}"
     }
   },
   "voiceCommands": {

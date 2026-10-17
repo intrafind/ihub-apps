@@ -1,5 +1,7 @@
+import { useId } from 'react';
 import parseNumberOrUndefined from '../../utils/parseNumberOrUndefined';
 import { usePlatformConfig } from '../../../../shared/contexts/PlatformConfigContext';
+import useFeatureFlags from '../../../../shared/hooks/useFeatureFlags';
 import { getLocalizedContent } from '../../../../utils/localizeContent';
 import {
   fromDictationValue,
@@ -7,6 +9,7 @@ import {
   getSpeechServiceLabel,
   toDictationValue
 } from '../../../voice/utils/speechService';
+import { VOICE_LISTENING_STYLES, withVoiceModeSettings } from '../../utils/voiceMode';
 
 /** The microphone switch and, when it is on, its mode and transcript options. */
 function MicrophoneFields({ app, onInputChange: handleInputChange, t }) {
@@ -285,12 +288,271 @@ function ServiceHostField({ app, onInputChange: handleInputChange, t }) {
   );
 }
 
+/** The voice ids a text-to-speech model names, to suggest in the voice field. */
+const voiceSuggestionsOf = model => {
+  const ids = [model?.tts?.voice, ...Object.values(model?.tts?.voices || {})];
+  return [...new Set(ids.filter(id => typeof id === 'string' && id))];
+};
+
+const selectClass =
+  'mt-1 block w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm disabled:cursor-not-allowed';
+
+/**
+ * Whether this app offers the spoken conversation (voice mode), and what it
+ * does differently from the platform. Stored in `inputMode.voiceMode`: nothing
+ * is written for a setting that follows the platform, and the whole object is
+ * left out when no setting is made.
+ *
+ * @param {object} props
+ * @param {Array} [props.ttsModels] Enabled text-to-speech models.
+ */
+function VoiceModeFields({
+  app,
+  onInputChange: handleInputChange,
+  t,
+  ttsModels = [],
+  currentLanguage
+}) {
+  const { platformConfig } = usePlatformConfig();
+  const flagEnabled = useFeatureFlags().isEnabled('voiceMode', false);
+  const voiceListId = useId();
+  // Same rule as the runtime: voice mode is part of voice input.
+  const micEnabled = (app.inputMode?.microphone?.enabled ?? app.microphone?.enabled) !== false;
+  const voiceMode = app.inputMode?.voiceMode || {};
+  const choice =
+    voiceMode.enabled === true ? 'on' : voiceMode.enabled === false ? 'off' : 'platform';
+  const platformVoiceMode = platformConfig?.speech?.voiceMode;
+  const platformDefaultLabel =
+    typeof platformVoiceMode?.appDefault !== 'boolean'
+      ? t('admin.apps.edit.voiceMode.platformDefault', 'Platform default')
+      : platformVoiceMode.appDefault
+        ? t('admin.apps.edit.voiceMode.platformDefaultOn', 'Platform default (on)')
+        : t('admin.apps.edit.voiceMode.platformDefaultOff', 'Platform default (off)');
+
+  const setVoiceMode = patch =>
+    handleInputChange('inputMode', withVoiceModeSettings(app.inputMode, patch));
+
+  const modelName = model => getLocalizedContent(model.name, currentLanguage) || model.id;
+  const ttsModelId = voiceMode.ttsModelId || '';
+  const chosenModelMissing = !!ttsModelId && !ttsModels.some(m => m.id === ttsModelId);
+  const effectiveModelId =
+    ttsModelId || platformVoiceMode?.ttsModelId || platformConfig?.speech?.tts?.defaultModelId;
+  const voiceSuggestions = voiceSuggestionsOf(ttsModels.find(m => m.id === effectiveModelId));
+  const platformModel = ttsModels.find(
+    m => m.id === (platformVoiceMode?.ttsModelId || platformConfig?.speech?.tts?.defaultModelId)
+  );
+  const platformStyle = VOICE_LISTENING_STYLES.includes(platformVoiceMode?.listeningStyle)
+    ? platformVoiceMode.listeningStyle
+    : null;
+  const styleName = style =>
+    style === 'push-to-talk'
+      ? t('admin.apps.edit.voiceMode.pushToTalk', 'Push-to-talk')
+      : t('admin.apps.edit.voiceMode.handsFree', 'Hands-free');
+
+  return (
+    <div className="space-y-3 border-t border-gray-100 dark:border-gray-700 pt-4">
+      <div>
+        <h4 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+          {t('admin.apps.edit.voiceMode.title', 'Voice mode')}
+        </h4>
+        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+          {t(
+            'admin.apps.edit.voiceMode.description',
+            'A spoken conversation with this app: users talk and the app answers out loud. It listens with the speech recognition service above and speaks with a text-to-speech model.'
+          )}
+        </p>
+      </div>
+
+      {!micEnabled && (
+        <p className="text-xs text-amber-600 dark:text-amber-400" data-testid="voice-mode-mic-off">
+          {t(
+            'admin.apps.edit.voiceMode.needsMicrophone',
+            'Voice mode needs voice input. Enable the microphone above to use it in this app.'
+          )}
+        </p>
+      )}
+      {micEnabled && !flagEnabled && (
+        <p className="text-xs text-amber-600 dark:text-amber-400" data-testid="voice-mode-flag-off">
+          {t(
+            'admin.apps.edit.voiceMode.flagOff',
+            'Voice mode is a preview feature that is switched off under Admin → Features. These settings take effect once it is on.'
+          )}
+        </p>
+      )}
+
+      <fieldset
+        disabled={!micEnabled}
+        className={`space-y-3 min-w-0 ${micEnabled ? '' : 'opacity-50'}`}
+      >
+        <div>
+          <label
+            className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+            htmlFor="voice-mode-choice"
+          >
+            {t('admin.apps.edit.voiceMode.label', 'Voice mode')}
+          </label>
+          <select
+            id="voice-mode-choice"
+            value={choice}
+            onChange={e =>
+              setVoiceMode({
+                enabled:
+                  e.target.value === 'on' ? true : e.target.value === 'off' ? false : undefined
+              })
+            }
+            className={selectClass}
+          >
+            <option value="platform">{platformDefaultLabel}</option>
+            <option value="on">{t('admin.apps.edit.voiceMode.on', 'On')}</option>
+            <option value="off">{t('admin.apps.edit.voiceMode.off', 'Off')}</option>
+          </select>
+          <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+            {choice === 'platform'
+              ? t(
+                  'admin.apps.edit.voiceMode.defaultHint',
+                  'Follows the setting under Admin → Voice Input, including later changes.'
+                )
+              : choice === 'on'
+                ? t(
+                    'admin.apps.edit.voiceMode.onHint',
+                    'On for this app. Voice mode must also be switched on under Admin → Voice Input.'
+                  )
+                : t('admin.apps.edit.voiceMode.offHint', 'Voice mode is not offered in this app.')}
+          </p>
+        </div>
+
+        {choice !== 'off' && (
+          <div className="space-y-3 pl-6">
+            <div>
+              <label
+                className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                htmlFor="voice-mode-listening-style"
+              >
+                {t('admin.apps.edit.voiceMode.listeningStyle', 'Listening style')}
+              </label>
+              <select
+                id="voice-mode-listening-style"
+                value={voiceMode.listeningStyle || ''}
+                onChange={e => setVoiceMode({ listeningStyle: e.target.value || undefined })}
+                className={selectClass}
+              >
+                <option value="">
+                  {platformStyle
+                    ? t(
+                        'admin.apps.edit.voiceMode.platformDefaultNamed',
+                        'Platform default ({{value}})',
+                        { value: styleName(platformStyle) }
+                      )
+                    : t('admin.apps.edit.voiceMode.platformDefault', 'Platform default')}
+                </option>
+                {VOICE_LISTENING_STYLES.map(style => (
+                  <option key={style} value={style}>
+                    {styleName(style)}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label
+                className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                htmlFor="voice-mode-tts-model"
+              >
+                {t('admin.apps.edit.voiceMode.ttsModel', 'Text-to-speech model')}
+              </label>
+              <select
+                id="voice-mode-tts-model"
+                value={ttsModelId}
+                onChange={e => setVoiceMode({ ttsModelId: e.target.value || undefined })}
+                className={selectClass}
+              >
+                <option value="">
+                  {platformModel
+                    ? t(
+                        'admin.apps.edit.voiceMode.platformDefaultNamed',
+                        'Platform default ({{value}})',
+                        { value: modelName(platformModel) }
+                      )
+                    : t('admin.apps.edit.voiceMode.platformDefault', 'Platform default')}
+                </option>
+                {chosenModelMissing && <option value={ttsModelId}>{ttsModelId}</option>}
+                {ttsModels.map(m => (
+                  <option key={m.id} value={m.id}>
+                    {modelName(m)}
+                  </option>
+                ))}
+              </select>
+              <p
+                className={`mt-1 text-xs ${
+                  chosenModelMissing
+                    ? 'text-amber-600 dark:text-amber-400'
+                    : 'text-gray-500 dark:text-gray-400'
+                }`}
+              >
+                {chosenModelMissing
+                  ? t(
+                      'admin.apps.edit.voiceMode.ttsModelUnavailable',
+                      'This model is disabled or no longer exists, so voice mode is not offered in this app.'
+                    )
+                  : t(
+                      'admin.apps.edit.voiceMode.ttsModelHint',
+                      'For example a German voice model for a German app. Users need access to the model through their groups.'
+                    )}
+              </p>
+            </div>
+
+            <div>
+              <label
+                className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                htmlFor="voice-mode-voice"
+              >
+                {t('admin.apps.edit.voiceMode.voice', 'Voice')}
+              </label>
+              <input
+                id="voice-mode-voice"
+                type="text"
+                list={voiceListId}
+                value={voiceMode.voice || ''}
+                onChange={e =>
+                  setVoiceMode({ voice: e.target.value.trim() ? e.target.value : undefined })
+                }
+                placeholder={t('admin.apps.edit.voiceMode.voicePlaceholder', 'Voice of the model')}
+                className={selectClass}
+              />
+              <datalist id={voiceListId}>
+                {voiceSuggestions.map(id => (
+                  <option key={id} value={id} />
+                ))}
+              </datalist>
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                {t(
+                  'admin.apps.edit.voiceMode.voiceHint',
+                  'Optional voice id of the text-to-speech model. Empty uses the voice settings of the model.'
+                )}
+              </p>
+            </div>
+          </div>
+        )}
+      </fieldset>
+    </div>
+  );
+}
+
 /**
  * @param {object} props
  * @param {Array} [props.transcriptionModels] Enabled streaming transcription
  *   models: each one can take the app's voice input.
+ * @param {Array} [props.ttsModels] Enabled text-to-speech models: each one can
+ *   speak the app's voice mode.
  */
-function InputModeSection({ app, onChange, t, transcriptionModels = [], currentLanguage }) {
+function InputModeSection({
+  app,
+  onChange,
+  t,
+  transcriptionModels = [],
+  ttsModels = [],
+  currentLanguage
+}) {
   const handleInputChange = (field, value) => {
     onChange({ ...app, [field]: value });
   };
@@ -337,6 +599,14 @@ function InputModeSection({ app, onChange, t, transcriptionModels = [], currentL
             />
 
             <ServiceHostField app={app} onInputChange={handleInputChange} t={t} />
+
+            <VoiceModeFields
+              app={app}
+              onInputChange={handleInputChange}
+              t={t}
+              ttsModels={ttsModels}
+              currentLanguage={currentLanguage}
+            />
           </div>
         </div>
       </div>

@@ -759,6 +759,52 @@
         "test": "Test",
         "testHint": "Speaks the text with the selected model, the way a chat message is read. Works before saving, but the model must be enabled.",
         "sampleText": "Hello! This is how answers sound when they are read aloud."
+      },
+      "voiceMode": {
+        "title": "Voice mode",
+        "preview": "Preview",
+        "description": "A spoken conversation with an app: users talk, the app answers out loud, and they can interrupt. Speech-to-text is whatever the app uses for voice input (see above); the answer is spoken by the text-to-speech model below. Audio is never stored.",
+        "flagOff": "Voice mode is a preview feature and is switched off. Enable the \"Voice Mode\" preview feature under Admin → Features first. You can already prepare the settings here, but nothing takes effect until then.",
+        "enabled": "Enable voice mode",
+        "appDefault": "Turn voice mode on for apps that do not decide themselves",
+        "appDefaultHint": "Off: voice mode is opt-in, each app turns it on in the app editor. On: every app that allows voice input has it, unless the app turns it off.",
+        "ttsModel": "Text-to-speech model",
+        "ttsModelDefault": "Default text-to-speech model",
+        "ttsModelDefaultNamed": "Default text-to-speech model ({{model}})",
+        "ttsModelMissing": "This model no longer exists, so voice mode is not offered.",
+        "ttsModelDisabledHint": "This model is disabled, so voice mode is not offered. Enable it under Admin → Models and make sure it has an API key.",
+        "ttsModelNone": "No text-to-speech model is set here or under \"Read aloud\" above, so voice mode is not offered.",
+        "ttsModelHint": "Leave on the default to use the read-aloud model. Apps can pick their own, for example a German voice model. Users need access to the model through their groups.",
+        "readAloudOff": "Read aloud is switched off above. Voice mode uses the same text-to-speech setup, so switch it on too, or voice mode is not offered.",
+        "listeningStyle": "Listening style",
+        "handsFree": "Hands-free",
+        "pushToTalk": "Push-to-talk",
+        "listeningStyleHint": "Hands-free listens all the time and ends a turn after a pause. Push-to-talk records while the button or the Space bar is held.",
+        "thinkingLevel": "Reasoning effort",
+        "thinking": {
+          "minimal": "Minimal",
+          "low": "Low",
+          "medium": "Medium",
+          "high": "High"
+        },
+        "thinkingLevelHint": "Reasoning models add seconds of silence before the answer. A low level keeps replies quick; an app that asks for more keeps its own level.",
+        "endOfTurnSilenceMs": "End of turn after silence (ms)",
+        "endOfTurnSilenceMsHint": "Hands-free only: how long the user must pause before the app answers. 300 to 3000, default 800.",
+        "maxSessionMinutes": "Longest session (minutes)",
+        "maxSessionMinutesHint": "A voice session ends after this time. 1 to 240, default 30.",
+        "bargeIn": "Let users interrupt the answer by speaking",
+        "bargeInHint": "Turn this off for laptop speakers without headphones, where the app could hear itself. Users can still stop an answer with a tap.",
+        "systemPrompt": {
+          "title": "Voice style instruction",
+          "description": "Added after the app's system prompt in voice mode so answers suit being heard. Leave a language empty to use the built-in text, shown below each field.",
+          "language": "Instruction ({{language}})",
+          "reset": "Reset to built-in",
+          "builtIn": "Built-in:"
+        },
+        "tryIt": "Try it",
+        "tryFlagOff": "Enable the \"Voice Mode\" preview feature first",
+        "tryItHint": "Starts a voice session in this browser with the speech service chosen under \"Voice input\" above, the text-to-speech model and the settings in this form. Works before saving; it needs the microphone and a text-to-speech model that is enabled.",
+        "trySoon": "Available soon"
       }
     },
     "agents": {
@@ -2915,6 +2961,31 @@
         "platformDefaultServiceHint": "Follows the default set under Admin → Voice Input, including later changes.",
         "dictationModelHint": "The microphone streams through the iHub server to this transcription model. Users need access to the model through their groups.",
         "dictationModelUnavailable": "This model is disabled, no longer exists or does not stream, so voice input fails in this app.",
+        "voiceMode": {
+          "title": "Voice mode",
+          "description": "A spoken conversation with this app: users talk and the app answers out loud. It listens with the speech recognition service above and speaks with a text-to-speech model.",
+          "needsMicrophone": "Voice mode needs voice input. Enable the microphone above to use it in this app.",
+          "flagOff": "Voice mode is a preview feature that is switched off under Admin → Features. These settings take effect once it is on.",
+          "label": "Voice mode",
+          "platformDefault": "Platform default",
+          "platformDefaultOn": "Platform default (on)",
+          "platformDefaultOff": "Platform default (off)",
+          "platformDefaultNamed": "Platform default ({{value}})",
+          "on": "On",
+          "off": "Off",
+          "defaultHint": "Follows the setting under Admin → Voice Input, including later changes.",
+          "onHint": "On for this app. Voice mode must also be switched on under Admin → Voice Input.",
+          "offHint": "Voice mode is not offered in this app.",
+          "listeningStyle": "Listening style",
+          "handsFree": "Hands-free",
+          "pushToTalk": "Push-to-talk",
+          "ttsModel": "Text-to-speech model",
+          "ttsModelHint": "For example a German voice model for a German app. Users need access to the model through their groups.",
+          "ttsModelUnavailable": "This model is disabled or no longer exists, so voice mode is not offered in this app.",
+          "voice": "Voice",
+          "voicePlaceholder": "Voice of the model",
+          "voiceHint": "Optional voice id of the text-to-speech model. Empty uses the voice settings of the model."
+        },
         "websearchMaxPageReads": "Max Page Reads per Answer",
         "websearchMaxPageReadsDesc": "Caps how many pages the model may open with the page reader for one answer. Pages the search itself fetches for its excerpts do not count. 1–50, default 5.",
         "usageGuide": {
@@ -4786,6 +4857,69 @@
       "startError": "Error starting voice input. Please try again.",
       "insecureContext": "Microphone access requires a secure connection (HTTPS or localhost).",
       "microphoneBusy": "The microphone could not be started. It may be in use by another application."
+    }
+  },
+  "voiceMode": {
+    "button": {
+      "start": "Start voice mode",
+      "end": "End voice mode"
+    },
+    "overlay": {
+      "label": "Voice mode",
+      "orb": "Voice activity"
+    },
+    "status": {
+      "connecting": "Connecting…",
+      "listening": "Listening…",
+      "userSpeaking": "Listening…",
+      "thinking": "Thinking…",
+      "speaking": "Speaking…",
+      "paused": "Microphone is muted",
+      "holdToTalk": "Hold Space or the button to talk"
+    },
+    "tools": {
+      "searchWeb": "Searching the web…",
+      "searchDocuments": "Looking in the documents…",
+      "readPage": "Reading a page…",
+      "working": "Working on it…"
+    },
+    "controls": {
+      "mute": "Mute",
+      "unmute": "Unmute",
+      "holdToTalk": "Hold to talk",
+      "release": "Release to send",
+      "end": "End",
+      "endTitle": "End voice mode (Esc)",
+      "retry": "Tap to retry",
+      "stopAnswer": "Stop the answer and talk"
+    },
+    "settings": {
+      "open": "Voice settings",
+      "title": "Voice settings",
+      "listeningStyle": "Listening",
+      "handsFree": "Hands-free: I answer when you pause",
+      "pushToTalk": "Push to talk: hold Space or the button",
+      "bargeIn": "Let me interrupt by speaking",
+      "bargeInHint": "Turn this off on laptop speakers if the answer cuts itself off. Headphones work best.",
+      "captions": "Show captions"
+    },
+    "errors": {
+      "micDenied": "Microphone access was blocked. Allow it in your browser settings and try again.",
+      "micMissing": "No microphone was found.",
+      "micLost": "The microphone stopped working.",
+      "unsupported": "Voice mode is not supported in this browser.",
+      "connection": "The connection to speech recognition was lost.",
+      "generic": "Voice mode stopped because of an error.",
+      "sendFailed": "I could not send that. Please try again."
+    },
+    "timeLimit": "Voice mode ended after {{minutes}} minutes.",
+    "voiceMessage": "Spoken message",
+    "try": {
+      "button": "Try it",
+      "title": "Talk to the app with the settings on this page",
+      "unavailable": "Needs a text-to-speech model, a working speech service and a browser with microphone support",
+      "heading": "Voice mode test",
+      "echo": "You said: {{text}}"
     }
   },
   "voiceCommands": {

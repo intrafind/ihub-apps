@@ -10,6 +10,12 @@ import { findByIdCaseInsensitive } from '../../utils/resourceLookup.js';
 import { normalizeFiles } from '../../../shared/promptContext.js';
 import { resolveMaxOutputTokens } from '../../../shared/outputTokens.js';
 import { matchesModelFilter, modelSupportsTools } from '../../../shared/modelCapabilities.js';
+import {
+  isVoiceTurn,
+  resolveVoiceInstruction,
+  appendVoiceInstruction,
+  resolveVoiceThinkingLevel
+} from './voiceMode.js';
 
 /**
  * Attach the page images of image-based PDFs to their message.
@@ -329,6 +335,7 @@ class RequestBuilder {
     imageQuality,
     requestedSkills,
     documentIds,
+    voiceMode,
     processMessageTemplates,
     user,
     chatId
@@ -639,6 +646,20 @@ class RequestBuilder {
         pageReader: tools.some(t => t.id === READ_URL_TOOL_ID)
       });
 
+      // A spoken turn: the answer is read aloud, so it is short and plain, and
+      // reasoning stays short. Only while the platform allows voice mode; the
+      // flag never fails a request.
+      let effectiveThinkingLevel = thinkingLevel;
+      if (voiceMode === true) {
+        const platform = configCache.getPlatform();
+        if (isVoiceTurn({ voiceMode, platform, features: configCache.getFeatures() })) {
+          appendVoiceInstruction(llmMessages, resolveVoiceInstruction({ platform, language }));
+          effectiveThinkingLevel =
+            resolveVoiceThinkingLevel({ platform, model, app, thinkingLevel, thinkingEnabled }) ??
+            thinkingLevel;
+        }
+      }
+
       // Build imageConfig if image generation is supported and parameters are provided
       // Pass raw user parameters to adapter for provider-specific translation
       let imageConfig = null;
@@ -673,7 +694,7 @@ class RequestBuilder {
       const llmOptions = {
         nativeWebSearch,
         thinkingEnabled,
-        thinkingLevel,
+        thinkingLevel: effectiveThinkingLevel,
         thinkingThoughts,
         imageConfig,
         user,

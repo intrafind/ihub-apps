@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import react from '@vitejs/plugin-react';
 import authGatePlugin from './vite-plugins/vite-plugin-auth-gate.js';
+import vadAssetsPlugin from './vite-plugins/vite-plugin-vad-assets.js';
 
 // Plugin that copies @microsoft/office-js/dist to dist/office/office-js after build.
 // This backs the `bundled` Office.js mode (see server/utils/officeJsSource.js) for
@@ -40,7 +41,8 @@ function loadOfficeDevCerts() {
 
 // https://vitejs.dev/config/
 export default defineConfig({
-  plugins: [react(), authGatePlugin(), copyOfficeJsPlugin()],
+  // vadAssetsPlugin publishes voice mode's VAD model + WebAssembly runtime under /vad/
+  plugins: [react(), authGatePlugin(), copyOfficeJsPlugin(), vadAssetsPlugin()],
   base: './', // Use relative paths for all assets - works with dynamic base tag
   envDir: '../',
   build: {

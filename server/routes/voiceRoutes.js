@@ -11,7 +11,8 @@ import {
   TTS_AUDIO_ENCODING,
   DEFAULT_MAX_CHARACTERS
 } from '../tts/index.js';
-import { detectSpeechLanguage } from '../tts/language.js';
+import { detectSpeechLanguage, normalizeLanguage } from '../tts/language.js';
+import { resolveVoiceModeSettings } from '../../shared/voiceMode.js';
 
 /** Longest message body `/api/voice/speech` accepts, before markup is stripped. */
 const MAX_INPUT_CHARACTERS = 200_000;
@@ -33,6 +34,39 @@ function writeWithBackpressure(res, chunk) {
   });
 }
 
+/** Longest `voice` id `/api/voice/speech` accepts (the model schema's limit). */
+const MAX_VOICE_ID_LENGTH = 200;
+
+/**
+ * The voices a request may pick for a text-to-speech model: the ones the admin
+ * set up on the model (`tts.voice`, `tts.voices`) and the ones an app names for
+ * it as its voice mode voice (`inputMode.voiceMode.voice`, on an app whose voice
+ * mode speaks with this model). A request cannot reach any other voice of the
+ * provider account.
+ *
+ * @param {Object} model - The text-to-speech model
+ * @param {Object} platform - Platform config
+ * @returns {Set<string>}
+ */
+function configuredVoices(model, platform) {
+  const voices = new Set();
+  const add = value => {
+    if (typeof value === 'string' && value.trim()) voices.add(value.trim());
+  };
+  add(model?.tts?.voice);
+  Object.values(model?.tts?.voices || {}).forEach(add);
+  const { data: apps } = configCache.getApps?.() || {};
+  for (const app of Array.isArray(apps) ? apps : []) {
+    if (
+      app?.inputMode?.voiceMode?.voice &&
+      resolveVoiceModeSettings({ platform, app }).ttsModelId === model.id
+    ) {
+      add(app.inputMode.voiceMode.voice);
+    }
+  }
+  return voices;
+}
+
 /**
  * User-facing voice / speech-to-text routes.
  *
@@ -47,10 +81,18 @@ function writeWithBackpressure(res, chunk) {
  */
 export default function registerVoiceRoutes(app) {
   /**
-   * Read a message aloud: `POST /api/voice/speech` `{ text, modelId?, language? }`.
+   * Read a message aloud: `POST /api/voice/speech`
+   * `{ text, modelId?, language?, languageFixed?, voice? }`.
    * `language` is a hint (the user's UI language) for when the message's own
    * language cannot be told from its text; it picks the voice from the
    * model's `tts.voices` (see server/tts/language.js).
+   *
+   * Voice mode reads one answer in several requests (a chunk each). With
+   * `languageFixed: true` the `language` is used as given and nothing is
+   * detected, so every chunk of the answer gets the voice the first one got
+   * (its `X-Speech-Language`) even when a short chunk would be told differently.
+   * `voice` picks one of the model's configured voices for the request (see
+   * `configuredVoices`); without it the voice follows the language.
    *
    * Streams the speech as it is generated — raw 16-bit signed little-endian
    * mono PCM (`X-Audio-Encoding: pcm_s16le`, rate in `X-Audio-Sample-Rate`)
@@ -78,7 +120,13 @@ export default function registerVoiceRoutes(app) {
       req.user = enhanceUserWithPermissions(req.user, platform.auth || {}, platform);
     }
 
-    const { text, modelId, language: languageHint } = req.body || {};
+    const {
+      text,
+      modelId,
+      language: languageHint,
+      languageFixed,
+      voice: requestedVoice
+    } = req.body || {};
     if (typeof text !== 'string' || !text.trim()) {
       return res.status(400).json({ error: 'text is required', code: 'invalid-text' });
     }
@@ -88,6 +136,23 @@ export default function registerVoiceRoutes(app) {
     if (modelId !== undefined && typeof modelId !== 'string') {
       return res.status(400).json({ error: 'modelId must be a string', code: 'invalid-model' });
     }
+    if (languageFixed !== undefined && typeof languageFixed !== 'boolean') {
+      return res
+        .status(400)
+        .json({ error: 'languageFixed must be a boolean', code: 'invalid-language' });
+    }
+    if (languageFixed === true && typeof languageHint !== 'string') {
+      return res.status(400).json({
+        error: 'language is required when languageFixed is true',
+        code: 'invalid-language'
+      });
+    }
+    if (
+      requestedVoice !== undefined &&
+      (typeof requestedVoice !== 'string' || requestedVoice.length > MAX_VOICE_ID_LENGTH)
+    ) {
+      return res.status(400).json({ error: 'voice must be a string', code: 'invalid-voice' });
+    }
 
     const resolved = resolveTtsModel({ modelId, user: req.user, platform });
     if (!resolved.ok) {
@@ -95,17 +160,30 @@ export default function registerVoiceRoutes(app) {
     }
     const { model, provider } = resolved;
 
+    // A voice the request picks has to be one the admin configured; it replaces
+    // the one the language chooses.
+    const voice = typeof requestedVoice === 'string' ? requestedVoice.trim() : '';
+    if (voice && !configuredVoices(model, platform).has(voice)) {
+      return res.status(400).json({ error: 'Unknown voice for this model', code: 'invalid-voice' });
+    }
+
     const maxCharacters = platform.speech?.tts?.maxCharacters || DEFAULT_MAX_CHARACTERS;
     const { chunks, characters, truncated } = prepareSpeech(text, { maxCharacters });
     if (!chunks.length) {
       return res.status(422).json({ error: 'Nothing to read aloud', code: 'no-speakable-text' });
     }
 
-    // One voice for the whole message: its language decides it once.
-    const language = detectSpeechLanguage(chunks.join('\n\n'), {
-      hint: typeof languageHint === 'string' ? languageHint : undefined
-    });
-    const cfg = provider.resolveUpstream(model, { language });
+    // One voice for the whole message: its language decides it once. A caller
+    // that already knows the language (the rest of an answer read in chunks)
+    // fixes it, and nothing is detected. A language the speech models do not
+    // list is not a failure mid-answer: it simply gets the model's own voice.
+    const language = languageFixed
+      ? normalizeLanguage(languageHint)
+      : detectSpeechLanguage(chunks.join('\n\n'), {
+          hint: typeof languageHint === 'string' ? languageHint : undefined
+        });
+    const upstream = provider.resolveUpstream(model, { language });
+    const cfg = voice ? { ...upstream, voice } : upstream;
 
     let started = false;
     const start = () => {

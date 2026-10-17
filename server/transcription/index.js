@@ -38,11 +38,28 @@
  *                                                return kind `go-away` to ask for it
  *   Both can be overridden per model in `config`.
  *
+ * Streaming providers may also take part in conversation mode (voice mode:
+ * many user turns over one upstream session; `start.conversation: true`).
+ * All three are optional, and a provider without them is safe: the bridge
+ * sends nothing at the end of a turn and settles on the upstream going quiet.
+ *   commitFrames(cfg)       → [json]             the user's turn ended: flush
+ *                                                what the upstream holds back,
+ *                                                without ending the session
+ *   turnStartFrames(cfg)    → [json]             arm the upstream for the next
+ *                                                turn; sent once, before the
+ *                                                first audio after a commit
+ *                                                (`readyFrames` armed turn 1)
+ *   commitEndsWithFinal     → boolean            the upstream answers the commit
+ *                                                with a `final` carrying the
+ *                                                turn's text: wait for it
+ *                                                instead of settling on quiet
+ *
  * Batch providers (`mode: 'batch'`) have no upstream protocol. The bridge
  * buffers the audio the browser streams and calls, once, on `stop`:
  *   transcribe({ cfg, pcm, sampleRate, signal }) → { text }
  * The browser-facing protocol is identical either way, so a batch model looks
- * to the client like a streaming one that emits a single `final`.
+ * to the client like a streaming one that emits a single `final`. In
+ * conversation mode it is called once per `commit` with that turn's audio.
  */
 import vllmRealtimeProvider from './vllmRealtimeProvider.js';
 import googleLiveProvider from './googleLiveProvider.js';

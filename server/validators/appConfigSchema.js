@@ -6,6 +6,7 @@ import {
   LANGUAGE_CODE_PATTERN,
   VARIABLE_NAME_PATTERN
 } from '../../shared/validationPatterns.js';
+import { VOICE_LISTENING_STYLES } from '../../shared/voiceMode.js';
 import { zHttpUrl } from './common.js';
 import { FEATURE_IDS } from '../featureRegistry.js';
 
@@ -172,6 +173,21 @@ const inputModeSchema = z
         enabled: z.boolean().optional().prefault(true),
         mode: z.enum(['manual', 'automatic']).optional().prefault('manual'),
         showTranscript: z.boolean().optional().prefault(true)
+      })
+      .optional(),
+    // Voice mode: a spoken conversation with the app. Nothing is defaulted
+    // here: an absent `enabled`, `listeningStyle` or `ttsModelId` follows the
+    // platform (`speech.voiceMode`, see shared/voiceMode.js). Voice mode shares
+    // the app's speech service (settings.speechRecognition), and an app with
+    // `microphone.enabled: false` has none.
+    voiceMode: z
+      .object({
+        enabled: z.boolean().optional(),
+        listeningStyle: z.enum(VOICE_LISTENING_STYLES).optional(),
+        // A `modelType: "tts"` model; empty follows the platform's.
+        ttsModelId: z.string().optional(),
+        // A voice of that model; empty uses the model's voice for the language.
+        voice: z.string().optional()
       })
       .optional()
   })

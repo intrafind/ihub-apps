@@ -16,6 +16,7 @@ import ImageGenerationControls from './ImageGenerationControls';
 import ModelSelector from './ModelSelector';
 import ModelHintBanner from './ModelHintBanner';
 import { VoiceInputComponent } from '../../voice/components';
+import VoiceModeButton from '../../voice/components/VoiceModeButton';
 import { useUIConfig } from '../../../shared/contexts/UIConfigContext';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
 import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
@@ -61,6 +62,12 @@ function ChatInput({
   onCancel,
   onVoiceInput,
   onVoiceCommand,
+  // Voice mode (a spoken conversation with the app): `onVoiceMode` starts it and
+  // is only passed when voice mode is available here. The button sits right next
+  // to Send; `voiceModeActive` is true while the voice view is open, which owns
+  // the input area, so dictation is held back.
+  onVoiceMode = null,
+  voiceModeActive = false,
   // Record (distinct from dictation onVoiceInput): the recording goes to the
   // selected model like an uploaded audio file.
   onRecordTranscription = null,
@@ -866,7 +873,7 @@ function ChatInput({
                   app={app}
                   onSpeechResult={onVoiceInput}
                   inputRef={actualInputRef}
-                  disabled={isInputDisabled || isProcessing}
+                  disabled={isInputDisabled || isProcessing || voiceModeActive}
                   onCommand={onVoiceCommand}
                 />
               </div>
@@ -944,6 +951,21 @@ function ChatInput({
                 onModelChange={onModelChange}
                 currentLanguage={currentLanguage}
                 disabled={isInputDisabled || isProcessing}
+              />
+            )}
+
+            {/* Voice mode: a hands-free spoken conversation. Right next to Send;
+                not while a turn streams or a recording runs. */}
+            {onVoiceMode && (
+              <VoiceModeButton
+                onClick={onVoiceMode}
+                active={voiceModeActive}
+                disabled={
+                  disabled ||
+                  requiresAlertAcknowledgment ||
+                  isRecordingTranscription ||
+                  (isProcessing && !voiceModeActive)
+                }
               />
             )}
 

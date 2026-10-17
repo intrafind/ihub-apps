@@ -8,6 +8,17 @@
       "enabled": false,
       "defaultModelId": ""
     },
+    "voiceMode": {
+      "enabled": false,
+      "appDefault": false,
+      "ttsModelId": "",
+      "listeningStyle": "hands-free",
+      "bargeIn": true,
+      "endOfTurnSilenceMs": 800,
+      "thinkingLevel": "low",
+      "maxSessionMinutes": 30,
+      "systemPrompt": {}
+    },
     "azure": {
       "enabled": false,
       "host": "",

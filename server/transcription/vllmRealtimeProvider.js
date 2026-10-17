@@ -92,6 +92,30 @@ export function stopFrames() {
 }
 
 /**
+ * Conversation mode: the end of one user turn on a session that stays open.
+ *
+ * vLLM transcribes one "utterance" per generation. A plain `commit` starts a
+ * generation and `commit` with `final: true` ends its audio, after which
+ * `transcription.done` carries the whole text of that utterance (see the
+ * Realtime API protocol in the vLLM speech-to-text docs: commit, append…,
+ * deltas, done, repeat for the next utterance). A turn is therefore one
+ * generation: this ends it, and `turnStartFrames` starts the next one.
+ */
+export function commitFrames() {
+  return [{ type: 'input_audio_buffer.commit', final: true }];
+}
+
+/**
+ * Conversation mode: arm the session for the next turn. The bridge sends this
+ * once, just before the first audio frame that follows a `commitFrames`; the
+ * initial commit in `readyFrames` armed the first turn. It is never sent while
+ * a generation is still reading audio, which would start a second one.
+ */
+export function turnStartFrames() {
+  return [{ type: 'input_audio_buffer.commit' }];
+}
+
+/**
  * Classify one parsed upstream frame for the bridge.
  *
  * @param {Object} msg
@@ -116,11 +140,16 @@ export default {
   id: 'vllm-realtime',
   mode: 'stream',
   readyFallbackMs: SESSION_CREATED_FALLBACK_MS,
+  // The commit that ends a turn is answered with `transcription.done`, which
+  // is the turn's end: the bridge waits for it instead of settling on quiet.
+  commitEndsWithFinal: true,
   resolveUpstream,
   connect,
   openFrames,
   readyFrames,
   audioFrame,
   stopFrames,
+  commitFrames,
+  turnStartFrames,
   interpret
 };
