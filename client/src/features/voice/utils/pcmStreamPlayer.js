@@ -219,18 +219,28 @@ export class PcmStreamPlayer {
     if (!this.multiStream) {
       return Promise.reject(new Error('enqueueStream needs a multi-stream player'));
     }
-    if (this.isFinal() || this.finishing) return Promise.resolve({ status: 'aborted' });
+    if (this.isFinal()) return Promise.resolve({ status: 'aborted' });
+    // A stream after `finish()` reopens the player, as long as it has not ended.
+    this.finishing = false;
     const stream = { pending: [], total: 0, done: false };
     this.streams.push(stream);
     if (this.state === 'idle') this.setState('loading');
     return this.runStream(stream, request, onResponse);
   }
 
-  /** Multi-stream mode: no more streams follow; the player ends once all audio has played. */
+  /**
+   * Multi-stream mode: no more streams follow (for now); the player ends once
+   * everything enqueued has been received and played.
+   */
   finish() {
     if (!this.multiStream || this.isFinal()) return;
     this.finishing = true;
     this.pump();
+  }
+
+  /** Whether audio is scheduled or queued: something is audible, or about to be. */
+  hasAudio() {
+    return this.sources.size > 0 || this.queuedBytes > 1;
   }
 
   async runStream(stream, request, onResponse) {
