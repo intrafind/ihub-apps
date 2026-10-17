@@ -40,6 +40,15 @@ const now = () =>
     ? performance.now()
     : Date.now();
 
+/** Resume a context that the autoplay policy (or iOS after a call) suspended. Never throws. */
+function resumeContext(context) {
+  try {
+    context.resume?.()?.catch?.(() => {});
+  } catch {
+    // Closed or not resumable: nothing to do.
+  }
+}
+
 /** Run a caller's callback; one that throws must not stall the audio. */
 function notify(callback, ...args) {
   try {
@@ -57,9 +66,10 @@ function notify(callback, ...args) {
  * An answer runs from the first `update()` (or `say()`) after idle or
  * `interrupt()` until `onDrained`. Callbacks may run synchronously inside
  * `update()` / `say()` (an answer with nothing to read drains at once) and
- * never after `interrupt()` or `dispose()`. After `interrupt()` the caller must
- * not feed the interrupted run's text again: the next `update()` starts a new
- * answer.
+ * never after `interrupt()` or `dispose()`. The text of the next answer may
+ * only be fed once the previous one has drained or been interrupted (the text
+ * is cumulative per answer), and after `interrupt()` the caller must not feed
+ * the interrupted run's text again: the next `update()` starts a new answer.
  *
  * @param {Object} [opts]
  * @param {string} [opts.modelId] - TTS model id; '' or omitted uses the server default.
@@ -98,7 +108,7 @@ export function createSpeechQueue({
 } = {}) {
   const context = createAudioContext();
   // A context created in a gesture may still start suspended (Safari).
-  context.resume?.().catch(() => {});
+  resumeContext(context);
 
   const textChunker = chunker || createSpeakableChunker();
   const limit = Math.max(1, Math.floor(maxInFlight) || 1);
@@ -108,9 +118,7 @@ export function createSpeechQueue({
   function startAnswer(autoFinal) {
     textChunker.reset();
     // Safari suspends an idle context ('interrupted' after a call or Siri).
-    if (context.state === 'suspended' || context.state === 'interrupted') {
-      context.resume?.().catch(() => {});
-    }
+    if (context.state === 'suspended' || context.state === 'interrupted') resumeContext(context);
     const current = {
       startedAt: now(),
       // Chunks cut but not requested yet.
