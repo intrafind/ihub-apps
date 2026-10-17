@@ -31,7 +31,7 @@ product.
 - **Delegation.** GPT-Live answers simple questions itself. For web search, deeper reasoning or
   bigger tasks it **hands the request to the frontier text model (GPT-5.5) in the background** and
   speaks the result when it arrives. A fast voice model handles the conversation, and a strong
-  text model does the hard work. This is the most interesting pattern for us (§5.4).
+  text model does the hard work. iHub does not plan native speech-to-speech (§5).
 - **Developer API.**
   - Realtime API (`gpt-realtime-2`, May 2026) over WebRTC or WebSocket. The browser either gets an
     **ephemeral client secret** from our server (`POST /v1/realtime/client_secrets`), or our server
@@ -142,10 +142,10 @@ What is missing:
 
 ## 3. Recommendation
 
-**Phase 1 builds cascaded voice mode, orchestrated in the browser on top of the existing
-endpoints. Phase 3 adds native speech-to-speech as an optional model type.**
+**Build cascaded voice mode, orchestrated in the browser on top of the existing endpoints.
+Native speech-to-speech is not planned (decision 2026-10-17, §7).**
 
-Why cascaded first:
+Why cascaded:
 
 - **It is the only design that keeps the app intact.** It works with every chat model iHub
   supports (OpenAI, Anthropic, Google, Mistral, Bedrock, local vLLM) and keeps the app's tools,
@@ -154,19 +154,20 @@ Why cascaded first:
   can be combined, which matters to our customers. Native S2S today is OpenAI and Google cloud only.
 - **About 80 % of the code exists.** The STT, TTS and chat paths are built, permission-checked,
   rate-limited and documented.
-- **Native S2S needs most of the same work.** The UI, state machine, barge-in and transcript
-  persistence carry over to Phase 3.
+- **Audio stays where the admin chose to send it.** Speech goes only to the speech service the
+  app already uses for voice input (§4.3). No new cloud vendor gets the user's voice.
 
 ---
 
-## 4. Phase 1 — cascaded voice mode
+## 4. Design — cascaded voice mode
 
 ### 4.1 User experience
 
-**Entry.** A waveform button (`VoiceModeButton`) sits in `ChatInput.jsx` next to the mic and Record
-buttons. Like ChatGPT, it **replaces the Send button while the input is empty**, so it does not add
-to the toolbar. It shows only when voice mode is available (§4.6). The first click asks for
-microphone permission and unlocks the `AudioContext`, because autoplay needs a user gesture.
+**Entry.** A waveform button (`VoiceModeButton`) sits in `ChatInput.jsx` **directly next to the
+mic button**, like Claude (decision 2026-10-17). The Send button stays as it is. On mobile, where
+the mic lives in `ChatInputActionsMenu.jsx`, the voice mode button sits beside it there. The button
+shows only when voice mode is available (§4.6). The first click asks for microphone permission and
+unlocks the `AudioContext`, because autoplay needs a user gesture.
 
 **Voice view** (`VoiceModeOverlay`) covers the message area and leaves the header visible:
 
@@ -240,7 +241,7 @@ Browser echo cancellation is what lets us listen while we speak.
 
 **VAD.** The RMS threshold in `modelRecognitionService.js` is fine for dictation. For a hands-free
 loop with barge-in it triggers on keyboard noise and on our own TTS leaking through the speakers.
-Phase 1 replaces it in voice mode with **Silero VAD in the browser** (`@ricky0123/vad-web`; ONNX
+Voice mode replaces it with **Silero VAD in the browser** (`@ricky0123/vad-web`; ONNX
 Runtime Web, about 2 MB, self-hosted under `/vad/`, no CDN). Silero returns a speech probability per
 32 ms frame. Parameters, configurable on the platform:
 
@@ -252,9 +253,20 @@ Runtime Web, about 2 MB, self-hosted under `/vad/`, no CDN). Silero returns a sp
 | `bargeInMinSpeechMs` | 350 | Speech needed during playback to interrupt; higher than `minSpeechMs` against echo |
 | `bargeInThresholdBoost` | 0.15 | Raises the speech probability threshold while we are speaking |
 
-**STT transport.** Voice mode uses the app's resolved speech service (`resolveSpeechService`):
+**STT transport.** Voice mode supports **every speech service voice input has** (decision
+2026-10-17). It uses the one the app's voice input already resolves to (`resolveSpeechService`: the
+app's `settings.speechRecognition.service`, else `platform.speech.defaultService`). No separate
+choice is made for voice mode. Whatever an admin set up for dictation also drives voice mode.
 
-- **`model` (recommended).** The existing `/api/voice/realtime` bridge with a streaming
+| Service | Turn end | Barge-in while the app speaks | Notes |
+| --- | --- | --- | --- |
+| `model` | Our VAD → `commit` | Our VAD on the echo-cancelled stream | Best latency with a streaming model; works on-premise |
+| `azure` | Our VAD → `stopContinuousRecognitionAsync`, final result | Our VAD; Azure is fed the same stream | The SDK takes a push stream (`AudioConfig.fromStreamInput`), so it gets our echo-cancelled, VAD-gated audio |
+| `browser` (and `custom`, which maps to it) | Our VAD → `recognition.stop()`, final result | Our VAD; the recognizer is paused while the app speaks and restarted on barge-in | Zero setup. Chrome sends audio to Google, Safari to Apple. Firefox has no Web Speech API, so voice mode is hidden there for this service |
+
+Details per service:
+
+- **`model`.** The existing `/api/voice/realtime` bridge with a streaming
   transcription model (Voxtral realtime, Mistral realtime, Gemini Live transcription). Today a
   session is one utterance: `start` → audio → `stop` → `done` → close. Voice mode needs **many
   turns over one socket**, so we extend the protocol in a backwards-compatible way:
@@ -277,10 +289,18 @@ Runtime Web, about 2 MB, self-hosted under `/vad/`, no CDN). Silero returns a sp
   - **Batch providers** (Whisper, Gemini transcribe) transcribe the audio buffered since the last
     commit, then send `final`. They work, with about 0.5–1.5 s more latency.
   - Interim `delta` frames drive the live caption.
-- **`browser` / `azure`.** These run in continuous recognition mode, with their `isFinal` result
-  as the commit. They need no new server code and give a zero-configuration path. The browser
-  service sends audio to Google or Apple, so admins choose it knowingly (already documented for
-  dictation). Firefox has no Web Speech API.
+- **`azure`.** Runs in continuous recognition mode (already implemented in
+  `azureRecognitionService.js` for manual dictation). Instead of the default microphone, it gets a
+  push stream fed from the voice session's echo-cancelled mic, gated by our VAD. Our end-of-turn
+  ends the utterance, and the recognizer's final result is the turn. No new server code is needed;
+  the token still comes from `GET /api/voice/azure/token`.
+- **`browser`.** The Web Speech API opens its own microphone and cannot take our stream. It runs
+  in continuous mode with interim results for the caption, and our VAD on the parallel
+  echo-cancelled stream decides the turn end. Its echo handling is outside our control, so while
+  the app speaks the recognizer is **paused**, which keeps the app's own voice out of the
+  transcript. Barge-in is detected by our VAD, which stops playback and restarts the recognizer.
+  The first ~300 ms of the interruption can be lost, because pre-roll audio cannot be replayed
+  into the browser recognizer. Push-to-talk avoids this. No new server code is needed.
 
 **Push-to-talk** skips VAD: press starts the audio, release sends `commit`.
 
@@ -344,9 +364,9 @@ chunks and synthesizes them in order** (`speechQueue.js`):
 
 **Load.** A typical answer of 3–6 chunks is well inside the inference limiter (500 requests/min).
 Voice answers are short by prompt, and `maxCharacters` still caps every request. No new server
-endpoint is needed in Phase 1. The only change to `/api/voice/speech` is the `languageFixed` flag.
+endpoint is needed. The only change to `/api/voice/speech` is the `languageFixed` flag.
 
-*Rejected for Phase 1:* a server-side endpoint that taps the run's text deltas and synthesizes them
+*Rejected for now:* a server-side endpoint that taps the run's text deltas and synthesizes them
 in one stream. It is fewer round trips, but it couples TTS to `RunStream` and needs run-to-TTS
 affinity across cluster workers. Reconsider if the per-chunk overhead turns out to matter.
 
@@ -361,7 +381,7 @@ affinity across cluster workers. Reconsider if the per-chunk overhead turns out 
 "speech": {
   "voiceMode": {
     "enabled": false,
-    "sttModelId": "",          // empty → speech.dictation.modelId / the app's speech service
+    "appDefault": false,       // voice mode for apps that don't set inputMode.voiceMode.enabled
     "ttsModelId": "",          // empty → speech.tts.defaultModelId
     "listeningStyle": "hands-free",   // "hands-free" | "push-to-talk"
     "bargeIn": true,
@@ -373,29 +393,57 @@ affinity across cluster workers. Reconsider if the per-chunk overhead turns out 
 }
 ```
 
-**App** (`contents/apps/*.json`):
+There is no separate STT model setting. Voice mode uses the speech service the app's voice input
+resolves to (§4.3).
 
-- `features.voiceMode: false` opts an app out. It follows the `features.textToSpeech` pattern;
-  `features` is passthrough.
-- Optional `settings.voiceMode: { ttsModelId?, voice? }` gives an app its own voice, for example
-  a German voice for a German HR assistant. This needs a schema entry because `settings` is strict.
+**App: part of the voice input configuration** (decision 2026-10-17). Voice mode is configured
+per app next to the microphone settings, in `inputMode` (`contents/apps/*.json`,
+`inputModeSchema` in `appConfigSchema.js`):
+
+```jsonc
+"inputMode": {
+  "microphone": { "enabled": true, "mode": "manual", "showTranscript": true },
+  "voiceMode": {
+    "enabled": true,                 // absent → platform speech.voiceMode.appDefault
+    "listeningStyle": "hands-free",  // optional, overrides the platform default
+    "ttsModelId": "",                // optional, e.g. a German voice model for a German HR app
+    "voice": ""                      // optional voice of that model
+  }
+}
+```
+
+- It sits beside `microphone` because voice mode *is* voice input. It shares the app's speech
+  service (`settings.speechRecognition`), and an app with `microphone.enabled: false` has no voice
+  mode either.
+- The platform switch turns the feature on for the instance. `appDefault` decides apps that say
+  nothing; each app can turn it on or off explicitly. With the default `appDefault: false`,
+  voice mode is opt-in per app; an admin can flip it to make it opt-out.
+- No app migration is needed: an absent `inputMode.voiceMode` means "follow the platform".
 
 **Available when all of these hold** (checked in a `useVoiceModeAvailability(app)` hook, like
 `useReadAloudAvailability`):
 
 1. the feature flag is on and `speech.voiceMode.enabled` is true
-2. the app does not opt out
-3. a TTS model is configured and the user is allowed to use it (`GET /api/models?type=tts`)
-4. an STT path exists: a permitted transcription model, Azure, or browser support
+2. the app allows voice input (`inputMode.microphone.enabled !== false`) and voice mode is on for
+   it (`inputMode.voiceMode.enabled`, else `appDefault`)
+3. a TTS model is configured (the app's `ttsModelId`, else the platform's) and the user is allowed
+   to use it (`GET /api/models?type=tts`)
+4. the app's speech service works here: a permitted transcription model for `model`, Azure
+   configured for `azure`, Web Speech API support for `browser`
 5. the browser has `getUserMedia` and `AudioWorklet`
 
 The server enforces the same rules: model permissions on the WS bridge and `/api/voice/speech`, and
 `requireFeature('voiceMode')` on the conversation-mode `start`. No new group capability is
 needed: permission to the app, the STT model and the TTS model is enough.
 
-**Admin UI.** A "Voice mode" section on the existing **Admin → Voice Input** page
-(`AdminVoiceInputPage.jsx`), with model pickers and the parameters above, plus a "Try it" button
-that runs a session in the admin page. App editor: a toggle in `InputModeSection.jsx`.
+**Admin UI.**
+
+- **Admin → Voice Input** (`AdminVoiceInputPage.jsx`) gets a "Voice mode" section: the platform
+  switch, `appDefault`, the TTS model picker and the parameters above. A "Try it" button runs a
+  session with the platform's default speech service.
+- **App editor:** in the voice input section (`InputModeSection.jsx`), under the microphone
+  settings. It has a three-way "Voice mode" control (platform default / on / off) and the
+  optional listening style, TTS model and voice.
 
 **Migration** (`create-migration` skill): it adds the `speech.voiceMode` defaults to
 `platform.json`. The feature flag needs no migration, because the registry default applies when
@@ -412,7 +460,7 @@ the key is absent.
 | `hooks/useVoiceMode.js` | Wires the reducer to mic, STT, `useAppChat` (`sendMessage`, stop, SSE events) and the speech queue |
 | `hooks/useVoiceModeAvailability.js` | Gating (§4.6) |
 | `utils/voiceModeReducer.js` | Pure state machine (§4.2) |
-| `utils/voiceSession.js` | One mic stream, Silero VAD, pre-roll ring buffer, STT conversation socket / browser recognizer |
+| `utils/voiceSession.js` | One mic stream, Silero VAD, pre-roll ring buffer, and one STT adapter per service: conversation socket (`model`), push-stream recognizer (`azure`), Web Speech recognizer (`browser`) |
 | `utils/speechQueue.js` | Delta → chunk cutting, ordered TTS fetches, `PcmStreamPlayer`, abort |
 | `utils/speakableChunker.js` | The pure chunking function (§4.5), unit-tested |
 
@@ -429,7 +477,8 @@ route**, so the `KNOWN_ROUTES` / `index.html` rule does not apply. The Office pa
 | `server/routes/voiceRoutes.js` | `languageFixed` on `/api/voice/speech`: use `language` as given, skip detection |
 | `server/validators/index.js` | `voiceMode` in `chatPostSchema` |
 | `server/services/chat/RequestBuilder.js` | Voice style instruction, thinking level |
-| `server/validators/platformConfigSchema.js`, `appConfigSchema.js` | New fields |
+| `server/validators/platformConfigSchema.js` | `speech.voiceMode` |
+| `server/validators/appConfigSchema.js` | `inputMode.voiceMode` |
 | `server/featureRegistry.js` | `voiceMode` flag |
 | `server/migrations/V{NNN}__add_voice_mode_defaults.js` | Platform defaults |
 
@@ -488,63 +537,24 @@ firstToken → firstChunk → firstAudio`), so we can measure p50/p90 per deploy
     timeout, batch provider per commit
   - the `voiceMode` request flag adds the instruction
   - the migration
+  - `inputMode.voiceMode` validation, and resolving it against `appDefault`
 - **E2E (Playwright).** Chromium with `--use-fake-ui-for-media-stream
   --use-fake-device-for-media-stream --use-file-for-fake-audio-capture=question.wav`, against stub
   STT/TTS providers. Assert that the turn is sent, captions appear, and the transcript persists
-  after End.
+  after End. Run it once per speech service: `model` against a stub transcription provider,
+  `azure` with a mocked SDK, and `browser` with a stubbed `SpeechRecognition`.
 
 ---
 
-## 5. Phase 3 — native speech-to-speech (optional)
+## 5. Not planned: native speech-to-speech
 
-For customers who accept OpenAI or Google cloud processing and want ChatGPT/Gemini-level
-responsiveness.
+Native speech-to-speech (OpenAI Realtime / GPT-Live, Gemini Live native audio) is **out of scope**
+(decision 2026-10-17). It would send the user's voice to OpenAI or Google cloud, bypass the app's
+own chat model, and need a separate bridge for tools and sources. The cascaded design keeps audio
+with the speech service the admin already chose, and keeps every app capability.
 
-### 5.1 Model type
-
-A new `modelType: "voice"` with providers `openai-realtime` (`gpt-realtime-2`, later `gpt-live-1`)
-and `google-live-voice` (Gemini Live native audio). In the voice mode settings, an admin picks either
-"Cascaded (app model + STT + TTS)" or a voice model. An app can pin one through
-`settings.voiceMode.engine`.
-
-### 5.2 Transport: relay through our server
-
-**Recommended: relay through our server** over WebSocket. It extends the `/api/voice/realtime`
-bridge pattern with a new `/api/voice/live` endpoint:
-
-- API keys never reach the browser.
-- It works where browsers cannot reach `api.openai.com` or Google directly (common in enterprise
-  networks).
-- Permissions, connection caps and audit logging are reused.
-- **iHub tools can run on the server** (§5.3).
-
-*Alternative: browser → provider over WebRTC with an ephemeral key*
-(`/v1/realtime/client_secrets`, Gemini ephemeral tokens). It has the lowest latency, and OpenAI
-cancels and truncates audio on barge-in by itself. But tool calls would have to round-trip
-through the browser, and egress must be open. Offer it later as an opt-in, only if the relay
-proves too slow.
-
-### 5.3 Keeping the app
-
-- **System prompt.** The app's system prompt plus the voice style instruction go into the session
-  `instructions`.
-- **Tools.** The app's tools are converted to realtime function definitions; the existing
-  converters in `server/adapters/toolCalling/` cover the OpenAI and Google shapes. Calls run
-  server-side through the same tool execution as `AgentLoop`, and the results go back into the
-  session.
-- **Sources / RAG.** A `search_sources` function is exposed, instead of stuffing sources into
-  the instructions.
-- **Transcripts.** Input and output transcripts (both APIs provide them) are persisted as normal
-  chat messages, so text and voice mix in one chat, as in §4.
-
-### 5.4 Delegation (the GPT-Live pattern)
-
-The voice model gets one extra function, **`ask_app(question)`**. It runs a full iHub chat turn
-with the app's own model, tools, sources and RAG (the same `ChatService.runTurn` the text chat
-uses) and returns the answer text. The voice model handles small talk and follow-ups immediately,
-says "Let me look that up", and speaks the result when it arrives. This combines native-voice
-latency with the app's full capability, and the cascaded work from Phase 1 is reused as the
-"brain".
+What the research still feeds into the cascaded design: barge-in, hands-free plus push-to-talk,
+preset voices, transcripts in the chat history, and the latency levers in §4.8 and §6.
 
 ---
 
@@ -560,25 +570,24 @@ latency with the app's full capability, and the cascaded work from Phase 1 is re
 - **Camera and screen sharing** in voice mode (the Gemini Live pattern), for vision models.
 - **Usage tracking** for STT seconds and TTS characters per user/app.
 
-## 7. Open questions
+## 7. Decisions (2026-10-17)
 
-1. **Button placement:** replace Send when the input is empty (ChatGPT style, recommended), or a
-   separate button next to the mic (Claude style)?
-2. **Is native speech-to-speech (Phase 3) wanted at all,** given data residency? If not, Phase 3
-   can be dropped and delegation (§5.4) is moot.
-3. **Browser STT in voice mode:** allow the Web Speech API as a zero-config option, or require a
-   transcription model or Azure for voice mode?
-4. **Default for apps:** available in every app once enabled on the platform (opt-out per app,
-   recommended), or opt-in per app?
+1. **Button placement:** a separate voice mode button **next to the mic**, as in Claude. Send is
+   unchanged (§4.1).
+2. **Native speech-to-speech:** not planned (§5).
+3. **Speech services:** voice mode supports **all voice input services**: transcription model,
+   Azure and browser. It uses whichever the app's voice input is configured with (§4.3).
+4. **Per-app control:** voice mode is configured **per app as part of the voice input
+   configuration** (`inputMode.voiceMode`), with a platform switch and a platform default for apps
+   that don't set it (§4.6).
 
 ## 8. Phasing
 
 | Phase | Scope | Done when |
 | --- | --- | --- |
-| **1a** | Overlay, reducer, push-to-talk, `model`/browser/azure STT, chunked TTS, voice style prompt, gating, migration | A user holds Space, asks a question, hears the answer, and the transcript is in the chat |
-| **1b** | Hands-free with Silero VAD, STT conversation mode (`commit`/`keepalive`), barge-in, tool status, `interaction/raised`, settings popover, admin section | Three turns in a row without touching anything; interrupting stops audio in < 300 ms |
+| **1a** | Overlay, reducer, push-to-talk, all three speech services (`model`, `azure`, `browser`), chunked TTS, voice style prompt, gating, migration | A user holds Space, asks a question, hears the answer, and the transcript is in the chat |
+| **1b** | Hands-free with Silero VAD, STT conversation mode (`commit`/`keepalive`), barge-in, tool status, `interaction/raised`, settings popover, admin section and app editor (`inputMode.voiceMode`) | Three turns in a row without touching anything; interrupting stops audio in < 300 ms |
 | **2** | Latency work: faster TTS provider, timings dashboard, tuned defaults | p50 end-of-speech → first audio < 2 s on the reference setup |
-| **3** | Native S2S `voice` model type via server relay, tool bridging, `ask_app` delegation | OpenAI Realtime or Gemini Live voice session with app tools and persisted transcript |
 
 ## Sources
 
