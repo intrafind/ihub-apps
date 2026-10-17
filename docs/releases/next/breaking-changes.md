@@ -36,8 +36,7 @@ Enterprise License.
   https://intrafind.com/" stays visible, at least in the footer or on an about page.
 - White-labeling, reselling, embedding, or hosting iHub Apps for customers is covered by the new
   Enterprise License, which can also include support, SLAs and warranties.
-- Releases up to and including v5.5.39 keep their original license (see `LICENSE_HISTORY`).
-  Contributions now fall under the Contributor License Agreement.
+- Contributions now fall under the Contributor License Agreement.
 
 **Before upgrading:** If you provide iHub Apps to customers or the public under your own name or
 branding, contact sales@intrafind.com for permission or an Enterprise License. Installations that

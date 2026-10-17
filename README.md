@@ -497,8 +497,6 @@ iHub Apps is free to use under the [iHub Apps License](LICENSE) — the BSD 3-Cl
 
 Need to white-label, resell, embed, or host iHub Apps for your customers, or want support, SLAs, and warranties? The **Enterprise License** covers this — contact [sales@intrafind.com](mailto:sales@intrafind.com).
 
-Releases up to and including v5.5.39 remain under their original license; see [LICENSE_HISTORY](LICENSE_HISTORY).
-
 ---
 
 _Built with ❤️ by [IntraFind Software AG](https://intrafind.com/) — Berlin · Bonn · Munich · Remote_
