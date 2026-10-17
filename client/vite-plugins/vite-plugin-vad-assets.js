@@ -20,7 +20,10 @@ export const VAD_ASSET_DIR = 'vad';
 
 export const VAD_ASSETS = [
   // The audio worklet that cuts the microphone into 16 kHz frames for the model.
-  { name: 'vad.worklet.bundle.min.js', specifier: '@ricky0123/vad-web/dist/vad.worklet.bundle.min.js' },
+  {
+    name: 'vad.worklet.bundle.min.js',
+    specifier: '@ricky0123/vad-web/dist/vad.worklet.bundle.min.js'
+  },
   // The Silero VAD v5 model (about 2.3 MB).
   { name: 'silero_vad_v5.onnx', specifier: '@ricky0123/vad-web/dist/silero_vad_v5.onnx' },
   // ONNX Runtime Web's loader and WebAssembly binary (the plain CPU build).

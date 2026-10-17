@@ -13,10 +13,7 @@ import { TARGET_SAMPLE_RATE } from './audioUtils';
  * @param {number} [options.sampleRate] - 16000.
  * @param {number} [options.capacityMs] - How much audio the buffer holds.
  */
-export function createPreRollBuffer({
-  sampleRate = TARGET_SAMPLE_RATE,
-  capacityMs = 1500
-} = {}) {
+export function createPreRollBuffer({ sampleRate = TARGET_SAMPLE_RATE, capacityMs = 1500 } = {}) {
   const capacity = Math.max(1, Math.round((capacityMs / 1000) * sampleRate));
   const ring = new Int16Array(capacity);
   let writeIndex = 0; // where the next sample goes
@@ -29,7 +26,8 @@ export function createPreRollBuffer({
     push(samples) {
       if (!samples?.length) return;
       // A chunk longer than the buffer: only its tail can survive.
-      const source = samples.length > capacity ? samples.subarray(samples.length - capacity) : samples;
+      const source =
+        samples.length > capacity ? samples.subarray(samples.length - capacity) : samples;
       const first = Math.min(source.length, capacity - writeIndex);
       ring.set(source.subarray(0, first), writeIndex);
       if (first < source.length) ring.set(source.subarray(first), 0);
