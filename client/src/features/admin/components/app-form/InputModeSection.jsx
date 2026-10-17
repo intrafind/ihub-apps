@@ -367,7 +367,7 @@ function VoiceModeFields({
       </div>
 
       {!micEnabled && (
-        <p className="text-xs text-amber-600 dark:text-amber-400" data-testid="voice-mode-mic-off">
+        <p className="text-xs text-amber-700 dark:text-amber-400" data-testid="voice-mode-mic-off">
           {t(
             'admin.apps.edit.voiceMode.needsMicrophone',
             'Voice mode needs voice input. Enable the microphone above to use it in this app.'
@@ -375,7 +375,7 @@ function VoiceModeFields({
         </p>
       )}
       {micEnabled && !flagEnabled && (
-        <p className="text-xs text-amber-600 dark:text-amber-400" data-testid="voice-mode-flag-off">
+        <p className="text-xs text-amber-700 dark:text-amber-400" data-testid="voice-mode-flag-off">
           {t(
             'admin.apps.edit.voiceMode.flagOff',
             'Voice mode is a preview feature that is switched off under Admin → Features. These settings take effect once it is on.'
@@ -490,7 +490,7 @@ function VoiceModeFields({
               <p
                 className={`mt-1 text-xs ${
                   chosenModelMissing
-                    ? 'text-amber-600 dark:text-amber-400'
+                    ? 'text-amber-700 dark:text-amber-400'
                     : 'text-gray-500 dark:text-gray-400'
                 }`}
               >

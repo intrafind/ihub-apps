@@ -210,7 +210,7 @@ function VoiceModeSettings({
         </select>
         <p
           className={`mt-1 text-xs ${
-            ttsHint.warn ? 'text-amber-600 dark:text-amber-400' : 'text-gray-500 dark:text-gray-400'
+            ttsHint.warn ? 'text-amber-700 dark:text-amber-400' : 'text-gray-500 dark:text-gray-400'
           }`}
         >
           {ttsHint.text}

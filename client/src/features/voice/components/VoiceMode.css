@@ -5,13 +5,26 @@
   --orb-core: #6366f1;
   --orb-glow: rgba(99, 102, 241, 0.35);
   position: relative;
-  width: 9rem;
-  height: 9rem;
+  /* A flex item in a column that can be shorter than the orb: it must keep its
+     shape (a phone in landscape squeezed it to 149x11 px) and shrink with the
+     screen height instead. */
+  flex-shrink: 0;
+  width: min(9rem, 28vh);
+  aspect-ratio: 1;
   border-radius: 9999px;
   border: 0;
   padding: 0;
   cursor: default;
-  background: radial-gradient(circle at 35% 30%, #a5b4fc 0%, var(--orb-core) 55%, #4338ca 100%);
+  /* Plain colour first, for a browser without color-mix. The highlight and the
+     shade come from the state's colour, so the error and muted orbs are not
+     tinted indigo. */
+  background: var(--orb-core);
+  background: radial-gradient(
+    circle at 35% 30%,
+    color-mix(in srgb, var(--orb-core) 55%, white) 0%,
+    var(--orb-core) 55%,
+    color-mix(in srgb, var(--orb-core) 72%, black) 100%
+  );
   box-shadow: 0 0 calc(2rem + var(--voice-level) * 3rem) calc(var(--voice-level) * 1rem)
     var(--orb-glow);
   transform: scale(calc(1 + var(--voice-level) * 0.12));

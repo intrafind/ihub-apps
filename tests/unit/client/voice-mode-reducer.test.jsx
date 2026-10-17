@@ -48,6 +48,7 @@ describe('initialVoiceModeState', () => {
       assistantCaption: '',
       toolStatus: null,
       error: null,
+      notice: null,
       turn: 0,
       runActive: false
     });
@@ -157,12 +158,32 @@ describe('the turn loop', () => {
     });
   });
 
-  test('a final transcript without a prior turn end still counts', () => {
-    const state = run(userSpeaking(), { type: 'FINAL', text: 'Direct final' });
+  test('a final transcript while the user is speaking again is the first part, not a turn', () => {
+    // The pause cut the sentence; the transcript of the first half arrives after
+    // the user has started the second.
+    const state = run(userSpeaking(), { type: 'FINAL', text: 'Please tell me about' });
     expect(state).toMatchObject({
-      status: S.THINKING,
-      userCaption: { text: 'Direct final', final: true }
+      status: S.USER_SPEAKING,
+      userCaption: { text: 'Please tell me about', final: false },
+      runActive: false,
+      turn: 0
     });
+    // The turn that is sent is the one the user ends.
+    expect(
+      run(state, 'TURN_ENDED', { type: 'FINAL', text: 'Please tell me about Berlin' })
+    ).toMatchObject({
+      status: S.THINKING,
+      userCaption: { text: 'Please tell me about Berlin', final: true }
+    });
+  });
+
+  test('a dropped or repeated first part changes nothing while the user speaks', () => {
+    const state = run(userSpeaking(), { type: 'INTERIM', text: 'and the weather' });
+    for (const text of ['', '  ', 'uh', undefined]) {
+      expect(voiceModeReducer(state, { type: 'FINAL', text })).toBe(state);
+    }
+    const shown = run(state, { type: 'FINAL', text: 'Tell me' });
+    expect(voiceModeReducer(shown, { type: 'FINAL', text: 'Tell me' })).toBe(shown);
   });
 
   test('events that do not fit the status return the same state', () => {
@@ -251,9 +272,23 @@ describe('barge-in', () => {
     expect(voiceModeReducer(state, { type: 'BARGE_IN' })).toBe(state);
   });
 
-  test('BARGE_IN with force works with barge-in off (a tap on the orb)', () => {
-    const state = run(speaking({ bargeIn: false }), { type: 'BARGE_IN', force: true });
-    expect(state.status).toBe(S.USER_SPEAKING);
+  test('BARGE_IN with force works with barge-in off (a tap on the orb) and listens', () => {
+    for (const make of [speaking, thinking]) {
+      const state = run(make({ bargeIn: false }), { type: 'BARGE_IN', force: true });
+      // Nobody speaks yet: the app stopped and listens.
+      expect(state).toMatchObject({
+        status: S.LISTENING,
+        runActive: false,
+        assistantCaption: '',
+        toolStatus: null,
+        userCaption: { text: '', final: false }
+      });
+    }
+  });
+
+  test('a tap on the orb while nothing plays changes nothing', () => {
+    const l = listening();
+    expect(voiceModeReducer(l, { type: 'BARGE_IN', force: true })).toBe(l);
   });
 
   test('BARGE_IN is ignored while paused', () => {
@@ -329,11 +364,13 @@ describe('transcripts that are dropped', () => {
   });
 
   test('a final without text is dropped', () => {
-    expect(run(userSpeaking(), { type: 'FINAL' }).status).toBe(S.LISTENING);
+    expect(run(userSpeaking(), 'TURN_ENDED', { type: 'FINAL' }).status).toBe(S.LISTENING);
   });
 
   test('a real transcript is not dropped', () => {
-    expect(run(userSpeaking(), { type: 'FINAL', text: 'ok' }).status).toBe(S.THINKING);
+    expect(run(userSpeaking(), 'TURN_ENDED', { type: 'FINAL', text: 'ok' }).status).toBe(
+      S.THINKING
+    );
   });
 
   test('a final that arrives while the app speaks and nobody barged in is ignored', () => {
@@ -493,6 +530,20 @@ describe('mute', () => {
     expect(state).toMatchObject({ status: S.LISTENING, muted: false });
   });
 
+  test('unmuting while the app still works on the answer goes back to thinking, not listening', () => {
+    // Muting silences the audio, the run goes on; "listening" with a run active
+    // would let the next transcript start a second run on top of the first.
+    const muted = run(thinking(), 'MUTE');
+    expect(muted).toMatchObject({ status: S.PAUSED, runActive: true });
+    expect(run(muted, 'UNMUTE')).toMatchObject({
+      status: S.THINKING,
+      muted: false,
+      runActive: true
+    });
+    // Once the run has ended there is nothing to wait for.
+    expect(run(muted, 'RUN_ENDED', 'UNMUTE').status).toBe(S.LISTENING);
+  });
+
   test('muting twice or unmuting twice changes nothing', () => {
     const muted = run(listening(), 'MUTE');
     expect(voiceModeReducer(muted, { type: 'MUTE' })).toBe(muted);
@@ -572,6 +623,14 @@ describe('errors', () => {
     expect(state.status).toBe(S.LISTENING);
   });
 
+  test('a retry starts unmuted: the new session is not muted, so the state must not say so', () => {
+    let state = run(listening(), 'MUTE', { type: 'ERROR', code: 'connection' });
+    expect(state.muted).toBe(true);
+    state = run(state, 'RETRY');
+    expect(state).toMatchObject({ status: S.CONNECTING, muted: false });
+    expect(run(state, 'READY').status).toBe(S.LISTENING);
+  });
+
   test('the turn count survives an error and a retry', () => {
     const state = run(speaking(), { type: 'ERROR', code: 'x' }, 'RETRY', 'READY');
     expect(state.turn).toBe(1);
@@ -593,6 +652,54 @@ describe('errors', () => {
   test('muting in the error state keeps the error', () => {
     const state = run(listening(), { type: 'ERROR', code: 'x', message: 'y' }, 'MUTE');
     expect(state).toMatchObject({ status: S.ERROR, muted: true });
+  });
+});
+
+describe('notice', () => {
+  test('NOTICE tts-failed is set once and shown with the state otherwise unchanged', () => {
+    const before = speaking();
+    const state = run(before, { type: 'NOTICE', notice: 'tts-failed' });
+    expect(state).toEqual({ ...before, notice: 'tts-failed' });
+    expect(voiceModeReducer(state, { type: 'NOTICE', notice: 'tts-failed' })).toBe(state);
+  });
+
+  test('an unknown notice is ignored', () => {
+    const state = listening();
+    expect(voiceModeReducer(state, { type: 'NOTICE', notice: 'other' })).toBe(state);
+    expect(voiceModeReducer(state, { type: 'NOTICE' })).toBe(state);
+  });
+
+  test.each([
+    ['READY', () => run(fresh(), { type: 'NOTICE', notice: 'tts-failed' }), 'READY'],
+    [
+      'SPEECH_START',
+      () => run(listening(), { type: 'NOTICE', notice: 'tts-failed' }),
+      'SPEECH_START'
+    ],
+    ['SENT', () => run(userSpeaking(), { type: 'NOTICE', notice: 'tts-failed' }), 'SENT'],
+    [
+      'RETRY',
+      () => run(listening(), { type: 'NOTICE', notice: 'tts-failed' }, { type: 'ERROR' }),
+      'RETRY'
+    ],
+    ['BARGE_IN', () => run(speaking(), { type: 'NOTICE', notice: 'tts-failed' }), 'BARGE_IN']
+  ])('%s clears it', (_name, make, action) => {
+    const noticed = make();
+    expect(noticed.notice).toBe('tts-failed');
+    expect(run(noticed, action).notice).toBeNull();
+  });
+
+  test('speech that starts with an interim transcript clears it too', () => {
+    const noticed = run(listening(), { type: 'NOTICE', notice: 'tts-failed' });
+    expect(run(noticed, { type: 'INTERIM', text: 'hello' }).notice).toBeNull();
+  });
+
+  test('the notice stays while the app goes on thinking, speaking and listening', () => {
+    const noticed = run(speaking(), { type: 'NOTICE', notice: 'tts-failed' });
+    expect(run(noticed, 'RUN_ENDED', 'PLAYBACK_DRAINED')).toMatchObject({
+      status: S.LISTENING,
+      notice: 'tts-failed'
+    });
   });
 });
 

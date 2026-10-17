@@ -882,7 +882,9 @@ function ChatMessage({
             title={t('voiceMode.voiceMessage', 'Spoken message')}
           >
             <VoiceWaveIcon className="h-3.5 w-3.5" />
-            <span className="sr-only">{t('voiceMode.voiceMessage', 'Spoken message')}</span>
+            {/* The colon and space: without them a screen reader (or a manual
+                copy) runs the marker into the text, "Spoken messageWhat is". */}
+            <span className="sr-only">{t('voiceMode.voiceMessage', 'Spoken message')}: </span>
           </span>
         )}
         {/* Unified workflow step progress indicator. A result alone is enough:

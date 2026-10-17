@@ -546,6 +546,63 @@ describe('a question the app asks', () => {
     });
   });
 
+  test('words that name none of the options are not an answer: asked again, question still pending', async () => {
+    const hook = setup();
+    await startAndReady(hook);
+    await speakTurn();
+    hook.setProps({ messages: [USER, asking()], processing: false, clarificationPending: true });
+    hook.calls.sendTurn.mockClear();
+    mockQueue.say.mockClear();
+
+    await speakTurn('I do not know yet');
+    // Nothing reaches the model, neither as an answer nor as a new message.
+    expect(hook.calls.answerClarification).not.toHaveBeenCalled();
+    expect(hook.calls.sendTurn).not.toHaveBeenCalled();
+    expect(mockQueue.say).toHaveBeenCalledWith(
+      'I did not catch which option you meant. Please say it again.'
+    );
+    // The turn is over like one the chat turned away: listening, agent idle.
+    expect(status(hook)).toBe('listening');
+    expect(hook.result.current.state.runActive).toBe(false);
+    expect(mockSession.setAgentState).toHaveBeenLastCalledWith('idle');
+
+    // The question is still there to be answered.
+    await speakTurn('The small one');
+    expect(hook.calls.answerClarification).toHaveBeenCalledWith(
+      expect.objectContaining({ questionId: 'q1', value: 'small', displayText: 'Small' })
+    );
+  });
+
+  test('a question that allows another answer takes the unclear words as the answer', async () => {
+    const hook = setup();
+    await startAndReady(hook);
+    await speakTurn();
+    hook.setProps({
+      messages: [
+        USER,
+        asking({
+          clarification: {
+            questionId: 'q1',
+            question: 'Which size?',
+            allowOther: true,
+            options: [{ value: 'small', label: 'Small' }]
+          }
+        })
+      ],
+      processing: false,
+      clarificationPending: true
+    });
+    await speakTurn('something in between');
+    expect(hook.calls.answerClarification).toHaveBeenCalledWith({
+      questionId: 'q1',
+      answered: true,
+      skipped: false,
+      value: 'something in between',
+      displayText: 'something in between'
+    });
+    expect(mockQueue.say).not.toHaveBeenCalledWith(expect.stringContaining('did not catch'));
+  });
+
   test('is spoken once, however often the chat re-renders', async () => {
     const hook = setup();
     await startAndReady(hook);

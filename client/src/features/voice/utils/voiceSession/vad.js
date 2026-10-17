@@ -145,6 +145,11 @@ export async function createSileroVad({
  * - While the app speaks and interruptions are on, confirmed speech calls
  *   `onBargeIn` instead of `onSpeechStart`. With interruptions off the utterance
  *   is ignored altogether, also if the app falls silent while it goes on.
+ * - The same holds while the app is merely busy (thinking: the answer is being
+ *   written): with interruptions off nothing the user says may start a turn, or
+ *   its transcript would be dropped by the state machine while the turn itself
+ *   disturbed the one in progress. With interruptions on a turn started then is an
+ *   ordinary `onSpeechStart` (the caller decides what speaking while it thinks means).
  * - `onSpeechEnd` fires once per utterance that started a turn.
  *
  * @param {Object} options
@@ -160,6 +165,7 @@ export async function createSileroVad({
  * @param {number} [options.bargeInMinSpeechMs]
  * @param {number} [options.bargeInThresholdBoost]
  * @param {boolean} [options.agentSpeaking] - Initial state.
+ * @param {boolean} [options.agentBusy] - Initial state: the app thinks or speaks.
  * @param {boolean} [options.bargeIn] - Initial state.
  * @param {boolean} [options.enabled] - Initial state; disabled pauses the detector.
  * @param {() => number} [options.now]
@@ -179,6 +185,7 @@ export async function createVadController({
   bargeInMinSpeechMs = VAD_DEFAULTS.bargeInMinSpeechMs,
   bargeInThresholdBoost = VAD_DEFAULTS.bargeInThresholdBoost,
   agentSpeaking = false,
+  agentBusy = false,
   bargeIn = true,
   enabled = true,
   now = () => Date.now(),
@@ -187,6 +194,7 @@ export async function createVadController({
   onSpeechEnd
 }) {
   let speaking = agentSpeaking;
+  let busy = agentBusy;
   let bargeInOn = bargeIn;
   let active = enabled;
   let destroyed = false;
@@ -208,13 +216,11 @@ export async function createVadController({
     if (utterance || destroyed) return;
     if (!active) {
       utterance = 'ignored';
+    } else if ((speaking || busy) && !bargeInOn) {
+      utterance = 'ignored';
     } else if (speaking) {
-      if (bargeInOn) {
-        utterance = 'turn';
-        onBargeIn?.({ speechStartedAt: rawStartedAt });
-      } else {
-        utterance = 'ignored';
-      }
+      utterance = 'turn';
+      onBargeIn?.({ speechStartedAt: rawStartedAt });
     } else {
       utterance = 'turn';
       onSpeechStart?.({ speechStartedAt: rawStartedAt });
@@ -274,6 +280,14 @@ export async function createVadController({
       if (next === speaking) return;
       speaking = next;
       void applyOptions();
+    },
+
+    /**
+     * The app starts or stops working on an answer (thinking or speaking). Only
+     * matters with interruptions off: then no utterance starts a turn meanwhile.
+     */
+    setAgentBusy(value) {
+      busy = Boolean(value);
     },
 
     setBargeIn(value) {

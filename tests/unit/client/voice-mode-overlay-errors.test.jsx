@@ -50,7 +50,8 @@ function renderError(code) {
       }}
     />
   );
-  return screen.getByTestId('voice-mode-status').textContent;
+  // The error text is the alert's; the status line stays a quiet live region.
+  return screen.getByRole('alert').textContent;
 }
 
 describe('VoiceModeOverlay error text', () => {
@@ -64,6 +65,7 @@ describe('VoiceModeOverlay error text', () => {
     ['vad-unavailable', /Voice detection could not be loaded/],
     ['feature-disabled', /Voice mode is switched off/],
     ['voice-mode-disabled', /Voice mode is switched off/],
+    ['no-speech', /nothing was said for a while/],
     ['closed', /connection to speech recognition was lost/],
     ['connection', /connection to speech recognition was lost/],
     ['not-permitted', /not permitted to use this transcription model/],

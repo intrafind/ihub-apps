@@ -463,9 +463,16 @@ function ChatInput({
     [selectedFile, onFileSelect]
   );
 
-  // When processing finishes, refocus the input field
+  // When processing finishes, refocus the input field. Not while voice mode is
+  // open: the composer is covered then, and a focused textarea behind the view
+  // takes the Space of the next push-to-talk turn, announces "Type your
+  // message" and sends a typed turn voice mode knows nothing about. Read
+  // through a ref, not as a dependency: ending voice mode must not refocus the
+  // input either, the voice view hands focus back to the button that opened it.
+  const voiceModeActiveRef = useRef(voiceModeActive);
+  voiceModeActiveRef.current = voiceModeActive;
   useEffect(() => {
-    if (!isProcessing) {
+    if (!isProcessing && !voiceModeActiveRef.current) {
       focusInputAtEnd();
     }
   }, [isProcessing, focusInputAtEnd]);
@@ -978,7 +985,7 @@ function ChatInput({
                 sendBlockedByAttachment ||
                 (!allowEmptySubmit && !value.trim() && !isProcessing)
               }
-              className={`p-2 sm:p-2.5 rounded-lg font-medium flex items-center justify-center transition-colors ${
+              className={`shrink-0 p-2 sm:p-2.5 rounded-lg font-medium flex items-center justify-center transition-colors ${
                 disabled ||
                 sendBlockedByAttachment ||
                 (!allowEmptySubmit && !value.trim() && !isProcessing)

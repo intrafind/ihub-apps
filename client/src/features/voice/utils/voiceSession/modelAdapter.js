@@ -20,8 +20,16 @@ import { toRecognitionLang } from '../speechService';
  * number of the turn (the n-th `commit` of the socket): a final of a turn that
  * nobody waits for is ignored.
  *
- * An unexpected close is answered with one reconnect (a fresh `start`); after
- * that the session fails with an unrecoverable error.
+ * An unexpected close is answered with one reconnect (a fresh `start`). The
+ * budget is per outage: once the new socket is `ready` it is whole again, so a
+ * long conversation survives any number of separate drops. A drop while the
+ * socket is not yet back (or the new socket closing before `ready`) fails the
+ * session with an unrecoverable error.
+ *
+ * A turn that was being spoken when the socket dropped lost its beginning (the
+ * audio went to the dead socket). Its end alone would be transcribed as a
+ * truncated sentence, so that turn is discarded: it ends with an empty `final`
+ * and the user says it again.
  */
 
 /** The server's idle timeout is 60 s; it asks for a keepalive at least every 20 s. */
@@ -79,6 +87,8 @@ export function createModelAdapter({
   let muted = false;
   // Is audio flowing to the socket for a user turn right now?
   let turnOpen = false;
+  // The open turn lost audio to a socket that dropped: do not send what is left of it.
+  let turnTruncated = false;
   // Commits sent on the current socket (the server counts them the same way)
   // and the ones whose `final` is still awaited, oldest first. `discard`: the
   // user dropped the turn (muted mid-sentence), so its answer is not wanted.
@@ -101,7 +111,12 @@ export function createModelAdapter({
   };
 
   const sendAudio = pcm => {
-    if (!isOpen() || !pcm?.length) return;
+    if (!pcm?.length) return;
+    if (!isOpen()) {
+      // Speech while the socket is down (or not yet back): that audio is gone.
+      if (turnOpen) turnTruncated = true;
+      return;
+    }
     if (ws.bufferedAmount > maxBufferedBytes) {
       // The link cannot keep up: drop instead of queueing seconds of audio.
       droppedFrames += 1;
@@ -152,6 +167,21 @@ export function createModelAdapter({
     for (let i = 0; i < lost.length; i++) emit({ type: 'final', text: '' });
   };
 
+  // The turn whose text the caption shows: the one being spoken, else the newest
+  // one that waits for its `final`. Text of an older turn (its tail can arrive
+  // while the next turn is already being spoken) is not the caption of this one.
+  const captionTurn = () => {
+    if (turnOpen) return committed + 1;
+    const waiting = pending.filter(entry => !entry.discard);
+    return waiting.length ? waiting[waiting.length - 1].turn : null;
+  };
+
+  const isCaptionDelta = msg => {
+    const turn = captionTurn();
+    if (turn === null) return false;
+    return !Number.isInteger(msg.turn) || msg.turn === turn;
+  };
+
   const handleMessage = raw => {
     let msg;
     try {
@@ -163,10 +193,12 @@ export function createModelAdapter({
       case 'ready':
         clearTimeout(readyTimer);
         readyTimer = null;
+        // A reconnect that works restores the budget for the next outage.
+        reconnects = 0;
         settleStart();
         break;
       case 'delta':
-        if (turnOpen || pending.some(entry => !entry.discard)) {
+        if (isCaptionDelta(msg)) {
           interimText = `${interimText}${msg.text || ''}`;
           emit({ type: 'interim', text: interimText.replace(/\s+/g, ' ').trim() });
         }
@@ -179,7 +211,8 @@ export function createModelAdapter({
         const [entry] = pending.splice(index, 1);
         // Commits older than the answered one cannot be answered any more.
         const skipped = pending.splice(0, index).filter(other => !other.discard);
-        interimText = '';
+        // The caption of a turn that is being spoken is not this turn's to clear.
+        if (!turnOpen) interimText = '';
         for (let i = 0; i < skipped.length; i++) emit({ type: 'final', text: '' });
         if (!entry.discard) emit({ type: 'final', text: String(msg.text ?? '').trim() });
         break;
@@ -207,6 +240,8 @@ export function createModelAdapter({
       return;
     }
     reconnects += 1;
+    // Audio of the turn in progress went to the socket that just died.
+    if (turnOpen) turnTruncated = true;
     reconnectTimer = setTimeout(() => {
       reconnectTimer = null;
       abandonPending();
@@ -266,6 +301,7 @@ export function createModelAdapter({
     beginTurn(preRoll) {
       if (muted || stopped) return;
       turnOpen = true;
+      turnTruncated = false;
       interimText = '';
       sendAudio(preRoll);
     },
@@ -278,7 +314,17 @@ export function createModelAdapter({
     commitTurn() {
       if (!turnOpen) return;
       turnOpen = false;
-      if (sendJson({ type: 'commit' })) {
+      if (turnTruncated) {
+        // Only the end of the sentence reached the new socket: flush it away (if
+        // there is a socket) and report an empty transcript instead of a wrong one.
+        turnTruncated = false;
+        interimText = '';
+        if (sendJson({ type: 'commit' })) {
+          committed += 1;
+          pending.push({ turn: committed, discard: true });
+        }
+        emit({ type: 'final', text: '' });
+      } else if (sendJson({ type: 'commit' })) {
         committed += 1;
         pending.push({ turn: committed, discard: false });
       } else {
@@ -291,6 +337,7 @@ export function createModelAdapter({
     cancelTurn() {
       if (!turnOpen) return;
       turnOpen = false;
+      turnTruncated = false;
       interimText = '';
       if (sendJson({ type: 'commit' })) {
         committed += 1;

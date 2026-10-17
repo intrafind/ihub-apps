@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { resolveVoiceModeSettings } from '../../../../../shared/voiceMode.js';
 import useVoiceMode from '../hooks/useVoiceMode';
@@ -8,6 +8,10 @@ import {
 } from '../hooks/useVoiceModeAvailability';
 import VoiceModeOverlay from './VoiceModeOverlay';
 import { VoiceWaveIcon } from './VoiceModeButton';
+
+/** What Tab can reach inside the dialog. The voice view's own root (tabindex -1) is left out on purpose. */
+const FOCUSABLE_SELECTOR =
+  'button:not([disabled]), input:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])';
 
 /**
  * The speech service the form's default stands for. The admin form holds the
@@ -42,6 +46,7 @@ function defaultChoiceOf(speech) {
 export default function VoiceModeTryButton({ speech, savedEnabled = true }) {
   const { t, i18n } = useTranslation();
   const [messages, setMessages] = useState([]);
+  const cardRef = useRef(null);
 
   const availability = useMemo(() => {
     const settings = {
@@ -107,6 +112,33 @@ export default function VoiceModeTryButton({ speech, savedEnabled = true }) {
     );
   }
 
+  // The page behind the dialog is out of reach: Tab and Shift+Tab wrap inside
+  // the card. Focus starts on the voice view's root, which is not in the list,
+  // so Shift+Tab from there lands on the last control. A listener on the node,
+  // like `useFocusTrap`'s: a key handler on a dialog element is not a control.
+  useEffect(() => {
+    const card = cardRef.current;
+    if (!voiceMode.active || !card) return undefined;
+    const keepTabInside = event => {
+      if (event.key !== 'Tab') return;
+      const items = Array.from(card.querySelectorAll(FOCUSABLE_SELECTOR));
+      if (items.length === 0) return;
+      const current = document.activeElement;
+      if (event.shiftKey && (current === items[0] || !items.includes(current))) {
+        event.preventDefault();
+        items[items.length - 1].focus();
+      } else if (
+        !event.shiftKey &&
+        (current === items[items.length - 1] || !items.includes(current))
+      ) {
+        event.preventDefault();
+        items[0].focus();
+      }
+    };
+    card.addEventListener('keydown', keepTabInside);
+    return () => card.removeEventListener('keydown', keepTabInside);
+  }, [voiceMode.active]);
+
   return (
     <>
       <button
@@ -120,8 +152,24 @@ export default function VoiceModeTryButton({ speech, savedEnabled = true }) {
         {t('voiceMode.try.button', 'Try it')}
       </button>
       {voiceMode.active && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="relative h-[32rem] w-full max-w-lg overflow-hidden rounded-2xl bg-white shadow-xl dark:bg-gray-900">
+        // The backdrop is a click target only for the mouse: the keyboard closes
+        // the dialog with Esc, which the voice view handles.
+        <div
+          role="presentation"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          onClick={event => {
+            if (event.target === event.currentTarget) voiceMode.end('user');
+          }}
+        >
+          {/* `min(32rem, 100%)`: on a phone in landscape a fixed 32rem card is
+              taller than the screen and its controls fall off the bottom. */}
+          <div
+            ref={cardRef}
+            role="dialog"
+            aria-modal="true"
+            aria-label={t('voiceMode.try.heading', 'Voice mode test')}
+            className="relative h-[min(32rem,100%)] w-full max-w-lg overflow-hidden rounded-2xl bg-white shadow-xl dark:bg-gray-900"
+          >
             <VoiceModeOverlay
               voiceMode={voiceMode}
               appName={t('voiceMode.try.heading', 'Voice mode test')}

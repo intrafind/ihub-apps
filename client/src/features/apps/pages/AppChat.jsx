@@ -3048,154 +3048,196 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
         <div
           className={`relative flex flex-col max-w-6xl mx-auto w-full ${embedded ? 'flex-1 min-h-0' : 'h-full'}`}
         >
-          {compareModeActive ? (
-            /* Compare Mode View */
-            <>
-              <div className="flex-1 min-h-0 overflow-hidden">
-                <CompareModeView
-                  ref={compareViewRef}
-                  app={app}
-                  appId={appId}
-                  models={chatModels}
-                  currentLanguage={currentLanguage}
-                  outputFormat={selectedOutputFormat}
-                  sendChatHistory={sendChatHistory}
-                  onPanelProcessingChange={handlePanelProcessingChange}
-                  onMessageComplete={handleMessageComplete}
-                  onOpenInCanvas={handleOpenInCanvas}
-                  canvasEnabled={app?.features?.canvas === true}
-                  requiredIntegrations={requiredIntegrations}
-                  onConnectIntegration={connectIntegration}
-                  onClarificationSubmit={handleClarificationSubmit}
-                  onClarificationSkip={handleClarificationSkip}
-                  onOpenSourceInApp={handleOpenSourceInApp}
-                  linkPath={appPagePath}
-                  ephemeral={ephemeral}
-                  startForm={showStartForm ? renderStartForm() : null}
-                />
-              </div>
-              {!showStartForm && (
-                <div className="shrink-0 px-4 pt-2">
-                  <div className="w-full max-w-4xl mx-auto">{renderChatInput()}</div>
+          {/* `contents`: no box of its own, so the layouts below stay the children
+              of the column as before. `inert` takes the transcript and the
+              composer out of the tab order and the accessibility tree while the
+              voice view is open: Shift+Tab must not leave it for a copy button,
+              nor a screen reader read the chat behind it. */}
+          <div className="contents" inert={voiceMode.active}>
+            {compareModeActive ? (
+              /* Compare Mode View */
+              <>
+                <div className="flex-1 min-h-0 overflow-hidden">
+                  <CompareModeView
+                    ref={compareViewRef}
+                    app={app}
+                    appId={appId}
+                    models={chatModels}
+                    currentLanguage={currentLanguage}
+                    outputFormat={selectedOutputFormat}
+                    sendChatHistory={sendChatHistory}
+                    onPanelProcessingChange={handlePanelProcessingChange}
+                    onMessageComplete={handleMessageComplete}
+                    onOpenInCanvas={handleOpenInCanvas}
+                    canvasEnabled={app?.features?.canvas === true}
+                    requiredIntegrations={requiredIntegrations}
+                    onConnectIntegration={connectIntegration}
+                    onClarificationSubmit={handleClarificationSubmit}
+                    onClarificationSkip={handleClarificationSkip}
+                    onOpenSourceInApp={handleOpenSourceInApp}
+                    linkPath={appPagePath}
+                    ephemeral={ephemeral}
+                    startForm={showStartForm ? renderStartForm() : null}
+                  />
                 </div>
-              )}
-            </>
-          ) : showStartForm ? (
-            /* Start form, in place of the transcript and the composer */
-            <div className="flex-1 min-h-0 overflow-y-auto">{renderStartForm()}</div>
-          ) : shouldCenterInput ? (
-            /* Centered layout for example prompts */
-            <>
-              {/* Mobile layout: content centers, input at bottom */}
-              <div className="flex flex-col h-full md:hidden">
-                <div className="flex-1 overflow-hidden flex flex-col">
-                  {messages.length > 0 ? (
-                    <div className="w-full h-full overflow-y-auto bg-gray-50 dark:bg-gray-800/50 rounded-lg flex flex-col">
-                      <ChatMessageList
-                        scheduleEnabledTools={effectiveEnabledTools}
-                        messages={messages}
-                        mcpAppHost={mcpAppHost}
-                        outputFormat={selectedOutputFormat}
-                        onDelete={handleDeleteMessage}
-                        onEdit={handleEditMessage}
-                        onResend={handleResendMessage}
-                        editable={true}
-                        appId={appId}
-                        chatId={chatId}
-                        modelId={selectedModel}
-                        imagesPersisted={serverBackedChat}
-                        onOpenInCanvas={handleOpenInCanvas}
-                        onSaveAsPrompt={handleSaveAsPrompt}
-                        onSaveAsSkill={handleSaveAsSkill}
-                        canvasEnabled={app?.features?.canvas === true}
-                        requiredIntegrations={requiredIntegrations}
-                        onConnectIntegration={connectIntegration}
-                        app={app}
-                        models={models}
-                        onClarificationSubmit={handleClarificationSubmit}
-                        onClarificationSkip={handleClarificationSkip}
-                        onOpenSourceInApp={handleOpenSourceInApp}
-                        linkPath={appPagePath}
-                      />
-                    </div>
-                  ) : (
-                    <div className="w-full h-full overflow-y-auto">
-                      <div className="min-h-full flex items-center justify-center p-4">
-                        <div className="w-full max-w-4xl">
-                          {renderStartupState(
-                            app,
-                            welcomeMessage,
-                            handleStarterPromptClick,
-                            hydrating,
-                            chatModeResolving,
-                            t,
-                            renderUsageGuideButton('hint')
-                          )}
+                {!showStartForm && (
+                  <div className="shrink-0 px-4 pt-2">
+                    <div className="w-full max-w-4xl mx-auto">{renderChatInput()}</div>
+                  </div>
+                )}
+              </>
+            ) : showStartForm ? (
+              /* Start form, in place of the transcript and the composer */
+              <div className="flex-1 min-h-0 overflow-y-auto">{renderStartForm()}</div>
+            ) : shouldCenterInput ? (
+              /* Centered layout for example prompts */
+              <>
+                {/* Mobile layout: content centers, input at bottom */}
+                <div className="flex flex-col h-full md:hidden">
+                  <div className="flex-1 overflow-hidden flex flex-col">
+                    {messages.length > 0 ? (
+                      <div className="w-full h-full overflow-y-auto bg-gray-50 dark:bg-gray-800/50 rounded-lg flex flex-col">
+                        <ChatMessageList
+                          scheduleEnabledTools={effectiveEnabledTools}
+                          messages={messages}
+                          mcpAppHost={mcpAppHost}
+                          outputFormat={selectedOutputFormat}
+                          onDelete={handleDeleteMessage}
+                          onEdit={handleEditMessage}
+                          onResend={handleResendMessage}
+                          editable={true}
+                          appId={appId}
+                          chatId={chatId}
+                          modelId={selectedModel}
+                          imagesPersisted={serverBackedChat}
+                          onOpenInCanvas={handleOpenInCanvas}
+                          onSaveAsPrompt={handleSaveAsPrompt}
+                          onSaveAsSkill={handleSaveAsSkill}
+                          canvasEnabled={app?.features?.canvas === true}
+                          requiredIntegrations={requiredIntegrations}
+                          onConnectIntegration={connectIntegration}
+                          app={app}
+                          models={models}
+                          onClarificationSubmit={handleClarificationSubmit}
+                          onClarificationSkip={handleClarificationSkip}
+                          onOpenSourceInApp={handleOpenSourceInApp}
+                          linkPath={appPagePath}
+                        />
+                      </div>
+                    ) : (
+                      <div className="w-full h-full overflow-y-auto">
+                        <div className="min-h-full flex items-center justify-center p-4">
+                          <div className="w-full max-w-4xl">
+                            {renderStartupState(
+                              app,
+                              welcomeMessage,
+                              handleStarterPromptClick,
+                              hydrating,
+                              chatModeResolving,
+                              t,
+                              renderUsageGuideButton('hint')
+                            )}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  )}
+                    )}
+                  </div>
+                  <div className="shrink-0 px-4 pt-2">
+                    <div className="w-full max-w-4xl mx-auto">{renderChatInput()}</div>
+                  </div>
                 </div>
-                <div className="shrink-0 px-4 pt-2">
-                  <div className="w-full max-w-4xl mx-auto">{renderChatInput()}</div>
-                </div>
-              </div>
 
-              {/* Desktop layout: everything centered together */}
-              <div className="hidden md:flex md:flex-col md:h-full md:items-center md:justify-center">
-                <div className="w-full max-w-4xl">
-                  {messages.length > 0 ? (
-                    <div className="mb-8">
-                      <ChatMessageList
-                        scheduleEnabledTools={effectiveEnabledTools}
-                        messages={messages}
-                        mcpAppHost={mcpAppHost}
-                        outputFormat={selectedOutputFormat}
-                        onDelete={handleDeleteMessage}
-                        onEdit={handleEditMessage}
-                        onResend={handleResendMessage}
-                        editable={true}
-                        appId={appId}
-                        chatId={chatId}
-                        modelId={selectedModel}
-                        imagesPersisted={serverBackedChat}
-                        onOpenInCanvas={handleOpenInCanvas}
-                        onSaveAsPrompt={handleSaveAsPrompt}
-                        onSaveAsSkill={handleSaveAsSkill}
-                        canvasEnabled={app?.features?.canvas === true}
-                        requiredIntegrations={requiredIntegrations}
-                        onConnectIntegration={connectIntegration}
-                        app={app}
-                        models={models}
-                        onClarificationSubmit={handleClarificationSubmit}
-                        onClarificationSkip={handleClarificationSkip}
-                        onOpenSourceInApp={handleOpenSourceInApp}
-                        linkPath={appPagePath}
-                      />
-                    </div>
-                  ) : (
-                    <div className="mb-8">
-                      {renderStartupState(
-                        app,
-                        welcomeMessage,
-                        handleStarterPromptClick,
-                        hydrating,
-                        chatModeResolving,
-                        t,
-                        renderUsageGuideButton('hint')
-                      )}
-                    </div>
-                  )}
-                  <div>{renderChatInput()}</div>
+                {/* Desktop layout: everything centered together */}
+                <div className="hidden md:flex md:flex-col md:h-full md:items-center md:justify-center">
+                  <div className="w-full max-w-4xl">
+                    {messages.length > 0 ? (
+                      <div className="mb-8">
+                        <ChatMessageList
+                          scheduleEnabledTools={effectiveEnabledTools}
+                          messages={messages}
+                          mcpAppHost={mcpAppHost}
+                          outputFormat={selectedOutputFormat}
+                          onDelete={handleDeleteMessage}
+                          onEdit={handleEditMessage}
+                          onResend={handleResendMessage}
+                          editable={true}
+                          appId={appId}
+                          chatId={chatId}
+                          modelId={selectedModel}
+                          imagesPersisted={serverBackedChat}
+                          onOpenInCanvas={handleOpenInCanvas}
+                          onSaveAsPrompt={handleSaveAsPrompt}
+                          onSaveAsSkill={handleSaveAsSkill}
+                          canvasEnabled={app?.features?.canvas === true}
+                          requiredIntegrations={requiredIntegrations}
+                          onConnectIntegration={connectIntegration}
+                          app={app}
+                          models={models}
+                          onClarificationSubmit={handleClarificationSubmit}
+                          onClarificationSkip={handleClarificationSkip}
+                          onOpenSourceInApp={handleOpenSourceInApp}
+                          linkPath={appPagePath}
+                        />
+                      </div>
+                    ) : (
+                      <div className="mb-8">
+                        {renderStartupState(
+                          app,
+                          welcomeMessage,
+                          handleStarterPromptClick,
+                          hydrating,
+                          chatModeResolving,
+                          t,
+                          renderUsageGuideButton('hint')
+                        )}
+                      </div>
+                    )}
+                    <div>{renderChatInput()}</div>
+                  </div>
                 </div>
-              </div>
-            </>
-          ) : (
-            /* Standard layout for normal chat and starter prompts */
-            <>
-              {/* Mobile layout: content scrollable, input at bottom */}
-              <div className="flex flex-col h-full md:hidden">
-                <div className="flex-1 overflow-hidden flex flex-col">
+              </>
+            ) : (
+              /* Standard layout for normal chat and starter prompts */
+              <>
+                {/* Mobile layout: content scrollable, input at bottom */}
+                <div className="flex flex-col h-full md:hidden">
+                  <div className="flex-1 overflow-hidden flex flex-col">
+                    <ChatMessageList
+                      scheduleEnabledTools={effectiveEnabledTools}
+                      messages={messages}
+                      mcpAppHost={mcpAppHost}
+                      outputFormat={selectedOutputFormat}
+                      onDelete={handleDeleteMessage}
+                      onEdit={handleEditMessage}
+                      onResend={handleResendMessage}
+                      editable={true}
+                      appId={appId}
+                      chatId={chatId}
+                      modelId={selectedModel}
+                      imagesPersisted={serverBackedChat}
+                      starterPrompts={app?.starterPrompts || []}
+                      onSelectPrompt={handleStarterPromptClick}
+                      welcomeMessage={welcomeMessage}
+                      showCenteredInput={shouldCenterInput}
+                      onOpenInCanvas={handleOpenInCanvas}
+                      onSaveAsPrompt={handleSaveAsPrompt}
+                      onSaveAsSkill={handleSaveAsSkill}
+                      canvasEnabled={app?.features?.canvas === true}
+                      requiredIntegrations={requiredIntegrations}
+                      onConnectIntegration={connectIntegration}
+                      app={app}
+                      models={models}
+                      onClarificationSubmit={handleClarificationSubmit}
+                      onClarificationSkip={handleClarificationSkip}
+                      onOpenSourceInApp={handleOpenSourceInApp}
+                      linkPath={appPagePath}
+                    />
+                  </div>
+                  <div className="shrink-0 px-4 pt-2">{renderChatInput()}</div>
+                </div>
+
+                {/* Desktop layout: normal flex column */}
+                <div className="hidden md:flex md:flex-col md:h-full">
                   <ChatMessageList
                     scheduleEnabledTools={effectiveEnabledTools}
                     messages={messages}
@@ -3226,47 +3268,12 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
                     onOpenSourceInApp={handleOpenSourceInApp}
                     linkPath={appPagePath}
                   />
+
+                  {renderChatInput()}
                 </div>
-                <div className="shrink-0 px-4 pt-2">{renderChatInput()}</div>
-              </div>
-
-              {/* Desktop layout: normal flex column */}
-              <div className="hidden md:flex md:flex-col md:h-full">
-                <ChatMessageList
-                  scheduleEnabledTools={effectiveEnabledTools}
-                  messages={messages}
-                  mcpAppHost={mcpAppHost}
-                  outputFormat={selectedOutputFormat}
-                  onDelete={handleDeleteMessage}
-                  onEdit={handleEditMessage}
-                  onResend={handleResendMessage}
-                  editable={true}
-                  appId={appId}
-                  chatId={chatId}
-                  modelId={selectedModel}
-                  imagesPersisted={serverBackedChat}
-                  starterPrompts={app?.starterPrompts || []}
-                  onSelectPrompt={handleStarterPromptClick}
-                  welcomeMessage={welcomeMessage}
-                  showCenteredInput={shouldCenterInput}
-                  onOpenInCanvas={handleOpenInCanvas}
-                  onSaveAsPrompt={handleSaveAsPrompt}
-                  onSaveAsSkill={handleSaveAsSkill}
-                  canvasEnabled={app?.features?.canvas === true}
-                  requiredIntegrations={requiredIntegrations}
-                  onConnectIntegration={connectIntegration}
-                  app={app}
-                  models={models}
-                  onClarificationSubmit={handleClarificationSubmit}
-                  onClarificationSkip={handleClarificationSkip}
-                  onOpenSourceInApp={handleOpenSourceInApp}
-                  linkPath={appPagePath}
-                />
-
-                {renderChatInput()}
-              </div>
-            </>
-          )}
+              </>
+            )}
+          </div>
 
           {/* Voice mode covers the transcript and the composer; the header stays.
               The messages stay mounted underneath and receive every turn. */}

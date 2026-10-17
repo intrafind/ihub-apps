@@ -180,6 +180,37 @@ describe('createVadController', () => {
     expect(handlers.onSpeechStart).toHaveBeenCalledTimes(1);
   });
 
+  test('with interruptions off, speech while the app only thinks starts no turn either', async () => {
+    const { vad, handlers, controller } = await setup({ bargeIn: false });
+    controller.setAgentBusy(true);
+    speak(vad);
+    expect(handlers.onSpeechStart).not.toHaveBeenCalled();
+    expect(handlers.onBargeIn).not.toHaveBeenCalled();
+    expect(handlers.onSpeechEnd).not.toHaveBeenCalled();
+
+    // Once the app is done the user's next utterance is a turn again.
+    controller.setAgentBusy(false);
+    speak(vad);
+    expect(handlers.onSpeechStart).toHaveBeenCalledTimes(1);
+    expect(handlers.onSpeechEnd).toHaveBeenCalledTimes(1);
+  });
+
+  test('a controller created while the app is busy ignores speech with interruptions off', async () => {
+    const { vad, handlers } = await setup({ bargeIn: false, agentBusy: true });
+    speak(vad);
+    expect(handlers.onSpeechStart).not.toHaveBeenCalled();
+  });
+
+  test('with interruptions on, speech while the app thinks is an ordinary turn start, thresholds unchanged', async () => {
+    const { vad, handlers, controller } = await setup();
+    controller.setAgentBusy(true);
+    expect(vad.setOptions).not.toHaveBeenCalled();
+    speak(vad);
+    expect(handlers.onSpeechStart).toHaveBeenCalledTimes(1);
+    expect(handlers.onBargeIn).not.toHaveBeenCalled();
+    expect(handlers.onSpeechEnd).toHaveBeenCalledTimes(1);
+  });
+
   test('interruptions can be switched on and off while the session runs', async () => {
     const { vad, handlers, controller } = await setup({ bargeIn: false });
     controller.setAgentSpeaking(true);

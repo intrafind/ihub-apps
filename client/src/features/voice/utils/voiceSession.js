@@ -18,7 +18,9 @@ import { VAD_DEFAULTS, createVadController } from './voiceSession/vad';
  * Hands-free turns are detected in the browser by Silero VAD (`vad.js`); while
  * nobody speaks, audio only fills the pre-roll buffer, so a turn starts with the
  * 300 ms before the detected speech and nothing is sent upstream in silence.
- * Push-to-talk skips the VAD: the UI says when the turn starts and ends.
+ * Push-to-talk skips the VAD: the UI says when the turn starts and ends, and the
+ * turn starts with the key press: nothing from before it (the click of the key)
+ * is kept or sent.
  *
  * Everything except the audio libraries is injectable through `overrides`, which
  * the unit tests use.
@@ -242,12 +244,17 @@ export async function createVoiceSession({
   const canListen = () => ready && !stopped && !muted && !suspended;
 
   // --- turns ---
+  // With interruptions off the app is not to be disturbed while it thinks or speaks:
+  // a turn started then could only be dropped further up, and would be in the way.
+  const agentBusy = () => agentState !== 'idle' && !bargeInOn;
+
   const beginTurn = (source, speechStartedAt) => {
-    if (turn || !canListen()) return false;
+    if (turn || !canListen() || agentBusy()) return false;
     // Audio from before the detector was sure: the pre-roll, plus the time the
-    // speech had already been going on when it was confirmed.
+    // speech had already been going on when it was confirmed. A push-to-talk turn
+    // begins at the key press; what the microphone heard before it is not speech.
     const earlier = source === 'vad' && speechStartedAt ? Math.max(0, now() - speechStartedAt) : 0;
-    const audio = preRoll.take(preRollMs + earlier + PRE_ROLL_SLACK_MS);
+    const audio = preRoll.take(source === 'ptt' ? 0 : preRollMs + earlier + PRE_ROLL_SLACK_MS);
     turn = { source, releasing: false };
     adapter.beginTurn(audio, { source });
     return true;
@@ -277,7 +284,8 @@ export async function createVoiceSession({
     levelMeter.push(frame);
     const pcm = toPcm16At16k(frame, rate);
     if (turn) adapter?.pushAudio(pcm);
-    else preRoll.push(pcm);
+    // Only a hands-free turn starts with what came before it.
+    else if (style === 'hands-free') preRoll.push(pcm);
   };
 
   // --- voice activity detection (hands-free) ---
@@ -298,6 +306,7 @@ export async function createVoiceSession({
       redemptionMs: clamp(endOfTurnSilenceMs, 300, 3000),
       ...vadParams,
       agentSpeaking: agentState === 'speaking',
+      agentBusy: agentState !== 'idle',
       bargeIn: bargeInOn,
       enabled: vadShouldRun(),
       now,
@@ -321,6 +330,7 @@ export async function createVoiceSession({
         vad = controller;
         // The app's state may have changed while the detector loaded.
         controller.setAgentSpeaking(agentState === 'speaking');
+        controller.setAgentBusy(agentState !== 'idle');
         controller.setBargeIn(bargeInOn);
         void controller.setEnabled(vadShouldRun());
         return controller;
@@ -515,6 +525,7 @@ export async function createVoiceSession({
       if (stopped || !AGENT_STATES.includes(state)) return;
       agentState = state;
       vad?.setAgentSpeaking(state === 'speaking');
+      vad?.setAgentBusy(state !== 'idle');
       adapter.setAgentState(state);
     },
 
@@ -523,6 +534,8 @@ export async function createVoiceSession({
       // End the turn in progress properly before the way of ending turns changes.
       endTurn();
       style = next;
+      // Push-to-talk starts a turn at the key press, never with earlier audio.
+      if (next === 'push-to-talk') preRoll.clear();
       adapter.setListeningStyle(next);
       if (next === 'hands-free') {
         ensureVad().then(
@@ -572,8 +585,8 @@ export async function createVoiceSession({
       // Pressed again within the tail of the last turn: that turn ends now.
       if (turn?.releasing) endTurn();
       if (turn) return;
+      // `beginTurn` refuses while the app is busy and interruptions are off.
       const interrupting = agentState === 'speaking';
-      if (interrupting && !bargeInOn) return;
       if (!beginTurn('ptt')) return;
       emit({ type: interrupting ? 'barge-in' : 'speech-start' });
     },

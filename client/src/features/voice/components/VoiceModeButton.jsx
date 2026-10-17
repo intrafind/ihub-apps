@@ -48,7 +48,7 @@ export default function VoiceModeButton({ onClick, active = false, disabled = fa
       aria-label={label}
       title={label}
       data-testid="voice-mode-button"
-      className={`flex items-center justify-center rounded-lg p-2 transition-colors disabled:cursor-not-allowed disabled:opacity-50 sm:p-2.5 ${
+      className={`flex shrink-0 items-center justify-center rounded-lg p-2 transition-colors disabled:cursor-not-allowed disabled:opacity-50 sm:p-2.5 ${
         active
           ? 'bg-indigo-100 text-indigo-700 hover:bg-indigo-200 dark:bg-indigo-900/50 dark:text-indigo-300 dark:hover:bg-indigo-900/70'
           : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600'

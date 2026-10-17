@@ -54,22 +54,26 @@ jest.mock('../../../client/src/features/voice/components', () => ({
   )
 }));
 
-const renderInput = props =>
-  render(
-    <ChatInput
-      app={{ id: 'a' }}
-      value=""
-      onChange={() => {}}
-      onSubmit={() => {}}
-      isProcessing={false}
-      showModelSelector={false}
-      onVoiceInput={() => {}}
-      // A second quick action, so dictation is its own button and not folded
-      // into the actions menu.
-      uploadConfig={{ localUploadEnabled: true }}
-      {...props}
-    />
-  );
+const inputElement = props => (
+  <ChatInput
+    app={{ id: 'a' }}
+    value=""
+    onChange={() => {}}
+    onSubmit={() => {}}
+    isProcessing={false}
+    showModelSelector={false}
+    onVoiceInput={() => {}}
+    // A second quick action, so dictation is its own button and not folded
+    // into the actions menu.
+    uploadConfig={{ localUploadEnabled: true }}
+    {...props}
+  />
+);
+const renderInput = props => {
+  const view = render(inputElement(props));
+  return { ...view, update: next => view.rerender(inputElement({ ...props, ...next })) };
+};
+const composer = () => screen.getByRole('textbox', { name: 'Type your message' });
 
 describe('voice mode button in the chat input', () => {
   test('is not rendered unless voice mode is available', () => {
@@ -102,5 +106,94 @@ describe('voice mode button in the chat input', () => {
     expect(button).toHaveAttribute('aria-pressed', 'true');
     expect(button).toBeEnabled();
     expect(screen.getByTestId('dictation')).toBeDisabled();
+  });
+});
+
+describe('focus after an answer (voice mode owns the keyboard while it is open)', () => {
+  test('returns to the input when a typed turn finishes', () => {
+    const { update } = renderInput({ onVoiceMode: () => {}, isProcessing: true });
+    document.body.focus();
+    expect(composer()).not.toHaveFocus();
+    update({ isProcessing: false });
+    expect(composer()).toHaveFocus();
+  });
+
+  test('stays off the covered input when a spoken turn finishes', () => {
+    // Before the fix the input took the focus after every answer: the Space of
+    // the next push-to-talk turn typed a space into it, a screen reader read
+    // "Type your message", and Enter sent a typed turn voice mode knew nothing about.
+    const { update } = renderInput({
+      onVoiceMode: () => {},
+      voiceModeActive: true,
+      isProcessing: true
+    });
+    document.body.focus();
+    update({ isProcessing: false });
+    expect(composer()).not.toHaveFocus();
+    update({ isProcessing: true });
+    update({ isProcessing: false });
+    expect(composer()).not.toHaveFocus();
+  });
+
+  test('does not take the focus on mount while voice mode is open', () => {
+    renderInput({ onVoiceMode: () => {}, voiceModeActive: true });
+    expect(composer()).not.toHaveFocus();
+  });
+
+  test('ending voice mode leaves the focus on the button it goes back to', () => {
+    const { update } = renderInput({ onVoiceMode: () => {}, voiceModeActive: true });
+    // What the voice view does when it closes: focus back to the opener.
+    const opener = screen.getByRole('button', { name: 'End voice mode' });
+    opener.focus();
+    update({ voiceModeActive: false });
+    expect(opener).toHaveFocus();
+    expect(composer()).not.toHaveFocus();
+  });
+
+  test('a turn that was still streaming when voice mode ended refocuses the input after it', () => {
+    const { update } = renderInput({
+      onVoiceMode: () => {},
+      voiceModeActive: true,
+      isProcessing: true
+    });
+    update({ voiceModeActive: false, isProcessing: true });
+    document.body.focus();
+    update({ voiceModeActive: false, isProcessing: false });
+    expect(composer()).toHaveFocus();
+  });
+});
+
+describe('the bottom bar on a 320 px phone', () => {
+  // jsdom has no layout, so these pin the classes that make the row shrink the
+  // model selector (it has a min-content width) instead of pushing Send out of
+  // the card. Checked in Chromium at 320 and 375 px by the author.
+  const models = [
+    { id: 'm1', name: { en: 'A model with a really quite long name' } },
+    { id: 'm2', name: { en: 'Another one' } }
+  ];
+
+  test('the voice mode and Send buttons never shrink', () => {
+    renderInput({ onVoiceMode: () => {} });
+    expect(screen.getByRole('button', { name: 'Start voice mode' }).className).toMatch(
+      /\bshrink-0\b/
+    );
+    expect(screen.getByRole('button', { name: 'Send' }).className).toMatch(/\bshrink-0\b/);
+  });
+
+  test('the model selector shrinks and truncates its label', () => {
+    renderInput({
+      onVoiceMode: () => {},
+      showModelSelector: true,
+      models,
+      selectedModel: 'm1',
+      onModelChange: () => {},
+      currentLanguage: 'en'
+    });
+    const trigger = screen.getByRole('button', { name: /A model with a really quite long name/ });
+    expect(trigger.parentElement.className).toMatch(/\bmin-w-0\b/);
+    expect(trigger.className).toMatch(/\bmax-w-full\b/);
+    const label = screen.getByText('A model with a really quite long name');
+    expect(label.className).toMatch(/\bmin-w-0\b/);
+    expect(label.className).toMatch(/\btruncate\b/);
   });
 });

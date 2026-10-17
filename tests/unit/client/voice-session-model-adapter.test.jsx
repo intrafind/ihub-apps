@@ -3,7 +3,7 @@
  * `/api/voice/realtime`. A fake WebSocket stands in for the server, so the
  * tests decide what arrives when: audio only while the user speaks, one
  * `commit` per turn, finals matched by turn number, a keepalive for the whole
- * session, one reconnect.
+ * session, one reconnect per outage.
  */
 
 jest.mock('../../../client/src/utils/runtimeBasePath', () => ({
@@ -183,6 +183,35 @@ describe('model adapter: the conversation socket', () => {
     adapter.beginTurn(pcm(1));
     socket().receive({ type: 'delta', text: 'Danke' });
     expect(events.slice(-1)[0]).toEqual({ type: 'interim', text: 'Danke' });
+    adapter.stop();
+  });
+
+  test('the tail of an earlier turn is not the caption of the turn being spoken', async () => {
+    const { adapter, socket, connect, events } = setup();
+    await connect();
+    adapter.beginTurn(pcm(1));
+    socket().receive({ type: 'delta', text: 'Wie ist', turn: 1 });
+    adapter.commitTurn();
+    // The user goes on while the server is still transcribing the first part.
+    adapter.beginTurn(pcm(1));
+    socket().receive({ type: 'delta', text: ' das', turn: 1 });
+    socket().receive({ type: 'delta', text: 'Und', turn: 2 });
+    expect(events.map(event => event.text)).toEqual(['Wie ist', 'Und']);
+
+    // Once the first turn is the only one waiting its text is the caption again.
+    socket().receive({ type: 'final', text: 'Wie ist das', turn: 1 });
+    adapter.commitTurn();
+    socket().receive({ type: 'delta', text: ' Wetter', turn: 2 });
+    expect(events.filter(event => event.type === 'interim').slice(-1)[0].text).toBe('Und Wetter');
+    adapter.stop();
+  });
+
+  test('deltas without a turn number (an older server) still make the caption', async () => {
+    const { adapter, socket, connect, events } = setup();
+    await connect();
+    adapter.beginTurn(pcm(1));
+    socket().receive({ type: 'delta', text: 'Hallo' });
+    expect(events).toEqual([{ type: 'interim', text: 'Hallo' }]);
     adapter.stop();
   });
 
@@ -379,14 +408,34 @@ describe('model adapter: failures', () => {
     adapter.stop();
   });
 
-  test('the second unexpected close ends the session with an unrecoverable error', async () => {
+  test('a reconnect that works restores the budget: the next outage is survived too', async () => {
+    jest.useFakeTimers();
+    const { adapter, socket, connect, events } = setup();
+    await connect();
+    for (let outage = 1; outage <= 3; outage++) {
+      socket().drop(1006);
+      jest.advanceTimersByTime(100);
+      expect(FakeSocket.instances).toHaveLength(outage + 1);
+      socket().open();
+      socket().receive({ type: 'ready' });
+    }
+    expect(events).toEqual([]);
+
+    // And the conversation still works on the last socket.
+    adapter.beginTurn(pcm(1));
+    adapter.commitTurn();
+    socket().receive({ type: 'final', text: 'still here', turn: 1 });
+    expect(finals(events)).toEqual(['still here']);
+    adapter.stop();
+  });
+
+  test('a reconnect whose socket closes before it is ready ends the session', async () => {
     jest.useFakeTimers();
     const { adapter, socket, connect, events } = setup();
     await connect();
     socket().drop(1006);
     jest.advanceTimersByTime(100);
-    socket().open();
-    socket().receive({ type: 'ready' });
+    socket().open(); // the server never says ready
     socket().drop(1006);
     jest.advanceTimersByTime(10_000);
 
@@ -396,6 +445,104 @@ describe('model adapter: failures', () => {
       expect.objectContaining({ type: 'error', code: 'connection', recoverable: false })
     ]);
     adapter.stop();
+  });
+
+  test('a drop right after a reconnect, before ready, is still one outage: no endless retries', async () => {
+    jest.useFakeTimers();
+    const { adapter, socket, connect, events } = setup();
+    await connect();
+    socket().drop(1006);
+    jest.advanceTimersByTime(100);
+    socket().drop(1006); // the reconnecting socket never opened
+    jest.advanceTimersByTime(10_000);
+    expect(FakeSocket.instances).toHaveLength(2);
+    expect(events.filter(event => event.type === 'error')).toHaveLength(1);
+    adapter.stop();
+  });
+
+  describe('a turn that was being spoken when the socket dropped', () => {
+    const reconnect = socket => {
+      jest.advanceTimersByTime(100);
+      socket().open();
+      socket().receive({ type: 'ready' });
+    };
+
+    test('is not sent as the sentence that is left: it ends empty and is flushed away', async () => {
+      jest.useFakeTimers();
+      const { adapter, socket, connect, events } = setup();
+      await connect();
+      adapter.beginTurn(pcm(1));
+      adapter.pushAudio(pcm(2));
+      socket().drop(1006);
+      jest.advanceTimersByTime(100);
+      socket().open();
+      socket().receive({ type: 'ready' });
+      // The user is still talking: the end of the sentence reaches the new socket.
+      adapter.pushAudio(pcm(3));
+      expect(socket().audio()).toHaveLength(1);
+      adapter.commitTurn();
+
+      expect(finals(events)).toEqual(['']);
+      // The tail the server holds is flushed, and what it makes of it is ignored.
+      expect(
+        socket()
+          .json()
+          .filter(frame => frame.type === 'commit')
+      ).toHaveLength(1);
+      socket().receive({ type: 'final', text: 'das Wetter in Berlin', turn: 1 });
+      expect(finals(events)).toEqual(['']);
+
+      // The next turn is a clean one.
+      adapter.beginTurn(pcm(1));
+      adapter.commitTurn();
+      socket().receive({ type: 'final', text: 'Wie ist das Wetter in Berlin', turn: 2 });
+      expect(finals(events)).toEqual(['', 'Wie ist das Wetter in Berlin']);
+      adapter.stop();
+    });
+
+    test('also when it ends before the new socket is back', async () => {
+      jest.useFakeTimers();
+      const { adapter, socket, connect, events } = setup();
+      await connect();
+      adapter.beginTurn(pcm(1));
+      socket().drop(1006);
+      adapter.pushAudio(pcm(2));
+      adapter.commitTurn();
+      expect(finals(events)).toEqual(['']);
+      reconnect(socket);
+      expect(finals(events)).toEqual(['']);
+      adapter.stop();
+    });
+
+    test('a turn that begins while the socket is down is truncated from the start', async () => {
+      jest.useFakeTimers();
+      const { adapter, socket, connect, events } = setup();
+      await connect();
+      socket().drop(1006);
+      adapter.beginTurn(pcm(1));
+      adapter.pushAudio(pcm(2));
+      reconnect(socket);
+      adapter.pushAudio(pcm(3));
+      adapter.commitTurn();
+      expect(finals(events)).toEqual(['']);
+      adapter.stop();
+    });
+
+    test('a turn after the outage is sent as usual', async () => {
+      jest.useFakeTimers();
+      const { adapter, socket, connect, events } = setup();
+      await connect();
+      adapter.beginTurn(pcm(1));
+      socket().drop(1006);
+      adapter.cancelTurn(); // muted: dropped either way
+      reconnect(socket);
+      adapter.beginTurn(pcm(1));
+      adapter.pushAudio(pcm(2));
+      adapter.commitTurn();
+      socket().receive({ type: 'final', text: 'complete sentence', turn: 1 });
+      expect(finals(events)).toEqual(['complete sentence']);
+      adapter.stop();
+    });
   });
 
   test('a turn waiting for its final when the socket drops ends empty after the reconnect', async () => {
@@ -431,6 +578,29 @@ describe('model adapter: failures', () => {
     expect(FakeSocket.instances).toHaveLength(1);
     expect(events).toEqual([
       { type: 'error', code: 'session-limit', message: 'Too long', recoverable: false }
+    ]);
+    adapter.stop();
+  });
+
+  test('the server ending a silent conversation passes its code through for the overlay', async () => {
+    jest.useFakeTimers();
+    const { adapter, socket, connect, events } = setup();
+    await connect();
+    socket().receive({
+      type: 'error',
+      code: 'no-speech',
+      message: 'Nothing was said for a long time, so the session was closed'
+    });
+    socket().drop(1008);
+    jest.advanceTimersByTime(10_000);
+    expect(FakeSocket.instances).toHaveLength(1);
+    expect(events).toEqual([
+      {
+        type: 'error',
+        code: 'no-speech',
+        message: 'Nothing was said for a long time, so the session was closed',
+        recoverable: false
+      }
     ]);
     adapter.stop();
   });

@@ -545,6 +545,32 @@ describe('hands-free turns', () => {
     h.session.stop();
   });
 
+  test('with interruptions off, speech while the app thinks starts no turn', async () => {
+    const h = await start({ session: { bargeIn: false } });
+    await h.readyNow();
+    h.session.setAgentState('thinking');
+    detectSpeech(h);
+    detectSilence(h);
+    expect(h.types()).toEqual(['ready']);
+    expect(h.adapter.last().beginTurn).not.toHaveBeenCalled();
+    expect(h.adapter.last().commitTurn).not.toHaveBeenCalled();
+
+    // The app is done: the next utterance is a turn again.
+    h.session.setAgentState('idle');
+    detectSpeech(h);
+    expect(h.types()).toEqual(['ready', 'speech-start']);
+    h.session.stop();
+  });
+
+  test('the busy app is known to a detector that loads after the state was set', async () => {
+    const h = await start({ session: { bargeIn: false } });
+    h.session.setAgentState('thinking');
+    await h.readyNow();
+    detectSpeech(h);
+    expect(h.adapter.last().beginTurn).not.toHaveBeenCalled();
+    h.session.stop();
+  });
+
   test('ignores agent states it does not know', async () => {
     const h = await start();
     await h.readyNow();
@@ -592,14 +618,13 @@ describe('push-to-talk', () => {
     return h;
   };
 
-  test('pressing starts a turn with 300 ms of pre-roll, releasing ends it', async () => {
+  test('pressing starts a turn, releasing ends it', async () => {
     const h = await ptt();
     h.hear(1000);
     h.session.pushToTalkStart();
     expect(h.types()).toEqual(['ready', 'speech-start']);
-    const [preRoll, info] = h.adapter.last().beginTurn.mock.calls[0];
+    const [, info] = h.adapter.last().beginTurn.mock.calls[0];
     expect(info).toEqual({ source: 'ptt' });
-    expect(preRoll.length).toBe(Math.round(((300 + 64) / 1000) * 16000));
 
     h.hear(320);
     expect(h.adapter.last().pushAudio).toHaveBeenCalledTimes(10);
@@ -607,6 +632,40 @@ describe('push-to-talk', () => {
     h.session.pushToTalkEnd();
     expect(h.types()).toEqual(['ready', 'speech-start', 'turn-end']);
     expect(h.adapter.last().commitTurn).toHaveBeenCalledTimes(1);
+    h.session.stop();
+  });
+
+  test('the turn starts at the key press: nothing from before it is sent, not even the key click', async () => {
+    const h = await ptt();
+    // The microphone has been open for a second, with the click of the key at the end.
+    h.hear(900, 0.02);
+    h.hear(100, 0.9);
+    h.session.pushToTalkStart();
+    const [preRoll] = h.adapter.last().beginTurn.mock.calls[0];
+    expect(preRoll).toBeInstanceOf(Int16Array);
+    expect(preRoll.length).toBe(0);
+    h.session.stop();
+  });
+
+  test('audio a hands-free session heard before it switched to push-to-talk is not sent either', async () => {
+    const h = await start();
+    await h.readyNow();
+    h.hear(1000, 0.5);
+    h.session.setListeningStyle('push-to-talk');
+    h.session.pushToTalkStart();
+    const [preRoll] = h.adapter.last().beginTurn.mock.calls[0];
+    expect(preRoll.length).toBe(0);
+    h.session.stop();
+  });
+
+  test('hands-free after push-to-talk keeps its pre-roll', async () => {
+    const h = await ptt();
+    h.session.setListeningStyle('hands-free');
+    await h.readyNow();
+    h.hear(1000);
+    detectSpeech(h, 250);
+    const [preRoll] = h.adapter.last().beginTurn.mock.calls[0];
+    expect(preRoll.length).toBe(Math.round(((300 + 250 + 64) / 1000) * 16000));
     h.session.stop();
   });
 
@@ -633,6 +692,29 @@ describe('push-to-talk', () => {
     h.session.setAgentState('speaking');
     h.session.pushToTalkStart();
     expect(h.types()).toEqual(['ready']);
+    h.session.stop();
+  });
+
+  test('while the app thinks, a press interrupts it (a speech-start the caller turns into a barge-in)', async () => {
+    const h = await ptt();
+    h.session.setAgentState('thinking');
+    h.session.pushToTalkStart();
+    expect(h.types()).toEqual(['ready', 'speech-start']);
+    h.session.stop();
+  });
+
+  test('with interruptions off, a press while the app thinks is ignored', async () => {
+    const h = await ptt({ session: { bargeIn: false, listeningStyle: 'push-to-talk' } });
+    h.session.setAgentState('thinking');
+    h.session.pushToTalkStart();
+    h.session.pushToTalkEnd();
+    expect(h.types()).toEqual(['ready']);
+    expect(h.adapter.last().beginTurn).not.toHaveBeenCalled();
+    expect(h.adapter.last().commitTurn).not.toHaveBeenCalled();
+
+    h.session.setAgentState('idle');
+    h.session.pushToTalkStart();
+    expect(h.types()).toEqual(['ready', 'speech-start']);
     h.session.stop();
   });
 

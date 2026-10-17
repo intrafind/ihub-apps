@@ -20,6 +20,11 @@
  * the app speaks and barge-in is off, the end of a run the user already
  * interrupted, audio that drains after the user started talking.
  *
+ * A transcript that arrives while the user is already talking again is not a
+ * turn: it is the first part of a sentence the user paused in (the speech-to-text
+ * answer for the turn the silence cut off). The state stays `user-speaking` and the
+ * caption shows it; the hook keeps the text and puts it in front of the next one.
+ *
  * `RUN_ENDED` and the tool and text events are not scoped to a run: after a
  * barge-in the hook must drop the events of the run it aborted. (A stale
  * `RUN_ENDED` while the next transcript is still pending only makes the status
@@ -40,6 +45,8 @@ const { CONNECTING, LISTENING, USER_SPEAKING, THINKING, SPEAKING, PAUSED, ERROR 
 
 const LISTENING_STYLES = ['hands-free', 'push-to-talk'];
 const EMPTY_USER_CAPTION = Object.freeze({ text: '', final: false });
+/** What the overlay may be told besides the status (`state.notice`). */
+const NOTICES = ['tts-failed'];
 
 /**
  * Words a recogniser reports for a cough, a breath or a hesitation. Letters may
@@ -72,6 +79,9 @@ export function isDroppedTranscript(text) {
  * @param {'hands-free'|'push-to-talk'} [opts.listeningStyle='hands-free']
  * @param {boolean} [opts.bargeIn=true] - Whether the user may interrupt the app.
  * @param {boolean} [opts.captions=true]
+ *
+ * `notice` is a hint the overlay shows next to the status: `'tts-failed'` (the
+ * answer could not be spoken, the caption still has it) or null.
  */
 export function initialVoiceModeState({ listeningStyle, bargeIn, captions = true } = {}) {
   return {
@@ -84,21 +94,27 @@ export function initialVoiceModeState({ listeningStyle, bargeIn, captions = true
     assistantCaption: '',
     toolStatus: null,
     error: null,
+    notice: null,
     turn: 0,
     runActive: false
   };
 }
 
-/** The user talks over the app: playback and run are the hook's to stop, this is the state. */
+/**
+ * The user takes over from the app: playback and run are the hook's to stop, this
+ * is the state. Talking over the app (`force` false) means the user is speaking;
+ * a tap on the orb (`force`) stops the app but nobody speaks yet, so it listens.
+ */
 function bargeIn(state, force) {
   if (state.status !== THINKING && state.status !== SPEAKING) return state;
   if (!state.bargeIn && !force) return state;
   return {
     ...state,
-    status: USER_SPEAKING,
+    status: force ? LISTENING : USER_SPEAKING,
     userCaption: EMPTY_USER_CAPTION,
     assistantCaption: '',
     toolStatus: null,
+    notice: null,
     runActive: false
   };
 }
@@ -113,7 +129,9 @@ function bargeIn(state, force) {
  *   - `TURN_ENDED`: silence or push-to-talk release; the final transcript follows.
  *   - `FINAL {text}`: the turn's transcript. An empty or filler transcript goes
  *     back to listening; otherwise it is the turn to send. Ignored while the app
- *     speaks or a run is active and the user did not barge in.
+ *     speaks or a run is active and the user did not barge in. While the user is
+ *     speaking again it is only the first part of the sentence: it shows in the
+ *     caption and changes nothing else.
  *   - `SENT`: the transcript was handed to the chat; a run is active now.
  *   - `TOOL_STARTED {kind, label}` / `TOOL_FINISHED`: the run's tool chip.
  *   - `ASSISTANT_TEXT {text}`: the answer so far (the caption).
@@ -122,7 +140,10 @@ function bargeIn(state, force) {
  *   - `RUN_ENDED {pendingAudio?}`: the answer is complete. While thinking this
  *     returns to listening, unless `pendingAudio` says speech is still queued.
  *   - `BARGE_IN {force?}`: the user interrupts (from the session's barge-in
- *     event). `force` also works with `bargeIn` off (a tap on the orb).
+ *     event) and is speaking now. `force` is a tap on the orb: it also works with
+ *     `bargeIn` off, and the state is `listening` (nobody speaks yet).
+ *   - `NOTICE {notice}`: a hint for the overlay (`'tts-failed'`). Cleared by
+ *     `READY`, `SPEECH_START`, `SENT` and `RETRY`, and by a barge-in.
  *   - `MUTE` / `UNMUTE`, `ERROR {code, message}`, `RETRY` (from `error` only),
  *     `SET_LISTENING_STYLE {style}`, `SET_BARGE_IN {value}`, `SET_CAPTIONS {value}`.
  * @returns {ReturnType<typeof initialVoiceModeState>} The same object for an
@@ -132,11 +153,11 @@ export function voiceModeReducer(state, action) {
   switch (action?.type) {
     case 'READY':
       if (state.status !== CONNECTING) return state;
-      return { ...state, status: state.muted ? PAUSED : LISTENING, error: null };
+      return { ...state, status: state.muted ? PAUSED : LISTENING, error: null, notice: null };
 
     case 'SPEECH_START':
       if (state.status === LISTENING) {
-        return { ...state, status: USER_SPEAKING, userCaption: EMPTY_USER_CAPTION };
+        return { ...state, status: USER_SPEAKING, userCaption: EMPTY_USER_CAPTION, notice: null };
       }
       if (state.status === THINKING || state.status === SPEAKING) return bargeIn(state, false);
       return state;
@@ -145,7 +166,7 @@ export function voiceModeReducer(state, action) {
       const text = typeof action.text === 'string' ? action.text : '';
       const caption = { text, final: false };
       if (state.status === LISTENING) {
-        return { ...state, status: USER_SPEAKING, userCaption: caption };
+        return { ...state, status: USER_SPEAKING, userCaption: caption, notice: null };
       }
       // A streaming recogniser may still deliver text after the turn ended.
       const awaitingFinal = state.status === THINKING && !state.runActive;
@@ -160,12 +181,17 @@ export function voiceModeReducer(state, action) {
       return state.status === USER_SPEAKING ? { ...state, status: THINKING } : state;
 
     case 'FINAL': {
-      const accepting =
-        state.status === LISTENING ||
-        state.status === USER_SPEAKING ||
-        (state.status === THINKING && !state.runActive);
-      if (!accepting) return state;
       const text = typeof action.text === 'string' ? action.text.trim() : '';
+      if (state.status === USER_SPEAKING) {
+        // The turn this transcript belongs to was cut off by a pause; the user
+        // went on. Not a turn yet, and not the end of the speaking either.
+        if (isDroppedTranscript(text)) return state;
+        if (state.userCaption.text === text && !state.userCaption.final) return state;
+        return { ...state, userCaption: { text, final: false } };
+      }
+      const accepting =
+        state.status === LISTENING || (state.status === THINKING && !state.runActive);
+      if (!accepting) return state;
       if (isDroppedTranscript(text)) {
         if (state.status === LISTENING && !state.userCaption.text) return state;
         return { ...state, status: LISTENING, userCaption: EMPTY_USER_CAPTION };
@@ -180,6 +206,7 @@ export function voiceModeReducer(state, action) {
         status: state.status === PAUSED ? PAUSED : THINKING,
         assistantCaption: '',
         toolStatus: null,
+        notice: null,
         turn: state.turn + 1,
         runActive: true
       };
@@ -230,6 +257,10 @@ export function voiceModeReducer(state, action) {
     case 'BARGE_IN':
       return bargeIn(state, action.force === true);
 
+    case 'NOTICE':
+      if (!NOTICES.includes(action.notice) || state.notice === action.notice) return state;
+      return { ...state, notice: action.notice };
+
     case 'MUTE': {
       const status = state.status === CONNECTING || state.status === ERROR ? state.status : PAUSED;
       if (state.muted && state.status === status) return state;
@@ -242,13 +273,12 @@ export function voiceModeReducer(state, action) {
       };
     }
 
-    case 'UNMUTE':
+    case 'UNMUTE': {
       if (!state.muted) return state;
-      return {
-        ...state,
-        muted: false,
-        status: state.status === PAUSED ? LISTENING : state.status
-      };
+      // A run that went on while muted is still the app's turn to finish.
+      const resumed = state.runActive ? THINKING : LISTENING;
+      return { ...state, muted: false, status: state.status === PAUSED ? resumed : state.status };
+    }
 
     case 'ERROR':
       return {
@@ -265,6 +295,9 @@ export function voiceModeReducer(state, action) {
         ...state,
         status: CONNECTING,
         error: null,
+        notice: null,
+        // The new session starts unmuted, whatever the old one was.
+        muted: false,
         userCaption: EMPTY_USER_CAPTION,
         assistantCaption: '',
         toolStatus: null,
