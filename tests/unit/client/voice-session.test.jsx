@@ -304,6 +304,36 @@ describe('starting a session', () => {
     h.session.stop();
   });
 
+  test('runs on an AudioContext the caller passes in and leaves it open on stop()', async () => {
+    const shared = new FakeAudioContext();
+    contexts.length = 0;
+    const h = await start({ session: { audioContext: shared } });
+    await h.readyNow();
+    expect(contexts).toHaveLength(0); // none created
+    expect(h.capture().audioContext).toBe(shared);
+    expect(h.vad.last().options.audioContext).toBe(shared);
+    h.session.stop();
+    expect(shared.close).not.toHaveBeenCalled(); // the caller owns it
+    expect(h.stream.track.stop).toHaveBeenCalledTimes(1);
+  });
+
+  test('a shared AudioContext is also left open when the microphone is denied', async () => {
+    const shared = new FakeAudioContext();
+    await expect(
+      createVoiceSession({
+        service: 'browser',
+        audioContext: shared,
+        onEvent: () => {},
+        overrides: {
+          getUserMedia: async () => {
+            throw Object.assign(new Error('x'), { name: 'NotAllowedError' });
+          }
+        }
+      })
+    ).rejects.toMatchObject({ code: 'mic-denied' });
+    expect(shared.close).not.toHaveBeenCalled();
+  });
+
   test('a denied microphone rejects with a code and releases the AudioContext', async () => {
     contexts.length = 0;
     const denied = Object.assign(new Error('Permission denied'), { name: 'NotAllowedError' });
@@ -318,7 +348,11 @@ describe('starting a session', () => {
           }
         }
       })
-    ).rejects.toMatchObject({ code: 'mic-denied', name: 'NotAllowedError' });
+    ).rejects.toMatchObject({
+      code: 'mic-denied',
+      name: 'NotAllowedError',
+      message: 'Microphone access was denied'
+    });
     expect(contexts[0].close).toHaveBeenCalled();
   });
 

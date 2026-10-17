@@ -49,23 +49,27 @@ function startError(code, message, cause) {
 /** `getUserMedia` failure to an error with a stable `code` (and the browser's `name`). */
 function microphoneError(error) {
   let code = 'start-failed';
+  let message = error?.message || 'The microphone is not available';
   switch (error?.name) {
     case 'NotAllowedError':
     case 'SecurityError':
       code = 'mic-denied';
+      message = 'Microphone access was denied';
       break;
     case 'NotFoundError':
     case 'OverconstrainedError':
       code = 'mic-missing';
+      message = 'No microphone was found';
       break;
     case 'NotReadableError':
     case 'AbortError':
       code = 'mic-busy';
+      message = 'The microphone could not be started. It may be in use by another application.';
       break;
     default:
       break;
   }
-  const wrapped = startError(code, error?.message || 'The microphone is not available', error);
+  const wrapped = startError(code, message, error);
   if (error?.name) wrapped.name = error.name;
   return wrapped;
 }
@@ -137,6 +141,10 @@ function createAdapter({ service, modelId, language, listeningStyle, speech, emi
  * @param {boolean} [options.bargeIn] - Whether the user may interrupt the app by speaking.
  * @param {number} [options.endOfTurnSilenceMs] - Silence that ends a hands-free turn.
  * @param {object} [options.speech] - `platformConfig.speech` (Azure host and key state).
+ * @param {AudioContext} [options.audioContext] - An AudioContext to run on instead of
+ *   creating one, for instance the one the answer is played on (iOS Safari echo
+ *   cancellation works best with a single context). The caller keeps ownership:
+ *   `stop()` does not close it.
  * @param {(event: object) => void} options.onEvent
  * @param {Object} [options.overrides] - Tests: `createVad`, `createAdapter`,
  *   `getUserMedia`, `AudioContext`, `preRollMs`, `pttTailMs`, `now`, `assetBaseUrl`,
@@ -159,6 +167,7 @@ export async function createVoiceSession({
   bargeIn = true,
   endOfTurnSilenceMs = VAD_DEFAULTS.redemptionMs,
   speech,
+  audioContext: sharedAudioContext,
   onEvent,
   overrides = {}
 }) {
@@ -168,12 +177,15 @@ export async function createVoiceSession({
   const AudioContextCtor =
     overrides.AudioContext ||
     (typeof window !== 'undefined' ? window.AudioContext || window.webkitAudioContext : undefined);
+  const ownsContext = !sharedAudioContext;
   const getUserMedia =
     overrides.getUserMedia ||
     (typeof navigator !== 'undefined' && navigator.mediaDevices?.getUserMedia
       ? constraints => navigator.mediaDevices.getUserMedia(constraints)
       : null);
-  if (!AudioContextCtor) throw startError('audio-unsupported', 'Web Audio is not supported');
+  if (!AudioContextCtor && ownsContext) {
+    throw startError('audio-unsupported', 'Web Audio is not supported');
+  }
   if (!getUserMedia) throw startError('mic-denied', 'The microphone needs a secure connection');
 
   const now = overrides.now || (() => Date.now());
@@ -182,7 +194,7 @@ export async function createVoiceSession({
   const vadParams = { ...overrides.vad };
 
   // Created before the first await: that is still inside the click.
-  let audioContext = createAudioContext(AudioContextCtor, true);
+  let audioContext = sharedAudioContext || createAudioContext(AudioContextCtor, true);
   audioContext.resume?.().catch(() => {});
 
   let stream;
@@ -191,7 +203,7 @@ export async function createVoiceSession({
       audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
     });
   } catch (error) {
-    audioContext.close?.().catch(() => {});
+    if (ownsContext) audioContext.close?.().catch(() => {});
     throw microphoneError(error);
   }
 
@@ -330,7 +342,7 @@ export async function createVoiceSession({
       track.removeEventListener?.('ended', onTrackEnded);
       track.removeEventListener?.('mute', onTrackMuted);
     }
-    if (audioContext) audioContext.onstatechange = null;
+    if (audioContext && ownsContext) audioContext.onstatechange = null;
     try {
       adapter?.stop();
     } catch (error) {
@@ -340,7 +352,7 @@ export async function createVoiceSession({
     else vadPromise?.then(controller => controller?.destroy()).catch(() => {});
     capture?.stop();
     for (const track of stream.getTracks()) track.stop();
-    if (audioContext && audioContext.state !== 'closed') audioContext.close?.().catch(() => {});
+    if (ownsContext && audioContext.state !== 'closed') audioContext.close?.().catch(() => {});
   };
 
   const stop = () => {
@@ -450,7 +462,7 @@ export async function createVoiceSession({
       return await createCapture({ audioContext, stream, onFrame });
     } catch (error) {
       // Some engines refuse a 16 kHz context for a microphone at another rate.
-      if (audioContext.sampleRate !== TARGET_SAMPLE_RATE) throw error;
+      if (!ownsContext || audioContext.sampleRate !== TARGET_SAMPLE_RATE) throw error;
       audioContext.close?.().catch(() => {});
       audioContext = createAudioContext(AudioContextCtor, false);
       audioContext.resume?.().catch(() => {});
@@ -461,7 +473,7 @@ export async function createVoiceSession({
     capture = await buildCapture();
   } catch (error) {
     for (const track of stream.getTracks()) track.stop();
-    if (audioContext.state !== 'closed') audioContext.close?.().catch(() => {});
+    if (ownsContext && audioContext.state !== 'closed') audioContext.close?.().catch(() => {});
     throw startError('audio-unsupported', error?.message || 'Audio capture failed', error);
   }
 
@@ -470,13 +482,16 @@ export async function createVoiceSession({
     track.addEventListener?.('mute', onTrackMuted);
   }
   document.addEventListener?.('visibilitychange', onVisibilityChange);
-  audioContext.onstatechange = () => {
-    // iOS interrupts the context (a call, Siri); take it back when possible.
-    const { state } = audioContext;
-    if (!stopped && !suspended && !document.hidden && state !== 'running' && state !== 'closed') {
-      audioContext.resume?.().catch(() => {});
-    }
-  };
+  if (ownsContext) {
+    const context = audioContext;
+    context.onstatechange = () => {
+      // iOS interrupts the context (a call, Siri); take it back when possible.
+      const { state } = context;
+      if (!stopped && !suspended && !document.hidden && state !== 'running' && state !== 'closed') {
+        context.resume?.().catch(() => {});
+      }
+    };
+  }
 
   // Finish setting up in the background: the caller has the session already, so
   // that it can stop it (and release the microphone) while this is going on.
