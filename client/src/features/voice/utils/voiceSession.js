@@ -282,8 +282,8 @@ export async function createVoiceSession({
       stream,
       audioContext,
       assetBaseUrl: overrides.assetBaseUrl,
-      ...vadParams,
       redemptionMs: clamp(endOfTurnSilenceMs, 300, 3000),
+      ...vadParams,
       agentSpeaking: agentState === 'speaking',
       bargeIn: bargeInOn,
       enabled: vadShouldRun(),
@@ -471,7 +471,8 @@ export async function createVoiceSession({
   document.addEventListener?.('visibilitychange', onVisibilityChange);
   audioContext.onstatechange = () => {
     // iOS interrupts the context (a call, Siri); take it back when possible.
-    if (!stopped && !suspended && audioContext.state !== 'running' && audioContext.state !== 'closed') {
+    const { state } = audioContext;
+    if (!stopped && !suspended && !document.hidden && state !== 'running' && state !== 'closed') {
       audioContext.resume?.().catch(() => {});
     }
   };

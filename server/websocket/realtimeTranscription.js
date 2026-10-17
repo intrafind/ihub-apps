@@ -60,7 +60,7 @@
  *                     `{type:'delta', text, turn:n}` interim text of turn n
  * A session without `conversation` never sees any of it. See
  * `docs/voice-transcription.md` ("Conversation mode") for the full contract and
- * the section "Conversation mode" below `bridgeConnection` for how turns are
+ * the "Conversation mode" section inside `bridgeConnection` for how turns are
  * kept apart.
  */
 import { WebSocketServer, WebSocket } from 'ws';
