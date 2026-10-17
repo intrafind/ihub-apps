@@ -230,6 +230,13 @@ describe('speakableChunker: ellipsis, quotes and brackets', () => {
     expect(chunksOf('Wait.... Really? Yes.')).toEqual(['Wait....', 'Really?', 'Yes.']);
   });
 
+  test('the lowercase check only applies once the next word has started', () => {
+    // Whitespace alone completes a sentence (the next token may be far away) ...
+    expect(eager().update('In short... ')).toEqual(['In short...']);
+    // ... a lowercase word that is already there keeps it going.
+    expect(eager().update('In short... it')).toEqual([]);
+  });
+
   test('a lowercase word after an ellipsis means the sentence goes on', () => {
     expect(chunksOf('In short... it depends. Next.')).toEqual(['In short... it depends.', 'Next.']);
     expect(chunksOf('Hmm… let me think. Done.')).toEqual(['Hmm… let me think.', 'Done.']);
@@ -570,7 +577,7 @@ describe('speakableChunker: state', () => {
       '',
       '| a | b |\n|---|---|\n| 1 | 2 |',
       '',
-      'Visit example.com/x.html now. He said "Stop." Then… silence.'
+      'Visit example.com/x.html now. He said "Stop." Then… Silence.'
     ].join('\n');
     const oneShot = chunksOf(text);
     for (const size of [1, 2, 3, 7, 13]) expect(streamed(text, { size })).toEqual(oneShot);
