@@ -247,7 +247,10 @@ export class PcmStreamPlayer {
       return this.settleStream(stream, aborted() ? null : error);
     }
     if (!response.body?.getReader) {
-      return this.settleStream(stream, new Error('Streaming audio is not supported in this browser'));
+      return this.settleStream(
+        stream,
+        new Error('Streaming audio is not supported in this browser')
+      );
     }
     // One sample rate for the whole player: the queue holds plain bytes.
     const rate =

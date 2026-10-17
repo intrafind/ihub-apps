@@ -148,7 +148,9 @@ describe('resolveVoiceInstruction', () => {
     const text = DEFAULT_VOICE_INSTRUCTIONS.de;
     expect(text).toMatch(/per Sprache/);
     expect(text).toMatch(/vorgelesen/);
-    expect(text).toMatch(/Tabellen, Codeblöcke, Überschriften, Aufzählungslisten, URLs oder Emojis/);
+    expect(text).toMatch(
+      /Tabellen, Codeblöcke, Überschriften, Aufzählungslisten, URLs oder Emojis/
+    );
     expect(text).not.toMatch(/\bthe\b/);
   });
 
@@ -183,8 +185,12 @@ describe('resolveVoiceInstruction', () => {
 
   test('a platform text for another language only does not hide the built-in one', () => {
     const platform = { speech: { voiceMode: { systemPrompt: { fr: 'Réponses courtes.' } } } };
-    expect(resolveVoiceInstruction({ platform, language: 'de' })).toBe(DEFAULT_VOICE_INSTRUCTIONS.de);
-    expect(resolveVoiceInstruction({ platform, language: 'en' })).toBe(DEFAULT_VOICE_INSTRUCTIONS.en);
+    expect(resolveVoiceInstruction({ platform, language: 'de' })).toBe(
+      DEFAULT_VOICE_INSTRUCTIONS.de
+    );
+    expect(resolveVoiceInstruction({ platform, language: 'en' })).toBe(
+      DEFAULT_VOICE_INSTRUCTIONS.en
+    );
   });
 
   test('blank and malformed platform texts fall through to the built-in one', () => {
@@ -290,7 +296,10 @@ describe('resolveVoiceThinkingLevel', () => {
   test('is never asked of a model that does not think', () => {
     expect(resolveVoiceThinkingLevel({ platform, model: plainModel })).toBeUndefined();
     expect(
-      resolveVoiceThinkingLevel({ platform, model: { ...plainModel, thinking: { enabled: false } } })
+      resolveVoiceThinkingLevel({
+        platform,
+        model: { ...plainModel, thinking: { enabled: false } }
+      })
     ).toBeUndefined();
     expect(resolveVoiceThinkingLevel({ platform })).toBeUndefined();
   });
@@ -312,16 +321,16 @@ describe('RequestBuilder with voiceMode', () => {
   test('adds the German instruction for a German request', async () => {
     voiceOn();
     const result = await builder.prepareChatRequest(request({ voiceMode: true, language: 'de' }));
-    expect(systemOf(result)).toBe(
-      `Du bist der HR-Assistent.\n\n${DEFAULT_VOICE_INSTRUCTIONS.de}`
-    );
+    expect(systemOf(result)).toBe(`Du bist der HR-Assistent.\n\n${DEFAULT_VOICE_INSTRUCTIONS.de}`);
     // Not the English text as well.
     expect(systemOf(result)).not.toContain(DEFAULT_VOICE_INSTRUCTIONS.en);
   });
 
   test('a regional request language such as de-DE gets the German text', async () => {
     voiceOn();
-    const result = await builder.prepareChatRequest(request({ voiceMode: true, language: 'de-DE' }));
+    const result = await builder.prepareChatRequest(
+      request({ voiceMode: true, language: 'de-DE' })
+    );
     expect(systemOf(result)).toContain(DEFAULT_VOICE_INSTRUCTIONS.de);
   });
 
