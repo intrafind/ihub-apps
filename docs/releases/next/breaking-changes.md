@@ -23,3 +23,22 @@ separate model are gone.
 **Before upgrading:** Users need permission for the transcription models they should use (group
 permissions, like chat models). An app that should open on a transcription model can set it as its
 preferred model.
+
+## License: Branding Protection and Enterprise License
+
+The iHub Apps license now protects the IntraFind and iHub branding. Rebranding iHub Apps — removing
+or replacing the IntraFind and iHub names and logos, or offering the software or a product or
+service built on it under another name — requires IntraFind's prior written permission or an
+Enterprise License.
+
+- Organizations running iHub Apps for their own employees may still change logos, colors, titles
+  and header and footer texts in the UI settings, as long as "Powered by IntraFind –
+  https://intrafind.com/" stays visible, at least in the footer or on an about page.
+- White-labeling, reselling, embedding, or hosting iHub Apps for customers is covered by the new
+  Enterprise License, which can also include support, SLAs and warranties.
+- Releases up to and including v5.5.39 keep their original license (see `LICENSE_HISTORY`).
+  Contributions now fall under the Contributor License Agreement.
+
+**Before upgrading:** If you provide iHub Apps to customers or the public under your own name or
+branding, contact sales@intrafind.com for permission or an Enterprise License. Installations that
+changed the footer should make sure the "Powered by IntraFind" attribution is visible.
