@@ -32,7 +32,7 @@ jest.mock('react-i18next', () => ({
 
 jest.mock('../../../client/src/utils/debugLog', () => ({
   __esModule: true,
-  debugLog: () => {}
+  debugLog: jest.fn()
 }));
 jest.mock('../../../client/src/utils/runtimeBasePath', () => ({
   __esModule: true,
@@ -67,7 +67,7 @@ jest.mock('../../../client/src/shared/hooks/useEventSource', () => ({
       initEventSource: () => {
         mockStream.opened += 1;
       },
-      detachEventSource: () => {},
+      detachEventSource: jest.fn(),
       stopEventSource: jest.fn()
     };
   }
@@ -83,7 +83,7 @@ jest.mock('../../../client/src/shared/hooks/useChats', () => ({
   useChatPersistenceResolving: () => false
 }));
 
-const mockNoop = () => {};
+const mockNoop = jest.fn();
 const mockSettings = {
   selectedModel: 'model-x',
   selectedStyle: 'normal',
@@ -120,54 +120,31 @@ jest.mock('../../../client/src/shared/hooks/useAppSettings', () => ({
   default: () => mockSettings
 }));
 
-// Upload state held in real React state, so a file picked in the form shows up
-// in what the page sends.
-const mockUpload = { config: { enabled: false, localUploadEnabled: false }, dropped: null };
-jest.mock('../../../client/src/shared/hooks/useFileUploadHandler', () => {
-  const React = require('react');
-  return {
-    __esModule: true,
-    default: () => {
-      const [selectedFile, setSelectedFile] = React.useState(null);
-      return React.useMemo(
-        () => ({
-          selectedFile,
-          showUploader: false,
-          handleFileSelect: setSelectedFile,
-          createUploadConfig: () => mockUpload.config,
-          toggleUploader: () => {},
-          hideUploader: () => {},
-          clearSelectedFile: () => setSelectedFile(null),
-          setSelectedFile
-        }),
-        [selectedFile]
-      );
-    }
-  };
-});
-// The drop zone itself is covered by the upload suites; here a button stands
-// in for a dropped file.
-const DROPPED = { type: 'document', fileName: 'brief.txt', fileType: 'text/plain', content: 'x' };
+// Uploads are off here; the drop zone and the attachment list have suites of their own.
+const mockUpload = {
+  config: { enabled: false, localUploadEnabled: false },
+  handler: {
+    selectedFile: null,
+    showUploader: false,
+    handleFileSelect: jest.fn(),
+    createUploadConfig: () => mockUpload.config,
+    toggleUploader: jest.fn(),
+    hideUploader: jest.fn(),
+    clearSelectedFile: jest.fn(),
+    setSelectedFile: jest.fn()
+  }
+};
+jest.mock('../../../client/src/shared/hooks/useFileUploadHandler', () => ({
+  __esModule: true,
+  default: () => mockUpload.handler
+}));
 jest.mock('../../../client/src/features/upload/components/UnifiedUploader', () => ({
   __esModule: true,
-  default: ({ onFileSelect, children }) => (
-    <div data-testid="drop-target">
-      <button type="button" onClick={() => onFileSelect(mockUpload.dropped)}>
-        drop a file
-      </button>
-      {children}
-    </div>
-  )
+  default: ({ children }) => children
 }));
 jest.mock('../../../client/src/features/upload/components/AttachedFilesList', () => ({
   __esModule: true,
-  default: ({ files }) => (
-    <ul data-testid="attached">
-      {files.map(f => (
-        <li key={f.fileName}>{f.fileName}</li>
-      ))}
-    </ul>
-  )
+  default: () => null
 }));
 const mockMagicPrompt = {
   showUndoMagicPrompt: false,
@@ -207,6 +184,7 @@ jest.mock('../../../client/src/features/chat/hooks/useIntegrationAuth', () => ({
   useIntegrationAuth: () => mockIntegrationAuth
 }));
 const mockVoice = { handleVoiceInput: mockNoop, handleVoiceCommand: mockNoop };
+const mockVoiceMode = { active: false, toggle: jest.fn(), end: jest.fn() };
 // Voice mode (issue #2868) has its own tests; the chat page only renders its
 // button and overlay, so it is switched off here.
 jest.mock('../../../client/src/features/voice/hooks/useVoiceModeAvailability', () => ({
@@ -221,7 +199,7 @@ jest.mock('../../../client/src/features/voice/hooks/useVoiceModeAvailability', (
 }));
 jest.mock('../../../client/src/features/voice/hooks/useVoiceMode', () => ({
   __esModule: true,
-  default: () => ({ active: false, toggle: () => {}, end: () => {} })
+  default: () => mockVoiceMode
 }));
 jest.mock('../../../client/src/features/voice/components/VoiceModeOverlay', () => ({
   __esModule: true,
@@ -237,7 +215,7 @@ jest.mock('../../../client/src/features/chat/startChatHandoff', () => ({
 }));
 jest.mock('../../../client/src/shared/utils/tokenEstimatorClient.js', () => ({
   __esModule: true,
-  ensureTokenizer: jest.fn().mockResolvedValue(undefined),
+  ensureTokenizer: jest.fn(() => Promise.resolve()),
   estimateTokensSync: () => 0
 }));
 jest.mock('../../../client/src/utils/recentApps', () => ({
@@ -288,20 +266,13 @@ jest.mock('../../../client/src/features/chat/components/AIDisclaimerBanner', () 
   __esModule: true,
   default: () => null
 }));
-// The compare view renders the form it is handed and records what is
-// broadcast to its panels.
-const mockCompare = { sent: [] };
+// Compare mode has its own suites; here it is never switched on.
 jest.mock('../../../client/src/features/chat/components/CompareModeView', () => {
   const React = require('react');
   return {
     __esModule: true,
-    default: React.forwardRef(function MockCompareModeView({ startForm }, ref) {
-      React.useImperativeHandle(ref, () => ({
-        sendMessage: message => mockCompare.sent.push(message),
-        clearAll: () => {},
-        cancelAll: () => {}
-      }));
-      return <div data-testid="compare-view">{startForm}</div>;
+    default: React.forwardRef(function MockCompareModeView() {
+      return null;
     })
   };
 });
@@ -391,9 +362,7 @@ beforeEach(() => {
   mockHeader.props = null;
   mockMessageList.props = null;
   mockUpload.config = { enabled: false, localUploadEnabled: false };
-  mockUpload.dropped = DROPPED;
   mockPersistence.on = false;
-  mockCompare.sent.length = 0;
   fetchChat.mockReset();
   sendAppChatMessage.mockClear();
   sessionStorage.clear();
