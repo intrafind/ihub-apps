@@ -3,8 +3,8 @@ import { createRoot } from 'react-dom/client';
 import { MemoryRouter } from 'react-router-dom';
 import './office.css';
 // Initialize i18next so main chat components (useTranslation) work in the taskpane.
-// This is a side-effect import — i18n initializes synchronously and loads translations async.
-import '../src/i18n/i18n';
+// i18n initializes synchronously and loads translations async; renderOfficeApp waits for them.
+import { i18nService } from '../src/i18n/i18n';
 import { OfficeConfigContext } from '../src/features/office/contexts/OfficeConfigContext';
 import { EmbeddedHostProvider } from '../src/features/office/contexts/EmbeddedHostContext';
 import OfficeApp, {
@@ -82,7 +82,10 @@ function buildOutlookHost(officeHost, popout) {
   };
 }
 
-function renderOfficeApp(rootEl, { config, host, initialEntries }) {
+async function renderOfficeApp(rootEl, { config, host, initialEntries }) {
+  // Translations come from the API rather than the bundle; wait for them (bounded
+  // by a timeout) so the first render doesn't flash untranslated text.
+  await i18nService.whenReady();
   const root = createRoot(rootEl);
   root.render(
     // eslint-disable-next-line @eslint-react/no-context-provider
@@ -130,7 +133,7 @@ async function startPopout(rootEl) {
   seedPopoutTranscript(init.chat);
   installOfficeAuthInterceptor(init.config);
 
-  renderOfficeApp(rootEl, {
+  await renderOfficeApp(rootEl, {
     config: init.config,
     // Only Outlook pops its chat out.
     host: buildOutlookHost('Outlook', popout),
@@ -199,5 +202,5 @@ Office.onReady(async () => {
     return null;
   })();
 
-  renderOfficeApp(rootEl, { config, host: buildOutlookHost(officeHost) });
+  await renderOfficeApp(rootEl, { config, host: buildOutlookHost(officeHost) });
 });

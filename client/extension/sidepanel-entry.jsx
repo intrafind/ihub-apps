@@ -105,7 +105,7 @@ initOfficeTheme();
   // import time. Loading it dynamically here means the apiClient
   // baseURL is already pointing at the iHub server when that fetch
   // fires.
-  await import('../src/i18n/i18n');
+  const { i18nService } = await import('../src/i18n/i18n');
 
   const extensionHost = {
     kind: 'extension',
@@ -143,6 +143,9 @@ initOfficeTheme();
     ]
   };
 
+  // Translations come from the API rather than the bundle; wait for them (bounded
+  // by a timeout) so the first render doesn't flash untranslated text.
+  await i18nService.whenReady();
   const root = createRoot(rootEl);
   root.render(
     // eslint-disable-next-line @eslint-react/no-context-provider

@@ -3,8 +3,8 @@ import { createRoot } from 'react-dom/client';
 import { useEffect, useState } from 'react';
 import './nextcloud.css';
 // Initialize i18next so main app components (useTranslation) work in the embed.
-// Side-effect import — i18n initializes synchronously and loads translations async.
-import '../src/i18n/i18n';
+// i18n initializes synchronously and loads translations async; the render below waits for them.
+import { i18nService } from '../src/i18n/i18n';
 import App from '../src/App';
 import {
   OfficeConfigContext,
@@ -249,6 +249,9 @@ void (async () => {
     window.history.replaceState({}, '', homePath + preservedHash);
   }
 
+  // Translations come from the API rather than the bundle; wait for them (bounded
+  // by a timeout) so the first render doesn't flash untranslated text.
+  await i18nService.whenReady();
   const root = createRoot(rootEl);
   root.render(
     // eslint-disable-next-line @eslint-react/no-context-provider
