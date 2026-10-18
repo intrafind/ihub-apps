@@ -201,7 +201,7 @@ jest.mock('../../../client/src/features/voice/hooks/useVoiceMode', () => ({
   __esModule: true,
   default: () => mockVoiceMode
 }));
-jest.mock('../../../client/src/features/voice/components/VoiceModeOverlay', () => ({
+jest.mock('../../../client/src/features/voice/components/VoiceModeDock', () => ({
   __esModule: true,
   default: () => null
 }));

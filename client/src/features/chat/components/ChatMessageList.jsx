@@ -186,7 +186,7 @@ function ChatMessageList({
       aria-label={t('chat.messageList', 'Chat messages')}
     >
       {displayedMessages.map((message, index) => (
-        <div key={message.id}>
+        <div key={message.id} data-message-role={message.role}>
           <div
             className={`flex ${showAvatars ? 'gap-3' : 'gap-1'} ${message.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}
           >
