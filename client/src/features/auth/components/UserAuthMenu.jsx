@@ -323,11 +323,7 @@ export default function UserAuthMenu({ variant = 'header', className = '', colla
                   onClick={handleLogout}
                   className="flex items-center w-full px-4 py-2 text-sm text-red-700 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30"
                 >
-                  <Icon
-                    name={variant === 'sidebar' ? 'log-out' : 'logout'}
-                    size="sm"
-                    className="mr-3 text-red-400"
-                  />
+                  <Icon name="logout" size="sm" className="mr-3 text-red-400 flex-none" />
                   {t('auth.menu.signOut', 'Sign Out')}
                 </button>
               </div>
