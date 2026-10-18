@@ -4,7 +4,7 @@ This document describes how server-side translations are loaded and how customer
 
 ## Built-in Locale Files
 
-Default translations are stored in the repository under the `shared/i18n/` directory. These files are included in the application bundle. Example:
+Default translations are stored in the repository under the `shared/i18n/` directory. The browser loads them, merged with any overrides, from `GET /api/translations/{lang}` for the selected language only; they are not part of the startup bundle. The built-in files are kept as a lazily loaded fallback for when that endpoint is unreachable. Example:
 
 ```text
 shared/i18n/en.json

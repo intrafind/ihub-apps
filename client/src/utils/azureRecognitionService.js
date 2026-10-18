@@ -1,5 +1,17 @@
-import * as speechSdk from 'microsoft-cognitiveservices-speech-sdk';
 import { buildApiUrl } from './runtimeBasePath';
+
+// The Speech SDK is ~350 KB, so it is loaded on first use (initRecognizer)
+// instead of shipping in the startup bundle. The recognition callbacks only run
+// after initRecognizer, so they can read it from this module-level binding.
+let speechSdk;
+// `import()` of the CommonJS-style SDK: named exports on the namespace or on `default`.
+const loadSpeechSdk = async () => {
+  if (!speechSdk) {
+    const mod = await import('microsoft-cognitiveservices-speech-sdk');
+    speechSdk = mod?.SpeechRecognizer ? mod : mod?.default || mod;
+  }
+  return speechSdk;
+};
 
 // const postfix = '?language=de-DE';
 const postfix = '';
@@ -180,6 +192,7 @@ class AzureSpeechRecognition {
     const { token, region } = this.useServerToken
       ? await this.#fetchAuthToken()
       : { token: null, region: '' };
+    await loadSpeechSdk();
 
     // Prefer a custom host when configured (private/regional endpoint or
     // on-prem container), otherwise use the region from the token response.

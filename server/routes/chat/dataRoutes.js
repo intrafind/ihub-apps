@@ -440,8 +440,9 @@ export default function registerDataRoutes(app) {
         lang = defaultLang;
       }
 
-      // Try to get translations from cache first
-      let translations = configCache.getLocalizations(lang);
+      // Try to get translations from cache first. The cache holds
+      // { data, etag } entries; the response is the translations themselves.
+      let translations = configCache.getLocalizations(lang)?.data;
 
       if (!translations) {
         logger.warn('Translations not in cache, attempting to load', {
@@ -453,7 +454,7 @@ export default function registerDataRoutes(app) {
         // Try to load and cache the locale
         try {
           await configCache.loadAndCacheLocale(lang);
-          translations = configCache.getLocalizations(lang);
+          translations = configCache.getLocalizations(lang)?.data;
         } catch (loadError) {
           logger.error('Failed to load locale', {
             component: 'DataRoutes',
@@ -479,13 +480,13 @@ export default function registerDataRoutes(app) {
             defaultLang
           });
           // Try to get default translations from cache first
-          let enTranslations = configCache.getLocalizations(defaultLang);
+          let enTranslations = configCache.getLocalizations(defaultLang)?.data;
 
           if (!enTranslations) {
             // Try to load default language if not in cache
             try {
               await configCache.loadAndCacheLocale(defaultLang);
-              enTranslations = configCache.getLocalizations(defaultLang);
+              enTranslations = configCache.getLocalizations(defaultLang)?.data;
             } catch (fallbackLoadError) {
               logger.error('Failed to load fallback locale', {
                 component: 'DataRoutes',
@@ -532,13 +533,13 @@ export default function registerDataRoutes(app) {
       try {
         // Try to get default translations from cache first as fallback
         const defaultLang = configCache.getPlatform()?.defaultLanguage || 'en';
-        let enTranslations = configCache.getLocalizations(defaultLang);
+        let enTranslations = configCache.getLocalizations(defaultLang)?.data;
 
         if (!enTranslations) {
           // Try to load default language if not in cache
           try {
             await configCache.loadAndCacheLocale(defaultLang);
-            enTranslations = configCache.getLocalizations(defaultLang);
+            enTranslations = configCache.getLocalizations(defaultLang)?.data;
           } catch (fallbackLoadError) {
             logger.error('Failed to load fallback locale', {
               component: 'DataRoutes',

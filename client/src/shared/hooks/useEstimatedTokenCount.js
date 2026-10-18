@@ -2,14 +2,16 @@ import { useEffect, useRef, useState } from 'react';
 import {
   ensureTokenizer,
   estimateTokensForFragmentsSync,
-  estimateTokensSync
+  estimateTokensSync,
+  shouldLoadTokenizer
 } from '../utils/tokenEstimatorClient.js';
 
 /**
- * Shared machinery for the two token-count hooks: wait for the lazily loaded
- * tokenizer chunk, then run `estimate()` — optionally debounced, and always
- * cancelled on unmount / dependency change so a late resolve can't write a
- * stale count.
+ * Shared machinery for the two token-count hooks: run `estimate()` with the
+ * implementation at hand (the chars/4 heuristic until the tokenizer chunk is
+ * loaded) and, when the count is large enough to matter, load the tokenizer
+ * and refine it — optionally debounced, and always cancelled on unmount /
+ * dependency change so a late resolve can't write a stale count.
  *
  * @param {() => number} estimate - reads the latest inputs when it runs
  * @param {*} dependency - identity that triggers recomputation
@@ -23,10 +25,14 @@ function useLazyTokenCount(estimate, dependency, debounceMs) {
 
   useEffect(() => {
     let cancelled = false;
-    const compute = () =>
-      ensureTokenizer().then(() => {
+    const compute = () => {
+      const loaded = shouldLoadTokenizer(estimateRef.current())
+        ? ensureTokenizer()
+        : Promise.resolve();
+      loaded.then(() => {
         if (!cancelled) setCount(estimateRef.current());
       });
+    };
 
     if (debounceMs > 0) {
       const handle = setTimeout(compute, debounceMs);
@@ -50,9 +56,9 @@ function useLazyTokenCount(estimate, dependency, debounceMs) {
  * chunk and optionally debouncing recomputation so we don't tokenize on every
  * keystroke.
  *
- * Returns 0 until the first computation completes. Once the tokenizer chunk is
- * loaded the count refines automatically (initial renders may use the chars/4
- * heuristic fallback).
+ * Returns 0 until the first computation completes. Small texts use the chars/4
+ * heuristic; once a count is large enough to matter the tokenizer chunk is
+ * loaded and the count refines automatically.
  *
  * @param {string} text - text to estimate
  * @param {{ debounceMs?: number }} [options]

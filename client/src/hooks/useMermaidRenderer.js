@@ -1,7 +1,9 @@
 import { useEffect } from 'react';
 import { validateMermaidCode, processMermaidCode, escapeHtml } from '../utils/markdownHelpers';
 import { isTrustedMermaidContainer, sanitizeMermaidSvg } from '../utils/mermaidSecurity';
-import svgPanZoom from 'svg-pan-zoom';
+
+// Loaded together with Mermaid, only once a diagram is on the page.
+let svgPanZoom;
 
 // A simple debounce utility
 const debounce = (func, delay) => {
@@ -114,6 +116,7 @@ const showMermaidButtonFeedback = (btn, message, colorClass, iconType) => {
 export const useMermaidRenderer = ({ t }) => {
   useEffect(() => {
     let mermaid;
+    let mermaidLoading = false;
     let mermaidReady = false;
 
     // Translated text, escaped for use in the HTML templates below.
@@ -125,11 +128,17 @@ export const useMermaidRenderer = ({ t }) => {
     // replaced, so re-renders leaked handlers indefinitely.
     const panZoomInstances = new Set();
 
-    // Pre-load Mermaid immediately when hook initializes
+    // Mermaid is several MB, so it is only fetched once the first diagram
+    // shows up (see initializeMermaidDiagrams), not when a page mounts.
     const loadMermaid = async () => {
-      if (!mermaid) {
+      if (!mermaidLoading) {
+        mermaidLoading = true;
         try {
-          const mermaidModule = await import('mermaid');
+          const [mermaidModule, panZoomModule] = await Promise.all([
+            import('mermaid'),
+            import('svg-pan-zoom')
+          ]);
+          svgPanZoom = panZoomModule.default || panZoomModule;
           mermaid = mermaidModule.default;
           mermaid.initialize({
             startOnLoad: false,
@@ -161,6 +170,8 @@ export const useMermaidRenderer = ({ t }) => {
           // Process any existing diagrams now that Mermaid is ready
           void initializeMermaidDiagrams();
         } catch (err) {
+          // Allow the next diagram to retry the load.
+          mermaidLoading = false;
           console.error('Failed to load or initialize Mermaid:', err);
         }
       }
@@ -177,6 +188,7 @@ export const useMermaidRenderer = ({ t }) => {
 
       // Wait for Mermaid to be ready
       if (!mermaidReady) {
+        void loadMermaid();
         return; // Mermaid will call this function once it's loaded
       }
 
@@ -493,10 +505,7 @@ export const useMermaidRenderer = ({ t }) => {
       );
     };
 
-    // Start loading Mermaid immediately
-    void loadMermaid();
-
-    // Run initial processing (will be called again once Mermaid loads)
+    // Run initial processing (loads Mermaid if a diagram is already on the page)
     initialRun();
 
     // Set up observer for future DOM changes

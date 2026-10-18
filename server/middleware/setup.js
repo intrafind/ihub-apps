@@ -10,6 +10,7 @@ import { teamsAuthMiddleware } from './teamsAuth.js';
 import ntlmAuthMiddleware from './ntlmAuth.js';
 import { enhanceUserWithPermissions, isAnonymousAccessAllowed } from '../utils/authorization.js';
 import { createRateLimiters } from './rateLimiting.js';
+import { createCompressionMiddleware } from './compression.js';
 import { basePathRewriteMiddleware, buildApiPath } from '../utils/basePath.js';
 import configCache from '../configCache.js';
 import logger from '../utils/logger.js';
@@ -295,6 +296,10 @@ export function setupMiddleware(app, platformConfig = {}) {
   // reach the routes without passing a limiter. Only a trusted proxy's
   // header is used (see basePathRewriteMiddleware).
   app.use(basePathRewriteMiddleware);
+
+  // Compress the client bundle and JSON API responses (streams are skipped,
+  // see compression.js). Mounted ahead of the routes so it wraps them all.
+  app.use(createCompressionMiddleware());
 
   // Open the per-request logging context. Subsequent middleware and route
   // handlers run inside an AsyncLocalStorage scope, so every logger call on

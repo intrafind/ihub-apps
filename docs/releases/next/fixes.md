@@ -18,3 +18,10 @@ replaced. The caption now shows the sentence once and grows with it.
 - A turn that ended without a finished transcript is no longer sent to the app as the stacked
   guesses.
 - Other transcription models are not affected; their updates were already incremental.
+
+## Custom Translations Now Show in the Browser
+
+Text overrides in `contents/locales/` had no effect on the web
+interface — it always showed the built-in wording. The translations endpoint answered in a shape
+the browser could not use, so the app fell back to its built-in strings. Overrides now appear in
+the interface.

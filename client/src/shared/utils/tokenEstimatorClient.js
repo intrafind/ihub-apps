@@ -49,6 +49,24 @@ function countCached(text) {
 }
 
 /**
+ * Below this many (heuristic) tokens the chars/4 estimate is close enough for
+ * the context-usage indicator, so the tokenizer chunk (~1 MB gzipped) is only
+ * fetched once some text is large enough for the difference to matter. This
+ * keeps it off the network when a chat page opens.
+ */
+export const ACCURATE_ESTIMATE_MIN_TOKENS = 1000;
+
+/**
+ * Whether an estimate of `count` tokens should be refined by loading the real
+ * tokenizer (it is not loaded yet and the count is large enough to matter).
+ * @param {number} count
+ * @returns {boolean}
+ */
+export function shouldLoadTokenizer(count) {
+  return !countTokensFn && count >= ACCURATE_ESTIMATE_MIN_TOKENS;
+}
+
+/**
  * Ensure the tokenizer chunk is loaded. Resolves with the active count
  * function (real tokenizer, or the heuristic fallback if loading failed).
  * @returns {Promise<(text: string) => number>}
