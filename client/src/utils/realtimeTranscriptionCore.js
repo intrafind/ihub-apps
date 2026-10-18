@@ -181,8 +181,15 @@ export async function createPcmCapturePipeline(mediaStream, onFrame) {
  * extend the current utterance, `final` folds the utterance into the committed
  * text (preferring the server-provided final text over the accumulated
  * deltas), and text() is the whitespace-normalized whole.
+ *
+ * `keepLineBreaks` is for a transcript shown as a chat answer, which may carry
+ * one `[mm:ss] Speaker 1: …` entry per line: spaces and tabs are still
+ * collapsed, but line breaks stay. Dictation types into an input field and
+ * leaves it off.
+ *
+ * @param {{ keepLineBreaks?: boolean }} [options]
  */
-export function createTranscriptAssembler() {
+export function createTranscriptAssembler({ keepLineBreaks = false } = {}) {
   let committed = '';
   let partial = '';
   return {
@@ -194,7 +201,12 @@ export function createTranscriptAssembler() {
       partial = '';
     },
     text() {
-      return `${committed} ${partial}`.replace(/\s+/g, ' ').trim();
+      const whole = `${committed} ${partial}`;
+      if (!keepLineBreaks) return whole.replace(/\s+/g, ' ').trim();
+      return whole
+        .replace(/[^\S\n]+/g, ' ')
+        .replace(/ ?\n ?/g, '\n')
+        .trim();
     },
     hasText() {
       return Boolean(committed || partial);

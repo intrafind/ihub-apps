@@ -76,7 +76,7 @@ export async function transcribeAudioBuffer(audioBuffer, opts = {}) {
     let overallTimer = null;
     let readyTimer = null;
     // Shared committed/partial accumulation (same semantics as dictation).
-    const transcript = createTranscriptAssembler();
+    const transcript = createTranscriptAssembler({ keepLineBreaks: true });
 
     const cleanup = () => {
       if (overallTimer) clearTimeout(overallTimer);

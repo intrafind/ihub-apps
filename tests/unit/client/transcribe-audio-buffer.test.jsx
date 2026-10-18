@@ -98,3 +98,17 @@ test('`done` completes the transcript whatever follows', async () => {
   ws.receive({ type: 'done' });
   await expect(running).resolves.toBe('Everything we said.');
 });
+
+test('an annotated transcript keeps one entry per line', async () => {
+  const onDelta = jest.fn();
+  const running = transcribeAudioBuffer(AUDIO, { modelId: 'gemini', onDelta });
+  await new Promise(resolve => setTimeout(resolve, 0));
+  const ws = FakeWebSocket.instances.at(-1);
+  ws.open();
+  ws.receive({ type: 'ready' });
+  ws.receive({ type: 'final', text: '[00:00] Speaker 1: Hello.\n[00:21] Speaker 2: Hi.' });
+  ws.receive({ type: 'done' });
+
+  await expect(running).resolves.toBe('[00:00] Speaker 1: Hello.\n[00:21] Speaker 2: Hi.');
+  expect(onDelta).toHaveBeenLastCalledWith('[00:00] Speaker 1: Hello.\n[00:21] Speaker 2: Hi.');
+});
