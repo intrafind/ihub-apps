@@ -163,6 +163,54 @@ describe('focus after an answer (voice mode owns the keyboard while it is open)'
   });
 });
 
+describe('focus after an answer (a dialog over the page keeps the keyboard)', () => {
+  // The usage guide dialog opens over the chat, also while an answer is being
+  // written. A focus trap only handles the keys pressed inside the dialog, so a
+  // composer that takes the focus when the answer finishes would take the typing
+  // and the next Tab (WCAG 2.4.3).
+  const openDialogButton = () => {
+    const button = document.createElement('button');
+    button.textContent = 'Close guide';
+    document.body.appendChild(button);
+    button.focus();
+    return button;
+  };
+
+  afterEach(() => {
+    document.body.replaceChildren();
+  });
+
+  test('stays inside the dialog when an answer finishes while it is open', () => {
+    const { update } = renderInput({ isProcessing: true });
+    update({ isProcessing: true, autoFocusSuspended: true });
+    const inDialog = openDialogButton();
+    update({ isProcessing: false, autoFocusSuspended: true });
+    expect(inDialog).toHaveFocus();
+    expect(composer()).not.toHaveFocus();
+  });
+
+  test('closing the dialog does not move the focus either: it goes back to its opener', () => {
+    const { update } = renderInput({ isProcessing: false, autoFocusSuspended: true });
+    const opener = openDialogButton();
+    update({ isProcessing: false, autoFocusSuspended: false });
+    expect(opener).toHaveFocus();
+    expect(composer()).not.toHaveFocus();
+  });
+
+  test('an answer that was still streaming when the dialog closed refocuses the input after it', () => {
+    const { update } = renderInput({ isProcessing: true, autoFocusSuspended: true });
+    update({ isProcessing: true, autoFocusSuspended: false });
+    document.body.focus();
+    update({ isProcessing: false, autoFocusSuspended: false });
+    expect(composer()).toHaveFocus();
+  });
+
+  test('does not take the focus on mount while a dialog is open', () => {
+    renderInput({ autoFocusSuspended: true });
+    expect(composer()).not.toHaveFocus();
+  });
+});
+
 describe('the bottom bar on a 320 px phone', () => {
   // jsdom has no layout, so these pin the classes that make the row shrink the
   // model selector (it has a min-content width) instead of pushing Send out of

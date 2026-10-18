@@ -2814,6 +2814,9 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
         // The usage guide: one control, in the same place in every state,
         // bottom left under the input, opposite the incognito toggle.
         leadingAction={renderUsageGuideButton()}
+        // The guide is a modal dialog: an answer that finishes while it is open
+        // must not move the focus to the composer behind it.
+        autoFocusSuspended={usageGuideViewerOpen}
       />
     );
   };

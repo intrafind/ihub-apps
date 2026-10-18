@@ -68,6 +68,9 @@ function ChatInput({
   // the input area, so dictation is held back.
   onVoiceMode = null,
   voiceModeActive = false,
+  // A dialog opened from the page (the usage guide) is open over the composer:
+  // finishing an answer must not pull the focus out of it.
+  autoFocusSuspended = false,
   // Record (distinct from dictation onVoiceInput): the recording goes to the
   // selected model like an uploaded audio file.
   onRecordTranscription = null,
@@ -469,10 +472,16 @@ function ChatInput({
   // message" and sends a typed turn voice mode knows nothing about. Read
   // through a ref, not as a dependency: ending voice mode must not refocus the
   // input either, the voice view hands focus back to the button that opened it.
+  // The same goes for a dialog over the page (`autoFocusSuspended`): a focus
+  // trap only handles the keys pressed inside it, so a focused composer behind
+  // the dialog would take the typing and the next Tab; closing it returns the
+  // focus to the control that opened it.
   const voiceModeActiveRef = useRef(voiceModeActive);
   voiceModeActiveRef.current = voiceModeActive;
+  const autoFocusSuspendedRef = useRef(autoFocusSuspended);
+  autoFocusSuspendedRef.current = autoFocusSuspended;
   useEffect(() => {
-    if (!isProcessing && !voiceModeActiveRef.current) {
+    if (!isProcessing && !voiceModeActiveRef.current && !autoFocusSuspendedRef.current) {
       focusInputAtEnd();
     }
   }, [isProcessing, focusInputAtEnd]);

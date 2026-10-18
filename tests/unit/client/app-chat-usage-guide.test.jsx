@@ -300,8 +300,13 @@ jest.mock('../../../client/src/features/chat/components/StreamingMarkdown', () =
 // The composer renders what AppChat hands it for the line below the input.
 jest.mock('../../../client/src/features/chat/components/ChatInput', () => ({
   __esModule: true,
-  default: ({ formRef, onSubmit, onChange, value, leadingAction }) => (
-    <form ref={formRef} onSubmit={onSubmit} data-testid="composer">
+  default: ({ formRef, onSubmit, onChange, value, leadingAction, autoFocusSuspended }) => (
+    <form
+      ref={formRef}
+      onSubmit={onSubmit}
+      data-testid="composer"
+      data-autofocus-suspended={String(Boolean(autoFocusSuspended))}
+    >
       <input data-testid="composer-input" value={value} onChange={onChange} />
       <div data-testid="composer-leading">{leadingAction}</div>
     </form>
@@ -397,6 +402,24 @@ describe('AppChat usage guide', () => {
 
     fireEvent.keyDown(window, { key: 'Escape' });
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  });
+
+  test('the composer is told not to take the focus while the dialog is open', async () => {
+    // An answer that finishes while the guide is open would otherwise move the
+    // focus to the composer behind the dialog (see chat-input-voice-mode.test.jsx
+    // for the composer's side of this).
+    renderApp();
+    await screen.findAllByTestId('composer');
+    const suspended = () => screen.getAllByTestId('composer')[0].dataset.autofocusSuspended;
+    expect(suspended()).toBe('false');
+
+    fireEvent.click(composerGuideButton());
+    await screen.findByRole('dialog');
+    expect(suspended()).toBe('true');
+
+    fireEvent.keyDown(window, { key: 'Escape' });
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(suspended()).toBe('false');
   });
 
   test('the link under the starter prompts opens the same dialog', async () => {
