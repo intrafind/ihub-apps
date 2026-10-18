@@ -78,7 +78,7 @@ export async function startLiveTranscription({
     throw transcriptionError('mic', err?.message);
   }
 
-  const transcript = createTranscriptAssembler();
+  const transcript = createTranscriptAssembler({ keepLineBreaks: true });
   let ws = null;
   let pipeline = null;
   let ready = false;

@@ -860,6 +860,38 @@ describe('bridgeConnection — batch providers', () => {
     }
   });
 
+  test('only a transcript for a chat turn is annotated, not dictation', async () => {
+    const provider = getTranscriptionProvider('google-transcribe');
+    const spy = jest.spyOn(provider, 'transcribe').mockResolvedValue({ text: 'ok' });
+    const run = async startFrame => {
+      const { client } = setup();
+      client.emit('message', JSON.stringify(startFrame), false);
+      await jest.advanceTimersByTimeAsync(0);
+      client.emit('message', Buffer.from([1, 2]), true);
+      client.emit('message', JSON.stringify({ type: 'stop' }), false);
+      await jest.advanceTimersByTimeAsync(0);
+      expect(client.framesOfType('done')).toHaveLength(1);
+      return spy.mock.calls.at(-1)[0].annotate;
+    };
+
+    try {
+      // The microphone button types into the input field: plain text.
+      expect(await run({ type: 'start', modelId: 'gemini-3.5-transcribe' })).toBe(false);
+      // A recording or file in a chat becomes the answer of a stored turn.
+      expect(
+        await run({
+          type: 'start',
+          modelId: 'gemini-3.5-transcribe',
+          chatId: 'chat-1',
+          appId: 'app-1',
+          source: 'file'
+        })
+      ).toBe(true);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
   test('audio that arrives before the model resolves is not lost', async () => {
     const { client } = setup();
     const provider = getTranscriptionProvider('google-transcribe');

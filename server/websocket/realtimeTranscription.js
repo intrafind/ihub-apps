@@ -77,6 +77,7 @@ import {
 } from '../utils/authorization.js';
 import { buildApiPath } from '../utils/basePath.js';
 import { getTranscriptionProvider } from '../transcription/index.js';
+import { tidyTranscript } from '../transcription/transcriptFormat.js';
 import {
   beginTranscriptionTurn,
   endTranscriptionTurn
@@ -762,7 +763,7 @@ export function bridgeConnection(clientWs, user, limiter, options = {}) {
   const endTurn = () => {
     if (!turnPromise) return Promise.resolve(true);
     if (turnEndPromise) return turnEndPromise;
-    const content = `${transcriptCommitted} ${transcriptPartial}`.replace(/\s+/g, ' ').trim();
+    const content = tidyTranscript(`${transcriptCommitted} ${transcriptPartial}`);
     const outcome = { content, error: failure, aborted: !completed && !failure };
     turnEndPromise = turnPromise.then(turn => endTranscriptionTurn(turn, outcome));
     return turnEndPromise;
@@ -1391,7 +1392,11 @@ export function bridgeConnection(clientWs, user, limiter, options = {}) {
         cfg,
         pcm,
         sampleRate: TARGET_SAMPLE_RATE,
-        signal: abortController.signal
+        signal: abortController.signal,
+        // A stored chat turn is a transcript to read: the model may add
+        // timestamps and speakers. Dictation types its text into the input
+        // field, where they would be noise.
+        annotate: Boolean(turnRequest)
       });
       if (clientWs.readyState > WebSocket.OPEN) return; // client walked away
       gotTranscription = true;
