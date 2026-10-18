@@ -26,7 +26,8 @@ import googleTranscribe, {
   extractTranscript,
   extractWords,
   isPendingStatus,
-  normalizeApiBase
+  normalizeApiBase,
+  transcribe
 } from '../transcription/googleTranscribeProvider.js';
 import { formatClock } from '../transcription/transcriptFormat.js';
 import { pcm16ToWav } from '../transcription/wav.js';
@@ -460,43 +461,43 @@ describe('googleTranscribeProvider — response parsing', () => {
 });
 
 describe('googleTranscribeProvider — timestamps and speakers (stub Gemini API)', () => {
-  let server;
-  let base;
-  let uploads;
-  let interactions;
-  let deletions;
-  let answers;
+  let server = null;
+  let base = '';
+  let uploads = [];
+  let interactions = [];
+  let deletions = [];
+  let answers = [];
+
+  /** The stub's routes: what a request gets back, as `{ status, headers, payload }`. */
+  const route = (req, body) => {
+    const ok = (payload, headers = {}) => ({ status: 200, headers, payload });
+    if (req.method === 'POST' && req.url === '/upload/v1beta/files') {
+      return ok({}, { 'x-goog-upload-url': `${base}/session/${uploads.length + 1}` });
+    }
+    if (req.method === 'POST' && req.url.startsWith('/session/')) {
+      uploads.push(body.length);
+      const name = `files/f${uploads.length}`;
+      return ok({ file: { name, uri: `${base}/${name}`, mimeType: 'audio/wav', state: 'ACTIVE' } });
+    }
+    if (req.method === 'POST' && req.url === '/v1beta/interactions') {
+      interactions.push(JSON.parse(body.toString()));
+      return ok(answers[interactions.length - 1] ?? answers.at(-1));
+    }
+    if (req.method === 'DELETE') {
+      deletions.push(req.url);
+      return ok({});
+    }
+    return { status: 404, headers: {}, payload: null };
+  };
 
   beforeAll(async () => {
     server = http.createServer((req, res) => {
       const chunks = [];
       req.on('data', chunk => chunks.push(chunk));
       req.on('end', () => {
-        const body = Buffer.concat(chunks);
-        const json = (payload, headers = {}) => {
-          res.writeHead(200, { 'Content-Type': 'application/json', ...headers });
-          res.end(JSON.stringify(payload));
-        };
-        if (req.method === 'POST' && req.url === '/upload/v1beta/files') {
-          return json({}, { 'x-goog-upload-url': `${base}/session/${uploads.length + 1}` });
-        }
-        if (req.method === 'POST' && req.url.startsWith('/session/')) {
-          uploads.push(body.length);
-          const name = `files/f${uploads.length}`;
-          return json({
-            file: { name, uri: `${base}/${name}`, mimeType: 'audio/wav', state: 'ACTIVE' }
-          });
-        }
-        if (req.method === 'POST' && req.url === '/v1beta/interactions') {
-          interactions.push(JSON.parse(body.toString()));
-          return json(answers[interactions.length - 1] ?? answers[answers.length - 1]);
-        }
-        if (req.method === 'DELETE') {
-          deletions.push(req.url);
-          return json({});
-        }
-        res.writeHead(404);
-        res.end();
+        const { status, headers, payload } = route(req, Buffer.concat(chunks));
+        res.writeHead(status, { 'Content-Type': 'application/json', ...headers });
+        res.end(payload === null ? undefined : JSON.stringify(payload));
       });
     });
     await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
@@ -538,7 +539,7 @@ describe('googleTranscribeProvider — timestamps and speakers (stub Gemini API)
 
   test('a transcript to read carries speakers and times, in verbatim mode without vocabulary', async () => {
     answers = [talk];
-    const { text } = await googleTranscribe.transcribe({
+    const { text } = await transcribe({
       cfg: cfg({
         timestamps: true,
         speakers: true,
@@ -566,7 +567,7 @@ describe('googleTranscribeProvider — timestamps and speakers (stub Gemini API)
 
   test('speakers without timestamps give turns, no times', async () => {
     answers = [talk];
-    const { text } = await googleTranscribe.transcribe({
+    const { text } = await transcribe({
       cfg: cfg({ speakers: true, speakerLabel: 'Sprecher' }),
       pcm: Buffer.alloc(32000),
       annotate: true
@@ -580,7 +581,7 @@ describe('googleTranscribeProvider — timestamps and speakers (stub Gemini API)
 
   test('without annotate (dictation, voice mode) the config is ignored: smart text, vocabulary kept', async () => {
     answers = [completed('Welcome to the talk', [])];
-    const { text } = await googleTranscribe.transcribe({
+    const { text } = await transcribe({
       cfg: cfg({ timestamps: true, speakers: true, customVocabulary: ['iHub'] }),
       pcm: Buffer.alloc(32000)
     });
@@ -595,7 +596,7 @@ describe('googleTranscribeProvider — timestamps and speakers (stub Gemini API)
   test('a recording over 30 minutes goes up in parts and the times keep counting', async () => {
     const seconds = 31 * 60;
     answers = [talk]; // both parts: the same words, from 0 s of their own part
-    const { text } = await googleTranscribe.transcribe({
+    const { text } = await transcribe({
       cfg: cfg({ timestamps: true }),
       pcm: Buffer.alloc(seconds * 16000 * 2),
       annotate: true
@@ -617,8 +618,8 @@ describe('googleTranscribeProvider — timestamps and speakers (stub Gemini API)
   });
 
   test('a response without annotations still gives the plain transcript', async () => {
-    answers = [completed('Hello there.', undefined)];
-    const { text } = await googleTranscribe.transcribe({
+    answers = [completed('Hello there.')];
+    const { text } = await transcribe({
       cfg: cfg({ timestamps: true }),
       pcm: Buffer.alloc(32000),
       annotate: true

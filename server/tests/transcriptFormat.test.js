@@ -200,7 +200,7 @@ describe('annotationsOf', () => {
   test('nothing is asked for unless the transcript is meant to be read', () => {
     const config = { timestamps: true, speakers: true };
     expect(annotationsOf(config, false)).toMatchObject({ timestamps: false, speakers: false });
-    expect(annotationsOf(config, undefined)).toMatchObject({ timestamps: false, speakers: false });
+    expect(annotationsOf(config)).toMatchObject({ timestamps: false, speakers: false });
     expect(annotationsOf(config, true)).toMatchObject({ timestamps: true, speakers: true });
   });
 
