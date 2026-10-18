@@ -12,7 +12,8 @@ import {
   formatTranscript,
   groupUnits,
   parseOffset,
-  speakerName
+  speakerName,
+  tidyTranscript
 } from '../transcription/transcriptFormat.js';
 
 /** Words of one sentence, 0.4 s apart, from `start`. */
@@ -216,5 +217,22 @@ describe('annotationsOf', () => {
     expect(annotationsOf({ speakerLabel: ' Sprecher ' }, true).speakerLabel).toBe('Sprecher');
     expect(annotationsOf({ speakerLabel: '  ' }, true).speakerLabel).toBeUndefined();
     expect(annotationsOf({ speakerLabel: 5 }, true).speakerLabel).toBeUndefined();
+  });
+});
+
+describe('tidyTranscript', () => {
+  test('collapses runs of spaces and trims, as a one-line transcript always was', () => {
+    expect(tidyTranscript('  Hello   there \t world  ')).toBe('Hello there world');
+  });
+
+  test('keeps the line breaks of an annotated transcript', () => {
+    expect(tidyTranscript('[00:00]  Speaker 1: Hello.  \n  [00:21] Speaker 2: Hi.\r\n')).toBe(
+      '[00:00] Speaker 1: Hello.\n[00:21] Speaker 2: Hi.'
+    );
+  });
+
+  test('has nothing to tidy in nothing', () => {
+    expect(tidyTranscript('')).toBe('');
+    expect(tidyTranscript(undefined)).toBe('');
   });
 });

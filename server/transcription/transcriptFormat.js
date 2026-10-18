@@ -158,6 +158,21 @@ export function formatTranscript(units, options = {}) {
 }
 
 /**
+ * Tidy a transcript assembled from a session before it is stored: runs of
+ * spaces and tabs become one space and the spaces around a line break go, but
+ * the line breaks stay, so an annotated transcript keeps one entry per line.
+ *
+ * @param {string} text
+ * @returns {string}
+ */
+export function tidyTranscript(text) {
+  return String(text ?? '')
+    .replace(/[^\S\n]+/gu, ' ')
+    .replace(/ ?\n ?/gu, '\n')
+    .trim();
+}
+
+/**
  * What a model's `config` asks the transcript to show. Only a transcript meant
  * to be read (a stored chat turn) is annotated; dictation and voice mode type
  * and speak the text, where `[00:12]` would be noise.

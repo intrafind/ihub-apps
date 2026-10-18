@@ -77,6 +77,7 @@ import {
 } from '../utils/authorization.js';
 import { buildApiPath } from '../utils/basePath.js';
 import { getTranscriptionProvider } from '../transcription/index.js';
+import { tidyTranscript } from '../transcription/transcriptFormat.js';
 import {
   beginTranscriptionTurn,
   endTranscriptionTurn
@@ -762,7 +763,7 @@ export function bridgeConnection(clientWs, user, limiter, options = {}) {
   const endTurn = () => {
     if (!turnPromise) return Promise.resolve(true);
     if (turnEndPromise) return turnEndPromise;
-    const content = `${transcriptCommitted} ${transcriptPartial}`.replace(/\s+/g, ' ').trim();
+    const content = tidyTranscript(`${transcriptCommitted} ${transcriptPartial}`);
     const outcome = { content, error: failure, aborted: !completed && !failure };
     turnEndPromise = turnPromise.then(turn => endTranscriptionTurn(turn, outcome));
     return turnEndPromise;
