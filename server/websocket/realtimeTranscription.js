@@ -44,9 +44,12 @@
  *                     once the backend is initialized (`mode` is the provider's,
  *                     'stream' or 'batch': a batch transcript only arrives after
  *                     `stop`, so a client waits longer for it),
- *                     `{type:'delta', text}` (streaming), `{type:'final', text}`
- *                     per completed segment, `{type:'done'}` once the transcript
- *                     is complete after `stop`, `{type:'error', message}`
+ *                     `{type:'delta', text}` (streaming: more text for the current
+ *                     segment; with `replace: true` the text is the whole
+ *                     current hypothesis and takes the place of the last one),
+ *                     `{type:'final', text}` per completed segment,
+ *                     `{type:'done'}` once the transcript is complete after
+ *                     `stop`, `{type:'error', message}`
  *   The same protocol serves both provider modes and every use — dictation
  *   (the microphone button), live transcription (the record button) and file
  *   transcription — so they share this one code path.
@@ -57,7 +60,10 @@
  *                     `{type:'keepalive'}` resets the idle timeout only
  *   server -> client: `{type:'final', text, turn:n}` once per commit, in order
  *                     (n counts commits from 1; `text` is '' for silence),
- *                     `{type:'delta', text, turn:n}` interim text of turn n
+ *                     `{type:'delta', text, turn:n}` interim text of turn n; a
+ *                     delta with `replace: true` carries the whole turn so far
+ *                     (the segments already completed and the current
+ *                     hypothesis), not a piece of it
  * A session without `conversation` never sees any of it. See
  * `docs/voice-transcription.md` ("Conversation mode") for the full contract and
  * the "Conversation mode" section inside `bridgeConnection` for how turns are
@@ -1193,11 +1199,17 @@ export function bridgeConnection(clientWs, user, limiter, options = {}) {
             textLen: event.text?.length || 0
           });
           if (conversation) {
-            onConversationText('delta', event.text || '');
+            onConversationText('delta', event.text || '', event.replace === true);
             break;
           }
-          transcriptPartial += event.text || '';
-          sendJson(clientWs, { type: 'delta', text: event.text || '' });
+          transcriptPartial = event.replace
+            ? event.text || ''
+            : `${transcriptPartial}${event.text || ''}`;
+          sendJson(clientWs, {
+            type: 'delta',
+            text: event.text || '',
+            ...(event.replace ? { replace: true } : {})
+          });
           // A file blasted at once can produce many segments after `stop`;
           // keep the completion window open while segments are still arriving.
           if (stopSentUpstream) armPostStopSettle();
@@ -1472,8 +1484,11 @@ export function bridgeConnection(clientWs, user, limiter, options = {}) {
     void finishCompleted();
   };
 
-  // Upstream text (streaming providers) for the current turn.
-  const onConversationText = (kind, text) => {
+  // Upstream text (streaming providers) for the current turn. A `replace` delta
+  // is a revised hypothesis of the segment being spoken: it takes the place of
+  // the last one. The client keeps no segments of its own in conversation mode,
+  // so what it shows has to carry the completed segments in front of it.
+  const onConversationText = (kind, text, replace = false) => {
     if (!activeTurn && !turnAudioUpstream) {
       logger.debug('Realtime STT: dropped transcript text of an ended turn', {
         component: 'RealtimeSTT',
@@ -1484,8 +1499,13 @@ export function bridgeConnection(clientWs, user, limiter, options = {}) {
       return;
     }
     if (kind === 'delta') {
-      turnText.partial += text;
-      sendJson(clientWs, { type: 'delta', text, turn: currentTurnNumber() });
+      turnText.partial = replace ? text : `${turnText.partial}${text}`;
+      sendJson(clientWs, {
+        type: 'delta',
+        text: replace ? `${turnText.committed} ${text}`.trim() : text,
+        ...(replace ? { replace: true } : {}),
+        turn: currentTurnNumber()
+      });
     } else {
       commitTurnSegment(text);
     }

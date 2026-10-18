@@ -898,6 +898,87 @@ describe('conversation mode: streaming provider, Gemini Live', () => {
     expect(client.framesOfType('delta').map(f => f.text)).toEqual(['How is']);
   });
 
+  test('revised hypotheses replace each other: the caption never repeats words', async () => {
+    const { client, upstreams } = setup(geminiModel);
+    await startSession(client, 'gemini-live');
+    await openSession(upstreams[0], GEMINI_READY);
+
+    sendAudio(client);
+    await tick();
+    upstreamSend(upstreams[0], interim('Warum schreiben'));
+    upstreamSend(upstreams[0], interim('Warum schreiben wir'));
+    upstreamSend(upstreams[0], interim('Warum schreiben wir eigentlich alles'));
+    sendJson(client, { type: 'commit' });
+    await tick();
+    upstreamSend(upstreams[0], segment('Warum schreiben wir eigentlich alles?'));
+    await tick(CONVERSATION_TIMINGS.turnFinalQuietMs + 50);
+
+    expect(client.framesOfType('delta').map(f => ({ text: f.text, replace: f.replace }))).toEqual([
+      { text: 'Warum schreiben', replace: true },
+      { text: 'Warum schreiben wir', replace: true },
+      { text: 'Warum schreiben wir eigentlich alles', replace: true }
+    ]);
+    expect(finals(client)).toEqual([{ turn: 1, text: 'Warum schreiben wir eigentlich alles?' }]);
+  });
+
+  test('without a final segment the turn is the last hypothesis, not all of them in a row', async () => {
+    const { client, upstreams } = setup(geminiModel);
+    await startSession(client, 'gemini-live');
+    await openSession(upstreams[0], GEMINI_READY);
+
+    sendAudio(client);
+    await tick();
+    upstreamSend(upstreams[0], interim('Warum schreiben'));
+    upstreamSend(upstreams[0], interim('Warum schreiben wir'));
+    upstreamSend(upstreams[0], interim('Warum schreiben wir eigentlich alles'));
+    sendJson(client, { type: 'commit' });
+    await tick(CONVERSATION_TIMINGS.turnExplicitWaitMs + 100);
+
+    expect(finals(client)).toEqual([{ turn: 1, text: 'Warum schreiben wir eigentlich alles' }]);
+  });
+
+  test('dictation (no conversation) forwards a hypothesis as a replacing delta, too', async () => {
+    const { client, upstreams } = setup(geminiModel);
+    await startSession(client, 'gemini-live', { conversation: false });
+    await openSession(upstreams[0], GEMINI_READY);
+
+    sendAudio(client);
+    await tick();
+    upstreamSend(upstreams[0], interim('Warum schreiben'));
+    upstreamSend(upstreams[0], interim('Warum schreiben wir'));
+
+    expect(client.framesOfType('delta').map(f => ({ text: f.text, replace: f.replace }))).toEqual([
+      { text: 'Warum schreiben', replace: true },
+      { text: 'Warum schreiben wir', replace: true }
+    ]);
+  });
+
+  test('a hypothesis after a completed segment carries the segment in front of it', async () => {
+    const { client, upstreams } = setup(geminiModel);
+    await startSession(client, 'gemini-live');
+    await openSession(upstreams[0], GEMINI_READY);
+
+    sendAudio(client);
+    await tick();
+    upstreamSend(upstreams[0], interim('How is'));
+    upstreamSend(upstreams[0], segment('How is the'));
+    upstreamSend(upstreams[0], interim('weather'));
+    upstreamSend(upstreams[0], interim('weather today'));
+
+    // The client keeps no segments in conversation mode: what a delta says is
+    // the whole caption.
+    expect(client.framesOfType('delta').map(f => f.text)).toEqual([
+      'How is',
+      'How is the weather',
+      'How is the weather today'
+    ]);
+    sendJson(client, { type: 'commit' });
+    await tick();
+    upstreamSend(upstreams[0], segment('weather today?'));
+    await tick(CONVERSATION_TIMINGS.turnFinalQuietMs + 50);
+    expect(finals(client)).toEqual([{ turn: 1, text: 'How is the weather today?' }]);
+  });
+
   test('the same session takes the next turn without re-arming', async () => {
     const { client, upstreams, createUpstream } = setup(geminiModel);
     await startSession(client, 'gemini-live');

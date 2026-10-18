@@ -196,7 +196,7 @@ export async function startLiveTranscription({
         if (stopRequested) sendStop();
         break;
       case 'delta':
-        transcript.applyDelta(msg.text);
+        transcript.applyDelta(msg.text, { replace: msg.replace === true });
         if (typeof onText === 'function') onText(transcript.text());
         break;
       case 'final':

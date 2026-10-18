@@ -200,7 +200,7 @@ describe('googleLiveProvider — wire protocol', () => {
   test('interpret maps interim transcription to a delta and final to a segment', () => {
     expect(
       googleLive.interpret({ serverContent: { interimInputTranscription: { text: 'hel' } } })
-    ).toEqual({ kind: 'delta', text: 'hel' });
+    ).toEqual({ kind: 'delta', text: 'hel', replace: true });
     expect(
       googleLive.interpret({ serverContent: { inputTranscription: { text: 'hello' } } })
     ).toEqual({ kind: 'final', text: 'hello' });
@@ -213,7 +213,7 @@ describe('googleLiveProvider — wire protocol', () => {
         inputTranscription: { text: 'final' }
       }
     });
-    expect(event).toEqual({ kind: 'delta', text: 'partial' });
+    expect(event).toEqual({ kind: 'delta', text: 'partial', replace: true });
   });
 
   test('interpret maps an error payload to a readable message', () => {
