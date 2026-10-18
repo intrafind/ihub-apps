@@ -131,13 +131,14 @@ const getInitializedVariables = (app, currentLanguage) => {
 };
 
 /** Starter prompts, else the greeting, else the empty-chat note. */
-const startupView = (app, welcomeMessage, handleStarterPromptClick) => {
+const startupView = (app, welcomeMessage, handleStarterPromptClick, onOpenUsageGuide) => {
   const starterPrompts = app?.starterPrompts || [];
   if (starterPrompts.length > 0) {
     return (
       <StarterPromptsView
         starterPrompts={starterPrompts}
         onSelectPrompt={handleStarterPromptClick}
+        onOpenUsageGuide={onOpenUsageGuide}
       />
     );
   }
@@ -152,7 +153,7 @@ const renderStartupState = (
   hydrating,
   modeResolving,
   t,
-  usageGuideHint = null
+  onOpenUsageGuide = undefined
 ) => {
   // The app details can arrive before the platform config and the auth status
   // do, and until both have, nothing here knows whether this chat is
@@ -170,14 +171,7 @@ const renderStartupState = (
     return <LoadingSpinner message={t('pages.appChat.loadingChat', 'Loading chat...')} />;
   }
 
-  const view = startupView(app, welcomeMessage, handleStarterPromptClick);
-  if (!usageGuideHint) return view;
-  return (
-    <>
-      {view}
-      <div className="flex justify-center px-4 pt-2 pb-4">{usageGuideHint}</div>
-    </>
-  );
+  return startupView(app, welcomeMessage, handleStarterPromptClick, onOpenUsageGuide);
 };
 
 // The query string an embedded chat reads: none. Module-level, so its identity
@@ -799,8 +793,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
     resetConversationState,
     addUserMessage,
     addAssistantMessage,
-    updateAssistantMessage,
-    removeMessage
+    updateAssistantMessage
   } = useAppChat({
     appId,
     chatId,
@@ -934,8 +927,8 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
 
   // A durable chat can be shared as a read-only link once it has a message.
   const chatShareOffered = chatSharingEnabled && serverBackedChat;
-  // A usage guide exchange is local only (`isGreeting`): it is not stored, so it
-  // neither makes a chat shareable nor starts one below.
+  // Local-only turns (`isGreeting`) are not stored, so they neither make a chat
+  // shareable nor start one below.
   const chatShareReady =
     chatShareOffered && Boolean(chatId) && messages.some(message => !message.isGreeting);
 
@@ -1734,50 +1727,18 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
     }
   };
 
-  // Usage guide (issue #2838): the app's pre-written answer to "how do I use
-  // this app?", shown without a model call. In the chat it is a question and
-  // its answer, marked `isGreeting` so neither is sent to the model, stored or
-  // exported. The start form and compare mode have no single transcript to
-  // answer in, so there it opens in a viewer instead.
+  // Usage guide (issue #2838): the app's pre-written "how do I use this app?"
+  // text, shown without a model call. It is help, not a conversation turn, so
+  // it opens in a dialog in every state and never enters the transcript — the
+  // starter prompts stay, nothing is stored or exported, and it stays available
+  // while an answer is being written.
   const usageGuide = useUsageGuide(app, currentLanguage);
   const [usageGuideViewerOpen, setUsageGuideViewerOpen] = useState(false);
   const showUsageGuide = () => {
-    if (!usageGuide.available) return;
-    if (showStartForm || compareModeActive) {
-      setUsageGuideViewerOpen(true);
-      return;
-    }
-    const pairId = uuidv4();
-    const answerId = `msg-${uuidv4()}`;
-    const mark = { isGreeting: true, usageGuide: pairId };
-    addUserMessage(usageGuide.question, mark);
-    addAssistantMessage(answerId);
-    updateAssistantMessage(answerId, usageGuide.content, false, {
-      ...mark,
-      outputFormat: 'markdown'
-    });
+    if (usageGuide.available) setUsageGuideViewerOpen(true);
   };
-  const renderUsageGuideButton = variant =>
-    usageGuide.available ? (
-      <UsageGuideButton
-        question={usageGuide.question}
-        onClick={showUsageGuide}
-        disabled={processing}
-        variant={variant}
-        opensDialog={showStartForm || compareModeActive}
-      />
-    ) : null;
-
-  const handleDeleteMessage = messageId => {
-    // A guide exchange is not part of the conversation: removing it takes the
-    // question and its answer, and leaves the turns after it alone.
-    const pairId = messages.find(m => m.id === messageId)?.usageGuide;
-    if (pairId) {
-      messages.filter(m => m.usageGuide === pairId).forEach(m => removeMessage(m.id));
-      return;
-    }
-    deleteMessage(messageId);
-  };
+  const renderUsageGuideButton = () =>
+    usageGuide.available ? <UsageGuideButton onClick={showUsageGuide} /> : null;
 
   const handleEditMessage = (messageId, newContent) => {
     editMessage(messageId, newContent);
@@ -2850,11 +2811,12 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
         // AI disclaimer shares the tight line below the input with the
         // ephemeral toggle; shown after the first submitted message.
         disclaimer={messages.length > 0 ? <AIDisclaimerBanner /> : null}
-        // Once the start screen with its centered guide button is gone, the
-        // guide stays one click away next to the input.
-        leadingAction={
-          messages.length > 0 || compareModeActive ? renderUsageGuideButton('inline') : null
-        }
+        // The usage guide: one control, in the same place in every state,
+        // bottom left under the input, opposite the incognito toggle.
+        leadingAction={renderUsageGuideButton()}
+        // The guide is a modal dialog: an answer that finishes while it is open
+        // must not move the focus to the composer behind it.
+        autoFocusSuspended={usageGuideViewerOpen}
       />
     );
   };
@@ -2903,11 +2865,9 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
             selectedModel={selectedModel}
             onModelChange={setSelectedModel}
             showModelSelector={modelSelectionAllowed}
+            usageGuideAction={renderUsageGuideButton()}
             currentLanguage={currentLanguage}
           />
-          {usageGuide.available && (
-            <div className="flex justify-center mt-4">{renderUsageGuideButton('hint')}</div>
-          )}
         </div>
       </div>
     );
@@ -3102,7 +3062,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
                           messages={messages}
                           mcpAppHost={mcpAppHost}
                           outputFormat={selectedOutputFormat}
-                          onDelete={handleDeleteMessage}
+                          onDelete={deleteMessage}
                           onEdit={handleEditMessage}
                           onResend={handleResendMessage}
                           editable
@@ -3135,7 +3095,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
                               hydrating,
                               chatModeResolving,
                               t,
-                              renderUsageGuideButton('hint')
+                              usageGuide.available ? showUsageGuide : undefined
                             )}
                           </div>
                         </div>
@@ -3157,7 +3117,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
                           messages={messages}
                           mcpAppHost={mcpAppHost}
                           outputFormat={selectedOutputFormat}
-                          onDelete={handleDeleteMessage}
+                          onDelete={deleteMessage}
                           onEdit={handleEditMessage}
                           onResend={handleResendMessage}
                           editable
@@ -3188,7 +3148,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
                           hydrating,
                           chatModeResolving,
                           t,
-                          renderUsageGuideButton('hint')
+                          usageGuide.available ? showUsageGuide : undefined
                         )}
                       </div>
                     )}
@@ -3207,7 +3167,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
                       messages={messages}
                       mcpAppHost={mcpAppHost}
                       outputFormat={selectedOutputFormat}
-                      onDelete={handleDeleteMessage}
+                      onDelete={deleteMessage}
                       onEdit={handleEditMessage}
                       onResend={handleResendMessage}
                       editable
@@ -3243,7 +3203,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
                     messages={messages}
                     mcpAppHost={mcpAppHost}
                     outputFormat={selectedOutputFormat}
-                    onDelete={handleDeleteMessage}
+                    onDelete={deleteMessage}
                     onEdit={handleEditMessage}
                     onResend={handleResendMessage}
                     editable

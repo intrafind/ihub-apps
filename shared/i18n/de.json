@@ -3260,7 +3260,7 @@
         "websearchMaxPageReadsDesc": "Begrenzt, wie viele Seiten das Modell mit dem Seitenleser für eine Antwort öffnen darf. Seiten, die die Suche selbst für ihre Auszüge abruft, zählen nicht. 1–50, Standard 5.",
         "usageGuide": {
           "title": "Anleitung",
-          "description": "Eine vorab geschriebene Antwort auf „Wie nutze ich diese App?“. Nutzer öffnen sie über eine Schaltfläche im Chat. Es wird kein Modell aufgerufen und die Anleitung wird nicht an das Modell gesendet – sie kostet nichts und belegt kein Kontextfenster.",
+          "description": "Eine vorab geschriebene Antwort auf „Wie nutze ich diese App?“. Nutzer öffnen sie in einem Dialog über den Link „Anleitung“ unter dem Eingabefeld des Chats. Es wird kein Modell aufgerufen und die Anleitung gelangt nie in den Chat – sie kostet nichts und belegt kein Kontextfenster.",
           "language": "Sprache",
           "generate": "Mit KI erstellen",
           "regenerate": "Mit KI neu erstellen",
@@ -3268,7 +3268,7 @@
           "write": "Selbst schreiben",
           "delete": "Anleitung löschen",
           "generateHint": "Zum Erstellen wird das Standardmodell einmal aufgerufen, mit dem aktuellen Stand dieses Formulars. Prüfen Sie den Text – er wird beim Speichern der App übernommen.",
-          "question": "Schaltflächentext / Frage",
+          "question": "Dialogüberschrift",
           "content": "Anleitung (Markdown)",
           "confirmRegenerate": "Den aktuellen Anleitungstext für diese Sprache durch einen neu erstellten ersetzen?",
           "confirmDelete": "Die Anleitung dieser App löschen?"
@@ -5902,8 +5902,7 @@
   "usageGuide": {
     "question": "Wie nutze ich diese App?",
     "inlineLabel": "Anleitung",
-    "badge": "Anleitung · vorab hinterlegt",
-    "badgeHint": "Von den Administratoren hinterlegt. Wird nicht an die KI gesendet, Rückfragen können sich nicht darauf beziehen.",
-    "inlineLabelShort": "Anleitung"
+    "inlineLabelShort": "Anleitung",
+    "startScreenHint": "Neu hier?"
   }
 }

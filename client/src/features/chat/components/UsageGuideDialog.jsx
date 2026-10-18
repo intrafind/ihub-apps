@@ -5,9 +5,11 @@ import Icon from '../../../shared/components/Icon';
 import StreamingMarkdown from './StreamingMarkdown';
 
 /**
- * An app's usage guide in a dialog (issue #2838), for the start form and
- * compare mode, which have no single transcript to answer in. The shared
- * `Modal` traps focus, closes on Escape and returns focus to the button.
+ * An app's usage guide in a dialog (issue #2838), in every state of the chat:
+ * the guide is help, not a conversation turn, so it never enters the
+ * transcript — the starter prompts and the composer stay as they are. The
+ * shared `Modal` traps focus, closes on Escape and returns focus to the control
+ * that opened it.
  *
  * @param {Object} props
  * @param {boolean} props.isOpen
@@ -42,8 +44,8 @@ function UsageGuideDialog({ isOpen, question, content, onClose }) {
           <Icon name="close" size="sm" aria-hidden="true" />
         </button>
       </div>
-      {/* The chat's own markdown renderer (sanitized), so the guide reads the
-          same here as in the chat. */}
+      {/* The chat's own markdown renderer (sanitized), so the guide reads like
+          an answer. */}
       <div className="overflow-y-auto px-6 py-5">
         <StreamingMarkdown content={content || ''} />
       </div>

@@ -2,8 +2,17 @@ import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 
-/** Display a list of starter prompts for quick start */
-function StarterPromptsView({ starterPrompts = [], onSelectPrompt }) {
+/**
+ * Display a list of starter prompts for quick start.
+ *
+ * @param {Object} props
+ * @param {Array<Object>} [props.starterPrompts]
+ * @param {Function} [props.onSelectPrompt]
+ * @param {Function} [props.onOpenUsageGuide] - When the app has a usage guide, a
+ *   plain text link under the subtitle opens it. It is a link in the sentence,
+ *   not a card or a chip, so it does not read as one more prompt.
+ */
+function StarterPromptsView({ starterPrompts = [], onSelectPrompt, onOpenUsageGuide }) {
   const { t, i18n } = useTranslation();
 
   return (
@@ -19,6 +28,19 @@ function StarterPromptsView({ starterPrompts = [], onSelectPrompt }) {
             'Choose a prompt below to get started quickly'
           )}
         </p>
+        {onOpenUsageGuide && (
+          <p className="text-sm text-gray-500 dark:text-gray-400">
+            {t('usageGuide.startScreenHint', 'New here?')}{' '}
+            <button
+              type="button"
+              onClick={onOpenUsageGuide}
+              aria-haspopup="dialog"
+              className="font-medium text-indigo-700 dark:text-indigo-300 underline underline-offset-2 hover:text-indigo-900 dark:hover:text-indigo-100 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900"
+            >
+              {t('usageGuide.inlineLabel', 'Usage guide')}
+            </button>
+          </p>
+        )}
       </div>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 w-full max-w-4xl mx-auto px-4 pb-4">
         {starterPrompts.map((sp, idx) => (

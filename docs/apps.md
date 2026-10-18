@@ -937,9 +937,9 @@ An app with a [start form](#start-form) opens with the form instead of any of th
 #### Usage Guide
 
 An app can carry a pre-written answer to "How do I use this app?". Users open it from a
-button, and the chat shows the question and the guide like any exchange — but no model is
-called, and neither message is sent to the model with later turns, so the guide costs nothing
-and takes no room in the context window. Starter prompts stay real prompts.
+"Usage guide" link, and it appears in a dialog — never in the chat. No model is called, and
+the guide is not part of the conversation, so it costs nothing, takes no room in the context
+window and leaves the starter prompts and the chat input as they are.
 
 ```json
 "usageGuide": {
@@ -954,16 +954,16 @@ and takes no room in the context window. Starter prompts stay real prompts.
 | Field      | Type   | Required | Description                                                                        |
 | ---------- | ------ | -------- | ---------------------------------------------------------------------------------- |
 | `content`  | Object | Yes      | Localized guide text in Markdown                                                   |
-| `question` | Object | No       | Localized button text and question; defaults to "How do I use this app?"           |
+| `question` | Object | No       | Localized dialog heading; defaults to "How do I use this app?"                     |
 
-Where users find it:
+Where users find it — one control with one label, "Usage guide" ("Anleitung" in German), in the
+same place in every state:
 
-- **Start screen**: a button in the middle of the screen, below the starter prompts or the
-  greeting — also when the app has no starter prompts.
-- **Next to the chat input**: a "Usage guide" link on the line below the input once the chat
-  has messages.
-- **Start form and compare mode**: the same button opens the guide in a viewer, as there is no
-  single transcript to answer in.
+- **Under the chat input**: on the line below the input, on the left, opposite the incognito
+  toggle — on the start screen and once the chat has messages, also in compare mode.
+- **Start form**: bottom left of the form's action row, opposite the start button.
+- **Start screen with starter prompts**: also a plain text link ("New here? Usage guide") under
+  the starter prompts' subtitle.
 
 The guide is part of the app's configuration, so it is exported, backed up and installed with
 the app. The app list (`GET /api/apps`) leaves the guide's text out; the chat reads it from the

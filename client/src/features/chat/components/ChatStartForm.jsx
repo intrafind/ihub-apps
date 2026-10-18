@@ -48,6 +48,8 @@ import useAttachmentProcessing from '../../../shared/hooks/useAttachmentProcessi
  * @param {Function} [props.onModelChange] - Receives the picked model id
  * @param {boolean} [props.showModelSelector=false] - Whether the app lets users
  *   pick the model; the selected model's hint shows either way
+ * @param {React.ReactNode} [props.usageGuideAction] - The control that opens the app's usage
+ *   guide, shown bottom left in the action row
  * @param {string} props.currentLanguage
  */
 function ChatStartForm({
@@ -71,6 +73,7 @@ function ChatStartForm({
   selectedModel = null,
   onModelChange = null,
   showModelSelector = false,
+  usageGuideAction = null,
   currentLanguage
 }) {
   const { t } = useTranslation();
@@ -238,24 +241,29 @@ function ChatStartForm({
         />
       )}
 
-      <div className="flex items-center justify-end gap-2">
-        {showModelSelector && models?.length > 0 && onModelChange && (
-          <ModelSelector
-            app={app}
-            models={models}
-            selectedModel={selectedModel}
-            onModelChange={onModelChange}
-            currentLanguage={currentLanguage}
-            disabled={isProcessing}
-          />
-        )}
-        <button
-          type="submit"
-          disabled={isProcessing || attaching || !canSubmit || alertPending}
-          className="px-5 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {submitLabel}
-        </button>
+      <div className="flex flex-wrap items-center gap-2">
+        {/* Bottom left, as under the chat input: the same control in the same
+            place, opposite the send button. */}
+        {usageGuideAction && <div className="shrink-0">{usageGuideAction}</div>}
+        <div className="ml-auto flex items-center gap-2">
+          {showModelSelector && models?.length > 0 && onModelChange && (
+            <ModelSelector
+              app={app}
+              models={models}
+              selectedModel={selectedModel}
+              onModelChange={onModelChange}
+              currentLanguage={currentLanguage}
+              disabled={isProcessing}
+            />
+          )}
+          <button
+            type="submit"
+            disabled={isProcessing || attaching || !canSubmit || alertPending}
+            className="px-5 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {submitLabel}
+          </button>
+        </div>
       </div>
     </form>
   );
