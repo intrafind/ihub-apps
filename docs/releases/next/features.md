@@ -21,6 +21,29 @@ Audio is never stored; it goes only to the speech service the app already uses f
   written. Voice mode speaks with a text-to-speech model: the one chosen for voice mode, else the
   read-aloud default. Read aloud itself does not have to be switched on.
 
+## Transcripts With Timestamps and Speakers
+
+A recording, audio file or video transcribed in a chat can now show when each stretch was said and
+who said it, so a 30-minute talk is no longer one block of text:
+
+```
+[00:00] Speaker 1: Welcome to the talk.
+[00:21] Speaker 2: Thanks for having me.
+```
+
+- Admins switch it on per transcription model, in the model's `config`: `"timestamps": true` and,
+  for Gemini 3.5 Transcribe, `"speakers": true`. Whisper models (OpenAI-compatible, such as LLM
+  Hub) support timestamps only; Whisper does not tell speakers apart. `"speakerLabel"` sets the
+  word before the number (`"Sprecher"` gives `Sprecher 1`).
+- The transcript is stored in the chat as before, so a chat model selected next can answer "what
+  was said around minute 20?" from it.
+- Dictation and voice mode are unchanged and always give plain text.
+- With Gemini, timestamps and speakers use verbatim mode and cannot be combined with
+  `customVocabulary`. Gemini handles 30 minutes per request with them on, so a longer recording is
+  sent in parts; times keep counting, but speaker numbers are per part.
+
+See [Realtime Voice & Transcription](../../voice-transcription.md#timestamps-and-speakers-in-a-transcript).
+
 ## Usage Guide Opens in a Dialog
 
 An app's usage guide is now one "Usage guide" control that opens the guide in a dialog, in every

@@ -25,13 +25,18 @@
  *
  * Model `config` (all optional): `language` (ISO-639-1, e.g. "de"; Whisper
  * detects it otherwise), `prompt` (spelling of names and terms),
- * `maxChunkSeconds`.
+ * `maxChunkSeconds`, and `timestamps`: a transcript a user reads (a stored chat
+ * turn) then carries the time of each line (`[12:03] …`), asked of the service
+ * as `verbose_json` segments. Whisper does not tell speakers apart, so there is
+ * no `speakers` here.
  */
 import { randomBytes } from 'node:crypto';
 import { providerEnvKeyName } from '../../shared/llmProviders.js';
 import { httpFetch } from '../utils/httpConfig.js';
+import logger from '../utils/logger.js';
 import { expandEnvVars, resolveApiKey } from './credentials.js';
-import { pcm16ToWav } from './wav.js';
+import { annotationsOf, formatTranscript, parseOffset } from './transcriptFormat.js';
+import { pcm16ToWav, splitPcm } from './wav.js';
 
 /** Used when an `openai` model sets no URL. */
 export const DEFAULT_OPENAI_BASE = 'https://api.openai.com/v1';
@@ -40,9 +45,6 @@ const TRANSCRIBE_TIMEOUT_MS = 300_000;
 const DEFAULT_MAX_CHUNK_SECONDS = 600;
 const MIN_CHUNK_SECONDS = 30;
 const MAX_CHUNK_SECONDS = 1500;
-/** How far back from a part's end the quietest moment is looked for. */
-const QUIET_SEARCH_SECONDS = 10;
-const QUIET_WINDOW_MS = 50;
 
 /** Endpoints of the same API a model URL may name instead of the base. */
 const CALL_SUFFIXES = [
@@ -108,49 +110,6 @@ export function resolveUpstream(model) {
 }
 
 /**
- * Split PCM16 into parts of at most `maxChunkSeconds`, each ending at the
- * quietest 50 ms of its last ten seconds, so a cut falls between words.
- *
- * @param {Buffer} pcm
- * @param {{ sampleRate?: number, maxChunkSeconds?: number }} [opts]
- * @returns {Buffer[]}
- */
-export function splitPcm(
-  pcm,
-  { sampleRate = 16000, maxChunkSeconds = DEFAULT_MAX_CHUNK_SECONDS } = {}
-) {
-  const bytesPerSecond = sampleRate * 2;
-  const maxBytes = Math.max(2, Math.floor((maxChunkSeconds * bytesPerSecond) / 2) * 2);
-  if (pcm.length <= maxBytes) return [pcm];
-
-  const windowBytes = Math.max(2, Math.floor((sampleRate * QUIET_WINDOW_MS) / 1000) * 2);
-  const searchBytes = Math.floor((QUIET_SEARCH_SECONDS * bytesPerSecond) / 2) * 2;
-  const parts = [];
-  let start = 0;
-  while (pcm.length - start > maxBytes) {
-    const limit = start + maxBytes;
-    const from = Math.max(start + windowBytes, limit - searchBytes);
-    let cut = limit;
-    let quietest = Infinity;
-    for (let w = limit - windowBytes; w >= from; w -= windowBytes) {
-      let energy = 0;
-      for (let i = w; i < w + windowBytes; i += 2) {
-        const v = pcm.readInt16LE(i);
-        energy += v * v;
-      }
-      if (energy < quietest) {
-        quietest = energy;
-        cut = w + Math.floor(windowBytes / 4) * 2;
-      }
-    }
-    parts.push(pcm.subarray(start, cut));
-    start = cut;
-  }
-  parts.push(pcm.subarray(start));
-  return parts;
-}
-
-/**
  * A user-facing message for a failed request: the status and the service's
  * own message, never the URL.
  *
@@ -206,8 +165,14 @@ export function buildMultipart(fields, file) {
   return { body: Buffer.concat(parts), contentType: `multipart/form-data; boundary=${boundary}` };
 }
 
-async function transcribePart({ cfg, wav, signal }) {
-  const fields = { model: cfg.model, response_format: 'json' };
+/**
+ * One request. `verbose` asks for `verbose_json`, which adds the segments (each
+ * with its start and end in seconds) to the text.
+ *
+ * @returns {Promise<{ text: string, segments: Array<{ text: string, start: number|null, end: number|null }> }>}
+ */
+async function transcribePart({ cfg, wav, signal, verbose = false }) {
+  const fields = { model: cfg.model, response_format: verbose ? 'verbose_json' : 'json' };
   if (cfg.options?.language) fields.language = String(cfg.options.language);
   if (cfg.options?.prompt) fields.prompt = String(cfg.options.prompt);
   const { body, contentType } = buildMultipart(fields, {
@@ -238,30 +203,100 @@ async function transcribePart({ cfg, wav, signal }) {
   // response_format=json gives `{ text }`; a server that ignores it may answer
   // with the bare text.
   if ((res.headers.get('content-type') || '').includes('json')) {
-    const body = await res.json();
-    return typeof body?.text === 'string' ? body.text.trim() : '';
+    const parsed = await res.json();
+    const segments = Array.isArray(parsed?.segments)
+      ? parsed.segments.map(segment => ({
+          text: typeof segment?.text === 'string' ? segment.text : '',
+          start: parseOffset(segment?.start),
+          end: parseOffset(segment?.end)
+        }))
+      : [];
+    return { text: typeof parsed?.text === 'string' ? parsed.text.trim() : '', segments };
   }
-  return (await res.text()).trim();
+  return { text: (await res.text()).trim(), segments: [] };
+}
+
+/** How long one part of a recording may be: `config.maxChunkSeconds`, within limits. */
+function chunkSecondsOf(options) {
+  const configured = Number(options?.maxChunkSeconds);
+  if (!Number.isFinite(configured)) return DEFAULT_MAX_CHUNK_SECONDS;
+  return Math.min(MAX_CHUNK_SECONDS, Math.max(MIN_CHUNK_SECONDS, configured));
+}
+
+/**
+ * Transcribe every part of a recording, one after the other.
+ *
+ * @returns {Promise<{ texts: string[], units: Array<{ text: string, start: number|null,
+ *   end: number|null }>, unsegmented: boolean }>} The text of each part, the
+ *   segments of all parts with their times counted from the start of the
+ *   recording, and whether some part had text but no segments.
+ */
+async function transcribeParts({ cfg, pcm, sampleRate, signal, verbose }) {
+  const parts = splitPcm(pcm, { sampleRate, maxChunkSeconds: chunkSecondsOf(cfg.options) });
+  const texts = [];
+  const units = [];
+  let unsegmented = false;
+  let offset = 0;
+  for (const part of parts) {
+    const result = await transcribePart({
+      cfg,
+      wav: pcm16ToWav(part, { sampleRate }),
+      signal,
+      verbose
+    });
+    // A response may carry its text only as segments.
+    const segmentText = result.segments.map(segment => segment.text).join('');
+    const text = result.text || segmentText.trim();
+    if (text) texts.push(text);
+    if (text && !result.segments.length) unsegmented = true;
+    for (const { text: line, start, end } of result.segments) {
+      units.push({
+        text: line,
+        start: start === null ? null : start + offset,
+        end: end === null ? null : end + offset
+      });
+    }
+    offset += part.length / (sampleRate * 2);
+  }
+  return { texts, units, unsegmented };
 }
 
 /**
  * Transcribe a complete PCM16 buffer, in parts when it is long.
  *
- * @param {{ cfg: Object, pcm: Buffer, sampleRate?: number, signal?: AbortSignal }} params
+ * With `annotate` and `config.timestamps` the text is one line per stretch of
+ * speech, led by its time (see `transcriptFormat.js`); the times of a part are
+ * counted from the start of the recording. A service that ignores
+ * `verbose_json` and returns no segments gives the plain transcript.
+ *
+ * @param {{ cfg: Object, pcm: Buffer, sampleRate?: number, signal?: AbortSignal,
+ *   annotate?: boolean }} params
+ *   `annotate`: the transcript is meant to be read (a stored chat turn), not
+ *   typed or spoken (dictation, voice mode).
  * @returns {Promise<{ text: string }>}
  */
-export async function transcribe({ cfg, pcm, sampleRate = 16000, signal } = {}) {
+export async function transcribe({ cfg, pcm, sampleRate = 16000, signal, annotate = false } = {}) {
   if (!cfg?.url) throw new Error('the model has no endpoint URL');
   if (!pcm?.length) return { text: '' };
-  const configured = Number(cfg.options?.maxChunkSeconds);
-  const maxChunkSeconds = Number.isFinite(configured)
-    ? Math.min(MAX_CHUNK_SECONDS, Math.max(MIN_CHUNK_SECONDS, configured))
-    : DEFAULT_MAX_CHUNK_SECONDS;
+  const { timestamps, speakerLabel } = annotationsOf(cfg.options, annotate);
 
-  const texts = [];
-  for (const part of splitPcm(pcm, { sampleRate, maxChunkSeconds })) {
-    const text = await transcribePart({ cfg, wav: pcm16ToWav(part, { sampleRate }), signal });
-    if (text) texts.push(text);
+  const { texts, units, unsegmented } = await transcribeParts({
+    cfg,
+    pcm,
+    sampleRate,
+    signal,
+    verbose: timestamps
+  });
+  // Lines only when every part has its segments: a part without them would
+  // otherwise be missing from the transcript.
+  if (timestamps && units.length && !unsegmented) {
+    return { text: formatTranscript(units, { timestamps: true, speakerLabel }) };
+  }
+  if (timestamps && texts.length) {
+    logger.warn(
+      'Whisper transcription: timestamps asked for, but the service returned no segments for some of the audio',
+      { component: 'OpenAITranscribe', model: cfg.model }
+    );
   }
   return { text: texts.join(' ') };
 }

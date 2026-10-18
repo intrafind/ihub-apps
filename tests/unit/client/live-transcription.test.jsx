@@ -263,3 +263,13 @@ test('cancel rejects a pending stop with "aborted" and keeps the text so far', a
   expect(onError).not.toHaveBeenCalled();
   expect(ws.readyState).toBe(FakeWebSocket.CLOSED);
 });
+
+test('an annotated transcript keeps one entry per line', async () => {
+  const onText = jest.fn();
+  const { session, ws } = await start({ onText });
+  ws.receive({ type: 'ready' });
+  ws.receive({ type: 'final', text: '[00:00] Speaker 1: Hello.\n[00:21] Speaker 2: Hi.' });
+
+  expect(onText).toHaveBeenLastCalledWith('[00:00] Speaker 1: Hello.\n[00:21] Speaker 2: Hi.');
+  expect(session.text()).toBe('[00:00] Speaker 1: Hello.\n[00:21] Speaker 2: Hi.');
+});

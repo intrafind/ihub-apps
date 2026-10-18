@@ -307,7 +307,9 @@ they are off by default.
   deleted. `config` accepts `mode` (`"smart"` — punctuation, capitalization and
   filler-word removal, the default — or `"verbatim"`), `languageCodes`, and
   `customVocabulary` (up to 1,000 phrases biasing recognition toward domain
-  terms, acronyms and proper names).
+  terms, acronyms and proper names), and `timestamps` / `speakers` for a
+  transcript with times and speaker labels (see [Timestamps and
+  speakers](#timestamps-and-speakers-in-a-transcript)).
 
   One hour of 16 kHz PCM16 is ≈115 MB, which the default
   `maxBufferedAudioBytes` (128 MiB, ≈70 min) holds. Raise it for longer
@@ -338,12 +340,59 @@ Whisper on your own vLLM. Such a model is a transcription model with `provider: 
   word. Recordings longer than `config.maxChunkSeconds` (default 600 s, under the common 25 MB
   upload limit) are sent in parts, each cut at a pause.
 - `config.language` (e.g. `"de"`) skips language detection; `config.prompt` helps with the
-  spelling of names and terms.
+  spelling of names and terms; `config.timestamps` puts the time in front of each line (see
+  [Timestamps and speakers](#timestamps-and-speakers-in-a-transcript)).
 - On LLM Hub, which models a key can use depends on its plan; Whisper is in every paid plan.
 
-Speaker diarization and word-level timestamps are **not** exposed. iHub renders
-a plain transcript into a chat bubble with nowhere to show them, and Gemini
-rejects both in combination with `smart` mode and with custom vocabulary.
+### Timestamps and speakers in a transcript
+
+A transcript that becomes a chat turn (a recording, audio file or video sent in the chat with a
+transcription model selected) can show when each stretch was said and who said it:
+
+```
+[00:00] Speaker 1: Welcome to the talk. Today it is about iHub.
+[00:21] Speaker 2: Thanks for having me.
+```
+
+It is plain text, stored as the answer like any other transcript, so a chat model selected next can
+answer "what was said around minute 20?" from it. It is off by default and set per model in `config`:
+
+| `config` key   | Models                                | Effect                                                                  |
+| -------------- | ------------------------------------- | ----------------------------------------------------------------------- |
+| `timestamps`   | `google-transcribe`, `openai`/`local` | `true` puts the time in front of each line (`[mm:ss]`, `[h:mm:ss]` from an hour on). |
+| `speakers`     | `google-transcribe`                   | `true` labels who speaks and starts a new line when the speaker changes. |
+| `speakerLabel` | `google-transcribe`                   | The word before the number, default `Speaker` (`"Sprecher"` gives `Sprecher 1`). |
+
+```json
+{
+  "id": "gemini-3.5-transcribe",
+  "provider": "google-transcribe",
+  "modelType": "transcription",
+  "config": { "timestamps": true, "speakers": true, "speakerLabel": "Sprecher" }
+}
+```
+
+- **Only for chat turns.** Dictation (the microphone button) and voice mode always get plain text:
+  `[00:12]` in an input field or a spoken question would be noise. To offer both plain and annotated
+  transcripts in a chat, add a second model for the same endpoint with the other `config`.
+- **Lines.** A line ends when the speaker changes. With `timestamps` it also ends at the first
+  sentence end or pause once it is 20 seconds long, and never runs longer than 40 seconds.
+- **Gemini** reports the time of every word, which iHub groups into lines. It then works in
+  `verbatim` mode (fillers like "um" stay, no smart formatting), `mode` is ignored, and
+  `customVocabulary` is not sent: Gemini rejects the request that combines it with timestamps or
+  speakers. Word timestamps can cost some accuracy. Up to 8 speakers are told apart; with three or
+  more the attribution is experimental.
+- **Gemini handles at most 30 minutes per request** with either option on (an hour without), so a
+  longer recording is sent in about equal parts, each cut at a pause. Times keep counting from the
+  start of the recording. Speaker labels do not: Gemini numbers the speakers of each request on its
+  own, so `Speaker 1` in the second half is not necessarily `Speaker 1` of the first.
+  If any part of a recording comes back without annotations, the plain transcript of the whole
+  recording is used instead, so no text is left out.
+- **Whisper** is asked for `verbose_json` and its segments are grouped into lines. Whisper does not
+  tell speakers apart, so there is no `speakers` for it. The endpoint has to support
+  `verbose_json` (OpenAI's `whisper-1` does; a vLLM or LLM Hub deployment depends on its version).
+  One that ignores it, or that returns no segments for part of a long recording, still gives the
+  plain transcript (all of it), and the server logs a warning.
 
 Transcription models never answer a prompt: they are listed in the chat's model selector (with `url`/`apiKey` stripped) so users can pick them to transcribe, but never as a magic-prompt, compare-mode or workflow model.
 

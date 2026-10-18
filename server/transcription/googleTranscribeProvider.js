@@ -19,6 +19,12 @@
  *   2. POST /v1beta/interactions with that file URI      → transcript
  *   3. DELETE the uploaded file                          → best-effort cleanup
  *
+ * With `config.timestamps` and/or `config.speakers` the transcript carries the
+ * time of each line and who said it (`[12:03] Speaker 2: …`), for a transcript
+ * a user reads (a stored chat turn). Gemini then works in verbatim mode and
+ * handles at most 30 minutes per request, so a longer recording is sent in
+ * parts (see `annotatedParts`).
+ *
  * Uploaded audio lands in Google's Files API store (48 h retention) before it
  * is transcribed. That is a data-flow an operator has to accept deliberately,
  * which is why the shipped model config is disabled by default.
@@ -28,7 +34,8 @@
  */
 import logger from '../utils/logger.js';
 import { expandEnvVars, resolveApiKey } from './credentials.js';
-import { pcm16ToWav } from './wav.js';
+import { annotationsOf, formatTranscript, parseOffset } from './transcriptFormat.js';
+import { pcm16ToWav, splitPcm } from './wav.js';
 
 /** Default API host. Overridable per model via `url`. */
 export const DEFAULT_API_BASE = 'https://generativelanguage.googleapis.com';
@@ -59,22 +66,35 @@ export function normalizeApiBase(url) {
  * Build the `transcription_config` for one request from the model config.
  *
  * Defaults to Gemini's `smart` mode (punctuation, capitalization, filler-word
- * removal), which reads best in a chat bubble. Speaker diarization and
- * word-level timestamps are deliberately not exposed: iHub renders a plain
- * transcript with nowhere to show them, and Gemini rejects them in combination
- * with `smart` mode and with custom vocabulary.
+ * removal), which reads best in a chat bubble. Word timestamps and speaker
+ * diarization exist only in `verbatim` mode and exclude custom vocabulary:
+ * Gemini rejects the request that mixes them, so asking for either (`timed`)
+ * switches to verbatim and leaves the vocabulary out.
  *
  * @param {Object} [config] - `model.config` contents.
+ * @param {{ timestamps?: boolean, speakers?: boolean }} [timed] - What the
+ *   transcript is to show, from {@link annotationsOf}.
  * @returns {Object} transcription_config payload.
  */
-export function buildTranscriptionConfig(config = {}) {
+export function buildTranscriptionConfig(
+  config = {},
+  { timestamps = false, speakers = false } = {}
+) {
   const out = {};
-  out.mode = config.mode === 'verbatim' ? { type: 'verbatim' } : 'smart';
+  if (timestamps || speakers) {
+    out.mode = {
+      type: 'verbatim',
+      ...(timestamps ? { timestamp_granularities: ['word'] } : {}),
+      ...(speakers ? { diarization_mode: 'speaker' } : {})
+    };
+  } else {
+    out.mode = config.mode === 'verbatim' ? { type: 'verbatim' } : 'smart';
+  }
   if (Array.isArray(config.languageCodes)) {
     const codes = config.languageCodes.filter(code => typeof code === 'string' && code);
     if (codes.length) out.language_codes = codes;
   }
-  if (Array.isArray(config.customVocabulary)) {
+  if (!timestamps && !speakers && Array.isArray(config.customVocabulary)) {
     const phrases = config.customVocabulary
       .filter(phrase => typeof phrase === 'string' && phrase)
       .slice(0, 1000); // Gemini's documented cap
@@ -85,8 +105,8 @@ export function buildTranscriptionConfig(config = {}) {
 
 /**
  * Collect the transcript from an interactions response. Text lives in
- * `steps[].content[]` blocks of `type: 'text'`; annotations (word timings,
- * speaker labels) are ignored here.
+ * `steps[].content[]` blocks of `type: 'text'`; the annotations on those blocks
+ * (word timings, speaker labels) are read by {@link extractWords}.
  *
  * @param {Object} body - Parsed interactions response.
  * @returns {string} The concatenated transcript, trimmed.
@@ -103,6 +123,49 @@ export function extractTranscript(body = {}) {
     }
   }
   return parts.join('\n').trim();
+}
+
+/**
+ * The timed words of an interactions response: the `word_info` annotations of
+ * `steps[].content[]`, with their offsets (`"0.450s"`) as seconds.
+ *
+ * @param {Object} body - Parsed interactions response.
+ * @returns {Array<{ text: string, speaker?: string, start: number|null, end: number|null }>}
+ */
+export function extractWords(body = {}) {
+  const words = [];
+  for (const step of Array.isArray(body.steps) ? body.steps : []) {
+    for (const block of Array.isArray(step?.content) ? step.content : []) {
+      for (const note of Array.isArray(block?.annotations) ? block.annotations : []) {
+        if (note?.type !== 'word_info' || typeof note.text !== 'string') continue;
+        words.push({
+          text: note.text,
+          speaker: typeof note.speaker === 'string' && note.speaker ? note.speaker : undefined,
+          start: parseOffset(note.start_offset),
+          end: parseOffset(note.end_offset)
+        });
+      }
+    }
+  }
+  return words;
+}
+
+/**
+ * Whether some text block of a response has text but no word annotations, so a
+ * transcript built from the annotations alone would leave that text out.
+ *
+ * @param {Object} body - Parsed interactions response.
+ * @returns {boolean}
+ */
+export function hasUnannotatedText(body = {}) {
+  for (const step of Array.isArray(body.steps) ? body.steps : []) {
+    for (const block of Array.isArray(step?.content) ? step.content : []) {
+      if (block?.type !== 'text' || typeof block.text !== 'string' || !block.text.trim()) continue;
+      const notes = Array.isArray(block.annotations) ? block.annotations : [];
+      if (!notes.some(note => note?.type === 'word_info')) return true;
+    }
+  }
+  return false;
 }
 
 /**
@@ -263,20 +326,39 @@ async function awaitInteraction({ base, apiKey, body, signal }) {
 }
 
 /**
- * Transcribe a complete PCM16 buffer.
- *
- * @param {{ cfg: Object, pcm: Buffer, sampleRate?: number, signal?: AbortSignal }} params
- * @returns {Promise<{ text: string }>}
+ * Gemini processes at most this much audio per request with word timestamps or
+ * speaker diarization on (an hour without them).
  */
-export async function transcribe({ cfg, pcm, sampleRate = 16000, signal } = {}) {
-  if (!cfg?.apiKey) {
-    throw new Error('Gemini transcription requires an API key (set GOOGLE_API_KEY)');
-  }
-  if (!pcm?.length) return { text: '' };
+export const ANNOTATED_MAX_SECONDS = 1800;
+/** Room for the cut to move back to a pause without leaving a short tail. */
+const PART_SLACK_SECONDS = 20;
 
-  const base = normalizeApiBase(cfg.url);
+/**
+ * The parts a recording is sent in. One part up to 30 minutes; a longer one is
+ * cut into about equal parts, each ending at a pause, rather than a full part
+ * and a tail of a few seconds.
+ *
+ * @param {Buffer} pcm
+ * @param {number} sampleRate
+ * @returns {Buffer[]}
+ */
+export function annotatedParts(pcm, sampleRate = 16000) {
+  const seconds = pcm.length / (sampleRate * 2);
+  if (seconds <= ANNOTATED_MAX_SECONDS) return [pcm];
+  const count = Math.ceil(seconds / ANNOTATED_MAX_SECONDS);
+  const maxChunkSeconds = Math.min(
+    ANNOTATED_MAX_SECONDS,
+    Math.ceil(seconds / count) + PART_SLACK_SECONDS
+  );
+  return splitPcm(pcm, { sampleRate, maxChunkSeconds });
+}
+
+/**
+ * Upload one WAV, transcribe it and return the completed interaction. The
+ * uploaded file is deleted again whatever happens.
+ */
+async function transcribeWav({ cfg, base, wav, timed, signal }) {
   const apiKey = cfg.apiKey;
-  const wav = pcm16ToWav(pcm, { sampleRate });
   let file;
   try {
     file = await uploadFile({
@@ -295,17 +377,83 @@ export async function transcribe({ cfg, pcm, sampleRate = 16000, signal } = {}) 
       body: JSON.stringify({
         model: cfg.model,
         input: [{ type: 'audio', uri: file.uri, mime_type: file.mimeType }],
-        generation_config: { transcription_config: buildTranscriptionConfig(cfg.options) }
+        generation_config: { transcription_config: buildTranscriptionConfig(cfg.options, timed) }
       }),
       signal: signal || AbortSignal.timeout(TRANSCRIBE_TIMEOUT_MS)
     });
     if (!res.ok) throw await upstreamError('request', res);
 
-    const completed = await awaitInteraction({ base, apiKey, body: await res.json(), signal });
-    return { text: extractTranscript(completed) };
+    return await awaitInteraction({ base, apiKey, body: await res.json(), signal });
   } finally {
     await deleteFile({ base, apiKey, name: file?.name });
   }
+}
+
+/**
+ * Transcribe a complete PCM16 buffer.
+ *
+ * With `annotate` and `config.timestamps` / `config.speakers` the text carries
+ * the time of each line and its speaker (see `transcriptFormat.js`); otherwise
+ * it is the plain transcript. Speaker labels are Gemini's per request, so in a
+ * recording sent in several parts `Speaker 1` of one part need not be the same
+ * person as `Speaker 1` of the next.
+ *
+ * @param {{ cfg: Object, pcm: Buffer, sampleRate?: number, signal?: AbortSignal,
+ *   annotate?: boolean }} params
+ *   `annotate`: the transcript is meant to be read (a stored chat turn), not
+ *   typed or spoken (dictation, voice mode).
+ * @returns {Promise<{ text: string }>}
+ */
+export async function transcribe({ cfg, pcm, sampleRate = 16000, signal, annotate = false } = {}) {
+  if (!cfg?.apiKey) {
+    throw new Error('Gemini transcription requires an API key (set GOOGLE_API_KEY)');
+  }
+  if (!pcm?.length) return { text: '' };
+
+  const base = normalizeApiBase(cfg.url);
+  const timed = annotationsOf(cfg.options, annotate);
+  if (!timed.timestamps && !timed.speakers) {
+    const wav = pcm16ToWav(pcm, { sampleRate });
+    return { text: extractTranscript(await transcribeWav({ cfg, base, wav, timed, signal })) };
+  }
+
+  if (cfg.options?.customVocabulary?.length) {
+    logger.warn('Gemini transcription: customVocabulary is not used with timestamps or speakers', {
+      component: 'GoogleTranscribe',
+      model: cfg.model
+    });
+  }
+  const words = [];
+  const plain = [];
+  let unannotated = false;
+  let offset = 0;
+  for (const part of annotatedParts(pcm, sampleRate)) {
+    const wav = pcm16ToWav(part, { sampleRate });
+    const completed = await transcribeWav({ cfg, base, wav, timed, signal });
+    plain.push(extractTranscript(completed));
+    if (hasUnannotatedText(completed)) unannotated = true;
+    for (const word of extractWords(completed)) {
+      words.push({
+        ...word,
+        start: word.start === null ? null : word.start + offset,
+        end: word.end === null ? null : word.end + offset
+      });
+    }
+    offset += part.length / (sampleRate * 2);
+  }
+  // No annotations came back (silence, or a response without them), or some
+  // text came back without: the plain transcript is still the whole answer, and
+  // better than annotated lines that leave a part of the recording out.
+  if (!words.length || unannotated) {
+    if (unannotated) {
+      logger.warn('Gemini transcription: some text came back without annotations', {
+        component: 'GoogleTranscribe',
+        model: cfg.model
+      });
+    }
+    return { text: plain.filter(Boolean).join('\n') };
+  }
+  return { text: formatTranscript(words, timed) };
 }
 
 export default {

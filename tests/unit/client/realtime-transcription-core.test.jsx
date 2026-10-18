@@ -65,6 +65,21 @@ describe('createTranscriptAssembler', () => {
     expect(asm.text()).toBe('first utterance second one');
   });
 
+  test('dictation (the default) puts the whole transcript on one line', () => {
+    const asm = createTranscriptAssembler();
+    asm.applyFinal('[00:00] Hello.\n[00:05] Hi.');
+    expect(asm.text()).toBe('[00:00] Hello. [00:05] Hi.');
+  });
+
+  test('keepLineBreaks keeps one entry per line and still collapses spaces', () => {
+    const asm = createTranscriptAssembler({ keepLineBreaks: true });
+    asm.applyDelta('  hel');
+    asm.applyDelta('lo   there  ');
+    expect(asm.text()).toBe('hello there');
+    asm.applyFinal('[00:00]  Speaker 1: Hello.  \n  [00:21] Speaker 2: Hi.\r\n');
+    expect(asm.text()).toBe('[00:00] Speaker 1: Hello.\n[00:21] Speaker 2: Hi.');
+  });
+
   test('empty assembler reports no text', () => {
     const asm = createTranscriptAssembler();
     expect(asm.text()).toBe('');
