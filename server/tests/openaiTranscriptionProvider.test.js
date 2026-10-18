@@ -14,10 +14,10 @@ import openaiTranscribe, {
   DEFAULT_OPENAI_BASE,
   describeError,
   resolveUpstream,
-  splitPcm,
   transcribe,
   transcriptionsUrl
 } from '../transcription/openaiTranscribeProvider.js';
+import { splitPcm } from '../transcription/wav.js';
 
 const llmHubWhisper = {
   id: 'llmhub-whisper-large-v3-turbo',
@@ -255,6 +255,89 @@ describe('against a stub /audio/transcriptions endpoint', () => {
     await expect(transcribe({ cfg: cfg(), pcm: Buffer.alloc(320) })).rejects.toMatchObject({
       status: 404,
       message: 'the service answered HTTP 404: model not found'
+    });
+  });
+
+  describe('timestamps', () => {
+    const segmented = (...segments) => ({
+      text: segments.map(segment => segment.text).join(''),
+      segments
+    });
+
+    test('a transcript to read asks for verbose_json and comes back as timed lines', async () => {
+      handler = (req, res) =>
+        json(
+          res,
+          segmented(
+            { start: 0, end: 4.2, text: ' Guten Tag.' },
+            { start: 4.2, end: 9, text: ' Heute geht es um iHub.' },
+            { start: 21.5, end: 25, text: ' Los geht’s.' }
+          )
+        );
+      const { text } = await transcribe({
+        cfg: cfg({ options: { timestamps: true } }),
+        pcm: Buffer.alloc(32000),
+        annotate: true
+      });
+
+      expect(requests[0].body).toMatch(/name="response_format"\r\n\r\nverbose_json\r\n/);
+      expect(text).toBe('[00:00] Guten Tag. Heute geht es um iHub.\n[00:21] Los geht’s.');
+    });
+
+    test('the times of every part count from the start of the recording', async () => {
+      let n = 0;
+      handler = (req, res) => json(res, segmented({ start: 1, end: 3, text: ` part ${++n}.` }));
+      // 70 s in parts of at most 30 s, each cut in a pause in its last 10 s. Every
+      // part answers with one segment 1 s into itself.
+      const { text } = await transcribe({
+        cfg: cfg({ options: { timestamps: true, maxChunkSeconds: 30 } }),
+        pcm: Buffer.alloc(70 * 16000 * 2),
+        annotate: true
+      });
+
+      expect(requests).toHaveLength(3);
+      const stamps = text.split('\n').map(line => line.match(/^\[(\d\d):(\d\d)\]/));
+      expect(stamps.every(Boolean)).toBe(true);
+      const seconds = stamps.map(([, m, s]) => Number(m) * 60 + Number(s));
+      expect(seconds[0]).toBe(1);
+      expect(seconds[1]).toBeGreaterThanOrEqual(20 + 1);
+      expect(seconds[1]).toBeLessThanOrEqual(30 + 1);
+      expect(seconds[2]).toBeGreaterThan(seconds[1]);
+      expect(text).toContain('part 1.');
+      expect(text).toContain('part 3.');
+    });
+
+    test('without annotate (dictation, voice mode) the config is ignored', async () => {
+      handler = (req, res) => json(res, { text: ' Hallo Welt ' });
+      const { text } = await transcribe({
+        cfg: cfg({ options: { timestamps: true } }),
+        pcm: Buffer.alloc(32000)
+      });
+
+      expect(requests[0].body).toMatch(/name="response_format"\r\n\r\njson\r\n/);
+      expect(text).toBe('Hallo Welt');
+    });
+
+    test('a service that ignores verbose_json gives the plain transcript', async () => {
+      handler = (req, res) => json(res, { text: ' Hallo Welt ' });
+      const { text } = await transcribe({
+        cfg: cfg({ options: { timestamps: true } }),
+        pcm: Buffer.alloc(32000),
+        annotate: true
+      });
+      expect(text).toBe('Hallo Welt');
+    });
+
+    test('speakers are not asked of Whisper', async () => {
+      handler = (req, res) =>
+        json(res, segmented({ start: 0, end: 2, text: ' Hallo.', speaker: 'A' }));
+      const { text } = await transcribe({
+        cfg: cfg({ options: { speakers: true } }),
+        pcm: Buffer.alloc(32000),
+        annotate: true
+      });
+      expect(requests[0].body).toMatch(/name="response_format"\r\n\r\njson\r\n/);
+      expect(text).toBe('Hallo.');
     });
   });
 

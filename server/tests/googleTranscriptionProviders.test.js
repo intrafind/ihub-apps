@@ -8,6 +8,7 @@
  * the interactions response parser — plus the invariant that matters most:
  * an API key must never leak into the URL the bridge logs.
  */
+import http from 'node:http';
 import {
   modelConfigSchema,
   TRANSCRIPTION_ONLY_PROVIDERS
@@ -19,11 +20,15 @@ import googleLive, {
   formatUpstreamError
 } from '../transcription/googleLiveProvider.js';
 import googleTranscribe, {
+  ANNOTATED_MAX_SECONDS,
+  annotatedParts,
   buildTranscriptionConfig,
   extractTranscript,
+  extractWords,
   isPendingStatus,
   normalizeApiBase
 } from '../transcription/googleTranscribeProvider.js';
+import { formatClock } from '../transcription/transcriptFormat.js';
 import { pcm16ToWav } from '../transcription/wav.js';
 import vllmRealtime from '../transcription/vllmRealtimeProvider.js';
 import { resolveApiKey } from '../transcription/credentials.js';
@@ -269,6 +274,33 @@ describe('googleTranscribeProvider — request building', () => {
     expect(cfg.custom_vocabulary).toHaveLength(1000);
   });
 
+  test('timestamps and speakers switch to verbatim mode with the matching options', () => {
+    expect(buildTranscriptionConfig({}, { timestamps: true }).mode).toEqual({
+      type: 'verbatim',
+      timestamp_granularities: ['word']
+    });
+    expect(buildTranscriptionConfig({}, { speakers: true }).mode).toEqual({
+      type: 'verbatim',
+      diarization_mode: 'speaker'
+    });
+    expect(buildTranscriptionConfig({}, { timestamps: true, speakers: true }).mode).toEqual({
+      type: 'verbatim',
+      timestamp_granularities: ['word'],
+      diarization_mode: 'speaker'
+    });
+  });
+
+  test('smart mode and custom vocabulary are dropped when timestamps or speakers are on', () => {
+    // Gemini rejects both combinations; the language codes stay.
+    const cfg = buildTranscriptionConfig(
+      { mode: 'smart', customVocabulary: ['iHub', 'IntraFind'], languageCodes: ['de-DE'] },
+      { timestamps: true }
+    );
+    expect(cfg.custom_vocabulary).toBeUndefined();
+    expect(cfg.mode).not.toBe('smart');
+    expect(cfg.language_codes).toEqual(['de-DE']);
+  });
+
   test('resolveUpstream normalizes the base url and reads model.config', () => {
     const cfg = googleTranscribe.resolveUpstream({
       ...batchModel,
@@ -336,6 +368,69 @@ describe('googleTranscribeProvider — response parsing', () => {
     expect(extractTranscript({ steps: [{ content: [{ type: 'text', text: '' }] }] })).toBe('');
   });
 
+  test('reads the word annotations with their offsets as seconds', () => {
+    const body = {
+      steps: [
+        {
+          type: 'model_output',
+          content: [
+            {
+              type: 'text',
+              text: 'Hello world',
+              annotations: [
+                {
+                  type: 'word_info',
+                  text: 'Hello',
+                  speaker: 'spk_1',
+                  start_offset: '0.100s',
+                  end_offset: '0.450s'
+                },
+                {
+                  type: 'word_info',
+                  text: 'world',
+                  speaker: 'spk_1',
+                  start_offset: '0.500s',
+                  end_offset: '0.850s'
+                },
+                { type: 'something_else', text: 'ignored' },
+                { type: 'word_info', text: 'nobody', start_offset: 'soon' }
+              ]
+            },
+            { type: 'text', text: 'no annotations' }
+          ]
+        }
+      ]
+    };
+    expect(extractWords(body)).toEqual([
+      { text: 'Hello', speaker: 'spk_1', start: 0.1, end: 0.45 },
+      { text: 'world', speaker: 'spk_1', start: 0.5, end: 0.85 },
+      { text: 'nobody', speaker: undefined, start: null, end: null }
+    ]);
+    expect(extractWords({})).toEqual([]);
+  });
+
+  test('a recording up to 30 minutes is one part; a longer one is cut into equal parts', () => {
+    const rate = 16000;
+    const pcmOf = seconds => Buffer.alloc(Math.round(seconds * rate) * 2);
+
+    expect(annotatedParts(pcmOf(ANNOTATED_MAX_SECONDS))).toHaveLength(1);
+
+    // 30:10 is two halves (give or take the move to a pause), not a full part
+    // and a ten-second tail.
+    const two = annotatedParts(pcmOf(ANNOTATED_MAX_SECONDS + 10));
+    expect(two).toHaveLength(2);
+    for (const part of two) {
+      expect(part.length / (rate * 2)).toBeGreaterThan(800);
+      expect(part.length / (rate * 2)).toBeLessThanOrEqual(ANNOTATED_MAX_SECONDS);
+    }
+
+    // 70 minutes is three parts, none over the limit.
+    const three = annotatedParts(pcmOf(70 * 60));
+    expect(three).toHaveLength(3);
+    expect(three.every(part => part.length / (rate * 2) <= ANNOTATED_MAX_SECONDS)).toBe(true);
+    expect(Buffer.concat(three).length).toBe(70 * 60 * rate * 2);
+  });
+
   test('recognizes the statuses that still need polling', () => {
     expect(isPendingStatus('in_progress')).toBe(true);
     expect(isPendingStatus('queued')).toBe(true);
@@ -361,6 +456,174 @@ describe('googleTranscribeProvider — response parsing', () => {
         pcm: Buffer.alloc(4)
       })
     ).rejects.toThrow(/GOOGLE_API_KEY/);
+  });
+});
+
+describe('googleTranscribeProvider — timestamps and speakers (stub Gemini API)', () => {
+  let server;
+  let base;
+  let uploads;
+  let interactions;
+  let deletions;
+  let answers;
+
+  beforeAll(async () => {
+    server = http.createServer((req, res) => {
+      const chunks = [];
+      req.on('data', chunk => chunks.push(chunk));
+      req.on('end', () => {
+        const body = Buffer.concat(chunks);
+        const json = (payload, headers = {}) => {
+          res.writeHead(200, { 'Content-Type': 'application/json', ...headers });
+          res.end(JSON.stringify(payload));
+        };
+        if (req.method === 'POST' && req.url === '/upload/v1beta/files') {
+          return json({}, { 'x-goog-upload-url': `${base}/session/${uploads.length + 1}` });
+        }
+        if (req.method === 'POST' && req.url.startsWith('/session/')) {
+          uploads.push(body.length);
+          const name = `files/f${uploads.length}`;
+          return json({
+            file: { name, uri: `${base}/${name}`, mimeType: 'audio/wav', state: 'ACTIVE' }
+          });
+        }
+        if (req.method === 'POST' && req.url === '/v1beta/interactions') {
+          interactions.push(JSON.parse(body.toString()));
+          return json(answers[interactions.length - 1] ?? answers[answers.length - 1]);
+        }
+        if (req.method === 'DELETE') {
+          deletions.push(req.url);
+          return json({});
+        }
+        res.writeHead(404);
+        res.end();
+      });
+    });
+    await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+    base = `http://127.0.0.1:${server.address().port}`;
+  });
+
+  afterAll(() => new Promise(resolve => server.close(resolve)));
+
+  beforeEach(() => {
+    uploads = [];
+    interactions = [];
+    deletions = [];
+    answers = [];
+  });
+
+  const cfg = options => ({ url: base, apiKey: 'k', model: 'gemini-3.5-transcribe', options });
+  const word = (text, speaker, start, end) => ({
+    type: 'word_info',
+    text,
+    speaker,
+    start_offset: `${start}s`,
+    end_offset: `${end}s`
+  });
+  const completed = (text, annotations) => ({
+    id: 'interactions/x',
+    status: 'completed',
+    steps: [{ type: 'model_output', content: [{ type: 'text', text, annotations }] }]
+  });
+  const talk = completed('Welcome to the talk Thanks for having me', [
+    word('Welcome', 'spk_1', 0.1, 0.5),
+    word('to', 'spk_1', 0.6, 0.7),
+    word('the', 'spk_1', 0.8, 0.9),
+    word('talk', 'spk_1', 1.0, 1.4),
+    word('Thanks', 'spk_2', 3.0, 3.4),
+    word('for', 'spk_2', 3.5, 3.6),
+    word('having', 'spk_2', 3.7, 4.0),
+    word('me', 'spk_2', 4.1, 4.3)
+  ]);
+
+  test('a transcript to read carries speakers and times, in verbatim mode without vocabulary', async () => {
+    answers = [talk];
+    const { text } = await googleTranscribe.transcribe({
+      cfg: cfg({
+        timestamps: true,
+        speakers: true,
+        customVocabulary: ['iHub'],
+        languageCodes: ['en-US']
+      }),
+      pcm: Buffer.alloc(32000),
+      annotate: true
+    });
+
+    expect(text).toBe(
+      '[00:00] Speaker 1: Welcome to the talk\n[00:03] Speaker 2: Thanks for having me'
+    );
+    expect(interactions).toHaveLength(1);
+    expect(interactions[0].generation_config.transcription_config).toEqual({
+      mode: {
+        type: 'verbatim',
+        timestamp_granularities: ['word'],
+        diarization_mode: 'speaker'
+      },
+      language_codes: ['en-US']
+    });
+    expect(deletions).toEqual(['/v1beta/files/f1']);
+  });
+
+  test('speakers without timestamps give turns, no times', async () => {
+    answers = [talk];
+    const { text } = await googleTranscribe.transcribe({
+      cfg: cfg({ speakers: true, speakerLabel: 'Sprecher' }),
+      pcm: Buffer.alloc(32000),
+      annotate: true
+    });
+    expect(text).toBe('Sprecher 1: Welcome to the talk\nSprecher 2: Thanks for having me');
+    expect(interactions[0].generation_config.transcription_config.mode).toEqual({
+      type: 'verbatim',
+      diarization_mode: 'speaker'
+    });
+  });
+
+  test('without annotate (dictation, voice mode) the config is ignored: smart text, vocabulary kept', async () => {
+    answers = [completed('Welcome to the talk', [])];
+    const { text } = await googleTranscribe.transcribe({
+      cfg: cfg({ timestamps: true, speakers: true, customVocabulary: ['iHub'] }),
+      pcm: Buffer.alloc(32000)
+    });
+
+    expect(text).toBe('Welcome to the talk');
+    expect(interactions[0].generation_config.transcription_config).toEqual({
+      mode: 'smart',
+      custom_vocabulary: ['iHub']
+    });
+  });
+
+  test('a recording over 30 minutes goes up in parts and the times keep counting', async () => {
+    const seconds = 31 * 60;
+    answers = [talk]; // both parts: the same words, from 0 s of their own part
+    const { text } = await googleTranscribe.transcribe({
+      cfg: cfg({ timestamps: true }),
+      pcm: Buffer.alloc(seconds * 16000 * 2),
+      annotate: true
+    });
+
+    expect(interactions).toHaveLength(2);
+    expect(uploads).toHaveLength(2);
+    expect(deletions).toHaveLength(2);
+    // The second part starts where the first ended (its upload less the 44-byte
+    // header); its first word is 0.1 s into it.
+    const secondStart = (uploads[0] - 44) / 32000;
+    expect(secondStart).toBeGreaterThan(900);
+    const lines = text.split('\n');
+    expect(lines).toHaveLength(2);
+    expect(lines[0]).toBe('[00:00] Welcome to the talk Thanks for having me');
+    expect(lines[1]).toBe(
+      `[${formatClock(secondStart + 0.1)}] Welcome to the talk Thanks for having me`
+    );
+  });
+
+  test('a response without annotations still gives the plain transcript', async () => {
+    answers = [completed('Hello there.', undefined)];
+    const { text } = await googleTranscribe.transcribe({
+      cfg: cfg({ timestamps: true }),
+      pcm: Buffer.alloc(32000),
+      annotate: true
+    });
+    expect(text).toBe('Hello there.');
   });
 });
 

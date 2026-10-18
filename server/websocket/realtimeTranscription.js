@@ -1391,7 +1391,11 @@ export function bridgeConnection(clientWs, user, limiter, options = {}) {
         cfg,
         pcm,
         sampleRate: TARGET_SAMPLE_RATE,
-        signal: abortController.signal
+        signal: abortController.signal,
+        // A stored chat turn is a transcript to read: the model may add
+        // timestamps and speakers. Dictation types its text into the input
+        // field, where they would be noise.
+        annotate: Boolean(turnRequest)
       });
       if (clientWs.readyState > WebSocket.OPEN) return; // client walked away
       gotTranscription = true;
