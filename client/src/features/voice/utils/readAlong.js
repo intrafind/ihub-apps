@@ -17,8 +17,13 @@ export const READ_ALONG_HIGHLIGHT = 'voice-unspoken';
 
 const COUNTED = /[\p{L}\p{N}]/gu;
 
-/** Text on the page that is not part of what is read out. */
-const SKIPPED = 'button, svg, script, style, .sr-only, [aria-hidden="true"]';
+/**
+ * Text on the page that is not part of what is read out: controls, hidden
+ * text, the citation badges (the speech text has their markers removed) and
+ * the code blocks' toolbars (their language label).
+ */
+const SKIPPED =
+  'button, svg, script, style, .sr-only, [aria-hidden="true"], [data-source-citation], .code-block-toolbar';
 
 /** Markdown in the speech text that renders as no letters at all. */
 function stripMarkup(markdown) {
@@ -28,6 +33,8 @@ function stripMarkup(markdown) {
       .replace(/\]\([^)]*\)/g, ']')
       // A code fence's language name is not shown.
       .replace(/```[^\n]*/g, '')
+      // A numbered list's numbers are list markers, not text.
+      .replace(/^[ \t]*\d+[.)][ \t]+/gm, '')
   );
 }
 

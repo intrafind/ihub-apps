@@ -201,7 +201,7 @@ const mockVoice = { handleVoiceInput: mockNoop, handleVoiceCommand: mockNoop };
 // Voice mode is available for this app; the hook is a stand-in that holds
 // `active` in real state (so the page re-renders when a test flips it) and
 // records what the page passes in.
-const mockVoiceMode = { options: null, end: null, setActive: null };
+const mockVoiceMode = { options: null, end: null, setActive: null, answerInChat: null };
 jest.mock('../../../client/src/features/voice/hooks/useVoiceModeAvailability', () => ({
   __esModule: true,
   default: () => ({
@@ -221,7 +221,12 @@ jest.mock('../../../client/src/features/voice/hooks/useVoiceMode', () => {
       mockVoiceMode.options = options;
       mockVoiceMode.setActive = setActive;
       return React.useMemo(
-        () => ({ active, toggle: () => setActive(value => !value), end: mockVoiceMode.end }),
+        () => ({
+          active,
+          toggle: () => setActive(value => !value),
+          end: mockVoiceMode.end,
+          answerInChat: mockVoiceMode.answerInChat
+        }),
         [active]
       );
     }
@@ -331,13 +336,21 @@ jest.mock('../../../client/src/features/chat/components/ChatMessageList', () => 
 // page's own submit with whatever is in the field.
 jest.mock('../../../client/src/features/chat/components/ChatInput', () => ({
   __esModule: true,
-  default: ({ formRef, onSubmit, onChange, value, voiceModeActive }) => (
-    <form ref={formRef} onSubmit={onSubmit} data-testid="composer" data-voice={voiceModeActive}>
-      <textarea aria-label="typed" value={value} onChange={onChange} />
-      <button type="submit">send</button>
-    </form>
-  )
+  default: function MockChatInput({ formRef, onSubmit, onChange, value, voiceModeActive }) {
+    const React = require('react');
+    // Counts mounts: voice mode must hide the composer, never remount it.
+    React.useEffect(() => {
+      mockComposerMounts.count += 1;
+    }, []);
+    return (
+      <form ref={formRef} onSubmit={onSubmit} data-testid="composer" data-voice={voiceModeActive}>
+        <textarea aria-label="typed" value={value} onChange={onChange} />
+        <button type="submit">send</button>
+      </form>
+    );
+  }
 }));
+const mockComposerMounts = { count: 0 };
 
 // `useAppChat` is stubbed: the tests read what the page hands to `sendMessage`.
 const mockChat = {
@@ -697,6 +710,25 @@ describe('while voice mode is open', () => {
     expect(screen.getByTestId('voice-dock')).toHaveValue('a draft');
     fireEvent.change(screen.getByTestId('voice-dock'), { target: { value: 'typed in voice' } });
     expect(typedField()).toHaveValue('typed in voice');
+  });
+
+  test('the composer is hidden, never remounted: an attachment in progress survives', async () => {
+    renderChat();
+    await screen.findAllByTestId('composer');
+    const mounted = mockComposerMounts.count;
+    act(() => mockVoiceMode.setActive(true));
+    act(() => mockVoiceMode.setActive(false));
+    expect(mockComposerMounts.count).toBe(mounted);
+  });
+
+  test("the app's question answered in the chat goes through voice mode", async () => {
+    mockVoiceMode.answerInChat = jest.fn();
+    await open();
+    const response = { questionId: 'q1', answered: true, skipped: false, value: 'red' };
+    act(() => mockMessageList.props.onClarificationSubmit(response));
+    act(() => mockMessageList.props.onClarificationSkip({ ...response, skipped: true }));
+    expect(mockVoiceMode.answerInChat).toHaveBeenCalledTimes(2);
+    expect(mockVoiceMode.answerInChat).toHaveBeenCalledWith(response);
   });
 
   test('the composer is told voice mode is open', async () => {

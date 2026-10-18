@@ -95,3 +95,22 @@ describe('findSpokenAnswer', () => {
     expect(findSpokenAnswer(document.createElement('div'))).toBeNull();
   });
 });
+
+describe('what the renderer adds or leaves out', () => {
+  test("a numbered list's numbers are markers, not text", () => {
+    const root = body('<ol><li>Apple.</li><li>Banana.</li></ol>');
+    expect(rest(root, '1. Apple.\n\n2. ')).toBe('Banana.');
+  });
+
+  test('citation badges are not counted: the speech text has no markers', () => {
+    const root = body('<p>Revenue grew<a data-source-citation="1">1</a> a lot. Costs fell.</p>');
+    expect(rest(root, 'Revenue grew a lot. ')).toBe('Costs fell.');
+  });
+
+  test("a code block's toolbar label is not counted", () => {
+    const root = body(
+      '<pre><code>const a</code></pre><div class="code-block-toolbar"><span>javascript</span></div><p>Done now.</p>'
+    );
+    expect(rest(root, '```javascript\nconst a\n```\n\n')).toBe('Done now.');
+  });
+});

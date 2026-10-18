@@ -118,6 +118,9 @@ function errorMessage(error, t) {
 /** How long a scroll of the user's own keeps the read-along from scrolling the chat. */
 const USER_SCROLL_GRACE_MS = 4000;
 
+/** Keys that scroll the chat when it has the focus. */
+const SCROLL_KEYS = new Set(['PageUp', 'PageDown', 'Home', 'End', 'ArrowUp', 'ArrowDown']);
+
 /**
  * Scrolls the chat so the spot the voice has reached stays in view, unless the
  * user scrolled a moment ago: the text runs ahead of the voice, and someone
@@ -158,11 +161,24 @@ function useReadAlong(rootRef, caption, spokenChars, enabled) {
     const onUserScroll = () => {
       lastUserScrollRef.current = Date.now();
     };
+    // A press in the chat (its scrollbar too) or a scrolling key there is the
+    // user's own scrolling as well; a scroll event alone could be ours.
+    const inChat = target => Boolean(target?.closest?.('[role="log"]'));
+    const onPointerDown = event => {
+      if (inChat(event.target)) onUserScroll();
+    };
+    const onKeyDown = event => {
+      if (SCROLL_KEYS.has(event.key) && inChat(event.target)) onUserScroll();
+    };
     document.addEventListener('wheel', onUserScroll, { passive: true });
     document.addEventListener('touchmove', onUserScroll, { passive: true });
+    document.addEventListener('pointerdown', onPointerDown, true);
+    document.addEventListener('keydown', onKeyDown, true);
     return () => {
       document.removeEventListener('wheel', onUserScroll);
       document.removeEventListener('touchmove', onUserScroll);
+      document.removeEventListener('pointerdown', onPointerDown, true);
+      document.removeEventListener('keydown', onKeyDown, true);
       if (typeof CSS !== 'undefined') CSS.highlights?.delete(READ_ALONG_HIGHLIGHT);
     };
   }, []);
@@ -472,6 +488,17 @@ export default function VoiceModeDock({ voiceMode, value = '', onChange }) {
   useEffect(() => {
     if (holdDisabled) endHold();
   }, [holdDisabled, endHold]);
+
+  // Nor the dock: it is replaced when the window crosses the phone/desktop
+  // breakpoint while the session goes on, and the new one knows of no hold.
+  const talkEndRef = useRef(talkEnd);
+  talkEndRef.current = talkEnd;
+  useEffect(
+    () => () => {
+      if (holdSourceRef.current) talkEndRef.current();
+    },
+    []
+  );
 
   // Esc ends voice mode (or closes the settings first); Space is push-to-talk.
   useEffect(() => {

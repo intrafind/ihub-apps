@@ -473,6 +473,41 @@ export function useVoiceMode({
     [bargeIn, deliverTurn, send]
   );
 
+  /**
+   * The app's question answered in the chat (an option button, or Skip) while
+   * voice mode is on: a turn like a spoken answer, so the continuation is read
+   * out. It takes over from an answer still running, like Stop.
+   *
+   * @param {Object} response - What the clarification card submits.
+   */
+  const answerInChat = useCallback(
+    response => {
+      const current = latestRef.current;
+      const { status, runActive } = stateRef.current;
+      if (status === VOICE_STATUS.CONNECTING || status === VOICE_STATUS.ERROR) {
+        current.answerClarification(response);
+        return;
+      }
+      if (status === VOICE_STATUS.THINKING || status === VOICE_STATUS.SPEAKING || runActive) {
+        bargeIn(true);
+      }
+      prefixRef.current = '';
+      turnRef.current = {
+        sent: true,
+        baseCount: current.messages.length,
+        timing: {},
+        answered: false,
+        text: '',
+        silenced: stateRef.current.muted
+      };
+      sessionRef.current?.setAgentState('thinking');
+      send({ type: 'TYPED' });
+      current.answerClarification(response);
+      send({ type: 'SENT' });
+    },
+    [bargeIn, send]
+  );
+
   /** The session ended a turn (silence, or push-to-talk released); the transcript follows. */
   const handleTurnEnd = useCallback(() => {
     const turn = turnRef.current;
@@ -784,6 +819,7 @@ export function useVoiceMode({
     retry,
     toggle: () => (active ? end('user') : start()),
     sendText,
+    answerInChat,
     setMuted,
     pushToTalkStart: () => sessionRef.current?.pushToTalkStart(),
     pushToTalkEnd: () => sessionRef.current?.pushToTalkEnd(),

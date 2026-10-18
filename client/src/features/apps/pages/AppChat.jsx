@@ -2653,6 +2653,14 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
       }
     }
   });
+  // The app's question answered in the chat (an option, or Skip) while voice
+  // mode is on: the continuation is a voice turn, read out like the rest.
+  const onClarificationSubmitInChat = voiceMode.active
+    ? voiceMode.answerInChat
+    : handleClarificationSubmit;
+  const onClarificationSkipInChat = voiceMode.active
+    ? voiceMode.answerInChat
+    : handleClarificationSkip;
   // Another chat or app is not the conversation voice mode was started in.
   const endVoiceMode = voiceMode.end;
   useEffect(() => {
@@ -2839,14 +2847,14 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
   // names the layout it is rendered in ('mobile' / 'desktop'), or none where
   // there is only one.
   const renderChatInput = layout => {
-    const composer = renderComposer();
-    if (!voiceMode.active) return composer;
-    const showDock = !layout || (layout === 'desktop') === isDesktopLayout;
+    const showDock = voiceMode.active && (!layout || (layout === 'desktop') === isDesktopLayout);
     return (
       <>
-        {/* Stays mounted, so its draft, attachments and menus survive voice mode. */}
-        <div hidden inert>
-          {composer}
+        {/* Always the same wrapper, so the composer is never remounted: its
+            draft, menus and an attachment still being processed survive voice
+            mode. `contents` adds no box while it shows. */}
+        <div className="contents" hidden={voiceMode.active} inert={voiceMode.active}>
+          {renderComposer()}
         </div>
         {showDock && (
           // The dock types into the composer's draft: what is typed stays when
@@ -3065,8 +3073,8 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
                   canvasEnabled={app?.features?.canvas === true}
                   requiredIntegrations={requiredIntegrations}
                   onConnectIntegration={connectIntegration}
-                  onClarificationSubmit={handleClarificationSubmit}
-                  onClarificationSkip={handleClarificationSkip}
+                  onClarificationSubmit={onClarificationSubmitInChat}
+                  onClarificationSkip={onClarificationSkipInChat}
                   onOpenSourceInApp={handleOpenSourceInApp}
                   linkPath={appPagePath}
                   ephemeral={ephemeral}
@@ -3112,8 +3120,8 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
                         onConnectIntegration={connectIntegration}
                         app={app}
                         models={models}
-                        onClarificationSubmit={handleClarificationSubmit}
-                        onClarificationSkip={handleClarificationSkip}
+                        onClarificationSubmit={onClarificationSubmitInChat}
+                        onClarificationSkip={onClarificationSkipInChat}
                         onOpenSourceInApp={handleOpenSourceInApp}
                         linkPath={appPagePath}
                       />
@@ -3168,8 +3176,8 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
                         onConnectIntegration={connectIntegration}
                         app={app}
                         models={models}
-                        onClarificationSubmit={handleClarificationSubmit}
-                        onClarificationSkip={handleClarificationSkip}
+                        onClarificationSubmit={onClarificationSubmitInChat}
+                        onClarificationSkip={onClarificationSkipInChat}
                         onOpenSourceInApp={handleOpenSourceInApp}
                         linkPath={appPagePath}
                       />
@@ -3223,8 +3231,8 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
                     onConnectIntegration={connectIntegration}
                     app={app}
                     models={models}
-                    onClarificationSubmit={handleClarificationSubmit}
-                    onClarificationSkip={handleClarificationSkip}
+                    onClarificationSubmit={onClarificationSubmitInChat}
+                    onClarificationSkip={onClarificationSkipInChat}
                     onOpenSourceInApp={handleOpenSourceInApp}
                     linkPath={appPagePath}
                   />
@@ -3260,8 +3268,8 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
                   onConnectIntegration={connectIntegration}
                   app={app}
                   models={models}
-                  onClarificationSubmit={handleClarificationSubmit}
-                  onClarificationSkip={handleClarificationSkip}
+                  onClarificationSubmit={onClarificationSubmitInChat}
+                  onClarificationSkip={onClarificationSkipInChat}
                   onOpenSourceInApp={handleOpenSourceInApp}
                   linkPath={appPagePath}
                 />

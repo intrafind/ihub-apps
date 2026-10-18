@@ -310,6 +310,22 @@ describe('the microphone is never left open', () => {
   });
 });
 
+describe('a hold does not outlive the dock', () => {
+  test('a hold still down when the dock goes away is released', () => {
+    const { voiceMode, unmount } = renderDock();
+    fireEvent.keyDown(document.body, { key: ' ' });
+    expect(voiceMode.pushToTalkStart).toHaveBeenCalledTimes(1);
+    unmount();
+    expect(voiceMode.pushToTalkEnd).toHaveBeenCalledTimes(1);
+  });
+
+  test('no hold, nothing to release', () => {
+    const { voiceMode, unmount } = renderDock();
+    unmount();
+    expect(voiceMode.pushToTalkEnd).not.toHaveBeenCalled();
+  });
+});
+
 describe('the Hold button with a pointer', () => {
   test('the primary button holds, releasing it sends', () => {
     const { voiceMode } = renderDock();
@@ -923,6 +939,41 @@ describe('read-along in the chat message', () => {
           />
         </div>
       );
+      expect(log.scrollTop).toBe(0);
+    } finally {
+      delete Range.prototype.getBoundingClientRect;
+    }
+  });
+
+  test.each([
+    ['a press on its scrollbar', log => fireEvent.pointerDown(log)],
+    ['Page Up in it', log => fireEvent.keyDown(log, { key: 'PageUp' })]
+  ])("%s counts as scrolling of the user's own", (_name, interact) => {
+    jest.spyOn(Element.prototype, 'getBoundingClientRect').mockReturnValue({ top: 0, height: 100 });
+    Range.prototype.getBoundingClientRect = () => ({ top: 200 });
+    try {
+      const chat = spokenChars => (
+        <div data-voice-scope="">
+          <div role="log" tabIndex={0}>
+            <div data-message-role="assistant">
+              <div className="markdown-content">
+                <p>It is sunny today. Tomorrow it rains.</p>
+              </div>
+            </div>
+          </div>
+          <VoiceModeDock
+            voiceMode={makeVoiceMode({
+              status: VOICE_STATUS.SPEAKING,
+              state: { assistantCaption: answer, spokenChars }
+            })}
+          />
+        </div>
+      );
+      const view = render(chat(5));
+      const log = view.container.querySelector('[role="log"]');
+      log.scrollTop = 0;
+      interact(log);
+      view.rerender(chat(12));
       expect(log.scrollTop).toBe(0);
     } finally {
       delete Range.prototype.getBoundingClientRect;

@@ -1574,3 +1574,40 @@ describe('a typed turn (typing while voice mode is on)', () => {
     expect(sendTurn).toHaveBeenCalledWith('Typed instead', { typed: true });
   });
 });
+
+describe("the app's question answered in the chat while voice mode is on", () => {
+  const RESPONSE = { questionId: 'q1', answered: true, skipped: false, value: 'red' };
+
+  test('goes out as a voice turn and its continuation is read out', async () => {
+    const hook = setup();
+    await startAndReady(hook);
+    act(() => hook.result.current.answerInChat(RESPONSE));
+    expect(hook.calls.answerClarification).toHaveBeenCalledWith(RESPONSE);
+    expect(status(hook)).toBe('thinking');
+    expect(hook.result.current.state.runActive).toBe(true);
+
+    hook.setProps({
+      messages: [USER, assistant({ content: 'Red it is.', loading: false })],
+      processing: false
+    });
+    expect(mockQueue.update).toHaveBeenLastCalledWith('Red it is.', { final: true });
+  });
+
+  test('stops an answer that is still being spoken', async () => {
+    const hook = setup();
+    await startAndReady(hook);
+    await speakTurn();
+    hook.setProps({ messages: [USER, assistant({ content: 'Which colour?' })], processing: true });
+    act(() => mockHandlers.queue.onSpeakingStart());
+    act(() => hook.result.current.answerInChat(RESPONSE));
+    expect(mockQueue.interrupt).toHaveBeenCalled();
+    expect(hook.calls.answerClarification).toHaveBeenCalledWith(RESPONSE);
+  });
+
+  test('before the session is up it is still answered, without a voice turn', () => {
+    const hook = setup();
+    act(() => hook.result.current.answerInChat(RESPONSE));
+    expect(hook.calls.answerClarification).toHaveBeenCalledWith(RESPONSE);
+    expect(hook.result.current.state.runActive).toBe(false);
+  });
+});
