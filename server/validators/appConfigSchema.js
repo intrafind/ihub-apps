@@ -58,16 +58,16 @@ const starterPromptSchema = z.object({
 });
 
 // Usage guide (issue #2838): pre-written "how to use this app" text, written
-// by an admin or generated once with a model in the app editor. The chat
-// offers `question` as a button and answers it with `content` as a local
-// exchange — no model call, and neither message is sent to the model. Kept in
-// the app itself so it travels with exports, backups and the marketplace.
+// by an admin or generated once with a model in the app editor. The chat opens
+// `content` in a dialog headed by `question` — no model call, and the guide
+// never enters the chat. Kept in the app itself so it travels with exports,
+// backups and the marketplace.
 const usageGuideSchema = z
   .object({
-    // Text of the button and of the question shown in the chat. An empty or
-    // missing language falls back to the built-in label.
+    // The dialog's heading. An empty or missing language falls back to the
+    // built-in question.
     question: z.record(z.string().regex(LANGUAGE_CODE_PATTERN), z.string()).optional(),
-    // The answer, as markdown per language.
+    // The guide, as markdown per language.
     content: localizedStringSchema
   })
   .optional();

@@ -146,7 +146,7 @@ function UsageGuideSection({ app, onChange }) {
           <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
             {t(
               'admin.apps.edit.usageGuide.description',
-              'A pre-written answer to "How do I use this app?". Users open it from a button in the chat. No model is called, and the guide is not sent to the model, so it costs nothing and leaves the context window free.'
+              'A pre-written answer to "How do I use this app?". Users open it in a dialog from the "Usage guide" link under the chat input. No model is called and the guide never enters the chat, so it costs nothing and leaves the context window free.'
             )}
           </p>
         </div>
@@ -177,7 +177,7 @@ function UsageGuideSection({ app, onChange }) {
           {guide && (
             <>
               <DynamicLanguageEditor
-                label={t('admin.apps.edit.usageGuide.question', 'Button text / question')}
+                label={t('admin.apps.edit.usageGuide.question', 'Dialog heading')}
                 value={guide.question || {}}
                 onChange={value => updateGuide({ question: value })}
                 placeholder={{ en: 'How do I use this app?', de: 'Wie nutze ich diese App?' }}
