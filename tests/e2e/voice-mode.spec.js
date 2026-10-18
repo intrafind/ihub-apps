@@ -20,7 +20,7 @@ import { fileURLToPath } from 'node:url';
  * spoken by ffmpeg's flite voice after four seconds of silence, so the real
  * Silero VAD in the page finds the turn.
  *
- * Each run asserts that the turn is sent, the captions appear, the answer is
+ * Each run asserts that the turn is sent and lands in the chat live, the answer is
  * spoken, and the transcript is still in the chat after End.
  *
  * The test provisions the stack through the admin API (default `admin` /
@@ -404,8 +404,10 @@ for (const service of ['browser', 'model', 'azure']) {
     );
 
     await voiceButton.click();
-    const overlay = page.getByTestId('voice-mode-overlay');
-    await expect(overlay).toBeVisible();
+    // The dock takes the composer's place; the chat stays in view.
+    const dock = page.getByTestId('voice-mode-dock');
+    await expect(dock).toBeVisible();
+    await expect(page.locator('[data-testid="voice-mode-button"]:visible')).toHaveCount(0);
     const status = page.getByTestId('voice-mode-status');
     await expect(status).toHaveText(/Listening/, { timeout: 30_000 });
 
@@ -414,10 +416,11 @@ for (const service of ['browser', 'model', 'azure']) {
     await expect(status).toHaveText(/Thinking|Speaking/, { timeout: 45_000 });
     await expect(status).toHaveText(/Speaking/, { timeout: 45_000 });
 
-    // Captions show what was asked and what is being answered.
-    const captions = page.getByTestId('voice-mode-captions');
-    await expect(captions).toContainText(QUESTION);
-    await expect(captions).toContainText('Paris');
+    // What was asked and what is being answered are in the chat, live.
+    await expect(page.locator('.chat-widget-message.user:visible').first()).toContainText(QUESTION);
+    await expect(page.locator('.chat-widget-message.assistant:visible').first()).toContainText(
+      'Paris'
+    );
 
     // The app listens again once it has spoken.
     await expect(status).toHaveText(/Listening/, { timeout: 45_000 });
@@ -446,8 +449,8 @@ for (const service of ['browser', 'model', 'azure']) {
     }
 
     // End returns to the chat, and every turn is still there as text.
-    await page.getByRole('button', { name: 'End', exact: true }).last().click();
-    await expect(overlay).toBeHidden();
+    await page.getByRole('button', { name: 'End voice mode (Esc)' }).click();
+    await expect(dock).toBeHidden();
     await expect(page.locator('.chat-widget-message.user').first()).toContainText(QUESTION);
     await expect(page.locator('.chat-widget-message.assistant').first()).toContainText('Paris');
     // The spoken turn carries the waveform marker.

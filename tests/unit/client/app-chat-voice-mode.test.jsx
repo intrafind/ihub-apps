@@ -5,7 +5,7 @@ import { MemoryRouter, Route, Routes, useNavigate } from 'react-router-dom';
 /**
  * `AppChat` and voice mode (issue #2868): what the page does with a spoken turn.
  *
- * Voice mode itself (hook, overlay) has its own suites and is replaced by a
+ * Voice mode itself (hook, dock) has its own suites and is replaced by a
  * stand-in here that records the options the page hands it. What is covered is
  * the page's side of the contract:
  *
@@ -15,8 +15,9 @@ import { MemoryRouter, Route, Routes, useNavigate } from 'react-router-dom';
  *   the files staged in it (they belong to the typed message they were added
  *   for, and an audio file the model cannot take would reject every turn);
  * - voice mode ends when the chat or the app changes;
- * - while the voice view is open, the transcript and the composer are `inert`
- *   (out of the tab order and the accessibility tree) and the view is not.
+ * - while voice mode is open, the dock takes the composer's place, once: the
+ *   composers stay mounted (hidden and `inert`), the transcript stays usable
+ *   but its messages cannot be edited.
  *
  * The mock setup mirrors app-chat-embedded.test.jsx; `useAppChat` is stubbed so
  * the message the page builds can be read as it is handed to `sendMessage`.
@@ -226,9 +227,9 @@ jest.mock('../../../client/src/features/voice/hooks/useVoiceMode', () => {
     }
   };
 });
-jest.mock('../../../client/src/features/voice/components/VoiceModeOverlay', () => ({
+jest.mock('../../../client/src/features/voice/components/VoiceModeDock', () => ({
   __esModule: true,
-  default: () => <div data-testid="voice-overlay" />
+  default: () => <div data-testid="voice-dock" />
 }));
 jest.mock('../../../client/src/features/voice/hooks/useVoiceCommands', () => ({
   __esModule: true,
@@ -317,7 +318,11 @@ jest.mock('../../../client/src/features/chat/components/ChatMessageList', () => 
   __esModule: true,
   default: props => {
     mockMessageList.props = props;
-    return <div data-testid="transcript">{props.messages.map(m => m.content).join('|')}</div>;
+    return (
+      <div data-testid="transcript" data-editable={String(props.editable)}>
+        {props.messages.map(m => m.content).join('|')}
+      </div>
+    );
   }
 }));
 // A real <form> with a text field and a submit button: a typed turn is the
@@ -601,27 +606,71 @@ describe('voice mode ends with the conversation it was started in', () => {
   });
 });
 
-describe('while the voice view is open', () => {
+describe('while voice mode is open', () => {
   const open = async () => {
     // A chat with a turn in it, so the transcript is on the page.
     mockChat.messages = [{ id: 'm1', role: 'user', content: 'an earlier question' }];
     renderChat();
     await screen.findAllByTestId('composer');
     act(() => mockVoiceMode.setActive(true));
-    return screen.getByTestId('voice-overlay');
+    return screen.getByTestId('voice-dock');
   };
 
-  test('the transcript and the composer are inert, the voice view is not', async () => {
-    const overlay = await open();
+  afterEach(() => {
+    delete window.matchMedia;
+  });
 
+  test('the dock takes the place of the composer, once', async () => {
+    await open();
+    // The phone and the desktop layout each have a composer slot; the dock's
+    // keyboard listeners are on the window, so there is only one.
+    expect(screen.getAllByTestId('voice-dock')).toHaveLength(1);
     const composers = screen.getAllByTestId('composer');
-    const transcripts = screen.getAllByTestId('transcript');
-    expect(composers.length).toBeGreaterThan(0);
-    expect(transcripts.length).toBeGreaterThan(0);
-    for (const covered of [...composers, ...transcripts]) {
-      expect(covered.closest('[inert]')).not.toBeNull();
+    expect(composers.length).toBeGreaterThan(1);
+    for (const composer of composers) {
+      const wrapper = composer.closest('[hidden]');
+      expect(wrapper).not.toBeNull();
+      expect(wrapper).toHaveAttribute('inert');
     }
-    expect(overlay.closest('[inert]')).toBeNull();
+    expect(screen.getByTestId('voice-dock').closest('[hidden]')).toBeNull();
+    // jsdom has no matchMedia, so the screen counts as a phone.
+    expect(screen.getByTestId('voice-dock').closest('.md\\:hidden')).not.toBeNull();
+  });
+
+  test('the dock is in the layout the screen shows', async () => {
+    // jsdom has no matchMedia: the phone layout. With a desktop-wide screen
+    // the dock moves to the desktop layout.
+    window.matchMedia = jest.fn(query => ({
+      matches: query === '(min-width: 48rem)',
+      addEventListener: () => {},
+      removeEventListener: () => {}
+    }));
+    const dock = await open();
+    expect(dock.closest('.md\\:hidden')).toBeNull();
+  });
+
+  test('the dock looks for the answer it reads out in the chat column', async () => {
+    const dock = await open();
+    expect(dock.closest('[data-voice-scope]')).not.toBeNull();
+  });
+
+  test('the transcript stays usable: nothing in it is inert or hidden', async () => {
+    await open();
+    for (const transcript of screen.getAllByTestId('transcript')) {
+      expect(transcript.closest('[inert]')).toBeNull();
+      expect(transcript.closest('[hidden]')).toBeNull();
+    }
+  });
+
+  test('its messages cannot be edited: an edit starts a typed run', async () => {
+    await open();
+    for (const transcript of screen.getAllByTestId('transcript')) {
+      expect(transcript).toHaveAttribute('data-editable', 'false');
+    }
+    act(() => mockVoiceMode.setActive(false));
+    for (const transcript of screen.getAllByTestId('transcript')) {
+      expect(transcript).toHaveAttribute('data-editable', 'true');
+    }
   });
 
   test('the composer is told voice mode is open', async () => {
@@ -631,23 +680,17 @@ describe('while the voice view is open', () => {
     }
   });
 
-  test('nothing is inert before it opens or after it closes', async () => {
+  test('nothing is hidden before it opens or after it closes', async () => {
     renderChat();
     await screen.findAllByTestId('composer');
     expect(document.querySelector('[inert]')).toBeNull();
-    expect(screen.queryByTestId('voice-overlay')).toBeNull();
+    expect(screen.queryByTestId('voice-dock')).toBeNull();
 
     act(() => mockVoiceMode.setActive(true));
     expect(document.querySelector('[inert]')).not.toBeNull();
 
     act(() => mockVoiceMode.setActive(false));
     expect(document.querySelector('[inert]')).toBeNull();
-    expect(screen.queryByTestId('voice-overlay')).toBeNull();
-  });
-
-  test("the wrapper adds no box: the layouts stay the column's own children", async () => {
-    await open();
-    const wrapper = screen.getAllByTestId('composer')[0].closest('[inert]');
-    expect(wrapper).toHaveClass('contents');
+    expect(screen.queryByTestId('voice-dock')).toBeNull();
   });
 });
