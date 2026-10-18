@@ -139,6 +139,9 @@ function bargeInState(state, force) {
  *     speaks or a run is active and the user did not barge in. While the user is
  *     speaking again it is only the first part of the sentence: it shows in the
  *     caption and changes nothing else.
+ *   - `TYPED`: the user sent a typed message (the hook stopped a running answer
+ *     first): the app works on it, or stays muted. A sentence the user had
+ *     begun to say is dropped.
  *   - `SENT`: the transcript was handed to the chat; a run is active now.
  *   - `TOOL_STARTED {kind, label}` / `TOOL_FINISHED`: the run's tool chip.
  *   - `ASSISTANT_TEXT {text}`: the answer so far (the caption).
@@ -207,6 +210,15 @@ export function voiceModeReducer(state, action) {
       }
       return { ...state, status: THINKING, userCaption: { text, final: true } };
     }
+
+    case 'TYPED':
+      if (state.status === CONNECTING || state.status === ERROR) return state;
+      return {
+        ...state,
+        status: state.status === PAUSED ? PAUSED : THINKING,
+        userCaption: EMPTY_USER_CAPTION,
+        notice: null
+      };
 
     case 'SENT':
       if (state.status === CONNECTING || state.status === ERROR) return state;

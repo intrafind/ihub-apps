@@ -4863,8 +4863,7 @@
       "end": "End voice mode"
     },
     "overlay": {
-      "label": "Voice mode",
-      "orb": "Voice activity"
+      "label": "Voice mode"
     },
     "status": {
       "connecting": "Connecting…",
@@ -4882,15 +4881,22 @@
       "readPage": "Reading a page…",
       "working": "Working on it…"
     },
+    "input": {
+      "label": "Type a message"
+    },
     "controls": {
-      "mute": "Mute",
-      "unmute": "Unmute",
       "holdToTalk": "Hold to talk",
       "release": "Release to send",
       "end": "End",
       "endTitle": "End voice mode (Esc)",
       "retry": "Try again",
-      "stopAnswer": "Stop the answer and talk"
+      "stopAnswer": "Stop the answer and talk",
+      "muteMicrophone": "Mute microphone",
+      "unmuteMicrophone": "Unmute microphone"
+    },
+    "hint": {
+      "pushToTalk": "Esc to end · Hold Space to talk",
+      "handsFree": "Esc to end"
     },
     "settings": {
       "open": "Voice settings",
@@ -4900,7 +4906,8 @@
       "pushToTalk": "Push-to-talk: hold Space or the button",
       "bargeIn": "Let me interrupt by speaking",
       "bargeInHint": "Turn this off on laptop speakers if the answer cuts itself off. Headphones work best.",
-      "captions": "Show captions"
+      "liveTranscript": "Show live transcript",
+      "liveTranscriptHint": "Your words as you speak, and the part of the answer still to be read out."
     },
     "errors": {
       "micDenied": "Microphone access was blocked. Allow it in your browser settings and try again.",
@@ -4928,7 +4935,8 @@
       "unavailable": "Needs a text-to-speech model, a working speech service and a browser with microphone support",
       "saveFirst": "Save the page with \"Enable voice mode\" ticked first: a transcription model checks the saved setting",
       "heading": "Voice mode test",
-      "echo": "You said: {{text}}"
+      "echo": "You said: {{text}}",
+      "intro": "Say something. The app repeats what it heard."
     }
   },
   "voiceCommands": {

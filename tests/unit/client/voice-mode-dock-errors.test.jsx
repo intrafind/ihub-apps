@@ -1,11 +1,11 @@
 /**
- * What the voice mode overlay says when the session fails (issue #2868): every
+ * What the voice mode dock says when the session fails (issue #2868): every
  * code gets text in the user's language, and the message the session carries
  * (English, from the browser, an adapter or the server) is never shown.
  */
 import { render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import VoiceModeOverlay from '../../../client/src/features/voice/components/VoiceModeOverlay';
+import VoiceModeDock from '../../../client/src/features/voice/components/VoiceModeDock';
 import {
   VOICE_STATUS,
   initialVoiceModeState
@@ -32,8 +32,7 @@ function renderError(code) {
   };
   const noop = () => {};
   render(
-    <VoiceModeOverlay
-      appName="Chat"
+    <VoiceModeDock
       voiceMode={{
         state,
         prefs: { listeningStyle: 'hands-free', bargeIn: true, captions: true },
@@ -54,7 +53,7 @@ function renderError(code) {
   return screen.getByRole('alert').textContent;
 }
 
-describe('VoiceModeOverlay error text', () => {
+describe('VoiceModeDock error text', () => {
   test.each([
     ['mic-denied', /Microphone access was blocked/],
     ['mic-missing', /No microphone was found/],

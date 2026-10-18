@@ -86,7 +86,7 @@ describe('the Try it modal is a dialog', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Try it' }));
     expect(dialog()).toHaveAttribute('aria-modal', 'true');
-    expect(screen.getByTestId('voice-mode-overlay')).toBeInTheDocument();
+    expect(screen.getByTestId('voice-mode-dock')).toBeInTheDocument();
   });
 
   test('a click on the backdrop closes it', () => {
@@ -99,7 +99,7 @@ describe('the Try it modal is a dialog', () => {
   test('a click inside the card does not', () => {
     openDialog();
     fireEvent.click(dialog());
-    fireEvent.click(screen.getByTestId('voice-mode-overlay'));
+    fireEvent.click(screen.getByTestId('voice-mode-dock'));
     fireEvent.click(screen.getByTestId('voice-mode-status'));
     expect(screen.getByRole('dialog')).toBeInTheDocument();
     expect(mockEnded).toEqual([]);
@@ -107,7 +107,7 @@ describe('the Try it modal is a dialog', () => {
 
   test('Esc closes it and the focus goes back to the Try it button', () => {
     const trigger = openDialog();
-    expect(screen.getByTestId('voice-mode-overlay')).toHaveFocus();
+    expect(screen.getByTestId('voice-mode-dock')).toHaveFocus();
     fireEvent.keyDown(document.activeElement, { key: 'Escape' });
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(trigger).toHaveFocus();
@@ -115,7 +115,7 @@ describe('the Try it modal is a dialog', () => {
 
   test('End in the voice view closes it', () => {
     openDialog();
-    fireEvent.click(screen.getByRole('button', { name: 'End' }));
+    fireEvent.click(screen.getByRole('button', { name: 'End voice mode (Esc)' }));
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
@@ -132,7 +132,7 @@ describe('Tab stays inside the dialog', () => {
 
   test('Tab on the last control wraps to the first', () => {
     openDialog();
-    const last = screen.getByRole('button', { name: 'End' });
+    const last = screen.getByRole('button', { name: 'End voice mode (Esc)' });
     last.focus();
     expect(tab(last)).toBe(false);
     expect(screen.getByRole('button', { name: 'Voice settings' })).toHaveFocus();
@@ -143,20 +143,20 @@ describe('Tab stays inside the dialog', () => {
     const first = screen.getByRole('button', { name: 'Voice settings' });
     first.focus();
     expect(tab(first, { shiftKey: true })).toBe(false);
-    expect(screen.getByRole('button', { name: 'End' })).toHaveFocus();
+    expect(screen.getByRole('button', { name: 'End voice mode (Esc)' })).toHaveFocus();
   });
 
   test('Shift+Tab from the voice view itself, where focus starts, lands on the last control', () => {
     openDialog();
-    const root = screen.getByTestId('voice-mode-overlay');
+    const root = screen.getByTestId('voice-mode-dock');
     expect(root).toHaveFocus();
     expect(tab(root, { shiftKey: true })).toBe(false);
-    expect(screen.getByRole('button', { name: 'End' })).toHaveFocus();
+    expect(screen.getByRole('button', { name: 'End voice mode (Esc)' })).toHaveFocus();
   });
 
   test('Tab in the middle is left to the browser', () => {
     openDialog();
-    const mute = screen.getByRole('button', { name: 'Mute' });
+    const mute = screen.getByRole('button', { name: 'Mute microphone' });
     mute.focus();
     expect(tab(mute)).toBe(true);
     expect(tab(mute, { shiftKey: true })).toBe(true);
@@ -164,7 +164,7 @@ describe('Tab stays inside the dialog', () => {
 
   test('other keys are left alone', () => {
     openDialog();
-    const last = screen.getByRole('button', { name: 'End' });
+    const last = screen.getByRole('button', { name: 'End voice mode (Esc)' });
     last.focus();
     expect(fireEvent.keyDown(last, { key: 'a' })).toBe(true);
   });

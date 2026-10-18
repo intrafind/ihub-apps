@@ -1,127 +1,186 @@
-/* Voice mode overlay: the orb and its states. The mic level reaches the orb as
-   --voice-level (0..1), written by the overlay without re-rendering it. */
-.voice-orb {
+/* Voice mode dock: the level bars in its End pill and the glow behind it, in
+   the state's colour. The mic level reaches them as --voice-level (0..1),
+   written by the dock without re-rendering it. */
+.voice-dock {
   --voice-level: 0;
-  --orb-core: #6366f1;
-  --orb-glow: rgba(99, 102, 241, 0.35);
-  position: relative;
-  /* A flex item in a column that can be shorter than the orb: it must keep its
-     shape (a phone in landscape squeezed it to 149x11 px) and shrink with the
-     screen height instead. */
-  flex-shrink: 0;
-  width: min(9rem, 28vh);
-  aspect-ratio: 1;
-  border-radius: 9999px;
-  border: 0;
-  padding: 0;
-  cursor: default;
-  /* Plain colour first, for a browser without color-mix. The highlight and the
-     shade come from the state's colour, so the error and muted orbs are not
-     tinted indigo. */
-  background: var(--orb-core);
+  --voice-accent: #9ca3af;
+}
+
+.voice-dock[data-status='listening'],
+.voice-dock[data-status='user-speaking'] {
+  --voice-accent: #6366f1;
+}
+
+.voice-dock[data-status='thinking'] {
+  --voice-accent: #8b5cf6;
+}
+
+.voice-dock[data-status='speaking'] {
+  --voice-accent: #0ea5e9;
+}
+
+.voice-dock[data-status='paused'] {
+  --voice-accent: #f59e0b;
+}
+
+.voice-dock[data-status='error'] {
+  --voice-accent: #ef4444;
+}
+
+.voice-glow {
+  /* Rises from the middle of the dock and fades out before the box's edges, so
+     nothing clips it. Plain colour first, for a browser without color-mix. */
+  background: radial-gradient(50% 100% at 50% 100%, rgba(99, 102, 241, 0.28), transparent 100%);
   background: radial-gradient(
-    circle at 35% 30%,
-    color-mix(in srgb, var(--orb-core) 55%, white) 0%,
-    var(--orb-core) 55%,
-    color-mix(in srgb, var(--orb-core) 72%, black) 100%
+    50% 100% at 50% 100%,
+    color-mix(in srgb, var(--voice-accent) 32%, transparent),
+    transparent 100%
   );
-  box-shadow: 0 0 calc(2rem + var(--voice-level) * 3rem) calc(var(--voice-level) * 1rem)
-    var(--orb-glow);
-  transform: scale(calc(1 + var(--voice-level) * 0.12));
-  transition:
-    transform 80ms linear,
-    box-shadow 80ms linear,
-    background-color 200ms ease;
+  opacity: calc(0.5 + var(--voice-level) * 0.5);
+  transition: opacity 120ms linear;
 }
 
-.voice-orb[data-clickable='true'] {
-  cursor: pointer;
+:where([data-theme='dark']) .voice-glow {
+  background: radial-gradient(
+    50% 100% at 50% 100%,
+    color-mix(in srgb, var(--voice-accent) 24%, transparent),
+    transparent 100%
+  );
 }
 
-.voice-orb:focus-visible {
-  outline: 3px solid #818cf8;
-  outline-offset: 4px;
+.voice-dock[data-status='thinking'] .voice-glow,
+.voice-dock[data-status='speaking'] .voice-glow {
+  animation: voice-glow-breathe 3.2s ease-in-out infinite;
 }
 
-.voice-orb[data-status='connecting'] {
-  --orb-core: #9ca3af;
-  --orb-glow: rgba(156, 163, 175, 0.3);
-  animation: voice-orb-breathe 1.6s ease-in-out infinite;
+.voice-dock[data-status='connecting'] .voice-glow,
+.voice-dock[data-status='paused'] .voice-glow,
+.voice-dock[data-status='error'] .voice-glow {
+  opacity: 0.2;
 }
 
-.voice-orb[data-status='listening'] {
-  animation: voice-orb-breathe 3s ease-in-out infinite;
+/* Each bar has its own gain, so the five move like a voice and not as a block. */
+.voice-bars rect {
+  transform-box: fill-box;
+  transform-origin: center;
+  transform: scaleY(calc(0.35 + var(--voice-level) * var(--bar-gain, 1)));
+  transition: transform 80ms linear;
 }
 
-.voice-orb[data-status='user-speaking'] {
-  --orb-core: #4f46e5;
-  --orb-glow: rgba(79, 70, 229, 0.5);
+.voice-bars rect:nth-child(1) {
+  --bar-gain: 0.9;
 }
 
-.voice-orb[data-status='thinking'] {
-  --orb-core: #8b5cf6;
-  --orb-glow: rgba(139, 92, 246, 0.4);
-  animation: voice-orb-think 1.4s ease-in-out infinite;
+.voice-bars rect:nth-child(2) {
+  --bar-gain: 0.75;
 }
 
-.voice-orb[data-status='speaking'] {
-  --orb-core: #0ea5e9;
-  --orb-glow: rgba(14, 165, 233, 0.45);
-  animation: voice-orb-speak 0.9s ease-in-out infinite;
+.voice-bars rect:nth-child(4) {
+  --bar-gain: 0.7;
 }
 
-.voice-orb[data-status='paused'] {
-  --orb-core: #9ca3af;
-  --orb-glow: rgba(156, 163, 175, 0.15);
-  filter: grayscale(0.6);
+.voice-bars rect:nth-child(5) {
+  --bar-gain: 0.85;
 }
 
-.voice-orb[data-status='error'] {
-  --orb-core: #ef4444;
-  --orb-glow: rgba(239, 68, 68, 0.35);
+.voice-dock[data-status='connecting'] .voice-bars rect,
+.voice-dock[data-status='paused'] .voice-bars rect {
+  transform: scaleY(0.35);
 }
 
-@keyframes voice-orb-breathe {
+.voice-dock[data-status='connecting'] .voice-bars {
+  animation: voice-bars-pulse 1.4s ease-in-out infinite;
+}
+
+.voice-dock[data-status='speaking'] .voice-bars rect {
+  animation: voice-wave-bar 0.9s ease-in-out infinite;
+}
+
+.voice-dock[data-status='thinking'] .voice-bars rect {
+  transform: scaleY(0.35);
+  animation: voice-bars-dot 1.2s ease-in-out infinite;
+}
+
+.voice-dock[data-status='speaking'] .voice-bars rect:nth-child(2),
+.voice-dock[data-status='thinking'] .voice-bars rect:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.voice-dock[data-status='speaking'] .voice-bars rect:nth-child(3),
+.voice-dock[data-status='thinking'] .voice-bars rect:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+.voice-dock[data-status='speaking'] .voice-bars rect:nth-child(4),
+.voice-dock[data-status='thinking'] .voice-bars rect:nth-child(4) {
+  animation-delay: 0.45s;
+}
+
+.voice-dock[data-status='speaking'] .voice-bars rect:nth-child(5),
+.voice-dock[data-status='thinking'] .voice-bars rect:nth-child(5) {
+  animation-delay: 0.6s;
+}
+
+@keyframes voice-glow-breathe {
   0%,
   100% {
-    transform: scale(calc(1 + var(--voice-level) * 0.12));
+    opacity: 0.55;
   }
   50% {
-    transform: scale(calc(1.04 + var(--voice-level) * 0.12));
+    opacity: 0.95;
   }
 }
 
-@keyframes voice-orb-think {
+@keyframes voice-bars-pulse {
   0%,
   100% {
-    transform: scale(0.96);
-    opacity: 0.85;
+    opacity: 0.45;
   }
   50% {
-    transform: scale(1.04);
     opacity: 1;
   }
 }
 
-@keyframes voice-orb-speak {
+@keyframes voice-bars-dot {
   0%,
   100% {
-    transform: scale(1);
+    opacity: 0.35;
   }
-  25% {
-    transform: scale(1.07);
-  }
-  60% {
-    transform: scale(0.97);
+  50% {
+    opacity: 1;
   }
 }
 
+/* Read-along: the part of the answer still to be said, in the chat message.
+   Lighter than the spoken part (both pass AA), so the mark does not depend on
+   seeing colours. */
+::highlight(voice-unspoken) {
+  color: #6b7280;
+}
+
+:where([data-theme='dark']) ::highlight(voice-unspoken) {
+  color: #9ca3af;
+}
+
+/* State shows in colour and words as well; motion is only on top. */
 @media (prefers-reduced-motion: reduce) {
-  .voice-orb,
-  .voice-orb[data-status] {
+  .voice-glow,
+  .voice-dock[data-status] .voice-glow,
+  .voice-bars,
+  .voice-bars rect,
+  .voice-dock[data-status] .voice-bars,
+  .voice-dock[data-status] .voice-bars rect {
     animation: none;
     transition: none;
-    transform: none;
+  }
+
+  .voice-bars rect,
+  .voice-dock[data-status] .voice-bars rect {
+    transform: scaleY(0.6);
+  }
+
+  .voice-glow {
+    opacity: 0.6;
   }
 }
 

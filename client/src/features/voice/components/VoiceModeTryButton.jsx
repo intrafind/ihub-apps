@@ -6,7 +6,7 @@ import {
   isVoiceModeBrowserSupported,
   isSpeechChoiceUsable
 } from '../hooks/useVoiceModeAvailability';
-import VoiceModeOverlay from './VoiceModeOverlay';
+import VoiceModeDock from './VoiceModeDock';
 import { VoiceWaveIcon } from './VoiceModeButton';
 
 /** What Tab can reach inside the dialog. The voice view's own root (tabindex -1) is left out on purpose. */
@@ -68,6 +68,7 @@ function toPublicSpeech(speech) {
 export default function VoiceModeTryButton({ speech, savedEnabled = true }) {
   const { t, i18n } = useTranslation();
   const [messages, setMessages] = useState([]);
+  const [draft, setDraft] = useState('');
   const cardRef = useRef(null);
 
   const availability = useMemo(() => {
@@ -184,18 +185,50 @@ export default function VoiceModeTryButton({ speech, savedEnabled = true }) {
           }}
         >
           {/* `min(32rem, 100%)`: on a phone in landscape a fixed 32rem card is
-              taller than the screen and its controls fall off the bottom. */}
+              taller than the screen and its controls fall off the bottom. A
+              small chat with the dock under it, like voice mode in an app;
+              `data-voice-scope` lets the dock mark the echo as it is read out. */}
           <div
             ref={cardRef}
             role="dialog"
             aria-modal="true"
             aria-label={t('voiceMode.try.heading', 'Voice mode test')}
-            className="relative h-[min(32rem,100%)] w-full max-w-lg overflow-hidden rounded-2xl bg-white shadow-xl dark:bg-gray-900"
+            data-voice-scope
+            className="relative flex h-[min(32rem,100%)] w-full max-w-lg flex-col rounded-2xl bg-white px-4 pt-4 shadow-xl dark:bg-gray-900"
           >
-            <VoiceModeOverlay
-              voiceMode={voiceMode}
-              appName={t('voiceMode.try.heading', 'Voice mode test')}
-            />
+            <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100">
+              {t('voiceMode.try.heading', 'Voice mode test')}
+            </h2>
+            <div
+              role="log"
+              aria-label={t('chat.messageList', 'Chat messages')}
+              className="my-3 min-h-0 flex-1 space-y-3 overflow-y-auto"
+            >
+              {messages.length === 0 ? (
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                  {t('voiceMode.try.intro', 'Say something. The app repeats what it heard.')}
+                </p>
+              ) : (
+                messages.map(message => (
+                  <div
+                    key={message.id}
+                    data-message-role={message.role}
+                    className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                  >
+                    <div
+                      className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm ${
+                        message.role === 'user'
+                          ? 'bg-indigo-600 text-white'
+                          : 'bg-gray-100 text-gray-900 dark:bg-gray-800 dark:text-gray-100'
+                      }`}
+                    >
+                      <div className="markdown-content">{message.content}</div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+            <VoiceModeDock voiceMode={voiceMode} value={draft} onChange={setDraft} />
           </div>
         </div>
       )}

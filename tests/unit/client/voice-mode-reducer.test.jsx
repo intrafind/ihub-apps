@@ -812,3 +812,30 @@ describe('how much of the answer has been spoken', () => {
     expect(failed.spokenChars).toBeNull();
   });
 });
+
+describe('a typed message', () => {
+  test('from listening: the app works on it', () => {
+    const next = run(listening(), 'TYPED');
+    expect(next.status).toBe(S.THINKING);
+    expect(run(next, 'SENT').runActive).toBe(true);
+  });
+
+  test('drops a sentence the user had begun to say', () => {
+    const next = run(userSpeaking(), { type: 'INTERIM', text: 'what is' }, 'TYPED');
+    expect(next.status).toBe(S.THINKING);
+    expect(next.userCaption).toEqual({ text: '', final: false });
+  });
+
+  test('while muted, stays muted', () => {
+    const next = run(listening(), 'MUTE', 'TYPED', 'SENT');
+    expect(next.status).toBe(S.PAUSED);
+    expect(next.runActive).toBe(true);
+  });
+
+  test('changes nothing while connecting or after an error', () => {
+    const connecting = fresh();
+    expect(run(connecting, 'TYPED')).toBe(connecting);
+    const failed = run(listening(), { type: 'ERROR', code: 'service' });
+    expect(run(failed, 'TYPED')).toBe(failed);
+  });
+});
