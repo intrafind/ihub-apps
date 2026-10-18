@@ -48,6 +48,19 @@ describe('createTranscriptAssembler', () => {
     expect(asm.hasText()).toBe(true);
   });
 
+  test('a replace delta is the whole hypothesis: it takes the place of the last one', () => {
+    const asm = createTranscriptAssembler();
+    asm.applyDelta('Warum schreiben', { replace: true });
+    asm.applyDelta('Warum schreiben wir', { replace: true });
+    asm.applyDelta('Warum schreiben wir eigentlich alles', { replace: true });
+    expect(asm.text()).toBe('Warum schreiben wir eigentlich alles');
+
+    asm.applyFinal('Warum schreiben wir eigentlich alles?');
+    asm.applyDelta('Und', { replace: true });
+    asm.applyDelta('Und wie', { replace: true });
+    expect(asm.text()).toBe('Warum schreiben wir eigentlich alles? Und wie');
+  });
+
   test('final folds the utterance into committed text, preferring the server final', () => {
     const asm = createTranscriptAssembler();
     asm.applyDelta('helo'); // deltas contain a typo…

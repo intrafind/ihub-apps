@@ -178,9 +178,10 @@ export async function createPcmCapturePipeline(mediaStream, onFrame) {
 /**
  * Accumulate streaming transcription frames into one transcript with identical
  * semantics for every consumer (dictation and buffer transcription): deltas
- * extend the current utterance, `final` folds the utterance into the committed
- * text (preferring the server-provided final text over the accumulated
- * deltas), and text() is the whitespace-normalized whole.
+ * extend the current utterance (a `replace` delta is the whole current
+ * hypothesis and takes the place of it), `final` folds the utterance into the
+ * committed text (preferring the server-provided final text over the
+ * accumulated deltas), and text() is the whitespace-normalized whole.
  *
  * `keepLineBreaks` is for a transcript shown as a chat answer, which may carry
  * one `[mm:ss] Speaker 1: …` entry per line: spaces and tabs are still
@@ -193,8 +194,8 @@ export function createTranscriptAssembler({ keepLineBreaks = false } = {}) {
   let committed = '';
   let partial = '';
   return {
-    applyDelta(text) {
-      partial = `${partial}${text || ''}`;
+    applyDelta(text, { replace = false } = {}) {
+      partial = replace ? text || '' : `${partial}${text || ''}`;
     },
     applyFinal(text) {
       committed = `${committed} ${text || partial}`.trim();

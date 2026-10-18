@@ -199,7 +199,9 @@ export function createModelAdapter({
         break;
       case 'delta':
         if (isCaptionDelta(msg)) {
-          interimText = `${interimText}${msg.text || ''}`;
+          // A revised hypothesis (Gemini) is the whole turn so far; appending it
+          // would show the same words again and again.
+          interimText = msg.replace === true ? msg.text || '' : `${interimText}${msg.text || ''}`;
           emit({ type: 'interim', text: interimText.replace(/\s+/g, ' ').trim() });
         }
         break;

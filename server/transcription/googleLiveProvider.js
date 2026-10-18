@@ -130,11 +130,14 @@ export function formatUpstreamError(error) {
  *
  * `interimInputTranscription` is a speculative partial hypothesis that gets
  * revised while the speaker is still talking, so it maps to `delta` (the bridge
- * relays it as streaming text). `inputTranscription` is the finalized segment
- * and maps to `final`, which is what the client keeps.
+ * relays it as streaming text). Each one is the whole hypothesis for the segment
+ * so far, not a piece to add to the last: it is marked `replace`, so that it
+ * takes the place of the previous one instead of being appended to it.
+ * `inputTranscription` is the finalized segment and maps to `final`, which is
+ * what the client keeps.
  *
  * @param {Object} msg
- * @returns {{ kind: 'session-ready'|'delta'|'final'|'error'|'go-away'|'ignore', text?: string, error?: string }}
+ * @returns {{ kind: 'session-ready'|'delta'|'final'|'error'|'go-away'|'ignore', text?: string, replace?: boolean, error?: string }}
  */
 export function interpret(msg = {}) {
   if (msg.setupComplete) return { kind: 'session-ready' };
@@ -143,7 +146,9 @@ export function interpret(msg = {}) {
   const content = msg.serverContent;
   if (content) {
     const interim = content.interimInputTranscription?.text;
-    if (typeof interim === 'string' && interim.length) return { kind: 'delta', text: interim };
+    if (typeof interim === 'string' && interim.length) {
+      return { kind: 'delta', text: interim, replace: true };
+    }
     const finalText = content.inputTranscription?.text;
     if (typeof finalText === 'string' && finalText.length)
       return { kind: 'final', text: finalText };

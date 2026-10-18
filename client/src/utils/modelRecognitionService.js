@@ -202,8 +202,8 @@ class ModelSpeechRecognition {
         this._mode = msg.mode || 'stream';
         break;
       case 'delta':
-        // Incremental token(s) for the current utterance.
-        this._transcript.applyDelta(msg.text);
+        // Incremental token(s) for the current utterance, or its revised hypothesis.
+        this._transcript.applyDelta(msg.text, { replace: msg.replace === true });
         this.#emitInterim();
         break;
       case 'final':

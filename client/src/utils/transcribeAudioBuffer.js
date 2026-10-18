@@ -200,7 +200,7 @@ export async function transcribeAudioBuffer(audioBuffer, opts = {}) {
           streamAudio().catch(err => fail('stream', err.message));
           break;
         case 'delta':
-          transcript.applyDelta(msg.text);
+          transcript.applyDelta(msg.text, { replace: msg.replace === true });
           if (typeof onDelta === 'function') onDelta(transcript.text());
           break;
         case 'final':

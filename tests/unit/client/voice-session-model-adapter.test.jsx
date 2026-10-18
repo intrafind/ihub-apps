@@ -186,6 +186,26 @@ describe('model adapter: the conversation socket', () => {
     adapter.stop();
   });
 
+  test('a replace delta is the whole turn so far, not more text to add to it', async () => {
+    const { adapter, socket, connect, events } = setup();
+    await connect();
+    adapter.beginTurn(pcm(1));
+    socket().receive({ type: 'delta', text: 'Warum schreiben', replace: true, turn: 1 });
+    socket().receive({ type: 'delta', text: 'Warum schreiben wir', replace: true, turn: 1 });
+    socket().receive({
+      type: 'delta',
+      text: 'Warum schreiben wir eigentlich alles',
+      replace: true,
+      turn: 1
+    });
+    expect(events.map(event => event.text)).toEqual([
+      'Warum schreiben',
+      'Warum schreiben wir',
+      'Warum schreiben wir eigentlich alles'
+    ]);
+    adapter.stop();
+  });
+
   test('the tail of an earlier turn is not the caption of the turn being spoken', async () => {
     const { adapter, socket, connect, events } = setup();
     await connect();
