@@ -797,6 +797,10 @@ The `settings` property controls which configuration options users can adjust fo
 | `inputMode.microphone.mode`           | Mode for recording (`manual` or `automatic`)                             |
 | `inputMode.microphone.showTranscript` | Show the live transcript while recording                                 |
 | `inputMode.microphone.enabled`        | Enable/disable microphone input for voice commands                       |
+| `inputMode.voiceMode.enabled`         | Turn [voice mode](microphone-feature.md#voice-mode-spoken-conversation) (preview) on or off for this app. Absent follows the platform's `appDefault`. Needs the microphone |
+| `inputMode.voiceMode.listeningStyle`  | Optional: `"hands-free"` or `"push-to-talk"`; absent follows the platform |
+| `inputMode.voiceMode.ttsModelId`      | Optional: the text-to-speech model that speaks in this app; absent follows the platform |
+| `inputMode.voiceMode.voice`           | Optional: a voice id of that model                                       |
 
 For more details, see the [Microphone Feature](microphone-feature.md) documentation.
 

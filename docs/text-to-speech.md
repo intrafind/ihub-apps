@@ -225,6 +225,27 @@ These settings take effect without a restart.
 Turns the button off for that app. Without this setting, the app follows the
 platform switch.
 
+### Voice mode
+
+Voice mode speaks with a TTS model too, and it needs an enabled model with a
+key (see above). Read aloud itself does not have to be switched on when voice
+mode names its own model. Which model speaks, in this order:
+
+1. `inputMode.voiceMode.ttsModelId` of the app, for example a German voice
+   model for a German app,
+2. `speech.voiceMode.ttsModelId` of the platform,
+3. `speech.tts.defaultModelId`, the read-aloud model.
+
+An app can also name a `voice` of that model in `inputMode.voiceMode.voice`
+(up to 200 characters). A request to `/api/voice/speech` may only pick a voice
+the admin configured: one of the model's own (`tts.voice`, `tts.voices`) or the
+voice of an app the caller may use whose voice mode is on and speaks with that
+model. A user can have at most six syntheses running at once (`429` with
+`too-many-requests`); voice mode keeps two running for one answer.
+Users need access to the model through their groups, as for read aloud. See
+[Voice mode](microphone-feature.md#voice-mode-spoken-conversation) for all
+settings.
+
 ## How it works
 
 ```
@@ -240,14 +261,40 @@ plays with Web Audio as it arrives      next piece once one is finished …
 ```
 
 - **Endpoint.** `POST /api/voice/speech` with
-  `{ "text": "…", "modelId"?: "…", "language"?: "de" }` answers with raw
-  16-bit little-endian mono PCM. The response headers describe the format:
-  `X-Audio-Encoding: pcm_s16le`, `X-Audio-Sample-Rate: 24000` and
-  `X-Audio-Channels: 1`. `X-Speech-Language` names the language the voice
-  was chosen for. Without a `modelId` the platform default is used, and only
-  while read aloud is switched on. With a `modelId`, any enabled TTS model
-  the user may use is accepted. `language` is the UI language and only
-  counts when the text is too short to tell.
+  `{ "text": "…", "modelId"?: "…", "language"?: "de", "languageFixed"?: true, "voice"?: "…" }`
+  answers with raw 16-bit little-endian mono PCM. The response headers
+  describe the format: `X-Audio-Encoding: pcm_s16le`,
+  `X-Audio-Sample-Rate: 24000` and `X-Audio-Channels: 1`.
+  `X-Speech-Language` names the language the voice was chosen for. Without a
+  `modelId` the platform default is used, and only while read aloud is
+  switched on. With a `modelId`, any enabled TTS model the user may use is
+  accepted. `language` is the UI language and only counts when the text is too
+  short to tell.
+- **`languageFixed`.** With `"languageFixed": true` and a `language`, the
+  endpoint uses that language as given and detects nothing from the text. The
+  voice then follows `language` through the model's **Voices per language**,
+  and a language the model has no voice for gets the model's **Voice**.
+  `languageFixed` without a `language` is a `400`. It is for callers that
+  already know the language: the first request of an answer reads
+  `X-Speech-Language` from the response, and every later request of the same
+  answer sends `{ "language": <that value>, "languageFixed": true }`. All
+  pieces then use one voice, even when a short piece alone would be detected
+  as another language.
+- **`voice`.** Optional. Picks one voice for this request instead of the one
+  the language chooses. It must be a voice the admin configured: the model's
+  **Voice**, a value of its **Voices per language**, or the `voice` of an app
+  whose voice mode speaks with this model. Any other voice is a `400` with
+  code `invalid-voice`, so a request cannot reach other voices of the
+  provider account.
+- **Voice mode.** [Voice mode](microphone-feature.md#voice-mode-spoken-conversation)
+  reads an answer in pieces instead of waiting for the whole message. The
+  browser cuts the streaming answer at sentence ends and sends one request per
+  piece (a short first piece, so speech starts quickly; later ones of a few
+  hundred characters), with at most two in flight, and plays the audio back to
+  back through one audio output. Every piece after the first carries
+  `languageFixed`. Nothing changes on the server for this: each piece is an
+  ordinary request, counted by the rate limiter and aborted when the user
+  interrupts.
 - **Voices (admin).** `GET`/`POST /api/admin/models/:id/tts/voices` lists the
   provider's voices and creates a custom one
   (`{ name, audio: <base64>, filename, languages, gender }`).
@@ -255,7 +302,7 @@ plays with Web Audio as it arrives      next piece once one is finished …
   All three use the model's stored key, and creating and deleting are
   recorded in the audit log.
 - **Errors** before the first audio byte are JSON with a status: `400` (no
-  text), `403` (model not permitted), `404` (not a TTS model), `413` (input
+  text, or an invalid `languageFixed`, `language` or `voice`), `403` (model not permitted), `404` (not a TTS model), `413` (input
   over 200,000 characters), `422` (nothing left to read once Markdown is
   removed), `502` (the provider failed, for example a rejected API key), and
   `503` (read aloud not configured, or the model is disabled). If the provider

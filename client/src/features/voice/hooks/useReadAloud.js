@@ -9,7 +9,7 @@ import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
 let ttsModelsRequest = null;
 let ttsModelsRequestKey = null;
 
-function loadTtsModels(key) {
+export function loadTtsModels(key) {
   if (!ttsModelsRequest || ttsModelsRequestKey !== key) {
     ttsModelsRequestKey = key;
     ttsModelsRequest = fetchTtsModels()

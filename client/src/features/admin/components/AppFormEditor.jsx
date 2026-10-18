@@ -26,6 +26,7 @@ import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
 import AdminFormErrorSummary from './AdminFormErrorSummary';
 import { FormValidationProvider } from '../../../shared/contexts/formValidationContext';
 import useAdminTranscriptionModels from '../hooks/useAdminTranscriptionModels';
+import useAdminTtsModels from '../hooks/useAdminTtsModels';
 import BasicInfoSection from './app-form/BasicInfoSection';
 import InputModeSection from './app-form/InputModeSection';
 import parseNumberOrUndefined from '../utils/parseNumberOrUndefined';
@@ -59,6 +60,7 @@ function AppFormEditor({
   // excluded from the generic tools picker so they don't appear twice.
   const [mcpToolIds, setMcpToolIds] = useState([]);
   const transcriptionModels = useAdminTranscriptionModels();
+  const ttsModels = useAdminTtsModels();
   const featureFlags = useFeatureFlags();
 
   // Check if sources feature is enabled
@@ -297,6 +299,7 @@ function AppFormEditor({
               onChange={onChange}
               t={t}
               transcriptionModels={transcriptionModels}
+              ttsModels={ttsModels}
               currentLanguage={currentLanguage}
             />
 

@@ -102,6 +102,16 @@ export function stopFrames() {
 }
 
 /**
+ * Conversation mode: the end of one user turn on a session that stays open.
+ * `audioStreamEnd` tells Gemini the audio paused, so it finalizes the
+ * transcript it holds; the client "can reopen the stream by sending an audio
+ * message" (Live API reference), so the same session takes the next turn.
+ */
+export function commitFrames() {
+  return [{ realtimeInput: { audioStreamEnd: true } }];
+}
+
+/**
  * Reduce a Gemini error payload to a short string. The shape varies between
  * `{ error: { code, message, status } }` and a bare string.
  *
@@ -162,5 +172,6 @@ export default {
   readyFrames,
   audioFrame,
   stopFrames,
+  commitFrames,
   interpret
 };

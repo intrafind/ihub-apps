@@ -97,6 +97,18 @@ export function stopFrames() {
 }
 
 /**
+ * Conversation mode: the end of one user turn on a session that stays open.
+ * `input_audio.flush` makes Mistral transcribe the audio it still holds back
+ * (the streaming delay) without ending the stream, so more audio can follow.
+ * `input_audio.end` would finish the session, so it is not sent. There is no
+ * `transcription.done` per turn: the bridge takes the turn's text from the
+ * deltas that follow, once they stop.
+ */
+export function commitFrames() {
+  return [{ type: 'input_audio.flush' }];
+}
+
+/**
  * Reduce a Mistral error payload to a short string. `error.message` may be a
  * string or an object (validation details).
  *
@@ -153,5 +165,6 @@ export default {
   readyFrames,
   audioFrame,
   stopFrames,
+  commitFrames,
   interpret
 };

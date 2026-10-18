@@ -103,7 +103,10 @@ function ModelSelector({
   }
 
   return (
-    <div className="relative" ref={dropdownRef}>
+    // `min-w-0` here and on the button: the bar next to it (voice mode, Send)
+    // does not shrink, so on a 320 px phone the selector has to, or the Send
+    // button is pushed out of the card.
+    <div className="relative min-w-0" ref={dropdownRef}>
       <button
         type="button"
         onClick={() => !disabled && setIsOpen(!isOpen)}
@@ -114,7 +117,7 @@ function ModelSelector({
           }
         }}
         disabled={disabled}
-        className={`flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+        className={`flex max-w-full items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
           disabled
             ? 'bg-gray-100 text-gray-400 cursor-not-allowed dark:bg-gray-700 dark:text-gray-500'
             : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'
@@ -123,8 +126,8 @@ function ModelSelector({
         aria-haspopup="menu"
         aria-expanded={isOpen}
       >
-        <span className="max-w-[150px] truncate">{selectedModelName}</span>
-        <Icon name={isOpen ? 'chevronUp' : 'chevronDown'} size="sm" />
+        <span className="min-w-0 max-w-[150px] truncate">{selectedModelName}</span>
+        <Icon name={isOpen ? 'chevronUp' : 'chevronDown'} size="sm" className="shrink-0" />
       </button>
 
       {isOpen && !disabled && (

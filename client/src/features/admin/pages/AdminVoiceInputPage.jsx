@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { makeAdminApiCall } from '../../../api/adminApi';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
+import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import {
   fromDictationValue,
@@ -10,7 +11,9 @@ import {
   toDictationValue
 } from '../../voice/utils/speechService';
 import { isStreamingTranscriptionModel } from '../utils/transcriptionMode';
+import { DEFAULT_VOICE_MODE, toFormVoiceMode, toSavedVoiceMode } from '../utils/voiceMode';
 import VoiceInputTestPanel from '../components/voice/VoiceInputTestPanel';
+import VoiceModeSettings from '../components/voice/VoiceModeSettings';
 import ReadAloudButton from '../../voice/components/ReadAloudButton';
 import useReadAloudPlayback from '../../voice/hooks/useReadAloudPlayback';
 import { stop as stopReadAloud } from '../../voice/utils/readAloud';
@@ -22,14 +25,16 @@ const DEFAULT_SPEECH = {
   defaultService: 'browser',
   dictation: { modelId: '' },
   tts: { enabled: false, defaultModelId: '' },
-  azure: { enabled: false, host: '', region: '', subscriptionKey: '' }
+  azure: { enabled: false, host: '', region: '', subscriptionKey: '' },
+  voiceMode: DEFAULT_VOICE_MODE
 };
 
 const toFormSpeech = (speech = {}) => ({
   defaultService: speech.defaultService || DEFAULT_SPEECH.defaultService,
   dictation: { ...DEFAULT_SPEECH.dictation, ...speech.dictation },
   tts: { ...DEFAULT_SPEECH.tts, ...speech.tts },
-  azure: { ...DEFAULT_SPEECH.azure, ...speech.azure }
+  azure: { ...DEFAULT_SPEECH.azure, ...speech.azure },
+  voiceMode: toFormVoiceMode(speech.voiceMode)
 });
 
 /**
@@ -83,6 +88,7 @@ function AdminVoiceInputPage() {
   const [ttsModels, setTtsModels] = useState(null);
   const [ttsSample, setTtsSample] = useState('');
   const readAloudTest = useReadAloudPlayback(READ_ALOUD_TEST_ID);
+  const voiceModeFlagEnabled = useFeatureFlags().isEnabled('voiceMode', false);
 
   useEffect(() => {
     void loadConfig();
@@ -147,7 +153,8 @@ function AdminVoiceInputPage() {
         defaultService: config.defaultService,
         dictation: { ...platform.speech?.dictation, ...config.dictation },
         tts: { ...platform.speech?.tts, ...config.tts },
-        azure: config.azure
+        azure: config.azure,
+        voiceMode: toSavedVoiceMode(config.voiceMode, platform.speech?.voiceMode)
       };
       await makeAdminApiCall('/admin/configs/platform', { method: 'POST', body: platform });
       // Re-read so the keys show their redacted state again. Not loadConfig():
@@ -230,6 +237,9 @@ function AdminVoiceInputPage() {
     setAzureTestResult(null);
     setConfig(prev => ({ ...prev, azure: { ...prev.azure, [field]: value } }));
   };
+
+  const setVoiceMode = patch =>
+    setConfig(prev => ({ ...prev, voiceMode: { ...prev.voiceMode, ...patch } }));
 
   if (loading) {
     return (
@@ -541,6 +551,19 @@ function AdminVoiceInputPage() {
             </p>
           </div>
         </div>
+
+        {/* Voice mode (spoken conversation) */}
+        <VoiceModeSettings
+          voiceMode={config.voiceMode}
+          onChange={setVoiceMode}
+          ttsModels={ttsModels}
+          defaultTtsModelId={config.tts.defaultModelId}
+          flagEnabled={voiceModeFlagEnabled}
+          speech={config}
+          savedEnabled={savedConfig.voiceMode?.enabled === true}
+          t={t}
+          language={i18n.language}
+        />
 
         {/* Azure */}
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6 space-y-4">
