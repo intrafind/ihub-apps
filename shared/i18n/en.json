@@ -4881,6 +4881,9 @@
       "readPage": "Reading a page…",
       "working": "Working on it…"
     },
+    "input": {
+      "label": "Type a message"
+    },
     "controls": {
       "holdToTalk": "Hold to talk",
       "release": "Release to send",

@@ -52,6 +52,7 @@ function makeVoiceMode({
     setListeningStyle: jest.fn(),
     setBargeIn: jest.fn(),
     setCaptions: jest.fn(),
+    sendText: jest.fn(async () => true),
     ...overrides
   };
 }
@@ -664,6 +665,94 @@ describe('the chat stays usable', () => {
   });
 });
 
+describe('typing while voice mode is on', () => {
+  /** A dock with a draft the test controls, like AppChat's composer state. */
+  function renderTyping({ value = '', ...options } = {}) {
+    const voiceMode = makeVoiceMode({ listeningStyle: 'hands-free', ...options });
+    const onChange = jest.fn();
+    const view = render(<VoiceModeDock voiceMode={voiceMode} value={value} onChange={onChange} />);
+    return {
+      voiceMode,
+      onChange,
+      view,
+      field: screen.queryByRole('textbox', { name: 'Type a message' })
+    };
+  }
+
+  test('the dock is a text field; empty, it shows the state as its placeholder', () => {
+    const { field } = renderTyping();
+    expect(field).toHaveValue('');
+    expect(screen.getByTestId('voice-mode-placeholder')).toHaveTextContent('Listening…');
+    expect(screen.getByTestId('voice-mode-placeholder')).toHaveAttribute('aria-hidden', 'true');
+  });
+
+  test('what is typed goes to the draft, and hides the placeholder', () => {
+    const { field, onChange } = renderTyping({ value: 'Hi' });
+    expect(screen.queryByTestId('voice-mode-placeholder')).toBeNull();
+    fireEvent.change(field, { target: { value: 'Hi there' } });
+    expect(onChange).toHaveBeenCalledWith('Hi there');
+  });
+
+  test('Enter sends the message into the conversation and clears the field', async () => {
+    const { field, voiceMode, onChange } = renderTyping({ value: '  What about Rome?  ' });
+    await act(async () => {
+      fireEvent.keyDown(field, { key: 'Enter' });
+    });
+    expect(voiceMode.sendText).toHaveBeenCalledWith('What about Rome?');
+    expect(onChange).toHaveBeenCalledWith('');
+  });
+
+  test('Shift+Enter is a new line, not a send', () => {
+    const { field, voiceMode } = renderTyping({ value: 'Line one' });
+    fireEvent.keyDown(field, { key: 'Enter', shiftKey: true });
+    expect(voiceMode.sendText).not.toHaveBeenCalled();
+  });
+
+  test('a message the chat turned away stays in the field', async () => {
+    const { field, onChange } = renderTyping({
+      value: 'Hello',
+      sendText: jest.fn(async () => false)
+    });
+    await act(async () => {
+      fireEvent.keyDown(field, { key: 'Enter' });
+    });
+    expect(onChange).not.toHaveBeenCalledWith('');
+  });
+
+  test('Send shows up with something typed, and sends it', async () => {
+    const { voiceMode, view } = renderTyping();
+    expect(screen.queryByRole('button', { name: 'Send' })).toBeNull();
+    view.rerender(<VoiceModeDock voiceMode={voiceMode} value="Hello" onChange={() => {}} />);
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Send' }), { detail: 1 });
+    });
+    expect(voiceMode.sendText).toHaveBeenCalledWith('Hello');
+  });
+
+  test('nothing is sent while connecting', () => {
+    const { field, voiceMode } = renderTyping({ value: 'Hello', status: VOICE_STATUS.CONNECTING });
+    expect(screen.getByRole('button', { name: 'Send' })).toBeDisabled();
+    fireEvent.keyDown(field, { key: 'Enter' });
+    expect(voiceMode.sendText).not.toHaveBeenCalled();
+  });
+
+  test('Space in the field types, it does not talk', () => {
+    const { field, voiceMode } = renderTyping({ listeningStyle: 'push-to-talk', value: 'a' });
+    field.focus();
+    fireEvent.keyDown(field, { key: ' ' });
+    expect(voiceMode.pushToTalkStart).not.toHaveBeenCalled();
+  });
+
+  test('the field makes way for the error and its way out', () => {
+    renderTyping({
+      status: VOICE_STATUS.ERROR,
+      state: { error: { code: 'service', message: 'x' } }
+    });
+    expect(screen.queryByRole('textbox')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument();
+  });
+});
+
 describe('the live transcript', () => {
   const transcript = () => screen.queryByTestId('voice-mode-transcript');
 
@@ -700,7 +789,7 @@ describe('the live transcript', () => {
       state: { userCaption: { text: 'What is the weather', final: true }, runActive: true }
     });
     expect(transcript()).toBeNull();
-    expect(screen.getByTestId('voice-mode-status')).not.toHaveClass('sr-only');
+    expect(screen.getByTestId('voice-mode-placeholder')).toHaveTextContent('Thinking…');
   });
 
   test('is gone when the app listens again: the sentence is in the chat', () => {

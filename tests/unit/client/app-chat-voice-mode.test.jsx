@@ -229,7 +229,9 @@ jest.mock('../../../client/src/features/voice/hooks/useVoiceMode', () => {
 });
 jest.mock('../../../client/src/features/voice/components/VoiceModeDock', () => ({
   __esModule: true,
-  default: () => <div data-testid="voice-dock" />
+  default: ({ value, onChange }) => (
+    <textarea data-testid="voice-dock" value={value} onChange={e => onChange(e.target.value)} />
+  )
 }));
 jest.mock('../../../client/src/features/voice/hooks/useVoiceCommands', () => ({
   __esModule: true,
@@ -453,6 +455,22 @@ describe('a spoken turn', () => {
     expect(turn.params.modelId).toBe('model-x');
   });
 
+  test('typed into the voice dock: answered as a voice turn, but not marked as spoken', async () => {
+    renderChat();
+    await screen.findAllByTestId('composer');
+
+    let taken;
+    await act(async () => {
+      taken = await mockVoiceMode.options.sendTurn('and Rome?', { typed: true });
+    });
+    expect(taken).toBe(true);
+
+    const turn = sent();
+    expect(turn.params.voiceMode).toBe(true);
+    expect('inputMode' in turn.displayMessage.meta).toBe(false);
+    expect(turn.apiMessage.content).toBe('and Rome?');
+  });
+
   test('a typed turn is neither flagged nor marked', async () => {
     renderChat();
     await screen.findAllByTestId('composer');
@@ -671,6 +689,14 @@ describe('while voice mode is open', () => {
     for (const transcript of screen.getAllByTestId('transcript')) {
       expect(transcript).toHaveAttribute('data-editable', 'true');
     }
+  });
+
+  test("the dock types into the composer's draft, both ways", async () => {
+    await open();
+    fireEvent.change(typedField(), { target: { value: 'a draft' } });
+    expect(screen.getByTestId('voice-dock')).toHaveValue('a draft');
+    fireEvent.change(screen.getByTestId('voice-dock'), { target: { value: 'typed in voice' } });
+    expect(typedField()).toHaveValue('typed in voice');
   });
 
   test('the composer is told voice mode is open', async () => {

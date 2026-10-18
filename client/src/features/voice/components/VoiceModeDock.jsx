@@ -368,18 +368,23 @@ const TRANSCRIPT_TAIL = 160;
  * in it as a normal message, and the part of the answer still to be read out
  * is muted in the message itself (read-along).
  *
- * The dock shows the state in words (or what the user is saying), level bars
- * and a soft glow in the state's colour, and the controls: settings, Stop the
- * answer, Mute, Hold to talk (push-to-talk) and End.
+ * The dock stays a text field, like Claude's composer: a typed message joins
+ * the spoken conversation (`voiceMode.sendText`) and is answered out loud.
+ * While the field is empty it shows the state in words, or what the user is
+ * saying. Level bars and a soft glow show the state's colour, and the controls
+ * are: settings, Stop the answer, Mute, Hold to talk (push-to-talk), Send
+ * (with something typed) and End.
  *
  * Keyboard: Esc ends voice mode (or closes the settings first); Space is
- * push-to-talk. The host mounts exactly one dock: its listeners are on the
- * window.
+ * push-to-talk, except in the text field; Enter sends what is typed. The host
+ * mounts exactly one dock: its listeners are on the window.
  *
  * @param {Object} props
  * @param {ReturnType<import('../hooks/useVoiceMode').useVoiceMode>} props.voiceMode
+ * @param {string} [props.value] - What is typed in the dock.
+ * @param {(text: string) => void} [props.onChange]
  */
-export default function VoiceModeDock({ voiceMode }) {
+export default function VoiceModeDock({ voiceMode, value = '', onChange }) {
   const { t } = useTranslation();
   const { state, prefs, levelRef } = voiceMode;
   const { status } = state;
@@ -387,6 +392,7 @@ export default function VoiceModeDock({ voiceMode }) {
   const settingsButtonRef = useRef(null);
   const holdButtonRef = useRef(null);
   const retryRef = useRef(null);
+  const textRef = useRef(null);
   // Who is holding push-to-talk right now: 'key' (Space, Enter), 'pointer'
   // (mouse, touch, pen) or 'latch' (a click without a press, see below).
   const holdSourceRef = useRef(null);
@@ -394,6 +400,7 @@ export default function VoiceModeDock({ voiceMode }) {
   const settingsPanelId = useId();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [talkDown, setTalkDown] = useState(false);
+  const [sending, setSending] = useState(false);
   const pushToTalk = prefs.listeningStyle === 'push-to-talk';
   // A key or button still down when push-to-talk is switched off is not "held".
   const talkHeld = talkDown && pushToTalk;
@@ -415,6 +422,14 @@ export default function VoiceModeDock({ voiceMode }) {
       }
     };
   }, []);
+
+  // The field grows with what is typed, up to a few lines.
+  useEffect(() => {
+    const field = textRef.current;
+    if (!field) return;
+    field.style.height = 'auto';
+    field.style.height = `${Math.min(field.scrollHeight, 160)}px`;
+  }, [value]);
 
   // The error comes with its way out: put the keyboard on "Try again".
   useEffect(() => {
@@ -560,6 +575,20 @@ export default function VoiceModeDock({ voiceMode }) {
       : t('voiceMode.hint.handsFree', 'Esc to end');
   const canStopAnswer = status === VOICE_STATUS.SPEAKING || status === VOICE_STATUS.THINKING;
   const isError = status === VOICE_STATUS.ERROR;
+  const typed = value.trim();
+  const canSend = Boolean(typed) && ready && !sending;
+
+  // A typed message: it stops an answer that is still running, and is answered
+  // out loud. The field is cleared once the chat took it.
+  const submitText = async () => {
+    if (!canSend) return;
+    setSending(true);
+    try {
+      if (await voiceMode.sendText(typed)) onChange?.('');
+    } finally {
+      setSending(false);
+    }
+  };
 
   return (
     <section
@@ -592,40 +621,13 @@ export default function VoiceModeDock({ voiceMode }) {
           isError ? 'border-red-300 dark:border-red-700' : 'border-gray-300 dark:border-gray-600'
         }`}
       >
-        <div className="flex min-h-12 flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3">
-          <p
-            role="status"
-            data-testid="voice-mode-status"
-            className={
-              statusLabel && !transcriptShown
-                ? `text-base ${
-                    status === VOICE_STATUS.THINKING
-                      ? 'text-violet-700 dark:text-violet-300'
-                      : muted
-                        ? 'text-amber-800 dark:text-amber-200'
-                        : 'text-gray-500 dark:text-gray-400'
-                  }`
-                : 'sr-only'
-            }
-          >
+        <div className="relative flex min-h-12 flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3">
+          {/* One stable live region for the state; what is on the screen is
+              the field's placeholder below. */}
+          <p role="status" data-testid="voice-mode-status" className="sr-only">
             {statusLabel}
           </p>
-          {transcriptShown && (
-            // The words keep coming while the user talks: the status line says
-            // "Listening" once instead of reading every interim word aloud.
-            <p
-              aria-hidden="true"
-              data-testid="voice-mode-transcript"
-              className={`line-clamp-2 min-w-0 flex-1 text-base ${
-                state.userCaption.final
-                  ? 'text-gray-900 dark:text-gray-100'
-                  : 'text-gray-600 dark:text-gray-300'
-              }`}
-            >
-              {transcriptShown}
-            </p>
-          )}
-          {isError && (
+          {isError ? (
             <>
               <p
                 role="alert"
@@ -646,6 +648,46 @@ export default function VoiceModeDock({ voiceMode }) {
               >
                 {t('voiceMode.controls.retry', 'Try again')}
               </button>
+            </>
+          ) : (
+            <>
+              <textarea
+                ref={textRef}
+                rows={1}
+                value={value}
+                onChange={event => onChange?.(event.target.value)}
+                onKeyDown={event => {
+                  if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
+                    event.preventDefault();
+                    submitText();
+                  }
+                }}
+                aria-label={t('voiceMode.input.label', 'Type a message')}
+                data-testid="voice-mode-input"
+                className="max-h-40 min-w-0 flex-1 resize-none bg-transparent text-base leading-6 text-gray-900 outline-hidden dark:text-gray-100"
+              />
+              {!value && (
+                // The placeholder: the state, or the words the user is saying.
+                // The status line above is what a screen reader hears, once,
+                // instead of every interim word.
+                <p
+                  aria-hidden="true"
+                  data-testid={transcriptShown ? 'voice-mode-transcript' : 'voice-mode-placeholder'}
+                  className={`pointer-events-none absolute inset-x-4 top-3 line-clamp-2 text-base leading-6 ${
+                    transcriptShown
+                      ? state.userCaption.final
+                        ? 'text-gray-900 dark:text-gray-100'
+                        : 'text-gray-600 dark:text-gray-300'
+                      : status === VOICE_STATUS.THINKING
+                        ? 'text-violet-700 dark:text-violet-300'
+                        : muted
+                          ? 'text-amber-800 dark:text-amber-200'
+                          : 'text-gray-500 dark:text-gray-400'
+                  }`}
+                >
+                  {transcriptShown || statusLabel}
+                </p>
+              )}
             </>
           )}
         </div>
@@ -769,6 +811,22 @@ export default function VoiceModeDock({ voiceMode }) {
               {talkHeld
                 ? t('voiceMode.controls.release', 'Release to send')
                 : t('voiceMode.controls.holdToTalk', 'Hold to talk')}
+            </button>
+          )}
+
+          {typed && (
+            <button
+              type="button"
+              onClick={event => {
+                submitText();
+                releaseFocusAfterPointer(event);
+              }}
+              disabled={!canSend}
+              aria-label={t('common.send', 'Send')}
+              title={t('common.send', 'Send')}
+              className={`${ICON_BUTTON} bg-indigo-600 text-white hover:bg-indigo-700`}
+            >
+              <Icon name="arrow-up" size="md" />
             </button>
           )}
 

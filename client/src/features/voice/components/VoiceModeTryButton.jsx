@@ -68,6 +68,7 @@ function toPublicSpeech(speech) {
 export default function VoiceModeTryButton({ speech, savedEnabled = true }) {
   const { t, i18n } = useTranslation();
   const [messages, setMessages] = useState([]);
+  const [draft, setDraft] = useState('');
   const cardRef = useRef(null);
 
   const availability = useMemo(() => {
@@ -227,7 +228,7 @@ export default function VoiceModeTryButton({ speech, savedEnabled = true }) {
                 ))
               )}
             </div>
-            <VoiceModeDock voiceMode={voiceMode} />
+            <VoiceModeDock voiceMode={voiceMode} value={draft} onChange={setDraft} />
           </div>
         </div>
       )}

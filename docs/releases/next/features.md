@@ -14,5 +14,7 @@ while you talk, with its sources and links.
   settings open upwards from the dock.
 - The answer is marked in the chat message itself as it is read out: the part still to come is
   grey. The setting that was called **Show captions** is now **Show live transcript**.
+- The dock stays a text field, like Claude's: a typed message joins the conversation and is
+  answered out loud. It stops an answer that is still running.
 - Messages cannot be edited while voice mode is on.
 - **Try it** under **Admin → Voice Input** uses the same dock, with the conversation above it.

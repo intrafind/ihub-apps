@@ -69,13 +69,28 @@ function lastClarification(messages) {
   return [...(messages || [])].reverse().find(message => message.clarification)?.clarification;
 }
 
-/** Send the spoken text through the chat; a send that fails or throws is "not accepted". */
-async function sendSpoken(sendTurn, spoken) {
+/** Send the turn's text through the chat; a send that fails or throws is "not accepted". */
+async function sendSpoken(sendTurn, spoken, options) {
   try {
-    return await sendTurn(spoken);
+    return await (options ? sendTurn(spoken, options) : sendTurn(spoken));
   } catch (error) {
     debugLog('voiceMode: sending the turn failed', error);
     return false;
+  }
+}
+
+/** How long a typed message waits for the answer it stopped to wind down. */
+const STOPPED_RUN_GRACE_MS = 3000;
+
+/**
+ * Resolves once the chat has no run going (or after `timeoutMs`): a run that
+ * was just cancelled ends a moment later, and the chat turns a new message
+ * away while one is running.
+ */
+async function untilIdle(latestRef, timeoutMs = STOPPED_RUN_GRACE_MS) {
+  const until = Date.now() + timeoutMs;
+  while (latestRef.current.processing && Date.now() < until) {
+    await new Promise(resolve => setTimeout(resolve, 50));
   }
 }
 
@@ -166,8 +181,9 @@ function syncNewSession(session, applied, latest, muted) {
  * @param {Array} params.messages - The chat's messages (`useAppChat`).
  * @param {boolean} params.processing - A turn is running (`useAppChat`).
  * @param {boolean} params.clarificationPending - The app asked a question and waits.
- * @param {(text: string) => Promise<boolean>} params.sendTurn - Send a spoken turn; resolves
- *   to whether it was accepted.
+ * @param {(text: string, options?: { typed?: boolean }) => Promise<boolean>} params.sendTurn -
+ *   Send a turn; resolves to whether it was accepted. `typed` is a message typed while voice
+ *   mode is on (see `sendText`), not spoken.
  * @param {(answer: { value: any, displayText: string }) => void} params.answerClarification
  * @param {(source: string) => void} params.cancelGeneration - Stop the running turn.
  * @param {(reason: 'user'|'time-limit'|'error') => void} [params.onEnded]
@@ -228,6 +244,8 @@ export function useVoiceMode({
    * toolKey, silenced }`, which the answer is read against.
    */
   const turnRef = useRef(null);
+  /** A typed message is on its way (`sendText`): a late transcript is no turn. */
+  const typingRef = useRef(false);
   /**
    * The text of a transcript that arrived while the user was already talking
    * again: the first part of a sentence the pause cut in two, to be put in
@@ -332,9 +350,12 @@ export function useVoiceMode({
     [send]
   );
 
-  /** Send the turn (or answer the app's question with it) and start waiting for the answer. */
+  /**
+   * Send the turn (or answer the app's question with it) and start waiting for
+   * the answer. Resolves to whether the chat took it.
+   */
   const deliverTurn = useCallback(
-    async (spoken, timing) => {
+    async (spoken, timing, { typed = false } = {}) => {
       const current = latestRef.current;
       // What the user said to a question the app asked. Words that name none of
       // its options are not an answer: guessing one would put the wrong
@@ -347,7 +368,7 @@ export function useVoiceMode({
           'voiceMode.errors.notUnderstood',
           'I did not catch which option you meant. Please say it again.'
         );
-        return;
+        return false;
       }
 
       turnRef.current = {
@@ -355,7 +376,10 @@ export function useVoiceMode({
         baseCount: current.messages.length,
         timing: timing || {},
         answered: false,
-        text: ''
+        text: '',
+        // A message typed while muted: the answer is only text, like the rest
+        // of a muted conversation.
+        silenced: stateRef.current.muted
       };
       sessionRef.current?.setAgentState('thinking');
 
@@ -368,22 +392,25 @@ export function useVoiceMode({
           ...answer
         });
       } else {
-        accepted = await sendSpoken(current.sendTurn, spoken);
+        accepted = await sendSpoken(current.sendTurn, spoken, typed ? { typed } : undefined);
       }
       if (!accepted) {
         endTurnWithMessage(
           'voiceMode.errors.sendFailed',
           'I could not send that. Please try again.'
         );
-        return;
+        return false;
       }
       send({ type: 'SENT' });
+      return true;
     },
     [endTurnWithMessage, send]
   );
 
   const handleFinal = useCallback(
     async text => {
+      // The words of a sentence the user gave up for a typed message.
+      if (typingRef.current) return;
       const heard = String(text ?? '').trim();
       if (stateRef.current.status === VOICE_STATUS.USER_SPEAKING) {
         // The user paused, the silence ended the turn, and they went on before
@@ -414,6 +441,36 @@ export function useVoiceMode({
       await deliverTurn(spoken, turn && !turn.sent ? turn.timing : undefined);
     },
     [deliverTurn, send]
+  );
+
+  /**
+   * A message typed while voice mode is on (the way Claude's composer stays a
+   * text field): a turn like a spoken one, answered out loud, but not marked as
+   * spoken. It takes over from an answer still running, like Stop, and from a
+   * sentence the user had begun to say. Resolves to whether the chat took it.
+   */
+  const sendText = useCallback(
+    async raw => {
+      const text = String(raw ?? '').trim();
+      const { status, runActive } = stateRef.current;
+      if (!text || status === VOICE_STATUS.CONNECTING || status === VOICE_STATUS.ERROR) {
+        return false;
+      }
+      if (status === VOICE_STATUS.THINKING || status === VOICE_STATUS.SPEAKING || runActive) {
+        bargeIn(true);
+      }
+      prefixRef.current = '';
+      turnRef.current = null;
+      typingRef.current = true;
+      send({ type: 'TYPED' });
+      try {
+        await untilIdle(latestRef);
+        return await deliverTurn(text, undefined, { typed: true });
+      } finally {
+        typingRef.current = false;
+      }
+    },
+    [bargeIn, deliverTurn, send]
   );
 
   /** The session ended a turn (silence, or push-to-talk released); the transcript follows. */
@@ -726,6 +783,7 @@ export function useVoiceMode({
     end,
     retry,
     toggle: () => (active ? end('user') : start()),
+    sendText,
     setMuted,
     pushToTalkStart: () => sessionRef.current?.pushToTalkStart(),
     pushToTalkEnd: () => sessionRef.current?.pushToTalkEnd(),

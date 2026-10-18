@@ -1481,3 +1481,96 @@ describe('marking what has been spoken of the answer', () => {
     expect(hook.result.current.state.spokenChars).toBeNull();
   });
 });
+
+describe('a typed turn (typing while voice mode is on)', () => {
+  const send = async (hook, text) => {
+    let accepted;
+    await act(async () => {
+      accepted = await hook.result.current.sendText(text);
+    });
+    return accepted;
+  };
+
+  test('goes out flagged as typed and is answered out loud', async () => {
+    const hook = setup();
+    await startAndReady(hook);
+    expect(await send(hook, '  What about Rome?  ')).toBe(true);
+    expect(hook.calls.sendTurn).toHaveBeenCalledWith('What about Rome?', { typed: true });
+    expect(status(hook)).toBe('thinking');
+    expect(hook.result.current.state.runActive).toBe(true);
+
+    hook.setProps({
+      messages: [USER, assistant({ content: 'Rome is lovely.', loading: false })],
+      processing: false
+    });
+    expect(mockQueue.update).toHaveBeenLastCalledWith('Rome is lovely.', { final: true });
+  });
+
+  test('stops an answer that is still being spoken, then goes out', async () => {
+    const hook = setup();
+    await startAndReady(hook);
+    await speakTurn();
+    hook.setProps({ messages: [USER, assistant({ content: 'Long answer' })], processing: true });
+    act(() => mockHandlers.queue.onSpeakingStart());
+    expect(status(hook)).toBe('speaking');
+
+    const sending = act(async () => {
+      await hook.result.current.sendText('Stop, something else');
+    });
+    // The stopped run winds down; the chat would turn the message away before.
+    expect(mockQueue.interrupt).toHaveBeenCalled();
+    expect(hook.calls.cancelGeneration).toHaveBeenCalledWith('voice-barge-in');
+    hook.setProps({ processing: false });
+    await sending;
+    expect(hook.calls.sendTurn).toHaveBeenLastCalledWith('Stop, something else', {
+      typed: true
+    });
+  });
+
+  test('while muted the answer is only text', async () => {
+    const hook = setup();
+    await startAndReady(hook);
+    act(() => hook.result.current.setMuted(true));
+    expect(await send(hook, 'Quietly, please')).toBe(true);
+    expect(status(hook)).toBe('paused');
+    mockQueue.update.mockClear();
+    hook.setProps({
+      messages: [USER, assistant({ content: 'Sure.', loading: false })],
+      processing: false
+    });
+    expect(mockQueue.update).not.toHaveBeenCalled();
+    expect(hook.result.current.state.runActive).toBe(false);
+  });
+
+  test('nothing, or nothing but spaces, is not sent; nor is anything before the session is up', async () => {
+    const hook = setup();
+    expect(await send(hook, 'Too early')).toBe(false);
+    await startAndReady(hook);
+    expect(await send(hook, '   ')).toBe(false);
+    expect(hook.calls.sendTurn).not.toHaveBeenCalled();
+  });
+
+  test('a transcript that arrives while the typed message goes out is no second turn', async () => {
+    let release;
+    const sendTurn = jest.fn(
+      () =>
+        new Promise(resolve => {
+          release = resolve;
+        })
+    );
+    const hook = setup({ sendTurn });
+    await startAndReady(hook);
+    emit({ type: 'speech-start' });
+    emit({ type: 'turn-end' });
+    const sending = act(async () => {
+      await hook.result.current.sendText('Typed instead');
+    });
+    await act(async () => {
+      mockHandlers.onEvent({ type: 'final', text: 'what I had started to say' });
+    });
+    release(true);
+    await sending;
+    expect(sendTurn).toHaveBeenCalledTimes(1);
+    expect(sendTurn).toHaveBeenCalledWith('Typed instead', { typed: true });
+  });
+});

@@ -448,15 +448,33 @@ for (const service of ['browser', 'model', 'azure']) {
       expect(stops).toBeGreaterThanOrEqual(1);
     }
 
+    // Typing works while voice mode is on: the message joins the conversation
+    // and is answered out loud, like a spoken one.
+    const chatsBefore = seen.chat.length;
+    const ttsBefore = seen.tts.length;
+    const field = page.getByRole('textbox', { name: 'Type a message' });
+    await field.fill('And what about Germany?');
+    await field.press('Enter');
+    await expect(field).toHaveValue('');
+    await expect(page.locator('.chat-widget-message.user:visible').nth(1)).toContainText(
+      'And what about Germany?'
+    );
+    await expect.poll(() => seen.chat.length, { timeout: 30_000 }).toBeGreaterThan(chatsBefore);
+    await expect.poll(() => seen.tts.length, { timeout: 30_000 }).toBeGreaterThan(ttsBefore);
+    await expect(status).toHaveText(/Listening/, { timeout: 45_000 });
+
     // End returns to the chat, and every turn is still there as text.
     await page.getByRole('button', { name: 'End voice mode (Esc)' }).click();
     await expect(dock).toBeHidden();
     await expect(page.locator('.chat-widget-message.user').first()).toContainText(QUESTION);
     await expect(page.locator('.chat-widget-message.assistant').first()).toContainText('Paris');
-    // The spoken turn carries the waveform marker.
+    // The spoken turn carries the waveform marker; the typed one does not.
     await expect(
       page.locator('.chat-widget-message.user .voice-wave-icon:visible').first()
     ).toBeVisible();
+    await expect(
+      page.locator('.chat-widget-message.user:visible').nth(1).locator('.voice-wave-icon')
+    ).toHaveCount(0);
     // The button is idle again.
     await expect(voiceButton).toHaveAttribute('aria-pressed', 'false');
   });

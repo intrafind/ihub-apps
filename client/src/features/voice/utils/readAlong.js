@@ -66,7 +66,7 @@ export function findSpokenBoundary(root, spokenText) {
       continue;
     }
     COUNTED.lastIndex = 0;
-    let match;
+    let match = null;
     while ((match = COUNTED.exec(text))) {
       seen += 1;
       if (seen === target) {

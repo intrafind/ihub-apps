@@ -175,7 +175,8 @@ Three more voice features may be available:
   app answers when you pause; in *push-to-talk* mode you hold the button or the Space bar while you
   speak. Voice mode stays in the chat: the input field turns into a voice dock, your turns and the
   answers appear as messages while you talk, the answer is marked as far as it has been spoken,
-  **Esc** ends it, and you carry on by typing. Headphones work best. Your voice is never stored. See
+  and you can type a message into the dock at any time, which is answered out loud too. **Esc**
+  ends it. Headphones work best. Your voice is never stored. See
   [Voice mode](microphone-feature.md#voice-mode-spoken-conversation) for the details and the
   admin setup.
 

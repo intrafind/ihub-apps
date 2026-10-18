@@ -4846,6 +4846,9 @@
       "readPage": "Liest eine Seite…",
       "working": "Arbeitet daran…"
     },
+    "input": {
+      "label": "Nachricht eingeben"
+    },
     "controls": {
       "holdToTalk": "Zum Sprechen halten",
       "release": "Loslassen zum Senden",

@@ -2285,11 +2285,16 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
    */
   /**
    * Send the message. `startFormMessage` is a start form's rendered prompt.
-   * `voiceText` is a spoken turn from voice mode: it goes out like typed text
-   * (same prompt, model, tools and variables), flagged as a voice turn, and
-   * leaves whatever is typed in the composer alone.
+   * `voiceText` is a turn from voice mode: it goes out like typed text (same
+   * prompt, model, tools and variables), flagged as a voice turn, and leaves
+   * the files staged in the composer alone. It is marked as spoken unless it
+   * was typed into the voice dock (`typedInVoiceMode`).
    */
-  const handleSubmit = async (e, startFormMessage = null, { voiceText } = {}) => {
+  const handleSubmit = async (
+    e,
+    startFormMessage = null,
+    { voiceText, typedInVoiceMode = false } = {}
+  ) => {
     e.preventDefault();
     const isVoiceTurn = typeof voiceText === 'string';
     // A spoken turn is its own message: a file staged in the composer belongs
@@ -2501,7 +2506,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
           rawContent: typed,
           variables:
             carriesVariables && app?.variables?.length > 0 ? { ...validatedVariables } : undefined,
-          ...(isVoiceTurn ? { inputMode: 'voice' } : {}),
+          ...(isVoiceTurn && !typedInVoiceMode ? { inputMode: 'voice' } : {}),
           ...messageData
         }
       },
@@ -2605,11 +2610,15 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
     !showStartForm &&
     !transcriptionModel;
   const voiceTurnSentRef = useRef(false);
-  // A spoken turn: resolves to whether the chat took it (a missing required
-  // variable, a recording in progress or a running turn all turn it away).
-  const sendVoiceTurn = async text => {
+  // A voice mode turn, spoken or typed into the dock: resolves to whether the
+  // chat took it (a missing required variable, a recording in progress or a
+  // running turn all turn it away).
+  const sendVoiceTurn = async (text, { typed = false } = {}) => {
     voiceTurnSentRef.current = false;
-    await handleSubmit({ preventDefault() {} }, null, { voiceText: text });
+    await handleSubmit({ preventDefault() {} }, null, {
+      voiceText: text,
+      typedInVoiceMode: typed
+    });
     return voiceTurnSentRef.current;
   };
   // The answer to a question the app asked, spoken.
@@ -2703,24 +2712,6 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
   // each mount a composer (one hidden by CSS), but the dock must exist once: its
   // keyboard listeners are on the window. `48rem` is Tailwind's `md`.
   const isDesktopLayout = useMediaQuery('(min-width: 48rem)');
-
-  // Helper function to render the appropriate chat input component. `layout`
-  // names the layout it is rendered in ('mobile' / 'desktop'), or none where
-  // there is only one.
-  const renderChatInput = layout => {
-    const composer = renderComposer();
-    if (!voiceMode.active) return composer;
-    const showDock = !layout || (layout === 'desktop') === isDesktopLayout;
-    return (
-      <>
-        {/* Stays mounted, so its draft, attachments and menus survive voice mode. */}
-        <div hidden inert>
-          {composer}
-        </div>
-        {showDock && <VoiceModeDock voiceMode={voiceMode} />}
-      </>
-    );
-  };
 
   const renderComposer = () => {
     const currentModel = models.find(m => m.id === selectedModel);
@@ -2841,6 +2832,28 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
         // must not move the focus to the composer behind it.
         autoFocusSuspended={usageGuideViewerOpen}
       />
+    );
+  };
+
+  // Helper function to render the appropriate chat input component. `layout`
+  // names the layout it is rendered in ('mobile' / 'desktop'), or none where
+  // there is only one.
+  const renderChatInput = layout => {
+    const composer = renderComposer();
+    if (!voiceMode.active) return composer;
+    const showDock = !layout || (layout === 'desktop') === isDesktopLayout;
+    return (
+      <>
+        {/* Stays mounted, so its draft, attachments and menus survive voice mode. */}
+        <div hidden inert>
+          {composer}
+        </div>
+        {showDock && (
+          // The dock types into the composer's draft: what is typed stays when
+          // voice mode ends, and a draft from before shows up in the dock.
+          <VoiceModeDock voiceMode={voiceMode} value={input} onChange={setInput} />
+        )}
+      </>
     );
   };
 

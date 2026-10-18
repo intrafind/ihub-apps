@@ -49,6 +49,12 @@ supposed to be part of.
 - **The "Show captions" setting is now "Show live transcript"** (same pref key). It controls the
   dock transcript and the read-along mark.
 - **Admin "Try it"** renders a small chat with the dock under it.
+- **Typing while voice mode is on** (decided after the first version, like Claude). The dock's
+  first row is a text field bound to the composer's draft; its placeholder is the state or the
+  live transcript. Enter or Send calls `voiceMode.sendText`: it stops a running answer
+  (`bargeIn(true)`), waits for the cancelled run to end, and sends the text as a voice turn with
+  `{ typed: true }`. The answer is spoken (text only while muted), and the message is not marked
+  as spoken. A transcript that arrives while a typed message goes out starts no second turn.
 
 ## Kept from the overlay
 
@@ -60,7 +66,6 @@ colour as well as motion.
 
 ## Open questions
 
-- Typing during voice mode (Claude allows it; the concept says no).
 - An inline "jump to live" pill when the user has scrolled up.
 - Moderated test with 5–6 users (laptop speakers and phone): ask, interrupt, mute, find
   push-to-talk, recover from an error.
