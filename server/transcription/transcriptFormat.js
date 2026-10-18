@@ -85,7 +85,10 @@ function startsNewLine(line, prev, unit, splitByTime) {
   if (!line || unit.speaker !== line.speaker) return true;
   if (!splitByTime || unit.start === null || line.start === null) return false;
   const length = unit.start - line.start;
-  if (length >= MAX_LINE_SECONDS) return true;
+  // A unit that would end past the cap cuts as well: a Whisper segment can run
+  // for half a minute, and joining three of them must not make a 54 s line.
+  const endLength = (unit.end ?? unit.start) - line.start;
+  if (length >= MAX_LINE_SECONDS || endLength > MAX_LINE_SECONDS) return true;
   const pause = prev?.end != null ? unit.start - prev.end : 0;
   const boundary = SENTENCE_END.test(prev?.text || '') || pause >= PAUSE_SECONDS;
   return length >= TARGET_LINE_SECONDS && boundary;

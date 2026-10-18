@@ -307,6 +307,39 @@ describe('against a stub /audio/transcriptions endpoint', () => {
       expect(text).toContain('part 3.');
     });
 
+    test('a part without segments gives the plain transcript of every part', async () => {
+      let n = 0;
+      handler = (req, res) => {
+        n += 1;
+        if (n === 2) return json(res, { text: ' plain part' });
+        return json(res, segmented({ start: 1, end: 3, text: ` part ${n}.` }));
+      };
+      const { text } = await transcribe({
+        cfg: cfg({ options: { timestamps: true, maxChunkSeconds: 30 } }),
+        pcm: Buffer.alloc(70 * 16000 * 2),
+        annotate: true
+      });
+
+      expect(requests).toHaveLength(3);
+      expect(text).toBe('part 1. plain part part 3.');
+    });
+
+    test('segments without a top-level text still give the transcript', async () => {
+      handler = (req, res) => json(res, { segments: [{ start: 0, end: 2, text: ' Hallo Welt.' }] });
+      const annotated = await transcribe({
+        cfg: cfg({ options: { timestamps: true } }),
+        pcm: Buffer.alloc(32000),
+        annotate: true
+      });
+      expect(annotated.text).toBe('[00:00] Hallo Welt.');
+
+      const plain = await transcribe({
+        cfg: cfg({ options: { timestamps: true } }),
+        pcm: Buffer.alloc(32000)
+      });
+      expect(plain.text).toBe('Hallo Welt.');
+    });
+
     test('without annotate (dictation, voice mode) the config is ignored', async () => {
       handler = (req, res) => json(res, { text: ' Hallo Welt ' });
       const { text } = await transcribe({

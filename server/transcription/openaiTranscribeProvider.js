@@ -241,6 +241,7 @@ export async function transcribe({ cfg, pcm, sampleRate = 16000, signal, annotat
 
   const texts = [];
   const units = [];
+  let unsegmented = false;
   let offset = 0;
   for (const part of splitPcm(pcm, { sampleRate, maxChunkSeconds })) {
     const result = await transcribePart({
@@ -249,7 +250,15 @@ export async function transcribe({ cfg, pcm, sampleRate = 16000, signal, annotat
       signal,
       verbose: timestamps
     });
-    if (result.text) texts.push(result.text);
+    // A response may carry its text only as segments.
+    const text =
+      result.text ||
+      result.segments
+        .map(segment => segment.text)
+        .join('')
+        .trim();
+    if (text) texts.push(text);
+    if (text && !result.segments.length) unsegmented = true;
     for (const segment of result.segments) {
       units.push({
         text: segment.text,
@@ -259,12 +268,14 @@ export async function transcribe({ cfg, pcm, sampleRate = 16000, signal, annotat
     }
     offset += part.length / (sampleRate * 2);
   }
-  if (timestamps && units.length) {
+  // Lines only when every part has its segments: a part without them would
+  // otherwise be missing from the transcript.
+  if (timestamps && units.length && !unsegmented) {
     return { text: formatTranscript(units, { timestamps: true, speakerLabel }) };
   }
   if (timestamps && texts.length) {
     logger.warn(
-      'Whisper transcription: timestamps asked for, but the service returned no segments',
+      'Whisper transcription: timestamps asked for, but the service returned no segments for some of the audio',
       {
         component: 'OpenAITranscribe',
         model: cfg.model

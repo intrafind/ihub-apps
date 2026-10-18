@@ -119,6 +119,20 @@ describe('groupUnits', () => {
     expect(lines.map(line => line.start)).toEqual([0, 40, 80]);
   });
 
+  test('a unit that would end past 40 s starts a new line, even when it starts before', () => {
+    // Whisper segments: 0–18, 18–36 and 36–54 s, no sentence end, no pause.
+    const segments = [
+      { text: 'a', start: 0, end: 18 },
+      { text: 'b', start: 18, end: 36 },
+      { text: 'c', start: 36, end: 54 }
+    ];
+    const lines = groupUnits(segments, { splitByTime: true });
+    expect(lines.map(line => [line.start, line.text])).toEqual([
+      [0, 'a b'],
+      [36, 'c']
+    ]);
+  });
+
   test('without splitByTime a long stretch stays one line', () => {
     const units = Array.from({ length: 100 }, (_, i) => ({ text: `w${i}.`, start: i, end: i + 1 }));
     expect(groupUnits(units)).toHaveLength(1);

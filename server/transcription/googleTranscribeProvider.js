@@ -151,6 +151,24 @@ export function extractWords(body = {}) {
 }
 
 /**
+ * Whether some text block of a response has text but no word annotations, so a
+ * transcript built from the annotations alone would leave that text out.
+ *
+ * @param {Object} body - Parsed interactions response.
+ * @returns {boolean}
+ */
+export function hasUnannotatedText(body = {}) {
+  for (const step of Array.isArray(body.steps) ? body.steps : []) {
+    for (const block of Array.isArray(step?.content) ? step.content : []) {
+      if (block?.type !== 'text' || typeof block.text !== 'string' || !block.text.trim()) continue;
+      const notes = Array.isArray(block.annotations) ? block.annotations : [];
+      if (!notes.some(note => note?.type === 'word_info')) return true;
+    }
+  }
+  return false;
+}
+
+/**
  * True when an interaction is still running and should be polled.
  *
  * @param {string} [status]
@@ -407,11 +425,13 @@ export async function transcribe({ cfg, pcm, sampleRate = 16000, signal, annotat
   }
   const words = [];
   const plain = [];
+  let unannotated = false;
   let offset = 0;
   for (const part of annotatedParts(pcm, sampleRate)) {
     const wav = pcm16ToWav(part, { sampleRate });
     const completed = await transcribeWav({ cfg, base, wav, timed, signal });
     plain.push(extractTranscript(completed));
+    if (hasUnannotatedText(completed)) unannotated = true;
     for (const word of extractWords(completed)) {
       words.push({
         ...word,
@@ -421,9 +441,18 @@ export async function transcribe({ cfg, pcm, sampleRate = 16000, signal, annotat
     }
     offset += part.length / (sampleRate * 2);
   }
-  // No annotations came back (silence, or a response without them): the plain
-  // transcript is still the answer.
-  if (!words.length) return { text: plain.filter(Boolean).join('\n') };
+  // No annotations came back (silence, or a response without them), or some
+  // text came back without: the plain transcript is still the whole answer, and
+  // better than annotated lines that leave a part of the recording out.
+  if (!words.length || unannotated) {
+    if (unannotated) {
+      logger.warn('Gemini transcription: some text came back without annotations', {
+        component: 'GoogleTranscribe',
+        model: cfg.model
+      });
+    }
+    return { text: plain.filter(Boolean).join('\n') };
+  }
   return { text: formatTranscript(words, timed) };
 }
 

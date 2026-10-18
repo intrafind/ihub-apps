@@ -386,10 +386,13 @@ answer "what was said around minute 20?" from it. It is off by default and set p
   longer recording is sent in about equal parts, each cut at a pause. Times keep counting from the
   start of the recording. Speaker labels do not: Gemini numbers the speakers of each request on its
   own, so `Speaker 1` in the second half is not necessarily `Speaker 1` of the first.
+  If any part of a recording comes back without annotations, the plain transcript of the whole
+  recording is used instead, so no text is left out.
 - **Whisper** is asked for `verbose_json` and its segments are grouped into lines. Whisper does not
   tell speakers apart, so there is no `speakers` for it. The endpoint has to support
   `verbose_json` (OpenAI's `whisper-1` does; a vLLM or LLM Hub deployment depends on its version).
-  One that ignores it still returns the plain transcript, and the server logs a warning.
+  One that ignores it, or that returns no segments for part of a long recording, still gives the
+  plain transcript (all of it), and the server logs a warning.
 
 Transcription models never answer a prompt: they are listed in the chat's model selector (with `url`/`apiKey` stripped) so users can pick them to transcribe, but never as a magic-prompt, compare-mode or workflow model.
 

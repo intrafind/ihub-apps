@@ -25,6 +25,7 @@ import googleTranscribe, {
   buildTranscriptionConfig,
   extractTranscript,
   extractWords,
+  hasUnannotatedText,
   isPendingStatus,
   normalizeApiBase,
   transcribe
@@ -591,6 +592,58 @@ describe('googleTranscribeProvider — timestamps and speakers (stub Gemini API)
       mode: 'smart',
       custom_vocabulary: ['iHub']
     });
+  });
+
+  test('finds text that came back without word annotations', () => {
+    const block = (text, annotations) => ({ type: 'text', text, annotations });
+    const note = { type: 'word_info', text: 'Hi', start_offset: '0s', end_offset: '1s' };
+    const body = content => ({ steps: [{ type: 'model_output', content }] });
+
+    expect(hasUnannotatedText(body([block('Hi', [note])]))).toBe(false);
+    expect(hasUnannotatedText(body([block('Hi', [note]), block('Plain', undefined)]))).toBe(true);
+    expect(hasUnannotatedText(body([block('Hi', [{ type: 'other' }])]))).toBe(true);
+    // Nothing said, nothing missing.
+    expect(hasUnannotatedText(body([block('', undefined), block('  ', [])]))).toBe(false);
+    expect(hasUnannotatedText({})).toBe(false);
+  });
+
+  test('a part that comes back without annotations gives the plain transcript of all parts', async () => {
+    answers = [talk, completed('Plain only part.')];
+    const { text } = await transcribe({
+      cfg: cfg({ timestamps: true }),
+      pcm: Buffer.alloc(31 * 60 * 16000 * 2),
+      annotate: true
+    });
+
+    expect(interactions).toHaveLength(2);
+    expect(text).toBe('Welcome to the talk Thanks for having me\nPlain only part.');
+  });
+
+  test('a response that mixes annotated and plain text blocks gives the whole plain transcript', async () => {
+    answers = [
+      {
+        status: 'completed',
+        steps: [
+          {
+            type: 'model_output',
+            content: [
+              {
+                type: 'text',
+                text: 'Annotated block.',
+                annotations: [word('Annotated', 'spk_1', 0, 1)]
+              },
+              { type: 'text', text: 'Plain block.' }
+            ]
+          }
+        ]
+      }
+    ];
+    const { text } = await transcribe({
+      cfg: cfg({ timestamps: true }),
+      pcm: Buffer.alloc(32000),
+      annotate: true
+    });
+    expect(text).toBe('Annotated block.\nPlain block.');
   });
 
   test('a recording over 30 minutes goes up in parts and the times keep counting', async () => {
