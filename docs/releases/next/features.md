@@ -21,6 +21,21 @@ Audio is never stored; it goes only to the speech service the app already uses f
   written. Voice mode speaks with a text-to-speech model: the one chosen for voice mode, else the
   read-aloud default. Read aloud itself does not have to be switched on.
 
+## Usage Guide Opens in a Dialog
+
+An app's usage guide is now one "Usage guide" control that opens the guide in a dialog, in every
+state of the chat. It no longer appears as a question and answer in the chat, so the starter
+prompts and the chat input stay as they are and the guide is available while an answer is being
+written.
+
+- The control sits bottom left under the chat input — on the start screen, in a running chat and
+  in compare mode — and bottom left in the action row of an app's start form. Apps with starter
+  prompts also show a "New here? Usage guide" link under the starter prompts' subtitle.
+- The centered button below the starter prompts is gone, so the guide no longer looks like one
+  more prompt.
+- In the app editor's **Usage Guide** section, the former "Button text / question" field is now
+  the **Dialog heading**. The control itself is always labelled "Usage guide".
+
 ## Transcripts With Timestamps and Speakers
 
 A recording, audio file or video transcribed in a chat can now show when each stretch was said and
@@ -43,18 +58,3 @@ who said it, so a 30-minute talk is no longer one block of text:
   sent in parts; times keep counting, but speaker numbers are per part.
 
 See [Realtime Voice & Transcription](../../voice-transcription.md#timestamps-and-speakers-in-a-transcript).
-
-## Usage Guide Opens in a Dialog
-
-An app's usage guide is now one "Usage guide" control that opens the guide in a dialog, in every
-state of the chat. It no longer appears as a question and answer in the chat, so the starter
-prompts and the chat input stay as they are and the guide is available while an answer is being
-written.
-
-- The control sits bottom left under the chat input — on the start screen, in a running chat and
-  in compare mode — and bottom left in the action row of an app's start form. Apps with starter
-  prompts also show a "New here? Usage guide" link under the starter prompts' subtitle.
-- The centered button below the starter prompts is gone, so the guide no longer looks like one
-  more prompt.
-- In the app editor's **Usage Guide** section, the former "Button text / question" field is now
-  the **Dialog heading**. The control itself is always labelled "Usage guide".
