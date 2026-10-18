@@ -203,15 +203,15 @@ async function transcribePart({ cfg, wav, signal, verbose = false }) {
   // response_format=json gives `{ text }`; a server that ignores it may answer
   // with the bare text.
   if ((res.headers.get('content-type') || '').includes('json')) {
-    const body = await res.json();
-    const segments = Array.isArray(body?.segments)
-      ? body.segments.map(segment => ({
+    const parsed = await res.json();
+    const segments = Array.isArray(parsed?.segments)
+      ? parsed.segments.map(segment => ({
           text: typeof segment?.text === 'string' ? segment.text : '',
           start: parseOffset(segment?.start),
           end: parseOffset(segment?.end)
         }))
       : [];
-    return { text: typeof body?.text === 'string' ? body.text.trim() : '', segments };
+    return { text: typeof parsed?.text === 'string' ? parsed.text.trim() : '', segments };
   }
   return { text: (await res.text()).trim(), segments: [] };
 }

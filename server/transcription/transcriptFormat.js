@@ -21,7 +21,7 @@ const TARGET_LINE_SECONDS = 20;
 const MAX_LINE_SECONDS = 40;
 /** A silence this long between two units is a place to cut a line. */
 const PAUSE_SECONDS = 0.5;
-const SENTENCE_END = /[.!?…]["'”’)\]]*$/;
+const SENTENCE_END = /[.!?…]["'”’)\]]*$/u;
 
 /**
  * Seconds from what an API calls a duration: a number, or a protobuf duration
@@ -33,7 +33,7 @@ const SENTENCE_END = /[.!?…]["'”’)\]]*$/;
 export function parseOffset(value) {
   if (typeof value === 'number') return Number.isFinite(value) ? value : null;
   if (typeof value !== 'string') return null;
-  const match = /^\s*(-?\d+(?:\.\d+)?)\s*s?\s*$/i.exec(value);
+  const match = /^\s*(-?\d+(?:\.\d+)?)\s*s?\s*$/iu.exec(value);
   return match ? Number(match[1]) : null;
 }
 
@@ -46,7 +46,7 @@ export function parseOffset(value) {
  */
 export function speakerName(id, prefix = 'Speaker') {
   const raw = String(id ?? '').trim();
-  const numbered = /^spk[_-]?(\d+)$/i.exec(raw);
+  const numbered = /^spk[_-]?(\d+)$/iu.exec(raw);
   return numbered ? `${prefix} ${numbered[1]}` : raw;
 }
 
@@ -59,13 +59,37 @@ export function speakerName(id, prefix = 'Speaker') {
  */
 export function formatClock(seconds, withHours = false) {
   const total = Math.max(0, Math.floor(seconds));
-  const h = Math.floor(total / 3600);
+  const hours = Math.floor(total / 3600);
   const mm = String(Math.floor((total % 3600) / 60)).padStart(2, '0');
   const ss = String(total % 60).padStart(2, '0');
-  return withHours ? `${h}:${mm}:${ss}` : `${mm}:${ss}`;
+  return withHours ? `${hours}:${mm}:${ss}` : `${mm}:${ss}`;
 }
 
 const hasTime = value => typeof value === 'number' && Number.isFinite(value);
+
+/** A unit as `groupUnits` works with it; null when it has no text. */
+function readUnit(unit, speakers) {
+  const text = String(unit?.text ?? '').trim();
+  if (!text) return null;
+  const start = hasTime(unit.start) ? unit.start : null;
+  return {
+    text,
+    start,
+    end: hasTime(unit.end) ? unit.end : start,
+    speaker: speakers && unit.speaker ? String(unit.speaker) : undefined
+  };
+}
+
+/** Whether `unit` starts a new line after `line`, whose last unit was `prev`. */
+function startsNewLine(line, prev, unit, splitByTime) {
+  if (!line || unit.speaker !== line.speaker) return true;
+  if (!splitByTime || unit.start === null || line.start === null) return false;
+  const length = unit.start - line.start;
+  if (length >= MAX_LINE_SECONDS) return true;
+  const pause = prev?.end != null ? unit.start - prev.end : 0;
+  const boundary = SENTENCE_END.test(prev?.text || '') || pause >= PAUSE_SECONDS;
+  return length >= TARGET_LINE_SECONDS && boundary;
+}
 
 /**
  * Group units (words or short segments) into lines.
@@ -83,28 +107,17 @@ export function groupUnits(units, { speakers = false, splitByTime = false } = {}
   const lines = [];
   let line = null;
   let prev = null;
-  for (const unit of units) {
-    const text = String(unit?.text ?? '').trim();
-    if (!text) continue;
-    const start = hasTime(unit.start) ? unit.start : null;
-    const end = hasTime(unit.end) ? unit.end : start;
-    const speaker = speakers && unit.speaker ? String(unit.speaker) : undefined;
-
-    let cut = !line || speaker !== line.speaker;
-    if (!cut && splitByTime && start !== null && line.start !== null) {
-      const length = start - line.start;
-      const pause = prev?.end != null ? start - prev.end : 0;
-      const boundary = SENTENCE_END.test(prev?.text || '') || pause >= PAUSE_SECONDS;
-      cut = length >= MAX_LINE_SECONDS || (length >= TARGET_LINE_SECONDS && boundary);
-    }
-    if (cut) {
-      line = { text, start, end, speaker, parts: [text] };
+  for (const raw of units) {
+    const unit = readUnit(raw, speakers);
+    if (!unit) continue;
+    if (startsNewLine(line, prev, unit, splitByTime)) {
+      line = { ...unit, parts: [unit.text] };
       lines.push(line);
     } else {
-      line.parts.push(text);
-      if (end !== null) line.end = end;
+      line.parts.push(unit.text);
+      if (unit.end !== null) line.end = unit.end;
     }
-    prev = { text, end };
+    prev = unit;
   }
   return lines.map(({ parts, ...rest }) => ({ ...rest, text: parts.join(' ') }));
 }

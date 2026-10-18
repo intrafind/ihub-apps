@@ -64,15 +64,15 @@ export function splitPcm(
     const from = Math.max(start + windowBytes, limit - searchBytes);
     let cut = limit;
     let quietest = Infinity;
-    for (let w = limit - windowBytes; w >= from; w -= windowBytes) {
+    for (let windowStart = limit - windowBytes; windowStart >= from; windowStart -= windowBytes) {
       let energy = 0;
-      for (let i = w; i < w + windowBytes; i += 2) {
-        const v = pcm.readInt16LE(i);
-        energy += v * v;
+      for (let at = windowStart; at < windowStart + windowBytes; at += 2) {
+        const sample = pcm.readInt16LE(at);
+        energy += sample * sample;
       }
       if (energy < quietest) {
         quietest = energy;
-        cut = w + Math.floor(windowBytes / 4) * 2;
+        cut = windowStart + Math.floor(windowBytes / 4) * 2;
       }
     }
     parts.push(pcm.subarray(start, cut));
