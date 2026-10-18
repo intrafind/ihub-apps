@@ -4828,8 +4828,7 @@
       "end": "Sprachmodus beenden"
     },
     "overlay": {
-      "label": "Sprachmodus",
-      "orb": "Sprachaktivität"
+      "label": "Sprachmodus"
     },
     "status": {
       "connecting": "Verbindung wird aufgebaut…",
@@ -4847,15 +4846,22 @@
       "readPage": "Liest eine Seite…",
       "working": "Arbeitet daran…"
     },
+    "input": {
+      "label": "Nachricht eingeben"
+    },
     "controls": {
-      "mute": "Stummschalten",
-      "unmute": "Stummschaltung aufheben",
       "holdToTalk": "Zum Sprechen halten",
       "release": "Loslassen zum Senden",
       "end": "Beenden",
       "endTitle": "Sprachmodus beenden (Esc)",
       "retry": "Erneut versuchen",
-      "stopAnswer": "Antwort stoppen und sprechen"
+      "stopAnswer": "Antwort stoppen und sprechen",
+      "muteMicrophone": "Mikrofon stummschalten",
+      "unmuteMicrophone": "Mikrofon einschalten"
+    },
+    "hint": {
+      "pushToTalk": "Esc zum Beenden · Leertaste halten zum Sprechen",
+      "handsFree": "Esc zum Beenden"
     },
     "settings": {
       "open": "Spracheinstellungen",
@@ -4865,7 +4871,8 @@
       "pushToTalk": "Push-to-Talk: Leertaste oder Schaltfläche gedrückt halten",
       "bargeIn": "Unterbrechen durch Sprechen erlauben",
       "bargeInHint": "Schalten Sie das auf Laptop-Lautsprechern aus, wenn sich die Antwort selbst unterbricht. Mit Kopfhörern funktioniert es am besten.",
-      "captions": "Untertitel anzeigen"
+      "liveTranscript": "Live-Transkript anzeigen",
+      "liveTranscriptHint": "Ihre Worte, während Sie sprechen, und der Teil der Antwort, der noch vorgelesen wird."
     },
     "errors": {
       "micDenied": "Der Mikrofonzugriff wurde blockiert. Erlauben Sie ihn in den Browsereinstellungen und versuchen Sie es erneut.",
@@ -4893,7 +4900,8 @@
       "unavailable": "Benötigt ein Sprachausgabemodell, einen funktionierenden Sprachdienst und einen Browser mit Mikrofonunterstützung",
       "saveFirst": "Speichern Sie die Seite zuerst mit aktiviertem „Sprachmodus aktivieren“: Ein Transkriptionsmodell prüft die gespeicherte Einstellung",
       "heading": "Sprachmodus-Test",
-      "echo": "Sie sagten: {{text}}"
+      "echo": "Sie sagten: {{text}}",
+      "intro": "Sagen Sie etwas. Die App wiederholt, was sie gehört hat."
     }
   },
   "voiceCommands": {
