@@ -600,10 +600,10 @@ describe('googleTranscribeProvider — timestamps and speakers (stub Gemini API)
     const body = content => ({ steps: [{ type: 'model_output', content }] });
 
     expect(hasUnannotatedText(body([block('Hi', [note])]))).toBe(false);
-    expect(hasUnannotatedText(body([block('Hi', [note]), block('Plain', undefined)]))).toBe(true);
+    expect(hasUnannotatedText(body([block('Hi', [note]), block('Plain')]))).toBe(true);
     expect(hasUnannotatedText(body([block('Hi', [{ type: 'other' }])]))).toBe(true);
     // Nothing said, nothing missing.
-    expect(hasUnannotatedText(body([block('', undefined), block('  ', [])]))).toBe(false);
+    expect(hasUnannotatedText(body([block(''), block('  ', [])]))).toBe(false);
     expect(hasUnannotatedText({})).toBe(false);
   });
 

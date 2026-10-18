@@ -216,6 +216,51 @@ async function transcribePart({ cfg, wav, signal, verbose = false }) {
   return { text: (await res.text()).trim(), segments: [] };
 }
 
+/** How long one part of a recording may be: `config.maxChunkSeconds`, within limits. */
+function chunkSecondsOf(options) {
+  const configured = Number(options?.maxChunkSeconds);
+  if (!Number.isFinite(configured)) return DEFAULT_MAX_CHUNK_SECONDS;
+  return Math.min(MAX_CHUNK_SECONDS, Math.max(MIN_CHUNK_SECONDS, configured));
+}
+
+/**
+ * Transcribe every part of a recording, one after the other.
+ *
+ * @returns {Promise<{ texts: string[], units: Array<{ text: string, start: number|null,
+ *   end: number|null }>, unsegmented: boolean }>} The text of each part, the
+ *   segments of all parts with their times counted from the start of the
+ *   recording, and whether some part had text but no segments.
+ */
+async function transcribeParts({ cfg, pcm, sampleRate, signal, verbose }) {
+  const parts = splitPcm(pcm, { sampleRate, maxChunkSeconds: chunkSecondsOf(cfg.options) });
+  const texts = [];
+  const units = [];
+  let unsegmented = false;
+  let offset = 0;
+  for (const part of parts) {
+    const result = await transcribePart({
+      cfg,
+      wav: pcm16ToWav(part, { sampleRate }),
+      signal,
+      verbose
+    });
+    // A response may carry its text only as segments.
+    const segmentText = result.segments.map(segment => segment.text).join('');
+    const text = result.text || segmentText.trim();
+    if (text) texts.push(text);
+    if (text && !result.segments.length) unsegmented = true;
+    for (const { text: line, start, end } of result.segments) {
+      units.push({
+        text: line,
+        start: start === null ? null : start + offset,
+        end: end === null ? null : end + offset
+      });
+    }
+    offset += part.length / (sampleRate * 2);
+  }
+  return { texts, units, unsegmented };
+}
+
 /**
  * Transcribe a complete PCM16 buffer, in parts when it is long.
  *
@@ -233,41 +278,15 @@ async function transcribePart({ cfg, wav, signal, verbose = false }) {
 export async function transcribe({ cfg, pcm, sampleRate = 16000, signal, annotate = false } = {}) {
   if (!cfg?.url) throw new Error('the model has no endpoint URL');
   if (!pcm?.length) return { text: '' };
-  const configured = Number(cfg.options?.maxChunkSeconds);
-  const maxChunkSeconds = Number.isFinite(configured)
-    ? Math.min(MAX_CHUNK_SECONDS, Math.max(MIN_CHUNK_SECONDS, configured))
-    : DEFAULT_MAX_CHUNK_SECONDS;
   const { timestamps, speakerLabel } = annotationsOf(cfg.options, annotate);
 
-  const texts = [];
-  const units = [];
-  let unsegmented = false;
-  let offset = 0;
-  for (const part of splitPcm(pcm, { sampleRate, maxChunkSeconds })) {
-    const result = await transcribePart({
-      cfg,
-      wav: pcm16ToWav(part, { sampleRate }),
-      signal,
-      verbose: timestamps
-    });
-    // A response may carry its text only as segments.
-    const text =
-      result.text ||
-      result.segments
-        .map(segment => segment.text)
-        .join('')
-        .trim();
-    if (text) texts.push(text);
-    if (text && !result.segments.length) unsegmented = true;
-    for (const segment of result.segments) {
-      units.push({
-        text: segment.text,
-        start: segment.start === null ? null : segment.start + offset,
-        end: segment.end === null ? null : segment.end + offset
-      });
-    }
-    offset += part.length / (sampleRate * 2);
-  }
+  const { texts, units, unsegmented } = await transcribeParts({
+    cfg,
+    pcm,
+    sampleRate,
+    signal,
+    verbose: timestamps
+  });
   // Lines only when every part has its segments: a part without them would
   // otherwise be missing from the transcript.
   if (timestamps && units.length && !unsegmented) {
@@ -276,10 +295,7 @@ export async function transcribe({ cfg, pcm, sampleRate = 16000, signal, annotat
   if (timestamps && texts.length) {
     logger.warn(
       'Whisper transcription: timestamps asked for, but the service returned no segments for some of the audio',
-      {
-        component: 'OpenAITranscribe',
-        model: cfg.model
-      }
+      { component: 'OpenAITranscribe', model: cfg.model }
     );
   }
   return { text: texts.join(' ') };
