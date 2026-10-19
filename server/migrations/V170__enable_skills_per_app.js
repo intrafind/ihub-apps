@@ -55,6 +55,12 @@ async function readApp(ctx, path) {
   }
 }
 
+/**
+ * Set `skillSettings.enabled` on every app that keeps skills, and log each decision.
+ *
+ * @param {object} ctx - migration context
+ * @returns {Promise<void>}
+ */
 export async function up(ctx) {
   let enabled = 0;
   let off = 0;
