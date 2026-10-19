@@ -1070,36 +1070,36 @@ export const useMermaidRenderer = ({ t }) => {
         window.addEventListener('resize', handleResize);
 
         // Drag functionality
-        diagramViewer.addEventListener('mousedown', e => {
-          if (e.target.closest('button')) return;
+        diagramViewer.addEventListener('mousedown', event => {
+          if (event.target.closest('button')) return;
           isDragging = true;
           diagramViewer.style.cursor = 'grabbing';
-          startX = e.clientX - translateX;
-          startY = e.clientY - translateY;
-          e.preventDefault();
+          startX = event.clientX - translateX;
+          startY = event.clientY - translateY;
+          event.preventDefault();
         });
 
         // Wheel zoom
-        diagramViewer.addEventListener('wheel', e => {
-          if (e.ctrlKey || e.metaKey) {
-            e.preventDefault();
-            const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1;
+        diagramViewer.addEventListener('wheel', event => {
+          if (event.ctrlKey || event.metaKey) {
+            event.preventDefault();
+            const zoomFactor = event.deltaY > 0 ? 0.9 : 1.1;
 
             // Get mouse position relative to the viewer
             const viewerRect = diagramViewer.getBoundingClientRect();
-            const mouseX = e.clientX - viewerRect.left;
-            const mouseY = e.clientY - viewerRect.top;
+            const mouseX = event.clientX - viewerRect.left;
+            const mouseY = event.clientY - viewerRect.top;
 
             updateZoom(currentZoom * zoomFactor, mouseX, mouseY);
           }
         });
 
         // Create cleanup function for event listeners
-        const mouseMoveHandler = e => {
+        const mouseMoveHandler = event => {
           if (!isDragging) return;
-          e.preventDefault();
-          translateX = e.clientX - startX;
-          translateY = e.clientY - startY;
+          event.preventDefault();
+          translateX = event.clientX - startX;
+          translateY = event.clientY - startY;
           updateTransform();
         };
 
@@ -1110,8 +1110,8 @@ export const useMermaidRenderer = ({ t }) => {
           }
         };
 
-        const escapeHandler = e => {
-          if (e.key === 'Escape') {
+        const escapeHandler = event => {
+          if (event.key === 'Escape') {
             closeModal();
           }
         };
@@ -1132,8 +1132,8 @@ export const useMermaidRenderer = ({ t }) => {
           }
         };
 
-        modal.addEventListener('click', e => {
-          if (e.target === modal) closeModal();
+        modal.addEventListener('click', event => {
+          if (event.target === modal) closeModal();
         });
 
         modal.querySelector('.close-fullscreen').addEventListener('click', closeModal);

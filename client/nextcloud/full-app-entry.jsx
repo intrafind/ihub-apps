@@ -133,7 +133,7 @@ function EmbedRoot({ initialError }) {
   return <App />;
 }
 
-void (async () => {
+(async () => {
   const rootEl = document.getElementById('ihub-embed-root');
   if (!rootEl) return;
 
