@@ -538,7 +538,6 @@ export async function executeTaskRun({ taskId, runId }, deps = {}) {
       user,
       messages: prepared.llmMessages,
       options: {
-        temperature: prepared.temperature,
         language,
         streaming,
         source: SCHEDULED_TASK_SOURCE,

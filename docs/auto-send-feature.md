@@ -54,7 +54,6 @@ When sharing links with support users or creating automated workflows, you can u
 | `prefill` | Yes | The message to send | `prefill=How%20to%20reset%20password?` |
 | `send` | Yes | Must be `true` to trigger auto-send | `send=true` |
 | `model` | No | Override the default model | `model=gpt-4` |
-| `temp` | No | Set temperature (0-2) | `temp=0.7` |
 | `style` | No | Set response style | `style=concise` |
 | `outfmt` | No | Set output format (`markdown`, `text`, `json`, `html`) | `outfmt=json` |
 | `history` | No | Include chat history in requests (`true`/`false`) | `history=true` |
@@ -64,7 +63,7 @@ When sharing links with support users or creating automated workflows, you can u
 | `searchProfile` | No | iFinder search profile used to resolve the document | `searchProfile=default` |
 
 > **Note:** `prefill` works on its own (without `send=true`) to simply pre-populate
-> the input field. Likewise, the `model`, `temp`, `style`, `outfmt`, `history`,
+> the input field. Likewise, the `model`, `style`, `outfmt`, `history`,
 > `var_*`, and `documentId` parameters can be used independently of auto-send.
 > All of these parameters are automatically removed from the URL after they are
 > applied, so refreshing the page will not re-trigger them.

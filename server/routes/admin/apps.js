@@ -97,10 +97,6 @@ function ensureValidAppConfig(appConfig, res) {
  *         preferredStyle:
  *           type: string
  *           description: Style preference
- *         preferredTemperature:
- *           type: number
- *           description: Temperature setting (0.0-1.0)
- *           example: 0.7
  *         sendChatHistory:
  *           type: boolean
  *           description: Include chat history in requests

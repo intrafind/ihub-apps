@@ -167,7 +167,7 @@ export class AgentLoop {
    * @param {Array} [request.tools] - tool specs offered to the model
    * @param {'server'|'caller'} [request.toolExecution='server']
    * @param {Object} [request.policies] - partial loop policies (see contracts/loop.js)
-   * @param {Object} [request.options] - LLMClient options (temperature, maxTokens, responseSchema, thinking*, …)
+   * @param {Object} [request.options] - LLMClient options (maxTokens, responseSchema, thinking*, …)
    * @param {string} [request.language]
    * @param {AbortSignal} [request.signal]
    * @param {Object} [request.refs] - correlation ids for ledger/telemetry

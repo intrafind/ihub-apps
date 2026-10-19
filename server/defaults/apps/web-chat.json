@@ -17,7 +17,6 @@
   "preferredModel": "gemini-flash-latest",
   "preferredOutputFormat": "markdown",
   "preferredStyle": "normal",
-  "preferredTemperature": 1,
   "enabled": true,
   "order": 1,
   "prompt": {
@@ -41,9 +40,6 @@
   "settings": {
     "enabled": true,
     "model": {
-      "enabled": true
-    },
-    "temperature": {
       "enabled": true
     },
     "outputFormat": {
@@ -112,10 +108,7 @@
     "system",
     "system",
     "system",
-    "system",
-    "preferredTemperature",
-    "preferredTemperature",
-    "preferredTemperature"
+    "system"
   ],
   "type": "chat",
   "greeting": {

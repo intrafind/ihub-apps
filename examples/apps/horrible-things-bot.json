@@ -17,16 +17,12 @@
   "preferredModel": "gpt-4",
   "preferredOutputFormat": "markdown",
   "preferredStyle": "normal",
-  "preferredTemperature": 0.7,
   "enabled": false,
   "sendChatHistory": true,
   "category": "Fun",
   "settings": {
     "enabled": true,
     "model": {
-      "enabled": true
-    },
-    "temperature": {
       "enabled": true
     },
     "outputFormat": {

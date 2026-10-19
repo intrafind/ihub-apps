@@ -164,7 +164,6 @@ export class QuoteValidatorNodeExecutor extends BaseNodeExecutor {
               { role: 'system', content: system },
               { role: 'user', content: user }
             ],
-            options: { temperature: 0.1 },
             language,
             signal: context?.abortSignal,
             telemetry: {

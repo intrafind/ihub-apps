@@ -29,7 +29,6 @@ const LABELS = {
     exportedOn: 'Exported on {date}',
     settings: 'Chat settings',
     model: 'Model',
-    temperature: 'Temperature',
     style: 'Style',
     outputFormat: 'Output format',
     variables: 'Variables'
@@ -40,7 +39,6 @@ const LABELS = {
     exportedOn: 'Exportiert am {date}',
     settings: 'Chat-Einstellungen',
     model: 'Modell',
-    temperature: 'Temperatur',
     style: 'Stil',
     outputFormat: 'Ausgabeformat',
     variables: 'Variablen'
@@ -113,7 +111,6 @@ function settingsBlock(settings, labels) {
     rows.push([{ text: label, bold: true }, { text: String(value).slice(0, 500) }]);
   };
   add(labels.model, settings.model);
-  add(labels.temperature, settings.temperature);
   add(labels.style, settings.style);
   add(labels.outputFormat, settings.outputFormat);
   if (settings.variables && typeof settings.variables === 'object') {
@@ -147,7 +144,7 @@ function settingsBlock(settings, labels) {
  *
  * @param {Object} params
  * @param {Array<{ role: string, content: string, timestamp?: string|number }>} params.messages
- * @param {Object} [params.settings] - model, temperature, style, outputFormat, variables
+ * @param {Object} [params.settings] - model, style, outputFormat, variables
  * @param {string} [params.title]
  * @param {string} [params.appName]
  * @param {string} [params.template] - default | professional | minimal

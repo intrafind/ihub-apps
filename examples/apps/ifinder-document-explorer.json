@@ -16,14 +16,12 @@
   },
   "preferredOutputFormat": "markdown",
   "preferredStyle": "normal",
-  "preferredTemperature": 0.7,
   "sendChatHistory": true,
   "tools": ["iFinder_search", "iFinder_getMetadata", "iFinder_getContent"],
   "settings": {
     "enabled": true,
     "model": { "enabled": true },
     "style": { "enabled": true },
-    "temperature": { "enabled": true },
     "outputFormat": { "enabled": true },
     "chatHistory": { "enabled": true }
   }

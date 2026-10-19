@@ -268,10 +268,7 @@ export default function registerOpenAIProxyRoutes(
    *                         messages are refused for apps — the app's prompt applies.
    *               temperature:
    *                 type: number
-   *                 minimum: 0
-   *                 maximum: 2
-   *                 default: 0.7
-   *                 description: Sampling temperature to use
+   *                 description: Accepted for OpenAI client compatibility and ignored. Sampling parameters come from the model's `sampling` config.
    *               stream:
    *                 type: boolean
    *                 default: false
@@ -360,7 +357,6 @@ export default function registerOpenAIProxyRoutes(
       messages,
       stream: clientWantsStream = false,
       stream_options: streamOptions,
-      temperature = 0.7,
       tools = null,
       tool_choice: toolChoice,
       max_tokens: maxTokens,
@@ -374,7 +370,6 @@ export default function registerOpenAIProxyRoutes(
       modelId,
       messageCount: Array.isArray(messages) ? messages.length : undefined,
       stream: clientWantsStream,
-      temperature,
       hasTools: !!tools,
       toolNames: Array.isArray(tools) ? tools.map(t => t.function?.name ?? t.name) : null,
       toolChoice,
@@ -474,7 +469,6 @@ export default function registerOpenAIProxyRoutes(
       chatId
     };
     const options = {
-      temperature,
       maxTokens,
       tools: genericTools,
       toolChoice,
@@ -742,7 +736,6 @@ export default function registerOpenAIProxyRoutes(
           { param: 'tools' }
         );
       }
-      const temperature = numberField(body, 'temperature', { min: 0, max: 2 });
       const maxOutputTokens =
         numberField(body, 'max_completion_tokens', { min: 1, integer: true }) ??
         numberField(body, 'max_tokens', { min: 1, integer: true });
@@ -771,7 +764,6 @@ export default function registerOpenAIProxyRoutes(
         applyTemplate: true,
         variables: resolved.variables,
         chatId,
-        temperature,
         maxOutputTokens
       });
     } catch (error) {

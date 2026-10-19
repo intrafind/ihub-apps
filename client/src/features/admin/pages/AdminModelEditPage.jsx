@@ -249,6 +249,13 @@ function AdminModelEditPage() {
     return Number.isFinite(parsed) ? parsed : undefined;
   };
 
+  /** Like `toOptionalInt`, for the decimal sampling fields (0 is a real temperature). */
+  const toOptionalFloat = value => {
+    if (value === '' || value === null || value === undefined) return undefined;
+    const parsed = Number.parseFloat(value);
+    return Number.isFinite(parsed) ? parsed : undefined;
+  };
+
   const handleSave = async data => {
     try {
       setSaving(true);
@@ -290,6 +297,22 @@ function AdminModelEditPage() {
       // Only a chat model can be the default; the checkbox is hidden for the
       // other types, so a flag left over from before the type changed goes.
       if ((dataToSend.modelType || 'chat') !== 'chat') dataToSend.default = false;
+      // Sampling overrides are only for chat models. The form keeps what was
+      // typed, so it becomes numbers here; a field left empty is left out, and
+      // with none set the `sampling` key goes altogether (the schema is strict
+      // and an empty one would override nothing).
+      const sampling = Object.fromEntries(
+        Object.entries({
+          temperature: toOptionalFloat(data.sampling?.temperature),
+          topP: toOptionalFloat(data.sampling?.topP),
+          topK: toOptionalInt(data.sampling?.topK)
+        }).filter(([, value]) => value !== undefined)
+      );
+      if ((dataToSend.modelType || 'chat') === 'chat' && Object.keys(sampling).length > 0) {
+        dataToSend.sampling = sampling;
+      } else {
+        delete dataToSend.sampling;
+      }
       // A language added without a voice yet means nothing to save.
       if (dataToSend.tts?.voices) {
         const voices = Object.entries(dataToSend.tts.voices).filter(([, voice]) => voice);

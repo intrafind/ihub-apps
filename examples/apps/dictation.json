@@ -18,7 +18,6 @@
   "preferredModel": "local-vllm",
   "preferredOutputFormat": "markdown",
   "preferredStyle": "normal",
-  "preferredTemperature": 0.7,
   "inputMode": {
     "type": "multiline",
     "rows": 5,
@@ -35,9 +34,6 @@
   "settings": {
     "enabled": true,
     "model": {
-      "enabled": true
-    },
-    "temperature": {
       "enabled": true
     },
     "outputFormat": {

@@ -26,7 +26,6 @@ const REDACTED_KEY = 'REDACTED';
  */
 export function optionsFromCallConfig(callConfig = {}, { tools, responseSchema } = {}) {
   const options = {};
-  if (typeof callConfig.temperature === 'number') options.temperature = callConfig.temperature;
   if (Number.isInteger(callConfig.maxTokens)) options.maxTokens = callConfig.maxTokens;
   if (callConfig.responseFormat) options.responseFormat = callConfig.responseFormat;
   if (responseSchema) options.responseSchema = responseSchema;

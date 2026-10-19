@@ -30,7 +30,6 @@ function realClient(runLog) {
 test('optionsFromCallConfig — round-trips the recorded call configuration', () => {
   const options = optionsFromCallConfig(
     {
-      temperature: 0.3,
       maxTokens: 512,
       responseFormat: 'json',
       thinking: { thinkingEnabled: false },
@@ -39,7 +38,6 @@ test('optionsFromCallConfig — round-trips the recorded call configuration', ()
     { tools: [{ id: 't' }] }
   );
   assert.deepEqual(options, {
-    temperature: 0.3,
     maxTokens: 512,
     responseFormat: 'json',
     thinkingEnabled: false,
@@ -64,14 +62,14 @@ test('a multi-step run reconstructs byte-for-byte through the real adapter', asy
   await client.complete({
     model,
     messages,
-    options: { temperature: 0.2, maxTokens: 300, tools },
+    options: { maxTokens: 300, tools },
     telemetry: { runId, step: 0 }
   });
   // same messages, same tools → 'same' header without messages
   await client.complete({
     model,
     messages,
-    options: { temperature: 0.2, maxTokens: 300, tools },
+    options: { maxTokens: 300, tools },
     telemetry: { runId, step: 1 }
   });
   // changed messages, tools dropped
@@ -82,7 +80,7 @@ test('a multi-step run reconstructs byte-for-byte through the real adapter', asy
       { role: 'assistant', content: 'ok' },
       { role: 'user', content: 'more' }
     ],
-    options: { temperature: 0.7 },
+    options: { maxTokens: 100 },
     telemetry: { runId, step: 2 }
   });
   await runLog.flush();
@@ -217,14 +215,14 @@ test('reconstruction rebuilds from the recorded model / options snapshot, not th
   await client.complete({
     model: { ...model, apiKey: 'sk-must-not-leak' },
     messages: [{ role: 'user', content: 'a' }],
-    options: { temperature: 0.1 },
+    options: { maxTokens: 150 },
     telemetry: { runId, step: 0 }
   });
   const header = events.find(e => e.type === 'request/header');
   assert.ok(header.data.modelSnapshot, 'snapshot recorded on the first header');
   assert.equal(header.data.modelSnapshot.apiKey, undefined, 'secrets never reach the ledger');
   assert.equal(header.data.modelSnapshot.url, model.url);
-  assert.equal(header.data.optionsSnapshot.temperature, 0.1);
+  assert.equal(header.data.optionsSnapshot.maxTokens, 150);
   assert.equal(JSON.stringify(header).includes('sk-must-not-leak'), false);
 
   // the model is gone from the catalog / was edited: the snapshot still verifies

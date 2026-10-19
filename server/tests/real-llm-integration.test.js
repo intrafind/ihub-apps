@@ -81,7 +81,6 @@ async function makeRealAPICall(provider, model, messages, tools) {
 
     const request = await createCompletionRequest(model, messages, apiKeys[provider], {
       tools: tools.slice(0, 2), // Use first 2 tools to avoid overwhelming
-      temperature: 0.1,
       maxTokens: 500,
       stream: false // Disable streaming for easier testing
     });

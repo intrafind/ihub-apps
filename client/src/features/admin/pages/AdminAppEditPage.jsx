@@ -98,7 +98,6 @@ function AdminAppEditPage() {
         preferredModel: undefined,
         preferredOutputFormat: 'markdown',
         preferredStyle: 'keep',
-        preferredTemperature: 0.7,
         enabled: true,
         variables: [],
         starterPrompts: [],

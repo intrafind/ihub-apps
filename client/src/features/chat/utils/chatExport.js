@@ -492,7 +492,6 @@ const renderMessageHTML = message => {
 // The settings that are always listed when set; the variables come separately.
 const renderSettingRows = settings =>
   `${settings.model ? `<div><strong>Model:</strong> ${escapeHtml(settings.model)}</div>` : ''}
-        ${settings.temperature !== undefined ? `<div><strong>Temperature:</strong> ${escapeHtml(settings.temperature)}</div>` : ''}
         ${settings.style ? `<div><strong>Style:</strong> ${escapeHtml(settings.style)}</div>` : ''}
         ${settings.outputFormat ? `<div><strong>Output Format:</strong> ${escapeHtml(settings.outputFormat)}</div>` : ''}`;
 
@@ -581,7 +580,6 @@ const generateJSON = (messages, settings) => {
     model: settings?.model,
     style: settings?.style,
     outputFormat: settings?.outputFormat,
-    temperature: settings?.temperature,
     variables: settings?.variables
   });
 
@@ -593,7 +591,6 @@ const generateJSONL = (messages, settings) => {
     model: settings?.model,
     style: settings?.style,
     outputFormat: settings?.outputFormat,
-    temperature: settings?.temperature,
     variables: settings?.variables
   });
 

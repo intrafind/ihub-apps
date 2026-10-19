@@ -73,7 +73,7 @@ describe('AppCreationWizard - overriddenFields deduplication', () => {
       id: 'template-app',
       name: { en: 'Template App' },
       system: { en: 'You are a helpful assistant' },
-      preferredTemperature: 0.7
+      preferredStyle: 'normal'
     };
 
     let overriddenFields = [];
@@ -114,14 +114,14 @@ describe('AppCreationWizard - overriddenFields deduplication', () => {
       newData
     );
 
-    // Update temperature
+    // Update style
     newData = {
       ...newData,
-      preferredTemperature: 0.9
+      preferredStyle: 'concise'
     };
     overriddenFields = updateOverriddenFields(
       overriddenFields,
-      { preferredTemperature: 0.9 },
+      { preferredStyle: 'concise' },
       templateApp,
       newData
     );
@@ -129,7 +129,7 @@ describe('AppCreationWizard - overriddenFields deduplication', () => {
     // Verify all fields appear exactly once
     expect(overriddenFields).toContain('name');
     expect(overriddenFields).toContain('system');
-    expect(overriddenFields).toContain('preferredTemperature');
+    expect(overriddenFields).toContain('preferredStyle');
     expect(overriddenFields.length).toBe(3);
 
     // Verify no duplicates

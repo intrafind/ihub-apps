@@ -17,7 +17,6 @@
   },
   "preferredOutputFormat": "markdown",
   "preferredStyle": "professional",
-  "preferredTemperature": 0.7,
   "sendChatHistory": true,
   "features": {
     "canvas": true,

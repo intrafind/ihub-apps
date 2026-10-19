@@ -119,7 +119,7 @@ export class QueryPlanNodeExecutor extends BaseNodeExecutor {
           { role: 'system', content: system },
           { role: 'user', content: userParts.join('\n\n') }
         ],
-        options: { temperature: 0.2, ...thinkingConfigToOptions(config.thinking) },
+        options: thinkingConfigToOptions(config.thinking),
         language,
         signal: context?.abortSignal,
         telemetry: {

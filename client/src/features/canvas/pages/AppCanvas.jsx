@@ -44,7 +44,6 @@ export default function AppCanvas() {
     selectedModel,
     selectedStyle,
     selectedOutputFormat,
-    temperature,
     sendChatHistory,
     enabledTools,
     models,
@@ -52,7 +51,6 @@ export default function AppCanvas() {
     setSelectedModel,
     setSelectedStyle,
     setSelectedOutputFormat,
-    setTemperature,
     setSendChatHistory,
     setEnabledTools,
     modelsLoading
@@ -80,11 +78,6 @@ export default function AppCanvas() {
       setSelectedOutputFormat(out);
       changed = true;
     }
-    const tempParam = searchParams.get('temp');
-    if (tempParam) {
-      setTemperature(Number.parseFloat(tempParam));
-      changed = true;
-    }
     const hist = searchParams.get('history');
     if (hist) {
       setSendChatHistory(hist === 'true');
@@ -100,14 +93,9 @@ export default function AppCanvas() {
 
     if (changed) {
       const newSearch = new URLSearchParams(searchParams);
-      [
-        'model',
-        'style',
-        'outfmt',
-        'temp',
-        'history',
-        ...Object.keys(newVars).map(v => `var_${v}`)
-      ].forEach(k => newSearch.delete(k));
+      ['model', 'style', 'outfmt', 'history', ...Object.keys(newVars).map(v => `var_${v}`)].forEach(
+        k => newSearch.delete(k)
+      );
       navigate(`${window.location.pathname}?${newSearch.toString()}`, { replace: true });
     }
   }, [
@@ -118,8 +106,7 @@ export default function AppCanvas() {
     setSelectedModel,
     setSelectedOutputFormat,
     setSelectedStyle,
-    setSendChatHistory,
-    setTemperature
+    setSendChatHistory
   ]);
 
   // Canvas editor states
@@ -222,7 +209,6 @@ export default function AppCanvas() {
           params: {
             modelId: selectedModel,
             style: options?.bypassAppPrompts ? 'normal' : selectedStyle,
-            temperature,
             outputFormat: selectedOutputFormat,
             language: currentLanguage,
             bypassAppPrompts: true,
@@ -251,7 +237,6 @@ export default function AppCanvas() {
       addSystemMessage,
       selectedModel,
       selectedStyle,
-      temperature,
       selectedOutputFormat,
       currentLanguage,
       sendChatHistory,
@@ -586,13 +571,11 @@ export default function AppCanvas() {
         selectedStyle={selectedStyle}
         selectedOutputFormat={selectedOutputFormat}
         sendChatHistory={sendChatHistory}
-        temperature={temperature}
         enabledTools={enabledTools}
         onModelChange={setSelectedModel}
         onStyleChange={setSelectedStyle}
         onOutputFormatChange={setSelectedOutputFormat}
         onSendChatHistoryChange={setSendChatHistory}
-        onTemperatureChange={setTemperature}
         onEnabledToolsChange={setEnabledTools}
         showConfig={showConfig}
         onToggleConfig={toggleConfig}
@@ -680,7 +663,6 @@ export default function AppCanvas() {
               model: selectedModel,
               style: selectedStyle,
               outfmt: selectedOutputFormat,
-              temp: temperature,
               history: sendChatHistory
             }
           }}

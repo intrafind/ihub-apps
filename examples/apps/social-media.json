@@ -18,7 +18,6 @@
   "preferredModel": "gpt-3.5-turbo",
   "preferredOutputFormat": "markdown",
   "preferredStyle": "creative",
-  "preferredTemperature": 0.8,
   "prompt": {
     "en": "Create {{count}} {{post_type}} for {{platform}} about {{topic}}. {{tone}} {{additional_instructions}}",
     "de": "Erstelle {{count}} {{post_type}} für {{platform}} über {{topic}}. {{tone}} {{additional_instructions}}"

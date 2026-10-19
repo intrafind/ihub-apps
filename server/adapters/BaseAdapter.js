@@ -51,13 +51,33 @@ export class BaseAdapter {
   }
 
   /**
+   * Sampling parameters for a request, taken from the model config only.
+   *
+   * Apps, prompts, workflows and agents carry no temperature, so a request
+   * never does either unless `model.sampling` sets one. Anything unset is
+   * omitted and the provider's own default applies. A model flagged
+   * `supportsTemperature: false` (it rejects sampling parameters) yields none.
+   *
+   * @param {Object} model - Model config (model.sampling, model.supportsTemperature)
+   * @returns {{temperature?: number, topP?: number, topK?: number}} Only the keys that are set
+   */
+  resolveSampling(model = {}) {
+    if (model.supportsTemperature === false) return {};
+    const { temperature, topP, topK } = model.sampling || {};
+    const sampling = {};
+    if (Number.isFinite(temperature)) sampling.temperature = temperature;
+    if (Number.isFinite(topP)) sampling.topP = topP;
+    if (Number.isFinite(topK)) sampling.topK = topK;
+    return sampling;
+  }
+
+  /**
    * Extract common request options
    * @param {Object} options - Request options
    * @returns {Object} Extracted options with defaults
    */
   extractRequestOptions(options = {}) {
     return {
-      temperature: options.temperature || 0.7,
       stream: options.stream !== undefined ? options.stream : true,
       maxTokens: options.maxTokens || DEFAULT_MAX_OUTPUT_TOKENS,
       tools: options.tools || null,

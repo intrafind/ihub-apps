@@ -19,7 +19,6 @@
   "preferredModel": "gemini-flash-latest",
   "preferredOutputFormat": "text",
   "preferredStyle": "keep",
-  "preferredTemperature": 0.7,
   "thinking": { "enabled": false },
   "sendChatHistory": false,
   "settings": {
@@ -28,9 +27,6 @@
       "enabled": true
     },
     "style": {
-      "enabled": false
-    },
-    "temperature": {
       "enabled": false
     },
     "outputFormat": {

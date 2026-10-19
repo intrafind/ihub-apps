@@ -14,16 +14,12 @@
   "order": 1,
   "preferredModel": "iassistant-conversation",
   "preferredOutputFormat": "markdown",
-  "preferredTemperature": 1,
   "sendChatHistory": true,
   "variables": [],
   "settings": {
     "enabled": true,
     "model": {
       "enabled": false
-    },
-    "temperature": {
-      "enabled": true
     },
     "outputFormat": {
       "enabled": true

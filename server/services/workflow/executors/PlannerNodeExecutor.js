@@ -1019,7 +1019,6 @@ Output rules:
       model,
       messages,
       options: {
-        temperature: 0.7,
         responseFormat: 'json',
         responseSchema: plannerResponseSchema,
         maxTokens,

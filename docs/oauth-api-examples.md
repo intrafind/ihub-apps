@@ -379,7 +379,7 @@ data: {"v":2,"seq":5,"runId":"chat-7f3a…","ts":"…","type":"run/ended","data"
 
 ### 3f. Advanced Options
 
-Specify model, temperature, output format, and other options in the POST body:
+Specify model, output format, and other options in the POST body:
 
 ```bash
 curl -s -X POST "$BASE_URL/api/apps/$APP_ID/chat/$CHAT_ID" \
@@ -393,7 +393,6 @@ curl -s -X POST "$BASE_URL/api/apps/$APP_ID/chat/$CHAT_ID" \
       }
     ],
     "modelId": "gpt-4o",
-    "temperature": 0.3,
     "outputFormat": "markdown"
   }' | jq .
 ```
@@ -404,7 +403,6 @@ curl -s -X POST "$BASE_URL/api/apps/$APP_ID/chat/$CHAT_ID" \
 |---|---|---|
 | `messages` | array | **Required.** Array of `{role, content}` objects |
 | `modelId` | string | Override the app's default model |
-| `temperature` | number | Sampling temperature (0–2) |
 | `outputFormat` | string | `markdown`, `text`, `json`, or `html` |
 | `language` | string | BCP 47 language code (e.g., `de`, `fr`) |
 | `enabledTools` | array | Tool names to enable for this request |

@@ -55,7 +55,6 @@ const memorySchema = z
     // Memory composer — explicit LLM step that decides what to commit to
     // long-term memory at the end of a run. Only used when enabled=true.
     modelId: z.string().optional(),
-    temperature: z.number().min(0).max(2).optional(),
     system: optionalLocalizedStringSchema.optional(),
     prompt: optionalLocalizedStringSchema.optional()
   })
@@ -212,7 +211,6 @@ const baseAgentProfileSchema = z.object({
   // run, say, a fast model for drafting and a stronger one for verification —
   // configured on the profile, without editing the workflow definition.
   nodeModels: z.record(z.string(), z.string()).optional(),
-  preferredTemperature: z.number().min(0).max(2).optional(),
   maxIterations: z.number().int().min(1).max(50).optional(),
   tools: z.array(z.string()).optional().prefault([]),
   sources: z.array(z.string()).optional().prefault([]),

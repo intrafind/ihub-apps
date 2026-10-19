@@ -79,8 +79,9 @@ class MistralAdapterClass extends BaseAdapter {
    * Create a completion request for Mistral
    */
   async createCompletionRequest(model, messages, apiKey, options = {}) {
-    const { temperature, stream, tools, toolChoice, responseFormat, responseSchema, maxTokens } =
+    const { stream, tools, toolChoice, responseFormat, responseSchema, maxTokens } =
       this.extractRequestOptions(options);
+    const sampling = this.resolveSampling(model);
 
     const formattedMessages = this.formatMessages(messages, model);
     this.debugLogMessages(messages, formattedMessages, 'Mistral');
@@ -89,9 +90,10 @@ class MistralAdapterClass extends BaseAdapter {
       model: model.modelId,
       messages: formattedMessages,
       stream,
-      temperature: Number.parseFloat(temperature),
       max_tokens: maxTokens
     };
+    if (sampling.temperature !== undefined) body.temperature = sampling.temperature;
+    if (sampling.topP !== undefined) body.top_p = sampling.topP;
 
     // Request usage data in streaming responses when model supports it
     if (stream && model.supportsUsageTracking !== false) {

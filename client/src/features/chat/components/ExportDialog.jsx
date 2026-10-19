@@ -79,7 +79,6 @@ function ExportDialog({
     model: settings.model,
     style: settings.style,
     outputFormat: settings.outputFormat,
-    temperature: settings.temperature,
     variables: settings.variables
   });
 
@@ -117,7 +116,6 @@ function ExportDialog({
       model: settings?.model,
       style: settings?.style,
       outputFormat: settings?.outputFormat,
-      temperature: settings?.temperature,
       variables: settings?.variables
     });
     return JSON.stringify(
@@ -132,7 +130,6 @@ function ExportDialog({
       model: settings?.model,
       style: settings?.style,
       outputFormat: settings?.outputFormat,
-      temperature: settings?.temperature,
       variables: settings?.variables
     });
     const lines = [JSON.stringify({ meta: buildMetadata() })];

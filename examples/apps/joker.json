@@ -18,7 +18,6 @@
   "preferredModel": "gemini-1.5-flash",
   "preferredOutputFormat": "markdown",
   "preferredStyle": "creative",
-  "preferredTemperature": 1,
   "allowedModels": ["local-vllm", "gemini-1.5-flash"],
   "enabled": false,
   "tools": [],
@@ -40,9 +39,6 @@
   "settings": {
     "enabled": true,
     "model": {
-      "enabled": true
-    },
-    "temperature": {
       "enabled": true
     },
     "outputFormat": {

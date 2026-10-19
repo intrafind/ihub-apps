@@ -363,6 +363,22 @@ function ModelFormEditor({
     onChange({ ...data, thinking: next });
   };
 
+  // `sampling` is an optional nested object and the schema is strict, so an
+  // emptied field drops its key and the last one going drops `sampling` itself:
+  // an empty `{}` would be saved as an override that overrides nothing. Values
+  // stay as typed (strings) here and become numbers when the model is saved.
+  const handleSamplingChange = (key, value) => {
+    const next = { ...data.sampling };
+    if (value === '' || value === null || value === undefined) delete next[key];
+    else next[key] = value;
+    if (Object.keys(next).length === 0) {
+      const { sampling: _dropped, ...rest } = data;
+      onChange(rest);
+      return;
+    }
+    onChange({ ...data, sampling: next });
+  };
+
   const handleInputChange = e => {
     const { name, value, type, checked } = e.target;
     handleChange(name, type === 'checkbox' ? checked : value);
@@ -453,8 +469,24 @@ function ModelFormEditor({
     modelId: t('admin.models.fields.modelId', 'Model'),
     url: t('admin.models.fields.url', 'URL'),
     contextWindow: t('admin.models.fields.contextWindow', 'Context Window'),
-    maxOutputTokens: t('admin.models.fields.maxOutputTokens', 'Max Output Tokens')
+    maxOutputTokens: t('admin.models.fields.maxOutputTokens', 'Max Output Tokens'),
+    'sampling.temperature': t('admin.models.fields.samplingTemperature', 'Temperature'),
+    'sampling.topP': t('admin.models.fields.samplingTopP', 'Top P'),
+    'sampling.topK': t('admin.models.fields.samplingTopK', 'Top K')
   };
+
+  // Optional sampling overrides; the bounds mirror the model schema.
+  const samplingFields = [
+    {
+      key: 'temperature',
+      label: errorLabels['sampling.temperature'],
+      min: 0,
+      max: 2,
+      step: 0.1
+    },
+    { key: 'topP', label: errorLabels['sampling.topP'], min: 0, max: 1, step: 0.05 },
+    { key: 'topK', label: errorLabels['sampling.topK'], min: 1, step: 1 }
+  ];
 
   return (
     <FormValidationProvider errors={mergedErrors}>
@@ -1285,6 +1317,57 @@ function ModelFormEditor({
                     </div>
                   </fieldset>
                 </div>
+
+                {isChat && (
+                  <div className="col-span-6">
+                    <fieldset>
+                      <legend className="text-base font-medium text-gray-900 dark:text-gray-100">
+                        {t('admin.models.sections.sampling', 'Sampling')}
+                      </legend>
+                      <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                        {t(
+                          'admin.models.hints.sampling',
+                          "Optional. Leave a field empty to use the model's or provider's own default; nothing is sent for it. A value set here applies to every request to this model."
+                        )}
+                      </p>
+                      <div className="mt-4 grid grid-cols-6 gap-6">
+                        {samplingFields.map(({ key, label, ...bounds }) => {
+                          const fieldError = mergedErrors[`sampling.${key}`];
+                          return (
+                            <div key={key} className="col-span-6 sm:col-span-2">
+                              <label
+                                htmlFor={`sampling.${key}`}
+                                className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                              >
+                                {label}
+                              </label>
+                              <input
+                                type="number"
+                                name={`sampling.${key}`}
+                                id={`sampling.${key}`}
+                                value={data.sampling?.[key] ?? ''}
+                                onChange={e => handleSamplingChange(key, e.target.value)}
+                                placeholder={t(
+                                  'admin.models.placeholders.samplingDefault',
+                                  'Provider default'
+                                )}
+                                className={`mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-xs sm:text-sm border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md ${
+                                  fieldError ? 'border-red-300 text-red-900' : ''
+                                }`}
+                                {...bounds}
+                              />
+                              {fieldError && (
+                                <p className="mt-2 text-sm text-red-600 dark:text-red-400">
+                                  {fieldError}
+                                </p>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </fieldset>
+                  </div>
+                )}
 
                 {isChat && (
                   <div className="col-span-6">

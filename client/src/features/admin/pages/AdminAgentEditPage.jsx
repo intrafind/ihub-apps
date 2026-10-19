@@ -26,7 +26,6 @@ const BLANK_PROFILE = {
   icon: 'robot',
   workflow: { ref: 'embedded' },
   preferredModel: '',
-  preferredTemperature: 0.7,
   maxIterations: 10,
   tools: [],
   sources: [],
@@ -37,7 +36,6 @@ const BLANK_PROFILE = {
     autoInclude: true,
     maxBytes: 8192,
     modelId: '',
-    temperature: 0.2,
     system: { en: '' },
     prompt: { en: '' }
   },
@@ -80,7 +78,6 @@ const TOP_LEVEL_FIELDS = new Set([
   'icon',
   'workflow',
   'preferredModel',
-  'preferredTemperature',
   'maxIterations',
   'tools',
   'sources',
@@ -494,7 +491,7 @@ export default function AdminAgentEditPage() {
               />
             </Section>
 
-            {/* Model & decoding */}
+            {/* Model */}
             <Section
               title={t('admin.agents.edit.model', 'Model')}
               hint={t(
@@ -502,7 +499,7 @@ export default function AdminAgentEditPage() {
                 'Image-generation models are filtered out — agents need a text model that can produce JSON for the planner and tool calls.'
               )}
             >
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                     {t('admin.agents.edit.preferredModel', 'Preferred model')}
@@ -531,22 +528,6 @@ export default function AdminAgentEditPage() {
                       )}
                     </p>
                   )}
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                    {t('admin.agents.edit.temperature', 'Temperature')}
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    max="2"
-                    step="0.1"
-                    value={profile.preferredTemperature ?? 0.7}
-                    onChange={e =>
-                      handleField('preferredTemperature', Number.parseFloat(e.target.value))
-                    }
-                    className="mt-1 block w-full rounded-lg border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
-                  />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
@@ -1227,30 +1208,6 @@ export default function AdminAgentEditPage() {
                           </option>
                         ))}
                     </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm text-gray-600 dark:text-gray-400">
-                      {t(
-                        'admin.agents.edit.memoryComposerTemperature',
-                        'Composer temperature (default 0.2)'
-                      )}
-                    </label>
-                    <input
-                      type="number"
-                      min="0"
-                      max="2"
-                      step="0.1"
-                      disabled={profile.memory?.enabled === false}
-                      value={profile.memory?.temperature ?? 0.2}
-                      onChange={e =>
-                        handleMemory({
-                          temperature: Number.isFinite(Number(e.target.value))
-                            ? Number(e.target.value)
-                            : 0.2
-                        })
-                      }
-                      className="mt-1 block w-full rounded-lg border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 disabled:opacity-50"
-                    />
                   </div>
                 </div>
                 <DynamicLanguageEditor

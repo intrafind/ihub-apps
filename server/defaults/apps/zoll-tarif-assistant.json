@@ -29,7 +29,6 @@
   },
   "preferredOutputFormat": "markdown",
   "preferredStyle": "detailed",
-  "preferredTemperature": 0.7,
   "sendChatHistory": true,
   "inputMode": {
     "type": "singleline",

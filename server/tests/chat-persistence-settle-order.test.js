@@ -27,7 +27,6 @@ const PREP = {
   model: { id: 'test-model' },
   llmMessages: [{ role: 'user', content: 'hi' }],
   tools: [],
-  temperature: 0.5,
   maxTokens: 100,
   llmOptions: {}
 };

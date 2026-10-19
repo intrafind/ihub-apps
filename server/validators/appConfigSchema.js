@@ -117,11 +117,6 @@ const settingsSchema = z
         filter: z.record(z.any()).optional() // Allow filtering models by any property
       })
       .optional(),
-    temperature: z
-      .object({
-        enabled: z.boolean().optional().prefault(true)
-      })
-      .optional(),
     outputFormat: z
       .object({
         enabled: z.boolean().optional().prefault(true)
@@ -460,7 +455,6 @@ const baseAppConfigSchema = z.object({
   preferredModel: z.string().optional(),
   preferredOutputFormat: z.enum(['markdown', 'text', 'json', 'html']).optional(),
   preferredStyle: z.string().optional(),
-  preferredTemperature: z.number().min(0).max(2).optional(),
   sendChatHistory: z.boolean().optional().prefault(true),
   thinking: thinkingSchema.optional(),
   imageGeneration: imageGenerationConfigSchema,
