@@ -25,6 +25,11 @@ function makeCtx(base) {
     writeJson: async (rel, data) => {
       await fs.writeFile(path.join(base, rel), JSON.stringify(data, null, 2), 'utf8');
     },
+    fileExists: async rel =>
+      fs.access(path.join(base, rel)).then(
+        () => true,
+        () => false
+      ),
     listFiles: async (subdir, pattern) => {
       const entries = await fs.readdir(path.join(base, subdir)).catch(() => []);
       const escaped = pattern.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*');
@@ -105,5 +110,49 @@ describe('migration V170', () => {
     assert.ok(ctx.logs.some(([level, m]) => level === 'warn' && m.includes('broken.json')));
     assert.ok(ctx.logs.some(([, m]) => m.includes('apps/chat.json: skillSettings.enabled set')));
     assert.equal((await readApp('chat')).skillSettings.enabled, true);
+  });
+
+  describe('legacy config/apps.json', () => {
+    const legacyPath = () => path.join(dir, 'config', 'apps.json');
+    const writeLegacy = async value => {
+      await fs.mkdir(path.join(dir, 'config'), { recursive: true });
+      await fs.writeFile(legacyPath(), typeof value === 'string' ? value : JSON.stringify(value));
+    };
+    const readLegacy = async () => JSON.parse(await fs.readFile(legacyPath(), 'utf8'));
+
+    it('applies the same rules to the apps in the array', async () => {
+      await writeLegacy([
+        { id: 'custom', skills: ['summarize'] },
+        { id: 'iassistant' },
+        { id: 'babelfish', tools: [] },
+        { id: 'pinned', skills: ['x'], skillSettings: { enabled: false } }
+      ]);
+      const ctx = makeCtx(dir);
+      await up(ctx);
+      const apps = await readLegacy();
+      assert.equal(apps[0].skillSettings.enabled, true);
+      assert.equal(apps[1].skillSettings.enabled, true);
+      assert.ok(!('skillSettings' in apps[2]));
+      assert.equal(apps[3].skillSettings.enabled, false);
+      assert.ok(
+        ctx.logs.some(([, m]) => m.includes('config/apps.json[0] (custom): skillSettings.enabled'))
+      );
+    });
+
+    it('leaves the file alone when no app changes, and tolerates other shapes', async () => {
+      const untouched = JSON.stringify([{ id: 'babelfish' }]);
+      await writeLegacy(untouched);
+      await up(makeCtx(dir));
+      assert.equal(await fs.readFile(legacyPath(), 'utf8'), untouched);
+
+      await writeLegacy('{ "not": "an array" }');
+      await up(makeCtx(dir));
+      assert.equal(await fs.readFile(legacyPath(), 'utf8'), '{ "not": "an array" }');
+
+      await writeLegacy('{ nope');
+      const ctx = makeCtx(dir);
+      await up(ctx);
+      assert.ok(ctx.logs.some(([level, m]) => level === 'warn' && m.includes('config/apps.json')));
+    });
   });
 });
