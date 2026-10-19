@@ -93,7 +93,12 @@ const userWith = granted => ({
   permissions: { skills: new Set(granted) }
 });
 
-const app = { id: 'app', system: { en: 'SYSTEM' }, skills: ['alpha', 'beta', 'gamma', 'manual'] };
+const app = {
+  id: 'app',
+  system: { en: 'SYSTEM' },
+  skills: ['alpha', 'beta', 'gamma', 'manual'],
+  skillSettings: { enabled: true }
+};
 
 /** The system prompt PromptService builds for a chat. */
 async function systemPromptFor(messages, { appConfig = app, user = userWith(['*']) } = {}) {
@@ -183,6 +188,23 @@ describe('the skills list', () => {
       ['newsletter', 'meeting-notes']
     );
     assert.deepEqual(skillAccess.searchSkillCatalog(entries, 'a ?'), []);
+  });
+});
+
+describe('skill tools in an app without skillSettings.enabled', () => {
+  test('are not offered, whatever the app lists or the turn activated', async () => {
+    const { skillSettings, ...closed } = app;
+    const tools = await getToolsForApp(closed, 'en', {
+      user: userWith(['*']),
+      activeSkills: [{ name: 'alpha', full: true }]
+    });
+    for (const id of ['activate_skill', 'read_skill_resource', 'find_skill']) {
+      assert.equal(
+        tools.find(t => t.id === id),
+        undefined,
+        id
+      );
+    }
   });
 });
 
@@ -391,7 +413,7 @@ describe('skills stay active across a chat', () => {
         answer('ok'),
         user('go on')
       ],
-      app: { ...app, skillSettings: { maxActiveSkills: 2 } },
+      app: { ...app, skillSettings: { enabled: true, maxActiveSkills: 2 } },
       user: userWith(['*'])
     });
     assert.deepEqual(

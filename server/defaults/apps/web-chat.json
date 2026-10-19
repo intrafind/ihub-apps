@@ -35,6 +35,9 @@
     "enabledByDefault": false
   },
   "tools": [],
+  "skillSettings": {
+    "enabled": true
+  },
   "allowEmptyContent": false,
   "sendChatHistory": true,
   "category": "utility",

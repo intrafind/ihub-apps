@@ -260,7 +260,15 @@ function AppFormEditor({
             {/* Skills Configuration */}
             {featureFlags.isEnabled('skills', false) && (
               <SkillsConfigSection
+                enabled={app.skillSettings?.enabled === true}
+                allowPersonal={app.skillSettings?.allowPersonal !== false}
                 selectedSkills={app.skills || []}
+                onEnabledChange={enabled =>
+                  handleInputChange('skillSettings', { ...app.skillSettings, enabled })
+                }
+                onAllowPersonalChange={allowPersonal =>
+                  handleInputChange('skillSettings', { ...app.skillSettings, allowPersonal })
+                }
                 onSkillsChange={skills => handleInputChange('skills', skills)}
               />
             )}
