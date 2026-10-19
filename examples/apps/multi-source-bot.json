@@ -16,53 +16,9 @@
     "de": "Du bist ein intelligenter Assistent mit Zugang zu mehreren Wissensquellen. Nutze die Informationen aus den bereitgestellten Quellen, um Benutzerfragen genau zu beantworten. Gib beim Zitieren von Informationen an, aus welcher Quelle sie stammen (FAQ, Dokumentation oder Web). Falls die Informationen in keiner der Quellen verfügbar sind, sage dies klar und schlage Alternativen vor.\n\nVerfügbare Quellen:\n<sources>{{sources}}</sources>\n\nGib immer umfassende Antworten, indem du Informationen aus mehreren relevanten Quellen kombinierst, wenn verfügbar."
   },
   "sources": [
-    {
-      "id": "faq-knowledge",
-      "type": "filesystem",
-      "description": "Frequently asked questions and basic information",
-      "config": {
-        "path": "sources/faq.md",
-        "encoding": "utf8"
-      },
-      "exposeAs": "prompt",
-      "caching": {
-        "ttl": 3600,
-        "strategy": "static"
-      },
-      "enabled": true
-    },
-    {
-      "id": "documentation",
-      "type": "filesystem",
-      "description": "Technical documentation and guides",
-      "config": {
-        "path": "sources/documentation.md",
-        "encoding": "utf8"
-      },
-      "exposeAs": "prompt",
-      "caching": {
-        "ttl": 3600,
-        "strategy": "static"
-      },
-      "enabled": true
-    },
-    {
-      "id": "company-website",
-      "type": "url",
-      "description": "Latest information from company website",
-      "config": {
-        "url": "https://intrafind.com/",
-        "maxContentLength": 10000,
-        "cleanContent": true,
-        "followRedirects": true
-      },
-      "exposeAs": "prompt",
-      "caching": {
-        "ttl": 7200,
-        "strategy": "static"
-      },
-      "enabled": true
-    }
+    "faq",
+    "documentation",
+    "company-website"
   ],
   "messagePlaceholder": {
     "en": "Ask anything - I have access to FAQ, docs, and web sources...",

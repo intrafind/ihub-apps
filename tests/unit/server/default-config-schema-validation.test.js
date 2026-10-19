@@ -3,10 +3,13 @@ import path from 'node:path';
 import { describe, expect, it } from '@jest/globals';
 import { appConfigSchema } from '../../../server/validators/appConfigSchema.js';
 import { modelConfigSchema } from '../../../server/validators/modelConfigSchema.js';
+import { sourcesArraySchema } from '../../../server/validators/sourceConfigSchema.js';
 
 const repoRoot = process.cwd();
 const defaultAppsDir = path.join(repoRoot, 'server/defaults/apps');
 const defaultModelsDir = path.join(repoRoot, 'server/defaults/models');
+const exampleAppsDir = path.join(repoRoot, 'examples/apps');
+const exampleSourcesFile = path.join(repoRoot, 'examples/config/sources.json');
 
 function readDefaultConfigs(directoryPath) {
   return fs
@@ -54,5 +57,32 @@ describe('default app and model configs', () => {
         expect(modelIds.has(parsedApp.data.preferredModel)).toBe(true);
       }
     }
+  });
+});
+
+// The examples are copied into `contents/` by hand, so an outdated one only
+// fails once someone installs it. Check them like the defaults.
+describe('example app configs', () => {
+  it('validate against the app schema and only reference example sources', () => {
+    const parsedSources = sourcesArraySchema.safeParse(
+      JSON.parse(fs.readFileSync(exampleSourcesFile, 'utf8'))
+    );
+    if (!parsedSources.success) {
+      throw new Error(`Invalid examples/config/sources.json: ${parsedSources.error.message}`);
+    }
+    const sourceIds = new Set(parsedSources.data.map(source => source.id));
+
+    const problems = [];
+    for (const { fileName, config } of readDefaultConfigs(exampleAppsDir)) {
+      const parsedApp = appConfigSchema.safeParse(config);
+      if (!parsedApp.success) {
+        problems.push(`${fileName}: ${JSON.stringify(parsedApp.error.issues)}`);
+        continue;
+      }
+      for (const sourceId of parsedApp.data.sources ?? []) {
+        if (!sourceIds.has(sourceId)) problems.push(`${fileName}: unknown source "${sourceId}"`);
+      }
+    }
+    expect(problems).toEqual([]);
   });
 });

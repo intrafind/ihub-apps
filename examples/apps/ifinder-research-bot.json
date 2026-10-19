@@ -16,56 +16,9 @@
     "de": "Du bist ein Forschungsassistent mit Zugang zur iFinder-Unternehmenssuche. Du kannst nach Dokumenten suchen, spezifische Inhalte abrufen und umfassende Antworten basierend auf den verfügbaren Dokumenten geben.\n\nDu hast Zugang sowohl zu vorgeladenen Wissen als auch zu interaktiven Suchfunktionen. Nutze die Suchtools, wenn du spezifische Dokumente finden musst oder wenn der Benutzer nach Informationen fragt, die eine Suche in der Dokumentendatenbank erfordern könnten.\n\nGib beim Zitieren von Informationen immer den Dokumenttitel und Autor an, wenn verfügbar. Wenn du dir bei etwas unsicher bist, nutze die Suchtools, um weitere Informationen zu finden."
   },
   "sources": [
-    {
-      "id": "recent-tickets",
-      "type": "ifinder",
-      "description": "Access to all jira tickets and the corresponding attachments",
-      "config": {
-        "query": "quarterly report 2024",
-        "searchProfile": "default",
-        "maxResults": 3,
-        "maxLength": 20000
-      },
-      "exposeAs": "prompt",
-      "caching": {
-        "ttl": 1800,
-        "strategy": "static"
-      },
-      "enabled": true
-    },
-    {
-      "id": "document-search",
-      "type": "ifinder",
-      "description": "Search for documents in iFinder",
-      "config": {
-        "searchProfile": "default",
-        "maxResults": 10,
-        "maxLength": 15000
-      },
-      "exposeAs": "tool",
-      "caching": {
-        "ttl": 600,
-        "strategy": "static"
-      },
-      "enabled": true
-    },
-    {
-      "id": "technical-docs",
-      "type": "ifinder",
-      "description": "Technical documentation and manuals",
-      "config": {
-        "query": "technical documentation manual",
-        "searchProfile": "default",
-        "maxResults": 5,
-        "maxLength": 25000
-      },
-      "exposeAs": "tool",
-      "caching": {
-        "ttl": 3600,
-        "strategy": "static"
-      },
-      "enabled": true
-    }
+    "recent-tickets",
+    "document-search",
+    "technical-docs"
   ],
   "messagePlaceholder": {
     "en": "Ask me to search for documents or research topics...",
@@ -80,7 +33,10 @@
     "de": "{{content}}"
   },
   "enabled": true,
-  "tools": ["source_document-search", "source_technical-docs"],
+  "tools": [
+    "source_document-search",
+    "source_technical-docs"
+  ],
   "greeting": {
     "en": {
       "title": "📚 iFinder Research Assistant",
@@ -93,16 +49,34 @@
   },
   "starterPrompts": [
     {
-      "en": "Search for the latest quarterly reports",
-      "de": "Suche nach den neuesten Quartalberichten"
+      "title": {
+        "en": "Quarterly reports",
+        "de": "Quartalsberichte"
+      },
+      "message": {
+        "en": "Search for the latest quarterly reports",
+        "de": "Suche nach den neuesten Quartalberichten"
+      }
     },
     {
-      "en": "Find technical documentation about our products",
-      "de": "Finde technische Dokumentation zu unseren Produkten"
+      "title": {
+        "en": "Product documentation",
+        "de": "Produktdokumentation"
+      },
+      "message": {
+        "en": "Find technical documentation about our products",
+        "de": "Finde technische Dokumentation zu unseren Produkten"
+      }
     },
     {
-      "en": "What information do you have about our recent projects?",
-      "de": "Welche Informationen hast du über unsere aktuellen Projekte?"
+      "title": {
+        "en": "Recent projects",
+        "de": "Aktuelle Projekte"
+      },
+      "message": {
+        "en": "What information do you have about our recent projects?",
+        "de": "Welche Informationen hast du über unsere aktuellen Projekte?"
+      }
     }
   ],
   "allowEmptyContent": false,

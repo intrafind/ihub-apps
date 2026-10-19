@@ -39,12 +39,6 @@
       "enabled": true
     }
   },
-  "useAI": true,
-  "useTemplate": false,
-  "useManual": false,
-  "parentId": null,
   "inheritanceLevel": 0,
-  "overriddenFields": [],
-  "aiGenerated": true,
-  "aiPrompt": "let's create an app which tells me horrible things anytime I've asked something"
+  "overriddenFields": []
 }
