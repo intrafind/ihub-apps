@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import DOMPurify from 'dompurify';
 import { useTranslation } from 'react-i18next';
 import { marked } from 'marked';

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * The scheduler: slot planning (run, overlap skip, catch-up, missed),
  * run outcomes (completion, auto-pause), the task source over a real

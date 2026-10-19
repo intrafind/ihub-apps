@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Source producers: how what a tool returned becomes the sources the chat
  * shows. The loop asks {@link extractToolSources} after every tool call

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 // Personal API Key Routes
 // Lets a signed-in user mint, rotate and revoke API credentials for themselves
 // from Settings > Integrations, within the policy an administrator configured.

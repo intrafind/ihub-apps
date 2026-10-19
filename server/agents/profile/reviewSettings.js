@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Preset strictness → concrete verifier knobs. Pure; see the design doc
  * docs/superpowers/specs/2026-06-25-configurable-agent-review-design.md.

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * RunLog service tests — in-memory event stream + persistence + identity +
  * cascade delete + retention. Uses a temp dir and forceEnabled so the feature

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * What a caller outside the chat gets from a finished workflow run: the MCP
  * and A2A gateways, which return the answer and nothing else.

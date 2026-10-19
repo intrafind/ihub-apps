@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import PromptService from './services/PromptService.js';
 import { abortCause, abortReason } from './services/chat/abortCause.js';
 import { clients, activeRequests, isChatDurable } from './sse.js';

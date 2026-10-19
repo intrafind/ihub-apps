@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Render a prompt text with its `{{variable}}` placeholders highlighted — the
  * one placeholder syntax the prompt library uses.

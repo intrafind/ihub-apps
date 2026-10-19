@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Regression tests for #1804: ContentInstaller's skill multi-file write path
  * used a prefix check (`resolvedPath.startsWith(path.resolve(skillDir))`)

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Headings and tables in PDF text on real pdf.js output (concepts/document-extraction/,
  * release 2, WP-F). The browser code runs the same shared functions on pdf.js in the page; jest

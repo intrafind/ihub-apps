@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Proxy auth uses its identity headers (user, groups, name, email) only when
  * the request came through a proxy an admin trusts: a connection from an

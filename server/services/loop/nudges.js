@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * The four wrap-up nudges the loop injects as `role: 'user'` messages with a
  * `[system]` prefix. Wording is prompt-sensitive and intentionally identical

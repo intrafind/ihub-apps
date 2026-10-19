@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Only a chat model can be the default model. A text-to-speech or
  * transcription model never takes the `default` flag through the admin

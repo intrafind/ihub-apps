@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Mistral realtime transcription provider (`voxtral-mini-transcribe-realtime-2602`
  * on the Mistral platform).

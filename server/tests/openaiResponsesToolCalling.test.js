@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import assert from 'assert';
 import { convertToolsFromGeneric } from '../adapters/toolCalling/index.js';
 import logger from '../utils/logger.js';

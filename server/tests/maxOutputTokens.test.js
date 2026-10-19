@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import assert from 'assert';
 import logger from '../utils/logger.js';
 import { DEFAULT_MAX_OUTPUT_TOKENS, resolveMaxOutputTokens } from '../../shared/outputTokens.js';

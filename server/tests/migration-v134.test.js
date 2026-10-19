@@ -1,5 +1,8 @@
 #!/usr/bin/env node
 
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Migration V134 specs — an empty MCP tool prefix is removed, so the server's
  * tools get the default `<id>__` prefix (a prefix an admin typed stays), and

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * `GET /api/sources/:provider/content|metadata` (routes/sources.js): one route
  * for every source provider's actions, so the sources panel acts on a source

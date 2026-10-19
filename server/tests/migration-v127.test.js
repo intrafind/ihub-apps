@@ -1,5 +1,8 @@
 #!/usr/bin/env node
 
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Migration V127 specs — shipped prompt texts use {{date}}, not {{timezone}}
  * (issue #2508). Only a text that is still exactly the old shipped default is

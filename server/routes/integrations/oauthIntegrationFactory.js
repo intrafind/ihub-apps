@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 // Shared OAuth2 integration route factory.
 //
 // office365.js, googledrive.js, nextcloud.js and jira.js each implement the

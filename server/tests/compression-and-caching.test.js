@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Startup transfer size: the client bundle and JSON API responses are
  * compressed, streamed responses are not (a compressor would hold SSE chunks

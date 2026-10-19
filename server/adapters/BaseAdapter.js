@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import logger from '../utils/logger.js';
 import { createParser } from 'eventsource-parser';
 import { getReadableStream } from '../utils/streamUtils.js';

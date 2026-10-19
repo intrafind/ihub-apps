@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# SPDX-FileCopyrightText: IntraFind Software AG
+# SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 # A script to recursively find and concatenate files in a directory.
 # Each file's content is prepended with metadata (filename, relative path)
 # and separated by a blank line.

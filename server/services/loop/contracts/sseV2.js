@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * SSE v2 event contracts — one typed schema, a projection of RunLog events
  * plus transport frames (concept §5.6). Every envelope carries a per-run

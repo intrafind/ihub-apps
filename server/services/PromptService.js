@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import { getLocalizedContent } from '../../shared/localize.js';
 import { renderUserMessage } from '../../shared/promptContext.js';
 import configCache from '../configCache.js';

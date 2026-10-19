@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * The acceptance test for routing configuration through the storage provider:
  * an installation's `contents/` is byte-identical before and after.

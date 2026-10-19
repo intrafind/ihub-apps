@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Abort helpers shared by the runtime: settle a piece of work as soon as its
  * signal aborts, even when the work itself ignores the signal (a hanging

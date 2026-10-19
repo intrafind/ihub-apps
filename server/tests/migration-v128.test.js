@@ -1,5 +1,8 @@
 #!/usr/bin/env node
 
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Migration V128 specs — the iFinder `getContent` / `getMetadata` descriptions
  * and the ifinder-search app prompt gain the document-id guidance, but only

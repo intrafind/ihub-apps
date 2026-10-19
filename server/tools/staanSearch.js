@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import searchWithExtraction from './lib/searchWithExtraction.js';
 import { STAAN_PAGE_SIZE, STAAN_MAX_WEB_RESULTS } from '../services/search/staanProvider.js';
 import logger from '../utils/logger.js';

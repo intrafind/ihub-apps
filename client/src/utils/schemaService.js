@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Schema Service - Client-side utility for fetching JSON schemas from server
  * Replaces local JSON schema files with server-side Zod schema conversion

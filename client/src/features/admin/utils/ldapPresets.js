@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Client-side mirror of the LDAP provider derivations in
  * `server/utils/ldapProviderConfig.js`, used only to show an admin what an

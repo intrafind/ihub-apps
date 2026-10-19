@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import React, { useState, useEffect, useRef } from 'react';
 import { ErrorBoundary } from 'react-error-boundary';
 

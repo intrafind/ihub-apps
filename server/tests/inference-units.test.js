@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Unit specs for the inference API building blocks (services/inference):
  * the `model` identifier, app variables through `prompt.variables`, the

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import express from 'express';
 import { loadAllRenderers, getRendererById } from '../renderersLoader.js';
 import { buildServerPath } from '../utils/basePath.js';

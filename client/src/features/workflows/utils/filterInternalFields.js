@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Set of state field names that should be hidden from end users.
  * These are internal workflow engine artifacts (definitions, paused state,

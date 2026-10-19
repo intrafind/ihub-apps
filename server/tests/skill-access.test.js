@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Skill access: a skill loads only when it is installed, assigned to the app
  * (or agent node) and granted to the user's groups — for the skills list, the

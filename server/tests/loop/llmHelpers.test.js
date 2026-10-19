@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Pure helpers behind LLMClient: retry classification/backoff, usage
  * normalization, tool-call delta merging, JSON extraction.

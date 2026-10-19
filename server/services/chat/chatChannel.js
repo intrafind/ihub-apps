@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Chat channel — projects the agent loop's streamed chunks onto SSE v2 frames
  * for the chat stream (`services/loop/RunStream.js`).

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import { buildApiUrl } from './runtimeBasePath';
 
 // The Speech SDK is ~350 KB, so it is loaded on first use (initRecognizer)

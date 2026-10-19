@@ -1,5 +1,8 @@
 #!/usr/bin/env node
 
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Migration V122 specs — the shipped apps move from the old context tags and
  * the quoted "{{content}}" templates to the <content> blocks. A prompt is

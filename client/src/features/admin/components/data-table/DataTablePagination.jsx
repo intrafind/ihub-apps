@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import Icon from '../../../../shared/components/Icon';
 import { DEFAULT_PAGE_SIZE_OPTIONS } from './useTablePagination';
 

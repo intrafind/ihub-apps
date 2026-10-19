@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 // Re-export all API functions from their respective modules
 export * from './endpoints/apps';
 export * from './endpoints/models';

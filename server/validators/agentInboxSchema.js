@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import { z } from 'zod';
 
 const INBOX_ID_PATTERN = /^[a-z0-9][a-z0-9-_]*[a-z0-9]$/;

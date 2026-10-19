@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Regression tests for issue #1734: the chat flow (RequestBuilder.prepareChatRequest)
  * must enforce user/group model-level permissions (user.permissions.models), not just

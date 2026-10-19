@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Pure projection of one SSE v2 RunState (shared/run/runReducer.js) onto the
  * assistant chat message that `ChatMessage.jsx` renders.

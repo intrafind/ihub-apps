@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * MCP Apps (SEP-1865, extension `io.modelcontextprotocol/ui`) — the pieces of
  * the host side that live on the server.

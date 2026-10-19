@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Tool Usage Tracker
  * Tracks tool enable/disable patterns and provides usage-based suggestions

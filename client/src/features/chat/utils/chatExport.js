@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import { Marked } from 'marked';
 import DOMPurify from 'dompurify';
 import { exportPdfOnServer } from '../../../api/endpoints/exports';

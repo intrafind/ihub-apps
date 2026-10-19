@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Interaction contract — every human touchpoint as one typed model
  * (concept §5.5). Generalizes the workflow `human` node checkpoint

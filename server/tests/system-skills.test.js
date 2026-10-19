@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * System skills (server/systemSkills): skills iHub ships as part of the
  * server. They are read-only for admins, their names are reserved, and only

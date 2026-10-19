@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * `collectChatStats` — the numbers the admin Chat History page shows — driven
  * against a real `ChatRepository` over a real filesystem storage provider.

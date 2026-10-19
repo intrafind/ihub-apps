@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 // Plain-node test (node server/tests/keyColdStartRace.test.js).
 //
 // On the first start of an installation the JWT signing key and the secret

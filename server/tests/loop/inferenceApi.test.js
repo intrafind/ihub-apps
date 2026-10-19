@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Route specs for the inference API extensions (#2580): apps as models,
  * `prompt.variables`, `response_format`, server-side output validation,

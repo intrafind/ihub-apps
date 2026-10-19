@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import { z } from 'zod';
 import { shareTargetSchema } from './userPromptSchema.js';
 import { MAX_SHARE_TARGETS } from '../services/skills/userSkillSettings.js';

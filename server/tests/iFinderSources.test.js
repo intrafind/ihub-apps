@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * iFinder documents as sources (services/sources/producers/ifinder.js): what
  * the iFinder tools and the iAssistant conversation API report becomes

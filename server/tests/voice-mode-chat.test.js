@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Voice mode on the chat request (issue #2868): `voiceMode: true` adds the
  * localized voice style instruction after the app's system prompt, asks for a

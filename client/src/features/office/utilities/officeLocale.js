@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /* global Office */
 
 const LOCALE_STORAGE_KEY = 'office_ihub_language';

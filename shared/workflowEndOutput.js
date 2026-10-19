@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * What an end step's `output` setting can be, shared by the server (the schema
  * that refuses a workflow without one, the end step that resolves it) and the

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import fs from 'node:fs/promises';
 import { loadJson } from './configLoader.js';
 import logger from './utils/logger.js';

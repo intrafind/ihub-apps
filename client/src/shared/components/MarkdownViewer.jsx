@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import { useEffect, useMemo } from 'react';
 import { renderMarkdown } from '../../config/marked.config';
 import { escapeHtml } from '../../utils/markdownHelpers';

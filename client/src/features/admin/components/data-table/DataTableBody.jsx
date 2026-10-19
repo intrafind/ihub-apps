@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import DataTableEmpty from './DataTableEmpty';
 import DataTableLoadingRows from './DataTableLoadingRows';
 import DataTableRow from './DataTableRow';

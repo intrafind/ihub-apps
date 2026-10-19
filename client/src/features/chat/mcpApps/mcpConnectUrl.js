@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * URLs of the per-user MCP sign-in: where to send the browser to connect a
  * server, and where it should come back to.

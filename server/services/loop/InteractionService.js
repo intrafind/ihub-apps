@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * InteractionService — the one model for every human touchpoint
  * (concept §5.5): `question` (ask_user, human-node input), `approval`

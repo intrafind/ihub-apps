@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import { useMemo } from 'react';
 import { usePlatformConfig } from '../contexts/PlatformConfigContext';
 import { FeatureFlags } from '../../../../shared/featureFlags.js';

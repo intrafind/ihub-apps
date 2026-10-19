@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 // Codes the server's `{type:'error'}` frame carries that have no text of their
 // own below. Their messages are written for the browser (no internal hosts or
 // keys — see diagnoseSocketError in server/websocket/realtimeTranscription.js)

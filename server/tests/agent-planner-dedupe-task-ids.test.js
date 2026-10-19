@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 // Plain-node test (node server/tests/agent-planner-dedupe-task-ids.test.js).
 //
 // Regression for run wf-exec-8b36a2e7, which HARD-FAILED on round 2 with

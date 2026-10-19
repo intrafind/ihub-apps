@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import registerAdminAuthRoutes from './admin/auth.js';
 import registerAdminLdapTestRoutes from './admin/ldapTest.js';
 import registerAdminOAuthRoutes from './admin/oauthClients.js';

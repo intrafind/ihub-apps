@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Which apps the Outlook add-in offers — the `allowedApps` list of the add-in's
  * OAuth client.

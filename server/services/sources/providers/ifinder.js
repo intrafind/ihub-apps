@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * The `ifinder` source provider: a document's content and details, fetched
  * with the signed-in user's own iFinder permissions. Serves the sources the

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import { z } from 'zod';
 import { mcpAppContextSchema } from '../services/mcp/mcpAppContext.js';
 export { zSafeId } from './common.js';

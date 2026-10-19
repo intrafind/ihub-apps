@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Encode audio as a 16-bit PCM WAV file: the sound track extracted from audio
  * and video uploads, and the recording a custom read-aloud voice is made from.

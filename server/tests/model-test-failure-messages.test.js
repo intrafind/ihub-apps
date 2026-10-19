@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * `describeModelTestFailure` (POST /admin/models/:id/test) must always emit a
  * `messageKey` alongside its English `userMessage` — that key is what the

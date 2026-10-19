@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import { useMemo } from 'react';
 
 export const DEFAULT_PAGE_SIZE_OPTIONS = [10, 25, 50, 100];

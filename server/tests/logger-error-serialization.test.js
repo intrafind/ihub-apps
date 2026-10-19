@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Test that the logger correctly serializes Error objects passed as metadata.
  * Error properties (message, stack, name) are non-enumerable and invisible to

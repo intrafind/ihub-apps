@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Golden wire tests for the OpenAI-compatible inference API on top of LLMClient.
  * Pins the byte-level contract external clients depend on (chunk shapes, role

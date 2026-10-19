@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import { resolveFontFamily } from './fonts.js';
 import { isColor } from './themes.js';
 import { acceptImage, markdownToContent, naturalImageSize, warn } from './markdownToPdfmake.js';

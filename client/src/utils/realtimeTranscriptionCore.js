@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Shared realtime-transcription primitives used by the microphone dictation
  * service (`modelRecognitionService.js`), live transcription

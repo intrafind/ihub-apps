@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import { DEFAULT_FONT } from './fonts.js';
 import { makePrintable, printableString } from './glyphs.js';
 import { markdownToContent } from './markdownToPdfmake.js';

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * OpenDocument presentations (.odp) → the same text as a PowerPoint deck: slides in the order of
  * the presentation, the title of a slide as a heading, tables as Markdown tables, hidden slides

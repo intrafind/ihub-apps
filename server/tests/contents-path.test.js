@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Specs for utils/contentsPath — every path under the contents directory
  * follows `CONTENTS_DIR`, including the fallbacks for the two settings that

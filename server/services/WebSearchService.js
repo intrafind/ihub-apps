@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import { emitToolProgress } from './loop/RunStream.js';
 import config from '../config.js';
 import { throttledFetch } from '../requestThrottler.js';

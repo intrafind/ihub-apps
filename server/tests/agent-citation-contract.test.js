@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 // Plain-node test (node server/tests/agent-citation-contract.test.js).
 //
 // Citation-contract change (run wf-exec-78d4c018: the synthesizer cited sparse

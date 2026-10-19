@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * The run ledger on the storage provider: `RunLog` over `RunLedgerStore`,
  * driven against a real `FilesystemStorageProvider`.

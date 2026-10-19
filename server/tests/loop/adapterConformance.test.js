@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Adapter conformance matrix — every registered provider driven through the
  * public LLMClient with wire-level fixtures. Scenarios (concept R14):

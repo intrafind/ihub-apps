@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import { getGenAIInstrumentation } from '../telemetry.js';
 import { recordAppUsage, recordError, recordConversation } from './metrics.js';
 import activityTracker from './ActivityTracker.js';

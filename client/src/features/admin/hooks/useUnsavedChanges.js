@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import { useCallback, useContext, useEffect, useRef, useState } from 'react';
 // UNSAFE_NavigationContext is the standard workaround for blocking navigation
 // in React Router v6 when using BrowserRouter (which lacks useBlocker support).

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Question pause — how a prompt / agent node pauses its execution when the
  * model calls `ask_user`, and how it resumes the same step from the answer

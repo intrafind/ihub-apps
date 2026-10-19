@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import { useState, useCallback, useMemo } from 'react';
 import { apiClient } from '../../../api/client';
 import { processCloudFile } from '../utils/cloudFileProcessing';

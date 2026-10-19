@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Regression tests for the contents/sources containment boundary added to
  * FileSystemHandler (issue #1687). Before this fix, any relative path that

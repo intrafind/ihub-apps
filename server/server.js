@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 // Import required modules
 // Must stay the first import: sizes the libuv threadpool before any module
 // touches it (see threadpool.js).

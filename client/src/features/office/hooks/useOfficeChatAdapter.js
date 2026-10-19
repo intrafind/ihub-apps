@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import { useCallback } from 'react';
 import useAppChat from '../../chat/hooks/useAppChat';
 import useStoredChatHydration from './useStoredChatHydration';

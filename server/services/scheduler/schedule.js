@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Schedules — the one normalized shape every scheduled job is described by,
  * and the arithmetic on it: validation, the next run times, and a sentence a

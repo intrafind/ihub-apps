@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import { memo } from 'react';
 import { Handle, Position, NodeResizer } from '@xyflow/react';
 import { NODE_TYPE_COLORS, NODE_TYPE_META } from '../workflowEditorUtils';

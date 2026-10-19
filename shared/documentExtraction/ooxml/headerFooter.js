@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Headers and footers of a Word document: letterheads, document numbers, confidentiality
  * notes, the sender address in a text box. mammoth has no reader for them, so without this

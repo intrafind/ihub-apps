@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import { TARGET_SAMPLE_RATE, createLevelMeter, toPcm16At16k } from './voiceSession/audioUtils';
 import { createAzureAdapter } from './voiceSession/azureAdapter';
 import { createBrowserAdapter } from './voiceSession/browserAdapter';

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Scheduled-task proposals — what the scheduling tools hand the chat instead
  * of saving anything.

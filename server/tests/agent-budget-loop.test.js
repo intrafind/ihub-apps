@@ -1,5 +1,8 @@
 #!/usr/bin/env node
 
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Unit tests for budget-driven tool-loop continuation in PromptNodeExecutor
  * (`executeLLMWithTools`). Verifies that a per-run token budget nudges the

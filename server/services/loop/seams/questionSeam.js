@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Interactive tools → interactions. A tool marked `interactive: true` (today:
  * `ask_user`) never executes; the seam raises a `question` interaction through

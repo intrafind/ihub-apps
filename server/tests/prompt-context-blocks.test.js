@@ -1,5 +1,8 @@
 #!/usr/bin/env node
 
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * One shape for every client: PromptService renders the host item
  * (`hostContext`) and uploads (`fileData`) as <content type origin> blocks

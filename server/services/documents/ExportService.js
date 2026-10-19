@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import { resolveTheme } from './pdf/themes.js';
 import { createPdf } from './pdf/PdfService.js';
 import { LIMITS } from './pdf/validators.js';

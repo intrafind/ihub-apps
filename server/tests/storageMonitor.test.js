@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 // node --test server/tests/storageMonitor.test.js
 //
 // When the background disk check writes to the log: once when a volume

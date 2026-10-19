@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Which HTML an MCP App view renders: the tool's declared `ui://` resource as
  * `resources/read` returns it, or — for servers that bake the call's data into

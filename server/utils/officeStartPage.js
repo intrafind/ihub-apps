@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * The Outlook add-in's start page settings — `platform.json →
  * officeIntegration.startPage`.

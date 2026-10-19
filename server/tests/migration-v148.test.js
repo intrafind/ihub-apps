@@ -1,5 +1,8 @@
 #!/usr/bin/env node
 
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Migration V148 specs — the Translator's task moves from its `prompt`
  * template into its `system` prompt, so the user's message is only the text

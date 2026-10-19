@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import winston from 'winston';
 import { getContext } from './requestContext.js';
 import { anonymizeIp } from './ipAnonymizer.js';

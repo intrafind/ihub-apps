@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 // Mirrors each server transcription provider's `mode` (server/transcription/*).
 // The admin model list does not carry the public `transcriptionMode` field.
 const STREAMING_PROVIDERS = new Set(['vllm-realtime', 'google-live', 'mistral']);

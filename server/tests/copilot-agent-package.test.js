@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * The Microsoft 365 Copilot agent package (`utils/copilotAgentPackage.js`).
  *

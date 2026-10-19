@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * The sources behind a chat answer, as the chat stores them with it, so that
  * reopening the chat draws the same sources panel and inline citations.

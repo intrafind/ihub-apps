@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import { useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import { loadPdfjs } from '../../upload/utils/fileProcessing';
 import {

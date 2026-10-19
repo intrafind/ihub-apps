@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import { buildWsUrl } from '../../../../utils/runtimeBasePath';
 import { pcmToArrayBuffer } from './audioUtils';
 import { toRecognitionLang } from '../speechService';

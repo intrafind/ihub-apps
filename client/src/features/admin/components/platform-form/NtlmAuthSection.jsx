@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import { CredentialRefSelect } from '../OpenApiToolEditor';
 import GroupMultiSelect from '../GroupMultiSelect';
 

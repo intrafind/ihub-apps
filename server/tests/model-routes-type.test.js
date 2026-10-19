@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * `GET /api/models?type=`: chat models by default, and a comma-separated list
  * for the chat's model selector, which offers transcription models too.

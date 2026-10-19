@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * The forwarded base path (X-Forwarded-Prefix) is stripped from the URL inside
  * setupMiddleware, before the rate limiters, so a request sent under a prefix

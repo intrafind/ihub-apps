@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import { parentPort } from 'node:worker_threads';
 import { renderPdfSpec } from './renderPdf.js';
 

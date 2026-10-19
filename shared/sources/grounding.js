@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Provider-run web search (the model's own search, not a tool) as a source
  * frame. The converters normalize each provider onto one `groundingMetadata`

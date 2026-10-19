@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * `tryHandleMentionWorkflow` — the `@workflow` branch of the chat POST,
  * called directly instead of through the route handler.

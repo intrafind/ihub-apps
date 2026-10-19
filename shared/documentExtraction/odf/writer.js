@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * OpenDocument text (.odt) → Markdown: headings by outline level, paragraphs, lists with the
  * numbers Writer computes, tables, footnotes, links, images as alt text, page breaks.

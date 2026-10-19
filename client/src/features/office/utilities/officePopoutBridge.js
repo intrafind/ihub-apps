@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Message protocol between the Outlook task pane and the chat it popped out
  * into an Office dialog (`Office.context.ui.displayDialogAsync`).

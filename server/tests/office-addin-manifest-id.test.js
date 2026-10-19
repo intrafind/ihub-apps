@@ -1,5 +1,8 @@
 #!/usr/bin/env node
 
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * The Outlook manifest's <Id> and <Version>. The Id used to be a constant, so
  * every iHub instance was the same add-in to Outlook (dev could not be

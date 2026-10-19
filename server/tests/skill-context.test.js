@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Skills in the model's context: the list the model is offered (within its
  * token budget, with `find_skill` when it is shortened), skills only users may

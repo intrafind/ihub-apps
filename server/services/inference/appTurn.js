@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * An app turn of the inference API — `model: "app:<appId>[/<modelId>]"`.
  *

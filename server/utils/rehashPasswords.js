@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import logger from './logger.js';
 import { getContentsPath } from './contentsPath.js';
 import { hashPasswordWithUserId, loadUsers, saveUsers } from './userManager.js';

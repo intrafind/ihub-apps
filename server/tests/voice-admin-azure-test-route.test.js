@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Route tests for `POST /api/admin/voice/azure/test` (Admin → Voice Input →
  * Azure Speech → Test connection).

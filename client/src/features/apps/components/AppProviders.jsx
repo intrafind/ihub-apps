@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import { useEffect } from 'react';
 import { UIConfigProvider } from '../../../shared/contexts/UIConfigContext';
 import { PlatformConfigProvider } from '../../../shared/contexts/PlatformConfigContext';

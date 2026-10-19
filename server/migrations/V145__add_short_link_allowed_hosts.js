@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 // server/migrations/V145__add_short_link_allowed_hosts.js
 export const version = '145';
 export const description = 'add_short_link_allowed_hosts';

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 // Plain-node test (run: node server/tests/vllm-openai-dedup.test.js).
 // Regression coverage for issue #1747: vLLM's adapter/converter duplicated
 // OpenAI's near-verbatim, and the duplication had already drifted into two

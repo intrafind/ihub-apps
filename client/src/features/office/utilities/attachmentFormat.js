@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 // Pure, dependency-free helpers for interpreting Outlook attachment
 // descriptors (as produced by outlookMailContext.js's readMailSnapshot).
 // Kept separate from buildChatApiMessages.js — which pulls in the full

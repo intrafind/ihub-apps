@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * `ConfigStore.updateJson`: a read-modify-write that concurrent writers cannot
  * interleave with.

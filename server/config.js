@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import { cleanEnv, str, num, bool } from 'envalid';
 import dotenv from 'dotenv';
 

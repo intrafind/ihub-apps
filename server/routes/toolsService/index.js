@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import express from 'express';
 import { requireFeature } from '../../featureRegistry.js';
 import { registerJobRoutes } from './jobRoutes.js';

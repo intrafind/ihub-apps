@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * What a chat turn did — searches, documents, tool calls, workflow steps — is
  * stored with its answer, so a user who comes back to the chat can see it.

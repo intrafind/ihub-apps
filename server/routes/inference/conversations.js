@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * `/api/inference/v1/conversations` — the OpenAI Conversations API on iHub
  * chats.

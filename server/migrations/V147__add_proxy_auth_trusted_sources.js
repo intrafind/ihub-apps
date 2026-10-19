@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 // server/migrations/V147__add_proxy_auth_trusted_sources.js
 export const version = '147';
 export const description = 'add_proxy_auth_trusted_sources';

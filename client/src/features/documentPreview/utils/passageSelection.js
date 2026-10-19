@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Turns a source's passage list (`shared/sources/source.js`) into the props the document preview
  * expects.

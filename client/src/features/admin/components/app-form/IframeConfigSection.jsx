@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 const SANDBOX_PERMISSIONS = [
   {
     value: 'allow-scripts',

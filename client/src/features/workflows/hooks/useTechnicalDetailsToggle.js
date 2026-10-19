@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import { useCallback, useEffect, useState } from 'react';
 
 const STORAGE_KEY = 'ihub_workflow_show_technical';

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import { useEffect } from 'react';
 import { validateMermaidCode, processMermaidCode, escapeHtml } from '../utils/markdownHelpers';
 import { isTrustedMermaidContainer, sanitizeMermaidSvg } from '../utils/mermaidSecurity';

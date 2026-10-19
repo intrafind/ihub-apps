@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * The answer of a workflow run, shared by the server (the chat runner, the
  * MCP and A2A gateways, the handoff of an execution to a chat) and the client

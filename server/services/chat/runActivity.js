@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * What a chat turn did — the searches it ran, the documents and pages they
  * found, the other tools it called, the workflow steps it went through — kept

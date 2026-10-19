@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Labeled <select> for filter rows. Controlled by `value` from the page,
  * typically backed by `useFilterState`.

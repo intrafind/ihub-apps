@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 // server/tests/agent-phased-audit.test.js
 //
 // Asserts the per-task auditability contract: round-1+ task ids are

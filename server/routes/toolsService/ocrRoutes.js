@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import express from 'express';
 import multer from 'multer';
 import { authRequired, authenticatedOnly } from '../../middleware/authRequired.js';

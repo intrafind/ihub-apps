@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Startup check for script-backed tools: a tool that cannot load, or whose
  * script does not export what the definition declares, is reported at startup

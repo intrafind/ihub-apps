@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * OpenDocument spreadsheets (.ods) → sheets for the shared spreadsheet text (`sheets.js`): the
  * cells as the sheet shows them (an ODS stores the text of every cell next to its value), merged

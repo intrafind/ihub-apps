@@ -1,5 +1,8 @@
 #!/usr/bin/env node
 
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Migration V167 specs — the per-app `transcription` block and the platform's
  * `speech.transcription` are removed; a restricted `allowedModels` keeps the

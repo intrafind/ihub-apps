@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * The reference that enables every skill of a remote A2A agent whatever else
  * uses its id (server/utils/toolSelection.js `a2aAgentReference`).

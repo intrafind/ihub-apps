@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Tests for the AuditLogService core: enriched entry shape, defaults, email
  * masking, buffered writes / flush, and crash-safety on partial input.

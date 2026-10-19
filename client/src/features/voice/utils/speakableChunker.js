@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Cuts a streaming answer into pieces worth sending to text-to-speech
  * (voice mode, issue #2868).

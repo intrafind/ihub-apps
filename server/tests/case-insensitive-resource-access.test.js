@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Regression tests for https://github.com/intrafind/ihub-apps/issues/2327:
  * model/app/prompt/workflow ids supplied by external callers (e.g. the

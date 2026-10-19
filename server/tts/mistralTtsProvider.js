@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Mistral text-to-speech provider (Voxtral TTS, `voxtral-mini-tts-latest`).
  *

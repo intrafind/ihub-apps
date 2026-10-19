@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import { createRequire } from 'node:module';
 import { PDFDocument } from 'pdf-lib';
 import { buildDocument, MAX_PAGES } from './buildDocument.js';

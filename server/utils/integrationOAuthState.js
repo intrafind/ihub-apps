@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * The OAuth `state` of an integration sign-in (Office 365, Google Drive, Jira,
  * Nextcloud), as a signed ticket.

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Which language a message is written in, so read aloud can pick the voice
  * configured for it (`tts.voices`). Voxtral TTS reads the language from the

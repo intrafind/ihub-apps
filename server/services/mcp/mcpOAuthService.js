@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * The interactive per-user OAuth flow for outbound MCP servers
  * (`auth.type: "oauthUser"`): discovery, client identity, the authorization

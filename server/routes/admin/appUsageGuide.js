@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import { contentAdminAuth } from '../../middleware/contentAdminAuth.js';
 import { generateUsageGuide } from '../../services/appUsageGuide.js';
 import { isLLMError } from '../../services/loop/LLMClient.js';

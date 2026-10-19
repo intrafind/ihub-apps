@@ -1,5 +1,8 @@
 #!/usr/bin/env node
 
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Specs for the Outlook add-in's start-page settings
  * (`officeIntegration.startPage`), as read by the two server endpoints:

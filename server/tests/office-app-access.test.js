@@ -1,5 +1,8 @@
 #!/usr/bin/env node
 
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Specs for the Outlook add-in's app access — the `allowedApps` list of its OAuth
  * client, as the Office Integration admin page reads and writes it.

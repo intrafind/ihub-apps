@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Shared message formatting for OpenAI-compatible chat completion APIs
  * (OpenAI itself, and vLLM's OpenAI-compatible endpoint).

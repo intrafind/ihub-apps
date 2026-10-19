@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Read-along for voice mode: the part of the answer that has been spoken stays
  * as it is in the chat message, the part still to come is muted, so the reader

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Storage bootstrap — bring the configured provider up once per worker and
  * hand it out without ever throwing at the call site.

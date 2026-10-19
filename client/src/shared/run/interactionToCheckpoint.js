@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Projection of an SSE v2 `interaction` (contracts/interaction.js) back onto
  * the legacy workflow `checkpoint` shape that `HumanCheckpoint.jsx` renders:

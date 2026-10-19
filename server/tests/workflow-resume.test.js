@@ -1,5 +1,8 @@
 #!/usr/bin/env node
 
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Unit tests for crash-resume of workflow runs:
  *   - WorkflowEngine.resume() restores a checkpoint, flips status back to

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * OpenAI-compatible batch transcription provider: `POST …/audio/transcriptions`
  * with the recording as a file, the transcript back as `{ text }`.

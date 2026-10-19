@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 export { default as WorkflowCard } from './WorkflowCard';
 export { default as ExecutionCard } from './ExecutionCard';
 export { default as HumanCheckpoint } from './HumanCheckpoint';

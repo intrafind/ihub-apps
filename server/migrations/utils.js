@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Migration utility functions for common JSON configuration transformations.
  * All functions are pure — no side effects or I/O.

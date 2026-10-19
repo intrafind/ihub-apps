@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 // docx, pptxgenjs and write-excel-file are heavy (~800KB) and only needed when a
 // user exports to one of those formats, so each exporter below imports its
 // library dynamically instead of this module doing it at top level. Keep it that

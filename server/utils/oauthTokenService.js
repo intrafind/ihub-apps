@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import crypto from 'node:crypto';
 import jwt from 'jsonwebtoken';
 import { verifyJwt, decodeJwt, getJwtAlgorithm, getJwtSigningKey } from './tokenService.js';

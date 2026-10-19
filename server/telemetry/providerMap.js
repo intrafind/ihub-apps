@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Single source of truth for mapping iHub provider IDs to OpenTelemetry
  * gen-ai semantic-conventions values. Both LLMClient / llmInstrumentation and

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Artifact routes:
  *   GET /api/agents/runs/:runId/artifacts            — list run artifacts

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Structure of a PDF beyond its lines: headings and tables, read from the sources a PDF offers
  * in this order of trust — the tagged structure tree, the outline (bookmarks), a conservative

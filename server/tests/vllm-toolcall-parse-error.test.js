@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 // Plain-node test (run: node server/tests/vllm-toolcall-parse-error.test.js).
 // Regression for a ReferenceError ("e is not defined") in VLLMConverter's
 // tool-argument parse-failure handlers: the catch bound `error` but logged the

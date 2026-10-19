@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Hostname resolution failures and connect timeouts are terminal for a model
  * call: retrying repeats the same wait and, for DNS, queues another blocking

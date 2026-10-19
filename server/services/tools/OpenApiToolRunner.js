@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import { promises as fs } from 'node:fs';
 import { join, normalize, sep } from 'node:path';
 import SwaggerParser from '@apidevtools/swagger-parser';

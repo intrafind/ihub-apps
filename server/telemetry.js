@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import appLogger from './utils/logger.js';
 import { resolveEnvVarsInObject } from './configCache.js';
 import { NodeSDK } from '@opentelemetry/sdk-node';

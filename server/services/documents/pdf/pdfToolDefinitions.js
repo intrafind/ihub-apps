@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Definitions of the tools the `pdf` system skill brings (see
  * `server/systemSkills/pdf`). Plain data: the handlers live in `pdfTools.js`

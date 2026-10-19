@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * `hostContext` for MCP App views: theme, styles, locale and layout, per the
  * MCP Apps specification (`McpUiHostContext`).

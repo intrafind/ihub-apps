@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Regression test for #1764: tools configured with a `script` file that
  * doesn't exist under server/tools/ used to fail silently until the tool

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Schedules — parsing, validation and next-run arithmetic for every preset,
  * in the schedule's own timezone (DST included), with the window

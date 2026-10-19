@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import { hasEndOutput } from '../../../../../shared/workflowEndOutput.js';
 
 const isText = value => typeof value === 'string' && value.trim() !== '';

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Artifact download helpers — fetch an artifact and save it locally in the
  * format the operator picked. The native `<a download>` attribute can't

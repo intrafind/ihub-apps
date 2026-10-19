@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import webSearchService from '../../services/WebSearchService.js';
 import webContentExtractor from '../webContentExtractor.js';
 import logger from '../../utils/logger.js';

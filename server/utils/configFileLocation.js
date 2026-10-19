@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Where a configured configuration file lives — as a cache key, an absolute
  * path, and a contents-relative path when it has one.

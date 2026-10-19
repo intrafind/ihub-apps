@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * The notes a scheduled task keeps between runs: the store's rules, what the
  * task document carries about them (a summary, never the content), what

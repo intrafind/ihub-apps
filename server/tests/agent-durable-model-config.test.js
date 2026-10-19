@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 // Plain-node test (node server/tests/agent-durable-model-config.test.js).
 // Regression for: agent nodes (planner/synthesize/verify + sub-tasks) silently
 // fell back to the global default model (local-vllm, 32k ctx) on re-execution.

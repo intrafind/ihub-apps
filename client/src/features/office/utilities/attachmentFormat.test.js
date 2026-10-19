@@ -1,5 +1,8 @@
 #!/usr/bin/env node
 
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Regression tests for Outlook attachment format handling — issue #1451
  * ("[Outlook] Bug: PDF / Word / .eml attachments fail silently or throw").

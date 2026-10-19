@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 // Plain-node test (node server/tests/agent-artifact-versioning.test.js).
 // The synthesizer re-runs once per adversarial-review round; it used to
 // OVERWRITE the same primary artifact (result.md) each round, so only the

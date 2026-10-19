@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Checkpoint resume — the one path from an answered `human` node interaction
  * back into the workflow engine (concept §5.5).

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import { useEffect, useRef, useState } from 'react';
 import { makeAdminApiCall } from '../../../../api/adminApi';
 import { AudioBufferRecorder } from '../../../../utils/audioRecorder';

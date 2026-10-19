@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import { buildApiUrl } from '../../../../utils/runtimeBasePath';
 import { pcmToArrayBuffer, TARGET_SAMPLE_RATE } from './audioUtils';
 import { toRecognitionLang } from '../speechService';

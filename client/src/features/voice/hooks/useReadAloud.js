@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import { useEffect, useState } from 'react';
 import { fetchTtsModels } from '../../../api/endpoints/models';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';

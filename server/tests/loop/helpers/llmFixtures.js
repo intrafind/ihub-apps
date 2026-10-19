@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Shared fixtures for LLMClient / adapter-conformance tests: fake fetch
  * Responses (SSE, JSON, binary Bedrock EventStream), a deterministic client

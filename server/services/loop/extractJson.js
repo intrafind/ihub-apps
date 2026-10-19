@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Shared JSON extraction for LLM responses (the planner's three-stage
  * strategy, which is a superset of the greedy-brace variants other callers

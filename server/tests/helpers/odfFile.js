@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Minimal OpenDocument packages from raw XML for the document extraction tests (the jest helper
  * `tests/utils/officeFixtures.js` is the same idea for the browser side). No binaries are

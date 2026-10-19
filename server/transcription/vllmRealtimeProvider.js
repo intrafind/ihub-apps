@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * vLLM realtime transcription provider (e.g. Voxtral on `/v1/realtime`).
  *

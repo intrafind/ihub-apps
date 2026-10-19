@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * `POST /api/voice/speech` for voice mode (issue #2868): an answer is read in
  * several requests, one per speakable chunk. `languageFixed` keeps the language

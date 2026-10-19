@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * The two switches that decide whether response feedback is accepted at all:
  * the platform-wide `feedback` feature flag and an app's own

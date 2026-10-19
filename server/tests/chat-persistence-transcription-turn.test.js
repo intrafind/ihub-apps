@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * A file or recording sent to a transcription model selected in a stored chat
  * is stored as a turn: the file as the question, the transcript as the answer

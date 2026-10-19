@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Scheduled tasks end to end on the server: the task service's
  * authorization and limits, a headless run producing a durable chat through

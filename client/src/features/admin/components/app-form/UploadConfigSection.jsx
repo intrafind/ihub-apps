@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import MimeTypeSelector from '../MimeTypeSelector';
 import { updateIn } from '../../utils/nestedUpdate';
 

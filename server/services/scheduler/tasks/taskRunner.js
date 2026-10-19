@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * The runner — executes queued scheduled runs on the scheduler owner, within
  * a global and a per-owner concurrency limit.

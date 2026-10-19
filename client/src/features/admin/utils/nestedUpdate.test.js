@@ -1,5 +1,8 @@
 #!/usr/bin/env node
 
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Tests for the immutable nested-update helpers used by the app-form
  * section components to replace repeated `{...a, b: {...a.b, c: value}}`

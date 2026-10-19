@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import { useRef, useCallback, useEffect } from 'react';
 import { checkAppChatStatus, stopAppChatStream } from '../../api';
 import {

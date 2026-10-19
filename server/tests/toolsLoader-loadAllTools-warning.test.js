@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * `loadAllTools` runs the missing-script check on what it loads: a tool file
  * that names a script which does not exist is reported, a malformed one never

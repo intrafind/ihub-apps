@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Regression test for `TlsForwardingHttpsProxyAgent` in server/utils/httpConfig.js.
  *
