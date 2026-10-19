@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 // Plain-node test (node server/tests/agent-synthesizer-anti-hallucination.test.js).
 //
 // Runs wf-exec-f33f80fc (Nelms) and wf-exec-8b36a2e7 (Stewart) were FAILED by

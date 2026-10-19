@@ -1,5 +1,8 @@
 #!/usr/bin/env node
 
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * An app's model may only run a workflow the person who chats may run.
  *

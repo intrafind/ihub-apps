@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * UserPromptRepository — prompts users write themselves, on top of the storage
  * abstraction.

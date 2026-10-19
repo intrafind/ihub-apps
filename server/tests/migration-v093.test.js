@@ -1,5 +1,8 @@
 #!/usr/bin/env node
 
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Migration V093 specs — seeding `startPage.showUserName` in ui.json.
  *

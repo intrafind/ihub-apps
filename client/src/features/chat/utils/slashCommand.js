@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * The `/` picker of the chat input (prompts and skills), as plain text
  * operations so they can be tested without a browser.

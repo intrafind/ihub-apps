@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Host side of the MCP Apps JSON-RPC channel (SEP-1865), transport-agnostic.
  *

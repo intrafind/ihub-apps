@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * One route for every source provider's actions, so the sources panel acts on
  * a source by its `provider` and `ref` alone and a new integration needs no

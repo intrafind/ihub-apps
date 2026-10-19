@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 // Nextcloud OAuth Integration Routes
 // Handles OAuth2 flow for Nextcloud file access authentication.
 

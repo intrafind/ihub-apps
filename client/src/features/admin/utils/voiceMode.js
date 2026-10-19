@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import {
   VOICE_END_OF_TURN_SILENCE_RANGE_MS,
   VOICE_INSTRUCTION_MAX_CHARS,

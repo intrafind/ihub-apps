@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Route tests for the Microsoft 365 Copilot agent (`/api/admin/copilot-agent/*`).
  *

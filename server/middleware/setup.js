@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import cors from 'cors';
 import express from 'express';
 import cookieParser from 'cookie-parser';

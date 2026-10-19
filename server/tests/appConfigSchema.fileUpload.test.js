@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Word review options and speaker notes of an app's file upload (concepts/document-extraction/, release 2, WP-B).
  *

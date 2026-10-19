@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * User skills — skills users write themselves — driven through the real route
  * chains, on the same model as user prompts.

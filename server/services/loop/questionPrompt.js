@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * The `question` interaction prompt for an `ask_user` call: the tool's
  * arguments (client vocabulary for the input type) mapped onto the interaction

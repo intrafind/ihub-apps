@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import { apiClient } from '../client';
 
 // Documents can be large and a provider may resolve the real download link

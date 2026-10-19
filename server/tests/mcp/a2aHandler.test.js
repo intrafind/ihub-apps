@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import { describe, it, expect } from '@jest/globals';
 import { dispatchA2A } from '../../services/mcp/a2aHandler.js';
 

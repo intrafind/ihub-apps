@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 export const version = '051';
 export const description = 'rename_evidence_workflow_nodes';
 

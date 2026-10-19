@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Prompt caching per model (issue #2508): the model switch, its provider
  * defaults, and the hints each adapter sends when it is on — OpenAI's

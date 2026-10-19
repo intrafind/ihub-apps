@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import bcrypt from 'bcryptjs';
 import fs from 'fs/promises';
 import { jest } from '@jest/globals';

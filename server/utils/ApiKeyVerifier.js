@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import { inspectModelApiKey, resolveModelApiKey } from '../utils.js';
 import ErrorHandler from './ErrorHandler.js';
 import configCache from '../configCache.js';

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * The source model (shared/sources): one shape for everything a producer
  * found, normalized the same way on the server and the client.

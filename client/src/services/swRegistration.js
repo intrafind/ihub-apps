@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import { buildPath, getBasePath } from '../utils/runtimeBasePath';
 
 let _registration = null;

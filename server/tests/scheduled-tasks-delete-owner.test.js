@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Deleting a user removes the tasks they own: a scheduled task is a standing
  * instruction to act as its owner, so it cannot outlive them. Run history and

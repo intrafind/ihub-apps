@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Local sign-in locks an account after repeated failed attempts
  * (`platform.localAuth.lockout`, utils/loginLockout.js). While it is locked,

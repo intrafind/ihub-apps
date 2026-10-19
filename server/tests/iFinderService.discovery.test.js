@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Tests for the iFinder discovery surface: `getFields`, `getFacetValues`,
  * `listProfiles`, and the facet normalisation they share with `discover`.

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Resolves the iFinder *search* profile that belongs to an iAssistant
  * *conversation* profile.

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * A source: one thing an integration found for the user — a web page, a
  * document, a record — in the one shape the whole platform speaks.

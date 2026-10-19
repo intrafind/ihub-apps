@@ -1,5 +1,8 @@
 #!/usr/bin/env node
 
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Migration V153 specs — the code node in the shipped corpus-analysis
  * workflows becomes a transform with an `append` operation, and the step that

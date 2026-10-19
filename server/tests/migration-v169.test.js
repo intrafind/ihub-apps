@@ -1,5 +1,8 @@
 #!/usr/bin/env node
 
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Migration V169 specs — no app below temperature 0.7, no thinking for the
  * Translator and Babelfish.

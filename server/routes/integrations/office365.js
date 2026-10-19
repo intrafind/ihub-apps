@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 // Office 365 OAuth Integration Routes
 // Handles OAuth2 PKCE flow for Microsoft 365 file access authentication
 

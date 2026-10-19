@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Voice mode configuration (issue #2868): the shared resolver the server and the
  * client both use, the platform and app schemas that hold the settings, and the

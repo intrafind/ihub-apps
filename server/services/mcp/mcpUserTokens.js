@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Per-user OAuth tokens for outbound MCP servers (`auth.type: "oauthUser"`).
  *

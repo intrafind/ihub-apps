@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Tests for the shared CSV helpers — quoting and spreadsheet formula-injection
  * neutralization.

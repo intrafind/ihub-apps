@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { markdownToHtml, isMarkdown } from '../../../utils/markdownUtils';
 

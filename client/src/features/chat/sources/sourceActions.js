@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import { fetchSourceContent } from '../../../api/endpoints/sources';
 import {
   filenameFromContentDisposition,

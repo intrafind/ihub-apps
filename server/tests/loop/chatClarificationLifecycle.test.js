@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Chat clarification lifecycle: a chat run paused for an `ask_user` question
  * ends when the question is answered, superseded or expires; workflow

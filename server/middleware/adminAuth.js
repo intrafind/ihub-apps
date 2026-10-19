@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import { isAdminEligiblePrincipal, loadGroupsConfiguration } from '../utils/authorization.js';
 import logger from '../utils/logger.js';
 

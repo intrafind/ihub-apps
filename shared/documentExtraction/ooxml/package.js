@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Reading an Office Open XML package (docx, pptx, xlsx, …): the relationships that name the
  * parts of a document.

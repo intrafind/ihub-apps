@@ -1,4 +1,8 @@
 #!/bin/bash
+
+# SPDX-FileCopyrightText: IntraFind Software AG
+# SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 # Helper script to ensure Node.js version >=20
 
 REQUIRED_MAJOR=20

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 
 /**

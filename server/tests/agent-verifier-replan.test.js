@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 // server/tests/agent-verifier-replan.test.js
 import { VerifierNodeExecutor } from '../services/workflow/executors/VerifierNodeExecutor.js';
 let failures = 0;

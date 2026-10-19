@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 // Plain-node test (node server/tests/oidcLoginState.test.js).
 //
 // The OIDC login state replaced passport's session-backed state store, so it

@@ -1,5 +1,8 @@
 #!/usr/bin/env node
 
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Web answers' sources and citations, on every search path (issue #2520).
  *

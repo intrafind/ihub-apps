@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 // Shared URL/path validation helpers used by both the Files file action and
 // the iframe host page. Same security posture as the legacy main.js: the
 // iframe target is parsed by `new URL()` so `javascript:` / `data:` and

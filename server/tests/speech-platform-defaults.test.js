@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Schema specs for the platform-wide voice-input defaults (issue #2622):
  * platform.speech.defaultService, and

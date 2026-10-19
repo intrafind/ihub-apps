@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * LoopRequest / LoopResult contracts for `AgentLoop.run()` and the request
  * shape of `LLMClient.execute()` (concept §5.2 / §5.3).

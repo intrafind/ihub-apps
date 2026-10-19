@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Case-insensitive lookup helpers for resources identified by an `id` field
  * (models, apps, prompts, workflows).

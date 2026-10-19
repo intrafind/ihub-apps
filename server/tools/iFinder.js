@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 // This wrapper is maintained for backward compatibility
 
 import iFinderService from '../services/integrations/iFinderService.js';

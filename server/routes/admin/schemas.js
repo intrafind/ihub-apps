@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import { getJsonSchemaByType, getAllJsonSchemas } from '../../utils/schemaExport.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import {

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * The public identity iHub presents to an outbound authorization server:
  * the base URL, the per-server OAuth callback, the per-server Client ID

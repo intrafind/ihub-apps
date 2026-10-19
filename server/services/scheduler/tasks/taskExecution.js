@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * One scheduled run: a new durable chat, one headless turn of the task's app
  * as the task's owner, and the record of how it went.

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Route tests for the text-to-speech voices of a model (Admin → Models):
  * `GET|POST /api/admin/models/:modelId/tts/voices` and

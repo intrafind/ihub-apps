@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import { loadGroupsConfiguration } from './authorization.js';
 import { loadUsers, saveUsers } from './userManager.js';
 import configCache from '../configCache.js';

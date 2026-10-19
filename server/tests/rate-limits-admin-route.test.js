@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Route tests for Admin → Security → Rate limits (`/api/admin/rate-limits`).
  *

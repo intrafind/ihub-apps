@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Parses an SSE (Server-Sent Events) ReadableStream, calling onEvent for each dispatched event.
  *

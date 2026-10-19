@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import { useEffect } from 'react';
 import { getSessionId, renewSession, getSessionInfo } from '../../utils/sessionManager.js';
 import { sendSessionStart } from '../../api';

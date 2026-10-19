@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import passport from 'passport';
 import { Strategy as OAuth2Strategy } from 'passport-oauth2';
 import { httpFetch } from '../utils/httpConfig.js';

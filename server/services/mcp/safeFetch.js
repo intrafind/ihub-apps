@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import dns from 'node:dns';
 import http from 'node:http';
 import https from 'node:https';

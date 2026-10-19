@@ -1,5 +1,8 @@
 #!/usr/bin/env node
 
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Migration V121 specs — dropping the shipped `localAuth.usersFile`,
  * `oauth.clientsFile` and `skills.skillsDirectory` values from platform.json, so the server's

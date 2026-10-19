@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Icon from '../../../../shared/components/Icon';
 import { getLocalizedContent } from '../../../../utils/localizeContent';

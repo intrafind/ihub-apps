@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Knowledge-source accounting (chat behaviour): classify every tool that ran
  * into the source badge vocabulary (`websearch`, `ifinder`, `sources`, `grounding`, …) so

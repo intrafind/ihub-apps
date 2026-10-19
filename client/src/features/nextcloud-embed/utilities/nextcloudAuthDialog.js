@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Opens the iHub OAuth URL in a standard browser popup window and delivers the
  * redirect URL back to the embed via `window.postMessage`.

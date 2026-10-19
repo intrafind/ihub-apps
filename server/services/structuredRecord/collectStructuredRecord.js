@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import { randomUUID } from 'node:crypto';
 import { structuredRecordSchema } from './recordSchema.js';
 import { jsonSchemaToZod } from './jsonSchemaToZod.js';

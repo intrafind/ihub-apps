@@ -1,4 +1,8 @@
 <?php
+
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 declare(strict_types=1);
 
 namespace OCA\IhubChat\Controller;

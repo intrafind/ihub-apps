@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Checkpoint resume specs — an answered `human` node interaction resumes its
  * execution through the one answer path (InteractionService.onAnswer), and a

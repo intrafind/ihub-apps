@@ -1,5 +1,8 @@
 #!/usr/bin/env node
 
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Migration V132 specs — the draw.io and Excalidraw MCP App servers the two
  * example apps use are added to mcpServers.json, disabled, unless an admin

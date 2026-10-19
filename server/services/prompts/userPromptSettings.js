@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * User prompts — the policy half: whether this installation lets users keep
  * their own prompts, and whom they may share them with.

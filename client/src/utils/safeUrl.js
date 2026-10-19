@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * URL checks for the places where the client navigates to a URL that came
  * from outside the code: a `?returnUrl=` parameter, the `authReturnUrl`

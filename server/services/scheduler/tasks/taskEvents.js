@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * "A scheduled task changed" — announced to this process and every other
  * worker, so the scheduler owner's index follows edits, new tasks, run-now

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 // Iframe host bootstrap for templates/main.php. Reads the iHub base URL
 // and provider id from initial state (set by PageController) and mounts an
 // iframe pointing at the iHub Nextcloud full-app embed, which has the

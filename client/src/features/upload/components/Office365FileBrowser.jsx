@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import CloudFileBrowserShell from './CloudFileBrowserShell';
 import { useOffice365Browser } from '../hooks/useOffice365Browser';
 

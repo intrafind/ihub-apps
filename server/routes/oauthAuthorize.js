@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import { stampDcrFirstUser } from '../utils/oauthClientManager.js';
 import { resolveOAuthClient } from '../utils/oauthClientResolver.js';
 import { isUserAllowedByGroups } from '../utils/oauthClientPolicy.js';

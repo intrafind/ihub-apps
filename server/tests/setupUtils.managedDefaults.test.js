@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Managed default files (utils/setupUtils.js): the shipped copy is
  * authoritative and is refreshed into contents on every start. A directory

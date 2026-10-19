@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * GET /api/auth/status tells the client whether proxy auth is on, and nothing
  * more: the names of the identity headers are not public.

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * PowerPoint (.pptx) → text with the structure of the deck: slides in the order of the
  * presentation, the title of a slide as a heading, tables as Markdown tables, hidden slides

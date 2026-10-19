@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Route test for the "Test" action on a transcription model (Admin → Models):
  * `POST /api/admin/models/:modelId/test` starts a session upstream instead of

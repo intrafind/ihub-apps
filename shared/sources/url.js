@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * URL helpers every part of the sources contract compares and renders links
  * with. Pure functions, no DOM and no Node APIs.

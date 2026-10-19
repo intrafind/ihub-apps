@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * OpenAI Responses API adapter for GPT-5 and newer models
  * Uses the new /v1/responses endpoint instead of /v1/chat/completions

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import { buildServerPath } from './basePath.js';
 import { getAuthCookieOptions, getClearAuthCookieOptions } from './cookieSettings.js';
 import logger from './logger.js';

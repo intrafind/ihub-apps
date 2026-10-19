@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * `POST /api/inference/v1/responses` — a subset of the OpenAI Responses API.
  *

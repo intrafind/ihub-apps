@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Tests for native (provider-handled) web search: Google Search grounding,
  * OpenAI Web Search, and Anthropic's web search tool.

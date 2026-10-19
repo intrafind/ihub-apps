@@ -1,5 +1,8 @@
 #!/usr/bin/env node
 
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Migration V151 specs — dictation moves from the `speech.realtime` vLLM
  * endpoint onto a transcription model: the endpoint lands on a model (reused or

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * The filesystem storage provider driven through the shared provider
  * conformance suite (`server/storage/__tests__/providerConformance.js`).

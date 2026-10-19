@@ -63,6 +63,17 @@ Versioned, Flyway-style, in `server/migrations/` (`V{NNN}__{description}.js`), r
 
 - Batch similar lint fixes across files rather than file-by-file.
 
+### License Headers (REUSE)
+
+Every source file (`.js`, `.jsx`, `.cjs`, `.mjs`, `.ts`, `.tsx`, `.css`, `.sh`, `.php`) carries a two-line SPDX header, no year, placed after a shebang if there is one:
+
+```js
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+```
+
+Add it to new files with `reuse annotate --copyright="IntraFind Software AG" --license=LicenseRef-iHub-Apps --exclude-year --single-line <file>` (CSS: omit `--single-line`; the tool then writes a `/* */` block, which you can compact to two lines). Files that cannot hold a comment (JSON, images, fonts, Markdown) are covered by glob in `REUSE.toml`; third-party code keeps its own notice and SPDX id there, with its text in `LICENSES/`. CI runs `reuse lint` (`.github/workflows/reuse.yml`). Bulk annotation commits belong in `.git-blame-ignore-revs` (`git config blame.ignoreRevsFile .git-blame-ignore-revs`).
+
 ### Release Changelog
 
 Any change visible to admins or end users gets an entry in `docs/releases/next/` — use the `/document-feature` skill, which also decides when _not_ to write one (a fix to a feature that has not shipped yet, a near-duplicate of an existing entry). Never write into a numbered `docs/releases/<version>/` directory: the release pipeline creates those from `next/` when a tag is cut. Pure refactors, dependency bumps, and test-only changes get no entry.

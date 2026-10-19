@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * LLMClient behavior specs: model resolution, API keys, retries, abort/timeout,
  * error taxonomy, usage normalization, ledger events, streaming vs collect.

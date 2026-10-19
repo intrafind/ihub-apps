@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Per-user voice mode preferences, kept in `localStorage` like other UI
  * preferences. Every read and write is wrapped: storage can be blocked

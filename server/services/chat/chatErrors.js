@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Map a failed chat turn onto the payload the chat client shows:
  * `{ message, code, details, isContextWindowError }`.

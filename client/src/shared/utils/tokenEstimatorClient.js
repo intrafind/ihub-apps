@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Client-side token estimation that keeps gpt-tokenizer OUT of the eager
  * bundle.

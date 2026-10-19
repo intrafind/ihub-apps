@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Test to verify Gemini 3 function calling fix
  * This test ensures that when Gemini 3 returns finishReason: "STOP" but includes function calls,

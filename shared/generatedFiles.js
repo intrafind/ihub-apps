@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Files a tool generated for the user (e.g. a PDF from the `pdf` system
  * skill), as the chat's download cards carry them.

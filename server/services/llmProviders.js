@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Server side of the LLM provider rules in `shared/llmProviders.js`: reading a
  * provider entry's API key. The pure rules are re-exported so server code has

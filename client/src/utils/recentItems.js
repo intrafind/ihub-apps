@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Same-tab notification that one of these lists changed. Mirrors the
  * `ihub:favorites-changed` event favorites use: a `storage` event only fires

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import logger from '../utils/logger.js';
 import { registerActivityObservers } from './metrics.js';
 

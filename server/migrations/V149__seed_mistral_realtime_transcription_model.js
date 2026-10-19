@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 // server/migrations/V149__seed_mistral_realtime_transcription_model.js
 export const version = '149';
 export const description = 'seed_mistral_realtime_transcription_model';

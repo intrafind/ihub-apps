@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Prompt-cache usage capture (issue #2508, phase 1) — every provider's usage
  * payload, driven through the public LLMClient with wire-level fixtures shaped

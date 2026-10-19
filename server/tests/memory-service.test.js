@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * The shared memory service: which scope a principal gets, and that the agent
  * scope reads and writes the same files agent memory always used.

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Tests for the global audit safety-net middleware: path/method/auth gating,
  * the admin carve-out, resource derivation, and sensitive-field redaction.

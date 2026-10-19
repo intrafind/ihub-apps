@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 export const version = '034';
 export const description = 'add_global_prompt_variables_custom_variables';
 

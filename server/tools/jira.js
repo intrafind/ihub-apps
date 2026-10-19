@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 // JIRA Integration Tool
 // Provides comprehensive JIRA ticket management capabilities
 

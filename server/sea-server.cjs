@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Node.js SEA (Single Executable Application) wrapper for iHub Apps server
  * This file loads and runs the ESM server module using dynamic import in a CommonJS context

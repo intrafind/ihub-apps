@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * PDF fixtures for the document extraction tests, built with pdf-lib (no binaries committed):
  * tagged PDFs with a structure tree (headings, tables), outlines, sized and fixed-width text.

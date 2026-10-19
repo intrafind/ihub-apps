@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import { authenticate } from 'ldap-authentication';
 import configCache from '../configCache.js';
 import credentialService from '../services/CredentialService.js';

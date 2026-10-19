@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * OpenTelemetry Gen-AI Instrumentation
  * Main class for instrumenting GenAI operations

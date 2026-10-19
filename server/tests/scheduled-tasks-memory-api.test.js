@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * The memory routes: the owner reads and edits the notes of their task, an
  * admin sees metadata and can clear them but never reads them, and nobody

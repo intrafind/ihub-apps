@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Paged fetch of a run's ledger projection (`GET /api/runs/:runId/events`).
  *

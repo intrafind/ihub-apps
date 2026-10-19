@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /** Prefix of every tool id that maps to a remote A2A agent's skill. */
 const A2A_TOOL_PREFIX = 'a2a__';
 

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * A transcription turn: a recording or an audio/video file sent to a
  * transcription model selected in a chat. The audio travels over the realtime

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 const HIDE_BELOW = {
   sm: 'hidden sm:table-cell',
   md: 'hidden md:table-cell',

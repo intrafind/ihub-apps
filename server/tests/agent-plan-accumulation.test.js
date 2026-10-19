@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 // Plain-node test (NOT jest — PlannerNodeExecutor's import graph pulls in uuid).
 // Regression guard for: on a review-loop re-plan round, planCreated.tasks was
 // OVERWRITTEN with only the current round's tasks, so round-0 tasks vanished

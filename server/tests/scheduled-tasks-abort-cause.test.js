@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Who stopped a scheduled run: every abort of a running turn carries a cause,
  * and the run, its chat and the ledger say so. Also the server half of

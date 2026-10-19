@@ -986,6 +986,17 @@ import { ChatMessage } from './ChatMessage.jsx';
    - Include request/response examples
    - Document authentication requirements
 
+### License Headers
+
+The project follows the [REUSE specification](https://reuse.software). Every source file starts with a two-line SPDX header (after the shebang, if any):
+
+```js
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+```
+
+Files that cannot hold a comment (JSON, images, fonts, Markdown) are covered by `REUSE.toml`; third-party code keeps its own notice and SPDX identifier there. The license text lives in `LICENSES/`. CI runs `reuse lint` and fails when a file has neither. Install the tool with `pip install reuse` and add a header with `reuse annotate --copyright="IntraFind Software AG" --license=LicenseRef-iHub-Apps --exclude-year --single-line <file>`.
+
 ## Next Steps and Specialization Areas
 
 ### Immediate Next Steps (Week 1)

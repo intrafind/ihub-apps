@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * "Chat with Results": a stored chat that opens with a finished workflow
  * execution's question and answer, so the user can ask follow-up questions

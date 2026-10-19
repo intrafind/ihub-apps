@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import { randomUUID } from 'node:crypto';
 import credentialService from '../CredentialService.js';
 import { safeFetch } from '../mcp/safeFetch.js';

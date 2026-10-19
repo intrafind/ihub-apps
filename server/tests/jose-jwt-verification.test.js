@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Test suite for JWT verification using jose library
  * Ensures the replacement of jwk-to-pem with jose maintains functionality

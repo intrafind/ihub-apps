@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * SSRF regression tests for #1693: `read_url` only validated the
  * *initial* hostname before fetching, then let redirects (and DNS rebinding)

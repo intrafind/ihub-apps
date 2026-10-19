@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Prompt caching per model (issue #2508) — shared by the server (which sends
  * the cache hints) and the admin model editor (which shows the switch).

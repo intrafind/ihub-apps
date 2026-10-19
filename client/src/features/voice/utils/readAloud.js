@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import { buildApiUrl } from '../../../utils/runtimeBasePath';
 import { fetchWithAuthRetry } from '../../../shared/utils/openSseStream';
 import PcmStreamPlayer from './pcmStreamPlayer';

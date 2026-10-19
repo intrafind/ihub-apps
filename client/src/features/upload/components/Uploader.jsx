@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { canonicalMimeType } from '../utils/fileProcessing';
 import { isAbortError, raceAbort } from '../../../utils/abortable';

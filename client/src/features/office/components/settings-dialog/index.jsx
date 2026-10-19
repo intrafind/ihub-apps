@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { XMarkIcon } from '@heroicons/react/24/outline';

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import { useState, useRef, useEffect } from 'react';
 import Editor from '@monaco-editor/react';
 import { useTranslation } from 'react-i18next';

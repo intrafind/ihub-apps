@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * `chatMaterializer` — the only module that writes chat turns — driven against
  * a real `ChatRepository` over a real filesystem storage provider.

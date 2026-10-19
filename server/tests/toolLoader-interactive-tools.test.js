@@ -1,5 +1,8 @@
 #!/usr/bin/env node
 
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Interactive clarification tools (`ask_user`, anything `requiresUserInput`)
  * survive a chat's `enabledTools` narrowing in `getToolsForApp`.

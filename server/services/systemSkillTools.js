@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import { getLocalizedString } from '../utils/localize.js';
 import { CREATE_PDF_TOOL, PREVIEW_PDF_TOOL } from './documents/pdf/pdfToolDefinitions.js';
 

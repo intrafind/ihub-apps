@@ -1,5 +1,8 @@
 #!/usr/bin/env node
 
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * PromptService.processMessageTemplates — text inserted for {{content}} must
  * reach the model exactly as written. The Outlook add-in and file uploads put

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import { useEffect, useMemo, useRef } from 'react';
 import { useChatList } from '../../../shared/hooks/chatListStore';
 import { officeChatsKey, resolveOfficeChats } from '../utilities/officeChatHistory';

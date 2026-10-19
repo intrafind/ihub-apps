@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import rateLimit from 'express-rate-limit';
 import { authRequired } from '../middleware/authRequired.js';
 import configCache from '../configCache.js';

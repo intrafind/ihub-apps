@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import { getDisplayableOutput } from './filterInternalFields';
 import { answerOf, executionOutputOf } from '../../../../../shared/workflowChatOutput.js';
 

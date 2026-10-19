@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import AzureSpeechRecognition from '../../../utils/azureRecognitionService';
 import ModelSpeechRecognition from '../../../utils/modelRecognitionService';
 

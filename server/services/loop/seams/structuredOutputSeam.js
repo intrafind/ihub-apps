@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Structured-output seam — checks the model's final answer against an output
  * contract and, when it does not hold, asks the model for one corrected

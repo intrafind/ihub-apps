@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import { useEffect } from 'react';
 import { useAuth } from '../../../shared/contexts/AuthContext';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';

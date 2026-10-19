@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * GET /api/translations/:lang is the client's only source of UI strings (they
  * are no longer bundled into the startup JavaScript), so it has to answer with

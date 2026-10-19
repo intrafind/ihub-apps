@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 export function normalizeName(name) {
   const normalized = (name || '').replace(/[^A-Za-z0-9_.-]/g, '_');
 

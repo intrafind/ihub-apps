@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import { JSDOM } from 'jsdom';
 import { Readability } from '@mozilla/readability';
 import TurndownService from 'turndown';

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 // server/migrations/V144__remove_app_wizard_fields.js
 export const version = '144';
 export const description = 'remove_app_wizard_fields';

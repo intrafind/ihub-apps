@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * ConversationStateManager — maps a chatId to the remote iAssistant
  * conversation it belongs to.

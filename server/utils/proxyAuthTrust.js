@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Whether a request may assert an identity through the proxy-auth headers
  * (`proxyAuth.userHeader`, `groupsHeader`, `X-Forwarded-Name`,

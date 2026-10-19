@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Workflow state retention — the daily sweep this issue adds, driven against
  * a real filesystem storage provider.

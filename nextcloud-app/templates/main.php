@@ -1,4 +1,8 @@
 <?php
+
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * iHub Chat — host page for the iHub iframe.
  *

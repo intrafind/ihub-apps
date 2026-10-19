@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import i18nService, { i18n } from '../services/i18nService';
 
 // i18n service is automatically initialized synchronously in constructor

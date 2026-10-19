@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import { verifyOAuthToken, isCurrentKeyGeneration } from '../utils/oauthTokenService.js';
 import { findClientByIdFresh, updateClientLastUsed } from '../utils/oauthClientManager.js';
 import { buildPolicyCimdClient } from '../utils/oauthClientResolver.js';

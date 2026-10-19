@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import { A2aAgentConnection, TASK_NOT_FOUND_RPC_CODE } from './A2aAgentConnection.js';
 import { A2A_CLIENT_ERRORS } from './a2aTools.js';
 import {

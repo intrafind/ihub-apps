@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * llmHttpErrors — mapping of the LLMError taxonomy onto HTTP responses used
  * by the single-shot routes (admin translate/completions/model test, magic

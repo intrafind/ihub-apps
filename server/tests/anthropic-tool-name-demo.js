@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Demonstration of the Anthropic tool name fix
  * This shows how tools are properly converted from localized names to Anthropic format

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Turn the app creation wizard's working state into the app configuration that
  * is sent to `POST /api/admin/apps`.

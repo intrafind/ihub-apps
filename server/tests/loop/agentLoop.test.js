@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * T3 — AgentLoop behaviour specs. Every loop behaviour is asserted ONCE here,
  * against the one loop, driven through the real LLMClient with scripted

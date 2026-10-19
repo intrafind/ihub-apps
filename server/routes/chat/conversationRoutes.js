@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Conversation API routes for iAssistant Conversation provider.
  * Provides endpoints for loading conversation history and managing messages.

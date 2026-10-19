@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Shared helpers for deriving display metadata from a Nextcloud file path.
  * Used by the full-app uploader adapter (`useNextcloudEmbedAttachments`).

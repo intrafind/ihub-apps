@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import { z } from 'zod';
 import { cloudStorageConfigSchema } from './cloudStorageSchema.js';
 import { LANGUAGE_CODE_PATTERN } from '../../shared/validationPatterns.js';

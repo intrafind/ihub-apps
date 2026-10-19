@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Model discovery remembers failures: an unreachable OpenAI-compatible endpoint
  * used to cost every message the full discovery timeout (and a blocking DNS

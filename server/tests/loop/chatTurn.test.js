@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Chat turn specs — `ChatService.runTurn` on the shared agent loop, SSE v2.
  *

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * The admin switch of structure-preserving document extraction
  * (concepts/document-extraction/): `structuredDocumentExtraction` is declared in the feature

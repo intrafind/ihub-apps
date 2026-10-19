@@ -1,4 +1,9 @@
 /*
+ * SPDX-FileCopyrightText: IntraFind Software AG
+ * SPDX-License-Identifier: LicenseRef-iHub-Apps
+ */
+
+/*
  * Minimal replacement for pdf.js's `web/pdf_viewer.css`. Only the text-layer
  * rules the `TextLayer` class actually relies on are reproduced here, plus the
  * highlight overlay this viewer paints on top of the canvas. Pulling in the

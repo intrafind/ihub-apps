@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 // JIRA OAuth Integration Routes
 // Handles OAuth2 PKCE flow for JIRA authentication
 

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Chat statistics for the admin Chat History page — what is stored, who it
  * belongs to, and what the next retention sweep would take.

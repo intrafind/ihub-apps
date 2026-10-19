@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * chatTurnSeam usage bookkeeping (issue #2508): the request side of a model
  * call is recorded when the call ends, with the provider's prompt and cache

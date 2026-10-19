@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import path from 'node:path';
 import { promises as fs } from 'node:fs';
 import { atomicWriteJSON } from './atomicWrite.js';

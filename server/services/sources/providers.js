@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Source providers: the systems that can act on the sources they own —
  * return a document's content for Preview, Download, Add to email and Open in

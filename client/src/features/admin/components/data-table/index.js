@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 export { default as DataTable } from './DataTable';
 export { default as DataTableHeader } from './DataTableHeader';
 export { default as DataTableBody } from './DataTableBody';

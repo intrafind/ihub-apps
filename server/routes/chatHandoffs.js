@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Chat hand-off routes — continue a chat that is not stored server-side in
  * another window of the same user ("Open in web app" in the Outlook pane).

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import StartForm from './StartForm';
 import EndForm from './EndForm';
 import PromptForm from './PromptForm';

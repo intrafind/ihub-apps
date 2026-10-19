@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 // Shared file processing utilities for upload components
 import { fetchMimetypesConfig, fetchPlatformConfig } from '../../../api/endpoints/config';
 import { FeatureFlags } from '../../../../../shared/featureFlags.js';

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import { monitorEventLoopDelay } from 'node:perf_hooks';
 import cluster from 'node:cluster';
 import logger from '../utils/logger.js';

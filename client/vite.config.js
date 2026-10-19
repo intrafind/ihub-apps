@@ -73,6 +73,13 @@ export default defineConfig({
         'nextcloud-full-embed': resolve(__dirname, 'nextcloud/full-embed.html')
       },
       output: {
+        // Keep a copyright banner in the entry chunks of the shipped JavaScript.
+        // `postBanner` is added after minification; a plain `banner` is stripped
+        // together with the other comments.
+        postBanner: chunk =>
+          chunk.isEntry
+            ? '/*! SPDX-FileCopyrightText: IntraFind Software AG | SPDX-License-Identifier: LicenseRef-iHub-Apps */'
+            : '',
         // Function form (object form is rejected by the rolldown-based Vite 8).
         // Maps a module id to its vendor chunk by package name; anything not
         // listed falls through to the default chunking.

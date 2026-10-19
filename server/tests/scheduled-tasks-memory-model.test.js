@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Memory between runs as a property of a task: how the setting is validated,
  * copied and kept, when the owner is notified once "only when something

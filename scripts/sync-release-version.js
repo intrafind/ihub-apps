@@ -1,5 +1,8 @@
 #!/usr/bin/env node
 
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import { readFile, writeFile } from 'node:fs/promises';
 import { execSync } from 'node:child_process';
 import { join, dirname } from 'node:path';

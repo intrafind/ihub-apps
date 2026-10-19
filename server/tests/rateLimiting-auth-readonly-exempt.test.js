@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * The strict auth limiter (30 requests / 15 min in the shipped platform.json)
  * is there to slow password guessing. Mounted on the whole `/api/auth` namespace

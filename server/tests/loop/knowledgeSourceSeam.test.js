@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Knowledge-source badge vocabulary: which tools count as a web search. iFinder
  * searches the organisation's document index, so its answers must not be

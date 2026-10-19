@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# SPDX-FileCopyrightText: IntraFind Software AG
+# SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 # decode-base64-binary.sh
 # Helper script to decode base64 encoded iHub Apps binaries
 # Usage: ./decode-base64-binary.sh <base64-file.txt>

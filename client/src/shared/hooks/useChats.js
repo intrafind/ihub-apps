@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import { useAuth } from '../contexts/AuthContext';
 import { usePlatformConfig } from '../contexts/PlatformConfigContext';
 import useAuthKey from './useAuthKey';

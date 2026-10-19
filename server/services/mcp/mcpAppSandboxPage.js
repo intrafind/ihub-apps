@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * The MCP Apps sandbox proxy page (SEP-1865, "Sandbox proxy").
  *

@@ -1,5 +1,8 @@
 #!/usr/bin/env node
 
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Migration V124 specs — rewording the shipped web-chat prompt for multi-step
  * research (issue #2484). Only a locale whose prompt is still exactly the old

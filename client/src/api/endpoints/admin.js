@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import { apiClient } from '../client';
 import { handleApiResponse } from '../utils/requestHandler';
 import cache, { DEFAULT_CACHE_TTL } from '../../utils/cache';

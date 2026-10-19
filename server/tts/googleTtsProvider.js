@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Google Gemini text-to-speech provider (`gemini-3.8-flash-tts`,
  * `gemini-3.8-flash-lite-tts`).

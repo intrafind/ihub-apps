@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# SPDX-FileCopyrightText: IntraFind Software AG
+# SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 # Kill processes on specified ports
 # Usage: ./kill-ports.sh
 

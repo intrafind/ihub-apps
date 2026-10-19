@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import { useTranslation } from 'react-i18next';
 import { CUSTOM_PROVIDER_API_TYPES } from '../../../../../shared/llmProviders.js';
 import { apiTypeLabel } from '../utils/modelImport';

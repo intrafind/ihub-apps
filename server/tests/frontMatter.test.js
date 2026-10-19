@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Tests for server/utils/frontMatter.js — Markdown front matter is parsed as
  * YAML only — and for the two places that read front matter through it: the

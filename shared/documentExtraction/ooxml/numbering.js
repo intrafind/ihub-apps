@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Word list numbering: the labels (`1.`, `1.1`, `a)`, `Teil I`, `§ 3`) Word computes from
  * numbering.xml and the paragraphs' list properties.

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 // Connected apps routes
 // Lets a signed-in user see which OAuth clients they have given access to,
 // and disconnect any of them, from Settings > Integrations.

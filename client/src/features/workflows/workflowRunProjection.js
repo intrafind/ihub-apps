@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Pure projection of an SSE v2 StreamState (shared/run/runReducer.js) onto the
  * workflow execution state that `WorkflowExecutionPage` /

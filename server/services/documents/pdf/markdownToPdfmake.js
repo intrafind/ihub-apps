@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import { Lexer } from 'marked';
 import { checkImageDataUri, fitWithin, imagePixelSize, safeLink, LIMITS } from './validators.js';
 

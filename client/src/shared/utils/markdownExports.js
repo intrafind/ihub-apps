@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Markdown export helpers — take an in-memory markdown string and save it
  * to disk in the user's chosen format. The PDF is rendered on the server

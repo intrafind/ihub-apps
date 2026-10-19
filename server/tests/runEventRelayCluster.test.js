@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 // Plain-node test (node server/tests/runEventRelayCluster.test.js).
 //
 // A workflow or agent run executes on the worker that started it, while the

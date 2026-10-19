@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import { getBezierPath, BaseEdge, EdgeLabelRenderer } from '@xyflow/react';
 
 /** Builds a short human-readable label for an edge condition. */

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 // node --test server/tests/systemResources.test.js
 //
 // The pure parts of the System resources collector: thresholds, cgroup

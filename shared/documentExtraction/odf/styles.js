@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Styles of an OpenDocument file: the named and automatic styles of content.xml and styles.xml,
  * looked up through their `style:parent-style-name` chain.

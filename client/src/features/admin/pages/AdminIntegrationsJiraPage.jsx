@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import JiraConfig from '../components/JiraConfig';

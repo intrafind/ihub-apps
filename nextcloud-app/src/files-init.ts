@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 // Registers the "Chat with iHub" file action on the Nextcloud Files page.
 // Targets @nextcloud/files v4 (the API shipped with Nextcloud 33). v4 uses
 // plain `IFileAction` objects whose callbacks receive an `ActionContext`

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 // Lightweight in-memory handoff used to carry a started message (and any
 // already-processed file attachments) from the start page into the target
 // app's chat. Files cannot travel through the URL, so we stash the processed

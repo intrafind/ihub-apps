@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Regression tests for #1806: tool.script must not allow path traversal
  * when the admin tools routes read/write/delete script files, and the

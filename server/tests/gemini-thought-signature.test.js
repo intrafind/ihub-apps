@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Test for Gemini 3 thoughtSignature handling in multi-turn tool calling conversations
  *

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Minimal PowerPoint packages for the document extraction tests: slides from raw PresentationML,
  * listed in the order the presentation shows them. No binaries are committed.

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /* global Office */
 
 import { getAsyncOrValue, normalizeRecipient, readRecipients, toIso } from './outlookItemFields';

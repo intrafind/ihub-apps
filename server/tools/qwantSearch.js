@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import searchWithExtraction from './lib/searchWithExtraction.js';
 import { QWANT_MAX_WEB_RESULTS } from '../services/search/qwantProvider.js';
 import logger from '../utils/logger.js';

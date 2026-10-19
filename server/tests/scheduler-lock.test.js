@@ -1,5 +1,8 @@
 #!/usr/bin/env node
 
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Unit tests for the cross-process scheduler lock that prevents multiple iHub
  * instances from double-firing the same scheduled workflow triggers.

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import { useState, useEffect, useMemo } from 'react';
 import { fetchAdminApps } from '../../../api';
 import { getLocalizedContent } from '../../../utils/localizeContent';

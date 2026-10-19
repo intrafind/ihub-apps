@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * The decisions around durable chats: *whether* a turn is persisted, *who* may
  * touch a stored chat, *what* the POST body is allowed to assert, and what

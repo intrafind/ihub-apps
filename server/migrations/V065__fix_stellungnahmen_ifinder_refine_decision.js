@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 export const version = '065';
 export const description = 'fix_stellungnahmen_ifinder_refine_decision';
 

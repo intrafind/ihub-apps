@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Text of a PDF as the model should read it: one block per page, introduced by a
  * `[Page N]` marker (with the printed label when the PDF defines page labels), real lines

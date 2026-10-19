@@ -1,5 +1,8 @@
 #!/usr/bin/env node
 
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * iAssistant Conversation adapter specs — global prompt variables in
  * `extraContext` and `systemPromptPreamble` (issue #1384, second half).

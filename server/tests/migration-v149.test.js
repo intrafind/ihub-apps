@@ -1,5 +1,8 @@
 #!/usr/bin/env node
 
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Migration V149 specs — seeds the disabled Mistral realtime transcription
  * model (voxtral-mini-transcribe-realtime-2602) next to the vLLM one.

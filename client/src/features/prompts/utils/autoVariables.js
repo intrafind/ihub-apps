@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import { fetchPromptVariables } from '../../../api';
 import { BUILTIN_AUTO_VARIABLES } from '../../../../../shared/promptVariables.js';
 

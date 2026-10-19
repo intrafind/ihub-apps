@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import fs from 'node:fs';
 import path from 'node:path';
 import { createResourceLoader, createValidator } from './utils/resourceLoader.js';

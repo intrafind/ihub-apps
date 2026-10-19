@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 // server/migrations/V142__add_text_to_speech.js
 export const version = '142';
 export const description = 'add_text_to_speech';

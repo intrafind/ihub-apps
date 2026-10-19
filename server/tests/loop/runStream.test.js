@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * RunStream specs — the SSE v2 producer side (`services/loop/RunStream.js`).
  *

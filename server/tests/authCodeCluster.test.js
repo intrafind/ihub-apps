@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 // Plain-node test (node server/tests/authCodeCluster.test.js).
 //
 // Exercises server/utils/authorizationCodeStore.js against a real cluster: the

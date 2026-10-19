@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Test for Anthropic tool name validation fix
  * Ensures that tool names are properly normalized to match Anthropic's requirements

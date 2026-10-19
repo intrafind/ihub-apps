@@ -1,4 +1,8 @@
 #!/usr/bin/env node
+
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * actionTracker is the internal event bus for workflow/agent runtime events.
  * It must fan events out to every registered listener without tripping Node's

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Request throttling utility supporting per-model and per-tool limits.
  * Keeps an in-memory queue for each identifier so provider rate limits are not exceeded.

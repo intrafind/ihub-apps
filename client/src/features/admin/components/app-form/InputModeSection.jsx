@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import { useId } from 'react';
 import parseNumberOrUndefined from '../../utils/parseNumberOrUndefined';
 import { usePlatformConfig } from '../../../../shared/contexts/PlatformConfigContext';

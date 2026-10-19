@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Structure-preserving PDF extraction on real pdf.js output (concepts/document-extraction/,
  * PR 3). The browser code runs the same shared functions on pdf.js in the page; jest cannot load

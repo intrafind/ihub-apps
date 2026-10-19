@@ -1,4 +1,9 @@
 /*
+ * SPDX-FileCopyrightText: IntraFind Software AG
+ * SPDX-License-Identifier: LicenseRef-iHub-Apps
+ */
+
+/*
  * The chat history in the task pane — the history page and the start page's
  * "Recent chats" (see chat-history/index.jsx, OfficeChatRow.jsx).
  *

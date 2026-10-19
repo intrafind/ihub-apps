@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 function isBackslashOrControlChar(char) {
   const code = char.codePointAt(0);
   return char === '\\' || code < 0x20 || code === 0x7f;

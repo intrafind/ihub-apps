@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Google Gemini Live API transcription provider (`gemini-3.5-transcribe-live`).
  *

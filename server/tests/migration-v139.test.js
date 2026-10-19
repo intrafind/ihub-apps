@@ -1,5 +1,8 @@
 #!/usr/bin/env node
 
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Migration V139 specs — seeds the platform-wide voice-input defaults
  * (speech.defaultService, speech.transcription.defaultModelId) with values

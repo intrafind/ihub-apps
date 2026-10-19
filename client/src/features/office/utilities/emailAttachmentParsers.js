@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 // Best-effort text extraction for the two Outlook attachment formats that
 // arrive as textual content rather than a binary document: attached/
 // forwarded emails (`format: 'eml'`) and meeting invites

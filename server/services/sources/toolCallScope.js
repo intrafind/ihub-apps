@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Sources a tool call reports beside its result. Some tools carry them on a
  * channel the result the model reads does not: an MCP result's

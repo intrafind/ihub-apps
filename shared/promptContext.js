@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * The one shape a user message takes when it carries material besides what
  * the user typed — an email, a meeting, a web page, uploaded files or email

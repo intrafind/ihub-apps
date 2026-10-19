@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Simple test to verify RS256 JWT algorithm support
  * Tests that tokens can be generated and verified with both RS256 and HS256 algorithms

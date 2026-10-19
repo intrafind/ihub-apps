@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * OpenTelemetry Gen-AI Event Emission
  * Implements https://opentelemetry.io/docs/specs/semconv/gen-ai/gen-ai-events/

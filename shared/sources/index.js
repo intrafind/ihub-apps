@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Sources — the one contract through which anything that found something for
  * the user (web search, the page reader, provider grounding, iFinder,

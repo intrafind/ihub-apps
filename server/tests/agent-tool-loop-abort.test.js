@@ -1,5 +1,8 @@
 #!/usr/bin/env node
 
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Regression tests for #1683: cancellation and node timeout could not
  * interrupt an in-flight agent tool loop. `executeLLMWithTools` never

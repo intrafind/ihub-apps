@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import bcrypt from 'bcryptjs';
 import crypto from 'node:crypto';
 import { enhanceUserGroups } from '../utils/authorization.js';

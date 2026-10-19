@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 // Plain-node test (node server/tests/configSync.test.js).
 //
 // Exercises server/configSync.js against a real cluster: the file forks itself

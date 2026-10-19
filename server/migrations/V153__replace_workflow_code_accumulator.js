@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 // server/migrations/V153__replace_workflow_code_accumulator.js
 export const version = '153';
 export const description = 'replace_workflow_code_accumulator';
