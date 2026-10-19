@@ -144,7 +144,7 @@ describe('tools of system skills', () => {
   });
 
   it('come with the skill when an app enables it for a permitted user', async () => {
-    const app = { id: 'writer', skills: ['pdf'] };
+    const app = { id: 'writer', skills: ['pdf'], skillSettings: { enabled: true } };
     const ids = (
       await getToolsForApp(app, 'en', { user: userWith('*'), model: { supportsImages: true } })
     ).map(t => t.id);
@@ -152,7 +152,7 @@ describe('tools of system skills', () => {
   });
 
   it('are not offered when the user may not use the skill or the feature is off', async () => {
-    const app = { id: 'writer', skills: ['pdf'] };
+    const app = { id: 'writer', skills: ['pdf'], skillSettings: { enabled: true } };
     // The activation tools follow the app's skill list; the skill's own tools
     // need the user to be allowed the skill.
     const ids = (await getToolsForApp(app, 'en', { user: userWith('notes') })).map(t => t.id);
@@ -163,6 +163,11 @@ describe('tools of system skills', () => {
     } finally {
       configCache.getFeatures = () => ({ skills: true });
     }
+  });
+
+  it('are not offered by an app that did not enable skills', async () => {
+    const app = { id: 'writer', skills: ['pdf'] };
+    assert.deepEqual(await getToolsForApp(app, 'en', { user: userWith('*') }), []);
   });
 
   it('refuse a direct call from a user without the skill', async () => {
@@ -178,7 +183,7 @@ describe('skill activation checks access', () => {
     const result = await runTool('activate_skill', {
       skill_name: 'pdf',
       user: userWith('*'),
-      appConfig: { id: 'writer', skills: ['pdf'] }
+      appConfig: { id: 'writer', skills: ['pdf'], skillSettings: { enabled: true } }
     });
     assert.match(result, /create_pdf/);
   });
@@ -187,14 +192,14 @@ describe('skill activation checks access', () => {
     const result = await runTool('activate_skill', {
       skill_name: 'pdf',
       user: userWith('*'),
-      appConfig: { id: 'other', skills: ['notes'] }
+      appConfig: { id: 'other', skills: ['notes'], skillSettings: { enabled: true } }
     });
     assert.match(result, /not found/);
     const resource = await runTool('read_skill_resource', {
       skill_name: 'pdf',
       file_path: 'references/examples.md',
       user: userWith('notes'),
-      appConfig: { id: 'other', skills: ['pdf'] }
+      appConfig: { id: 'other', skills: ['pdf'], skillSettings: { enabled: true } }
     });
     assert.match(resource, /access denied/);
   });

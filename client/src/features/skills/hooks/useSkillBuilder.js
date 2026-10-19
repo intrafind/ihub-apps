@@ -14,7 +14,7 @@ const MAX_ACTIVE_SKILLS_LIMIT = 10;
 
 /**
  * Whether `app` is built around the skill-builder skill: it runs the skill on
- * every turn (`skillSettings.autoActivate`), like the shipped Skill Builder
+ * every turn (`skillSettings.enabled` and `autoActivate`), like the shipped Skill Builder
  * app, so a chat there needs no `/skill-builder` to start. The server
  * auto-activates the app's skills in order up to `maxActiveSkills`, so the
  * skill has to be within that many.
@@ -23,7 +23,8 @@ const MAX_ACTIVE_SKILLS_LIMIT = 10;
  * @returns {boolean}
  */
 export function runsSkillBuilder(app) {
-  if (app?.skillSettings?.autoActivate !== true || !Array.isArray(app?.skills)) return false;
+  if (app?.skillSettings?.enabled !== true) return false;
+  if (app.skillSettings.autoActivate !== true || !Array.isArray(app.skills)) return false;
   const configured = app.skillSettings.maxActiveSkills;
   const cap =
     Number.isInteger(configured) && configured >= 1
@@ -53,7 +54,10 @@ export function findSkillBuilderApp(apps, globalSkills, { favoriteAppIds = [], u
   );
   if (!granted) return null;
   const candidates = (Array.isArray(apps) ? apps : []).filter(
-    app => Array.isArray(app?.skills) && app.skills.includes(SKILL_BUILDER_NAME)
+    app =>
+      app?.skillSettings?.enabled === true &&
+      Array.isArray(app.skills) &&
+      app.skills.includes(SKILL_BUILDER_NAME)
   );
   const dedicated = candidates.filter(runsSkillBuilder);
   return (

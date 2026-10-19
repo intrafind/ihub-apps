@@ -499,7 +499,7 @@ describe('ownership, copies and history', () => {
 });
 
 describe('in chat', () => {
-  const app = { id: 'chat', skills: ['brand-voice'] };
+  const app = { id: 'chat', skills: ['brand-voice'], skillSettings: { enabled: true } };
 
   it('lists a user skill for the model and loads it for owner and recipients only', async () => {
     const skill = await create(ADA, { name: 'chat-skill' });
@@ -567,7 +567,10 @@ describe('in chat', () => {
   it("keeps the user's own namesake, picked earlier, ahead of an auto-activated skill", async () => {
     const mine = await create(ROOT, { name: 'brand-voice', body: 'ROOT BRAND' });
     const root = { ...ROOT, permissions: { skills: new Set(['*']) } };
-    const auto = { ...app, skillSettings: { autoActivate: true, maxActiveSkills: 1 } };
+    const auto = {
+      ...app,
+      skillSettings: { enabled: true, autoActivate: true, maxActiveSkills: 1 }
+    };
     // A later turn: the user named their own brand-voice in an earlier one.
     const resolved = await skillAccess.resolveSkillsForTurn({
       earlier: [{ name: 'brand-voice', by: 'user' }],
@@ -596,10 +599,32 @@ describe('in chat', () => {
     );
   });
 
+  it('keeps user skills out of an app that did not enable skills', async () => {
+    const skill = await create(ADA, { name: 'not-enabled' });
+    const ada = { ...ADA, permissions: { skills: new Set(['*']) } };
+    const off = { id: 'babelfish', tools: [] };
+    assert.equal(await skillAccess.isSkillUsable(skill.id, { app: off, user: ada }), false);
+    assert.deepEqual(await skillAccess.getUsablePersonalSkills({ app: off, user: ada }), []);
+    assert.deepEqual(await skillAccess.listSkillsForPrompt({ app: off, user: ada }), []);
+    const active = await skillAccess.prepareActiveSkills({
+      messages: [{ role: 'user', content: `/${skill.name} hi` }],
+      requested: [skill.id],
+      app: off,
+      user: ada
+    });
+    assert.deepEqual(active.skills, []);
+    const body = await runTool('activate_skill', {
+      skill_name: skill.id,
+      appConfig: off,
+      user: ada
+    });
+    assert.doesNotMatch(body, /WEEKLY BODY/);
+  });
+
   it('keeps user skills out of apps that opt out and out of agent nodes', async () => {
     const skill = await create(ADA, { name: 'opt-out' });
     const ada = { ...ADA, permissions: { skills: new Set(['*']) } };
-    const closed = { ...app, skillSettings: { allowPersonal: false } };
+    const closed = { ...app, skillSettings: { enabled: true, allowPersonal: false } };
     assert.equal(await skillAccess.isSkillUsable(skill.id, { app: closed, user: ada }), false);
     const listed = await skillAccess.listSkillsForPrompt({ app: closed, user: ada });
     assert.ok(!listed.some(entry => entry.name === skill.id));

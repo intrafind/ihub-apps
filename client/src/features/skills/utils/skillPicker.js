@@ -24,8 +24,11 @@ export function pickerSkillScope(skill) {
  * Which skills the `/` picker offers in an app, ready for the search list.
  *
  * - A **global** skill is offered only when the app lists it in `app.skills`.
- * - A **personal** skill (the caller's own, or shared with them) is offered in
- *   every app, unless the app sets `skillSettings.allowPersonal: false`.
+ * - A **personal** skill (the caller's own, or shared with them) is offered
+ *   unless the app sets `skillSettings.allowPersonal: false`.
+ *
+ * Whether the app offers skills at all (`skillSettings.enabled`) is decided by
+ * the caller: it does not open the picker's skill list otherwise.
  *
  * Each entry gets `_type: 'skill'`, its picker `group`, and an `id` — the
  * value sent as `requestedSkills`: the name of a global skill, the `usk_…` id

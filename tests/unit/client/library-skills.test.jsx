@@ -191,7 +191,7 @@ test('New offers Create skill with AI, opening an app that has the skill-builder
   fetchSkills.mockResolvedValue([...PICKER, SKILL_BUILDER]);
   mockApps = [
     { id: 'translator', skills: [] },
-    { id: 'chat', skills: ['skill-builder'] }
+    { id: 'chat', skills: ['skill-builder'], skillSettings: { enabled: true } }
   ];
   renderLibrary();
   await waitFor(() => expect(screen.getAllByTestId('skill-card')).toHaveLength(3));
@@ -208,8 +208,12 @@ test('New offers Create skill with AI, opening an app that has the skill-builder
 test('Create skill with AI opens the Skill Builder app as it is', async () => {
   fetchSkills.mockResolvedValue([...PICKER, SKILL_BUILDER]);
   mockApps = [
-    { id: 'chat', skills: ['skill-builder'] },
-    { id: 'skill-builder', skills: ['skill-builder'], skillSettings: { autoActivate: true } }
+    { id: 'chat', skills: ['skill-builder'], skillSettings: { enabled: true } },
+    {
+      id: 'skill-builder',
+      skills: ['skill-builder'],
+      skillSettings: { enabled: true, autoActivate: true }
+    }
   ];
   renderLibrary();
   await waitFor(() => expect(screen.getAllByTestId('skill-card')).toHaveLength(3));
@@ -219,7 +223,7 @@ test('Create skill with AI opens the Skill Builder app as it is', async () => {
 });
 
 test('Create skill with AI needs the skill granted, an app with it and personal skills', async () => {
-  mockApps = [{ id: 'chat', skills: ['skill-builder'] }];
+  mockApps = [{ id: 'chat', skills: ['skill-builder'], skillSettings: { enabled: true } }];
   const { unmount } = renderLibrary();
   await waitFor(() => expect(screen.getAllByTestId('skill-card')).toHaveLength(2));
   fireEvent.click(screen.getByRole('button', { name: 'New' }));

@@ -30,6 +30,9 @@
   "preferredStyle": "normal",
   "sendChatHistory": true,
   "skills": ["skill-builder"],
+  "skillSettings": {
+    "enabled": true
+  },
   "features": {
     "magicPrompt": {
       "enabled": true,

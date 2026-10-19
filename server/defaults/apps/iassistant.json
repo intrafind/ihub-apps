@@ -15,6 +15,9 @@
   "preferredModel": "iassistant-conversation",
   "preferredOutputFormat": "markdown",
   "sendChatHistory": true,
+  "skillSettings": {
+    "enabled": true
+  },
   "variables": [],
   "settings": {
     "enabled": true,

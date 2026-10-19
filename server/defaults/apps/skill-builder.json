@@ -64,6 +64,7 @@
   "tools": ["ask_user"],
   "skills": ["skill-builder"],
   "skillSettings": {
+    "enabled": true,
     "autoActivate": true,
     "allowPersonal": false
   },

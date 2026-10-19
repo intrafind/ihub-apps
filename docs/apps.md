@@ -1069,6 +1069,7 @@ The `skills` array specifies which skill identifiers are available for an app. S
 ```json
 "skills": ["summarizer", "translator", "code-reviewer"],
 "skillSettings": {
+  "enabled": true,
   "maxActiveSkills": 3
 }
 ```
@@ -1076,11 +1077,12 @@ The `skills` array specifies which skill identifiers are available for an app. S
 | Property                       | Type    | Default | Description                                                                         |
 | ------------------------------ | ------- | ------- | ----------------------------------------------------------------------------------- |
 | `skills`                       | Array   | -       | Array of skill identifier strings. Each string must match a skill defined in the skills directory |
+| `skillSettings.enabled`        | Boolean | `false` | Turn skills on for this app. Skills are opt-in: without `true`, the app gets no `<available_skills>` block, no `activate_skill` / `read_skill_resource` / `find_skill` tools, no `requestedSkills` or `/name` pre-activation, and skills active earlier in the chat are not carried over, whatever the app lists in `skills` and whatever skills the user owns. Agent nodes are not affected: they list their skills themselves |
 | `skillSettings.autoActivate`   | Boolean | `false` | Run the app's `skills` on every turn, without `/name` and without waiting for the model to activate them — for an app built around a skill, like the shipped Skill Builder. They come after the skills the request or message names and count towards `maxActiveSkills`; only skills granted to the user are loaded. This includes skills only users may start (`disable-model-invocation: true`): assigning them with `autoActivate` is the admin starting them. A user's own skill of the same name, picked with `/name`, takes the app skill's place |
 | `skillSettings.maxActiveSkills`| Number  | `3`     | Maximum number of skills active at once in a turn (1-10): the ones the request or message names with `/`, then the app's own skills when `autoActivate` is on, then the ones still active from earlier in the chat, newest first. Further skills are left out |
-| `skillSettings.allowPersonal`  | Boolean | `true`  | Offer users' own and shared [user skills](skills.md#user-skills) in this app. Set `false` to allow only the global skills listed in `skills` |
+| `skillSettings.allowPersonal`  | Boolean | `true`  | Offer users' own and shared [user skills](skills.md#user-skills) in this app. Applies only when `skillSettings.enabled` is `true`. Set `false` to allow only the global skills listed in `skills` |
 
-A global skill is only ever loaded for an app when three things hold: it is installed, it is listed in the app's `skills`, and the user's groups grant it (`permissions.skills` in `groups.json`). [User skills](skills.md#user-skills) are the user's own and shared skills; they are offered in every app unless `skillSettings.allowPersonal` is `false`. This applies to every way a skill gets loaded: the model calling `activate_skill` or `read_skill_resource`, the user picking skills with `/` (sent as `requestedSkills`), and agents. An empty `permissions.skills` grants no skills. Agent runs check skills against the agent's service-account groups and the skills listed on the agent profile.
+A skill is only ever loaded for an app that sets `skillSettings.enabled: true`. A global skill is loaded then when three things hold: it is installed, it is listed in the app's `skills`, and the user's groups grant it (`permissions.skills` in `groups.json`). [User skills](skills.md#user-skills) are the user's own and shared skills; an app with skills enabled offers them unless `skillSettings.allowPersonal` is `false`. This applies to every way a skill gets loaded: the model calling `activate_skill` or `read_skill_resource`, the user picking skills with `/` (sent as `requestedSkills`), and agents. An empty `permissions.skills` grants no skills. Agent runs check skills against the agent's service-account groups and the skills listed on the agent profile.
 
 #### Apps as Tools (Concierge Pattern)
 
