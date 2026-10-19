@@ -212,7 +212,7 @@ describe('exportChatToFormat', () => {
       timestamp: 1700000001000
     }
   ];
-  const settings = { model: 'gpt-test', temperature: 0.5 };
+  const settings = { model: 'gpt-test' };
 
   it('exports Markdown without greetings, and without mangling Markdown replies', async () => {
     const result = await exportChatToFormat(messages, settings, 'markdown', {
@@ -247,7 +247,7 @@ describe('exportChatToFormat', () => {
     const parsed = JSON.parse(await readBlob(downloads[0].blob));
     expect(downloads[0].filename).toBe('chat.json');
     expect(parsed.model).toBe('gpt-test');
-    expect(parsed.temperature).toBe(0.5);
+    expect(parsed).not.toHaveProperty('temperature');
     expect(parsed.messages.map(m => m.role)).toEqual(['user', 'assistant']);
   });
 
@@ -256,7 +256,7 @@ describe('exportChatToFormat', () => {
 
     const lines = (await readBlob(downloads[0].blob)).split('\n').map(line => JSON.parse(line));
     expect(downloads[0].filename).toBe('chat.jsonl');
-    expect(lines[0]).toEqual({ meta: { model: 'gpt-test', temperature: 0.5 } });
+    expect(lines[0]).toEqual({ meta: { model: 'gpt-test' } });
     expect(lines.slice(1).map(m => m.role)).toEqual(['user', 'assistant']);
   });
 
@@ -289,7 +289,6 @@ describe('exportChatToFormat', () => {
       [{ role: 'user', content: 'hi' }],
       {
         model: '<script>alert(1)</script>',
-        temperature: 0.5,
         style: '<b>bold</b>',
         outputFormat: '"><svg onload=alert(1)>',
         variables: { '<k>': '<img src=x onerror=alert(1)>' }
@@ -312,8 +311,23 @@ describe('exportChatToFormat', () => {
     expect(html).toContain(
       '<strong>Variables:</strong> &lt;k&gt;: &lt;img src=x onerror=alert(1)&gt;'
     );
-    // Plain values still render as before.
-    expect(html).toContain('<div><strong>Temperature:</strong> 0.5</div>');
+  });
+
+  it('never exports a temperature, even when the settings object still carries one', async () => {
+    const stale = { model: 'gpt-test', style: 'concise', temperature: 0.5 };
+
+    await exportChatToFormat(messages, stale, 'json', { appName: 'Chat' });
+    expect(await readBlob(downloads[0].blob)).not.toMatch(/temperature/i);
+
+    await exportChatToFormat(messages, stale, 'jsonl', { appName: 'Chat' });
+    expect(await readBlob(downloads[1].blob)).not.toMatch(/temperature/i);
+
+    await exportChatToFormat(messages, stale, 'html', { appName: 'Chat' });
+    const html = await readBlob(downloads[2].blob);
+    expect(html).not.toMatch(/temperature/i);
+    // The settings that remain still render.
+    expect(html).toContain('<div><strong>Model:</strong> gpt-test</div>');
+    expect(html).toContain('<div><strong>Style:</strong> concise</div>');
   });
 
   it('renders the PDF on the server and saves the result, dropping greetings', async () => {

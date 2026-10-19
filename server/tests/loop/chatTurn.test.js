@@ -235,7 +235,6 @@ function makePrep(overrides = {}) {
     model: MODELS.openai,
     llmMessages: [{ role: 'user', content: 'Hello' }],
     tools: [],
-    temperature: 0.7,
     maxTokens: 512,
     responseFormat: undefined,
     responseSchema: undefined,

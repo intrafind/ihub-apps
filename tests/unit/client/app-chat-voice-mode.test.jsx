@@ -100,7 +100,6 @@ const mockBaseSettings = {
   selectedModel: 'model-x',
   selectedStyle: 'normal',
   selectedOutputFormat: 'markdown',
-  temperature: 0.7,
   sendChatHistory: true,
   thinkingEnabled: null,
   thinkingBudget: null,
@@ -114,7 +113,6 @@ const mockBaseSettings = {
   setSelectedModel: mockNoop,
   setSelectedStyle: mockNoop,
   setSelectedOutputFormat: mockNoop,
-  setTemperature: mockNoop,
   setSendChatHistory: mockNoop,
   setThinkingEnabled: mockNoop,
   setThinkingBudget: mockNoop,
@@ -466,6 +464,8 @@ describe('a spoken turn', () => {
     expect(turn.apiMessage.content).toBe('what is the capital of France');
     // The app's own settings travel with it, like for a typed turn.
     expect(turn.params.modelId).toBe('model-x');
+    // A temperature is not among them: the model decides its own sampling.
+    expect(turn.params).not.toHaveProperty('temperature');
   });
 
   test('typed into the voice dock: answered as a voice turn, but not marked as spoken', async () => {
@@ -493,6 +493,7 @@ describe('a spoken turn', () => {
 
     const turn = sent();
     expect('voiceMode' in turn.params).toBe(false);
+    expect(turn.params).not.toHaveProperty('temperature');
     expect('inputMode' in turn.displayMessage.meta).toBe(false);
     expect(turn.apiMessage.content).toBe('typed question');
     // ... and it empties the composer, which a spoken turn does not.
@@ -528,6 +529,7 @@ describe('a spoken turn', () => {
       'the second one',
       expect.objectContaining({ voiceMode: true, modelId: 'model-x' })
     );
+    expect(mockChat.submitClarificationResponse.mock.calls[0][1]).not.toHaveProperty('temperature');
   });
 
   test('tells the chat when voice mode ran out of time, and says nothing when the user ended it', async () => {

@@ -27,8 +27,9 @@ class VLLMAdapterClass extends BaseAdapter {
    * Create a completion request for vLLM
    */
   async createCompletionRequest(model, messages, apiKey, options = {}) {
-    const { temperature, stream, tools, toolChoice, responseFormat, responseSchema, maxTokens } =
+    const { stream, tools, toolChoice, responseFormat, responseSchema, maxTokens } =
       this.extractRequestOptions(options);
+    const sampling = this.resolveSampling(model);
 
     const formattedMessages = this.formatMessages(messages, model);
     this.debugLogMessages(messages, formattedMessages, 'vLLM');
@@ -37,9 +38,13 @@ class VLLMAdapterClass extends BaseAdapter {
       model: model.modelId,
       messages: formattedMessages,
       stream,
-      temperature: Number.parseFloat(temperature),
       max_tokens: maxTokens
     };
+    // Unset sampling keys are left out so vLLM applies the model's own
+    // `generation_config.json` — what the model vendor recommends.
+    if (sampling.temperature !== undefined) body.temperature = sampling.temperature;
+    if (sampling.topP !== undefined) body.top_p = sampling.topP;
+    if (sampling.topK !== undefined) body.top_k = sampling.topK;
 
     // Request usage data in streaming responses when model supports it
     if (stream && model.supportsUsageTracking !== false) {

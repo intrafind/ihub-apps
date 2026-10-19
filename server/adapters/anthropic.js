@@ -199,7 +199,7 @@ class AnthropicAdapterClass extends BaseAdapter {
    * Create a completion request for Anthropic
    */
   async createCompletionRequest(model, messages, apiKey, options = {}) {
-    const { temperature, stream, maxTokens, tools, toolChoice, responseSchema, nativeWebSearch } =
+    const { stream, maxTokens, tools, toolChoice, responseSchema, nativeWebSearch } =
       this.extractRequestOptions(options);
 
     // Format messages and extract system prompt
@@ -216,16 +216,14 @@ class AnthropicAdapterClass extends BaseAdapter {
       max_tokens: maxTokens
     };
 
-    // Sampling parameters were removed from Anthropic's newer reasoning models
-    // (Claude Opus 5, Sonnet 5, Fable 5.x, Opus 4.7/4.8): sending `temperature`
-    // returns a 400 and the whole request fails. Model configs opt out with
-    // `supportsTemperature: false`; everything else keeps sending it.
-    if (model.supportsTemperature !== false) {
-      const parsedTemperature = Number.parseFloat(temperature);
-      if (Number.isFinite(parsedTemperature)) {
-        requestBody.temperature = parsedTemperature;
-      }
-    }
+    // Sampling only comes from the model config. Anthropic's newer reasoning
+    // models (Claude Opus 5, Sonnet 5, Fable 5.x, Opus 4.7/4.8) reject every
+    // sampling parameter with a 400; their configs say `supportsTemperature:
+    // false`, which makes resolveSampling() return nothing.
+    const sampling = this.resolveSampling(model);
+    if (sampling.temperature !== undefined) requestBody.temperature = sampling.temperature;
+    if (sampling.topP !== undefined) requestBody.top_p = sampling.topP;
+    if (sampling.topK !== undefined) requestBody.top_k = sampling.topK;
 
     let finalTools = tools ? [...tools] : [];
     if (responseSchema) {

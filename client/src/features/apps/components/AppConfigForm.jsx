@@ -10,7 +10,6 @@ function AppConfigForm({
   selectedStyle,
   selectedOutputFormat,
   sendChatHistory,
-  temperature,
   thinkingEnabled,
   thinkingLevel,
   thinkingThoughts,
@@ -20,7 +19,6 @@ function AppConfigForm({
   onStyleChange,
   onOutputFormatChange,
   onSendChatHistoryChange,
-  onTemperatureChange,
   onThinkingEnabledChange,
   onThinkingLevelChange,
   onThinkingThoughtsChange,
@@ -118,28 +116,6 @@ function AppConfigForm({
               </option>
             ))}
           </select>
-        </div>
-      )}
-
-      {/* Temperature */}
-      {app?.settings?.temperature?.enabled !== false && (
-        <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            {t('models.temperature')}: {temperature}
-          </label>
-          <input
-            type="range"
-            min="0"
-            max="1"
-            step="0.1"
-            value={temperature}
-            onChange={e => onTemperatureChange(Number.parseFloat(e.target.value))}
-            className="w-full"
-          />
-          <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400">
-            <span>{t('common.precise')}</span>
-            <span>{t('common.creative')}</span>
-          </div>
         </div>
       )}
 

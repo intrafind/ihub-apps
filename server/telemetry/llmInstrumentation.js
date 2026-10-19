@@ -15,7 +15,7 @@ import { resolveProviderName, resolveOperation } from './providerMap.js';
  * @param {Object} ctx
  * @param {Object} ctx.model - Model configuration (must include modelId, provider)
  * @param {Array}  [ctx.messages] - Prompt messages for event emission
- * @param {Object} [ctx.options] - Request options (temperature, maxTokens, ...)
+ * @param {Object} [ctx.options] - Request options (the sampling parameters actually sent, maxTokens, ...)
  * @param {Object} [ctx.customContext] - { appId, userId, chatId, isFollowUp, messageCount, ... }
  * @param {Function} fn - Async function performing the actual LLM call. Receives the active span.
  * @returns {Promise<*>} - Result of `fn`

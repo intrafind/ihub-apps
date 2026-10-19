@@ -115,7 +115,6 @@ async function testProviderToolCall(provider, model, prompt, tools) {
       apiKeys[provider],
       {
         tools: tools,
-        temperature: 0.1,
         maxTokens: 500,
         stream: false
       }

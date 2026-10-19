@@ -120,7 +120,9 @@ Required and conditionally required attributes follow the gen-ai conventions:
 | `gen_ai.operation.name` | `chat`, `generate_content`, `text_completion` |
 | `gen_ai.provider.name`  | `openai`, `anthropic`, `google`, `mistral_ai` |
 | `gen_ai.request.model`  | Model id sent to the provider |
-| `gen_ai.request.temperature` | When known |
+| `gen_ai.request.temperature` | Only when the model config sets `sampling.temperature` |
+| `gen_ai.request.top_p`       | Only when the model config sets `sampling.topP` |
+| `gen_ai.request.top_k`       | Only when the model config sets `sampling.topK` |
 | `gen_ai.request.max_tokens`  | When set |
 | `gen_ai.response.id`         | Provider response id |
 | `gen_ai.response.model`      | Provider-reported model |

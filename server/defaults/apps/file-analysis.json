@@ -18,7 +18,6 @@
   "order": 10,
   "preferredOutputFormat": "markdown",
   "preferredStyle": "detailed",
-  "preferredTemperature": 1.0,
   "sendChatHistory": true,
   "upload": {
     "enabled": true,

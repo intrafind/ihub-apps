@@ -21,32 +21,45 @@ assert.deepStrictEqual(req.body.tool_choice, { type: 'tool', name: 'json' });
 assert.strictEqual(req.body.response_format, undefined);
 logger.info('Anthropic adapter structured output test passed');
 
-// --- Sampling parameters (issue #2282) -------------------------------------
-// Anthropic removed `temperature` from Claude Opus 5 / Sonnet 5 / Fable 5.x:
-// sending it returns a 400 and the whole request fails. Model configs opt out
-// with `supportsTemperature: false` and the adapter must omit the field.
-const withTemperature = await AnthropicAdapter.createCompletionRequest(model, messages, 'key', {
+// --- Sampling parameters (issues #2282, #2883) ------------------------------
+// Sampling only comes from the model config. Anthropic removed `temperature`
+// from Claude Opus 5 / Sonnet 5 / Fable 5.x: sending it returns a 400 and the
+// whole request fails. Those configs say `supportsTemperature: false`.
+const unconfigured = await AnthropicAdapter.createCompletionRequest(model, messages, 'key', {
   temperature: 0.4
 });
-assert.strictEqual(withTemperature.body.temperature, 0.4, 'temperature sent by default');
+for (const key of ['temperature', 'top_p', 'top_k']) {
+  assert.ok(
+    !(key in unconfigured.body),
+    `${key} must be absent when the model sets no sampling, whatever the caller passes`
+  );
+}
+
+const sampled = await AnthropicAdapter.createCompletionRequest(
+  { ...model, sampling: { temperature: 0.4, topP: 0.9, topK: 40 } },
+  messages,
+  'key'
+);
+assert.strictEqual(sampled.body.temperature, 0.4, 'temperature from the model config');
+assert.strictEqual(sampled.body.top_p, 0.9, 'top_p from the model config');
+assert.strictEqual(sampled.body.top_k, 40, 'top_k from the model config');
 
 const noSampling = await AnthropicAdapter.createCompletionRequest(
-  { ...model, modelId: 'claude-opus-5', supportsTemperature: false },
+  {
+    ...model,
+    modelId: 'claude-opus-5',
+    supportsTemperature: false,
+    sampling: { temperature: 0.4, topP: 0.9 }
+  },
   messages,
-  'key',
-  { temperature: 0.4 }
+  'key'
 );
-assert.ok(
-  !('temperature' in noSampling.body),
-  'temperature must be absent, not null, when the model rejects sampling parameters'
-);
+for (const key of ['temperature', 'top_p', 'top_k']) {
+  assert.ok(
+    !(key in noSampling.body),
+    `${key} must be absent, not null, when the model rejects sampling parameters`
+  );
+}
 assert.strictEqual(noSampling.body.model, 'claude-opus-5');
-
-// A non-numeric temperature must not serialize as `null` (JSON.stringify turns
-// NaN into null, which Anthropic rejects).
-const badTemperature = await AnthropicAdapter.createCompletionRequest(model, messages, 'key', {
-  temperature: 'not-a-number'
-});
-assert.ok(!('temperature' in badTemperature.body), 'unparseable temperature is omitted');
 
 logger.info('Anthropic adapter sampling-parameter test passed');

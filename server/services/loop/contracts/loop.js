@@ -95,7 +95,6 @@ export const loopPoliciesSchema = z.object({
 /** Provider-facing call options (the allowlist formerly in adapterOptions.js). */
 export const llmCallOptionsSchema = z
   .object({
-    temperature: z.number().min(0).max(2).optional(),
     maxTokens: z.number().int().positive().optional(),
     responseFormat: z.string().nullable().optional(),
     responseSchema: z.record(z.any()).nullable().optional(),

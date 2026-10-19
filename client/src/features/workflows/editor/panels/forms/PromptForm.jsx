@@ -61,15 +61,6 @@ function PromptForm({ config, onChange }) {
         placeholder="Search models..."
       />
       <FormField
-        label="Temperature"
-        type="number"
-        value={config.temperature}
-        onChange={v => onChange({ ...config, temperature: v })}
-        min={0}
-        max={2}
-        step={0.1}
-      />
-      <FormField
         label="Max Tokens"
         type="number"
         value={config.maxTokens}

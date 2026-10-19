@@ -28,7 +28,6 @@ function SharedAppHeader({
   selectedStyle,
   selectedOutputFormat,
   sendChatHistory,
-  temperature,
   thinkingEnabled,
   thinkingLevel,
   thinkingThoughts,
@@ -39,7 +38,6 @@ function SharedAppHeader({
   onStyleChange,
   onOutputFormatChange,
   onSendChatHistoryChange,
-  onTemperatureChange,
   onThinkingEnabledChange,
   onThinkingLevelChange,
   onThinkingThoughtsChange,
@@ -118,7 +116,6 @@ function SharedAppHeader({
     model: selectedModel,
     style: selectedStyle,
     outputFormat: selectedOutputFormat,
-    temperature,
     variables
   };
 
@@ -184,7 +181,6 @@ function SharedAppHeader({
             selectedStyle={selectedStyle}
             selectedOutputFormat={selectedOutputFormat}
             sendChatHistory={sendChatHistory}
-            temperature={temperature}
             thinkingEnabled={thinkingEnabled}
             thinkingLevel={thinkingLevel}
             thinkingThoughts={thinkingThoughts}
@@ -194,7 +190,6 @@ function SharedAppHeader({
             onStyleChange={onStyleChange}
             onOutputFormatChange={onOutputFormatChange}
             onSendChatHistoryChange={onSendChatHistoryChange}
-            onTemperatureChange={onTemperatureChange}
             onThinkingEnabledChange={onThinkingEnabledChange}
             onThinkingLevelChange={onThinkingLevelChange}
             onThinkingThoughtsChange={onThinkingThoughtsChange}

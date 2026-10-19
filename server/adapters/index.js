@@ -43,7 +43,7 @@ export function getAdapter(provider) {
  * @param {Object} model - The model configuration
  * @param {Array} messages - The messages to send
  * @param {string} apiKey - The API key
- * @param {Object} options - Additional options like temperature
+ * @param {Object} options - Call options like maxTokens, tools and thinking settings
  * @returns {Promise<Object>} Request details including URL, headers, and body
  */
 export async function createCompletionRequest(model, messages, apiKey, options = {}, context = {}) {

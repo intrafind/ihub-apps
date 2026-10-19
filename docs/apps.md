@@ -444,7 +444,7 @@ Chat apps require these additional fields:
 |-------|------|-------------|---------|
 | `system` | Object | Localized system prompts | `{"en": "You are a helpful assistant."}` |
 
-Optional fields include: `preferredModel`, `preferredStyle`, `preferredTemperature`, `tools`, `variables`, `settings`, etc.
+Optional fields include: `preferredModel`, `preferredStyle`, `tools`, `variables`, `settings`, etc.
 
 ### Redirect Apps (Additional Required Fields)
 
@@ -481,7 +481,7 @@ These optional fields work for all app types:
 
 The following fields are specific to chat apps and are not used for redirect or iframe types:
 - `system`, `preferredModel`, `preferredOutputFormat`
-- `preferredStyle`, `preferredTemperature`, `sendChatHistory`
+- `preferredStyle`, `sendChatHistory`
 - `tools`, `websearch`, `variables`, `prompt`, `outputSchema`
 - `settings`, `inputMode`, `upload`, `features`
 - `greeting`, `starterPrompts`, `usageGuide`, `messagePlaceholder`
@@ -513,7 +513,6 @@ Each app is defined with the following essential properties:
   "preferredModel": "gpt-3.5-turbo",
   "preferredOutputFormat": "markdown",
   "preferredStyle": "normal",
-  "preferredTemperature": 0.7,
   "sendChatHistory": true
 }
 ```
@@ -536,7 +535,6 @@ Each app is defined with the following essential properties:
 | `preferredModel`        | String  | Optional. Default AI model to use with this app. If omitted, uses the model marked as default in `models.json`          |
 | `preferredOutputFormat` | String  | Optional. Format for AI responses (`markdown`, `text`, `json`, `html`)                                                   |
 | `preferredStyle`        | String  | Optional. Style guidance for AI responses (normal, professional, creative, academic)                                     |
-| `preferredTemperature`  | Number  | Optional. Temperature setting (0.0-2.0) controlling randomness                                                           |
 | `sendChatHistory`       | Boolean | Optional. Whether to include chat history in API requests. Default: `true`                                               |
 | `autoStart`             | Boolean | Optional. Automatically start the chat as soon as the app opens (sends the configured `prompt` without user input). Default: `false` |
 | `ephemeral`             | Boolean | Optional. When `true`, the chat is never stored. Messages exist only in memory while the chat is open and are discarded when the user switches apps or reloads the page. No chat history or iAssistant conversation ID is written to browser storage. This is the default value for the ghost-icon toggle users see below the chat input, next to the send button (hide it with `settings.ephemeral.enabled: false`). While active, the input is highlighted and a notice explains that messages are not saved — similar to a browser's incognito mode. Default: `false` |
@@ -559,6 +557,9 @@ Each app is defined with the following essential properties:
 | `parentId`              | String  | Optional. ID of the parent app to inherit configuration from                                                             |
 | `inheritanceLevel`      | Number  | Optional. Depth of the inheritance chain                                                                                 |
 | `overriddenFields`      | Array   | Optional. Fields that have been explicitly overridden from the parent app                                                |
+
+Apps do not set a temperature or any other sampling parameter. Those come from the model's `sampling` configuration; when it is unset the provider's default applies. See [Sampling Parameters](models.md#sampling-parameters).
+
 ### Advanced Configuration Options
 
 Apps can include additional configuration for user inputs and prompt formatting:
@@ -762,7 +763,6 @@ The `settings` property controls which configuration options users can adjust fo
     "filter": { "supportsTools": ["auto", "required"] }
   },
   "style": { "enabled": true },
-  "temperature": { "enabled": true },
   "outputFormat": { "enabled": true },
   "chatHistory": { "enabled": true },
   "imageGeneration": { "enabled": true },
@@ -787,7 +787,6 @@ The `settings` property controls which configuration options users can adjust fo
 | `settings.model.enabled`              | Enable/disable model selection option                                    |
 | `settings.model.filter`               | Record of model properties to filter the available models list. Example: `{"supportsTools": ["auto", "required"]}` shows only models that support tool calling (a filter value that is an array matches any of its entries) |
 | `settings.style.enabled`              | Enable/disable response style selection                                  |
-| `settings.temperature.enabled`        | Enable/disable temperature adjustment                                    |
 | `settings.outputFormat.enabled`       | Enable/disable output format selection                                   |
 | `settings.chatHistory.enabled`        | Enable/disable chat history toggle                                       |
 | `settings.imageGeneration.enabled`    | Show/hide the image generation settings panel                            |
@@ -1295,9 +1294,6 @@ Here are some practical examples of how to configure the settings for different 
     "style": {
       "enabled": true
     },
-    "temperature": {
-      "enabled": true
-    },
     "outputFormat": {
       "enabled": true
     },
@@ -1326,9 +1322,6 @@ Here are some practical examples of how to configure the settings for different 
       "enabled": false
     },
     "style": {
-      "enabled": false
-    },
-    "temperature": {
       "enabled": false
     },
     "outputFormat": {

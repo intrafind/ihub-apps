@@ -16,15 +16,11 @@
   },
   "preferredOutputFormat": "markdown",
   "preferredStyle": "detailed",
-  "preferredTemperature": 1,
   "sendChatHistory": false,
   "tools": ["researchPlanner", "deepResearch", "queryRewriter", "evaluator", "braveSearch"],
   "settings": {
     "enabled": true,
     "model": {
-      "enabled": true
-    },
-    "temperature": {
       "enabled": true
     },
     "outputFormat": {

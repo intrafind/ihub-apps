@@ -26,7 +26,6 @@
   },
   "preferredOutputFormat": "markdown",
   "preferredStyle": "professional",
-  "preferredTemperature": 0.7,
   "sendChatHistory": true,
   "prompt": {
     "en": "{{content}}",
@@ -83,9 +82,6 @@
   "settings": {
     "enabled": true,
     "model": {
-      "enabled": true
-    },
-    "temperature": {
       "enabled": true
     },
     "outputFormat": {

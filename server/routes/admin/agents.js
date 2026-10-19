@@ -134,7 +134,7 @@ async function shapeToolResultWithLLM(toolResult, { promptTemplate, modelId }) {
   const result = await llmClient.complete({
     modelId: resolvedModel,
     messages: [{ role: 'user', content: userPrompt }],
-    options: { temperature: 0.2, maxTokens: 4096 },
+    options: { maxTokens: 4096 },
     telemetry: { kind: 'utility', purpose: 'memory-shaper' }
   });
   return (result.content || '').trim();

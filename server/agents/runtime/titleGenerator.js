@@ -117,7 +117,7 @@ export function generateRunTitleAsync({
       const response = await llmClient.complete({
         model,
         messages,
-        options: { temperature: 0.2, maxTokens: 24 },
+        options: { maxTokens: 24 },
         language,
         // The call is part of the execution's run: recorded on its ledger
         // (segment `title`) instead of as a separate utility run.

@@ -18,7 +18,6 @@
 
   "preferredOutputFormat": "markdown",
   "preferredStyle": "academic",
-  "preferredTemperature": 0.7,
   "prompt": {
     "en": "{{action}} on the topic of {{topic}}. {{format}}\n\n{{content}}",
     "de": "{{action}} zum Thema {{topic}}. {{format}}\n\n{{content}}"

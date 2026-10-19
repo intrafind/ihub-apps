@@ -24,7 +24,7 @@
  *
  * Usage:
  *
- *   const result = await llmClient.complete({ modelId, messages, options: { temperature: 0.2 } });
+ *   const result = await llmClient.complete({ modelId, messages, options: { maxTokens: 256 } });
  *   result.content, result.toolCalls, result.usage, result.finishReason
  *
  *   const stream = await llmClient.execute({ model, messages, telemetry: { runId, step } });
@@ -585,7 +585,7 @@ export class LLMClient {
    * @param {string} [params.modelId] - iHub model id (looked up when `model` is absent)
    * @param {boolean} [params.includeDisabled=false] - allow disabled models on lookup
    * @param {Array} params.messages - generic messages
-   * @param {Object} [params.options] - adapter options (temperature, maxTokens, tools, toolChoice,
+   * @param {Object} [params.options] - adapter options (maxTokens, tools, toolChoice,
    *   responseFormat, responseSchema, nativeWebSearch, thinking*, user, chatId, appConfig, …)
    * @param {string|null} [params.apiKey] - explicit key; resolved via ApiKeyVerifier when omitted
    * @param {boolean} [params.stream=true] - false → single JSON body (one chunk)
@@ -1448,8 +1448,6 @@ export class LLMClient {
       this._lastConfigHash.delete(this._lastConfigHash.keys().next().value);
     }
     const callConfig = {
-      temperature:
-        typeof adapterOptions.temperature === 'number' ? adapterOptions.temperature : undefined,
       maxTokens: Number.isInteger(adapterOptions.maxTokens) ? adapterOptions.maxTokens : undefined,
       responseFormat: adapterOptions.responseFormat ?? null,
       responseSchemaHash,
@@ -1525,12 +1523,19 @@ export class LLMClient {
         }
       );
       instrumentation.recordRequest(span, model, messages, {
-        temperature: request.body?.temperature ?? request.body?.generationConfig?.temperature,
+        temperature:
+          request.body?.temperature ??
+          request.body?.generationConfig?.temperature ??
+          request.body?.inferenceConfig?.temperature,
         maxTokens:
           request.body?.max_tokens ||
           request.body?.max_output_tokens ||
           request.body?.generationConfig?.maxOutputTokens,
-        topP: request.body?.top_p,
+        topP:
+          request.body?.top_p ??
+          request.body?.generationConfig?.topP ??
+          request.body?.inferenceConfig?.topP,
+        topK: request.body?.top_k ?? request.body?.generationConfig?.topK,
         stream: effectiveStream
       });
       return span;

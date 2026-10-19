@@ -30,7 +30,6 @@ function AppCreationWizard({ onClose, templateApp = null }) {
     preferredModel: undefined,
     preferredOutputFormat: 'markdown',
     preferredStyle: 'normal',
-    preferredTemperature: 0.7,
     enabled: true,
     order: 0,
     messagePlaceholder: { en: '' },
@@ -52,7 +51,6 @@ function AppCreationWizard({ onClose, templateApp = null }) {
     settings: {
       enabled: true,
       model: { enabled: true },
-      temperature: { enabled: true },
       outputFormat: { enabled: true },
       chatHistory: { enabled: true },
       style: { enabled: true }
@@ -674,8 +672,7 @@ function AIGenerationStep({ appData, updateAppData }) {
             }
           ],
           responseFormat: 'json',
-          responseSchema: appGeneratorPrompt.outputSchema,
-          temperature: 1.0
+          responseSchema: appGeneratorPrompt.outputSchema
         }
       });
 
@@ -1332,23 +1329,6 @@ function SystemPromptStep({
               'Optional: Pre-select a default model for this app'
             )}
           </p>
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700">
-            {t('admin.apps.wizard.system.temperature', 'Temperature')}
-          </label>
-          <input
-            type="number"
-            min="0"
-            max="2"
-            step="0.1"
-            value={appData.preferredTemperature}
-            onChange={e =>
-              updateAppData({ preferredTemperature: Number.parseFloat(e.target.value) })
-            }
-            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-          />
         </div>
       </div>
     </div>

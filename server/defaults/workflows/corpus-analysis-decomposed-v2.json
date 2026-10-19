@@ -194,7 +194,6 @@
       },
       "config": {
         "chatVisible": false,
-        "temperature": 0.2,
         "system": {
           "en": "You analyse one document for one specific sub-question. Extract structured findings, ground every claim in the source, quote verbatim. The downstream validator checks every quote against the source."
         },
@@ -295,7 +294,6 @@
         "y": 2540
       },
       "config": {
-        "temperature": 0.3,
         "system": {
           "en": "You synthesise evidence collected across multiple sub-questions into a single narrative. Group findings by sub-question, then offer cross-cutting themes. Cite docIds inline. Do not add facts beyond the evidence."
         },

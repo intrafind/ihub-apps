@@ -41,7 +41,8 @@ Each model is defined with the following properties:
 | `supportsAudio`                | Boolean | -        | Whether the model can process audio input                                                      |
 | `supportsStructuredOutput`     | Boolean | -        | Whether the model natively supports structured JSON output schemas                             |
 | `supportsUsageTracking`        | Boolean | -        | Whether the model reports token usage in its responses                                         |
-| `supportsTemperature`          | Boolean | `true`   | Whether the provider accepts sampling parameters for this model. Set `false` for models that reject them — Claude Opus 5, Sonnet 5 and Fable 5.x return a `400` for `temperature`, so the adapter omits the field instead of failing every request. See [Sampling Parameters](#sampling-parameters) |
+| `sampling`                     | Object  | -        | Optional sampling overrides for this model: `temperature` (0–2), `topP` (0–1) and `topK` (integer ≥ 1). The only way a sampling parameter is ever sent to the provider; a key that is not set is left out of the request. See [Sampling Parameters](#sampling-parameters) |
+| `supportsTemperature`          | Boolean | `true`   | Whether the provider accepts sampling parameters for this model. Set `false` for models that reject them — Claude Opus 5, Sonnet 5 and Fable 5.x return a `400` for `temperature`, so the adapter ignores `sampling` instead of failing every request. See [Sampling Parameters](#sampling-parameters) |
 | `supportsImageGeneration`      | Boolean | `false`  | Whether the model can generate images                                                          |
 | `imageGeneration`              | Object  | -        | Default image generation parameters for this model. See [Image Generation Defaults](#image-generation-defaults) below |
 | `apiKey`                       | String  | -        | Per-model API key stored encrypted on the server. Overrides the environment-level API key for this model only |
@@ -57,11 +58,69 @@ Each model is defined with the following properties:
 
 ### Sampling Parameters
 
+iHub does not set a temperature. Apps, prompts, agents and workflows carry no sampling
+setting, and neither does the chat: current models are tuned for specific sampling values
+by their vendor, so the provider's (or the model's) own defaults apply. A `temperature` sent
+by a client of the [OpenAI-compatible API](openai-compatible-api.md) is accepted but ignored.
+
+When a model needs different values, set them on the model with `sampling`. It is the
+only place a `temperature`, `top_p` or `top_k` is ever taken from, and it applies to
+every request to that model:
+
+```json
+{
+  "id": "qwen3-local",
+  "modelId": "Qwen/Qwen3-32B",
+  "provider": "local",
+  "sampling": {
+    "temperature": 0.6,
+    "topP": 0.95,
+    "topK": 20
+  }
+}
+```
+
+| Key           | Type    | Range     | Description                                 |
+| ------------- | ------- | --------- | ------------------------------------------- |
+| `temperature` | Number  | 0–2       | Randomness of the output                    |
+| `topP`        | Number  | 0–1       | Nucleus sampling: the probability mass kept |
+| `topK`        | Integer | 1 or more | Number of highest-ranked tokens considered  |
+
+Every key is optional. A key that is not set is left out of the request, so the
+provider's default applies. For a [vLLM](local-llm-providers.md) server that default is
+the model's `generation_config.json`, that is, the values the model vendor recommends —
+leave `sampling` unset and vLLM serves the model the way it was meant to run.
+
+Which adapters send which parameter (the column is the `provider` of the model):
+
+| Provider                  | `temperature` | `topP`        | `topK`        |
+| ------------------------- | ------------- | ------------- | ------------- |
+| `openai`                  | yes           | yes (`top_p`) | no            |
+| `local` (vLLM)            | yes           | yes (`top_p`) | yes (`top_k`) |
+| `mistral`                 | yes           | yes (`top_p`) | no            |
+| `anthropic`               | yes           | yes (`top_p`) | yes (`top_k`) |
+| `google`                  | yes           | yes (`topP`)  | yes (`topK`)  |
+| `bedrock`                 | yes           | yes (`topP`)  | no            |
+| `openai-responses`        | no            | no            | no            |
+| `iassistant-conversation` | no            | no            | no            |
+
+A value an adapter does not send is ignored without an error. `openai-responses` always
+sends `reasoning`, and the reasoning models behind it (GPT-5 and newer) reject sampling
+parameters, so it never sends them. The iAssistant adapter has no sampling parameters.
+
+iHub does not check `sampling` against what a particular model accepts: it sends the keys
+that are set. Some models take only one of `temperature` and `topP`. Claude Haiku 4.5 on
+Anthropic or Bedrock, for example, rejects a request that sets both. For such a model set
+just one of the two; the provider's error names the parameters when a request is refused.
+
+#### Models that reject sampling parameters
+
 Anthropic removed sampling parameters from its newer reasoning models. On Claude
 Opus 5, Claude Sonnet 5, Claude Fable 5.x and Claude Opus 4.7/4.8, sending
 `temperature` returns a `400` and the request fails outright — there is no
 graceful degradation. Set `supportsTemperature: false` on those model configs and
-the Anthropic adapter omits the field:
+the whole `sampling` block is ignored for the model: the Anthropic adapter sends no
+`temperature`, `top_p` or `top_k`.
 
 ```json
 {
@@ -72,10 +131,10 @@ the Anthropic adapter omits the field:
 }
 ```
 
-The app's temperature setting (and `preferredStyle`, which maps onto it) is then
-simply ignored for that model — the model decides its own sampling. Older models
-(Claude Haiku 4.5 and earlier, and every other provider) still accept
-`temperature`, so leave the flag unset for them.
+`supportsTemperature` therefore marks a model that rejects sampling parameters, while
+`sampling` supplies the values for a model that accepts them. Older models
+(Claude Haiku 4.5 and earlier, and every other provider) accept sampling parameters,
+so leave the flag unset for them.
 
 ### Tools
 
@@ -118,7 +177,7 @@ The system currently supports the following providers:
 3. **Anthropic** (`provider: "anthropic"`)
    - Compatible with the Anthropic Messages API format
    - Examples: Claude Opus 5, Claude Sonnet 5, Claude Haiku 4.5, Claude Fable 5.1
-   - Models from Claude Opus 4.7 onwards reject `temperature`; set `supportsTemperature: false` on those configs (see [Sampling Parameters](#sampling-parameters))
+   - Models from Claude Opus 4.7 onwards reject sampling parameters; set `supportsTemperature: false` on those configs (see [Sampling Parameters](#sampling-parameters))
 
 4. **Google** (`provider: "google"`)
    - Compatible with the Google Gemini API format
@@ -555,8 +614,8 @@ surface reasoning the same way in the UI (a separate "thinking" stream):
   their reasoning text, but OpenAI-compatible endpoints (vLLM, DeepSeek, OpenRouter) reached
   via the `openai` provider return it in a `reasoning`/`reasoning_content` field, which iHub
   surfaces as thinking. The `openai` adapter is conservative — it adds `reasoning_effort`
-  only and leaves `max_tokens`/`temperature` untouched so non-reasoning compatible endpoints
-  keep working.
+  only and leaves `max_tokens` and the `sampling` parameters untouched so non-reasoning
+  compatible endpoints keep working.
 - **vLLM (`local`):** sends `chat_template_kwargs` to enable/disable reasoning and reads
   reasoning text from the response's `reasoning` (current) or `reasoning_content` (legacy)
   field. Requires the vLLM server to be started with a matching `--reasoning-parser`.

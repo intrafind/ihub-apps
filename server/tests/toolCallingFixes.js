@@ -543,7 +543,7 @@ const UnifiedAdapterInterface = {
   // @returns {Object} HTTP request object
   createCompletionRequest(model, messages, apiKey, options = {}) {
     const provider = model.provider;
-    const { tools = [], temperature = 0.7, maxTokens = 1024, stream = true } = options;
+    const { tools = [], maxTokens = 1024, stream = true } = options;
 
     // Format messages using unified formatter
     const formattedMessages = UnifiedMessageFormatter.formatMessages(messages, provider);
@@ -564,7 +564,6 @@ const UnifiedAdapterInterface = {
     // Create request using the provider-specific adapter
     return await adapter.createCompletionRequest(model, formattedMessages.messages, apiKey, {
       tools,
-      temperature,
       maxTokens,
       stream,
       systemPrompt: formattedMessages.systemInstruction

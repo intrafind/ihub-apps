@@ -17,7 +17,6 @@
 
   "preferredStyle": "normal",
   "preferredOutputFormat": "markdown",
-  "preferredTemperature": 0.8,
   "sendChatHistory": false,
   "prompt": {
     "en": "{{content}}",

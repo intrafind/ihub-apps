@@ -143,7 +143,6 @@
       "position": { "x": 100, "y": 960 },
       "config": {
         "chatVisible": false,
-        "temperature": 0.2,
         "system": {
           "en": "You are a corpus analyst. Extract structured findings from a single document for an audit-grade pipeline that verifies every quote against the source verbatim. Never invent. Quotes are character-for-character."
         },
@@ -243,7 +242,6 @@
       "name": { "en": "Cross-document synthesis", "de": "Dokumentübergreifende Synthese" },
       "position": { "x": 100, "y": 1600 },
       "config": {
-        "temperature": 0.3,
         "system": {
           "en": "You synthesise a corpus of structured evidence records into a clear narrative — themes, majority position, contradictions, open points. You DO NOT add facts beyond the evidence. You cite the docIds you draw from."
         },

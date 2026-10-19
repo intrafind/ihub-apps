@@ -192,10 +192,6 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
    *           type: string
    *           description: ID of the model to use (overrides app default)
    *           example: "gpt-4o"
-   *         temperature:
-   *           type: number
-   *           description: Sampling temperature (0–2)
-   *           example: 0.7
    *         style:
    *           type: string
    *           description: Response style identifier
@@ -814,7 +810,6 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
         const {
           messages,
           modelId,
-          temperature,
           style,
           outputFormat,
           language,
@@ -875,7 +870,7 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
             userSessionId,
             user: req.user,
             messages: llmMessages,
-            options: { temperature, style, outputFormat, language: clientLanguage, streaming },
+            options: { style, outputFormat, language: clientLanguage, streaming },
             ...extra
           };
         }
@@ -1008,7 +1003,6 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
             settings: normalizeChatSettings({
               style,
               outputFormat,
-              temperature,
               sendChatHistory,
               thinkingEnabled,
               thinkingLevel,
@@ -1046,7 +1040,6 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
           appId,
           modelId,
           messages: conversation,
-          temperature,
           style,
           outputFormat,
           language: clientLanguage,

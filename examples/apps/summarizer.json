@@ -28,7 +28,6 @@
   },
   "preferredOutputFormat": "markdown",
   "preferredStyle": "normal",
-  "preferredTemperature": 0.7,
   "prompt": {
     "en": "Please {{action}} the following content: \"{{content}}\"",
     "de": "Bitte {{action}} den folgenden Inhalt: \"{{content}}\""

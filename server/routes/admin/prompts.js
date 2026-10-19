@@ -281,13 +281,6 @@ export function slugifyPromptId(name) {
  *               content:
  *                 type: string
  *           example: [{ "role": "user", "content": "Hello, how are you?" }]
- *         temperature:
- *           type: number
- *           description: Sampling temperature (0.0 to 1.0)
- *           minimum: 0
- *           maximum: 1
- *           default: 0.7
- *           example: 0.7
  *         maxTokens:
  *           type: number
  *           description: Maximum tokens in the response
@@ -1581,7 +1574,6 @@ export default function registerAdminPromptsRoutes(app) {
    *                 content: "You are a helpful assistant."
    *               - role: "user"
    *                 content: "Hello, how are you?"
-   *             temperature: 0.7
    *             maxTokens: 4000
    *     responses:
    *       200:
@@ -1652,7 +1644,6 @@ export default function registerAdminPromptsRoutes(app) {
       const {
         model,
         messages,
-        temperature = 0.7,
         maxTokens = 8192,
         responseFormat = null,
         responseSchema = null
@@ -1682,7 +1673,7 @@ export default function registerAdminPromptsRoutes(app) {
       const result = await llmClient.complete({
         modelId,
         messages,
-        options: { temperature, maxTokens, responseFormat, responseSchema },
+        options: { maxTokens, responseFormat, responseSchema },
         retries: 0,
         telemetry: { kind: 'utility', purpose: 'admin-completions', user: req.user }
       });

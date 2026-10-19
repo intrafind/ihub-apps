@@ -22,8 +22,9 @@ class OpenAIAdapterClass extends BaseAdapter {
    * Create a completion request for OpenAI
    */
   async createCompletionRequest(model, messages, apiKey, options = {}, { signal } = {}) {
-    const { temperature, stream, tools, toolChoice, responseFormat, responseSchema, maxTokens } =
+    const { stream, tools, toolChoice, responseFormat, responseSchema, maxTokens } =
       this.extractRequestOptions(options);
+    const sampling = this.resolveSampling(model);
 
     const formattedMessages = this.formatMessages(messages, model);
     this.debugLogMessages(messages, formattedMessages, 'OpenAI');
@@ -38,9 +39,10 @@ class OpenAIAdapterClass extends BaseAdapter {
       model: effectiveModelId,
       messages: formattedMessages,
       stream,
-      temperature: Number.parseFloat(temperature),
       max_tokens: maxTokens
     };
+    if (sampling.temperature !== undefined) body.temperature = sampling.temperature;
+    if (sampling.topP !== undefined) body.top_p = sampling.topP;
 
     // Request usage data in streaming responses when model supports it
     if (stream && model.supportsUsageTracking !== false) {
@@ -51,9 +53,9 @@ class OpenAIAdapterClass extends BaseAdapter {
     // models are unaffected. OpenAI reasoning models — and OpenAI-compatible
     // endpoints reached via this adapter (vLLM/DeepSeek/OpenRouter) — accept the
     // `reasoning_effort` parameter on /chat/completions. We deliberately keep
-    // this conservative: max_tokens and temperature are left untouched so the
-    // many OpenAI-compatible endpoints that don't impose reasoning-model
-    // constraints keep working.
+    // this conservative: max_tokens is left untouched and sampling only comes
+    // from the model config, so the many OpenAI-compatible endpoints that don't
+    // impose reasoning-model constraints keep working.
     if (model.thinking?.enabled && (options.thinkingEnabled ?? true)) {
       body.reasoning_effort = this.resolveReasoningEffort(options, model);
     }

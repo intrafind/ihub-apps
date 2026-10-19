@@ -295,9 +295,6 @@ function localizedToString(value, fallback) {
 function basePromptConfig(profile, { systemFallbackKey, fallbackIterations }) {
   return {
     modelId: pickModel(profile),
-    ...(profile.preferredTemperature !== undefined
-      ? { temperature: profile.preferredTemperature }
-      : {}),
     system: isLocalizedNonEmpty(profile.system)
       ? profile.system
       : profile.description || { en: systemFallbackKey },
@@ -392,9 +389,6 @@ function buildSynthesizerNode(profile) {
     type: 'prompt',
     config: {
       modelId: profile.synthesizer?.modelId || pickModel(profile),
-      ...(profile.preferredTemperature !== undefined
-        ? { temperature: profile.preferredTemperature }
-        : {}),
       system: isLocalizedNonEmpty(profile.synthesizer?.system)
         ? profile.synthesizer.system
         : DEFAULT_SYNTHESIZER_SYSTEM,
@@ -424,10 +418,6 @@ function buildMemoryComposerNode(profile) {
     type: 'prompt',
     config: {
       modelId: profile.memory?.modelId || pickModel(profile),
-      // Memory composition is structured-output and benefits from low
-      // temperature — we want consistent, conservative writes.
-      temperature:
-        typeof profile.memory?.temperature === 'number' ? profile.memory.temperature : 0.2,
       system: isLocalizedNonEmpty(profile.memory?.system)
         ? profile.memory.system
         : DEFAULT_MEMORY_COMPOSER_SYSTEM,
@@ -505,9 +495,6 @@ function buildReviewerNode(profile) {
     type: 'prompt',
     config: {
       modelId: profile.review?.modelId || pickModel(profile),
-      ...(profile.preferredTemperature !== undefined
-        ? { temperature: profile.preferredTemperature }
-        : {}),
       system: isLocalizedNonEmpty(profile.review?.system)
         ? profile.review.system
         : DEFAULT_REVIEWER_SYSTEM,

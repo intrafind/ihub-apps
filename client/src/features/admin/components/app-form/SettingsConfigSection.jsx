@@ -43,18 +43,6 @@ function SettingsConfigSection({ app, onChange, t }) {
             <div className="flex items-center">
               <input
                 type="checkbox"
-                checked={app.settings?.temperature?.enabled !== false}
-                onChange={e => handleSettingChange('temperature', e.target.checked)}
-                className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded-sm"
-              />
-              <label className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
-                {t('admin.apps.edit.enableTemperatureControl', 'Enable Temperature Control')}
-              </label>
-            </div>
-
-            <div className="flex items-center">
-              <input
-                type="checkbox"
                 checked={app.settings?.outputFormat?.enabled !== false}
                 onChange={e => handleSettingChange('outputFormat', e.target.checked)}
                 className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded-sm"

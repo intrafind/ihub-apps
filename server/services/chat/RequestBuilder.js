@@ -321,7 +321,6 @@ class RequestBuilder {
     appId,
     modelId,
     messages,
-    temperature,
     style,
     outputFormat,
     language,
@@ -690,8 +689,6 @@ class RequestBuilder {
         }
       }
 
-      const resolvedTemperature = Number.parseFloat(temperature) || app.preferredTemperature || 0.7;
-
       // Provider-facing options for every model call of this turn. The loop
       // hands them to LLMClient unchanged, so follow-up calls after tool
       // results keep native web search, thinking and image settings.
@@ -715,7 +712,6 @@ class RequestBuilder {
           llmMessages,
           tools,
           apiKey: apiKeyResult.apiKey,
-          temperature: resolvedTemperature,
           maxTokens: finalTokens,
           responseFormat: outputFormat,
           responseSchema: app.outputSchema,

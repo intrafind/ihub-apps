@@ -216,7 +216,6 @@ export class ContextSummarizer {
       const response = await this.llmClient.complete({
         model,
         messages,
-        options: { temperature: 0.3 },
         language: context.language || 'en',
         signal: context.abortSignal,
         telemetry: {

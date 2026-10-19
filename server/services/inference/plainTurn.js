@@ -102,7 +102,7 @@ export function withJsonInstruction(messages, format) {
  * @param {import('../loop/LLMClient.js').LLMClient} params.llmClient
  * @param {Object} params.model
  * @param {Array} params.messages - Messages in the shape adapters take.
- * @param {Object} [params.options] - Adapter options (temperature, maxTokens, …).
+ * @param {Object} [params.options] - Adapter options (maxTokens, …).
  * @param {Object|null} [params.format] - Structured-output format.
  * @param {boolean} [params.validate=true] - Check the answer against the format.
  * @param {number} [params.maxRetries=1] - Corrected attempts after an invalid answer.

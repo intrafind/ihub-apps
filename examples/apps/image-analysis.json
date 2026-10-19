@@ -18,7 +18,6 @@
   "preferredModel": "gpt-4-vision-preview",
   "preferredOutputFormat": "markdown",
   "preferredStyle": "detailed",
-  "preferredTemperature": 0.7,
   "sendChatHistory": true,
   "upload": {
     "enabled": true,

@@ -18,7 +18,6 @@
   "preferredModel": "gemini-3-pro-image",
   "preferredOutputFormat": "markdown",
   "preferredStyle": "creative",
-  "preferredTemperature": 0.8,
   "sendChatHistory": true,
   "greeting": {
     "en": {
@@ -39,9 +38,6 @@
       }
     },
     "style": {
-      "enabled": true
-    },
-    "temperature": {
       "enabled": true
     },
     "outputFormat": {

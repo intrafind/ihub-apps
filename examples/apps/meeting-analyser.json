@@ -17,7 +17,6 @@
   },
   "preferredOutputFormat": "markdown",
   "preferredStyle": "detailed",
-  "preferredTemperature": 0.7,
   "upload": {
     "enabled": true,
     "imageUpload": {

@@ -138,11 +138,10 @@ shapes append a two-step memory tail after the synthesizer:
    long-term memory. The composer is instructed to cite the tool/URL
    behind each fact, skip duplicates already in memory, and prefer
    `append` over `replace`. Operator-overridable via `memory.modelId`,
-   `memory.temperature` (default 0.2), `memory.system`, and
-   `memory.prompt`. Splitting this from the synthesizer keeps the report
-   writer focused on the report and avoids cross-provider schema
-   headaches (Gemini's proto schema rejects union types like
-   `["object", "null"]`).
+   `memory.system`, and `memory.prompt`. Splitting this from the
+   synthesizer keeps the report writer focused on the report and avoids
+   cross-provider schema headaches (Gemini's proto schema rejects union
+   types like `["object", "null"]`).
 2. **`memory-finalize`** is deterministic — no LLM call. It drains
    `state.data._pendingMemoryUpdates` (populated by `memory-compose`'s
    auto-persist branch in `PromptNodeExecutor`) and writes via
