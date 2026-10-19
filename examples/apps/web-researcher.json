@@ -22,7 +22,7 @@
   "preferredModel": "gemini-2.5-flash-preview-05-20",
   "preferredOutputFormat": "markdown",
   "preferredStyle": "detailed",
-  "preferredTemperature": 0.4,
+  "preferredTemperature": 0.7,
   "sendChatHistory": false,
   "websearch": {
     "enabled": true,

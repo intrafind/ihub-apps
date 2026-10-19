@@ -16,7 +16,7 @@
   },
   "preferredOutputFormat": "markdown",
   "preferredStyle": "normal",
-  "preferredTemperature": 0.5,
+  "preferredTemperature": 0.7,
   "sendChatHistory": true,
   "tools": ["iFinder_search", "iFinder_getMetadata", "iFinder_getContent"],
   "settings": {

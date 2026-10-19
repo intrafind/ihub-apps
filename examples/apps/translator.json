@@ -18,7 +18,8 @@
   "preferredModel": "gemini-1.5-flash",
   "preferredOutputFormat": "text",
   "preferredStyle": "keep",
-  "preferredTemperature": 0.3,
+  "preferredTemperature": 0.7,
+  "thinking": { "enabled": false },
   "sendChatHistory": false,
   "prompt": {
     "en": "Selected Language: \"{{language}}\" - Text to translate: \"{{content}}\"",

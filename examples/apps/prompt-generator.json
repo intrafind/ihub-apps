@@ -18,7 +18,7 @@
 
   "preferredOutputFormat": "markdown",
   "preferredStyle": "normal",
-  "preferredTemperature": 0.6,
+  "preferredTemperature": 0.7,
   "sendChatHistory": true,
   "prompt": {
     "en": "Create a {{prompt_type}} prompt for {{task}}. The target AI model is {{model}}. {{additional_requirements}}\n\n{{#if content}}User refinement request: {{content}}{{else}}Please provide a well-structured, effective prompt that follows best practices for this model and use case.{{/if}}",

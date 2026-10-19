@@ -19,7 +19,7 @@
   "tools": ["excalidraw"],
   "preferredOutputFormat": "markdown",
   "preferredStyle": "normal",
-  "preferredTemperature": 0.4,
+  "preferredTemperature": 0.7,
   "sendChatHistory": true,
   "messagePlaceholder": {
     "en": "What should I sketch? (e.g. 'how our services talk to each other')",

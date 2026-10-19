@@ -19,7 +19,7 @@
   "tools": ["drawio"],
   "preferredOutputFormat": "markdown",
   "preferredStyle": "normal",
-  "preferredTemperature": 0.3,
+  "preferredTemperature": 0.7,
   "sendChatHistory": true,
   "messagePlaceholder": {
     "en": "Describe the diagram you need (e.g. 'the login flow of our app')",

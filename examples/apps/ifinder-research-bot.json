@@ -73,7 +73,7 @@
   },
   "preferredOutputFormat": "markdown",
   "preferredStyle": "professional",
-  "preferredTemperature": 0.2,
+  "preferredTemperature": 0.7,
   "sendChatHistory": true,
   "prompt": {
     "en": "{{content}}",
