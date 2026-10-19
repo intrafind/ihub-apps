@@ -20,7 +20,7 @@ import {
   description
 } from '../migrations/V169__app_temperature_floor_and_translation_thinking.js';
 
-let dir;
+let dir = '';
 
 /** A migration context over a scratch contents directory. */
 function makeCtx(base) {

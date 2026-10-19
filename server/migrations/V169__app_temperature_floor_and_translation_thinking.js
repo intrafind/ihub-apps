@@ -24,47 +24,64 @@ const MIN_TEMPERATURE = 0.7;
 const NO_THINKING_APPS = new Set(['translator', 'babelfish']);
 
 /**
- * Apply both rules to one app config in place.
+ * Raise a `preferredTemperature` below the floor.
  *
  * @param {object} ctx - migration context
  * @param {string} path - app path, for the log
  * @param {object} app - the app config (mutated)
  * @returns {boolean} true when it changed
  */
-function migrateApp(ctx, path, app) {
-  let changed = false;
-
+function raiseTemperature(ctx, path, app) {
   const temperature = app.preferredTemperature;
-  if (typeof temperature === 'number' && temperature < MIN_TEMPERATURE) {
-    app.preferredTemperature = MIN_TEMPERATURE;
-    ctx.log(`${path}: preferredTemperature ${temperature} → ${MIN_TEMPERATURE}`);
-    changed = true;
-  }
+  if (typeof temperature !== 'number' || temperature >= MIN_TEMPERATURE) return false;
+  app.preferredTemperature = MIN_TEMPERATURE;
+  ctx.log(`${path}: preferredTemperature ${temperature} → ${MIN_TEMPERATURE}`);
+  return true;
+}
 
-  if (NO_THINKING_APPS.has(app.id) && app.thinking?.enabled === undefined) {
-    app.thinking = { ...(app.thinking ?? {}), enabled: false };
-    ctx.log(`${path}: thinking turned off`);
-    changed = true;
-  }
+/**
+ * Turn thinking off for a translation app that does not say whether to think.
+ *
+ * @param {object} ctx - migration context
+ * @param {string} path - app path, for the log
+ * @param {object} app - the app config (mutated)
+ * @returns {boolean} true when it changed
+ */
+function turnOffThinking(ctx, path, app) {
+  if (!NO_THINKING_APPS.has(app.id) || app.thinking?.enabled !== undefined) return false;
+  app.thinking = { ...app.thinking, enabled: false };
+  ctx.log(`${path}: thinking turned off`);
+  return true;
+}
 
-  return changed;
+/**
+ * Read one app, or null when it cannot be read.
+ *
+ * @param {object} ctx - migration context
+ * @param {string} path - app path
+ * @returns {Promise<object|null>} the app config
+ */
+async function readApp(ctx, path) {
+  try {
+    const app = await ctx.readJson(path);
+    return app && typeof app === 'object' ? app : null;
+  } catch (error) {
+    // Not this migration's file to repair, and throwing would block every
+    // later migration on startup.
+    ctx.warn(`Skipped ${path}: ${error.message}`);
+    return null;
+  }
 }
 
 export async function up(ctx) {
   let count = 0;
   for (const file of await ctx.listFiles('apps', '*.json')) {
     const path = `apps/${file}`;
-    let app;
-    try {
-      app = await ctx.readJson(path);
-    } catch (error) {
-      // Not this migration's file to repair, and throwing would block every
-      // later migration on startup.
-      ctx.warn(`Skipped ${path}: ${error.message}`);
-      continue;
-    }
-    if (!app || typeof app !== 'object') continue;
-    if (migrateApp(ctx, path, app)) {
+    const app = await readApp(ctx, path);
+    if (!app) continue;
+    // Both rules run, so neither may short-circuit the other.
+    const changed = [raiseTemperature(ctx, path, app), turnOffThinking(ctx, path, app)];
+    if (changed.includes(true)) {
       await ctx.writeJson(path, app);
       count += 1;
     }
