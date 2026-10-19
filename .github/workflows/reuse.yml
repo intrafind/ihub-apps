@@ -1,0 +1,33 @@
+# REUSE compliance (https://reuse.software)
+#
+# Fails when a file has no copyright/license information, i.e. a new source
+# file was added without the two-line SPDX header and is not covered by an
+# annotation in REUSE.toml. See "License Headers" in CLAUDE.md.
+
+name: REUSE Compliance
+
+on:
+  pull_request:
+    branches: [main, develop]
+  push:
+    branches: [main, develop]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: reuse-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  reuse-lint:
+    name: reuse lint
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Lint
+        run: pipx run reuse==6.2.0 lint
