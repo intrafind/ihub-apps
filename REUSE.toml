@@ -1,0 +1,40 @@
+# REUSE specification 3.2 — https://reuse.software/spec-3.2/
+# Run `reuse lint` to check compliance (also enforced in CI, see .github/workflows/reuse.yml).
+#
+# Source files carry their own two-line SPDX header (see CLAUDE.md, "License Headers").
+# This file covers everything that cannot hold a comment (JSON, images, fonts, fixtures)
+# or should not be edited (documentation, runtime-loaded content). With the default
+# `closest` precedence a header inside a file wins over the entries below. Later
+# entries override earlier ones, so third-party code is listed last.
+
+version = 1
+SPDX-PackageName = "iHub Apps"
+SPDX-PackageSupplier = "IntraFind Software AG"
+SPDX-PackageDownloadLocation = "https://github.com/intrafind/ihub-apps"
+
+# Default: everything in the repository is covered by the iHub Apps license.
+[[annotations]]
+path = "**"
+SPDX-FileCopyrightText = "IntraFind Software AG"
+SPDX-License-Identifier = "LicenseRef-iHub-Apps"
+
+# Third-party fonts. Original notices are kept next to the files
+# (client/public/fonts/LICENSE.txt, client/public/fonts/JetBrains Mono/OFL.txt).
+[[annotations]]
+path = "client/public/fonts/Inter Web/**"
+precedence = "override"
+SPDX-FileCopyrightText = "2016-2020 The Inter Project Authors (https://github.com/rsms/inter)"
+SPDX-License-Identifier = "OFL-1.1"
+
+[[annotations]]
+path = "client/public/fonts/JetBrains Mono/**"
+precedence = "override"
+SPDX-FileCopyrightText = "2020 The JetBrains Mono Project Authors (https://github.com/JetBrains/JetBrainsMono)"
+SPDX-License-Identifier = "OFL-1.1"
+
+# Third-party skill bundled as a default skill, licensed Apache-2.0 per its SKILL.md.
+[[annotations]]
+path = "server/defaults/skills/interview-to-blog/**"
+precedence = "override"
+SPDX-FileCopyrightText = "The interview-to-blog skill authors"
+SPDX-License-Identifier = "Apache-2.0"
