@@ -84,8 +84,8 @@ describe('migration V170', () => {
     await writeApp({ id: 'translator' });
     const ctx = makeCtx(dir);
     await up(ctx);
-    assert.equal((await readApp('babelfish')).skillSettings, undefined);
-    assert.equal((await readApp('translator')).skillSettings, undefined);
+    assert.ok(!('skillSettings' in (await readApp('babelfish'))));
+    assert.ok(!('skillSettings' in (await readApp('translator'))));
     assert.ok(ctx.logs.some(([, m]) => m.includes('apps/babelfish.json: skills stay off')));
   });
 

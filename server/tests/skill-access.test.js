@@ -478,7 +478,7 @@ describe('skills are opt-in per app', () => {
   const user = () => userWith(['*']);
 
   test('skillsEnabledIn needs skillSettings.enabled: true, except for agent nodes', () => {
-    assert.equal(skillAccess.skillsEnabledIn(undefined), false);
+    assert.equal(skillAccess.skillsEnabledIn(), false);
     assert.equal(skillAccess.skillsEnabledIn({ skills: ['alpha'] }), false);
     assert.equal(skillAccess.skillsEnabledIn({ skillSettings: { allowPersonal: true } }), false);
     assert.equal(skillAccess.skillsEnabledIn({ skillSettings: { enabled: false } }), false);

@@ -193,7 +193,8 @@ describe('the skills list', () => {
 
 describe('skill tools in an app without skillSettings.enabled', () => {
   test('are not offered, whatever the app lists or the turn activated', async () => {
-    const { skillSettings, ...closed } = app;
+    const closed = { ...app };
+    delete closed.skillSettings;
     const tools = await getToolsForApp(closed, 'en', {
       user: userWith(['*']),
       activeSkills: [{ name: 'alpha', full: true }]
