@@ -3,7 +3,7 @@ import { buildApiUrl } from './runtimeBasePath';
 // The Speech SDK is ~350 KB, so it is loaded on first use (initRecognizer)
 // instead of shipping in the startup bundle. The recognition callbacks only run
 // after initRecognizer, so they can read it from this module-level binding.
-let speechSdk;
+let speechSdk = null;
 // `import()` of the CommonJS-style SDK: named exports on the namespace or on `default`.
 const loadSpeechSdk = async () => {
   if (!speechSdk) {

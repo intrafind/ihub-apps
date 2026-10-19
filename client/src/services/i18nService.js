@@ -12,6 +12,20 @@ const BUNDLED_TRANSLATIONS = {
   de: () => import('../../../shared/i18n/de.json')
 };
 
+// Built-in translations without the admin's overrides, for when the API is
+// unreachable. Not cached, so the next language load retries the API.
+async function loadBundledTranslations(language) {
+  const load = BUNDLED_TRANSLATIONS[language];
+  if (!load) return null;
+  try {
+    const mod = await load();
+    return mod.default || mod;
+  } catch (error) {
+    console.error(`Failed to load bundled translations for ${language}:`, error);
+    return null;
+  }
+}
+
 class I18nService {
   constructor() {
     this.defaultLanguage = 'en';
@@ -163,17 +177,24 @@ class I18nService {
       this.resolveReady();
     }
 
-    // Keys missing from the current language fall back to the fallback language,
-    // so load it too — once the browser is idle, as it is rarely needed and
-    // shouldn't compete with the requests of the first render.
+    this.scheduleFallbackTranslations();
+  }
+
+  // Keys missing from the current language fall back to the fallback language,
+  // so load it too — once the browser is idle, as it is rarely needed and
+  // shouldn't compete with the requests of the first render.
+  scheduleFallbackTranslations() {
     const fallbackLanguage = i18n.options?.fallbackLng?.[0] || 'en';
-    if (this.normalizeLanguageCode(i18n.language) !== fallbackLanguage) {
-      const loadFallback = () => void this.loadFullTranslations(fallbackLanguage);
-      if (typeof window.requestIdleCallback === 'function') {
-        window.requestIdleCallback(loadFallback, { timeout: 10000 });
-      } else {
-        setTimeout(loadFallback, 2000);
-      }
+    if (this.normalizeLanguageCode(i18n.language) === fallbackLanguage) return;
+
+    // loadFullTranslations handles its own errors, so the promise never rejects.
+    const loadFallback = () => {
+      this.loadFullTranslations(fallbackLanguage);
+    };
+    if (typeof window.requestIdleCallback === 'function') {
+      window.requestIdleCallback(loadFallback, { timeout: 10000 });
+    } else {
+      setTimeout(loadFallback, 2000);
     }
   }
 
@@ -293,21 +314,7 @@ class I18nService {
       `Failed to fetch translations for ${language} after ${maxRetries} attempts:`,
       lastError
     );
-    return this.loadBundledTranslations(language);
-  }
-
-  // Built-in translations without the admin's overrides, for when the API is
-  // unreachable. Not cached, so the next language load retries the API.
-  async loadBundledTranslations(language) {
-    const load = BUNDLED_TRANSLATIONS[language];
-    if (!load) return null;
-    try {
-      const mod = await load();
-      return mod.default || mod;
-    } catch (error) {
-      console.error(`Failed to load bundled translations for ${language}:`, error);
-      return null;
-    }
+    return loadBundledTranslations(language);
   }
 
   addTranslationsToI18n(language, translations) {

@@ -25,7 +25,7 @@ jest.unstable_mockModule('../configCache.js', () => ({
     getSupportedLanguages: () => ['en', 'de'],
     getLocalizations: lang =>
       mockLocales[lang] ? { data: mockLocales[lang], etag: `etag-${lang}` } : { data: null },
-    loadAndCacheLocale: async () => null
+    loadAndCacheLocale: () => Promise.resolve(null)
   }
 }));
 

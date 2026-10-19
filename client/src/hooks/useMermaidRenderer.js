@@ -3,7 +3,7 @@ import { validateMermaidCode, processMermaidCode, escapeHtml } from '../utils/ma
 import { isTrustedMermaidContainer, sanitizeMermaidSvg } from '../utils/mermaidSecurity';
 
 // Loaded together with Mermaid, only once a diagram is on the page.
-let svgPanZoom;
+let svgPanZoom = null;
 
 // A simple debounce utility
 const debounce = (func, delay) => {
@@ -188,7 +188,8 @@ export const useMermaidRenderer = ({ t }) => {
 
       // Wait for Mermaid to be ready
       if (!mermaidReady) {
-        void loadMermaid();
+        // loadMermaid handles its own errors, so the promise never rejects.
+        loadMermaid();
         return; // Mermaid will call this function once it's loaded
       }
 
