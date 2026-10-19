@@ -132,6 +132,22 @@ describe('model sampling fields', () => {
     expect(field('Top K')).toHaveValue(40);
   });
 
+  test('does not let the browser reject a value the schema allows', async () => {
+    // A fixed step would make 0.35 and 0.99 "invalid" for native validation,
+    // which blocks submitting the whole form, whatever was edited.
+    await loadModel({ ...MODEL, sampling: { temperature: 0.35, topP: 0.99, topK: 40 } });
+
+    expect(field('Temperature').validity.valid).toBe(true);
+    expect(field('Top P').validity.valid).toBe(true);
+    fireEvent.change(field('Temperature'), { target: { value: '1.25' } });
+    expect(field('Temperature').validity.valid).toBe(true);
+    // The bounds still apply, and Top K stays whole.
+    fireEvent.change(field('Temperature'), { target: { value: '2.5' } });
+    expect(field('Temperature').validity.rangeOverflow).toBe(true);
+    fireEvent.change(field('Top K'), { target: { value: '2.5' } });
+    expect(field('Top K').validity.stepMismatch).toBe(true);
+  });
+
   test('saves what was entered as numbers', async () => {
     await loadModel(MODEL);
 

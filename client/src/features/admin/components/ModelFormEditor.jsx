@@ -508,16 +508,19 @@ function ModelFormEditor({
     'sampling.topK': t('admin.models.fields.samplingTopK', 'Top K')
   };
 
-  // Optional sampling overrides; the bounds mirror the model schema.
+  // Optional sampling overrides; the bounds mirror the model schema. The
+  // decimal fields take `step="any"`: the schema allows every value in range,
+  // and a fixed step would make the browser refuse to submit the form for a
+  // value such as 0.35, even when the edit was to something else.
   const samplingFields = [
     {
       key: 'temperature',
       label: errorLabels['sampling.temperature'],
       min: 0,
       max: 2,
-      step: 0.1
+      step: 'any'
     },
-    { key: 'topP', label: errorLabels['sampling.topP'], min: 0, max: 1, step: 0.05 },
+    { key: 'topP', label: errorLabels['sampling.topP'], min: 0, max: 1, step: 'any' },
     { key: 'topK', label: errorLabels['sampling.topK'], min: 1, step: 1 }
   ];
 

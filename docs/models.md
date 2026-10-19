@@ -108,6 +108,11 @@ A value an adapter does not send is ignored without an error. `openai-responses`
 sends `reasoning`, and the reasoning models behind it (GPT-5 and newer) reject sampling
 parameters, so it never sends them. The iAssistant adapter has no sampling parameters.
 
+iHub does not check `sampling` against what a particular model accepts: it sends the keys
+that are set. Some models take only one of `temperature` and `topP`. Claude Haiku 4.5 on
+Anthropic or Bedrock, for example, rejects a request that sets both. For such a model set
+just one of the two; the provider's error names the parameters when a request is refused.
+
 #### Models that reject sampling parameters
 
 Anthropic removed sampling parameters from its newer reasoning models. On Claude
