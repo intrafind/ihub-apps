@@ -20,12 +20,21 @@
     "videoUpload": {
       "enabled": true,
       "extractAudio": true,
-      "supportedFormats": ["video/mp4", "video/webm", "video/quicktime"],
+      "supportedFormats": [
+        "video/mp4",
+        "video/webm",
+        "video/quicktime"
+      ],
       "maxFileSizeMB": 50
     },
     "audioUpload": {
       "enabled": true,
-      "supportedFormats": ["audio/mpeg", "audio/wav", "audio/mp3", "audio/mp4"],
+      "supportedFormats": [
+        "audio/mpeg",
+        "audio/wav",
+        "audio/mp3",
+        "audio/mp4"
+      ],
       "maxFileSizeMB": 25
     }
   },
@@ -34,8 +43,14 @@
     "de": "Laden Sie eine Videodatei hoch, um deren Audio zu extrahieren und zu analysieren..."
   },
   "greeting": {
-    "en": "Hello! I can help you analyze audio from video files. Simply upload a video (MP4, WebM, or MOV), and I'll extract the audio and provide a detailed analysis.",
-    "de": "Hallo! Ich kann Ihnen helfen, Audio aus Videodateien zu analysieren. Laden Sie einfach ein Video (MP4, WebM oder MOV) hoch, und ich extrahiere das Audio und erstelle eine detaillierte Analyse."
+    "en": {
+      "title": "Audio Analysis (from Video)",
+      "subtitle": "Hello! I can help you analyze audio from video files. Simply upload a video (MP4, WebM, or MOV), and I'll extract the audio and provide a detailed analysis."
+    },
+    "de": {
+      "title": "Audioanalyse (aus Video)",
+      "subtitle": "Hallo! Ich kann Ihnen helfen, Audio aus Videodateien zu analysieren. Laden Sie einfach ein Video (MP4, WebM oder MOV) hoch, und ich extrahiere das Audio und erstelle eine detaillierte Analyse."
+    }
   },
   "enabled": true,
   "category": "media"

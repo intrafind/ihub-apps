@@ -24,21 +24,7 @@
   "preferredTemperature": 0.7,
   "sendChatHistory": true,
   "sources": [
-    {
-      "id": "faq-content",
-      "type": "filesystem",
-      "description": "Frequently asked questions document",
-      "config": {
-        "path": "sources/faq.md",
-        "encoding": "utf8"
-      },
-      "exposeAs": "prompt",
-      "caching": {
-        "ttl": 3600,
-        "strategy": "static"
-      },
-      "enabled": true
-    }
+    "faq"
   ],
   "enabled": true,
   "tools": [],
@@ -89,7 +75,13 @@
       "enabled": false,
       "resizeImages": true,
       "maxFileSizeMB": 10,
-      "supportedFormats": ["image/jpeg", "image/jpg", "image/png", "image/gif", "image/webp"]
+      "supportedFormats": [
+        "image/jpeg",
+        "image/jpg",
+        "image/png",
+        "image/gif",
+        "image/webp"
+      ]
     },
     "fileUpload": {
       "maxFileSizeMB": 5,

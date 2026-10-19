@@ -15,17 +15,10 @@
     "en": "You are a professional writing assistant. Help users create well-structured, clear, and comprehensive documents. Focus on providing substantial content that would benefit from editing in a visual editor.",
     "de": "Du bist ein professioneller Schreibassistent. Hilf Nutzern beim Erstellen gut strukturierter, klarer und umfassender Dokumente."
   },
-
   "preferredOutputFormat": "markdown",
   "preferredStyle": "professional",
   "preferredTemperature": 0.7,
   "sendChatHistory": true,
-  "imageUpload": {
-    "enabled": true
-  },
-  "fileUpload": {
-    "enabled": false
-  },
   "features": {
     "canvas": true,
     "magicPrompt": {
@@ -53,22 +46,43 @@
   ],
   "starterPrompts": [
     {
-      "text": {
+      "title": {
+        "en": "Business proposal",
+        "de": "Geschäftsvorschlag"
+      },
+      "message": {
         "en": "Write a business proposal for implementing AI solutions",
         "de": "Schreibe einen Geschäftsvorschlag für die Implementierung von KI-Lösungen"
       }
     },
     {
-      "text": {
+      "title": {
+        "en": "Technical specification",
+        "de": "Technische Spezifikation"
+      },
+      "message": {
         "en": "Create a technical specification document",
         "de": "Erstelle ein technisches Spezifikationsdokument"
       }
     },
     {
-      "text": {
+      "title": {
+        "en": "Project plan",
+        "de": "Projektplan"
+      },
+      "message": {
         "en": "Draft a comprehensive project plan",
         "de": "Entwerfe einen umfassenden Projektplan"
       }
     }
-  ]
+  ],
+  "upload": {
+    "enabled": true,
+    "imageUpload": {
+      "enabled": true
+    },
+    "fileUpload": {
+      "enabled": false
+    }
+  }
 }
