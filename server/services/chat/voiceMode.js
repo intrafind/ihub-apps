@@ -30,20 +30,25 @@ import {
  */
 export const DEFAULT_VOICE_INSTRUCTIONS = Object.freeze({
   en:
-    'The user is talking to you by voice and hears your answer read aloud. Answer ' +
-    'conversationally and briefly: lead with the answer, usually 1-4 sentences. Do not use ' +
-    'tables, code blocks, headings, bullet lists, URLs, or emoji unless the user asks for them. ' +
-    'Say numbers and units the way they are spoken. If the answer is long, give a summary and ' +
-    'offer details. If you do include a table, chart or image, tell the user in one short ' +
-    'sentence that you put it in the chat.',
+    'The user speaks to the app by voice and hears the answer read aloud. This is about how ' +
+    'your answer sounds, not about what it says: keep following every instruction above, ' +
+    'including your role and what the messages mean. Where those instructions leave it open, ' +
+    'answer conversationally and briefly: lead with the answer, usually 1-4 sentences. Do not ' +
+    'use tables, code blocks, headings, bullet lists, URLs, or emoji unless the user asks for ' +
+    'them or the instructions above require them. Say numbers and units the way they are ' +
+    'spoken. If the answer is long, give a summary and offer details. If you do include a ' +
+    'table, chart or image, tell the user in one short sentence that you put it in the chat.',
   de:
-    'Der Nutzer spricht per Sprache mit dir und hört deine Antwort vorgelesen. Antworte im ' +
-    'Gesprächston und kurz: Beginne mit der Antwort, in der Regel in 1-4 Sätzen. Verwende keine ' +
-    'Tabellen, Codeblöcke, Überschriften, Aufzählungslisten, URLs oder Emojis, es sei denn, der ' +
-    'Nutzer wünscht sie ausdrücklich. Sprich Zahlen und Einheiten so aus, wie man sie spricht. ' +
-    'Ist die Antwort lang, gib eine Zusammenfassung und biete Details an. Wenn du doch eine ' +
-    'Tabelle, ein Diagramm oder ein Bild lieferst, sag dem Nutzer in einem kurzen Satz, dass du ' +
-    'es in den Chat gestellt hast.'
+    'Der Nutzer spricht per Sprache mit der App und hört die Antwort vorgelesen. Das betrifft ' +
+    'nur, wie deine Antwort klingt, nicht, was sie sagt: Befolge weiterhin alle Anweisungen ' +
+    'oben, auch zu deiner Rolle und dazu, was die Nachrichten bedeuten. Wo diese Anweisungen ' +
+    'es offenlassen, antworte im Gesprächston und kurz: Beginne mit der Antwort, in der Regel ' +
+    'in 1-4 Sätzen. Verwende keine Tabellen, Codeblöcke, Überschriften, Aufzählungslisten, ' +
+    'URLs oder Emojis, es sei denn, der Nutzer wünscht sie ausdrücklich oder die Anweisungen ' +
+    'oben verlangen sie. Sprich Zahlen und Einheiten so aus, wie man sie spricht. Ist die ' +
+    'Antwort lang, gib eine Zusammenfassung und biete Details an. Wenn du doch eine Tabelle, ' +
+    'ein Diagramm oder ein Bild lieferst, sag dem Nutzer in einem kurzen Satz, dass du es in ' +
+    'den Chat gestellt hast.'
 });
 
 /**
