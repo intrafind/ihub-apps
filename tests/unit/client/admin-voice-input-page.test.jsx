@@ -301,10 +301,10 @@ describe('voice mode', () => {
     expect(section.getByLabelText('Instruction (Deutsch)')).toHaveValue('');
     // The built-in text is the hint under each field.
     expect(section.getByTestId('voice-mode-builtin-en')).toHaveTextContent(
-      /The user is talking to you by voice and hears your answer read aloud/
+      /The user speaks to the app by voice and hears the answer read aloud/
     );
     expect(section.getByTestId('voice-mode-builtin-de')).toHaveTextContent(
-      /Der Nutzer spricht per Sprache mit dir/
+      /Der Nutzer spricht per Sprache mit der App/
     );
   });
 
