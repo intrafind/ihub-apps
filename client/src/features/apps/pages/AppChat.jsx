@@ -304,10 +304,13 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
   // installation lets users keep prompts of their own (#2519).
   const userPromptsEnabled =
     platformConfig?.userPrompts?.enabled === true && auth?.isAuthenticated === true;
-  // Personal skills (own or shared) are offered in the `/` picker of every
-  // app that does not opt out with `skillSettings.allowPersonal: false` —
-  // also in apps without global skills of their own.
+  // Skills are opt-in per app (`skillSettings.enabled`). In an app that
+  // turned them on, personal skills (own or shared) are offered in the `/`
+  // picker unless it opts out with `skillSettings.allowPersonal: false` —
+  // also without global skills of its own.
+  const appSkillsEnabled = app?.skillSettings?.enabled === true;
   const personalSkillsAvailable =
+    appSkillsEnabled &&
     platformConfig?.userSkills?.enabled === true &&
     auth?.isAuthenticated === true &&
     app?.skillSettings?.allowPersonal !== false;
@@ -2809,6 +2812,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
       // `/<skill-name> ` and the server activates it from the message.
       skillsSlashEnabled:
         featureFlags.isEnabled('skills', false) &&
+        appSkillsEnabled &&
         ((Array.isArray(app?.skills) && app.skills.length > 0) || personalSkillsAvailable),
       // Clarification state
       clarificationPending,

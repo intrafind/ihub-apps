@@ -31,6 +31,9 @@
     "iFinder_discover"
   ],
   "skills": ["ifinder-search"],
+  "skillSettings": {
+    "enabled": true
+  },
   "variables": [],
   "starterPrompts": [
     {

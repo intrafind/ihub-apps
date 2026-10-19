@@ -7,7 +7,8 @@ import {
   getUsableSkills,
   isModelInvocable,
   loadUsableSkill,
-  searchSkillCatalog
+  searchSkillCatalog,
+  skillsEnabledIn
 } from './services/skillAccess.js';
 import { actionTracker } from './actionTracker.js';
 import { emitToolProgress } from './services/loop/RunStream.js';
@@ -722,14 +723,15 @@ export async function getToolsForApp(app, language = null, context = {}) {
     }
   }
 
-  // Skill tools, while the skills feature is on. `activate_skill` and
+  // Skill tools, while the skills feature is on and the app turned skills on
+  // (`skillSettings.enabled`). `activate_skill` and
   // `read_skill_resource` come when there is a skill to load: one the model is
   // offered (the list in the system prompt) or one active in this turn
   // (`context.activeSkills`); their names are the only values the tools take.
   // `find_skill` comes when that list is shortened to fit its token budget.
   // A system skill (e.g. `pdf`) also brings built-in tools (`create_pdf`):
   // they come with the usable global skills.
-  if (isFeatureEnabled('skills', configCache.getFeatures())) {
+  if (isFeatureEnabled('skills', configCache.getFeatures()) && skillsEnabledIn(app)) {
     const lang = language || 'en';
     const catalog = await describeSkillCatalog({ app, user: context.user });
     const active = Array.isArray(context.activeSkills) ? context.activeSkills : [];

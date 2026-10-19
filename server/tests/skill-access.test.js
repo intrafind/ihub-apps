@@ -118,20 +118,23 @@ describe('getSkillsForUser', () => {
 describe('isSkillUsable', () => {
   test('needs the skill assigned and granted', async () => {
     const user = userWith(['alpha', 'gamma']);
-    assert.equal(await skillAccess.isSkillUsable('alpha', { skillIds: ['alpha'], user }), true);
-    assert.equal(await skillAccess.isSkillUsable('beta', { skillIds: ['alpha'], user }), false);
-    assert.equal(await skillAccess.isSkillUsable('beta', { skillIds: ['beta'], user }), false);
-    assert.equal(
-      await skillAccess.isSkillUsable('missing', { skillIds: ['missing'], user }),
-      false
-    );
+    const app = { skillSettings: { enabled: true } };
+    const usable = (name, skillIds) => skillAccess.isSkillUsable(name, { skillIds, user, app });
+    assert.equal(await usable('alpha', ['alpha']), true);
+    assert.equal(await usable('beta', ['alpha']), false);
+    assert.equal(await usable('beta', ['beta']), false);
+    assert.equal(await usable('missing', ['missing']), false);
   });
 
   test('is false while the skills feature is off', async () => {
     features = { skills: false };
     try {
       const user = userWith(['*']);
-      assert.equal(await skillAccess.isSkillUsable('alpha', { skillIds: ['alpha'], user }), false);
+      const app = { skillSettings: { enabled: true } };
+      assert.equal(
+        await skillAccess.isSkillUsable('alpha', { skillIds: ['alpha'], user, app }),
+        false
+      );
     } finally {
       features = { skills: true };
     }
@@ -145,7 +148,7 @@ describe('isSkillUsable', () => {
 });
 
 describe('resolveRequestedSkills', () => {
-  const app = { id: 'app', skills: ['alpha', 'beta', 'gamma'] };
+  const app = { id: 'app', skills: ['alpha', 'beta', 'gamma'], skillSettings: { enabled: true } };
 
   test('keeps usable names in request order without duplicates', async () => {
     const user = userWith(['alpha', 'gamma']);
@@ -162,7 +165,7 @@ describe('resolveRequestedSkills', () => {
   test('stops at maxActiveSkills', async () => {
     const user = userWith(['*']);
     const capped = await skillAccess.resolveRequestedSkills(['alpha', 'beta', 'gamma'], {
-      app: { ...app, skillSettings: { maxActiveSkills: 2 } },
+      app: { ...app, skillSettings: { enabled: true, maxActiveSkills: 2 } },
       user
     });
     assert.deepEqual(
@@ -192,7 +195,7 @@ describe('resolveRequestedSkills', () => {
 });
 
 describe('activate_skill and read_skill_resource', () => {
-  const appConfig = { id: 'app', skills: ['alpha'] };
+  const appConfig = { id: 'app', skills: ['alpha'], skillSettings: { enabled: true } };
 
   test('load an assigned, granted skill and its files', async () => {
     const user = userWith(['*']);
@@ -257,7 +260,12 @@ describe('PromptService skills block', () => {
     );
 
   test('pre-activates only requested skills the app and user allow', async () => {
-    const app = { id: 'app', system: { en: 'SYSTEM' }, skills: ['alpha', 'gamma'] };
+    const app = {
+      id: 'app',
+      system: { en: 'SYSTEM' },
+      skills: ['alpha', 'gamma'],
+      skillSettings: { enabled: true }
+    };
     const [system] = await run(app, userWith(['alpha', 'beta']), ['beta', 'alpha', 'gamma']);
     assert.match(system.content, /<active_skill name="alpha">\nALPHA BODY/);
     assert.doesNotMatch(system.content, /BETA BODY/);
@@ -272,7 +280,12 @@ describe('PromptService skills block', () => {
   });
 
   test('lists usable skills with escaped descriptions and stacks several', async () => {
-    const app = { id: 'app', system: { en: 'SYSTEM' }, skills: ['alpha', 'gamma'] };
+    const app = {
+      id: 'app',
+      system: { en: 'SYSTEM' },
+      skills: ['alpha', 'gamma'],
+      skillSettings: { enabled: true }
+    };
     const [system] = await run(app, userWith(['*']), ['gamma', 'alpha']);
     assert.match(
       system.content,
@@ -306,7 +319,12 @@ describe('/name in the prompt', () => {
   });
 
   test('pre-activates the skills the message invokes, if the app and user allow them', async () => {
-    const app = { id: 'app', system: { en: 'SYSTEM' }, skills: ['alpha'] };
+    const app = {
+      id: 'app',
+      system: { en: 'SYSTEM' },
+      skills: ['alpha'],
+      skillSettings: { enabled: true }
+    };
     const [system] = await PromptService.processMessageTemplates(
       [{ role: 'user', content: '/alpha and /beta: summarize this' }],
       app,
@@ -327,7 +345,11 @@ describe('/name in the prompt', () => {
     const resolved = await skillAccess.resolveSkillsForTurn({
       requested: ['gamma'],
       text: '/alpha /beta /gamma',
-      app: { id: 'app', skills: ['alpha', 'beta', 'gamma'], skillSettings: { maxActiveSkills: 2 } },
+      app: {
+        id: 'app',
+        skills: ['alpha', 'beta', 'gamma'],
+        skillSettings: { enabled: true, maxActiveSkills: 2 }
+      },
       user: userWith(['*'])
     });
     assert.deepEqual(
@@ -341,7 +363,7 @@ describe('/name in the prompt', () => {
       id: 'app',
       system: { en: 'SYSTEM' },
       skills: ['alpha', 'beta'],
-      skillSettings: { autoActivate: true }
+      skillSettings: { enabled: true, autoActivate: true }
     };
     // No `/name` anywhere in the chat: the app's skills are active anyway.
     const [system] = await PromptService.processMessageTemplates(
@@ -394,7 +416,11 @@ describe('/name in the prompt', () => {
 
   test('autoActivate only loads skills granted to the user', async () => {
     const resolved = await skillAccess.resolveSkillsForTurn({
-      app: { id: 'app', skills: ['alpha', 'beta'], skillSettings: { autoActivate: true } },
+      app: {
+        id: 'app',
+        skills: ['alpha', 'beta'],
+        skillSettings: { enabled: true, autoActivate: true }
+      },
       user: userWith(['alpha'])
     });
     assert.deepEqual(
@@ -406,7 +432,7 @@ describe('/name in the prompt', () => {
   test('without autoActivate a turn without `/name` activates nothing', async () => {
     const resolved = await skillAccess.resolveSkillsForTurn({
       text: 'A weekly report',
-      app: { id: 'app', skills: ['alpha'] },
+      app: { id: 'app', skills: ['alpha'], skillSettings: { enabled: true } },
       user: userWith(['*'])
     });
     assert.deepEqual(resolved, []);
@@ -444,5 +470,86 @@ describe('agent planner', () => {
     });
     const planner = workflow.nodes.find(node => node.type === 'planner');
     assert.deepEqual(planner.config.skills, ['alpha']);
+  });
+});
+
+describe('skills are opt-in per app', () => {
+  const listing = { id: 'app', system: { en: 'SYSTEM' }, skills: ['alpha', 'beta'] };
+  const user = () => userWith(['*']);
+
+  test('skillsEnabledIn needs skillSettings.enabled: true, except for agent nodes', () => {
+    assert.equal(skillAccess.skillsEnabledIn(), false);
+    assert.equal(skillAccess.skillsEnabledIn({ skills: ['alpha'] }), false);
+    assert.equal(skillAccess.skillsEnabledIn({ skillSettings: { allowPersonal: true } }), false);
+    assert.equal(skillAccess.skillsEnabledIn({ skillSettings: { enabled: false } }), false);
+    assert.equal(skillAccess.skillsEnabledIn({ skillSettings: { enabled: true } }), true);
+    assert.equal(skillAccess.skillsEnabledIn({ _skillIds: [] }), true);
+  });
+
+  test('an app that lists skills but did not enable them lists, resolves and loads none', async () => {
+    const earlier = [{ name: 'alpha', by: 'user' }];
+    assert.deepEqual(await skillAccess.listSkillsForPrompt({ app: listing, user: user() }), []);
+    assert.equal((await skillAccess.describeSkillCatalog({ app: listing, user: user() })).text, '');
+    assert.deepEqual(
+      await skillAccess.resolveSkillsForTurn({
+        requested: ['alpha'],
+        text: '/beta hello',
+        earlier,
+        app: { ...listing, skillSettings: { autoActivate: true } },
+        user: user()
+      }),
+      []
+    );
+    const active = await skillAccess.prepareActiveSkills({
+      messages: [{ role: 'user', content: '/alpha hi' }],
+      requested: ['beta'],
+      app: listing,
+      user: user()
+    });
+    assert.deepEqual(active, { skills: [], text: '' });
+    assert.equal(
+      await skillAccess.loadUsableSkill('alpha', {
+        skillIds: ['alpha'],
+        user: user(),
+        app: listing
+      }),
+      null
+    );
+    assert.equal(
+      await skillAccess.isSkillUsable('alpha', { skillIds: ['alpha'], user: user(), app: listing }),
+      false
+    );
+  });
+
+  test('the skill tools refuse to load a skill in an app that did not enable skills', async () => {
+    const body = await runTool('activate_skill', {
+      skill_name: 'alpha',
+      appConfig: listing,
+      user: user()
+    });
+    assert.doesNotMatch(body, /ALPHA BODY/);
+    const file = await runTool('read_skill_resource', {
+      skill_name: 'alpha',
+      file_path: 'references/notes.md',
+      appConfig: listing,
+      user: user()
+    });
+    assert.doesNotMatch(file, /ALPHA NOTES/);
+  });
+
+  test('the system prompt carries no skill block, even for /name and requestedSkills', async () => {
+    const [system] = await PromptService.processMessageTemplates(
+      [{ role: 'user', content: '/alpha hi' }],
+      listing,
+      null,
+      null,
+      'en',
+      null,
+      user(),
+      null,
+      null,
+      ['beta']
+    );
+    assert.doesNotMatch(system.content, /available_skills|active_skill|ALPHA BODY|BETA BODY/);
   });
 });

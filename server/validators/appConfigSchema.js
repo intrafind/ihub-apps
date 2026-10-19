@@ -493,6 +493,9 @@ const baseAppConfigSchema = z.object({
   skills: z.array(z.string()).optional(),
   skillSettings: z
     .object({
+      // Skills are opt-in: without `true`, the app offers no skills at all
+      // (no prompt block, no skill tools, nothing carried over in the chat)
+      enabled: z.boolean().optional(),
       autoActivate: z.boolean().optional(),
       maxActiveSkills: z.number().min(1).max(10).optional(),
       // false keeps users' own and shared skills out of this app

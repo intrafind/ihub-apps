@@ -12,6 +12,11 @@
  *   false`), and the caller owns it or it is shared with them. Agents, OAuth
  *   clients and anonymous callers never get one.
  *
+ * Both only apply in an app that turned skills on (`skillSettings.enabled:
+ * true`, see {@link skillsEnabledIn}); an app that did not gets no skill
+ * block, no skill tools and no active skills. An agent node (`_skillIds`)
+ * lists its skills itself and is not affected.
+ *
  * Every path that loads a skill body or file asks this module: the
  * `activate_skill`, `read_skill_resource` and `find_skill` tools,
  * `requestedSkills` pre-activation, the skills kept active across a chat, the
@@ -44,6 +49,20 @@ import {
 export const MAX_LISTED_USER_SKILLS = 20;
 
 /**
+ * Whether skills are switched on in `app`. They are opt-in: an app that does
+ * not set `skillSettings.enabled: true` offers none, global or personal, and
+ * keeps none active. An agent node (`_skillIds`) names its skills itself, so
+ * it is always on.
+ *
+ * @param {Object} [app] - App config, or an agent node's tool config
+ * @returns {boolean}
+ */
+export function skillsEnabledIn(app) {
+  if (Array.isArray(app?._skillIds)) return true;
+  return app?.skillSettings?.enabled === true;
+}
+
+/**
  * The skill ids assigned to the context a tool call runs in: an agent node's
  * own list (`_skillIds`, set by the prompt node executor) or the app's
  * `skills`.
@@ -72,9 +91,14 @@ export async function getUsableSkills({ skillIds, user }) {
   return configCache.getSkillsForApp({ skills: skillIds }, user, configCache.getPlatform() || {});
 }
 
-/** Whether user skills may be used in `app` at all, for anyone. */
+/**
+ * Whether user skills may be used in `app` at all, for anyone. Without an
+ * `app` there is no app to ask (the `/` picker's list), so only the
+ * installation's own switches count.
+ */
 function userSkillsAllowedIn(app) {
   if (app?._skillIds) return false; // an agent node: global skills only
+  if (app && !skillsEnabledIn(app)) return false;
   if (app?.skillSettings?.allowPersonal === false) return false;
   if (!isUserSkillsConfigured(configCache.getFeatures(), configCache.getPlatform() || {})) {
     return false;
@@ -116,7 +140,12 @@ export async function getUsablePersonalSkills({ app, user }) {
  * @returns {Promise<Object|null>} The stored skill, or null
  */
 export async function getUsablePersonalSkill(skillId, { app, user }) {
-  if (!isUserSkillId(skillId) || !canHoldUserPrompts(user) || !userSkillsAllowedIn(app)) {
+  if (
+    !isUserSkillId(skillId) ||
+    !skillsEnabledIn(app) ||
+    !canHoldUserPrompts(user) ||
+    !userSkillsAllowedIn(app)
+  ) {
     return null;
   }
   const skill = await getUserSkillRepository().get(skillId);
@@ -138,6 +167,7 @@ export async function getUsablePersonalSkill(skillId, { app, user }) {
  */
 export async function isSkillUsable(skillName, { skillIds, user, app }) {
   if (typeof skillName !== 'string' || !skillName) return false;
+  if (!skillsEnabledIn(app)) return false;
   if (isUserSkillId(skillName)) {
     return Boolean(await getUsablePersonalSkill(skillName, { app, user }));
   }
@@ -173,7 +203,7 @@ function userSkillResources(skill) {
  *   readFile: (path: string) => Promise<string|null>}|null>}
  */
 export async function loadUsableSkill(skillName, { skillIds, user, app }) {
-  if (typeof skillName !== 'string' || !skillName) return null;
+  if (typeof skillName !== 'string' || !skillName || !skillsEnabledIn(app)) return null;
   if (isUserSkillId(skillName)) {
     const skill = await getUsablePersonalSkill(skillName, { app, user });
     if (!skill) return null;
@@ -191,7 +221,7 @@ export async function loadUsableSkill(skillName, { skillIds, user, app }) {
       }
     };
   }
-  if (!(await isSkillUsable(skillName, { skillIds, user }))) return null;
+  if (!(await isSkillUsable(skillName, { skillIds, user, app }))) return null;
   const content = await getSkillContent(skillName);
   if (!content) return null;
   return {
@@ -218,6 +248,7 @@ export async function loadUsableSkill(skillName, { skillIds, user, app }) {
  * @returns {Promise<Array<{name: string, displayName: string, description: string}>>}
  */
 export async function listSkillsForPrompt({ app, user }) {
+  if (!skillsEnabledIn(app)) return [];
   const global = (await getUsableSkills({ skillIds: getAssignedSkillIds(app), user })).filter(
     isModelInvocable
   );
@@ -535,7 +566,8 @@ export function earlierSkillRefs(messages) {
  * @returns {string[]}
  */
 function autoActivatedSkillIds(app) {
-  if (app?._skillIds || app?.skillSettings?.autoActivate !== true) return [];
+  if (!skillsEnabledIn(app) || app?._skillIds || app?.skillSettings?.autoActivate !== true)
+    return [];
   return Array.isArray(app.skills) ? app.skills.filter(name => typeof name === 'string') : [];
 }
 
@@ -574,6 +606,7 @@ function autoActivatedSkillIds(app) {
  *   `name` is what `loadUsableSkill` takes: the global name or the `usk_…` id
  */
 export async function resolveSkillsForTurn({ requested = [], text = '', earlier = [], app, user }) {
+  if (!skillsEnabledIn(app)) return [];
   const explicit = Array.isArray(requested) ? requested.filter(n => typeof n === 'string') : [];
   const tokens = skillTokensIn(text);
   const refs = Array.isArray(earlier) ? earlier : [];
@@ -734,7 +767,9 @@ export async function prepareActiveSkills({
   contextWindow = null
 }) {
   const none = { skills: [], text: '' };
-  if (!app || !isFeatureEnabled('skills', configCache.getFeatures())) return none;
+  if (!app || !skillsEnabledIn(app) || !isFeatureEnabled('skills', configCache.getFeatures())) {
+    return none;
+  }
   const entries = await resolveSkillsForTurn({
     requested,
     text: lastUserText(messages),
