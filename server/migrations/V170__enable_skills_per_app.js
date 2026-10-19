@@ -91,7 +91,7 @@ function decide(ctx, label, app) {
 async function migrateLegacyApps(ctx, totals) {
   const path = 'config/apps.json';
   if (!(await ctx.fileExists(path))) return;
-  let apps;
+  let apps = null;
   try {
     apps = await ctx.readJson(path);
   } catch (error) {

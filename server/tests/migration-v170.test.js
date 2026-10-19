@@ -25,7 +25,7 @@ function makeCtx(base) {
     writeJson: async (rel, data) => {
       await fs.writeFile(path.join(base, rel), JSON.stringify(data, null, 2), 'utf8');
     },
-    fileExists: async rel =>
+    fileExists: rel =>
       fs.access(path.join(base, rel)).then(
         () => true,
         () => false
