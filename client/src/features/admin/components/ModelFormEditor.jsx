@@ -402,7 +402,7 @@ function ModelFormEditor({
   const handleSamplingChange = (key, value) => {
     if (!NUMERIC_DRAFT.test(value)) return;
     const next = { ...data.sampling };
-    if (value === '' || value === null || value === undefined) delete next[key];
+    if (value === '') delete next[key];
     else next[key] = value;
     if (Object.keys(next).length === 0) {
       const { sampling: _dropped, ...rest } = data;
