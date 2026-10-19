@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * Migration V170 specs — temperature is no longer an app, agent, workflow or
+ * Migration V171 specs — temperature is no longer an app, agent, workflow or
  * prompt setting.
  *
  * What these pin is restraint as much as reach: only the temperature keys go,
@@ -14,7 +14,7 @@ import path from 'node:path';
 import { afterEach, beforeEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { up, version, description } from '../migrations/V170__remove_temperature_settings.js';
+import { up, version, description } from '../migrations/V171__remove_temperature_settings.js';
 
 let dir = '';
 
@@ -50,21 +50,21 @@ async function read(rel) {
 }
 
 beforeEach(async () => {
-  dir = await fs.mkdtemp(path.join(os.tmpdir(), 'ihub-v170-'));
+  dir = await fs.mkdtemp(path.join(os.tmpdir(), 'ihub-v171-'));
 });
 
 afterEach(async () => {
   await fs.rm(dir, { recursive: true, force: true });
 });
 
-describe('V170 metadata', () => {
+describe('V171 metadata', () => {
   it('declares its version and description', () => {
-    assert.equal(version, '170');
+    assert.equal(version, '171');
     assert.equal(description, 'remove_temperature_settings');
   });
 });
 
-describe('V170 apps', () => {
+describe('V171 apps', () => {
   it('removes preferredTemperature and the settings.temperature flag', async () => {
     await write('apps/chat.json', {
       id: 'chat',
@@ -103,7 +103,7 @@ describe('V170 apps', () => {
   });
 });
 
-describe('V170 agent profiles', () => {
+describe('V171 agent profiles', () => {
   it('removes preferredTemperature and the memory composer temperature', async () => {
     await write('agents/profiles/helper.json', {
       id: 'helper',
@@ -120,7 +120,7 @@ describe('V170 agent profiles', () => {
   });
 });
 
-describe('V170 workflows', () => {
+describe('V171 workflows', () => {
   it('removes the temperature of every node that has one', async () => {
     await write('workflows/review.json', {
       id: 'review',
@@ -151,7 +151,7 @@ describe('V170 workflows', () => {
   });
 });
 
-describe('V170 prompts', () => {
+describe('V171 prompts', () => {
   it('removes a temperature from a prompt', async () => {
     await write('prompts/summarize.json', {
       id: 'summarize',
@@ -166,7 +166,7 @@ describe('V170 prompts', () => {
   });
 });
 
-describe('V170 robustness', () => {
+describe('V171 robustness', () => {
   it('skips an unreadable file and still migrates the others', async () => {
     await fs.mkdir(path.join(dir, 'apps'), { recursive: true });
     await fs.writeFile(path.join(dir, 'apps', 'broken.json'), '{ not json', 'utf8');

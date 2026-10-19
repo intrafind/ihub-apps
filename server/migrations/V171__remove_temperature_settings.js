@@ -1,5 +1,5 @@
 /**
- * Migration V170 — temperature is no longer an app, prompt, agent or workflow setting
+ * Migration V171 — temperature is no longer an app, prompt, agent or workflow setting
  *
  * A temperature picked per app contradicts what a current model is tuned for:
  * reasoning models loop at low values, and some providers fix the value or
@@ -22,7 +22,7 @@
  * it can be found again.
  */
 
-export const version = '170';
+export const version = '171';
 export const description = 'remove_temperature_settings';
 
 /**
