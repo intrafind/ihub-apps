@@ -208,6 +208,9 @@ const getEnvironmentVariableNames = model => {
   return envVars;
 };
 
+// A number being typed: "", "0.", "-1", ".5" and so on.
+const NUMERIC_DRAFT = /^-?\d*\.?\d*$/;
+
 /**
  * One optional sampling input (temperature, top P, top K). An empty value means
  * "not set": nothing is sent and the provider default applies.
@@ -394,7 +397,10 @@ function ModelFormEditor({
   // emptied field drops its key and the last one going drops `sampling` itself:
   // an empty `{}` would be saved as an override that overrides nothing. Values
   // stay as typed (strings) here and become numbers when the model is saved.
+  // The inputs are `type="number"`, so only a draft that can be a number
+  // (digits, a sign, a decimal point) is kept; anything else is not stored.
   const handleSamplingChange = (key, value) => {
+    if (!NUMERIC_DRAFT.test(value)) return;
     const next = { ...data.sampling };
     if (value === '' || value === null || value === undefined) delete next[key];
     else next[key] = value;
