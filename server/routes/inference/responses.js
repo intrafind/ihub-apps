@@ -24,7 +24,6 @@ import { RunStreamEmitter } from '../../services/loop/RunStream.js';
 import { newRunId } from '../../services/loop/RunLog.js';
 import { abortCause, abortReason } from '../../services/chat/abortCause.js';
 import { activeRequests, clearChatDurable, markChatDurable, hasChatClient } from '../../sse.js';
-import { normalizeChatSettings } from '../../services/chat/ChatRepository.js';
 import {
   materializeAssistantTurn,
   materializeUserTurn
@@ -239,6 +238,7 @@ export default function registerResponsesRoutes(
    *                 type: boolean
    *               temperature:
    *                 type: number
+   *                 description: Accepted for OpenAI client compatibility and ignored. Sampling parameters come from the model's `sampling` config.
    *               max_output_tokens:
    *                 type: integer
    *               metadata:
@@ -295,7 +295,6 @@ export default function registerResponsesRoutes(
         inputMessages,
         stream,
         ctx,
-        temperature: numberField(body, 'temperature', { min: 0, max: 2 }),
         maxOutputTokens: numberField(body, 'max_output_tokens', { min: 1, integer: true }),
         metadata: validateMetadata(body.metadata),
         validate: validationRequested(req),
@@ -449,7 +448,6 @@ export default function registerResponsesRoutes(
     inputMessages,
     stream,
     ctx,
-    temperature,
     maxOutputTokens,
     metadata,
     validate,
@@ -510,7 +508,6 @@ export default function registerResponsesRoutes(
       applyTemplate: prompt.applyTemplate,
       variables: prompt.variables,
       chatId,
-      temperature,
       maxOutputTokens
     });
 
@@ -522,7 +519,7 @@ export default function registerResponsesRoutes(
         created_at: Math.floor(Date.now() / 1000),
         model: prepared.label,
         instructions: null,
-        temperature: prepared.prep.temperature ?? null,
+        temperature: prepared.model?.sampling?.temperature ?? null,
         max_output_tokens: maxOutputTokens ?? null,
         text: textParam(prepared.format),
         metadata: metadata || {},
@@ -559,7 +556,6 @@ export default function registerResponsesRoutes(
           content: current.content,
           clientMessageId: null,
           attachments: attachmentsOf(current),
-          settings: normalizeChatSettings({ temperature }),
           // The chat's variable set, shared with the chat UI (its start
           // form stores the same field): replaced by a turn that sets them.
           ...(prompt.storeVariables ? { variables: prompt.variables } : {}),
@@ -635,7 +631,6 @@ export default function registerResponsesRoutes(
     inputMessages,
     stream,
     ctx,
-    temperature,
     maxOutputTokens,
     metadata,
     validate,
@@ -686,7 +681,7 @@ export default function registerResponsesRoutes(
         created_at: Math.floor(Date.now() / 1000),
         model: model.id,
         instructions,
-        temperature: temperature ?? 0.7,
+        temperature: model.sampling?.temperature ?? null,
         max_output_tokens: maxOutputTokens ?? null,
         text: textParam(format),
         metadata: metadata || {},
@@ -727,7 +722,6 @@ export default function registerResponsesRoutes(
           identityMode: chat.identityMode,
           appId: null,
           modelId: model.id,
-          settings: normalizeChatSettings({ temperature }),
           runId,
           content: current.content,
           attachments: attachmentsOf(current),
@@ -752,7 +746,7 @@ export default function registerResponsesRoutes(
           llmClient,
           model,
           messages,
-          options: { temperature: temperature ?? 0.7, maxTokens: maxOutputTokens, user },
+          options: { maxTokens: maxOutputTokens, user },
           format,
           validate,
           maxRetries: 1,

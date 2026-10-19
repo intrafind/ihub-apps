@@ -74,7 +74,6 @@ export const chatPostSchema = {
   body: z.object({
     messages: z.array(z.any()),
     modelId: z.string().optional(),
-    temperature: z.any().optional(),
     style: z.string().optional(),
     outputFormat: z.string().optional(),
     language: z.string().optional(),

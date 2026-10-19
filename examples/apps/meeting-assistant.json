@@ -17,7 +17,6 @@
 
   "preferredOutputFormat": "markdown",
   "preferredStyle": "normal",
-  "preferredTemperature": 0.7,
   "prompt": {
     "en": "{{action}} for a {{meeting_type}} meeting with the following details:\n\nMeeting Title: {{meeting_title}}\nParticipants: {{participants}}\nDuration: {{duration}}\n\n{{content}}",
     "de": "{{action}} für eine {{meeting_type}} Besprechung mit den folgenden Details:\n\nBesprechungstitel: {{meeting_title}}\nTeilnehmer: {{participants}}\nDauer: {{duration}}\n\n{{content}}"

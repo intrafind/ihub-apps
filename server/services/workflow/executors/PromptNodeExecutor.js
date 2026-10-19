@@ -60,7 +60,6 @@ const PROMPT_NODE_WORKER_TASK_BODY_CHARS = 2000;
  * @property {string} [prompt] - User prompt template (can contain variable references)
  * @property {Array<string>} [tools] - Tool IDs available to this agent
  * @property {string} [modelId] - Specific model to use (overrides workflow default)
- * @property {number} [temperature] - Temperature for LLM responses
  * @property {number} [maxTokens] - Maximum tokens for response
  * @property {number} [maxIterations] - Maximum tool calling rounds (default: the agent
  *   profile's `budgets.maxToolRoundsPerNode`, else 10)
@@ -715,7 +714,6 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
       const resolvedInputs = {
         modelId: model.id,
         modelName: model.name,
-        temperature: config.temperature ?? null,
         maxTokens: config.maxTokens ?? null,
         outputVariable: config.outputVariable ?? null,
         renderedPrompt: renderedUserMessage
@@ -1538,7 +1536,6 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
         }
       },
       options: {
-        temperature: config.temperature ?? 0.7,
         maxTokens,
         nativeWebSearch,
         // `outputSchema` → native structured output where the provider supports

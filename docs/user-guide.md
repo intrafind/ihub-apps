@@ -125,7 +125,7 @@ Hover a message to see its actions:
 
 Depending on the app: **Clear** the chat, **Export** it (Markdown, PDF, Word, HTML, JSON, …),
 **Share** a read-only link, switch on **Compare mode**, and open the chat **Settings** (model,
-temperature, output format, reasoning effort, tools).
+output format, reasoning effort, tools).
 
 ### Compare two models
 

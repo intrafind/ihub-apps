@@ -47,7 +47,7 @@ const result = await agentLoop.run({
   tools,                    // ToolSpec[]: { id, description, parameters, readOnly?, interactive?, passthrough? }
   toolExecution: 'server',  // 'caller' hands tool calls back instead of executing them
   policies: { budgets, tools, context, interactions, approval },
-  options: { temperature, maxTokens, responseSchema, nativeWebSearch, thinking… },
+  options: { maxTokens, responseSchema, nativeWebSearch, thinking… },
   language,
   signal,                   // AbortSignal
   refs: { executionId, nodeId, chatId, appId, userId, taskId, profileId },

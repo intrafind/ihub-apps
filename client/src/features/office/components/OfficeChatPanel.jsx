@@ -71,9 +71,6 @@ function buildParamsFromApp(app) {
   const params = { language: officeLocale };
   if (app?.preferredOutputFormat) params.outputFormat = String(app.preferredOutputFormat);
   if (app?.preferredStyle) params.style = String(app.preferredStyle);
-  if (typeof app?.preferredTemperature === 'number' && !Number.isNaN(app.preferredTemperature)) {
-    params.temperature = app.preferredTemperature;
-  }
   return params;
 }
 

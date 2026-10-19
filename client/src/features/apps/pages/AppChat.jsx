@@ -304,10 +304,13 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
   // installation lets users keep prompts of their own (#2519).
   const userPromptsEnabled =
     platformConfig?.userPrompts?.enabled === true && auth?.isAuthenticated === true;
-  // Personal skills (own or shared) are offered in the `/` picker of every
-  // app that does not opt out with `skillSettings.allowPersonal: false` —
-  // also in apps without global skills of their own.
+  // Skills are opt-in per app (`skillSettings.enabled`). In an app that
+  // turned them on, personal skills (own or shared) are offered in the `/`
+  // picker unless it opts out with `skillSettings.allowPersonal: false` —
+  // also without global skills of its own.
+  const appSkillsEnabled = app?.skillSettings?.enabled === true;
   const personalSkillsAvailable =
+    appSkillsEnabled &&
     platformConfig?.userSkills?.enabled === true &&
     auth?.isAuthenticated === true &&
     app?.skillSettings?.allowPersonal !== false;
@@ -378,7 +381,6 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
     selectedModel,
     selectedStyle,
     selectedOutputFormat,
-    temperature,
     sendChatHistory,
     ephemeral,
     thinkingEnabled,
@@ -393,7 +395,6 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
     setSelectedModel,
     setSelectedStyle,
     setSelectedOutputFormat,
-    setTemperature,
     setSendChatHistory,
     setEphemeral,
     setThinkingEnabled,
@@ -432,11 +433,6 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
       setSelectedOutputFormat(out);
       changed = true;
     }
-    const tempParam = searchParams.get('temp');
-    if (tempParam) {
-      setTemperature(Number.parseFloat(tempParam));
-      changed = true;
-    }
     const hist = searchParams.get('history');
     if (hist) {
       setSendChatHistory(hist === 'true');
@@ -460,7 +456,6 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
         'model',
         'style',
         'outfmt',
-        'temp',
         'history',
         'prefill',
         'send',
@@ -476,8 +471,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
     setSelectedModel,
     setSelectedOutputFormat,
     setSelectedStyle,
-    setSendChatHistory,
-    setTemperature
+    setSendChatHistory
   ]);
 
   // State for managing parameter changes on mobile
@@ -1207,7 +1201,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
     if (!autoSendPending.current || autoSendTriggered.current) return;
     if (!app || processing) return;
     // Wait for the model catalogue before firing. `useAppSettings` resolves
-    // the app's initial model (and its temperature, output format, …) only
+    // the app's initial model (and its output format, …) only
     // once the catalogue has loaded, and a model carried over from the start
     // page arrives via `?model=` which the URL-parameter effect above applies
     // on the same gate. Sending before that goes out as `modelId: null`,
@@ -1385,7 +1379,6 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
         const params = {
           modelId: selectedModel,
           style: selectedStyle,
-          temperature,
           outputFormat: selectedOutputFormat,
           language: currentLanguage,
           ...(thinkingEnabled !== null ? { thinkingEnabled } : {}),
@@ -1457,7 +1450,6 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
     appId,
     selectedModel,
     selectedStyle,
-    temperature,
     selectedOutputFormat,
     sendChatHistory,
     currentLanguage,
@@ -1528,7 +1520,6 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
           selectedStyle,
           selectedOutputFormat,
           sendChatHistory,
-          temperature,
           variables: initialVars
         };
         if (!embedded) saveAppSettings(appId, settings);
@@ -1803,7 +1794,6 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
       const params = {
         modelId: selectedModel,
         style: selectedStyle,
-        temperature,
         outputFormat: selectedOutputFormat,
         language: currentLanguage
       };
@@ -1813,7 +1803,6 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
       submitClarificationResponse,
       selectedModel,
       selectedStyle,
-      temperature,
       selectedOutputFormat,
       currentLanguage
     ]
@@ -1830,7 +1819,6 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
       const params = {
         modelId: selectedModel,
         style: selectedStyle,
-        temperature,
         outputFormat: selectedOutputFormat,
         language: currentLanguage
       };
@@ -1840,7 +1828,6 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
       submitClarificationResponse,
       selectedModel,
       selectedStyle,
-      temperature,
       selectedOutputFormat,
       currentLanguage
     ]
@@ -1905,7 +1892,6 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
           selectedStyle,
           selectedOutputFormat,
           sendChatHistory,
-          temperature,
           variables: initialVars
         };
         if (!embedded) saveAppSettings(appId, settings);
@@ -2449,7 +2435,6 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
     const params = {
       modelId: selectedModel,
       style: selectedStyle,
-      temperature,
       outputFormat: selectedOutputFormat,
       language: currentLanguage,
       ...(thinkingEnabled !== null ? { thinkingEnabled } : {}),
@@ -2626,7 +2611,6 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
     submitClarificationResponse(answer, {
       modelId: selectedModel,
       style: selectedStyle,
-      temperature,
       outputFormat: selectedOutputFormat,
       language: currentLanguage,
       voiceMode: true
@@ -2809,6 +2793,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
       // `/<skill-name> ` and the server activates it from the message.
       skillsSlashEnabled:
         featureFlags.isEnabled('skills', false) &&
+        appSkillsEnabled &&
         ((Array.isArray(app?.skills) && app.skills.length > 0) || personalSkillsAvailable),
       // Clarification state
       clarificationPending,
@@ -2956,7 +2941,6 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
         selectedStyle={selectedStyle}
         selectedOutputFormat={selectedOutputFormat}
         sendChatHistory={sendChatHistory}
-        temperature={temperature}
         thinkingEnabled={thinkingEnabled}
         thinkingLevel={thinkingLevel}
         thinkingThoughts={thinkingThoughts}
@@ -2967,7 +2951,6 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
         onStyleChange={setSelectedStyle}
         onOutputFormatChange={setSelectedOutputFormat}
         onSendChatHistoryChange={setSendChatHistory}
-        onTemperatureChange={setTemperature}
         onThinkingEnabledChange={setThinkingEnabled}
         onThinkingLevelChange={setThinkingLevel}
         onThinkingThoughtsChange={setThinkingThoughts}
@@ -3373,7 +3356,6 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
                     model: selectedModel,
                     style: selectedStyle,
                     outfmt: selectedOutputFormat,
-                    temp: temperature,
                     history: sendChatHistory,
                     prefill: prefillMessage,
                     ...Object.fromEntries(

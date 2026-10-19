@@ -186,7 +186,7 @@ test('upstream request construction through the real OpenAI adapter', async () =
   assert.equal(req.body.model, 'gpt-4o');
   assert.equal(req.body.stream, true);
   assert.equal(req.body.max_tokens, 5);
-  assert.equal(req.body.temperature, 0.7);
+  assert.equal('temperature' in req.body, false, 'a model without sampling gets no temperature');
   assert.deepEqual(req.body.stream_options, { include_usage: true });
   assert.ok(ctx.signal instanceof AbortSignal, 'client-disconnect abort signal is wired');
 

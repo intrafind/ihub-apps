@@ -154,9 +154,15 @@ describe('findSkillBuilderApp', () => {
   const skills = [{ name: 'skill-builder' }, { name: 'brand-voice' }];
   const apps = [
     { id: 'translator', order: 1, skills: ['brand-voice'] },
-    { id: 'writer', order: 3, skills: ['skill-builder'] },
-    { id: 'chat', order: 2, skills: ['skill-builder'] },
-    { id: 'site', type: 'iframe', order: 0, skills: ['skill-builder'] }
+    { id: 'writer', order: 3, skills: ['skill-builder'], skillSettings: { enabled: true } },
+    { id: 'chat', order: 2, skills: ['skill-builder'], skillSettings: { enabled: true } },
+    {
+      id: 'site',
+      type: 'iframe',
+      order: 0,
+      skills: ['skill-builder'],
+      skillSettings: { enabled: true }
+    }
   ];
 
   test('picks the first chat app that has the skill', () => {
@@ -178,7 +184,7 @@ describe('findSkillBuilderApp', () => {
       id: 'skill-builder',
       order: 9,
       skills: ['skill-builder'],
-      skillSettings: { autoActivate: true }
+      skillSettings: { enabled: true, autoActivate: true }
     };
     const uiConfig = { startPage: { defaultAppId: 'chat' } };
     expect(findSkillBuilderApp([...apps, builder], skills, { uiConfig })?.id).toBe('skill-builder');
@@ -186,15 +192,24 @@ describe('findSkillBuilderApp', () => {
     expect(runsSkillBuilder(apps[2])).toBe(false);
   });
 
+  test('ignores apps that did not enable skills', () => {
+    const off = [
+      { id: 'chat', skills: ['skill-builder'] },
+      { id: 'builder', skills: ['skill-builder'], skillSettings: { autoActivate: true } }
+    ];
+    expect(findSkillBuilderApp(off, skills)).toBeNull();
+    expect(runsSkillBuilder(off[1])).toBe(false);
+  });
+
   test('does not count on auto-activation past the active-skills cap', () => {
     const skillsList = ['a', 'b', 'c', 'skill-builder'];
-    expect(runsSkillBuilder({ skills: skillsList, skillSettings: { autoActivate: true } })).toBe(
-      false
-    );
+    expect(
+      runsSkillBuilder({ skills: skillsList, skillSettings: { enabled: true, autoActivate: true } })
+    ).toBe(false);
     expect(
       runsSkillBuilder({
         skills: skillsList,
-        skillSettings: { autoActivate: true, maxActiveSkills: 4 }
+        skillSettings: { enabled: true, autoActivate: true, maxActiveSkills: 4 }
       })
     ).toBe(true);
   });

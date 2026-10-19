@@ -95,7 +95,6 @@ function prepStatus(code) {
  * @param {boolean} options.applyTemplate - Wrap the current turn in the app template.
  * @param {Object} options.variables - Variables for the template and the system prompt.
  * @param {string} options.chatId
- * @param {number} [options.temperature]
  * @param {number} [options.maxOutputTokens] - Caller's cap; the model's own cap still applies.
  * @returns {Promise<{prep: Object, app: Object, model: Object, label: string,
  *   format: Object|null, renderedContent: string}>}
@@ -110,7 +109,6 @@ export async function prepareAppTurn({
   applyTemplate,
   variables,
   chatId,
-  temperature,
   maxOutputTokens
 }) {
   const { app } = target;
@@ -131,7 +129,6 @@ export async function prepareAppTurn({
       appId: app.id,
       modelId: target.modelId || undefined,
       messages: promptMessages,
-      temperature,
       language,
       user,
       chatId
@@ -222,7 +219,7 @@ export async function executeAppTurn({
     sessionId: chatId,
     user,
     messages: prep.llmMessages,
-    options: { temperature: prep.temperature, language, streaming, source: 'inference-api' },
+    options: { language, streaming, source: 'inference-api' },
     ...extra
   });
   await chatService.logInteraction('chat_request', buildLogData(true));

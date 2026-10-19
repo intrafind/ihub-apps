@@ -18,7 +18,6 @@
 
   "preferredOutputFormat": "markdown",
   "preferredStyle": "normal",
-  "preferredTemperature": 0.7,
   "prompt": {
     "en": "User Input: {{content}}\nMode: {{mode}}",
     "de": "Benutzereingabe: {{content}}\nModus: {{mode}}"

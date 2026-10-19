@@ -50,6 +50,20 @@ const thinkingSchema = z
   })
   .strict();
 
+// Sampling overrides. This is the only place a temperature (or top_p / top_k)
+// ever comes from: apps, prompts, workflows and agents do not set one, so a
+// request carries a sampling parameter only when the model config says so.
+// Every key is optional and an unset key is left out of the request, which
+// leaves the provider's (or, for vLLM, the model's `generation_config.json`)
+// own default in force.
+const samplingSchema = z
+  .object({
+    temperature: z.number().min(0).max(2).optional(),
+    topP: z.number().min(0).max(1).optional(),
+    topK: z.number().int().min(1).optional()
+  })
+  .strict();
+
 // Image generation configuration schema
 const imageGenerationSchema = z
   .object({
@@ -262,10 +276,13 @@ const baseModelConfigSchema = z
     supportsVision: z.boolean().optional(),
     supportsAudio: z.boolean().optional(),
     supportsStructuredOutput: z.boolean().optional(),
+    // Optional sampling overrides (temperature, topP, topK) sent with every
+    // request to this model. Unset = nothing sent, the provider default applies.
+    sampling: samplingSchema.optional(),
     // Whether the provider accepts sampling parameters (`temperature`) for this
     // model. Newer reasoning models reject them outright — Claude Opus 5,
     // Sonnet 5 and Fable 5.x return a 400 for `temperature` — so a model config
-    // can opt out and the adapter omits the field instead of failing every
+    // can opt out and the adapter ignores `sampling` instead of failing every
     // request. Defaults to true (unset) so existing model configs are unchanged.
     supportsTemperature: z.boolean().optional(),
     supportsUsageTracking: z.boolean().optional(),

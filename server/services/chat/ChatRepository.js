@@ -291,12 +291,11 @@ function toChat(doc) {
  * `modelId` is not here: it has its own field on the chat document and is
  * written by the materializer.
  *
- * @type {Readonly<Object<string, 'string'|'number'|'boolean'|'stringArray'>>}
+ * @type {Readonly<Object<string, 'string'|'boolean'|'stringArray'>>}
  */
 const CHAT_SETTING_TYPES = Object.freeze({
   style: 'string',
   outputFormat: 'string',
-  temperature: 'number',
   sendChatHistory: 'boolean',
   thinkingEnabled: 'boolean',
   thinkingLevel: 'string',
@@ -352,8 +351,6 @@ export function normalizeChatSettings(settings) {
     if (value === null || value === undefined) continue;
     if (kind === 'boolean') {
       if (typeof value === 'boolean') out[key] = value;
-    } else if (kind === 'number') {
-      if (typeof value === 'number' && Number.isFinite(value)) out[key] = value;
     } else if (kind === 'string') {
       if (typeof value === 'string' && value) out[key] = value.slice(0, MAX_SETTING_CHARS);
     } else if (kind === 'stringArray') {

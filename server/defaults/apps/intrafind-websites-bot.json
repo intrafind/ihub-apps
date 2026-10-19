@@ -21,7 +21,6 @@
   },
   "preferredOutputFormat": "markdown",
   "preferredStyle": "normal",
-  "preferredTemperature": 0.7,
   "sendChatHistory": true,
   "sources": [
     "intrafind-website-home",
@@ -47,9 +46,6 @@
   "settings": {
     "enabled": true,
     "model": {
-      "enabled": true
-    },
-    "temperature": {
       "enabled": true
     },
     "outputFormat": {

@@ -81,7 +81,6 @@ check(
     model: undefined,
     style: undefined,
     outputFormat: undefined,
-    temperature: undefined,
     variables: undefined
   }).length === 0
 );
@@ -90,11 +89,9 @@ check(
   'variables alone do not produce a settings section',
   getExportSettingsRows({ variables: { foo: 'bar' } }).length === 0
 );
-check('null temperature is skipped', getExportSettingsRows({ temperature: null }).length === 0);
 check(
-  'temperature 0 is kept',
-  JSON.stringify(getExportSettingsRows({ temperature: 0 })) ===
-    JSON.stringify([['Temperature', '0']])
+  'a temperature is never exported (it is no longer a chat setting)',
+  getExportSettingsRows({ temperature: 0.7 }).length === 0
 );
 check(
   'populated settings yield rows in stable order',
@@ -102,13 +99,11 @@ check(
     getExportSettingsRows({
       outputFormat: 'markdown',
       style: 'concise',
-      model: 'gpt',
-      temperature: 0.7
+      model: 'gpt'
     })
   ) ===
     JSON.stringify([
       ['Model', 'gpt'],
-      ['Temperature', '0.7'],
       ['Style', 'concise'],
       ['Output Format', 'markdown']
     ])

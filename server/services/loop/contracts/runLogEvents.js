@@ -206,7 +206,6 @@ export const requestHeaderData = z.object({
   optionsSnapshot: z.record(z.any()).optional(),
   callConfig: z
     .object({
-      temperature: z.number().optional(),
       maxTokens: z.number().int().optional(),
       responseFormat: z.string().nullable().optional(),
       responseSchemaHash: z.string().nullable().optional(),

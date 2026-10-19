@@ -3,7 +3,6 @@ import IconPicker from '../../../../shared/components/IconPicker';
 import ResourceSelector from '../ResourceSelector';
 import { getLocalizedContent } from '../../../../utils/localizeContent';
 import { isFieldRequired } from '../../../../utils/schemaValidation';
-import parseNumberOrUndefined from '../../utils/parseNumberOrUndefined';
 
 function BasicInfoSection({
   app,
@@ -244,23 +243,6 @@ function BasicInfoSection({
                   'Restrict which models users can select for this app. Leave empty to allow all models.'
                 )}
               </p>
-            </div>
-
-            <div className="col-span-6 sm:col-span-3">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                {t('admin.apps.edit.temperature', 'Temperature')}
-              </label>
-              <input
-                type="number"
-                min="0"
-                max="2"
-                step="0.1"
-                value={app.preferredTemperature || 0.7}
-                onChange={e =>
-                  handleInputChange('preferredTemperature', parseNumberOrUndefined(e.target.value))
-                }
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-              />
             </div>
 
             <div className="col-span-6 sm:col-span-3">

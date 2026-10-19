@@ -36,7 +36,6 @@ const testAzureOpenAI = async () => {
   try {
     logger.info('\n🔄 Creating request...');
     const request = await createCompletionRequest(model, messages, apiKey, {
-      temperature: 0.1,
       maxTokens: 100,
       stream: false // Disable streaming for simple test
     });

@@ -15,7 +15,6 @@
     "workflowId": "claude-style-agent"
   },
   "preferredModel": "gemini-flash-latest",
-  "preferredTemperature": 1,
   "maxIterations": 10,
   "tools": [],
   "sources": [],
@@ -24,8 +23,7 @@
   "memory": {
     "enabled": true,
     "autoInclude": true,
-    "maxBytes": 8192,
-    "temperature": 0.2
+    "maxBytes": 8192
   },
   "inboxId": "claude-style-agent",
   "hitl": {

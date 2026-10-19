@@ -282,7 +282,6 @@ export class VerifierNodeExecutor extends BaseNodeExecutor {
           tools,
           config: {
             maxIterations: config.maxToolRounds || config.maxIterations || 8,
-            temperature: 0.3,
             maxTokens: config.maxTokens
           },
           context,
@@ -295,7 +294,7 @@ export class VerifierNodeExecutor extends BaseNodeExecutor {
         const response = await this.llmClient.complete({
           model,
           messages,
-          options: { temperature: 0.3, ...thinkingConfigToOptions(node.config?.thinking) },
+          options: thinkingConfigToOptions(node.config?.thinking),
           language,
           signal: context.abortSignal,
           telemetry: {

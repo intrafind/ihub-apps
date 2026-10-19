@@ -48,7 +48,6 @@ Create `contents/apps/{id}.json` with this minimal valid shape:
   "order": 10,
   "preferredModel": "gpt-4o",
   "preferredOutputFormat": "markdown",
-  "preferredTemperature": 0.7,
   "sendChatHistory": true,
   "messagePlaceholder": { "en": "Type your message...", "de": "Nachricht eingeben..." },
   "greeting": { "en": "Hello! How can I help?", "de": "Hallo! Wie kann ich helfen?" },

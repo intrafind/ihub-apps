@@ -30,10 +30,15 @@ There are two kinds:
   instructions, or in a message sent to the chat API, and the skill is loaded for that run. The
   chat API also accepts `requestedSkills`, a list of global skill names or user skill ids.
 
+Skills are opt-in per app: an app offers none until it sets `skillSettings.enabled: true`
+(**Admin → Apps → Skills → Enable skills in this app**). Without it, the app sends no skill list
+and no skill tools to the model, ignores `/name`, and does not carry skills over in the chat.
+
 A skill is loaded only when the current app and user may use it. For a global skill that means:
-installed, listed in the app's `skills`, and granted to the user's groups. For a user skill: the
-user owns it or it is shared with them, and the app does not set
-`skillSettings.allowPersonal: false`. Agents use only the global skills on their profile.
+the app enables skills, the skill is installed, listed in the app's `skills`, and granted to the
+user's groups. For a user skill: the app enables skills, the user owns the skill or it is shared
+with them, and the app does not set `skillSettings.allowPersonal: false`. Agents use only the
+global skills on their profile.
 
 ## How skills reach the model
 
@@ -145,8 +150,8 @@ iHub also ships the **Skill Builder** app (`contents/apps/skill-builder.json`), 
 existing installations on startup like any default file they do not have yet. It is a chat app
 built around the skill:
 
-- `skills: ["skill-builder"]` with `skillSettings.autoActivate: true`, so the skill runs from the
-  first message on, and `allowPersonal: false`, so users' own skills stay out of the way.
+- `skills: ["skill-builder"]` with `skillSettings.enabled: true` and `autoActivate: true`, so the
+  skill runs from the first message on, and `allowPersonal: false`, so users' own skills stay out of the way.
 - `requiredFeatures: ["skills"]`: users only get the app while **Agent Skills** is on. Until
   then, **Admin → Apps** lists it as hidden from users.
 - Like any app, it is available to the groups whose `permissions.apps` include it (`*` on a new
@@ -208,12 +213,13 @@ earlier version and restore it; a restore is saved as a new version.
 
 ### Using user skills in an app
 
-A user's own and shared skills are offered in every app, in the `/` picker and to the model (the
-20 most recently changed ones). To keep them out of an app — for example a regulated app that
-must only use reviewed skills — set:
+A user's own and shared skills are offered in every app that enables skills
+(`skillSettings.enabled: true`), in the `/` picker and to the model (the 20 most recently
+changed ones). Apps that do not enable skills never see them. To keep them out of an app that
+does — for example a regulated app that must only use reviewed skills — set:
 
 ```json
-"skillSettings": { "allowPersonal": false }
+"skillSettings": { "enabled": true, "allowPersonal": false }
 ```
 
 ## Admin

@@ -4,7 +4,7 @@
  * Two halves:
  *   1. Request side — when `model.thinking.enabled`, the OpenAI adapter adds
  *      `reasoning_effort` (mapped from level/budget) and leaves `max_tokens` /
- *      `temperature` untouched (conservative: OpenAI-compatible endpoints that
+ *      sampling untouched (conservative: OpenAI-compatible endpoints that
  *      don't impose reasoning-model constraints must keep working).
  *   2. Response side — the OpenAI converter surfaces reasoning text into
  *      `result.thinking[]`, parsing both `reasoning_content` (DeepSeek / legacy
@@ -31,23 +31,28 @@ const messages = [{ role: 'user', content: 'test' }];
 
 describe('OpenAI reasoning — request side', () => {
   test('no reasoning_effort when model.thinking is absent', async () => {
-    const req = await OpenAIAdapter.createCompletionRequest(baseModel, messages, 'key', {
-      temperature: 0.4,
-      maxTokens: 512
-    });
+    const req = await OpenAIAdapter.createCompletionRequest(
+      { ...baseModel, sampling: { temperature: 0.4 } },
+      messages,
+      'key',
+      { maxTokens: 512 }
+    );
     expect(req.body.reasoning_effort).toBeUndefined();
     expect(req.body.temperature).toBe(0.4);
     expect(req.body.max_tokens).toBe(512);
   });
 
-  test('explicit level maps to reasoning_effort, leaving tokens/temperature untouched', async () => {
-    const model = { ...baseModel, thinking: { enabled: true, level: 'high' } };
+  test('explicit level maps to reasoning_effort, leaving tokens/sampling untouched', async () => {
+    const model = {
+      ...baseModel,
+      thinking: { enabled: true, level: 'high' },
+      sampling: { temperature: 0.4 }
+    };
     const req = await OpenAIAdapter.createCompletionRequest(model, messages, 'key', {
-      temperature: 0.4,
       maxTokens: 512
     });
     expect(req.body.reasoning_effort).toBe('high');
-    // Conservative: token/temperature semantics unchanged.
+    // Conservative: token/sampling semantics unchanged.
     expect(req.body.temperature).toBe(0.4);
     expect(req.body.max_tokens).toBe(512);
     expect(req.body.max_completion_tokens).toBeUndefined();

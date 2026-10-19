@@ -687,7 +687,7 @@ config:
 - `theme: base` is required. It is the only Mermaid theme whose colors can be changed.
 - `primaryColor`, `primaryTextColor` and `primaryBorderColor` style nodes, `lineColor` styles connections, and `pie1` to `pie12` set the pie chart slices in order. The full list of variables is in the [Mermaid theming guide](https://mermaid.js.org/config/theming.html).
 - The older directive form, `%%{init: {'theme': 'base', 'themeVariables': {...}}}%%` on the first line, works as well.
-- The palette only appears when the model copies the header, so keep the instruction explicit. A low `preferredTemperature` makes the output more consistent.
+- The palette only appears when the model copies the header, so keep the instruction explicit.
 
 #### Custom CSS for diagrams
 

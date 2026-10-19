@@ -54,8 +54,6 @@
     "back": "Zurück",
     "all": "Alle",
     "default": "Standard",
-    "precise": "Präzise",
-    "creative": "Kreativ",
     "select": "Auswählen",
     "favorite": "Favorisieren",
     "unfavorite": "Defavorisieren",
@@ -428,7 +426,6 @@
     }
   },
   "models": {
-    "temperature": "Temperatur",
     "provider": "Anbieter",
     "descriptions": {
       "gpt-3.5-turbo": "Schnelles und effizientes Modell für die meisten alltäglichen Aufgaben und Gespräche",
@@ -508,8 +505,6 @@
     "model": "Modell",
     "selectModel": "Modell auswählen",
     "defaultModel": "Standardmodell",
-    "temperature": "Temperatur",
-    "temperatureDescription": "Steuert die Zufälligkeit: Niedrigere Werte sind deterministischer, höhere Werte sind kreativer.",
     "systemPrompt": "System-Prompt",
     "systemPromptDescription": "Anweisungen für die KI zu Beginn des Gesprächs.",
     "markdown": "Markdown",
@@ -1334,6 +1329,9 @@
         "thinkingLevelMedium": "Mittel",
         "thinkingLevelHigh": "Hoch",
         "thinkingThoughts": "Reasoning anzeigen",
+        "samplingTemperature": "Temperatur",
+        "samplingTopP": "Top P",
+        "samplingTopK": "Top K",
         "ttsVoice": "Stimme",
         "ttsVoices": "Stimmen pro Sprache",
         "ttsVoiceLanguage": "Sprache",
@@ -1366,6 +1364,7 @@
         "thinkingLevel": "Wird als reasoning_effort (OpenAI, vLLM) bzw. thinkingLevel (Gemini) gesendet. Server ohne Unterstützung ignorieren den Wert — beim Provider-Standard belassen, sofern das Modell diese Stufen nicht dokumentiert.",
         "thinkingThoughts": "Das Reasoning Nutzern hinter dem Umschalter „Denkprozess anzeigen“ zugänglich machen. Zum Verbergen deaktivieren.",
         "maxOutputTokens": "Leer bedeutet der Standardwert ({{value}}), nicht unbegrenzt. Reasoning-Modelle verbrauchen ihre Denk-Tokens aus diesem Limit – halten Sie es deutlich über der längsten erwarteten Antwort.",
+        "sampling": "Optional. Ein leeres Feld verwendet den Standardwert des Modells bzw. des Anbieters; dafür wird nichts gesendet. Ein hier gesetzter Wert gilt für jede Anfrage an dieses Modell.",
         "ttsUrl": "Sprach-Endpunkt des Anbieters. Er bleibt auf dem Server und erreicht nie den Browser.",
         "ttsVoice": "Stimmen-ID des Anbieters: eine Mistral-Vorlage wie en_paul_neutral, gb_jane_neutral oder fr_marie_neutral oder die ID einer in Ihrem Mistral-Konto gespeicherten Stimme. Leer verwendet en_paul_neutral.",
         "ttsVoiceGoogle": "Eine der vorgefertigten Gemini-Stimmen, etwa Kore, Puck oder Charon. Jede spricht alle Sprachen; die Sprache wird am Text erkannt. Leer bedeutet Kore.",
@@ -1375,6 +1374,7 @@
       },
       "placeholders": {
         "maxOutputTokens": "Standard: {{value}}",
+        "samplingDefault": "Provider-Standard",
         "selectProvider": "Anbieter auswählen",
         "apiModelId": "z.B. gpt-4, claude-3-opus",
         "apiUrl": "https://api.anbieter.com/v1/chat/completions",
@@ -1388,6 +1388,7 @@
         "nativeWebSearch": "Native Websuche",
         "promptCaching": "Prompt-Caching",
         "providerConfig": "Anbieter-Einstellungen",
+        "sampling": "Sampling",
         "thinking": "Reasoning"
       },
       "errors": {
@@ -3197,6 +3198,10 @@
         "iassistantExtraContextDesc": "Zusätzlicher Kontext, der zum Response-State-Prompt hinzugefügt wird. Unterstützt Prompt-Variablen wie {{user_name}}, {{user_email}}, {{date}} sowie eigene globale Variablen. Mit Vorsicht verwenden, da Änderungen die Antwortqualität beeinflussen können.",
         "iassistantSystemPromptPreamble": "System-Prompt-Präambel",
         "iassistantSystemPromptPreambleDesc": "Die Prompt-Präambel, die im Response-State-System-Prompt verwendet wird. Ideal zum Ändern der Identität des iAssistant. Unterstützt Prompt-Variablen wie {{user_name}}, {{user_email}}, {{date}} sowie eigene globale Variablen. Mit Vorsicht verwenden.",
+        "skillsEnabled": "Skills in dieser App aktivieren",
+        "skillsEnabledHelp": "Skills sind Opt-in. Ist die Option aus, erhält die App keine Skill-Liste, keine Skill-Tools und keine aktiven Skills – auch wenn Nutzer eigene oder geteilte Skills haben.",
+        "skillsAllowPersonal": "Persönliche Skills der Nutzer erlauben",
+        "skillsAllowPersonalHelp": "Bietet zusätzlich zu den oben gelisteten Skills die eigenen und geteilten Skills der Nutzer an. Ausschalten, um nur die gelisteten Skills zu erlauben.",
         "noTranscriptionModels": "Keine Transkriptionsmodelle konfiguriert. Fügen Sie eines unter Admin → Modelle hinzu (Modelltyp \"transcription\").",
         "enableVideoUpload": "Video-Upload aktivieren",
         "trackedChanges": "Word: Änderungen nachverfolgen",

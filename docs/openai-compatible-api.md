@@ -69,7 +69,7 @@ https://your-ihub-instance.com/api/inference/v1
 | `model`       | **Required.** An iHub model `id`, or an app: `app:<appId>` / `app:<appId>/<modelId>` (see [Models and apps](#models-and-apps-the-model-field)). |
 | `messages`    | **Required.** Standard `role`/`content` array.                 |
 | `stream`      | `true` streams Server-Sent Events back to you; default `false`. It describes *your* response only — see below. |
-| `temperature` | `0`–`2`, default `0.7`.                                        |
+| `temperature` | Accepted so OpenAI clients keep working, but ignored — iHub does not forward it. Sampling comes from the model's `sampling` config, see [Sampling Parameters](models.md#sampling-parameters). |
 | `max_tokens`  | Maximum tokens to generate.                                    |
 | `tools`       | OpenAI tool/function definitions — translated to each provider.|
 | `tool_choice` | `none` \| `auto` \| `{ ... }`.                                 |
@@ -229,7 +229,8 @@ Mistral `json_schema`, vLLM):
 | `text.format` | `text`, `json_object` or `json_schema` — plain models only |
 | `conversation` | A conversation id (or `{ id }`): load its history and append this turn |
 | `stream` | Semantic streaming events (below) |
-| `temperature`, `max_output_tokens`, `metadata` | As in OpenAI |
+| `temperature` | Accepted but ignored, as on chat completions |
+| `max_output_tokens`, `metadata` | As in OpenAI |
 | `store` | Ignored: only a `conversation` persists |
 
 Not supported, answered with `400 unsupported_parameter`: `previous_response_id` (use
@@ -522,7 +523,6 @@ curl -s -X POST "$IHUB_API_URL/api/inference/v1/chat/completions" \
       { "role": "system", "content": "You are a helpful assistant." },
       { "role": "user", "content": "Hello, this is a test!" }
     ],
-    "temperature": 0.7,
     "max_tokens": 100
   }' | jq .
 ```

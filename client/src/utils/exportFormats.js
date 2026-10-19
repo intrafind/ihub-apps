@@ -27,9 +27,6 @@ export const getExportSettingsRows = settings => {
   if (!settings) return [];
   const rows = [];
   if (settings.model) rows.push(['Model', String(settings.model)]);
-  if (settings.temperature !== undefined && settings.temperature !== null) {
-    rows.push(['Temperature', String(settings.temperature)]);
-  }
   if (settings.style) rows.push(['Style', String(settings.style)]);
   if (settings.outputFormat) rows.push(['Output Format', String(settings.outputFormat)]);
   return rows;

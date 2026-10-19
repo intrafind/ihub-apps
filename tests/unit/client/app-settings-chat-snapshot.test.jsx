@@ -131,18 +131,35 @@ test('re-reading the same chat does not replay its snapshot either', async () =>
   const app = makeApp();
   const { result, rerender } = await settled({
     app,
-    chatSettings: { temperature: 0.2 }
+    chatSettings: { outputFormat: 'text' }
   });
-  expect(result.current.temperature).toBe(0.2);
+  expect(result.current.selectedOutputFormat).toBe('text');
 
   act(() => {
-    result.current.setTemperature(1.1);
+    result.current.setSelectedOutputFormat('json');
   });
 
   await act(async () => {
-    rerender({ app, chatSettings: { temperature: 0.2 } });
+    rerender({ app, chatSettings: { outputFormat: 'text' } });
   });
-  expect(result.current.temperature).toBe(1.1);
+  expect(result.current.selectedOutputFormat).toBe('json');
+});
+
+test('temperature is not a setting: nothing exposes it and nothing stored brings it back', async () => {
+  // The model decides its own sampling (`sampling` on the model config), so a
+  // value an older app, browser or chat still carries must not resurface.
+  const { result } = await settled({
+    app: makeApp({ preferredTemperature: 0.2 }),
+    chatSettings: { temperature: 1.1 }
+  });
+
+  expect(result.current).not.toHaveProperty('temperature');
+  expect(result.current).not.toHaveProperty('setTemperature');
+  expect(result.current.settings).not.toHaveProperty('temperature');
+  expect(result.current.setters).not.toHaveProperty('setTemperature');
+  for (const key of Object.keys(sessionStorage)) {
+    expect(sessionStorage.getItem(key)).not.toMatch(/temperature/i);
+  }
 });
 
 test('following a link to another app waits for that app, rather than initializing on the old one', async () => {

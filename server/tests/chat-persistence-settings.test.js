@@ -57,7 +57,6 @@ describe('normalizeChatSettings', () => {
     const settings = normalizeChatSettings({
       style: 'concise',
       outputFormat: 'markdown',
-      temperature: 0.3,
       sendChatHistory: false,
       thinkingEnabled: true,
       thinkingLevel: 'high',
@@ -70,7 +69,6 @@ describe('normalizeChatSettings', () => {
     assert.deepEqual(settings, {
       style: 'concise',
       outputFormat: 'markdown',
-      temperature: 0.3,
       sendChatHistory: false,
       thinkingEnabled: true,
       thinkingLevel: 'high',
@@ -100,13 +98,19 @@ describe('normalizeChatSettings', () => {
     assert.deepEqual(settings, { websearchEnabled: true });
   });
 
+  it('no longer stores a temperature', () => {
+    assert.equal(normalizeChatSettings({ temperature: 0.3 }), null);
+    assert.deepEqual(normalizeChatSettings({ temperature: 0.3, style: 'concise' }), {
+      style: 'concise'
+    });
+  });
+
   it('drops a declared key whose value is the wrong type', () => {
     // A boolean sent as the string "true" is the shape a hand-built request
     // has; storing it would make `typeof === 'boolean'` false on read and the
     // toggle would silently never restore.
     assert.equal(normalizeChatSettings({ websearchEnabled: 'true' }), null);
-    assert.equal(normalizeChatSettings({ temperature: '0.5' }), null);
-    assert.equal(normalizeChatSettings({ temperature: Number.NaN }), null);
+    assert.equal(normalizeChatSettings({ style: 7 }), null);
     assert.equal(normalizeChatSettings({ enabledTools: 'webSearch' }), null);
     assert.deepEqual(normalizeChatSettings({ enabledTools: ['ok', 7, null] }), {
       enabledTools: ['ok']
@@ -159,7 +163,7 @@ describe('settings on the chat document', () => {
         chatId: CHAT_ID,
         ownerId: OWNER,
         identityMode: 'default',
-        settings: { websearchEnabled: true, style: 'concise', temperature: 0.2 },
+        settings: { websearchEnabled: true, style: 'concise', outputFormat: 'text' },
         runId: 'run-1',
         content: 'first'
       });
@@ -169,7 +173,7 @@ describe('settings on the chat document', () => {
         ownerId: OWNER,
         identityMode: 'default',
         // This surface only offers the websearch toggle, so that is all it
-        // sends. The style and temperature the chat was started with have to
+        // sends. The style and output format the chat was started with have to
         // survive it.
         settings: { websearchEnabled: false },
         runId: 'run-2',
@@ -179,7 +183,7 @@ describe('settings on the chat document', () => {
       assert.deepEqual(chat.settings, {
         websearchEnabled: false,
         style: 'concise',
-        temperature: 0.2
+        outputFormat: 'text'
       });
     });
   });

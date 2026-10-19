@@ -6,7 +6,7 @@ import { useUIConfig } from '../contexts/UIConfigContext';
 
 /**
  * Custom hook for managing app settings across chat and canvas modes
- * Provides shared state management for model, style, temperature, etc.
+ * Provides shared state management for model, style, output format, etc.
  *
  * Three layers, applied in this order, each overriding the last:
  *
@@ -55,7 +55,6 @@ function useAppSettings(
   const [selectedModel, setSelectedModel] = useState(null);
   const [selectedStyle, setSelectedStyle] = useState('normal');
   const [selectedOutputFormat, setSelectedOutputFormat] = useState('markdown');
-  const [temperature, setTemperature] = useState(0.7);
   const [sendChatHistory, setSendChatHistory] = useState(true);
   const [ephemeral, setEphemeral] = useState(false);
   const [thinkingEnabled, setThinkingEnabled] = useState(null);
@@ -164,7 +163,6 @@ function useAppSettings(
     const initialState = {
       selectedModel: initialModel,
       selectedStyle: app.preferredStyle || 'normal',
-      temperature: app.preferredTemperature || 0.7,
       selectedOutputFormat: app.preferredOutputFormat || 'markdown',
       sendChatHistory: true,
       ephemeral: app.ephemeral ?? false,
@@ -180,7 +178,6 @@ function useAppSettings(
     // Set initial states
     setSelectedModel(initialState.selectedModel);
     setSelectedStyle(initialState.selectedStyle);
-    setTemperature(initialState.temperature);
     setSelectedOutputFormat(initialState.selectedOutputFormat);
     setSendChatHistory(initialState.sendChatHistory);
     setEphemeral(initialState.ephemeral);
@@ -208,7 +205,6 @@ function useAppSettings(
       if (savedSettings.selectedStyle) setSelectedStyle(savedSettings.selectedStyle);
       if (savedSettings.selectedOutputFormat)
         setSelectedOutputFormat(savedSettings.selectedOutputFormat);
-      if (savedSettings.temperature) setTemperature(savedSettings.temperature);
       if (savedSettings.sendChatHistory !== undefined)
         setSendChatHistory(savedSettings.sendChatHistory);
       if (savedSettings.ephemeral !== undefined) setEphemeral(savedSettings.ephemeral);
@@ -232,7 +228,6 @@ function useAppSettings(
     if (chatSettings && typeof chatSettings === 'object') {
       if (chatSettings.style) setSelectedStyle(chatSettings.style);
       if (chatSettings.outputFormat) setSelectedOutputFormat(chatSettings.outputFormat);
-      if (typeof chatSettings.temperature === 'number') setTemperature(chatSettings.temperature);
       if (typeof chatSettings.sendChatHistory === 'boolean')
         setSendChatHistory(chatSettings.sendChatHistory);
       if (typeof chatSettings.thinkingEnabled === 'boolean')
@@ -263,7 +258,6 @@ function useAppSettings(
         selectedModel,
         selectedStyle,
         selectedOutputFormat,
-        temperature,
         sendChatHistory,
         ephemeral,
         thinkingEnabled,
@@ -283,7 +277,6 @@ function useAppSettings(
     selectedModel,
     selectedStyle,
     selectedOutputFormat,
-    temperature,
     sendChatHistory,
     ephemeral,
     thinkingEnabled,
@@ -301,7 +294,6 @@ function useAppSettings(
     selectedModel,
     selectedStyle,
     selectedOutputFormat,
-    temperature,
     sendChatHistory,
     ephemeral,
     thinkingEnabled,
@@ -319,7 +311,6 @@ function useAppSettings(
     setSelectedModel,
     setSelectedStyle,
     setSelectedOutputFormat,
-    setTemperature,
     setSendChatHistory,
     setEphemeral,
     setThinkingEnabled,

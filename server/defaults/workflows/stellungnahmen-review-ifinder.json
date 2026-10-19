@@ -306,7 +306,6 @@
       },
       "config": {
         "chatVisible": false,
-        "temperature": 0.1,
         "system": {
           "en": "You are a corpus-completeness referee. You look at the candidate list and the user's focus and decide whether the corpus is broad enough to support an audit-grade Stellungnahmen review. Return ONLY JSON.",
           "de": "Sie sind ein Korpus-Vollständigkeits-Schiedsrichter. Sie prüfen die Kandidatenliste und den Nutzer-Fokus und entscheiden, ob der Korpus breit genug für eine revisionssichere Stellungnahmen-Auswertung ist. Antworten Sie NUR mit JSON."

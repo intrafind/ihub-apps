@@ -18,7 +18,6 @@
   "preferredModel": "local-vllm-gemma-3-27b",
   "preferredOutputFormat": "markdown",
   "preferredStyle": "keep",
-  "preferredTemperature": 0.7,
   "sendChatHistory": true,
   "messagePlaceholder": {
     "en": "Which topic should the note deal with and which key aspects should I address in the facts or the assessment?",

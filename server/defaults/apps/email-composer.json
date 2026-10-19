@@ -18,7 +18,6 @@
   },
   "preferredOutputFormat": "markdown",
   "preferredStyle": "professional",
-  "preferredTemperature": 0.7,
   "allowEmptyContent": true,
   "messagePlaceholder": {
     "en": "Here you can provide additional information for composing the email...",
@@ -192,9 +191,6 @@
   "settings": {
     "enabled": true,
     "model": {
-      "enabled": false
-    },
-    "temperature": {
       "enabled": false
     },
     "outputFormat": {

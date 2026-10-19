@@ -134,7 +134,6 @@ for (const provider of providers) {
   try {
     const request = await createCompletionRequest(model, messages, {
       tools: testTools,
-      temperature: 0.7,
       max_tokens: 1000
     });
 
@@ -181,8 +180,7 @@ for (const provider of providers) {
 
   try {
     const request = await createCompletionRequest(model, multiRoundMessages, {
-      tools: testTools,
-      temperature: 0.7
+      tools: testTools
     });
 
     logger.info(`✅ ${provider} multi-round request created successfully`);
@@ -252,8 +250,7 @@ for (const provider of providers) {
 
   try {
     const request = await createCompletionRequest(model, messages, {
-      tools: [toolWithRequiredParams],
-      temperature: 0.7
+      tools: [toolWithRequiredParams]
     });
 
     logger.info(`✅ ${provider} tool parameter validation passed`);

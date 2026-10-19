@@ -338,7 +338,7 @@ export function getErrorDetails(error, model) {
  * @param {string} [data.userSessionId] - The user's browser session ID
  * @param {Object} [data.user] - The authenticated user object with username, groups, and id
  * @param {Array} [data.messages] - The conversation messages
- * @param {Object} [data.options] - Additional options like temperature, style, etc.
+ * @param {Object} [data.options] - Additional options like style, output format, etc.
  * @param {string} [data.responseType] - Type of response (error, success, feedback)
  * @param {string} [data.response] - The AI's response if available
  * @param {Error} [data.error] - Error object if there was an error

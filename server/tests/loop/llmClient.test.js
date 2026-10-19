@@ -90,7 +90,6 @@ test('complete — streams OpenAI deltas into one result with usage and finishRe
   const result = await client.complete({
     modelId: 'oa',
     messages,
-    options: { temperature: 0.2 },
     telemetry: { autoRun: false }
   });
   assert.equal(result.content, 'Hello');
@@ -106,7 +105,6 @@ test('complete — streams OpenAI deltas into one result with usage and finishRe
   assert.equal(calls.length, 1);
   const { request, ctx } = calls[0];
   assert.equal(request.body.stream, true, 'streaming by default');
-  assert.equal(request.body.temperature, 0.2);
   assert.equal(request.body.maxTokens, 4096, 'output cap defaults to model.maxOutputTokens');
   assert.equal(ctx.model.id, 'oa');
   assert.equal(request.headers.Authorization, 'Bearer sk-test');
@@ -446,7 +444,7 @@ test('ledger — request/header per call with hash dedupe, retry and error event
   await client.complete({
     modelId: 'oa',
     messages,
-    options: { temperature: 0.1, tools: [{ id: 't', name: 't', parameters: {} }] },
+    options: { tools: [{ id: 't', name: 't', parameters: {} }] },
     telemetry: { runId, step: 2, purpose: 'planner', toolExecution: 'server' }
   });
   await client.complete({ modelId: 'oa', messages, telemetry: { runId, step: 3 } });
@@ -474,7 +472,6 @@ test('ledger — request/header per call with hash dedupe, retry and error event
   assert.equal(headers[0].data.toolExecution, 'server');
   assert.equal(typeof headers[0].data.toolSchemasHash, 'string');
   assert.equal(headers[1].data.toolSchemasHash, null);
-  assert.equal(headers[0].data.callConfig.temperature, 0.1);
   assert.equal(headers[0].data.callConfig.stream, true);
   assert.match(headers[0].data.requestHash, /^[0-9a-f]{64}$/);
   const retries = events.filter(e => e.type === RUN_LOG_EVENTS.REQUEST_RETRY);
@@ -586,7 +583,7 @@ test('iassistant-conversation — stream forced on and null API key accepted', a
 
 test('snapshots: secrets are dropped at any depth and the acting user is reduced to the run principal', () => {
   const options = {
-    temperature: 0.2,
+    maxTokens: 300,
     user: { id: 'u1', email: 'u1@example.com', groups: ['staff'], claims: { sub: 'x' } },
     appConfig: {
       id: 'app1',
@@ -595,7 +592,7 @@ test('snapshots: secrets are dropped at any depth and the acting user is reduced
     }
   };
   assert.deepEqual(snapshotOptions(options, { principalId: 'usr_ab12' }), {
-    temperature: 0.2,
+    maxTokens: 300,
     user: { id: 'usr_ab12' },
     appConfig: { id: 'app1', integration: { endpoint: 'https://x', nested: [{ keep: 1 }] } }
   });

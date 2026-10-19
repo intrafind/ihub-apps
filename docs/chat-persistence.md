@@ -181,7 +181,7 @@ without the second form it would leave the superseded exchange in the stored
 transcript and grow the conversation by one discarded round per retry.
 
 A chat reopens **the way you left it set up**. The websearch toggle, the tools
-you enabled, the style, the output format, the temperature and the model come
+you enabled, the style, the output format and the model come
 back from the chat rather than from the app's defaults, so a chat you had
 turned websearch on for does not quietly answer the next question without it.
 Only what the chat actually recorded is restored; everything else falls back
@@ -589,7 +589,7 @@ Details that matter:
   exchange id is kept as `clientMessageId` so an optimistic render can be
   reconciled instead of duplicated.
 - **`settings` is a closed set, and it merges.** Each turn records how it was
-  answered — `style`, `outputFormat`, `temperature`, `sendChatHistory`, the
+  answered — `style`, `outputFormat`, `sendChatHistory`, the
   three `thinking*` fields, `enabledTools`, `websearchEnabled`,
   `imageAspectRatio`, `imageQuality` — and nothing else: these arrive in a
   request body and are read back for the life of the chat, so an open-ended

@@ -44,7 +44,6 @@ const testModelFiltering = async () => {
       appId: 'image-generator',
       modelId: 'gemini-3-pro-image',
       messages: [{ role: 'user', content: 'Generate an image of a sunset' }],
-      temperature: 0.7,
       language: 'en',
       processMessageTemplates: async msgs => msgs
     });
@@ -67,7 +66,6 @@ const testModelFiltering = async () => {
       appId: 'image-generator',
       modelId: 'gemini-2.5-flash', // This model doesn't support image generation
       messages: [{ role: 'user', content: 'Generate an image of a sunset' }],
-      temperature: 0.7,
       language: 'en',
       processMessageTemplates: async msgs => msgs
     });
@@ -93,7 +91,6 @@ const testModelFiltering = async () => {
       appId: 'chat',
       modelId: 'gemini-2.5-flash',
       messages: [{ role: 'user', content: 'Hello' }],
-      temperature: 0.7,
       language: 'en',
       processMessageTemplates: async msgs => msgs
     });
@@ -111,7 +108,6 @@ const testModelFiltering = async () => {
       appId: 'image-generator',
       modelId: null, // No model specified
       messages: [{ role: 'user', content: 'Generate an image' }],
-      temperature: 0.7,
       language: 'en',
       processMessageTemplates: async msgs => msgs
     });

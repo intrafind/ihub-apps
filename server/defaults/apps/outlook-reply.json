@@ -22,7 +22,6 @@
   },
   "preferredOutputFormat": "text",
   "preferredStyle": "keep",
-  "preferredTemperature": 0.7,
   "sendChatHistory": true,
   "allowEmptyContent": true,
   "messagePlaceholder": {
@@ -78,9 +77,6 @@
     "enabled": true,
     "model": {
       "enabled": true
-    },
-    "temperature": {
-      "enabled": false
     },
     "outputFormat": {
       "enabled": false

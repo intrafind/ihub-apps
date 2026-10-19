@@ -100,9 +100,6 @@
     "model": {
       "enabled": true
     },
-    "temperature": {
-      "enabled": false
-    },
     "outputFormat": {
       "enabled": false
     },

@@ -554,9 +554,6 @@
               "callConfig": {
                 "type": "object",
                 "properties": {
-                  "temperature": {
-                    "type": "number"
-                  },
                   "maxTokens": {
                     "type": "integer",
                     "minimum": -9007199254740991,
@@ -2856,11 +2853,6 @@
       "options": {
         "type": "object",
         "properties": {
-          "temperature": {
-            "type": "number",
-            "minimum": 0,
-            "maximum": 2
-          },
           "maxTokens": {
             "type": "integer",
             "exclusiveMinimum": 0,
@@ -3702,11 +3694,6 @@
       "options": {
         "type": "object",
         "properties": {
-          "temperature": {
-            "type": "number",
-            "minimum": 0,
-            "maximum": 2
-          },
           "maxTokens": {
             "type": "integer",
             "exclusiveMinimum": 0,

@@ -54,8 +54,6 @@
     "back": "Back",
     "all": "All",
     "default": "Default",
-    "precise": "Precise",
-    "creative": "Creative",
     "select": "Select",
     "favorite": "Favorite",
     "unfavorite": "Unfavorite",
@@ -1088,6 +1086,9 @@
         "thinkingLevelMedium": "Medium",
         "thinkingLevelHigh": "High",
         "thinkingThoughts": "Show reasoning",
+        "samplingTemperature": "Temperature",
+        "samplingTopP": "Top P",
+        "samplingTopK": "Top K",
         "ttsVoice": "Voice",
         "ttsVoices": "Voices per language",
         "ttsVoiceLanguage": "Language",
@@ -1120,6 +1121,7 @@
         "thinkingLevel": "Sent as reasoning_effort (OpenAI, vLLM) or thinkingLevel (Gemini). Servers that do not support it ignore the value — leave on provider default unless the model documents these levels.",
         "thinkingThoughts": "Surface the reasoning to users behind the \"Show thinking\" toggle. Turn off to keep it hidden.",
         "maxOutputTokens": "Empty means the default ({{value}}), not unlimited. Reasoning models spend their thinking tokens from this limit, so keep it well above the longest answer you expect.",
+        "sampling": "Optional. Leave a field empty to use the model's or provider's own default; nothing is sent for it. A value set here applies to every request to this model.",
         "ttsUrl": "Speech endpoint of the provider. It stays server-side and never reaches the browser.",
         "ttsVoice": "Voice id of the provider: a Mistral preset such as en_paul_neutral, gb_jane_neutral or fr_marie_neutral, or the id of a voice saved in your Mistral account. Empty uses en_paul_neutral.",
         "ttsVoiceGoogle": "One of the prebuilt Gemini voices, such as Kore, Puck or Charon. Each speaks every language, which is detected from the text. Empty uses Kore.",
@@ -1129,6 +1131,7 @@
       },
       "placeholders": {
         "maxOutputTokens": "Default: {{value}}",
+        "samplingDefault": "Provider default",
         "selectProvider": "Select a provider",
         "apiModelId": "e.g., gpt-4, claude-3-opus",
         "apiUrl": "https://api.provider.com/v1/chat/completions",
@@ -1142,6 +1145,7 @@
         "nativeWebSearch": "Native Web Search",
         "promptCaching": "Prompt Caching",
         "providerConfig": "Provider Settings",
+        "sampling": "Sampling",
         "thinking": "Reasoning"
       },
       "errors": {
@@ -2925,6 +2929,10 @@
         "iassistantExtraContextDesc": "Additional context to be added to the response state prompt. Supports prompt variables like {{user_name}}, {{user_email}}, {{date}} and custom global variables. Use with care as changes can impact answer quality.",
         "iassistantSystemPromptPreamble": "System Prompt Preamble",
         "iassistantSystemPromptPreambleDesc": "The prompt preamble used in the response state system prompt. This is ideal for changing the identity of the iAssistant. Supports prompt variables like {{user_name}}, {{user_email}}, {{date}} and custom global variables. Use with care.",
+        "skillsEnabled": "Enable skills in this app",
+        "skillsEnabledHelp": "Skills are opt-in. When off, the app gets no skill list, no skill tools and no active skills, even if users own or are shared skills.",
+        "skillsAllowPersonal": "Allow users' personal skills",
+        "skillsAllowPersonalHelp": "Offer users' own and shared skills in addition to the skills listed above. Turn off to allow only the listed skills.",
         "noTranscriptionModels": "No transcription models configured. Add one under Admin → Models (model type \"transcription\").",
         "enableVideoUpload": "Enable Video Upload",
         "trackedChanges": "Word: tracked changes",
@@ -3903,7 +3911,6 @@
     "redo": "Redo"
   },
   "models": {
-    "temperature": "Temperature",
     "provider": "Provider",
     "descriptions": {
       "gpt-3.5-turbo": "Fast and efficient model for most everyday tasks and conversations",
@@ -3983,8 +3990,6 @@
     "model": "Model",
     "selectModel": "Select Model",
     "defaultModel": "Default model",
-    "temperature": "Temperature",
-    "temperatureDescription": "Controls randomness: Lower values are more deterministic, higher values are more creative.",
     "systemPrompt": "System prompt",
     "systemPromptDescription": "Instructions for the AI at the beginning of the conversation.",
     "markdown": "Markdown",

@@ -536,9 +536,6 @@ export function validateNewConfig(config) {
     }
   ],
   "settings": {
-    "temperature": {
-      "enabled": true
-    },
     "outputFormat": {
       "enabled": false
     }

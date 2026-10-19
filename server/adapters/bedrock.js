@@ -322,11 +322,10 @@ class BedrockAdapterClass extends BaseAdapter {
     const op = stream ? 'converse-stream' : 'converse';
     const url = `https://bedrock-runtime.${endpointRegion}.amazonaws.com/model/${encodeURIComponent(modelId)}/${op}`;
 
-    const inferenceConfig = {
-      maxTokens: opts.maxTokens,
-      temperature: opts.temperature
-    };
-    if (typeof options.topP === 'number') inferenceConfig.topP = options.topP;
+    const inferenceConfig = { maxTokens: opts.maxTokens };
+    const sampling = this.resolveSampling(model);
+    if (sampling.temperature !== undefined) inferenceConfig.temperature = sampling.temperature;
+    if (sampling.topP !== undefined) inferenceConfig.topP = sampling.topP;
     if (Array.isArray(options.stopSequences) && options.stopSequences.length > 0) {
       inferenceConfig.stopSequences = options.stopSequences;
     }

@@ -20,7 +20,6 @@
     "synthesize": "gemini-flash-latest",
     "verify": "gemini-3.1-pro"
   },
-  "preferredTemperature": 1,
   "maxIterations": 20,
   "tools": [],
   "sources": [],
@@ -29,8 +28,7 @@
   "memory": {
     "enabled": true,
     "autoInclude": true,
-    "maxBytes": 8192,
-    "temperature": 0.2
+    "maxBytes": 8192
   },
   "inboxId": "claude-style-agent",
   "hitl": {

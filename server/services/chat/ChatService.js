@@ -453,7 +453,6 @@ class ChatService {
       model,
       llmMessages,
       tools = [],
-      temperature,
       maxTokens,
       responseFormat,
       responseSchema,
@@ -691,7 +690,7 @@ class ChatService {
           tools: { parallel: false, choice: app.toolChoice },
           context: { compactThresholdTokens: chatCompactThresholdTokens(model) }
         },
-        options: { temperature, maxTokens, responseFormat, responseSchema, ...llmOptions },
+        options: { maxTokens, responseFormat, responseSchema, ...llmOptions },
         language,
         signal: controller.signal,
         timeoutMs,
@@ -1261,7 +1260,6 @@ class ChatService {
         model,
         llmMessages,
         tools = [],
-        temperature,
         maxTokens,
         responseFormat,
         responseSchema,
@@ -1323,7 +1321,7 @@ class ChatService {
           tools: { parallel: false, choice: app.toolChoice },
           context: { compactThresholdTokens: chatCompactThresholdTokens(model) }
         },
-        options: { temperature, maxTokens, responseFormat, responseSchema, ...llmOptions },
+        options: { maxTokens, responseFormat, responseSchema, ...llmOptions },
         language,
         signal: abortSignal,
         timeoutMs,

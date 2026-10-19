@@ -335,7 +335,6 @@ curl -X POST "$IHUB_API_URL/api/inference/v1/chat/completions" \
         "content": "Hello, this is a test!"
       }
     ],
-    "temperature": 0.7,
     "max_tokens": 100
   }' | jq .
 ```
