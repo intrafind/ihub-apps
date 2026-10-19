@@ -26,11 +26,13 @@ function useLazyTokenCount(estimate, dependency, debounceMs) {
   useEffect(() => {
     let cancelled = false;
     const compute = () => {
-      const loaded = shouldLoadTokenizer(estimateRef.current())
-        ? ensureTokenizer()
-        : Promise.resolve();
-      loaded.then(() => {
-        if (!cancelled) setCount(estimateRef.current());
+      // Tokenize once; only a freshly loaded tokenizer needs a second pass.
+      const estimate = estimateRef.current();
+      const counted = shouldLoadTokenizer(estimate)
+        ? ensureTokenizer().then(() => estimateRef.current())
+        : Promise.resolve(estimate);
+      counted.then(value => {
+        if (!cancelled) setCount(value);
       });
     };
 

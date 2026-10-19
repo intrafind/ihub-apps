@@ -12,6 +12,15 @@ const BUNDLED_TRANSLATIONS = {
   de: () => import('../../../shared/i18n/de.json')
 };
 
+// Resolves with `promise`'s value, or with `timeoutValue` after `ms`.
+function raceTimeout(promise, ms, timeoutValue) {
+  let timer;
+  const timeout = new Promise(resolve => {
+    timer = setTimeout(() => resolve(timeoutValue), ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
 // Built-in translations without the admin's overrides, for when the API is
 // unreachable. Not cached, so the next language load retries the API.
 async function loadBundledTranslations(language) {
@@ -201,11 +210,33 @@ class I18nService {
   /**
    * Wait until the first language's translations are available, but at most
    * `timeoutMs`, so a slow translations API can't hold the app back for long.
+   * When the API is that slow, the built-in translations are installed before
+   * resolving (bounded the same way), so the first render shows text rather
+   * than raw keys. A later API response still replaces them with the merged
+   * translations, admin overrides included.
    * @param {number} [timeoutMs]
    * @returns {Promise<void>}
    */
-  whenReady(timeoutMs = 3000) {
-    return Promise.race([this.ready, new Promise(resolve => setTimeout(resolve, timeoutMs))]);
+  async whenReady(timeoutMs = 3000) {
+    const timedOut = await raceTimeout(
+      this.ready.then(() => false),
+      timeoutMs,
+      true
+    );
+    if (timedOut) {
+      await raceTimeout(this.applyBundledTranslations(), timeoutMs);
+    }
+  }
+
+  async applyBundledTranslations() {
+    const language = this.normalizeLanguageCode(i18n.language);
+    // Unbundled languages fall back to English keys through fallbackLng.
+    const bundledLanguage = BUNDLED_TRANSLATIONS[language] ? language : 'en';
+    const translations = await loadBundledTranslations(bundledLanguage);
+    // The API may have answered in the meantime; its translations win.
+    if (translations && !this.translationCache.has(bundledLanguage)) {
+      this.addTranslationsToI18n(bundledLanguage, translations);
+    }
   }
 
   async loadPlatformConfig() {
