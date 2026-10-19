@@ -209,6 +209,33 @@ const getEnvironmentVariableNames = model => {
 };
 
 /**
+ * One optional sampling input (temperature, top P, top K). An empty value means
+ * "not set": nothing is sent and the provider default applies.
+ */
+function SamplingField({ id, label, value, error, placeholder, onChange, bounds }) {
+  return (
+    <div className="col-span-6 sm:col-span-2">
+      <label htmlFor={id} className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+        {label}
+      </label>
+      <input
+        type="number"
+        name={id}
+        id={id}
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        placeholder={placeholder}
+        className={`mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-xs sm:text-sm border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md ${
+          error ? 'border-red-300 text-red-900' : ''
+        }`}
+        {...bounds}
+      />
+      {error && <p className="mt-2 text-sm text-red-600 dark:text-red-400">{error}</p>}
+    </div>
+  );
+}
+
+/**
  * Form-based editor for model configuration
  * @param {Object} props
  * @param {Object} props.value - Model configuration data
@@ -1331,39 +1358,21 @@ function ModelFormEditor({
                         )}
                       </p>
                       <div className="mt-4 grid grid-cols-6 gap-6">
-                        {samplingFields.map(({ key, label, ...bounds }) => {
-                          const fieldError = mergedErrors[`sampling.${key}`];
-                          return (
-                            <div key={key} className="col-span-6 sm:col-span-2">
-                              <label
-                                htmlFor={`sampling.${key}`}
-                                className="block text-sm font-medium text-gray-700 dark:text-gray-300"
-                              >
-                                {label}
-                              </label>
-                              <input
-                                type="number"
-                                name={`sampling.${key}`}
-                                id={`sampling.${key}`}
-                                value={data.sampling?.[key] ?? ''}
-                                onChange={e => handleSamplingChange(key, e.target.value)}
-                                placeholder={t(
-                                  'admin.models.placeholders.samplingDefault',
-                                  'Provider default'
-                                )}
-                                className={`mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-xs sm:text-sm border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md ${
-                                  fieldError ? 'border-red-300 text-red-900' : ''
-                                }`}
-                                {...bounds}
-                              />
-                              {fieldError && (
-                                <p className="mt-2 text-sm text-red-600 dark:text-red-400">
-                                  {fieldError}
-                                </p>
-                              )}
-                            </div>
-                          );
-                        })}
+                        {samplingFields.map(({ key, label, ...bounds }) => (
+                          <SamplingField
+                            key={key}
+                            id={`sampling.${key}`}
+                            label={label}
+                            value={data.sampling?.[key] ?? ''}
+                            error={mergedErrors[`sampling.${key}`]}
+                            placeholder={t(
+                              'admin.models.placeholders.samplingDefault',
+                              'Provider default'
+                            )}
+                            onChange={value => handleSamplingChange(key, value)}
+                            bounds={bounds}
+                          />
+                        ))}
                       </div>
                     </fieldset>
                   </div>

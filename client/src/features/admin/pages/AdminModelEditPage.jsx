@@ -17,6 +17,46 @@ import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import MarketplaceModelReviewNotice from '../components/marketplace/MarketplaceModelReviewNotice';
 
+/**
+ * A number field that accepts 0. `''`/null/undefined mean "not set" and drop
+ * out of the payload; anything unparseable is left out rather than sent as
+ * NaN, which the Zod schema would reject with an unhelpful message.
+ * @param {string|number|null|undefined} value
+ * @returns {number|undefined}
+ */
+const toOptionalInt = value => {
+  if (value === '' || value === null || value === undefined) return undefined;
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) ? parsed : undefined;
+};
+
+/** Like `toOptionalInt`, for the decimal sampling fields (0 is a real temperature). */
+const toOptionalFloat = value => {
+  if (value === '' || value === null || value === undefined) return undefined;
+  const parsed = Number.parseFloat(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
+};
+
+/**
+ * The `sampling` block to save. Only a chat model has one. The form keeps what
+ * was typed, so it becomes numbers here; a field left empty is left out, and
+ * with none set there is no block at all (the schema is strict and an empty
+ * one would override nothing).
+ * @param {Object} data - the form data
+ * @returns {Object|undefined}
+ */
+const samplingPayload = data => {
+  if ((data.modelType || 'chat') !== 'chat') return undefined;
+  const sampling = Object.fromEntries(
+    Object.entries({
+      temperature: toOptionalFloat(data.sampling?.temperature),
+      topP: toOptionalFloat(data.sampling?.topP),
+      topK: toOptionalInt(data.sampling?.topK)
+    }).filter(([, value]) => value !== undefined)
+  );
+  return Object.keys(sampling).length > 0 ? sampling : undefined;
+};
+
 function AdminModelEditPage() {
   const { t, i18n } = useTranslation();
   const currentLanguage = i18n.language;
@@ -236,26 +276,6 @@ function AdminModelEditPage() {
     await handleSave(formData);
   };
 
-  /**
-   * A number field that accepts 0. `''`/null/undefined mean "not set" and drop
-   * out of the payload; anything unparseable is left out rather than sent as
-   * NaN, which the Zod schema would reject with an unhelpful message.
-   * @param {string|number|null|undefined} value
-   * @returns {number|undefined}
-   */
-  const toOptionalInt = value => {
-    if (value === '' || value === null || value === undefined) return undefined;
-    const parsed = Number.parseInt(value, 10);
-    return Number.isFinite(parsed) ? parsed : undefined;
-  };
-
-  /** Like `toOptionalInt`, for the decimal sampling fields (0 is a real temperature). */
-  const toOptionalFloat = value => {
-    if (value === '' || value === null || value === undefined) return undefined;
-    const parsed = Number.parseFloat(value);
-    return Number.isFinite(parsed) ? parsed : undefined;
-  };
-
   const handleSave = async data => {
     try {
       setSaving(true);
@@ -297,22 +317,8 @@ function AdminModelEditPage() {
       // Only a chat model can be the default; the checkbox is hidden for the
       // other types, so a flag left over from before the type changed goes.
       if ((dataToSend.modelType || 'chat') !== 'chat') dataToSend.default = false;
-      // Sampling overrides are only for chat models. The form keeps what was
-      // typed, so it becomes numbers here; a field left empty is left out, and
-      // with none set the `sampling` key goes altogether (the schema is strict
-      // and an empty one would override nothing).
-      const sampling = Object.fromEntries(
-        Object.entries({
-          temperature: toOptionalFloat(data.sampling?.temperature),
-          topP: toOptionalFloat(data.sampling?.topP),
-          topK: toOptionalInt(data.sampling?.topK)
-        }).filter(([, value]) => value !== undefined)
-      );
-      if ((dataToSend.modelType || 'chat') === 'chat' && Object.keys(sampling).length > 0) {
-        dataToSend.sampling = sampling;
-      } else {
-        delete dataToSend.sampling;
-      }
+      // Left out of the payload when empty (the loop below drops undefined).
+      dataToSend.sampling = samplingPayload(data);
       // A language added without a voice yet means nothing to save.
       if (dataToSend.tts?.voices) {
         const voices = Object.entries(dataToSend.tts.voices).filter(([, voice]) => voice);
