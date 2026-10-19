@@ -18,7 +18,7 @@
   },
   "preferredOutputFormat": "markdown",
   "preferredStyle": "professional",
-  "preferredTemperature": 0.4,
+  "preferredTemperature": 0.7,
   "sendChatHistory": true,
   "allowEmptyContent": true,
   "sources": ["meeting-knowledge-base"],

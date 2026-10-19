@@ -18,7 +18,7 @@
   },
   "preferredOutputFormat": "json",
   "preferredStyle": "keep",
-  "preferredTemperature": 0.4,
+  "preferredTemperature": 0.7,
   "sendChatHistory": false,
   "outputSchema": {
     "type": "object",

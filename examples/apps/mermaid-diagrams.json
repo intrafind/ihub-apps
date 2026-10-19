@@ -18,7 +18,7 @@
   "preferredModel": "gpt-4o",
   "preferredOutputFormat": "markdown",
   "preferredStyle": "normal",
-  "preferredTemperature": 0.3,
+  "preferredTemperature": 0.7,
   "sendChatHistory": true,
   "messagePlaceholder": {
     "en": "Describe the diagram you want to create (e.g., 'Create a flowchart for user authentication process')",

@@ -17,7 +17,7 @@
   },
   "preferredOutputFormat": "markdown",
   "preferredStyle": "normal",
-  "preferredTemperature": 0.4,
+  "preferredTemperature": 0.7,
   "sendChatHistory": true,
   "prompt": {
     "en": "Generate a complete JSON configuration for an iHub App with the following details:\n\nApp Name: {{app_name}}\nPurpose: {{app_purpose}}\nPreferred Model: {{preferred_model}}\nPreferred Temperature: {{preferred_temperature}}\n\nFeatures and functionality needed: {{app_features}}\n\nUser input variables required: {{input_variables}}\n\n{{additional_details}}\n\nPLEASE PROVIDE A VALID JSON CONFIGURATION FOLLOWING EXACTLY THE STRUCTURE AND FIELD NAMES AS SHOWN IN THE REFERENCE EXAMPLE.",

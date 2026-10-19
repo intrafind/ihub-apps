@@ -18,7 +18,7 @@
   "preferredModel": "gemini-flash-latest",
   "preferredOutputFormat": "markdown",
   "preferredStyle": "detailed",
-  "preferredTemperature": 0.3,
+  "preferredTemperature": 0.7,
   "upload": {
     "enabled": true,
     "audioUpload": {
