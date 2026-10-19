@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import { useEffect, useState } from 'react';
 import * as microsoftTeams from '@microsoft/teams-js';
 import { useAuth } from '../auth';

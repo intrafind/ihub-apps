@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Workflow state on the storage provider: `WorkflowStateRepository`, the
  * checkpoint path through `StateManager`, the two boot sweeps that read it,

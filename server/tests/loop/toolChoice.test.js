@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * `policies.tools.choice: 'required'` — the first model call of a turn must
  * call a tool, every later call is free to answer. Driven through the real

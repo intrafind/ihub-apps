@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 // Plain-node test (node server/tests/clusterBus.test.js).
 //
 // Exercises server/clusterBus.js against a real cluster: the file forks itself

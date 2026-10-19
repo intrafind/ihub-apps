@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Server side of per-model prompt caching (see `shared/promptCaching.js`):
  * resolving the per-request cache options the adapters read from

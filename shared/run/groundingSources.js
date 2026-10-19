@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Display helpers for the sources behind a chat answer. The sources themselves
  * — web search results, page reads and provider grounding — are collected by

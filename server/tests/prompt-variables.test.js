@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Prompt variables (#2519): which placeholders a prompt asks for, and how the
  * text reads once they are filled in. The same module drives the client's

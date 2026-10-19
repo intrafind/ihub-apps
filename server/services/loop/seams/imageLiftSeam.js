@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Image lifting (chat behaviour): a tool result that carries an image
  * (`{ imageData: { type: 'image', base64, format?, filename? } }` anywhere in

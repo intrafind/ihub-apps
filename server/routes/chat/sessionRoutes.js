@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import configCache from '../../configCache.js';
 import { appendMcpAppContext } from '../../services/mcp/mcpAppContext.js';
 import { sendLLMError } from '../../services/loop/llmHttpErrors.js';

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * RunLog event contracts — the ledger underneath every chat, workflow, agent
  * and inference run (concept §5.4). One append-only JSONL stream per run.

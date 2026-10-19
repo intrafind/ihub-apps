@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 function DataTableLoadingRows({ rows = 5, columnCount }) {
   // Skeleton rows have no identity beyond their position — disabling the
   // array-index-key rule is intentional here.

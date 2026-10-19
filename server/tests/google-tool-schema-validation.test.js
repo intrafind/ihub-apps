@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Integration test for Google Gemini tool schema validation
  * Reproduces the original bug where un-localized tool descriptions caused Google API errors

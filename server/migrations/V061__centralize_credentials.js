@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 export const version = '061';
 export const description = 'centralize_credentials';
 // Numbered V060 (not V057): main already ships V057–V059.

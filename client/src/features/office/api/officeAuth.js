@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Office add-in authentication module.
  * Uses prefixed localStorage keys to avoid conflicts with the main SPA's auth tokens.

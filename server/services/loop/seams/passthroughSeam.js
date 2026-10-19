@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Passthrough tools (chat behaviour): a tool marked `passthrough: true`
  * (workflow tools invoked from chat) streams its own answer straight to the

@@ -1,5 +1,8 @@
 #!/usr/bin/env node
 
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * What the page reader makes of a page (`tools/lib/pageContent.js`), how its
  * cache is bounded (`services/pageCache.js`), and the result shape and filters

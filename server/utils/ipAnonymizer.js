@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Anonymize an IPv4 or IPv6 address by zeroing the host bits, leaving only
  * coarse network information behind. The output is still useful for things

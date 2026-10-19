@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import configCache from '../configCache.js';
 import { SECRET_FIELDS_BY_TYPE } from '../validators/credentialSchema.js';
 import logger from '../utils/logger.js';

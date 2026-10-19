@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * DOCX → Markdown with the structure Word stores: headings (also custom styles and outline
  * levels), lists, tables, footnotes, links, page breaks.

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Progress and Stop of a document extraction. A long document takes seconds to minutes, so the
  * extractors report where they are and stop when the caller asks them to.

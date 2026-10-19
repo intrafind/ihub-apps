@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import { useEffect, useSyncExternalStore } from 'react';
 import { subscribe, getPlaybackFor, stop } from '../utils/readAloud';
 

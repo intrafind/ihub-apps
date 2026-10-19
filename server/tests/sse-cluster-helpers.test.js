@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 // Plain-node test (node server/tests/sse-cluster-helpers.test.js).
 //
 // The cluster-aware helpers in server/sse.js replaced direct `clients` /

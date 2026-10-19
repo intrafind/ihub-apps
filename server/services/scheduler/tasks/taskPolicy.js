@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Scheduled task policy — whether the feature is on, who may use it, and the
  * platform limits it runs under.

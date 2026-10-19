@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * List and chapter numbers of an OpenDocument text: Writer stores them as list styles and
  * counts them when it lays the document out. The labels are computed here — numbered lists,

@@ -1,5 +1,8 @@
 #!/usr/bin/env node
 
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Validates the shipped Claude-style autonomous agent:
  *   - server/defaults/workflows/claude-style-agent.json passes workflowConfigSchema

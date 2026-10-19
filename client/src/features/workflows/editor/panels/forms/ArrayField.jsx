@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 function ArrayField({ label, value = [], onChange, placeholder }) {
   const items = Array.isArray(value) ? value : [];
 

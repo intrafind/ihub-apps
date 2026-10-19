@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 // Office Add-in HTML Page Routes
 // Serves the Office add-in HTML pages (taskpane, callback, commands) and static assets.
 // These pages live outside the main SPA and need their own dedicated routes.

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Small pure helpers that turn what the chat holds (an answer, a tool run, a
  * question the app asked) into what voice mode says and shows.

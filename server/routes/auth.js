@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import { loginUser, createUser } from '../middleware/localAuth.js';
 import { createAuthorizationMiddleware } from '../utils/authorization.js';
 import {

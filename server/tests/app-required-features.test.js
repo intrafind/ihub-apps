@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * `requiredFeatures` on an app: while a feature it lists is off, users do not
  * get the app (as if it were disabled), admins still do, and the apps ETag

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * The client view of a user skill — what `/api/user-skills` and the admin list
  * send for one. Shaped like the user prompt view (`userPromptView.js`).

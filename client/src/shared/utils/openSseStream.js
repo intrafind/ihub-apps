@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Shared SSE transport for every run-scoped stream (chat, workflow execution,
  * agent run, tool-service progress).

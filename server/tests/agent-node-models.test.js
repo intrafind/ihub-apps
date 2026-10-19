@@ -1,5 +1,8 @@
 #!/usr/bin/env node
 
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Per-step model configuration for agent runs:
  *   - agentProfileSchema accepts a `nodeModels` map (nodeId → modelId)

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Test to verify GoogleConverter (generic tool calling) handles Gemini 3 function calling correctly
  */

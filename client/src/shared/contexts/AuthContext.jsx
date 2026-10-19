@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import { useContext, useReducer, useEffect, useCallback, useRef } from 'react';
 import { AuthContext } from './authContextValue';
 import { apiClient } from '../../api/client.js';

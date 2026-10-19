@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * A plain-model turn of the inference API: one model, no app, no tools run
  * on the server — straight through `LLMClient`, with the structured-output

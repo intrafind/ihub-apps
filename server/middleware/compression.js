@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import compression from 'compression';
 
 // Response types worth compressing: the client bundle, the SPA shell and JSON

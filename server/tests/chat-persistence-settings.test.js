@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Per-chat answering settings: what a chat remembers about how it is being
  * answered, so reopening it comes back with the same setup.

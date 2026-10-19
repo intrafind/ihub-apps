@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import cache from '../../utils/cache';
 
 // Clear the API cache - useful when user actions might invalidate the cache

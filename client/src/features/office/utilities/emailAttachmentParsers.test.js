@@ -1,5 +1,8 @@
 #!/usr/bin/env node
 
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Regression tests for parsing attached emails (.eml) and meeting invites
  * (.ics/iCalendar) that Outlook exposes via getAttachmentContentAsync —

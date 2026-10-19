@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Source producers (services/sources): how what a tool returned becomes the
  * sources the chat shows — web search and the page reader, a tool's own

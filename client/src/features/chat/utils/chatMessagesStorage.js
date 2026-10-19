@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * sessionStorage key of a chat's browser copy — the transcript of a chat that
  * is not stored server-side (`useChatMessages`). Its own module, free of

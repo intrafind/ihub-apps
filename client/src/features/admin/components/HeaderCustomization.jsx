@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import DynamicLanguageEditor from '../../../shared/components/DynamicLanguageEditor';
 
 function HeaderCustomization({ config, onUpdate, t }) {

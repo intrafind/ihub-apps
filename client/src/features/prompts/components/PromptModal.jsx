@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import { useState } from 'react';
 import Modal from '../../../shared/components/Modal';
 import Icon from '../../../shared/components/Icon';

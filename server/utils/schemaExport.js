@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import { z } from 'zod';
 import { appConfigSchema } from '../validators/appConfigSchema.js';
 import { modelConfigSchema } from '../validators/modelConfigSchema.js';

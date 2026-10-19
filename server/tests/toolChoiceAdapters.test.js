@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * What each adapter puts on the wire when the loop asks for a tool call
  * (`options.toolChoice: 'required'`). One row of docs/tool-calling.md's

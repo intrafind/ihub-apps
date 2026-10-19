@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Conversation memory of the outbound A2A client: which `contextId` (and,
  * while the agent waits for the user's answer, which `taskId`) a chat has with

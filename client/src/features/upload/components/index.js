@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 export { default as AttachedFilesList } from './AttachedFilesList';
 export { default as CloudStoragePicker } from './CloudStoragePicker';
 export { default as UnifiedUploader } from './UnifiedUploader';

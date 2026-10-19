@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * `RunSummaryRepository` and the one-time legacy import, driven against a real
  * filesystem storage provider.

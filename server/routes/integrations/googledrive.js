@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 // Google Drive OAuth Integration Routes
 // Handles OAuth2 PKCE flow for Google Workspace file access authentication
 

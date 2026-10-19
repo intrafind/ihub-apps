@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * User skills — the policy half: whether this installation lets users keep
  * their own skills, how big they may be, and whom they may share them with.

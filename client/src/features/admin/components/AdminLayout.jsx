@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import { Outlet, useLocation } from 'react-router-dom';
 import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';

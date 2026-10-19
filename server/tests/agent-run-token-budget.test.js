@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 // Plain-node test (node server/tests/agent-run-token-budget.test.js).
 //
 // Regression for the missing token circuit-breaker in phased agent runs

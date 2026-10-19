@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import useAppChat from '../hooks/useAppChat';

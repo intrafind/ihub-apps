@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 // Plain-node test (node server/tests/search-cache.test.js).
 //
 // Run wf-exec-f4f70e84 fired 151 braveSearch calls against a ~1 req/s free tier

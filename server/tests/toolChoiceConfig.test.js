@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Where `toolChoice` is configured: an app's `toolChoice`, a workflow node's
  * `config.toolChoice` and a model's `supportsTools` levels.

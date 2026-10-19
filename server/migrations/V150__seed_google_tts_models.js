@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 // server/migrations/V150__seed_google_tts_models.js
 export const version = '150';
 export const description = 'seed_google_tts_models';

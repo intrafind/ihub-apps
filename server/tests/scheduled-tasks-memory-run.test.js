@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * A run of a task that keeps memory: what the model is given (the notes, the
  * instruction to read them and the earlier runs first, the tools), what is

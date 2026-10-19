@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import configStore from '../../services/config/ConfigStore.js';
 import { rawRelPath } from '../../storage/namespaces.js';
 import configCache from '../../configCache.js';

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * The rules a personal skill has to satisfy, as the editor checks them while
  * the user types. The server applies the same rules (see the user skills API

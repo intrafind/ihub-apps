@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Structured output for the inference API — the output contract a request
  * asks for, whether the model can honour it, and whether an answer does.

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import { v4 as uuidv4 } from 'uuid';
 import { DAGScheduler } from './DAGScheduler.js';
 import { emitNodeProgress } from './nodeProgress.js';

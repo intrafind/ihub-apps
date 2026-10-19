@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 // Provider adapters registry
 import OpenAIAdapter from './openai.js';
 import OpenAIResponsesAdapter from './openai-responses.js';

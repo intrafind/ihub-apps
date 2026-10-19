@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Built-in catalog of hosted MCP servers, offered under Admin → MCP servers →
  * Browse catalog. An entry is a template for a `mcpServers.json` server: the

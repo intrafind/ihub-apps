@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import { recordTokenUsage } from './telemetry.js';
 import { recordMagicPromptUsage, recordFeedbackEvent } from './telemetry/metrics.js';
 import { resolveUserId } from './services/UserFingerprint.js';

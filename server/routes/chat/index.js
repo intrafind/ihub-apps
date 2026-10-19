@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import registerSessionRoutes from './sessionRoutes.js';
 import registerFeedbackRoutes from './feedbackRoutes.js';
 import registerDataRoutes from './dataRoutes.js';

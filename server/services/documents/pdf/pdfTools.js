@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import { createPdf, PdfGenerationError, renderPagePreview } from './PdfService.js';
 import { GeneratedFileError, heldGeneratedFile, holdGeneratedFile } from '../generatedFiles.js';
 

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * The per-app options of document extraction (`upload.fileUpload` of an app). All of them send
  * more than the visible text of a document and are therefore off unless an app asks for them

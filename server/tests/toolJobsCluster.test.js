@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 // Plain-node test (node server/tests/toolJobsCluster.test.js).
 //
 // Tool jobs (OCR) run in the memory of the worker that started them, while

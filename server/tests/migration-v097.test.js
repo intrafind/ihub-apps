@@ -1,5 +1,8 @@
 #!/usr/bin/env node
 
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Migration V097 specs — seeding the `chats` section in platform.json and
  * carrying the chat-history preview flag over to durable chats.

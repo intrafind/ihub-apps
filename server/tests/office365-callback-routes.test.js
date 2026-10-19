@@ -1,5 +1,8 @@
 #!/usr/bin/env node
 
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import office365Router from '../routes/integrations/office365.js';
 import Office365Service from '../services/integrations/Office365Service.js';
 import {

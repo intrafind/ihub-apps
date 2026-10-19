@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 // Tool functions for the Microsoft Entra ID directory. The Graph client lives in
 // services/integrations/EntraService.js.
 

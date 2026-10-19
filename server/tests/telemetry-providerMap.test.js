@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Tests for the shared provider/operation resolver used by llmInstrumentation
  * for streaming and non-streaming model calls alike.

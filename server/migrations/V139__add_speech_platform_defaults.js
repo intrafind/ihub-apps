@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 // server/migrations/V139__add_speech_platform_defaults.js
 export const version = '139';
 export const description = 'add_speech_platform_defaults';

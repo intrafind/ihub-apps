@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import { createCompletionRequest } from '../adapters/index.js';
 import dotenv from 'dotenv';
 import logger from '../utils/logger.js';

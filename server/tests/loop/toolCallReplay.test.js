@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Tool calls replayed in message history go to OpenAI-format providers with
  * JSON arguments. A call the model made without arguments is recorded as `''`;

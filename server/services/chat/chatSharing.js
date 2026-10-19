@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Chat sharing — the policy half: which modes an installation allows, what an
  * owner may pick for a link, and what state a share is in right now.

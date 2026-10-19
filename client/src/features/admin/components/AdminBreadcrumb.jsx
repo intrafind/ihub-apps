@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import { Link } from 'react-router-dom';
 import Icon from '../../../shared/components/Icon';
 

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Model endpoint discovery (admin "Import from URL"): the URL the admin pastes
  * is turned into the `/models` listing, the listing is called with or without

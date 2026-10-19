@@ -1,5 +1,8 @@
 #!/usr/bin/env node
 
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Migration V108 specs — the meeting apps' prompts follow the Outlook add-in
  * from the "--- Current meeting ---" heading to the <current_meeting> block.

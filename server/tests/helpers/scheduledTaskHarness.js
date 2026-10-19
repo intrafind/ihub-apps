@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * A scheduled-task test harness: real filesystem storage in a temp directory,
  * a populated config cache, and a real ChatService over a scripted provider.

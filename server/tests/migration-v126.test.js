@@ -1,5 +1,8 @@
 #!/usr/bin/env node
 
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Migration V126 specs — registers the WebVTT and "any text file" upload
  * formats and lets apps that accept plain text also accept .vtt transcripts.

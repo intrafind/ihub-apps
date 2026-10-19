@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * HTTP Configuration Utilities
  * Provides centralized configuration for HTTP clients including SSL and proxy settings.

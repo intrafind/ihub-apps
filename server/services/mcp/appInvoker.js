@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import path from 'node:path';
 import ChatService from '../chat/ChatService.js';
 import { isValidId } from '../../utils/pathSecurity.js';

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Steer — deliver a human message into a running loop at its next step
  * boundary (concept §5.5: human → agent on the same rails).

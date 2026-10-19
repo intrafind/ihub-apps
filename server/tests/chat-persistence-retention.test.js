@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * `chatRetention` — the two rules that keep durable chats from growing without
  * bound — driven against a real `ChatRepository` over a real filesystem

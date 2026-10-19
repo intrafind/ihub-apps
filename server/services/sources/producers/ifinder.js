@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Source producer for the iFinder tools, and the conversion of iFinder
  * documents as the iAssistant conversation API sends them.

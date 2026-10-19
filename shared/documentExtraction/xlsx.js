@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Spreadsheets (.xlsx, .xls) → text a model can read: a sheet with a header row as a Markdown
  * table, merged cells that keep every row complete, hidden sheets flagged, and a size limit with

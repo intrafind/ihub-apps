@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import { describe, it, expect } from '@jest/globals';
 import { MCP_SERVER_CATALOG, MCP_CATALOG_CATEGORIES } from '../../services/mcp/serverCatalog.js';
 import { mcpServerConfigSchema } from '../../validators/mcpServerConfigSchema.js';

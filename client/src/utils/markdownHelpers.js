@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 // Define maps once at the module level for performance
 const LANGUAGE_DISPLAY_MAP = {
   js: 'JavaScript',

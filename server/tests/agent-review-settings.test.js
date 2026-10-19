@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 // server/tests/agent-review-settings.test.js
 import { resolveReviewSettings } from '../agents/profile/reviewSettings.js';
 let failures = 0;

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * ActivityTracker drives the periodic "Activity summary" log line and the
  * ihub.active.users / ihub.active.chats observable gauges. These tests

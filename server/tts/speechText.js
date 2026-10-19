@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Turn a chat message (Markdown, sometimes with HTML) into text a speech model
  * can read aloud, and split it into requests the provider accepts.

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * The server-side PDF engine behind the `pdf` system skill and PDF exports
  * (services/documents/pdf): Markdown conversion, the layout-block sanitiser

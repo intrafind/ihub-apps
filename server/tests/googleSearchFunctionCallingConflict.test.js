@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Test to verify that native Google Search grounding and function calling
  * cannot be combined in the same request. This validates the fix for the

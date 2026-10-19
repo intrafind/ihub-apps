@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Audio helpers for the batch transcription providers, which upload the PCM16
  * the browser streams as a file: the WAV wrapper, and cutting a long recording

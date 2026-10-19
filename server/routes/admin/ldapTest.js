@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import net from 'node:net';
 import tls from 'node:tls';
 import { authenticateResult, AUTH_RESULT_SUCCESS } from 'ldap-authentication';

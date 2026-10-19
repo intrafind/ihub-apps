@@ -1,5 +1,8 @@
 #!/usr/bin/env node
 
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 // The shared OAuth route factory (routes/integrations/oauthIntegrationFactory.js),
 // exercised through the four real provider routers. Handlers are driven directly
 // with stubbed services; nothing touches the network or the disk.

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import TurndownService from 'turndown';
 import { renderMarkdown } from '../config/marked.config';
 

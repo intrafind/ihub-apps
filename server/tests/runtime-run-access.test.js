@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * `runAccess` reading the shared `runs` namespace, driven against a real
  * `FilesystemStorageProvider` brought up through the storage bootstrap.

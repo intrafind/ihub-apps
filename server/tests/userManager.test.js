@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import { equalsIgnoreCase, findUserByIdentifier } from '../utils/userManager.js';
 
 describe('equalsIgnoreCase', () => {

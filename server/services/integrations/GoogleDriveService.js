@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import 'dotenv/config';
 import crypto from 'node:crypto';
 import { httpFetch } from '../../utils/httpConfig.js';

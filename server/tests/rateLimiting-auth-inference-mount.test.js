@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Regression test for #1684: the auth and inference rate limiters were
  * mounted with buildServerPath('/auth') / buildServerPath('/inference'),

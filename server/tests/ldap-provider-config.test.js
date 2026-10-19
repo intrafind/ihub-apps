@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Tests for the LDAP provider derivation in `utils/ldapProviderConfig.js`
  * (issue #2442).

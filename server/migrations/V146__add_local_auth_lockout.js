@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 // server/migrations/V146__add_local_auth_lockout.js
 export const version = '146';
 export const description = 'add_local_auth_lockout';

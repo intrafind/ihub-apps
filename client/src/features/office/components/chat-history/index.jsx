@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import ChatHeader from '../chat/ChatHeader';

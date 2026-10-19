@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Usage guides for apps (issue #2838): the parts that need no configuration
  * cache or model — the app list without the guides' text, and the prompt that

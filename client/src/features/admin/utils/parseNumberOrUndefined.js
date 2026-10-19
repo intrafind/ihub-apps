@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 // parseInt/parseFloat return NaN for cleared/invalid input; NaN serializes to
 // null in JSON and is rejected by the strict server schema, so fall back to undefined.
 export default function parseNumberOrUndefined(value, parser = Number.parseFloat) {

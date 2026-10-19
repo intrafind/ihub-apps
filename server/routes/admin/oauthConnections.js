@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import { listConnections, revokeConnection } from '../../services/oauth/ConnectionService.js';
 import { listCimdClientRows } from '../../services/oauth/CimdGovernanceService.js';
 import { buildServerPath } from '../../utils/basePath.js';

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Output-token cap (`max_tokens` / `maxOutputTokens`) sent to a provider.
  *

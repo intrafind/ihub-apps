@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 const STATUS_COLORS = {
   queued: 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300',
   processing: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300',

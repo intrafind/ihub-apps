@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * `InteractionService` on the storage provider, driven against a real
  * `FilesystemStorageProvider`.

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Sources declared in a tool definition: a mapping from the tool's result to
  * sources, so a tool whose result does not speak the contract (an OpenAPI

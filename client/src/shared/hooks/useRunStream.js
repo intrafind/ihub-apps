@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import { useReducer, useRef, useCallback, useEffect, useState } from 'react';
 import {
   createStreamState,

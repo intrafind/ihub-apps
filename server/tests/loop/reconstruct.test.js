@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * T5 — a run recorded through LLMClient can be rebuilt from its ledger and the
  * rebuilt provider request hashes to what was sent (report-only check).

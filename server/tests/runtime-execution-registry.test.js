@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * `ExecutionRegistry` over the shared `runs` namespace, driven against a real
  * `FilesystemStorageProvider`.

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Render a Markdown report from a workflow-author-supplied template and a
  * conventional context shape (`{records, coverage, synthesis, ...extra}`).

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Migration V118 — replace `officeIntegration.useLocalOfficejs` with an
  * Office.js source mode and URLs.

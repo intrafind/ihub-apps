@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 // Plain-node test (node server/tests/consentTicket.test.js).
 //
 // The consent ticket replaced a session-backed CSRF token plus session-stored

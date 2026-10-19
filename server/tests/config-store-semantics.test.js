@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * The three read/write semantics the configuration store had to preserve
  * exactly, because the rest of the server was built on them:

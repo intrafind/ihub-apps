@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Whether web search works with a model in an app — for the model picker.
  * The sources a web search found are part of the answer's sources

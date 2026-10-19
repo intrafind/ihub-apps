@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import config from './config.js';
 import configCache from './configCache.js';
 import tokenStorageService from './services/TokenStorageService.js';

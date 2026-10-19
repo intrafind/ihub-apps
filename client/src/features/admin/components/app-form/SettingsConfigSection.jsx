@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * SettingsConfigSection - Toggles controlling which per-chat settings end
  * users are allowed to change, extracted from AppFormEditor.

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import expressNtlm from 'express-ntlm';
 import configCache from '../configCache.js';
 import credentialService from '../services/CredentialService.js';

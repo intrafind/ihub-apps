@@ -1,5 +1,8 @@
 #!/usr/bin/env node
 
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Validates the phased Claude-style autonomous agent profile:
  *   - server/defaults/agents/profiles/claude-style-agent-phased.json passes

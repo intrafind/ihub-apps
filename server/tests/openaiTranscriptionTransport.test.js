@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * The OpenAI-compatible transcription provider uploads through the platform's
  * `httpFetch`, so its proxy, TLS settings and DNS guard apply — as they do to

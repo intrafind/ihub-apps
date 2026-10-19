@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Canonical TaskRecord shape for the agent dynamic-task queue
  * (`state.data._taskQueue`).

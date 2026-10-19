@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 export let DEFAULT_LANGUAGE = 'en';
 export function setDefaultLanguage(lang) {
   if (typeof lang === 'string' && lang.length > 0) {

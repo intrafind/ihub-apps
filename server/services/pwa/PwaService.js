@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import { createHash } from 'node:crypto';
 import { statSync, readFileSync } from 'node:fs';
 import { getBasePath } from '../../utils/basePath.js';

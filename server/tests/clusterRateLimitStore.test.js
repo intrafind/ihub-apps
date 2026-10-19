@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 // Plain-node test (node server/tests/clusterRateLimitStore.test.js).
 //
 // The credential rate limiters count in the primary process, so a client

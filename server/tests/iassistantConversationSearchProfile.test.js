@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * The search profile a resumed iAssistant conversation's documents are linked
  * into (`GET /api/apps/:appId/conversations/:id/messages`).

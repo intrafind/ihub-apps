@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import { z } from 'zod';
 import { VARIABLE_NAME_PATTERN, VARIABLE_TYPES } from '../../shared/promptVariables.js';
 import { SAFE_ID_PATTERN } from '../utils/pathSecurity.js';

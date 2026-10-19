@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 // Plain-node test (node server/tests/workflow-model-resolution.test.js).
 // Covers the shared BaseNodeExecutor.resolveModel precedence and the fact that
 // query-plan / quote-validator nodes now inherit it (previously they resolved

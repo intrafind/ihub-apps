@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * OpenDocument files (.odt, .ods, .odp) → text with the structure of the document. The kind of
  * document is read from the body of content.xml, not from the file name: a text becomes

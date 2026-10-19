@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * The step that keeps a task's notes up to date after a run: how its reply is
  * read, what it is shown, and what happens to the notes, the run and the

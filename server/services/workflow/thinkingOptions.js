@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Map a workflow node's `thinking` config block to the per-request adapter
  * options the LLM adapters understand.

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 export { collectStructuredRecord } from './collectStructuredRecord.js';
 export { jsonSchemaToZod } from './jsonSchemaToZod.js';
 export {

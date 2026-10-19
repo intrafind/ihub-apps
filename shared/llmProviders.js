@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * LLM provider entries (`config/providers.json`) and the models linked to them.
  * Shared by the server (API key lookup, admin routes) and the admin UI.

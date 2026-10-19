@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import { promises as fs, existsSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { getRootDir } from '../pathUtils.js';

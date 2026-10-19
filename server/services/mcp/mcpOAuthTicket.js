@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * The OAuth `state` of an outbound per-user MCP sign-in, as a signed ticket.
  *

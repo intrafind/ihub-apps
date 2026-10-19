@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import SourceHandler from './SourceHandler.js';
 import iFinder from '../tools/iFinder.js';
 

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * The Outlook add-in's default answer action — `platform.json →
  * officeIntegration.defaultMailAction`.

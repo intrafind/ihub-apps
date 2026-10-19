@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import { matchesModelFilter, modelSupportsTools } from '../../../shared/modelCapabilities.js';
 
 /** A transcription model: answers audio with its transcript, never a prompt. */

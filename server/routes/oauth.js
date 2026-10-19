@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import crypto from 'node:crypto';
 import { validateClientCredentials } from '../utils/oauthClientManager.js';
 import { buildPolicyCimdClient, resolveOAuthClient } from '../utils/oauthClientResolver.js';

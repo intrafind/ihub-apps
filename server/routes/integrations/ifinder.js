@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import express from 'express';
 import { authRequired } from '../../middleware/authRequired.js';
 import logger from '../../utils/logger.js';

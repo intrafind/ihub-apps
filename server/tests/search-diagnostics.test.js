@@ -1,5 +1,8 @@
 #!/usr/bin/env node
 
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Search diagnostics specs — the admin connectivity test's whole value is that
  * it tells an admin *which kind* of problem they have, because the two common

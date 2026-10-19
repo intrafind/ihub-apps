@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import cluster from 'node:cluster';
 import { MemoryStore } from 'express-rate-limit';
 import { isClusterBusActive, request, respondInPrimary } from '../clusterBus.js';

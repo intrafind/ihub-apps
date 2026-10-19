@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * iAssistant Conversation API adapter for iHub Apps
  * Handles multi-turn conversations with SSE streaming via the iFinder Conversation API.

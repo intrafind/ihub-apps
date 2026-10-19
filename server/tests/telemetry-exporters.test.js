@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * parseOTLPEnvVars handles the OTEL_EXPORTER_OTLP_HEADERS string format
  * documented in the OpenTelemetry spec:

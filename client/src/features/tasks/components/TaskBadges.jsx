@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import { useTranslation } from 'react-i18next';
 import { RUN_STATUS_CLASSES, TASK_STATUS_CLASSES } from '../utils/taskFormat';
 

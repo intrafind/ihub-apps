@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Regression test for #1799: runUpdateCLI's catch block used `catch (error)`,
  * which shadowed the module-scoped `error(msg)` logger, so any real failure

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Stream Utilities
  * Provides utilities for working with different stream types (Web Streams vs Node.js streams)

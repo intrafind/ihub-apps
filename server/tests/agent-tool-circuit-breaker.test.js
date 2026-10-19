@@ -1,4 +1,8 @@
 #!/usr/bin/env node
+
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 //
 // Run wf-exec-f4f70e84: 151/151 braveSearch calls returned HTTP 429. The model
 // re-tried the rate-limited tool every round, burning all 8 iterations per task

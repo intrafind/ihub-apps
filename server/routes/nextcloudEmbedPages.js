@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 // Nextcloud Embed HTML Page Routes
 // Serves the embedded iHub UI for use as an iframe inside Nextcloud. The
 // runtime API config + appinfo/info.xml live in

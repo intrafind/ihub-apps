@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * recordTokenUsage must preserve a legitimate 0-token reading. The previous
  * `usage.inputTokens || usage.prompt_tokens` pattern silently dropped 0

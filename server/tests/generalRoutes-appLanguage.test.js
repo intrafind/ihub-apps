@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Regression test for GET /api/apps/:appId honoring the platform's
  * configured defaultLanguage when no Accept-Language header is sent.

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 // Nextcloud Embed Integration Routes
 // Serves the runtime configuration the embedded iHub UI fetches on boot. This
 // is a separate surface from `routes/integrations/nextcloud.js`, which

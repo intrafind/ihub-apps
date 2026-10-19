@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Agent run lifecycle routes:
  *   POST /api/agents/profiles/:id/runs        — manual trigger

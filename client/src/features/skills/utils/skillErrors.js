@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * The response body of a failed skills API call, whichever way the error
  * reached us: wrapped by `handleApiResponse` (`originalError.response`) or as

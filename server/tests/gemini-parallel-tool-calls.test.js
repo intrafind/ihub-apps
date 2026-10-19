@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Regression test for #1722: Google streaming emitted the same tool_calls index (0)
  * for every chunk because GoogleConverter derived it from result.tool_calls.length,

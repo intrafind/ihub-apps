@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';

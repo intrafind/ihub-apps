@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Workflows have no code node type any more: there is no executor for it,
  * the workflow schema rejects it, and no shipped workflow uses one. The

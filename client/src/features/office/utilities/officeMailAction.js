@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * What the task pane does with an assistant answer in Outlook: the action
  * vocabulary, which actions each Outlook mode offers, and how the default one

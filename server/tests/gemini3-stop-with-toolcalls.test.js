@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Test to verify tool calling works when Gemini returns finishReason: "STOP" with function calls
  * This test validates the fix for the issue where tool calls were not being executed

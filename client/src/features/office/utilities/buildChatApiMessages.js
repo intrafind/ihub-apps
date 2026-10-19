@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import { processDocumentFile, resizeImageCanvas } from '../../upload/utils/fileProcessing';
 import { extractionOptionsOf } from '../../upload/utils/extractionOptions';
 import { sanitizeContentType, hasBase64Content } from './attachmentFormat';

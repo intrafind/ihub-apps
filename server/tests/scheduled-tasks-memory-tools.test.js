@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * `list_task_runs` and `get_task_run`: what a run can read about the earlier
  * runs of its own task, and everything it must not be able to read.

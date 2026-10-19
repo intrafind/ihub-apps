@@ -1,5 +1,8 @@
 #!/usr/bin/env node
 
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Migration V168 specs — adds the voice mode platform defaults
  * (`speech.voiceMode`, issue #2868) without touching what an admin set.

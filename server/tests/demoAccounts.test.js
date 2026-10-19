@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * The admin is warned while the login page lists the demo accounts and the
  * credentials it prints still sign in (utils/demoAccounts.js): the account is

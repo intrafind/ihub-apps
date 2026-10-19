@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import { createResourceLoader, createSchemaValidator } from './utils/resourceLoader.js';
 import { agentProfileSchema, knownAgentProfileKeys } from './validators/agentProfileSchema.js';
 

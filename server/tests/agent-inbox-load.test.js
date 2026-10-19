@@ -1,5 +1,8 @@
 #!/usr/bin/env node
 
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Runtime test for the root-cause fix of the "agent hallucinated a topic" bug:
  * an EXTERNAL agent workflow must deterministically load its inbox item before

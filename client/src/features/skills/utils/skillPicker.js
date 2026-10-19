@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * The `/` picker's group for a skill, by the skill's scope. Global skills
  * keep the existing `skill` group; personal skills get their own groups after

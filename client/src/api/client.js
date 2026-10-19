@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import axios from 'axios';
 import { getSessionId, shouldRenewSession, renewSession } from '../utils/sessionManager';
 import { buildApiUrl } from '../utils/runtimeBasePath';

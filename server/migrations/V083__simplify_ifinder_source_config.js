@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 // server/migrations/V083__simplify_ifinder_source_config.js
 export const version = '083';
 export const description = 'simplify_ifinder_source_config';

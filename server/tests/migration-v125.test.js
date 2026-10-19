@@ -1,5 +1,8 @@
 #!/usr/bin/env node
 
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Migration V125 specs — the iFinder search description gains a pointer to the
  * ifinder-search skill, but only where an admin has not reworded it.

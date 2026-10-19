@@ -1,5 +1,8 @@
 #!/usr/bin/env node
 
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Unit tests for the adversarial verifier mode on VerifierNodeExecutor
  * (Claude Code verification-agent analog) and its reconsideration hook:

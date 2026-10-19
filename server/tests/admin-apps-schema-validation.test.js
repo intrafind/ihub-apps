@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Creating or updating an app through the admin API validates the
  * configuration against the app schema and answers 400 with the issues when

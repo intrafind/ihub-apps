@@ -1,3 +1,8 @@
+/*
+ * SPDX-FileCopyrightText: IntraFind Software AG
+ * SPDX-License-Identifier: LicenseRef-iHub-Apps
+ */
+
 /* Voice mode dock: the level bars in its End pill and the glow behind it, in
    the state's colour. The mic level reaches them as --voice-level (0..1),
    written by the dock without re-rendering it. */

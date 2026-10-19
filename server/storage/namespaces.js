@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * The raw configuration namespaces — which storage namespace is a view over
  * which directory of an installation's `contents/`.

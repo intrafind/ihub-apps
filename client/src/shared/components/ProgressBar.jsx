@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 export default function ProgressBar({ value, max, label, variant = 'stacked' }) {
   const pct = max > 0 ? Math.round((value / max) * 100) : 0;
 

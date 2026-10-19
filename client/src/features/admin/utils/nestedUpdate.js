@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Immutably set a value at a nested path without repeating spread pyramids
  * like `{...obj, a: {...obj.a, b: {...obj.a.b, c: value}}}`.

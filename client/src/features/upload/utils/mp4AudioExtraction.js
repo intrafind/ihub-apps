@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * The audio track of an MP4, MOV or M4A file of any size, read with
  * `File.slice()`.

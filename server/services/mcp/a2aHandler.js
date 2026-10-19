@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import configCache from '../../configCache.js';

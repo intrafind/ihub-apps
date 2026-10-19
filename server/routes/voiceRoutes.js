@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import configCache from '../configCache.js';
 import { authRequired } from '../middleware/authRequired.js';
 import { getAzureSpeechToken } from '../services/azureSpeechToken.js';

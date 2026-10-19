@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 // Browser Extension Integration Routes
 // Serves runtime configuration the extension needs before OAuth can start.
 
