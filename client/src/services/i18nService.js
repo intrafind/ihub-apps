@@ -1,11 +1,39 @@
 import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
 import LanguageDetector from 'i18next-browser-languagedetector';
-import { fetchTranslations } from '../api';
-import { apiClient } from '../api/client';
-// Import core translations statically to avoid Firefox dynamic import issues
-import enCoreTranslations from '../../../shared/i18n/en.json';
-import deCoreTranslations from '../../../shared/i18n/de.json';
+import { fetchTranslations, fetchUIConfig } from '../api';
+
+// The built-in translations are only a fallback for when the translations API
+// is unreachable: the API serves them merged with the admin's overrides. They
+// are ~300 KB per language, so they live in lazy chunks instead of the startup
+// bundle.
+const BUNDLED_TRANSLATIONS = {
+  en: () => import('../../../shared/i18n/en.json'),
+  de: () => import('../../../shared/i18n/de.json')
+};
+
+// Resolves with `promise`'s value, or with `timeoutValue` after `ms`.
+function raceTimeout(promise, ms, timeoutValue) {
+  let timer;
+  const timeout = new Promise(resolve => {
+    timer = setTimeout(() => resolve(timeoutValue), ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
+// Built-in translations without the admin's overrides, for when the API is
+// unreachable. Not cached, so the next language load retries the API.
+async function loadBundledTranslations(language) {
+  const load = BUNDLED_TRANSLATIONS[language];
+  if (!load) return null;
+  try {
+    const mod = await load();
+    return mod.default || mod;
+  } catch (error) {
+    console.error(`Failed to load bundled translations for ${language}:`, error);
+    return null;
+  }
+}
 
 class I18nService {
   constructor() {
@@ -17,6 +45,11 @@ class I18nService {
     this.languageChangeInProgress = false;
     this.broadcastChannel = null;
     this.suppressBroadcast = false;
+    // Resolves once the first language's translations are loaded (or failed to
+    // load), so the app can hold its first render until there is text to show.
+    this.ready = new Promise(resolve => {
+      this.resolveReady = resolve;
+    });
 
     // Initialize synchronously with minimal setup
     this.initializeSync();
@@ -72,6 +105,7 @@ class I18nService {
     } catch (error) {
       console.error('Failed to initialize i18n service synchronously:', error);
       this.isInitialized = true;
+      this.resolveReady();
     }
   }
 
@@ -140,31 +174,78 @@ class I18nService {
 
   async initializeAsync() {
     try {
-      // Load platform configuration asynchronously
-      await this.loadPlatformConfig();
-
-      // Add core translations to existing i18n instance (already imported statically)
-      i18n.addResourceBundle('en', 'translation', enCoreTranslations, true, true);
-      i18n.addResourceBundle('de', 'translation', deCoreTranslations, true, true);
-
-      // Load full translations for the current language
       const currentLanguage = i18n.language || this.defaultLanguage;
       document.documentElement.lang = currentLanguage;
-      await this.loadFullTranslations(currentLanguage);
+
+      // The translations don't depend on the UI configuration, so fetch both
+      // in parallel instead of one after the other.
+      await Promise.all([this.loadPlatformConfig(), this.loadFullTranslations(currentLanguage)]);
     } catch (error) {
       console.error('Failed to initialize i18n service asynchronously:', error);
+    } finally {
+      this.resolveReady();
+    }
+
+    this.scheduleFallbackTranslations();
+  }
+
+  // Keys missing from the current language fall back to the fallback language,
+  // so load it too — once the browser is idle, as it is rarely needed and
+  // shouldn't compete with the requests of the first render.
+  scheduleFallbackTranslations() {
+    const fallbackLanguage = i18n.options?.fallbackLng?.[0] || 'en';
+    if (this.normalizeLanguageCode(i18n.language) === fallbackLanguage) return;
+
+    // loadFullTranslations handles its own errors, so the promise never rejects.
+    const loadFallback = () => {
+      this.loadFullTranslations(fallbackLanguage);
+    };
+    if (typeof window.requestIdleCallback === 'function') {
+      window.requestIdleCallback(loadFallback, { timeout: 10000 });
+    } else {
+      setTimeout(loadFallback, 2000);
+    }
+  }
+
+  /**
+   * Wait until the first language's translations are available, but at most
+   * `timeoutMs`, so a slow translations API can't hold the app back for long.
+   * When the API is that slow, the built-in translations are installed before
+   * resolving (bounded the same way), so the first render shows text rather
+   * than raw keys. A later API response still replaces them with the merged
+   * translations, admin overrides included.
+   * @param {number} [timeoutMs]
+   * @returns {Promise<void>}
+   */
+  async whenReady(timeoutMs = 3000) {
+    const timedOut = await raceTimeout(
+      this.ready.then(() => false),
+      timeoutMs,
+      true
+    );
+    if (timedOut) {
+      await raceTimeout(this.applyBundledTranslations(), timeoutMs);
+    }
+  }
+
+  async applyBundledTranslations() {
+    const language = this.normalizeLanguageCode(i18n.language);
+    // Unbundled languages fall back to English keys through fallbackLng.
+    const bundledLanguage = BUNDLED_TRANSLATIONS[language] ? language : 'en';
+    const translations = await loadBundledTranslations(bundledLanguage);
+    // The API may have answered in the meantime; its translations win.
+    if (translations && !this.translationCache.has(bundledLanguage)) {
+      this.addTranslationsToI18n(bundledLanguage, translations);
     }
   }
 
   async loadPlatformConfig() {
     try {
-      // Use apiClient to get UI config instead (which now contains defaultLanguage)
-      const response = await apiClient.get('/configs/ui');
-      if (response.status >= 200 && response.status < 300) {
-        this.platformConfig = response.data;
-        if (this.platformConfig?.defaultLanguage) {
-          this.defaultLanguage = this.platformConfig.defaultLanguage;
-        }
+      // The UI config carries defaultLanguage. fetchUIConfig shares its cache
+      // with UIConfigContext, so the app doesn't request it a second time.
+      this.platformConfig = await fetchUIConfig();
+      if (this.platformConfig?.defaultLanguage) {
+        this.defaultLanguage = this.platformConfig.defaultLanguage;
       }
     } catch (error) {
       console.warn('Failed to load UI configuration, using default language en:', error);
@@ -264,7 +345,7 @@ class I18nService {
       `Failed to fetch translations for ${language} after ${maxRetries} attempts:`,
       lastError
     );
-    return null;
+    return loadBundledTranslations(language);
   }
 
   addTranslationsToI18n(language, translations) {

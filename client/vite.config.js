@@ -76,26 +76,28 @@ export default defineConfig({
         // Function form (object form is rejected by the rolldown-based Vite 8).
         // Maps a module id to its vendor chunk by package name; anything not
         // listed falls through to the default chunking.
+        //
+        // Only small, startup-critical packages belong here. Rolldown pulls every
+        // dependency of a captured module into the same chunk
+        // (`includeDependenciesRecursively` defaults to true), so a group for a
+        // heavy lazy library (mermaid, pdfjs, teams, monaco, ...) also captures
+        // the shared packages it depends on (DOMPurify, lodash, ...). Startup
+        // code then imports those from the heavy chunk, which drags the whole
+        // library into the initial load (this once put 4.8 MB of mermaid on the
+        // start page). Lazy libraries are reached through dynamic import(), so
+        // the default chunking already keeps them out of the startup bundle.
         manualChunks(id) {
-          if (!id.includes('node_modules')) return undefined;
+          // Match top-level packages only: copies nested under another package
+          // (e.g. mermaid/node_modules/marked) stay with their parent.
+          const parts = id.split('node_modules/');
+          if (parts.length !== 2) return undefined;
           const chunkMap = {
-            // Vendor chunks
-            'vendor-react': ['react', 'react-dom', 'react-router-dom'],
+            'vendor-react': ['react', 'react-dom', 'react-router', 'react-router-dom', 'scheduler'],
             'vendor-ui': ['@heroicons/react', 'react-icons', 'tailwindcss'],
-            'vendor-forms': ['react-quill-new', 'ajv', 'ajv-formats'],
-            'vendor-utils': ['axios', 'uuid', 'file-saver', 'fuse.js', 'marked', 'turndown'],
-
-            // Heavy dependencies that should be separate
-            mermaid: ['mermaid'],
-            monaco: ['@monaco-editor/react'],
-            teams: ['@microsoft/teams-js', 'microsoft-cognitiveservices-speech-sdk'],
-            pdf: ['pdfjs-dist'],
-            babel: ['@babel/standalone'],
-            office: ['react-markdown'],
-            xlsx: ['xlsx']
+            'vendor-utils': ['axios', 'uuid', 'file-saver', 'fuse.js', 'marked', 'turndown']
           };
           for (const [chunk, pkgs] of Object.entries(chunkMap)) {
-            if (pkgs.some(pkg => id.includes(`node_modules/${pkg}/`))) {
+            if (pkgs.some(pkg => parts[1].startsWith(`${pkg}/`))) {
               return chunk;
             }
           }

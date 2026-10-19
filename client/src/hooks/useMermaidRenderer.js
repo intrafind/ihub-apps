@@ -1,7 +1,9 @@
 import { useEffect } from 'react';
 import { validateMermaidCode, processMermaidCode, escapeHtml } from '../utils/markdownHelpers';
 import { isTrustedMermaidContainer, sanitizeMermaidSvg } from '../utils/mermaidSecurity';
-import svgPanZoom from 'svg-pan-zoom';
+
+// Loaded together with Mermaid, only once a diagram is on the page.
+let svgPanZoom = null;
 
 // A simple debounce utility
 const debounce = (func, delay) => {
@@ -114,6 +116,7 @@ const showMermaidButtonFeedback = (btn, message, colorClass, iconType) => {
 export const useMermaidRenderer = ({ t }) => {
   useEffect(() => {
     let mermaid;
+    let mermaidLoading = false;
     let mermaidReady = false;
 
     // Translated text, escaped for use in the HTML templates below.
@@ -125,11 +128,17 @@ export const useMermaidRenderer = ({ t }) => {
     // replaced, so re-renders leaked handlers indefinitely.
     const panZoomInstances = new Set();
 
-    // Pre-load Mermaid immediately when hook initializes
+    // Mermaid is several MB, so it is only fetched once the first diagram
+    // shows up (see initializeMermaidDiagrams), not when a page mounts.
     const loadMermaid = async () => {
-      if (!mermaid) {
+      if (!mermaidLoading) {
+        mermaidLoading = true;
         try {
-          const mermaidModule = await import('mermaid');
+          const [mermaidModule, panZoomModule] = await Promise.all([
+            import('mermaid'),
+            import('svg-pan-zoom')
+          ]);
+          svgPanZoom = panZoomModule.default || panZoomModule;
           mermaid = mermaidModule.default;
           mermaid.initialize({
             startOnLoad: false,
@@ -161,6 +170,8 @@ export const useMermaidRenderer = ({ t }) => {
           // Process any existing diagrams now that Mermaid is ready
           void initializeMermaidDiagrams();
         } catch (err) {
+          // Allow the next diagram to retry the load.
+          mermaidLoading = false;
           console.error('Failed to load or initialize Mermaid:', err);
         }
       }
@@ -177,6 +188,8 @@ export const useMermaidRenderer = ({ t }) => {
 
       // Wait for Mermaid to be ready
       if (!mermaidReady) {
+        // loadMermaid handles its own errors, so the promise never rejects.
+        loadMermaid();
         return; // Mermaid will call this function once it's loaded
       }
 
@@ -493,10 +506,7 @@ export const useMermaidRenderer = ({ t }) => {
       );
     };
 
-    // Start loading Mermaid immediately
-    void loadMermaid();
-
-    // Run initial processing (will be called again once Mermaid loads)
+    // Run initial processing (loads Mermaid if a diagram is already on the page)
     initialRun();
 
     // Set up observer for future DOM changes
@@ -1060,36 +1070,36 @@ export const useMermaidRenderer = ({ t }) => {
         window.addEventListener('resize', handleResize);
 
         // Drag functionality
-        diagramViewer.addEventListener('mousedown', e => {
-          if (e.target.closest('button')) return;
+        diagramViewer.addEventListener('mousedown', event => {
+          if (event.target.closest('button')) return;
           isDragging = true;
           diagramViewer.style.cursor = 'grabbing';
-          startX = e.clientX - translateX;
-          startY = e.clientY - translateY;
-          e.preventDefault();
+          startX = event.clientX - translateX;
+          startY = event.clientY - translateY;
+          event.preventDefault();
         });
 
         // Wheel zoom
-        diagramViewer.addEventListener('wheel', e => {
-          if (e.ctrlKey || e.metaKey) {
-            e.preventDefault();
-            const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1;
+        diagramViewer.addEventListener('wheel', event => {
+          if (event.ctrlKey || event.metaKey) {
+            event.preventDefault();
+            const zoomFactor = event.deltaY > 0 ? 0.9 : 1.1;
 
             // Get mouse position relative to the viewer
             const viewerRect = diagramViewer.getBoundingClientRect();
-            const mouseX = e.clientX - viewerRect.left;
-            const mouseY = e.clientY - viewerRect.top;
+            const mouseX = event.clientX - viewerRect.left;
+            const mouseY = event.clientY - viewerRect.top;
 
             updateZoom(currentZoom * zoomFactor, mouseX, mouseY);
           }
         });
 
         // Create cleanup function for event listeners
-        const mouseMoveHandler = e => {
+        const mouseMoveHandler = event => {
           if (!isDragging) return;
-          e.preventDefault();
-          translateX = e.clientX - startX;
-          translateY = e.clientY - startY;
+          event.preventDefault();
+          translateX = event.clientX - startX;
+          translateY = event.clientY - startY;
           updateTransform();
         };
 
@@ -1100,8 +1110,8 @@ export const useMermaidRenderer = ({ t }) => {
           }
         };
 
-        const escapeHandler = e => {
-          if (e.key === 'Escape') {
+        const escapeHandler = event => {
+          if (event.key === 'Escape') {
             closeModal();
           }
         };
@@ -1122,8 +1132,8 @@ export const useMermaidRenderer = ({ t }) => {
           }
         };
 
-        modal.addEventListener('click', e => {
-          if (e.target === modal) closeModal();
+        modal.addEventListener('click', event => {
+          if (event.target === modal) closeModal();
         });
 
         modal.querySelector('.close-fullscreen').addEventListener('click', closeModal);

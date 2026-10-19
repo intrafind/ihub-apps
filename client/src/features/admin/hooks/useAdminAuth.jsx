@@ -30,10 +30,6 @@ export function AdminAuthProvider({ children }) {
     setIsLoading(false);
   }, []);
 
-  useEffect(() => {
-    checkAuthStatus();
-  }, [checkAuthStatus]);
-
   // Refresh admin auth status when user authentication changes
   useEffect(() => {
     const handleAuthChange = () => {
@@ -56,8 +52,8 @@ export function AdminAuthProvider({ children }) {
     };
   }, [isAuthenticated, checkAuthStatus]);
 
-  // Refresh when user authentication or admin status changes
-  // But only if admin is not already authenticated to prevent session resets
+  // Check on mount, and again when user authentication or admin status changes,
+  // but only if admin is not already authenticated to prevent session resets
   useEffect(() => {
     if (!isAuthenticated) {
       checkAuthStatus();

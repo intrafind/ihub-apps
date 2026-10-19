@@ -13,6 +13,18 @@ import {
 import configCache from '../configCache.js';
 import { buildIndexHtml, resolvePwaConfig } from '../services/pwa/PwaService.js';
 
+/**
+ * Whether a file served from the client build is a content-hashed Vite asset
+ * (`<staticPath>/assets/...`), which never changes under the same URL.
+ * @param {string} staticPath
+ * @param {string} filePath
+ * @returns {boolean}
+ */
+export function isHashedAsset(staticPath, filePath) {
+  const relative = path.relative(staticPath, filePath);
+  return relative.startsWith(`assets${path.sep}`);
+}
+
 export default function registerStaticRoutes(app, { isPackaged, rootDir, basePath }) {
   // Only serve static files in production or packaged mode
   // In development, Vite serves the frontend directly
@@ -25,7 +37,19 @@ export default function registerStaticRoutes(app, { isPackaged, rootDir, basePat
     // HTML entry points (`/`, subpath root, and any deep link) flow through the
     // SPA handler below, which injects the authoritative base path into
     // index.html. Serving the raw file here would skip that injection.
-    const staticOptions = { index: false };
+    //
+    // Files under assets/ carry a content hash in their name (Vite output), so
+    // a changed file always gets a new URL: browsers may keep them for a year
+    // without revalidating. Everything else (fonts, icons, sw.js, manifest)
+    // keeps the default revalidation.
+    const staticOptions = {
+      index: false,
+      setHeaders: (res, filePath) => {
+        if (isHashedAsset(staticPath, filePath)) {
+          res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+        }
+      }
+    };
     if (basePath) {
       app.use(basePath, express.static(staticPath, staticOptions));
     } else {
