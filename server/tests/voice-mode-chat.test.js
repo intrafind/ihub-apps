@@ -137,7 +137,10 @@ describe('resolveVoiceInstruction', () => {
 
   test('the English text says what the concept asks for', () => {
     const text = DEFAULT_VOICE_INSTRUCTIONS.en;
-    expect(text).toMatch(/by voice and hears your answer read aloud/);
+    expect(text).toMatch(/by voice and hears the answer read aloud/);
+    // The app's own role wins: an interpreter app must keep translating, not answer.
+    expect(text).toMatch(/keep following every instruction above/);
+    expect(text).not.toMatch(/talking to you/);
     expect(text).toMatch(/lead with the answer, usually 1-4 sentences/);
     expect(text).toMatch(/tables, code blocks, headings, bullet lists, URLs, or emoji/);
     expect(text).toMatch(/numbers and units the way they are spoken/);
@@ -148,6 +151,7 @@ describe('resolveVoiceInstruction', () => {
     const text = DEFAULT_VOICE_INSTRUCTIONS.de;
     expect(text).toMatch(/per Sprache/);
     expect(text).toMatch(/vorgelesen/);
+    expect(text).toMatch(/Befolge weiterhin alle Anweisungen/);
     expect(text).toMatch(
       /Tabellen, Codeblöcke, Überschriften, Aufzählungslisten, URLs oder Emojis/
     );
