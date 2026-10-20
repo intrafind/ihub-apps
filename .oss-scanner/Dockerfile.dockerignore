@@ -4,8 +4,14 @@
 # This replaces the root .dockerignore for this build entirely (Docker does not
 # merge them). The root file strips tests/ and *.test.js to keep the production
 # image small, but this build runs `npm run test:quick`, so those must stay.
+#
+# .git/ is kept (unlike the exclusions below) because
+# tests/unit/server/no-case-colliding-modules.test.js shells out to `git
+# ls-files` to check for files that differ only in case; a git-less checkout
+# makes that test fail outright, not just skip. The scan this image feeds into
+# runs with no network access and its findings go only to primary_contact, so
+# history embedded in .git isn't exposed beyond that private report.
 
-.git/
 .gitignore
 .gitattributes
 .github/
