@@ -1,4 +1,5 @@
 <!-- Threat model for Anthropic's OSS Scanner (https://github.com/anthropics/oss-scanner). -->
+
 # Threat model
 
 ## What this project does and where untrusted input enters
