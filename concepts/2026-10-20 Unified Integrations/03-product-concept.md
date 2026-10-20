@@ -13,7 +13,7 @@ Every way iHub reaches another system becomes an **integration**: a catalog entr
 | **Integration** | A catalog entry: who it talks to, how it is wired, how it authenticates, what it offers. Immutable, versioned, distributable through a registry. | MCP catalog entry, connector module, OpenAPI tool JSON, a2a agent, cloud storage provider, web search provider |
 | **Installed integration** (instance) | An integration set up on this iHub: endpoint and install fields filled, OAuth client chosen, groups allowed, policies set, enabled or not. An integration can be installed more than once (two Jira sites, EU and US tenants). | an entry in `mcpServers.json`, `platform.jira`, a provider in `platform.cloudStorage` |
 | **Connection** | One principal's credential for one installed integration. **Personal** (a user's OAuth grant, PAT or API key) or **shared** (an admin-owned secret, offered to groups). | `TokenStorageService` files, `credentials.json` profiles |
-| **Capability** | What an integration offers: `tools` (model-callable actions), `files` (browse and pick files), `search` (knowledge source), `views` (MCP Apps UI), `triggers` (events), `agent` (A2A), `channel` (inbound surface). An integration declares one or more. | tools vs sources vs cloud storage picker vs MCP Apps |
+| **Capability** | What an integration offers: `tools` (model-callable actions), `files` (browse and pick files), `search` (knowledge source), `views` (MCP Apps UI), `triggers` (events), `agent` (A2A). An integration declares one or more. Inbound surfaces are not capabilities; see section 9. | tools vs sources vs cloud storage picker vs MCP Apps |
 | **Action** | One model-callable tool of an integration, with an **effect**: `read`, `write`, `destructive`. From MCP annotations, OpenAPI method, or the connector's declaration. | tool function, MCP tool |
 | **Binding** | How an app (or workflow, agent, scheduled task) uses an integration: which actions, and *whose connection* (each user's own, or a pre-selected shared one). | `app.tools`, `app.sources`, `app.upload.cloudStorageUpload`, `app.websearch` |
 | **Registry** | A `catalog.json` source the marketplace reads. Gains the item type `integration`. | marketplace registries |
@@ -151,7 +151,7 @@ Install  Atlassian Jira & Confluence                                        step
                                                       [Test connection]  [Back]  [Install]
 ```
 
-Rollout can be staged: *pilot groups first* (Microsoft's staged rollout, Glean's test groups), then everyone. Actions the server adds later get the instance's *new actions* policy (default *ask*) and a "new" badge in the Actions tab, so a vendor cannot slip a write tool past the admin (Microsoft resets changed tools to *needs approval*).
+Rollout can be staged: *pilot groups first* (Microsoft's staged rollout, Glean's test groups), then everyone. Every action is fingerprinted (name, effect, input schema). Actions the server adds later get the instance's *new actions* policy (default *ask*) and a "new" badge in the Actions tab; an existing action whose fingerprint changes (a new effect, a changed schema) drops back to *ask* and is badged "changed" until an admin reviews it. A vendor cannot slip a write tool past the admin either way (Microsoft resets changed tools to *needs approval*).
 
 Test connection runs before save (MCP: discovery + `tools/list`; OpenAPI: a read probe; native: the connector's self-test) and reports in the existing `IntegrationTestResults` style. For per-user integrations the admin can "Connect my account" in the same dialog to verify end to end.
 
@@ -213,7 +213,7 @@ Every integration the user's groups allow is listed, whether or not it needs a s
 
 Rules:
 
-- The app decides the candidates (its bindings); the user decides which are on, per chat, with app defaults. The state moves from `localStorage` to the server (per user, per app) so it follows the user across devices and into scheduled tasks.
+- The app decides the candidates (its bindings); the user decides which are on, per chat, with app defaults. Two levels of state, both on the server instead of `localStorage`: a per-user, per-app default (what a new chat starts with) and a per-chat override stored with the chat. A scheduled task or workflow snapshots its own set when it is created and never reads chat state, so switching an integration on in one chat cannot switch it on anywhere else.
 - A row shows one integration, never its 21 tools. The effect summary (`read · write`) is derived from the enabled actions.
 - A not-connected per-user integration shows **Connect →** inline. Connecting opens the vendor consent in a new tab, returns to the *same chat*, and the row turns on. (Open WebUI's "return to a new chat" is the pitfall to avoid.)
 - Active integrations show as small chips under the composer (logo + name), so the user sees what the model can reach before sending. Langdock's "blue = connected" cue, LibreChat's status icons.
@@ -234,7 +234,7 @@ One component, one look, for every protocol. It replaces `IntegrationConnectionC
  └─────────────────────────────────────────────────────────────┘
 ```
 
-After connecting, the failed call is retried automatically. For `reconnect needed` (expired, revoked, or a new scope), the card says why and what changes.
+After connecting, the call is retried automatically only when it failed *before* execution with `INTEGRATION_AUTH_REQUIRED` (no connection, expired, insufficient scope). A call that failed inside the adapter or on the transport is never retried on its own, because a write may already have happened; the model is told what failed and a write is re-run only through a fresh confirmation. For `reconnect needed` (expired, revoked, or a new scope), the card says why and what changes.
 
 ### 7.4 Confirmation card for writes
 

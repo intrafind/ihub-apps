@@ -2,7 +2,7 @@
 
 **Date:** 2026-10-20 · **Status:** Analysis · Part of [Unified Integrations](README.md)
 
-This document is the inventory behind the concept. It lists every way iHub talks to an external system today, how each one is installed, configured, authenticated and used, and where they diverge. Nothing here is a proposal; the proposal is in [03 · Product concept](03-product-concept.md).
+This document is the inventory behind the concept. It lists every way iHub talks to an external system today, how each one is installed, configured, authenticated and used, and where they diverge. Section 5 names the existing pieces the proposal builds on; the proposal itself is in [03 · Product concept](03-product-concept.md).
 
 ## 1. The integrations we ship
 
@@ -28,7 +28,7 @@ Rows 12–14 are **inbound** (something connects *to* iHub). Rows 1–11 are **o
 
 ## 2. Five ways to do the same thing
 
-### 2.1 Four per-user OAuth stacks
+### 2.1 Four per-user authentication stacks (three OAuth, one JWT)
 
 | Stack | Used by | Discovery | Token store | Routes | Chat prompt |
 | --- | --- | --- | --- | --- | --- |
@@ -41,7 +41,7 @@ Two chat connect cards exist with different looks (`IntegrationConnectionCard`, 
 
 ### 2.2 Three ways to store a secret
 
-- `credentialRef` into the central credential store (`contents/config/credentials.json`): MCP, A2A, OpenAPI tools, Jira, cloud storage, iFinder, LDAP.
+- `credentialRef` into the central credential store (`contents/config/credentials.json`): MCP, A2A, OpenAPI tools, Jira, cloud storage, iFinder. (LDAP and NTLM use the same store for their bind passwords, but they are sign-in providers for iHub itself, not integrations, and are out of scope here.)
 - Inline encrypted field: web search API keys in `providers.json`, marketplace registry auth.
 - Environment only: Entra; env fallbacks for Brave, Staan, iFinder, Jira.
 

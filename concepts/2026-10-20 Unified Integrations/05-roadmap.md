@@ -12,9 +12,9 @@ Ship the shared layer under the existing integrations without changing what user
 - File the epic and sub-issues from this folder and from `concepts/third-party-integrations/` (still unfiled).
 - Create the Jira idea (IPD) and link IPD-618 (iFinder MCP server) and IPD-554 (business-user admin for connectors).
 
-## Phase 1 · Foundation, invisible (5 to 6 weeks)
+## Phase 1 · Foundation, almost invisible (5 to 6 weeks)
 
-Goal: one definition format, one instance store, one connection service, one OAuth client, one approval gate. The UI still looks the same.
+Goal: one definition format, one instance store, one connection service, one OAuth client, one approval gate. The admin and settings UI still look the same. One change is visible to users on purpose: write and destructive actions now pause for the confirmation card. It ships in this phase because it is a safety fix for integrations that already write today (Jira comments and transitions), and it is announced in the changelog as such.
 
 1. `IntegrationDefinition`, `ConfigField`, `InstalledIntegration`, `Connection` schemas (Zod) and files.
 2. Adapters for `mcp-remote`, `mcp-stdio`, `openapi`, `a2a`, `storage`, `websearch`; `native` with Jira, Microsoft 365, iFinder, Entra on the adapter contract.

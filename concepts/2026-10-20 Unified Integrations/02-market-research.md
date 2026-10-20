@@ -2,7 +2,7 @@
 
 **Date:** 2026-10-20 · **Status:** Research · Part of [Unified Integrations](README.md)
 
-Twelve products were reviewed from their current documentation (October 2026): Langdock, Open WebUI, LibreChat, Dify, AnythingLLM; Claude.ai / Claude for Enterprise, ChatGPT, Microsoft 365 Copilot and Copilot Studio, Gemini Enterprise, Glean, Perplexity Enterprise, Slack and Notion AI; and the "managed auth" layer (Composio, Nango, Pipedream Connect, Arcade, n8n). The Anthropic connector directory extract (842 remote MCP connectors, 132 desktop extensions, 4,482 plugins; `claude-connector-directory-ihub.xlsx`) was used as a quantitative reference. Sources are listed at the end of each section.
+Thirteen products were reviewed from their current documentation (October 2026): Langdock, Open WebUI, LibreChat, Dify, AnythingLLM; Claude.ai / Claude for Enterprise, ChatGPT, Microsoft 365 Copilot and Copilot Studio, Gemini Enterprise, Glean, Perplexity Enterprise, Slack and Notion AI; and the "managed auth" layer (Composio, Nango, Pipedream Connect, Arcade, n8n). The Anthropic connector directory extract (842 remote MCP connectors, 132 desktop extensions, 4,482 plugins) was used as a quantitative reference. It is a snapshot of the public directory API (`api.anthropic.com/api/directory/servers` and `/plugins`) pulled on 2026-10-17 into a workbook that is not committed here; the counts are reproducible from that API but will drift. Sources are listed at the end of each section.
 
 ## 1. Convergence: the industry has settled on one shape
 
@@ -79,7 +79,7 @@ Composio, Nango, Pipedream Connect and Arcade all separate the **Integration** (
 
 1. **Adopt the three-layer model** (integration → installed integration → connection) and the three-decision rule (admin enables, user connects, user picks). This is what every peer does and what users already expect from Claude and ChatGPT.
 2. **One catalog with trust labels**, one install form generated from typed fields, one test-before-save, and the marketplace as the distribution channel. Add the public MCP registry as an optional community source rather than curating 842 entries by hand.
-3. **Tool policy tiers** (*ask / allow / block*, by effect category with per-action override, admin ceiling, reset to *ask* when a publisher adds a write tool) and a confirmation card with editable payload and scoped memory (*once / this chat / always*). Read actions never ask.
+3. **Tool policy tiers** (*ask / allow / block*, by effect category with per-action override, admin ceiling, reset to *ask* when a publisher adds a write tool) and a confirmation card with editable payload and scoped memory (*once / this chat / always*). Read actions never ask. An action whose effect is unknown, or whose annotation comes from an untrusted server, counts as a write and therefore asks; nothing is read-only by default.
 4. **In-chat picker at the integration level**, status cues on the composer, lazy connect that returns to the same chat and retries, *Reconnect* with the reason.
 5. **Enterprise-managed auth** as a planned auth mode (the DACH public sector runs Entra and Keycloak; Keycloak issuance is not there yet, so this is phase 3).
 6. **Differentiate on what directories lack**: on-prem and sovereign systems (SharePoint Server, Jira and Confluence Data Center, d.velop, enaio, nscale, ELO, M-Files, Nextcloud, openDesk, SAP), per-connector audit, and iFinder as a permission-trimmed MCP server (IPD-618).

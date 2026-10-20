@@ -223,7 +223,7 @@ document.querySelectorAll('nav.tabs button').forEach(b=>b.onclick=()=>go(b.datas
 document.querySelectorAll('.itabs button').forEach(b=>b.onclick=()=>{document.querySelectorAll('.itabs button').forEach(x=>x.classList.toggle('on',x===b));document.querySelectorAll('.ipane').forEach(p=>p.style.display=p.id===b.dataset.t?'':'none')});
 
 const cat=[
- {n:'Microsoft 365',p:'Microsoft',b:'verified',d:'Mail, calendar, OneDrive and SharePoint files, Teams chat.',a:'per-user',e:'read + write',r:'cloud',c:'7 actions',col:'#d83b01',i:'M'},
+ {n:'Microsoft 365',p:'Microsoft',b:'verified',d:'Mail, calendar, OneDrive and SharePoint files, Teams chat.',a:'per-user',e:'read + write',r:'cloud',c:'7 actions',col:'#d83b01',i:'M',inst:true},
  {n:'Atlassian Jira & Confluence',p:'Atlassian',b:'verified',d:'Issues, JQL search, comments, transitions; Confluence pages.',a:'per-user',e:'read + write',r:'cloud · DC',c:'21 actions',col:'#2563eb',i:'J',inst:true},
  {n:'SharePoint Server (on-prem)',p:'IntraFind',b:'verified',d:'Search, fetch, libraries and versions inside your network.',a:'SSO (Kerberos)',e:'read',r:'on-prem',c:'5 actions',col:'#0f766e',i:'SP'},
  {n:'d.velop documents',p:'IntraFind',b:'verified',d:'Search, read and file documents into the e-Akte.',a:'service account',e:'read + write',r:'on-prem',c:'9 actions',col:'#7c3aed',i:'dv'},
@@ -243,6 +243,7 @@ renderCards();document.getElementById('q').oninput=e=>renderCards(e.target.value
 const inst=[
  ['ok','Atlassian Jira & Confluence (EU)','MCP · per-user','engineering, support','ok · 2 min','37'],
  ['ok','SharePoint Online','Native · per-user','everyone','ok · 5 min','412'],
+ ['warn','Microsoft 365','Native · per-user','everyone','ok · scope added (mail)','198'],
  ['ok','iFinder','Native · SSO (JWT)','everyone','ok · 1 min','–'],
  ['warn','enaio DMS','OpenAPI · service account','legal','degraded · slow','–'],
  ['off','HubSpot','MCP · per-user','–','disabled','0'],
@@ -259,7 +260,7 @@ const urows=[
  ['ok','enaio DMS','Runs as service account (legal team)','search, read, file-in','<button class="btn sm" disabled>–</button>'],
  ['off','HubSpot','Not connected','contacts, deals','<button class="btn sm primary">Connect</button>'],
  ['warn','Microsoft 365','Reconnect needed · new permission: mail','mail, calendar, files','<button class="btn sm primary">Reconnect</button>'],
- ['ok','DeepL','Shared key','translate','<button class="btn sm" disabled>–</button>'],
+ ['err','DeepL','Unavailable · the shared key expired, an admin must renew it','translate','<button class="btn sm" disabled>–</button>'],
 ];
 document.getElementById('userrows').innerHTML=urows.map(r=>`<tr><td><span class="dot ${r[0]}"></span><b>${r[1]}</b></td><td>${r[2]}</td><td class="hint">${r[3]}</td><td style="text-align:right">${r[4]}</td></tr>`).join('');
 

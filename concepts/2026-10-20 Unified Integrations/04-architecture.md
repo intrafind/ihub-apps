@@ -6,13 +6,15 @@ This document turns [03 · Product concept](03-product-concept.md) into files, s
 
 ## 1. Three records
 
+Definitions and tokens never share a directory: `contents/integrations/` stays what it is today, the `TokenStorageService` tree of per-user tokens keyed by service name, and definitions live in their own tree `contents/integration-definitions/<id>/` (an `integration.json` plus optional `icon` and `README.md`). `IntegrationRegistry` loads shipped definitions from `server/defaults/integrations/`, then `contents/integration-definitions/`; a `contents` definition with the same id wins. The re-index in section 7 reads only the token tree.
+
 ```
-IntegrationDefinition   (catalog, immutable per version)   contents/integrations/<id>.json
+IntegrationDefinition   (catalog, immutable per version)   contents/integration-definitions/<id>/integration.json
         │ 1..n
 InstalledIntegration    (admin instance)                    contents/config/integrations.json
         │ 1..n
 Connection              (principal credential)              storage namespace `integration-connections`
-                                                            + TokenStorageService for the secret material
+                                                            + TokenStorageService for the secret material (contents/integrations/<service>/…, unchanged)
 ```
 
 ### 1.1 IntegrationDefinition
@@ -192,7 +194,7 @@ Effect for MCP actions: `readOnlyHint: true` → read; `destructiveHint: true` (
 | `GET /api/admin/integrations/:id/actions` · `PUT …/actions` | live action list, enable, policy |
 | `GET /api/admin/integrations/:id/connections` · `DELETE …/connections/:connId` | connected principals, revoke |
 | `GET/POST /api/admin/integrations/connections/shared` | shared connections |
-| `GET /api/admin/integrations/requests` · `POST …/:id/_approve|_decline` | member requests (phase 2) |
+| `GET /api/admin/integrations/requests` · `POST …/:id/_approve` · `POST …/:id/_decline` | member requests (phase 2) |
 | `GET /api/integrations` | for the user: allowed instances with capabilities, actions, connection status |
 | `POST /api/integrations/:id/connect` → `{ url }` · `GET /api/integrations/oauth/callback` · `POST /api/integrations/:id/disconnect` · `POST …/reconnect` | one connect flow for every protocol; callbacks `/api/integrations/jira/callback` and `/api/mcp/oauth/callback` stay registered as aliases because they are configured in vendor OAuth apps |
 | `GET/PUT /api/integrations/preferences?app=` | per-user, per-app enabled set (replaces `localStorage` `enabledTools`) |
@@ -219,7 +221,7 @@ Design tokens: indigo accent, `text-2xl font-semibold` headers, `DataTable` list
 ## 6. Marketplace
 
 - `catalogSchema.js`: add `type: "integration"`; content is the definition JSON plus optional `icon` and `README.md` (companions, like skills).
-- `ContentInstaller`: write to `contents/integrations/<id>/integration.json`; after install, open the wizard (the instance is created by the wizard, not the installer, so one definition can be installed twice). `_update` re-validates existing instances against the new definition and shows a diff of install fields and actions; `_detach` and `_uninstall` as today (uninstall refuses while instances exist).
+- `ContentInstaller`: write to `contents/integration-definitions/<id>/integration.json`; after install, open the wizard (the instance is created by the wizard, not the installer, so one definition can be installed twice). `_update` re-validates existing instances against the new definition and shows a diff of install fields and actions; `_detach` and `_uninstall` as today (uninstall refuses while instances exist).
 - `RegistryService`: a new registry kind `mcp-registry` (read-only) that pages `GET /v0.1/servers` and converts `server.json` on the fly, labelled community. Off by default; `features.integrationsMcpRegistry`.
 - Built-in catalog: `server/services/mcp/serverCatalog.js` becomes `server/defaults/integrations/*.json` (one definition each) listed by a shipped registry entry `ihub-builtin`.
 
@@ -232,7 +234,14 @@ Design tokens: indigo accent, `text-2xl font-semibold` headers, `DataTable` list
 | `V1xx__integrations_from_platform` | `platform.jira` → instance `jira` of the shipped `com.intrafind/jira` definition; `platform.cloudStorage.providers[]` → instances of the storage definitions; `platform.iFinder` → instance `ifinder`; web search providers → instances of `websearch/*` with the API key moved into the credential store; Entra from env → instance `entra` (env still read as fallback, like providers) |
 | `V1xx__groups_integrations_permission` | `permissions.integrations` on every group: `["*"]` for groups that could use everything before (there was no gating), the browser extension's `allowedGroups` untouched |
 | `V1xx__apps_integrations_binding` | `app.tools` (script ids, base ids, MCP server ids, `a2a__` refs), `app.upload.cloudStorageUpload`, `app.websearch` → `app.integrations[]`; pure script tools that are not integrations (`ask_user`, `evidence`, scheduler, agent tools) stay in `app.tools` |
-| re-index | on first start after the migration, `ConnectionService` scans `contents/integrations/*/` token files and builds the connection index; no token is moved |
+| re-index | on first start after the migration, `ConnectionService` scans the token tree `contents/integrations/<service>/` and builds the connection index; no token is moved or re-encrypted, and `secretRef` is the existing storage key, so nobody reconnects. The mapping is fixed per service: |
+
+| Token file today | `integration` | `principal` | `issuer` | Notes |
+| --- | --- | --- | --- | --- |
+| `jira/<userId>.json` | the single instance migrated from `platform.jira` (`jira`) | user `<userId>` | `https://auth.atlassian.com` | Jira has one slot per user; a second Jira instance starts with no connections |
+| `office365/<userId>__<providerId>.json`, `googledrive/…`, `nextcloud/…` | the instance migrated from the provider with that `providerId` | user `<userId>` | the provider's authorization server | a legacy file without `__<providerId>` maps to the only instance of that service, or is skipped and logged when there are several |
+| `mcp/<storageId>__<serverId>.json` | the instance migrated from server `<serverId>` | the user behind `<storageId>` (resolved as `mcpUserTokens.js` does today) | the authorization server stored with the token (tokens are already keyed by issuer) | the config fingerprint stored with the token keeps working: a changed endpoint still invalidates it |
+| `mcp-oauth-clients` namespace | n/a | n/a | per issuer | client registrations move unchanged under `OAuthUserClient` |
 
 Breaking changes to decide explicitly (CLAUDE.md rule): the admin routes `/api/admin/mcp/servers`, `/api/admin/a2a/agents`, `/api/admin/configs/platform` writes for `jira`/`cloudStorage`, and the three cloud file-browser routes. Recommendation: clean break for admin routes (they are UI-internal) and aliases only for the OAuth callback URLs that customers registered in vendor consoles.
 
