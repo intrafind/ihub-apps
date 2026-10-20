@@ -11,10 +11,16 @@
 # makes that test fail outright, not just skip. The scan this image feeds into
 # runs with no network access and its findings go only to primary_contact, so
 # history embedded in .git isn't exposed beyond that private report.
+#
+# .github/ is kept too: tests/unit/server/copyleft-exemptions.test.js reads
+# .github/dependency-review-config.yml and
+# tests/unit/server/review-checklist-sync.test.js reads
+# .github/instructions/review-checklist.instructions.md, both to check they
+# stay in sync with other copies of the same rules. It's just workflow/config
+# YAML and docs, nothing sensitive.
 
 .gitignore
 .gitattributes
-.github/
 .claude/
 
 node_modules/
