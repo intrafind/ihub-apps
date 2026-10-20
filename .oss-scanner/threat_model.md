@@ -34,16 +34,22 @@ Highest priority:
 - `server/services/TokenStorageService.js`, `server/configCache.js` — AES-256-GCM
   encryption of secrets at rest (Jira, OIDC, LDAP, NTLM, cloud storage) and the
   `contents/.encryption-key` handling.
-- Auth provider implementations in `server/routes/auth.js` (OIDC, LDAP, NTLM,
-  proxy-header auth) — token/signature validation, session handling.
+- Authentication provider implementations in `server/middleware/localAuth.js`,
+  `server/middleware/oidcAuth.js`, `server/middleware/ldapAuth.js`,
+  `server/middleware/ntlmAuth.js`, `server/middleware/proxyAuth.js`, and
+  `server/middleware/teamsAuth.js`; unified token validation in
+  `server/middleware/jwtAuth.js` — identity validation, token/session handling,
+  and external-group mapping.
+- Authentication routes and provider orchestration in `server/routes/auth.js`.
 - MCP/tool execution paths and anything that builds shell commands, file paths,
   or URLs from user- or model-supplied values.
 
 Lower priority / mostly out of scope:
 
 - The client build output and `node_modules` — generated/vendored, not reviewed.
-- The mdBook/Rust documentation site under `docs/` — not built or shipped by
-  `.oss-scanner/Dockerfile` (`npm run build:docker` explicitly skips it).
+- The mdBook/Rust site under `docs/` — its generated site output is not built or
+  shipped by `.oss-scanner/Dockerfile`. The Docker build still exports the
+  Markdown documentation to `server/defaults/sources/ihub-documentation.md`.
 - Example/demo content under `contents/` — ships only to make local
   getting-started easier, not a security boundary.
 

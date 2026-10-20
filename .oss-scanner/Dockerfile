@@ -14,8 +14,12 @@ RUN apk add --no-cache \
 COPY . /src
 WORKDIR /src
 
-# Don't let a flaky or environment-dependent test fail the whole build; the
-# scanner mails primary_contact if install or the build itself errors out.
-RUN npm run install:all && \
+# npm ci (not install:all's plain `npm install`) so the scanner tests exactly
+# what the committed lockfiles pin, not whatever `npm install` freshly resolves.
+# test:quick is this repo's own required, blocking CI check, so it gates this
+# build the same way: a failure here fails the image and mails primary_contact.
+RUN npm ci && \
+    (cd client && npm ci) && \
+    (cd server && npm ci) && \
     npm run build:docker && \
-    (npm run test:quick || echo "WARNING: test:quick reported failures")
+    npm run test:quick
