@@ -2,6 +2,7 @@
 
 **Date:** 2026-10-20
 **Status:** Proposal
+**Tickets:** Jira [IPD-641](https://intrafind.atlassian.net/browse/IPD-641) · GitHub epic [intrafind/ihub-apps#2911](https://github.com/intrafind/ihub-apps/issues/2911)
 **Related:** [Third-party integrations issue drafts](../third-party-integrations/README.md) (connection framework and per-connector drafts, 2026-09-24), [Preconfigured MCP Server Catalog](../2026-09-24%20Preconfigured%20MCP%20Server%20Catalog.md), [MCP Per-User OAuth Implementation Notes](../2026-09-27%20MCP%20Per-User%20OAuth%20Implementation%20Notes.md), [Langdock Cookbook Gap Analysis](../2026-09-25%20Langdock%20Cookbook%20Gap%20Analysis%20—%20MCP,%20A2A%20and%20Agent%20API.md), [iHub Marketplace PRD](../2026-02-23%20iHub%20Marketplace%20PRD.docx), [Marketplace](../../docs/marketplace.md), [MCP Integration](../../docs/mcp-integration.md), [Building an Integration](../../docs/integration-development.md), Jira IPD-618 (iFinder MCP server), IPD-554 (business-user admin for connectors)
 
 ---

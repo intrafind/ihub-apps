@@ -9,8 +9,8 @@ Ship the shared layer under the existing integrations without changing what user
 ## Phase 0 · Decide (1 week)
 
 - Agree the vocabulary, the default write policy, server-side chat preferences, the nav change, the marketplace type and the breaking-change stance ([03 · Product concept](03-product-concept.md#10-decisions-this-concept-asks-for)).
-- File the epic and sub-issues from this folder and from `concepts/third-party-integrations/` (still unfiled).
-- Create the Jira idea (IPD) and link IPD-618 (iFinder MCP server) and IPD-554 (business-user admin for connectors).
+- ~~File the epic and sub-issues.~~ Done 2026-10-20: epic [intrafind/ihub-apps#2911](https://github.com/intrafind/ihub-apps/issues/2911) with sub-issues #2912 to #2918 (Phase 1), #2919 to #2926 (Phase 2), #2927 to #2929 (Phase 3). The per-connector drafts in `concepts/third-party-integrations/` are filed per connector on demand.
+- ~~Create the Jira idea.~~ Done 2026-10-20: [IPD-641](https://intrafind.atlassian.net/browse/IPD-641), linked to IPD-618 (iFinder MCP server) and IPD-554 (business-user admin for connectors).
 
 ## Phase 1 · Foundation, almost invisible (5 to 6 weeks)
 
