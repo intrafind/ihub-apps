@@ -57,6 +57,6 @@ We propose one **integrations platform** with three layers, the shape every comp
                                                                        (read: run · write: ask · destructive: ask)
 ```
 
-## Decisions requested
+## Decisions
 
-See [03 · Product concept → Decisions](03-product-concept.md#10-decisions-this-concept-asks-for) and [05 · Roadmap → Open questions](05-roadmap.md#open-questions-for-the-team).
+The five product decisions in [03 · Product concept → Decisions](03-product-concept.md#10-decisions-this-concept-asks-for) were taken on 2026-10-20: vocabulary (Integration, Connection, Action), ask-by-default for writes, server-side chat state, marketplace type `integration`, clean break for the admin MCP and A2A routes. The team-level questions in [05 · Roadmap → Open questions](05-roadmap.md#open-questions-for-the-team) remain open.

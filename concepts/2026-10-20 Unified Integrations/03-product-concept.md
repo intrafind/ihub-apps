@@ -276,7 +276,7 @@ Unchanged: Answer Sources, citations, preview and download already come from one
 ## 10. Decisions this concept asks for
 
 1. **Vocabulary.** "Integration" for all of it, "Connection" for the user's credential, "Action" for a tool. Drop "MCP server" and "tool" from end-user UI. **Decided 2026-10-20 (Daniel Manzke): yes.**
-2. **Default write policy.** *Ask* for everything with a write or destructive effect, for MCP and native alike. No exception for MCP (Langdock's inconsistency).
+2. **Default write policy.** *Ask* for everything with a write or destructive effect, for MCP and native alike. No exception for MCP (Langdock's inconsistency). **Decided 2026-10-20 (Daniel Manzke): yes.** Read actions never ask; admins relax per integration or per action; unknown or untrusted effects count as write.
 3. **Per-chat enabled state on the server**, not in `localStorage`. **Decided 2026-10-20 (Daniel Manzke): yes.** A per-user default per app, a per-chat override stored with the chat, and a snapshot per scheduled task or workflow (section 7.2).
 4. **One nav section** named Integrations with Installed, Catalog, Connections, Inbound. MCP servers, A2A agents and the hub cards fold in.
 5. **Marketplace type `integration`**, with the built-in catalog converted and the public MCP registry as an optional community source. **Decided 2026-10-20 (Daniel Manzke): yes.** Whether the public MCP registry is ever shown to customers stays open (roadmap question 6).
