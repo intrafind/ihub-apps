@@ -45,7 +45,7 @@ Exit: an admin installs Confluence Data Center from the catalog, scopes it to a 
 - **Native connectors from the epic**: Outlook Mail and Calendar, cloud file tools, Teams, SAP OData, DMS (d.velop, enaio, nscale, ELO, M-Files), ServiceNow, Personio, DATEV; each as a definition plus adapter module, published through the IntraFind registry.
 - **Triggers** (`02-triggers.md`) as a capability once scheduled tasks can receive events.
 - **Per-user API keys for OpenAPI integrations** (`ConfigField.scope: user`), several connections per integration with a default.
-- **Auto vs on-demand tool mode** for apps with many integrations (deferred action loading).
+- **Auto vs on-demand tool mode** for apps with many integrations: deferred action definitions with `search_tools` / `call_tool` ([intrafind/ihub-apps#2889](https://github.com/intrafind/ihub-apps/issues/2889)), surfaced per integration in the picker.
 
 ## Risks
 

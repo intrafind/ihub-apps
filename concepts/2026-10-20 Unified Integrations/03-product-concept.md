@@ -218,7 +218,7 @@ Rules:
 - A not-connected per-user integration shows **Connect →** inline. Connecting opens the vendor consent in a new tab, returns to the *same chat*, and the row turns on. (Open WebUI's "return to a new chat" is the pitfall to avoid.)
 - Active integrations show as small chips under the composer (logo + name), so the user sees what the model can reach before sending. Langdock's "blue = connected" cue, LibreChat's status icons.
 - `@` in the composer searches the same list (and workflows, skills, prompts) for people who prefer typing.
-- Apps with many integrations can run in **on-demand** mode (Claude's recommendation above ten connectors): the model gets a `find_action` tool and loads an integration's actions only when it needs them, instead of all of them in every prompt.
+- Apps with many integrations can run in **on-demand** mode (Claude's recommendation above ten connectors): deferred actions appear by name only and the model fetches and runs them through `search_tools` / `call_tool`, as proposed in [intrafind/ihub-apps#2889](https://github.com/intrafind/ihub-apps/issues/2889), instead of carrying every definition in every prompt.
 
 ### 7.3 Connect card
 
