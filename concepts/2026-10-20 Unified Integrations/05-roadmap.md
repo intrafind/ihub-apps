@@ -65,5 +65,5 @@ Exit: an admin installs Confluence Data Center from the catalog, scopes it to a 
 2. **Shared OAuth connections**: forbid entirely (Langdock: only via an app's pre-selected connection) or allow an admin to share their own OAuth connection with a group for service-like use?
 3. **Web search as an integration row** in the picker, or keep the dedicated switch? Concept says row, with the same look as today.
 4. **Sources**: fold `ifinder`, `url` and future "search" capabilities into integrations in phase 3, or keep knowledge sources a separate feature for good?
-5. **Clean break of admin routes** vs aliases, per CLAUDE.md. Recommendation: clean break for `/api/admin/mcp/servers` and `/api/admin/a2a/agents`; stable OAuth callbacks.
+5. ~~**Clean break of admin routes** vs aliases, per CLAUDE.md.~~ Decided 2026-10-20: clean break for `/api/admin/mcp/servers` and `/api/admin/a2a/agents`; stable OAuth callbacks. The release notes for the phase that ships it carry a breaking-change entry in `docs/releases/next/breaking-changes.md`.
 6. **Community registry**: do we ever show the public MCP registry to customers, or only our curated catalog plus their own registries?
