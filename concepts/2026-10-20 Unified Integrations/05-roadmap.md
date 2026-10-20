@@ -61,7 +61,7 @@ Exit: an admin installs Confluence Data Center from the catalog, scopes it to a 
 
 ## Open questions for the team
 
-1. **Name on the sidebar**: "Integrations" (this concept) or "Connectors" (Claude, Microsoft, Glean)? Our UI already says Integrations in three places.
+1. ~~**Name on the sidebar**: "Integrations" (this concept) or "Connectors" (Claude, Microsoft, Glean)?~~ Decided 2026-10-20: "Integration" and "Connection" everywhere; "MCP server" and "tool" leave the end-user UI.
 2. **Shared OAuth connections**: forbid entirely (Langdock: only via an app's pre-selected connection) or allow an admin to share their own OAuth connection with a group for service-like use?
 3. **Web search as an integration row** in the picker, or keep the dedicated switch? Concept says row, with the same look as today.
 4. **Sources**: fold `ifinder`, `url` and future "search" capabilities into integrations in phase 3, or keep knowledge sources a separate feature for good?
