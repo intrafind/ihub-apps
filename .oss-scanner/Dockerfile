@@ -14,9 +14,8 @@ RUN apk add --no-cache \
 COPY . /src
 WORKDIR /src
 
-RUN npm run install:all
-RUN npm run build:docker
-
 # Don't let a flaky or environment-dependent test fail the whole build; the
-# scanner mails primary_contact if this step itself errors out.
-RUN npm run test:quick || echo "WARNING: test:quick reported failures"
+# scanner mails primary_contact if install or the build itself errors out.
+RUN npm run install:all && \
+    npm run build:docker && \
+    (npm run test:quick || echo "WARNING: test:quick reported failures")

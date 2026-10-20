@@ -1,0 +1,40 @@
+# Dockerfile-specific ignore file for .oss-scanner/Dockerfile
+# (https://docs.docker.com/build/building/context/#dockerignore-files).
+#
+# This replaces the root .dockerignore for this build entirely (Docker does not
+# merge them). The root file strips tests/ and *.test.js to keep the production
+# image small, but this build runs `npm run test:quick`, so those must stay.
+
+.git/
+.gitignore
+.gitattributes
+.github/
+.claude/
+
+node_modules/
+dist/
+dist-bin/
+client/dist/
+build/
+.next/
+.nuxt/
+
+logs/
+*.log
+contents/
+coverage/
+.nyc_output/
+
+**/.env.production
+*/.env
+*/.env.*
+!.env.example
+
+.vscode/
+.idea/
+*.swp
+*.swo
+*.tmp
+*.temp
+.DS_Store
+Thumbs.db
