@@ -1,0 +1,271 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Unified Integrations · mockup</title>
+<style>
+  :root { --bg:#f6f7fb; --card:#fff; --line:#e3e6ee; --text:#1a1d29; --muted:#6b7280; --accent:#4f46e5; --accent-soft:#eef0ff;
+          --ok:#16a34a; --warn:#d97706; --err:#dc2626; --off:#9ca3af; --read:#0ea5e9; --write:#d97706; --destr:#dc2626; }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg:#0f1117; --card:#171a23; --line:#2a2f3d; --text:#e6e8ef; --muted:#9aa1b2; --accent:#8b85ff; --accent-soft:#232648; } }
+  * { box-sizing:border-box } body { margin:0; font:14px/1.45 Inter, system-ui, sans-serif; background:var(--bg); color:var(--text) }
+  header { display:flex; align-items:center; gap:16px; padding:12px 20px; border-bottom:1px solid var(--line); background:var(--card); position:sticky; top:0; z-index:5; flex-wrap:wrap }
+  header h1 { font-size:15px; margin:0 12px 0 0 } header .note { color:var(--muted); font-size:12px; flex-basis:100%; }
+  nav.tabs { display:flex; gap:4px; flex-wrap:wrap } nav.tabs button { border:1px solid var(--line); background:transparent; color:var(--text); padding:6px 12px; border-radius:8px; cursor:pointer; font:inherit }
+  nav.tabs button.active { background:var(--accent); color:#fff; border-color:var(--accent) }
+  main { max-width:1100px; margin:0 auto; padding:20px 16px } section.screen { display:none } section.screen.active { display:block }
+  .crumbs { color:var(--muted); font-size:12px; margin-bottom:6px } h2 { font-size:22px; font-weight:600; margin:0 0 4px } .sub { color:var(--muted); margin:0 0 16px }
+  .bar { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin:12px 0 } input[type=search], select { padding:7px 10px; border:1px solid var(--line); border-radius:8px; background:var(--card); color:var(--text); font:inherit }
+  input[type=search] { min-width:260px; flex:1 } .btn { padding:7px 12px; border-radius:8px; border:1px solid var(--line); background:var(--card); color:var(--text); cursor:pointer; font:inherit }
+  .btn.primary { background:var(--accent); border-color:var(--accent); color:#fff } .btn.danger { color:var(--err) } .btn.sm { padding:4px 9px; font-size:12px }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(280px,1fr)); gap:12px } .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:14px; display:flex; flex-direction:column; gap:8px }
+  .card .top { display:flex; gap:10px; align-items:center } .logo { width:36px; height:36px; border-radius:9px; display:grid; place-items:center; font-weight:700; color:#fff; font-size:13px; flex:none }
+  .card h3 { margin:0; font-size:14px } .card .pub { color:var(--muted); font-size:12px } .card p { margin:0; color:var(--muted); font-size:13px; min-height:36px }
+  .facts { display:flex; gap:6px; flex-wrap:wrap } .chip { font-size:11px; padding:2px 8px; border-radius:999px; background:var(--accent-soft); color:var(--text); border:1px solid transparent }
+  .chip.verified { background:#dcfce7; color:#166534 } .chip.partner { background:#e0f2fe; color:#075985 } .chip.community { background:#fef3c7; color:#92400e } .chip.installed { background:#e5e7eb; color:#374151 }
+  .chip.read { background:#e0f2fe; color:#075985 } .chip.write { background:#fef3c7; color:#92400e } .chip.destr { background:#fee2e2; color:#991b1b } .chip.new { background:#ede9fe; color:#5b21b6 }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .chip.verified{background:#14532d;color:#bbf7d0} :root:not([data-theme="light"]) .chip.partner,:root:not([data-theme="light"]) .chip.read{background:#0c4a6e;color:#bae6fd} :root:not([data-theme="light"]) .chip.community,:root:not([data-theme="light"]) .chip.write{background:#78350f;color:#fde68a} :root:not([data-theme="light"]) .chip.installed{background:#374151;color:#e5e7eb} :root:not([data-theme="light"]) .chip.destr{background:#7f1d1d;color:#fecaca} :root:not([data-theme="light"]) .chip.new{background:#4c1d95;color:#ddd6fe} }
+  .card .foot { display:flex; justify-content:space-between; align-items:center; margin-top:auto }
+  table { width:100%; border-collapse:collapse; background:var(--card); border:1px solid var(--line); border-radius:12px; overflow:hidden } th, td { text-align:left; padding:10px 12px; border-bottom:1px solid var(--line); vertical-align:middle } th { font-size:12px; color:var(--muted); font-weight:600; text-transform:uppercase; letter-spacing:.02em }
+  tr:last-child td { border-bottom:0 } tr.row:hover td { background:var(--accent-soft); cursor:pointer }
+  .dot { display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:6px; vertical-align:middle } .dot.ok{background:var(--ok)} .dot.warn{background:var(--warn)} .dot.err{background:var(--err)} .dot.off{background:var(--off)}
+  .panel { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px; margin-bottom:14px } .panel h4 { margin:0 0 10px; font-size:13px; text-transform:uppercase; color:var(--muted); letter-spacing:.03em }
+  .steps { display:flex; gap:8px; margin-bottom:14px; flex-wrap:wrap } .steps span { padding:4px 10px; border-radius:999px; border:1px solid var(--line); font-size:12px; color:var(--muted) } .steps span.on { background:var(--accent); color:#fff; border-color:var(--accent) }
+  .field { display:grid; grid-template-columns:160px 1fr; gap:10px; align-items:start; padding:8px 0; border-bottom:1px dashed var(--line) } .field:last-child{border-bottom:0} .field label { color:var(--muted); font-size:13px; padding-top:4px } .field .opts { display:flex; flex-direction:column; gap:6px } .field input[type=text] { padding:6px 10px; border:1px solid var(--line); border-radius:8px; background:var(--bg); color:var(--text); width:100%; max-width:420px; font:inherit }
+  .toggle { display:inline-flex; align-items:center; gap:8px; cursor:pointer } .toggle i { width:34px; height:20px; border-radius:999px; background:var(--off); position:relative; transition:.15s } .toggle i::after { content:""; position:absolute; top:2px; left:2px; width:16px; height:16px; border-radius:50%; background:#fff; transition:.15s } .toggle.on i { background:var(--accent) } .toggle.on i::after { left:16px }
+  .itabs { display:flex; gap:2px; border-bottom:1px solid var(--line); margin-bottom:14px } .itabs button { background:none; border:0; border-bottom:2px solid transparent; padding:8px 12px; color:var(--muted); cursor:pointer; font:inherit } .itabs button.on { color:var(--accent); border-bottom-color:var(--accent); font-weight:600 }
+  .kv { display:grid; grid-template-columns:150px 1fr; gap:6px 12px; font-size:13px } .kv b { color:var(--muted); font-weight:500 }
+  /* chat */
+  .chat { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:16px; max-width:760px; margin:0 auto } .msg { margin:10px 0 } .msg.user { text-align:right } .msg.user span { display:inline-block; background:var(--accent-soft); padding:8px 12px; border-radius:12px }
+  .ccard { border:1px solid var(--line); border-radius:12px; padding:12px; margin:10px 0; background:var(--bg) } .ccard h5 { margin:0 0 6px; font-size:13px } .ccard p { margin:4px 0; color:var(--muted); font-size:13px } .ccard textarea { width:100%; border:1px solid var(--line); border-radius:8px; padding:8px; font:inherit; background:var(--card); color:var(--text) }
+  .composer { border:1px solid var(--line); border-radius:12px; padding:10px; margin-top:14px; position:relative } .composer .chips { display:flex; gap:6px; margin-bottom:8px; flex-wrap:wrap } .composer .chips .chip { display:inline-flex; gap:5px; align-items:center } .composer .chips .chip .dot{margin:0}
+  .composer .row { display:flex; gap:8px; align-items:center } .composer .row input { flex:1; border:0; background:transparent; color:var(--text); font:inherit; outline:none }
+  .menu { position:absolute; bottom:52px; left:10px; width:330px; background:var(--card); border:1px solid var(--line); border-radius:12px; box-shadow:0 10px 30px rgba(0,0,0,.15); padding:8px; display:none; z-index:3 } .menu.open{display:block}
+  .menu h6 { margin:6px 8px 4px; font-size:11px; color:var(--muted); text-transform:uppercase } .menu .it { display:flex; align-items:center; gap:8px; padding:6px 8px; border-radius:8px } .menu .it:hover { background:var(--accent-soft) } .menu .it .name { flex:1 } .menu .it .eff { font-size:11px; color:var(--muted) } .menu .it input { margin:0 }
+  .menu .link { color:var(--accent); font-size:12px; cursor:pointer }
+  .activity { font-size:12px; color:var(--muted); display:flex; gap:8px; align-items:center; margin:6px 0 }
+  .hint { font-size:12px; color:var(--muted); margin-top:4px } .two { display:grid; grid-template-columns:1fr 1fr; gap:14px } @media (max-width:800px){ .two{grid-template-columns:1fr} .field{grid-template-columns:1fr} }
+  .badge-count { background:var(--err); color:#fff; border-radius:999px; font-size:10px; padding:1px 6px; margin-left:4px }
+</style>
+</head>
+<body>
+<header>
+  <h1>Unified Integrations · low-fi mockup</h1>
+  <nav class="tabs">
+    <button data-s="catalog" class="active">Admin · Catalog</button>
+    <button data-s="wizard">Admin · Install wizard</button>
+    <button data-s="installed">Admin · Installed</button>
+    <button data-s="instance">Admin · Instance page</button>
+    <button data-s="user">User · Settings</button>
+    <button data-s="chat">User · Chat</button>
+  </nav>
+  <span class="note">Concept 2026-10-20. Layout follows the existing admin pages (DataTable, indigo accent, slide-over detail). Everything is clickable but nothing persists.</span>
+</header>
+<main>
+
+<!-- ============ CATALOG ============ -->
+<section class="screen active" id="catalog">
+  <div class="crumbs">Admin › Integrations › Catalog</div>
+  <h2>Integrations</h2>
+  <p class="sub">Installed (24) · <b>Catalog (1,034)</b> · Connections · Inbound · Requests <span class="badge-count">3</span></p>
+  <div class="bar">
+    <input type="search" placeholder="Search integrations… (try “jira”, “sap”, “dms”)" id="q">
+    <select><option>Category: all</option><option>Productivity</option><option>Knowledge &amp; DMS</option><option>ERP &amp; CRM</option><option>Developer</option></select>
+    <select><option>Sign-in: any</option><option>Per user</option><option>Service account</option><option>None</option></select>
+    <select><option>Runs: anywhere</option><option>Cloud</option><option>On-prem</option></select>
+    <select><option>Source: all registries</option><option>iHub Official</option><option>Our registry</option><option>Built-in</option><option>MCP registry (community)</option></select>
+  </div>
+  <div class="grid" id="cards"></div>
+  <p class="hint" style="margin-top:12px">Card facts are always the same four: sign-in type, effect, where it runs, action count. Badges come from the registry: verified · partner · community · installed · update.</p>
+</section>
+
+<!-- ============ WIZARD ============ -->
+<section class="screen" id="wizard">
+  <div class="crumbs">Admin › Integrations › Catalog › Atlassian Jira &amp; Confluence › Install</div>
+  <h2>Install Atlassian Jira &amp; Confluence</h2>
+  <p class="sub">The form is generated from the integration's install fields (the same ConfigField type as MCPB user_config and MCP registry inputs).</p>
+  <div class="steps"><span class="on">1 Where</span><span class="on">2 Sign-in</span><span>3 Who</span><span>4 Policy</span><span>5 Test &amp; install</span></div>
+  <div class="panel">
+    <div class="field"><label>Region</label><div class="opts">
+      <label><input type="radio" name="reg" checked> Cloud (EU) · https://mcp.atlassian.com/v2/mcp</label>
+      <label><input type="radio" name="reg"> Cloud (US)</label>
+      <label><input type="radio" name="reg"> Data Center · <input type="text" placeholder="https://jira.example.com" style="display:inline-block;width:260px"></label></div></div>
+    <div class="field"><label>Sign-in</label><div class="opts">
+      <label><input type="radio" name="auth" checked> Each user signs in with their Atlassian account <span class="chip">recommended</span></label>
+      <label><input type="radio" name="auth"> Shared service account · credential <select><option>select…</option><option>jira-svc (basic)</option></select></label>
+      <label><input type="radio" name="auth" disabled> Enterprise-managed (no consent click, via Okta / Entra) <span class="chip">not advertised by this server</span></label></div></div>
+    <div class="field"><label>OAuth client</label><div class="opts">
+      <label><input type="radio" name="cl" checked> iHub's published identity (CIMD) · nothing to register</label>
+      <label><input type="radio" name="cl"> Register automatically (DCR, legacy)</label>
+      <label><input type="radio" name="cl"> Our own OAuth app · client id <input type="text" style="width:180px;display:inline-block"> secret <select><option>credential ref…</option></select></label>
+      <div class="hint">Redirect URI to register at the vendor: https://ihub.example.com/api/integrations/oauth/callback</div></div></div>
+    <div class="field"><label>Label</label><div><input type="text" value="Jira (EU)"></div></div>
+  </div>
+  <div class="panel">
+    <div class="field"><label>Who may use it</label><div class="opts"><div><span class="chip">engineering ×</span> <span class="chip">support ×</span> <button class="btn sm">+ group</button></div><label><input type="checkbox"> everyone</label><label><input type="checkbox"> pilot first: roll out to <span class="chip">it-pilot</span> only</label></div></div>
+    <div class="field"><label>Actions</label><div class="opts"><label><input type="radio" name="ac" checked> all 21 (14 read · 6 write · 1 destructive)</label><label><input type="radio" name="ac"> pick…</label></div></div>
+    <div class="field"><label>Writes</label><div class="opts"><label><input type="radio" name="wr" checked> ask the user each time <span class="chip">default</span></label><label><input type="radio" name="wr"> allow without asking</label><label><input type="radio" name="wr"> block write and destructive actions (read-only)</label>
+      <div class="hint">New write actions the vendor adds later: ask (flagged “new” in the Actions tab).</div></div></div>
+  </div>
+  <div class="panel">
+    <h4>Test connection</h4>
+    <div id="testout" class="hint">Not run yet.</div>
+    <div class="bar"><button class="btn" onclick="runTest()">Test connection</button><button class="btn" onclick="runTest(true)">Connect my account &amp; test</button><span style="flex:1"></span><button class="btn">Back</button><button class="btn primary" onclick="go('instance')">Install</button></div>
+  </div>
+</section>
+
+<!-- ============ INSTALLED ============ -->
+<section class="screen" id="installed">
+  <div class="crumbs">Admin › Integrations</div>
+  <h2>Integrations</h2>
+  <p class="sub"><b>Installed (24)</b> · Catalog (1,034) · Connections · Inbound · Requests <span class="badge-count">3</span></p>
+  <div class="bar"><input type="search" placeholder="Search…"><select><option>Protocol: all</option><option>MCP</option><option>OpenAPI</option><option>Native</option><option>A2A</option><option>Storage</option></select><select><option>Status: all</option></select><select><option>Group: all</option></select><span style="flex:1"></span><button class="btn" onclick="go('catalog')">Catalog</button><button class="btn primary">+ Add manually ▾</button></div>
+  <table>
+    <thead><tr><th></th><th>Integration</th><th>Protocol · sign-in</th><th>Groups</th><th>Health</th><th>Users</th><th></th></tr></thead>
+    <tbody id="instrows"></tbody>
+  </table>
+  <p class="hint">Same DataTable as Tools and Apps. “MCP servers”, “A2A agents” and the hub cards are rows here, not pages. Inbound surfaces (gateway, Outlook add-in, extension, Copilot agent) live in the Inbound tab.</p>
+</section>
+
+<!-- ============ INSTANCE ============ -->
+<section class="screen" id="instance">
+  <div class="crumbs">Admin › Integrations › Jira (EU)</div>
+  <h2><span class="dot ok"></span>Jira (EU) <span class="chip">MCP</span> <span class="chip">per-user sign-in</span> <label class="toggle on" onclick="this.classList.toggle('on')"><i></i>enabled</label></h2>
+  <p class="sub">Atlassian Jira &amp; Confluence v2.1.0 · Atlassian · verified · installed from iHub Official · update to 2.2.0 available</p>
+  <div class="itabs"><button class="on" data-t="ov">Overview</button><button data-t="ac">Actions (21)</button><button data-t="co">Connections (37)</button><button data-t="bi">Bindings (4)</button><button data-t="au">Audit</button><button data-t="se">Settings</button></div>
+  <div class="ipane" id="ov">
+    <div class="two">
+      <div class="panel"><h4>Status</h4><div class="kv"><b>Health</b><span><span class="dot ok"></span>ok · checked 2 min ago · 21 actions</span><b>Endpoint</b><span>https://mcp.atlassian.com/v2/mcp · streamable HTTP · 2026-07-28</span><b>OAuth client</b><span>iHub published identity (CIMD)</span><b>Groups</b><span>engineering, support</span><b>Rollout</b><span>all</span><b>Trusted annotations</b><span>no (missing annotation = write)</span></div></div>
+      <div class="panel"><h4>Last 7 days</h4><div class="kv"><b>Calls</b><span>1,284 (read 1,201 · write 83)</span><b>Approvals</b><span>83 asked · 79 approved · 4 skipped</span><b>Errors</b><span>3 (token expired, 2 users)</span><b>Connected users</b><span>37 of 112 eligible</span></div></div>
+    </div>
+  </div>
+  <div class="ipane" id="ac" style="display:none">
+    <table><thead><tr><th>On</th><th>Action</th><th>Effect</th><th>Policy</th><th>Calls</th></tr></thead><tbody>
+      <tr><td><label class="toggle on"><i></i></label></td><td>search_issues<br><span class="hint">Search Jira issues with JQL</span></td><td><span class="chip read">read</span></td><td>run</td><td>812</td></tr>
+      <tr><td><label class="toggle on"><i></i></label></td><td>get_issue</td><td><span class="chip read">read</span></td><td>run</td><td>389</td></tr>
+      <tr><td><label class="toggle on"><i></i></label></td><td>add_comment</td><td><span class="chip write">write</span></td><td><select><option>ask (inherited)</option><option>allow</option><option>block</option></select></td><td>61</td></tr>
+      <tr><td><label class="toggle on"><i></i></label></td><td>transition_issue</td><td><span class="chip write">write</span></td><td><select><option>ask (inherited)</option></select></td><td>22</td></tr>
+      <tr><td><label class="toggle on"><i></i></label></td><td>create_page <span class="chip new">new since 2.2.0</span></td><td><span class="chip write">write</span></td><td><select><option>ask (new-action policy)</option></select></td><td>0</td></tr>
+      <tr><td><label class="toggle"><i></i></label></td><td>delete_issue</td><td><span class="chip destr">destructive</span></td><td>blocked by platform rule <code>*:delete_*</code></td><td>–</td></tr>
+    </tbody></table>
+  </div>
+  <div class="ipane" id="co" style="display:none">
+    <div class="bar"><input type="search" placeholder="Filter users…"><button class="btn">+ Shared connection</button></div>
+    <table><thead><tr><th>Principal</th><th>Kind</th><th>Status</th><th>Scopes</th><th>Last used</th><th></th></tr></thead><tbody>
+      <tr><td>daniel.manzke@…</td><td>OAuth (user)</td><td><span class="dot ok"></span>active · expires in 29 d</td><td>read:jira-work, write:jira-work</td><td>today</td><td><button class="btn sm danger">Revoke</button></td></tr>
+      <tr><td>anna.k@…</td><td>OAuth (user)</td><td><span class="dot warn"></span>needs reconnect (scope added)</td><td>read:jira-work</td><td>3 d ago</td><td><button class="btn sm danger">Revoke</button></td></tr>
+      <tr><td>group: support</td><td>service account · jira-svc</td><td><span class="dot ok"></span>active</td><td>–</td><td>today</td><td><button class="btn sm">Edit</button></td></tr>
+    </tbody></table>
+  </div>
+  <div class="ipane" id="bi" style="display:none"><div class="panel"><h4>Used by</h4><div class="kv"><b>Apps</b><span>Engineering Assistant (all actions, user's own connection) · Support Desk (search, get, add_comment · shared: support) · Release Notes (read only)</span><b>Workflows</b><span>Weekly sprint digest</span><b>Scheduled tasks</b><span>3 (owners' connections)</span></div></div></div>
+  <div class="ipane" id="au" style="display:none"><table><thead><tr><th>When</th><th>Who</th><th>Event</th></tr></thead><tbody><tr><td>today 10:12</td><td>daniel.manzke</td><td>action.execute add_comment ACME-12 (approved)</td></tr><tr><td>yesterday</td><td>admin</td><td>action.policyChange add_comment: ask → allow (Support Desk)</td></tr><tr><td>2026-10-14</td><td>anna.k</td><td>connection.create (oauth-user)</td></tr><tr><td>2026-10-01</td><td>admin</td><td>integration.install from iHub Official v2.1.0</td></tr></tbody></table></div>
+  <div class="ipane" id="se" style="display:none"><div class="panel"><div class="bar"><button class="btn" onclick="go('wizard')">Re-run install wizard</button><button class="btn">Update to 2.2.0 (shows diff)</button><button class="btn">Detach from registry</button><span style="flex:1"></span><button class="btn danger">Uninstall</button></div><div class="hint">Uninstall is refused while 37 connections exist; revoke all first (n8n-style warning with the count).</div></div></div>
+</section>
+
+<!-- ============ USER SETTINGS ============ -->
+<section class="screen" id="user">
+  <div class="crumbs">Settings › Integrations</div>
+  <h2>Integrations</h2>
+  <p class="sub">Everything your groups allow, with its true identity state. Connect once; the chat picker uses it afterwards.</p>
+  <div class="bar"><input type="search" placeholder="Search…"><select><option>Category: all</option></select><select><option>Status: all</option><option>Needs attention</option></select></div>
+  <table><thead><tr><th>Integration</th><th>Status</th><th>What it can do</th><th></th></tr></thead><tbody id="userrows"></tbody></table>
+  <div class="panel" style="margin-top:16px"><h4>Access to iHub (unchanged)</h4><div class="kv"><b>Personal API keys</b><span>2 keys · <a href="#">manage</a></span><b>Connected apps</b><span>Claude Desktop, VS Code · <a href="#">manage</a></span><b>Outlook add-in</b><span>manifest.xml</span></div></div>
+</section>
+
+<!-- ============ CHAT ============ -->
+<section class="screen" id="chat">
+  <div class="chat">
+    <div class="msg user"><span>What are my open tickets and add a comment to ACME-12 that staging passed?</span></div>
+    <div class="ccard" id="connectcard">
+      <h5>🔗 Connect Atlassian Jira &amp; Confluence (EU)</h5>
+      <p>To answer this, iHub needs to act as you in Jira. You will sign in at atlassian.com and come back to this chat.</p>
+      <p>Permissions: read issues and pages · write comments</p>
+      <div class="bar"><button class="btn primary" onclick="connected()">Connect</button><button class="btn">Not now</button></div>
+    </div>
+    <div id="afterconnect" style="display:none">
+      <div class="activity"><span class="logo" style="background:#2563eb;width:18px;height:18px;font-size:9px;border-radius:5px">J</span> Jira · search_issues · read · 3 results</div>
+      <div class="msg">You have three open tickets: <b>ACME-12</b> (in review), <b>ACME-19</b>, <b>ACME-23</b>.</div>
+      <div class="ccard" id="approval">
+        <h5>✎ Jira · Add comment to ACME-12 <span class="chip write">write</span></h5>
+        <textarea rows="2">Tested on staging, works. Moving to review.</textarea>
+        <p>Runs as daniel.manzke@… · in Jira (EU) · nothing is sent until you choose.</p>
+        <div class="bar"><button class="btn primary" onclick="approved()">Run</button><button class="btn">Edit</button><button class="btn">Skip</button><label style="font-size:12px;color:var(--muted)"><input type="checkbox"> don't ask again in this chat</label></div>
+      </div>
+      <div id="done" style="display:none"><div class="activity"><span class="logo" style="background:#2563eb;width:18px;height:18px;font-size:9px;border-radius:5px">J</span> Jira · add_comment · write · ACME-12 · approved by you</div><div class="msg">Done. I added the comment to <a href="#">ACME-12</a>.</div></div>
+    </div>
+    <div class="composer">
+      <div class="chips"><span class="chip"><span class="dot ok"></span>Web search</span><span class="chip"><span class="dot ok"></span>iFinder</span><span class="chip" id="jirachip"><span class="dot off"></span>Jira (EU) · not connected</span></div>
+      <div class="row"><button class="btn" onclick="document.getElementById('menu').classList.toggle('open')">＋</button><input placeholder="Message… (type @ to search integrations)"><button class="btn primary">Send</button></div>
+      <div class="menu" id="menu">
+        <input type="search" placeholder="Search integrations…" style="width:100%;min-width:0">
+        <h6>Attach</h6>
+        <div class="it"><span>📎</span><span class="name">Upload file</span></div>
+        <div class="it"><span>📁</span><span class="name">SharePoint</span><span class="eff">files</span></div>
+        <div class="it"><span>📁</span><span class="name">Google Drive</span><span class="eff">files</span></div>
+        <h6>Use in this chat</h6>
+        <div class="it"><input type="checkbox" checked><span class="name">Web search</span><span class="eff">read</span></div>
+        <div class="it"><input type="checkbox" checked><span class="name">iFinder</span><span class="eff">read · SSO</span></div>
+        <div class="it"><input type="checkbox" id="jiracb"><span class="name">Jira &amp; Confluence (EU)</span><span class="link" id="jiralink" onclick="connected()">Connect →</span></div>
+        <div class="it"><input type="checkbox"><span class="name">enaio DMS</span><span class="eff">read · write · service acct</span></div>
+        <div class="it"><input type="checkbox"><span class="name">Image generation</span></div>
+        <h6></h6><div class="it"><span class="link">Manage integrations…</span></div>
+      </div>
+    </div>
+    <p class="hint">One row per integration, never its 21 tools. The chip row shows what the model can reach before you send. Connect opens the vendor consent in a new tab and returns here; the failed call is retried.</p>
+  </div>
+</section>
+</main>
+
+<script>
+const screens=[...document.querySelectorAll('section.screen')];
+function go(id){screens.forEach(s=>s.classList.toggle('active',s.id===id));document.querySelectorAll('nav.tabs button').forEach(b=>b.classList.toggle('active',b.dataset.s===id));window.scrollTo(0,0)}
+document.querySelectorAll('nav.tabs button').forEach(b=>b.onclick=()=>go(b.dataset.s));
+document.querySelectorAll('.itabs button').forEach(b=>b.onclick=()=>{document.querySelectorAll('.itabs button').forEach(x=>x.classList.toggle('on',x===b));document.querySelectorAll('.ipane').forEach(p=>p.style.display=p.id===b.dataset.t?'':'none')});
+
+const cat=[
+ {n:'Microsoft 365',p:'Microsoft',b:'verified',d:'Mail, calendar, OneDrive and SharePoint files, Teams chat.',a:'per-user',e:'read + write',r:'cloud',c:'7 actions',col:'#d83b01',i:'M'},
+ {n:'Atlassian Jira & Confluence',p:'Atlassian',b:'verified',d:'Issues, JQL search, comments, transitions; Confluence pages.',a:'per-user',e:'read + write',r:'cloud · DC',c:'21 actions',col:'#2563eb',i:'J',inst:true},
+ {n:'SharePoint Server (on-prem)',p:'IntraFind',b:'verified',d:'Search, fetch, libraries and versions inside your network.',a:'SSO (Kerberos)',e:'read',r:'on-prem',c:'5 actions',col:'#0f766e',i:'SP'},
+ {n:'d.velop documents',p:'IntraFind',b:'verified',d:'Search, read and file documents into the e-Akte.',a:'service account',e:'read + write',r:'on-prem',c:'9 actions',col:'#7c3aed',i:'dv'},
+ {n:'iFinder',p:'IntraFind',b:'verified',d:'Permission-trimmed enterprise search and document content.',a:'SSO (JWT)',e:'read',r:'on-prem · cloud',c:'7 actions',col:'#dc2626',i:'iF',inst:true},
+ {n:'SAP S/4HANA',p:'IntraFind',b:'partner',d:'OData reads: materials, orders, vendors; gated BAPI actions.',a:'service account',e:'read',r:'on-prem',c:'6 actions',col:'#0284c7',i:'SAP'},
+ {n:'Notion',p:'Notion',b:'partner',d:'Pages and databases.',a:'per-user',e:'read + write',r:'cloud',c:'13 actions',col:'#111827',i:'N'},
+ {n:'Slack',p:'Slack',b:'verified',d:'Search messages, read threads, post (gated).',a:'per-user',e:'read + write',r:'cloud',c:'11 actions',col:'#4a154b',i:'S'},
+ {n:'Nextcloud',p:'IntraFind',b:'verified',d:'Files, search, upload, share. Also as file picker.',a:'per-user',e:'read + write',r:'on-prem',c:'6 actions · files',col:'#0082c9',i:'Nc'},
+ {n:'HubSpot',p:'HubSpot',b:'partner',d:'Contacts, deals, companies.',a:'per-user',e:'read + write',r:'cloud',c:'36 actions',col:'#ff7a59',i:'H'},
+ {n:'DeepL',p:'DeepL',b:'verified',d:'Translate text and documents, glossaries.',a:'shared key',e:'read',r:'cloud',c:'3 actions',col:'#0f2b46',i:'DL',inst:true},
+ {n:'Context7',p:'Upstash',b:'community',d:'Library documentation lookup. Community listing, not reviewed.',a:'none',e:'read',r:'cloud',c:'2 actions',col:'#6b7280',i:'C7'},
+];
+const cards=document.getElementById('cards');
+function renderCards(q=''){cards.innerHTML='';cat.filter(x=>(x.n+x.d+x.p).toLowerCase().includes(q.toLowerCase())).forEach(x=>{const el=document.createElement('div');el.className='card';el.innerHTML=`<div class="top"><div class="logo" style="background:${x.col}">${x.i}</div><div><h3>${x.n}</h3><div class="pub">${x.p} · <span class="chip ${x.b}">${x.b}</span>${x.inst?' <span class="chip installed">installed</span>':''}</div></div></div><p>${x.d}</p><div class="facts"><span class="chip">🔑 ${x.a}</span><span class="chip">📖 ${x.e}</span><span class="chip">${x.r.includes('on-prem')?'🏢':'☁'} ${x.r}</span><span class="chip">${x.c}</span></div><div class="foot"><span class="link" style="font-size:12px;color:var(--accent);cursor:pointer">Details</span>${x.inst?'<button class="btn sm">Installed ✓</button>':'<button class="btn sm primary" onclick="go(\'wizard\')">Install</button>'}</div>`;cards.appendChild(el)})}
+renderCards();document.getElementById('q').oninput=e=>renderCards(e.target.value);
+
+const inst=[
+ ['ok','Atlassian Jira & Confluence (EU)','MCP · per-user','engineering, support','ok · 2 min','37'],
+ ['ok','SharePoint Online','Native · per-user','everyone','ok · 5 min','412'],
+ ['ok','iFinder','Native · SSO (JWT)','everyone','ok · 1 min','–'],
+ ['warn','enaio DMS','OpenAPI · service account','legal','degraded · slow','–'],
+ ['off','HubSpot','MCP · per-user','–','disabled','0'],
+ ['err','DeepL','OpenAPI · shared key','everyone','key expired','–'],
+ ['ok','Brave web search','Web search · shared key','everyone','ok','–'],
+ ['ok','draw.io (views)','MCP · none','everyone','ok · 3 min','–'],
+];
+document.getElementById('instrows').innerHTML=inst.map(r=>`<tr class="row" onclick="go('instance')"><td><span class="dot ${r[0]}"></span></td><td><b>${r[1]}</b></td><td>${r[2]}</td><td>${r[3]}</td><td>${r[4]}</td><td>${r[5]}</td><td><button class="btn sm">⋯</button></td></tr>`).join('');
+
+const urows=[
+ ['ok','Atlassian Jira & Confluence (EU)','Connected as daniel.manzke@… · expires in 29 days','search, read, comment, transition','<button class="btn sm">Disconnect</button>'],
+ ['ok','SharePoint Online','Connected','files, search','<button class="btn sm">Disconnect</button>'],
+ ['ok','iFinder','Signed in via SSO · nothing to do','search, read','<button class="btn sm" disabled>–</button>'],
+ ['ok','enaio DMS','Runs as service account (legal team)','search, read, file-in','<button class="btn sm" disabled>–</button>'],
+ ['off','HubSpot','Not connected','contacts, deals','<button class="btn sm primary">Connect</button>'],
+ ['warn','Microsoft 365','Reconnect needed · new permission: mail','mail, calendar, files','<button class="btn sm primary">Reconnect</button>'],
+ ['ok','DeepL','Shared key','translate','<button class="btn sm" disabled>–</button>'],
+];
+document.getElementById('userrows').innerHTML=urows.map(r=>`<tr><td><span class="dot ${r[0]}"></span><b>${r[1]}</b></td><td>${r[2]}</td><td class="hint">${r[3]}</td><td style="text-align:right">${r[4]}</td></tr>`).join('');
+
+function runTest(me){const o=document.getElementById('testout');o.innerHTML='Discovering… RFC 9728 ✓ · authorization server ✓ · CIMD accepted ✓ · tools/list ✓ 21 actions (14 read · 6 write · 1 destructive)'+(me?' · signed in as daniel.manzke@… ✓':' · per-user sign-in not tested (use “Connect my account”)')}
+function connected(){document.getElementById('connectcard').style.display='none';document.getElementById('afterconnect').style.display='';document.getElementById('jirachip').innerHTML='<span class="dot ok"></span>Jira (EU)';document.getElementById('jiracb').checked=true;document.getElementById('jiralink').outerHTML='<span class="eff">read · write</span>';document.getElementById('menu').classList.remove('open')}
+function approved(){document.getElementById('approval').style.display='none';document.getElementById('done').style.display=''}
+</script>
+</body>
+</html>
