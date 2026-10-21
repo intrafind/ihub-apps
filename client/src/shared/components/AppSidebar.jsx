@@ -38,6 +38,7 @@ import {
   useScheduledTaskNotifications,
   useScheduledTasksAvailable
 } from '../../features/tasks/hooks/useScheduledTasks';
+import { useProjectsAvailability } from '../../features/projects/hooks/useProjects';
 
 const SIDEBAR_COLLAPSED_KEY = 'ihub_sidebar_collapsed';
 const FAVORITE_APPS_KEY = 'ihub_favorite_apps';
@@ -143,6 +144,8 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose = () => {
   const canCreateTasks = useCanCreateScheduledTasks();
   const tasksEnabled = tasksAvailable && canCreateTasks;
   const { count: unseenTaskRuns } = useScheduledTaskNotifications();
+  // User projects (#1036): shown when the platform offers them to this viewer.
+  const { userProjectsEnabled: projectsEnabled } = useProjectsAvailability();
   const { chats, loading: chatsLoading, error: chatsError, hasMore: hasMoreChats } = useChats();
   // Render exactly one sidebar variant instead of mounting both and hiding one with CSS.
   const isDesktop = useMediaQuery('(min-width: 768px)');
@@ -491,6 +494,8 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose = () => {
   const isOnPrompts = location.pathname.startsWith('/prompts');
   const isOnChats = location.pathname.startsWith('/chats');
   const isOnTasks = location.pathname.startsWith('/tasks');
+  const isOnProjects = location.pathname.startsWith('/projects');
+  const projectsLabel = t('sidebar.projects', 'Projects');
   const tasksLabel = t('sidebar.tasks', 'Scheduled tasks');
   const unseenTasksLabel =
     unseenTaskRuns > 0
@@ -641,6 +646,18 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose = () => {
                 aria-hidden="true"
               />
             )}
+          </Link>
+        )}
+
+        {projectsEnabled && (
+          <Link
+            to="/projects"
+            title={projectsLabel}
+            aria-label={projectsLabel}
+            aria-current={isOnProjects ? 'page' : undefined}
+            className={railItemClass(isOnProjects)}
+          >
+            <Icon name="folder" size="md" />
           </Link>
         )}
 
@@ -825,6 +842,15 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose = () => {
               onClick={onMobileClose}
               active={isOnTasks}
               badge={unseenTasksLabel}
+            />
+          )}
+          {projectsEnabled && (
+            <NavItem
+              icon="folder"
+              label={projectsLabel}
+              to="/projects"
+              onClick={onMobileClose}
+              active={isOnProjects}
             />
           )}
           {configuredLinks.map(link => {

@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { fetchSourceMetadata } from '../../../api/endpoints/sources';
 import { siteOf } from '../sources/sourcesView';
+import ItemProvenance from '../../projects/components/ItemProvenance';
 
 /** A date in the locale of the browser, or the value as it came when it does not parse. */
 function formatDate(value) {
@@ -69,6 +70,8 @@ function SourceDetailsModal({ source, onClose }) {
   const title = details.title || source.title || t('sources.untitled', 'Untitled');
   const fileName = details.filename || source.fileName;
   const rows = [
+    // A project document (#1036): the project it belongs to.
+    { label: t('sources.project', 'Project'), value: details.project?.name },
     { label: t('sources.fileType', 'File type'), value: details.application || source.type },
     { label: t('sources.fileSize', 'File size'), value: details.sizeFormatted },
     { label: t('sources.author', 'Author'), value: details.author },
@@ -118,6 +121,11 @@ function SourceDetailsModal({ source, onClose }) {
           {fileName && fileName !== title && (
             <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">{fileName}</p>
           )}
+          <ItemProvenance
+            provenance={details.provenance || source.provenance}
+            item={{ kind: details.kind, snapshotAt: details.snapshotAt }}
+            className="mt-1"
+          />
           {rows.length > 0 && (
             <dl className="mt-4 grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
               {rows.map(({ label, value }) => (

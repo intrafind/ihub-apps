@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 import { fetchSourceContent } from '../../../api/endpoints/sources';
+import { downloadFormatFor, isOriginalDiscarded } from '../../documentPreview/utils/textPreview';
 import {
   filenameFromContentDisposition,
   openExternalUrl,
@@ -172,6 +173,24 @@ export function resolveSourceFilename(source, response) {
 }
 
 /**
+ * The source's file for a download or an attachment: the original, or its
+ * text where the provider keeps no original (a project item answers
+ * `410 ORIGINAL_DISCARDED`, spec 2 §5.1).
+ *
+ * @param {Object} source
+ * @returns {Promise<import('axios').AxiosResponse>}
+ */
+export async function fetchDownloadableContent(source) {
+  if (downloadFormatFor(source) === 'text') return fetchSourceContent({ source, format: 'text' });
+  try {
+    return await fetchSourceContent({ source });
+  } catch (error) {
+    if (!isOriginalDiscarded(error)) throw error;
+    return fetchSourceContent({ source, format: 'text' });
+  }
+}
+
+/**
  * Download the source's file through its provider and save it.
  *
  * @param {Object} source
@@ -180,7 +199,7 @@ export function resolveSourceFilename(source, response) {
 export async function downloadSource(source) {
   if (!source?.ref) return { ok: false, reason: 'unavailable' };
   try {
-    const response = await fetchSourceContent({ source });
+    const response = await fetchDownloadableContent(source);
     return saveBlobAs(response.data, resolveSourceFilename(source, response))
       ? { ok: true }
       : { ok: false, reason: 'failed' };
@@ -262,7 +281,7 @@ export async function attachSourceToMail(source) {
   if (!canAttachSource()) return { ok: false, reason: 'notComposing' };
 
   try {
-    const response = await fetchSourceContent({ source });
+    const response = await fetchDownloadableContent(source);
     const blob = response.data;
     if (blob?.size > MAX_ATTACHMENT_BYTES) {
       return { ok: false, reason: 'tooLarge' };

@@ -61,7 +61,8 @@ function DocumentTitle() {
       '/workflows': 'documentTitle.workflows',
       '/prompts': 'documentTitle.prompts',
       '/chats': 'documentTitle.chats',
-      '/tasks': 'documentTitle.tasks'
+      '/tasks': 'documentTitle.tasks',
+      '/projects': 'documentTitle.projects'
     };
 
     // Determine page-specific prefix based on route

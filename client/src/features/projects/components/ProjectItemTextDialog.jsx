@@ -5,47 +5,44 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Modal from '../../../shared/components/Modal';
 import Icon from '../../../shared/components/Icon';
-import { fetchAdminProjectItemText, getAdminApiErrorMessage } from '../../../api/adminApi';
-import { ITEM_TEXT_PREVIEW_CHARS } from '../utils/projectAdmin';
+import { ITEM_TEXT_PREVIEW_CHARS } from '../utils/projectItems';
+
+const EMPTY_STATE = { loading: false, text: '', chars: null, truncated: false, error: null };
 
 /**
  * Shows the plain text the model gets from one item: the extracted text of
  * a stored item, or the live content of a linked one. At most
- * {@link ITEM_TEXT_PREVIEW_CHARS} characters are loaded.
+ * {@link ITEM_TEXT_PREVIEW_CHARS} characters are loaded. The admin editor
+ * and the user project page pass their own text loader.
  *
  * @param {Object} props
  * @param {string} props.projectId
  * @param {Object|null} props.item - The item to preview; `null` closes the dialog.
  * @param {() => void} props.onClose
+ * @param {(projectId: string, itemId: string, options: {maxChars: number}) =>
+ *   Promise<{text: string, chars: number|null, truncated: boolean}>} props.fetchText
+ * @param {(error: Error) => string} props.errorMessage
  * @returns {JSX.Element|null}
  */
-function ProjectItemTextDialog({ projectId, item, onClose }) {
+function ProjectItemTextDialog({ projectId, item, onClose, fetchText, errorMessage }) {
   const { t } = useTranslation();
-  const [state, setState] = useState({ loading: false, text: '', chars: null, error: null });
+  const [state, setState] = useState(EMPTY_STATE);
 
   useEffect(() => {
     if (!item) return undefined;
     let cancelled = false;
-    setState({ loading: true, text: '', chars: null, truncated: false, error: null });
-    fetchAdminProjectItemText(projectId, item.id, { maxChars: ITEM_TEXT_PREVIEW_CHARS })
+    setState({ ...EMPTY_STATE, loading: true });
+    fetchText(projectId, item.id, { maxChars: ITEM_TEXT_PREVIEW_CHARS })
       .then(result => {
-        if (!cancelled) setState({ loading: false, ...result, error: null });
+        if (!cancelled) setState({ ...EMPTY_STATE, ...result });
       })
       .catch(err => {
-        if (!cancelled) {
-          setState({
-            loading: false,
-            text: '',
-            chars: null,
-            truncated: false,
-            error: getAdminApiErrorMessage(err)
-          });
-        }
+        if (!cancelled) setState({ ...EMPTY_STATE, error: errorMessage(err) });
       });
     return () => {
       cancelled = true;
     };
-  }, [projectId, item]);
+  }, [projectId, item, fetchText, errorMessage]);
 
   return (
     <Modal
@@ -59,7 +56,7 @@ function ProjectItemTextDialog({ projectId, item, onClose }) {
           id="project-item-text-title"
           className="text-lg font-medium text-gray-900 dark:text-gray-100 truncate"
         >
-          {t('admin.projects.preview.title', 'Text of "{{name}}"', { name: item?.name ?? '' })}
+          {t('projects.preview.title', 'Text of "{{name}}"', { name: item?.name ?? '' })}
         </h3>
         <button
           type="button"
@@ -86,7 +83,7 @@ function ProjectItemTextDialog({ projectId, item, onClose }) {
             {state.truncated && (
               <p className="mb-3 text-xs text-amber-700 dark:text-amber-400">
                 {t(
-                  'admin.projects.preview.truncated',
+                  'projects.preview.truncated',
                   'Showing the first {{shown}} of {{total}} characters.',
                   {
                     shown: ITEM_TEXT_PREVIEW_CHARS.toLocaleString(),
@@ -96,7 +93,7 @@ function ProjectItemTextDialog({ projectId, item, onClose }) {
               </p>
             )}
             <pre className="whitespace-pre-wrap break-words text-sm text-gray-800 dark:text-gray-200 bg-gray-50 dark:bg-gray-900 rounded-md p-4 border border-gray-200 dark:border-gray-700">
-              {state.text || t('admin.projects.preview.empty', '(no text)')}
+              {state.text || t('projects.preview.empty', '(no text)')}
             </pre>
           </>
         )}

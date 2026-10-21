@@ -16,6 +16,7 @@ export * from './endpoints/shares';
 export * from './endpoints/sources';
 export * from './endpoints/exports';
 export * from './endpoints/scheduledTasks';
+export * from './endpoints/projects';
 
 // Re-export utility functions
 export { clearApiCache, invalidateCacheByPattern } from './utils/cache';

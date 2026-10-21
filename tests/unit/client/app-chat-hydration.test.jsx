@@ -60,15 +60,20 @@ jest.mock('../../../client/src/api/endpoints/sources', () => ({
   fetchSourceMetadata: jest.fn()
 }));
 
-// The stream: record what was opened, deliver nothing.
+// The stream: record what was opened, deliver nothing — unless a test hands
+// an event to the surface through the captured `onEvent`.
 const mockStreams = [];
+const mockEventSource = { onEvent: null };
 jest.mock('../../../client/src/shared/hooks/useEventSource', () => ({
   __esModule: true,
-  default: () => ({
-    initEventSource: jest.fn(url => mockStreams.push(url)),
-    detachEventSource: jest.fn(),
-    stopEventSource: jest.fn()
-  })
+  default: options => {
+    mockEventSource.onEvent = options?.onEvent || null;
+    return {
+      initEventSource: jest.fn(url => mockStreams.push(url)),
+      detachEventSource: jest.fn(),
+      stopEventSource: jest.fn()
+    };
+  }
 }));
 
 const mockCapability = { persistence: true, resolving: false };
@@ -293,7 +298,8 @@ jest.mock('../../../client/src/features/chat/components/ChatInput', () => ({
 }));
 
 const AppChat = require('../../../client/src/features/apps/pages/AppChat').default;
-const { fetchChat, claimChatHandoff } = require('../../../client/src/api');
+const { fetchChat, claimChatHandoff, sendAppChatMessage } = require('../../../client/src/api');
+const { SSE_V2_EVENTS } = require('../../../shared/runEvents.js');
 
 const APP = {
   id: 'acme',
@@ -520,6 +526,36 @@ describe('starting a new chat', () => {
       // Pinning the URL is not a chat switch: nothing is fetched or re-sent.
       expect(fetchChat).not.toHaveBeenCalled();
       expect(mockStreams).toHaveLength(1);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+});
+
+describe('a chat started from a project page', () => {
+  test('sends the project as projectId on the first turn (#1036)', async () => {
+    jest.useFakeTimers();
+    try {
+      renderChat({ path: '/apps/acme?project=prj_case&prefill=first%20question&send=true' });
+      await act(async () => {
+        jest.advanceTimersByTime(200);
+      });
+      expect(mockStreams).toHaveLength(1);
+      const chatId = mockStreams[0].split('/').pop();
+
+      // The stream is up: the queued message goes out with the project.
+      await act(async () => {
+        await mockEventSource.onEvent({
+          type: SSE_V2_EVENTS.STREAM_CONNECTED,
+          envelope: { type: SSE_V2_EVENTS.STREAM_CONNECTED, seq: 0, data: {} }
+        });
+      });
+      expect(sendAppChatMessage).toHaveBeenCalledWith(
+        'acme',
+        chatId,
+        expect.any(Array),
+        expect.objectContaining({ projectId: 'prj_case' })
+      );
     } finally {
       jest.useRealTimers();
     }

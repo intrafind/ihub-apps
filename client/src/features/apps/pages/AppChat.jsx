@@ -77,6 +77,8 @@ import { getTranscriptionErrorMessage } from '../../../utils/transcriptionErrors
 import { startLiveTranscription } from '../../../utils/liveTranscription';
 import { AudioBufferRecorder } from '../../../utils/audioRecorder';
 import ScheduledRunBanner from '../../tasks/components/ScheduledRunBanner';
+import ChatProjectBar from '../../projects/components/ChatProjectBar';
+import { PROJECT_QUERY_PARAM } from '../../projects/utils/projectView';
 
 /**
  * Initialize variables with default values from app configuration
@@ -276,6 +278,9 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
   const documentId = searchParams.get('documentId');
   const searchProfileParam = searchParams.get('searchProfile');
   const documentSource = searchParams.get('source');
+  // A chat started from a project page (`?project=<id>`, #1036 spec 1 §6.3):
+  // the project rides on the chat request as `projectId`.
+  const projectParam = searchParams.get(PROJECT_QUERY_PARAM);
   const [app, setApp] = useState(preloadedApp);
   const [input, setInput] = useState(prefillMessage);
   // Set by handleResendMessage once the resend content/variables/files have
@@ -378,6 +383,10 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
   // How the open chat came about (`origin` on the stored chat). A scheduled
   // run's chat shows the run header — task, time, status, approval.
   const [chatOrigin, setChatOrigin] = useState(null);
+  // The project the open chat runs in (`projectId` on the stored chat), or
+  // the one this visit started it in; null for a chat outside any project.
+  const [chatProjectId, setChatProjectId] = useState(null);
+  const containerProjectId = chatProjectId || (embedded ? null : projectParam) || null;
 
   // Shared app settings hook
   const {
@@ -967,6 +976,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
     // previous one's tools.
     setChatSettings(null);
     setChatOrigin(null);
+    setChatProjectId(null);
   }, [chatId]);
 
   // The hydration attempt that owns the transcript, as `<chatId>|<mode>`. Keyed
@@ -1036,6 +1046,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
         // panel shows them again, and a start form's chat continues with them.
         if (result?.chat?.variables) setVariables(v => ({ ...v, ...result.chat.variables }));
         setChatOrigin(result?.chat?.origin || null);
+        setChatProjectId(result?.chat?.projectId || null);
         // Opening a chat is what "seen" means: this same GET cleared the
         // chat's unseen flag server-side, so every list already on screen is
         // now showing a badge the server no longer reports.
@@ -1392,7 +1403,8 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
             : {}),
           ...(app?.websearch?.enabled ? { websearchEnabled } : {}),
           ...(imageAspectRatio ? { imageAspectRatio } : {}),
-          ...(imageQuality ? { imageQuality } : {})
+          ...(imageQuality ? { imageQuality } : {}),
+          ...(containerProjectId ? { projectId: containerProjectId } : {})
         };
 
         // Prepare validated variables
@@ -1445,6 +1457,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
     }
   }, [
     app,
+    containerProjectId,
     messages.length,
     hydrating,
     chatModeResolving,
@@ -2450,7 +2463,11 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
       ...(imageAspectRatio ? { imageAspectRatio } : {}),
       ...(imageQuality ? { imageQuality } : {}),
       ...(documentId ? { documentIds: [documentId] } : {}),
-      ...(isVoiceTurn ? { voiceMode: true } : {})
+      ...(isVoiceTurn ? { voiceMode: true } : {}),
+      // The container project: accepted on the first turn and fixed for the
+      // chat afterwards; the same id on later turns is accepted too, which
+      // keeps a chat that is not stored server-side inside its project.
+      ...(containerProjectId ? { projectId: containerProjectId } : {})
     };
 
     debugLog('📤 Sending message with params:', params);
@@ -2562,6 +2579,8 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
     } else {
       sendChatMessage(messageStructure);
       setSentInChatId(chatId);
+      // Keep the project once the URL drops `?project=` for `/c/:chatId`.
+      if (containerProjectId && !chatProjectId) setChatProjectId(containerProjectId);
       voiceTurnSentRef.current = true;
     }
 
@@ -2976,6 +2995,15 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
         showEditAppButton={!embedded}
         onOpenCanvas={embedded ? () => openInNewTab(`/apps/${appId}/canvas`) : undefined}
       />
+
+      {!embedded && (
+        <ChatProjectBar
+          chatId={chatId}
+          projectId={containerProjectId}
+          canMove={serverBackedChat && (Boolean(routeChatId) || chatStarted)}
+          onMoved={setChatProjectId}
+        />
+      )}
 
       {chatOrigin?.createdVia === 'scheduled-task' && (
         <ScheduledRunBanner origin={chatOrigin} onRunChanged={reloadScheduledRunChat} />

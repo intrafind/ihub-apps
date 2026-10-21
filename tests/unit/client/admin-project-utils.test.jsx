@@ -7,23 +7,25 @@
  * and the dependency list of a refused delete.
  */
 import {
-  buildItemDialogTabs,
-  buildItemRequest,
   buildProjectPayload,
   dependenciesFromDeleteError,
   filterProjects,
-  hasActiveItems,
   normalizeProjectLinks,
   parseTags,
   projectFormFromProject,
   setProjectLinkMode,
-  summarizeItemKinds,
   toggleProjectLink,
   uploadsAreUnscanned,
   validateProjectForm,
-  validateProjectId,
-  validateUpload
+  validateProjectId
 } from '../../../client/src/features/admin/utils/projectAdmin';
+import {
+  buildItemDialogTabs,
+  buildItemRequest,
+  hasActiveItems,
+  summarizeItemKinds,
+  validateUpload
+} from '../../../client/src/features/projects/utils/projectItems';
 
 describe('project links', () => {
   test('bare string ids become auto links without write access', () => {

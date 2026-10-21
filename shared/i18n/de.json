@@ -561,7 +561,8 @@
       "loadedOne": "vollständig geladen",
       "searchedOne": "durchsucht",
       "unavailableOne": "nicht verfügbar",
-      "overBudget": "über dem Budget"
+      "overBudget": "über dem Budget",
+      "openProject": "Projekt öffnen"
     },
     "answerSource": {
       "llmOnly": "Basierend auf KI-Wissen",
@@ -4117,29 +4118,8 @@
         "saveFirst": "Legen Sie das Projekt zuerst an; danach können Sie Elemente hinzufügen.",
         "removeTitle": "Element entfernen",
         "removeConfirm": "„{{name}}“ aus dem Projekt entfernen?",
-        "empty": "Noch keine Elemente",
-        "emptyHint": "Fügen Sie Dateien, Text, Webseiten, iHub-Seiten oder iFinder-Dokumente hinzu.",
-        "pinItem": "{{name}} anheften",
-        "pinnedHint": "Angeheftete Elemente stehen immer im Prompt, wenn das Projekt im Kontext ist.",
-        "columns": {
-          "kind": "Art",
-          "name": "Name",
-          "status": "Status",
-          "pinned": "Angeheftet"
-        },
         "actions": {
-          "preview": "Text anzeigen",
-          "retry": "Erneut versuchen",
-          "refresh": "Aktualisieren",
           "remove": "Element entfernen"
-        },
-        "status": {
-          "pending": "Wartet",
-          "extracting": "Wird extrahiert",
-          "ready": "Bereit",
-          "failed": "Fehlgeschlagen",
-          "stale": "Veraltet",
-          "staleHint": "Der Inhalt hat sich an seinem Ursprung geändert; aktualisieren Sie, um ihn neu zu lesen."
         }
       },
       "unsaved": {
@@ -4147,50 +4127,6 @@
         "message": "Sie haben ungespeicherte Änderungen. Trotzdem verlassen?",
         "leave": "Verlassen",
         "stay": "Bleiben"
-      },
-      "addItem": {
-        "title": "Element hinzufügen",
-        "kinds": "Elementarten",
-        "tabs": {
-          "upload": "Hochladen",
-          "text": "Text"
-        },
-        "comingLater": "Folgt in einer späteren Version.",
-        "storageUnavailable": "Dateien und Text benötigen den Projektspeicher, der auf diesem Server nicht verfügbar ist.",
-        "kindDisabled": "Diese Art ist auf diesem Server nicht aktiviert.",
-        "file": "Datei",
-        "accepted": "Erlaubt: {{types}}",
-        "text": "Text",
-        "url": "URL",
-        "check": "Prüfen",
-        "checking": "Prüfe...",
-        "urlOk": "Die Seite kann gelesen werden.",
-        "urlFailed": "Die Seite kann nicht gelesen werden: {{error}}",
-        "page": "Seite",
-        "choosePage": "Seite auswählen",
-        "language": "Sprache",
-        "userLanguage": "Die Sprache des Benutzers",
-        "ifinderSearch": "iFinder durchsuchen",
-        "search": "Suchen",
-        "searching": "Suche läuft...",
-        "noResults": "Keine Dokumente gefunden.",
-        "selectedDocument": "Ausgewählt: {{title}}",
-        "query": "Suchanfrage",
-        "queryHint": "Die passenden Dokumente werden bei jeder Verwendung des Projekts gelesen.",
-        "name": "Name",
-        "namePlaceholder": "Optional; wird sonst aus dem Inhalt abgeleitet",
-        "pinned": "Angeheftet (immer im Prompt)",
-        "submit": "Hinzufügen",
-        "errors": {
-          "fileRequired": "Wählen Sie eine Datei zum Hochladen.",
-          "fileTooLarge": "Die Datei ist größer als {{max}}.",
-          "textRequired": "Geben Sie den Text ein.",
-          "urlInvalid": "Geben Sie eine gültige http(s)-URL ein.",
-          "pageRequired": "Wählen Sie eine Seite.",
-          "documentRequired": "Durchsuchen Sie iFinder und wählen Sie ein Dokument.",
-          "queryRequired": "Geben Sie eine Suchanfrage ein.",
-          "unsupported": "Diese Art kann hier nicht hinzugefügt werden."
-        }
       },
       "dependencies": {
         "title": "Projekt wird verwendet",
@@ -4200,11 +4136,6 @@
           "workflow": "Workflow",
           "agent": "Agent"
         }
-      },
-      "preview": {
-        "title": "Text von „{{name}}“",
-        "truncated": "Die ersten {{shown}} von {{total}} Zeichen.",
-        "empty": "(kein Text)"
       },
       "picker": {
         "label": "Projekte",
@@ -4831,7 +4762,8 @@
     "prompts": "Prompts",
     "apps": "Apps",
     "chats": "Chats",
-    "tasks": "Geplante Aufgaben"
+    "tasks": "Geplante Aufgaben",
+    "projects": "Projekte"
   },
   "darkMode": {
     "auto": "Auto (System)",
@@ -5167,7 +5099,8 @@
     "noChatsMatch": "Keine passenden Chats",
     "chatsUnavailable": "Die Chats konnten nicht geladen werden",
     "unseenBadge": "{{count}} neu",
-    "tasks": "Geplante Aufgaben"
+    "tasks": "Geplante Aufgaben",
+    "projects": "Projekte"
   },
   "chatHistory": {
     "title": "Ihre Chats",
@@ -5220,7 +5153,10 @@
     "sharedWithYou": "Mit Ihnen geteilt",
     "sharedNew": "Neu",
     "sharedNewHint": "Sie haben dies noch nicht geöffnet",
-    "scheduled": "Geplant"
+    "scheduled": "Geplant",
+    "inProject": "Im Projekt {{name}}",
+    "moveToProject": "In Projekt verschieben",
+    "moved": "Chat verschoben"
   },
   "transcription": {
     "record": "Audio für das ausgewählte Modell aufnehmen",
@@ -5268,7 +5204,8 @@
     "zoomOut": "Verkleinern",
     "highlight": "Markieren",
     "allPassages": "Alle",
-    "loadFailed": "Dokument konnte nicht geladen werden: {{error}}"
+    "loadFailed": "Dokument konnte nicht geladen werden: {{error}}",
+    "textOnly": "Nur Text – die Originaldatei wird nicht aufbewahrt"
   },
   "searchSummary": {
     "searchedFor": "Gesucht nach",
@@ -5513,7 +5450,8 @@
     "breadcrumbs": "Pfad",
     "loading": "Wird geladen…",
     "detailsUnavailable": "Keine weiteren Details verfügbar.",
-    "documentFromSource": "Dokument"
+    "documentFromSource": "Dokument",
+    "project": "Projekt"
   },
   "prompts": {
     "actions": {
@@ -6108,5 +6046,256 @@
     "inlineLabel": "Anleitung",
     "inlineLabelShort": "Anleitung",
     "startScreenHint": "Neu hier?"
+  },
+  "projects": {
+    "addItem": {
+      "accepted": "Erlaubt: {{types}}",
+      "check": "Prüfen",
+      "checking": "Wird geprüft...",
+      "choosePage": "Seite wählen",
+      "cloudAdd": "Zum Projekt hinzufügen",
+      "cloudHint": "Der Text jeder gewählten Datei wird jetzt mit Ihrem Konto übernommen. Aktualisieren Sie ein Element später, um ihn erneut zu übernehmen.",
+      "cloudNone": "Für diese Art ist keine Verbindung eingerichtet.",
+      "cloudProvider": "Verbindung",
+      "comingLater": "Folgt in einer späteren Version.",
+      "dropHint": "Oder Dateien hierher ziehen.",
+      "errors": {
+        "documentRequired": "Suchen Sie in iFinder und wählen Sie ein Dokument.",
+        "fileRequired": "Wählen Sie eine Datei zum Hochladen.",
+        "fileTooLarge": "Die Datei ist größer als {{max}}.",
+        "pageRequired": "Wählen Sie eine Seite.",
+        "queryRequired": "Geben Sie eine Suchanfrage ein.",
+        "quotaFiles": "Ein Projekt enthält höchstens {{max}} Elemente; entfernen Sie zuerst welche.",
+        "quotaProjectBytes": "Diese Dateien passen nicht in die {{max}}, die ein Projekt enthalten darf.",
+        "textRequired": "Geben Sie den Text ein, der hinzugefügt werden soll.",
+        "unsupported": "Diese Art kann hier nicht hinzugefügt werden.",
+        "urlInvalid": "Geben Sie eine gültige http(s)-URL ein."
+      },
+      "file": "Datei",
+      "ifinderSearch": "In iFinder suchen",
+      "kindDisabled": "Diese Art ist auf diesem Server nicht aktiviert.",
+      "kinds": "Elementarten",
+      "language": "Sprache",
+      "maxFileSize": "Höchstens {{size}} pro Datei.",
+      "name": "Name",
+      "namePlaceholder": "Optional; wird sonst aus dem Inhalt abgeleitet",
+      "noResults": "Keine Dokumente gefunden.",
+      "page": "Seite",
+      "pinned": "Angeheftet (immer im Prompt)",
+      "query": "Suchanfrage",
+      "queryHint": "Die Dokumente zu dieser Anfrage werden bei jeder Nutzung des Projekts gelesen.",
+      "search": "Suchen",
+      "searching": "Suche läuft...",
+      "selectedDocument": "Ausgewählt: {{title}}",
+      "storageUnavailable": "Dateien und Text brauchen den Projektspeicher, der auf diesem Server nicht verfügbar ist.",
+      "submit": "Hinzufügen",
+      "tabs": {
+        "text": "Text",
+        "upload": "Hochladen"
+      },
+      "text": "Text",
+      "title": "Element hinzufügen",
+      "url": "URL",
+      "urlFailed": "Die Seite kann nicht gelesen werden: {{error}}",
+      "urlOk": "Die Seite kann gelesen werden.",
+      "userLanguage": "Sprache des Benutzers"
+    },
+    "chatBar": {
+      "change": "Projekt wechseln",
+      "inProject": "Im Projekt: {{name}}",
+      "move": "In Projekt verschieben",
+      "open": "Projekt öffnen",
+      "unnamed": "Projekt"
+    },
+    "chats": {
+      "byMe": "von Ihnen",
+      "byOther": "von {{name}} (nur lesen)",
+      "empty": "Noch keine Chats in diesem Projekt.",
+      "filterLabel": "Anzeigen",
+      "filters": {
+        "all": "Alle Chats",
+        "mine": "Meine Chats"
+      },
+      "newChat": "Neuer Chat",
+      "noApps": "Keine App kann in Projekten chatten.",
+      "searchApps": "Apps suchen",
+      "someone": "einem anderen Mitglied",
+      "startHint": "Wählen Sie die App für den Chat. Sie erhält die Anweisungen und Dokumente des Projekts.",
+      "startTitle": "Chat in diesem Projekt beginnen",
+      "title": "Chats"
+    },
+    "create": {
+      "creating": "Wird angelegt…",
+      "submit": "Projekt anlegen",
+      "subtitle": "Ein Projekt hält Dokumente, Anweisungen und Chats zusammen. Es bleibt privat, bis Sie es teilen.",
+      "title": "Neues Projekt"
+    },
+    "errors": {
+      "accessChanged": "Ihr Zugriff auf dieses Projekt hat sich inzwischen geändert. Laden Sie die Seite neu.",
+      "generic": "Etwas ist schiefgegangen. Bitte versuchen Sie es erneut.",
+      "invalidRef": "Das Element konnte nicht hinzugefügt werden: {{message}}",
+      "kindDisabled": "Diese Art von Element ist hier nicht verfügbar.",
+      "mismatch": "Dieser Chat gehört bereits zu einem anderen Projekt. Verschieben Sie ihn stattdessen über das Chat-Menü.",
+      "notFound": "Dieses Projekt gibt es nicht, oder Sie haben keinen Zugriff mehr darauf.",
+      "permissionDenied": "Das dürfen Sie nicht.",
+      "quotaFileBytes": "Eine Datei darf höchstens {{limit}} groß sein.",
+      "quotaFiles": "Dieses Projekt enthält bereits {{limit}} Elemente, so viele wie erlaubt.",
+      "quotaProjectBytes": "Dieses Projekt darf höchstens {{limit}} enthalten; {{used}} sind belegt.",
+      "quotaProjects": "Der Besitzer hat bereits {{limit}} Projekte, so viele wie eine Person besitzen darf.",
+      "shareTargetInvalid": "Eine der Personen oder Gruppen kann nicht hinzugefügt werden: {{message}}",
+      "sourceForbidden": "Verbinden Sie zuerst die Integration, oder Sie haben keinen Zugriff auf dieses Dokument. ({{message}})",
+      "sourceGone": "Das Quelldokument wurde entfernt.",
+      "storageUnavailable": "Projekte sind auf dieser Installation nicht verfügbar.",
+      "unsupportedType": "Dieser Dateityp wird nicht unterstützt.",
+      "unsupportedTypeWith": "Dieser Dateityp wird nicht unterstützt. Unterstützt: {{types}}.",
+      "userProjectsDisabled": "Benutzerprojekte sind ausgeschaltet."
+    },
+    "form": {
+      "description": "Beschreibung",
+      "instructions": "Anweisungen",
+      "instructionsHint": "Wird dem Systemprompt jedes Chats in diesem Projekt angefügt, nach dem eigenen Prompt der App.",
+      "name": "Name",
+      "nameRequired": "Ein Name ist erforderlich.",
+      "tooLong": "Höchstens {{max}} Zeichen."
+    },
+    "items": {
+      "actions": {
+        "preview": "Text ansehen",
+        "refresh": "Aktualisieren",
+        "remove": "Element entfernen",
+        "rename": "Umbenennen",
+        "retry": "Erneut versuchen"
+      },
+      "add": "Dokumente hinzufügen",
+      "columns": {
+        "kind": "Art",
+        "name": "Name",
+        "pinned": "Angeheftet",
+        "status": "Status"
+      },
+      "empty": "Noch keine Elemente",
+      "emptyHint": "Fügen Sie Dateien, Text, Webseiten, iHub-Seiten, Cloud- oder iFinder-Dokumente hinzu.",
+      "errors": {
+        "interrupted": "Der Upload wurde unterbrochen. Laden Sie die Datei erneut hoch.",
+        "noText": "Dieses PDF hat keine Textebene (gescannt). Führen Sie eine Texterkennung (OCR) durch und laden Sie das Ergebnis hoch.",
+        "scanRejected": "Vom Virenscanner abgelehnt.",
+        "sourceForbidden": "Verbinden Sie die Integration erneut; das Dokument konnte mit Ihrem Konto nicht gelesen werden.",
+        "sourceGone": "Das Quelldokument wurde entfernt.",
+        "unsupportedType": "Dieser Dateityp wird nicht unterstützt."
+      },
+      "full": "Dieses Projekt enthält so viele Elemente wie erlaubt.",
+      "pinItem": "{{name}} anheften",
+      "pinnedHint": "Angeheftete Elemente sind immer im Prompt, auch wenn das Projekt durchsucht wird.",
+      "removeConfirm": "„{{name}}“ aus dem Projekt entfernen?",
+      "removeTitle": "Element entfernen",
+      "renameTitle": "Element umbenennen",
+      "status": {
+        "extracting": "Wird extrahiert",
+        "failed": "Fehlgeschlagen",
+        "pending": "Wartet",
+        "ready": "Bereit",
+        "stale": "Veraltet",
+        "staleHint": "Der Inhalt hat sich an der Quelle geändert; aktualisieren Sie, um ihn neu zu lesen.",
+        "staleNewer": "Neuere Version an der Quelle"
+      },
+      "title": "Dokumente",
+      "tokens": "~{{tokens}} Tokens"
+    },
+    "list": {
+      "emptyText": "Legen Sie ein Projekt an, fügen Sie Ihre Dokumente und Anweisungen hinzu und beginnen Sie Chats, die sie kennen.",
+      "emptyTitle": "Noch keine Projekte",
+      "filterLabel": "Anzeigen",
+      "filters": {
+        "all": "Alle",
+        "apps": "Aus Apps",
+        "mine": "Meine",
+        "shared": "Mit mir geteilt"
+      },
+      "lastActivity": "Aktiv am {{date}}",
+      "limitReached": "Sie haben die Grenze von {{limit}} Projekten erreicht",
+      "newProject": "Neues Projekt",
+      "noMatches": "Keine passenden Projekte",
+      "ownedBy": "Besitzer: {{name}}",
+      "quota": "{{used}} von {{limit}} eigenen Projekten",
+      "search": "Projekte suchen",
+      "subtitle": "Dokumente, Anweisungen und Chats an einem Ort, privat oder mit Ihrem Team geteilt.",
+      "title": "Projekte",
+      "itemCount_one": "{{count}} Dokument",
+      "itemCount_other": "{{count}} Dokumente",
+      "memberCount_one": "{{count}} Mitglied",
+      "memberCount_other": "{{count}} Mitglieder"
+    },
+    "members": {
+      "everyone": "Alle angemeldeten Benutzer",
+      "inactive": "inaktiv",
+      "leave": "Projekt verlassen",
+      "leaveConfirm": "Sie verlieren den Zugriff auf dieses Projekt und seine Chats, bis es jemand wieder mit Ihnen teilt.",
+      "leaveTitle": "Projekt verlassen",
+      "manage": "Teilen",
+      "private": "Nur der Besitzer – dieses Projekt ist privat.",
+      "shareHelp": "„Kann verwenden“ macht jemanden zum Benutzer: Er chattet mit dem Projekt und liest seine Dokumente. „Kann bearbeiten“ macht ihn zum Bearbeiter: Er fügt zusätzlich Dokumente hinzu oder entfernt sie, bearbeitet die Anweisungen und ändert die Mitglieder.",
+      "shareTitle": "Projekt teilen",
+      "title": "Mitglieder",
+      "transfer": "Besitz übertragen",
+      "unknownOwner": "Unbekannt",
+      "count_one": "{{count}} Mitglied",
+      "count_other": "{{count}} Mitglieder"
+    },
+    "moveChat": {
+      "hint": "Der Chat verwendet dann die Anweisungen und Dokumente des Projekts, und seine Mitglieder können ihn lesen.",
+      "list": "Projekte",
+      "none": "Sie haben kein anderes Projekt, in das Sie diesen Chat verschieben können.",
+      "remove": "Aus dem Projekt entfernen",
+      "submit": "Verschieben",
+      "title": "Chat in ein Projekt verschieben"
+    },
+    "page": {
+      "adminProject": "Dieses Projekt gehört zu einer Ihrer Apps. Administratoren verwalten es.",
+      "backToList": "Alle Projekte",
+      "breadcrumb": "Brotkrumennavigation",
+      "delete": "Projekt löschen",
+      "deleteConfirm": "„{{name}}“ mit allen Dokumenten löschen? Die Chats bleiben erhalten, außerhalb des Projekts. Das lässt sich nicht rückgängig machen.",
+      "deleteTitle": "Projekt löschen",
+      "readOnly": "Der Besitzer dieses Projekts ist nicht mehr aktiv. Es bleibt lesbar, aber niemand kann es ändern, bis ein Administrator es überträgt."
+    },
+    "preview": {
+      "empty": "(kein Text)",
+      "title": "Text von „{{name}}“",
+      "truncated": "Die ersten {{shown}} von {{total}} Zeichen werden angezeigt."
+    },
+    "provenance": {
+      "linked": "Verknüpft",
+      "picked": "Ausgewählt",
+      "pickedFrom": "Ausgewählt aus {{site}}",
+      "snapshot": "Text vom {{date}}",
+      "uploaded": "Hochgeladen"
+    },
+    "roles": {
+      "admin": "Aus einer App",
+      "editor": "Bearbeiter",
+      "owner": "Besitzer",
+      "user": "Benutzer"
+    },
+    "settings": {
+      "editTitle": "Einstellungen",
+      "noInstructions": "Keine Anweisungen.",
+      "reset": "Änderungen verwerfen",
+      "saved": "Gespeichert.",
+      "saving": "Wird gespeichert…",
+      "title": "Anweisungen"
+    },
+    "transfer": {
+      "hint": "Der neue Besitzer darf das Projekt ändern und löschen. Sie verlieren Ihren Zugriff, bis er es wieder mit Ihnen teilt.",
+      "search": "Personen suchen",
+      "submit": "Übertragen",
+      "submitTo": "An {{name}} übertragen",
+      "title": "Besitz übertragen"
+    },
+    "usage": {
+      "bytesOf": "{{used}} von {{limit}}",
+      "items": "Elemente",
+      "itemsOf": "{{used}} von {{limit}}",
+      "storage": "Speicher"
+    }
   }
 }

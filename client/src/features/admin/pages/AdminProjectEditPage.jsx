@@ -8,21 +8,27 @@ import Icon from '../../../shared/components/Icon';
 import DynamicLanguageEditor from '../../../shared/components/DynamicLanguageEditor';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import {
+  addAdminProjectItem,
+  checkProjectPickerUrl,
   createAdminProject,
   deleteAdminProjectItem,
   fetchAdminProjectConfig,
+  fetchAdminProjectItemText,
   fetchAdminProjectKinds,
+  fetchProjectPickerPages,
   getAdminApiErrorMessage,
   refreshAdminProjectItem,
+  searchProjectPickerIFinder,
   testAdminProject,
   updateAdminProject,
-  updateAdminProjectItem
+  updateAdminProjectItem,
+  uploadAdminProjectItem
 } from '../../../api/adminApi';
 import AdminBreadcrumb from '../components/AdminBreadcrumb';
 import ChangeHistoryDrawer from '../components/ChangeHistoryDrawer';
-import AddProjectItemDialog from '../components/AddProjectItemDialog';
-import ProjectItemsTable from '../components/ProjectItemsTable';
-import ProjectItemTextDialog from '../components/ProjectItemTextDialog';
+import AddProjectItemDialog from '../../projects/components/AddProjectItemDialog';
+import ProjectItemsTable from '../../projects/components/ProjectItemsTable';
+import ProjectItemTextDialog from '../../projects/components/ProjectItemTextDialog';
 import ProjectTestResults from '../components/ProjectTestResults';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import { useAdminProject } from '../hooks/useAdminProject';
@@ -30,16 +36,33 @@ import {
   MAX_PROJECT_ID_LENGTH,
   buildProjectPayload,
   createEmptyProjectForm,
-  localizedText,
   parseTags,
   projectFormFromProject,
   uploadsAreUnscanned,
   validateProjectForm
 } from '../utils/projectAdmin';
+import { localizedText } from '../../projects/utils/projectItems';
 
 const INPUT_CLASS =
   'w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500';
 const LABEL_CLASS = 'block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2';
+
+/**
+ * What the shared "Add item" dialog calls for an admin project: the admin
+ * item routes and the user picker endpoints. Admin projects get no cloud tab.
+ */
+const ADMIN_ITEM_API = {
+  addItem: (...args) => addAdminProjectItem(...args),
+  uploadItem: (...args) => uploadAdminProjectItem(...args),
+  fetchPages: () => fetchProjectPickerPages(),
+  searchIFinder: query => searchProjectPickerIFinder(query),
+  checkUrl: url => checkProjectPickerUrl(url),
+  errorMessage: err => getAdminApiErrorMessage(err)
+};
+
+/** Text loader of the shared preview dialog. */
+const fetchAdminItemText = (...args) => fetchAdminProjectItemText(...args);
+const adminErrorMessage = err => getAdminApiErrorMessage(err);
 
 /**
  * Admin → Projects → new / edit (#1036). Edits the project's settings (id on
@@ -551,6 +574,7 @@ function AdminProjectEditPage() {
               projectId={id}
               kinds={kinds}
               config={config}
+              api={ADMIN_ITEM_API}
               onAdded={() => void reload()}
             />
           )}
@@ -558,6 +582,8 @@ function AdminProjectEditPage() {
             projectId={id}
             item={previewItem}
             onClose={() => setPreviewItem(null)}
+            fetchText={fetchAdminItemText}
+            errorMessage={adminErrorMessage}
           />
           <ChangeHistoryDrawer
             isOpen={historyOpen}

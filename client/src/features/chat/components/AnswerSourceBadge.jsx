@@ -163,9 +163,21 @@ function AnswerSourceBadge({ answerSource, workflowResult, knowledgeScope = null
   );
 }
 
+/** How one project of the scope was used, as a short phrase. */
+function scopeModeText(project, t) {
+  if (project.mode === 'loaded') return t('chatMessage.knowledgeScope.loadedOne', 'loaded in full');
+  if (project.mode === 'searched') return t('chatMessage.knowledgeScope.searchedOne', 'searched');
+  return t('chatMessage.knowledgeScope.unavailableOne', 'unavailable');
+}
+
+/** Whether a scope entry is a user project (it has a page to link to). */
+const isUserProject = project => typeof project?.id === 'string' && project.id.startsWith('prj_');
+
 /**
  * Which projects the turn reached, and whether each was loaded in full or
- * searched (#1036, `knowledge/scope`).
+ * searched (#1036, `knowledge/scope`). One project is named (and, for a user
+ * project, links to its page); several are counted: *3 projects · 2 loaded in
+ * full · 1 searched*.
  */
 function KnowledgeScopeBadge({ scope, t }) {
   const projects = Array.isArray(scope?.projects) ? scope.projects : [];
@@ -176,26 +188,42 @@ function KnowledgeScopeBadge({ scope, t }) {
   if (loaded.length) parts.push(t('chatMessage.knowledgeScope.loaded', { count: loaded.length }));
   if (searched.length)
     parts.push(t('chatMessage.knowledgeScope.searched', { count: searched.length }));
-  const label = `${t('chatMessage.knowledgeScope.projects', { count: projects.length })} · ${parts.join(' · ')}`;
+  const single = projects.length === 1 ? projects[0] : null;
+  const label = single
+    ? `${single.name || single.id} · ${scopeModeText(single, t)}`
+    : `${t('chatMessage.knowledgeScope.projects', { count: projects.length })} · ${parts.join(' · ')}`;
   const tooltip = projects
     .map(
       project =>
-        `${project.name || project.id}: ${
-          project.mode === 'loaded'
-            ? t('chatMessage.knowledgeScope.loadedOne', 'loaded in full')
-            : project.mode === 'searched'
-              ? t('chatMessage.knowledgeScope.searchedOne', 'searched')
-              : t('chatMessage.knowledgeScope.unavailableOne', 'unavailable')
-        }${project.overBudget ? ` (${t('chatMessage.knowledgeScope.overBudget', 'over budget')})` : ''}`
+        `${project.name || project.id}: ${scopeModeText(project, t)}${
+          project.overBudget
+            ? ` (${t('chatMessage.knowledgeScope.overBudget', 'over budget')})`
+            : ''
+        }`
     )
     .join('\n');
-  return (
-    <div
-      className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs border bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 border-purple-200 dark:border-purple-800"
-      title={tooltip}
-    >
+  const className =
+    'inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs border bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 border-purple-200 dark:border-purple-800';
+  const content = (
+    <>
       <Icon name="folder" className="w-3 h-3" />
       <span>{label}</span>
+    </>
+  );
+  if (single && isUserProject(single)) {
+    return (
+      <Link
+        to={`/projects/${encodeURIComponent(single.id)}`}
+        className={`${className} hover:underline`}
+        title={`${tooltip}\n${t('chatMessage.knowledgeScope.openProject', 'Open the project')}`}
+      >
+        {content}
+      </Link>
+    );
+  }
+  return (
+    <div className={className} title={tooltip}>
+      {content}
     </div>
   );
 }

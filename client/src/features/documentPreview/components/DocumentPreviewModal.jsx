@@ -7,6 +7,8 @@ import { fetchSourceContent } from '../../../api/endpoints/sources';
 import { saveBlobAs } from '../../../utils/externalNavigation';
 import { resolveSourceFilename } from '../../chat/sources/sourceActions';
 import PdfPassageViewer from './PdfPassageViewer';
+import TextPassageViewer from './TextPassageViewer';
+import { downloadFormatFor, isOriginalDiscarded, previewFormatFor } from '../utils/textPreview';
 
 const MIN_SCALE = 0.5;
 const MAX_SCALE = 3;
@@ -17,7 +19,10 @@ const SCALE_STEP = 0.2;
  * highlighted in the document text.
  *
  * The PDF is the provider's PDF rendition (`GET /api/sources/:provider/content
- * ?format=pdf`, `routes/sources.js`). Fetching it as an ArrayBuffer (instead
+ * ?format=pdf`, `routes/sources.js`). A document kept as text only — a
+ * project item, whose original is discarded (`410 ORIGINAL_DISCARDED`) — is
+ * shown in text mode instead (`format=text`, `TextPassageViewer`), with the
+ * same passage highlighting and navigation. Fetching it as an ArrayBuffer (instead
  * of handing the URL to pdf.js) keeps the request on the app's authenticated
  * `apiClient` path, which also carries the Bearer token the Outlook task pane
  * and the extension side panel sign requests with.
@@ -37,6 +42,15 @@ function DocumentPreviewModal({ source, title, passages = [], initialPassageInde
   const { t } = useTranslation();
   const [data, setData] = useState(null);
   const [loadError, setLoadError] = useState(null);
+  // 'pdf' or 'text'; a PDF request that answers "original discarded" switches
+  // to text. Re-derived when another source is shown.
+  const [mode, setMode] = useState(() => previewFormatFor(source));
+  const [modeFor, setModeFor] = useState(source);
+  if (modeFor !== source) {
+    setModeFor(source);
+    setMode(previewFormatFor(source));
+  }
+  const isText = mode === 'text';
   const [scale, setScale] = useState(1.2);
   const [selectedPassage, setSelectedPassage] = useState(initialPassageIndex);
   const [viewerState, setViewerState] = useState({
@@ -47,7 +61,7 @@ function DocumentPreviewModal({ source, title, passages = [], initialPassageInde
   });
   const controlRef = useRef(null);
 
-  // Fetch the generated PDF.
+  // Fetch the generated PDF, or the text of a text-only document.
   useEffect(() => {
     let cancelled = false;
     const controller = new AbortController();
@@ -57,24 +71,25 @@ function DocumentPreviewModal({ source, title, passages = [], initialPassageInde
 
     fetchSourceContent({
       source,
-      format: 'pdf',
-      responseType: 'arraybuffer',
+      format: mode,
+      responseType: mode === 'text' ? 'text' : 'arraybuffer',
       signal: controller.signal
     })
       .then(response => {
-        if (!cancelled) setData(response.data);
+        if (cancelled) return;
+        setData(mode === 'text' ? String(response.data ?? '') : response.data);
       })
       .catch(err => {
-        if (!cancelled && err.name !== 'AbortError' && err.code !== 'ERR_CANCELED') {
-          setLoadError(err.message);
-        }
+        if (cancelled || err.name === 'AbortError' || err.code === 'ERR_CANCELED') return;
+        if (mode === 'pdf' && isOriginalDiscarded(err)) setMode('text');
+        else setLoadError(err.message);
       });
 
     return () => {
       cancelled = true;
       controller.abort();
     };
-  }, [source]);
+  }, [source, mode]);
 
   // Close on Escape, navigate matches with Enter / Shift+Enter.
   useEffect(() => {
@@ -120,7 +135,10 @@ function DocumentPreviewModal({ source, title, passages = [], initialPassageInde
     setDownloading(true);
     setDownloadError(null);
     try {
-      const response = await fetchSourceContent({ source });
+      const response = await fetchSourceContent({
+        source,
+        format: isText ? 'text' : downloadFormatFor(source)
+      });
       if (!saveBlobAs(response.data, resolveSourceFilename(source, response))) {
         setDownloadError(
           t('sources.downloadFailed', 'The document could not be downloaded. Please try again.')
@@ -133,7 +151,7 @@ function DocumentPreviewModal({ source, title, passages = [], initialPassageInde
     } finally {
       setDownloading(false);
     }
-  }, [source, t]);
+  }, [source, t, isText]);
 
   const { loading, numPages, totalMatches, currentMatch } = viewerState;
   const passageCount = passages.length;
@@ -161,9 +179,11 @@ function DocumentPreviewModal({ source, title, passages = [], initialPassageInde
               </p>
             ) : (
               <p className="text-xs text-gray-500 dark:text-gray-400">
-                {loading
-                  ? t('documentPreview.loading', 'Loading document…')
-                  : t('documentPreview.pageCount', '{{count}} pages', { count: numPages })}
+                {isText
+                  ? t('documentPreview.textOnly', 'Text only — the original file is not kept')
+                  : loading
+                    ? t('documentPreview.loading', 'Loading document…')
+                    : t('documentPreview.pageCount', '{{count}} pages', { count: numPages })}
               </p>
             )}
           </div>
@@ -221,7 +241,7 @@ function DocumentPreviewModal({ source, title, passages = [], initialPassageInde
           )}
 
           {/* Zoom */}
-          <div className="hidden sm:flex items-center gap-1">
+          <div className={isText ? 'hidden' : 'hidden sm:flex items-center gap-1'}>
             <button
               onClick={() => setScale(s => Math.max(MIN_SCALE, +(s - SCALE_STEP).toFixed(2)))}
               className="p-1.5 rounded-sm hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300"
@@ -328,7 +348,7 @@ function DocumentPreviewModal({ source, title, passages = [], initialPassageInde
               })}
             </p>
           </div>
-        ) : !data ? (
+        ) : data === null ? (
           <div className="flex-1 flex items-center justify-center text-gray-500 dark:text-gray-400">
             <svg className="animate-spin h-6 w-6 mr-2" fill="none" viewBox="0 0 24 24">
               <circle
@@ -347,6 +367,13 @@ function DocumentPreviewModal({ source, title, passages = [], initialPassageInde
             </svg>
             {t('documentPreview.loading', 'Loading document…')}
           </div>
+        ) : isText ? (
+          <TextPassageViewer
+            text={data}
+            passages={activePassages}
+            controlRef={controlRef}
+            onStateChange={handleStateChange}
+          />
         ) : (
           <PdfPassageViewer
             data={data}

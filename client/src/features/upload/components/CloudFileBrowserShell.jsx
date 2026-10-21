@@ -24,6 +24,12 @@ const CloudFileBrowserShell = ({
   uploadConfig,
   onFilesProcessed,
   onClose,
+  // Optional: hand the picked files (and the drive they sit in) to the caller
+  // instead of downloading them in the browser — the project "Add item"
+  // dialog adds them as references the server fetches (#1036).
+  onPick = null,
+  // Optional label of the confirm button when `onPick` is set.
+  pickLabel = null,
   // Optional adapter: predicate marking provider-specific virtual files
   // that have no upstream size but are still attachable (Google Docs).
   isVirtualFile = () => false,
@@ -129,6 +135,10 @@ const CloudFileBrowserShell = ({
   );
 
   const handleAttachFiles = async () => {
+    if (onPick) {
+      await onPick(Array.from(selectedFiles.values()), currentDrive);
+      return;
+    }
     const processedData = await downloadAndProcessFiles(uploadConfig);
     if (processedData.length > 0) {
       onFilesProcessed(processedData);
@@ -579,9 +589,10 @@ const CloudFileBrowserShell = ({
                 disabled={selectedFiles.size === 0}
                 className="px-4 py-2 border border-transparent rounded-md shadow-xs text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600 disabled:bg-gray-400 disabled:cursor-not-allowed"
               >
-                {t('cloudStorage.attachFiles', 'Attach {{count}} File(s)', {
-                  count: selectedFiles.size
-                })}
+                {pickLabel ||
+                  t('cloudStorage.attachFiles', 'Attach {{count}} File(s)', {
+                    count: selectedFiles.size
+                  })}
               </button>
             </div>
           </div>
