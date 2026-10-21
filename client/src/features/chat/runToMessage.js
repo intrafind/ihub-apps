@@ -148,6 +148,9 @@ export function projectRunToMessage(run, options = {}) {
 
   // ── tool side channels ───────────────────────────────────────────────
   if (run.skills?.length) extras.activeSkills = run.skills;
+  // Which projects the turn reached and how (`knowledge/scope`): the badge
+  // of the answer, streamed and stored alike.
+  if (run.knowledgeScope?.projects?.length) extras.knowledgeScope = run.knowledgeScope;
   if (run.searchStatus !== null && run.searchStatus !== undefined) {
     extras.searchStatus = run.searchStatus;
   }

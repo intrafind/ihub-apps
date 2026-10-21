@@ -561,7 +561,8 @@
       "loadedOne": "vollständig geladen",
       "searchedOne": "durchsucht",
       "unavailableOne": "nicht verfügbar",
-      "overBudget": "über dem Budget"
+      "overBudget": "über dem Budget",
+      "privateProject": "Privates Projekt"
     },
     "answerSource": {
       "llmOnly": "Basierend auf KI-Wissen",
@@ -5258,6 +5259,7 @@
   "documentPreview": {
     "title": "Dokumentvorschau",
     "loading": "Dokument wird geladen…",
+    "textOnly": "Extrahierter Text (das Original wird nicht aufbewahrt)",
     "pageCount": "{{count}} Seite",
     "pageCount_plural": "{{count}} Seiten",
     "matchPosition": "{{current}} von {{total}}",

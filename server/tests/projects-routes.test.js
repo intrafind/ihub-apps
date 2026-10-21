@@ -34,6 +34,7 @@ import registerProjectRoutes from '../routes/projectRoutes.js';
 import registerAdminProjectsRoutes from '../routes/admin/projects.js';
 import registerChatRoutes from '../routes/chats.js';
 import { getChatRepository } from '../services/chat/ChatRepository.js';
+import { authorizeChat } from '../services/chat/chatAccess.js';
 import { getProjectRepository } from '../services/projects/ProjectRepository.js';
 
 const ADA = { id: 'user-ada', name: 'Ada Lovelace', groups: ['authenticated'] };
@@ -140,6 +141,7 @@ const route = {
   adminDeps: handlersFor(adminRoutes, 'get', '/api/admin/projects/_dependencies/:id'),
   adminToggle: handlersFor(adminRoutes, 'post', '/api/admin/projects/_toggle'),
   adminAddItem: handlersFor(adminRoutes, 'post', '/api/admin/projects/:id/items'),
+  adminPut: handlersFor(adminRoutes, 'put', '/api/admin/projects/:id'),
   chatPatch: handlersFor(chatRoutes, 'patch', '/api/chats/:chatId')
 };
 
@@ -296,12 +298,31 @@ describe('configuration and gates', () => {
   });
 
   it('keeps user projects dark while the flag is off', async () => {
+    const existing = await create(ADA, { name: 'Before the switch' });
     setFeatures({ userProjects: false });
     const res = await drive(route.create, { user: ADA, body: { name: 'x' } });
     assert.equal(res.statusCode, 403);
     assert.equal(res.body.details.code, 'USER_PROJECTS_DISABLED');
     const feature = await drive(route.config, { user: ADA });
     assert.equal(feature.body.userProjects.enabled, false);
+    // An existing project is dark too, reads and writes alike, except for a
+    // full admin; admin projects stay reachable through their links.
+    const params = { projectId: existing.id };
+    for (const handlers of [route.get, route.update, route.remove, route.addItem]) {
+      const dark = await drive(handlers, { user: ADA, params, body: { name: 'y' } });
+      assert.equal(dark.statusCode, 403, JSON.stringify(dark.body));
+      assert.equal(dark.body.details.code, 'USER_PROJECTS_DISABLED');
+    }
+    assert.equal((await drive(route.get, { user: ROOT, params })).statusCode, 200);
+    const chats = getChatRepository();
+    const chat = await chats.ensureChat({ chatId: 'chat-dark-1', ownerId: ADA.id, appId: 'chat' });
+    const move = await drive(route.chatPatch, {
+      user: ADA,
+      params: { chatId: chat.id },
+      body: { projectId: existing.id }
+    });
+    assert.equal(move.statusCode, 403);
+    assert.equal(move.body.details.code, 'USER_PROJECTS_DISABLED');
     setFeatures({ projects: false });
     const gated = await drive(route.list, { user: ADA });
     assert.equal(gated.statusCode, 403);
@@ -563,13 +584,46 @@ describe('admin projects', () => {
     });
     assert.equal(patched.statusCode, 200);
     assert.deepEqual(patched.body.project.tags, ['help']);
-    // Admin names are localized records, on update as on create.
+    // Admin names are localized records, on update as on create — through
+    // the user route as well, where a content admin may edit it.
     const plain = await drive(route.adminPatch, {
       user: EDITOR,
       params: { id: 'faq' },
       body: { name: 'FAQ' }
     });
     assert.equal(plain.statusCode, 400);
+    const plainViaUser = await drive(route.update, {
+      user: EDITOR,
+      params: { projectId: 'faq' },
+      body: { name: 'FAQ' }
+    });
+    assert.equal(plainViaUser.statusCode, 400);
+    const localizedViaUser = await drive(route.update, {
+      user: EDITOR,
+      params: { projectId: 'faq' },
+      body: { name: { en: 'FAQ' } }
+    });
+    assert.equal(localizedViaUser.statusCode, 200, JSON.stringify(localizedViaUser.body));
+    // The linked project cannot be deleted through the user route either.
+    const viaUser = await drive(route.remove, { user: EDITOR, params: { projectId: 'faq' } });
+    assert.equal(viaUser.statusCode, 400, JSON.stringify(viaUser.body));
+    assert.equal(viaUser.body.details.code, 'PROJECT_IN_USE');
+    // PUT is a metadata request: a document carrying items is refused, not
+    // silently stored without them.
+    const withItems = await drive(route.adminPut, {
+      user: EDITOR,
+      params: { id: 'faq' },
+      body: { id: 'faq', name: { en: 'FAQ' }, items: [] }
+    });
+    assert.equal(withItems.statusCode, 400);
+    assert.equal(withItems.body.details.code, 'ITEMS_NOT_EDITABLE');
+    const put = await drive(route.adminPut, {
+      user: EDITOR,
+      params: { id: 'faq' },
+      body: { id: 'faq', name: { en: 'FAQ' }, tags: ['help'] }
+    });
+    assert.equal(put.statusCode, 200, JSON.stringify(put.body));
+    assert.deepEqual(put.body.project.tags, ['help']);
 
     const unlinked = await drive(route.adminCreate, {
       user: EDITOR,
@@ -611,6 +665,8 @@ describe('chats in a project', () => {
     assert.ok(chat);
     const project = await create(ADA, { name: 'Container' });
     await setMembers(ADA, project.id, [{ type: 'user', id: GRACE.id, role: 'user' }]);
+    const stale = '2020-01-01T00:00:00.000Z';
+    await getProjectRepository().mutate(project.id, current => current, { now: stale });
 
     const moved = await drive(route.chatPatch, {
       user: ADA,
@@ -624,6 +680,23 @@ describe('chats in a project', () => {
       markers.map(m => m.chatId),
       [chat.id]
     );
+    // Moving a chat in is activity: retention must not see the old stamp.
+    assert.ok((await getProjectRepository().get(project.id)).lastActivityAt > stale);
+
+    // A member reads the chat's transcript, marked as such so the owner's
+    // side effects stay the owner's; a stranger gets nothing; the read is
+    // gone with the feature.
+    const asMember = await authorizeChat(chat.id, GRACE, { repository: chats });
+    assert.equal(asMember.ok, true);
+    assert.equal(asMember.viaProject, true);
+    assert.equal(
+      (await authorizeChat(chat.id, GRACE, { repository: chats, intent: 'write' })).ok,
+      false
+    );
+    assert.equal((await authorizeChat(chat.id, CAROL, { repository: chats })).ok, false);
+    setFeatures({ userProjects: false });
+    assert.equal((await authorizeChat(chat.id, GRACE, { repository: chats })).ok, false);
+    setFeatures();
 
     const listed = await drive(route.chats, { user: GRACE, params: { projectId: project.id } });
     assert.equal(listed.statusCode, 200);

@@ -266,7 +266,42 @@ describe('service rules', () => {
       service.createUserProject({ owner, content: { name: 'two' } }),
       error => error instanceof ProjectError && error.code === 'QUOTA_PROJECTS'
     );
+    // The count and the create are serialized per owner: with one slot left,
+    // concurrent creates cannot all see it free.
+    const racer = { id: 'u-racer', name: 'Racer' };
+    const outcomes = await Promise.allSettled(
+      [1, 2, 3].map(n => service.createUserProject({ owner: racer, content: { name: `r${n}` } }))
+    );
+    assert.equal(outcomes.filter(o => o.status === 'fulfilled').length, 1);
+    assert.ok(
+      outcomes.filter(o => o.status === 'rejected').every(o => o.reason.code === 'QUOTA_PROJECTS')
+    );
+    assert.equal(await repo.countOwned(racer.id), 1);
     platform = {};
+  });
+
+  it('judges a delete again under the lock, and drops one member in place', async () => {
+    const project = await service.createUserProject({ owner: ADA, content: { name: 'Judged' } });
+    // The retention sweep and the user cleanup pass what they saw as the
+    // predicate; a project that no longer satisfies it is left alone.
+    await assert.rejects(
+      service.deleteProject(project.id, { authorize: current => current.owner.id === GRACE.id }),
+      error => error instanceof ProjectError && error.code === 'PROJECT_ACCESS_CHANGED'
+    );
+    assert.ok(await repo.get(project.id));
+    const graceKey = memberTargetKey({ type: 'user', id: GRACE.id });
+    await repo.setMembers(project.id, [
+      { type: 'user', id: GRACE.id, name: 'Grace', role: 'user' },
+      { type: 'group', id: 'g1', name: 'G1', role: 'user' }
+    ]);
+    const dropped = await repo.removeMember(project.id, graceKey);
+    assert.deepEqual(
+      dropped.members.map(m => m.id),
+      ['g1']
+    );
+    assert.equal(await repo.removeMember(project.id, graceKey), null);
+    assert.deepEqual(await repo.listSharedWith([graceKey]), []);
+    assert.ok(await service.deleteProject(project.id));
   });
 
   it('adds link items as ready, refuses unknown kinds and bad refs', async () => {

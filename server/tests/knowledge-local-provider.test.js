@@ -208,6 +208,18 @@ describe('corpus index', () => {
     assert.deepEqual(hits[0].path, ['Information security policy', 'Backups']);
     assert.equal(searchCorpus(index, 'deposit', { docIds: ['b'] }).length, 0);
   });
+
+  it('expands a short hit within its own document only', () => {
+    const index = buildCorpusIndex([
+      { id: 'a', name: 'Alpha', text: '# Alpha\n\nA tiny intro about alpha.' },
+      { id: 'b', name: 'Beta', text: '## Beta\n\nBeta is all about widgets and gadgets.' }
+    ]);
+    const hits = collectHits(index, 'tiny intro alpha');
+    assert.equal(hits[0].docId, 'a');
+    assert.ok(!hits[0].text.includes('widgets'), 'the next document is not a subsection');
+    const restricted = collectHits(index, 'tiny intro alpha', { docIds: ['a'] });
+    assert.ok(restricted.every(hit => hit.docId === 'a' && !hit.text.includes('widgets')));
+  });
 });
 
 describe('local provider', () => {
@@ -340,11 +352,36 @@ describe('scope and planner', () => {
     assert.equal(cramped.limitTokens, 30);
     assert.deepEqual(cramped.projects[0].cut, ['itm_policy']);
     assert.equal(cramped.projects[0].injected.length, 1);
+    assert.equal(cramped.projects[0].injected[0].doc.id, 'itm_policy');
     assert.equal(cramped.projects[0].injected[0].truncated, true);
     assert.ok(cramped.projects[0].injected[0].text.length < POLICY.length);
     assert.ok(cramped.projects[0].tokens <= 30);
     assert.ok(renderProjectsBlock(cramped).includes('truncated="true"'));
     assert.equal(scopeSummary(cramped).projects[0].cut, 1);
+    assert.equal(cramped.tools, true, 'what was cut stays reachable through the tools');
+
+    // The hard limit is one limit for the whole scope, not one per project.
+    const twice = [
+      { ...scope[0], mode: 'context' },
+      { ...scope[0], mode: 'context', project: { ...scope[0].project, id: 'prj_twin' } }
+    ];
+    const shared = await planKnowledgeScope(twice, {
+      model: { contextWindow: 200 },
+      settings: { loadAllMaxTokens: 50000 },
+      ctx
+    });
+    assert.equal(shared.limitTokens, 150);
+    const total = shared.projects.reduce((sum, project) => sum + project.tokens, 0);
+    assert.ok(total <= 150, `injected ${total} tokens past the limit`);
+    assert.equal(shared.projects[0].cut.length, 0);
+    // What is left goes to the pinned policy first (truncated, so listed as
+    // cut as well); the contract, first in item order, is dropped whole.
+    assert.deepEqual(shared.projects[1].cut, ['itm_policy', 'itm_contract']);
+    assert.equal(shared.projects[1].injected.length, 1);
+    assert.equal(shared.projects[1].injected[0].doc.id, 'itm_policy');
+    assert.equal(shared.projects[1].injected[0].truncated, true);
+    assert.equal(shared.tools, true);
+    evictProjectIndex('prj_twin');
 
     const forced = await planKnowledgeScope(
       scope.map(entry => ({ ...entry, mode: 'tools' })),
@@ -368,12 +405,21 @@ describe('tools', () => {
     ...extra
   });
 
+  const installed = ['knowledge_search', 'knowledge_read', 'knowledge_list'].map(id => ({
+    id,
+    name: id,
+    description: `The ${id} tool`,
+    script: 'knowledge.js',
+    method: id.slice('knowledge_'.length),
+    enabled: true
+  }));
+
   it('are offered with the scope in their description', async () => {
     const tools = await knowledgeToolsFor({
       app: { id: 'chat', _projectId: textProject.id },
       user: ADA,
       language: 'en',
-      allTools: []
+      allTools: installed
     });
     assert.deepEqual(
       tools.map(tool => tool.id),
@@ -384,13 +430,34 @@ describe('tools', () => {
     );
     assert.equal(tools[0].script, 'knowledge.js');
     assert.equal(tools[0].method, 'search');
-    const none = await knowledgeToolsFor({
+    // A project loaded in full by configuration still offers the tools: the
+    // planner may have to cut it at the hard limit, and the description says
+    // it is already in context.
+    const loaded = await knowledgeToolsFor({
       app: { id: 'chat', projects: [{ id: textProject.id, mode: 'context' }] },
       user: ADA,
-      allTools: []
+      allTools: installed
     });
-    assert.deepEqual(none, [], 'a project loaded in full by configuration needs no tool');
+    assert.equal(loaded.length, 3);
+    assert.ok(loaded[0].description.includes('loaded in full'));
     assert.deepEqual(await knowledgeToolsFor({ app: { id: 'chat' }, user: ADA }), []);
+    // Only the installation's enabled definitions are advertised: what the
+    // admin disabled or removed cannot run, so it is not offered either.
+    const disabled = installed.map(tool =>
+      tool.id === 'knowledge_read' ? { ...tool, enabled: false } : tool
+    );
+    assert.deepEqual(
+      await knowledgeToolsFor({
+        app: { id: 'chat', _projectId: textProject.id },
+        user: ADA,
+        allTools: disabled
+      }),
+      []
+    );
+    assert.deepEqual(
+      await knowledgeToolsFor({ app: { id: 'chat', _projectId: textProject.id }, user: ADA }),
+      []
+    );
   });
 
   it('search returns numbered hits with a sources envelope', async () => {
@@ -489,6 +556,50 @@ describe('sources', () => {
     const details = await providerMetadata({ ref, user: ADA });
     assert.equal(details.project.id, textProject.id);
     assert.equal(details.provenance.origin, 'uploaded');
+  });
+
+  it('sends the reader of a link item to its source, and goes dark with the feature', async () => {
+    const linked = await repo.createUser({ owner: ADA, content: { name: 'Links' } });
+    await repo.mutate(linked.id, p => ({
+      ...p,
+      items: [
+        {
+          id: 'itm_page',
+          kind: 'page',
+          name: 'FAQ page',
+          ref: { pageId: 'faq', language: 'de' },
+          storage: 'link',
+          pinned: false,
+          status: 'ready',
+          error: null,
+          provenance: { origin: 'linked', by: { id: ADA.id, name: ADA.name }, at: '2026-10-20' }
+        }
+      ]
+    }));
+    const ref = { id: 'itm_page', scope: linked.id };
+    await assert.rejects(
+      providerContent({ ref, user: ADA, format: 'original' }),
+      error => error.status === 409 && error.redirect === '/de/pages/faq'
+    );
+    configCache.setCacheEntry('config/features.json', { projects: true, userProjects: false });
+    try {
+      await assert.rejects(
+        providerContent({ ref, user: ADA, format: 'text' }),
+        error => error.status === 404
+      );
+      const dark = await resolveProjectScope({
+        appConfig: { id: 'chat', _projectId: textProject.id },
+        user: ADA
+      });
+      assert.equal(dark.length, 0, 'a user project is out of scope while the feature is off');
+    } finally {
+      configCache.setCacheEntry('config/features.json', { projects: true, userProjects: true });
+    }
+    const perApp = await resolveProjectScope({
+      appConfig: { id: 'chat', _projectId: textProject.id, features: { userProjects: false } },
+      user: ADA
+    });
+    assert.equal(perApp.length, 0, 'an app may switch user projects off for itself');
   });
 });
 

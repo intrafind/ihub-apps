@@ -244,6 +244,21 @@ export class ProjectRepository {
     return this.locks.withLock(`project:${projectId}`, fn, LOCK_OPTIONS);
   }
 
+  /**
+   * Run `fn` holding the lock of one owner: what serializes the per-user
+   * project count with the create or transfer it gates. Taken before any
+   * project lock, never inside one.
+   *
+   * @param {string} ownerId
+   * @param {() => Promise<T>} fn
+   * @returns {Promise<T>}
+   * @template T
+   */
+  withOwnerLock(ownerId, fn) {
+    if (!this.locks) return fn();
+    return this.locks.withLock(`project-owner:${ownerId}`, fn, LOCK_OPTIONS);
+  }
+
   async _loadUser(projectId) {
     const doc = await this.documents.get(USER_PROJECTS_NAMESPACE, projectId);
     return { project: doc?.data || null, etag: doc ? doc.etag : null };
@@ -441,8 +456,8 @@ export class ProjectRepository {
    * @param {boolean} [options.includeDisabled=true]
    * @returns {Promise<Object[]>}
    */
-  async listAdmin({ includeDisabled = true } = {}) {
-    const docs = await this.config.listDocuments(ADMIN_PROJECTS_DIR);
+  async listAdmin({ includeDisabled = true, strict = false } = {}) {
+    const docs = await this.config.listDocuments(ADMIN_PROJECTS_DIR, { strict });
     const projects = [];
     for (const doc of docs) {
       const project = doc?.data;
@@ -607,6 +622,43 @@ export class ProjectRepository {
         added: [...after].filter(key => !before.has(key)),
         removed: [...before].filter(key => !after.has(key))
       };
+    });
+  }
+
+  /**
+   * Drop one member from a user project, under the project's lock and against
+   * the list stored right now (a deleted user's cleanup; the members route
+   * replaces the whole list).
+   *
+   * @param {string} projectId
+   * @param {string} targetKey - `memberTargetKey` of the member to drop.
+   * @param {Object} [options]
+   * @param {{id: string, name?: string}} [options.actor]
+   * @param {string} [options.now]
+   * @returns {Promise<Object|null>} The stored project, or null when there is
+   *   no such project or member.
+   */
+  async removeMember(projectId, targetKey, { actor, now } = {}) {
+    if (!this.isAvailable() || !isUserProjectId(projectId)) return null;
+    return this._withLock(projectId, async () => {
+      const { project, etag } = await this._loadUser(projectId);
+      if (!project) return null;
+      const members = (project.members || []).filter(m => memberTargetKey(m) !== targetKey);
+      if (members.length === (project.members || []).length) return null;
+      const stamp = now || new Date().toISOString();
+      const stored = await this._writeUser(
+        {
+          ...project,
+          members,
+          membersUpdatedAt: stamp,
+          membersUpdatedBy: actor ? actorOf(actor) : project.membersUpdatedBy || null,
+          updatedAt: stamp,
+          updatedBy: actor ? actorOf(actor) : project.updatedBy
+        },
+        etag
+      );
+      await this._removeMemberMarkers(projectId, [targetKey]);
+      return stored;
     });
   }
 

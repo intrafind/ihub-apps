@@ -216,6 +216,9 @@ function isTextMime(mime) {
   return mime.startsWith('text/') || TEXT_MIME_TYPES.has(mime);
 }
 
+/** The generic zip types a browser or a store may send for an Office file. */
+const ZIP_MIMES = new Set(['application/zip', 'application/x-zip-compressed']);
+
 function isRefusedMime(mime) {
   return REFUSED_TYPES.has(mime) || REFUSED_PREFIXES.some(prefix => mime.startsWith(prefix));
 }
@@ -231,18 +234,16 @@ function isRefusedMime(mime) {
 export function acceptedTypeOf({ contentType, name } = {}) {
   const declared = normalizeMime(contentType);
   const extension = extensionOf(name);
-  if (declared && isRefusedMime(declared)) return null;
+  // A generic zip type on an Office extension is a browser's or a cloud
+  // store's wording for the package, not an archive: the bytes decide below.
+  const zipForPackage = ZIP_MIMES.has(declared) && PACKAGE_MIME_BY_EXTENSION.has(extension);
+  if (declared && isRefusedMime(declared) && !zipForPackage) return null;
   if (declared === PDF_MIME || (!declared && extension === '.pdf')) return PDF_MIME;
   if (PACKAGES.has(declared)) return declared;
   if (PACKAGE_MIME_BY_EXTENSION.has(extension)) {
     // Browsers and cloud stores often send a generic or a sibling type for
     // an Office file; the extension is the better witness, the bytes decide.
-    if (
-      !declared ||
-      declared === 'application/zip' ||
-      PACKAGES.has(declared) ||
-      isTextMime(declared)
-    ) {
+    if (!declared || zipForPackage || PACKAGES.has(declared) || isTextMime(declared)) {
       return PACKAGE_MIME_BY_EXTENSION.get(extension);
     }
     return null;
@@ -297,6 +298,9 @@ export function sniffBytes(bytes) {
   return 'unknown';
 }
 
+/** A real `mimetype` entry is a few dozen bytes. */
+const MAX_MIMETYPE_BYTES = 256;
+
 /** Which Office package a zip holds, read from its entry names. */
 async function packageTypeOf(bytes) {
   const { default: JSZip } = await import('jszip');
@@ -311,7 +315,9 @@ async function packageTypeOf(bytes) {
   if (names.some(name => name.startsWith('ppt/'))) return PPTX_MIME;
   if (names.some(name => name.startsWith('xl/'))) return XLSX_MIME;
   const mimetype = zip.file('mimetype');
-  if (mimetype) {
+  // The entry is inflated before `assertSafePackage` bounds the package, so
+  // only a mimetype of the size a real one has is read at all.
+  if (mimetype && Number(mimetype._data?.uncompressedSize) <= MAX_MIMETYPE_BYTES) {
     const declared = (await mimetype.async('string')).trim();
     if (PACKAGES.has(declared)) return declared;
   }

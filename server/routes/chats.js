@@ -176,13 +176,17 @@ async function resolveOwnerId(user) {
  * @param {'read'|'write'} [intent='read'] - What the caller is about to do.
  *   The admin bypass covers reads only, so a rename or a delete of someone
  *   else's chat is refused even for an admin.
- * @returns {Promise<{chat: Object, viaAdmin: boolean}|null>} The chat and how
- *   it was authorized, or null once a 404 is due.
+ * @returns {Promise<{chat: Object, viaAdmin: boolean, viaProject: boolean, nonOwner: boolean}|null>}
+ *   The chat and how it was authorized, or null once a 404 is due. `nonOwner`
+ *   is set for every read that does not rest on ownership (an admin's or a
+ *   project member's), so the owner's side effects can be skipped.
  */
 async function loadOwnedChat(chatId, user, repository, intent = 'read') {
   const auth = await authorizeChat(chatId, user, { repository, intent });
   if (!auth.ok || !auth.chat) return null;
-  return { chat: auth.chat, viaAdmin: auth.viaAdmin === true };
+  const viaAdmin = auth.viaAdmin === true;
+  const viaProject = auth.viaProject === true;
+  return { chat: auth.chat, viaAdmin, viaProject, nonOwner: viaAdmin || viaProject };
 }
 
 /**
@@ -194,12 +198,14 @@ async function moveChatToProject(req, res, repository, chat) {
     { chatProjectSchema, describeIssues },
     { getProjectRepository },
     access,
-    { getProjectService }
+    { getProjectService },
+    { isUserProjectsConfigured }
   ] = await Promise.all([
     import('../validators/projectSchema.js'),
     import('../services/projects/ProjectRepository.js'),
     import('../middleware/projectAccess.js'),
-    import('../services/projects/ProjectService.js')
+    import('../services/projects/ProjectService.js'),
+    import('../services/projects/projectSettings.js')
   ]);
   const parsed = chatProjectSchema.safeParse({ projectId: req.body.projectId });
   if (!parsed.success) {
@@ -208,6 +214,14 @@ async function moveChatToProject(req, res, repository, chat) {
   }
   const targetId = parsed.data.projectId;
   if (targetId) {
+    // Chat containers are the user-project feature: while it is off a chat
+    // joins no project (leaving one stays possible, it only undoes a share).
+    if (!isUserProjectsConfigured(configCache.getFeatures())) {
+      sendErrorResponse(res, 403, 'User projects are switched off', {
+        details: { code: 'USER_PROJECTS_DISABLED' }
+      });
+      return null;
+    }
     access.ensurePrincipal(req);
     const project = await getProjectRepository().get(targetId);
     const permissions = access.permissionsFor(project, req.user, access.callerContext(req.user));
@@ -277,7 +291,7 @@ export default function registerChatRoutes(app) {
       if (!repository) return;
       const access = await loadOwnedChat(chatId, req.user, repository, 'read');
       if (!access) return sendNotFound(res, 'Chat');
-      const { viaAdmin } = access;
+      const { nonOwner } = access;
       // Before the transcript is read, so an interrupted turn's closing answer
       // is part of it — and the client does not re-attach to a dead run.
       const chat = await settleInterruptedChat(access.chat, { repository, runLog });
@@ -289,14 +303,14 @@ export default function registerChatRoutes(app) {
       // Opening a chat is what "seen" means — for its owner. Only write when
       // the flag is actually set: the clear is a locked read-modify-write, and
       // a plain read should not contend with a turn that is producing into
-      // this chat. An admin reading someone else's chat clears nothing: the
-      // owner has not seen the answer, and a support read should not tell them
-      // they have.
+      // this chat. An admin or a project member reading someone else's chat
+      // clears nothing: the owner has not seen the answer, and another's read
+      // should not tell them they have.
       const seen =
-        chat.hasUnseenActivity && !viaAdmin ? await repository.clearUnseen(chatId) : null;
+        chat.hasUnseenActivity && !nonOwner ? await repository.clearUnseen(chatId) : null;
       // A scheduled run's chat, opened by its owner, is also the end of that
       // run's notification on the Tasks page.
-      if (!viaAdmin && chat.origin?.createdVia === SCHEDULED_TASK_ORIGIN) {
+      if (!nonOwner && chat.origin?.createdVia === SCHEDULED_TASK_ORIGIN) {
         markRunChatSeen(chat);
       }
       // `messages` is the array, not the stored envelope — a hydrating client
