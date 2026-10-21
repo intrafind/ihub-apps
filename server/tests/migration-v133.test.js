@@ -96,11 +96,18 @@ describe('V133 identity', () => {
     assert.equal(await precondition(withApp), true);
   });
 
-  it('matches what fresh installations ship', async () => {
-    const shipped = JSON.parse(
-      await fs.readFile(path.join(__dirname, '../defaults/apps/ihub-support-bot.json'), 'utf8')
+  it('is the prompt V175 replaces once V174 renamed the placeholder', async () => {
+    // The shipped prompt moved on with the projects migration (V174, V175);
+    // the chain holds when V175 starts from exactly this text.
+    const { PREVIOUS_SYSTEM: next } =
+      await import('../migrations/V175__support_bot_knowledge_prompt.js');
+    const renamed = Object.fromEntries(
+      Object.entries(SYSTEM).map(([lang, text]) => [
+        lang,
+        text.replace('{{sources}}', '{{projects}}')
+      ])
     );
-    assert.deepEqual(shipped.system, { ...SYSTEM });
+    assert.deepEqual({ ...next }, renamed);
   });
 
   it('tells the model to search with a query, in English, in every language', () => {

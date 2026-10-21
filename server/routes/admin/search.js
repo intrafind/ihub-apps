@@ -26,7 +26,7 @@ export default function registerAdminSearchRoutes(app) {
         models: [],
         groups: [],
         users: [],
-        sources: [],
+        projects: [],
         providers: [],
         tools: []
       };
@@ -118,10 +118,10 @@ export default function registerAdminSearchRoutes(app) {
         // skip
       }
 
-      // Search sources
+      // Search projects
       try {
-        const { data: sources } = configCache.getSources(true);
-        results.sources = sources
+        const { data: projects } = configCache.getProjects(true);
+        results.projects = projects
           .filter(s => {
             const name =
               typeof s.name === 'object' ? Object.values(s.name).join(' ') : s.name || '';

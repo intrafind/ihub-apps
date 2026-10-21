@@ -155,14 +155,16 @@ export async function copyDefaultConfiguration() {
  * are relative to both server/defaults and the contents directory; an entry
  * ending in `/` is a directory whose files are all managed (recursively).
  *
- * - `sources/ihub-documentation.md` — the consolidated documentation the
- *   build regenerates.
  * - `skills/ifinder-search/` — the shipped iFinder search skill. Its guidance
  *   moves with the iFinder tools and the search app prompt in the same
  *   release, so an installation must not keep an older copy. Customize it by
  *   copying it under another skill id, not by editing it in place.
+ *
+ * The consolidated documentation (`sources/ihub-documentation.md`) is no
+ * longer copied: the `ihub-documentation` admin project imports it from the
+ * shipped defaults whenever it changes (`services/projects/projectImport.js`).
  */
-export const MANAGED_DEFAULT_FILES = ['sources/ihub-documentation.md', 'skills/ifinder-search/'];
+export const MANAGED_DEFAULT_FILES = ['skills/ifinder-search/'];
 
 /**
  * Files under `dir`, recursively, as paths relative to `dir` (posix separators).

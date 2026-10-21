@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 import configCache from './configCache.js';
-import { createSourceManager } from './sources/index.js';
 import {
   activeSkillsOf,
   describeSkillCatalog,
@@ -634,23 +633,6 @@ export async function getToolsForApp(app, language = null, context = {}) {
   // An app may also list the page reader in `tools` — offer it only once.
   appTools = appTools.concat(websearchTools.filter(t => !appTools.some(a => a.id === t.id)));
 
-  // Add source-generated tools
-  if (Array.isArray(app.sources) && app.sources.length > 0) {
-    try {
-      const sourceManager = createSourceManager();
-      const { data: sourcesConfig } = configCache.getSources();
-      if (sourcesConfig && Array.isArray(sourcesConfig)) {
-        const appSources = sourcesConfig.filter(
-          source => app.sources.includes(source.id) && source.enabled
-        );
-        const sourceTools = sourceManager.generateTools(appSources, context);
-        appTools = appTools.concat(sourceTools);
-      }
-    } catch (error) {
-      logger.error('Error generating source tools', { component: 'ToolLoader', error });
-    }
-  }
-
   // Add the project knowledge tools when the request reaches a project
   // (#1036): one definition, a scope per request in its description.
   if (hasProjectScope(app) && context.user) {
@@ -1052,20 +1034,6 @@ export async function runTool(toolId, params = {}, options = {}) {
   if (toolId.startsWith('workflow_')) {
     const mod = await import('./tools/workflowRunner.js');
     return await mod.default({ ...params, workflowId: toolId.replace('workflow_', '') });
-  }
-
-  // Check if this is a source tool (starts with 'source_')
-  if (toolId.startsWith('source_')) {
-    const { createSourceManager } = await import('./sources/index.js');
-    const sourceManager = createSourceManager();
-    const sourceToolFn = sourceManager.getToolFunction(toolId);
-
-    if (sourceToolFn) {
-      logger.info('Executing source tool', { component: 'ToolLoader', toolId });
-      return await sourceToolFn(params);
-    } else {
-      throw new Error(`Source tool ${toolId} not found in registry`);
-    }
   }
 
   // Find tool definition to determine the script file

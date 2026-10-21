@@ -4,8 +4,6 @@
 import { getLocalizedContent } from '../../shared/localize.js';
 import { renderUserMessage } from '../../shared/promptContext.js';
 import configCache from '../configCache.js';
-import { createSourceManager } from '../sources/index.js';
-import SourceResolutionService from './SourceResolutionService.js';
 import { isFeatureEnabled } from '../featureRegistry.js';
 import { describeSkillCatalog, prepareActiveSkills } from './skillAccess.js';
 import logger from '../utils/logger.js';
@@ -479,76 +477,6 @@ class PromptService {
         systemPrompt = systemPrompt.trim()
           ? `${temporalContext}\n\n${systemPrompt}`
           : temporalContext;
-      }
-
-      // Process sources using unified source resolution system
-      try {
-        let sourceContent = '';
-
-        // Handle both admin source references and inline source configs
-        if (app.sources && Array.isArray(app.sources) && app.sources.length > 0) {
-          // Initialize source resolution service
-          const sourceResolutionService = new SourceResolutionService();
-
-          // Resolve source references to actual configurations
-          const context = {
-            user: user,
-            chatId: chatId,
-            userVariables: userVariables,
-            language: lang
-          };
-
-          const resolvedSources = await sourceResolutionService.resolveAppSources(app, context);
-
-          if (resolvedSources.length > 0) {
-            // createSourceManager() is a process-wide singleton; config is only
-            // honored on the very first call, so we rely on FileSystemHandler's
-            // own default basePath here instead of passing a redundant override.
-            const sourceManager = createSourceManager();
-
-            // Load content from resolved sources
-            const result = await sourceManager.loadSources(resolvedSources, context);
-            sourceContent = result.content;
-
-            // Track that prompt-based sources were used if content was loaded
-            if (sourceContent && sourceContent.trim()) {
-              this.trackPromptSources(chatId);
-              logger.info('Prompt-based sources loaded and tracked', {
-                component: 'PromptService',
-                chatId,
-                contentLength: sourceContent.length,
-                sourceCount: resolvedSources.length
-              });
-            }
-
-            if (result.metadata.errors.length > 0) {
-              logger.warn('Source loading errors', {
-                component: 'PromptService',
-                errors: result.metadata.errors
-              });
-            }
-          }
-
-          // Replace {{sources}} template with combined content
-          const hasSourcesPlaceholder = systemPrompt.includes('{{sources}}');
-          const hasSourcePlaceholder = systemPrompt.includes('{{source}}');
-
-          if (hasSourcesPlaceholder) {
-            systemPrompt = systemPrompt.replace('{{sources}}', () => sourceContent || '');
-          }
-          // Also support legacy {{source}} template
-          if (hasSourcePlaceholder) {
-            systemPrompt = systemPrompt.replace('{{source}}', () => sourceContent || '');
-          }
-
-          // If no placeholder was found but we have source content, append it automatically
-          if (!hasSourcesPlaceholder && !hasSourcePlaceholder && sourceContent) {
-            systemPrompt += `\n\nSources:\n<sources>${sourceContent}</sources>`;
-          }
-        }
-      } catch (error) {
-        logger.error('Error in source resolution system', { component: 'PromptService', error });
-        throw new Error(`Failed to process sources: ${error.message}`);
       }
 
       // Projects (#1036): the projects the request reaches — linked on the

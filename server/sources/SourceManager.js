@@ -34,7 +34,6 @@ function toolMetadata(metadata) {
 }
 
 // Global registry for source tool functions (persists across SourceManager instances)
-const globalSourceToolRegistry = new Map();
 
 /**
  * Source Manager
@@ -46,7 +45,6 @@ class SourceManager {
   constructor(config = {}) {
     this.config = config;
     this.handlers = new Map();
-    this.toolRegistry = new Map();
 
     // Initialize default handlers
     this.initializeHandlers();
@@ -227,16 +225,9 @@ class SourceManager {
       }
     }
 
-    // Generate enhanced sources template with both prompt and tool sources
-    const enhancedContent = this.generateEnhancedSourcesTemplate(
-      results,
-      totalContent.trim(),
-      context
-    );
-
     return {
       sources: results,
-      content: enhancedContent,
+      content: totalContent.trim(),
       metadata: {
         totalSources: sources.length,
         loadedSources: results.filter(r => r.success).length,
@@ -245,241 +236,6 @@ class SourceManager {
         loadedAt: new Date().toISOString()
       }
     };
-  }
-
-  /**
-   * Generate tools for sources marked as 'tool'
-   * @param {Array} sources - Array of source configurations
-   * @param {Object} context - Context (user, chatId, etc.)
-   * @returns {Array} - Array of tool definitions
-   */
-  generateTools(sources, context = {}) {
-    const tools = [];
-
-    for (const source of sources) {
-      if (source.exposeAs === 'tool') {
-        const tool = this.createSourceTool(source, context);
-        if (tool) {
-          // Validate tool structure before adding (generic format)
-          if (tool.name && tool.description && tool.parameters) {
-            tools.push(tool);
-          } else {
-            logger.error(
-              `Invalid tool generated for source ${source.id}:`,
-              JSON.stringify(tool, null, 2)
-            );
-          }
-        }
-      }
-    }
-
-    return tools;
-  }
-
-  /**
-   * Generate enhanced sources template that includes both prompt sources (with content)
-   * and tool sources (with function references)
-   * @param {Array} results - Source loading results
-   * @param {string} promptContent - Existing prompt-based source content
-   * @param {Object} context - Context with language information
-   * @returns {string} Enhanced sources template
-   */
-  generateEnhancedSourcesTemplate(results, promptContent, context = {}) {
-    const sourceEntries = [];
-
-    for (const result of results) {
-      if (result.success) {
-        if (result.exposeAs === 'tool') {
-          // Tool-based source - include as function reference with human-friendly name
-          const link = result.link || '';
-
-          // Localize description
-          const description = result.description
-            ? getLocalizedString(result.description, 'en', undefined, `Content from ${result.id}`)
-            : `Content from ${result.id}`;
-
-          // Get human-friendly display name
-          const language = context.language || 'en';
-          const displayName = result.name
-            ? getLocalizedString(result.name, language, undefined, result.id)
-            : result.id;
-
-          sourceEntries.push(
-            `  <source id="${result.id}" type="function" name="source_${result.id}" displayName="${displayName}" link="${link}" description="${description}"/>`
-          );
-        } else {
-          // Prompt-based source - include directly in content (already handled in totalContent)
-          // Just add metadata entry to the list
-          const link = result.link || '';
-          const description = result.description
-            ? getLocalizedString(result.description, 'en', undefined, `Content from ${result.id}`)
-            : `Content from ${result.id}`;
-
-          sourceEntries.push(
-            `  <source id="${result.id}" type="${result.type}" link="${link}" description="${description}"/>`
-          );
-        }
-      }
-    }
-
-    if (sourceEntries.length > 0) {
-      const sourcesHeader = `<sources>\n${sourceEntries.join('\n')}\n</sources>\n\n`;
-      return sourcesHeader + promptContent;
-    }
-
-    return promptContent;
-  }
-
-  /**
-   * Create a tool definition for a source
-   * @param {Object} source - Source configuration
-   * @param {Object} context - Context
-   * @returns {Object} - Tool definition
-   */
-  createSourceTool(source, context) {
-    const handler = this.handlers.get(source.type);
-    if (!handler) {
-      return null;
-    }
-
-    const toolId = `source_${source.id}`;
-
-    // Store tool execution function in global registry
-    const toolFunction = async (params = {}) => {
-      if (!DOCUMENT_TYPES.has(source.type)) {
-        return await handler.getCachedContent({ ...source.config, ...context, ...params });
-      }
-
-      const { query, section, ...rest } = params;
-      const sourceConfig = { ...source.config, ...context, ...rest };
-      // The file is the one the admin configured, never one the model names.
-      if (source.type === 'filesystem') sourceConfig.path = source.config.path;
-
-      const loaded = await handler.getCachedContent(sourceConfig);
-      const name = source.name
-        ? getLocalizedString(source.name, context.language || 'en', undefined, source.id)
-        : source.id;
-      const { content, retrieval } = selectContent(loaded?.content, { query, section, name });
-      return { content, metadata: { ...toolMetadata(loaded?.metadata), retrieval } };
-    };
-
-    this.toolRegistry.set(toolId, toolFunction);
-    globalSourceToolRegistry.set(toolId, toolFunction);
-
-    // Localize description
-    const language = context.language || 'en';
-    const baseDescription = source.description
-      ? getLocalizedString(
-          source.description,
-          language,
-          undefined,
-          `Load content from ${source.type} source: ${source.id}`
-        )
-      : `Load content from ${source.type} source: ${source.id}`;
-    const description = DOCUMENT_TYPES.has(source.type)
-      ? `${baseDescription}${RETRIEVAL_HINT}`
-      : baseDescription;
-
-    // Get human-friendly name
-    const displayName = source.name
-      ? getLocalizedString(source.name, language, undefined, source.id)
-      : source.id;
-
-    // Generate tool schema in generic format (will be converted by provider adapters).
-    // `id` and `name` both carry the dispatch key so provider formatters that read
-    // `t.id` (Google, Anthropic) and `t.name` (OpenAI fallback) agree on the tool name.
-    const tool = {
-      id: toolId,
-      name: toolId,
-      displayName: displayName,
-      description: description,
-      parameters: this.generateToolParameters(source)
-    };
-
-    return tool;
-  }
-
-  /**
-   * Generate tool parameters schema based on source type
-   * @param {Object} source - Source configuration
-   * @returns {Object} - Parameters schema
-   */
-  generateToolParameters(source) {
-    const baseSchema = {
-      type: 'object',
-      properties: {},
-      required: []
-    };
-
-    if (DOCUMENT_TYPES.has(source.type)) {
-      baseSchema.properties.query = {
-        type: 'string',
-        description:
-          'Keywords or a short question to search the source for. Needed when the source is ' +
-          'too large to return in full; then only the best-matching sections are returned.'
-      };
-      baseSchema.properties.section = {
-        type: 'string',
-        description: 'Id of a section to read in full, as listed in an earlier result.'
-      };
-    }
-
-    switch (source.type) {
-      case 'url':
-        baseSchema.properties.url = {
-          type: 'string',
-          description: 'URL to fetch (optional if configured in source)'
-        };
-        baseSchema.properties.maxContentLength = {
-          type: 'number',
-          description: 'Maximum content length to fetch'
-        };
-        break;
-
-      case 'ifinder':
-        baseSchema.properties.query = {
-          type: 'string',
-          description: 'Search query for documents'
-        };
-        baseSchema.properties.documentId = {
-          type: 'string',
-          description: 'Specific document ID to retrieve'
-        };
-        baseSchema.properties.maxResults = {
-          type: 'number',
-          description: 'Maximum number of search results'
-        };
-        break;
-
-      case 'page':
-        baseSchema.properties.pageId = {
-          type: 'string',
-          description: 'Page identifier to load (required)'
-        };
-        baseSchema.properties.language = {
-          type: 'string',
-          description: 'Language code for the page (e.g., "en", "de")'
-        };
-        baseSchema.required = ['pageId'];
-        break;
-    }
-
-    return baseSchema;
-  }
-
-  /**
-   * Execute a source tool
-   * @param {string} toolId - Tool identifier
-   * @param {Object} params - Tool parameters
-   * @returns {Promise<Object>} - Tool execution result
-   */
-  async executeTool(toolId, params) {
-    const toolFunction = this.toolRegistry.get(toolId);
-    if (!toolFunction) {
-      throw new Error(`Tool not found: ${toolId}`);
-    }
-
-    return await toolFunction(params);
   }
 
   /**
@@ -823,48 +579,8 @@ class SourceManager {
   getSourceStats() {
     return {
       registeredHandlers: Array.from(this.handlers.keys()),
-      totalTools: this.toolRegistry.size,
       cacheStats: this.getCacheStats()
     };
-  }
-
-  /**
-   * Process app sources configuration
-   * @param {Object} app - App configuration
-   * @param {Object} context - Request context
-   * @returns {Promise<Object>} - Processed sources result
-   */
-  async processAppSources(app, context) {
-    if (!app.sources || !Array.isArray(app.sources)) {
-      return {
-        sources: [],
-        content: '',
-        tools: [],
-        metadata: { totalSources: 0, loadedSources: 0, errors: [] }
-      };
-    }
-
-    // Load sources
-    const sourcesResult = await this.loadSources(app.sources, context);
-
-    // Generate tools
-    const tools = this.generateTools(app.sources, context);
-
-    return {
-      sources: sourcesResult.sources,
-      content: sourcesResult.content,
-      tools,
-      metadata: sourcesResult.metadata
-    };
-  }
-
-  /**
-   * Get a tool function from the registry
-   * @param {string} toolId - Tool ID to retrieve
-   * @returns {Function|null} - Tool execution function or null if not found
-   */
-  getToolFunction(toolId) {
-    return this.toolRegistry.get(toolId) || globalSourceToolRegistry.get(toolId) || null;
   }
 }
 

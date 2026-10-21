@@ -17,6 +17,22 @@
 
 import logger from '../../utils/logger.js';
 
+/**
+ * Project links as the planner or the template name them: bare ids are kept,
+ * link objects kept by id, duplicates dropped (first wins).
+ */
+function dedupeLinks(links) {
+  const seen = new Set();
+  const out = [];
+  for (const link of Array.isArray(links) ? links : []) {
+    const id = typeof link === 'string' ? link : link?.id;
+    if (typeof id !== 'string' || !id || seen.has(id)) continue;
+    seen.add(id);
+    out.push(link);
+  }
+  return out;
+}
+
 function dedupeStrings(arr) {
   return Array.from(new Set((arr || []).filter(v => typeof v === 'string')));
 }
@@ -48,7 +64,7 @@ export class SubWorkflowMaterializer {
     });
 
     // Create agent nodes for each task in the plan.
-    // CRITICAL: Destructure tools/apps/sources from taskTemplate before
+    // CRITICAL: Destructure tools/apps/projects from taskTemplate before
     // spreading — each is additive at the task level (the planner may
     // spotlight a per-task subset on top of the profile-wide template), so
     // the spread of restTemplate must NOT overwrite the merged arrays we
@@ -56,7 +72,7 @@ export class SubWorkflowMaterializer {
     const {
       tools: templateTools,
       apps: templateApps,
-      sources: templateSources,
+      projects: templateProjects,
       ...restTemplate
     } = parentConfig.taskTemplate || {};
 
@@ -128,7 +144,7 @@ export class SubWorkflowMaterializer {
       //   - task.tools === [...non-empty]  → use exactly these
       const taskToolsExplicit = Array.isArray(task.tools);
       const taskAppsExplicit = Array.isArray(task.apps);
-      const taskSourcesExplicit = Array.isArray(task.sources);
+      const taskProjectsExplicit = Array.isArray(task.projects);
       const effectiveTools = taskToolsExplicit
         ? dedupeStrings(task.tools)
         : Array.isArray(templateTools)
@@ -139,10 +155,10 @@ export class SubWorkflowMaterializer {
         : Array.isArray(templateApps)
           ? dedupeStrings(templateApps)
           : [];
-      const effectiveSources = taskSourcesExplicit
-        ? dedupeStrings(task.sources)
-        : Array.isArray(templateSources)
-          ? dedupeStrings(templateSources)
+      const effectiveProjects = taskProjectsExplicit
+        ? dedupeLinks(task.projects)
+        : Array.isArray(templateProjects)
+          ? dedupeLinks(templateProjects)
           : [];
 
       const hasSearchLikeTool = effectiveTools.some(t => {
@@ -205,17 +221,17 @@ export class SubWorkflowMaterializer {
           _taskTitle: taskTitle,
           // Bedrock (and other strict APIs) require at least one user message.
           prompt: promptParts.join('\n\n'),
-          // Per-task tools / apps / sources — planner-authoritative when the
+          // Per-task tools / apps / projects — planner-authoritative when the
           // planner emitted the field, falling back to the profile-wide
           // template otherwise. See `taskToolsExplicit` block above for the
           // full semantics. The planner's response schema enum-binds each
-          // field (tools/apps/sources) to its catalog when the catalog is
+          // field (tools/apps/projects) to its catalog when the catalog is
           // non-empty, so unknown ids are rejected at structured-output
           // time. Backward-compat for hand-written plans that omit a field
           // is via the explicit-array check (omit → inherit template).
           tools: effectiveTools,
           apps: effectiveApps,
-          sources: effectiveSources
+          projects: effectiveProjects
           // No `outputVariable` — the runtime auto-persists planner-task
           // results to state.data._taskResults[<taskId>] via
           // PromptNodeExecutor._autoPersistResult. The legacy flat

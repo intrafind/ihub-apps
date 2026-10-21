@@ -1,0 +1,53 @@
+{
+  "version": 1,
+  "id": "faq-page-source",
+  "ownership": "admin",
+  "tier": "ihub",
+  "name": {
+    "en": "FAQ Page"
+  },
+  "description": {
+    "en": "FAQ Page"
+  },
+  "instructions": "",
+  "enabled": true,
+  "category": "",
+  "tags": [],
+  "items": [
+    {
+      "id": "itm_e20ee24f354a",
+      "pinned": false,
+      "error": null,
+      "createdAt": "2026-10-21T00:00:00.000Z",
+      "updatedAt": "2026-10-21T00:00:00.000Z",
+      "kind": "page",
+      "name": "faq",
+      "ref": {
+        "pageId": "faq",
+        "language": "en"
+      },
+      "storage": "link",
+      "status": "ready",
+      "cache": {
+        "ttlSeconds": 7200
+      },
+      "provenance": {
+        "origin": "linked",
+        "by": {
+          "id": "system",
+          "name": "iHub defaults"
+        },
+        "at": "2026-10-21T00:00:00.000Z",
+        "run": null,
+        "source": {
+          "site": "iHub",
+          "url": "/pages/faq"
+        }
+      },
+      "snapshotAt": null
+    }
+  ],
+  "createdAt": "2025-08-05T20:03:25.278Z",
+  "updatedAt": "2025-08-05T20:03:25.278Z",
+  "createdBy": null
+}

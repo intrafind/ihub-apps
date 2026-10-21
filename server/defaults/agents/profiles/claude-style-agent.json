@@ -17,7 +17,6 @@
   "preferredModel": "gemini-flash-latest",
   "maxIterations": 10,
   "tools": [],
-  "sources": [],
   "apps": [],
   "skills": [],
   "memory": {

@@ -23,6 +23,7 @@ import {
   stopIngestReconciler
 } from './ProjectIngestService.js';
 import { getProjectService } from './ProjectService.js';
+import { importPendingProjects } from './projectImport.js';
 
 const COMPONENT = 'ProjectsBootstrap';
 
@@ -77,6 +78,13 @@ export async function bootstrapProjects({ reconcile = true } = {}) {
       });
     }
     startIngestReconciler(ingestService);
+    // File-backed admin items (migrated sources, shipped defaults, the
+    // managed documentation) are imported off the startup path.
+    setTimeout(() => {
+      importPendingProjects().catch(error =>
+        logger.error('Project import failed', { component: COMPONENT, error: error.message })
+      );
+    }, 2000).unref?.();
   }
   return ingestService;
 }

@@ -36,8 +36,14 @@ import { classifyToolResult } from '../../loop/toolClassify.js';
 import { ContextSummarizer } from '../ContextSummarizer.js';
 import { dedupeCitations } from '../citationUtils.js';
 import { getLocalizedString } from '../../../utils/localize.js';
-import SourceResolutionService from '../../SourceResolutionService.js';
-import { createSourceManager } from '../../../sources/index.js';
+import { resolveProjectScope } from '../../knowledge/ProjectScope.js';
+import {
+  planKnowledgeScope,
+  renderProjectInstructions,
+  renderProjectsBlock,
+  scopeSummary
+} from '../../knowledge/KnowledgeScopePlanner.js';
+import { projectSettings } from '../../projects/projectSettings.js';
 import logger from '../../../utils/logger.js';
 import { getAgentToolIds } from '../../../agents/runtime/agentToolRegistrar.js';
 import { readMemoryBodyForPrompt } from '../../../agents/memory/memoryFile.js';
@@ -223,20 +229,18 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
     });
 
     try {
-      // Resolve and load sources (node-level overrides workflow-level)
+      // Resolve the node's projects (node-level overrides workflow-level) and
+      // plan what goes into the prompt: loaded in full or left to the
+      // knowledge tools (#1036, spec 2 §6).
       const {
-        content: sourceContent,
-        cacheUpdates,
-        sourcesMetadata
-      } = await this.loadSourceContent(config, state, context);
-      if (sourceContent) {
-        context = { ...context, sourceContent };
-      }
-      // Hold onto the resolved sources metadata so we can put it on the
-      // step log after model/tools are sorted out. Even when no content
-      // came back (errors, all unresolved), still recording the IDs the
-      // node WAS configured with makes it visible in the audit.
-      const stepSourceMetadata = Array.isArray(sourcesMetadata) ? sourcesMetadata : [];
+        content: projectContent,
+        projectsMetadata,
+        links: projectLinks
+      } = await this.loadProjectContent(config, state, context);
+      context = { ...context, projectLinks, ...(projectContent ? { projectContent } : {}) };
+      // Recorded on the step log after model/tools are sorted out, so the
+      // audit shows which projects the node was configured with.
+      const stepProjectMetadata = Array.isArray(projectsMetadata) ? projectsMetadata : [];
 
       // Auto-summarize accumulated cross-node context (Claude Code autocompact
       // analog). Opt-in via `config.autoSummarize: true` for plain workflows;
@@ -572,7 +576,7 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
         // step. NOT tool calls — sources are injected as <sources>…</sources>
         // blocks. Recording them here is the only way the operator can see
         // which configured sources the agent actually saw.
-        sources: stepSourceMetadata,
+        projects: stepProjectMetadata,
         // Apps the profile/node configured, with per-app registration
         // status. Apps that were registered show up as available tools
         // above; the value of THIS field is making the *missing* ones
@@ -671,7 +675,6 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
       // Build state updates (include source cache if sources were loaded)
       const stateUpdates = {
         ...(config.outputVariable ? { [config.outputVariable]: output } : {}),
-        ...(cacheUpdates ? { _sourceContent: cacheUpdates } : {}),
         ...(resumedTranscript ? { _pausedLoops: { [node.id]: null } } : {})
       };
 
@@ -839,19 +842,13 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
         systemContent += `\n\n${context._agentSkillsBlock}`;
       }
 
-      // Inject source content into system prompt if available
-      if (context.sourceContent) {
-        const hasSourcesPlaceholder = systemContent.includes('{{sources}}');
-        const hasSourcePlaceholder = systemContent.includes('{{source}}');
-
-        if (hasSourcesPlaceholder) {
-          systemContent = systemContent.replace('{{sources}}', context.sourceContent);
-        }
-        if (hasSourcePlaceholder) {
-          systemContent = systemContent.replace('{{source}}', context.sourceContent);
-        }
-        if (!hasSourcesPlaceholder && !hasSourcePlaceholder) {
-          systemContent += `\n\nSources:\n<sources>${context.sourceContent}</sources>`;
+      // Inject the projects block into the system prompt (#1036): it replaces
+      // `{{projects}}` or is appended. A function replacer keeps `$` literal.
+      if (context.projectContent) {
+        if (systemContent.includes('{{projects}}')) {
+          systemContent = systemContent.replace('{{projects}}', () => context.projectContent);
+        } else {
+          systemContent += `\n\n${context.projectContent}`;
         }
       }
 
@@ -1331,7 +1328,8 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
     const skillIds = Array.isArray(_context._skillIds) ? _context._skillIds : [];
     const appConfig = {
       tools: toolIds,
-      sources: _context.appConfig?.sources || [],
+      // The node's project links, so the knowledge tools are offered (#1036).
+      projects: Array.isArray(_context.projectLinks) ? _context.projectLinks : [],
       // The node's list, an empty one included, marks this as a workflow node:
       // `getToolsForApp` then offers no skill tools for users' own skills.
       _skillIds: skillIds,
@@ -1348,116 +1346,74 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
   }
 
   /**
-   * Load source content for this agent node.
+   * Plan the projects of this agent node (#1036, spec 2 §6).
    *
-   * Sources can be defined at node level (config.sources) or workflow level
-   * (context.workflow.sources). Node-level sources take precedence.
-   * Content is cached in state.data._sourceContent to avoid redundant loading
-   * when multiple agent nodes reference the same sources.
+   * Links can be defined at node level (`config.projects`) or workflow level
+   * (`context.workflow.projects`); the node's list wins. Every linked
+   * project is loaded in full when it fits the load-all budget, otherwise
+   * its pinned items go into the prompt and the knowledge tools search the
+   * rest. The rendered block replaces `{{projects}}` in the system prompt.
    *
    * @param {Object} nodeConfig - Agent node configuration
-   * @param {Object} state - Workflow state
+   * @param {Object} _state - Workflow state (unused; text is cached per process)
    * @param {Object} context - Execution context
-   * @returns {Promise<{content: string|null, cacheUpdates: Object|null}>} Source content and cache updates
+   * @returns {Promise<{content: string|null, projectsMetadata: Array, links: Array}>}
    * @private
    */
-  async loadSourceContent(nodeConfig, state, context) {
-    // Determine which sources to load (node-level overrides workflow-level)
-    const sourceIds = nodeConfig.sources || context.workflow?.sources;
-    if (!sourceIds || !Array.isArray(sourceIds) || sourceIds.length === 0) {
-      return { content: null, cacheUpdates: null, sourcesMetadata: [] };
-    }
-
-    // Check cache in state first (keyed by sorted source IDs)
-    const cacheKey = [...sourceIds].sort().join(',');
-    const cachedContent = state.data?._sourceContent?.[cacheKey];
-    if (cachedContent) {
-      this.logger.debug('Using cached source content', {
-        component: 'PromptNodeExecutor',
-        sourceIds
-      });
-      return {
-        content: cachedContent,
-        cacheUpdates: null,
-        sourcesMetadata: sourceIds.map(id => ({ id, status: 'cached' }))
-      };
-    }
-
+  async loadProjectContent(nodeConfig, _state, context) {
+    const links = Array.isArray(nodeConfig.projects)
+      ? nodeConfig.projects
+      : Array.isArray(context.workflow?.projects)
+        ? context.workflow.projects
+        : [];
+    if (links.length === 0) return { content: null, projectsMetadata: [], links: [] };
+    const idOf = link => (typeof link === 'string' ? link : link?.id);
     try {
-      // Resolve source references to configurations
-      const sourceResolutionService = new SourceResolutionService();
-      const fakeApp = { id: context.workflow?.id || 'workflow', sources: sourceIds };
-      const sourceContext = {
-        user: context.user,
-        chatId: context.executionId,
-        language: context.language
-      };
-
-      const resolvedSources = await sourceResolutionService.resolveAppSources(
-        fakeApp,
-        sourceContext
-      );
-
-      const resolvedIds = new Set(
-        Array.isArray(resolvedSources) ? resolvedSources.map(s => s?.id).filter(Boolean) : []
-      );
-
-      if (resolvedSources.length === 0) {
-        return {
-          content: null,
-          cacheUpdates: null,
-          sourcesMetadata: sourceIds.map(id => ({ id, status: 'unresolved' }))
-        };
-      }
-
-      // Load content from resolved sources.
-      // createSourceManager() is a process-wide singleton; config is only
-      // honored on the very first call, so we rely on FileSystemHandler's
-      // own default basePath here instead of passing a redundant override.
-      const sourceManager = createSourceManager();
-
-      const result = await sourceManager.loadSources(resolvedSources, sourceContext);
-
-      if (result.metadata.errors.length > 0) {
-        this.logger.warn('Source loading errors', {
-          component: 'PromptNodeExecutor',
-          errors: result.metadata.errors
-        });
-      }
-
-      // Build per-source metadata for the step log. We can only see byte
-      // counts at the aggregate level via result.metadata, so per-source
-      // size is approximate; status however is precise.
-      const errorIds = new Set(
-        Array.isArray(result?.metadata?.errors)
-          ? result.metadata.errors.map(e => e?.sourceId || e?.id).filter(Boolean)
-          : []
-      );
-      const totalBytes =
-        typeof result?.content === 'string' ? Buffer.byteLength(result.content, 'utf8') : 0;
-      const loadedIds = sourceIds.filter(id => resolvedIds.has(id) && !errorIds.has(id));
-      const perSourceBytes = loadedIds.length > 0 ? Math.round(totalBytes / loadedIds.length) : 0;
-      const sourcesMetadata = sourceIds.map(id => {
-        if (errorIds.has(id)) return { id, status: 'error' };
-        if (!resolvedIds.has(id)) return { id, status: 'unresolved' };
-        return { id, status: 'loaded', bytesApprox: perSourceBytes };
+      const scope = await resolveProjectScope({
+        appConfig: { projects: links, _workflowProjects: [] },
+        user: context.user
       });
-
-      // Return content and cache updates for state persistence
-      const existingCache = state.data?._sourceContent || {};
-      const cacheUpdates = result.content ? { ...existingCache, [cacheKey]: result.content } : null;
-
-      return { content: result.content || null, cacheUpdates, sourcesMetadata };
+      const models = configCache.getModels?.()?.data;
+      const model = Array.isArray(models)
+        ? models.find(entry => entry.id === nodeConfig.modelId) || null
+        : null;
+      const plan = await planKnowledgeScope(scope, {
+        model,
+        settings: projectSettings(configCache.getPlatform?.() || {}),
+        ctx: {
+          user: context.user,
+          chatId: context.executionId,
+          language: context.language,
+          purpose: 'workflow'
+        }
+      });
+      const instructions = renderProjectInstructions(plan);
+      const block = plan.projects.some(
+        project => project.injected.length || project.mode === 'searched'
+      )
+        ? renderProjectsBlock(plan)
+        : '';
+      const content = [instructions, block].filter(Boolean).join('\n\n') || null;
+      const projectsMetadata = scopeSummary(plan).projects.map(project => ({
+        id: project.id,
+        mode: project.mode,
+        tokens: project.tokens
+      }));
+      return { content, projectsMetadata, links };
     } catch (error) {
-      this.logger.error('Failed to load sources', {
+      this.logger.error('Failed to plan the node projects', {
         component: 'PromptNodeExecutor',
-        sourceIds,
+        projects: links.map(idOf),
         error
       });
       return {
         content: null,
-        cacheUpdates: null,
-        sourcesMetadata: sourceIds.map(id => ({ id, status: 'error', error: error.message }))
+        projectsMetadata: links.map(link => ({
+          id: idOf(link),
+          mode: 'unavailable',
+          error: error.message
+        })),
+        links
       };
     }
   }

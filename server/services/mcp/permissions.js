@@ -92,13 +92,14 @@ export function toolVisibleInSet(toolId, visibleSet, mcpServerId, a2aAgentId) {
  * Set of source ids the user may read, unioned across accessible apps'
  * `sources` arrays.
  */
-export async function getVisibleSourceIds(user, platform) {
+export async function getVisibleProjectIds(user, platform) {
   const apps = await getAccessibleApps(user, platform);
   const ids = new Set();
   for (const app of apps) {
-    if (!Array.isArray(app.sources)) continue;
-    for (const s of app.sources) {
-      if (typeof s === 'string' && s) ids.add(s);
+    if (!Array.isArray(app.projects)) continue;
+    for (const link of app.projects) {
+      const id = typeof link === 'string' ? link : link?.id;
+      if (typeof id === 'string' && id) ids.add(id);
     }
   }
   return ids;
