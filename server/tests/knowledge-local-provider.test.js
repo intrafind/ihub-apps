@@ -331,6 +331,21 @@ describe('scope and planner', () => {
     assert.equal(summary.projects[0].mode, 'searched');
     assert.equal(summary.projects[0].pinned, 1);
 
+    // The hard limit: pinned text is cut at 75 % of the context window.
+    const cramped = await planKnowledgeScope(scope, {
+      model: { contextWindow: 40 },
+      settings: { loadAllMaxTokens: 50 },
+      ctx
+    });
+    assert.equal(cramped.limitTokens, 30);
+    assert.deepEqual(cramped.projects[0].cut, ['itm_policy']);
+    assert.equal(cramped.projects[0].injected.length, 1);
+    assert.equal(cramped.projects[0].injected[0].truncated, true);
+    assert.ok(cramped.projects[0].injected[0].text.length < POLICY.length);
+    assert.ok(cramped.projects[0].tokens <= 30);
+    assert.ok(renderProjectsBlock(cramped).includes('truncated="true"'));
+    assert.equal(scopeSummary(cramped).projects[0].cut, 1);
+
     const forced = await planKnowledgeScope(
       scope.map(entry => ({ ...entry, mode: 'tools' })),
       { model: null, settings: {}, ctx }
