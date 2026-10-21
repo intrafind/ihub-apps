@@ -94,7 +94,11 @@ const HAND_WRITTEN = {
  * one in {@link HAND_WRITTEN} is reserved for the untouched-bytes assertion.
  */
 const WRITABLE_EXTRAS = {
-  'locales/de.json': '{\n  "greeting": "hallo"\n}\n'
+  'locales/de.json': '{\n  "greeting": "hallo"\n}\n',
+  // Admin projects ship with slice 4 of #1036; until then the defaults tree
+  // has no `projects/` either, and an installation's project looks like this.
+  'projects/handbook.json':
+    '{\n  "id": "handbook",\n  "ownership": "admin",\n  "name": { "en": "Handbook" },\n  "items": []\n}\n'
 };
 
 for (const [relPath, bytes] of Object.entries({ ...HAND_WRITTEN, ...WRITABLE_EXTRAS })) {
