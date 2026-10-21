@@ -563,6 +563,13 @@ describe('admin projects', () => {
     });
     assert.equal(patched.statusCode, 200);
     assert.deepEqual(patched.body.project.tags, ['help']);
+    // Admin names are localized records, on update as on create.
+    const plain = await drive(route.adminPatch, {
+      user: EDITOR,
+      params: { id: 'faq' },
+      body: { name: 'FAQ' }
+    });
+    assert.equal(plain.statusCode, 400);
 
     const unlinked = await drive(route.adminCreate, {
       user: EDITOR,
@@ -635,6 +642,15 @@ describe('chats in a project', () => {
       body: { projectId: 'prj_doesnotexist' }
     });
     assert.equal(stranger.statusCode, 404);
+
+    // An admin project is configuration, not a container for chats.
+    const intoAdmin = await drive(route.chatPatch, {
+      user: ADA,
+      params: { chatId: chat.id },
+      body: { projectId: 'faq' }
+    });
+    assert.equal(intoAdmin.statusCode, 404);
+    assert.equal((await getChatRepository().getChat(chat.id)).projectId, project.id);
 
     const out = await drive(route.chatPatch, {
       user: ADA,

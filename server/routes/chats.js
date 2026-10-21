@@ -211,7 +211,9 @@ async function moveChatToProject(req, res, repository, chat) {
     access.ensurePrincipal(req);
     const project = await getProjectRepository().get(targetId);
     const permissions = access.permissionsFor(project, req.user, access.callerContext(req.user));
-    if (!project || !permissions.canUse) {
+    // Admin projects are configuration linked to apps, not containers for
+    // user data: a chat can only move into a user project.
+    if (!project || !permissions.canUse || project.ownership !== 'user') {
       sendNotFound(res, 'Project');
       return null;
     }

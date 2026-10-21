@@ -160,9 +160,7 @@ export default function registerAdminProjectsRoutes(app) {
         });
       }
       const projects = await repo.listAdmin({ includeDisabled: true });
-      const { etag } = configCache.getProjects(true);
-      if (etag) res.setHeader('ETag', etag);
-      res.json(projects.map(adminView));
+      return res.json(projects.map(adminView));
     } catch (error) {
       sendFailedOperationError(res, 'list projects', error);
     }
