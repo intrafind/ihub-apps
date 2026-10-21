@@ -20,15 +20,12 @@ import {
  *
  * A user project is written in one language, so its name and description
  * are plain strings. An admin project is configuration shown to every user,
- * so they are localized records, as apps use. One schema serves both through
- * `textOrLocalized`.
+ * so they are localized records, as apps use, on create and on update alike.
  */
 
 const LANGUAGE_CODE = /^[a-z]{2}(-[A-Z]{2})?$/;
 
 const localized = max => z.record(z.string().regex(LANGUAGE_CODE), z.string().max(max));
-
-const textOrLocalized = max => z.union([z.string().trim().max(max), localized(max)]);
 
 /**
  * One line per issue, for a 400 message.
@@ -202,8 +199,8 @@ export const userProjectUpdateSchema = z
 /** What `PATCH /api/admin/projects/:id` accepts beyond the user fields. */
 export const adminProjectUpdateSchema = z
   .object({
-    name: textOrLocalized(MAX_NAME_LENGTH).optional(),
-    description: textOrLocalized(MAX_DESCRIPTION_LENGTH).optional(),
+    name: localized(MAX_NAME_LENGTH).optional(),
+    description: localized(MAX_DESCRIPTION_LENGTH).optional(),
     instructions: z.string().max(MAX_INSTRUCTIONS_LENGTH).optional(),
     enabled: z.boolean().optional(),
     category: z.string().max(100).optional(),
