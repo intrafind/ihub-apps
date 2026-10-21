@@ -349,7 +349,6 @@ export class ProjectRepository {
     }
     const stored = {
       version: PROJECT_VERSION,
-      ownership: 'admin',
       tier: 'ihub',
       instructions: '',
       enabled: true,
