@@ -16,8 +16,10 @@
  *
  * @module services/knowledge/ProjectScope
  */
+import configCache from '../../configCache.js';
 import { callerContext, permissionsFor } from '../../middleware/projectAccess.js';
 import { getProjectRepository } from '../projects/ProjectRepository.js';
+import { isUserProjectsConfigured } from '../projects/projectSettings.js';
 import { normalizeProjectLink } from '../../validators/projectSchema.js';
 import { projectName } from '../projects/projectView.js';
 
@@ -68,10 +70,17 @@ export async function resolveProjectScope({ appConfig, user }) {
 
   const repository = getProjectRepository();
   const context = callerContext(user);
+  // User projects are reached only while the feature is on, here and for
+  // this app: a saved container or attachment stays on the chat, dark until
+  // the feature returns. Admin projects linked to apps keep working.
+  const userProjectsOn =
+    isUserProjectsConfigured(configCache.getFeatures()) &&
+    appConfig?.features?.userProjects !== false;
   const scope = [];
   for (const entry of wanted) {
     const project = await repository.get(entry.id);
     if (!project) continue;
+    if (project.ownership === 'user' && !userProjectsOn) continue;
     const permissions = permissionsFor(project, user, context);
     if (!permissions.canUse) continue;
     scope.push({

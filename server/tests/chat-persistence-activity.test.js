@@ -505,6 +505,51 @@ describe('the stored form of the activity', () => {
     });
   });
 
+  it('keeps which projects the turn reached, bounded', () => {
+    const stored = boundStoredActivity({
+      knowledgeScope: {
+        budgetTokens: 40000,
+        projects: [
+          {
+            id: 'prj_1',
+            name: 'Case',
+            ownership: 'user',
+            origin: 'container',
+            mode: 'loaded',
+            documents: 2,
+            tokens: 120,
+            pinned: 1,
+            injected: [{ huge: 'x'.repeat(10000) }]
+          },
+          { id: 'faq', name: 'FAQ', ownership: 'admin', mode: 'bogus', cut: 1, overBudget: true }
+        ]
+      }
+    });
+    assert.deepEqual(stored.knowledgeScope, {
+      budgetTokens: 40000,
+      projects: [
+        {
+          id: 'prj_1',
+          name: 'Case',
+          ownership: 'user',
+          origin: 'container',
+          mode: 'loaded',
+          documents: 2,
+          tokens: 120,
+          pinned: 1
+        },
+        {
+          id: 'faq',
+          name: 'FAQ',
+          ownership: 'admin',
+          mode: 'unavailable',
+          overBudget: true,
+          cut: 1
+        }
+      ]
+    });
+  });
+
   it('is nothing when there is nothing', () => {
     assert.equal(boundStoredActivity(null), null);
     assert.equal(boundStoredActivity({}), null);
@@ -557,6 +602,22 @@ describe('what a share carries of the activity', () => {
     assert.equal(shared.searchSummary.totalHits, 12);
     assert.deepEqual(shared.searchSummary.applications, []);
     assert.deepEqual(shared.searchSummary.sources, []);
+  });
+
+  it('keeps that a private project was used, not which one', () => {
+    const shared = shareableActivity({
+      knowledgeScope: {
+        budgetTokens: 1,
+        projects: [
+          { id: 'prj_1', name: 'Case', ownership: 'user', mode: 'loaded' },
+          { id: 'faq', name: 'FAQ', ownership: 'admin', mode: 'searched' }
+        ]
+      }
+    });
+    assert.deepEqual(shared.knowledgeScope.projects, [
+      { id: null, name: null, ownership: 'user', mode: 'loaded' },
+      { id: 'faq', name: 'FAQ', ownership: 'admin', mode: 'searched' }
+    ]);
   });
 
   it('drops what any non-web tool found, whatever its kind or scope', () => {

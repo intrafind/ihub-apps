@@ -117,6 +117,9 @@ export async function copySourceLink(source) {
 }
 
 /** Extensions to fall back on when the name the provider sent carries none. */
+/** The status a provider answers when only a document's extracted text is kept. */
+export const ORIGINAL_DISCARDED = 410;
+
 const EXTENSION_BY_CONTENT_TYPE = {
   'application/pdf': 'pdf',
   'application/msword': 'doc',
@@ -185,6 +188,22 @@ export async function downloadSource(source) {
       ? { ok: true }
       : { ok: false, reason: 'failed' };
   } catch (error) {
+    // A project document of which only the text is kept (410): the text is
+    // the download.
+    if (error?.response?.status === ORIGINAL_DISCARDED) {
+      try {
+        const text = await fetchSourceContent({ source, format: 'text' });
+        const name = resolveSourceFilename(source, text);
+        return saveBlobAs(
+          new Blob([text.data], { type: 'text/plain' }),
+          name.endsWith('.txt') ? name : `${name}.txt`
+        )
+          ? { ok: true }
+          : { ok: false, reason: 'failed' };
+      } catch (textError) {
+        return { ok: false, reason: 'failed', error: textError };
+      }
+    }
     return { ok: false, reason: 'failed', error };
   }
 }
