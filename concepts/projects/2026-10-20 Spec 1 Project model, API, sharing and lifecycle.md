@@ -25,7 +25,7 @@ Resolved here:
 | --- | --- |
 | One container or two (#2315) | **One.** A project without items is the folder. #2315 shrinks to "move a chat into a project" (this spec, §6.4) plus chat search. No separate chat folders. |
 | Confirmation of decision 17 (credentials for picked items) | **Confirmed as proposed.** iHub tier: snapshot at pick time with the picking user's token; `snapshotAt` shown; refresh by any editor who has a connected token for that integration. iFinder items stay references and are fetched with the reading user's rights. |
-| Default key provider | Local master key file (`contents/.encryption-key`) wrapping per-object data keys. Spec 3 §6. |
+| Default key provider | The active `TokenStorageService` master key (`TOKEN_ENCRYPTION_KEY` when set, otherwise `contents/.encryption-key`) wraps per-object data keys; `TOKEN_ENCRYPTION_KEY_PREVIOUS` lets objects wrapped before a key change still unwrap. Spec 3 §6. |
 | Admin policy (who may create and share) | Two booleans in `groups.json`: `projects` (create user projects) and `projectSharing` (share them). §7.2. |
 | Where the shared crypto spec lives | Out of phase 1; the Node.js format implementation and its vectors live in `server/services/projects/crypto/` and move to the shared repository when #2906 opens it. |
 
@@ -93,7 +93,7 @@ app, workflow or agent that links the project may use the project through it (§
   status: 'pending' | 'extracting' | 'ready' | 'failed' | 'stale',
   error: { code: 'NO_TEXT', message: 'The PDF has no text layer' } | null,
   text: {                      // storage === 'text' only
-    blobKey: 'prj_8Zt1aq__itm_k3Fq__01JB4R2...',   // project-files blob, version id inside (spec 3 §5) gitleaks:allow
+    blobKey: 'prj_<projectId>__itm_<itemId>__<versionId>',   // project-files blob, version id inside (spec 3 §5)
     bytes: 182_204,            // ciphertext bytes stored
     chars: 171_880, tokens: 41_200,                 // of the extracted text
     sha256: '…',               // of the plaintext
@@ -112,6 +112,7 @@ app, workflow or agent that links the project may use the project through it (§
   },
   snapshotAt: '2026-10-20T10:00:00Z' | null,   // picked items: when the text was taken; === text.extractedAt
   managedFile: 'sources/ihub-documentation.md' | undefined,   // admin projects only, §8.4
+  import: { file: string, encoding?: string } | undefined,     // startup import only (§8.4); cleared by importPending()
   createdAt, updatedAt
 }
 ```
@@ -188,6 +189,17 @@ admin project editor uses the same dialog and the same endpoints.
 All routes under `buildServerPath`. Errors are `{ error, code }`; codes in §5.4. Every user route
 runs `requireFeature('projects')` then `authenticatedOnly` (an anonymous caller never sees a
 project, like prompts) then `projectAccessRequired(level)` (§7.1).
+
+Routes that create or change **user** projects — `POST /api/projects`, `PUT …/members`,
+`POST …/transfer`, moving a chat into a user project (§6.4) and the user-project pages —
+additionally require the `userProjects` flag and answer `403 USER_PROJECTS_DISABLED` without
+it; reading an admin project linked to an app the caller may use needs only `projects`, so a
+linked project keeps working while user projects are switched off.
+
+Every `Project` and `ProjectItem` response omits `text.key`: the serializer strips it, in
+lists, single reads and admin responses alike. The `text` block is written only by the ingest
+pipeline — the admin `POST` and `PUT` bodies carry no `text`, and `PUT` keeps the stored `text`
+block of every existing item.
 
 ### 5.1 User API
 
@@ -488,7 +500,10 @@ per-user count only.
 ### 10.1 Migration `V172__sources_to_projects.js`
 
 Precondition: `config/sources.json` exists or any app, workflow or agent profile carries
-`sources`. Steps, in order:
+`sources`. Preflight, before any file is written: a source id that starts with `prj_` would
+collide with the user-project namespace (spec 1 §2); such an id is remapped deterministically
+to `legacy-<id>` and every app, workflow and agent-profile reference is rewritten with it, and
+the migration log names each remap. Steps, in order:
 
 1. **Sources become admin projects.** For every entry of `config/sources.json`, write
    `projects/<id>.json`:
@@ -588,7 +603,7 @@ contain item text.
 | Members changed / transferred | `share` / `update` | `projectShare` | added, removed, new owner |
 | Chat moved into or out of a project | `update` | `project` | chat id |
 | Admin toggled, deleted a user project, or ran retention | `toggle` / `delete` | `project` | actor `admin` or `system` |
-| Key events (rotation, unwrap denied) | `update` / failure | `projectKey` | key id; phase 3 for rotation, the denied-unwrap failure event ships in phase 1 |
+| Key events (rotation, unwrap denied) | `update` | `projectKey` | key id; phase 3 for rotation; a denied unwrap is `update` with `result: 'failure'` and ships in phase 1 |
 
 The resource id of item events is the project id; the item id is in the summary, so one filter
 shows a project's whole history.

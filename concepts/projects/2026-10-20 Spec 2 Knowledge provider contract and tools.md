@@ -77,11 +77,15 @@ true, search: true, passages: true, preview: 'text', write: true }`.
   keyed by `blobKey` holds decrypted text, since a project is read on every turn.
 - `storage: 'link'` → the kind's `fetch(item, ctx)` through today's handlers and their TTL
   caches (`URLHandler`, `PageHandler`, `IFinderHandler`); the iFinder cache stays keyed per user.
-  A fetch error becomes `{ error }` on the result and the item is marked `stale` with the error
-  code; the turn goes on without the item and the tool result names it.
+  A fetch error puts the item under `unavailable` with its code (`SOURCE_FORBIDDEN`,
+  `SOURCE_GONE`) and the turn goes on without it; the stored item is **not** changed, because an
+  iFinder `403` or `404` is the reading user's, not the project's — another member may still
+  have access. Only the refresh of a picked item (spec 3 §4) marks an item `stale`.
 
-Items that are not `ready` (or `stale`, which stays usable) are skipped and listed under
-`unavailable` in every result, so the model can say so.
+`loadAll`, `search` and `read` use every `ready` item and every `stale` item whose snapshot is
+still readable (a failed refresh keeps the old text, spec 3 §4); items in any other status, and
+items whose text cannot be read, are listed under `unavailable` with the reason in every result,
+so the model can say so.
 
 ### 2.2 Index
 
@@ -236,8 +240,8 @@ MCP) get the same prefix where they had `source_`.
 ## 5. Mapping onto the `Source` model (#2637)
 
 Every hit and every read becomes a `Source` through a registered producer
-(`registerSourceProducer({ id: 'project', matches: toolId.startsWith('knowledge_'),
-fromToolResult })`), so the panel, inline numbering, storage and sharing need no project code:
+(`registerSourceProducer({ id: 'project', matches: ({ toolId }) => toolId === 'knowledge_search'
+|| toolId === 'knowledge_read', fromToolResult })` — `knowledge_list` carries no sources), so the panel, inline numbering, storage and sharing need no project code:
 
 ```js
 {
@@ -302,8 +306,11 @@ for each project in scope, with its link mode:
             otherwise → inject pinned items, offer the tools          effective: 'searched'
   remaining budget decreases by what was injected; projects are planned in scope order
   (container, admin links, attachments)
-pinned items are always injected, in every mode, and are never cut; if pinned text alone
-exceeds the budget the plan still injects it and flags `overBudget`
+pinned items are always injected, in every mode, ahead of everything else; when pinned text
+alone exceeds the load-all budget the plan still injects it and flags `overBudget`, but never
+past the hard limit of 75 % of the model's context window: beyond it the remaining pinned text
+is cut (the cut items are listed as `cut` on the plan and in the scope event, and stay
+reachable through `knowledge_read`)
 ```
 
 The injected block replaces `{{projects}}` in the system prompt (`PromptService`, and the

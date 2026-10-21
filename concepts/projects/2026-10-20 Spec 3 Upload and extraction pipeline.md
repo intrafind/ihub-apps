@@ -32,6 +32,10 @@ every way text enters a project:
 | Admin text item (`POST /items`, JSON `{ kind: 'upload', text, name }`) | `{ text }` | the admin editor (replaces the sources file editor) |
 | Startup import of migrated and default admin items | `{ path }` under `contents/` or `server/defaults/` | `ProjectService.importPending()` (spec 1 §8.4) |
 
+When `projects.scan.provider` is `command`, inputs that arrive as bytes or text are staged into
+a private temp file (`contents/data/tmp/project-uploads/<id>/`) before `scan`, and the staged
+file is removed after the job, on success and on failure.
+
 `item.status` moves `pending → extracting → ready | failed`. The item document is written at
 each transition under the project lock, so a client polling `GET /items/:id` sees progress and
 a crashed worker leaves a visible state (§8).
@@ -50,9 +54,13 @@ optional fields `name` and `pinned`.
   `QUOTA_FILES` and `QUOTA_PROJECT_BYTES` (using the declared `Content-Length` as the upper
   bound) answer `413` without writing the temp file. A second check with the real size runs
   after receive.
-- Accepted types are the union of what extraction supports (§3.1); anything else is `415
-  UNSUPPORTED_TYPE` from the `fileFilter`. The type is decided by the file's magic bytes where
-  they exist (PDF, zip-based Office, images are refused) and by the declared type for text.
+- `fileFilter` sees only metadata (multer attaches the stream after the filter accepts the
+  file), so it applies the declared-type and quota checks: anything outside §3.1 is `415
+  UNSUPPORTED_TYPE` before a byte is written. Once `diskStorage` has the file, the route reads
+  its magic bytes: an image, media, archive or executable is `415` and the temp file unlinked
+  **before** the item is written and `202` answered; the exact document type (PDF, which Office
+  package, text encoding) is settled in the pipeline (§3.1), where a mismatch fails the item with
+  `UNSUPPORTED_TYPE`.
 - The route answers `202 { item }` with `status: 'pending'` as soon as the file is on disk and
   the item document is written. Extraction continues in-process (§2.1). Link kinds (JSON body,
   `url`, `page`, iFinder) answer `201` with a `ready` item and never enter this pipeline.
@@ -64,7 +72,9 @@ starve the event loop together; `pdfjs` and `mammoth` are CPU-bound) and runs th
 worker that received the file: the temp file is local, and a second instance could not read it.
 The job holds no HTTP connection, so a client that closes the tab loses nothing. A job that
 fails writes `status: 'failed'` with the error code and unlinks the temp file; the original is
-gone in every outcome.
+gone in every outcome. The event-loop cost is accepted for phase 1 (§11.2); the measured
+follow-up is a `worker_threads` handoff of the extract step with the temp file path, behind the
+same queue.
 
 Multi-instance: nothing is shared on the receive side. The text blob goes to the `BlobStore`,
 which needs a shared volume until the S3 adapter (#2906, spec 1 §8.3).
@@ -96,8 +106,8 @@ headings.
 
 ### 3.2 OCR decision
 
-**None in v1.** A PDF whose extraction yields fewer than 50 non-whitespace characters over more
-than one page is `failed` with `error.code: 'NO_TEXT'` and the message "This PDF has no text
+**None in v1.** A PDF whose extraction yields no text at all, or fewer than 50 non-whitespace
+characters over more than one page (page markers excluded), is `failed` with `error.code: 'NO_TEXT'` and the message "This PDF has no text
 layer (scanned). Run it through OCR and upload the result." The two later options are recorded,
 not built: the existing LLM-based OCR tool service (`server/routes/toolsService/ocrRoutes.js`,
 a job per file, would plug in as an `extract` fallback behind `projects.ocr: 'tools-service'`),
@@ -144,14 +154,19 @@ The extracted text is encrypted with a fresh per-object data key and stored as o
 - `associatedData = 'ihub/project-files/' + tenant + '/' + projectId + '/' + itemId + '/' +
   versionId` with `tenant = 'default'` until the SaaS plan's phase 1 adds a tenant id to the
   request context. The AAD binds the ciphertext to its object: a blob copied under another key
-  does not decrypt. Never a path.
+  does not decrypt. Never a path. The tenant component is recorded on the item (`text.tenant`,
+  `'default'` in phase 1) and read from there on decrypt, so a later tenant-aware derivation
+  changes nothing for existing objects; moving an object between tenants is a re-encryption,
+  never a re-interpretation.
 - Decrypt: `unwrap` the data key (cached in memory with a 10-minute TTL per `blobKey`, so a
   project read on every turn does not hit the provider every time), `decryptStream`, verify
   `sha256`.
 
-`contents/sources/*.md` written by the migration are **not** encrypted in place; they are
-imported (read, extracted as text, encrypted into `project-files`) and left where they are
-(spec 1 §10.3).
+`contents/sources/*.md` written by the migration are imported at the next boot (read, extracted
+as text, encrypted into `project-files`) and **deleted once the item is `ready`**, so no
+plaintext copy outlives the import. A failed import leaves the file in place and the item
+`failed` with the path in its error; the next boot retries it. The breaking-change note (spec 1
+§10.3) says so.
 
 ## 6. KeyProvider and the ciphertext format
 
@@ -225,7 +240,10 @@ command: 'clamdscan --no-summary --fdpass {path}', timeoutMs: 30000 }`, exit cod
 infected, anything else `error`). The hook runs on the temp file before extraction, in a child
 process, never on the event loop. `infected` is `failed` with `SCAN_REJECTED`, audited as a
 failure event with the scanner's detail; `error` follows `projects.scan.onError: 'reject' |
-'allow'` (default `reject`). An ICAP client (the integration most enterprise scanners offer)
+'allow'` (default `reject`). When `projects.scan` is omitted the provider is `none` and uploads
+are not scanned; a production installation is expected to configure `command` (or a later ICAP
+provider), and the admin Projects page shows a warning while uploads are enabled without a
+scanner. An ICAP client (the integration most enterprise scanners offer)
 is a later provider behind the same interface.
 
 ## 8. Consistency and the reconciler
@@ -238,8 +256,10 @@ The storage concept's `PENDING → ACTIVE` rule, applied to items:
   with `INTERRUPTED` ("the server restarted during extraction, upload the file again"); their
   temp directories are removed.
 - Orphan blobs (a blob whose `project-files` key no item names, left by a crash between
-  `blobs.put` and the document write, or by a delete cascade that was interrupted) are listed
-  by prefix per project during the same sweep and deleted when older than one hour.
+  `blobs.put` and the document write, or by a delete cascade that was interrupted) are found by
+  a namespace-wide, paginated `project-files` listing in the same sweep — a blob whose project
+  no longer exists is found this way too, not only one under a live project's prefix — and
+  deleted when older than one hour (the version id in the key carries its mint time).
 - Temp directories under `contents/data/tmp/project-uploads/` older than one hour are removed
   at startup.
 
