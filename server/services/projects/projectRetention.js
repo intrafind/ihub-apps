@@ -29,6 +29,7 @@ const COMPONENT = 'ProjectRetention';
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 let sweepTimer = null;
+let startupTimer = null;
 let sweeping = false;
 
 function activityTime(project) {
@@ -125,11 +126,14 @@ export function startProjectRetentionSweep({ intervalMs = DAY_MS } = {}) {
   sweepTimer = setInterval(tick, intervalMs);
   if (typeof sweepTimer.unref === 'function') sweepTimer.unref();
   // Off the startup path: the sweep reads every project document.
-  setTimeout(tick, 5000).unref?.();
+  startupTimer = setTimeout(tick, 5000);
+  startupTimer.unref?.();
 }
 
 /** Stop the sweep (shutdown and tests). */
 export function stopProjectRetentionSweep() {
   if (sweepTimer) clearInterval(sweepTimer);
+  if (startupTimer) clearTimeout(startupTimer);
   sweepTimer = null;
+  startupTimer = null;
 }
