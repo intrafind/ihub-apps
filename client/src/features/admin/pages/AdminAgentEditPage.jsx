@@ -11,7 +11,7 @@ import DynamicLanguageEditor from '../../../shared/components/DynamicLanguageEdi
 import IconPicker from '../../../shared/components/IconPicker';
 import ToolsSelector from '../../../shared/components/ToolsSelector';
 import SkillsSelector from '../../../shared/components/SkillsSelector';
-import SourcePicker from '../components/SourcePicker';
+import ProjectPicker from '../components/ProjectPicker';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import { fetchAdminApps, fetchAdminModels, getAdminApiErrorMessage } from '../../../api/adminApi';
 import {
@@ -31,7 +31,7 @@ const BLANK_PROFILE = {
   preferredModel: '',
   maxIterations: 10,
   tools: [],
-  sources: [],
+  projects: [],
   apps: [],
   skills: [],
   memory: {
@@ -83,7 +83,7 @@ const TOP_LEVEL_FIELDS = new Set([
   'preferredModel',
   'maxIterations',
   'tools',
-  'sources',
+  'projects',
   'apps',
   'skills',
   'memory',
@@ -550,7 +550,7 @@ export default function AdminAgentEditPage() {
               </div>
             </Section>
 
-            {/* Capabilities — tools, apps, sources */}
+            {/* Capabilities — tools, apps, projects */}
             <Section
               title={t('admin.agents.edit.capabilities', 'Capabilities (task executors)')}
               hint={t(
@@ -600,11 +600,11 @@ export default function AdminAgentEditPage() {
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                    {t('admin.agents.edit.sources', 'Sources')}
+                    {t('admin.agents.edit.projects', 'Projects')}
                   </label>
-                  <SourcePicker
-                    value={profile.sources || []}
-                    onChange={v => handleField('sources', v)}
+                  <ProjectPicker
+                    value={profile.projects || []}
+                    onChange={links => handleField('projects', links)}
                   />
                 </div>
 

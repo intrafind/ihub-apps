@@ -89,9 +89,9 @@ const WorkflowEditorPage = lazyWithRetry(() => import('./features/admin/pages/Wo
 const AdminWorkflowExecutionsPage = lazyWithRetry(
   () => import('./features/admin/pages/AdminWorkflowExecutionsPage')
 );
-const AdminSourcesPage = lazyWithRetry(() => import('./features/admin/pages/AdminSourcesPage'));
-const AdminSourceEditPage = lazyWithRetry(
-  () => import('./features/admin/pages/AdminSourceEditPage')
+const AdminProjectsPage = lazyWithRetry(() => import('./features/admin/pages/AdminProjectsPage'));
+const AdminProjectEditPage = lazyWithRetry(
+  () => import('./features/admin/pages/AdminProjectEditPage')
 );
 const AdminPagesPage = lazyWithRetry(() => import('./features/admin/pages/AdminPagesPage'));
 const AdminPageEditPage = lazyWithRetry(() => import('./features/admin/pages/AdminPageEditPage'));
@@ -573,13 +573,13 @@ function App() {
                 element={<LazyAdminRoute component={AdminSkillEditPage} />}
               />
             )}
-            {showAdminPage('sources') && (
-              <Route path="sources" element={<LazyAdminRoute component={AdminSourcesPage} />} />
+            {showAdminPage('projects') && (
+              <Route path="projects" element={<LazyAdminRoute component={AdminProjectsPage} />} />
             )}
-            {showAdminPage('sources') && (
+            {showAdminPage('projects') && (
               <Route
-                path="sources/:id"
-                element={<LazyAdminRoute component={AdminSourceEditPage} />}
+                path="projects/:id"
+                element={<LazyAdminRoute component={AdminProjectEditPage} />}
               />
             )}
             {showAdminPage('workflows') && (

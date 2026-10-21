@@ -5,8 +5,8 @@ import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   fetchAdminApps,
+  fetchAdminProjects,
   fetchAdminPrompts,
-  fetchAdminSources,
   makeAdminApiCall
 } from '../../../api/adminApi';
 
@@ -23,7 +23,7 @@ import {
  * @param {Object} [options]
  * @param {boolean} [options.contentAdminOnly] - When true, the caller is a
  *   content-admin-only user (no full admin access). Only content endpoints
- *   (apps/prompts/sources) are queried; the platform/usage/audit endpoints are
+ *   (apps/prompts/projects) are queried; the platform/usage/audit endpoints are
  *   skipped because they require full admin and would return 403 (issue #1923).
  */
 export function useOverviewData({ contentAdminOnly = false } = {}) {
@@ -40,17 +40,17 @@ export function useOverviewData({ contentAdminOnly = false } = {}) {
     // Content-admin-only view: fetch just the resources they manage. These all
     // pass contentAdminAuth on the server, so no 403s are triggered.
     const loadContentAdmin = async () => {
-      const [appsResult, promptsResult, sourcesResult] = await Promise.allSettled([
+      const [appsResult, promptsResult, projectsResult] = await Promise.allSettled([
         fetchAdminApps(),
         fetchAdminPrompts(),
-        fetchAdminSources()
+        fetchAdminProjects()
       ]);
 
       if (cancelled) return;
 
       const apps = appsResult.status === 'fulfilled' ? appsResult.value : [];
       const prompts = promptsResult.status === 'fulfilled' ? promptsResult.value : [];
-      const sources = sourcesResult.status === 'fulfilled' ? sourcesResult.value : [];
+      const projects = projectsResult.status === 'fulfilled' ? projectsResult.value : [];
 
       const appCount = Array.isArray(apps) ? apps.length : 0;
       const enabledApps = Array.isArray(apps) ? apps.filter(a => a.enabled !== false).length : 0;
@@ -66,10 +66,12 @@ export function useOverviewData({ contentAdminOnly = false } = {}) {
           sub: t('admin.overview.prompts.label', 'prompts'),
           href: '/admin/prompts'
         },
-        sources: {
-          value: Array.isArray(sources) ? sources.length : 0,
-          sub: t('admin.overview.sources.label', 'sources'),
-          href: '/admin/sources'
+        projects: {
+          value: Array.isArray(projects) ? projects.length : 0,
+          sub: t('admin.overview.projects.enabledCount', '{{count}} enabled', {
+            count: Array.isArray(projects) ? projects.filter(p => p.enabled !== false).length : 0
+          }),
+          href: '/admin/projects'
         }
       });
 

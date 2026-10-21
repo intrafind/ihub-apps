@@ -2,14 +2,16 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 import { useState, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import FormField from './FormField';
 import LocalizedField from './LocalizedField';
 import ResourcePicker from './ResourcePicker';
 import { fetchModels } from '../../../../../api/endpoints/models';
 import { fetchTools } from '../../../../../api/endpoints/admin';
-import { fetchAdminSources } from '../../../../../api/adminApi';
+import ProjectPicker from '../../../../admin/components/ProjectPicker';
 
 function PromptForm({ config, onChange }) {
+  const { t } = useTranslation();
   const [schemaText, setSchemaText] = useState(() => {
     try {
       return config.outputSchema ? JSON.stringify(config.outputSchema, null, 2) : '';
@@ -32,7 +34,6 @@ function PromptForm({ config, onChange }) {
     }
   };
 
-  const fetchSources = useCallback(() => fetchAdminSources(), []);
   const fetchToolsFn = useCallback(() => fetchTools(), []);
   const fetchModelsFn = useCallback(() => fetchModels(), []);
 
@@ -86,14 +87,14 @@ function PromptForm({ config, onChange }) {
         min={1}
         max={50}
       />
-      <ResourcePicker
-        label="Sources"
-        fetchFn={fetchSources}
-        value={config.sources}
-        onChange={v => onChange({ ...config, sources: v })}
-        multi
-        placeholder="Search sources..."
-      />
+      <div>
+        <div className={labelClass}>{t('admin.projects.picker.label', 'Projects')}</div>
+        <ProjectPicker
+          compact
+          value={config.projects || []}
+          onChange={links => onChange({ ...config, projects: links })}
+        />
+      </div>
       <FormField
         label="Max Iterations"
         type="number"
