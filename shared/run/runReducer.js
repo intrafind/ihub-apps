@@ -79,6 +79,8 @@ export function createRunState(runId, init = {}) {
     // gathered here from the tools or steps, so the badge shows exactly what
     // the server reported (see shared/run/runActivity.js#answerSourceOf).
     knowledgeSources: [],
+    // Which projects the turn reached and whether each was loaded or searched.
+    knowledgeScope: null,
     // Everything the run's producers found (`sources/added`, shared/sources).
     sources: emptySourceSet(),
     skills: [],
@@ -446,6 +448,9 @@ export function reduceRunEvent(state, envelope) {
       run = { ...run, tools };
       return withRun(next, run);
     }
+
+    case SSE_V2_EVENTS.KNOWLEDGE_SCOPE:
+      return withRun(next, { ...run, knowledgeScope: data || null });
 
     case SSE_V2_EVENTS.SOURCES_ADDED: {
       // The run's set, and — for a tool call's frame — that call's own list,

@@ -20,6 +20,7 @@ import {
   usageSchema,
   toolCallRecordSchema,
   sourcesAddedData,
+  knowledgeScopeData,
   abortCauseSchema
 } from './runLogEvents.js';
 import { interactionSchema, interactionAnswerSchema } from './interaction.js';
@@ -252,6 +253,7 @@ export const sseV2EventSchema = z.discriminatedUnion('type', [
   z.object({ ...base, type: z.literal(SSE_V2_EVENTS.TOOL_PROGRESS), data: toolProgressData }),
   z.object({ ...base, type: z.literal(SSE_V2_EVENTS.TOOL_COMPLETED), data: toolCompletedData }),
   z.object({ ...base, type: z.literal(SSE_V2_EVENTS.SOURCES_ADDED), data: sourcesAddedData }),
+  z.object({ ...base, type: z.literal(SSE_V2_EVENTS.KNOWLEDGE_SCOPE), data: knowledgeScopeData }),
   z.object({
     ...base,
     type: z.literal(SSE_V2_EVENTS.INTERACTION_RAISED),
@@ -279,6 +281,7 @@ export const sseV2EventDataSchemas = Object.freeze({
   [SSE_V2_EVENTS.TOOL_PROGRESS]: toolProgressData,
   [SSE_V2_EVENTS.TOOL_COMPLETED]: toolCompletedData,
   [SSE_V2_EVENTS.SOURCES_ADDED]: sourcesAddedData,
+  [SSE_V2_EVENTS.KNOWLEDGE_SCOPE]: knowledgeScopeData,
   [SSE_V2_EVENTS.INTERACTION_RAISED]: interactionRaisedData,
   [SSE_V2_EVENTS.INTERACTION_ANSWERED]: interactionAnsweredData,
   [SSE_V2_EVENTS.PROGRESS_NODE]: progressNodeData,

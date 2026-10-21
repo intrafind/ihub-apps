@@ -34,6 +34,10 @@
  * @property {{ok: boolean, words?: number, truncated?: boolean}} [read] - a read of its content
  * @property {boolean} [cited] - the provider reports that the answer relies on it
  * @property {string[]} [markers] - provider inline markers that point at it (iAssistant `r:3`)
+ * @property {{origin: 'uploaded'|'picked'|'linked'|'written', kind?: string, at?: string}} [provenance] -
+ *   where a project document came from: uploaded by a user, picked from an
+ *   integration (snapshotted at `at`), linked at its source, or written by a
+ *   run. The citation panel shows it as the "uploaded" or "picked" marker.
  * @property {boolean} [private] - found with the user's own permissions or
  *   network; never included in a share
  *
@@ -126,6 +130,19 @@ function refOf(value) {
 }
 
 /** A read status `{ ok, words?, truncated? }`, or null when `ok` is not a boolean. */
+const PROVENANCE_ORIGINS = new Set(['uploaded', 'picked', 'linked', 'written']);
+
+function provenanceOf(value) {
+  if (!value || typeof value !== 'object') return null;
+  if (!PROVENANCE_ORIGINS.has(value.origin)) return null;
+  const provenance = { origin: value.origin };
+  const kind = text(value.kind, 50);
+  if (kind) provenance.kind = kind;
+  const at = dateOf(value.at);
+  if (at) provenance.at = at;
+  return provenance;
+}
+
 function readOf(value) {
   if (!value || typeof value !== 'object') return null;
   if (value.ok !== true && value.ok !== false) return null;
@@ -231,6 +248,8 @@ export function normalizeSource(input, defaults = {}) {
   const type = text(input.type, 100);
   if (type) source.type = type;
   if (ref) source.ref = ref;
+  const provenance = provenanceOf(input.provenance);
+  if (provenance) source.provenance = provenance;
   const read = readOf(input.read);
   if (read) source.read = read;
   if (input.cited === true) source.cited = true;

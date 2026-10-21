@@ -47,7 +47,12 @@ const WEB_SEARCH_TOOL =
  */
 function isOtherTool(toolId) {
   const id = String(toolId || '').toLowerCase();
-  return id.startsWith('ifinder') || id.startsWith('source_') || id.startsWith('app__');
+  return (
+    id.startsWith('ifinder') ||
+    id.startsWith('source_') ||
+    id.startsWith('knowledge_') ||
+    id.startsWith('app__')
+  );
 }
 
 /**

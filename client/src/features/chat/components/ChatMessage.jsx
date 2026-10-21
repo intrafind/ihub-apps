@@ -1159,11 +1159,12 @@ function ChatMessage({
         {!isUser &&
           !isError &&
           !message.loading &&
-          (message.answerSource || message.workflowResult) && (
+          (message.answerSource || message.workflowResult || message.knowledgeScope) && (
             <div className="flex justify-end">
               <AnswerSourceBadge
                 answerSource={message.answerSource}
                 workflowResult={message.workflowResult}
+                knowledgeScope={message.knowledgeScope}
               />
             </div>
           )}

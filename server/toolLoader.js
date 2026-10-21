@@ -26,6 +26,7 @@ import { isStaanSearchConfigured } from './services/search/staanApiKey.js';
 import logger from './utils/logger.js';
 import { getLocalizedString } from './utils/localize.js';
 import { filterSchedulingTools } from './services/scheduler/tasks/toolGate.js';
+import { hasProjectScope, knowledgeToolsFor } from './services/knowledge/knowledgeTools.js';
 import { mentionAccess } from './services/workflow/workflowAccess.js';
 import {
   isSystemSkillTool,
@@ -647,6 +648,22 @@ export async function getToolsForApp(app, language = null, context = {}) {
       }
     } catch (error) {
       logger.error('Error generating source tools', { component: 'ToolLoader', error });
+    }
+  }
+
+  // Add the project knowledge tools when the request reaches a project
+  // (#1036): one definition, a scope per request in its description.
+  if (hasProjectScope(app) && context.user) {
+    try {
+      const knowledgeTools = await knowledgeToolsFor({
+        app,
+        user: context.user,
+        language,
+        allTools
+      });
+      appTools = appTools.concat(knowledgeTools.filter(t => !appTools.some(a => a.id === t.id)));
+    } catch (error) {
+      logger.error('Error adding the knowledge tools', { component: 'ToolLoader', error });
     }
   }
 
