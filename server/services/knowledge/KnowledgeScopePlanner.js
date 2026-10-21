@@ -13,8 +13,11 @@
  *
  * The budget is `min(platform.projects.loadAllMaxTokens, 0.4 × the model's
  * context window)`, spent in scope order (container, app links,
- * attachments). Pinned items are always injected, never cut; when pinned
- * text alone exceeds the budget the plan still injects it and says so.
+ * attachments). Pinned items are always injected ahead of everything else;
+ * when pinned text alone exceeds the budget the plan still injects it and
+ * says so (`overBudget`), but never past the hard limit of 75 % of the
+ * model's context window: beyond it the rest is cut (`cut` lists the
+ * documents) and stays reachable through `knowledge_read`.
  *
  * The plan is what the prompt renders (`renderProjectsBlock`) and what the
  * client is told (`knowledge/scope`): per project, `loaded` or `searched`.
@@ -26,6 +29,9 @@ import { projectName } from '../projects/projectView.js';
 import { providerFor } from './registry.js';
 
 const CONTEXT_SHARE = 0.4;
+
+/** The share of the context window no injection may exceed, pinned or not. */
+const HARD_CONTEXT_SHARE = 0.75;
 
 /**
  * The load-all budget of a request.
@@ -43,6 +49,53 @@ export function loadAllBudget(model, settings) {
 }
 
 /**
+ * The hard limit of injected text: what the prompt may never exceed.
+ *
+ * @param {{contextWindow?: number}|null} model
+ * @param {{loadAllMaxTokens?: number}} settings
+ * @returns {number}
+ */
+export function hardLimit(model, settings) {
+  const window = Number(model?.contextWindow);
+  if (Number.isFinite(window) && window > 0) {
+    return Math.max(1, Math.floor(window * HARD_CONTEXT_SHARE));
+  }
+  return loadAllBudget(model, settings) * 4;
+}
+
+/**
+ * Keep injected documents within the hard limit: the first document that
+ * does not fit is truncated to the room left, the rest are dropped.
+ *
+ * @param {Array<{doc: Object, text: string, tokens?: number}>} docs
+ * @param {number} limitTokens
+ * @returns {{docs: Array, cut: string[]}}
+ */
+function capInjected(docs, limitTokens) {
+  let used = 0;
+  const kept = [];
+  const cut = [];
+  for (const entry of docs) {
+    const tokens = entry.tokens ?? estimateTokens(entry.text);
+    if (used + tokens <= limitTokens) {
+      kept.push(entry);
+      used += tokens;
+      continue;
+    }
+    cut.push(entry.doc.id);
+    const room = limitTokens - used;
+    if (room > 0 && tokens > 0) {
+      const chars = Math.floor(entry.text.length * (room / tokens));
+      if (chars > 0) {
+        kept.push({ ...entry, text: entry.text.slice(0, chars), tokens: room, truncated: true });
+        used = limitTokens;
+      }
+    }
+  }
+  return { docs: kept, cut };
+}
+
+/**
  * Plan a scope.
  *
  * @param {import('./ProjectScope.js').ScopeEntry[]} scope
@@ -54,6 +107,7 @@ export function loadAllBudget(model, settings) {
  */
 export async function planKnowledgeScope(scope, { model, settings, ctx }) {
   const budgetTokens = loadAllBudget(model, settings);
+  const limitTokens = hardLimit(model, settings);
   let remaining = budgetTokens;
   const projects = [];
   let tools = false;
@@ -73,6 +127,7 @@ export async function planKnowledgeScope(scope, { model, settings, ctx }) {
         tokens: 0,
         pinned: 0,
         injected: [],
+        cut: [],
         unavailable: []
       });
       continue;
@@ -111,6 +166,8 @@ export async function planKnowledgeScope(scope, { model, settings, ctx }) {
       unavailable = loaded.unavailable;
       injected = loaded.docs;
     }
+    const capped = capInjected(injected, limitTokens);
+    injected = capped.docs;
     tokens = injected.reduce((sum, doc) => sum + (doc.tokens ?? estimateTokens(doc.text)), 0);
     remaining = Math.max(0, remaining - tokens);
     if (effective === 'searched') tools = true;
@@ -124,12 +181,13 @@ export async function planKnowledgeScope(scope, { model, settings, ctx }) {
       documents: usable.length,
       tokens,
       pinned: pinnedIds.length,
-      overBudget: tokens > budgetTokens,
+      overBudget: tokens > budgetTokens || capped.cut.length > 0,
       injected,
+      cut: capped.cut,
       unavailable
     });
   }
-  return { projects, budgetTokens, usedTokens: budgetTokens - remaining, tools };
+  return { projects, budgetTokens, limitTokens, usedTokens: budgetTokens - remaining, tools };
 }
 
 function escapeAttribute(value) {
@@ -159,13 +217,14 @@ export function renderProjectsBlock(plan) {
       continue;
     }
     lines.push(`  <project ${attrs.join(' ')}>`);
-    for (const { doc, text } of project.injected) {
+    for (const { doc, text, truncated } of project.injected) {
       const docAttrs = [
         `id="${escapeAttribute(doc.id)}"`,
         `name="${escapeAttribute(doc.name)}"`,
         `origin="${escapeAttribute(doc.provenance?.origin || 'linked')}"`
       ];
       if (doc.pinned) docAttrs.push('pinned="true"');
+      if (truncated) docAttrs.push('truncated="true"');
       lines.push(`    <document ${docAttrs.join(' ')}>`, text, '    </document>');
     }
     lines.push('  </project>');
@@ -209,6 +268,7 @@ export function scopeSummary(plan) {
       tokens: project.tokens,
       pinned: project.pinned,
       ...(project.overBudget ? { overBudget: true } : {}),
+      ...(project.cut?.length ? { cut: project.cut.length } : {}),
       ...(project.unavailable?.length ? { unavailable: project.unavailable.length } : {})
     }))
   };
