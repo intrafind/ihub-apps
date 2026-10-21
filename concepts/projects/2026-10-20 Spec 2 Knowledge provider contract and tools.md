@@ -133,7 +133,7 @@ as text) a rebuild is milliseconds, so no persistent index exists.
 | `office365`, `google-drive`, `nextcloud` | `{ bytes, contentType, name, lastModified, url }` through the integration service with the **picking** user's stored token | at pick, and on refresh by an editor with a connected token | refresh sees a newer `lastModified` (marked, old text kept) or `SOURCE_GONE` / `SOURCE_FORBIDDEN` |
 | `url`, `page` | `{ text, contentType, url }` through today's handlers, TTL cached | at use, per process | fetch error at use |
 | `ifinder-document` | `{ text, url, metadata }` with the **reading** user's JWT, TTL cached per user | at use | `getContent` returns 403/404 for this user (reported in the tool result, item not marked, since another member may still read it) |
-| `ifinder-query` | the query's hits as one text, as `IFinderHandler.loadDocumentsByQuery` renders them; an empty `ref.query` takes the model's `query` | at use | as above |
+| `ifinder-query` | the query's hits as one text, as `IFinderHandler.loadDocumentsByQuery` renders them. An empty `ref.query` is a dynamic search: it takes part in `knowledge_search` only, where the model's `query` becomes the iFinder query (the result is cached by the handler per user and query for the TTL); load-all and `knowledge_read` have no query, report the item in `unavailable` and leave it out, so the planner offers the tools for such a project. A read reference stays the item id; the hits are listed as citations. | at use | as above |
 
 Snapshotted kinds carry `snapshotAt`; the citation card says "text taken 12 Oct 2026" and the
 project page offers refresh. Link kinds carry nothing: they are current by construction.
@@ -286,7 +286,8 @@ uploads (no URL), so the model is told to cite with the hit number in square bra
   gives **Download** for free; `format=original` or `pdf` answers `410 ORIGINAL_DISCARDED` for
   text items (the client falls back to the text preview) and redirects link kinds to their
   source (`url`, `page`, the iFinder provider's own content action for iFinder items).
-- `metadata({ ref, user })`: name, kind, status, provenance, `snapshotAt`, chars, tokens, url.
+- `metadata({ ref, user })`: the same `use` check on `ref.scope` as `content` (a non-member
+  gets `404`), then name, kind, status, provenance, `snapshotAt`, chars, tokens, url.
 
 `DocumentPreviewModal` gains a text mode: when `format=pdf` answers `ORIGINAL_DISCARDED` it
 shows the text with the hit passages highlighted (`PdfPassageViewer` has a sibling
@@ -308,9 +309,11 @@ for each project in scope, with its link mode:
   (container, admin links, attachments)
 pinned items are always injected, in every mode, ahead of everything else; when pinned text
 alone exceeds the load-all budget the plan still injects it and flags `overBudget`, but never
-past the hard limit of 75 % of the model's context window: beyond it the remaining pinned text
-is cut (the cut items are listed as `cut` on the plan and in the scope event, and stay
-reachable through `knowledge_read`)
+past the hard limit of 75 % of the model's context window. The limit bounds everything injected,
+whatever the mode (`context`, `auto`, pinned): the injected set is truncated to it, the rest is
+cut (the cut items are listed as `cut` on the plan and in the scope event, and stay reachable
+through `knowledge_read`), and a plan that cut anything offers the tools even when no project
+is in tools mode
 ```
 
 The injected block replaces `{{projects}}` in the system prompt (`PromptService`, and the

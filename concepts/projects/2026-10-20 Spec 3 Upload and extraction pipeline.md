@@ -52,8 +52,12 @@ optional fields `name` and `pinned`.
   `413 QUOTA_FILE_BYTES` and `recordUpload('project', 'rejected_size')`.
 - The quota check (spec 1 §9.4) runs in a `fileFilter` **before** the first byte is accepted:
   `QUOTA_FILES` and `QUOTA_PROJECT_BYTES` (using the declared `Content-Length` as the upper
-  bound) answer `413` without writing the temp file. A second check with the real size runs
-  after receive.
+  bound) answer `413` without writing the temp file. That early check is advisory (parallel
+  uploads can pass it together, a chunked request has no length); the binding check runs after
+  receive, under the project lock, against the project's current usage, so nothing beyond the
+  quota is ever persisted. No reservation is held: the disk a rejected upload can occupy is
+  bounded by `maxFileBytes` (multer's `fileSize` limit covers chunked requests) times the
+  concurrent requests, and the temp file is removed on rejection. Decided for phase 1.
 - `fileFilter` sees only metadata (multer attaches the stream after the filter accepts the
   file), so it applies the declared-type and quota checks: anything outside §3.1 is `415
   UNSUPPORTED_TYPE` before a byte is written. Once `diskStorage` has the file, the route reads
@@ -129,10 +133,14 @@ and iFinder's converter when the installation has one (phase 2, together with th
 4. A `404`/`410` from the source is `SOURCE_GONE`, a `401`/`403` is `SOURCE_FORBIDDEN`; the
    item is `failed` and can be removed or retried.
 
-Refresh runs the same steps with `purpose: 'refresh'`, keeps the old blob readable until the
-new one is stored, then deletes the old blob (new version id in the key, spec 1 §8.1). When the
-source's `lastModified` is older than or equal to `snapshotAt` the refresh is a no-op that
-clears `stale`.
+Refresh runs the same steps with `purpose: 'refresh'` but never through `pending` or
+`extracting`: the item keeps its status (`ready` or `stale`, so spec 2 keeps reading the old
+snapshot) and carries `refreshingAt` while the run lasts; the old blob stays readable until the
+new one is stored, then it is deleted (new version id in the key, spec 1 §8.1). A refresh that
+fails, or that the reconciler finds interrupted, leaves the item `stale` with the error. The
+no-op check compares the source's `lastModified` with the version the last successful fetch
+saw (`provenance.source.lastModified`, falling back to `snapshotAt`), not with the time
+extraction finished: a change between fetch and extraction is still picked up.
 
 Link kinds (`url`, `page`, `ifinder-document`, `ifinder-query`) skip this pipeline: `POST
 /items` validates the ref, runs the kind's `test` when it has one (a `HEAD` for URLs, a page
@@ -144,9 +152,12 @@ The extracted text is encrypted with a fresh per-object data key and stored as o
 
 - `dataKey = randomBytes(32)`; `ciphertext = encryptStream(text, dataKey, associatedData)` in
   the format of §6; `wrapped = keyProvider.wrap(dataKey, aad)`.
-- `blobKey = <projectId>__<itemId>__<versionId>` with `versionId` a ULID (time-ordered, so a
-  prefix listing of `<projectId>__<itemId>__` shows versions in order; the newest is the one
-  the item names). `blobs.put('project-files', blobKey, ciphertext)`.
+- `blobKey = <projectId>__<itemId>__<versionId>` with `versionId` time-ordered (9 base36 digits
+  of the time plus 8 hex digits of randomness, 17 characters), so a prefix listing of
+  `<projectId>__<itemId>__` shows versions in order; the newest is the one the item names.
+  The key is bounded: a project id is at most 50 characters, an item id 26 (`itm_` plus 22
+  base64url), so a key is at most 97 characters, under the 100-character limit of the blob
+  store (`isValidId`). `blobs.put('project-files', blobKey, ciphertext)`.
 - The item document is written **after** the blob (artifact pattern): `text: { blobKey, bytes,
   chars, tokens, sha256 (plaintext), format, segmentBytes, key: { provider, keyId, wrapped },
   extractedAt, original: { contentType, bytes, pages } }`, `status: 'ready'`. A failed document
@@ -163,7 +174,8 @@ The extracted text is encrypted with a fresh per-object data key and stored as o
   `sha256`.
 
 `contents/sources/*.md` written by the migration are imported at the next boot (read, extracted
-as text, encrypted into `project-files`) and **deleted once the item is `ready`**, so no
+as text, encrypted into `project-files`) and **deleted once every item importing that file is
+`ready`** (two sources could share a path; the import counts the pointers per file first), so no
 plaintext copy outlives the import. A failed import leaves the file in place and the item
 `failed` with the path in its error; the next boot retries it. The breaking-change note (spec 1
 §10.3) says so.
@@ -186,8 +198,11 @@ export class KeyProvider {
 `LocalFileKeyProvider` (phase 1, default, `projects.encryption.keyProvider: 'local-file'`):
 the master key is the 32-byte key `TokenStorageService` already holds (`TOKEN_ENCRYPTION_KEY`
 or `contents/.encryption-key`), so an installation gets envelope encryption with no new
-secret and the existing rotation documentation (`docs/encryption-key-management.md`) still
-describes the master key. `wrap` = AES-256-GCM of the data key with a random 12-byte IV and the
+secret. The rotation guide (`docs/encryption-key-management.md`) is updated in phase 1: it
+told admins to replace the key and re-enter credentials, which would lose every project
+document (originals are discarded, the data keys stay wrapped under the old master key); it now
+tells them to keep the replaced key in `TOKEN_ENCRYPTION_KEY_PREVIOUS` and never to drop a key
+that still wraps project data until the rewrap of phase 3 has run. `wrap` = AES-256-GCM of the data key with a random 12-byte IV and the
 AAD, serialized as `v1 || iv || tag || ciphertext` (base64 in the item); `keyId` = the key
 fingerprint `TokenStorageService.getKeyFingerprint()`; `unwrap` with a `keyId` that is not the
 current fingerprint tries the previous key when `TOKEN_ENCRYPTION_KEY_PREVIOUS` is set

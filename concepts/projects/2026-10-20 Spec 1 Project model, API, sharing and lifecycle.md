@@ -122,8 +122,10 @@ pick queued); `extracting` a worker is extracting and encrypting; `ready` usable
 permanent, with `error.code` from spec 3 §9, retry by re-adding; `stale` the snapshot is older
 than the source (a refresh saw a newer `lastModified`, or a refresh failed with `SOURCE_GONE` or
 `SOURCE_FORBIDDEN`), the old text stays usable and the UI offers refresh. Link items are `ready`
-as soon as the reference validates; a fetch failure at use time is reported in the tool result
-and on the item (`stale` + `error`), never as a failed chat turn.
+as soon as the reference validates; a fetch failure at use time is reported in that request's
+`unavailable` result only (spec 2 §2.1): it is the reading user's failure, another member may
+still read the item, so the stored item never changes and the chat turn never fails. Only a
+refresh of a picked item marks `stale`.
 
 `provenance.origin` is what the citation panel shows as the "uploaded" or "picked" marker (spec 2
 §5): `uploaded` and `written` render as *uploaded*, `picked` as *picked from <site>*, `linked`
@@ -360,8 +362,10 @@ user project:
   user   → use
   full admin (adminAccess, interactive) → use and own for compliance; never edit
   owner deactivated or deleted → read-only for members until an admin transfers it
-anonymous, OAuth clients, agents, delegated tokens (oauth_authorization_code) → nothing
-(a personal API key acts as its owner)
+anonymous, OAuth clients, agents, delegated tokens (oauth_authorization_code) → nothing on
+user projects (a personal API key acts as its owner); an admin project linked to the app,
+workflow or agent they may use is readable through that link (`linked`, use only, never
+edit), so an anonymous-enabled app keeps its migrated sources
 ```
 
 Every mutation re-runs the same check under the repository lock (`authorize` callback), as
@@ -456,8 +460,9 @@ extraction job of an upload runs on the worker that received the file (spec 3 §
 `server/defaults/projects/` ships the admin projects that `server/defaults/config/sources.json`
 shipped as sources (§10.2). An `upload` item in a default project carries `import: { file:
 'sources/faq.md' }` pointing into `server/defaults/`; on startup `ProjectService.importPending()`
-extracts, encrypts and stores every admin item that is `pending` with an `import` pointer and
-clears the pointer. `ihub-documentation` keeps `managedFile: 'sources/ihub-documentation.md'`
+extracts, encrypts and stores every admin item that still carries an `import` pointer (`pending`,
+or `failed` from an earlier attempt, including one the reconciler marked `INTERRUPTED`) and
+clears the pointer only after the item is `ready`. `ihub-documentation` keeps `managedFile: 'sources/ihub-documentation.md'`
 and is re-imported whenever the sha256 of the managed default changes (this replaces the
 `MANAGED_DEFAULT_FILES` copy of that file into `contents/sources/`). The import runs once per
 boot under the `project-import` lock, after storage and the encryption key are up.
@@ -500,10 +505,13 @@ per-user count only.
 ### 10.1 Migration `V174__sources_to_projects.js`
 
 Precondition: `config/sources.json` exists or any app, workflow or agent profile carries
-`sources`. Preflight, before any file is written: a source id that starts with `prj_` would
-collide with the user-project namespace (spec 1 §2); such an id is remapped deterministically
-to `legacy-<id>` and every app, workflow and agent-profile reference is rewritten with it, and
-the migration log names each remap. Steps, in order:
+`sources`. Preflight, before any file is written, the project id of every source is decided
+for the whole set (`projectIdsForSources`): an id is kept when it neither starts with `prj_`
+(the user-project namespace, spec 1 §2) nor exceeds the 50-character admin id limit; otherwise
+it becomes `legacy-<id>` when that fits and is not already the id of another source, else
+`legacy-<first 12 hex of sha256(id)>`. The mapping is deterministic, collision-free within the
+set, and every app, workflow and agent-profile reference is rewritten with it; the migration
+log names each remap. Steps, in order:
 
 1. **Sources become admin projects.** For every entry of `config/sources.json`, write
    `projects/<id>.json`:
@@ -537,8 +545,8 @@ the migration log names each remap. Steps, in order:
    `projectSharing` set on the built-in groups where undefined (§7.2).
 6. **Retire the file.** `config/sources.json` is moved to `config/sources.json.migrated` so
    nothing loads it and the admin can still read what was there. `contents/sources/*.md` is left
-   in place; the breaking-change note says it can be removed once the admin has checked the
-   projects.
+   in place for the import at the next start (spec 3 §5), which deletes each file once every
+   item that imports it is `ready` (two sources could share a path).
 
 Idempotent per file: a project file that already exists is not overwritten; an app that has
 `projects` and no `sources` is skipped. Tested in `server/tests/migration-v174.test.js` with the
@@ -580,8 +588,9 @@ so apps, workflows and agents keep their knowledge. The admin pages are now **Pr
 - The MCP gateway exposes `ihub://project/<id>` resources instead of `ihub://source/<id>`.
 - The feature flag `sources` is renamed to `projects`; its value is carried over.
 - Files under `contents/sources/` are imported into encrypted project storage at the first
-  start; the copy under `contents/sources/` is deleted once its project item shows as ready
-  (spec 3 §5), the shipped documentation is refreshed from the defaults whenever it changes.
+  start; a copy under `contents/sources/` is deleted once every project item importing it shows
+  as ready (spec 3 §5), the shipped documentation is refreshed from the defaults whenever it
+  changes.
 
 **Before upgrading:** back up `contents/`. The migration is forward-only. If you deploy several
 instances, every instance needs the same `TOKEN_ENCRYPTION_KEY` and a shared volume (or the
