@@ -3204,7 +3204,11 @@
       "externalMappingsEmpty": "No external mappings yet",
       "externalMappingsHelp": "Enter external group names that should be mapped to this group. Users with these external groups will automatically be assigned to this internal group.",
       "scheduledTasks": "Scheduled Tasks",
-      "scheduledTasksHint": "Allow members to create scheduled tasks that run by themselves as the member (needs the Scheduled Tasks feature). Inherited by groups that inherit this one."
+      "scheduledTasksHint": "Allow members to create scheduled tasks that run by themselves as the member (needs the Scheduled Tasks feature). Inherited by groups that inherit this one.",
+      "projects": "Projects",
+      "projectsHint": "Allow members to create projects of their own: documents, instructions and chats (needs the User Projects feature). Inherited by groups that inherit this one.",
+      "projectSharing": "Project sharing",
+      "projectSharingHint": "Allow members to add other users, groups or everyone to the projects they own or edit."
     },
     "contentAccess": {
       "title": "Group access",

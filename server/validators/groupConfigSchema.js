@@ -26,7 +26,11 @@ export const groupConfigSchema = z
         // rejects a group that merely uses it.
         contentAdmin: z.boolean().prefault(false),
         // May create and run scheduled tasks (feature `scheduledTasks`).
-        scheduledTasks: z.boolean().prefault(false)
+        scheduledTasks: z.boolean().prefault(false),
+        // May create projects of their own (feature `userProjects`, #1036).
+        projects: z.boolean().prefault(false),
+        // May add members to the projects they own or edit.
+        projectSharing: z.boolean().prefault(false)
       })
       .prefault({}),
     mappings: z.array(z.string()).prefault([]),

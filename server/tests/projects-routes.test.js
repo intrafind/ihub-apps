@@ -1,0 +1,648 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
+/**
+ * The projects API driven through the real route chains (#1036, spec 1 §5,
+ * §6.4, §7): `requireFeature`, `authenticatedOnly` and
+ * `projectAccessRequired` run as registered over a filesystem storage
+ * provider in a scratch directory (whose parent is the config view, so admin
+ * projects land in `<scratch>/projects/`).
+ *
+ * What is pinned here:
+ *
+ *  - a project is private until shared; an editor may change it, a user may
+ *    only use it; only the owner deletes; a stranger gets a 404;
+ *  - the `projects` and `projectSharing` group permissions gate creating and
+ *    sharing; the platform's sharing audiences are enforced;
+ *  - an admin project is readable by whoever may use an app that links it,
+ *    editable by content admins, and cannot be deleted while linked;
+ *  - a full admin lists every user project for compliance; a content admin
+ *    does not;
+ *  - a chat moves into a project and the project lists it.
+ */
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import { after, before, beforeEach, describe, it } from 'node:test';
+import assert from 'node:assert/strict';
+
+import configCache from '../configCache.js';
+import { bootstrapStorage, shutdownStorageBootstrap } from '../storage/bootstrap.js';
+import { resolveGroupInheritance } from '../utils/authorization.js';
+import { locateConfigFile } from '../utils/configFileLocation.js';
+import registerProjectRoutes from '../routes/projectRoutes.js';
+import registerAdminProjectsRoutes from '../routes/admin/projects.js';
+import registerChatRoutes from '../routes/chats.js';
+import { getChatRepository } from '../services/chat/ChatRepository.js';
+import { getProjectRepository } from '../services/projects/ProjectRepository.js';
+
+const ADA = { id: 'user-ada', name: 'Ada Lovelace', groups: ['authenticated'] };
+const GRACE = { id: 'user-grace', name: 'Grace Hopper', groups: ['authenticated'] };
+const CAROL = { id: 'user-carol', name: 'Carol Shaw', groups: ['engineers'] };
+const EDITOR = { id: 'user-editor', name: 'Content Editor', groups: ['editors'] };
+const ROOT = { id: 'user-root', name: 'Root', groups: ['admins'] };
+const NOBODY = { id: 'user-nobody', name: 'No Projects', groups: ['readers'] };
+const THIRD_PARTY = { ...GRACE, authMode: 'oauth_authorization_code' };
+
+let scratch;
+let platform;
+
+function captureRoutes(register) {
+  const routes = [];
+  const record =
+    method =>
+    (routePath, ...handlers) =>
+      routes.push({ method, routePath, handlers });
+  register({
+    get: record('get'),
+    post: record('post'),
+    put: record('put'),
+    patch: record('patch'),
+    delete: record('delete'),
+    use: () => {}
+  });
+  return routes;
+}
+
+const projectRoutes = captureRoutes(registerProjectRoutes);
+const adminRoutes = captureRoutes(registerAdminProjectsRoutes);
+const chatRoutes = captureRoutes(registerChatRoutes);
+
+function handlersFor(routes, method, suffix) {
+  const route = routes.find(entry => entry.method === method && entry.routePath.endsWith(suffix));
+  assert.ok(route, `${method.toUpperCase()} ${suffix} must be registered`);
+  return route.handlers;
+}
+
+function makeResponse() {
+  const res = { statusCode: 200, body: null, headers: {} };
+  res.status = code => {
+    res.statusCode = code;
+    return res;
+  };
+  res.json = value => {
+    res.body = value;
+    return res;
+  };
+  res.end = () => res;
+  res.send = value => {
+    res.body = value;
+    return res;
+  };
+  res.setHeader = (name, value) => {
+    res.headers[String(name).toLowerCase()] = value;
+    return res;
+  };
+  return res;
+}
+
+async function drive(handlers, { params = {}, query = {}, body = {}, user } = {}) {
+  const req = {
+    params,
+    query,
+    body,
+    headers: {},
+    user: user ? { ...user, groups: [...(user.groups || [])] } : undefined,
+    ip: '127.0.0.1',
+    method: 'GET',
+    url: '/'
+  };
+  const res = makeResponse();
+  for (const handler of handlers) {
+    let advanced = false;
+    await handler(req, res, () => {
+      advanced = true;
+    });
+    if (!advanced) break;
+  }
+  return res;
+}
+
+const route = {
+  config: handlersFor(projectRoutes, 'get', '/api/projects/_config'),
+  targets: handlersFor(projectRoutes, 'get', '/api/projects/share-targets'),
+  list: handlersFor(projectRoutes, 'get', '/api/projects'),
+  create: handlersFor(projectRoutes, 'post', '/api/projects'),
+  get: handlersFor(projectRoutes, 'get', '/api/projects/:projectId'),
+  update: handlersFor(projectRoutes, 'patch', '/api/projects/:projectId'),
+  remove: handlersFor(projectRoutes, 'delete', '/api/projects/:projectId'),
+  items: handlersFor(projectRoutes, 'get', '/api/projects/:projectId/items'),
+  addItem: handlersFor(projectRoutes, 'post', '/api/projects/:projectId/items'),
+  removeItem: handlersFor(projectRoutes, 'delete', '/api/projects/:projectId/items/:itemId'),
+  members: handlersFor(projectRoutes, 'put', '/api/projects/:projectId/members'),
+  transfer: handlersFor(projectRoutes, 'post', '/api/projects/:projectId/transfer'),
+  chats: handlersFor(projectRoutes, 'get', '/api/projects/:projectId/chats'),
+  adminList: handlersFor(adminRoutes, 'get', '/api/admin/projects'),
+  adminCreate: handlersFor(adminRoutes, 'post', '/api/admin/projects'),
+  adminGet: handlersFor(adminRoutes, 'get', '/api/admin/projects/:id'),
+  adminPatch: handlersFor(adminRoutes, 'patch', '/api/admin/projects/:id'),
+  adminDelete: handlersFor(adminRoutes, 'delete', '/api/admin/projects/:id'),
+  adminDeps: handlersFor(adminRoutes, 'get', '/api/admin/projects/_dependencies/:id'),
+  adminToggle: handlersFor(adminRoutes, 'post', '/api/admin/projects/_toggle'),
+  adminAddItem: handlersFor(adminRoutes, 'post', '/api/admin/projects/:id/items'),
+  chatPatch: handlersFor(chatRoutes, 'patch', '/api/chats/:chatId')
+};
+
+async function create(user, body = {}) {
+  const res = await drive(route.create, { user, body: { name: 'Case 2026-114', ...body } });
+  assert.equal(res.statusCode, 201, JSON.stringify(res.body));
+  return res.body;
+}
+
+async function setMembers(user, projectId, members) {
+  return drive(route.members, { user, params: { projectId }, body: { members } });
+}
+
+function setProjectSettings(overrides = {}) {
+  platform.projects = {
+    limits: { maxFiles: 25, maxFileBytes: 1000, maxProjectBytes: 10000, maxProjectsPerUser: 0 },
+    ...overrides,
+    sharing: {
+      allowUsers: true,
+      allowGroups: true,
+      allowEveryone: false,
+      ...(overrides.sharing || {})
+    }
+  };
+  configCache.setCacheEntry('config/platform.json', platform);
+}
+
+function setFeatures(overrides = {}) {
+  configCache.setCacheEntry('config/features.json', {
+    projects: true,
+    userProjects: true,
+    chatPersistence: true,
+    ...overrides
+  });
+}
+
+async function writeUsers() {
+  const users = {};
+  for (const user of [ADA, GRACE, CAROL, EDITOR, ROOT, NOBODY]) {
+    users[user.id] = { ...user, username: user.id.replace('user-', ''), active: true };
+  }
+  const usersFile = path.join(scratch, 'users.json');
+  await fs.writeFile(usersFile, JSON.stringify({ users }), 'utf8');
+  configCache.setCacheEntry(locateConfigFile(usersFile).cacheKey, { users, metadata: {} });
+  return usersFile;
+}
+
+before(async () => {
+  scratch = await fs.mkdtemp(path.join(os.tmpdir(), 'ihub-projects-routes-'));
+  await bootstrapStorage({
+    storage: {
+      provider: 'filesystem',
+      filesystem: { baseDir: path.join(scratch, 'data'), flushIntervalMs: 25 }
+    }
+  });
+  const usersFile = await writeUsers();
+  platform = {
+    defaultLanguage: 'en',
+    localAuth: { usersFile },
+    anonymousAuth: { enabled: true, defaultGroups: ['anonymous'] },
+    chats: { enabled: true }
+  };
+  setProjectSettings();
+  setFeatures();
+  configCache.setCacheEntry(
+    'config/groups.json',
+    resolveGroupInheritance({
+      groups: {
+        admins: {
+          id: 'admins',
+          name: 'Admins',
+          permissions: { apps: ['*'], adminAccess: true, projects: true, projectSharing: true }
+        },
+        editors: {
+          id: 'editors',
+          name: 'Content editors',
+          inherits: ['authenticated'],
+          permissions: { apps: ['*'], contentAdmin: true }
+        },
+        engineers: {
+          id: 'engineers',
+          name: 'Engineers',
+          inherits: ['authenticated'],
+          permissions: { apps: ['*'] }
+        },
+        readers: {
+          id: 'readers',
+          name: 'Readers',
+          permissions: { apps: ['support'] }
+        },
+        authenticated: {
+          id: 'authenticated',
+          name: 'Authenticated',
+          inherits: ['anonymous'],
+          permissions: { apps: ['chat'], projects: true, projectSharing: true }
+        },
+        anonymous: {
+          id: 'anonymous',
+          name: 'Anonymous',
+          permissions: { apps: ['chat'] }
+        }
+      }
+    })
+  );
+  configCache.setCacheEntry('config/apps.json', [
+    { id: 'chat', name: { en: 'Chat' }, enabled: true },
+    {
+      id: 'support',
+      name: { en: 'Support' },
+      enabled: true,
+      projects: ['faq', { id: 'docs', mode: 'tools' }]
+    }
+  ]);
+  configCache.setCacheEntry('config/workflows.json', []);
+  configCache.setCacheEntry('config/agents.json', []);
+  configCache.setCacheEntry('config/projects.json', []);
+});
+
+after(async () => {
+  await shutdownStorageBootstrap();
+  await fs.rm(scratch, { recursive: true, force: true });
+});
+
+beforeEach(() => {
+  setProjectSettings();
+  setFeatures();
+});
+
+describe('configuration and gates', () => {
+  it('tells a user what they may do', async () => {
+    const res = await drive(route.config, { user: ADA });
+    assert.equal(res.statusCode, 200);
+    assert.equal(res.body.enabled, true);
+    assert.equal(res.body.userProjects.enabled, true);
+    assert.equal(res.body.userProjects.canCreate, true);
+    assert.equal(res.body.userProjects.canShare, true);
+    assert.ok(res.body.kinds.some(kind => kind.id === 'url'));
+    assert.equal(
+      res.body.kinds.some(kind => kind.id === 'ifinder-document'),
+      false
+    );
+    const nobody = await drive(route.config, { user: NOBODY });
+    assert.equal(nobody.body.userProjects.canCreate, false);
+  });
+
+  it('refuses anonymous callers, third-party tokens and users without the permission', async () => {
+    assert.equal((await drive(route.create, { body: { name: 'x' } })).statusCode, 401);
+    const thirdParty = await drive(route.create, { user: THIRD_PARTY, body: { name: 'x' } });
+    assert.equal(thirdParty.statusCode, 403);
+    assert.equal(thirdParty.body.details.code, 'PROJECTS_NOT_ALLOWED');
+    const nobody = await drive(route.create, { user: NOBODY, body: { name: 'x' } });
+    assert.equal(nobody.statusCode, 403);
+    assert.equal(nobody.body.details.code, 'PERMISSION_DENIED');
+  });
+
+  it('keeps user projects dark while the flag is off', async () => {
+    setFeatures({ userProjects: false });
+    const res = await drive(route.create, { user: ADA, body: { name: 'x' } });
+    assert.equal(res.statusCode, 403);
+    assert.equal(res.body.details.code, 'USER_PROJECTS_DISABLED');
+    const feature = await drive(route.config, { user: ADA });
+    assert.equal(feature.body.userProjects.enabled, false);
+    setFeatures({ projects: false });
+    const gated = await drive(route.list, { user: ADA });
+    assert.equal(gated.statusCode, 403);
+    assert.equal(gated.body.code, 'FEATURE_DISABLED');
+  });
+});
+
+describe('user projects', () => {
+  it('is private to its owner until shared', async () => {
+    const project = await create(ADA, { instructions: 'Answer in German' });
+    assert.equal(project.role, 'owner');
+    assert.equal(project.permissions.canDelete, true);
+    assert.equal(project.instructions, 'Answer in German');
+    assert.deepEqual(project.members, []);
+    assert.ok((await drive(route.list, { user: ADA })).body.items.some(p => p.id === project.id));
+    assert.equal(
+      (await drive(route.list, { user: GRACE })).body.items.some(p => p.id === project.id),
+      false
+    );
+    const direct = await drive(route.get, { user: GRACE, params: { projectId: project.id } });
+    assert.equal(direct.statusCode, 404, 'an unshared project does not confirm it exists');
+  });
+
+  it('gives an editor and a user their roles, and revokes at once', async () => {
+    const project = await create(ADA);
+    const shared = await setMembers(ADA, project.id, [
+      { type: 'user', id: GRACE.id, role: 'editor' },
+      { type: 'group', id: 'engineers', role: 'user' }
+    ]);
+    assert.equal(shared.statusCode, 200, JSON.stringify(shared.body));
+    assert.equal(shared.body.members.find(m => m.id === GRACE.id).name, 'Grace Hopper');
+
+    const asEditor = await drive(route.get, { user: GRACE, params: { projectId: project.id } });
+    assert.equal(asEditor.statusCode, 200);
+    assert.equal(asEditor.body.role, 'editor');
+    assert.ok(asEditor.body.members, 'editors see the member list');
+    const edit = await drive(route.update, {
+      user: GRACE,
+      params: { projectId: project.id },
+      body: { instructions: 'Be brief' }
+    });
+    assert.equal(edit.statusCode, 200);
+    assert.equal(edit.body.instructions, 'Be brief');
+
+    const asUser = await drive(route.get, { user: CAROL, params: { projectId: project.id } });
+    assert.equal(asUser.statusCode, 200);
+    assert.equal(asUser.body.role, 'user');
+    assert.equal(asUser.body.members, undefined, 'users do not see the member list');
+    assert.equal(asUser.body.memberCount, 2);
+    const forbidden = await drive(route.update, {
+      user: CAROL,
+      params: { projectId: project.id },
+      body: { name: 'Mine now' }
+    });
+    assert.equal(forbidden.statusCode, 403);
+    assert.equal(forbidden.body.details.code, 'PERMISSION_DENIED');
+    assert.equal(
+      (await drive(route.remove, { user: GRACE, params: { projectId: project.id } })).statusCode,
+      403,
+      'editors never delete'
+    );
+    assert.ok(
+      (await drive(route.list, { user: CAROL, query: { scope: 'shared' } })).body.items.some(
+        p => p.id === project.id
+      )
+    );
+
+    assert.equal((await setMembers(ADA, project.id, [])).statusCode, 200);
+    assert.equal(
+      (await drive(route.get, { user: GRACE, params: { projectId: project.id } })).statusCode,
+      404
+    );
+    assert.equal(
+      (await drive(route.list, { user: GRACE })).body.items.some(p => p.id === project.id),
+      false
+    );
+  });
+
+  it('enforces the sharing audiences and the sharing permission', async () => {
+    const project = await create(ADA);
+    const everyone = await setMembers(ADA, project.id, [{ type: 'everyone', role: 'user' }]);
+    assert.equal(everyone.statusCode, 403, 'everyone is off by default');
+    setProjectSettings({ sharing: { allowEveryone: true } });
+    assert.equal(
+      (await setMembers(ADA, project.id, [{ type: 'everyone', role: 'user' }])).statusCode,
+      200
+    );
+    assert.equal(
+      (await drive(route.get, { user: NOBODY, params: { projectId: project.id } })).statusCode,
+      200
+    );
+    const unknown = await setMembers(ADA, project.id, [
+      { type: 'user', id: 'user-ghost', role: 'user' }
+    ]);
+    assert.equal(unknown.statusCode, 400);
+    assert.equal(unknown.body.details.code, 'SHARE_TARGET_INVALID');
+    const anonymousGroup = await setMembers(ADA, project.id, [
+      { type: 'group', id: 'anonymous', role: 'user' }
+    ]);
+    assert.equal(anonymousGroup.statusCode, 400);
+  });
+
+  it('transfers ownership to a known user', async () => {
+    const project = await create(ADA);
+    const res = await drive(route.transfer, {
+      user: ADA,
+      params: { projectId: project.id },
+      body: { ownerId: GRACE.id }
+    });
+    assert.equal(res.statusCode, 200, JSON.stringify(res.body));
+    assert.equal(res.body.transferred, true);
+    const mine = await drive(route.get, { user: GRACE, params: { projectId: project.id } });
+    assert.equal(mine.body.role, 'owner');
+    const ghost = await drive(route.transfer, {
+      user: GRACE,
+      params: { projectId: project.id },
+      body: { ownerId: 'nope' }
+    });
+    assert.equal(ghost.statusCode, 400);
+  });
+
+  it('adds and removes link items within the quota', async () => {
+    const project = await create(ADA);
+    const added = await drive(route.addItem, {
+      user: ADA,
+      params: { projectId: project.id },
+      body: { kind: 'url', ref: { url: 'https://example.com/policy' }, pinned: true }
+    });
+    assert.equal(added.statusCode, 201, JSON.stringify(added.body));
+    assert.equal(added.body.item.status, 'ready');
+    assert.equal(added.body.item.pinned, true);
+    assert.equal(added.body.item.text, null);
+    const items = await drive(route.items, { user: ADA, params: { projectId: project.id } });
+    assert.equal(items.body.items.length, 1);
+    const upload = await drive(route.addItem, {
+      user: ADA,
+      params: { projectId: project.id },
+      body: { kind: 'upload', ref: {}, name: 'x.txt' }
+    });
+    assert.equal(upload.statusCode, 400, 'the upload kind is not registered before slice 3');
+    assert.equal(upload.body.details.code, 'KIND_UNKNOWN');
+    const removed = await drive(route.removeItem, {
+      user: ADA,
+      params: { projectId: project.id, itemId: added.body.item.id }
+    });
+    assert.equal(removed.statusCode, 204);
+    assert.equal(
+      (await drive(route.items, { user: ADA, params: { projectId: project.id } })).body.items
+        .length,
+      0
+    );
+  });
+
+  it('lets only the owner delete, and a full admin for compliance', async () => {
+    const project = await create(ADA);
+    await setMembers(ADA, project.id, [{ type: 'user', id: GRACE.id, role: 'editor' }]);
+    assert.equal(
+      (await drive(route.remove, { user: GRACE, params: { projectId: project.id } })).statusCode,
+      403
+    );
+    const asAdmin = await drive(route.get, { user: ROOT, params: { projectId: project.id } });
+    assert.equal(asAdmin.statusCode, 200);
+    assert.equal(asAdmin.body.role, 'admin');
+    assert.equal(asAdmin.body.permissions.canEdit, false);
+    assert.equal(
+      (await drive(route.remove, { user: ADA, params: { projectId: project.id } })).statusCode,
+      204
+    );
+    assert.equal(
+      (await drive(route.get, { user: ADA, params: { projectId: project.id } })).statusCode,
+      404
+    );
+  });
+
+  it('answers the share-target lookup with what the caller may pick', async () => {
+    const res = await drive(route.targets, { user: ADA, query: { q: 'gr' } });
+    assert.equal(res.statusCode, 200);
+    assert.deepEqual(res.body.allowed, { user: true, group: true, everyone: false });
+    assert.ok(res.body.users.some(user => user.id === GRACE.id));
+    assert.ok(res.body.groups.every(group => group.id !== 'anonymous'));
+  });
+});
+
+describe('admin projects', () => {
+  it('are created by content admins and reached by users through a linked app', async () => {
+    const created = await drive(route.adminCreate, {
+      user: EDITOR,
+      body: { id: 'faq', name: { en: 'FAQ', de: 'FAQ' }, instructions: 'Cite the FAQ' }
+    });
+    assert.equal(created.statusCode, 201, JSON.stringify(created.body));
+    assert.equal(created.body.project.ownership, 'admin');
+    const again = await drive(route.adminCreate, {
+      user: EDITOR,
+      body: { id: 'faq', name: { en: 'FAQ' } }
+    });
+    assert.equal(again.statusCode, 409);
+    assert.equal(
+      (await drive(route.adminCreate, { user: ADA, body: { id: 'x', name: { en: 'x' } } }))
+        .statusCode,
+      403
+    );
+
+    // NOBODY may use the `support` app, which links `faq`; ADA may not.
+    const linked = await drive(route.get, { user: NOBODY, params: { projectId: 'faq' } });
+    assert.equal(linked.statusCode, 200, JSON.stringify(linked.body));
+    assert.equal(linked.body.role, 'linked');
+    assert.equal(linked.body.permissions.canEdit, false);
+    assert.equal(
+      (await drive(route.get, { user: ADA, params: { projectId: 'faq' } })).statusCode,
+      404
+    );
+    assert.ok((await drive(route.list, { user: NOBODY })).body.items.some(p => p.id === 'faq'));
+    const asEditor = await drive(route.get, { user: EDITOR, params: { projectId: 'faq' } });
+    assert.equal(asEditor.body.role, 'admin');
+    assert.equal(asEditor.body.permissions.canEdit, true);
+
+    const item = await drive(route.adminAddItem, {
+      user: EDITOR,
+      params: { id: 'faq' },
+      body: { kind: 'page', ref: { pageId: 'faq' } }
+    });
+    assert.equal(item.statusCode, 201, JSON.stringify(item.body));
+    assert.equal(item.body.item.provenance.origin, 'linked');
+    assert.equal(
+      (await drive(route.items, { user: NOBODY, params: { projectId: 'faq' } })).body.items.length,
+      1
+    );
+  });
+
+  it('cannot be deleted while linked, and disabling hides it from users', async () => {
+    const deps = await drive(route.adminDeps, { user: EDITOR, params: { id: 'faq' } });
+    assert.deepEqual(deps.body.dependencies, [{ type: 'app', id: 'support', name: 'Support' }]);
+    const blocked = await drive(route.adminDelete, { user: EDITOR, params: { id: 'faq' } });
+    assert.equal(blocked.statusCode, 400);
+    assert.equal(blocked.body.details.code, 'PROJECT_IN_USE');
+
+    const toggled = await drive(route.adminToggle, {
+      user: EDITOR,
+      body: { ids: ['faq'], enabled: false }
+    });
+    assert.equal(toggled.statusCode, 200);
+    assert.equal(toggled.body.changed, 1);
+    const hidden = await drive(route.get, { user: NOBODY, params: { projectId: 'faq' } });
+    assert.equal(
+      hidden.statusCode,
+      403,
+      'a disabled project is visible but unusable through the link'
+    );
+    assert.equal(
+      (await drive(route.adminToggle, { user: EDITOR, body: { ids: ['faq'], enabled: true } }))
+        .statusCode,
+      200
+    );
+
+    const patched = await drive(route.adminPatch, {
+      user: EDITOR,
+      params: { id: 'faq' },
+      body: { tags: ['help'] }
+    });
+    assert.equal(patched.statusCode, 200);
+    assert.deepEqual(patched.body.project.tags, ['help']);
+
+    const unlinked = await drive(route.adminCreate, {
+      user: EDITOR,
+      body: { id: 'scratch', name: { en: 'Scratch' } }
+    });
+    assert.equal(unlinked.statusCode, 201);
+    assert.equal(
+      (await drive(route.adminDelete, { user: EDITOR, params: { id: 'scratch' } })).statusCode,
+      204
+    );
+    assert.equal(
+      (await drive(route.adminGet, { user: EDITOR, params: { id: 'scratch' } })).statusCode,
+      404
+    );
+  });
+
+  it('lists user projects for full admins only', async () => {
+    await create(ADA, { name: 'Compliance' });
+    const asRoot = await drive(route.adminList, { user: ROOT, query: { ownership: 'user' } });
+    assert.equal(asRoot.statusCode, 200);
+    assert.ok(asRoot.body.items.some(p => p.name === 'Compliance' && p.owner.id === ADA.id));
+    const asEditor = await drive(route.adminList, { user: EDITOR, query: { ownership: 'user' } });
+    assert.equal(asEditor.statusCode, 403);
+    const admin = await drive(route.adminList, { user: EDITOR });
+    assert.ok(Array.isArray(admin.body) && admin.body.some(p => p.id === 'faq'));
+  });
+});
+
+describe('chats in a project', () => {
+  it('moves a chat into a project and lists it there', async () => {
+    const chats = getChatRepository();
+    assert.ok(chats.isAvailable());
+    const chat = await chats.ensureChat({
+      chatId: 'chat-move-1',
+      ownerId: ADA.id,
+      appId: 'chat',
+      title: 'Hello'
+    });
+    assert.ok(chat);
+    const project = await create(ADA, { name: 'Container' });
+    await setMembers(ADA, project.id, [{ type: 'user', id: GRACE.id, role: 'user' }]);
+
+    const moved = await drive(route.chatPatch, {
+      user: ADA,
+      params: { chatId: chat.id },
+      body: { projectId: project.id }
+    });
+    assert.equal(moved.statusCode, 200, JSON.stringify(moved.body));
+    assert.equal(moved.body.chat.projectId, project.id);
+    const markers = await getProjectRepository().listChatMarkers(project.id);
+    assert.deepEqual(
+      markers.map(m => m.chatId),
+      [chat.id]
+    );
+
+    const listed = await drive(route.chats, { user: GRACE, params: { projectId: project.id } });
+    assert.equal(listed.statusCode, 200);
+    assert.equal(listed.body.items.length, 1);
+    assert.equal(listed.body.items[0].owner.mine, false);
+    const mine = await drive(route.chats, {
+      user: GRACE,
+      params: { projectId: project.id },
+      query: { filter: 'mine' }
+    });
+    assert.equal(mine.body.items.length, 0);
+
+    const stranger = await drive(route.chatPatch, {
+      user: ADA,
+      params: { chatId: chat.id },
+      body: { projectId: 'prj_doesnotexist' }
+    });
+    assert.equal(stranger.statusCode, 404);
+
+    const out = await drive(route.chatPatch, {
+      user: ADA,
+      params: { chatId: chat.id },
+      body: { projectId: null }
+    });
+    assert.equal(out.statusCode, 200);
+    assert.equal(out.body.chat.projectId, null);
+    assert.deepEqual(await getProjectRepository().listChatMarkers(project.id), []);
+  });
+});

@@ -8,6 +8,7 @@ import { loadAllPrompts } from './promptsLoader.js';
 import { loadAllWorkflows } from './workflowsLoader.js';
 import { loadAllAgentProfiles } from './agentsLoader.js';
 import { loadAllTools } from './toolsLoader.js';
+import { loadAllProjects } from './projectsLoader.js';
 import {
   resolveGroupInheritance,
   filterResourcesByPermissions,
@@ -248,7 +249,8 @@ const AGGREGATE_KEY_BY_NAMESPACE = Object.freeze({
   prompts: 'config/prompts.json',
   workflows: 'config/workflows.json',
   tools: 'config/tools.json',
-  agents: 'config/agents.json'
+  agents: 'config/agents.json',
+  projects: 'config/projects.json'
 });
 
 /**
@@ -338,6 +340,11 @@ const CONFIG_LOADERS = {
   'config/tools.json': {
     label: 'tools',
     load: async ({ verbose }) => expandToolFunctions(await loadAllTools(true, verbose))
+  },
+  'config/projects.json': {
+    label: 'admin projects',
+    load: ({ verbose }) => loadAllProjects(true, verbose),
+    emptyOnError: []
   },
   'config/groups.json': {
     label: 'groups with resolved inheritance',
@@ -450,6 +457,7 @@ class ConfigCache {
       'config/groups.json',
       'config/users.json',
       'config/sources.json',
+      'config/projects.json',
       'config/providers.json',
       'config/mimetypes.json',
       'config/features.json',
@@ -1060,6 +1068,22 @@ class ConfigCache {
   }
 
   /**
+   * Admin projects (`contents/projects/*.json`), the successor of sources.
+   *
+   * @param {boolean} [includeDisabled=false]
+   * @returns {{data: Object[], etag: string|null}}
+   */
+  getProjects(includeDisabled = false) {
+    const projects = this.get('config/projects.json');
+    if (projects === null || !projects.data) return { data: [], etag: null };
+    if (includeDisabled) return projects;
+    return {
+      data: projects.data.filter(project => project.enabled !== false),
+      etag: projects.etag
+    };
+  }
+
+  /**
    * Get styles configuration
    */
   getStyles() {
@@ -1445,6 +1469,18 @@ class ConfigCache {
       logger.info('Tools cache refreshed', { component: 'ConfigCache', count: tools.length });
     } catch (error) {
       logger.error('Error refreshing tools cache', { component: 'ConfigCache', error });
+    }
+  }
+
+  /**
+   * Refresh the admin projects cache. Called after an admin project was
+   * created, changed or deleted through the admin API or a cascade.
+   */
+  async refreshProjectsCache() {
+    try {
+      await this.refreshCacheEntry('config/projects.json');
+    } catch (error) {
+      logger.error('Error refreshing projects cache', { component: 'ConfigCache', error });
     }
   }
 

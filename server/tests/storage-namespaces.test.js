@@ -47,6 +47,11 @@ import {
   USER_SKILL_VERSIONS_NAMESPACE,
   USER_SKILL_SHARES_NAMESPACE
 } from '../services/skills/UserSkillRepository.js';
+import {
+  PROJECT_CHATS_NAMESPACE,
+  USER_PROJECTS_NAMESPACE,
+  USER_PROJECT_SHARES_NAMESPACE
+} from '../services/projects/ProjectRepository.js';
 import { MCP_TOOL_CATALOG_NAMESPACE } from '../services/mcp/mcpToolCatalogStore.js';
 
 describe('storage namespaces', () => {
@@ -94,7 +99,10 @@ describe('storage namespaces', () => {
       ['UserPromptRepository.PROMPT_PREFERENCES_NAMESPACE', PROMPT_PREFERENCES_NAMESPACE],
       ['UserSkillRepository.USER_SKILLS_NAMESPACE', USER_SKILLS_NAMESPACE],
       ['UserSkillRepository.USER_SKILL_VERSIONS_NAMESPACE', USER_SKILL_VERSIONS_NAMESPACE],
-      ['UserSkillRepository.USER_SKILL_SHARES_NAMESPACE', USER_SKILL_SHARES_NAMESPACE]
+      ['UserSkillRepository.USER_SKILL_SHARES_NAMESPACE', USER_SKILL_SHARES_NAMESPACE],
+      ['ProjectRepository.USER_PROJECTS_NAMESPACE', USER_PROJECTS_NAMESPACE],
+      ['ProjectRepository.USER_PROJECT_SHARES_NAMESPACE', USER_PROJECT_SHARES_NAMESPACE],
+      ['ProjectRepository.PROJECT_CHATS_NAMESPACE', PROJECT_CHATS_NAMESPACE]
     ]) {
       assert.ok(declared.has(ns), `${label} is '${ns}', which RUNTIME_NAMESPACES does not declare`);
     }
