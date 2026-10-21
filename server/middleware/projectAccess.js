@@ -36,6 +36,7 @@ import {
   satisfiesLevel
 } from '../services/projects/projectAccess.js';
 import { linkedProjectIds } from '../services/projects/projectLinks.js';
+import { isUserProjectsConfigured } from '../services/projects/projectSettings.js';
 
 /**
  * Give the request a principal with resolved permissions, as the data routes
@@ -139,6 +140,19 @@ export function projectAccessRequired(level) {
       const permissions = permissionsFor(project, req.user, context);
       if (!project || !permissions.canView) {
         sendNotFound(res, 'Project');
+        return;
+      }
+      // User projects sit behind the `userProjects` flag (spec 1 §7.3): while
+      // it is off they stay dark, reads and writes alike, for everyone but a
+      // full admin, who still reaches them for compliance.
+      if (
+        project.ownership === 'user' &&
+        !context.isAdmin &&
+        !isUserProjectsConfigured(configCache.getFeatures())
+      ) {
+        sendErrorResponse(res, 403, 'User projects are switched off', {
+          details: { code: 'USER_PROJECTS_DISABLED' }
+        });
         return;
       }
       if (!satisfiesLevel(permissions, level)) {
