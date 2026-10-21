@@ -16,6 +16,7 @@ const STORED_ACTIVITY_FIELDS = [
   'searchSummary',
   'activeSkills',
   'answerSource',
+  'knowledgeScope',
   'workflowSteps',
   'workflowResult',
   'outputFormat'

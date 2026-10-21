@@ -1,0 +1,185 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
+/**
+ * ItemTextService — the one place that turns a project item into text
+ * (spec 2 §2.1).
+ *
+ *  - A `storage: 'text'` item holds an encrypted blob. Reading it is the
+ *    job of the ingest pipeline's decryptor (spec 3), which registers itself
+ *    here through {@link setTextReader}; until then such an item answers
+ *    `TEXT_UNAVAILABLE`.
+ *  - A `storage: 'link'` item is fetched at use time through today's source
+ *    handlers (`URLHandler`, `PageHandler`, `IFinderHandler`) and their TTL
+ *    caches. iFinder items are fetched with the **reading** user's rights;
+ *    the handler's cache is keyed per user already.
+ *
+ * A per-process LRU of decrypted text keeps a project that is read on every
+ * turn from being decrypted on every turn.
+ *
+ * @module services/knowledge/ItemTextService
+ */
+import logger from '../../utils/logger.js';
+import { createSourceManager } from '../../sources/index.js';
+import { KnowledgeError } from './types.js';
+
+const COMPONENT = 'ItemTextService';
+
+/** Decrypted texts kept per process, and the bytes they may add up to. */
+const TEXT_CACHE_ENTRIES = 64;
+const TEXT_CACHE_BYTES = 64 * 1024 * 1024;
+
+const textCache = new Map();
+let textCacheBytes = 0;
+
+function cacheGet(key) {
+  const entry = textCache.get(key);
+  if (!entry) return null;
+  // Refresh recency.
+  textCache.delete(key);
+  textCache.set(key, entry);
+  return entry.text;
+}
+
+function cacheSet(key, text) {
+  const bytes = text.length * 2;
+  if (bytes > TEXT_CACHE_BYTES / 4) return;
+  if (textCache.has(key)) textCacheBytes -= textCache.get(key).bytes;
+  textCache.set(key, { text, bytes });
+  textCacheBytes += bytes;
+  while (textCache.size > TEXT_CACHE_ENTRIES || textCacheBytes > TEXT_CACHE_BYTES) {
+    const [oldest] = textCache.keys();
+    textCacheBytes -= textCache.get(oldest).bytes;
+    textCache.delete(oldest);
+  }
+}
+
+/** Forget one blob's text (the item was refreshed or removed), or all. */
+export function evictItemText(blobKey) {
+  if (!blobKey) {
+    textCache.clear();
+    textCacheBytes = 0;
+    return;
+  }
+  const entry = textCache.get(blobKey);
+  if (entry) {
+    textCacheBytes -= entry.bytes;
+    textCache.delete(blobKey);
+  }
+}
+
+let textReader = null;
+
+/**
+ * Register the reader of stored text blobs: `(project, item) → Promise<string>`.
+ * The ingest pipeline (spec 3) owns decryption and registers it at startup.
+ *
+ * @param {((project: Object, item: Object) => Promise<string>)|null} reader
+ */
+export function setTextReader(reader) {
+  textReader = typeof reader === 'function' ? reader : null;
+}
+
+/** The handler type and config a link item's fetch runs with. */
+function handlerCallOf(item, ctx) {
+  const ref = item.ref || {};
+  switch (item.kind) {
+    case 'url':
+      return {
+        type: 'url',
+        config: {
+          url: ref.url,
+          ...(ref.maxContentLength ? { options: { maxContentLength: ref.maxContentLength } } : {}),
+          chatId: ctx.chatId
+        }
+      };
+    case 'page':
+      return {
+        type: 'page',
+        config: { pageId: ref.pageId, language: ref.language || ctx.language || 'en' }
+      };
+    case 'ifinder-document':
+      return {
+        type: 'ifinder',
+        config: {
+          documentId: ref.documentId,
+          searchProfile: ref.searchProfile,
+          maxLength: ref.maxLength,
+          user: ctx.user,
+          chatId: ctx.chatId || `project-${item.id}`
+        }
+      };
+    case 'ifinder-query': {
+      const query = ref.query || ctx.query || '';
+      return {
+        type: 'ifinder',
+        config: {
+          query,
+          searchProfile: ref.searchProfile,
+          maxResults: ref.maxResults,
+          maxLength: ref.maxLength,
+          user: ctx.user,
+          chatId: ctx.chatId || `project-${item.id}`
+        }
+      };
+    }
+    default:
+      return null;
+  }
+}
+
+/**
+ * The text of one item.
+ *
+ * @param {Object} project
+ * @param {Object} item
+ * @param {import('./KnowledgeProvider.js').KnowledgeContext} ctx
+ * @returns {Promise<{text: string, cached: boolean}>}
+ * @throws {KnowledgeError} `ITEM_NOT_READY`, `TEXT_UNAVAILABLE`, `SOURCE_FORBIDDEN`,
+ *   `SOURCE_GONE`, `KIND_UNKNOWN`.
+ */
+export async function getItemText(project, item, ctx = {}) {
+  const where = { projectId: project?.id, itemId: item?.id };
+  if (!item || (item.status !== 'ready' && item.status !== 'stale')) {
+    throw new KnowledgeError('ITEM_NOT_READY', `Item ${item?.id || ''} is not ready`, where);
+  }
+  if (item.storage === 'text') {
+    const key = item.text?.blobKey;
+    if (!key) throw new KnowledgeError('TEXT_UNAVAILABLE', 'The item holds no text yet', where);
+    const cached = cacheGet(key);
+    if (cached !== null) return { text: cached, cached: true };
+    if (!textReader) {
+      throw new KnowledgeError(
+        'TEXT_UNAVAILABLE',
+        'Stored text cannot be read on this installation',
+        where
+      );
+    }
+    const text = await textReader(project, item);
+    cacheSet(key, text);
+    return { text, cached: false };
+  }
+  const call = handlerCallOf(item, ctx);
+  if (!call) throw new KnowledgeError('KIND_UNKNOWN', `Unknown item kind ${item.kind}`, where);
+  if (call.type === 'ifinder' && !ctx.user) {
+    throw new KnowledgeError('SOURCE_FORBIDDEN', 'iFinder items need a signed-in reader', where);
+  }
+  if (call.type === 'ifinder' && !call.config.documentId && !call.config.query) {
+    throw new KnowledgeError('INVALID_REF', 'This iFinder search needs a query', where);
+  }
+  try {
+    const handler = createSourceManager().getHandler(call.type);
+    const result = await handler.getCachedContent(call.config);
+    const text =
+      typeof result?.content === 'string' ? result.content : String(result?.content || '');
+    return { text, cached: false };
+  } catch (error) {
+    const message = String(error?.message || 'fetch failed');
+    logger.warn('Could not fetch a link item', { component: COMPONENT, ...where, error: message });
+    if (/not found|404|gone/i.test(message))
+      throw new KnowledgeError('SOURCE_GONE', message, where);
+    if (/denied|forbidden|401|403/i.test(message))
+      throw new KnowledgeError('SOURCE_FORBIDDEN', message, where);
+    throw new KnowledgeError('SOURCE_GONE', message, where);
+  }
+}

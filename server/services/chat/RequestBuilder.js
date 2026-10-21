@@ -340,7 +340,9 @@ class RequestBuilder {
     voiceMode,
     processMessageTemplates,
     user,
-    chatId
+    chatId,
+    projectId = null,
+    attachedProjectIds = []
   }) {
     try {
       const { data: apps } = configCache.getApps();
@@ -350,12 +352,25 @@ class RequestBuilder {
         return { success: false, error };
       }
 
-      const app = findByIdCaseInsensitive(apps, appId);
-      if (!app) {
+      const configuredApp = findByIdCaseInsensitive(apps, appId);
+      if (!configuredApp) {
         const error = await this.errorHandler.createModelError(appId, 'unknown', language);
         error.code = 'APP_NOT_FOUND';
         return { success: false, error };
       }
+      // The chat's container project and the projects attached from the
+      // picker travel on the app object, the way the active skills do, so
+      // the prompt builder and the tool loader see one scope (#1036).
+      const app =
+        projectId || attachedProjectIds?.length
+          ? {
+              ...configuredApp,
+              ...(projectId ? { _projectId: projectId } : {}),
+              ...(attachedProjectIds?.length
+                ? { _attachedProjectIds: [...attachedProjectIds] }
+                : {})
+            }
+          : configuredApp;
 
       const { data: models } = configCache.getModels();
       if (!models) {

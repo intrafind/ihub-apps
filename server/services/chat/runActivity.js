@@ -150,6 +150,9 @@ function slim(envelope) {
     // set is stored as the message's `sources`, not here.
     case SSE_V2_EVENTS.SOURCES_ADDED:
       return data?.callId ? envelope : null;
+    // Which projects the turn reached and how: shown with the stored answer.
+    case SSE_V2_EVENTS.KNOWLEDGE_SCOPE:
+      return envelope;
     case SSE_V2_EVENTS.PROGRESS_NODE:
       // A reconnecting client is sent the steps again (`replayChatWorkflowProgress`);
       // folding the replay would list every running step twice.

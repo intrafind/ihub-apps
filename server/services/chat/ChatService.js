@@ -263,7 +263,11 @@ class ChatService {
     // prepared while it still ran (and superseded it).
     const promptSources = PromptService.getPromptSources(params?.chatId);
     PromptService.resetPromptSources(params?.chatId);
-    if (result?.success && result.data) result.data.promptSources = promptSources;
+    const knowledgeScope = PromptService.takeKnowledgeScope(params?.chatId);
+    if (result?.success && result.data) {
+      result.data.promptSources = promptSources;
+      if (knowledgeScope) result.data.knowledgeScope = knowledgeScope;
+    }
     return result;
   }
 
@@ -461,7 +465,8 @@ class ChatService {
       responseSchema,
       llmOptions = {},
       userFileData,
-      promptSources = []
+      promptSources = [],
+      knowledgeScope = null
     } = prep;
     const log = typeof buildLogData === 'function' ? buildLogData : () => ({});
     const loopTools = markInteractiveTools(tools);
@@ -576,6 +581,13 @@ class ChatService {
       ...(model?.id ? { model: model.id } : {}),
       refs
     });
+    // Which projects this turn reached, and whether each was loaded in full
+    // or left to the knowledge tools (#1036): on the stream for the badge and
+    // on the ledger so a re-sync and the stored answer carry it too.
+    if (knowledgeScope?.projects?.length) {
+      stream.emit(SSE_V2_EVENTS.KNOWLEDGE_SCOPE, knowledgeScope);
+      this.runLog.append(runId, RUN_LOG_EVENTS.KNOWLEDGE_SCOPE, knowledgeScope);
+    }
     for (const skill of activatedSkills || []) {
       if (!skill?.skillName) continue;
       stream.emit(SSE_V2_EVENTS.TOOL_PROGRESS, {

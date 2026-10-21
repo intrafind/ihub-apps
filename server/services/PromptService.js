@@ -9,6 +9,15 @@ import SourceResolutionService from './SourceResolutionService.js';
 import { isFeatureEnabled } from '../featureRegistry.js';
 import { describeSkillCatalog, prepareActiveSkills } from './skillAccess.js';
 import logger from '../utils/logger.js';
+import { resolveProjectScope } from './knowledge/ProjectScope.js';
+import {
+  planKnowledgeScope,
+  renderProjectInstructions,
+  renderProjectsBlock,
+  scopeSummary
+} from './knowledge/KnowledgeScopePlanner.js';
+import { projectSettings } from './projects/projectSettings.js';
+import { hasProjectScope } from './knowledge/knowledgeTools.js';
 
 /**
  * Module-level knowledge source tracking
@@ -16,6 +25,9 @@ import logger from '../utils/logger.js';
  * @type {Map<string, Set<string>>}
  */
 const promptKnowledgeSources = new Map();
+// The knowledge scope (which projects, loaded or searched) of the prompt
+// being built for a chat, taken by `ChatService.prepareChatRequest`.
+const knowledgeScopes = new Map();
 
 /**
  * Escape regex metacharacters so arbitrary keys can be used inside `new RegExp(...)`.
@@ -117,6 +129,72 @@ class PromptService {
   resetPromptSources(chatId) {
     if (!chatId) return;
     promptKnowledgeSources.delete(chatId);
+  }
+
+  /**
+   * Note the projects a prompt was built with (#1036), for the turn to
+   * report as `knowledge/scope`.
+   * @param {string} chatId
+   * @param {Object} summary - `scopeSummary(plan)`
+   */
+  trackKnowledgeScope(chatId, summary) {
+    if (!chatId || !summary) return;
+    knowledgeScopes.set(chatId, summary);
+  }
+
+  /**
+   * The knowledge scope noted for a chat, and forget it.
+   * @param {string} chatId
+   * @returns {Object|null}
+   */
+  takeKnowledgeScope(chatId) {
+    if (!chatId) return null;
+    const summary = knowledgeScopes.get(chatId) || null;
+    knowledgeScopes.delete(chatId);
+    return summary;
+  }
+
+  /**
+   * The system prompt with the request's projects applied (spec 2 §6).
+   *
+   * @param {string} systemPrompt
+   * @param {Object|null} app - App with its link fields (`projects`, `_projectId`, …)
+   * @param {{user: Object|null, chatId: string|null, lang: string, modelName: string|null}} ctx
+   * @returns {Promise<string>}
+   */
+  async _applyProjects(systemPrompt, app, { user, chatId, lang, modelName }) {
+    const placeholder = '{{projects}}';
+    const hasPlaceholder = systemPrompt.includes(placeholder);
+    const scope =
+      hasProjectScope(app) && user ? await resolveProjectScope({ appConfig: app, user }) : [];
+    if (!scope.length) {
+      return hasPlaceholder ? systemPrompt.replace(placeholder, () => '') : systemPrompt;
+    }
+    const platform = configCache.getPlatform() || {};
+    const models = configCache.getModels?.()?.data || [];
+    const model = modelName ? models.find(entry => entry?.id === modelName) || null : null;
+    const plan = await planKnowledgeScope(scope, {
+      model,
+      settings: projectSettings(platform),
+      ctx: { user, chatId, language: lang, purpose: 'chat' }
+    });
+    const instructions = renderProjectInstructions(plan);
+    const block = renderProjectsBlock(plan);
+    let out = systemPrompt;
+    if (instructions) out = out.trim() ? `${out}\n\n${instructions}` : instructions;
+    if (hasPlaceholder) out = out.replace(placeholder, () => block);
+    else if (block) out += `\n\nProjects:\n${block}`;
+    if (plan.projects.some(project => project.mode === 'loaded' && project.injected.length)) {
+      this.trackPromptSources(chatId);
+    }
+    this.trackKnowledgeScope(chatId, scopeSummary(plan));
+    logger.info('Projects applied to the prompt', {
+      component: 'PromptService',
+      chatId,
+      projects: plan.projects.map(project => `${project.id}:${project.mode}`).join(','),
+      tokens: plan.usedTokens
+    });
+    return out;
   }
 
   /**
@@ -471,6 +549,26 @@ class PromptService {
       } catch (error) {
         logger.error('Error in source resolution system', { component: 'PromptService', error });
         throw new Error(`Failed to process sources: ${error.message}`);
+      }
+
+      // Projects (#1036): the projects the request reaches — linked on the
+      // app, the chat's container, attached from the picker — loaded in full
+      // or left to the knowledge tools (spec 2 §6). Their instructions go
+      // before the knowledge block; the block replaces `{{projects}}` or is
+      // appended, exactly as sources were.
+      try {
+        systemPrompt = await this._applyProjects(systemPrompt, app, {
+          user,
+          chatId,
+          lang,
+          modelName
+        });
+      } catch (error) {
+        logger.error('Error applying the projects of the request', {
+          component: 'PromptService',
+          error
+        });
+        throw new Error(`Failed to process projects: ${error.message}`);
       }
 
       // Skills: list the skills the model may activate (name + description,
