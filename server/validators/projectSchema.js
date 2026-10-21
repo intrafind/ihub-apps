@@ -134,6 +134,8 @@ export const projectItemSchema = z
     cache: z.object({ ttlSeconds: z.number().int().positive() }).strict().optional(),
     provenance: itemProvenanceSchema,
     snapshotAt: z.string().nullable().optional(),
+    /** Set while a refresh runs; the status keeps the readable snapshot. */
+    refreshingAt: z.string().nullable().optional(),
     import: z
       .object({ file: z.string().max(1024), encoding: z.string().max(32).optional() })
       .strict()

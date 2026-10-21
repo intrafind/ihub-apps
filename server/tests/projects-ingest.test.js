@@ -856,11 +856,15 @@ describe('ingest pipeline', () => {
     assert.equal(unchanged.item.status, 'ready');
     assert.equal(unchanged.item.text.blobKey, firstBlob);
 
-    // Changed: a new blob, the old one gone.
+    // Changed at the source after the last fetch but before extraction
+    // finished: compared with the fetched version, not with `snapshotAt`.
     fakeFetch.bytes = Buffer.from('# Cloud doc v2\n\nChanged in the cloud.');
-    fakeFetch.lastModified = '2099-01-01T00:00:00.000Z';
+    fakeFetch.lastModified = '2026-10-05T00:00:00.000Z';
+    assert.ok(Date.parse(fakeFetch.lastModified) < Date.parse(picked.snapshotAt));
     const refreshed = await service.refreshItem(project.id, item.id, { user: ADA, wait: true });
     assert.equal(refreshed.item.status, 'ready');
+    assert.equal(refreshed.item.refreshingAt, undefined);
+    assert.equal(refreshed.item.provenance.source.lastModified, fakeFetch.lastModified);
     assert.notEqual(refreshed.item.text.blobKey, firstBlob);
     const repository = getProjectRepository();
     assert.equal(await repository.blobs.get(PROJECT_FILES_NAMESPACE, firstBlob), null);
@@ -875,6 +879,7 @@ describe('ingest pipeline', () => {
     );
     const stale = await itemOf(project.id, item.id);
     assert.equal(stale.status, 'stale');
+    assert.equal(stale.refreshingAt, undefined);
     assert.equal(stale.error.code, 'SOURCE_GONE');
     assert.equal(stale.text.blobKey, refreshed.item.text.blobKey);
     assert.match(
