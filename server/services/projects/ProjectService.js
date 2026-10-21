@@ -26,6 +26,7 @@ import { getItemKind, isItemKindEnabled } from './kinds/registry.js';
 // Registering the built-in link kinds is a side effect of loading them.
 import './kinds/linkKinds.js';
 import { projectSettings } from './projectSettings.js';
+import { findDependencies } from './projectLinks.js';
 
 const COMPONENT = 'ProjectService';
 
@@ -155,19 +156,25 @@ export class ProjectService {
       );
     }
     const { limits } = this.settings();
-    if (limits.maxProjectsPerUser > 0) {
-      const owned = await this.repository.countOwned(String(owner.id));
-      if (owned >= limits.maxProjectsPerUser) {
-        throw new ProjectError(
-          'QUOTA_PROJECTS',
-          `You can keep at most ${limits.maxProjectsPerUser} projects — delete one to make room`,
-          { limit: limits.maxProjectsPerUser, used: owned }
-        );
+    // The count and the write share the owner's lock: two creates with one
+    // slot left cannot both see it free.
+    return this.repository.withOwnerLock(String(owner.id), async () => {
+      if (limits.maxProjectsPerUser > 0) {
+        const owned = await this.repository.countOwned(String(owner.id));
+        if (owned >= limits.maxProjectsPerUser) {
+          throw new ProjectError(
+            'QUOTA_PROJECTS',
+            `You can keep at most ${limits.maxProjectsPerUser} projects — delete one to make room`,
+            { limit: limits.maxProjectsPerUser, used: owned }
+          );
+        }
       }
-    }
-    const project = await this.repository.createUser({ owner: actorOf(owner), content });
-    if (!project) throw new ProjectError('STORAGE_UNAVAILABLE', 'The project could not be stored');
-    return project;
+      const project = await this.repository.createUser({ owner: actorOf(owner), content });
+      if (!project) {
+        throw new ProjectError('STORAGE_UNAVAILABLE', 'The project could not be stored');
+      }
+      return project;
+    });
   }
 
   /**
@@ -239,6 +246,19 @@ export class ProjectService {
    * @returns {Promise<Object|null>} The project as it was, or null.
    */
   async deleteProject(projectId, { authorize, detachChat } = {}) {
+    // An admin project that apps, workflows or agents link stays: the links
+    // would dangle. Checked here, not only in the admin API, so every route
+    // that may delete one keeps the invariant.
+    if (isAdminProjectId(projectId)) {
+      const dependencies = findDependencies(projectId);
+      if (dependencies.length > 0) {
+        throw new ProjectError(
+          'PROJECT_IN_USE',
+          'Cannot delete a project that apps, workflows or agents link',
+          { dependencies }
+        );
+      }
+    }
     let project;
     try {
       project = await this.repository.delete(projectId, { authorize });
@@ -512,24 +532,28 @@ export class ProjectService {
       throw new ProjectError('PERMISSION_DENIED', 'Admin projects cannot be transferred');
     }
     const { limits } = this.settings();
-    if (limits.maxProjectsPerUser > 0) {
-      const owned = await this.repository.countOwned(String(newOwner.id));
-      if (owned >= limits.maxProjectsPerUser) {
-        throw new ProjectError(
-          'QUOTA_PROJECTS',
-          `${newOwner.name || newOwner.id} already keeps ${limits.maxProjectsPerUser} projects`,
-          { limit: limits.maxProjectsPerUser, used: owned }
-        );
+    // The new owner's count and the hand-over share that owner's lock, with
+    // the creates that count against the same cap.
+    return this.repository.withOwnerLock(String(newOwner.id), async () => {
+      if (limits.maxProjectsPerUser > 0) {
+        const owned = await this.repository.countOwned(String(newOwner.id));
+        if (owned >= limits.maxProjectsPerUser) {
+          throw new ProjectError(
+            'QUOTA_PROJECTS',
+            `${newOwner.name || newOwner.id} already keeps ${limits.maxProjectsPerUser} projects`,
+            { limit: limits.maxProjectsPerUser, used: owned }
+          );
+        }
       }
-    }
-    try {
-      return await this.repository.transfer(projectId, newOwner, {
-        actor: actorOf(user),
-        authorize
-      });
-    } catch (error) {
-      throw translateError(error);
-    }
+      try {
+        return await this.repository.transfer(projectId, newOwner, {
+          actor: actorOf(user),
+          authorize
+        });
+      } catch (error) {
+        throw translateError(error);
+      }
+    });
   }
 
   // --- chats ----------------------------------------------------------------
@@ -543,11 +567,7 @@ export class ProjectService {
    */
   async attachChat(projectId, chatId, { ownerId = null } = {}) {
     await this.repository.addChatMarker(projectId, chatId, { ownerId });
-    await attempt(
-      () => this.repository.mutate(projectId, () => null, { touchActivity: true }),
-      'project activity',
-      { component: COMPONENT, projectId }
-    );
+    await this.touchActivity(projectId);
   }
 
   /** Forget a chat's membership. */

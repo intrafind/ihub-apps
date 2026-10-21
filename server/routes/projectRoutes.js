@@ -57,6 +57,7 @@ import { enabledItemKinds } from '../services/projects/kinds/registry.js';
 import { projectName, serializeItem, serializeProject } from '../services/projects/projectView.js';
 import {
   addItemSchema,
+  adminProjectUpdateSchema,
   describeIssues,
   itemUpdateSchema,
   membersUpdateSchema,
@@ -378,7 +379,11 @@ export default function registerProjectRoutes(app) {
     projectAccessRequired('edit'),
     async (req, res) => {
       try {
-        const body = parseBody(userProjectUpdateSchema, req, res);
+        // An admin project keeps the admin document's shape (localized
+        // names), whoever edits it.
+        const schema =
+          req.project.ownership === 'admin' ? adminProjectUpdateSchema : userProjectUpdateSchema;
+        const body = parseBody(schema, req, res);
         if (!body) return;
         const service = getProjectService();
         const project = await service.updateProject(req.project.id, body, {
