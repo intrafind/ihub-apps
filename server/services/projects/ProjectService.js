@@ -23,59 +23,16 @@ import {
   mintItemId
 } from './ProjectRepository.js';
 import { getItemKind, isItemKindEnabled } from './kinds/registry.js';
-// Registering the built-in link kinds is a side effect of loading them.
+import { ProjectError } from './projectErrors.js';
+// Registering the built-in kinds is a side effect of loading them.
 import './kinds/linkKinds.js';
+import './kinds/uploadKind.js';
+import './kinds/cloudKinds.js';
 import { projectSettings } from './projectSettings.js';
 
 const COMPONENT = 'ProjectService';
 
-/** HTTP status per error code. */
-const STATUS_BY_CODE = Object.freeze({
-  FEATURE_DISABLED: 403,
-  USER_PROJECTS_DISABLED: 403,
-  PROJECTS_NOT_ALLOWED: 403,
-  PERMISSION_DENIED: 403,
-  PROJECT_NOT_FOUND: 404,
-  PROJECT_ACCESS_CHANGED: 403,
-  PROJECT_EXISTS: 409,
-  PROJECT_IN_USE: 400,
-  PROJECT_MISMATCH: 409,
-  QUOTA_PROJECTS: 409,
-  QUOTA_FILES: 413,
-  QUOTA_FILE_BYTES: 413,
-  QUOTA_PROJECT_BYTES: 413,
-  KIND_DISABLED: 400,
-  KIND_UNKNOWN: 400,
-  INVALID_REF: 400,
-  UNSUPPORTED_TYPE: 415,
-  EXTRACTION_FAILED: 422,
-  NO_TEXT: 422,
-  SCAN_REJECTED: 422,
-  SOURCE_FORBIDDEN: 403,
-  SOURCE_GONE: 404,
-  SHARE_TARGET_INVALID: 400,
-  ITEM_NOT_FOUND: 404,
-  INGEST_UNAVAILABLE: 501,
-  STORAGE_UNAVAILABLE: 503
-});
-
-/**
- * An error the routes know how to answer.
- */
-export class ProjectError extends Error {
-  /**
-   * @param {string} code - One of the codes of spec 1 §5.4.
-   * @param {string} message
-   * @param {Object} [details]
-   */
-  constructor(code, message, details = undefined) {
-    super(message);
-    this.name = 'ProjectError';
-    this.code = code;
-    this.status = STATUS_BY_CODE[code] || 400;
-    if (details) this.details = details;
-  }
-}
+export { ProjectError, STATUS_BY_CODE } from './projectErrors.js';
 
 function actorOf(user) {
   return {
@@ -127,6 +84,8 @@ export class ProjectService {
     this.logger = log || logger;
     /** Hooks a later slice registers: called after a project is deleted. */
     this.onDeleted = [];
+    /** Hooks called with `(projectId, itemId, item)` after an item's text is gone or replaced. */
+    this.onItemRemoved = [];
   }
 
   settings() {
@@ -313,29 +272,45 @@ export class ProjectService {
 
   /**
    * Add an item. A link kind is `ready` as soon as its reference validates;
-   * a text kind goes through the ingest pipeline (spec 3), which is not wired
-   * before slice 3 and answers `INGEST_UNAVAILABLE` until then.
+   * a text kind goes through the ingest pipeline (spec 3): an upload hands
+   * in `file` (the temp file multer wrote), a workflow or an admin hands in
+   * `text`, and a cloud kind is fetched with the caller's token. The route
+   * answers `202` with the `pending` item; `text` runs inline and returns
+   * the finished item.
    *
    * @param {string} projectId
-   * @param {{kind: string, ref?: Object, name?: string, pinned?: boolean, text?: string}} input
-   * @param {{user: Object, authorize?: Function, origin?: string, run?: Object}} options
+   * @param {{kind: string, ref?: Object, name?: string, pinned?: boolean, text?: string,
+   *   file?: {path: string, contentType?: string, name?: string, bytes?: number, cleanupDir?: string}}} input
+   * @param {{user: Object, authorize?: Function, origin?: string, run?: Object, wait?: boolean}} options
    * @returns {Promise<{project: Object, item: Object}>}
    */
-  async addItem(projectId, input, { user, authorize, origin, run = null }) {
+  async addItem(projectId, input, { user, authorize, origin, run = null, wait = false }) {
     const { kind, ref } = this._checkKindRef(input.kind, input.ref);
+    const isText = kind.storage.ihub === 'text';
+    const file = isText && input.file && typeof input.file === 'object' ? input.file : null;
+    const text = isText && typeof input.text === 'string' ? input.text : null;
+    if (isText && !file && text === null && typeof kind.fetch !== 'function') {
+      throw new ProjectError('INVALID_REF', `An item of kind ${kind.id} needs a file or text`);
+    }
     const described = typeof kind.describe === 'function' ? kind.describe(ref, user?.language) : {};
     const now = nowIso();
+    const declaredBytes = file
+      ? Number(file.bytes) || 0
+      : text !== null
+        ? Buffer.byteLength(text, 'utf8')
+        : Number(ref.size) || 0;
     const item = {
       id: mintItemId(),
       kind: kind.id,
-      name: String(input.name || described.name || kind.id).slice(0, 300),
+      name: String(input.name || file?.name || described.name || kind.id).slice(0, 300),
       ref,
       storage: kind.storage.ihub,
       pinned: input.pinned === true,
-      status: kind.storage.ihub === 'link' ? 'ready' : 'pending',
+      status: isText ? 'pending' : 'ready',
       error: null,
       provenance: {
-        origin: origin || (kind.storage.ihub === 'link' ? 'linked' : 'picked'),
+        origin:
+          origin || (!isText ? 'linked' : file ? 'uploaded' : text !== null ? 'written' : 'picked'),
         by: actorOf(user),
         at: now,
         run,
@@ -346,7 +321,7 @@ export class ProjectService {
       createdAt: now,
       updatedAt: now
     };
-    if (kind.storage.ihub === 'link') {
+    if (!isText) {
       item.cache = { ttlSeconds: 7200 };
     }
     let stored;
@@ -354,7 +329,7 @@ export class ProjectService {
       stored = await this.repository.mutate(
         projectId,
         project => {
-          this._checkItemQuota(project);
+          this._checkItemQuota(project, { bytes: declaredBytes });
           project.items = [...(project.items || []), item];
           return project;
         },
@@ -364,18 +339,112 @@ export class ProjectService {
       throw translateError(error);
     }
     if (!stored) throw new ProjectError('PROJECT_NOT_FOUND', 'Project not found');
-    const storedItem = stored.items.find(entry => entry.id === item.id) || item;
-    if (kind.storage.ihub === 'text') {
+    let storedItem = stored.items.find(entry => entry.id === item.id) || item;
+    if (isText) {
       if (!this.ingest) {
         await this.removeItem(projectId, item.id, { user, authorize }).catch(() => {});
         throw new ProjectError(
           'INGEST_UNAVAILABLE',
-          'Uploads and picked documents are not available yet on this installation'
+          'Uploads and picked documents are not available on this installation'
         );
       }
-      await this.ingest.start(stored, storedItem, input, { user, authorize });
+      const ingestInput = file
+        ? {
+            path: file.path,
+            cleanupDir: file.cleanupDir,
+            contentType: file.contentType,
+            name: storedItem.name,
+            bytes: declaredBytes,
+            purpose: 'upload'
+          }
+        : text !== null
+          ? {
+              text,
+              contentType: ref.contentType || 'text/markdown',
+              name: storedItem.name,
+              purpose: origin === 'written' ? 'write' : 'text'
+            }
+          : {
+              fetch: () => kind.fetch(storedItem, { user, purpose: 'pick' }),
+              contentType: ref.mimeType,
+              name: storedItem.name,
+              purpose: 'pick'
+            };
+      const result = await this.ingest.start(stored, storedItem, ingestInput, { user, wait });
+      if (result) {
+        if (!result.item) {
+          // An inline job failed: nothing to keep, the caller gets the error.
+          await this.removeItem(projectId, item.id, { user, authorize }).catch(() => {});
+          throw new ProjectError(result.error.code, result.error.message);
+        }
+        storedItem = result.item;
+      }
     }
     return { project: stored, item: storedItem };
+  }
+
+  /**
+   * Fetch a picked item again (spec 3 §4): the kind downloads with the
+   * caller's token, the old text stays readable until the new one is
+   * stored, and a source that did not change since `snapshotAt` leaves the
+   * item as it was.
+   *
+   * @param {string} projectId
+   * @param {string} itemId
+   * @param {{user: Object, authorize?: Function, wait?: boolean}} options
+   * @returns {Promise<{project: Object, item: Object}>}
+   */
+  async refreshItem(projectId, itemId, { user, authorize, wait = false }) {
+    if (!this.ingest) {
+      throw new ProjectError(
+        'INGEST_UNAVAILABLE',
+        'Refreshing items is not available on this installation'
+      );
+    }
+    let stored;
+    let target = null;
+    try {
+      stored = await this.repository.mutate(
+        projectId,
+        project => {
+          const item = (project.items || []).find(entry => entry.id === itemId);
+          if (!item) throw new ProjectError('ITEM_NOT_FOUND', 'Item not found');
+          const kind = getItemKind(item.kind);
+          if (!kind || kind.storage.ihub !== 'text' || typeof kind.fetch !== 'function') {
+            throw new ProjectError('INVALID_REF', 'Only picked documents can be refreshed');
+          }
+          if (item.status === 'pending' || item.status === 'extracting') {
+            throw new ProjectError('PROJECT_MISMATCH', 'The item is still being processed');
+          }
+          this._checkKindRef(item.kind, item.ref, { admin: true });
+          item.status = 'pending';
+          item.error = null;
+          item.updatedAt = nowIso();
+          target = { item, kind };
+          return project;
+        },
+        { actor: actorOf(user), authorize }
+      );
+    } catch (error) {
+      throw translateError(error);
+    }
+    if (!stored) throw new ProjectError('PROJECT_NOT_FOUND', 'Project not found');
+    const storedItem = stored.items.find(entry => entry.id === itemId);
+    const result = await this.ingest.start(
+      stored,
+      storedItem,
+      {
+        fetch: () => target.kind.fetch(storedItem, { user, purpose: 'refresh' }),
+        contentType: storedItem.ref?.mimeType,
+        name: storedItem.name,
+        previousBlobKey: storedItem.text?.blobKey || null,
+        previousSnapshotAt: storedItem.snapshotAt || null,
+        purpose: 'refresh'
+      },
+      { user, wait }
+    );
+    if (result?.error) throw new ProjectError(result.error.code, result.error.message);
+    return { project: stored, item: result?.item || storedItem };
   }
 
   /**
@@ -428,11 +497,13 @@ export class ProjectService {
   async removeItem(projectId, itemId, { user, authorize }) {
     let stored;
     let found = false;
+    let removed = null;
     try {
       stored = await this.repository.mutate(
         projectId,
         project => {
           const before = (project.items || []).length;
+          removed = (project.items || []).find(entry => entry.id === itemId) || null;
           project.items = (project.items || []).filter(entry => entry.id !== itemId);
           found = project.items.length !== before;
           return found ? project : null;
@@ -449,6 +520,13 @@ export class ProjectService {
       projectId,
       itemId
     });
+    for (const hook of this.onItemRemoved) {
+      await attempt(() => hook(projectId, itemId, removed), 'an item hook', {
+        component: COMPONENT,
+        projectId,
+        itemId
+      });
+    }
     return stored;
   }
 
@@ -600,7 +678,10 @@ export function getProjectService() {
       ingest: previous?.ingest || null,
       logger
     });
-    if (previous) cachedService.onDeleted = previous.onDeleted;
+    if (previous) {
+      cachedService.onDeleted = previous.onDeleted;
+      cachedService.onItemRemoved = previous.onItemRemoved;
+    }
   }
   return cachedService;
 }

@@ -501,6 +501,10 @@ if (cluster.isPrimary && workerCount > 1) {
     // the new `<userId>__<providerId>.json` layout. Safe no-op on
     // already-migrated installs.
     await tokenStorageService.migrateLegacyTokenFiles();
+    // Project text (uploads, picked documents) is encrypted under that key;
+    // the pipeline, the reader and the reconciler come up once it exists.
+    const { bootstrapProjects } = await import('./services/projects/bootstrap.js');
+    await bootstrapProjects();
   } catch (error) {
     logger.error('Failed to initialize encryption key or JWT secret', {
       component: 'Server',
@@ -1151,6 +1155,9 @@ if (cluster.isPrimary && workerCount > 1) {
     // start against a provider that is being torn down.
     stopChatRetentionSweep();
     stopProjectRetentionSweep();
+    import('./services/projects/bootstrap.js')
+      .then(({ shutdownProjects }) => shutdownProjects())
+      .catch(() => {});
     stopWorkflowStateRetention();
     // Conversation state coalesces its writes on a timer to keep document I/O
     // off the streaming path; drain what is still buffered, or a chat resumes

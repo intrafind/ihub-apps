@@ -54,8 +54,13 @@ export const DEFAULT_PROJECT_SETTINGS = Object.freeze({
   retentionDays: 0,
   loadAllMaxTokens: 50000,
   kinds: Object.freeze({}),
-  encryption: Object.freeze({ keyProvider: 'local-file' })
+  encryption: Object.freeze({ keyProvider: 'local-file' }),
+  scan: Object.freeze({ provider: 'none', command: '', timeoutMs: 30000, onError: 'reject' }),
+  ingest: Object.freeze({ concurrency: 2, staleAfterMinutes: 30 })
 });
+
+/** Malware scan providers phase 1 ships. */
+export const SCAN_PROVIDERS = Object.freeze(['none', 'command']);
 
 function readBoolean(value, fallback) {
   return typeof value === 'boolean' ? value : fallback;
@@ -83,7 +88,9 @@ function readPositive(value, fallback) {
  * @returns {{tierPolicy: string, limits: {maxFiles: number, maxFileBytes: number,
  *   maxProjectBytes: number, maxProjectsPerUser: number}, sharing: {allowUsers: boolean,
  *   allowGroups: boolean, allowEveryone: boolean}, retentionDays: number,
- *   loadAllMaxTokens: number, kinds: Object<string, boolean>, encryption: {keyProvider: string}}}
+ *   loadAllMaxTokens: number, kinds: Object<string, boolean>, encryption: {keyProvider: string},
+ *   scan: {provider: string, command: string, timeoutMs: number, onError: string},
+ *   ingest: {concurrency: number, staleAfterMinutes: number}}}
  */
 export function projectSettings(platformConfig) {
   const block = platformConfig?.projects || {};
@@ -123,6 +130,24 @@ export function projectSettings(platformConfig) {
         typeof block.encryption?.keyProvider === 'string' && block.encryption.keyProvider
           ? block.encryption.keyProvider
           : defaults.encryption.keyProvider
+    },
+    scan: {
+      provider: SCAN_PROVIDERS.includes(block.scan?.provider)
+        ? block.scan.provider
+        : defaults.scan.provider,
+      command: typeof block.scan?.command === 'string' ? block.scan.command : defaults.scan.command,
+      timeoutMs: readPositive(block.scan?.timeoutMs, defaults.scan.timeoutMs),
+      onError: block.scan?.onError === 'allow' ? 'allow' : 'reject'
+    },
+    ingest: {
+      concurrency: Math.min(
+        8,
+        readPositive(block.ingest?.concurrency, defaults.ingest.concurrency)
+      ),
+      staleAfterMinutes: readPositive(
+        block.ingest?.staleAfterMinutes,
+        defaults.ingest.staleAfterMinutes
+      )
     }
   };
 }

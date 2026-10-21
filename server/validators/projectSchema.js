@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 import { z } from 'zod';
-import { zSafeId } from './common.js';
+import { isHttpUrl, zSafeId } from './common.js';
 import { SAFE_ID_PATTERN } from '../utils/pathSecurity.js';
 import {
   LINK_MODES,
@@ -282,3 +282,19 @@ export function normalizeProjectLink(link) {
     write: link?.write === true
   };
 }
+
+/** Query of `GET /api/projects/pickers/ifinder/search`. */
+export const ifinderPickerSchema = z
+  .object({
+    q: z.string().trim().min(1).max(1000),
+    profile: z.string().trim().max(200).optional(),
+    limit: z.coerce.number().int().min(1).max(50).prefault(10)
+  })
+  .passthrough();
+
+/** Body of `POST /api/projects/pickers/url/check`. */
+export const urlCheckSchema = z
+  .object({
+    url: z.string().trim().max(2048).refine(isHttpUrl, 'Only http(s) URLs are allowed')
+  })
+  .strict();
