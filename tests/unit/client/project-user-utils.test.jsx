@@ -357,10 +357,20 @@ describe('provenance', () => {
 });
 
 describe('text preview', () => {
-  test('previews and downloads project documents as text', () => {
-    expect(previewFormatFor({ provider: 'project' })).toBe('text');
+  test('previews and downloads text-only project documents as text', () => {
+    const upload = { provider: 'project', provenance: { origin: 'uploaded', kind: 'upload' } };
+    const webPage = { provider: 'project', provenance: { origin: 'linked', kind: 'url' } };
+    const ifinderDoc = {
+      provider: 'project',
+      provenance: { origin: 'linked', kind: 'ifinder-document' }
+    };
+    expect(previewFormatFor(upload)).toBe('text');
+    expect(previewFormatFor(webPage)).toBe('text');
+    expect(downloadFormatFor(upload)).toBe('text');
+    // An iFinder document has a rendition; an unknown kind asks and falls back on 410.
+    expect(previewFormatFor(ifinderDoc)).toBe('pdf');
+    expect(previewFormatFor({ provider: 'project' })).toBe('pdf');
     expect(previewFormatFor({ provider: 'ifinder' })).toBe('pdf');
-    expect(downloadFormatFor({ provider: 'project' })).toBe('text');
     expect(downloadFormatFor({ provider: 'ifinder' })).toBe('original');
   });
 
@@ -373,16 +383,16 @@ describe('text preview', () => {
     const text = 'The rent is due monthly. Notice period is three months.';
     expect(splitByPassages(text, ['Notice period is three months.'])).toEqual({
       segments: [
-        { text: 'The rent is due monthly. ', match: null },
-        { text: 'Notice period is three months.', match: 0 }
+        { at: 0, text: 'The rent is due monthly. ', match: null },
+        { at: 25, text: 'Notice period is three months.', match: 0 }
       ],
       matches: 1
     });
     const overlapping = splitByPassages(text, ['rent is due', 'is due monthly']);
     expect(overlapping.matches).toBe(1);
-    expect(overlapping.segments[1]).toEqual({ text: 'rent is due monthly', match: 0 });
+    expect(overlapping.segments[1]).toEqual({ at: 4, text: 'rent is due monthly', match: 0 });
     expect(splitByPassages(text, ['not in there'])).toEqual({
-      segments: [{ text, match: null }],
+      segments: [{ at: 0, text, match: null }],
       matches: 0
     });
   });

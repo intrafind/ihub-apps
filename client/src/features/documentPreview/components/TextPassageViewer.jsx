@@ -58,12 +58,12 @@ function TextPassageViewer({ text, passages, controlRef, onStateChange }) {
         className="max-w-4xl mx-auto whitespace-pre-wrap break-words font-sans text-sm leading-relaxed text-gray-800 dark:text-gray-200 bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6"
         data-testid="text-passage-viewer"
       >
-        {segments.map((segment, index) =>
+        {segments.map(segment =>
           segment.match === null ? (
-            <span key={index}>{segment.text}</span>
+            <span key={segment.at}>{segment.text}</span>
           ) : (
             <mark
-              key={index}
+              key={segment.at}
               data-match={segment.match}
               className={`rounded-sm px-0.5 ${
                 segment.match === current

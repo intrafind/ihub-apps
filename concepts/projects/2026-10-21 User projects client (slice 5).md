@@ -23,11 +23,15 @@ Status: implemented on the `claude/projects-migration` line, client only. The se
 - **Chat**: `AppChat` sends `projectId` (from `?project=` or the stored chat) on every turn; a bar
   under the header shows "In project: X" (link) and "Move to project" / "Change project" for a
   stored chat. The chat history page shows a project chip per chat and a "Move to project" button.
-- **Answers**: the `knowledge/scope` badge names a single project and links a user project; source
-  cards and the details dialog show *Uploaded* / *Picked from … · text taken …* / *Linked*; the
-  document preview opens project documents in **text mode** (`format=text`, passages highlighted)
-  and falls back to text when a PDF request answers `410`. Download and "attach to mail" fetch the
-  text for project sources.
+- **Answers**: the `knowledge/scope` badge names a single project and links a user project (a
+  project the viewer may not see by name reads "Private project"); source cards and the details
+  dialog show _Uploaded_ / _Picked from … · text taken …_ / _Linked_; the document preview opens
+  text-only project documents (uploads, picked cloud files, web and iHub pages) directly in
+  **text mode** (`format=text`, passages highlighted, match navigation), asks for the PDF for
+  everything else (an iFinder item of a project is served through the iFinder provider) and falls
+  back to the text on `410 ORIGINAL_DISCARDED`. Download (panel and preview) and "attach to mail"
+  go through `downloadSource` / `fetchDownloadableContent` with the same rule and save text as
+  `.txt`.
 - **Navigation**: "Projects" in the sidebar (expanded and rail), document title, full-bleed layout.
   `projects` is in `KNOWN_ROUTES` and in the inline list of `client/index.html`.
 
@@ -49,7 +53,7 @@ non-anonymous viewer (`useProjectsAvailability`). Nothing is requested while the
 | Shared item components (lifted from admin) | `components/ProjectItemsTable.jsx`, `ProjectItemStatus.jsx`, `ProjectItemTextDialog.jsx`, `AddProjectItemDialog.jsx` + `components/item-dialog/*` |
 | Page sections and dialogs | `components/ProjectItemsSection.jsx`, `ProjectChatsSection.jsx`, `ProjectMembersSection.jsx`, `ProjectSettingsCard.jsx`, `CreateProjectDialog.jsx`, `TransferProjectDialog.jsx`, `StartProjectChatDialog.jsx`, `RenameItemDialog.jsx`, `ProjectUsageBar.jsx`, `ProjectRoleBadge.jsx`, `ItemProvenance.jsx` |
 | Chat integration | `components/ChatProjectBar.jsx`, `MoveChatToProjectDialog.jsx`; edits in `features/apps/pages/AppChat.jsx`, `features/chat/pages/ChatHistoryPage.jsx` |
-| Text mode of the preview | `features/documentPreview/components/TextPassageViewer.jsx`, `utils/textPreview.js`, `DocumentPreviewModal.jsx` |
+| Text mode of the preview | `features/documentPreview/components/TextPassageViewer.jsx` (the only text viewer), `utils/textPreview.js` (`ORIGINAL_DISCARDED`, `previewFormatFor`, `downloadFormatFor`, `splitByPassages`), `DocumentPreviewModal.jsx`; `ORIGINAL_DISCARDED` is also exported from `chat/sources/sourceActions.js` |
 | Cloud browser `onPick` | `features/upload/components/CloudFileBrowserShell.jsx` (`onPick`, `pickLabel`) |
 | Translations | `shared/i18n/{en,de}.json` → `projects.*`, plus `sidebar.projects`, `documentTitle.projects`, `chatHistory.{inProject,moveToProject,moved}`, `sources.project`, `documentPreview.textOnly`, `chatMessage.knowledgeScope.openProject` |
 | Tests | `tests/unit/client/project-user-utils`, `projects-api`, `projects-page`, `project-page`, `project-chat-integration` (`.test.jsx`), one case in `app-chat-hydration.test.jsx` |
@@ -68,6 +72,16 @@ re-export; imports and the admin test were updated). `useAdminProject` is now a 
 `admin.projects.items` moved to `projects.*`. The admin dialog keeps the cloud tabs as "coming in
 a later release" (`buildItemDialogTabs(kinds, config, { cloud })`); the user dialog sets
 `cloud` and hides kinds the installation does not offer (`hideUnavailable`).
+
+### Reconciled with the review round on the base branch (c68e305)
+
+The base branch added its own 410 fallback (`TextPassageView.jsx` with `segmentText`, a `.txt`
+fallback inside `downloadSource`, `ORIGINAL_DISCARDED` in `sourceActions.js`). After the merge
+there is one viewer (`TextPassageViewer`, which also navigates between highlights and finds a
+passage by its start when it is not verbatim; segments are keyed by their offset as in the base
+version), one constant (`textPreview.js`, re-exported from `sourceActions.js`), and one download
+path (`fetchDownloadableContent` → `downloadSource`, used by the preview's Download button too).
+The base's `privateProject` label is used by the single-project badge and the tooltip.
 
 ## What the API lacked (no server change was made)
 

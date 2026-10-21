@@ -4,11 +4,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { fetchSourceContent } from '../../../api/endpoints/sources';
-import { saveBlobAs } from '../../../utils/externalNavigation';
-import { resolveSourceFilename } from '../../chat/sources/sourceActions';
+import { downloadSource } from '../../chat/sources/sourceActions';
 import PdfPassageViewer from './PdfPassageViewer';
 import TextPassageViewer from './TextPassageViewer';
-import { downloadFormatFor, isOriginalDiscarded, previewFormatFor } from '../utils/textPreview';
+import { isOriginalDiscarded, previewFormatFor } from '../utils/textPreview';
 
 const MIN_SCALE = 0.5;
 const MAX_SCALE = 3;
@@ -135,23 +134,18 @@ function DocumentPreviewModal({ source, title, passages = [], initialPassageInde
     setDownloading(true);
     setDownloadError(null);
     try {
-      const response = await fetchSourceContent({
-        source,
-        format: isText ? 'text' : downloadFormatFor(source)
-      });
-      if (!saveBlobAs(response.data, resolveSourceFilename(source, response))) {
+      // The original, or — for a document of which only the text is kept —
+      // the text as a `.txt` (the same rule as the panel's Download).
+      const result = await downloadSource(source);
+      if (!result.ok) {
         setDownloadError(
           t('sources.downloadFailed', 'The document could not be downloaded. Please try again.')
         );
       }
-    } catch {
-      setDownloadError(
-        t('sources.downloadFailed', 'The document could not be downloaded. Please try again.')
-      );
     } finally {
       setDownloading(false);
     }
-  }, [source, t, isText]);
+  }, [source, t]);
 
   const { loading, numPages, totalMatches, currentMatch } = viewerState;
   const passageCount = passages.length;
@@ -180,7 +174,7 @@ function DocumentPreviewModal({ source, title, passages = [], initialPassageInde
             ) : (
               <p className="text-xs text-gray-500 dark:text-gray-400">
                 {isText
-                  ? t('documentPreview.textOnly', 'Text only — the original file is not kept')
+                  ? t('documentPreview.textOnly', 'Extracted text (the original is not kept)')
                   : loading
                     ? t('documentPreview.loading', 'Loading document…')
                     : t('documentPreview.pageCount', '{{count}} pages', { count: numPages })}

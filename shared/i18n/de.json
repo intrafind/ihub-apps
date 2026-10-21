@@ -562,7 +562,8 @@
       "searchedOne": "durchsucht",
       "unavailableOne": "nicht verfügbar",
       "overBudget": "über dem Budget",
-      "openProject": "Projekt öffnen"
+      "openProject": "Projekt öffnen",
+      "privateProject": "Privates Projekt"
     },
     "answerSource": {
       "llmOnly": "Basierend auf KI-Wissen",
@@ -5194,6 +5195,7 @@
   "documentPreview": {
     "title": "Dokumentvorschau",
     "loading": "Dokument wird geladen…",
+    "textOnly": "Extrahierter Text (das Original wird nicht aufbewahrt)",
     "pageCount": "{{count}} Seite",
     "pageCount_plural": "{{count}} Seiten",
     "matchPosition": "{{current}} von {{total}}",
@@ -5204,8 +5206,7 @@
     "zoomOut": "Verkleinern",
     "highlight": "Markieren",
     "allPassages": "Alle",
-    "loadFailed": "Dokument konnte nicht geladen werden: {{error}}",
-    "textOnly": "Nur Text – die Originaldatei wird nicht aufbewahrt"
+    "loadFailed": "Dokument konnte nicht geladen werden: {{error}}"
   },
   "searchSummary": {
     "searchedFor": "Gesucht nach",

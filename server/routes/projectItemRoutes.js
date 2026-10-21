@@ -433,7 +433,7 @@ export function registerProjectPickerRoutes(app) {
     const parsed = urlCheckSchema.safeParse(req.body || {});
     if (!parsed.success) return sendBadRequest(res, 'A http(s) URL is required');
     try {
-      const { createSourceManager } = await import('../sources/SourceManager.js');
+      const { createSourceManager } = await import('../sources/index.js');
       const result = await createSourceManager().testSource('url', { url: parsed.data.url });
       res.json({ ok: true, ...result });
     } catch (error) {

@@ -10,8 +10,33 @@
  * @module features/documentPreview/utils/textPreview
  */
 
-/** Providers whose documents are kept as text only (no original, no PDF). */
-const TEXT_ONLY_PROVIDERS = Object.freeze(['project']);
+/** The status a provider answers when only a document's extracted text is kept. */
+export const ORIGINAL_DISCARDED = 410;
+
+/**
+ * Project item kinds that keep an original the preview can render: an iFinder
+ * document is served through the iFinder provider (PDF rendition, the reader's
+ * rights). Every other project item is text only — an upload or a picked
+ * cloud file (original discarded), or a web / iHub page whose "original"
+ * lives elsewhere (the content route redirects there, which a preview cannot
+ * render).
+ */
+const PROJECT_KINDS_WITH_ORIGINAL = Object.freeze(['ifinder-document']);
+
+/**
+ * Whether a source is known to be text only. A project source without a
+ * recorded kind is not: the preview asks for the original and falls back to
+ * the text on {@link ORIGINAL_DISCARDED}.
+ *
+ * @param {{provider?: string, provenance?: {kind?: string}}} source
+ * @returns {boolean}
+ */
+function isTextOnly(source) {
+  const kind = source?.provenance?.kind;
+  return (
+    source?.provider === 'project' && Boolean(kind) && !PROJECT_KINDS_WITH_ORIGINAL.includes(kind)
+  );
+}
 
 /** Characters of a passage used to find it when the whole passage does not match. */
 const NEEDLE_LENGTH = 60;
@@ -19,11 +44,11 @@ const NEEDLE_LENGTH = 60;
 /**
  * The format the preview asks the provider for first.
  *
- * @param {{provider?: string}} source
+ * @param {{provider?: string, provenance?: {kind?: string}}} source
  * @returns {'pdf'|'text'}
  */
 export function previewFormatFor(source) {
-  return TEXT_ONLY_PROVIDERS.includes(source?.provider) ? 'text' : 'pdf';
+  return isTextOnly(source) ? 'text' : 'pdf';
 }
 
 /**
@@ -34,7 +59,7 @@ export function previewFormatFor(source) {
  * @returns {'original'|'text'}
  */
 export function downloadFormatFor(source) {
-  return TEXT_ONLY_PROVIDERS.includes(source?.provider) ? 'text' : 'original';
+  return isTextOnly(source) ? 'text' : 'original';
 }
 
 /**
@@ -46,7 +71,7 @@ export function downloadFormatFor(source) {
 export function isOriginalDiscarded(error) {
   const response = error?.response || error?.originalError?.response;
   return (
-    response?.status === 410 ||
+    response?.status === ORIGINAL_DISCARDED ||
     response?.data?.code === 'ORIGINAL_DISCARDED' ||
     response?.data?.details?.code === 'ORIGINAL_DISCARDED'
   );
@@ -78,13 +103,14 @@ function locate(text, passage) {
  *
  * @param {string} text
  * @param {string[]} passages
- * @returns {{segments: Array<{text: string, match: number|null}>, matches: number}}
- *   `match` is the highlight's index for highlighted segments, else null.
+ * @returns {{segments: Array<{at: number, text: string, match: number|null}>, matches: number}}
+ *   `at` is the segment's offset in the text (its stable key); `match` is the
+ *   highlight's index for highlighted segments, else null.
  *
  * @example
  * splitByPassages('a b c', ['b'])
- * // => { segments: [{ text: 'a ', match: null }, { text: 'b', match: 0 },
- * //                 { text: ' c', match: null }], matches: 1 }
+ * // => { segments: [{ at: 0, text: 'a ', match: null }, { at: 2, text: 'b', match: 0 },
+ * //                 { at: 3, text: ' c', match: null }], matches: 1 }
  */
 export function splitByPassages(text, passages) {
   const source = String(text || '');
@@ -101,13 +127,14 @@ export function splitByPassages(text, passages) {
   const segments = [];
   let cursor = 0;
   merged.forEach((range, index) => {
-    if (range.start > cursor)
-      segments.push({ text: source.slice(cursor, range.start), match: null });
-    segments.push({ text: source.slice(range.start, range.end), match: index });
+    if (range.start > cursor) {
+      segments.push({ at: cursor, text: source.slice(cursor, range.start), match: null });
+    }
+    segments.push({ at: range.start, text: source.slice(range.start, range.end), match: index });
     cursor = range.end;
   });
   if (cursor < source.length || segments.length === 0) {
-    segments.push({ text: source.slice(cursor), match: null });
+    segments.push({ at: cursor, text: source.slice(cursor), match: null });
   }
   return { segments, matches: merged.length };
 }

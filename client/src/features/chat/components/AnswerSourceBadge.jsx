@@ -170,6 +170,13 @@ function scopeModeText(project, t) {
   return t('chatMessage.knowledgeScope.unavailableOne', 'unavailable');
 }
 
+/** A scope entry's name; a project the viewer may not see by name stays anonymous. */
+function scopeProjectName(project, t) {
+  return (
+    project.name || project.id || t('chatMessage.knowledgeScope.privateProject', 'Private project')
+  );
+}
+
 /** Whether a scope entry is a user project (it has a page to link to). */
 const isUserProject = project => typeof project?.id === 'string' && project.id.startsWith('prj_');
 
@@ -190,12 +197,12 @@ function KnowledgeScopeBadge({ scope, t }) {
     parts.push(t('chatMessage.knowledgeScope.searched', { count: searched.length }));
   const single = projects.length === 1 ? projects[0] : null;
   const label = single
-    ? `${single.name || single.id} · ${scopeModeText(single, t)}`
+    ? `${scopeProjectName(single, t)} · ${scopeModeText(single, t)}`
     : `${t('chatMessage.knowledgeScope.projects', { count: projects.length })} · ${parts.join(' · ')}`;
   const tooltip = projects
     .map(
       project =>
-        `${project.name || project.id}: ${scopeModeText(project, t)}${
+        `${scopeProjectName(project, t)}: ${scopeModeText(project, t)}${
           project.overBudget
             ? ` (${t('chatMessage.knowledgeScope.overBudget', 'over budget')})`
             : ''

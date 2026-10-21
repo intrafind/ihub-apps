@@ -178,7 +178,11 @@ describe('knowledge badge and provenance', () => {
 });
 
 describe('DocumentPreviewModal text mode', () => {
-  const projectSource = { provider: 'project', ref: { id: 'itm_1', scope: 'prj_case' } };
+  const projectSource = {
+    provider: 'project',
+    ref: { id: 'itm_1', scope: 'prj_case' },
+    provenance: { origin: 'uploaded', kind: 'upload' }
+  };
 
   test('shows a project document as text with the passage highlighted', async () => {
     mockFetchSourceContent.mockResolvedValue({
@@ -197,7 +201,7 @@ describe('DocumentPreviewModal text mode', () => {
       expect.objectContaining({ format: 'text', responseType: 'text' })
     );
     expect(within(viewer).getByText('Notice is three months.').tagName).toBe('MARK');
-    expect(screen.getByText('Text only — the original file is not kept')).toBeInTheDocument();
+    expect(screen.getByText('Extracted text (the original is not kept)')).toBeInTheDocument();
   });
 
   test('falls back to the text when the PDF answers "original discarded"', async () => {

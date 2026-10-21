@@ -91,6 +91,12 @@ function outcomeOf(code) {
   }
 }
 
+/** The project without one item, as the quota of that item is judged against. */
+function withoutItem(project, itemId) {
+  const others = (project.items || []).filter(entry => entry.id !== itemId);
+  return { ...project, items: others, usage: usageOf(others) };
+}
+
 async function removeQuietly(target) {
   if (!target) return;
   try {
@@ -181,8 +187,11 @@ export class ProjectIngestService {
       user,
       startedAt: Date.now()
     };
+    // Every job goes through the queue, so `ingest.concurrency` bounds the
+    // downloads, scans and extractions of this worker whatever the route;
+    // `inline` only decides whether the caller waits for the result.
     const inline = wait === true || typeof input.text === 'string';
-    const promise = inline ? this._run(job) : this._enqueue(job);
+    const promise = this._enqueue(job);
     if (!inline) return null;
     return promise;
   }
@@ -268,27 +277,27 @@ export class ProjectIngestService {
       }
 
       // 2. The real size against the quota (the receive-side check used the
-      //    declared length; a fetched document had none).
+      //    declared length; a fetched document had none). An early refusal
+      //    before the scan and the extraction; the binding check runs again
+      //    under the project's lock when the text is installed (step 5).
       const size = bytes ? bytes.length : Buffer.byteLength(text, 'utf8');
       const project = await this.repository.get(projectId);
       if (!project) return null;
-      const others = (project.items || []).filter(entry => entry.id !== itemId);
-      this.service._checkItemQuota(
-        { ...project, items: others, usage: usageOf(others) },
-        { bytes: size }
-      );
+      this.service._checkItemQuota(withoutItem(project, itemId), { bytes: size });
 
-      // 3. Scan, on the temp file (the command scanner needs a path).
-      if (bytes) {
-        let scanPath = input.path || null;
+      // 3. Scan, on the temp file (the command scanner needs a path). Text
+      //    handed in is scanned as the bytes it will be stored as.
+      {
+        const scanBytes = bytes || Buffer.from(text, 'utf8');
+        let scanPath = bytes ? input.path || null : null;
         let scratch = null;
         if (!scanPath && this.scanner().id !== 'none') {
           scratch = await this.newTempDir();
           scanPath = path.join(scratch, 'fetched');
-          await fs.writeFile(scanPath, bytes, { mode: 0o600 });
+          await fs.writeFile(scanPath, scanBytes, { mode: 0o600 });
         }
         try {
-          await this._scan({ path: scanPath, bytes, contentType, name });
+          await this._scan({ path: scanPath, bytes: scanBytes, contentType, name });
         } finally {
           await removeQuietly(scratch);
         }
@@ -323,30 +332,39 @@ export class ProjectIngestService {
       });
       storedBlobKey = block.blobKey;
       const now = new Date().toISOString();
-      const stored = await this.service.patchItem(projectId, itemId, item => {
-        item.status = 'ready';
-        item.error = null;
-        delete item.refreshingAt;
-        item.text = block;
-        if (input.purpose === 'pick' || input.purpose === 'refresh' || job.lastModified) {
-          item.snapshotAt = block.extractedAt;
-        }
-        if (job.source) {
-          item.provenance = {
-            ...(item.provenance || {}),
-            source: { ...(item.provenance?.source || {}), ...job.source }
-          };
-        }
-        if (
-          extracted.contentType &&
-          item.ref &&
-          typeof item.ref === 'object' &&
-          item.kind === 'upload'
-        ) {
-          item.ref = { ...item.ref, contentType: extracted.contentType, bytes: size };
-        }
-        item.updatedAt = now;
-      });
+      // Under the project's lock, against what the project holds right now:
+      // two uploads cannot both pass on the same free room.
+      const quota = current =>
+        this.service._checkItemQuota(withoutItem(current, itemId), { bytes: size });
+      const stored = await this.service.patchItem(
+        projectId,
+        itemId,
+        item => {
+          item.status = 'ready';
+          item.error = null;
+          delete item.refreshingAt;
+          item.text = block;
+          if (input.purpose === 'pick' || input.purpose === 'refresh' || job.lastModified) {
+            item.snapshotAt = block.extractedAt;
+          }
+          if (job.source) {
+            item.provenance = {
+              ...(item.provenance || {}),
+              source: { ...(item.provenance?.source || {}), ...job.source }
+            };
+          }
+          if (
+            extracted.contentType &&
+            item.ref &&
+            typeof item.ref === 'object' &&
+            item.kind === 'upload'
+          ) {
+            item.ref = { ...item.ref, contentType: extracted.contentType, bytes: size };
+          }
+          item.updatedAt = now;
+        },
+        { check: quota }
+      );
       if (!stored) {
         // Removed while extracting: the blob has no item, drop it.
         await this.repository.blobs
@@ -432,22 +450,25 @@ export class ProjectIngestService {
   async reconcile({ now = Date.now() } = {}) {
     const staleMs = this.settings().ingest.staleAfterMinutes * 60 * 1000;
     const projects = [];
+    let complete = true;
     try {
-      projects.push(...(await this.repository.listAdmin({ includeDisabled: true })));
+      // Strict: a project file that cannot be read makes the inventory
+      // incomplete, and an incomplete inventory sweeps no blob.
+      projects.push(...(await this.repository.listAdmin({ includeDisabled: true, strict: true })));
     } catch (error) {
-      logger.warn('Could not list admin projects for reconciliation', {
+      complete = false;
+      logger.warn('Could not list every admin project; orphan blobs are kept this time', {
         component: COMPONENT,
         error: error.message
       });
     }
-    let complete = true;
     if (this.repository.isAvailable()) {
       const { projects: users, truncated } = await this.repository.scanUser({
         max: 10000,
         maxScanned: 10000
       });
       projects.push(...users);
-      complete = !truncated;
+      if (truncated) complete = false;
     }
     let interrupted = 0;
     let orphans = 0;

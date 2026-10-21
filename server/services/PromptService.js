@@ -28,6 +28,29 @@ const promptKnowledgeSources = new Map();
 const knowledgeScopes = new Map();
 
 /**
+ * The model behind what the request builder hands over as `modelName`: the
+ * display name when the model has one, else the id. Matched on both, so a
+ * model named differently from its id still brings its context window.
+ *
+ * @param {Object[]} models
+ * @param {string|null} modelName
+ * @returns {Object|null}
+ */
+function findModel(models, modelName) {
+  if (!modelName) return null;
+  const wanted = String(modelName);
+  const nameOf = entry =>
+    typeof entry?.name === 'object' && entry.name
+      ? Object.values(entry.name)
+      : [entry?.name].filter(Boolean);
+  return (
+    models.find(entry => entry?.id === wanted) ||
+    models.find(entry => nameOf(entry).includes(wanted)) ||
+    null
+  );
+}
+
+/**
  * Escape regex metacharacters so arbitrary keys can be used inside `new RegExp(...)`.
  * @param {string} str
  * @returns {string}
@@ -169,10 +192,8 @@ class PromptService {
       return hasPlaceholder ? systemPrompt.replace(placeholder, () => '') : systemPrompt;
     }
     const platform = configCache.getPlatform() || {};
-    const models = configCache.getModels?.()?.data || [];
-    const model = modelName ? models.find(entry => entry?.id === modelName) || null : null;
     const plan = await planKnowledgeScope(scope, {
-      model,
+      model: findModel(configCache.getModels?.()?.data || [], modelName),
       settings: projectSettings(platform),
       ctx: { user, chatId, language: lang, purpose: 'chat' }
     });
@@ -182,7 +203,9 @@ class PromptService {
     if (instructions) out = out.trim() ? `${out}\n\n${instructions}` : instructions;
     if (hasPlaceholder) out = out.replace(placeholder, () => block);
     else if (block) out += `\n\nProjects:\n${block}`;
-    if (plan.projects.some(project => project.mode === 'loaded' && project.injected.length)) {
+    // Any injected text — a whole project or the pinned documents of a
+    // searched one — can ground the answer without a tool call.
+    if (plan.projects.some(project => project.injected.length)) {
       this.trackPromptSources(chatId);
     }
     this.trackKnowledgeScope(chatId, scopeSummary(plan));

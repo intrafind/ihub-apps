@@ -4156,7 +4156,8 @@
       "searchedOne": "searched",
       "unavailableOne": "unavailable",
       "overBudget": "over budget",
-      "openProject": "Open the project"
+      "openProject": "Open the project",
+      "privateProject": "Private project"
     },
     "answerSource": {
       "llmOnly": "Based on AI knowledge",
@@ -5229,6 +5230,7 @@
   "documentPreview": {
     "title": "Document preview",
     "loading": "Loading document…",
+    "textOnly": "Extracted text (the original is not kept)",
     "pageCount": "{{count}} page",
     "pageCount_plural": "{{count}} pages",
     "matchPosition": "{{current}} of {{total}}",
@@ -5239,8 +5241,7 @@
     "zoomOut": "Zoom out",
     "highlight": "Highlight",
     "allPassages": "All",
-    "loadFailed": "Could not load the document: {{error}}",
-    "textOnly": "Text only — the original file is not kept"
+    "loadFailed": "Could not load the document: {{error}}"
   },
   "searchSummary": {
     "searchedFor": "Searched for",
