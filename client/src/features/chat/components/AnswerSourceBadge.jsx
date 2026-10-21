@@ -180,7 +180,7 @@ function KnowledgeScopeBadge({ scope, t }) {
   const tooltip = projects
     .map(
       project =>
-        `${project.name || project.id}: ${
+        `${project.name || project.id || t('chatMessage.knowledgeScope.privateProject', 'Private project')}: ${
           project.mode === 'loaded'
             ? t('chatMessage.knowledgeScope.loadedOne', 'loaded in full')
             : project.mode === 'searched'

@@ -16,8 +16,9 @@
  * attachments). Pinned items are always injected ahead of everything else;
  * when pinned text alone exceeds the budget the plan still injects it and
  * says so (`overBudget`), but never past the hard limit of 75 % of the
- * model's context window: beyond it the rest is cut (`cut` lists the
- * documents) and stays reachable through `knowledge_read`.
+ * model's context window, shared by every project of the scope: beyond it
+ * the rest is cut (`cut` lists the documents) and stays reachable through
+ * `knowledge_read`.
  *
  * The plan is what the prompt renders (`renderProjectsBlock`) and what the
  * client is told (`knowledge/scope`): per project, `loaded` or `searched`.
@@ -95,6 +96,11 @@ function capInjected(docs, limitTokens) {
   return { docs: kept, cut };
 }
 
+/** The same documents, pinned ones ahead, otherwise in their order. */
+function pinnedFirst(docs) {
+  return [...docs.filter(({ doc }) => doc.pinned), ...docs.filter(({ doc }) => !doc.pinned)];
+}
+
 /**
  * Plan a scope.
  *
@@ -109,6 +115,8 @@ export async function planKnowledgeScope(scope, { model, settings, ctx }) {
   const budgetTokens = loadAllBudget(model, settings);
   const limitTokens = hardLimit(model, settings);
   let remaining = budgetTokens;
+  // The hard limit bounds the whole prompt, not each project of it.
+  let limitRemaining = limitTokens;
   const projects = [];
   let tools = false;
   for (const entry of scope) {
@@ -166,10 +174,12 @@ export async function planKnowledgeScope(scope, { model, settings, ctx }) {
       unavailable = loaded.unavailable;
       injected = loaded.docs;
     }
-    const capped = capInjected(injected, limitTokens);
+    // Pinned first, so the cap drops unpinned text before anything pinned.
+    const capped = capInjected(pinnedFirst(injected), limitRemaining);
     injected = capped.docs;
     tokens = injected.reduce((sum, doc) => sum + (doc.tokens ?? estimateTokens(doc.text)), 0);
     remaining = Math.max(0, remaining - tokens);
+    limitRemaining = Math.max(0, limitRemaining - tokens);
     // What was cut from the prompt stays reachable through the tools.
     if (effective === 'searched' || capped.cut.length > 0) tools = true;
     projects.push({

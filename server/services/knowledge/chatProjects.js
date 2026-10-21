@@ -83,16 +83,21 @@ export async function resolveChatProjects({ req, chat, app, projectId, projects 
   ensurePrincipal(req);
   const repository = getProjectRepository();
   const context = callerContext(req.user);
-  const usable = async id => {
+  const usable = async (id, { container = false } = {}) => {
     if (!isProjectId(id)) return false;
     const project = await repository.get(id);
-    return Boolean(project) && permissionsFor(project, req.user, context).canUse;
+    if (!project) return false;
+    // A container holds chats, which its members may read: only a user
+    // project is one (the same rule as a move, `routes/chats.js`). An admin
+    // project is knowledge, attached or linked, never a container.
+    if (container && project.ownership !== 'user') return false;
+    return permissionsFor(project, req.user, context).canUse;
   };
 
   let containerId = storedContainer;
   let newContainer = false;
   if (requestedContainer && !storedContainer) {
-    if (!(await usable(requestedContainer))) {
+    if (!(await usable(requestedContainer, { container: true }))) {
       return { ok: false, status: 404, code: 'PROJECT_NOT_FOUND', message: 'Project not found' };
     }
     containerId = requestedContainer;

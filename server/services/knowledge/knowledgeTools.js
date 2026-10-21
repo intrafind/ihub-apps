@@ -7,17 +7,17 @@
  * each description so the model knows which project ids `project` accepts
  * and which projects it already has in context.
  *
- * Offered whenever the request reaches a project that is not loaded in
- * full by configuration (`mode: 'context'`); a project the planner loads
- * because it fits still allows a search, which is harmless.
+ * Offered whenever the request reaches a project. A project loaded in full
+ * (`mode: 'context'`, or one the planner loads because it fits) still allows
+ * a search, which is harmless — and the planner may have to cut such a
+ * project at the hard limit, when `knowledge_read` is the only way to the
+ * omitted text. The tools are taken from the installation's tool list and
+ * only from there: a definition the admin disabled or removed is neither
+ * advertised nor runnable.
  *
  * @module services/knowledge/knowledgeTools
  */
-import { createRequire } from 'node:module';
-import { getLocalizedContent } from '../../../shared/localize.js';
 import { describeScope, resolveProjectScope } from './ProjectScope.js';
-
-const require = createRequire(import.meta.url);
 
 /** The three function ids, in the order the model sees them. */
 export const KNOWLEDGE_TOOL_IDS = Object.freeze([
@@ -42,64 +42,25 @@ export function hasProjectScope(app) {
   );
 }
 
-function localizeDeep(value, language) {
-  if (Array.isArray(value)) return value.map(entry => localizeDeep(entry, language));
-  if (value && typeof value === 'object') {
-    const keys = Object.keys(value);
-    const looksLocalized = keys.length > 0 && keys.every(key => /^[a-z]{2}(-[A-Z]{2})?$/.test(key));
-    if (looksLocalized) return getLocalizedContent(value, language);
-    const out = {};
-    for (const [key, entry] of Object.entries(value)) out[key] = localizeDeep(entry, language);
-    return out;
-  }
-  return value;
-}
-
-/**
- * The shipped definitions, expanded and localized, when the installation's
- * tool list does not carry them (the migration has not run, or an admin
- * deleted the file).
- */
-function shippedDefinitions(language) {
-  const tool = require('../../defaults/tools/knowledge.json');
-  return Object.entries(tool.functions || {}).map(([fn, cfg]) => ({
-    ...localizeDeep({ ...tool, functions: undefined }, language),
-    id: `${tool.id}_${fn}`,
-    name: `${tool.id}_${fn}`,
-    description: getLocalizedContent(cfg.description, language),
-    parameters: localizeDeep(cfg.parameters || {}, language),
-    method: fn,
-    script: tool.script
-  }));
-}
-
 /**
  * The knowledge tools for one request, or an empty list when it reaches no
- * project or every project is loaded in full by configuration.
+ * project or the installation does not carry the (enabled) definitions.
  *
  * @param {Object} options
  * @param {Object} options.app - The app object with its link fields.
  * @param {Object} options.user - The requesting user.
  * @param {string} [options.language]
- * @param {Object[]} [options.allTools] - The installation's localized tools.
+ * @param {Object[]} [options.allTools] - The installation's localized, enabled tools.
  * @returns {Promise<Object[]>}
  */
 export async function knowledgeToolsFor({ app, user, language = 'en', allTools = [] }) {
   if (!hasProjectScope(app) || !user) return [];
   const scope = await resolveProjectScope({ appConfig: app, user });
   if (!scope.length) return [];
-  if (scope.every(entry => entry.mode === 'context')) return [];
-  const fromConfig = KNOWLEDGE_TOOL_IDS.map(id => allTools.find(tool => tool.id === id)).filter(
-    Boolean
+  const definitions = KNOWLEDGE_TOOL_IDS.map(id =>
+    allTools.find(tool => tool.id === id && tool.enabled !== false)
   );
-  const definitions =
-    fromConfig.length === KNOWLEDGE_TOOL_IDS.length &&
-    fromConfig.every(tool => tool.enabled !== false)
-      ? fromConfig
-      : fromConfig.length
-        ? []
-        : shippedDefinitions(language);
-  if (!definitions.length) return [];
+  if (definitions.some(tool => !tool)) return [];
   const scopeText = describeScope(
     scope.map(entry => ({ ...entry, effective: entry.mode === 'context' ? 'loaded' : 'searched' })),
     language
