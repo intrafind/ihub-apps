@@ -170,7 +170,8 @@ export async function planKnowledgeScope(scope, { model, settings, ctx }) {
     injected = capped.docs;
     tokens = injected.reduce((sum, doc) => sum + (doc.tokens ?? estimateTokens(doc.text)), 0);
     remaining = Math.max(0, remaining - tokens);
-    if (effective === 'searched') tools = true;
+    // What was cut from the prompt stays reachable through the tools.
+    if (effective === 'searched' || capped.cut.length > 0) tools = true;
     projects.push({
       id: project.id,
       name,
