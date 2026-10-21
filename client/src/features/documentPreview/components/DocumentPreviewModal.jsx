@@ -4,9 +4,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { fetchSourceContent } from '../../../api/endpoints/sources';
-import { saveBlobAs } from '../../../utils/externalNavigation';
-import { resolveSourceFilename } from '../../chat/sources/sourceActions';
+import { ORIGINAL_DISCARDED, downloadSource } from '../../chat/sources/sourceActions';
 import PdfPassageViewer from './PdfPassageViewer';
+import TextPassageView from './TextPassageView';
 
 const MIN_SCALE = 0.5;
 const MAX_SCALE = 3;
@@ -36,6 +36,9 @@ const SCALE_STEP = 0.2;
 function DocumentPreviewModal({ source, title, passages = [], initialPassageIndex = -1, onClose }) {
   const { t } = useTranslation();
   const [data, setData] = useState(null);
+  // The extracted text, when the provider keeps no original to render (a
+  // project document, 410 `ORIGINAL_DISCARDED`).
+  const [textData, setTextData] = useState(null);
   const [loadError, setLoadError] = useState(null);
   const [scale, setScale] = useState(1.2);
   const [selectedPassage, setSelectedPassage] = useState(initialPassageIndex);
@@ -53,8 +56,10 @@ function DocumentPreviewModal({ source, title, passages = [], initialPassageInde
     const controller = new AbortController();
 
     setData(null);
+    setTextData(null);
     setLoadError(null);
 
+    const isAbort = err => err.name === 'AbortError' || err.code === 'ERR_CANCELED';
     fetchSourceContent({
       source,
       format: 'pdf',
@@ -65,9 +70,26 @@ function DocumentPreviewModal({ source, title, passages = [], initialPassageInde
         if (!cancelled) setData(response.data);
       })
       .catch(err => {
-        if (!cancelled && err.name !== 'AbortError' && err.code !== 'ERR_CANCELED') {
+        if (cancelled || isAbort(err)) return;
+        if (err?.response?.status !== ORIGINAL_DISCARDED) {
           setLoadError(err.message);
+          return;
         }
+        // Only the text is kept: show that instead.
+        fetchSourceContent({
+          source,
+          format: 'text',
+          responseType: 'text',
+          signal: controller.signal
+        })
+          .then(response => {
+            if (cancelled) return;
+            setTextData(String(response.data ?? ''));
+            setViewerState({ loading: false, numPages: 0, totalMatches: 0, currentMatch: -1 });
+          })
+          .catch(textError => {
+            if (!cancelled && !isAbort(textError)) setLoadError(textError.message);
+          });
       });
 
     return () => {
@@ -120,16 +142,14 @@ function DocumentPreviewModal({ source, title, passages = [], initialPassageInde
     setDownloading(true);
     setDownloadError(null);
     try {
-      const response = await fetchSourceContent({ source });
-      if (!saveBlobAs(response.data, resolveSourceFilename(source, response))) {
+      // The original, or — for a document of which only the text is kept —
+      // the text as a `.txt`.
+      const result = await downloadSource(source);
+      if (!result.ok) {
         setDownloadError(
           t('sources.downloadFailed', 'The document could not be downloaded. Please try again.')
         );
       }
-    } catch {
-      setDownloadError(
-        t('sources.downloadFailed', 'The document could not be downloaded. Please try again.')
-      );
     } finally {
       setDownloading(false);
     }
@@ -163,13 +183,15 @@ function DocumentPreviewModal({ source, title, passages = [], initialPassageInde
               <p className="text-xs text-gray-500 dark:text-gray-400">
                 {loading
                   ? t('documentPreview.loading', 'Loading document…')
-                  : t('documentPreview.pageCount', '{{count}} pages', { count: numPages })}
+                  : textData !== null
+                    ? t('documentPreview.textOnly', 'Extracted text (the original is not kept)')
+                    : t('documentPreview.pageCount', '{{count}} pages', { count: numPages })}
               </p>
             )}
           </div>
 
           {/* Match navigation */}
-          {!loading && passageCount > 0 && (
+          {!loading && textData === null && passageCount > 0 && (
             <div className="flex items-center gap-1">
               <span
                 className={`text-xs px-2 py-1 rounded ${
@@ -221,36 +243,38 @@ function DocumentPreviewModal({ source, title, passages = [], initialPassageInde
           )}
 
           {/* Zoom */}
-          <div className="hidden sm:flex items-center gap-1">
-            <button
-              onClick={() => setScale(s => Math.max(MIN_SCALE, +(s - SCALE_STEP).toFixed(2)))}
-              className="p-1.5 rounded-sm hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300"
-              title={t('documentPreview.zoomOut', 'Zoom out')}
-              aria-label={t('documentPreview.zoomOut', 'Zoom out')}
-            >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" />
-              </svg>
-            </button>
-            <span className="text-xs text-gray-500 dark:text-gray-400 w-10 text-center">
-              {Math.round(scale * 100)}%
-            </span>
-            <button
-              onClick={() => setScale(s => Math.min(MAX_SCALE, +(s + SCALE_STEP).toFixed(2)))}
-              className="p-1.5 rounded-sm hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300"
-              title={t('documentPreview.zoomIn', 'Zoom in')}
-              aria-label={t('documentPreview.zoomIn', 'Zoom in')}
-            >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M12 4v16m8-8H4"
-                />
-              </svg>
-            </button>
-          </div>
+          {textData === null && (
+            <div className="hidden sm:flex items-center gap-1">
+              <button
+                onClick={() => setScale(s => Math.max(MIN_SCALE, +(s - SCALE_STEP).toFixed(2)))}
+                className="p-1.5 rounded-sm hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300"
+                title={t('documentPreview.zoomOut', 'Zoom out')}
+                aria-label={t('documentPreview.zoomOut', 'Zoom out')}
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" />
+                </svg>
+              </button>
+              <span className="text-xs text-gray-500 dark:text-gray-400 w-10 text-center">
+                {Math.round(scale * 100)}%
+              </span>
+              <button
+                onClick={() => setScale(s => Math.min(MAX_SCALE, +(s + SCALE_STEP).toFixed(2)))}
+                className="p-1.5 rounded-sm hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300"
+                title={t('documentPreview.zoomIn', 'Zoom in')}
+                aria-label={t('documentPreview.zoomIn', 'Zoom in')}
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M12 4v16m8-8H4"
+                  />
+                </svg>
+              </button>
+            </div>
+          )}
 
           <button
             type="button"
@@ -328,6 +352,8 @@ function DocumentPreviewModal({ source, title, passages = [], initialPassageInde
               })}
             </p>
           </div>
+        ) : textData !== null ? (
+          <TextPassageView text={textData} passages={activePassages} />
         ) : !data ? (
           <div className="flex-1 flex items-center justify-center text-gray-500 dark:text-gray-400">
             <svg className="animate-spin h-6 w-6 mr-2" fill="none" viewBox="0 0 24 24">
