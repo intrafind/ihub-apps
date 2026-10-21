@@ -137,11 +137,15 @@ export function projectAccessRequired(level) {
       const project = await repository.get(projectId);
       const context = callerContext(req.user);
       const permissions = permissionsFor(project, req.user, context);
-      if (!project || !permissions.canView) return sendNotFound(res, 'Project');
+      if (!project || !permissions.canView) {
+        sendNotFound(res, 'Project');
+        return;
+      }
       if (!satisfiesLevel(permissions, level)) {
-        return sendErrorResponse(res, 403, 'You do not have the required access to this project', {
+        sendErrorResponse(res, 403, 'You do not have the required access to this project', {
           details: { code: 'PERMISSION_DENIED', required: level }
         });
+        return;
       }
       req.project = project;
       req.projectPermissions = permissions;
@@ -157,9 +161,9 @@ export function projectAccessRequired(level) {
         authorize: required => loaded =>
           satisfiesLevel(permissionsFor(loaded, req.user, context), required)
       };
-      return next();
+      next();
     } catch (error) {
-      return next(error);
+      next(error);
     }
   };
 }
