@@ -93,7 +93,7 @@ app, workflow or agent that links the project may use the project through it (§
   status: 'pending' | 'extracting' | 'ready' | 'failed' | 'stale',
   error: { code: 'NO_TEXT', message: 'The PDF has no text layer' } | null,
   text: {                      // storage === 'text' only
-    blobKey: 'prj_8Zt1aq__itm_k3Fq__01JB4R2...',   // project-files blob, version id inside (spec 3 §5)
+    blobKey: 'prj_8Zt1aq__itm_k3Fq__01JB4R2...',   // project-files blob, version id inside (spec 3 §5) gitleaks:allow
     bytes: 182_204,            // ciphertext bytes stored
     chars: 171_880, tokens: 41_200,                 // of the extracted text
     sha256: '…',               // of the plaintext
