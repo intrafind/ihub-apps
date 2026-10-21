@@ -497,7 +497,7 @@ per-user count only.
 
 ## 10. The sources migration and the breaking change
 
-### 10.1 Migration `V172__sources_to_projects.js`
+### 10.1 Migration `V174__sources_to_projects.js`
 
 Precondition: `config/sources.json` exists or any app, workflow or agent profile carries
 `sources`. Preflight, before any file is written: a source id that starts with `prj_` would
@@ -541,7 +541,7 @@ the migration log names each remap. Steps, in order:
    projects.
 
 Idempotent per file: a project file that already exists is not overwritten; an app that has
-`projects` and no `sources` is skipped. Tested in `server/tests/migration-v172.test.js` with the
+`projects` and no `sources` is skipped. Tested in `server/tests/migration-v174.test.js` with the
 shipped defaults and with a hand-built installation that has every source type, a workflow with
 node sources and an agent profile.
 
@@ -553,7 +553,7 @@ node sources and an agent profile.
 are rewritten to `projects` with the modes above. The support bot links
 `[{ id: 'faq', mode: 'context' }, { id: 'ihub-documentation', mode: 'tools' }]`, its system
 prompt uses `{{projects}}` and names the tools `knowledge_search` and `knowledge_read` instead
-of "its tool" and `section`; a migration (`V173__support_bot_knowledge_prompt.js`) replaces the
+of "its tool" and `section`; a migration (`V175__support_bot_knowledge_prompt.js`) replaces the
 prompt only while it still equals the shipped text, as V133 did. `scripts/export-docs-markdown.js`
 keeps writing `server/defaults/sources/ihub-documentation.md`; only the consumer changes.
 
@@ -580,7 +580,8 @@ so apps, workflows and agents keep their knowledge. The admin pages are now **Pr
 - The MCP gateway exposes `ihub://project/<id>` resources instead of `ihub://source/<id>`.
 - The feature flag `sources` is renamed to `projects`; its value is carried over.
 - Files under `contents/sources/` are imported into encrypted project storage at the first
-  start; the originals are left in place and can be deleted once the projects show as ready.
+  start; the copy under `contents/sources/` is deleted once its project item shows as ready
+  (spec 3 §5), the shipped documentation is refreshed from the defaults whenever it changes.
 
 **Before upgrading:** back up `contents/`. The migration is forward-only. If you deploy several
 instances, every instance needs the same `TOKEN_ENCRYPTION_KEY` and a shared volume (or the
