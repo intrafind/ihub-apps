@@ -680,9 +680,13 @@ function idOfPart(index, partIndex) {
  */
 function subtreeEnd(index, start) {
   const { level } = index.sections[index.parts[start].sectionIndex];
+  const docId = index.parts[start].docId ?? null;
   let end = start + 1;
   while (end < index.parts.length) {
     const { part, sectionIndex } = index.parts[end];
+    // A corpus index strings documents together: the next document's first
+    // heading is not a subsection of this one, whatever its level.
+    if ((index.parts[end].docId ?? null) !== docId) break;
     if (part === 1 && index.sections[sectionIndex].level <= level) break;
     end++;
   }

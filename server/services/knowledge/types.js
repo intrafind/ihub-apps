@@ -6,6 +6,7 @@
  *
  * @module services/knowledge/types
  */
+import { getItemKind } from '../projects/kinds/registry.js';
 
 /**
  * An error a knowledge call answers with. The codes are those of spec 1
@@ -44,7 +45,12 @@ export function docOf(project, item) {
     pinned: item.pinned === true,
     chars: Number.isFinite(item.text?.chars) ? item.text.chars : null,
     tokens: Number.isFinite(item.text?.tokens) ? item.text.tokens : null,
-    url: item.provenance?.source?.url || item.ref?.url || item.ref?.webUrl || null,
+    url:
+      item.provenance?.source?.url ||
+      item.ref?.url ||
+      item.ref?.webUrl ||
+      getItemKind(item.kind)?.describe?.(item.ref || {})?.url ||
+      null,
     provenance: item.provenance || { origin: 'linked' },
     snapshotAt: item.snapshotAt || null,
     updatedAt: item.updatedAt || item.createdAt || null

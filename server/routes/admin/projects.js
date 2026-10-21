@@ -321,9 +321,18 @@ export default function registerAdminProjectsRoutes(app) {
       const body = parseBody(adminProjectSchema, req, res);
       if (!body) return;
       if (body.id !== before.id) return sendBadRequest(res, 'Project ID mismatch');
+      // A metadata request: items change through the item endpoints, which
+      // keep the server-only text block. A document that carries `items` is
+      // refused rather than quietly keeping the stored ones.
+      if (req.body?.items !== undefined) {
+        return sendErrorResponse(
+          res,
+          400,
+          'Items are changed through the item endpoints, not the project document',
+          { details: { code: 'ITEMS_NOT_EDITABLE' } }
+        );
+      }
       const service = getProjectService();
-      // The whole document comes back from the editor; items keep whatever
-      // the editor did not touch (the text block is never sent to it).
       const project = await service.updateProject(
         before.id,
         {
@@ -380,21 +389,10 @@ export default function registerAdminProjectsRoutes(app) {
       const repo = getProjectRepository();
       const project = await repo.get(id);
       if (!project) return sendNotFound(res, 'Project');
-      if (project.ownership === 'user') {
-        if (isAdminAuthRequired(req)) return sendNotFound(res, 'Project');
-      } else {
-        const dependencies = findDependencies(id);
-        if (dependencies.length > 0) {
-          return sendErrorResponse(
-            res,
-            400,
-            'Cannot delete a project that apps, workflows or agents link',
-            {
-              details: { code: 'PROJECT_IN_USE', dependencies }
-            }
-          );
-        }
+      if (project.ownership === 'user' && isAdminAuthRequired(req)) {
+        return sendNotFound(res, 'Project');
       }
+      // A linked admin project answers PROJECT_IN_USE from the service.
       const chats = getChatRepository();
       const deleted = await getProjectService().deleteProject(id, {
         detachChat: chatId =>
