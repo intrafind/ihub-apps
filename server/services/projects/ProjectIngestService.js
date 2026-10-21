@@ -199,7 +199,7 @@ export class ProjectIngestService {
     while (this.running < limit && this.queue.length) {
       const { job, resolve } = this.queue.shift();
       this.running += 1;
-      this._run(job)
+      void this._run(job)
         .catch(() => null)
         .then(result => {
           this.running -= 1;
