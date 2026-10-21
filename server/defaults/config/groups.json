@@ -10,7 +10,9 @@
         "models": ["*"],
         "skills": ["*"],
         "adminAccess": true,
-        "scheduledTasks": true
+        "scheduledTasks": true,
+        "projects": true,
+        "projectSharing": true
       },
       "mappings": ["IT-Admin", "IT-Admins", "Platform-Admin", "Platform-Admins"]
     },
@@ -24,7 +26,9 @@
         "models": ["*"],
         "skills": ["*"],
         "adminAccess": false,
-        "scheduledTasks": true
+        "scheduledTasks": true,
+        "projects": true,
+        "projectSharing": true
       },
       "mappings": ["Employees", "Staff"]
     },
@@ -38,7 +42,9 @@
         "models": ["gemini-flash-latest", "local-vllm"],
         "skills": [],
         "adminAccess": false,
-        "scheduledTasks": false
+        "scheduledTasks": false,
+        "projects": false,
+        "projectSharing": false
       },
       "mappings": ["anonymous", "public"]
     },
@@ -53,7 +59,9 @@
         "models": ["*"],
         "skills": ["*"],
         "adminAccess": false,
-        "scheduledTasks": true
+        "scheduledTasks": true,
+        "projects": true,
+        "projectSharing": true
       },
       "mappings": []
     }

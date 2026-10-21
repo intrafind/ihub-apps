@@ -97,6 +97,27 @@ export const featureRegistry = [
     default: true
   },
   {
+    id: 'projects',
+    name: { en: 'Projects', de: 'Projekte' },
+    description: {
+      en: 'Admin projects: knowledge linked to apps, workflows and agents (the successor of sources)',
+      de: 'Admin-Projekte: Wissen, das mit Apps, Workflows und Agenten verknüpft ist (Nachfolger der Quellen)'
+    },
+    category: 'ai',
+    default: true
+  },
+  {
+    id: 'userProjects',
+    name: { en: 'User Projects', de: 'Benutzerprojekte' },
+    description: {
+      en: 'Projects users create themselves: documents, instructions and chats, shared with roles',
+      de: 'Projekte, die Benutzer selbst anlegen: Dokumente, Anweisungen und Chats, geteilt mit Rollen'
+    },
+    category: 'preview',
+    default: false,
+    preview: true
+  },
+  {
     id: 'compareMode',
     name: { en: 'Compare Mode', de: 'Vergleichsmodus' },
     description: {

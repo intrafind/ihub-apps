@@ -510,6 +510,26 @@
     "memoryMaxChars": 16000,
     "maxHistoryReadChars": 8000
   },
+  "projects": {
+    "tierPolicy": "ihub",
+    "limits": {
+      "maxFiles": 25,
+      "maxFileBytes": 20971520,
+      "maxProjectBytes": 209715200,
+      "maxProjectsPerUser": 20
+    },
+    "sharing": {
+      "allowUsers": true,
+      "allowGroups": true,
+      "allowEveryone": false
+    },
+    "retentionDays": 0,
+    "loadAllMaxTokens": 50000,
+    "kinds": {},
+    "encryption": {
+      "keyProvider": "local-file"
+    }
+  },
   "storage": {
     "provider": "filesystem",
     "filesystem": {

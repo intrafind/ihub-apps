@@ -77,7 +77,9 @@ function normalizeGroupPermissions(incoming = {}, existing = {}, adminAccess = u
         ? adminAccess
         : Boolean(incoming.adminAccess ?? existing.adminAccess),
     contentAdmin: Boolean(incoming.contentAdmin ?? existing.contentAdmin),
-    scheduledTasks: Boolean(incoming.scheduledTasks ?? existing.scheduledTasks)
+    scheduledTasks: Boolean(incoming.scheduledTasks ?? existing.scheduledTasks),
+    projects: Boolean(incoming.projects ?? existing.projects),
+    projectSharing: Boolean(incoming.projectSharing ?? existing.projectSharing)
   };
 }
 

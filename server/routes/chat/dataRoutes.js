@@ -14,9 +14,12 @@ import { scheduledTasksClientConfig } from '../../services/scheduler/tasks/taskP
 import { userPromptsClientConfig } from '../../services/prompts/userPromptSettings.js';
 import { getUserPromptRepository } from '../../services/prompts/UserPromptRepository.js';
 import registerPromptRoutes from '../promptRoutes.js';
+import registerProjectRoutes from '../projectRoutes.js';
 import { getUserSkillRepository } from '../../services/skills/UserSkillRepository.js';
 import { userSkillsClientConfig } from '../../services/skills/userSkillSettings.js';
 import { hasSyncedRegistry } from '../../services/skills/marketplaceSkills.js';
+import { projectsClientConfig } from '../../services/projects/projectSettings.js';
+import { getProjectRepository } from '../../services/projects/ProjectRepository.js';
 import crypto from 'node:crypto';
 import logger from '../../utils/logger.js';
 import { sendInternalError, sendFailedOperationError } from '../../utils/responseHelpers.js';
@@ -307,6 +310,7 @@ export default function registerDataRoutes(app) {
   // The prompt library — global and user prompts behind one /api/prompts
   // (#2519). Registered here, where GET /api/prompts always lived.
   registerPromptRoutes(app);
+  registerProjectRoutes(app);
 
   /**
    * @swagger
@@ -862,6 +866,12 @@ export default function registerDataRoutes(app) {
         userSkills: userSkillsClientConfig(configCache.getFeatures(), platform, {
           storageAvailable: getUserSkillRepository().isAvailable(),
           marketplaceReady: hasSyncedRegistry(configCache.getRegistries().data)
+        }),
+        // Projects (#1036): whether admin projects and user projects are on
+        // (flags plus the storage provider) and the limits the dialogs show.
+        // Whether this user may create or share one is on /api/projects/_config.
+        projects: projectsClientConfig(configCache.getFeatures(), platform, {
+          storageAvailable: getProjectRepository().isAvailable()
         }),
         rateLimit: platform.rateLimit,
         swagger: platform.swagger

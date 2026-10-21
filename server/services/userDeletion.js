@@ -169,6 +169,16 @@ export const USER_CLEANUP_STEPS = [
     }
   },
   {
+    // Owned projects go with the user (their uploaded knowledge is theirs);
+    // a membership in someone else's project is simply dropped.
+    name: 'userProjects',
+    kind: 'content',
+    run: async userId => {
+      const { cleanUpProjectsOfUser } = await import('./projects/projectUserCleanup.js');
+      return cleanUpProjectsOfUser(userId);
+    }
+  },
+  {
     name: 'userSkills',
     kind: 'content',
     run: async userId => {
