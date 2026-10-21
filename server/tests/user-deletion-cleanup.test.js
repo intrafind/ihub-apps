@@ -310,6 +310,7 @@ describe('the cleanup', () => {
       'scheduledTasks',
       'chats',
       'userPrompts',
+      'userProjects',
       'userSkills',
       'shortLinks'
     ]);
