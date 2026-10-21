@@ -21,3 +21,26 @@ otherwise. The chat shows which happened.
   (`projects.scan`, `none` or a scanner command such as `clamdscan --no-summary --fdpass {path}`).
 - `GET /api/admin/projects/_tokens` reports the size of each project for the app editor;
   `POST /api/admin/projects/:id/test` reads every item the way a chat would.
+
+## Projects for users (preview)
+
+Users can keep their own **projects** (sidebar → Projects): a container with documents,
+instructions and chats, private until shared. Chats started from a project, or moved into one,
+answer with the project's instructions and documents. Switch it on with the `userProjects`
+feature flag; the `projects` and `projectSharing` group permissions decide who may create and
+share projects.
+
+- Add documents by upload (several files at once, with the limits from `platform.projects`), from
+  OneDrive / SharePoint, Google Drive or Nextcloud (the text is taken with the user's account and
+  can be refreshed later), or as a web page, iHub page or iFinder document or search.
+- Each document shows its status (waiting, extracting, ready, failed with the reason, outdated)
+  and can be pinned, renamed, refreshed or removed; the page shows the usage against the quotas.
+- Share with users, groups or everyone signed in as *user* (chat and read) or *editor* (also
+  change documents, instructions and members); owners can transfer or delete a project. A project
+  whose owner is no longer active stays readable but cannot be changed.
+- The project page lists its chats (all, or only your own) and starts new ones in any app that
+  allows projects. A stored chat moves into a project or out of it from the chat page or the chat
+  history, and both show which project a chat belongs to.
+- Answers name the project they drew on, and citations from a project show whether the document
+  was uploaded or picked ("Picked from SharePoint · text taken 12 Oct 2026"); the preview shows the
+  stored text with the cited passages highlighted, since originals are not kept.
