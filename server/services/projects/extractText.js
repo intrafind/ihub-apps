@@ -568,7 +568,7 @@ function countPages(text) {
  */
 export function normalizeText(text, { maxChars = MAX_TEXT_CHARS } = {}) {
   let out = String(text ?? '')
-    .replace(/\u0000/g, '')
+    .replaceAll('\u0000', '')
     .replace(/\r\n?/g, '\n')
     .replace(/\n{4,}/g, '\n\n\n')
     .trim();

@@ -583,8 +583,8 @@ export class ProjectRepository {
       const { project, etag } = await this._loadUser(projectId);
       if (!project) return null;
       assertAuthorized(authorize, project);
-      const before = new Set((project.members || []).map(memberTargetKey));
-      const after = new Set(members.map(memberTargetKey));
+      const before = new Set((project.members || []).map(member => memberTargetKey(member)));
+      const after = new Set(members.map(member => memberTargetKey(member)));
       const stamp = now || new Date().toISOString();
       const stored = await this._writeUser(
         {
@@ -684,7 +684,10 @@ export class ProjectRepository {
         if (!project) return null;
         assertAuthorized(authorize, project);
         await this.documents.delete(USER_PROJECTS_NAMESPACE, projectId);
-        await this._removeMemberMarkers(projectId, (project.members || []).map(memberTargetKey));
+        await this._removeMemberMarkers(
+          projectId,
+          (project.members || []).map(member => memberTargetKey(member))
+        );
         return project;
       });
     }
