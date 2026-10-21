@@ -16,7 +16,7 @@ import {
   ArrowRightIcon,
   ShieldCheckIcon,
   BoltIcon,
-  CircleStackIcon,
+  FolderIcon,
   WrenchIcon,
   KeyIcon,
   ArrowUpCircleIcon,
@@ -251,9 +251,9 @@ function ContentQuickActions() {
         'bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600'
     },
     {
-      label: t('admin.overview.actions.manageSources', 'Manage Sources'),
-      href: '/admin/sources',
-      icon: CircleStackIcon,
+      label: t('admin.overview.actions.manageProjects', 'Manage Projects'),
+      href: '/admin/projects',
+      icon: FolderIcon,
       color:
         'bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600'
     }
@@ -398,15 +398,17 @@ function PlatformInfoSection({ info, systemPagesVisible }) {
           })}
           href="/admin/models"
         />
-        <InfoRow
-          icon={CircleStackIcon}
-          label={t('admin.overview.sources', 'Sources')}
-          value={t('admin.overview.enabledOfTotal', '{{enabled}} / {{total}}', {
-            enabled: info.sources.enabled,
-            total: info.sources.total
-          })}
-          href="/admin/sources"
-        />
+        {info.projects && (
+          <InfoRow
+            icon={FolderIcon}
+            label={t('admin.overview.projects.label', 'Projects')}
+            value={t('admin.overview.enabledOfTotal', '{{enabled}} / {{total}}', {
+              enabled: info.projects.enabled,
+              total: info.projects.total
+            })}
+            href="/admin/projects"
+          />
+        )}
         <InfoRow
           icon={WrenchIcon}
           label={t('admin.overview.tools', 'Tools')}
@@ -544,7 +546,7 @@ export default function AdminOverview() {
   const systemPagesVisible = platformConfig?.admin?.pages?.system !== false;
 
   // Content-admin-only users (contentAdmin permission, no full adminAccess) get a
-  // content-focused overview: only the apps/prompts/sources they can manage, and
+  // content-focused overview: only the apps/prompts/projects they can manage, and
   // none of the platform-admin panels/links they'd hit 403 on (issue #1923).
   const isContentAdminOnly = Boolean(
     user?.permissions?.contentAdmin && !user?.permissions?.adminAccess && !user?.isAdmin
@@ -585,11 +587,11 @@ export default function AdminOverview() {
         ...stats.prompts
       },
       {
-        key: 'sources',
-        label: t('admin.overview.stats.sources', 'Sources'),
-        icon: CircleStackIcon,
+        key: 'projects',
+        label: t('admin.overview.stats.projects', 'Projects'),
+        icon: FolderIcon,
         iconColor: 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400',
-        ...stats.sources
+        ...stats.projects
       }
     ];
   } else if (stats) {
@@ -646,7 +648,7 @@ export default function AdminOverview() {
     const contentPages = [
       { label: t('admin.nav.apps', 'Apps'), href: '/admin/apps' },
       { label: t('admin.nav.prompts', 'Prompts'), href: '/admin/prompts' },
-      { label: t('admin.nav.sources', 'Sources'), href: '/admin/sources' }
+      { label: t('admin.nav.projects', 'Projects'), href: '/admin/projects' }
     ];
     return (
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -656,7 +658,7 @@ export default function AdminOverview() {
             {t('admin.overview.title', '{{name}} — Admin', { name: instanceName })}
           </h1>
           <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-            {t('admin.overview.contentSubtitle', 'Manage apps, prompts, and sources')}
+            {t('admin.overview.contentSubtitle', 'Manage apps, prompts, and projects')}
           </p>
         </div>
 

@@ -26,7 +26,7 @@ import IHubLogo from '../../../shared/components/IHubLogo';
 // Sections visible to content-admin-only users
 const CONTENT_ADMIN_SECTIONS = new Set(['overview', 'aiWorkspace']);
 // Items within aiWorkspace visible to content-admin-only users
-const CONTENT_ADMIN_ITEMS = new Set(['apps', 'prompts', 'sources']);
+const CONTENT_ADMIN_ITEMS = new Set(['apps', 'prompts', 'projects']);
 
 function NavItem({ item, isCollapsed }) {
   const location = useLocation();

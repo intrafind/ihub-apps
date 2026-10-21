@@ -10,7 +10,7 @@ const NAV_SHORTCUTS = {
   p: '/admin/prompts',
   u: '/admin/users',
   g: '/admin/groups',
-  s: '/admin/sources',
+  j: '/admin/projects',
   l: '/admin/audit-log'
 };
 
@@ -20,7 +20,7 @@ const SEQUENCE_TIMEOUT_MS = 300;
  * Registers admin-wide keyboard shortcuts.
  *
  * Shortcuts:
- *   g + a/m/p/u/g/s/l  — navigate to section
+ *   g + a/m/p/u/g/j/l  — navigate to section (j: proJects; p is Prompts)
  *   n                   — "New item" action on list pages (pass onNew)
  *   ?                   — toggle shortcut cheatsheet
  *

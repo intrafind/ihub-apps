@@ -242,11 +242,14 @@ function GroupFormEditor({
                       className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded-sm"
                     />
                     <label className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
-                      {t('admin.groups.contentAdmin', 'Content Admin (Apps, Prompts, Sources)')}
+                      {t('admin.groups.contentAdmin', 'Content Admin (Apps, Prompts, Projects)')}
                     </label>
                   </div>
                   <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                    Allow members to manage Apps, Prompts, and Sources without full admin access
+                    {t(
+                      'admin.groups.contentAdminHint',
+                      'Allow members to manage Apps, Prompts, and Projects without full admin access'
+                    )}
                   </p>
                 </div>
 
