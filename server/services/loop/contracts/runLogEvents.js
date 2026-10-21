@@ -337,6 +337,7 @@ export const knowledgeScopeData = z.object({
         tokens: z.number().int().nonnegative().optional(),
         pinned: z.number().int().nonnegative().optional(),
         overBudget: z.boolean().optional(),
+        cut: z.number().int().nonnegative().optional(),
         unavailable: z.number().int().nonnegative().optional(),
         reason: z.string().optional()
       })
