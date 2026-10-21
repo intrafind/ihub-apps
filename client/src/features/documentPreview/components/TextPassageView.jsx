@@ -10,7 +10,8 @@ import { useMemo } from 'react';
  *
  * @param {string} text
  * @param {string[]} passages
- * @returns {Array<{text: string, marked: boolean}>}
+ * @returns {Array<{at: number, text: string, marked: boolean}>} `at` is the
+ *   segment's offset in `text`, the stable key of its element.
  */
 export function segmentText(text, passages) {
   const ranges = [];
@@ -25,11 +26,12 @@ export function segmentText(text, passages) {
   let cursor = 0;
   for (const [start, end] of ranges) {
     if (start < cursor) continue;
-    if (start > cursor) segments.push({ text: text.slice(cursor, start), marked: false });
-    segments.push({ text: text.slice(start, end), marked: true });
+    if (start > cursor)
+      segments.push({ at: cursor, text: text.slice(cursor, start), marked: false });
+    segments.push({ at: start, text: text.slice(start, end), marked: true });
     cursor = end;
   }
-  if (cursor < text.length) segments.push({ text: text.slice(cursor), marked: false });
+  if (cursor < text.length) segments.push({ at: cursor, text: text.slice(cursor), marked: false });
   return segments;
 }
 
@@ -44,13 +46,13 @@ function TextPassageView({ text, passages = [] }) {
   return (
     <div className="flex-1 min-h-0 overflow-auto bg-gray-50 dark:bg-gray-900">
       <pre className="whitespace-pre-wrap break-words font-sans text-sm leading-relaxed text-gray-800 dark:text-gray-200 p-6 max-w-3xl mx-auto">
-        {segments.map((segment, index) =>
+        {segments.map(segment =>
           segment.marked ? (
-            <mark key={index} className="bg-amber-200 dark:bg-amber-700/60 rounded-sm px-0.5">
+            <mark key={segment.at} className="bg-amber-200 dark:bg-amber-700/60 rounded-sm px-0.5">
               {segment.text}
             </mark>
           ) : (
-            <span key={index}>{segment.text}</span>
+            <span key={segment.at}>{segment.text}</span>
           )
         )}
       </pre>
