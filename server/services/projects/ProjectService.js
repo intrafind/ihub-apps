@@ -413,11 +413,12 @@ export class ProjectService {
           if (!kind || kind.storage.ihub !== 'text' || typeof kind.fetch !== 'function') {
             throw new ProjectError('INVALID_REF', 'Only picked documents can be refreshed');
           }
-          if (item.status === 'pending' || item.status === 'extracting') {
+          if (item.status === 'pending' || item.status === 'extracting' || item.refreshingAt) {
             throw new ProjectError('PROJECT_MISMATCH', 'The item is still being processed');
           }
           this._checkKindRef(item.kind, item.ref, { admin: true });
-          item.status = 'pending';
+          // The old snapshot stays readable until the new one is stored:
+          // the status is left alone, the pipeline marks `refreshingAt`.
           item.error = null;
           item.updatedAt = nowIso();
           target = { item, kind };
@@ -439,6 +440,9 @@ export class ProjectService {
         name: storedItem.name,
         previousBlobKey: storedItem.text?.blobKey || null,
         previousSnapshotAt: storedItem.snapshotAt || null,
+        // The version the last fetch saw, so a change between that fetch
+        // and the end of extraction is not mistaken for "unchanged".
+        previousLastModified: storedItem.provenance?.source?.lastModified || null,
         purpose: 'refresh'
       },
       { user, wait }

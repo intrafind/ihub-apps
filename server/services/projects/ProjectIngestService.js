@@ -222,9 +222,13 @@ export class ProjectIngestService {
     let name = input.name;
     let contentType = input.contentType;
     let storedBlobKey = null;
+    const refresh = input.purpose === 'refresh' && Boolean(input.previousBlobKey);
     try {
       const extracting = await this.service.patchItem(projectId, itemId, item => {
-        item.status = 'extracting';
+        // A refresh keeps the old snapshot readable while the new one is
+        // fetched (spec 3 §4): the status stays, `refreshingAt` marks the run.
+        if (refresh) item.refreshingAt = new Date().toISOString();
+        else item.status = 'extracting';
         item.error = null;
       });
       if (!extracting) return null; // The item was removed while queued.
@@ -241,15 +245,17 @@ export class ProjectIngestService {
         contentType = fetched.contentType || contentType;
         job.lastModified = fetched.lastModified || null;
         job.source = fetched.source || null;
+        const previousVersion = input.previousLastModified || input.previousSnapshotAt;
         if (
-          input.previousSnapshotAt &&
+          previousVersion &&
           job.lastModified &&
-          Date.parse(job.lastModified) <= Date.parse(input.previousSnapshotAt)
+          Date.parse(job.lastModified) <= Date.parse(previousVersion)
         ) {
           // Nothing changed at the source: keep the text, clear `stale`.
           const unchanged = await this.service.patchItem(projectId, itemId, item => {
             item.status = item.text ? 'ready' : 'failed';
             item.error = null;
+            delete item.refreshingAt;
           });
           return unchanged ? { item: unchanged, unchanged: true } : null;
         }
@@ -320,6 +326,7 @@ export class ProjectIngestService {
       const stored = await this.service.patchItem(projectId, itemId, item => {
         item.status = 'ready';
         item.error = null;
+        delete item.refreshingAt;
         item.text = block;
         if (input.purpose === 'pick' || input.purpose === 'refresh' || job.lastModified) {
           item.snapshotAt = block.extractedAt;
@@ -370,6 +377,7 @@ export class ProjectIngestService {
           // A refresh that fails keeps the old text readable (spec 3 §4).
           item.status = input.previousBlobKey && item.text ? 'stale' : 'failed';
           item.error = { code: failure.code, message: failure.message.slice(0, 2000) };
+          delete item.refreshingAt;
         })
         .catch(patchError =>
           logger.error('Could not record an ingest failure', {
@@ -445,14 +453,27 @@ export class ProjectIngestService {
     let orphans = 0;
     for (const project of projects) {
       const stuck = (project.items || []).filter(item => {
-        if (item.status !== 'pending' && item.status !== 'extracting') return false;
+        const refreshing = typeof item.refreshingAt === 'string';
+        if (!refreshing && item.status !== 'pending' && item.status !== 'extracting') return false;
         if (this.isActive(item.id)) return false;
-        const since = Date.parse(item.updatedAt || item.createdAt || '') || 0;
+        const since = refreshing
+          ? Date.parse(item.refreshingAt) || 0
+          : Date.parse(item.updatedAt || item.createdAt || '') || 0;
         return now - since > staleMs;
       });
       for (const item of stuck) {
         try {
           await this.service.patchItem(project.id, item.id, entry => {
+            if (typeof entry.refreshingAt === 'string') {
+              // An interrupted refresh: the old snapshot is still there.
+              delete entry.refreshingAt;
+              entry.status = entry.text ? 'stale' : 'failed';
+              entry.error = {
+                code: INTERRUPTED,
+                message: 'The server restarted during the refresh. Refresh the document again.'
+              };
+              return;
+            }
             if (entry.status !== 'pending' && entry.status !== 'extracting') return;
             entry.status = 'failed';
             entry.error = {
