@@ -181,7 +181,7 @@
   ],
   "projects": [
     {
-      "id": "documentation",
+      "id": "ihub-documentation",
       "mode": "context"
     },
     {
