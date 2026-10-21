@@ -154,7 +154,7 @@ export default function registerAdminProjectsRoutes(app) {
       const projects = await repo.listAdmin({ includeDisabled: true });
       return res.json(projects.map(adminView));
     } catch (error) {
-      sendFailedOperationError(res, 'list projects', error);
+      return sendFailedOperationError(res, 'list projects', error);
     }
   });
 
@@ -270,7 +270,8 @@ export default function registerAdminProjectsRoutes(app) {
       const body = parseBody(adminProjectSchema, req, res);
       if (!body) return;
       if (isUserProjectId(body.id) || !isAdminProjectId(body.id)) {
-        return sendBadRequest(res, 'Admin project ids may not start with "prj_"');
+        sendBadRequest(res, 'Admin project ids may not start with "prj_"');
+        return;
       }
       const project = await getProjectService().createAdminProject(body, { actor: req.user });
       logAudit({
