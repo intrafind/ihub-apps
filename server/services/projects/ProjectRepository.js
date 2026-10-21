@@ -456,8 +456,8 @@ export class ProjectRepository {
    * @param {boolean} [options.includeDisabled=true]
    * @returns {Promise<Object[]>}
    */
-  async listAdmin({ includeDisabled = true } = {}) {
-    const docs = await this.config.listDocuments(ADMIN_PROJECTS_DIR);
+  async listAdmin({ includeDisabled = true, strict = false } = {}) {
+    const docs = await this.config.listDocuments(ADMIN_PROJECTS_DIR, { strict });
     const projects = [];
     for (const doc of docs) {
       const project = doc?.data;

@@ -7,6 +7,7 @@ import IFinderHandler from './IFinderHandler.js';
 import PageHandler from './PageHandler.js';
 import logger from '../utils/logger.js';
 import { httpFetch } from '../utils/httpConfig.js';
+import { assertPublicTarget, createPinnedLookup } from '../utils/ssrfGuard.js';
 import { recordSourceLoad } from '../telemetry/metrics.js';
 import { getLocalizedString } from '../utils/localize.js';
 import { RESULT_BUDGET_TOKENS, getContentStats, selectContent } from './documentRetrieval.js';
@@ -42,6 +43,32 @@ const globalSourceToolRegistry = new Map();
  * Centralized manager for all source handlers. Provides unified interface
  * for loading content from various sources with caching and tool generation.
  */
+/** How much of a probed URL's body is read to size it. */
+export const URL_TEST_MAX_BYTES = 1024 * 1024;
+const URL_TEST_MAX_REDIRECTS = 5;
+
+/**
+ * Count a response body up to `maxBytes`, then stop reading (the connection
+ * is dropped with the stream), so a probe never buffers a body it does not
+ * need and an endless body ends with the bound.
+ *
+ * @param {AsyncIterable<Buffer|string>|null} body
+ * @param {number} maxBytes
+ * @returns {Promise<{bytes: number, truncated: boolean}>}
+ */
+export async function countBodyBytes(body, maxBytes) {
+  if (!body) return { bytes: 0, truncated: false };
+  let bytes = 0;
+  for await (const chunk of body) {
+    bytes += Buffer.isBuffer(chunk) ? chunk.length : Buffer.byteLength(String(chunk));
+    if (bytes >= maxBytes) {
+      if (typeof body.destroy === 'function') body.destroy();
+      return { bytes: maxBytes, truncated: true };
+    }
+  }
+  return { bytes, truncated: false };
+}
+
 class SourceManager {
   constructor(config = {}) {
     this.config = config;
@@ -692,40 +719,64 @@ class SourceManager {
    * Test URL source
    */
   async testUrlSource(config) {
-    const { url, method = 'GET', timeout = 10000, headers = {} } = config;
+    const {
+      url,
+      method = 'GET',
+      timeout = 10000,
+      headers = {},
+      maxBytes = URL_TEST_MAX_BYTES
+    } = config;
 
+    // Any signed-in user may probe a URL from the project picker, so the probe
+    // is held to the same line as the reader: no private or internal target,
+    // every redirect hop checked again, DNS pinned to the checked address,
+    // and the body counted up to a bound while the timeout stays armed.
+    const startTime = Date.now();
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeout);
     try {
-      const startTime = Date.now();
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), timeout);
-
-      const response = await httpFetch(url, {
-        method,
-        headers,
-        signal: controller.signal
-      });
-
-      clearTimeout(timeoutId);
-      const duration = Date.now() - startTime;
+      let hop = new URL(url);
+      let response;
+      for (let redirects = 0; ; redirects += 1) {
+        if (redirects > URL_TEST_MAX_REDIRECTS) throw new Error('Too many redirects');
+        if (hop.protocol !== 'http:' && hop.protocol !== 'https:') {
+          throw new Error(`Unsupported URL scheme ${hop.protocol}`);
+        }
+        const target = await assertPublicTarget(hop);
+        if (!target.ok) {
+          throw new Error(`Access to private/internal addresses is not allowed (${target.reason})`);
+        }
+        response = await httpFetch(hop.href, {
+          method,
+          headers,
+          signal: controller.signal,
+          redirect: 'manual',
+          lookup: createPinnedLookup(target.addresses)
+        });
+        const location = response.headers.get('location');
+        if (response.status >= 300 && response.status < 400 && location) {
+          hop = new URL(location, hop);
+          continue;
+        }
+        break;
+      }
 
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
 
-      // Get content type and count actual content size
       const contentType = response.headers.get('content-type') || 'unknown';
       const headerContentLength = response.headers.get('content-length');
-
-      // Read the content to count its actual size
-      const content = await response.text();
-      const actualContentLength = Buffer.byteLength(content, 'utf8');
+      const body = await countBodyBytes(response.body, maxBytes);
+      const duration = Date.now() - startTime;
 
       return {
         accessible: true,
         status: response.status,
         statusText: response.statusText,
         contentType,
-        contentLength: actualContentLength,
+        contentLength: body.bytes,
+        ...(body.truncated ? { contentTruncated: true } : {}),
         headerContentLength: headerContentLength ? Number.parseInt(headerContentLength) : null,
         duration
       };
@@ -734,6 +785,8 @@ class SourceManager {
         throw new Error(`Request timeout after ${timeout}ms`);
       }
       throw new Error(`URL test failed: ${error.message}`);
+    } finally {
+      clearTimeout(timeoutId);
     }
   }
 

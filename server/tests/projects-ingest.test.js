@@ -65,6 +65,7 @@ import {
 } from '../services/projects/bootstrap.js';
 import { evictItemText, getItemText } from '../services/knowledge/ItemTextService.js';
 import registerProjectRoutes from '../routes/projectRoutes.js';
+import { countBodyBytes } from '../sources/SourceManager.js';
 import { z } from 'zod';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -614,11 +615,11 @@ describe('MalwareScanner', () => {
     ]);
     assert.equal(scannerFor({ provider: 'none' }).id, 'none');
     assert.equal(scannerFor({}).id, 'none');
-    assert.equal(
-      scannerFor({ provider: 'command', command: '' }).id,
-      'none',
-      'a broken command falls back to none'
-    );
+    // A scanner that is configured but cannot be set up answers `error`,
+    // so `onError: reject` keeps uploads out rather than letting them pass.
+    const unconfigured = scannerFor({ provider: 'command', command: '' });
+    assert.equal(unconfigured.id, 'misconfigured');
+    assert.equal((await unconfigured.scan({ path: '/x' })).verdict, 'error');
     const calls = [];
     const exec =
       (code, stdout = '') =>
@@ -812,6 +813,35 @@ describe('ingest pipeline', () => {
       assert.equal(failed.status, 'failed');
       assert.equal(failed.error.code, 'QUOTA_PROJECT_BYTES');
       await service.removeItem(project.id, item.id, { user: ADA });
+      // Two fetched documents that each fit the free room alone are judged
+      // under the project's lock when installed: only one of them lands.
+      await service.removeItem(
+        project.id,
+        (await getProjectRepository().get(project.id)).items[0].id,
+        { user: ADA }
+      );
+      fakeFetch.bytes = Buffer.from('d'.repeat(90));
+      const [one, two] = await Promise.all(
+        ['race-1', 'race-2'].map(fileId =>
+          service.addItem(project.id, { kind: 'fake-cloud', ref: { fileId } }, { user: ADA })
+        )
+      );
+      const outcomes = await Promise.all([
+        settled(project.id, one.item.id),
+        settled(project.id, two.item.id)
+      ]);
+      assert.deepEqual(outcomes.map(entry => entry.status).sort(), ['failed', 'ready']);
+      assert.equal(
+        outcomes.find(entry => entry.status === 'failed').error.code,
+        'QUOTA_PROJECT_BYTES'
+      );
+      assert.ok((await getProjectRepository().get(project.id)).usage.bytes <= 150);
+      for (const entry of outcomes) await service.removeItem(project.id, entry.id, { user: ADA });
+      await service.addItem(
+        project.id,
+        { kind: 'upload', ref: {}, name: 'a', text: 'a'.repeat(90) },
+        { user: ADA }
+      );
       await service.addItem(
         project.id,
         { kind: 'url', ref: { url: 'https://example.com/a' } },
@@ -943,6 +973,39 @@ describe('ingest pipeline', () => {
         { user: ADA }
       );
       assert.equal((await settled(project.id, allowed.id)).status, 'ready');
+
+      // Text handed in is scanned as well, as the bytes it is stored as.
+      ingest._scanner = new CommandScanner({ command: 'fake {path}', exec: exec(1) });
+      setPlatform({
+        projects: {
+          ...platform.projects,
+          scan: { provider: 'command', command: 'fake {path}', onError: 'reject' }
+        }
+      });
+      await assert.rejects(
+        service.addItem(
+          project.id,
+          { kind: 'upload', ref: {}, name: 'eicar.txt', text: 'X5O!P%@AP' },
+          { user: ADA }
+        ),
+        error => error.code === 'SCAN_REJECTED'
+      );
+      // A misconfigured scanner with `reject` keeps uploads out.
+      ingest._scanner = null;
+      setPlatform({
+        projects: {
+          ...platform.projects,
+          scan: { provider: 'command', command: '', onError: 'reject' }
+        }
+      });
+      await assert.rejects(
+        service.addItem(
+          project.id,
+          { kind: 'upload', ref: {}, name: 'later.txt', text: 'fine' },
+          { user: ADA }
+        ),
+        error => error.code === 'SCAN_REJECTED' && /misconfigured/.test(error.message)
+      );
     } finally {
       ingest._scanner = null;
       setPlatform({ projects: { ...platform.projects, scan: { provider: 'none' } } });
@@ -1008,8 +1071,25 @@ describe('ingest pipeline', () => {
       platform: () => platform,
       tempDir: path.join(scratch, 'tmp-test')
     });
+    // An inventory that cannot be completed settles the items but sweeps
+    // no blob: a project it could not read may still name them.
+    const listAdmin = repository.listAdmin;
+    repository.listAdmin = async () => {
+      throw new Error('projects directory unreadable');
+    };
+    let kept;
+    try {
+      kept = await ingest.reconcile();
+    } finally {
+      repository.listAdmin = listAdmin;
+    }
+    assert.equal(kept.interrupted, 1);
+    assert.equal(kept.orphans, 0);
+    assert.ok(
+      await repository.blobs.get(PROJECT_FILES_NAMESPACE, `${project.id}__itm_gone__${oldVersion}`)
+    );
     const result = await ingest.reconcile();
-    assert.equal(result.interrupted, 1);
+    assert.equal(result.interrupted, 0);
     assert.equal(result.orphans, 2);
     const stuck = await itemOf(project.id, 'itm_stuck');
     assert.equal(stuck.status, 'failed');
@@ -1160,5 +1240,36 @@ describe('routes', () => {
     assert.deepEqual(pages.body.pages[0].languages, ['en', 'de']);
     const bad = await drive(route.urlCheck, { user: ADA, body: { url: 'ftp://example.com' } });
     assert.equal(bad.statusCode, 400);
+    // The probe is held to the reader's line: no private or internal target.
+    const inside = await drive(route.urlCheck, {
+      user: ADA,
+      body: { url: 'http://127.0.0.1:9/admin' }
+    });
+    assert.equal(inside.statusCode, 200);
+    assert.equal(inside.body.ok, false);
+    assert.match(inside.body.error, /private/);
+    const local = await drive(route.urlCheck, { user: ADA, body: { url: 'http://localhost/' } });
+    assert.equal(local.body.ok, false);
+  });
+
+  it('sizes a probed body up to a bound and drops the rest', async () => {
+    const { Readable } = await import('node:stream');
+    let destroyed = false;
+    const endless = new Readable({
+      read() {
+        this.push(Buffer.alloc(64 * 1024));
+      },
+      destroy(error, cb) {
+        destroyed = true;
+        cb(error);
+      }
+    });
+    const counted = await countBodyBytes(endless, 200 * 1024);
+    assert.deepEqual(counted, { bytes: 200 * 1024, truncated: true });
+    assert.equal(destroyed, true);
+    assert.deepEqual(await countBodyBytes(Readable.from([Buffer.from('abc')]), 1024), {
+      bytes: 3,
+      truncated: false
+    });
   });
 });

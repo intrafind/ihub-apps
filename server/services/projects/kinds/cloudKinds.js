@@ -58,7 +58,9 @@ function fetched(file, ref, site) {
     bytes: file.content,
     contentType: file.mimeType || ref.mimeType,
     name: file.name || ref.name,
-    lastModified: file.lastModified || ref.lastModified || null,
+    // Only what the download itself reports: the picker's timestamp is the
+    // version picked, and comparing it would call every change unchanged.
+    lastModified: file.lastModified || null,
     source: {
       site,
       ...(ref.url ? { url: ref.url } : {}),

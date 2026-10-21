@@ -373,7 +373,9 @@ export class ProjectService {
             path: file.path,
             cleanupDir: file.cleanupDir,
             contentType: file.contentType,
-            name: storedItem.name,
+            // The file's own name decides the type; the item's name is the
+            // display title the uploader chose.
+            name: file.name || storedItem.name,
             bytes: declaredBytes,
             purpose: 'upload'
           }
@@ -562,12 +564,15 @@ export class ProjectService {
    * @param {(item: Object) => void} update - Mutates the item in place.
    * @returns {Promise<Object|null>} The item as stored, or null when gone.
    */
-  async patchItem(projectId, itemId, update) {
+  async patchItem(projectId, itemId, update, { check } = {}) {
     const stored = await this.repository.mutate(
       projectId,
       project => {
         const item = (project.items || []).find(entry => entry.id === itemId);
         if (!item) return null;
+        // A check against the project as stored right now (a quota), under
+        // the lock the write holds; what it throws aborts the write.
+        if (typeof check === 'function') check(project, item);
         update(item);
         item.updatedAt = nowIso();
         return project;
