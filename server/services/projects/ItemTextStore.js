@@ -119,6 +119,7 @@ export async function storeText({
     format: FORMAT_ID,
     segmentBytes: DEFAULT_SEGMENT_BYTES,
     key: { provider: provider.id, keyId, wrapped: wrapped.toString('base64') },
+    tenant,
     extractedAt: new Date().toISOString(),
     ...(truncated ? { truncated: true } : {}),
     original: {
@@ -157,7 +158,14 @@ export async function readText(
   const blob = await repository.blobs.get(PROJECT_FILES_NAMESPACE, block.blobKey);
   if (!blob) throw new KnowledgeError('TEXT_UNAVAILABLE', 'The stored text is gone', where);
   const versionId = block.blobKey.slice(`${project.id}__${item.id}__`.length);
-  const aad = associatedDataOf({ tenant, projectId: project.id, itemId: item.id, versionId });
+  // The tenant the object was encrypted under is the item's, not the
+  // request's: a later tenant-aware derivation changes nothing for it.
+  const aad = associatedDataOf({
+    tenant: block.tenant || tenant,
+    projectId: project.id,
+    itemId: item.id,
+    versionId
+  });
   let dataKey = cachedKey(block.blobKey);
   if (!dataKey) {
     const provider = getKeyProvider(

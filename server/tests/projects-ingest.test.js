@@ -463,6 +463,7 @@ describe('ItemTextStore', () => {
     assert.ok(block.blobKey.startsWith(`${projectId}__${itemId}__`));
     assert.equal(block.chars, text.length);
     assert.equal(block.key.provider, 'local-file');
+    assert.equal(block.tenant, 'default');
     assert.equal(block.original.bytes, 1600);
     const blob = await repository.blobs.get(PROJECT_FILES_NAMESPACE, block.blobKey);
     assert.ok(blob.data.length > text.length);
@@ -990,6 +991,12 @@ describe('ingest pipeline', () => {
       `${project.id}__itm_new__${newVersion}`,
       Buffer.from('young')
     );
+    // A blob of a project that no longer exists is an orphan too.
+    await repository.blobs.put(
+      PROJECT_FILES_NAMESPACE,
+      `prj_vanished__itm_lost__${oldVersion}`,
+      Buffer.from('orphan of a deleted project')
+    );
     const ingest = new ProjectIngestService({
       service,
       repository,
@@ -998,7 +1005,7 @@ describe('ingest pipeline', () => {
     });
     const result = await ingest.reconcile();
     assert.equal(result.interrupted, 1);
-    assert.equal(result.orphans, 1);
+    assert.equal(result.orphans, 2);
     const stuck = await itemOf(project.id, 'itm_stuck');
     assert.equal(stuck.status, 'failed');
     assert.equal(stuck.error.code, INTERRUPTED);
@@ -1009,6 +1016,10 @@ describe('ingest pipeline', () => {
     );
     assert.ok(
       await repository.blobs.get(PROJECT_FILES_NAMESPACE, `${project.id}__itm_new__${newVersion}`)
+    );
+    assert.equal(
+      await repository.blobs.get(PROJECT_FILES_NAMESPACE, `prj_vanished__itm_lost__${oldVersion}`),
+      null
     );
 
     const oldDir = path.join(ingest.tempDir, 'u-old');
@@ -1085,6 +1096,17 @@ describe('routes', () => {
     const refused = await drive(route.addItem, { user: ADA, req: png });
     assert.equal(refused.statusCode, 415, JSON.stringify(refused.body));
     assert.equal(refused.body.details.code, 'UNSUPPORTED_TYPE');
+
+    // Declared as text, but the bytes are a PNG: refused after receive, before any item exists.
+    const lying = multipartRequest({
+      name: 'notes.txt',
+      contentType: 'text/plain',
+      bytes: Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3, 4])
+    });
+    lying.params = { projectId: project.id };
+    const sniffed = await drive(route.addItem, { user: ADA, req: lying });
+    assert.equal(sniffed.statusCode, 415, JSON.stringify(sniffed.body));
+    assert.equal((await getProjectRepository().get(project.id)).items.length, 0);
 
     setLimits({ maxFileBytes: 50 });
     try {

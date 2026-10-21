@@ -432,9 +432,14 @@ export class ProjectIngestService {
         error: error.message
       });
     }
+    let complete = true;
     if (this.repository.isAvailable()) {
-      const { projects: users } = await this.repository.scanUser({ max: 10000, maxScanned: 10000 });
+      const { projects: users, truncated } = await this.repository.scanUser({
+        max: 10000,
+        maxScanned: 10000
+      });
       projects.push(...users);
+      complete = !truncated;
     }
     let interrupted = 0;
     let orphans = 0;
@@ -465,8 +470,8 @@ export class ProjectIngestService {
           });
         }
       }
-      orphans += await this._sweepOrphans(project, now);
     }
+    orphans += await this._sweepOrphans(projects, now, { complete });
     if (interrupted || orphans) {
       logger.info('Project ingest reconciled', {
         component: COMPONENT,
@@ -478,15 +483,24 @@ export class ProjectIngestService {
     return { scanned: projects.length, interrupted, orphans };
   }
 
-  async _sweepOrphans(project, now) {
-    if (!this.repository.hasBlobs()) return 0;
-    const named = new Set((project.items || []).map(item => item.text?.blobKey).filter(Boolean));
+  /**
+   * Delete blobs no item names, across the whole namespace: a blob left by
+   * a crash between `blobs.put` and the document write, and a blob of a
+   * project that no longer exists (an interrupted delete cascade) alike.
+   * Only when every project could be scanned, so a blob of an unscanned
+   * project is never mistaken for an orphan.
+   */
+  async _sweepOrphans(projects, now, { complete = true } = {}) {
+    if (!this.repository.hasBlobs() || !complete) return 0;
+    const named = new Set();
+    for (const project of projects) {
+      for (const item of project.items || []) if (item.text?.blobKey) named.add(item.text.blobKey);
+    }
     let removed = 0;
     let cursor = null;
     try {
       do {
         const page = await this.repository.blobs.list(PROJECT_FILES_NAMESPACE, {
-          prefix: `${project.id}__`,
           limit: 200,
           ...(cursor ? { cursor } : {})
         });
@@ -500,11 +514,7 @@ export class ProjectIngestService {
         cursor = page.nextCursor;
       } while (cursor);
     } catch (error) {
-      logger.warn('Orphan blob sweep failed', {
-        component: COMPONENT,
-        projectId: project.id,
-        error: error.message
-      });
+      logger.warn('Orphan blob sweep failed', { component: COMPONENT, error: error.message });
     }
     return removed;
   }

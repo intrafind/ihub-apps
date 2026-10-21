@@ -104,6 +104,7 @@ export const itemTextSchema = z
         wrapped: z.string().max(4096)
       })
       .strict(),
+    tenant: z.string().max(100).optional(),
     extractedAt: z.string(),
     truncated: z.boolean().optional(),
     original: z

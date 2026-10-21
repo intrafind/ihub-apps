@@ -35,7 +35,7 @@ import { KnowledgeError } from '../services/knowledge/types.js';
 import { getItemText } from '../services/knowledge/ItemTextService.js';
 import { ProjectError, getProjectService } from '../services/projects/ProjectService.js';
 import { PROJECTS_FEATURE, projectSettings } from '../services/projects/projectSettings.js';
-import { ACCEPTED_TYPES, acceptedTypeOf } from '../services/projects/extractText.js';
+import { ACCEPTED_TYPES, acceptedTypeOf, sniffBytes } from '../services/projects/extractText.js';
 import { projectName, serializeItem } from '../services/projects/projectView.js';
 import { ifinderPickerSchema, urlCheckSchema } from '../validators/projectSchema.js';
 
@@ -189,6 +189,18 @@ export function receiveUpload(req, res, next) {
   });
 }
 
+/** The first bytes of the received file, for the magic-byte check. */
+async function headOf(filePath, length = 16) {
+  const handle = await fs.open(filePath, 'r');
+  try {
+    const buffer = Buffer.alloc(length);
+    const { bytesRead } = await handle.read(buffer, 0, length, 0);
+    return buffer.subarray(0, bytesRead);
+  } finally {
+    await handle.close();
+  }
+}
+
 async function removeUploadDir(req) {
   if (!req.projectUploadDir) return;
   try {
@@ -212,6 +224,22 @@ export async function addUploadedItem(req, res, { project, authorize, admin = fa
     return sendBadRequest(res, `A multipart upload needs a "${UPLOAD_FIELD}" field`);
   }
   try {
+    // `fileFilter` saw only the declared type; the bytes decide what the
+    // file is. An image, media, archive or executable is refused here,
+    // before the item exists, whatever the client declared.
+    if (sniffBytes(await headOf(file.path)) === 'refused') {
+      recordUpload('project', 'rejected_type', file.size);
+      await removeUploadDir(req);
+      return sendProjectError(
+        res,
+        new ProjectError(
+          'UNSUPPORTED_TYPE',
+          `${file.originalname || 'The file'} is an image, media, archive or binary file. Supported: ${ACCEPTED_TYPES.summary}.`,
+          { accepted: ACCEPTED_TYPES }
+        ),
+        'upload project item'
+      );
+    }
     const service = getProjectService();
     const name = typeof req.body?.name === 'string' ? req.body.name.trim().slice(0, 300) : '';
     const pinned = req.body?.pinned === true || req.body?.pinned === 'true';
