@@ -1,12 +1,9 @@
 /**
  * @jest-environment node
  */
-import fs from 'node:fs';
-import path from 'node:path';
 import { describe, expect, it, jest } from '@jest/globals';
 import {
   validateSourceConfig,
-  validateSourcesArray,
   getDefaultSourceConfig
 } from '../../../server/validators/sourceConfigSchema.js';
 
@@ -112,15 +109,5 @@ describe('iFinder source config schema', () => {
       maxResults: 10,
       maxLength: 10000
     });
-  });
-});
-
-describe('shipped default sources', () => {
-  it('validate against the sources schema', () => {
-    const sourcesPath = path.join(process.cwd(), 'server/defaults/config/sources.json');
-    const sources = JSON.parse(fs.readFileSync(sourcesPath, 'utf8'));
-
-    const result = validateSourcesArray(sources);
-    expect(result.success).toBe(true);
   });
 });

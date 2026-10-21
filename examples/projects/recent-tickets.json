@@ -1,0 +1,54 @@
+{
+  "version": 1,
+  "id": "recent-tickets",
+  "ownership": "admin",
+  "tier": "ihub",
+  "name": {
+    "en": "Recent Tickets"
+  },
+  "description": {
+    "en": "Access to all jira tickets and the corresponding attachments"
+  },
+  "instructions": "",
+  "enabled": true,
+  "category": "",
+  "tags": [],
+  "items": [
+    {
+      "id": "itm_495c7402b979",
+      "pinned": false,
+      "error": null,
+      "snapshotAt": null,
+      "createdAt": "2026-10-21T08:03:52.903Z",
+      "updatedAt": "2026-10-21T08:03:52.903Z",
+      "kind": "ifinder-query",
+      "name": "quarterly report 2024",
+      "ref": {
+        "query": "quarterly report 2024",
+        "searchProfile": "default",
+        "maxLength": 20000,
+        "maxResults": 3
+      },
+      "storage": "link",
+      "status": "ready",
+      "cache": {
+        "ttlSeconds": 7200
+      },
+      "provenance": {
+        "origin": "linked",
+        "by": {
+          "id": "system",
+          "name": "Sources migration"
+        },
+        "at": "2026-10-21T08:03:52.903Z",
+        "run": null,
+        "source": {
+          "site": "iFinder"
+        }
+      }
+    }
+  ],
+  "createdAt": "2026-10-21T08:03:52.903Z",
+  "updatedAt": "2026-10-21T08:03:52.903Z",
+  "createdBy": null
+}

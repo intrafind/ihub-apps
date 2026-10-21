@@ -1,0 +1,50 @@
+{
+  "version": 1,
+  "id": "documentation",
+  "ownership": "admin",
+  "tier": "ihub",
+  "name": {
+    "en": "Documentation"
+  },
+  "description": {
+    "en": "Technical documentation and guides"
+  },
+  "instructions": "",
+  "enabled": true,
+  "category": "",
+  "tags": [],
+  "items": [
+    {
+      "id": "itm_caf9f906b16a",
+      "pinned": false,
+      "error": null,
+      "snapshotAt": null,
+      "createdAt": "2026-10-21T08:03:52.903Z",
+      "updatedAt": "2026-10-21T08:03:52.903Z",
+      "kind": "upload",
+      "name": "documentation.md",
+      "ref": {
+        "contentType": "text/markdown"
+      },
+      "storage": "text",
+      "status": "pending",
+      "provenance": {
+        "origin": "migrated",
+        "by": {
+          "id": "system",
+          "name": "Sources migration"
+        },
+        "at": "2026-10-21T08:03:52.903Z",
+        "run": null,
+        "source": null
+      },
+      "import": {
+        "file": "sources/documentation.md",
+        "encoding": "utf8"
+      }
+    }
+  ],
+  "createdAt": "2026-10-21T08:03:52.903Z",
+  "updatedAt": "2026-10-21T08:03:52.903Z",
+  "createdBy": null
+}
