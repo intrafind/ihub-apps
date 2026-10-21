@@ -27,14 +27,19 @@ export async function cleanUpProjectsOfUser(userId) {
   const service = getProjectService();
   const chats = getChatRepository();
   let removed = 0;
+  const ownedBy = project => String(project?.owner?.id) === String(userId);
   for (const project of await repository.listOwned(String(userId))) {
     try {
       const deleted = await service.deleteProject(project.id, {
+        // Judged again under the project's lock: a transfer that landed since
+        // the listing leaves the new owner's project alone.
+        authorize: ownedBy,
         detachChat: chatId =>
           chats.isAvailable() ? chats.updateChat(chatId, { projectId: null }) : null
       });
       if (deleted) removed += 1;
     } catch (error) {
+      if (error?.code === 'PROJECT_ACCESS_CHANGED') continue; // handed over since the listing
       logger.error('Failed to delete a project of a deleted user', {
         component: COMPONENT,
         projectId: project.id,
@@ -46,9 +51,8 @@ export async function cleanUpProjectsOfUser(userId) {
   let membershipsDropped = 0;
   for (const project of await repository.listSharedWith([userKey])) {
     try {
-      const members = (project.members || []).filter(member => memberTargetKey(member) !== userKey);
-      if (members.length === (project.members || []).length) continue;
-      const result = await repository.setMembers(project.id, members, {
+      // Against the member list stored right now, under the project's lock.
+      const result = await repository.removeMember(project.id, userKey, {
         actor: { id: 'system', name: 'user deletion' }
       });
       if (result) membershipsDropped += 1;
