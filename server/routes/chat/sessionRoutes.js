@@ -486,7 +486,10 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
         // chat is a durable, guessable resource, so subscribing to its stream
         // has to be an ownership decision as well as an app one.
         const access = await authorizeChat(chatId, req.user, { intent: 'read' });
-        if (!access.ok) return sendNotFound(res, 'Chat session');
+        // A project member reads the transcript, never the stream: one
+        // registration per chat id, so a second subscriber would divert the
+        // owner's output.
+        if (!access.ok || access.viaProject) return sendNotFound(res, 'Chat session');
 
         const channel = createSseChannel({
           req,

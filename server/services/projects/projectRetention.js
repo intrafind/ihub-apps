@@ -57,18 +57,20 @@ export async function sweepProjects({ retentionDays, now = Date.now } = {}) {
   const repository = getProjectRepository();
   if (!repository.isAvailable()) return { scanned: 0, deleted: 0, skipped: true };
   const cutoff = now() - days * DAY_MS;
-  const { projects } = await repository.scanUser({
-    filter: project => {
-      const activeAt = activityTime(project);
-      return Number.isFinite(activeAt) && activeAt < cutoff;
-    }
-  });
+  const expired = project => {
+    const activeAt = activityTime(project);
+    return Number.isFinite(activeAt) && activeAt < cutoff;
+  };
+  const { projects } = await repository.scanUser({ filter: expired });
   const service = getProjectService();
   const chats = getChatRepository();
   let deleted = 0;
   for (const project of projects) {
     try {
       const removed = await service.deleteProject(project.id, {
+        // The scan saw a snapshot; the project is judged again on the
+        // document loaded under its lock, so activity since then keeps it.
+        authorize: expired,
         detachChat: chatId =>
           chats.isAvailable() ? chats.updateChat(chatId, { projectId: null }) : null
       });
@@ -83,6 +85,7 @@ export async function sweepProjects({ retentionDays, now = Date.now } = {}) {
         summary: `Retention removed project "${project.name}" of ${project.owner?.name || project.owner?.id} after ${days} days without activity`
       });
     } catch (error) {
+      if (error?.code === 'PROJECT_ACCESS_CHANGED') continue; // active again since the scan
       logger.error('Failed to delete an expired project', {
         component: COMPONENT,
         projectId: project.id,
