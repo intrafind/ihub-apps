@@ -226,24 +226,29 @@ export function projectPermissions(
   user,
   { groups = [], isAdmin = false, isContentAdmin = false, ownerActive = true, linked = false } = {}
 ) {
-  if (!project || !user || isAnonymousUser(user)) return NO_ACCESS;
+  if (!project || !user) return NO_ACCESS;
 
   if (project.ownership === 'admin') {
-    if (!isContentAdmin && !linked) return NO_ACCESS;
+    // An admin project is configuration: whoever may use the app, workflow
+    // or agent that links it may read it, anonymous and delegated callers
+    // included (the app's own permission check already ran). Changing it
+    // takes a signed-in content admin.
+    const admin = isContentAdmin && !isAnonymousUser(user);
+    if (!admin && !linked) return NO_ACCESS;
     return {
       canView: true,
-      canUse: project.enabled !== false || isContentAdmin,
-      canEdit: isContentAdmin,
+      canUse: project.enabled !== false || admin,
+      canEdit: admin,
       canShare: false,
-      canDelete: isContentAdmin,
+      canDelete: admin,
       canTransfer: false,
       isOwner: false,
-      role: isContentAdmin ? 'admin' : 'linked',
-      readOnly: !isContentAdmin
+      role: admin ? 'admin' : 'linked',
+      readOnly: !admin
     };
   }
 
-  if (!canHoldProjects(user)) return NO_ACCESS;
+  if (isAnonymousUser(user) || !canHoldProjects(user)) return NO_ACCESS;
   const isOwner = String(project.owner?.id ?? project.ownerId) === String(user.id);
   const role = isOwner ? null : memberRoleFor(project, user, groups);
   if (!isOwner && !role && !isAdmin) return NO_ACCESS;

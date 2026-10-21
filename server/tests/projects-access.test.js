@@ -177,6 +177,18 @@ describe('admin projects', () => {
     assert.equal(editor.canShare, false);
   });
 
+  it('is usable through a link by anonymous and delegated callers, never editable', () => {
+    assert.deepEqual(projectPermissions(admin, ANON), NO_ACCESS);
+    const anonymous = projectPermissions(admin, ANON, { linked: true });
+    assert.equal(anonymous.role, 'linked');
+    assert.equal(anonymous.canUse, true);
+    assert.equal(anonymous.canEdit, false);
+    assert.deepEqual(projectPermissions(admin, ANON, { isContentAdmin: true }), NO_ACCESS);
+    const delegated = { id: 'u-del', authMode: 'oauth_authorization_code', groups: ['users'] };
+    assert.equal(projectPermissions(admin, delegated, { linked: true }).canUse, true);
+    assert.deepEqual(projectPermissions(userProject(), delegated), NO_ACCESS);
+  });
+
   it('is unusable through a link while disabled', () => {
     const p = projectPermissions({ ...admin, enabled: false }, GRACE, { linked: true });
     assert.equal(p.canView, true);
