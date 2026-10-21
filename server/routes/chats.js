@@ -42,6 +42,7 @@ import {
   sendNotFound
 } from '../utils/responseHelpers.js';
 import configCache from '../configCache.js';
+import { logAudit } from '../services/AuditLogService.js';
 import runLog from '../services/loop/RunLog.js';
 import { resolvePrincipal } from '../services/loop/runIdentity.js';
 import { authorizeChat } from '../services/chat/chatAccess.js';
@@ -185,6 +186,58 @@ async function loadOwnedChat(chatId, user, repository, intent = 'read') {
 }
 
 /**
+ * Move a chat into a project, or out of one with `projectId: null`. Sends the
+ * refusal itself and returns null when the request cannot go on.
+ */
+async function moveChatToProject(req, res, repository, chat) {
+  const [
+    { chatProjectSchema, describeIssues },
+    { getProjectRepository },
+    access,
+    { getProjectService }
+  ] = await Promise.all([
+    import('../validators/projectSchema.js'),
+    import('../services/projects/ProjectRepository.js'),
+    import('../middleware/projectAccess.js'),
+    import('../services/projects/ProjectService.js')
+  ]);
+  const parsed = chatProjectSchema.safeParse({ projectId: req.body.projectId });
+  if (!parsed.success) {
+    sendBadRequest(res, `Invalid request: ${describeIssues(parsed.error)}`);
+    return null;
+  }
+  const targetId = parsed.data.projectId;
+  if (targetId) {
+    access.ensurePrincipal(req);
+    const project = await getProjectRepository().get(targetId);
+    const permissions = access.permissionsFor(project, req.user, access.callerContext(req.user));
+    if (!project || !permissions.canUse) {
+      sendNotFound(res, 'Project');
+      return null;
+    }
+  }
+  if ((chat.projectId || null) === targetId) return chat;
+  const service = getProjectService();
+  const updated = await repository.updateChat(chat.id, { projectId: targetId });
+  if (!updated) {
+    sendNotFound(res, 'Chat');
+    return null;
+  }
+  if (chat.projectId) await service.detachChat(chat.projectId, chat.id).catch(() => {});
+  if (targetId) await service.attachChat(targetId, chat.id, { ownerId: chat.ownerId || null });
+  logAudit({
+    req,
+    action: 'update',
+    resource: 'project',
+    resourceId: targetId || chat.projectId,
+    summary: targetId
+      ? `Moved chat ${chat.id} into project ${targetId}`
+      : `Removed chat ${chat.id} from project ${chat.projectId}`
+  });
+  return updated;
+}
+
+/**
  * Register the `/api/chats` endpoints.
  *
  * Call it next to `registerRunRoutes(app)` in `server/server.js`; the paths
@@ -318,18 +371,29 @@ export default function registerChatRoutes(app) {
       const { chatId } = req.params;
       if (!validateIdForPath(chatId, 'chat', res)) return;
       const title = req.body?.title;
-      if (typeof title !== 'string') {
+      const hasProject = req.body && Object.hasOwn(req.body, 'projectId');
+      if (typeof title !== 'string' && !hasProject) {
         return sendBadRequest(res, 'title is required and must be a string');
       }
       const repository = requireRepository(res);
       if (!repository) return;
       const access = await loadOwnedChat(chatId, req.user, repository, 'write');
       if (!access) return sendNotFound(res, 'Chat');
-      // The repository caps and marks the title as user-set so no later turn
-      // derives over it; an empty title clears that mark instead.
-      const renamed = await repository.renameChat(chatId, title.slice(0, TITLE_INPUT_WINDOW));
-      if (!renamed) return sendNotFound(res, 'Chat');
-      res.json({ chat: renamed });
+      let chat = access.chat;
+      if (hasProject) {
+        // Moving a chat into (or out of) a project (#1036, spec 1 §6.4). The
+        // target must be one the caller may use; the markers follow the chat.
+        const moved = await moveChatToProject(req, res, repository, chat);
+        if (!moved) return;
+        chat = moved;
+      }
+      if (typeof title === 'string') {
+        // The repository caps and marks the title as user-set so no later turn
+        // derives over it; an empty title clears that mark instead.
+        chat = await repository.renameChat(chatId, title.slice(0, TITLE_INPUT_WINDOW));
+        if (!chat) return sendNotFound(res, 'Chat');
+      }
+      res.json({ chat });
     } catch (error) {
       sendChatStorageError(res, error, 'rename chat');
     }

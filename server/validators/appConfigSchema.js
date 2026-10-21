@@ -11,6 +11,7 @@ import {
 } from '../../shared/validationPatterns.js';
 import { VOICE_LISTENING_STYLES } from '../../shared/voiceMode.js';
 import { zHttpUrl } from './common.js';
+import { projectLinksSchema } from './projectSchema.js';
 import { FEATURE_IDS } from '../featureRegistry.js';
 
 // Localized string schema - matches client pattern for language codes
@@ -473,6 +474,9 @@ const baseAppConfigSchema = z.object({
   starterPrompts: z.array(starterPromptSchema).optional(),
   usageGuide: usageGuideSchema,
   sources: z.array(sourceReferenceSchema).optional(),
+  // Projects linked to the app (#1036, spec 1 §6.1): a bare id or
+  // `{ id, mode: 'auto' | 'context' | 'tools', write }`.
+  projects: projectLinksSchema.optional(),
   allowedModels: z.array(z.string()).optional(),
   disallowModelSelection: z.boolean().optional().prefault(false),
   allowEmptyContent: z.boolean().optional().prefault(false),

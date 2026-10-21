@@ -65,6 +65,10 @@ import registerScheduledTaskRoutes from './routes/scheduledTasks.js';
 import runLog from './services/loop/RunLog.js';
 import { startChatRetentionSweep, stopChatRetentionSweep } from './services/chat/chatRetention.js';
 import {
+  startProjectRetentionSweep,
+  stopProjectRetentionSweep
+} from './services/projects/projectRetention.js';
+import {
   startWorkflowStateRetention,
   stopWorkflowStateRetention
 } from './services/workflow/workflowRetention.js';
@@ -788,6 +792,8 @@ if (cluster.isPrimary && workerCount > 1) {
     // sub-workflow — a state nothing ever deleted. Same daily cadence and the
     // same ownership guard as the sweeps above.
     startWorkflowStateRetention();
+    // Abandoned user projects, when `platform.projects.retentionDays` says so.
+    startProjectRetentionSweep();
   }
   registerVoiceRoutes(app);
   registerSetupRoutes(app);
@@ -1158,6 +1164,7 @@ if (cluster.isPrimary && workerCount > 1) {
     // Stop the retention sweeps before storage goes away, so a tick cannot
     // start against a provider that is being torn down.
     stopChatRetentionSweep();
+    stopProjectRetentionSweep();
     stopWorkflowStateRetention();
     // Conversation state coalesces its writes on a timer to keep document I/O
     // off the streaming path; drain what is still buffered, or a chat resumes

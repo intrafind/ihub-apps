@@ -33,6 +33,24 @@ import { resolvePrincipal, isAnonymousUser, isAdminUser } from '../loop/runIdent
 import { getChatRepository, isPersistableChatId } from './ChatRepository.js';
 
 /**
+ * Whether `user` may use the project a chat lives in. Loaded lazily: the
+ * project modules import the chat repository for their own cascade.
+ */
+async function isProjectMember(projectId, user) {
+  try {
+    const [{ getProjectRepository }, { callerContext, permissionsFor }] = await Promise.all([
+      import('../projects/ProjectRepository.js'),
+      import('../../middleware/projectAccess.js')
+    ]);
+    const project = await getProjectRepository().get(projectId);
+    if (!project) return false;
+    return permissionsFor(project, user, callerContext(user)).canUse === true;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Decide whether `user` may act on chat `chatId`.
  *
  * A storage failure is not caught: an authorization decision that cannot read
@@ -78,5 +96,11 @@ export async function authorizeChat(
   // An admin who is not the owner may read, never write — a write gets the
   // same 404 as anyone else.
   if (isAdminUser(user) && intent === 'read') return { ok: true, chat, viaAdmin: true };
+  // A chat inside a project is readable by the project's members (#1036,
+  // spec 1 §6.4): the project page lists them, and a member opens another's
+  // chat read-only. Never a write.
+  if (intent === 'read' && chat.projectId && (await isProjectMember(chat.projectId, user))) {
+    return { ok: true, chat, viaProject: true };
+  }
   return { ok: false, status: 404 };
 }

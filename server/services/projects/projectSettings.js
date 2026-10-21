@@ -1,0 +1,182 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
+/**
+ * Projects — the policy half: whether this installation offers projects,
+ * which tier backs them, the limits of the local tier and whom a user may
+ * share a project with.
+ *
+ * Two feature flags sit above the `platform.projects` block:
+ *
+ *  - `projects` gates the admin pages, the admin API and the picker
+ *    endpoints. It is the successor of the `sources` flag; admin projects
+ *    linked to an app keep working at runtime whatever it says, exactly as
+ *    sources did (the flag hides the pages, it does not unload knowledge).
+ *  - `userProjects` gates projects users create themselves: the project
+ *    pages, the chat-input picker and container-first chats. It is the phase
+ *    1 feature flag of #1036 and ships off.
+ *
+ * See `concepts/projects/2026-10-20 Spec 1 …` §7.3.
+ *
+ * @module services/projects/projectSettings
+ */
+import { isFeatureEnabled } from '../../featureRegistry.js';
+
+/** Feature flag gating admin projects, the admin pages and the picker endpoints. */
+export const PROJECTS_FEATURE = 'projects';
+
+/** Feature flag gating projects users create themselves. */
+export const USER_PROJECTS_FEATURE = 'userProjects';
+
+import {
+  MAX_FILES_CEILING,
+  MAX_MEMBERS,
+  PROJECT_TIERS,
+  TIER_POLICIES
+} from './projectConstants.js';
+
+export { MAX_FILES_CEILING, MAX_MEMBERS, PROJECT_TIERS, TIER_POLICIES };
+
+/** Built-in `platform.projects` values. */
+export const DEFAULT_PROJECT_SETTINGS = Object.freeze({
+  tierPolicy: 'ihub',
+  limits: Object.freeze({
+    maxFiles: 25,
+    maxFileBytes: 20 * 1024 * 1024,
+    maxProjectBytes: 200 * 1024 * 1024,
+    maxProjectsPerUser: 20
+  }),
+  sharing: Object.freeze({
+    allowUsers: true,
+    allowGroups: true,
+    allowEveryone: false
+  }),
+  retentionDays: 0,
+  loadAllMaxTokens: 50000,
+  kinds: Object.freeze({}),
+  encryption: Object.freeze({ keyProvider: 'local-file' })
+});
+
+function readBoolean(value, fallback) {
+  return typeof value === 'boolean' ? value : fallback;
+}
+
+function readNumber(value, fallback) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function readPositive(value, fallback) {
+  const parsed = readNumber(value, fallback);
+  return parsed > 0 ? Math.floor(parsed) : fallback;
+}
+
+/**
+ * The effective `platform.projects` block, every key present and every
+ * number inside its bounds.
+ *
+ * `limits.maxFiles` is clamped to the hard ceiling; `maxProjectsPerUser` of
+ * zero or less means no cap, the way every other cap on the platform works;
+ * `retentionDays` of zero or less keeps user projects until deleted.
+ *
+ * @param {Object} [platformConfig] - Platform configuration.
+ * @returns {{tierPolicy: string, limits: {maxFiles: number, maxFileBytes: number,
+ *   maxProjectBytes: number, maxProjectsPerUser: number}, sharing: {allowUsers: boolean,
+ *   allowGroups: boolean, allowEveryone: boolean}, retentionDays: number,
+ *   loadAllMaxTokens: number, kinds: Object<string, boolean>, encryption: {keyProvider: string}}}
+ */
+export function projectSettings(platformConfig) {
+  const block = platformConfig?.projects || {};
+  const limits = block.limits || {};
+  const sharing = block.sharing || {};
+  const defaults = DEFAULT_PROJECT_SETTINGS;
+  const tierPolicy = TIER_POLICIES.includes(block.tierPolicy)
+    ? block.tierPolicy
+    : defaults.tierPolicy;
+  return {
+    tierPolicy,
+    limits: {
+      maxFiles: Math.min(
+        MAX_FILES_CEILING,
+        readPositive(limits.maxFiles, defaults.limits.maxFiles)
+      ),
+      maxFileBytes: readPositive(limits.maxFileBytes, defaults.limits.maxFileBytes),
+      maxProjectBytes: readPositive(limits.maxProjectBytes, defaults.limits.maxProjectBytes),
+      maxProjectsPerUser: Math.max(
+        0,
+        Math.floor(readNumber(limits.maxProjectsPerUser, defaults.limits.maxProjectsPerUser))
+      )
+    },
+    sharing: {
+      allowUsers: readBoolean(sharing.allowUsers, defaults.sharing.allowUsers),
+      allowGroups: readBoolean(sharing.allowGroups, defaults.sharing.allowGroups),
+      allowEveryone: readBoolean(sharing.allowEveryone, defaults.sharing.allowEveryone)
+    },
+    retentionDays: Math.max(0, Math.floor(readNumber(block.retentionDays, defaults.retentionDays))),
+    loadAllMaxTokens: readPositive(block.loadAllMaxTokens, defaults.loadAllMaxTokens),
+    kinds:
+      block.kinds && typeof block.kinds === 'object' && !Array.isArray(block.kinds)
+        ? { ...block.kinds }
+        : {},
+    encryption: {
+      keyProvider:
+        typeof block.encryption?.keyProvider === 'string' && block.encryption.keyProvider
+          ? block.encryption.keyProvider
+          : defaults.encryption.keyProvider
+    }
+  };
+}
+
+/**
+ * Whether admin projects and their pages are switched on.
+ *
+ * @param {Object} [featureConfig] - Saved feature flags.
+ * @returns {boolean}
+ */
+export function isProjectsConfigured(featureConfig = {}) {
+  return isFeatureEnabled(PROJECTS_FEATURE, featureConfig);
+}
+
+/**
+ * Whether users may create projects of their own: both flags on. Storage
+ * availability is the repository's to answer.
+ *
+ * @param {Object} [featureConfig] - Saved feature flags.
+ * @returns {boolean}
+ */
+export function isUserProjectsConfigured(featureConfig = {}) {
+  return (
+    isProjectsConfigured(featureConfig) && isFeatureEnabled(USER_PROJECTS_FEATURE, featureConfig)
+  );
+}
+
+/**
+ * The `projects` block `GET /api/configs/platform` sends: what the client
+ * needs to decide whether to show projects at all, and the limits the
+ * dialogs display. The server enforces the same.
+ *
+ * @param {Object} featureConfig - Saved feature flags.
+ * @param {Object} platformConfig - Platform configuration.
+ * @param {Object} [options]
+ * @param {boolean} [options.storageAvailable=false] - A storage provider came up.
+ * @returns {Object}
+ */
+export function projectsClientConfig(
+  featureConfig = {},
+  platformConfig = {},
+  { storageAvailable = false } = {}
+) {
+  const settings = projectSettings(platformConfig);
+  const enabled = storageAvailable && isProjectsConfigured(featureConfig);
+  return {
+    enabled,
+    userProjects: enabled && isUserProjectsConfigured(featureConfig),
+    tierPolicy: settings.tierPolicy,
+    // Phase 1 implements the iHub tier only; the policy is validated and
+    // shown, but every value reads as `ihub` at runtime.
+    tiers: ['ihub'],
+    limits: settings.limits,
+    sharing: settings.sharing,
+    retentionDays: settings.retentionDays
+  };
+}

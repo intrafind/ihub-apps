@@ -8,6 +8,7 @@ import {
   LANGUAGE_CODE_PATTERN
 } from '../../shared/validationPatterns.js';
 import { hasEndOutput } from '../../shared/workflowEndOutput.js';
+import { projectLinksSchema } from './projectSchema.js';
 
 /**
  * Workflow Configuration Schema
@@ -522,6 +523,13 @@ const baseWorkflowConfigSchema = z.object({
    * Agent nodes can reference source content via {{sources}} in their prompts.
    */
   sources: z.array(z.string()).optional(),
+
+  /**
+   * Projects linked to the workflow (#1036, spec 1 §6.2): a bare id or
+   * `{ id, mode, write }`. Prompt, planner and verifier nodes may name their
+   * own in `config.projects`, which wins over this list.
+   */
+  projects: projectLinksSchema.optional(),
 
   /**
    * Groups that are allowed to execute this workflow

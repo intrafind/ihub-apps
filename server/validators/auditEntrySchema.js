@@ -20,7 +20,12 @@ export const auditActions = [
   'import',
   'export',
   'login',
-  'logout'
+  'logout',
+  // Reading stored content when the admin asked for it to be audited
+  // (project item text, spec 1 §11).
+  'read',
+  // Changing who may reach something: project members.
+  'share'
 ];
 
 export const auditResults = ['success', 'failure'];

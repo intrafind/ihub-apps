@@ -601,6 +601,41 @@ export const platformConfigSchema = z
       })
       .passthrough()
       .prefault({}),
+    // Projects (#1036): the one container for documents, instructions and
+    // chats. `tierPolicy` is validated and shown but only `ihub` is active in
+    // this version. `limits.maxFiles` may not exceed 50; `maxProjectsPerUser`
+    // of zero or less means no cap; `retentionDays` of zero or less keeps user
+    // projects until deleted. `kinds` switches item kinds off by id.
+    projects: z
+      .object({
+        tierPolicy: z.enum(['ihub', 'both', 'ifinder']).prefault('ihub'),
+        limits: z
+          .object({
+            maxFiles: z.number().int().min(1).max(50).prefault(25),
+            maxFileBytes: z.number().int().positive().prefault(20971520),
+            maxProjectBytes: z.number().int().positive().prefault(209715200),
+            maxProjectsPerUser: z.number().int().prefault(20)
+          })
+          .passthrough()
+          .prefault({}),
+        sharing: z
+          .object({
+            allowUsers: z.boolean().prefault(true),
+            allowGroups: z.boolean().prefault(true),
+            allowEveryone: z.boolean().prefault(false)
+          })
+          .passthrough()
+          .prefault({}),
+        retentionDays: z.number().prefault(0),
+        loadAllMaxTokens: z.number().int().positive().prefault(50000),
+        kinds: z.record(z.string(), z.boolean()).prefault({}),
+        encryption: z
+          .object({ keyProvider: z.string().prefault('local-file') })
+          .passthrough()
+          .prefault({})
+      })
+      .passthrough()
+      .prefault({}),
     // Storage abstraction: which provider backs runtime data (documents,
     // append-logs, locks, change events). Durable chats are its first consumer
     // — `server/storage/bootstrap.js` brings this provider up at boot and the

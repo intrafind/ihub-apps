@@ -79,7 +79,15 @@ export const CONFIG_NAMESPACES = Object.freeze({
   /** `contents/agents/profiles/*.json` — agent profiles; `agents/memory` is runtime state. */
   agents: Object.freeze({ dir: 'agents/profiles', raw: true }),
   /** `contents/locales/<lang>.json` — translation overrides layered over the builtin locales. */
-  locales: Object.freeze({ dir: 'locales', raw: true })
+  locales: Object.freeze({ dir: 'locales', raw: true }),
+  /**
+   * `contents/projects/*.json` — admin projects: the knowledge an admin links
+   * to apps, workflows and agents (the successor of `config/sources.json`).
+   * Configuration for the same reason sources were: hand-edited, git-tracked,
+   * seeded from defaults and rewritten by migrations. The items' *text* is not
+   * configuration and lives in the `project-files` blob namespace.
+   */
+  projects: Object.freeze({ dir: 'projects', raw: true })
 });
 
 /**
@@ -225,8 +233,44 @@ export const RUNTIME_NAMESPACES = Object.freeze({
    * document is returned to admins as it is.
    */
   scheduledTaskMemory: 'scheduled-task-memory',
+  /**
+   * Projects users create themselves, one document per project (metadata,
+   * members and item metadata inline; item text is a `project-files` blob),
+   * filed under the owner so "my projects" is an index read. Admin projects
+   * stay configuration in the raw `projects` namespace.
+   */
+  userProjects: 'user-projects',
+  /**
+   * Share markers of user projects, one per member target, filed under the
+   * principal they reach (`user:<id>`, `group:<name>`, `everyone`), as for
+   * user prompts. An index, never the authority: the project's member list
+   * decides.
+   */
+  userProjectShares: 'user-project-shares',
+  /**
+   * Which chats live inside a project, one marker `<projectId>__<chatId>`
+   * filed under the project id, so "the chats of this project" is an index
+   * read. The chat's own `projectId` is the authority.
+   */
+  projectChats: 'project-chats',
   /** One-time import markers, shared by every runtime store that has one. */
   runtimeImports: 'runtime-imports'
+});
+
+/**
+ * Blob namespaces. Blobs are addressed by `(namespace, key)` on the blob
+ * facet and have no owner index, so a declaration here is only what keeps
+ * two features from picking the same name.
+ *
+ * @type {Readonly<Record<string, string>>}
+ */
+export const BLOB_NAMESPACES = Object.freeze({
+  /**
+   * Encrypted extracted text of project items, both ownerships, keyed
+   * `<projectId>__<itemId>__<versionId>` so a project's blobs are a prefix
+   * listing and a re-upload never overwrites.
+   */
+  projectFiles: 'project-files'
 });
 
 /**

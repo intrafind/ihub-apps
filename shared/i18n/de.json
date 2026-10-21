@@ -3473,7 +3473,11 @@
       "externalMappingsEmpty": "Noch keine externen Zuordnungen",
       "externalMappingsHelp": "Geben Sie externe Gruppennamen ein, die dieser Gruppe zugeordnet werden sollen. Benutzer mit diesen externen Gruppen werden automatisch dieser internen Gruppe zugewiesen.",
       "scheduledTasks": "Geplante Aufgaben",
-      "scheduledTasksHint": "Mitglieder dürfen geplante Aufgaben anlegen, die von selbst als das Mitglied laufen (erfordert die Funktion „Geplante Aufgaben“). Wird von Gruppen geerbt, die diese Gruppe erben."
+      "scheduledTasksHint": "Mitglieder dürfen geplante Aufgaben anlegen, die von selbst als das Mitglied laufen (erfordert die Funktion „Geplante Aufgaben“). Wird von Gruppen geerbt, die diese Gruppe erben.",
+      "projects": "Projekte",
+      "projectsHint": "Mitglieder dürfen eigene Projekte anlegen: Dokumente, Anweisungen und Chats (erfordert die Funktion „Benutzerprojekte“). Wird von Gruppen geerbt, die diese Gruppe erben.",
+      "projectSharing": "Projekte teilen",
+      "projectSharingHint": "Mitglieder dürfen andere Benutzer, Gruppen oder alle zu Projekten hinzufügen, die sie besitzen oder bearbeiten."
     },
     "contentAccess": {
       "title": "Gruppenzugriff",
