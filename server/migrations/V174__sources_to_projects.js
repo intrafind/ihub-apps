@@ -36,9 +36,58 @@ export function itemIdForSource(sourceId) {
   return `itm_${crypto.createHash('sha256').update(String(sourceId)).digest('hex').slice(0, 12)}`;
 }
 
-/** The project id a source id becomes. */
+const MAX_PROJECT_ID_LENGTH = 50;
+
+function hashOf(value) {
+  return crypto.createHash('sha256').update(String(value)).digest('hex').slice(0, 12);
+}
+
+/**
+ * Whether a source id can stay the project id: it must not look like a user
+ * project (`prj_` is reserved, spec 1 §2) and must fit the admin id limit.
+ */
+function keepsId(sourceId) {
+  return !sourceId.startsWith('prj_') && sourceId.length <= MAX_PROJECT_ID_LENGTH;
+}
+
+/**
+ * The project id a source id becomes on its own: kept when it may be,
+ * otherwise `legacy-<id>` when that fits, otherwise `legacy-<hash>`.
+ */
 export function projectIdForSource(sourceId) {
-  return String(sourceId).startsWith('prj_') ? `legacy-${sourceId}` : String(sourceId);
+  const id = String(sourceId);
+  if (keepsId(id)) return id;
+  const prefixed = `legacy-${id}`;
+  return prefixed.length <= MAX_PROJECT_ID_LENGTH ? prefixed : `legacy-${hashOf(id)}`;
+}
+
+/**
+ * Deterministic, collision-free project ids for a whole source set, decided
+ * before any file is written: a remapped id that another source already
+ * occupies falls back to `legacy-<hash>`.
+ *
+ * @param {Array<{id?: string}>} sources
+ * @returns {Map<string, string>} source id → project id
+ */
+export function projectIdsForSources(sources) {
+  const ids = [];
+  for (const source of sources) {
+    if (typeof source?.id === 'string' && source.id && !ids.includes(source.id))
+      ids.push(source.id);
+  }
+  const taken = new Set(ids.filter(keepsId));
+  const map = new Map();
+  for (const id of ids) {
+    if (keepsId(id)) {
+      map.set(id, id);
+      continue;
+    }
+    let candidate = projectIdForSource(id);
+    if (taken.has(candidate)) candidate = `legacy-${hashOf(id)}`;
+    taken.add(candidate);
+    map.set(id, candidate);
+  }
+  return map;
 }
 
 function hostOf(url) {
@@ -207,7 +256,7 @@ function sameJson(a, b) {
  * Rewrite one document in place: `sources` → `projects`, placeholders,
  * `source_*` tools. Returns whether anything changed.
  */
-function rewriteDocument(doc, modeOf, ctx, label, { textFields = ['system'] } = {}) {
+function rewriteDocument(doc, modeOf, idOf, ctx, label, { textFields = ['system'] } = {}) {
   if (!doc || typeof doc !== 'object') return false;
   const before = JSON.stringify(doc);
   if (Array.isArray(doc.sources)) {
@@ -217,7 +266,7 @@ function rewriteDocument(doc, modeOf, ctx, label, { textFields = ['system'] } = 
         const mode = modeOf(id);
         if (!mode)
           ctx.warn(`${label}: source "${id}" is not in config/sources.json — linked in auto mode`);
-        return { id: projectIdForSource(id), mode: mode || 'auto', write: false };
+        return { id: idOf(id), mode: mode || 'auto', write: false };
       });
     const existing = Array.isArray(doc.projects) ? doc.projects : [];
     const known = new Set(existing.map(link => (typeof link === 'string' ? link : link?.id)));
@@ -302,11 +351,14 @@ export async function up(ctx) {
     sources = Array.isArray(raw) ? raw : Array.isArray(raw?.sources) ? raw.sources : [];
   }
 
-  // Preflight: ids that would collide with user projects.
-  for (const source of sources) {
-    if (typeof source?.id === 'string' && source.id.startsWith('prj_')) {
+  // Preflight: ids that would collide with user projects or exceed the admin
+  // id limit are remapped for the whole set before anything is written.
+  const ids = projectIdsForSources(sources);
+  const idOf = id => ids.get(id) || projectIdForSource(id);
+  for (const [sourceId, projectId] of ids) {
+    if (sourceId !== projectId) {
       ctx.log(
-        `Source "${source.id}" is remapped to "${projectIdForSource(source.id)}" (the prj_ prefix belongs to user projects)`
+        `Source "${sourceId}" is remapped to "${projectId}" (the prj_ prefix belongs to user projects and ids are at most ${MAX_PROJECT_ID_LENGTH} characters)`
       );
     }
   }
@@ -322,6 +374,7 @@ export async function up(ctx) {
   for (const source of sources) {
     if (typeof source?.id !== 'string' || !source.id) continue;
     const { project, item } = projectFromSource(source, now);
+    project.id = idOf(source.id);
     const relPath = `projects/${project.id}.json`;
     if (await ctx.fileExists(relPath)) {
       ctx.log(`Project ${project.id} already exists — not overwritten`);
@@ -339,17 +392,17 @@ export async function up(ctx) {
   // 2–4. Links, placeholders and tool lists on apps, workflows and profiles.
   let rewritten = 0;
   await eachFile(ctx, 'apps', (app, relPath) => {
-    const changed = rewriteDocument(app, modeOf, ctx, relPath, { textFields: ['system'] });
+    const changed = rewriteDocument(app, modeOf, idOf, ctx, relPath, { textFields: ['system'] });
     if (changed) rewritten += 1;
     return changed;
   });
   await eachFile(ctx, 'workflows', (workflow, relPath) => {
-    let changed = rewriteDocument(workflow, modeOf, ctx, relPath, { textFields: [] });
+    let changed = rewriteDocument(workflow, modeOf, idOf, ctx, relPath, { textFields: [] });
     for (const node of Array.isArray(workflow?.nodes) ? workflow.nodes : []) {
       if (!node?.config || typeof node.config !== 'object') continue;
       const label = `${relPath} node ${node.id}`;
       if (
-        rewriteDocument(node.config, modeOf, ctx, label, {
+        rewriteDocument(node.config, modeOf, idOf, ctx, label, {
           textFields: ['system', 'prompt', 'instructions']
         })
       ) {
@@ -359,7 +412,9 @@ export async function up(ctx) {
       if (
         template &&
         typeof template === 'object' &&
-        rewriteDocument(template, modeOf, ctx, `${label} taskTemplate`, { textFields: ['system'] })
+        rewriteDocument(template, modeOf, idOf, ctx, `${label} taskTemplate`, {
+          textFields: ['system']
+        })
       ) {
         changed = true;
       }
@@ -368,7 +423,9 @@ export async function up(ctx) {
     return changed;
   });
   await eachFile(ctx, 'agents/profiles', (profile, relPath) => {
-    const changed = rewriteDocument(profile, modeOf, ctx, relPath, { textFields: ['system'] });
+    const changed = rewriteDocument(profile, modeOf, idOf, ctx, relPath, {
+      textFields: ['system']
+    });
     if (changed) rewritten += 1;
     return changed;
   });

@@ -22,6 +22,7 @@ import {
   itemIdForSource,
   precondition,
   projectIdForSource,
+  projectIdsForSources,
   up,
   version
 } from '../migrations/V174__sources_to_projects.js';
@@ -198,6 +199,19 @@ describe('V174 sources_to_projects', () => {
     assert.match(itemIdForSource('faq'), /^itm_[0-9a-f]{12}$/);
     assert.equal(itemIdForSource('faq'), itemIdForSource('faq'));
     assert.equal(projectIdForSource('prj_bad'), 'legacy-prj_bad');
+    const long = `prj_${'x'.repeat(60)}`;
+    assert.match(projectIdForSource(long), /^legacy-[0-9a-f]{12}$/);
+    assert.ok(projectIdForSource('y'.repeat(60)).length <= 50);
+    // Decided for the whole set: a remap that another source occupies falls back to a hash.
+    const ids = projectIdsForSources([
+      { id: 'prj_case' },
+      { id: 'legacy-prj_case' },
+      { id: 'faq' }
+    ]);
+    assert.equal(ids.get('faq'), 'faq');
+    assert.equal(ids.get('legacy-prj_case'), 'legacy-prj_case');
+    assert.match(ids.get('prj_case'), /^legacy-[0-9a-f]{12}$/);
+    assert.equal(new Set(ids.values()).size, 3);
     assert.equal(projectIdForSource('faq'), 'faq');
   });
 

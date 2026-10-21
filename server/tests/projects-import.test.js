@@ -203,4 +203,34 @@ describe('importPendingProjects', () => {
     assert.equal(found.error, null);
     assert.equal(found.import, undefined);
   });
+
+  it('deletes a shared plaintext file only after the last item importing it is ready', async () => {
+    const repository = getProjectRepository();
+    await write(path.join(scratch, 'sources/shared.md'), '# Shared\n\nOne file, two projects.');
+    for (const id of ['shared-a', 'shared-b']) {
+      await repository.createAdmin(
+        {
+          id,
+          name: { en: id },
+          items: [item(`itm_${id}`, { import: { file: 'sources/shared.md' } })]
+        },
+        { actor: SYSTEM }
+      );
+    }
+    const result = await importPendingProjects({ contentsDir: scratch, defaultsDir });
+    assert.equal(result.imported, 2);
+    assert.equal(result.failed, 0);
+    for (const id of ['shared-a', 'shared-b']) {
+      const project = await repository.get(id);
+      assert.equal(project.items[0].status, 'ready', id);
+      assert.match(
+        (await getItemText(project, project.items[0], { user: SYSTEM })).text,
+        /two projects/
+      );
+    }
+    await assert.rejects(
+      fs.stat(path.join(scratch, 'sources/shared.md')),
+      'gone after the last import'
+    );
+  });
 });

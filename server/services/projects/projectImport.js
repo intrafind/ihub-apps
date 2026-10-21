@@ -134,6 +134,15 @@ async function importAll({ service, contentsDir, defaultsDir: defaults, deleteIm
     return result;
   }
   const projects = await service.repository.listAdmin({ includeDisabled: true });
+  // Several items may import the same file (two sources shared a path): the
+  // plaintext copy goes only once the last of them is ready.
+  const pointerUses = new Map();
+  for (const project of projects) {
+    for (const item of project.items || []) {
+      const relative = needsImport(item) ? safeRelativeFile(item.import.file) : null;
+      if (relative) pointerUses.set(relative, (pointerUses.get(relative) || 0) + 1);
+    }
+  }
   for (const project of projects) {
     for (const item of project.items || []) {
       result.scanned += 1;
@@ -144,7 +153,8 @@ async function importAll({ service, contentsDir, defaultsDir: defaults, deleteIm
             service,
             contentsDir,
             defaultsDir: defaults,
-            deleteImported
+            deleteImported,
+            pointerUses
           });
           result[outcome] += 1;
         } else if (item.managedFile) {
@@ -173,7 +183,7 @@ async function importAll({ service, contentsDir, defaultsDir: defaults, deleteIm
 async function importFromPointer(
   project,
   item,
-  { service, contentsDir, defaultsDir: defaults, deleteImported }
+  { service, contentsDir, defaultsDir: defaults, deleteImported, pointerUses = new Map() }
 ) {
   const where = { component: COMPONENT, projectId: project.id, itemId: item.id };
   const resolved = await resolveImportFile(item.import.file, {
@@ -207,7 +217,10 @@ async function importFromPointer(
   await service.patchItem(project.id, item.id, entry => {
     delete entry.import;
   });
-  if (deleteImported && resolved.where === 'contents') {
+  const relative = safeRelativeFile(item.import.file);
+  const remaining = Math.max(0, (pointerUses.get(relative) || 1) - 1);
+  pointerUses.set(relative, remaining);
+  if (deleteImported && resolved.where === 'contents' && remaining === 0) {
     try {
       await fs.unlink(resolved.path);
       logger.info('Removed the imported plaintext file', { ...where, file: item.import.file });
