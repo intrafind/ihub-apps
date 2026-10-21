@@ -1,0 +1,102 @@
+{
+  "id": "knowledge",
+  "name": {
+    "en": "Project knowledge",
+    "de": "Projektwissen"
+  },
+  "description": {
+    "en": "Search, list and read the documents of the projects available in this chat, workflow or agent. Added automatically when a project is in scope.",
+    "de": "Dokumente der Projekte durchsuchen, auflisten und lesen, die in diesem Chat, Workflow oder Agenten verfügbar sind. Wird automatisch hinzugefügt, wenn ein Projekt im Zugriff ist."
+  },
+  "script": "knowledge.js",
+  "enabled": true,
+  "functions": {
+    "search": {
+      "description": {
+        "en": "Search the projects for passages that answer a question. Returns ranked passages with the document and section they come from, numbered for citation. Search with the key terms of the question; search again with other terms (synonyms, English terms, configuration keys) when the results do not answer it, or read a document in full with knowledge_read.",
+        "de": "Durchsucht die Projekte nach Passagen, die eine Frage beantworten. Liefert bewertete Passagen mit Dokument und Abschnitt, nummeriert zum Zitieren. Mit den Schlüsselbegriffen der Frage suchen; bei unpassenden Treffern mit anderen Begriffen (Synonyme, englische Begriffe, Konfigurationsschlüssel) erneut suchen oder ein Dokument mit knowledge_read vollständig lesen."
+      },
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": {
+              "en": "Key terms of the question",
+              "de": "Schlüsselbegriffe der Frage"
+            }
+          },
+          "project": {
+            "type": "string",
+            "description": {
+              "en": "Limit the search to one project id (see the list of available projects in this tool's description). Omit to search every project.",
+              "de": "Suche auf eine Projekt-ID beschränken (siehe die Liste der verfügbaren Projekte in der Beschreibung dieses Tools). Weglassen, um alle Projekte zu durchsuchen."
+            }
+          },
+          "limit": {
+            "type": "integer",
+            "description": {
+              "en": "Most passages to return (default 8)",
+              "de": "Maximale Anzahl Passagen (Standard 8)"
+            },
+            "default": 8,
+            "minimum": 1,
+            "maximum": 20
+          }
+        },
+        "required": ["query"]
+      }
+    },
+    "read": {
+      "description": {
+        "en": "Read one document in full, or one of its sections, by the document id from a search result or from knowledge_list. A long document comes back as an outline; pass a section id or heading to read that section.",
+        "de": "Ein Dokument vollständig oder abschnittsweise lesen, anhand der Dokument-ID aus einem Suchergebnis oder aus knowledge_list. Ein langes Dokument wird als Gliederung geliefert; mit einer Abschnitts-ID oder Überschrift den Abschnitt lesen."
+      },
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "document": {
+            "type": "string",
+            "description": {
+              "en": "The document id (itm_…)",
+              "de": "Die Dokument-ID (itm_…)"
+            }
+          },
+          "project": {
+            "type": "string",
+            "description": {
+              "en": "The project id the document belongs to; omit when the id is unambiguous",
+              "de": "Die Projekt-ID des Dokuments; weglassen, wenn die ID eindeutig ist"
+            }
+          },
+          "section": {
+            "type": "string",
+            "description": {
+              "en": "Section id or heading to read; omit for the whole document (an id ending in #2, #3, … continues a long section)",
+              "de": "Abschnitts-ID oder Überschrift; weglassen für das ganze Dokument (eine ID mit #2, #3, … setzt einen langen Abschnitt fort)"
+            }
+          }
+        },
+        "required": ["document"]
+      }
+    },
+    "list": {
+      "description": {
+        "en": "List the documents of the available projects with their id, name, kind, size, status and origin (uploaded, picked, linked, written).",
+        "de": "Dokumente der verfügbaren Projekte mit ID, Name, Art, Größe, Status und Herkunft (hochgeladen, ausgewählt, verlinkt, geschrieben) auflisten."
+      },
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "project": {
+            "type": "string",
+            "description": {
+              "en": "Limit to one project id",
+              "de": "Auf eine Projekt-ID beschränken"
+            }
+          }
+        }
+      }
+    }
+  }
+}

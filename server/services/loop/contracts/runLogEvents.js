@@ -318,6 +318,32 @@ export const sourcesAddedData = z.object({
   supports: z.array(z.object({ text: z.string(), urls: z.array(z.string()) })).optional()
 });
 
+/**
+ * Which projects a turn reached and how (#1036, spec 2 §6): per project,
+ * whether its documents were loaded into the prompt in full or left to the
+ * knowledge tools, so the client can say which happened.
+ */
+export const knowledgeScopeData = z.object({
+  budgetTokens: z.number().int().nonnegative().optional(),
+  projects: z
+    .array(
+      z.object({
+        id: z.string(),
+        name: z.string().optional(),
+        ownership: z.string().optional(),
+        origin: z.string().optional(),
+        mode: z.enum(['loaded', 'searched', 'unavailable']),
+        documents: z.number().int().nonnegative().optional(),
+        tokens: z.number().int().nonnegative().optional(),
+        pinned: z.number().int().nonnegative().optional(),
+        overBudget: z.boolean().optional(),
+        unavailable: z.number().int().nonnegative().optional(),
+        reason: z.string().optional()
+      })
+    )
+    .prefault([])
+});
+
 export const toolResultData = z.object({
   step: z.number().int().nonnegative(),
   callId: z.string(),
@@ -449,6 +475,11 @@ export const runLogEventSchema = z.discriminatedUnion('type', [
   }),
   z.object({ ...base, type: z.literal(RUN_LOG_EVENTS.HUMAN_EVENT), data: humanEventData }),
   z.object({ ...base, type: z.literal(RUN_LOG_EVENTS.SOURCES_ADDED), data: sourcesAddedData }),
+  z.object({
+    ...base,
+    type: z.literal(RUN_LOG_EVENTS.KNOWLEDGE_SCOPE),
+    data: knowledgeScopeData
+  }),
   z.object({ ...base, type: z.literal(RUN_LOG_EVENTS.ERROR), data: errorData })
 ]);
 
@@ -473,6 +504,7 @@ export const runLogEventDataSchemas = Object.freeze({
   [RUN_LOG_EVENTS.CONTEXT_COMPACTION]: contextCompactionData,
   [RUN_LOG_EVENTS.HUMAN_EVENT]: humanEventData,
   [RUN_LOG_EVENTS.SOURCES_ADDED]: sourcesAddedData,
+  [RUN_LOG_EVENTS.KNOWLEDGE_SCOPE]: knowledgeScopeData,
   [RUN_LOG_EVENTS.ERROR]: errorData
 });
 

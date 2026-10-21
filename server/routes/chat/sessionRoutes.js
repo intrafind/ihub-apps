@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 import configCache from '../../configCache.js';
+import { recordChatInProject, resolveChatProjects } from '../../services/knowledge/chatProjects.js';
 import { appendMcpAppContext } from '../../services/mcp/mcpAppContext.js';
 import { sendLLMError } from '../../services/loop/llmHttpErrors.js';
 import { logInteraction, trackSession } from '../../utils.js';
@@ -830,7 +831,9 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
           ephemeral,
           sendChatHistory,
           mcpAppContext,
-          voiceMode
+          voiceMode,
+          projectId: requestedProjectId,
+          projects: requestedProjects
         } = req.body;
 
         // `chatAuthRequired` authorizes the app, never the chat id. Once chats
@@ -838,6 +841,21 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
         // — and, through the stream, read back — another user's chat.
         const access = await authorizeChat(chatId, req.user, { intent: 'write' });
         if (!access.ok) return sendNotFound(res, 'Chat session');
+        // The chat's container project and the projects attached from the
+        // picker (#1036): checked against the caller's access here, carried
+        // on the request to the prompt builder, persisted with the chat.
+        const chatProjects = await resolveChatProjects({
+          req,
+          chat: access.chat,
+          app: configCache.getApps()?.data?.find(entry => entry?.id === appId) || null,
+          projectId: requestedProjectId,
+          projects: requestedProjects
+        });
+        if (!chatProjects.ok) {
+          return res
+            .status(chatProjects.status)
+            .json({ error: chatProjects.message, code: chatProjects.code });
+        }
 
         const defaultLang = configCache.getPlatform()?.defaultLanguage || 'en';
         const clientLanguage =
@@ -998,6 +1016,9 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
             })
               ? { metadata: { inputMode: VOICE_INPUT_MODE } }
               : undefined,
+            // The container project and the attached projects, when this
+            // turn changed them (`chatProjects`); merged over the stored chat.
+            ...(chatProjects.chatPatch ? { chat: chatProjects.chatPatch } : {}),
             // How this turn is being answered, so reopening the chat comes
             // back with the same setup rather than the app's defaults. Only
             // the keys this request actually carried: the repository merges
@@ -1058,7 +1079,9 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
           documentIds,
           voiceMode,
           user: req.user,
-          chatId
+          chatId,
+          projectId: chatProjects.containerId,
+          attachedProjectIds: chatProjects.attachedIds
         };
 
         // Resolve the SSE sink once, up front. In cluster mode the stream for
@@ -1067,6 +1090,15 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
         // anywhere and the answer has to come back on this POST instead.
         // Deciding from the sink itself (rather than checking membership and
         // fetching separately) keeps the two in step.
+        // A chat that starts inside a project is recorded there (the marker
+        // the project page lists chats by); the chat's own `projectId`, set
+        // by the persistence below, stays the authority.
+        if (persistence && chatProjects.newContainer) {
+          await recordChatInProject(chatProjects.containerId, chatId, {
+            ownerId: persistence.ownerId
+          });
+        }
+
         const streamOpen = hasChatClient(chatId);
 
         // From here the turn owns the chat. A persisted turn has to survive the

@@ -37,8 +37,8 @@ const HIDDEN_TOOL_IDS = new Set(['activate_skill', 'ask_user']);
  */
 export function toolKind(toolId) {
   const id = String(toolId || '').toLowerCase();
-  if (id === 'read_url' || id === 'ifinder_getcontent') return 'fetch';
-  if (id.includes('search') || id.startsWith('source_')) return 'search';
+  if (id === 'read_url' || id === 'ifinder_getcontent' || id === 'knowledge_read') return 'fetch';
+  if (id.includes('search') || id.startsWith('source_') || id === 'knowledge_list') return 'search';
   return 'tool';
 }
 
@@ -51,7 +51,9 @@ export function toolKind(toolId) {
  */
 export function searchScope(toolId) {
   const id = String(toolId || '').toLowerCase();
-  return id.startsWith('ifinder') || id.startsWith('source_') ? 'documents' : 'web';
+  return id.startsWith('ifinder') || id.startsWith('source_') || id.startsWith('knowledge_')
+    ? 'documents'
+    : 'web';
 }
 
 function queryOf(args) {

@@ -37,6 +37,7 @@ import { emptySourceSet, mergeSources } from '../../../shared/sources/index.js';
 import { declarationOf, declaredSources } from './producers/declared.js';
 import { envelopeSources } from './producers/envelope.js';
 import { iFinderSourceProducer } from './producers/ifinder.js';
+import { projectSourceProducer } from './producers/project.js';
 import { webSourceProducer } from './producers/web.js';
 import { hasSourceProvider } from './providers.js';
 import logger from '../../utils/logger.js';
@@ -66,7 +67,7 @@ function boundFrame(frame) {
   return bounded;
 }
 
-const BUILT_IN_PRODUCERS = [webSourceProducer, iFinderSourceProducer];
+const BUILT_IN_PRODUCERS = [webSourceProducer, iFinderSourceProducer, projectSourceProducer];
 const registered = [];
 
 /**

@@ -340,6 +340,84 @@ export function getContentStats(content) {
 const indexCache = new Map();
 
 /**
+ * Sections, searchable parts and an inverted index over one or more
+ * documents. Each part remembers the document it came from (`docId`), so a
+ * project of many items is one corpus the search ranks together.
+ *
+ * @param {Array<{id: string|null, text: string, name?: string}>} docs
+ * @returns {{sections: Array, parts: Array, postings: Map, avgLength: number,
+ *   docs: Array<{id: string|null, name: string, sections: number, chars: number}>,
+ *   tokens: number, characters: number}}
+ */
+function indexDocuments(docs) {
+  const sections = [];
+  const parts = [];
+  const postings = new Map();
+  const summary = [];
+  let totalLength = 0;
+  let characters = 0;
+  let tokens = 0;
+
+  for (const doc of docs) {
+    const text = typeof doc?.text === 'string' ? doc.text : '';
+    const docId = doc?.id ?? null;
+    const docSections = splitSections(text);
+    const stats = getContentStats(text);
+    characters += stats.characters;
+    tokens += stats.tokens;
+    summary.push({
+      id: docId,
+      name: String(doc?.name || docId || ''),
+      sections: docSections.length,
+      chars: stats.characters,
+      tokens: stats.tokens
+    });
+    for (const section of docSections) {
+      const sectionIndex = sections.length;
+      sections.push({ ...section, docId });
+      const texts = splitIntoParts(section.text);
+      const titleTerms = tokenize(section.title);
+      const pathTerms = tokenize(section.path.join(' '));
+      texts.forEach((partText, i) => {
+        const bodyTerms = tokenize(partText);
+        const tf = new Map();
+        const add = (term, weight) => tf.set(term, (tf.get(term) || 0) + weight);
+        for (const term of bodyTerms) add(term, 1);
+        for (const term of titleTerms) add(term, TITLE_WEIGHT);
+        for (const term of pathTerms) add(term, PATH_WEIGHT);
+
+        const partIndex = parts.length;
+        const length = bodyTerms.length + titleTerms.length;
+        totalLength += length;
+        parts.push({
+          sectionIndex,
+          docId,
+          part: i + 1,
+          partCount: texts.length,
+          text: partText,
+          length
+        });
+        for (const [term, weight] of tf) {
+          let list = postings.get(term);
+          if (!list) postings.set(term, (list = []));
+          list.push(partIndex, weight);
+        }
+      });
+    }
+  }
+
+  return {
+    sections,
+    parts,
+    postings,
+    avgLength: parts.length ? totalLength / parts.length : 0,
+    docs: summary,
+    tokens,
+    characters
+  };
+}
+
+/**
  * Sections, searchable parts and an inverted index for `content`, cached by
  * content hash so a document is indexed once, not on every tool call.
  * @param {string} content
@@ -348,45 +426,21 @@ export function getDocumentIndex(content) {
   const key = hashContent(content);
   const cached = cacheGet(indexCache, key);
   if (cached) return cached;
-
-  const sections = splitSections(content);
-  const parts = [];
-  const postings = new Map();
-  let totalLength = 0;
-
-  sections.forEach((section, sectionIndex) => {
-    const texts = splitIntoParts(section.text);
-    const titleTerms = tokenize(section.title);
-    const pathTerms = tokenize(section.path.join(' '));
-    texts.forEach((text, i) => {
-      const bodyTerms = tokenize(text);
-      const tf = new Map();
-      const add = (term, weight) => tf.set(term, (tf.get(term) || 0) + weight);
-      for (const term of bodyTerms) add(term, 1);
-      for (const term of titleTerms) add(term, TITLE_WEIGHT);
-      for (const term of pathTerms) add(term, PATH_WEIGHT);
-
-      const partIndex = parts.length;
-      const length = bodyTerms.length + titleTerms.length;
-      totalLength += length;
-      parts.push({ sectionIndex, part: i + 1, partCount: texts.length, text, length });
-      for (const [term, weight] of tf) {
-        let list = postings.get(term);
-        if (!list) postings.set(term, (list = []));
-        list.push(partIndex, weight);
-      }
-    });
-  });
-
-  const index = {
-    sections,
-    parts,
-    postings,
-    avgLength: parts.length ? totalLength / parts.length : 0,
-    ...getContentStats(content)
-  };
+  const index = indexDocuments([{ id: null, text: content }]);
   cacheSet(indexCache, key, index, INDEX_CACHE_SIZE);
   return index;
+}
+
+/**
+ * One index over several documents — a project's items as one corpus. Not
+ * cached here: the caller knows when its documents change and keys its own
+ * cache by that (the local knowledge provider does).
+ *
+ * @param {Array<{id: string, text: string, name?: string}>} docs
+ * @returns {ReturnType<typeof indexDocuments>}
+ */
+export function buildCorpusIndex(docs) {
+  return indexDocuments(Array.isArray(docs) ? docs : []);
 }
 
 /** The query term itself plus the indexed terms it is a prefix of. */
@@ -442,6 +496,79 @@ export function searchDocument(index, query) {
     }
   }
   return results.sort((a, b) => b.score - a.score || a.partIndex - b.partIndex);
+}
+
+/**
+ * Rank a corpus for `query`, optionally within some documents only.
+ *
+ * @param {ReturnType<typeof buildCorpusIndex>} index
+ * @param {string} query
+ * @param {{docIds?: Iterable<string>}} [options]
+ * @returns {Array<{partIndex: number, docId: string|null, score: number}>} best first
+ */
+export function searchCorpus(index, query, { docIds } = {}) {
+  const allowed = docIds ? new Set(docIds) : null;
+  return searchDocument(index, query)
+    .filter(hit => !allowed || allowed.has(index.parts[hit.partIndex].docId))
+    .map(hit => ({ ...hit, docId: index.parts[hit.partIndex].docId }));
+}
+
+/**
+ * The best passages of a corpus for `query`, as structured hits rather than
+ * rendered XML: the knowledge tools report them to the model and to the
+ * sources panel alike. A short hit (mostly a heading) brings its subsections
+ * along, as the source tools do.
+ *
+ * @param {ReturnType<typeof buildCorpusIndex>} index
+ * @param {string} query
+ * @param {{limit?: number, budgetChars?: number, docIds?: Iterable<string>}} [options]
+ * @returns {Array<{docId: string|null, sectionId: string, title: string, path: string[],
+ *   part: number, partCount: number, text: string, score: number, chars: number}>}
+ */
+export function collectHits(
+  index,
+  query,
+  { limit = MAX_SEARCH_RESULTS, budgetChars = RESULT_BUDGET_CHARS, docIds } = {}
+) {
+  const ranked = searchCorpus(index, query, { docIds });
+  if (!ranked.length) return [];
+  const best = ranked[0].score;
+  const included = new Set();
+  const hits = [];
+  let used = 0;
+  for (const { partIndex, score } of ranked) {
+    if (hits.length >= limit || score < best * MIN_RELATIVE_SCORE) break;
+    if (included.has(partIndex)) continue;
+    const hit = index.parts[partIndex];
+    const section = index.sections[hit.sectionIndex];
+    const members = [partIndex];
+    if (hit.partCount === 1 && hit.text.length < EXPAND_BELOW_CHARS) {
+      let chars = hit.text.length;
+      const end = subtreeEnd(index, partIndex);
+      for (let i = partIndex + 1; i < end; i++) {
+        if (included.has(i)) continue;
+        if (chars + index.parts[i].text.length > MAX_PART_CHARS) break;
+        members.push(i);
+        chars += index.parts[i].text.length;
+      }
+    }
+    const text = members.map(i => index.parts[i].text).join('\n\n');
+    if (used + text.length > budgetChars) continue;
+    members.forEach(i => included.add(i));
+    used += text.length;
+    hits.push({
+      docId: hit.docId ?? null,
+      sectionId: partId(section, hit.part, hit.partCount),
+      title: section.title,
+      path: [...section.path, section.title],
+      part: hit.part,
+      partCount: hit.partCount,
+      text,
+      score,
+      chars: text.length
+    });
+  }
+  return hits;
 }
 
 function escapeAttribute(value) {

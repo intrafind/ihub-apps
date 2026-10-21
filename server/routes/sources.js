@@ -104,6 +104,10 @@ async function resolve(req, res) {
 
 /** Answer a provider's failure with its status (a plain error is a logged 500). */
 function sendFailure(res, error, what) {
+  // A document that lives at its source (a project's link item) is opened there.
+  if (typeof error?.redirect === 'string' && /^https?:\/\//i.test(error.redirect)) {
+    return res.redirect(302, error.redirect);
+  }
   const status = Number.isInteger(error?.status) ? error.status : 500;
   if (status >= 500) logger.error(`Source ${what} failed`, { component: 'sources', error });
   return sendErrorResponse(res, status, error?.message || `Source ${what} failed`);

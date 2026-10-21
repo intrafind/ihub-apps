@@ -217,6 +217,9 @@ function isToolAllowed(tool, expose, visibleToolIds) {
   // types, not as raw tools.
   if (tool.id?.startsWith('workflow_')) return false;
   if (tool.id?.startsWith('source_')) return false;
+  // The project knowledge tools are scoped per request; over MCP the
+  // projects are resources of their own.
+  if (tool.id?.startsWith('knowledge_')) return false;
   if (tool.id === 'activate_skill' || tool.id === 'read_skill_resource') return false;
   // Never re-expose tools discovered from external (outbound) MCP servers —
   // that would proxy another server's tools (and their credentials) to inbound
