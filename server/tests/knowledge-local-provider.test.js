@@ -19,7 +19,13 @@ import { resolveGroupInheritance } from '../utils/authorization.js';
 import { locateConfigFile } from '../utils/configFileLocation.js';
 import { buildCorpusIndex, collectHits, searchCorpus } from '../sources/documentRetrieval.js';
 import { ProjectRepository } from '../services/projects/ProjectRepository.js';
-import { setTextReader, evictItemText } from '../services/knowledge/ItemTextService.js';
+import {
+  getItemText,
+  setTextReader,
+  evictItemText
+} from '../services/knowledge/ItemTextService.js';
+import { createSourceManager } from '../sources/index.js';
+import URLHandler from '../sources/URLHandler.js';
 import {
   LocalKnowledgeProvider,
   evictProjectIndex
@@ -488,6 +494,80 @@ describe('scope and planner: incomplete loads', () => {
     const pendingPlan = await planKnowledgeScope(pendingScope, { model, settings, ctx });
     assert.equal(pendingPlan.projects[0].mode, 'loaded');
     for (const id of [partial.id, gone.id, pending.id]) evictProjectIndex(id);
+  });
+});
+
+describe('link items their source cut short', () => {
+  it('are carried as truncated through the text service, the planner and knowledge_read', async () => {
+    const handler = createSourceManager().getHandler('ifinder');
+    const original = handler.getCachedContent;
+    // The iFinder handler cuts a document at `maxLength` (10 000 characters
+    // by default) and says so in its metadata.
+    handler.getCachedContent = async () => ({
+      content: '# Manual\n\nThe first part of a long manual about deposits.',
+      metadata: { type: 'ifinder', documentId: 'doc-1', truncated: true }
+    });
+    const linked = await repo.createUser({ owner: ADA, content: { name: 'Linked' } });
+    const item = {
+      id: 'itm_manual',
+      kind: 'ifinder-document',
+      name: 'Manual',
+      ref: { documentId: 'doc-1', searchProfile: 'default' },
+      storage: 'link',
+      pinned: false,
+      status: 'ready',
+      error: null,
+      provenance: { origin: 'linked', by: { id: ADA.id, name: ADA.name }, at: '2026-10-20' }
+    };
+    await repo.mutate(linked.id, p => ({ ...p, items: [item] }));
+    const ctx = { user: ADA, chatId: 'c-linked', language: 'en' };
+    try {
+      const fetched = await getItemText(linked, item, ctx);
+      assert.equal(fetched.truncated, true);
+
+      const scope = await resolveProjectScope({
+        appConfig: { id: 'chat', _projectId: linked.id },
+        user: ADA
+      });
+      const plan = await planKnowledgeScope(scope, {
+        model: { contextWindow: 100000 },
+        settings: { loadAllMaxTokens: 50000 },
+        ctx
+      });
+      assert.equal(plan.projects[0].mode, 'searched', 'a partial load is not loaded in full');
+      assert.ok(renderProjectsBlock(plan).includes('truncated="true"'));
+
+      const params = {
+        user: ADA,
+        chatId: 'c-linked',
+        language: 'en',
+        appConfig: { id: 'chat', _projectId: linked.id }
+      };
+      const doc = await read({ ...params, document: 'itm_manual' });
+      assert.equal(doc.retrieval.mode, 'full');
+      assert.equal(doc.retrieval.sourceTruncated, true);
+      assert.match(doc.note, /only its beginning/);
+      assert.equal(
+        doc.sources[0].read.truncated,
+        true,
+        'the source card does not claim a full read'
+      );
+
+      const found = await runToolCallScope([], () => search({ ...params, query: 'deposits' }));
+      assert.deepEqual(found.retrieval.projects[0].truncatedDocuments, ['itm_manual']);
+    } finally {
+      handler.getCachedContent = original;
+      evictProjectIndex(linked.id);
+    }
+  });
+
+  it('a URL fetch cut at its length limit says so in its metadata', async () => {
+    const handler = new URLHandler();
+    handler.getWebContentExtractor = async () => ({
+      extract: async () => ({ content: 'start of a page', truncated: true, metadata: {} })
+    });
+    const loaded = await handler.loadContent({ url: 'https://example.com/long' });
+    assert.equal(loaded.metadata.truncated, true);
   });
 });
 
