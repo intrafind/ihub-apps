@@ -80,3 +80,7 @@ decision), edit its condition, or remove it, using only the keyboard. This is th
 dragging a line between two steps on the canvas and follows the same rules (no connections across a
 loop boundary). The delete button on a step is also shown while it has keyboard focus, not only on
 mouse hover.
+
+## OpenRouter as a provider
+
+**Admin → Models → Import from URL** has an **OpenRouter** preset when you create a new provider: one click fills in the name, ID `openrouter`, the OpenAI-compatible API type and `https://openrouter.ai/api/v1`. Enter your OpenRouter key, load the model list and import the models you want; the key is stored encrypted on the provider (or set `OPENROUTER_API_KEY`). Models that generate images or audio instead of text are marked and not selected by **Select all**.
