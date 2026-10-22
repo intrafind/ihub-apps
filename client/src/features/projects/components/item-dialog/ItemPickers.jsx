@@ -134,13 +134,19 @@ export function UrlPicker({ draft, update, checkUrl, errorMessage }) {
   const { t } = useTranslation();
   const [check, setCheck] = useState(null);
 
+  // A check answers for the URL it was started for: one that comes back
+  // after the URL was edited (or checked again) is dropped, so a slow answer
+  // never reports on an earlier URL.
   const runCheck = async () => {
-    setCheck({ checking: true });
+    const url = draft.url.trim();
+    setCheck({ checking: true, url });
+    let outcome;
     try {
-      setCheck(await checkUrl(draft.url.trim()));
+      outcome = await checkUrl(url);
     } catch (err) {
-      setCheck({ ok: false, error: errorMessage(err) });
+      outcome = { ok: false, error: errorMessage(err) };
     }
+    setCheck(current => (current?.url === url ? { ...outcome, url } : current));
   };
 
   return (
@@ -269,7 +275,8 @@ export function IFinderDocumentPicker({ draft, update, searchIFinder, errorMessa
   const [error, setError] = useState(null);
 
   const search = async () => {
-    if (!query.trim()) return;
+    // Enter in the field reaches here too, not only the (disabled) button.
+    if (!query.trim() || searching) return;
     setSearching(true);
     setError(null);
     try {
@@ -337,7 +344,12 @@ export function IFinderDocumentPicker({ draft, update, searchIFinder, errorMessa
                     update({
                       documentId: result.documentId,
                       documentTitle: result.title || result.documentId,
-                      name: draft.name || result.title || ''
+                      // The name follows the picked document until the user
+                      // types one of their own.
+                      name:
+                        !draft.name || draft.name === draft.documentTitle
+                          ? result.title || ''
+                          : draft.name
                     })
                   }
                   aria-pressed={selected}
