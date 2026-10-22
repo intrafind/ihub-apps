@@ -598,6 +598,70 @@ describe('link items their source cut short', () => {
     }
   });
 
+  it('tell an iFinder search missing documents it could not fetch from a cut one', async () => {
+    const handler = createSourceManager().getHandler('ifinder');
+    const original = handler.getCachedContent;
+    handler.getCachedContent = async () => ({
+      content: '<document id="doc-1" title="Deposits">\nThe deposit is returned.\n</document>',
+      metadata: {
+        type: 'ifinder',
+        documents: [{ documentId: 'doc-1', truncated: false }],
+        failedDocuments: [{ documentId: 'doc-2', error: 'timeout' }]
+      }
+    });
+    const searchProject = await repo.createUser({ owner: ADA, content: { name: 'Search' } });
+    const item = {
+      id: 'itm_fixed_query',
+      kind: 'ifinder-query',
+      name: 'Deposit search',
+      ref: { query: 'deposit', searchProfile: 'default' },
+      storage: 'link',
+      pinned: false,
+      status: 'ready',
+      error: null,
+      provenance: { origin: 'linked', by: { id: ADA.id, name: ADA.name }, at: '2026-10-20' }
+    };
+    await repo.mutate(searchProject.id, p => ({ ...p, items: [item] }));
+    const ctx = { user: ADA, chatId: 'c-query', language: 'en' };
+    try {
+      const fetched = await getItemText(searchProject, item, ctx);
+      assert.equal(fetched.truncated, false, 'nothing was cut at a length limit');
+      assert.deepEqual(fetched.failed, ['doc-2']);
+
+      const scope = await resolveProjectScope({
+        appConfig: { id: 'chat', _projectId: searchProject.id },
+        user: ADA
+      });
+      const plan = await planKnowledgeScope(scope, {
+        model: { contextWindow: 100000 },
+        settings: { loadAllMaxTokens: 50000 },
+        ctx
+      });
+      assert.equal(plan.projects[0].mode, 'searched', 'a partial result is not loaded in full');
+      const block = renderProjectsBlock(plan);
+      assert.ok(block.includes('incomplete="true"'));
+      assert.ok(!block.includes('truncated="true"'));
+
+      const params = {
+        user: ADA,
+        chatId: 'c-query',
+        language: 'en',
+        appConfig: { id: 'chat', _projectId: searchProject.id }
+      };
+      const doc = await read({ ...params, document: 'itm_fixed_query' });
+      assert.equal(doc.retrieval.sourceFailed, 1);
+      assert.match(doc.note, /could not be loaded/);
+      assert.doesNotMatch(doc.note, /only its beginning/);
+      assert.equal(doc.sources[0].read.truncated, true);
+
+      const found = await runToolCallScope([], () => search({ ...params, query: 'deposit' }));
+      assert.deepEqual(found.retrieval.projects[0].incompleteDocuments, ['itm_fixed_query']);
+    } finally {
+      handler.getCachedContent = original;
+      evictProjectIndex(searchProject.id);
+    }
+  });
+
   it('a URL fetch cut at its length limit says so in its metadata', async () => {
     const handler = new URLHandler();
     handler.getWebContentExtractor = async () => ({

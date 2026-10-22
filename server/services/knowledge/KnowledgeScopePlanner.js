@@ -189,9 +189,10 @@ export async function planKnowledgeScope(scope, { model, settings, ctx }) {
       effective = 'searched';
     }
     // A document its source handed over only in part (a link past its
-    // handler's length limit) is in the prompt as far as it goes, marked
-    // `truncated`: the project is not "loaded in full" either.
-    if (effective === 'loaded' && injected.some(doc => doc.sourceTruncated)) {
+    // handler's length limit, marked `truncated`; an iFinder search missing
+    // documents it could not fetch, marked `incomplete`) is in the prompt as
+    // far as it goes: the project is not "loaded in full" either.
+    if (effective === 'loaded' && injected.some(doc => doc.sourceTruncated || doc.sourceFailed)) {
       effective = 'searched';
     }
     // Pinned first, so the cap drops unpinned text before anything pinned.
@@ -278,7 +279,7 @@ export function renderProjectsBlock(plan) {
       continue;
     }
     lines.push(`  <project ${attrs.join(' ')}>`);
-    for (const { doc, text, truncated } of project.injected) {
+    for (const { doc, text, truncated, sourceFailed } of project.injected) {
       const docAttrs = [
         `id="${escapeAttribute(doc.id)}"`,
         `name="${escapeAttribute(doc.name)}"`,
@@ -286,6 +287,7 @@ export function renderProjectsBlock(plan) {
       ];
       if (doc.pinned) docAttrs.push('pinned="true"');
       if (truncated) docAttrs.push('truncated="true"');
+      if (sourceFailed) docAttrs.push('incomplete="true"');
       lines.push(
         `    <document ${docAttrs.join(' ')}>`,
         neutralizeProjectText(text),

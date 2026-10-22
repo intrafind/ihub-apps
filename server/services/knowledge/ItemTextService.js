@@ -130,19 +130,27 @@ function handlerCallOf(item, ctx) {
 }
 
 /**
- * Whether a handler result is only part of its document: the handler cut it
- * at its length limit (`metadata.truncated`; iFinder at `maxLength`, 10 000
- * characters by default), or, for an iFinder search, cut one of the
- * documents it loaded.
+ * How much of its document a handler result is, for two different reasons
+ * the model is told apart:
+ *
+ *  - `truncated`: the handler cut the text at its length limit
+ *    (`metadata.truncated`; iFinder at `maxLength`, 10 000 characters by
+ *    default), or, for an iFinder search, cut one of the documents it loaded;
+ *  - `failed`: an iFinder search found documents whose content could not be
+ *    fetched (`metadata.failedDocuments`), so they are missing from the text.
  *
  * @param {Object|undefined} metadata
- * @returns {boolean}
+ * @returns {{truncated: boolean, failed: string[]}}
  */
-function isTruncated(metadata) {
-  if (metadata?.truncated === true) return true;
-  return Array.isArray(metadata?.documents)
-    ? metadata.documents.some(entry => entry?.truncated === true)
-    : false;
+function completenessOf(metadata) {
+  const truncated =
+    metadata?.truncated === true ||
+    (Array.isArray(metadata?.documents) &&
+      metadata.documents.some(entry => entry?.truncated === true));
+  const failed = Array.isArray(metadata?.failedDocuments)
+    ? metadata.failedDocuments.map(entry => String(entry?.documentId ?? '')).filter(Boolean)
+    : [];
+  return { truncated, failed };
 }
 
 /**
@@ -180,9 +188,11 @@ function assertPageReadable(pageId, user, where) {
  * @param {Object} project
  * @param {Object} item
  * @param {import('./KnowledgeProvider.js').KnowledgeContext} ctx
- * @returns {Promise<{text: string, cached: boolean, truncated: boolean}>} `truncated`
- *   says the source handed over only part of the document (a link item past its
- *   handler's length limit): the text is a prefix, and nothing here reaches the rest.
+ * @returns {Promise<{text: string, cached: boolean, truncated: boolean, failed: string[]}>}
+ *   `truncated` says the source handed over only part of the document (a link item past
+ *   its handler's length limit): the text is a prefix, and nothing here reaches the rest.
+ *   `failed` lists the documents an iFinder search found but could not fetch: they are
+ *   missing from the text.
  * @throws {KnowledgeError} `ITEM_NOT_READY`, `TEXT_UNAVAILABLE`, `SOURCE_FORBIDDEN`,
  *   `SOURCE_GONE`, `KIND_UNKNOWN`.
  */
@@ -195,7 +205,7 @@ export async function getItemText(project, item, ctx = {}) {
     const key = item.text?.blobKey;
     if (!key) throw new KnowledgeError('TEXT_UNAVAILABLE', 'The item holds no text yet', where);
     const cached = cacheGet(key);
-    if (cached !== null) return { text: cached, cached: true, truncated: false };
+    if (cached !== null) return { text: cached, cached: true, truncated: false, failed: [] };
     if (!textReader) {
       throw new KnowledgeError(
         'TEXT_UNAVAILABLE',
@@ -205,7 +215,7 @@ export async function getItemText(project, item, ctx = {}) {
     }
     const text = await textReader(project, item);
     cacheSet(key, text);
-    return { text, cached: false, truncated: false };
+    return { text, cached: false, truncated: false, failed: [] };
   }
   const call = handlerCallOf(item, ctx);
   if (!call) throw new KnowledgeError('KIND_UNKNOWN', `Unknown item kind ${item.kind}`, where);
@@ -221,7 +231,7 @@ export async function getItemText(project, item, ctx = {}) {
     const result = await handler.getCachedContent(call.config);
     const text =
       typeof result?.content === 'string' ? result.content : String(result?.content || '');
-    return { text, cached: false, truncated: isTruncated(result?.metadata) };
+    return { text, cached: false, ...completenessOf(result?.metadata) };
   } catch (error) {
     const message = String(error?.message || 'fetch failed');
     logger.warn('Could not fetch a link item', { component: COMPONENT, ...where, error: message });
