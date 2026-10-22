@@ -236,11 +236,9 @@ has models cannot be deleted.
 }
 ```
 
-The API key of a linked model is looked up in this order: the model's own `apiKey`, the
-provider's stored key, the `<MODEL_ID>_API_KEY` environment variable, then the provider's
-variable — `LLMHUB_API_KEY` for a provider with ID `llmhub`. A linked model never falls back to the
-variable of its API type, so an LLM Hub model speaking the OpenAI API is never sent
-`OPENAI_API_KEY`.
+The API key of a linked model is the model's own `apiKey` if it has one, otherwise the key stored
+on its provider. A linked model never uses the key of its API type, so an LLM Hub model speaking
+the OpenAI API is never sent the OpenAI key.
 
 ### Importing Models from an Endpoint
 
@@ -270,6 +268,8 @@ you pick, so they need not be typed in one by one.
    With **+ New provider**, you can also pick no model and choose **Create provider without
    models**: the provider is created with the endpoint's normalized base URL and the key, for an
    endpoint that lists no models yet or to import its models later.
+
+For [OpenRouter](https://openrouter.ai), choose the **OpenRouter** preset under **+ New provider** (ID `openrouter`, base URL `https://openrouter.ai/api/v1`) and enter your OpenRouter key. The endpoint URL is prefilled with the default and can be changed, for example to a regional endpoint; it is stored as the provider's base URL, which you can edit later under **Admin → Providers**.
 
 Supported listings: OpenAI and every OpenAI-compatible server (vLLM, LM Studio, Ollama, LLM Hub,
 OpenRouter, Together, Groq), Mistral, Anthropic and Google. The call goes through the platform's

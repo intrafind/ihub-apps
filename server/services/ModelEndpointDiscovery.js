@@ -270,6 +270,14 @@ function classifyType(item, meta, id) {
     }
   }
 
+  // OpenRouter: a model that cannot answer in text is an image or audio generator.
+  const outputs = lowerList(item.architecture?.output_modalities);
+  if (outputs.length > 0 && !outputs.includes('text')) {
+    if (outputs.includes('image')) return 'image';
+    if (outputs.includes('audio')) return 'audio';
+    return 'other';
+  }
+
   const methods = item.supportedGenerationMethods;
   if (Array.isArray(methods)) {
     // Google
@@ -293,7 +301,7 @@ function classifyType(item, meta, id) {
  *                max_output_length, input_modalities, end_of_life_date}
  *   - Mistral:   name, description, max_context_length, capabilities, deprecation
  *   - OpenRouter/Together: name/display_name, description, context_length,
- *                architecture.input_modalities, supported_parameters,
+ *                architecture.{input_modalities, output_modalities}, supported_parameters,
  *                top_provider.max_completion_tokens, type
  *   - Groq:      context_window
  *   - Anthropic: display_name
