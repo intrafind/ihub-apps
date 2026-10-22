@@ -71,7 +71,7 @@ function LocalizedField({ label, value, onChange, placeholder, rows = 4 }) {
             className={`px-2 py-0.5 text-xs rounded transition-colors ${
               currentLang === lang
                 ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300 font-medium'
-                : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'
+                : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
             }`}
           >
             {lang}

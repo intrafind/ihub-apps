@@ -355,7 +355,7 @@ function ExportDialog({
           </h2>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+            className="text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
             disabled={isExporting}
             aria-label={t('common.close', 'Close')}
           >
@@ -521,7 +521,7 @@ function ExportDialog({
                 <Icon
                   name="exclamation-circle"
                   size="sm"
-                  className="text-red-600 dark:text-red-400 mt-0.5"
+                  className="text-red-700 dark:text-red-400 mt-0.5"
                 />
                 <div className="text-sm text-red-800 dark:text-red-200">{exportError}</div>
               </div>

@@ -16,6 +16,8 @@ import {
   toggleAdminWorkflow
 } from '../../../api/adminApi';
 import { DataTable, SearchInput, FilterSelect } from '../components/data-table';
+import UploadConfigButton from '../components/UploadConfigButton';
+import AdminLoadError from '../components/AdminLoadError';
 
 function WorkflowNameCell({ workflow, currentLanguage }) {
   return (
@@ -31,7 +33,7 @@ function WorkflowNameCell({ workflow, currentLanguage }) {
 function GroupsCell({ workflow }) {
   const groups = workflow.allowedGroups || workflow.groups || [];
   if (groups.length === 0) {
-    return <span className="text-gray-400 text-xs">—</span>;
+    return <span className="text-gray-500 text-xs">—</span>;
   }
   return (
     <div className="flex flex-wrap gap-1">
@@ -297,25 +299,10 @@ function AdminWorkflowsPage() {
 
   if (error) {
     return (
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-md p-4">
-          <div className="flex">
-            <Icon name="exclamation-triangle" className="h-5 w-5 text-red-400" />
-            <div className="ml-3">
-              <h3 className="text-sm font-medium text-red-800 dark:text-red-200">
-                {t('admin.workflows.loadError', 'Error loading workflows')}
-              </h3>
-              <p className="mt-1 text-sm text-red-700 dark:text-red-300">{error}</p>
-              <button
-                onClick={() => window.location.reload()}
-                className="mt-2 text-sm text-red-600 dark:text-red-400 hover:text-red-500"
-              >
-                {t('common.retry', 'Retry')}
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
+      <AdminLoadError
+        title={t('admin.workflows.loadError', 'Error loading workflows')}
+        message={error}
+      />
     );
   }
 
@@ -350,29 +337,13 @@ function AdminWorkflowsPage() {
                 <Icon name="plus" className="h-4 w-4 mr-2" />
                 {t('admin.workflows.createNew', 'Create New Workflow')}
               </button>
-              <div className="relative">
-                <input
-                  type="file"
-                  accept=".json"
-                  onChange={handleUploadConfig}
-                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                  disabled={uploading}
-                />
-                <button
-                  type="button"
-                  className="inline-flex items-center justify-center rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 shadow-xs hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                  disabled={uploading}
-                  title={t('admin.workflows.uploadConfig', 'Upload Workflow Config')}
-                >
-                  <Icon
-                    name={uploading ? 'refresh' : 'upload'}
-                    className={`h-4 w-4 mr-2 ${uploading ? 'animate-spin' : ''}`}
-                  />
-                  {uploading
-                    ? t('admin.workflows.uploading', 'Uploading...')
-                    : t('admin.workflows.uploadConfig', 'Upload Config')}
-                </button>
-              </div>
+              <UploadConfigButton
+                onChange={handleUploadConfig}
+                uploading={uploading}
+                title={t('admin.workflows.uploadConfig', 'Upload Workflow Config')}
+                uploadingLabel={t('admin.workflows.uploading', 'Uploading...')}
+                label={t('admin.workflows.uploadConfig', 'Upload Config')}
+              />
             </div>
           </div>
         </div>

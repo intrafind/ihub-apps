@@ -138,7 +138,7 @@ export default function AttachedFilesList({
             <Icon
               name={expanded ? 'chevronUp' : 'chevronDown'}
               size="sm"
-              className="shrink-0 text-gray-400"
+              className="shrink-0 text-gray-500"
               aria-hidden
             />
           </button>
@@ -245,7 +245,7 @@ export default function AttachedFilesList({
                   type="button"
                   onClick={() => onRemoveFile(index)}
                   disabled={disabled || file.loading}
-                  className="shrink-0 text-gray-400 hover:text-red-600 dark:hover:text-red-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed p-1"
+                  className="shrink-0 text-gray-500 hover:text-red-600 dark:hover:text-red-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed p-1"
                   title={t('attachedFiles.remove', 'Remove file')}
                   aria-label={t('attachedFiles.remove', 'Remove file')}
                 >

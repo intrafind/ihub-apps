@@ -57,7 +57,7 @@ function ToolActivity({ activity, loading = false }) {
                   : 'globe-alt'
             }
             size="sm"
-            className="shrink-0 text-gray-400 dark:text-gray-500"
+            className="shrink-0 text-gray-500 dark:text-gray-400"
           />
         )}
         <span className="truncate">{headline}</span>
@@ -159,7 +159,7 @@ function StatusIcon({ item, fallback }) {
   if (item.status === 'error') {
     return <Icon name="exclamation-circle" size="sm" className="shrink-0 text-red-500" />;
   }
-  return <Icon name={fallback} size="sm" className="shrink-0 text-gray-400 dark:text-gray-500" />;
+  return <Icon name={fallback} size="sm" className="shrink-0 text-gray-500 dark:text-gray-400" />;
 }
 
 function ActivityItem({ item }) {
@@ -185,7 +185,7 @@ function ActivityItem({ item }) {
             </span>
           ))}
           {item.sources.length > 0 && (
-            <span className="text-gray-400 dark:text-gray-500">
+            <span className="text-gray-500 dark:text-gray-400">
               {t('toolActivity.sources', { count: item.sources.length })}
             </span>
           )}
@@ -232,16 +232,16 @@ function ActivityItem({ item }) {
             label && <span className="text-gray-700 dark:text-gray-300 break-all">{label}</span>
           )}
           {label !== host && host && (
-            <span className="text-gray-400 dark:text-gray-500">{host}</span>
+            <span className="text-gray-500 dark:text-gray-400">{host}</span>
           )}
           {page?.read?.words > 0 && (
-            <span className="text-gray-400 dark:text-gray-500">
+            <span className="text-gray-500 dark:text-gray-400">
               {t('toolActivity.wordsRead', { count: page.read.words })}
             </span>
           )}
           {page?.read?.truncated && (
             <span
-              className="text-amber-600 dark:text-amber-400"
+              className="text-amber-700 dark:text-amber-400"
               title={t('toolActivity.truncatedTitle', 'The page is longer than what was read')}
             >
               {t('toolActivity.truncated', 'truncated')}
@@ -250,7 +250,7 @@ function ActivityItem({ item }) {
           <ItemStatus item={item} />
         </div>
         {item.limitReached && (
-          <p className="mt-1 ms-5 text-amber-600 dark:text-amber-400">
+          <p className="mt-1 ms-5 text-amber-700 dark:text-amber-400">
             {t(
               'toolActivity.pageReadLimit',
               'Page read limit reached for this answer — ask to continue in the next message to read more.'
@@ -291,7 +291,7 @@ function ItemDetails({ item }) {
     <dl className="mt-1 ms-5 flex flex-wrap items-baseline gap-x-3 gap-y-1">
       {item.details.map(detail => (
         <div key={detail.name} className="inline-flex flex-wrap items-baseline gap-1 min-w-0">
-          <dt className="text-gray-400 dark:text-gray-500">{detail.name}</dt>
+          <dt className="text-gray-500 dark:text-gray-400">{detail.name}</dt>
           {detail.values.map(value => (
             <dd
               key={value.full ?? value.text}
@@ -302,7 +302,7 @@ function ItemDetails({ item }) {
             </dd>
           ))}
           {detail.more > 0 && (
-            <dd className="m-0 text-gray-400 dark:text-gray-500">
+            <dd className="m-0 text-gray-500 dark:text-gray-400">
               {t('toolActivity.moreValues', { count: detail.more })}
             </dd>
           )}
@@ -361,11 +361,11 @@ function SourceRow({ source }) {
         </span>
       )}
       {source.title && host && (
-        <span className="shrink-0 text-gray-400 dark:text-gray-500">{host}</span>
+        <span className="shrink-0 text-gray-500 dark:text-gray-400">{host}</span>
       )}
       {source.read?.ok && (
         <span
-          className="shrink-0 inline-flex items-center gap-0.5 text-emerald-600 dark:text-emerald-400"
+          className="shrink-0 inline-flex items-center gap-0.5 text-emerald-700 dark:text-emerald-400"
           title={
             source.kind === 'document'
               ? t('toolActivity.readDocumentTitle', 'The document was read')
@@ -378,7 +378,7 @@ function SourceRow({ source }) {
       )}
       {source.read?.ok === false && (
         <span
-          className="shrink-0 text-amber-600 dark:text-amber-400"
+          className="shrink-0 text-amber-700 dark:text-amber-400"
           title={t('toolActivity.readFailedTitle', 'The page could not be fetched')}
         >
           {t('toolActivity.readFailed', 'Not readable')}

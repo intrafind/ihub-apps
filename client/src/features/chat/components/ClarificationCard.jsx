@@ -297,7 +297,7 @@ function ClarificationCard({
       return (
         <div className="flex items-center justify-center p-6 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg">
           <div className="text-center">
-            <Icon name="paper-clip" size="lg" className="mx-auto text-gray-400 mb-2" />
+            <Icon name="paper-clip" size="lg" className="mx-auto text-gray-500 mb-2" />
             <p className="text-sm text-gray-500 dark:text-gray-400">
               {t('clarification.fileUploadPlaceholder', 'File upload not yet implemented')}
             </p>
@@ -403,7 +403,7 @@ function ClarificationCard({
             focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500
             ${
               !canSubmit()
-                ? 'bg-gray-200 text-gray-400 cursor-not-allowed dark:bg-gray-700 dark:text-gray-500'
+                ? 'bg-gray-200 text-gray-600 cursor-not-allowed dark:bg-gray-700 dark:text-gray-300'
                 : 'bg-indigo-600 text-white hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600'
             }
           `}
@@ -424,7 +424,7 @@ function ClarificationCard({
       </div>
 
       {/* Keyboard shortcut hint */}
-      <p className="mt-3 text-xs text-center text-gray-400 dark:text-gray-500">
+      <p className="mt-3 text-xs text-center text-gray-500 dark:text-gray-400">
         {t('clarification.keyboardHint', 'Press Ctrl+Enter to submit')}
       </p>
     </div>

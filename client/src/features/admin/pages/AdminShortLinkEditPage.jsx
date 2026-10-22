@@ -152,7 +152,7 @@ function AdminShortLinkEditPage() {
                 value={link.ownerId || ''}
                 readOnly
                 disabled
-                className="mt-1 block w-full border-gray-300 dark:border-gray-600 rounded-md shadow-xs bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400"
+                className="mt-1 block w-full border-gray-300 dark:border-gray-600 rounded-md shadow-xs bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400"
               />
             </div>
           )}

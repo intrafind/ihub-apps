@@ -118,7 +118,7 @@ function ProjectPageContent({ projectId }) {
   if (!project) {
     return (
       <div className="max-w-3xl mx-auto px-4 py-10 text-center">
-        <Icon name="folder-open" size="xl" className="mx-auto text-gray-400" />
+        <Icon name="folder-open" size="xl" className="mx-auto text-gray-500" />
         <p role="alert" className="mt-3 text-sm text-gray-700 dark:text-gray-300">
           {error ||
             t(

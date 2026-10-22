@@ -151,7 +151,7 @@ function SmartValueField({
           <button
             type="button"
             onClick={() => onChange({})}
-            className="text-[10px] text-blue-500 hover:text-blue-600"
+            className="text-[0.625rem] text-blue-500 hover:text-blue-600"
             title="Switch to JSON value (object/array)"
           >
             {}
@@ -161,7 +161,7 @@ function SmartValueField({
           <button
             type="button"
             onClick={() => onChange('')}
-            className="text-[10px] text-gray-500 hover:text-gray-700"
+            className="text-[0.625rem] text-gray-500 hover:text-gray-700"
             title="Switch back to scalar value"
           >
             abc

@@ -72,7 +72,7 @@ function PromptModal({
 
   const statusIcon = (status, fallback) =>
     status === 'success' ? (
-      <Icon name="check-circle" className="text-green-600" solid />
+      <Icon name="check-circle" className="text-green-700" solid />
     ) : status === 'error' ? (
       <Icon name="exclamation-circle" className="text-red-600" solid />
     ) : (

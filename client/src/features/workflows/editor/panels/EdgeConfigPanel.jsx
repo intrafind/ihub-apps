@@ -73,7 +73,7 @@ export function EdgeConfigPanel({ selectedEdge, variables, onUpdateEdge, onDelet
         </span>
         <button
           onClick={onClose}
-          className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 p-1"
+          className="text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 p-1"
           aria-label={t('common.close', 'Close')}
         >
           &#x2715;

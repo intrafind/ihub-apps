@@ -76,7 +76,7 @@ function AdminShortcutsModal({ isOpen, onClose }) {
             </h2>
             <button
               onClick={onClose}
-              className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+              className="text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
               aria-label={t('common.close', 'Close')}
             >
               <Icon name="x-mark" className="w-4 h-4" />
@@ -86,7 +86,7 @@ function AdminShortcutsModal({ isOpen, onClose }) {
           <div className="px-5 py-4 space-y-5">
             {SHORTCUTS.map(({ category, items }) => (
               <div key={category}>
-                <div className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2">
+                <div className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
                   {category}
                 </div>
                 <div className="space-y-1.5">
@@ -96,8 +96,8 @@ function AdminShortcutsModal({ isOpen, onClose }) {
                       <span className="flex items-center gap-1 shrink-0">
                         {keys.map((k, i) => (
                           <span key={i} className="flex items-center gap-1">
-                            {i > 0 && <span className="text-xs text-gray-400">then</span>}
-                            <kbd className="inline-flex items-center px-1.5 py-0.5 text-xs font-medium text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 rounded-sm border border-gray-200 dark:border-gray-600">
+                            {i > 0 && <span className="text-xs text-gray-500">then</span>}
+                            <kbd className="inline-flex items-center px-1.5 py-0.5 text-xs font-medium text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-sm border border-gray-200 dark:border-gray-600">
                               {k}
                             </kbd>
                           </span>
@@ -111,7 +111,7 @@ function AdminShortcutsModal({ isOpen, onClose }) {
           </div>
 
           <div className="px-5 py-3 border-t border-gray-200 dark:border-gray-700 text-center">
-            <span className="text-xs text-gray-400 dark:text-gray-500">
+            <span className="text-xs text-gray-500 dark:text-gray-400">
               {t('admin.shortcuts.hint', 'Shortcuts are disabled when typing in inputs')}
             </span>
           </div>

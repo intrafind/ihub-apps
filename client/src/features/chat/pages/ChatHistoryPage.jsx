@@ -82,7 +82,7 @@ function EmptyState({ icon, title, description, children }) {
       <Icon name={icon} size="xl" className="text-gray-300 dark:text-gray-600 mx-auto mb-3" />
       <p className="text-gray-500 dark:text-gray-400">{title}</p>
       {description && (
-        <p className="mt-1 text-sm text-gray-400 dark:text-gray-500">{description}</p>
+        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{description}</p>
       )}
       {children}
     </div>
@@ -136,11 +136,11 @@ function ChatRow({
   const summary = (
     <span className="flex-1 min-w-0">
       <span className="flex items-center gap-2 mb-0.5">
-        <span className="text-[15px] font-bold text-gray-900 dark:text-gray-100 truncate">
+        <span className="text-[0.9375rem] font-bold text-gray-900 dark:text-gray-100 truncate">
           {chat.displayTitle}
         </span>
         <span
-          className="flex-none text-[11px] font-semibold rounded-full px-2 py-0.5"
+          className="flex-none text-[0.6875rem] font-semibold rounded-full px-2 py-0.5"
           style={{
             color: chat.appColor,
             backgroundColor: hexToRgba(chat.appColor, 0.12)
@@ -150,7 +150,7 @@ function ChatRow({
         </span>
         {chat.projectName && (
           <span
-            className="flex-none inline-flex items-center gap-1 text-[11px] font-semibold rounded-full px-2 py-0.5 bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-200 max-w-[12rem]"
+            className="flex-none inline-flex items-center gap-1 text-[0.6875rem] font-semibold rounded-full px-2 py-0.5 bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-200 max-w-[12rem]"
             title={t('chatHistory.inProject', 'In project {{name}}', { name: chat.projectName })}
           >
             <Icon name="folder" size="xs" />
@@ -159,7 +159,7 @@ function ChatRow({
         )}
         {chat.origin?.createdVia === 'scheduled-task' && (
           <span
-            className="flex-none text-[11px] font-semibold rounded-full px-2 py-0.5 bg-indigo-100 text-indigo-800 dark:bg-indigo-900/40 dark:text-indigo-200"
+            className="flex-none text-[0.6875rem] font-semibold rounded-full px-2 py-0.5 bg-indigo-100 text-indigo-800 dark:bg-indigo-900/40 dark:text-indigo-200"
             title={chat.origin.taskName || undefined}
           >
             {t('chatHistory.scheduled', 'Scheduled')}
@@ -167,7 +167,7 @@ function ChatRow({
         )}
         {chat.status === 'running' && (
           <span
-            className="flex-none inline-flex items-center gap-1.5 text-[11px] font-semibold rounded-full px-2 py-0.5 bg-indigo-100 text-indigo-800 dark:bg-indigo-900/40 dark:text-indigo-200"
+            className="flex-none inline-flex items-center gap-1.5 text-[0.6875rem] font-semibold rounded-full px-2 py-0.5 bg-indigo-100 text-indigo-800 dark:bg-indigo-900/40 dark:text-indigo-200"
             title={t('chatHistory.runningHint', 'This chat is still working on an answer')}
           >
             <span
@@ -179,7 +179,7 @@ function ChatRow({
         )}
         {chat.hasUnseenActivity && (
           <span
-            className="flex-none text-[11px] font-semibold rounded-full px-2 py-0.5 bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200"
+            className="flex-none text-[0.6875rem] font-semibold rounded-full px-2 py-0.5 bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200"
             title={t('chatHistory.unseenHint', 'This chat answered while you were away')}
           >
             {t('chatHistory.unseen', 'New')}
@@ -236,7 +236,7 @@ function ChatRow({
               onClick={onStartRename}
               aria-label={t('chatHistory.rename', 'Rename chat')}
               title={t('chatHistory.rename', 'Rename chat')}
-              className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700 dark:hover:text-gray-200"
+              className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700 dark:hover:text-gray-200"
             >
               <Icon name="pencil" size="sm" />
             </button>
@@ -246,7 +246,7 @@ function ChatRow({
                 onClick={onMove}
                 aria-label={t('chatHistory.moveToProject', 'Move to project')}
                 title={t('chatHistory.moveToProject', 'Move to project')}
-                className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700 dark:hover:text-gray-200"
+                className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700 dark:hover:text-gray-200"
               >
                 <Icon name="folder-open" size="sm" />
               </button>
@@ -256,7 +256,7 @@ function ChatRow({
               onClick={onDelete}
               aria-label={t('chatHistory.delete', 'Delete chat')}
               title={t('chatHistory.delete', 'Delete chat')}
-              className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 dark:hover:text-red-400"
+              className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 dark:hover:text-red-400"
             >
               <Icon name="trash" size="sm" />
             </button>
@@ -290,11 +290,11 @@ function SharedRow({ share, timeLabel }) {
       </span>
       <span className="flex-1 min-w-0">
         <span className="flex items-center gap-2 mb-0.5">
-          <span className="text-[15px] font-bold text-gray-900 dark:text-gray-100 truncate">
+          <span className="text-[0.9375rem] font-bold text-gray-900 dark:text-gray-100 truncate">
             {share.displayTitle}
           </span>
           <span
-            className="flex-none text-[11px] font-semibold rounded-full px-2 py-0.5"
+            className="flex-none text-[0.6875rem] font-semibold rounded-full px-2 py-0.5"
             style={{
               color: share.appColor,
               backgroundColor: hexToRgba(share.appColor, 0.12)
@@ -304,7 +304,7 @@ function SharedRow({ share, timeLabel }) {
           </span>
           {!share.viewed && (
             <span
-              className="flex-none text-[11px] font-semibold rounded-full px-2 py-0.5 bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200"
+              className="flex-none text-[0.6875rem] font-semibold rounded-full px-2 py-0.5 bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200"
               title={t('chatHistory.sharedNewHint', 'You have not opened this yet')}
             >
               {t('chatHistory.sharedNew', 'New')}
@@ -620,7 +620,7 @@ export default function ChatHistoryPage() {
         {/* Header */}
         <div className="flex items-end justify-between gap-4 mb-6 flex-wrap">
           <div>
-            <h1 className="text-[26px] font-extrabold text-gray-900 dark:text-gray-100 tracking-tight">
+            <h1 className="text-[1.625rem] font-extrabold text-gray-900 dark:text-gray-100 tracking-tight">
               {activeView === 'shared'
                 ? t('chatHistory.sharedWithMe', 'Shared with me')
                 : t('chatHistory.title', 'Your chats')}
@@ -689,7 +689,7 @@ export default function ChatHistoryPage() {
         {/* Search + grouping */}
         <div className="flex gap-3 mb-6 flex-wrap">
           <div className="relative flex-1 min-w-50">
-            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">
+            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500">
               <Icon name="search" size="sm" />
             </span>
             <input
@@ -697,7 +697,7 @@ export default function ChatHistoryPage() {
               onChange={e => setQuery(e.target.value)}
               placeholder={t('chatHistory.searchPlaceholder', 'Search your chats…')}
               aria-label={t('chatHistory.searchPlaceholder', 'Search your chats…')}
-              className="w-full pl-11 pr-10 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm outline-hidden focus:border-indigo-400 dark:text-gray-100 dark:placeholder-gray-500"
+              className="w-full pl-11 pr-10 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm outline-hidden focus:border-indigo-400 dark:text-gray-100 dark:placeholder-gray-400"
             />
             {query && (
               <button
@@ -869,7 +869,7 @@ export default function ChatHistoryPage() {
             {histGroups.map(group => (
               <div key={group.key} className="mb-2">
                 {group.showLabel && (
-                  <h2 className="text-[11px] font-bold tracking-widest uppercase text-gray-500 dark:text-gray-400 mt-5 mb-2.5 px-1">
+                  <h2 className="text-[0.6875rem] font-bold tracking-widest uppercase text-gray-500 dark:text-gray-400 mt-5 mb-2.5 px-1">
                     {group.label}
                   </h2>
                 )}

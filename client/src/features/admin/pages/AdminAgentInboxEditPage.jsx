@@ -10,6 +10,7 @@ import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 
 import { getAdminApiErrorMessage } from '../../../api/adminApi';
+import AdminLoadError from '../components/AdminLoadError';
 // Parse a checklist-style markdown body into structured items so the form
 // editor can manipulate them. Lines that don't match the checkbox shape are
 // preserved as a header/footer block so we don't corrupt user-authored
@@ -228,11 +229,7 @@ export default function AdminAgentInboxEditPage() {
           </div>
         </div>
 
-        {error && (
-          <div className="mb-3 p-3 bg-red-50 border border-red-200 text-red-800 rounded-sm">
-            {error}
-          </div>
-        )}
+        {error && <AdminLoadError message={error} framed={false} className="mb-3" action={null} />}
 
         {view === 'raw' ? (
           <>
@@ -338,7 +335,7 @@ export default function AdminAgentInboxEditPage() {
                         value={item.text}
                         onChange={e => updateItem(idx, { text: e.target.value })}
                         className={`flex-1 rounded border-gray-300 shadow-xs text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 ${
-                          item.status === 'done' ? 'line-through text-gray-400' : ''
+                          item.status === 'done' ? 'line-through text-gray-500' : ''
                         }`}
                       />
                       <div className="flex flex-col gap-1">

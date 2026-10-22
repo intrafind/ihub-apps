@@ -208,7 +208,7 @@ function OfficeContextStrip({
               {headerTitle}
             </div>
             {summaryLine && (
-              <div className="text-[11px] text-slate-500 truncate dark:text-slate-400">
+              <div className="text-[0.6875rem] text-slate-500 truncate dark:text-slate-400">
                 {summaryLine}
               </div>
             )}

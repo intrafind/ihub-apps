@@ -355,7 +355,7 @@ function StartWorkflowModal({ workflow, isOpen, onClose, onStarted }) {
             <button
               onClick={handleClose}
               disabled={submitting}
-              className="text-gray-400 hover:text-gray-500 dark:hover:text-gray-300 transition-colors focus:outline-hidden focus:ring-2 focus:ring-indigo-500 rounded-sm"
+              className="text-gray-500 hover:text-gray-500 dark:hover:text-gray-300 transition-colors focus:outline-hidden focus:ring-2 focus:ring-indigo-500 rounded-sm"
               aria-label={t('common.close', 'Close')}
             >
               <Icon name="x" className="w-6 h-6" aria-hidden="true" />
@@ -372,7 +372,7 @@ function StartWorkflowModal({ workflow, isOpen, onClose, onStarted }) {
               {description ? (
                 <p className="text-sm text-gray-700 dark:text-gray-200">{description}</p>
               ) : (
-                <p className="text-sm text-gray-400 italic">
+                <p className="text-sm text-gray-500 italic">
                   {t('workflows.noDescription', 'No description provided.')}
                 </p>
               )}

@@ -181,7 +181,7 @@ function OidcProvidersSection({ config, onChange, t, availableGroups = [] }) {
 
       {!config.oidcAuth?.providers || config.oidcAuth.providers.length === 0 ? (
         <div className="text-center py-8 text-gray-500">
-          <Icon name="key" size="lg" className="mx-auto mb-4 text-gray-400" />
+          <Icon name="key" size="lg" className="mx-auto mb-4 text-gray-500" />
           <p>{t('admin.auth.noOidcProviders', 'No OIDC providers configured')}</p>
           <p className="text-sm">
             {t('admin.auth.addProvider', 'Add a provider to enable OIDC authentication')}
@@ -486,7 +486,7 @@ function OidcProvidersSection({ config, onChange, t, availableGroups = [] }) {
                 </h3>
                 <button
                   onClick={() => setShowProviderModal(false)}
-                  className="text-gray-400 hover:text-gray-500 dark:hover:text-gray-300"
+                  className="text-gray-500 hover:text-gray-500 dark:hover:text-gray-300"
                 >
                   <Icon name="close" size="md" />
                 </button>
@@ -507,7 +507,7 @@ function OidcProvidersSection({ config, onChange, t, availableGroups = [] }) {
                 >
                   <div className="shrink-0 mt-1">
                     <div className="w-10 h-10 bg-orange-100 dark:bg-orange-900/30 rounded-lg flex items-center justify-center">
-                      <Icon name="key" size="md" className="text-orange-600 dark:text-orange-400" />
+                      <Icon name="key" size="md" className="text-orange-700 dark:text-orange-400" />
                     </div>
                   </div>
                   <div className="ml-3">
@@ -527,7 +527,7 @@ function OidcProvidersSection({ config, onChange, t, availableGroups = [] }) {
                 >
                   <div className="shrink-0 mt-1">
                     <div className="w-10 h-10 bg-red-100 dark:bg-red-900/30 rounded-lg flex items-center justify-center">
-                      <Icon name="key" size="md" className="text-red-600 dark:text-red-400" />
+                      <Icon name="key" size="md" className="text-red-700 dark:text-red-400" />
                     </div>
                   </div>
                   <div className="ml-3">
@@ -570,7 +570,7 @@ function OidcProvidersSection({ config, onChange, t, availableGroups = [] }) {
                 >
                   <div className="shrink-0 mt-1">
                     <div className="w-10 h-10 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center">
-                      <Icon name="key" size="md" className="text-green-600 dark:text-green-400" />
+                      <Icon name="key" size="md" className="text-green-700 dark:text-green-400" />
                     </div>
                   </div>
                   <div className="ml-3">

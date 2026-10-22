@@ -285,7 +285,7 @@ function AdminVoiceInputPage() {
     result && (
       <span
         className={`text-sm flex items-center gap-1 ${
-          result.ok ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
+          result.ok ? 'text-green-700 dark:text-green-400' : 'text-red-600 dark:text-red-400'
         }`}
       >
         <Icon name={result.ok ? 'check-circle' : 'clearCircle'} className="w-4 h-4 shrink-0" />
@@ -390,7 +390,7 @@ function AdminVoiceInputPage() {
               )}
             </select>
             {config.defaultService === 'azure' && !config.azure.enabled && (
-              <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
+              <p className="mt-1 text-xs text-amber-700 dark:text-amber-400">
                 {t(
                   'admin.voiceInput.dictation.azureNotEnabled',
                   'Azure Speech is not enabled below. Until it is, apps that follow the platform default use the browser.'
@@ -401,7 +401,7 @@ function AdminVoiceInputPage() {
               <p
                 className={`mt-1 text-xs ${
                   dictationModelMissing
-                    ? 'text-amber-600 dark:text-amber-400'
+                    ? 'text-amber-700 dark:text-amber-400'
                     : 'text-gray-500 dark:text-gray-400'
                 }`}
               >
@@ -493,7 +493,7 @@ function AdminVoiceInputPage() {
             <p
               className={`mt-1 text-xs ${
                 ttsModelMissing || ttsModelDisabled || (config.tts.enabled && !ttsModelId)
-                  ? 'text-amber-600 dark:text-amber-400'
+                  ? 'text-amber-700 dark:text-amber-400'
                   : 'text-gray-500 dark:text-gray-400'
               }`}
             >

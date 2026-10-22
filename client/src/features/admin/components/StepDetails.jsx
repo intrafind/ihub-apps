@@ -73,7 +73,7 @@ function ToolCallRow({ call }) {
           <span className="text-xs text-gray-500 font-mono">[{call.toolId}]</span>
         )}
         {typeof call.durationMs === 'number' && (
-          <span className="text-xs text-gray-400">
+          <span className="text-xs text-gray-500">
             {call.durationMs < 1000
               ? `${call.durationMs}ms`
               : `${(call.durationMs / 1000).toFixed(1)}s`}

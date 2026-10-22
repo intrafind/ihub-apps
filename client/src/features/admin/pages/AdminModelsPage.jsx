@@ -14,6 +14,8 @@ import { translateModelTestMessage } from '../utils/modelTestMessages';
 import ModelImportDialog from '../components/ModelImportDialog';
 import ApiKeyStatusBadge from '../components/ApiKeyStatusBadge';
 import useApiKeyStatus from '../hooks/useApiKeyStatus';
+import UploadConfigButton from '../components/UploadConfigButton';
+import AdminLoadError from '../components/AdminLoadError';
 
 function ModelNameCell({ model, currentLanguage }) {
   return (
@@ -363,7 +365,7 @@ function AdminModelsPage() {
                 return next;
               })
             }
-            className="text-gray-400 hover:text-gray-600"
+            className="text-gray-500 hover:text-gray-600"
             title={t('common.close', 'Close')}
           >
             <Icon name="x" className="h-5 w-5" />
@@ -375,25 +377,7 @@ function AdminModelsPage() {
 
   if (error) {
     return (
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md p-4">
-          <div className="flex">
-            <Icon name="exclamation-triangle" className="h-5 w-5 text-red-400" />
-            <div className="ml-3">
-              <h3 className="text-sm font-medium text-red-800 dark:text-red-300">
-                {t('admin.models.loadError', 'Error loading models')}
-              </h3>
-              <p className="mt-1 text-sm text-red-700 dark:text-red-400">{error}</p>
-              <button
-                onClick={() => window.location.reload()}
-                className="mt-2 text-sm text-red-600 dark:text-red-300 hover:text-red-500"
-              >
-                {t('common.retry', 'Retry')}
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
+      <AdminLoadError title={t('admin.models.loadError', 'Error loading models')} message={error} />
     );
   }
 
@@ -426,29 +410,13 @@ function AdminModelsPage() {
                 <Icon name="link" className="h-4 w-4 mr-2" />
                 {t('admin.models.import.button', 'Import from URL')}
               </button>
-              <div className="relative">
-                <input
-                  type="file"
-                  accept=".json"
-                  onChange={handleUploadConfig}
-                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                  disabled={uploading}
-                />
-                <button
-                  type="button"
-                  className="inline-flex items-center justify-center rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 shadow-xs hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                  disabled={uploading}
-                  title={t('admin.models.uploadConfig', 'Upload Model Config')}
-                >
-                  <Icon
-                    name={uploading ? 'refresh' : 'upload'}
-                    className={`h-4 w-4 mr-2 ${uploading ? 'animate-spin' : ''}`}
-                  />
-                  {uploading
-                    ? t('admin.models.uploading', 'Uploading...')
-                    : t('admin.models.uploadConfig', 'Upload Config')}
-                </button>
-              </div>
+              <UploadConfigButton
+                onChange={handleUploadConfig}
+                uploading={uploading}
+                title={t('admin.models.uploadConfig', 'Upload Model Config')}
+                uploadingLabel={t('admin.models.uploading', 'Uploading...')}
+                label={t('admin.models.uploadConfig', 'Upload Config')}
+              />
               <button
                 type="button"
                 className="inline-flex items-center justify-center rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 shadow-xs hover:bg-gray-50 dark:hover:bg-gray-600"

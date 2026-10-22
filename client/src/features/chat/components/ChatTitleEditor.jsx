@@ -144,7 +144,7 @@ function ChatTitleEditor({
       onClick={event => event.stopPropagation()}
       placeholder={placeholder || t('chatHistory.titlePlaceholder', 'Name this chat')}
       aria-label={label || t('chatHistory.titleLabel', 'Chat title')}
-      className={`w-full min-w-0 rounded-lg border border-indigo-400 bg-white px-2 py-1 text-sm text-gray-900 outline-hidden focus:border-indigo-500 dark:border-indigo-500 dark:bg-gray-900 dark:text-gray-100 dark:placeholder-gray-500 ${className}`}
+      className={`w-full min-w-0 rounded-lg border border-indigo-400 bg-white px-2 py-1 text-sm text-gray-900 outline-hidden focus:border-indigo-500 dark:border-indigo-500 dark:bg-gray-900 dark:text-gray-100 dark:placeholder-gray-400 ${className}`}
     />
   );
 }

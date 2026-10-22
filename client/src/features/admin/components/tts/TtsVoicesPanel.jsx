@@ -428,7 +428,7 @@ function TtsVoicesPanel({ modelId, onUseVoice, t, uiLanguage }) {
           <audio controls src={previewUrl} className="w-full" />
         )}
         {tooShort && (
-          <p className="text-sm text-amber-600 dark:text-amber-400">
+          <p className="text-sm text-amber-700 dark:text-amber-400">
             {t(
               'admin.models.ttsVoices.tooShort',
               'The sample is shorter than {{seconds}} seconds; record a little more.',

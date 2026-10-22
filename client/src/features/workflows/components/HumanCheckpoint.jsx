@@ -43,7 +43,7 @@ function PrimitiveValue({ value }) {
   const { t } = useTranslation();
   if (value === null || value === undefined || value === '') {
     return (
-      <span className="text-gray-400 dark:text-gray-500 italic text-sm">
+      <span className="text-gray-500 dark:text-gray-400 italic text-sm">
         {t('workflows.checkpoint.displayDataEmptyValue', '(empty)')}
       </span>
     );

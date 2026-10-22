@@ -112,7 +112,7 @@ function MarketplaceItemCard({ item, onClick, onAction }) {
           )}
         </div>
         {item.version && (
-          <span className="text-xs text-gray-400 dark:text-gray-500">v{item.version}</span>
+          <span className="text-xs text-gray-500 dark:text-gray-400">v{item.version}</span>
         )}
       </div>
 
@@ -130,7 +130,7 @@ function MarketplaceItemCard({ item, onClick, onAction }) {
           {item.tags.slice(0, 3).map(tag => (
             <span
               key={tag}
-              className="px-2 py-0.5 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 rounded-sm text-xs"
+              className="px-2 py-0.5 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-sm text-xs"
             >
               {tag}
             </span>
@@ -140,7 +140,7 @@ function MarketplaceItemCard({ item, onClick, onAction }) {
 
       {/* Footer: author/registry and install button */}
       <div className="flex items-center justify-between">
-        <span className="text-xs text-gray-400 dark:text-gray-500 truncate">
+        <span className="text-xs text-gray-500 dark:text-gray-400 truncate">
           {item.author ? `by ${item.author}` : item.registryName}
         </span>
 
@@ -153,7 +153,7 @@ function MarketplaceItemCard({ item, onClick, onAction }) {
               : isLocal
                 ? 'border border-amber-300 text-amber-700 hover:bg-amber-50 dark:border-amber-700 dark:text-amber-300 dark:hover:bg-amber-900/20'
                 : hasUpdate
-                  ? 'bg-orange-600 text-white hover:bg-orange-700'
+                  ? 'bg-orange-700 text-white hover:bg-orange-800'
                   : 'bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50'
           }`}
         >

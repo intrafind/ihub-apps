@@ -439,7 +439,7 @@ function ChatInputActionsMenu({
                     <Icon
                       name="chevronRight"
                       size="sm"
-                      className="text-gray-400 dark:text-gray-500 ml-2"
+                      className="text-gray-500 dark:text-gray-400 ml-2"
                     />
                   </button>
                 ))}

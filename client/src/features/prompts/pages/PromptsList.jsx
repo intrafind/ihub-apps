@@ -643,7 +643,7 @@ function PromptsList() {
       <div className="w-full max-w-2xl mb-4 flex flex-wrap sm:flex-nowrap gap-3">
         <div className="relative w-full sm:w-auto sm:flex-1">
           <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-            <Icon name="search" className="h-5 w-5 text-gray-400" />
+            <Icon name="search" className="h-5 w-5 text-gray-500" />
           </div>
           <input
             type="text"
@@ -669,7 +669,7 @@ function PromptsList() {
                 setSearchTerm('');
                 setPage(0);
               }}
-              className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600"
+              className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-500 hover:text-gray-600"
               aria-label={t('common.clear', 'Clear')}
             >
               <Icon name="x" className="w-5 h-5" />
@@ -805,20 +805,6 @@ function PromptsList() {
                   data-testid="prompt-card"
                   data-prompt-id={p.id}
                   className="group relative bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-xs hover:shadow-md hover:border-indigo-300 dark:hover:border-indigo-600 transition-all duration-200 transform hover:-translate-y-0.5 cursor-pointer"
-                  onClick={() => actions.use(p)}
-                  onKeyDown={e => {
-                    if (e.target !== e.currentTarget) return;
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault();
-                      actions.use(p);
-                    }
-                  }}
-                  role="button"
-                  tabIndex={0}
-                  aria-label={t('prompts.actions.useNamed', {
-                    defaultValue: 'Use prompt {{name}}',
-                    name: p.name
-                  })}
                 >
                   <div className="p-4 h-full flex flex-col">
                     <button
@@ -840,7 +826,7 @@ function PromptsList() {
                     >
                       <Icon
                         name="star"
-                        className={isFavorite ? 'text-yellow-500' : 'text-gray-400'}
+                        className={isFavorite ? 'text-yellow-500' : 'text-gray-500'}
                         solid={isFavorite}
                       />
                     </button>
@@ -854,7 +840,19 @@ function PromptsList() {
                       </div>
                       <div className="flex-1 min-w-0">
                         <h3 className="font-semibold text-gray-900 dark:text-gray-100 text-sm leading-5 mb-1 flex items-center flex-wrap">
-                          {p.name}
+                          {/* Stretched button: its ::after covers the whole card, so the card is
+                              clickable without being a button that contains buttons. */}
+                          <button
+                            type="button"
+                            onClick={() => actions.use(p)}
+                            aria-label={t('prompts.actions.useNamed', {
+                              defaultValue: 'Use prompt {{name}}',
+                              name: p.name
+                            })}
+                            className="text-left focus:outline-hidden after:absolute after:inset-0 after:rounded-xl after:content-[''] focus-visible:after:ring-2 focus-visible:after:ring-indigo-500"
+                          >
+                            {p.name}
+                          </button>
                           {recentPromptIds.includes(p.id) && (
                             <span
                               className="ml-1"
@@ -894,7 +892,7 @@ function PromptsList() {
                       {highlightVariables(p.description || p.prompt)}
                     </p>
 
-                    <div className="flex flex-wrap gap-2 mt-auto justify-start">
+                    <div className="relative z-10 flex flex-wrap gap-2 mt-auto justify-start">
                       <button
                         onClick={e => {
                           e.stopPropagation();
@@ -913,7 +911,7 @@ function PromptsList() {
                         className="px-3 py-1.5 text-xs border border-indigo-600 text-indigo-600 dark:border-indigo-400 dark:text-indigo-400 rounded-lg hover:bg-indigo-50 dark:hover:bg-indigo-900/40 transition-colors flex items-center justify-center gap-1"
                       >
                         {copyStatus[p.id] === 'success' ? (
-                          <Icon name="check-circle" size="sm" className="text-green-600" solid />
+                          <Icon name="check-circle" size="sm" className="text-green-700" solid />
                         ) : copyStatus[p.id] === 'error' ? (
                           <Icon
                             name="exclamation-circle"

@@ -7,6 +7,7 @@ import Icon from '../../../shared/components/Icon';
 import { makeAdminApiCall } from '../../../api/adminApi';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import { useUpdateCheck } from '../hooks/useUpdateCheck';
+import AdminLoadError from '../components/AdminLoadError';
 
 function AdminUpdatesPage() {
   const { t } = useTranslation();
@@ -316,7 +317,7 @@ function AdminUpdatesPage() {
                           <button
                             onClick={handleUpdateNow}
                             disabled={updateActionLoading}
-                            className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-green-700 hover:bg-green-800 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed"
                           >
                             {updateActionLoading ? (
                               <svg
@@ -427,15 +428,12 @@ function AdminUpdatesPage() {
                   {t('admin.system.versionLoading', 'Loading version information...')}
                 </div>
               ) : versionError ? (
-                <div className="p-4 rounded-md bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800">
-                  <div className="flex">
-                    <Icon name="warning" size="md" className="text-red-500 mt-0.5 mr-3" />
-                    <p className="text-sm text-red-700 dark:text-red-300">
-                      {t('admin.system.versionError', 'Failed to load version information')}:{' '}
-                      {versionError}
-                    </p>
-                  </div>
-                </div>
+                <AdminLoadError
+                  title={t('admin.system.versionError', 'Failed to load version information')}
+                  message={versionError}
+                  framed={false}
+                  action={null}
+                />
               ) : versionInfo ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="bg-gray-50 dark:bg-gray-700 rounded-md p-4 border border-gray-200 dark:border-gray-600">

@@ -173,7 +173,7 @@ function OfficeMailContextBanner({
               </div>
             )}
             {!bodySent && (
-              <div className="mt-0.5 text-[11px] text-amber-600 dark:text-amber-400">
+              <div className="mt-0.5 text-[0.6875rem] text-amber-700 dark:text-amber-400">
                 Email body will not be sent.
               </div>
             )}
@@ -185,7 +185,7 @@ function OfficeMailContextBanner({
       {hasAttachments && remainingAttachments.length > 0 && (
         <div className="divide-y divide-slate-100 dark:divide-slate-700">
           {attachmentApiUnavailable && (
-            <div className="flex items-start gap-2 px-3 py-1.5 bg-amber-50 text-[11px] text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
+            <div className="flex items-start gap-2 px-3 py-1.5 bg-amber-50 text-[0.6875rem] text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
               <Icon name="information-circle" size="sm" />
               <span>
                 Attachments can&apos;t be read on this version of Outlook (requires Mailbox 1.8+).
@@ -210,7 +210,7 @@ function OfficeMailContextBanner({
                   >
                     {att.name || 'Attachment'}
                   </div>
-                  <div className="text-[11px] text-slate-500 flex items-center gap-1.5 dark:text-slate-400">
+                  <div className="text-[0.6875rem] text-slate-500 flex items-center gap-1.5 dark:text-slate-400">
                     <span>{formatFileSize(Number(att.size) || 0)}</span>
                     {status.kind === 'failed' && !attachmentApiUnavailable && (
                       <>

@@ -83,7 +83,7 @@ function AdminSettingsPage({
         {banner && <div className="mb-6">{banner}</div>}
 
         <div className="flex gap-8">
-          <aside className="hidden lg:block w-56 shrink-0">
+          <div className="hidden lg:block w-56 shrink-0">
             <nav className="sticky top-4 space-y-1" aria-label="Settings sections">
               {sections.map(s => {
                 const isActive = activeId === s.id;
@@ -105,7 +105,7 @@ function AdminSettingsPage({
                 );
               })}
             </nav>
-          </aside>
+          </div>
 
           <div className="flex-1 min-w-0 space-y-8">
             {sections.map(s => (

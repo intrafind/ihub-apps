@@ -134,7 +134,7 @@ function ArtifactRow({ artifact, fetchBlob }) {
       <Icon
         name={artifact.kind === 'image' ? 'photograph' : 'document'}
         size="md"
-        className="text-gray-400 flex-none"
+        className="text-gray-500 flex-none"
       />
       <span className="flex-1 min-w-0">
         <span className="block text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
@@ -383,7 +383,7 @@ export default function SharedChatPage() {
               <h1 className="text-lg font-bold text-gray-900 dark:text-gray-100 truncate">
                 {title}
               </h1>
-              <span className="inline-flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wide rounded-full px-2 py-0.5 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
+              <span className="inline-flex items-center gap-1 text-[0.6875rem] font-semibold uppercase tracking-wide rounded-full px-2 py-0.5 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
                 <Icon name="eye" size="xs" />
                 {t('chatSharing.viewer.readOnly', 'Read-only')}
               </span>
@@ -433,7 +433,7 @@ export default function SharedChatPage() {
           <section className="mt-4 mb-8" aria-labelledby="shared-artifacts-heading">
             <h2
               id="shared-artifacts-heading"
-              className="text-[11px] font-bold tracking-widest uppercase text-gray-500 dark:text-gray-400 mb-2.5 px-1"
+              className="text-[0.6875rem] font-bold tracking-widest uppercase text-gray-500 dark:text-gray-400 mb-2.5 px-1"
             >
               {t('chatSharing.viewer.artifacts', 'Files in this chat')}
             </h2>
@@ -446,7 +446,7 @@ export default function SharedChatPage() {
         )}
 
         {share.expiresAt && (
-          <p className="text-xs text-gray-400 dark:text-gray-500 text-center mb-4">
+          <p className="text-xs text-gray-500 dark:text-gray-400 text-center mb-4">
             {t('chatSharing.viewer.expires', {
               date: formatDate(share.expiresAt, i18n.language),
               defaultValue: 'This link expires on {{date}}.'

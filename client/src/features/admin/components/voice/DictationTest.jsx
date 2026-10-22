@@ -276,7 +276,7 @@ function DictationTest({ speech, models, t, language }) {
       </div>
 
       {serviceDisabled && (
-        <p className="text-xs text-amber-600 dark:text-amber-400">
+        <p className="text-xs text-amber-700 dark:text-amber-400">
           {t(
             'admin.voiceInput.test.dictation.serviceDisabled',
             'This backend is not enabled in the saved configuration, so the test is expected to fail.'
@@ -326,13 +326,13 @@ function DictationTest({ speech, models, t, language }) {
       )}
 
       {status === 'done' && finalText && (
-        <p className="text-sm text-green-600 dark:text-green-400 flex items-center gap-1">
+        <p className="text-sm text-green-700 dark:text-green-400 flex items-center gap-1">
           <Icon name="check-circle" className="w-4 h-4 shrink-0" />
           {t('admin.voiceInput.test.dictation.success', 'Dictation works.')}
         </p>
       )}
       {noSpeech && (
-        <p className="text-sm text-amber-600 dark:text-amber-400 flex items-center gap-1">
+        <p className="text-sm text-amber-700 dark:text-amber-400 flex items-center gap-1">
           <Icon name="exclamation-triangle" className="w-4 h-4 shrink-0" />
           {t(
             'admin.voiceInput.test.dictation.noText',

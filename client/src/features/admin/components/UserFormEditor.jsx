@@ -131,7 +131,7 @@ function UserFormEditor({
       <div className="p-8 text-center text-gray-500 dark:text-gray-400">
         <Icon
           name="exclamation-triangle"
-          className="h-12 w-12 mx-auto mb-4 text-gray-400 dark:text-gray-500"
+          className="h-12 w-12 mx-auto mb-4 text-gray-500 dark:text-gray-400"
         />
         <p className="text-lg font-medium">
           {t('admin.users.edit.noUserData', 'No user data available')}

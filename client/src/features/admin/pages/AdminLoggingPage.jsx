@@ -913,7 +913,7 @@ function AdminLoggingPage() {
                       {t('admin.logging.includeRawData', 'Include raw authentication data')}
                     </span>
                   </label>
-                  <p className="text-xs text-amber-600 dark:text-amber-400 mt-1 ml-6">
+                  <p className="text-xs text-amber-700 dark:text-amber-400 mt-1 ml-6">
                     {t(
                       'admin.logging.includeRawDataWarning',
                       'Security risk: logs the full user-info payload and access tokens. Leave off unless actively debugging; disable again afterwards.'

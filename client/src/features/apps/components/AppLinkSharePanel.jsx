@@ -140,7 +140,7 @@ function AppLinkSharePanel({ appId, appName, path, params }) {
     ),
     checking: t('common.loading', 'Loading…'),
     available: (
-      <span className="text-green-600 dark:text-green-400">
+      <span className="text-green-700 dark:text-green-400">
         {t('common.codeAvailable', 'Code available')}
       </span>
     ),

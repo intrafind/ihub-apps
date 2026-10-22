@@ -117,7 +117,10 @@ function AdminFeaturesPage() {
                     <div key={feature.id} className="flex items-center justify-between px-6 py-4">
                       <div className="flex-1 min-w-0 pr-4">
                         <div className="flex items-center gap-2">
-                          <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                          <span
+                            id={`feature-name-${feature.id}`}
+                            className="text-sm font-medium text-gray-900 dark:text-gray-100"
+                          >
                             {getLocalizedContent(feature.name, lang)}
                           </span>
                           {feature.preview && (
@@ -134,6 +137,7 @@ function AdminFeaturesPage() {
                         type="button"
                         role="switch"
                         aria-checked={feature.enabled}
+                        aria-labelledby={`feature-name-${feature.id}`}
                         onClick={() => handleToggle(feature.id, feature.enabled)}
                         className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden focus:ring-2 focus:ring-indigo-600 focus:ring-offset-2 ${
                           feature.enabled ? 'bg-indigo-600' : 'bg-gray-200 dark:bg-gray-600'
@@ -157,7 +161,7 @@ function AdminFeaturesPage() {
               <div>
                 {message && (
                   <p
-                    className={`text-sm ${message.includes('Failed') || message.includes('Error') ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}
+                    className={`text-sm ${message.includes('Failed') || message.includes('Error') ? 'text-red-600 dark:text-red-400' : 'text-green-700 dark:text-green-400'}`}
                   >
                     {message}
                   </p>

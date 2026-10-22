@@ -114,7 +114,7 @@ function AdminBackupPage() {
           <div className="flex items-start space-x-4">
             <div className="shrink-0 mt-1">
               <div className="p-3 rounded-full bg-green-100 dark:bg-green-900/50">
-                <Icon name="archive-box" size="lg" className="text-green-600 dark:text-green-400" />
+                <Icon name="archive-box" size="lg" className="text-green-700 dark:text-green-400" />
               </div>
             </div>
             <div className="flex-1">
@@ -170,7 +170,7 @@ function AdminBackupPage() {
                     <Icon
                       name={importMessage.type === 'success' ? 'check' : 'warning'}
                       size="md"
-                      className={`mt-0.5 mr-3 ${importMessage.type === 'success' ? 'text-green-500' : 'text-red-500'}`}
+                      className={`mt-0.5 mr-3 ${importMessage.type === 'success' ? 'text-green-500' : 'text-red-700'}`}
                     />
                     <p
                       className={`text-sm ${importMessage.type === 'success' ? 'text-green-700 dark:text-green-300' : 'text-red-700 dark:text-red-300'}`}
@@ -188,7 +188,7 @@ function AdminBackupPage() {
                   className={`inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-xs text-white ${
                     exportLoading
                       ? 'bg-gray-400 cursor-not-allowed'
-                      : 'bg-green-600 hover:bg-green-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-green-500'
+                      : 'bg-green-700 hover:bg-green-800 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-green-500'
                   }`}
                 >
                   {exportLoading ? (

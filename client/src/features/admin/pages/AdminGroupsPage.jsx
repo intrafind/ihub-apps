@@ -24,7 +24,7 @@ function GroupCell({ group }) {
           {group.name}
         </div>
         <div className="text-sm text-gray-500 dark:text-gray-400 truncate">{group.description}</div>
-        <div className="text-xs text-gray-400 dark:text-gray-500">ID: {group.id}</div>
+        <div className="text-xs text-gray-500 dark:text-gray-400">ID: {group.id}</div>
       </div>
     </div>
   );
@@ -76,7 +76,7 @@ function MappingsCell({ group, t }) {
   const mappings = group.mappings || [];
   if (mappings.length === 0) {
     return (
-      <span className="text-sm text-gray-400 dark:text-gray-500">
+      <span className="text-sm text-gray-500 dark:text-gray-400">
         {t('admin.groups.noMappings', 'No mappings')}
       </span>
     );
@@ -223,7 +223,7 @@ function AdminGroupsPage() {
                 name={message.type === 'success' ? 'check' : 'warning'}
                 size="md"
                 className={`mt-0.5 mr-3 ${
-                  message.type === 'success' ? 'text-green-500' : 'text-red-500'
+                  message.type === 'success' ? 'text-green-500' : 'text-red-700'
                 }`}
               />
               <p

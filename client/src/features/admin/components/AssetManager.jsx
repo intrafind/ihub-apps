@@ -4,6 +4,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { makeAdminApiCall } from '../../../api/adminApi';
 import { buildUploadUrl } from '../../../utils/runtimeBasePath';
+import AdminLoadError from './AdminLoadError';
 
 function AssetManager({ t }) {
   const [assets, setAssets] = useState([]);
@@ -181,37 +182,12 @@ function AssetManager({ t }) {
 
       {/* Status Messages */}
       {error && (
-        <div className="mb-4 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-md p-4">
-          <div className="flex">
-            <div className="shrink-0">
-              <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
-                <path
-                  fillRule="evenodd"
-                  d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
-                  clipRule="evenodd"
-                />
-              </svg>
-            </div>
-            <div className="ml-3">
-              <p className="text-sm text-red-800 dark:text-red-300">{error}</p>
-            </div>
-            <div className="ml-auto pl-3">
-              <button
-                onClick={() => setError(null)}
-                className="inline-flex text-red-400 hover:text-red-600 dark:hover:text-red-300"
-              >
-                <span className="sr-only">Dismiss</span>
-                <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                  <path
-                    fillRule="evenodd"
-                    d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
-                    clipRule="evenodd"
-                  />
-                </svg>
-              </button>
-            </div>
-          </div>
-        </div>
+        <AdminLoadError
+          message={error}
+          framed={false}
+          className="mb-4"
+          action={{ label: t('common.dismiss', 'Dismiss'), onClick: () => setError(null) }}
+        />
       )}
 
       {successMessage && (
@@ -239,7 +215,7 @@ function AssetManager({ t }) {
           <div className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-6 bg-white dark:bg-gray-800">
             <div className="text-center">
               <svg
-                className="mx-auto h-12 w-12 text-gray-400 dark:text-gray-500"
+                className="mx-auto h-12 w-12 text-gray-500 dark:text-gray-400"
                 stroke="currentColor"
                 fill="none"
                 viewBox="0 0 48 48"
@@ -387,7 +363,7 @@ function AssetManager({ t }) {
         {assets.length === 0 ? (
           <div className="text-center py-12 bg-gray-50 dark:bg-gray-800 rounded-lg">
             <svg
-              className="mx-auto h-12 w-12 text-gray-400 dark:text-gray-500"
+              className="mx-auto h-12 w-12 text-gray-500 dark:text-gray-400"
               fill="none"
               viewBox="0 0 24 24"
               stroke="currentColor"

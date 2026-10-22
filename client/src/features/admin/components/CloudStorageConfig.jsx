@@ -379,7 +379,7 @@ function CloudStorageConfig({ filterType } = {}) {
                       className="flex items-center justify-between p-3 border border-gray-200 dark:border-gray-700 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700"
                     >
                       <div className="flex items-center space-x-3">
-                        <Icon name="cloud" size="md" className="text-gray-400" />
+                        <Icon name="cloud" size="md" className="text-gray-500" />
                         <div>
                           <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
                             {provider.displayName}
@@ -861,7 +861,7 @@ function CloudStorageConfig({ filterType } = {}) {
                           <Icon
                             name={callbackUrlCopied ? 'check' : 'clipboard'}
                             size="sm"
-                            className={callbackUrlCopied ? 'text-green-600' : ''}
+                            className={callbackUrlCopied ? 'text-green-700' : ''}
                             aria-hidden="true"
                           />
                         </button>
@@ -955,7 +955,7 @@ function CloudStorageConfig({ filterType } = {}) {
                   name={message.type === 'success' ? 'check' : 'warning'}
                   size="md"
                   className={`mt-0.5 mr-3 ${
-                    message.type === 'success' ? 'text-green-500' : 'text-red-500'
+                    message.type === 'success' ? 'text-green-500' : 'text-red-700'
                   }`}
                 />
                 <p

@@ -21,6 +21,7 @@ import {
 } from '../../../api/adminApi';
 import { createStarterWorkflow } from '../../workflows/editor/workflowEditorUtils';
 import { appsUsingWorkflow, withCleanToolDescription } from '../../workflows/utils/chatIntegration';
+import AdminLoadError from '../components/AdminLoadError';
 /**
  * Admin page for editing or creating a single workflow definition.
  * Provides metadata editing, group-based permissions, and a full JSON editor.
@@ -346,17 +347,13 @@ function AdminWorkflowEditPage() {
 
         {/* Error display */}
         {error && (
-          <div className="mb-6 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md p-4">
-            <div className="flex">
-              <Icon name="exclamation-triangle" className="h-5 w-5 text-red-400" />
-              <div className="ml-3">
-                <h3 className="text-sm font-medium text-red-800 dark:text-red-300">
-                  {t('common.error', 'Error')}
-                </h3>
-                <p className="mt-1 text-sm text-red-700 dark:text-red-400">{error}</p>
-              </div>
-            </div>
-          </div>
+          <AdminLoadError
+            title={t('common.error', 'Error')}
+            message={error}
+            framed={false}
+            className="mb-6"
+            action={null}
+          />
         )}
 
         {workflowData && (

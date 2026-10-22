@@ -124,7 +124,7 @@ function McpToolsSelector({ selectedTools = [], onToolsChange, onMcpToolIdsChang
                   <span className="font-medium text-sm text-gray-900 dark:text-gray-100">
                     {serverName}
                   </span>
-                  <span className="font-mono text-xs text-gray-400 dark:text-gray-500">
+                  <span className="font-mono text-xs text-gray-500 dark:text-gray-400">
                     {server.id}
                   </span>
                   {!server.enabled && (

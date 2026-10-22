@@ -477,7 +477,7 @@ export default function StartPage() {
         {featuredApps.length > 0 && (
           <div className="mb-7">
             <div className="flex items-center justify-between mb-3">
-              <h2 className="text-[11px] font-bold tracking-widest uppercase text-gray-500 dark:text-gray-400">
+              <h2 className="text-[0.6875rem] font-bold tracking-widest uppercase text-gray-500 dark:text-gray-400">
                 {t('startPage.jumpIntoApp', 'Jump into an app')}
               </h2>
               <button
@@ -504,10 +504,10 @@ export default function StartPage() {
                       <Icon name={app.icon} size="md" />
                     </span>
                     <span className="min-w-0 flex-1">
-                      <span className="block font-semibold text-[14.5px] text-gray-900 dark:text-gray-100 truncate">
+                      <span className="block font-semibold text-[0.9062rem] text-gray-900 dark:text-gray-100 truncate">
                         {name}
                       </span>
-                      <span className="block text-[12.5px] text-gray-500 dark:text-gray-400 truncate">
+                      <span className="block text-[0.7812rem] text-gray-500 dark:text-gray-400 truncate">
                         {desc}
                       </span>
                     </span>
@@ -521,7 +521,7 @@ export default function StartPage() {
         {/* Pick up where you left off — the viewer's most recent stored chats */}
         {recentChats.length > 0 && (
           <div>
-            <h2 className="text-[11px] font-bold tracking-widest uppercase text-gray-500 dark:text-gray-400 mb-3">
+            <h2 className="text-[0.6875rem] font-bold tracking-widest uppercase text-gray-500 dark:text-gray-400 mb-3">
               {t('startPage.pickUpWhereYouLeftOff', 'Pick up where you left off')}
             </h2>
             <div className="flex flex-wrap gap-2">

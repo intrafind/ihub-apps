@@ -39,7 +39,7 @@ function SearchSummary({ summary }) {
       {queries.length > 0 && (
         <div className="flex flex-wrap items-center gap-1.5">
           <span className="inline-flex items-center gap-1">
-            <Icon name="search" size="sm" className="text-gray-400 dark:text-gray-500" />
+            <Icon name="search" size="sm" className="text-gray-500 dark:text-gray-400" />
             {t('searchSummary.searchedFor', 'Searched for')}
           </span>
           {queries.map(query => (

@@ -20,6 +20,7 @@ import {
   toggleSkill,
   updateSkill
 } from '../../../api/adminApi';
+import AdminLoadError from '../components/AdminLoadError';
 /**
  * AdminSkillEditPage - Detail / edit page for a single installed skill.
  *
@@ -193,31 +194,17 @@ function AdminSkillEditPage() {
   if (!skill) {
     return (
       <div>
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md p-4">
-            <div className="flex">
-              <Icon name="exclamation-triangle" className="h-5 w-5 text-red-400" />
-              <div className="ml-3">
-                <h3 className="text-sm font-medium text-red-800 dark:text-red-300">
-                  {t('admin.skills.notFound', 'Skill not found')}
-                </h3>
-                <p className="mt-1 text-sm text-red-700 dark:text-red-400">
-                  {error ||
-                    t(
-                      'admin.skills.notFoundDescription',
-                      'The requested skill could not be loaded.'
-                    )}
-                </p>
-                <button
-                  onClick={() => navigate('/admin/skills')}
-                  className="mt-2 text-sm text-red-600 hover:text-red-500 dark:text-red-400 dark:hover:text-red-300"
-                >
-                  {t('admin.skills.backToList', 'Back to Skills')}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+        <AdminLoadError
+          title={t('admin.skills.notFound', 'Skill not found')}
+          message={
+            error ||
+            t('admin.skills.notFoundDescription', 'The requested skill could not be loaded.')
+          }
+          action={{
+            label: t('admin.skills.backToList', 'Back to Skills'),
+            onClick: () => navigate('/admin/skills')
+          }}
+        />
       </div>
     );
   }
@@ -600,7 +587,7 @@ function AdminSkillEditPage() {
                                 ? 'photograph'
                                 : 'document-text'
                           }
-                          className="h-5 w-5 text-gray-400 dark:text-gray-500 mr-3 shrink-0"
+                          className="h-5 w-5 text-gray-500 dark:text-gray-400 mr-3 shrink-0"
                         />
                         <span className="text-sm text-gray-900 dark:text-gray-100 truncate">
                           {fileName}
@@ -619,7 +606,7 @@ function AdminSkillEditPage() {
               <div className="text-center py-12">
                 <Icon
                   name="folder"
-                  className="mx-auto h-12 w-12 text-gray-400 dark:text-gray-500"
+                  className="mx-auto h-12 w-12 text-gray-500 dark:text-gray-400"
                 />
                 <h3 className="mt-2 text-sm font-medium text-gray-900 dark:text-gray-100">
                   {t('admin.skills.noFiles', 'No files')}
@@ -667,7 +654,7 @@ function AdminSkillEditPage() {
                   <textarea
                     id="override-description"
                     rows={3}
-                    className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                    className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-300 focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                     placeholder={t(
                       'admin.skills.field.customDescriptionPlaceholder',
                       'Enter a custom description to override the default...'

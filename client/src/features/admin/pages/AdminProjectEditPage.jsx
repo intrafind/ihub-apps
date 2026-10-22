@@ -270,7 +270,7 @@ function AdminProjectEditPage() {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
         <div className="flex items-center justify-center h-64">
-          <Icon name="arrow-path" className="animate-spin h-8 w-8 text-gray-400" />
+          <Icon name="arrow-path" className="animate-spin h-8 w-8 text-gray-500" />
           <span className="ml-3 text-gray-500 dark:text-gray-400">
             {t('common.loading', 'Loading...')}
           </span>
@@ -383,7 +383,7 @@ function AdminProjectEditPage() {
               type="button"
               onClick={() => setError(null)}
               aria-label={t('common.dismiss', 'Dismiss')}
-              className="ml-auto text-red-600 dark:text-red-400"
+              className="ml-auto text-red-700 dark:text-red-400"
             >
               <Icon name="x-mark" className="h-4 w-4" />
             </button>

@@ -149,11 +149,11 @@ function GroupToggle({ open, label, count, newCount, controls, onToggle, classNa
       className={`w-full flex flex-wrap items-center gap-x-1.5 gap-y-1 rounded-md px-2 py-1.5 text-sm text-left text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800 ${className}`}
     >
       <ChevronRightIcon
-        className={`h-4 w-4 shrink-0 text-gray-400 transition-transform ${open ? 'rotate-90' : ''}`}
+        className={`h-4 w-4 shrink-0 text-gray-500 transition-transform ${open ? 'rotate-90' : ''}`}
         aria-hidden="true"
       />
       <span className="truncate">{label}</span>
-      <span className="text-xs text-gray-400 dark:text-gray-500">{count}</span>
+      <span className="text-xs text-gray-500 dark:text-gray-400">{count}</span>
       {newCount > 0 && (
         <Badge tone="indigo">
           {t('admin.changelog.newCount', '{{count}} new', { count: newCount })}

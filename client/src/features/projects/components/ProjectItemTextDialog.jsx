@@ -121,7 +121,7 @@ function ProjectItemTextDialog({ projectId, item, onClose, fetchText, onSave, er
           type="button"
           onClick={onClose}
           aria-label={t('common.close', 'Close')}
-          className={`${editable && !isEditing && !state.loading && !state.error ? '' : 'ml-auto '}text-gray-400 hover:text-gray-600 dark:hover:text-gray-200`}
+          className={`${editable && !isEditing && !state.loading && !state.error ? '' : 'ml-auto '}text-gray-500 hover:text-gray-600 dark:hover:text-gray-200`}
         >
           <Icon name="x" className="h-5 w-5" />
         </button>

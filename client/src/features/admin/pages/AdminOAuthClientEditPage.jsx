@@ -301,7 +301,7 @@ function AdminOAuthClientEditPage() {
             <div className="flex items-center">
               <button
                 onClick={() => navigate('/admin/oauth/clients')}
-                className="mr-4 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
+                className="mr-4 text-gray-500 dark:text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
               >
                 <Icon name="arrow-left" size="md" />
               </button>
@@ -334,7 +334,7 @@ function AdminOAuthClientEditPage() {
                   name={message.type === 'success' ? 'check' : 'warning'}
                   size="md"
                   className={`mt-0.5 mr-3 ${
-                    message.type === 'success' ? 'text-green-500' : 'text-red-500'
+                    message.type === 'success' ? 'text-green-500' : 'text-red-700'
                   }`}
                 />
                 <p

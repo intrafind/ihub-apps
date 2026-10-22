@@ -46,7 +46,7 @@ function WorkflowCard({ workflow, onStart, onEdit }) {
           {onEdit && (
             <button
               onClick={() => onEdit(workflow)}
-              className="shrink-0 p-1.5 -m-1.5 text-gray-400 hover:text-indigo-600 dark:text-gray-500 dark:hover:text-indigo-400 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
+              className="shrink-0 p-1.5 -m-1.5 text-gray-500 hover:text-indigo-600 dark:text-gray-400 dark:hover:text-indigo-400 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
               aria-label={t('workflows.card.edit', 'Edit workflow')}
               title={t('workflows.card.edit', 'Edit workflow')}
             >

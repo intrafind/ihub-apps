@@ -29,7 +29,7 @@ function UserNameCell({ user }) {
           {user.name || user.username}
         </div>
         <div className="text-sm text-gray-500 dark:text-gray-400 truncate">{user.email}</div>
-        <div className="text-xs text-gray-400 dark:text-gray-500 truncate">@{user.username}</div>
+        <div className="text-xs text-gray-500 dark:text-gray-400 truncate">@{user.username}</div>
       </div>
     </div>
   );
@@ -73,7 +73,7 @@ function AuthMethodCell({ user }) {
 function GroupsCell({ user }) {
   const groups = user.internalGroups || [];
   if (groups.length === 0) {
-    return <span className="text-sm text-gray-400 dark:text-gray-500">No groups</span>;
+    return <span className="text-sm text-gray-500 dark:text-gray-400">No groups</span>;
   }
   return (
     <div className="flex flex-wrap gap-1">
@@ -90,6 +90,7 @@ function GroupsCell({ user }) {
 }
 
 function StatusCell({ user, onToggle }) {
+  const { t } = useTranslation();
   return (
     <div className="flex items-center space-x-3">
       <span
@@ -109,6 +110,9 @@ function StatusCell({ user, onToggle }) {
           type="checkbox"
           checked={user.active !== false}
           onChange={() => onToggle(user)}
+          aria-label={t('admin.users.statusToggle', 'Account active: {{name}}', {
+            name: user.name || user.username
+          })}
           className="sr-only peer"
         />
         <div className="w-9 h-5 bg-gray-200 dark:bg-gray-600 peer-focus:outline-hidden peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600" />
@@ -121,13 +125,13 @@ function LastActiveCell({ user }) {
   // Captured once per mount — the static "days ago" label needs no live clock
   const [now] = useState(() => Date.now());
   if (!user.lastActiveDate) {
-    return <span className="text-gray-400 dark:text-gray-500">Never</span>;
+    return <span className="text-gray-500 dark:text-gray-400">Never</span>;
   }
   const daysAgo = Math.floor((now - new Date(user.lastActiveDate)) / (1000 * 60 * 60 * 24));
   return (
     <div className="flex flex-col">
       <span>{new Date(user.lastActiveDate).toLocaleDateString()}</span>
-      <span className="text-xs text-gray-400 dark:text-gray-500">{daysAgo} days ago</span>
+      <span className="text-xs text-gray-500 dark:text-gray-400">{daysAgo} days ago</span>
     </div>
   );
 }
@@ -361,7 +365,7 @@ function AdminUsersPage() {
                 name={message.type === 'success' ? 'check' : 'warning'}
                 size="md"
                 className={`mt-0.5 mr-3 ${
-                  message.type === 'success' ? 'text-green-500' : 'text-red-500'
+                  message.type === 'success' ? 'text-green-500' : 'text-red-700'
                 }`}
               />
               <p

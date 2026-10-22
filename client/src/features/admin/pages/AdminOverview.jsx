@@ -55,7 +55,7 @@ function StatCard({
           </p>
           {sub && <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">{sub}</p>}
           {updateAvailable && latestVersion && (
-            <p className="mt-1 flex items-center gap-1 text-xs font-medium text-amber-600 dark:text-amber-400">
+            <p className="mt-1 flex items-center gap-1 text-xs font-medium text-amber-700 dark:text-amber-400">
               <ArrowUpCircleIcon className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
               {t('admin.overview.updateAvailable', 'v{{version}} available', {
                 version: latestVersion
@@ -307,7 +307,7 @@ function CommonPages({ className = '', links: customLinks }) {
             className="flex items-center justify-between px-3 py-2 rounded-md text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-gray-100 transition-colors"
           >
             {link.label}
-            <ArrowRightIcon className="w-3.5 h-3.5 text-gray-400 shrink-0" aria-hidden="true" />
+            <ArrowRightIcon className="w-3.5 h-3.5 text-gray-500 shrink-0" aria-hidden="true" />
           </Link>
         ))}
       </nav>
@@ -590,7 +590,7 @@ export default function AdminOverview() {
         key: 'projects',
         label: t('admin.overview.stats.projects', 'Projects'),
         icon: FolderIcon,
-        iconColor: 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400',
+        iconColor: 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400',
         ...stats.projects
       }
     ];
@@ -614,14 +614,14 @@ export default function AdminOverview() {
         key: 'chats',
         label: t('admin.overview.stats.conversations', 'Conversations'),
         icon: ChatBubbleLeftRightIcon,
-        iconColor: 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400',
+        iconColor: 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400',
         ...stats.chats
       },
       {
         key: 'version',
         label: t('admin.overview.stats.version', 'Version'),
         icon: TagIcon,
-        iconColor: 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400',
+        iconColor: 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300',
         ...stats.version,
         updateAvailable: updateInfo?.updateAvailable ?? false,
         latestVersion: updateInfo?.latestVersion

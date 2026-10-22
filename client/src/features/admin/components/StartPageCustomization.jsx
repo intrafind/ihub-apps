@@ -503,7 +503,7 @@ function StartPageCustomization({ config, pages, onUpdate, t }) {
               getLabel={featuredLabel}
               renderItem={(item, index) => (
                 <span className="flex min-w-0 items-center gap-2">
-                  <span className="w-5 shrink-0 text-xs font-semibold text-gray-400 dark:text-gray-500">
+                  <span className="w-5 shrink-0 text-xs font-semibold text-gray-500 dark:text-gray-400">
                     {index + 1}.
                   </span>
                   {item.app && (
@@ -517,7 +517,7 @@ function StartPageCustomization({ config, pages, onUpdate, t }) {
                   <span className="min-w-0 flex-1 truncate text-sm text-gray-900 dark:text-gray-100">
                     {featuredLabel(item)}
                     {!item.app && !loading && (
-                      <span className="ml-1 text-xs text-amber-600 dark:text-amber-400">
+                      <span className="ml-1 text-xs text-amber-700 dark:text-amber-400">
                         ({t('admin.ui.startPage.unknownApp', 'not found')})
                       </span>
                     )}
@@ -539,7 +539,7 @@ function StartPageCustomization({ config, pages, onUpdate, t }) {
                   title={t('admin.ui.startPage.removeFeaturedApp', 'Remove {{name}}', {
                     name: featuredLabel(item)
                   })}
-                  className="rounded-md p-1 text-gray-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/30"
+                  className="rounded-md p-1 text-gray-500 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/30"
                 >
                   <Icon name="trash" size="sm" />
                 </button>

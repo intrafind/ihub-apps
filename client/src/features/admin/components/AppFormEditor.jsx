@@ -159,7 +159,7 @@ function AppFormEditor({
   if (!app) {
     return (
       <div className="p-8 text-center text-gray-500">
-        <Icon name="exclamation-triangle" className="h-12 w-12 mx-auto mb-4 text-gray-400" />
+        <Icon name="exclamation-triangle" className="h-12 w-12 mx-auto mb-4 text-gray-500" />
         <p className="text-lg font-medium">
           {t('admin.apps.edit.noAppData', 'No app data available')}
         </p>

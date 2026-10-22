@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import { renderMarkdown } from '../../../config/marked.config';
 import ArtifactDownloadMenu from './ArtifactDownloadMenu';
 import { buildApiUrl } from '../../../utils/runtimeBasePath';
+import AdminLoadError from './AdminLoadError';
 
 /**
  * Modal markdown viewer for agent run artifacts. Fetches the raw file from
@@ -108,11 +109,7 @@ function ArtifactViewer({ runId, name, onClose }) {
         </header>
         <div className="flex-1 overflow-y-auto px-6 py-4">
           {loading && <div className="text-sm text-gray-500">Loading…</div>}
-          {error && (
-            <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-sm p-3">
-              {error}
-            </div>
-          )}
+          {error && <AdminLoadError message={error} framed={false} action={null} />}
           {!loading && !error && (
             <article
               className="prose prose-sm max-w-none prose-headings:font-semibold prose-a:text-indigo-600"

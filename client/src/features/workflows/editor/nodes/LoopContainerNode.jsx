@@ -74,7 +74,7 @@ export const LoopContainerNode = memo(function LoopContainerNode({ data, selecte
 
       {data.onDelete && (
         <button
-          className="absolute -top-8 right-0 opacity-0 group-hover:opacity-100 bg-red-500 hover:bg-red-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs transition-opacity"
+          className="absolute -top-8 right-0 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 bg-red-700 hover:bg-red-800 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs transition-opacity"
           onClick={e => {
             e.stopPropagation();
             data.onDelete(data.nodeId);
@@ -86,7 +86,7 @@ export const LoopContainerNode = memo(function LoopContainerNode({ data, selecte
         </button>
       )}
 
-      <div className="absolute top-2 left-2 flex items-center gap-1 text-[10px] font-mono text-orange-700 dark:text-orange-300 bg-white/80 dark:bg-gray-900/60 border border-orange-200 dark:border-orange-800 rounded-full px-2 py-0.5 pointer-events-none">
+      <div className="absolute top-2 left-2 flex items-center gap-1 text-[0.625rem] font-mono text-orange-700 dark:text-orange-300 bg-white/80 dark:bg-gray-900/60 border border-orange-200 dark:border-orange-800 rounded-full px-2 py-0.5 pointer-events-none">
         <span aria-hidden="true">⟳</span>
         <span>
           each item: {'{{_loopItem}}'} · #{'{{_loopHuman}}'}/{'{{_loopTotal}}'}
@@ -94,7 +94,7 @@ export const LoopContainerNode = memo(function LoopContainerNode({ data, selecte
       </div>
 
       {cfg.outputVariable && (
-        <div className="absolute bottom-2 right-2 text-[10px] font-mono text-orange-700 dark:text-orange-300 bg-white/80 dark:bg-gray-900/60 border border-orange-200 dark:border-orange-800 rounded-full px-2 py-0.5 pointer-events-none">
+        <div className="absolute bottom-2 right-2 text-[0.625rem] font-mono text-orange-700 dark:text-orange-300 bg-white/80 dark:bg-gray-900/60 border border-orange-200 dark:border-orange-800 rounded-full px-2 py-0.5 pointer-events-none">
           collects → {cfg.outputVariable}
         </div>
       )}

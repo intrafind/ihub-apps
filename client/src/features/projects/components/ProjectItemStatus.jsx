@@ -44,7 +44,7 @@ function ProjectItemStatus({ item }) {
             {t('projects.items.status.failed', 'Failed')}
           </span>
           {message && (
-            <div className="mt-1 text-xs text-red-600 dark:text-red-400 break-words">{message}</div>
+            <div className="mt-1 text-xs text-red-700 dark:text-red-400 break-words">{message}</div>
           )}
         </div>
       );

@@ -208,7 +208,7 @@ function WorkflowEditorPage() {
               className={`text-xs px-2 py-0.5 rounded ${
                 workflow.status === 'published'
                   ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'
-                  : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'
+                  : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300'
               }`}
             >
               {workflow.status}
@@ -249,7 +249,7 @@ function WorkflowEditorPage() {
           <div
             role="status"
             className={`absolute bottom-4 right-4 px-4 py-2 rounded shadow-lg text-sm ${
-              toast.kind === 'success' ? 'bg-green-600 text-white' : 'bg-red-600 text-white'
+              toast.kind === 'success' ? 'bg-green-700 text-white' : 'bg-red-600 text-white'
             }`}
           >
             {toast.message}

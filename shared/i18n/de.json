@@ -2575,6 +2575,7 @@
       "groupsHelp": "Definierte Gruppen suchen und auswählen oder einen Namen eingeben und Enter drücken, um eine externe Gruppenzuordnung hinzuzufügen. Benutzer erben die Berechtigungen aller zugewiesenen Gruppen.",
       "groupMembership": "Gruppenzugehörigkeit",
       "groupMembershipDescription": "Weisen Sie diesen Benutzer Gruppen zu, um seine Berechtigungen und Zugriffsebenen zu steuern",
+      "statusToggle": "Konto aktiv: {{name}}",
       "deleteConfirm": "Diesen Benutzer löschen? Der Zugriff endet sofort, und seine API-Schlüssel, Verbindungen, gespeicherten Zugangsdaten, geplanten Aufgaben, Chats, Prompts, Skills und Kurzlinks werden entfernt. Das lässt sich nicht rückgängig machen. Um jemandem die Anmeldung zu sperren und das Erstellte zu behalten, deaktiviere stattdessen das Konto."
     },
     "logging": {
@@ -4775,6 +4776,22 @@
       "loadingWorkflow": "Workflow wird geladen...",
       "name": "Name",
       "newWorkflowHeading": "Neuer Workflow",
+      "connections": {
+        "title": "Verbindungen",
+        "help": "Legen Sie fest, welcher Schritt als Nächstes läuft. Das ist die Tastatur-Alternative zum Ziehen einer Linie zwischen zwei Schritten auf der Zeichenfläche.",
+        "none": "Noch keine ausgehenden Verbindungen.",
+        "branch": "Zweig",
+        "branchYes": "Ja",
+        "branchNo": "Nein",
+        "branchPrefix": "{{branch}}:",
+        "target": "Verbinden mit",
+        "choose": "Schritt auswählen…",
+        "add": "Verbindung hinzufügen",
+        "edit": "Bedingung",
+        "editCondition": "Bedingung der Verbindung zu {{name}} bearbeiten",
+        "removeButton": "Entfernen",
+        "remove": "Verbindung zu {{name}} entfernen"
+      },
       "noCrossBoundaryEdges": "Verbindungen dürfen die Schleifengrenze nicht überqueren — verbinden Sie stattdessen die Schleife selbst.",
       "noFormAvailable": "Für diesen Knotentyp gibt es kein Formular. Verwenden Sie den JSON-Tab.",
       "noVariableMatches": "Keine Variable passt zu diesem Filter.",

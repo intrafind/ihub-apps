@@ -141,10 +141,10 @@ function ClarificationInput({
         w-full px-4 py-3 text-sm border rounded-lg resize-none
         transition-colors min-h-[44px]
         focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 focus:outline-hidden
-        dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 dark:placeholder-gray-400
+        dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 dark:placeholder-gray-300
         ${
           disabled
-            ? 'bg-gray-100 text-gray-400 cursor-not-allowed border-gray-200'
+            ? 'bg-gray-100 text-gray-600 cursor-not-allowed border-gray-200'
             : 'bg-white text-gray-900 border-gray-300'
         }
       `}
@@ -170,10 +170,10 @@ function ClarificationInput({
           w-full px-4 py-3 text-sm border rounded-lg
           transition-colors min-h-[44px]
           focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 focus:outline-hidden
-          dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 dark:placeholder-gray-400
+          dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 dark:placeholder-gray-300
           ${
             disabled
-              ? 'bg-gray-100 text-gray-400 cursor-not-allowed border-gray-200'
+              ? 'bg-gray-100 text-gray-600 cursor-not-allowed border-gray-200'
               : 'bg-white text-gray-900 border-gray-300'
           }
           ${validationError ? 'border-red-500 focus:ring-red-500 focus:border-red-500' : ''}
@@ -203,7 +203,7 @@ function ClarificationInput({
         <Icon
           name="calendar"
           size="sm"
-          className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"
+          className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none"
         />
         <input
           type="date"
@@ -220,7 +220,7 @@ function ClarificationInput({
             dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100
             ${
               disabled
-                ? 'bg-gray-100 text-gray-400 cursor-not-allowed border-gray-200'
+                ? 'bg-gray-100 text-gray-600 cursor-not-allowed border-gray-200'
                 : 'bg-white text-gray-900 border-gray-300'
             }
           `}
@@ -247,7 +247,7 @@ function ClarificationInput({
             <Icon
               name="calendar"
               size="sm"
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none"
             />
             <input
               type="date"
@@ -264,7 +264,7 @@ function ClarificationInput({
                 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100
                 ${
                   disabled
-                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed border-gray-200'
+                    ? 'bg-gray-100 text-gray-600 cursor-not-allowed border-gray-200'
                     : 'bg-white text-gray-900 border-gray-300'
                 }
                 ${validationError ? 'border-red-500 focus:ring-red-500 focus:border-red-500' : ''}
@@ -276,7 +276,7 @@ function ClarificationInput({
 
         {/* Range indicator */}
         <div className="flex items-center justify-center">
-          <Icon name="arrow-right" size="sm" className="text-gray-400" />
+          <Icon name="arrow-right" size="sm" className="text-gray-500" />
         </div>
 
         {/* End date */}
@@ -288,7 +288,7 @@ function ClarificationInput({
             <Icon
               name="calendar"
               size="sm"
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none"
             />
             <input
               type="date"
@@ -305,7 +305,7 @@ function ClarificationInput({
                 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100
                 ${
                   disabled
-                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed border-gray-200'
+                    ? 'bg-gray-100 text-gray-600 cursor-not-allowed border-gray-200'
                     : 'bg-white text-gray-900 border-gray-300'
                 }
                 ${validationError ? 'border-red-500 focus:ring-red-500 focus:border-red-500' : ''}

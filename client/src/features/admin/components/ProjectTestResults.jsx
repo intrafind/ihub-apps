@@ -27,7 +27,7 @@ function ProjectTestResults({ result, onDismiss }) {
       <div className="flex items-center mb-4">
         <Icon
           name={result.success ? 'check-circle' : 'x-circle'}
-          className={`h-5 w-5 mr-2 ${result.success ? 'text-green-600' : 'text-red-600'}`}
+          className={`h-5 w-5 mr-2 ${result.success ? 'text-green-700' : 'text-red-600'}`}
         />
         <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100">
           {result.success
@@ -43,7 +43,7 @@ function ProjectTestResults({ result, onDismiss }) {
           type="button"
           onClick={onDismiss}
           aria-label={t('common.close', 'Close')}
-          className="ml-auto text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+          className="ml-auto text-gray-500 hover:text-gray-600 dark:hover:text-gray-200"
         >
           <Icon name="x" className="h-4 w-4" />
         </button>
@@ -64,7 +64,7 @@ function ProjectTestResults({ result, onDismiss }) {
               <Icon
                 name={entry.ok ? 'check' : 'x-circle'}
                 size="sm"
-                className={entry.ok ? 'text-green-600 mt-0.5' : 'text-red-600 mt-0.5'}
+                className={entry.ok ? 'text-green-700 mt-0.5' : 'text-red-600 mt-0.5'}
               />
               <span className="font-medium text-gray-900 dark:text-gray-100">{entry.name}</span>
               <span className="text-gray-500 dark:text-gray-400">{entry.kind}</span>

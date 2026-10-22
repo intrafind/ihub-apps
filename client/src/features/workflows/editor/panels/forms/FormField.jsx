@@ -84,7 +84,7 @@ function FormField({
         <pre className="w-full text-xs font-mono border border-amber-300 dark:border-amber-700 rounded-sm px-2 py-1.5 bg-amber-50 dark:bg-amber-900/20 text-amber-900 dark:text-amber-200 whitespace-pre-wrap wrap-break-word max-h-32 overflow-y-auto">
           {preview}
         </pre>
-        <p className="text-xs text-amber-600 dark:text-amber-400 mt-0.5">
+        <p className="text-xs text-amber-700 dark:text-amber-400 mt-0.5">
           Structured value — edit via the JSON tab.
         </p>
       </div>

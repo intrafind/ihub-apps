@@ -219,7 +219,7 @@ export default function ProjectsPage() {
           <p className="mt-10 text-sm text-gray-500">{t('common.loading', 'Loading…')}</p>
         ) : visible.length === 0 ? (
           <div className="mt-10 rounded-xl border border-dashed border-gray-300 dark:border-gray-700 p-10 text-center">
-            <Icon name="folder-open" size="xl" className="mx-auto text-gray-400" />
+            <Icon name="folder-open" size="xl" className="mx-auto text-gray-500" />
             <h2 className="mt-3 text-base font-semibold text-gray-900 dark:text-gray-100">
               {projects.length === 0
                 ? t('projects.list.emptyTitle', 'No projects yet')

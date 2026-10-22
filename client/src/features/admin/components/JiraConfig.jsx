@@ -243,7 +243,7 @@ function JiraConfig() {
                   name={message.type === 'success' ? 'check' : 'warning'}
                   size="md"
                   className={`mt-0.5 mr-3 ${
-                    message.type === 'success' ? 'text-green-500' : 'text-red-500'
+                    message.type === 'success' ? 'text-green-500' : 'text-red-700'
                   }`}
                 />
                 <p

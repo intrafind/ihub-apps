@@ -136,12 +136,12 @@ function IconPicker({ value, onChange, className = '', error }) {
               <span className="text-gray-900">{value}</span>
             </>
           ) : (
-            <span className="text-gray-400">
+            <span className="text-gray-500">
               {t('admin.apps.edit.selectIcon', 'Select an icon')}
             </span>
           )}
         </div>
-        <Icon name="chevron-down" size="sm" className="text-gray-400" />
+        <Icon name="chevron-down" size="sm" className="text-gray-500" />
       </button>
 
       {/* Error Message */}
@@ -156,7 +156,7 @@ function IconPicker({ value, onChange, className = '', error }) {
               <Icon
                 name="search"
                 size="sm"
-                className="absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-400"
+                className="absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-500"
               />
               <input
                 ref={searchInputRef}
@@ -192,7 +192,7 @@ function IconPicker({ value, onChange, className = '', error }) {
               </div>
             ) : (
               <div className="text-center py-8 text-gray-500">
-                <Icon name="search" size="xl" className="mx-auto mb-2 text-gray-400" />
+                <Icon name="search" size="xl" className="mx-auto mb-2 text-gray-500" />
                 <p className="text-sm">{t('admin.apps.edit.noIconsFound', 'No icons found')}</p>
               </div>
             )}

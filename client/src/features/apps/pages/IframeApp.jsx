@@ -152,7 +152,7 @@ function IframeApp({ app }) {
       {error && (
         <div className="bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500 p-4 m-4">
           <div className="flex items-center">
-            <Icon name="exclamation-circle" className="h-5 w-5 text-red-500 mr-3" />
+            <Icon name="exclamation-circle" className="h-5 w-5 text-red-700 mr-3" />
             <div>
               <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
               <button

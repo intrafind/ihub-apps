@@ -117,7 +117,7 @@ function ChatHeader({
               )}
             </h1>
             {!isMobile && (
-              <p className="text-gray-600 text-sm">
+              <p className="text-gray-600 dark:text-gray-300 text-sm">
                 {typeof description === 'object'
                   ? getLocalizedContent(description, currentLanguage)
                   : description}

@@ -134,7 +134,7 @@ function A2aAgentsSelector({ selectedTools = [], onToolsChange, onA2aToolIdsChan
                   <span className="font-medium text-sm text-gray-900 dark:text-gray-100">
                     {agentName}
                   </span>
-                  <span className="font-mono text-xs text-gray-400 dark:text-gray-500">
+                  <span className="font-mono text-xs text-gray-500 dark:text-gray-400">
                     {agent.id}
                   </span>
                   <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-indigo-100 dark:bg-indigo-900/50 text-indigo-800 dark:text-indigo-300">

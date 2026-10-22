@@ -438,7 +438,7 @@ function AppsList() {
         {searchConfig.enabled && apps.length > 3 && (
           <div className="flex flex-col sm:flex-row items-stretch gap-3 mb-5 justify-center">
             <div className={`relative min-w-0 ${searchConfig.width || 'w-full sm:w-2/3 lg:w-1/3'}`}>
-              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">
+              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none">
                 <Icon name="search" className="h-5 w-5" />
               </span>
               <input
@@ -458,7 +458,7 @@ function AppsList() {
               {searchTerm && (
                 <button
                   onClick={clearSearch}
-                  className="absolute inset-y-0 right-0 pr-4 flex items-center text-gray-400 hover:text-gray-600"
+                  className="absolute inset-y-0 right-0 pr-4 flex items-center text-gray-500 hover:text-gray-600"
                   aria-label={t('common.clearSearch', 'Clear search')}
                 >
                   <Icon name="x" className="w-4 h-4" />
@@ -557,11 +557,11 @@ function AppsList() {
                       <Icon name={app.icon} size="md" />
                     </span>
                     <span className="flex-1 min-w-0 pointer-events-none">
-                      <span className="flex items-center gap-1.5 font-bold text-[15px] text-gray-900 dark:text-gray-100">
+                      <span className="flex items-center gap-1.5 font-bold text-[0.9375rem] text-gray-900 dark:text-gray-100">
                         <span className="truncate">{name}</span>
                         {recentAppIds.includes(app.id) && (
                           <span
-                            className="flex-none text-gray-400"
+                            className="flex-none text-gray-500"
                             title={t('pages.appsList.recent', 'Recently used')}
                           >
                             <Icon name="clock" size="xs" aria-hidden="true" />
@@ -571,7 +571,7 @@ function AppsList() {
                           </span>
                         )}
                       </span>
-                      <span className="block text-[13px] text-gray-500 dark:text-gray-400 truncate leading-snug">
+                      <span className="block text-[0.8125rem] text-gray-500 dark:text-gray-400 truncate leading-snug">
                         {desc}
                       </span>
                     </span>

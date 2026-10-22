@@ -12,7 +12,7 @@ function PanelMessage({ icon, children }) {
   return (
     <div className="flex-1 flex items-center justify-center p-8 text-center">
       <div className="max-w-sm">
-        <Icon name={icon} className="h-8 w-8 mx-auto text-gray-400" />
+        <Icon name={icon} className="h-8 w-8 mx-auto text-gray-500" />
         <p className="mt-3 text-sm text-gray-600 dark:text-gray-300">{children}</p>
       </div>
     </div>

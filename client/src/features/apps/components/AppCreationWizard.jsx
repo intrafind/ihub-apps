@@ -351,7 +351,7 @@ function AppCreationWizard({ onClose, templateApp = null }) {
               </h3>
               <p className="mt-1 text-sm text-gray-600">{currentStepData.description}</p>
             </div>
-            <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+            <button onClick={onClose} className="text-gray-500 hover:text-gray-600">
               <Icon name="x" className="h-6 w-6" />
             </button>
           </div>
@@ -370,8 +370,8 @@ function AppCreationWizard({ onClose, templateApp = null }) {
                       index === currentStep
                         ? 'bg-indigo-600 border-indigo-600 text-white'
                         : index < currentStep
-                          ? 'bg-green-600 border-green-600 text-white hover:bg-green-700'
-                          : 'border-gray-300 text-gray-400'
+                          ? 'bg-green-700 border-green-600 text-white hover:bg-green-800'
+                          : 'border-gray-300 text-gray-500'
                     } ${index <= currentStep ? 'cursor-pointer' : 'cursor-not-allowed'}`}
                     disabled={index > currentStep}
                   >
@@ -433,7 +433,7 @@ function AppCreationWizard({ onClose, templateApp = null }) {
               {currentStep >= 2 && currentStep < visibleSteps.length - 1 && (
                 <button
                   onClick={handleFinishApp}
-                  className="px-4 py-2 text-sm font-medium text-white bg-green-600 border border-transparent rounded-md hover:bg-green-700"
+                  className="px-4 py-2 text-sm font-medium text-white bg-green-700 border border-transparent rounded-md hover:bg-green-800"
                 >
                   {t('admin.apps.wizard.finish', 'Finish App')}
                 </button>
@@ -1524,7 +1524,7 @@ function ToolsStep({ appData, updateAppData }) {
       {/* Search input */}
       <div className="relative">
         <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-          <Icon name="search" className="h-5 w-5 text-gray-400" />
+          <Icon name="search" className="h-5 w-5 text-gray-500" />
         </div>
         <input
           type="text"
@@ -1537,7 +1537,7 @@ function ToolsStep({ appData, updateAppData }) {
         {searchTerm && (
           <button
             onClick={() => setSearchTerm('')}
-            className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600"
+            className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-500 hover:text-gray-600"
             aria-label={t('common.clearSearch', 'Clear search')}
           >
             <Icon name="x" className="h-5 w-5" />

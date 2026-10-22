@@ -26,7 +26,7 @@ function AdminBreadcrumb({ crumbs = [] }) {
             {index > 0 && (
               <Icon
                 name="chevron-right"
-                className="w-3.5 h-3.5 shrink-0 text-gray-400 dark:text-gray-600"
+                className="w-3.5 h-3.5 shrink-0 text-gray-500 dark:text-gray-600"
               />
             )}
             {isLast || !crumb.href ? (

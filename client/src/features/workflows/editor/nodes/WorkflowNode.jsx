@@ -123,7 +123,7 @@ export const WorkflowNode = memo(function WorkflowNode({ data, selected }) {
 
       {!isStart && !isEnd && data.onDelete && (
         <button
-          className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 bg-red-500 hover:bg-red-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs transition-opacity"
+          className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 bg-red-700 hover:bg-red-800 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs transition-opacity"
           onClick={e => {
             e.stopPropagation();
             data.onDelete(data.nodeId);
@@ -168,10 +168,10 @@ export const WorkflowNode = memo(function WorkflowNode({ data, selected }) {
             style={{ top: '72%' }}
             className="bg-rose-400!"
           />
-          <span className="absolute right-1.5 top-[35%] -translate-y-1/2 text-[9px] font-semibold text-emerald-600 dark:text-emerald-400 pointer-events-none">
+          <span className="absolute right-1.5 top-[35%] -translate-y-1/2 text-[0.5625rem] font-semibold text-emerald-700 dark:text-emerald-400 pointer-events-none">
             yes
           </span>
-          <span className="absolute right-1.5 top-[72%] -translate-y-1/2 text-[9px] font-semibold text-rose-500 dark:text-rose-400 pointer-events-none">
+          <span className="absolute right-1.5 top-[72%] -translate-y-1/2 text-[0.5625rem] font-semibold text-rose-700 dark:text-rose-400 pointer-events-none">
             no
           </span>
         </>

@@ -97,7 +97,7 @@ function AdminFormErrorSummary({
           <div className="flex items-start gap-3">
             <Icon
               name="warning"
-              className="w-5 h-5 text-red-600 dark:text-red-400 shrink-0 mt-0.5"
+              className="w-5 h-5 text-red-700 dark:text-red-400 shrink-0 mt-0.5"
               aria-hidden="true"
             />
             <div className="flex-1 min-w-0">

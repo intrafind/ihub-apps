@@ -8,6 +8,7 @@ import {
   updateMarketplaceRegistry,
   testMarketplaceRegistry
 } from '../../../../api/adminApi';
+import AdminLoadError from '../AdminLoadError';
 
 /**
  * Modal dialog for creating or editing a marketplace registry.
@@ -164,7 +165,7 @@ function RegistryFormDialog({ registry, onSave, onCancel }) {
           </h2>
           <button
             onClick={onCancel}
-            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+            className="text-gray-500 hover:text-gray-600 dark:hover:text-gray-200"
             aria-label={t('common.close', 'Close')}
           >
             &#x2715;
@@ -174,9 +175,7 @@ function RegistryFormDialog({ registry, onSave, onCancel }) {
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           {/* Global error banner */}
           {errors._global && (
-            <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 rounded-lg p-3 text-sm text-red-700 dark:text-red-300">
-              {errors._global}
-            </div>
+            <AdminLoadError message={errors._global} framed={false} action={null} />
           )}
 
           {/* Registry ID - only shown when creating */}

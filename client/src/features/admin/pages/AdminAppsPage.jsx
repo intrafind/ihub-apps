@@ -23,6 +23,8 @@ import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContex
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import ReorderableList from '../components/ReorderableList';
 import { DataTable, SearchInput, FilterSelect } from '../components/data-table';
+import UploadConfigButton from '../components/UploadConfigButton';
+import AdminLoadError from '../components/AdminLoadError';
 
 function AppNameCell({ app, currentLanguage }) {
   return (
@@ -312,7 +314,7 @@ function AdminAppsPage() {
             {label}
           </span>
         ) : (
-          <span className="text-gray-400 text-sm">{t('common.notAvailable', 'N/A')}</span>
+          <span className="text-gray-500 text-sm">{t('common.notAvailable', 'N/A')}</span>
         );
       }
     },
@@ -472,29 +474,13 @@ function AdminAppsPage() {
                   <Icon name="plus" className="h-4 w-4 mr-2" />
                   {t('admin.apps.createApp', 'Create App')}
                 </button>
-                <div className="relative">
-                  <input
-                    type="file"
-                    accept=".json"
-                    onChange={handleUploadConfig}
-                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                    disabled={uploading}
-                  />
-                  <button
-                    type="button"
-                    className="inline-flex items-center justify-center rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 shadow-xs hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                    disabled={uploading}
-                    title={t('admin.apps.uploadConfig', 'Upload App Config')}
-                  >
-                    <Icon
-                      name={uploading ? 'refresh' : 'upload'}
-                      className={`h-4 w-4 mr-2 ${uploading ? 'animate-spin' : ''}`}
-                    />
-                    {uploading
-                      ? t('admin.apps.uploading', 'Uploading...')
-                      : t('admin.apps.uploadConfig', 'Upload Config')}
-                  </button>
-                </div>
+                <UploadConfigButton
+                  onChange={handleUploadConfig}
+                  uploading={uploading}
+                  title={t('admin.apps.uploadConfig', 'Upload App Config')}
+                  uploadingLabel={t('admin.apps.uploading', 'Uploading...')}
+                  label={t('admin.apps.uploadConfig', 'Upload Config')}
+                />
                 <button
                   type="button"
                   className="inline-flex items-center justify-center rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 shadow-xs hover:bg-gray-50 dark:hover:bg-gray-600"
@@ -524,11 +510,7 @@ function AdminAppsPage() {
         </div>
       </div>
 
-      {error && (
-        <div className="mt-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md p-4 text-sm text-red-700 dark:text-red-300">
-          {error}
-        </div>
-      )}
+      {error && <AdminLoadError message={error} framed={false} className="mt-4" action={null} />}
 
       {orderDraft ? (
         <div className="mt-6">
@@ -545,7 +527,7 @@ function AdminAppsPage() {
             getLabel={app => getLocalizedContent(app.name, currentLanguage) || app.id}
             renderItem={(app, index) => (
               <div className="flex min-w-0 items-center gap-3">
-                <span className="w-8 shrink-0 text-right text-xs font-semibold text-gray-400 dark:text-gray-500">
+                <span className="w-8 shrink-0 text-right text-xs font-semibold text-gray-500 dark:text-gray-400">
                   {index + 1}
                 </span>
                 <span

@@ -21,6 +21,7 @@ import {
   getModelProviderId,
   getProviderApiType
 } from '../../../../../shared/llmProviders.js';
+import AdminLoadError from '../components/AdminLoadError';
 
 /** Linked model names shown in the list before "+N more". */
 const LINKED_MODEL_PREVIEW = 3;
@@ -30,7 +31,7 @@ function HealthBadge({ status }) {
 
   if (!status || status === 'idle') {
     return (
-      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400">
+      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
         {t('admin.providers.health.notTested', 'Not tested')}
       </span>
     );
@@ -361,17 +362,7 @@ function AdminProvidersPage() {
         </div>
 
         {/* Error Display */}
-        {error && (
-          <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg">
-            <div className="flex items-center">
-              <Icon
-                name="ExclamationCircleIcon"
-                className="w-5 h-5 text-red-600 dark:text-red-400 mr-2"
-              />
-              <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
-            </div>
-          </div>
-        )}
+        {error && <AdminLoadError message={error} framed={false} className="mb-6" action={null} />}
 
         {/* Search and Actions Bar */}
         <div className="mb-6 flex flex-col sm:flex-row gap-4">
@@ -379,7 +370,7 @@ function AdminProvidersPage() {
             <div className="relative">
               <Icon
                 name="MagnifyingGlassIcon"
-                className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400"
+                className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-500"
               />
               <input
                 type="text"
@@ -394,7 +385,7 @@ function AdminProvidersPage() {
             <button
               onClick={testAllProviders}
               disabled={testingAll}
-              className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              className="px-4 py-2 bg-green-700 text-white rounded-lg hover:bg-green-800 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
               {testingAll ? (
                 <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-white inline-block" />
@@ -572,7 +563,7 @@ function AdminProvidersPage() {
                                         </div>
                                       </div>
                                     ) : (
-                                      <span className="text-sm text-gray-400 dark:text-gray-500">
+                                      <span className="text-sm text-gray-500 dark:text-gray-400">
                                         —
                                       </span>
                                     )}
@@ -588,7 +579,7 @@ function AdminProvidersPage() {
                                             e.stopPropagation();
                                             toggleExpanded(provider.id);
                                           }}
-                                          className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+                                          className="text-gray-500 hover:text-gray-600 dark:hover:text-gray-200"
                                           title={
                                             isExpanded
                                               ? t(
@@ -619,7 +610,7 @@ function AdminProvidersPage() {
                                           void testProvider(provider.id);
                                         }}
                                         disabled={providerHealth.status === 'testing' || testingAll}
-                                        className="text-green-600 hover:text-green-900 dark:text-green-400 dark:hover:text-green-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                                        className="text-green-700 hover:text-green-900 dark:text-green-400 dark:hover:text-green-300 disabled:opacity-50 disabled:cursor-not-allowed"
                                       >
                                         {t('admin.providers.test', 'Test')}
                                       </button>
@@ -631,7 +622,7 @@ function AdminProvidersPage() {
                                           void testWebsearchProvider(provider.id);
                                         }}
                                         disabled={providerHealth.status === 'testing' || testingAll}
-                                        className="text-green-600 hover:text-green-900 dark:text-green-400 dark:hover:text-green-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                                        className="text-green-700 hover:text-green-900 dark:text-green-400 dark:hover:text-green-300 disabled:opacity-50 disabled:cursor-not-allowed"
                                         title={t(
                                           'admin.providers.websearchTest.buttonTitle',
                                           'Run one live search and report whether this server can reach the provider'
@@ -704,7 +695,7 @@ function AdminProvidersPage() {
                                             }
                                             className={`w-4 h-4 mt-0.5 shrink-0 ${
                                               result.success
-                                                ? 'text-green-600 dark:text-green-400'
+                                                ? 'text-green-700 dark:text-green-400'
                                                 : 'text-red-600 dark:text-red-400'
                                             }`}
                                           />

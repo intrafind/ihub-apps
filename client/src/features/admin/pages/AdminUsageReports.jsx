@@ -26,7 +26,7 @@ function StatCard({ title, value, icon, color, change, changeType, linkTo, linkL
           </p>
           {change && (
             <p
-              className={`text-sm ${changeType === 'positive' ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'} mt-1`}
+              className={`text-sm ${changeType === 'positive' ? 'text-green-700 dark:text-green-400' : 'text-red-600 dark:text-red-400'} mt-1`}
             >
               {changeType === 'positive' ? '↗' : '↘'} {change}
             </p>
@@ -97,7 +97,7 @@ function TopUsersCard({ title, data, color, showRating = false }) {
                   {new Intl.NumberFormat().format(displayValue)}
                 </div>
                 {showRating && averageRating > 0 && (
-                  <div className="flex items-center text-xs text-amber-600 dark:text-amber-400">
+                  <div className="flex items-center text-xs text-amber-700 dark:text-amber-400">
                     <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
                       <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
                     </svg>
@@ -341,7 +341,7 @@ function AdminUsageReports() {
                   <div className="bg-amber-400 h-2 flex-1" />
                 </div>
               </div>
-              <span className="text-sm font-medium text-green-600 dark:text-green-400 whitespace-nowrap">
+              <span className="text-sm font-medium text-green-700 dark:text-green-400 whitespace-nowrap">
                 {Math.round(
                   ((usage.tokenSources.provider || 0) /
                     Math.max(
@@ -389,7 +389,7 @@ function AdminUsageReports() {
                 {t('admin.usage.trackingModes.identified', 'Identified')}
               </option>
             </select>
-            <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
               {trackingMeta.trackingMode === 'anonymous'
                 ? t(
                     'admin.usage.trackingModeDesc.anonymous',
@@ -680,18 +680,18 @@ function AdminUsageReports() {
                     <div className="text-xs text-blue-600 dark:text-blue-400">Prompt Tokens</div>
                   </div>
                   <div className="text-center p-3 bg-green-50 dark:bg-green-900/30 rounded-lg">
-                    <div className="text-lg font-bold text-green-600 dark:text-green-400">
+                    <div className="text-lg font-bold text-green-700 dark:text-green-400">
                       {new Intl.NumberFormat().format(completionTokens)}
                     </div>
-                    <div className="text-xs text-green-600 dark:text-green-400">
+                    <div className="text-xs text-green-700 dark:text-green-400">
                       Completion Tokens
                     </div>
                   </div>
                   <div className="text-center p-3 bg-amber-50 dark:bg-amber-900/30 rounded-lg">
-                    <div className="text-lg font-bold text-amber-600 dark:text-amber-400">
+                    <div className="text-lg font-bold text-amber-700 dark:text-amber-400">
                       {avgTokensPerMessage}
                     </div>
-                    <div className="text-xs text-amber-600 dark:text-amber-400">Avg/Message</div>
+                    <div className="text-xs text-amber-700 dark:text-amber-400">Avg/Message</div>
                   </div>
                 </div>
 
@@ -743,10 +743,10 @@ function AdminUsageReports() {
             </div>
           </div>
           <div className="text-center p-4 bg-green-50 dark:bg-green-900/30 rounded-lg">
-            <div className="text-2xl font-bold text-green-600 dark:text-green-400">
+            <div className="text-2xl font-bold text-green-700 dark:text-green-400">
               {Object.keys(messages.perApp || {}).length}
             </div>
-            <div className="text-sm text-green-600 dark:text-green-400 font-medium">
+            <div className="text-sm text-green-700 dark:text-green-400 font-medium">
               {t('admin.usage.overview.activeApps', 'Active Apps')}
             </div>
           </div>
@@ -759,10 +759,10 @@ function AdminUsageReports() {
             </div>
           </div>
           <div className="text-center p-4 bg-amber-50 dark:bg-amber-900/30 rounded-lg">
-            <div className="text-2xl font-bold text-amber-600 dark:text-amber-400">
+            <div className="text-2xl font-bold text-amber-700 dark:text-amber-400">
               {messages.total > 0 ? Math.round(tokens.total / messages.total) : 0}
             </div>
-            <div className="text-sm text-amber-600 dark:text-amber-400 font-medium">
+            <div className="text-sm text-amber-700 dark:text-amber-400 font-medium">
               {t('admin.usage.overview.avgTokensPerMsg', 'Avg Tokens/Msg')}
             </div>
           </div>

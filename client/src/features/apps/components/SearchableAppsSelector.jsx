@@ -68,7 +68,7 @@ function SearchableAppsSelector({ apps, value, onChange, placeholder, currentLan
             )}
           </span>
           <span className="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none">
-            <Icon name="chevron-down" className="h-5 w-5 text-gray-400 dark:text-gray-500" />
+            <Icon name="chevron-down" className="h-5 w-5 text-gray-500 dark:text-gray-400" />
           </span>
         </button>
 
@@ -76,7 +76,7 @@ function SearchableAppsSelector({ apps, value, onChange, placeholder, currentLan
           <button
             type="button"
             onClick={handleClear}
-            className="absolute inset-y-0 right-8 flex items-center pr-2 text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300"
+            className="absolute inset-y-0 right-8 flex items-center pr-2 text-gray-500 hover:text-gray-600 dark:text-gray-400 dark:hover:text-gray-300"
           >
             <Icon name="x" className="h-4 w-4" />
           </button>
@@ -92,14 +92,14 @@ function SearchableAppsSelector({ apps, value, onChange, placeholder, currentLan
           <div className="sticky top-0 bg-white dark:bg-gray-800 px-3 py-2 border-b border-gray-200 dark:border-gray-700">
             <div className="relative">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <Icon name="search" className="h-4 w-4 text-gray-400 dark:text-gray-500" />
+                <Icon name="search" className="h-4 w-4 text-gray-500 dark:text-gray-400" />
               </div>
               <input
                 ref={inputRef}
                 type="text"
                 value={searchTerm}
                 onChange={e => setSearchTerm(e.target.value)}
-                className="block w-full pl-10 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-hidden focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 placeholder-gray-400 dark:placeholder-gray-500"
+                className="block w-full pl-10 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-hidden focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 placeholder-gray-500 dark:placeholder-gray-300"
                 placeholder={t('admin.prompts.edit.searchApps', 'Search apps...')}
                 autoComplete="off"
               />

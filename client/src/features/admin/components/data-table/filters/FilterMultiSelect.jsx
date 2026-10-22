@@ -188,7 +188,7 @@ function FilterMultiSelect({
               ? (emptyLabel ?? t('admin.filters.multiSelect.noOptions', 'No values'))
               : triggerText}
           </span>
-          <Icon name="chevron-down" size="sm" className="shrink-0 text-gray-400" />
+          <Icon name="chevron-down" size="sm" className="shrink-0 text-gray-500" />
         </button>
 
         {open && (

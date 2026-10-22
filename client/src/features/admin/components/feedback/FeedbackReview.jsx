@@ -64,12 +64,12 @@ function FeedbackCard({ data }) {
                 </svg>
               ))}
             </div>
-            <span className="text-2xl font-bold text-amber-600 dark:text-amber-400">
+            <span className="text-2xl font-bold text-amber-700 dark:text-amber-400">
               {averageRating.toFixed(1)}
             </span>
           </div>
           <div className="text-center">
-            <div className="text-sm text-amber-600 dark:text-amber-400 font-medium">
+            <div className="text-sm text-amber-700 dark:text-amber-400 font-medium">
               Average Rating ({totalStarRatings} ratings)
             </div>
           </div>
@@ -308,7 +308,7 @@ export function FeedbackReview({ feedback }) {
                           </svg>
                         ))}
                       </div>
-                      <span className="text-amber-600 dark:text-amber-400 font-medium">
+                      <span className="text-amber-700 dark:text-amber-400 font-medium">
                         {averageRating.toFixed(1)}
                       </span>
                     </div>
@@ -359,7 +359,7 @@ export function FeedbackReview({ feedback }) {
                           </svg>
                         ))}
                       </div>
-                      <span className="text-amber-600 dark:text-amber-400 font-medium">
+                      <span className="text-amber-700 dark:text-amber-400 font-medium">
                         {averageRating.toFixed(1)}
                       </span>
                     </div>
@@ -405,7 +405,7 @@ export function FeedbackReview({ feedback }) {
                           </svg>
                         ))}
                       </div>
-                      <span className="text-amber-600 dark:text-amber-400 font-medium">
+                      <span className="text-amber-700 dark:text-amber-400 font-medium">
                         {averageRating.toFixed(1)}
                       </span>
                     </div>

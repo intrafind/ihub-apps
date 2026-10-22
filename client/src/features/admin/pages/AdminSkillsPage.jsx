@@ -16,6 +16,7 @@ import {
   importSkill,
   toggleSkill
 } from '../../../api/adminApi';
+import AdminLoadError from '../components/AdminLoadError';
 /** The tabs of the page, as `?tab=` names them. */
 const TABS = ['skills', 'user'];
 
@@ -209,23 +210,11 @@ function AdminSkillsPage() {
 
   if (error && skills.length === 0 && activeTab === 'skills') {
     return (
-      <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md p-4">
-        <div className="flex">
-          <Icon name="exclamation-triangle" className="h-5 w-5 text-red-400" />
-          <div className="ml-3">
-            <h3 className="text-sm font-medium text-red-800 dark:text-red-300">
-              {t('admin.skills.loadError', 'Error loading skills')}
-            </h3>
-            <p className="mt-1 text-sm text-red-700 dark:text-red-400">{error}</p>
-            <button
-              onClick={() => window.location.reload()}
-              className="mt-2 text-sm text-red-600 hover:text-red-500 dark:text-red-400 dark:hover:text-red-300"
-            >
-              {t('common.retry', 'Retry')}
-            </button>
-          </div>
-        </div>
-      </div>
+      <AdminLoadError
+        title={t('admin.skills.loadError', 'Error loading skills')}
+        message={error}
+        framed={false}
+      />
     );
   }
 
@@ -323,20 +312,12 @@ function AdminSkillsPage() {
           <>
             {/* Inline error banner (shown alongside data) */}
             {error && skills.length > 0 && (
-              <div className="mt-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md p-4">
-                <div className="flex">
-                  <Icon name="exclamation-triangle" className="h-5 w-5 text-red-400" />
-                  <div className="ml-3 flex-1">
-                    <p className="text-sm text-red-700 dark:text-red-400">{error}</p>
-                  </div>
-                  <button
-                    onClick={() => setError(null)}
-                    className="ml-3 text-red-400 hover:text-red-600"
-                  >
-                    <Icon name="close" className="h-4 w-4" />
-                  </button>
-                </div>
-              </div>
+              <AdminLoadError
+                message={error}
+                framed={false}
+                className="mt-4"
+                action={{ label: t('common.dismiss', 'Dismiss'), onClick: () => setError(null) }}
+              />
             )}
 
             {/* Search and filter controls */}
@@ -344,7 +325,7 @@ function AdminSkillsPage() {
               <div className="flex-1">
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <Icon name="search" className="h-5 w-5 text-gray-400" />
+                    <Icon name="search" className="h-5 w-5 text-gray-500" />
                   </div>
                   <input
                     type="text"
@@ -453,7 +434,7 @@ function AdminSkillsPage() {
                                   {skill.metadata.version}
                                 </code>
                               ) : (
-                                <span className="text-gray-400">-</span>
+                                <span className="text-gray-500">-</span>
                               )}
                             </td>
 
@@ -485,7 +466,7 @@ function AdminSkillsPage() {
                                     className={`p-2 rounded-full ${
                                       skill.enabled !== false
                                         ? 'text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30'
-                                        : 'text-green-600 hover:bg-green-50 dark:hover:bg-green-900/30'
+                                        : 'text-green-700 hover:bg-green-50 dark:hover:bg-green-900/30'
                                     }`}
                                     title={
                                       skill.enabled !== false
@@ -506,7 +487,7 @@ function AdminSkillsPage() {
                                     e.stopPropagation();
                                     void handleExportSkill(skill.name);
                                   }}
-                                  className="p-2 text-green-600 hover:bg-green-50 dark:hover:bg-green-900/30 rounded-full"
+                                  className="p-2 text-green-700 hover:bg-green-50 dark:hover:bg-green-900/30 rounded-full"
                                   title={t('admin.skills.export', 'Export Skill')}
                                 >
                                   <Icon name="download" className="h-4 w-4" />
@@ -556,7 +537,7 @@ function AdminSkillsPage() {
                       <div className="text-center py-12 bg-gray-50 dark:bg-gray-800">
                         <Icon
                           name="sparkles"
-                          className="mx-auto h-12 w-12 text-gray-400 dark:text-gray-500"
+                          className="mx-auto h-12 w-12 text-gray-500 dark:text-gray-400"
                         />
                         <h3 className="mt-2 text-sm font-medium text-gray-900 dark:text-gray-100">
                           {t('admin.skills.noSkills', 'No skills found')}

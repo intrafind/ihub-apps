@@ -18,6 +18,7 @@ import AdminBreadcrumb from '../components/AdminBreadcrumb';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import WebsearchTestResult from '../components/WebsearchTestResult';
+import AdminLoadError from '../components/AdminLoadError';
 
 function AdminProviderEditPage() {
   const { t, i18n } = useTranslation();
@@ -237,9 +238,9 @@ function AdminProviderEditPage() {
             <div className="flex items-center">
               <Icon
                 name="CheckCircleIcon"
-                className="w-5 h-5 text-green-600 dark:text-green-400 mr-2"
+                className="w-5 h-5 text-green-700 dark:text-green-400 mr-2"
               />
-              <p className="text-sm text-green-600 dark:text-green-400">
+              <p className="text-sm text-green-700 dark:text-green-400">
                 {t('admin.providers.edit.saved', 'Provider configuration saved successfully!')}
               </p>
             </div>
@@ -247,17 +248,7 @@ function AdminProviderEditPage() {
         )}
 
         {/* Error Message */}
-        {error && (
-          <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg">
-            <div className="flex items-center">
-              <Icon
-                name="ExclamationCircleIcon"
-                className="w-5 h-5 text-red-600 dark:text-red-400 mr-2"
-              />
-              <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
-            </div>
-          </div>
-        )}
+        {error && <AdminLoadError message={error} framed={false} className="mb-6" action={null} />}
 
         {/* Form */}
         <form onSubmit={handleSave} className="bg-white dark:bg-gray-800 shadow-sm rounded-lg p-6">
@@ -471,7 +462,7 @@ function AdminProviderEditPage() {
                 type="button"
                 onClick={runWebsearchTest}
                 disabled={testing}
-                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                className="px-4 py-2 bg-green-700 text-white rounded-lg hover:bg-green-800 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
                 {testing ? (
                   <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-white inline-block" />

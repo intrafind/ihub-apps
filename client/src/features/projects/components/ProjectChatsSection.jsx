@@ -124,7 +124,7 @@ function ProjectChatsSection({ project, canStartChat }) {
         <ul className="divide-y divide-gray-100 dark:divide-gray-700">
           {state.chats.map(chat => (
             <li key={chat.id} className="py-2.5 flex items-center gap-3">
-              <Icon name="chat-bubble-left" size="sm" className="text-gray-400 flex-none" />
+              <Icon name="chat-bubble-left" size="sm" className="text-gray-500 flex-none" />
               <div className="flex-1 min-w-0">
                 <Link
                   to={chatPath(chat)}

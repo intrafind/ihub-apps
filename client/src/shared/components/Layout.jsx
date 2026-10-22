@@ -25,6 +25,7 @@ import { canAccessLink as canAccessLinkShared, FEATURE_ROUTES } from '../../util
 import AppSidebar from './AppSidebar';
 import IHubLogo from './IHubLogo';
 import BrandTitle from './BrandTitle';
+import SkipLink from './SkipLink';
 
 /**
  * The application shell that wraps every routed page via `<Outlet />`.
@@ -108,6 +109,10 @@ function Layout() {
   // independently scrolling content pane); classic-layout pages scroll the
   // document so the footer ends up after the content (#2289).
   const isAdminRoute = pathnameStartsWith(location.pathname, '/admin');
+  // AdminLayout renders its own skip link and <main>; the full-screen workflow
+  // editor sits outside it, so the shell has to provide both there.
+  const isStandaloneAdminPage = /\/admin\/workflows\/[^/]+\/edit\/?$/.test(location.pathname);
+  const adminProvidesOwnMain = isAdminRoute && !isStandaloneAdminPage;
   const isSetupRoute = pathnameStartsWith(location.pathname, '/setup');
   const isLoginRoute = pathnameEquals(location.pathname, '/login');
   const isTeamsRoute = pathnameStartsWith(location.pathname, '/teams');
@@ -203,12 +208,14 @@ function Layout() {
     <div
       className={`relative flex flex-col w-full bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 transition-colors duration-200 ${showSidebar || isAdminRoute || isAppPage ? 'h-shell overflow-hidden' : 'min-h-screen'}`}
     >
-      <a
-        href="#main-content"
-        className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:top-2 focus:left-2 focus:p-3 focus:bg-white focus:text-indigo-600 focus:rounded-md focus:shadow-lg focus:underline dark:focus:bg-gray-800 dark:focus:text-indigo-400"
-      >
-        {t('accessibility.skipToContent', 'Skip to main content')}
-      </a>
+      {!adminProvidesOwnMain && (
+        <SkipLink
+          targetId="main-content"
+          className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:top-2 focus:left-2 focus:p-3 focus:bg-white focus:text-indigo-600 focus:rounded-md focus:shadow-lg focus:underline dark:focus:bg-gray-800 dark:focus:text-indigo-400"
+        >
+          {t('accessibility.skipToContent', 'Skip to main content')}
+        </SkipLink>
+      )}
 
       {/* Disclaimer Popup */}
       {uiConfig?.disclaimer && uiConfig.disclaimer.enabled !== false && (
@@ -253,7 +260,11 @@ function Layout() {
                 />
               </Link>
             </div>
-            <main id="main-content" tabIndex={-1} className="flex-1 min-h-0 overflow-y-auto">
+            <main
+              id="main-content"
+              tabIndex={-1}
+              className="flex-1 min-h-0 overflow-y-auto focus:outline-hidden"
+            >
               {isFullBleedPage ? (
                 <Outlet />
               ) : (
@@ -268,13 +279,19 @@ function Layout() {
         </div>
       ) : isAdminRoute ? (
         /* Admin routes handle their own layout */
-        <main
-          id="main-content"
-          tabIndex={-1}
-          className="flex flex-col flex-1 min-h-0 overflow-hidden w-full"
-        >
-          <Outlet />
-        </main>
+        adminProvidesOwnMain ? (
+          <div className="flex flex-col flex-1 min-h-0 overflow-hidden w-full">
+            <Outlet />
+          </div>
+        ) : (
+          <main
+            id="main-content"
+            tabIndex={-1}
+            className="flex flex-col flex-1 min-h-0 overflow-hidden w-full focus:outline-hidden"
+          >
+            <Outlet />
+          </main>
+        )
       ) : (
         /* Embedded / legacy contexts: keep original header + container layout */
         <>
@@ -318,7 +335,7 @@ function Layout() {
                           )}
                         </span>
                         {uiConfig?.header?.tagline && (
-                          <span className="text-[9px] text-white/60 font-normal">
+                          <span className="text-[0.5625rem] text-white/60 font-normal">
                             {getLocalizedContent(uiConfig.header.tagline, currentLanguage)}
                           </span>
                         )}
@@ -405,7 +422,7 @@ function Layout() {
           <main
             id="main-content"
             tabIndex={-1}
-            className={`grow w-full min-h-0 ${isAppPage ? 'flex flex-col overflow-hidden' : ''}`}
+            className={`grow w-full min-h-0 focus:outline-hidden ${isAppPage ? 'flex flex-col overflow-hidden' : ''}`}
           >
             <div
               className={`container mx-auto ${isAppPage ? 'flex flex-col flex-1 min-h-0' : 'px-4'}`}

@@ -54,7 +54,7 @@ const ChatHeader = ({
           <span className="shrink-0 text-slate-600 dark:text-slate-300">{titleIcon}</span>
         )}
         {showCheckmark && (
-          <span className="shrink-0 text-green-600 font-bold text-base leading-none" aria-hidden>
+          <span className="shrink-0 text-green-700 font-bold text-base leading-none" aria-hidden>
             ✓
           </span>
         )}

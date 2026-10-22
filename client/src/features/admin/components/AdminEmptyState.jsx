@@ -16,7 +16,7 @@ function AdminEmptyState({ icon = 'inbox', title, description, action }) {
   return (
     <div className="flex flex-col items-center justify-center py-16 px-4 text-center">
       <div className="w-12 h-12 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center mb-4">
-        <Icon name={icon} className="w-6 h-6 text-gray-400 dark:text-gray-500" />
+        <Icon name={icon} className="w-6 h-6 text-gray-500 dark:text-gray-400" />
       </div>
       <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">{title}</h3>
       {description && (

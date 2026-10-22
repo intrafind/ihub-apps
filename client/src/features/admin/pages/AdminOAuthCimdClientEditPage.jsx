@@ -233,7 +233,7 @@ function AdminOAuthCimdClientEditPage() {
         <div className="flex items-center mb-6">
           <button
             onClick={() => navigate('/admin/oauth/clients')}
-            className="mr-4 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
+            className="mr-4 text-gray-500 dark:text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
           >
             <Icon name="arrow-left" size="md" />
           </button>

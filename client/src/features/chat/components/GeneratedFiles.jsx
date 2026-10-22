@@ -64,7 +64,7 @@ function GeneratedFileCard({ file, chatId }) {
 
   return (
     <div className="flex items-center gap-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 max-w-md">
-      <div className="flex-shrink-0 flex items-center justify-center w-9 h-9 rounded-md bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400">
+      <div className="flex-shrink-0 flex items-center justify-center w-9 h-9 rounded-md bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-400">
         <Icon name="document-text" size="md" />
       </div>
       <div className="min-w-0 flex-1">

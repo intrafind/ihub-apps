@@ -38,7 +38,7 @@ function SimpleLineChart({ data, dataKeys, height = 200 }) {
   if (!data || data.length === 0) {
     return (
       <div
-        className="flex items-center justify-center text-gray-400 dark:text-gray-500"
+        className="flex items-center justify-center text-gray-500 dark:text-gray-400"
         style={{ height }}
       >
         No data available
@@ -80,7 +80,7 @@ function SimpleLineChart({ data, dataKeys, height = 200 }) {
             x={padding.left - 8}
             y={yScale(tick) + 4}
             textAnchor="end"
-            className="text-gray-400 dark:text-gray-500"
+            className="text-gray-500 dark:text-gray-400"
             fontSize="10"
             fill="currentColor"
           >
@@ -100,7 +100,7 @@ function SimpleLineChart({ data, dataKeys, height = 200 }) {
             x={xScale(i)}
             y={height - 5}
             textAnchor="middle"
-            className="text-gray-400 dark:text-gray-500"
+            className="text-gray-500 dark:text-gray-400"
             fontSize="9"
             fill="currentColor"
           >
@@ -153,7 +153,7 @@ function BreakdownTable({ title, data, columns, expanded, onToggle }) {
           {title} ({data.length})
         </h4>
         <svg
-          className={`w-4 h-4 text-gray-400 transition-transform ${expanded ? 'rotate-180' : ''}`}
+          className={`w-4 h-4 text-gray-500 transition-transform ${expanded ? 'rotate-180' : ''}`}
           fill="none"
           viewBox="0 0 24 24"
           stroke="currentColor"
@@ -477,7 +477,7 @@ export default function UsageTimeline() {
         </div>
       ) : chartData.length === 0 ? (
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xs border border-gray-200 dark:border-gray-700 p-12 text-center">
-          <div className="text-gray-400 dark:text-gray-500 text-5xl mb-4">
+          <div className="text-gray-500 dark:text-gray-400 text-5xl mb-4">
             <svg
               className="w-16 h-16 mx-auto"
               fill="none"
@@ -524,7 +524,7 @@ export default function UsageTimeline() {
               </p>
             </div>
             <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-4">
-              <p className="text-sm text-green-600 dark:text-green-400">
+              <p className="text-sm text-green-700 dark:text-green-400">
                 {t('admin.usage.timeline.completionTokens', 'Completion Tokens')}
               </p>
               <p className="text-2xl font-bold text-green-700 dark:text-green-300">

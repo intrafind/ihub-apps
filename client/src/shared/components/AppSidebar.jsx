@@ -103,13 +103,13 @@ function SectionHeader({ label, badge = null, open, onToggle }) {
       <Icon
         name="chevron-down"
         size="sm"
-        className={`text-gray-400 transition-transform duration-150 ${open ? '' : '-rotate-90'}`}
+        className={`text-gray-500 transition-transform duration-150 ${open ? '' : '-rotate-90'}`}
       />
-      <span className="text-[11px] font-bold tracking-widest uppercase text-gray-500 dark:text-gray-400">
+      <span className="text-[0.6875rem] font-bold tracking-widest uppercase text-gray-500 dark:text-gray-400">
         {label}
       </span>
       {badge && (
-        <span className="text-[10px] font-semibold text-amber-800 dark:text-amber-200 bg-amber-100 dark:bg-amber-900/40 rounded px-1.5">
+        <span className="text-[0.625rem] font-semibold text-amber-800 dark:text-amber-200 bg-amber-100 dark:bg-amber-900/40 rounded px-1.5">
           {badge}
         </span>
       )}
@@ -756,7 +756,7 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose = () => {
               className="block text-base text-gray-900 dark:text-gray-100 truncate"
             />
             {tagline && (
-              <span className="block text-[10px] text-gray-500 dark:text-gray-400 tracking-wide truncate">
+              <span className="block text-[0.625rem] text-gray-500 dark:text-gray-400 tracking-wide truncate">
                 {tagline}
               </span>
             )}
@@ -771,7 +771,7 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose = () => {
             if (mobileOpen) onMobileClose();
             else toggleCollapsed();
           }}
-          className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-600 dark:hover:text-gray-300 transition-colors flex-none"
+          className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-600 dark:hover:text-gray-300 transition-colors flex-none"
         >
           <Icon name={mobileOpen ? 'x' : 'chevron-left'} size="sm" />
         </button>
@@ -808,7 +808,7 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose = () => {
       {searchOpen && (
         <div className="px-4 pb-2">
           <div className="relative">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">
               <Icon name="search" size="sm" />
             </span>
             <input
@@ -946,7 +946,7 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose = () => {
                 <Icon name="home" size="sm" />
               </span>
               <span className="flex-1">{t('sidebar.allApps', 'All apps')}</span>
-              <span className="text-[11px] font-bold text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 rounded-full px-2 py-0.5">
+              <span className="text-[0.6875rem] font-bold text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 rounded-full px-2 py-0.5">
                 {apps.length}
               </span>
             </Link>
@@ -997,7 +997,7 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose = () => {
                             onCommit={next => handleRenameChat(chat.id, next)}
                             onCancel={() => setRenamingChatId(null)}
                             returnFocusRef={renameButtonRefFor(chat.id)}
-                            className="text-[13px]"
+                            className="text-[0.8125rem]"
                           />
                         </div>
                       ) : (
@@ -1018,7 +1018,7 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose = () => {
                             >
                               <Icon name={chat.appIcon} size="sm" className="w-3 h-3" />
                             </span>
-                            <span className="flex-1 truncate text-[13px]">{title}</span>
+                            <span className="flex-1 truncate text-[0.8125rem]">{title}</span>
                             {chat.status === 'running' && (
                               <span
                                 role="img"
@@ -1077,7 +1077,7 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose = () => {
                     // How many are loaded, not how many exist: the list is
                     // cursor-paged and the API has no cheap total, so a bare
                     // number would be a page size pretending to be one.
-                    <span className="text-[11px] font-bold text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 rounded-full px-2 py-0.5">
+                    <span className="text-[0.6875rem] font-bold text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 rounded-full px-2 py-0.5">
                       {chats.length}
                       {hasMoreChats ? '+' : ''}
                     </span>

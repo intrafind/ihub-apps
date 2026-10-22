@@ -55,7 +55,7 @@ function AdminAdvancedPage() {
           <div className="flex items-start space-x-4">
             <div className="shrink-0 mt-1">
               <div className="p-3 rounded-full bg-orange-100 dark:bg-orange-900/50">
-                <Icon name="refresh" size="lg" className="text-orange-600 dark:text-orange-400" />
+                <Icon name="refresh" size="lg" className="text-orange-700 dark:text-orange-400" />
               </div>
             </div>
             <div className="flex-1">
@@ -99,7 +99,7 @@ function AdminAdvancedPage() {
                       name={forceRefreshMessage.type === 'success' ? 'check' : 'warning'}
                       size="md"
                       className={`mt-0.5 mr-3 ${
-                        forceRefreshMessage.type === 'success' ? 'text-green-500' : 'text-red-500'
+                        forceRefreshMessage.type === 'success' ? 'text-green-500' : 'text-red-700'
                       }`}
                     />
                     <p
@@ -121,7 +121,7 @@ function AdminAdvancedPage() {
                 className={`inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-xs text-white ${
                   forceRefreshLoading
                     ? 'bg-gray-400 cursor-not-allowed'
-                    : 'bg-orange-600 hover:bg-orange-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-orange-500'
+                    : 'bg-orange-700 hover:bg-orange-800 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-orange-500'
                 }`}
               >
                 {forceRefreshLoading ? (

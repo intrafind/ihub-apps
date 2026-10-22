@@ -175,7 +175,7 @@ function ResourcePicker({
                     {itemLabel(item)}
                   </div>
                   {item.id !== itemLabel(item) && (
-                    <div className="text-xs text-gray-400 dark:text-gray-500">{item.id}</div>
+                    <div className="text-xs text-gray-500 dark:text-gray-400">{item.id}</div>
                   )}
                 </button>
               ))

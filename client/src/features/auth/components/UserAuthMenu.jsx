@@ -268,7 +268,7 @@ export default function UserAuthMenu({ variant = 'header', className = '', colla
                   </div>
                 )}
                 {user?.authMethod && (
-                  <div className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                  <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                     via {user.authMethod}
                   </div>
                 )}
@@ -292,7 +292,7 @@ export default function UserAuthMenu({ variant = 'header', className = '', colla
                       <Icon
                         name="link"
                         size="sm"
-                        className="mr-3 text-gray-400 dark:text-gray-500"
+                        className="mr-3 text-gray-500 dark:text-gray-400"
                       />
                       {t('auth.menu.integrations', 'Integrations')}
                     </Link>
@@ -313,7 +313,7 @@ export default function UserAuthMenu({ variant = 'header', className = '', colla
                     <Icon
                       name="settings"
                       size="sm"
-                      className="mr-3 text-gray-400 dark:text-gray-500"
+                      className="mr-3 text-gray-500 dark:text-gray-400"
                     />
                     {t('auth.menu.adminPanel', 'Admin Panel')}
                   </Link>
@@ -354,7 +354,7 @@ export default function UserAuthMenu({ variant = 'header', className = '', colla
                 onClick={handleLoginClick}
                 className="flex items-center w-full px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
               >
-                <Icon name="login" size="sm" className="mr-3 text-gray-400 dark:text-gray-500" />
+                <Icon name="login" size="sm" className="mr-3 text-gray-500 dark:text-gray-400" />
                 {t('auth.menu.signIn', 'Sign In')}
               </button>
             </>

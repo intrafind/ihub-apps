@@ -371,7 +371,7 @@ function AdminBrowserExtensionPage() {
                   className={`rounded-lg px-4 py-2 text-sm font-semibold transition-colors disabled:opacity-60 ${
                     status?.enabled
                       ? 'bg-red-100 text-red-700 hover:bg-red-200 dark:bg-red-900/30 dark:text-red-400'
-                      : 'bg-emerald-600 text-white hover:bg-emerald-700'
+                      : 'bg-emerald-700 text-white hover:bg-emerald-800'
                   }`}
                 >
                   {toggling
@@ -393,7 +393,7 @@ function AdminBrowserExtensionPage() {
                   {' — '}
                   <Link
                     to={`/admin/oauth/clients/${status.oauthClientId}`}
-                    className="text-emerald-600 hover:underline dark:text-emerald-400"
+                    className="text-emerald-700 hover:underline dark:text-emerald-400"
                   >
                     {t('admin.browserExtension.viewClient', 'View OAuth Client')}
                   </Link>
@@ -429,7 +429,7 @@ function AdminBrowserExtensionPage() {
                 <button
                   type="button"
                   onClick={handleRotateKey}
-                  className="rounded-lg bg-emerald-600 text-white px-4 py-2 text-sm font-medium hover:bg-emerald-700"
+                  className="rounded-lg bg-emerald-700 text-white px-4 py-2 text-sm font-medium hover:bg-emerald-800"
                 >
                   {t('admin.browserExtension.generateSigningKey', 'Generate signing key')}
                 </button>
@@ -487,14 +487,14 @@ function AdminBrowserExtensionPage() {
                   <button
                     type="button"
                     onClick={() => downloadPackage('zip')}
-                    className="rounded-lg bg-emerald-600 text-white px-4 py-2 text-sm font-medium hover:bg-emerald-700"
+                    className="rounded-lg bg-emerald-700 text-white px-4 py-2 text-sm font-medium hover:bg-emerald-800"
                   >
                     {t('admin.browserExtension.downloadZip', 'Download ZIP')}
                   </button>
                   <button
                     type="button"
                     onClick={() => downloadPackage('crx')}
-                    className="rounded-lg bg-emerald-600 text-white px-4 py-2 text-sm font-medium hover:bg-emerald-700"
+                    className="rounded-lg bg-emerald-700 text-white px-4 py-2 text-sm font-medium hover:bg-emerald-800"
                   >
                     {t('admin.browserExtension.downloadCrx', 'Download CRX')}
                   </button>
@@ -752,7 +752,7 @@ function AdminBrowserExtensionPage() {
                   type="button"
                   onClick={handleSaveConfig}
                   disabled={saving}
-                  className="rounded-lg bg-emerald-600 text-white px-4 py-2 text-sm font-medium hover:bg-emerald-700 disabled:opacity-60"
+                  className="rounded-lg bg-emerald-700 text-white px-4 py-2 text-sm font-medium hover:bg-emerald-800 disabled:opacity-60"
                 >
                   {saving ? '…' : t('admin.browserExtension.save', 'Save')}
                 </button>

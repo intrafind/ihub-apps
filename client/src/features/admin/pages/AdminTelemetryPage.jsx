@@ -396,7 +396,7 @@ function AdminTelemetryPage() {
             <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               {t('admin.telemetry.privacy', 'Content & Privacy')}
             </p>
-            <p className="text-xs text-amber-600 dark:text-amber-400 mb-3">
+            <p className="text-xs text-amber-700 dark:text-amber-400 mb-3">
               {t(
                 'admin.telemetry.privacyWarn',
                 'Including prompts and completions may capture PII or sensitive data. Disabled by default.'

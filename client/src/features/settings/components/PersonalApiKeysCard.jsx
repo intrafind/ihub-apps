@@ -330,7 +330,7 @@ export default function PersonalApiKeysCard({
                   {t('integrations.page.apiKeys.create', 'Generate API key')}
                 </button>
                 {atLimit && (
-                  <p className="mt-2 text-xs text-amber-600 dark:text-amber-400">
+                  <p className="mt-2 text-xs text-amber-700 dark:text-amber-400">
                     {t(
                       'integrations.page.apiKeys.limitReached',
                       'You have reached the maximum number of API keys. Revoke one to create another.'
@@ -354,7 +354,7 @@ export default function PersonalApiKeysCard({
               >
                 <Icon
                   name="chevron-right"
-                  className={`w-4 h-4 text-gray-400 transition-transform ${
+                  className={`w-4 h-4 text-gray-500 transition-transform ${
                     showEndpoints ? 'rotate-90' : ''
                   }`}
                 />

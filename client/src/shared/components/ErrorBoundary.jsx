@@ -94,7 +94,7 @@ function ErrorFallback({ error, resetErrorBoundary }) {
   return (
     <div role="alert" className="p-4 m-4 bg-red-50 border border-red-200 rounded-md">
       <div className="flex items-center mb-4">
-        <Icon name="exclamation-triangle" size="lg" className="text-red-500 mr-2" />
+        <Icon name="exclamation-triangle" size="lg" className="text-red-700 mr-2" />
         <h2 className="text-xl font-bold text-red-700">{title}</h2>
       </div>
 

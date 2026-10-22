@@ -70,7 +70,7 @@ function AppTemplateSelector({ onSelect, onClose }) {
                 )}
               </p>
             </div>
-            <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+            <button onClick={onClose} className="text-gray-500 hover:text-gray-600">
               <Icon name="x" className="h-6 w-6" />
             </button>
           </div>
@@ -79,7 +79,7 @@ function AppTemplateSelector({ onSelect, onClose }) {
           <div className="py-4">
             <div className="relative">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <Icon name="search" className="h-5 w-5 text-gray-400" />
+                <Icon name="search" className="h-5 w-5 text-gray-500" />
               </div>
               <input
                 type="text"
@@ -158,20 +158,20 @@ function AppTemplateSelector({ onSelect, onClose }) {
                         {getLocalizedContent(app.description, currentLanguage)}
                       </div>
                       <div className="flex items-center mt-1">
-                        <span className="text-xs text-gray-400">ID: {app.id}</span>
+                        <span className="text-xs text-gray-500">ID: {app.id}</span>
                         {app.variables?.length > 0 && (
-                          <span className="ml-3 text-xs text-gray-400">
+                          <span className="ml-3 text-xs text-gray-500">
                             {app.variables.length} variables
                           </span>
                         )}
                         {app.tools?.length > 0 && (
-                          <span className="ml-3 text-xs text-gray-400">
+                          <span className="ml-3 text-xs text-gray-500">
                             {app.tools.length} tools
                           </span>
                         )}
                       </div>
                     </div>
-                    <Icon name="chevron-down" className="h-5 w-5 text-gray-400" />
+                    <Icon name="chevron-down" className="h-5 w-5 text-gray-500" />
                   </button>
                 ))}
               </div>

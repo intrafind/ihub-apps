@@ -167,7 +167,7 @@ function InputValueRenderer({ value, t }) {
   };
 
   if (value === null || value === undefined) {
-    return <span className="text-gray-400 italic">{t('common.empty', 'empty')}</span>;
+    return <span className="text-gray-500 italic">{t('common.empty', 'empty')}</span>;
   }
   if (typeof value === 'string') {
     if (value.length > LONG_STRING_THRESHOLD) {
@@ -192,7 +192,7 @@ function InputValueRenderer({ value, t }) {
     return <span className="whitespace-pre-wrap wrap-break-word">{value}</span>;
   }
   if (Array.isArray(value)) {
-    if (value.length === 0) return <span className="text-gray-400 italic">[]</span>;
+    if (value.length === 0) return <span className="text-gray-500 italic">[]</span>;
     if (value.every(isFileLike)) {
       return (
         <div className="space-y-2">
@@ -659,12 +659,12 @@ function WorkflowExecutionPage() {
           <div className="flex items-center gap-2">
             <Icon
               name={isExpanded ? 'chevron-up' : 'chevron-down'}
-              className="w-4 h-4 text-gray-400 shrink-0"
+              className="w-4 h-4 text-gray-500 shrink-0"
             />
             <h4 className="font-medium text-gray-700 dark:text-gray-300 capitalize">
               {key.replaceAll('_', ' ')}
             </h4>
-            <span className="text-xs text-gray-400 dark:text-gray-500">
+            <span className="text-xs text-gray-500 dark:text-gray-400">
               {value === null || value === undefined
                 ? 'null'
                 : typeof value === 'string'
@@ -860,7 +860,7 @@ function WorkflowExecutionPage() {
                 aria-hidden="true"
               />
               {t('workflows.sofar', 'So far')}
-              <span className="text-sm text-gray-400 dark:text-gray-500">
+              <span className="text-sm text-gray-500 dark:text-gray-400">
                 ({completedSteps} {completedSteps === 1 ? 'step' : 'steps'})
               </span>
             </summary>
@@ -914,7 +914,7 @@ function WorkflowExecutionPage() {
               {/* Stats */}
               <div className="grid grid-cols-3 gap-4 text-center">
                 <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3">
-                  <div className="text-2xl font-bold text-green-600 dark:text-green-400">
+                  <div className="text-2xl font-bold text-green-700 dark:text-green-400">
                     {state.data?.nodeInvocations || state.completedNodes?.length || 0}
                   </div>
                   <div className="text-xs text-gray-500 dark:text-gray-400">
@@ -967,7 +967,7 @@ function WorkflowExecutionPage() {
                           </span>
                         </div>
                         <div className="flex justify-between text-xs">
-                          <span className="text-gray-400 dark:text-gray-500">
+                          <span className="text-gray-500 dark:text-gray-400">
                             {t('workflows.inputTokens', 'Input')}:
                           </span>
                           <span className="text-gray-600 dark:text-gray-400">
@@ -975,7 +975,7 @@ function WorkflowExecutionPage() {
                           </span>
                         </div>
                         <div className="flex justify-between text-xs">
-                          <span className="text-gray-400 dark:text-gray-500">
+                          <span className="text-gray-500 dark:text-gray-400">
                             {t('workflows.outputTokens', 'Output')}:
                           </span>
                           <span className="text-gray-600 dark:text-gray-400">
@@ -1064,7 +1064,7 @@ function WorkflowExecutionPage() {
                     </span>
                   </div>
                   {state.errors && state.errors.length > 0 && (
-                    <p className="mt-2 text-sm text-red-600 dark:text-red-400">
+                    <p className="mt-2 text-sm text-red-700 dark:text-red-400">
                       {state.errors[state.errors.length - 1]?.message ||
                         state.errors[state.errors.length - 1]}
                     </p>
@@ -1191,12 +1191,12 @@ function WorkflowExecutionPage() {
                       <div className="flex items-center gap-2">
                         <Icon
                           name={additionalDataExpanded ? 'chevron-up' : 'chevron-down'}
-                          className="w-4 h-4 text-gray-400"
+                          className="w-4 h-4 text-gray-500"
                         />
                         <span className="font-medium text-gray-600 dark:text-gray-400">
                           {t('workflows.output.additionalData', 'Additional Data')}
                         </span>
-                        <span className="text-xs text-gray-400 dark:text-gray-500">
+                        <span className="text-xs text-gray-500 dark:text-gray-400">
                           ({additionalKeys.length}{' '}
                           {additionalKeys.length === 1
                             ? t('workflows.output.field', 'field')

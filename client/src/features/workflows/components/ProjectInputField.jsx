@@ -64,7 +64,7 @@ function ProjectInputField({
           placeholder={t('workflows.startModal.project.idPlaceholder', 'Project id')}
           className={`${className} font-mono`}
         />
-        <p className="text-xs text-amber-600 dark:text-amber-400">
+        <p className="text-xs text-amber-700 dark:text-amber-400">
           {error
             ? t('workflows.startModal.project.loadError', 'Your projects could not be loaded.')
             : t(
