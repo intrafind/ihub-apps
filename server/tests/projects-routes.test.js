@@ -604,6 +604,41 @@ describe('admin projects', () => {
     }
   });
 
+  it("is reached through a planner's task template and blocks its deletion", async () => {
+    // The planner's generated workers carry `taskTemplate.projects`; a
+    // non-admin who may run the workflow (RUNNER: `wf-link`) must reach
+    // them, and the admin
+    // page must list the dependency.
+    configCache.setCacheEntry('config/workflows.json', [
+      {
+        id: 'wf-link',
+        name: { en: 'Planner' },
+        enabled: true,
+        nodes: [
+          {
+            id: 'plan',
+            type: 'planner',
+            config: { taskTemplate: { projects: [{ id: 'faq', mode: 'tools' }] } }
+          }
+        ]
+      }
+    ]);
+    try {
+      const linked = await drive(route.get, { user: RUNNER, params: { projectId: 'faq' } });
+      assert.equal(linked.statusCode, 200, JSON.stringify(linked.body));
+      assert.equal(linked.body.role, 'linked');
+      const deps = await drive(route.adminDeps, { user: EDITOR, params: { id: 'faq' } });
+      assert.ok(
+        deps.body.dependencies.some(
+          dep => dep.type === 'workflow' && dep.id === 'wf-link' && dep.nodeId === 'plan'
+        ),
+        JSON.stringify(deps.body)
+      );
+    } finally {
+      configCache.setCacheEntry('config/workflows.json', []);
+    }
+  });
+
   it('cannot be deleted while linked, and disabling hides it from users', async () => {
     const deps = await drive(route.adminDeps, { user: EDITOR, params: { id: 'faq' } });
     assert.deepEqual(deps.body.dependencies, [{ type: 'app', id: 'support', name: 'Support' }]);
