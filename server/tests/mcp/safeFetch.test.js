@@ -2,7 +2,12 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 import { describe, it, expect } from '@jest/globals';
-import { isPrivateIp, assertSafeHost, hostMatchesPattern } from '../../services/mcp/safeFetch.js';
+import {
+  isPrivateIp,
+  assertSafeHost,
+  hostMatchesPattern,
+  withoutAutoRedirects
+} from '../../services/mcp/safeFetch.js';
 
 describe('mcp/safeFetch isPrivateIp', () => {
   it('matches all RFC1918 IPv4 ranges', () => {
@@ -126,5 +131,27 @@ describe('mcp/safeFetch hostMatchesPattern', () => {
     it('returns false for a subdomain pattern with no base (`.`)', () => {
       expect(hostMatchesPattern('anything.com', '.')).toBe(false);
     });
+  });
+});
+
+describe('mcp/safeFetch withoutAutoRedirects', () => {
+  const bypass = { rejectUnauthorized: false };
+
+  it('stops following redirects when certificate verification is off', () => {
+    expect(withoutAutoRedirects({ method: 'POST' }, bypass)).toEqual({
+      method: 'POST',
+      redirect: 'error'
+    });
+    expect(withoutAutoRedirects({ redirect: 'follow' }, bypass).redirect).toBe('error');
+  });
+
+  it('keeps a caller that handles redirects itself', () => {
+    const init = { redirect: 'manual' };
+    expect(withoutAutoRedirects(init, bypass)).toBe(init);
+  });
+
+  it('leaves normally verified requests alone', () => {
+    const init = { method: 'GET' };
+    expect(withoutAutoRedirects(init, {})).toBe(init);
   });
 });
