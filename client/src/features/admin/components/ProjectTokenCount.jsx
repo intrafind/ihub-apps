@@ -55,8 +55,14 @@ function ProjectTokenCount({
 
   let note = null;
   if (mode === 'auto') {
+    // Only the platform ceiling is known here; at request time the budget is
+    // also capped by the model's context window and shared with the projects
+    // linked before this one, so a project that fits is not promised a load.
     note = fitsPrompt
-      ? t('admin.projects.tokens.autoPrompt', 'loaded into the prompt')
+      ? t(
+          'admin.projects.tokens.autoPrompt',
+          'fits the prompt limit; loaded if the model and other linked projects leave room'
+        )
       : t('admin.projects.tokens.autoSearched', 'too large to load; searched with tools');
   } else if (mode === 'context') {
     note = t('admin.projects.tokens.everyRequest', 'sent with every request');

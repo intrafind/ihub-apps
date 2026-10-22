@@ -4229,7 +4229,7 @@
       "tokens": {
         "count": "~{{tokens}} Tokens",
         "unknown": "Größe noch nicht bekannt",
-        "autoPrompt": "wird in den Prompt geladen",
+        "autoPrompt": "passt ins Prompt-Limit; wird geladen, wenn das Modell und andere verknüpfte Projekte Platz lassen",
         "autoSearched": "zu groß zum Laden; wird mit Tools durchsucht",
         "everyRequest": "wird mit jeder Anfrage gesendet",
         "searched": "durchsucht, bis zu ~{{tokens}} pro Aufruf",
