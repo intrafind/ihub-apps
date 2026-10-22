@@ -34,7 +34,9 @@ jest.unstable_mockModule('../../services/mcp/appInvoker.js', () => ({
   invokeAppNonStreaming: jest.fn()
 }));
 jest.unstable_mockModule('../../featureRegistry.js', () => ({
-  requireFeature: () => (_req, _res, next) => next()
+  requireFeature: () => (_req, _res, next) => next(),
+  // The projects settings behind the MCP permissions ask for it.
+  isFeatureEnabled: () => true
 }));
 jest.unstable_mockModule('../../middleware/authRequired.js', () => ({
   authRequired: (req, _res, next) => {

@@ -38,7 +38,11 @@ const CloudFileBrowserShell = ({
   isVirtualFile = () => false,
   // Optional adapter: extra MIME → icon rules for provider-specific
   // document types (e.g. Google Sheets / Slides).
-  extraFileIconRule = () => null
+  extraFileIconRule = () => null,
+  // Optional: which files can be picked, as `(mimeType, fileName) => boolean`.
+  // The chat's rule by default; the project "Add item" dialog passes the
+  // formats the project extraction accepts.
+  isFileSupported = isCloudFileSupported
 }) => {
   const { t } = useTranslation();
   const {
@@ -106,8 +110,7 @@ const CloudFileBrowserShell = ({
 
     if (!showUnsupportedFiles) {
       result = result.filter(
-        item =>
-          item.isFolder || isVirtualFile(item) || isCloudFileSupported(item.mimeType, item.name)
+        item => item.isFolder || isVirtualFile(item) || isFileSupported(item.mimeType, item.name)
       );
     }
 
@@ -129,7 +132,7 @@ const CloudFileBrowserShell = ({
     });
 
     return result;
-  }, [items, showUnsupportedFiles, isVirtualFile, sortBy, sortDirection]);
+  }, [items, showUnsupportedFiles, isVirtualFile, isFileSupported, sortBy, sortDirection]);
 
   const handleSortClick = useCallback(
     column => {
@@ -186,7 +189,7 @@ const CloudFileBrowserShell = ({
   const canSelectFile = item => {
     if (item.isFolder) return false;
     const maxSize = (uploadConfig.maxFileSizeMB || 10) * 1024 * 1024;
-    const supported = isCloudFileSupported(item.mimeType, item.name);
+    const supported = isFileSupported(item.mimeType, item.name);
     if (isVirtualFile(item)) return supported;
     return supported && item.size <= maxSize;
   };
@@ -194,7 +197,7 @@ const CloudFileBrowserShell = ({
   const getFileTooltip = item => {
     if (item.isFolder) return null;
     const maxSize = (uploadConfig.maxFileSizeMB || 10) * 1024 * 1024;
-    const supported = isCloudFileSupported(item.mimeType, item.name);
+    const supported = isFileSupported(item.mimeType, item.name);
     const virtual = isVirtualFile(item);
 
     if (!supported && !virtual) {

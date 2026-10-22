@@ -618,6 +618,50 @@ describe('extractText', () => {
     assert.match(single.text, /hiermit kündige ich\./);
   });
 
+  it('bounds the columns and cells of a sparse worksheet before converting it', async () => {
+    // Column A on 2000 rows and one value in the last column, XFD2000:
+    // a 2000 x 16384 range from a file of a few kilobytes (written by hand,
+    // as a writer would fill the range).
+    const { default: JSZip } = await import('jszip');
+    const cell = (ref, text) => `<c r="${ref}" t="inlineStr"><is><t>${text}</t></is></c>`;
+    const rows = [];
+    for (let row = 1; row <= 2000; row += 1) {
+      const far = row === 2000 ? cell('XFD2000', 'far away') : '';
+      rows.push(`<row r="${row}">${cell(`A${row}`, `Row ${row}`)}${far}</row>`);
+    }
+    const zip = new JSZip();
+    zip.file(
+      '[Content_Types].xml',
+      '<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>'
+    );
+    zip.file(
+      '_rels/.rels',
+      '<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>'
+    );
+    zip.file(
+      'xl/workbook.xml',
+      '<?xml version="1.0" encoding="UTF-8"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Sparse" sheetId="1" r:id="rId1"/></sheets></workbook>'
+    );
+    zip.file(
+      'xl/_rels/workbook.xml.rels',
+      '<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/></Relationships>'
+    );
+    zip.file(
+      'xl/worksheets/sheet1.xml',
+      `<?xml version="1.0" encoding="UTF-8"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><dimension ref="A1:XFD2000"/><sheetData>${rows.join('')}</sheetData></worksheet>`
+    );
+    const bytes = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' });
+    assert.ok(bytes.length < 100 * 1024);
+    const started = Date.now();
+    const result = await extractText({ bytes, name: 'sparse.xlsx' });
+    assert.ok(Date.now() - started < 15000, 'the sparse range is not materialized');
+    assert.match(result.text, /Row 1\b/);
+    assert.match(result.text, /columns beyond 1000 omitted/);
+    assert.match(result.text, /rows omitted/);
+    assert.doesNotMatch(result.text, /far away/);
+    assert.equal(result.truncated, true);
+  });
+
   it('reports content an extractor left out on its own limits as truncated', async () => {
     // The production limits leave these small files whole.
     const whole = await extractText({ bytes: await makeXlsx(), name: 'budget.xlsx' });
@@ -1048,7 +1092,7 @@ describe('ingest pipeline', () => {
         open = resolve;
       });
       const reserved = await service.refreshItem(project.id, item.id, { user: ADA });
-      assert.equal(typeof reserved.item.refreshAttempt, 'string');
+      assert.equal(typeof reserved.item.ingestAttempt, 'string');
       await waitFor(() => fakeFetch.entered);
 
       // Another worker's reconciler (its own job map, this project only)
@@ -1072,7 +1116,7 @@ describe('ingest pipeline', () => {
       const interrupted = await itemOf(project.id, item.id);
       assert.equal(interrupted.status, 'stale');
       assert.equal(interrupted.error.code, INTERRUPTED);
-      assert.equal(interrupted.refreshAttempt, undefined);
+      assert.equal(interrupted.ingestAttempt, undefined);
 
       // Refresh B runs to the end with the newer version.
       fakeFetch.bytes = Buffer.from('# Cloud doc B\n\nThe newer version.');
@@ -1094,6 +1138,83 @@ describe('ingest pipeline', () => {
         /The newer version/
       );
       // A's blob went with it; only B's text is stored for the item.
+      const page = await repository.blobs.list(PROJECT_FILES_NAMESPACE, {
+        prefix: `${project.id}__${item.id}__`
+      });
+      assert.deepEqual(
+        page.items.map(blob => blob.key),
+        [final.text.blobKey]
+      );
+    } finally {
+      open?.();
+      fakeFetch.gate = null;
+      fakeFetch.lastModified = '2026-10-01T00:00:00.000Z';
+      fakeFetch.bytes = Buffer.from('# Cloud doc\n\nPicked from the cloud.');
+    }
+  });
+
+  it('discards a slow first pick another worker released, after a refresh replaced it', async () => {
+    const project = await newProject();
+    const repository = getProjectRepository();
+    let open = null;
+    try {
+      // The first pick hangs in its download.
+      fakeFetch.bytes = Buffer.from('# Cloud doc A\n\nThe older version.');
+      fakeFetch.lastModified = '2026-10-05T00:00:00.000Z';
+      fakeFetch.entered = false;
+      fakeFetch.gate = new Promise(resolve => {
+        open = resolve;
+      });
+      const { item } = await service.addItem(
+        project.id,
+        { kind: 'fake-cloud', ref: { fileId: 'slow-pick' } },
+        { user: ADA }
+      );
+      assert.equal(typeof (await itemOf(project.id, item.id)).ingestAttempt, 'string');
+      await waitFor(() => fakeFetch.entered);
+
+      // Another worker's reconciler releases it past `staleAfterMinutes`.
+      const scoped = Object.create(repository);
+      scoped.listAdmin = async () => [];
+      scoped.scanUser = async () => ({
+        projects: [await repository.get(project.id)],
+        truncated: false,
+        nextCursor: null,
+        skipped: 0
+      });
+      scoped.hasBlobs = () => false;
+      const other = new ProjectIngestService({
+        service,
+        repository: scoped,
+        platform: () => platform,
+        tempDir: path.join(scratch, 'tmp-other-pick')
+      });
+      assert.equal(
+        (await other.reconcile({ now: Date.now() + 3 * 60 * 60 * 1000 })).interrupted,
+        1
+      );
+      const released = await itemOf(project.id, item.id);
+      assert.equal(released.status, 'failed');
+      assert.equal(released.error.code, INTERRUPTED);
+      assert.equal(released.ingestAttempt, undefined);
+
+      // The editor refreshes the failed item; the newer version is installed.
+      fakeFetch.bytes = Buffer.from('# Cloud doc B\n\nThe newer version.');
+      fakeFetch.lastModified = '2026-10-07T00:00:00.000Z';
+      const newer = await service.refreshItem(project.id, item.id, { user: ADA, wait: true });
+      assert.equal(newer.item.status, 'ready');
+
+      // The first pick wakes up: it installs and records nothing.
+      open();
+      await waitFor(() => !service.ingest.isActive(item.id));
+      const final = await itemOf(project.id, item.id);
+      assert.equal(final.status, 'ready');
+      assert.equal(final.error, null);
+      assert.equal(final.text.blobKey, newer.item.text.blobKey);
+      assert.match(
+        (await getItemText({ id: project.id }, final, { user: ADA })).text,
+        /The newer version/
+      );
       const page = await repository.blobs.list(PROJECT_FILES_NAMESPACE, {
         prefix: `${project.id}__${item.id}__`
       });
@@ -1540,6 +1661,60 @@ describe('ingest pipeline', () => {
     }
   });
 
+  it('follows the inventory past its first page of user projects', async () => {
+    const repository = getProjectRepository();
+    const old = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+    const stuckIds = [];
+    for (const name of ['Paged A', 'Paged B']) {
+      const project = await newProject(name);
+      await repository.mutate(project.id, p => ({
+        ...p,
+        items: [
+          {
+            id: 'itm_paged',
+            kind: 'upload',
+            name: 'paged',
+            ref: {},
+            storage: 'text',
+            pinned: false,
+            status: 'extracting',
+            error: null,
+            provenance: { origin: 'uploaded', by: { id: ADA.id }, at: old },
+            createdAt: old,
+            updatedAt: old
+          }
+        ]
+      }));
+      stuckIds.push(project.id);
+    }
+    const oldVersion = `${(Date.now() - 3 * 60 * 60 * 1000).toString(36).padStart(9, '0')}deadbeef`;
+    const orphan = `prj_pagedgone__itm_lost__${oldVersion}`;
+    await repository.blobs.put(PROJECT_FILES_NAMESPACE, orphan, Buffer.from('orphan'));
+    // An installation larger than a page: every page holds one project.
+    const scoped = Object.create(repository);
+    let pages = 0;
+    scoped.scanUser = options => {
+      pages += 1;
+      return repository.scanUser({ ...options, max: 1, maxScanned: 1 });
+    };
+    const ingest = new ProjectIngestService({
+      service,
+      repository: scoped,
+      platform: () => platform,
+      tempDir: path.join(scratch, 'tmp-paged')
+    });
+    const result = await ingest.reconcile();
+    assert.ok(pages > 2, `the inventory read ${pages} pages`);
+    assert.ok(result.interrupted >= 2);
+    for (const projectId of stuckIds) {
+      const item = await itemOf(projectId, 'itm_paged');
+      assert.equal(item.status, 'failed');
+      assert.equal(item.error.code, INTERRUPTED);
+    }
+    // The whole inventory was read: the orphan is swept.
+    assert.equal(await repository.blobs.get(PROJECT_FILES_NAMESPACE, orphan), null);
+  });
+
   it('parses blob keys from the right and keeps the ones it cannot parse', async () => {
     const repository = getProjectRepository();
     const oldVersion = `${(Date.now() - 3 * 60 * 60 * 1000).toString(36).padStart(9, '0')}deadbeef`;
@@ -1627,6 +1802,198 @@ describe('ingest pipeline', () => {
     }
     // Both inventories whole again: the blobs no project names are swept.
     assert.equal((await ingest.reconcile()).orphans, 2);
+  });
+});
+
+describe('built-in cloud kinds', () => {
+  let server = null;
+  let base = null;
+  const restore = [];
+  const sockets = new Set();
+
+  function stub(target, key, value) {
+    const had = Object.prototype.hasOwnProperty.call(target, key);
+    const previous = target[key];
+    restore.push(() => {
+      if (had) target[key] = previous;
+      else delete target[key];
+    });
+    target[key] = value;
+  }
+
+  before(async () => {
+    server = http.createServer((req, res) => {
+      const url = new URL(req.url, 'http://local');
+      const send = (status, body, headers = {}) => {
+        res.writeHead(status, headers);
+        res.end(body);
+      };
+      if (url.pathname === '/graph/me/drive/items/doc-1') {
+        return send(
+          200,
+          JSON.stringify({
+            id: 'doc-1',
+            name: 'Lease.txt',
+            size: 22,
+            file: { mimeType: 'text/plain' },
+            lastModifiedDateTime: '2026-10-03T08:00:00Z',
+            '@microsoft.graph.downloadUrl': `${base}/content/o365`
+          }),
+          { 'content-type': 'application/json' }
+        );
+      }
+      if (url.pathname === '/drive/files/doc-2' && url.searchParams.get('alt') === 'media') {
+        return send(200, 'The rent is due monthly.', { 'content-type': 'text/plain' });
+      }
+      if (url.pathname === '/drive/files/doc-2') {
+        assert.match(url.searchParams.get('fields'), /modifiedTime/);
+        return send(
+          200,
+          JSON.stringify({
+            id: 'doc-2',
+            name: 'Lease.txt',
+            mimeType: 'text/plain',
+            modifiedTime: '2026-10-04T09:00:00.000Z'
+          }),
+          { 'content-type': 'application/json' }
+        );
+      }
+      if (url.pathname === '/drive/files/stall' && url.searchParams.get('alt') === 'media') {
+        // Headers and a first chunk, then nothing: a body that never ends.
+        res.writeHead(200, { 'content-type': 'text/plain' });
+        res.write('The rent ');
+        return undefined;
+      }
+      if (url.pathname === '/drive/files/stall') {
+        return send(
+          200,
+          JSON.stringify({ id: 'stall', name: 'Stall.txt', mimeType: 'text/plain' }),
+          {
+            'content-type': 'application/json'
+          }
+        );
+      }
+      if (url.pathname === '/content/o365') {
+        return send(200, 'The rent is due monthly.', { 'content-type': 'text/plain' });
+      }
+      if (url.pathname.startsWith('/nextcloud/')) {
+        return send(200, 'The rent is due monthly.', {
+          'content-type': 'text/plain',
+          'last-modified': 'Mon, 05 Oct 2026 10:00:00 GMT'
+        });
+      }
+      return send(404, 'not found');
+    });
+    server.on('connection', socket => {
+      sockets.add(socket);
+      socket.on('close', () => sockets.delete(socket));
+    });
+    await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+    base = `http://127.0.0.1:${server.address().port}`;
+    const tokens = async () => ({ accessToken: 'token', providerId: 'p1', nextcloudUserId: 'ada' });
+    const { default: office365 } = await import('../services/integrations/Office365Service.js');
+    const { default: googleDrive } = await import('../services/integrations/GoogleDriveService.js');
+    const { default: nextcloud } = await import('../services/integrations/NextcloudService.js');
+    stub(office365, 'graphApiUrl', `${base}/graph`);
+    stub(office365, 'getUserTokens', tokens);
+    stub(googleDrive, 'driveApiUrl', `${base}/drive`);
+    stub(googleDrive, 'getUserTokens', tokens);
+    stub(nextcloud, 'getUserTokens', tokens);
+    stub(nextcloud, '_getProviderConfig', () => ({ serverUrl: `${base}/nextcloud` }));
+  });
+
+  after(async () => {
+    while (restore.length) restore.pop()();
+    for (const socket of sockets) socket.destroy();
+    await new Promise(resolve => server.close(resolve));
+  });
+
+  it('report the modification time the source holds now', async () => {
+    const cases = [
+      ['office365', { providerId: 'p1', fileId: 'doc-1' }, '2026-10-03T08:00:00Z'],
+      ['google-drive', { providerId: 'p1', fileId: 'doc-2' }, '2026-10-04T09:00:00.000Z'],
+      ['nextcloud', { providerId: 'p1', path: '/Leases/Lease.txt' }, '2026-10-05T10:00:00.000Z']
+    ];
+    for (const [kindId, ref, lastModified] of cases) {
+      const fetched = await getItemKind(kindId).fetch({ ref }, { user: ADA });
+      assert.equal(fetched.bytes.toString(), 'The rent is due monthly.', kindId);
+      assert.equal(fetched.lastModified, lastModified, kindId);
+      assert.equal(fetched.source.lastModified, lastModified, kindId);
+    }
+  });
+
+  it('abort a download whose body stalls when the signal fires', async () => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(new Error('deadline')), 100);
+    const started = Date.now();
+    try {
+      await assert.rejects(
+        getItemKind('google-drive').fetch(
+          { ref: { providerId: 'p1', fileId: 'stall' } },
+          { user: ADA, signal: controller.signal }
+        )
+      );
+    } finally {
+      clearTimeout(timer);
+    }
+    assert.ok(Date.now() - started < 5000);
+  });
+
+  it('call a missing cloud connection forbidden, not an extraction failure', async () => {
+    const { default: office365 } = await import('../services/integrations/Office365Service.js');
+    const tokens = office365.getUserTokens;
+    office365.getUserTokens = async () => {
+      throw new Error('User not authenticated with microsoft');
+    };
+    try {
+      await assert.rejects(
+        getItemKind('office365').fetch(
+          { ref: { providerId: 'p1', fileId: 'doc-1' } },
+          { user: ADA }
+        ),
+        error => error.code === 'SOURCE_FORBIDDEN' && error.status === 403
+      );
+    } finally {
+      office365.getUserTokens = tokens;
+    }
+  });
+
+  it('fail a fetch that outlives its deadline and free its queue slot', async () => {
+    const service = getProjectService();
+    const ingest = service.ingest;
+    let seen = null;
+    registerItemKind({
+      id: 'fake-stall',
+      name: { en: 'Stalling cloud' },
+      storage: { ihub: 'text' },
+      credentials: 'picking-user',
+      picker: { type: 'cloud', provider: 'stall' },
+      refSchema: z.object({ fileId: z.string() }).strict(),
+      describe: ref => ({ name: `stall-${ref.fileId}` }),
+      // Ignores its signal: the deadline must hold anyway.
+      fetch: (_item, ctx) => {
+        seen = ctx.signal;
+        return new Promise(() => {});
+      }
+    });
+    const timeout = ingest.fetchTimeoutMs;
+    ingest.fetchTimeoutMs = 100;
+    try {
+      const project = await service.createUserProject({ owner: ADA, content: { name: 'Stall' } });
+      const { item } = await service.addItem(
+        project.id,
+        { kind: 'fake-stall', ref: { fileId: 'f' } },
+        { user: ADA }
+      );
+      const failed = await settled(project.id, item.id);
+      assert.equal(failed.status, 'failed');
+      assert.equal(failed.error.code, 'SOURCE_TIMEOUT');
+      assert.equal(seen?.aborted, true);
+      await waitFor(() => !ingest.isActive(item.id));
+      assert.equal(ingest.running, 0);
+    } finally {
+      ingest.fetchTimeoutMs = timeout;
+    }
   });
 });
 

@@ -4,6 +4,7 @@
 import configCache from '../../configCache.js';
 import logger from '../../utils/logger.js';
 import { isToolSelected } from '../../utils/toolSelection.js';
+import { isProjectsConfigured } from '../projects/projectSettings.js';
 
 /**
  * Sources have no standalone group-level permission — they are scoped through
@@ -89,10 +90,14 @@ export function toolVisibleInSet(toolId, visibleSet, mcpServerId, a2aAgentId) {
 }
 
 /**
- * Set of source ids the user may read, unioned across accessible apps'
- * `sources` arrays.
+ * Set of project ids the user may read, unioned across accessible apps'
+ * `projects` links. Empty while the Projects feature is off: an app that
+ * does not itself require the feature may still link projects, and the MCP
+ * resource paths read project content without the master-switch check of a
+ * chat turn's scope, so this set is where they are switched off.
  */
 export async function getVisibleProjectIds(user, platform) {
+  if (!isProjectsConfigured(configCache.getFeatures())) return new Set();
   const apps = await getAccessibleApps(user, platform);
   const ids = new Set();
   for (const app of apps) {

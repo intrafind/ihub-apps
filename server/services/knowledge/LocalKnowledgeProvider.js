@@ -53,6 +53,11 @@ export function evictProjectIndex(projectId) {
   }
 }
 
+/** Bytes a text takes inside a JSON document: UTF-8, quotes and escapes included. */
+function serializedBytes(text) {
+  return Buffer.byteLength(JSON.stringify(text), 'utf8');
+}
+
 function hash(value) {
   return createHash('sha256').update(String(value)).digest('hex').slice(0, 16);
 }
@@ -81,7 +86,8 @@ export class LocalKnowledgeProvider extends KnowledgeProvider {
    * @param {Object} project
    * @param {import('./KnowledgeProvider.js').KnowledgeContext} ctx
    * @param {{itemIds?: string[]}} [options]
-   * @returns {Promise<{texts: Array<{item: Object, text: string}>, unavailable: Array}>}
+   * @returns {Promise<{texts: Array<{item: Object, text: string, truncated: boolean}>, unavailable: Array}>}
+   *   `truncated`: the source handed over only the start of the document
    */
   async texts(project, ctx, { itemIds } = {}) {
     const wanted = itemIds ? new Set(itemIds) : null;
@@ -99,8 +105,8 @@ export class LocalKnowledgeProvider extends KnowledgeProvider {
         continue;
       }
       try {
-        const { text } = await getItemText(project, item, ctx);
-        texts.push({ item, text });
+        const { text, truncated } = await getItemText(project, item, ctx);
+        texts.push({ item, text, truncated: truncated === true });
       } catch (error) {
         unavailable.push({
           document: item.id,
@@ -168,6 +174,7 @@ export class LocalKnowledgeProvider extends KnowledgeProvider {
       chars: hit.chars,
       name: byId.get(hit.docId)?.name || ''
     }));
+    const partial = texts.filter(entry => entry.truncated).map(entry => entry.item.id);
     return {
       hits,
       unavailable,
@@ -175,6 +182,8 @@ export class LocalKnowledgeProvider extends KnowledgeProvider {
         mode: 'search',
         query: q,
         documents: texts.length,
+        // Searched as far as their source handed them over, not to the end.
+        ...(partial.length ? { truncatedDocuments: partial } : {}),
         totalSections: index.sections.length,
         totalTokens: index.tokens,
         returnedTokens: Math.round(hits.reduce((sum, hit) => sum + hit.chars, 0) / 4)
@@ -182,25 +191,53 @@ export class LocalKnowledgeProvider extends KnowledgeProvider {
     };
   }
 
-  async read(project, ctx, { itemId }, { section, budgetChars = RESULT_BUDGET_CHARS } = {}) {
+  /**
+   * One document, or a section of it, within a budget: `budgetBytes` bounds
+   * the text as it serializes into a JSON result (UTF-8, escapes included),
+   * `budgetChars` in characters. A document over the budget comes back as
+   * its outline, and a section read names the id it continues at.
+   */
+  async read(
+    project,
+    ctx,
+    { itemId },
+    { section, budgetChars = RESULT_BUDGET_CHARS, budgetBytes } = {}
+  ) {
     const item = (project.items || []).find(entry => entry.id === itemId);
     if (!item)
       throw new KnowledgeError('ITEM_NOT_FOUND', 'Document not found', {
         projectId: project.id,
         itemId
       });
-    const { text } = await getItemText(project, item, ctx);
-    const selected = selectContent(text, { section, name: item.name, budgetChars });
-    return { doc: docOf(project, item), text: selected.content, retrieval: selected.retrieval };
+    const { text, truncated } = await getItemText(project, item, ctx);
+    const selected = selectContent(text, {
+      section,
+      name: item.name,
+      ...(Number.isFinite(budgetBytes)
+        ? { budgetChars: budgetBytes, measure: serializedBytes }
+        : { budgetChars })
+    });
+    return {
+      doc: docOf(project, item),
+      text: selected.content,
+      // The source handed over only the start of the document: even a
+      // `full` read is not the whole of it, and no section reaches the rest.
+      retrieval: truncated ? { ...selected.retrieval, sourceTruncated: true } : selected.retrieval
+    };
   }
 
   async loadAll(project, ctx, { itemIds } = {}) {
     const { texts, unavailable } = await this.texts(project, ctx, { itemIds });
     let tokens = 0;
-    const docs = texts.map(({ item, text }) => {
+    const docs = texts.map(({ item, text, truncated }) => {
       const stats = getContentStats(text);
       tokens += stats.tokens;
-      return { doc: docOf(project, item), text, tokens: stats.tokens };
+      return {
+        doc: docOf(project, item),
+        text,
+        tokens: stats.tokens,
+        ...(truncated ? { truncated: true, sourceTruncated: true } : {})
+      };
     });
     return { docs, unavailable, tokens };
   }

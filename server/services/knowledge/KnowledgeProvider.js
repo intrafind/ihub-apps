@@ -113,7 +113,8 @@ export class KnowledgeProvider {
    * @param {Object} _project
    * @param {KnowledgeContext} _ctx
    * @param {{itemId: string}} _docRef
-   * @param {{section?: string, budgetChars?: number}} [_options]
+   * @param {{section?: string, budgetChars?: number, budgetBytes?: number}} [_options] -
+   *   `budgetBytes` bounds the text as serialized into a JSON result (UTF-8)
    * @returns {Promise<{doc: KnowledgeDoc, text: string, retrieval: Object}>}
    */
   async read(_project, _ctx, _docRef, _options = {}) {

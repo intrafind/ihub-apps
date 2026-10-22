@@ -13,7 +13,9 @@
  * `context`, `exposeAs: tool` → `tools`); `{{sources}}` becomes
  * `{{projects}}`; `source_<id>` tool entries go, the knowledge tools are
  * offered at runtime. The `sources` feature flag and admin page carry over
- * to `projects`, and `config/sources.json` is kept as
+ * to `projects`, as does a `sources` entry in an app's `requiredFeatures`
+ * (the registry no longer knows `sources`, and an unknown requirement hides
+ * the app), and `config/sources.json` is kept as
  * `config/sources.json.migrated`.
  *
  * A source id starting with `prj_` would collide with the user-project
@@ -252,13 +254,26 @@ function sameJson(a, b) {
   return JSON.stringify(a) === JSON.stringify(b);
 }
 
+/** Whether a document requires the retired `sources` feature. */
+function requiresSourcesFeature(doc) {
+  return Array.isArray(doc?.requiredFeatures) && doc.requiredFeatures.includes('sources');
+}
+
 /**
- * Rewrite one document in place: `sources` → `projects`, placeholders,
- * `source_*` tools. Returns whether anything changed.
+ * Rewrite one document in place: `sources` → `projects` (links and
+ * `requiredFeatures`), placeholders, `source_*` tools. Returns whether
+ * anything changed.
  */
 function rewriteDocument(doc, modeOf, idOf, ctx, label, { textFields = ['system'] } = {}) {
   if (!doc || typeof doc !== 'object') return false;
   const before = JSON.stringify(doc);
+  if (requiresSourcesFeature(doc)) {
+    doc.requiredFeatures = [
+      ...new Set(
+        doc.requiredFeatures.map(feature => (feature === 'sources' ? 'projects' : feature))
+      )
+    ];
+  }
   if (Array.isArray(doc.sources)) {
     const links = doc.sources
       .filter(id => typeof id === 'string' && id)
@@ -313,7 +328,7 @@ async function eachFile(ctx, directory, fn) {
 
 function hasSourcesKey(doc) {
   if (!doc || typeof doc !== 'object') return false;
-  if (Array.isArray(doc.sources)) return true;
+  if (Array.isArray(doc.sources) || requiresSourcesFeature(doc)) return true;
   if (Array.isArray(doc.nodes)) {
     return doc.nodes.some(
       node =>

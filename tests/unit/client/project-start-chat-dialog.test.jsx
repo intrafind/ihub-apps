@@ -52,6 +52,7 @@ function renderDialog() {
 
 beforeEach(() => {
   sessionStorage.clear();
+  localStorage.clear();
   mockApps.apps = [
     { id: 'chat', name: { en: 'Chat' } },
     { id: 'wiki', name: { en: 'Wiki' }, type: 'iframe' },
@@ -61,6 +62,8 @@ beforeEach(() => {
 
 test('opens a new chat of the app inside the project, never the one this tab held', () => {
   sessionStorage.setItem('ai_hub_chat_id_chat', 'chat-previous');
+  // The iAssistant conversation the app would otherwise resume.
+  localStorage.setItem('ai_hub_conversation_id_chat', 'conv-previous');
   renderDialog();
 
   fireEvent.click(screen.getByRole('button', { name: /Chat/ }));
@@ -69,6 +72,7 @@ test('opens a new chat of the app inside the project, never the one this tab hel
   const minted = sessionStorage.getItem('ai_hub_chat_id_chat');
   expect(minted).toMatch(/^chat-/);
   expect(minted).not.toBe('chat-previous');
+  expect(localStorage.getItem('ai_hub_conversation_id_chat')).toBeNull();
 });
 
 test('offers only chat apps', () => {

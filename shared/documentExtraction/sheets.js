@@ -17,6 +17,14 @@ import { markdownTableLines } from './markdown.js';
 /** Rows read from one sheet. */
 export const MAX_SHEET_ROWS = 2000;
 
+/**
+ * Columns read from one sheet, and cells read from one sheet in all: a sheet's range is not
+ * bounded by its file size (one value in the last column of the last row spans the whole grid),
+ * and the rows are materialized before the character budget applies.
+ */
+export const MAX_SHEET_COLUMNS = 1000;
+export const MAX_SHEET_CELLS = 200000;
+
 /** Characters of all sheets together; the next row that would go beyond is left out. */
 export const MAX_WORKBOOK_CHARS = 300000;
 

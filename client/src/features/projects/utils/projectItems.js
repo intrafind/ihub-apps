@@ -371,6 +371,48 @@ export function cloudBrowserUploadConfig(config) {
 }
 
 /**
+ * Which cloud files the project can take, for the shared cloud file browser
+ * (`isFileSupported`): the formats the project extraction pipeline accepts
+ * (`_config.upload`, by MIME type — `text/*` style wildcards included — or by
+ * extension), rather than the chat uploader's list, which leaves out Excel,
+ * PowerPoint and OpenDocument files the project reads. The server checks the
+ * type again when it fetches the file.
+ *
+ * @param {{upload?: {mimeTypes?: string[], accept?: string[]}}|null} config - `_config`.
+ * @returns {((mimeType: string, fileName: string) => boolean)|null} Null
+ *   without an upload block: the browser keeps its own rule.
+ *
+ * @example
+ * const supported = projectFileSupported({ upload: { mimeTypes: ['text/*'], accept: ['.xlsx'] } });
+ * supported('text/csv', 'a.csv'); // true
+ * supported('application/octet-stream', 'Budget.XLSX'); // true
+ */
+export function projectFileSupported(config) {
+  const upload = config?.upload;
+  const mimeTypes = Array.isArray(upload?.mimeTypes) ? upload.mimeTypes : [];
+  const extensions = Array.isArray(upload?.accept) ? upload.accept : [];
+  if (mimeTypes.length === 0 && extensions.length === 0) return null;
+  const exact = new Set(mimeTypes.filter(type => !type.endsWith('/*')).map(lower));
+  const prefixes = mimeTypes
+    .filter(type => type.endsWith('/*'))
+    .map(type => lower(type.slice(0, -1)));
+  const accepted = new Set(extensions.map(lower));
+  return (mimeType, fileName) => {
+    const type = lower(String(mimeType || '').split(';')[0]);
+    if (type && (exact.has(type) || prefixes.some(prefix => type.startsWith(prefix)))) {
+      return true;
+    }
+    const name = String(fileName || '');
+    const dot = name.lastIndexOf('.');
+    return dot > 0 && accepted.has(lower(name.slice(dot)));
+  };
+}
+
+function lower(value) {
+  return String(value).trim().toLowerCase();
+}
+
+/**
  * Validate a file upload before it is sent.
  *
  * @param {File|null|undefined} file

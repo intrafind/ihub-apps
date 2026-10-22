@@ -9,9 +9,9 @@
  * everything read-only; an editor listed by name may leave; a project whose
  * owner is gone shows the read-only banner; the chat list filters to "mine".
  */
-import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
+import { act, render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
+import { MemoryRouter, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 
 const mockApi = {
   fetchProject: jest.fn(),
@@ -97,7 +97,8 @@ const ProjectSettingsCard =
   require('../../../client/src/features/projects/components/ProjectSettingsCard').default;
 const {
   invalidateProjectsConfig,
-  invalidateProjectsList
+  invalidateProjectsList,
+  useMyProjects
 } = require('../../../client/src/features/projects/hooks/useProjects');
 
 const CONFIG = {
@@ -165,15 +166,41 @@ function LocationProbe() {
   return <div data-testid="location">{location.pathname}</div>;
 }
 
-function renderPage() {
+// In-app navigation the way Back/Forward moves the router: the page stays
+// mounted, only `:projectId` changes.
+const mockRouter = { navigate: null };
+function NavigationProbe() {
+  mockRouter.navigate = useNavigate();
+  return null;
+}
+
+// A consumer of the shared project list, as the list page and the chat's
+// project labels are.
+function ListProbe() {
+  const { projects } = useMyProjects();
+  return <div data-testid="list-probe">{projects.map(project => project.name).join('|')}</div>;
+}
+
+function renderPage({ withList = false } = {}) {
   return render(
     <MemoryRouter initialEntries={['/projects/prj_a']}>
       <Routes>
         <Route path="/projects/:projectId" element={<ProjectPage />} />
         <Route path="*" element={<LocationProbe />} />
       </Routes>
+      <NavigationProbe />
+      {withList && <ListProbe />}
     </MemoryRouter>
   );
+}
+
+/** A promise the test settles. */
+function deferred() {
+  let resolve;
+  const promise = new Promise(settle => {
+    resolve = settle;
+  });
+  return { promise, resolve };
 }
 
 beforeEach(() => {
@@ -227,6 +254,57 @@ describe('ProjectPage – owner', () => {
       })
     );
     expect(await screen.findByText('Saved.')).toBeInTheDocument();
+  });
+
+  test('a save still out for the previous project never replaces the one on screen', async () => {
+    const projectB = makeProject({ id: 'prj_b', name: 'Team wiki', instructions: 'Be terse.' });
+    mockApi.fetchProject.mockImplementation(id =>
+      Promise.resolve(id === 'prj_b' ? projectB : makeProject())
+    );
+    const save = deferred();
+    mockApi.updateProject.mockReturnValue(save.promise);
+    renderPage();
+
+    fireEvent.change(await screen.findByLabelText('Instructions'), {
+      target: { value: 'Answer in German.' }
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    expect(mockApi.updateProject).toHaveBeenCalledWith('prj_a', expect.any(Object));
+
+    // Back/Forward to project B while A's save is out.
+    await act(async () => {
+      mockRouter.navigate('/projects/prj_b');
+    });
+    expect(await screen.findByRole('heading', { name: 'Team wiki' })).toBeInTheDocument();
+
+    await act(async () => {
+      save.resolve(makeProject({ instructions: 'Answer in German.' }));
+    });
+    expect(screen.getByRole('heading', { name: 'Team wiki' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Case 2026-114' })).toBeNull();
+    expect(screen.getByLabelText('Instructions')).toHaveValue('Be terse.');
+  });
+
+  test('a saved rename reaches the shared project list', async () => {
+    mockApi.fetchProject.mockResolvedValue(makeProject());
+    mockApi.fetchProjects
+      .mockResolvedValueOnce([makeProject()])
+      .mockResolvedValue([makeProject({ name: 'Case 2026-115' })]);
+    mockApi.updateProject.mockResolvedValue(makeProject({ name: 'Case 2026-115' }));
+    renderPage({ withList: true });
+    await waitFor(() =>
+      expect(screen.getByTestId('list-probe')).toHaveTextContent('Case 2026-114')
+    );
+
+    fireEvent.change(await screen.findByLabelText('Name'), {
+      target: { value: 'Case 2026-115' }
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() =>
+      expect(screen.getByTestId('list-probe')).toHaveTextContent('Case 2026-115')
+    );
+    expect(mockApi.fetchProjects).toHaveBeenCalledTimes(2);
   });
 
   test('follows a refresh until the new snapshot is stored', async () => {
@@ -432,5 +510,25 @@ describe('ProjectSettingsCard – a newer copy arrives while editing', () => {
     );
     expect(await screen.findByText('Saved.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+  });
+});
+
+describe('ProjectSettingsCard – while a save is out', () => {
+  test('the fields are read-only, so no edit is lost when the answer arrives', async () => {
+    const save = deferred();
+    mockApi.updateProject.mockReturnValue(save.promise);
+    render(<ProjectSettingsCard project={makeProject()} editable onSaved={jest.fn()} />);
+
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Case 2026-115' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    for (const label of ['Name', 'Description', 'Instructions']) {
+      expect(screen.getByLabelText(label)).toBeDisabled();
+    }
+    await act(async () => {
+      save.resolve(makeProject({ name: 'Case 2026-115' }));
+    });
+    expect(screen.getByLabelText('Instructions')).toBeEnabled();
+    expect(screen.getByLabelText('Name')).toHaveValue('Case 2026-115');
   });
 });

@@ -21,8 +21,9 @@
  * `knowledge_read`.
  *
  * A project whose usable documents could not all be loaded (a failed link,
- * an iFinder search without a configured query) is `searched` as well: what
- * did load is injected, the rest is left to the tools.
+ * an iFinder search without a configured query, a link its source cut at its
+ * length limit) is `searched` as well: what did load is injected, the rest is
+ * left to the tools.
  *
  * The plan is what the prompt renders (`renderProjectsBlock`) and what the
  * client is told (`knowledge/scope`): per project, `loaded` or `searched`.
@@ -184,6 +185,12 @@ export async function planKnowledgeScope(scope, { model, settings, ctx }) {
     // badge are told to search, whether or not other documents made it in.
     const usableIds = new Set(usable.map(item => item.id));
     if (effective === 'loaded' && unavailable.some(entry => usableIds.has(entry.document))) {
+      effective = 'searched';
+    }
+    // A document its source handed over only in part (a link past its
+    // handler's length limit) is in the prompt as far as it goes, marked
+    // `truncated`: the project is not "loaded in full" either.
+    if (effective === 'loaded' && injected.some(entry => entry.sourceTruncated)) {
       effective = 'searched';
     }
     // Pinned first, so the cap drops unpinned text before anything pinned.
