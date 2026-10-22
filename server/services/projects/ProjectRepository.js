@@ -422,9 +422,14 @@ export class ProjectRepository {
    */
   async listOwned(ownerId) {
     if (!this.isAvailable() || !ownerId) return [];
-    const docs = await collect(this.documents, USER_PROJECTS_NAMESPACE, {
-      ownerId: String(ownerId)
-    });
+    // Every page: the quota check and the user-deletion cascade both need the
+    // whole set, and a user's projects are bounded by that quota.
+    const docs = await collect(
+      this.documents,
+      USER_PROJECTS_NAMESPACE,
+      { ownerId: String(ownerId) },
+      Infinity
+    );
     return docs.map(doc => doc.data);
   }
 
@@ -862,11 +867,18 @@ export class ProjectRepository {
    * The chat markers of one project.
    *
    * @param {string} projectId
+   * @param {{all?: boolean}} [options] - `all` follows every page (for a
+   *   cascade); the default stops at the scan budget (for a listing).
    * @returns {Promise<Array<{chatId: string, ownerId: string|null}>>}
    */
-  async listChatMarkers(projectId) {
+  async listChatMarkers(projectId, { all = false } = {}) {
     if (!this.documents || !isProjectId(projectId)) return [];
-    const docs = await collect(this.documents, PROJECT_CHATS_NAMESPACE, { ownerId: projectId });
+    const docs = await collect(
+      this.documents,
+      PROJECT_CHATS_NAMESPACE,
+      { ownerId: projectId },
+      all ? Infinity : MAX_SCANNED
+    );
     return docs
       .map(doc => doc.data)
       .filter(data => data && isValidId(data.chatId))
@@ -875,7 +887,7 @@ export class ProjectRepository {
 
   /** Remove every chat marker of a project; returns the chat ids it had. */
   async removeAllChatMarkers(projectId) {
-    const markers = await this.listChatMarkers(projectId);
+    const markers = await this.listChatMarkers(projectId, { all: true });
     for (const marker of markers) await this.removeChatMarker(projectId, marker.chatId);
     return markers.map(marker => marker.chatId);
   }

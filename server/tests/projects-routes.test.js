@@ -1065,16 +1065,29 @@ describe('chats in a project', () => {
       error =>
         error.code === 'CASCADE_INCOMPLETE' &&
         error.status === 500 &&
+        error.details.deleted === false &&
         error.details.chats.length === 1 &&
+        // The chat id only: the storage error stays in the log.
+        Object.keys(error.details.chats[0]).join() === 'chatId' &&
         error.details.chats[0].chatId === chat.id
     );
-    // The document is gone, the marker stays as the record of what is left.
-    assert.equal(await getProjectRepository().get(project.id), null);
+    // Nothing is gone: the project, the marker and the chat's association
+    // are the record of what is still to do.
+    assert.ok(await getProjectRepository().get(project.id));
     assert.deepEqual(
       (await getProjectRepository().listChatMarkers(project.id)).map(m => m.chatId),
       [chat.id]
     );
     assert.equal((await chats.getChat(chat.id)).projectId, project.id);
+    // The retry with chat storage back finishes the job.
+    const retried = await drive(route.remove, {
+      user: ADA,
+      params: { projectId: project.id }
+    });
+    assert.equal(retried.statusCode, 204, JSON.stringify(retried.body));
+    assert.equal(await getProjectRepository().get(project.id), null);
+    assert.deepEqual(await getProjectRepository().listChatMarkers(project.id), []);
+    assert.equal((await chats.getChat(chat.id)).projectId ?? null, null);
   });
 });
 

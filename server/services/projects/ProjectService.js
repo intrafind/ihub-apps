@@ -277,6 +277,20 @@ export class ProjectService {
         );
       }
     }
+    const where = { component: COMPONENT, projectId };
+    // Chats first, while the project still exists: a chat whose detach fails
+    // keeps its marker and the project, so the same delete can be retried.
+    // The lock order is chat, then project (`moveChatToProject`), which is
+    // why this runs outside the project's lock; a chat attached meanwhile is
+    // caught by the second pass once the document is gone.
+    const failed = await this._detachChats(projectId, detachChat, where);
+    if (failed.length > 0) {
+      throw new ProjectError(
+        'CASCADE_INCOMPLETE',
+        `The project is kept: ${failed.length} chat(s) could not be detached from it`,
+        { project: { id: projectId }, deleted: false, chats: failed }
+      );
+    }
     let project;
     try {
       project = await this.repository.delete(projectId, { authorize });
@@ -284,41 +298,60 @@ export class ProjectService {
       throw translateError(error);
     }
     if (!project) return null;
-    const where = { component: COMPONENT, projectId };
     await attempt(() => this.repository.deleteBlobs(projectId), 'text blobs', where);
-    // Chat by chat: the marker goes only once its chat is detached, so a
-    // detach that fails leaves the marker as the durable record of what is
-    // still to do, and the caller hears about it instead of a clean success.
-    const failed = [];
-    const markers = await attempt(
-      () => this.repository.listChatMarkers(projectId),
-      'chat markers',
-      where
-    );
-    for (const marker of markers || []) {
-      try {
-        if (typeof detachChat === 'function') await detachChat(marker.chatId);
-        await this.repository.removeChatMarker(projectId, marker.chatId);
-      } catch (error) {
-        logger.error('Failed to detach a chat of a deleted project', {
-          ...where,
-          chatId: marker.chatId,
-          error: error.message
-        });
-        failed.push({ chatId: marker.chatId, error: error.message });
-      }
+    let late;
+    try {
+      late = await this._detachChats(projectId, detachChat, where);
+    } catch (error) {
+      logger.error('Failed to list the chats of a deleted project', {
+        ...where,
+        error: error.message
+      });
+      late = [];
+      late.unlisted = true;
     }
     for (const hook of this.onDeleted) {
       await attempt(() => hook(project), 'a delete hook', where);
     }
-    if (failed.length > 0) {
+    if (late.length > 0 || late.unlisted) {
       throw new ProjectError(
         'CASCADE_INCOMPLETE',
-        `The project is deleted, but ${failed.length} chat(s) could not be detached from it`,
-        { project: { id: project.id, ownership: project.ownership }, chats: failed }
+        `The project is deleted, but ${late.unlisted ? 'its' : late.length} chat(s) could not be detached from it`,
+        { project: { id: project.id, ownership: project.ownership }, deleted: true, chats: late }
       );
     }
     return project;
+  }
+
+  /**
+   * Detach every chat the project's markers name; a marker goes only once its
+   * chat is detached, so a failure leaves the record of what is still to do.
+   * Only the chat id is reported: the storage error is in the log.
+   *
+   * @returns {Promise<Array<{chatId: string}>>} The chats still attached.
+   */
+  async _detachChats(projectId, detachChat, where) {
+    let markers;
+    try {
+      markers = await this.repository.listChatMarkers(projectId, { all: true });
+    } catch (error) {
+      throw translateError(error);
+    }
+    const failed = [];
+    for (const marker of markers) {
+      try {
+        if (typeof detachChat === 'function') await detachChat(marker.chatId);
+        await this.repository.removeChatMarker(projectId, marker.chatId);
+      } catch (error) {
+        logger.error('Failed to detach a chat from a project being deleted', {
+          ...where,
+          chatId: marker.chatId,
+          error: error.message
+        });
+        failed.push({ chatId: marker.chatId });
+      }
+    }
+    return failed;
   }
 
   // --- items ----------------------------------------------------------------
