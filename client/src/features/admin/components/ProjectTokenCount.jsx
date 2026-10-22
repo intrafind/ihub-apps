@@ -34,7 +34,7 @@ function ProjectTokenCount({
   inline = false
 }) {
   const { t } = useTranslation();
-  const muted = 'text-gray-400 dark:text-gray-500';
+  const muted = 'text-gray-600 dark:text-gray-400';
   const size = inline ? 'text-xs' : 'text-sm';
 
   if (!estimate || !Number.isFinite(estimate.tokens)) {
@@ -91,7 +91,7 @@ function ProjectTokenCount({
       </span>
       {note && (
         <span
-          className={`text-xs ${large ? 'text-amber-600 dark:text-amber-400' : muted}`}
+          className={`text-xs ${large ? 'text-amber-700 dark:text-amber-400' : muted}`}
           data-testid="project-token-note"
         >
           {note}
