@@ -558,6 +558,32 @@ describe('admin projects', () => {
     );
   });
 
+  it('refuses import pointers and managed files from API callers', async () => {
+    // The startup importer reads such a file into the project and deletes
+    // it: a content admin must not be able to aim it at config/platform.json.
+    const item = extra => ({
+      id: 'itm_x',
+      kind: 'upload',
+      name: 'platform.json',
+      storage: 'text',
+      status: 'pending',
+      provenance: { origin: 'uploaded' },
+      ...extra
+    });
+    for (const extra of [
+      { import: { file: 'config/platform.json' } },
+      { managedFile: 'config/platform.json' }
+    ]) {
+      const refused = await drive(route.adminCreate, {
+        user: EDITOR,
+        body: { id: 'smuggled', name: { en: 'Smuggled' }, items: [item(extra)] }
+      });
+      assert.equal(refused.statusCode, 400, JSON.stringify(refused.body));
+      assert.equal(refused.body.details.code, 'SERVER_ONLY_FIELDS');
+    }
+    assert.equal(await getProjectRepository().get('smuggled'), null);
+  });
+
   it('is reached through a workflow by the same rule that lets the user run it', async () => {
     // `allowedGroups` is not part of the execution policy (`permissions.workflows`
     // is), so it must not hide the linked project from a user who may run it.

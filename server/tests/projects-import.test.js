@@ -120,6 +120,51 @@ describe('import pointers', () => {
     });
     assert.equal(await resolveImportFile('sources/nowhere.md', dirs), null);
   });
+
+  it('reads only from the sources directory, symlinks included', async () => {
+    const base = path.join(scratch, 'confined');
+    const dirs = { contentsDir: base, defaultsDir: path.join(base, 'no-defaults') };
+    await write(path.join(base, 'config/platform.json'), '{"secret":true}');
+    await write(path.join(base, 'sources/ok.md'), 'fine');
+    await fs.symlink(path.join(base, 'config/platform.json'), path.join(base, 'sources/escape.md'));
+    assert.equal((await resolveImportFile('sources/ok.md', dirs))?.where, 'contents');
+    assert.equal(await resolveImportFile('config/platform.json', dirs), null);
+    assert.equal(await resolveImportFile('sources/escape.md', dirs), null);
+  });
+
+  it('neither reads nor deletes a pointer outside the sources directory', async () => {
+    const repository = getProjectRepository();
+    const base = path.join(scratch, 'guarded');
+    await write(path.join(base, 'config/platform.json'), '{"secret":true}');
+    await repository.createAdmin(
+      {
+        id: 'guarded',
+        name: { en: 'Guarded' },
+        items: [
+          item('itm_cfg', { import: { file: 'config/platform.json' } }),
+          item('itm_managed_cfg', { managedFile: 'config/platform.json' })
+        ]
+      },
+      { actor: SYSTEM }
+    );
+    try {
+      await importPendingProjects({ contentsDir: base, defaultsDir: base });
+      const project = await repository.get('guarded');
+      for (const entry of project.items) {
+        assert.equal(entry.status, 'failed', entry.id);
+        assert.equal(entry.error.code, 'IMPORT_MISSING', entry.id);
+        assert.equal(entry.text ?? null, null, entry.id);
+      }
+      assert.equal(
+        await fs.readFile(path.join(base, 'config/platform.json'), 'utf8'),
+        '{"secret":true}',
+        'the file is untouched'
+      );
+    } finally {
+      // The later tests count every project's outcomes.
+      await repository.delete('guarded');
+    }
+  });
 });
 
 describe('importPendingProjects', () => {
