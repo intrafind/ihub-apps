@@ -47,7 +47,10 @@ import {
 import PromptService from '../services/PromptService.js';
 import { chatPostSchema } from '../validators/index.js';
 import { resolveChatProjects } from '../services/knowledge/chatProjects.js';
-import { materializeUserTurn } from '../services/chat/chatMaterializer.js';
+import { materializeUserTurn, settleUserTurn } from '../services/chat/chatMaterializer.js';
+import { getChatRepository } from '../services/chat/ChatRepository.js';
+import ChatService from '../services/chat/ChatService.js';
+import registerSessionRoutes from '../routes/chat/sessionRoutes.js';
 import { beginTranscriptionTurn } from '../services/chat/transcriptionTurn.js';
 import { tryHandleMentionWorkflow } from '../services/workflow/mentionWorkflow.js';
 import { runToolCallScope } from '../services/sources/toolCallScope.js';
@@ -851,7 +854,7 @@ describe('chat container', () => {
     });
     assert.equal(first.ok, true);
     assert.equal(first.newContainer, true);
-    assert.deepEqual(first.chatPatch.projectId, textProject.id);
+    assert.equal(first.projectPatch.claimContainer, textProject.id);
 
     // A standalone chat with a transcript cannot join a project by a turn.
     const standalone = { id: 'c-alone', projectId: null, messageCount: 2 };
@@ -869,12 +872,16 @@ describe('chat container', () => {
     const inside = { id: 'c-in', projectId: textProject.id, messageCount: 2 };
     const leave = await resolveChatProjects({ req: req(), chat: inside, app, projectId: null });
     assert.equal(leave.code, 'PROJECT_MISMATCH');
-    // Omitting the field, or repeating the same container, changes nothing.
+    // Omitting the field changes nothing; repeating the same container only
+    // asserts it, checked again when the turn is stored.
     for (const projectId of [undefined, textProject.id]) {
       const same = await resolveChatProjects({ req: req(), chat: inside, app, projectId });
       assert.equal(same.ok, true);
       assert.equal(same.containerId, textProject.id);
-      assert.equal(same.chatPatch, null);
+      assert.deepEqual(
+        same.projectPatch,
+        projectId ? { expectedContainer: textProject.id, attach: [], maxAttached: 10 } : null
+      );
     }
     // An explicit null on a standalone chat is no change.
     const none = await resolveChatProjects({ req: req(), chat: standalone, app, projectId: null });
@@ -891,7 +898,7 @@ describe('chat container', () => {
         projectId: null
       });
       assert.equal(ignored.ok, true);
-      assert.equal(ignored.chatPatch, null);
+      assert.equal(ignored.projectPatch, null);
       assert.equal(ignored.containerId, textProject.id);
     } finally {
       configCache.setCacheEntry('config/features.json', { projects: true, userProjects: true });
@@ -913,6 +920,18 @@ function recordingChats(projectId) {
       writes.push({ chatId, patch, markersBefore: markers.map(marker => marker.chatId) });
       return { id: chatId, ...patch };
     },
+    // The chat as the fake stores it never has a container or messages, so
+    // a claim always holds.
+    updateChatProjects: async (chatId, projects, patch) => {
+      const merged = {
+        ...patch,
+        ...(projects.claimContainer ? { projectId: projects.claimContainer } : {}),
+        attachedProjectIds: projects.attach
+      };
+      const markers = await repo.listChatMarkers(projectId);
+      writes.push({ chatId, patch: merged, markersBefore: markers.map(marker => marker.chatId) });
+      return { chat: { id: chatId, ...merged }, conflict: false };
+    },
     appendMessage: async (chatId, message) => ({ message: { id: `m-${chatId}`, ...message } })
   };
   const repository = new Proxy(known, {
@@ -933,7 +952,7 @@ describe('chat container persistence', () => {
       appId: 'chat',
       runId: 'run-1',
       content: 'hello',
-      chat: { projectId: textProject.id, attachedProjectIds: [] }
+      projects: { claimContainer: textProject.id, attach: [], maxAttached: 10 }
     });
     assert.equal(writes[0].patch.projectId, textProject.id);
     assert.equal(writes[0].markersBefore.includes(chatId), false, 'no marker before the patch');
@@ -974,7 +993,7 @@ describe('chat container persistence', () => {
           ownerId: ADA.id,
           identityMode: 'default',
           content: message.content,
-          chat: { projectId: textProject.id, attachedProjectIds: [] }
+          projects: { claimContainer: textProject.id, attach: [], maxAttached: 10 }
         }
       });
       assert.equal(outcome.handled, true);
@@ -1121,5 +1140,219 @@ describe('prompt injection', () => {
     );
     PromptService.takeKnowledgeScope('chat-k3');
     PromptService.resetPromptSources('chat-k3');
+  });
+});
+
+describe('chat projects under concurrency and caps', () => {
+  const req = () => ({ user: { ...ADA } });
+  const app = { id: 'chat' };
+
+  it('caps the attached projects against the stored ones, not only the request', async () => {
+    const extra = [];
+    for (const name of ['Extra A', 'Extra B', 'Extra C']) {
+      extra.push(await repo.createUser({ owner: ADA, content: { name } }));
+    }
+    const stored = Array.from({ length: 9 }, (_, index) => `prj_stored${index}`);
+    const resolved = await resolveChatProjects({
+      req: req(),
+      chat: { id: 'c-many', projectId: null, attachedProjectIds: stored, messageCount: 4 },
+      app,
+      projects: extra.map(entry => entry.id)
+    });
+    assert.equal(resolved.ok, true);
+    assert.equal(resolved.attachedIds.length, 10, 'the union stays within the cap');
+    assert.deepEqual(resolved.projectPatch.attach, [extra[0].id]);
+    assert.equal(resolved.projectPatch.maxAttached, 10);
+  });
+
+  it('refuses the slower of two first turns that open one chat in different projects', async () => {
+    const other = await repo.createUser({ owner: ADA, content: { name: 'Other case' } });
+    const chatId = 'chat-first-turn-race';
+    const repository = getChatRepository();
+    // Both turns are resolved against the chat as it was before either was
+    // stored: there is none yet, so each may open it in its project.
+    const [a, b] = await Promise.all(
+      [textProject.id, other.id].map(projectId =>
+        resolveChatProjects({ req: req(), chat: null, app, projectId })
+      )
+    );
+    assert.equal(a.newContainer && b.newContainer, true);
+    const turn = (resolved, runId) =>
+      settleUserTurn({
+        repository,
+        chatId,
+        ownerId: ADA.id,
+        identityMode: 'default',
+        appId: 'chat',
+        runId,
+        content: runId,
+        projects: resolved.projectPatch
+      });
+    try {
+      const results = await Promise.all([turn(a, 'chat-run-a'), turn(b, 'chat-run-b')]);
+      assert.equal(results.filter(result => result.message).length, 1);
+      const refused = results.find(result => result.refusal);
+      assert.equal(refused?.refusal.code, 'PROJECT_MISMATCH');
+      const chat = await repository.getChat(chatId);
+      const winner = results[0].message ? textProject.id : other.id;
+      assert.equal(chat.projectId, winner, 'the first claim stands');
+      const { messages } = await repository.getMessages(chatId);
+      assert.equal(messages.length, 1);
+    } finally {
+      await repository.deleteChat(chatId);
+      await repo.removeChatMarker(textProject.id, chatId);
+      await repo.removeChatMarker(other.id, chatId);
+    }
+  });
+});
+
+describe('chat route and projects', () => {
+  const routes = [];
+  const record =
+    method =>
+    (routePath, ...handlers) =>
+      routes.push({ method, routePath, handlers });
+  registerSessionRoutes(
+    { get: record('get'), post: record('post'), put: () => {}, delete: () => {}, use: () => {} },
+    { getLocalizedError: async code => `localized:${code}`, DEFAULT_TIMEOUT: 5000 }
+  );
+  const chatPost = routes.find(
+    entry => entry.method === 'post' && entry.routePath.endsWith('/api/apps/:appId/chat/:chatId')
+  ).handlers;
+
+  /** Drive the POST chain from `validate()` on; `req.user` stands in for the auth middleware. */
+  async function post({ appId, chatId, body }) {
+    const req = { params: { appId, chatId }, body, headers: {}, query: {}, user: { ...ADA } };
+    const res = { statusCode: 200, body: null };
+    res.status = code => {
+      res.statusCode = code;
+      return res;
+    };
+    res.json = value => {
+      res.body = value;
+      return res;
+    };
+    for (let index = 1; index < chatPost.length; index += 1) {
+      let advanced = false;
+      await chatPost[index](req, res, () => {
+        advanced = true;
+      });
+      if (index < chatPost.length - 1 && !advanced) break;
+    }
+    return res;
+  }
+
+  async function withStubs({ prepare, runTurn }, fn) {
+    const original = {
+      prepare: ChatService.prototype.prepareChatRequest,
+      run: ChatService.prototype.runTurn
+    };
+    ChatService.prototype.prepareChatRequest = prepare;
+    if (runTurn) ChatService.prototype.runTurn = runTurn;
+    try {
+      await fn();
+    } finally {
+      ChatService.prototype.prepareChatRequest = original.prepare;
+      ChatService.prototype.runTurn = original.run;
+    }
+  }
+
+  it("applies the app's userProjects gate to an app id typed in another case", async () => {
+    configCache.setCacheEntry('config/apps.json', [
+      { id: 'chat', name: { en: 'Chat' }, enabled: true, features: { userProjects: false } }
+    ]);
+    const calls = [];
+    try {
+      await withStubs(
+        {
+          prepare: async params => {
+            calls.push(params);
+            return { success: false, error: { code: 'APP_NOT_FOUND' } };
+          }
+        },
+        async () => {
+          await post({
+            appId: 'CHAT',
+            chatId: 'chat-case-gate',
+            body: { messages: [{ role: 'user', content: 'hi' }], projectId: textProject.id }
+          });
+        }
+      );
+      assert.equal(calls.length, 1);
+      assert.equal(calls[0].projectId, null, 'the app turned user projects off');
+    } finally {
+      configCache.setCacheEntry('config/apps.json', [
+        { id: 'chat', name: { en: 'Chat' }, enabled: true }
+      ]);
+    }
+  });
+
+  it('answers a turn refused at persistence with 409 PROJECT_MISMATCH', async () => {
+    const refusal = {
+      code: 'PROJECT_MISMATCH',
+      message: 'This chat already runs inside a project'
+    };
+    await withStubs(
+      {
+        prepare: async () => ({
+          success: true,
+          data: { app: { id: 'chat' }, model: { id: 'small' }, llmMessages: [], tools: [] }
+        }),
+        runTurn: async () => ({ status: 'error', errorInfo: refusal, refusal })
+      },
+      async () => {
+        const res = await post({
+          appId: 'chat',
+          chatId: 'chat-refused-turn',
+          body: { messages: [{ role: 'user', content: 'hi' }], projectId: textProject.id }
+        });
+        assert.equal(res.statusCode, 409);
+        assert.deepEqual(res.body, { error: refusal.message, code: 'PROJECT_MISMATCH' });
+      }
+    );
+  });
+
+  it('ends a refused turn before the model is called', async () => {
+    const ended = [];
+    const service = new ChatService({
+      runLog: {
+        startRun: async () => {},
+        append: () => {},
+        endRun: (runId, summary) => ended.push({ runId, summary })
+      },
+      agentLoop: {
+        run: async () => {
+          throw new Error('the model must not be called');
+        }
+      }
+    });
+    const repository = {
+      isAvailable: () => true,
+      ensureChat: async ({ chatId }) => ({ id: chatId, title: 'x' }),
+      updateChatProjects: async chatId => ({
+        chat: { id: chatId, projectId: 'prj_someone_else' },
+        conflict: true
+      }),
+      appendMessage: async () => {
+        throw new Error('nothing may be stored');
+      }
+    };
+    const outcome = await service.runTurn({
+      prep: { app: { id: 'chat' }, model: { id: 'small' }, llmMessages: [], tools: [] },
+      chatId: 'chat-refused-in-service',
+      streaming: false,
+      user: { ...ADA },
+      persistence: {
+        repository,
+        ownerId: ADA.id,
+        identityMode: 'default',
+        content: 'hi',
+        projects: { claimContainer: textProject.id, attach: [], maxAttached: 10 }
+      }
+    });
+    assert.equal(outcome.refusal?.code, 'PROJECT_MISMATCH');
+    assert.equal(outcome.status, 'error');
+    assert.equal(ended.length, 1, 'the ledger run is ended');
+    assert.equal(ended[0].summary.error.code, 'PROJECT_MISMATCH');
   });
 });

@@ -256,15 +256,33 @@ function failedError(info) {
  *   message (inclusive) before appending — an edit or a regenerate
  * @param {Object} [params.message] - extra fields for the stored message (`variables`,
  *   `renderedContent`); the repository keeps the ones it knows
- * @param {Object} [params.chat] - extra fields patched onto the chat document with this turn;
- *   a `projectId` among them also records the chat in that project once it is stored
+ * @param {Object} [params.chat] - extra fields patched onto the chat document with this turn
+ * @param {import('../knowledge/chatProjects.js').ProjectPatch} [params.projects] - the
+ *   container this turn opens the chat in and the projects it attaches
+ *   (`resolveChatProjects`), applied with the chat patch under the chat lock against the
+ *   chat as it stands then (`ChatRepository.updateChatProjects`); a claimed container also
+ *   records the chat in that project once it is stored
  * @param {Object} [params.origin] - how a chat created by this turn came about
  *   (`{ createdVia, clientId? }`); a chat the turn creates without one came from the UI
  * @param {string} [params.titleText] - what a chat this turn names is named after,
  *   when that is not the message itself (an `@workflow` turn: the text without the mention)
  * @returns {Promise<Object|null>} the stored message, or null when nothing was written
  */
-export async function materializeUserTurn({
+export async function materializeUserTurn(params) {
+  return (await settleUserTurn(params)).message;
+}
+
+/**
+ * {@link materializeUserTurn}, and why nothing was written when the turn is
+ * refused: `refusal` is `{ code: 'PROJECT_MISMATCH', message }` when the chat's
+ * container changed under the turn (a first turn that raced it opened the chat
+ * in another project), which the caller answers as a 409. Nothing of the turn
+ * is stored then, the chat document included.
+ *
+ * @param {Parameters<typeof materializeUserTurn>[0]} params
+ * @returns {Promise<{message: Object|null, refusal: {code: string, message: string}|null}>}
+ */
+export async function settleUserTurn({
   repository,
   chatId,
   ownerId,
@@ -280,10 +298,12 @@ export async function materializeUserTurn({
   replaceFromMessageId,
   message = null,
   chat: chatPatch = null,
+  projects = null,
   origin = null,
   titleText = null
 }) {
-  if (!repository) return null;
+  const none = { message: null, refusal: null };
+  if (!repository) return none;
   const text = typeof content === 'string' ? content : '';
   const title = deriveChatTitle(
     typeof titleText === 'string' && titleText.trim() ? titleText : text
@@ -306,9 +326,9 @@ export async function materializeUserTurn({
         chatId,
         runId
       });
-      return null;
+      return none;
     }
-    await repository.updateChat(chatId, {
+    const turnPatch = {
       ...(chatPatch && typeof chatPatch === 'object' ? chatPatch : {}),
       activeRunId: runId,
       status: 'running',
@@ -328,13 +348,37 @@ export async function materializeUserTurn({
       // recorded whether or not a message from it ever landed. Computing them
       // here as well meant a second implementation of the same cap, and the
       // two disagreed on where a repeated id lands in the list.
-    });
-    // A chat that opens inside a project is recorded there (the marker the
-    // project page lists chats by) only once the chat document carries the
-    // association: the listing prunes a marker its chat does not back, and
-    // a marker written before this patch could be pruned for good.
-    if (chatPatch?.projectId) {
-      await recordChatInProject(chatPatch.projectId, chatId, { ownerId });
+    };
+    let stored;
+    if (projects && typeof projects === 'object') {
+      const applied = await repository.updateChatProjects(chatId, projects, turnPatch);
+      if (applied?.conflict) {
+        logger.warn('Chat user turn refused: the chat project changed under the turn', {
+          component: COMPONENT,
+          chatId,
+          runId,
+          projectId: applied.chat?.projectId || null
+        });
+        return {
+          message: null,
+          refusal: {
+            code: 'PROJECT_MISMATCH',
+            message: applied.chat?.projectId
+              ? 'This chat already runs inside a project; move it with PATCH /api/chats/:id'
+              : 'This chat already has messages outside a project; move it with PATCH /api/chats/:id'
+          }
+        };
+      }
+      stored = applied?.chat ?? null;
+      // A chat that opens inside a project is recorded there (the marker the
+      // project page lists chats by) only once the chat document carries the
+      // association: the listing prunes a marker its chat does not back, and
+      // a marker written before this patch could be pruned for good.
+      if (projects.claimContainer && stored) {
+        await recordChatInProject(projects.claimContainer, chatId, { ownerId });
+      }
+    } else {
+      stored = await repository.updateChat(chatId, turnPatch);
     }
     const appended = await repository.appendMessage(
       chatId,
@@ -351,13 +395,13 @@ export async function materializeUserTurn({
     );
     // A turn inside a project is activity on the project (retention counts
     // conversations, not only attachments); throttled and never fatal.
-    const projectId = chatPatch?.projectId ?? chat.projectId ?? null;
+    const projectId = stored?.projectId ?? chat.projectId ?? null;
     if (appended?.message && projectId) {
       getProjectService()
         .noteChatTurn(projectId)
         .catch(() => {});
     }
-    return appended?.message ?? null;
+    return { message: appended?.message ?? null, refusal: null };
   } catch (error) {
     logger.error('Chat user turn not materialized', {
       component: COMPONENT,
@@ -365,7 +409,7 @@ export async function materializeUserTurn({
       runId,
       error: error.message
     });
-    return null;
+    return none;
   }
 }
 
