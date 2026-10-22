@@ -8,6 +8,7 @@ import {
   LANGUAGE_CODE_PATTERN
 } from '../../shared/validationPatterns.js';
 import { hasEndOutput } from '../../shared/workflowEndOutput.js';
+import { reservedProjectInputNames } from '../../shared/workflowProjectInputs.js';
 import { projectLinksSchema } from './projectSchema.js';
 
 /**
@@ -702,6 +703,19 @@ export const workflowConfigSchema = baseWorkflowConfigSchema
     {
       message:
         'All nodes except the start node and loop-body nodes must have at least one incoming edge',
+      path: ['nodes']
+    }
+  )
+  .refine(
+    data =>
+      // A chat run passes the message as `input`: a project input of that
+      // name would take the sentence for a project id.
+      data.nodes
+        .filter(node => node.type === 'start')
+        .every(node => reservedProjectInputNames(node.config?.inputVariables).length === 0),
+    {
+      message:
+        'A start input of type "project" cannot be named "input": a chat run passes the message under that name',
       path: ['nodes']
     }
   )

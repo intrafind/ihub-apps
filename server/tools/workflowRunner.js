@@ -17,6 +17,7 @@
 import { getWorkflowEngine } from '../services/workflow/WorkflowEngine.js';
 import { runnerAccess } from '../services/workflow/workflowAccess.js';
 import { PROJECT_INPUT_TYPE } from '../services/workflow/projectNodes.js';
+import { reservedProjectInputNames } from '../../shared/workflowProjectInputs.js';
 import { isValidRunId } from '../services/loop/RunLog.js';
 import { getExecutionRegistry } from '../services/workflow/ExecutionRegistry.js';
 import { recordPendingFinish, buildReplayStepsFromState } from '../services/workflow/chatBridge.js';
@@ -295,6 +296,10 @@ export default async function workflowRunner(params = {}) {
   // `chatTextVariable`). A project id given separately stays where it is.
   const startNode = (workflow.nodes || []).find(n => n.type === 'start');
   const inputVars = startNode?.config?.inputVariables;
+  // `input` is reserved for the message: the schema refuses a project input
+  // of that name, and one in a workflow loaded anyway never gets the sentence
+  // as its project id.
+  if (reservedProjectInputNames(inputVars).includes('input')) delete initialData.input;
   if (inputVars?.length > 0 && input) {
     const textVar = chatTextVariable(inputVars);
     if (textVar && textVar.name !== 'input' && !initialData[textVar.name]) {

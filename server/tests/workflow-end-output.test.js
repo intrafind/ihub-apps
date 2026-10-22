@@ -807,6 +807,26 @@ describe('a run through the chat runner', () => {
     assert.equal(result.output.case, 'prj_case');
     assert.equal(result.output.output, 'Summarize the lease');
   });
+
+  it('never hands the chat message to a project input named input', async () => {
+    // The schema refuses this name; a workflow loaded anyway (the loader
+    // only warns) must still not take the sentence for a project id.
+    const definition = projectFirst();
+    definition.nodes[0].config.inputVariables[0].name = 'input';
+    definition.nodes[1].config.outputVariables = ['input'];
+    configCache.setCacheEntry('config/workflows.json', [definition]);
+    const result = await workflowRunner({
+      workflowId: 'answers',
+      chatId: `answers-chat-${(chatSeq += 1)}`,
+      user: USER,
+      appConfig: APP,
+      passthrough: false,
+      input: 'Summarize the lease'
+    });
+    assert.equal(result.status, 'completed');
+    assert.equal(result.output.output, 'Summarize the lease', 'the text input has the message');
+    assert.equal(result.output.input, undefined, 'the project input is not the sentence');
+  });
 });
 
 describe('workflows that are built by code end with an output as well', () => {

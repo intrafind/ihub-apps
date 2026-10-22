@@ -1015,4 +1015,21 @@ describe('workflow schema', () => {
     });
     assert.ok(parsed.success, JSON.stringify(parsed.error?.issues));
   });
+
+  it('refuses a project input named input, the name a chat run passes its message under', () => {
+    const withInput = name =>
+      workflowConfigSchema.safeParse(
+        workflowOf({
+          nodes: workflowOf().nodes.map(node =>
+            node.type === 'start'
+              ? { ...node, config: { inputVariables: [{ name, type: 'project' }] } }
+              : { ...node, config: { output: 'memo' } }
+          )
+        })
+      );
+    const refused = withInput('input');
+    assert.equal(refused.success, false);
+    assert.match(JSON.stringify(refused.error.issues), /cannot be named \\"input\\"/);
+    assert.equal(withInput('case').success, true);
+  });
 });

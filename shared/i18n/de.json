@@ -4781,6 +4781,7 @@
       "projectNodes": {
         "inputTypeProject": "Projekt",
         "inputTypeProjectHelp": "Die Person wählt beim Start eines ihrer Projekte. Projektschritte lesen es als {{reference}}.",
+        "inputNameReserved": "Eine Projekt-Eingabe kann nicht „{{name}}“ heißen: Ein Chat-Lauf übergibt seine Nachricht unter diesem Namen. Wählen Sie einen anderen Namen.",
         "outputVariable": "Ausgabevariable",
         "project": {
           "label": "Projekt",
