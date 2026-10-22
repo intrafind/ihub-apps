@@ -27,9 +27,12 @@
  * registerSourceProducer({
  *   id: 'confluence',
  *   matches: ({ toolId, toolDef }) => toolId.startsWith('confluence_'),
- *   fromToolResult: ({ toolId, toolDef, args, result, failed }) => ({ items, queries })
+ *   fromToolResult: ({ toolId, toolDef, args, result, reported, failed }) => ({ items, queries })
  * });
  * ```
+ *
+ * `reported` holds the source inputs the call reported beside its result
+ * (`toolCallScope.js`); a producer that wants them includes them.
  *
  * @module services/sources
  */
@@ -169,7 +172,7 @@ export function extractToolSources({
       const declared = declaredSources(declaration, { args, result: parsed });
       return finalizeSourceFrame(declared, { ...defaults, ...declared.defaults });
     }
-    const call = { toolId: String(toolId || ''), toolDef, args, result: parsed, failed };
+    const call = { toolId: String(toolId || ''), toolDef, args, result: parsed, reported, failed };
     const producer = [...registered, ...BUILT_IN_PRODUCERS].find(candidate =>
       candidate.matches(call)
     );

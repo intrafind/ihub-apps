@@ -244,6 +244,9 @@ export class AgentLoop {
       knowledgeSources: new Set(),
       // What the segment's producers found (tool calls, adapters, provider search).
       sources: emptySourceSet(),
+      // State the run's tool calls share (services/sources/toolCallScope.js):
+      // the passage numbers already handed out, so citations stay unique.
+      toolTurn: { passageMarkers: 0 },
       state: request.state,
       meta: request.meta || {},
       refs: request.refs || {},
@@ -966,15 +969,18 @@ export class AgentLoop {
         }
         rawResult = await raceAbort(
           () =>
-            runToolCallScope(reported, () =>
-              ctx.request.executeTool(call, {
-                toolDef,
-                toolId,
-                args,
-                ctx,
-                info,
-                signal: ctx.signal
-              })
+            runToolCallScope(
+              reported,
+              () =>
+                ctx.request.executeTool(call, {
+                  toolDef,
+                  toolId,
+                  args,
+                  ctx,
+                  info,
+                  signal: ctx.signal
+                }),
+              ctx.toolTurn
             ),
           ctx.signal,
           () => abortError('Agent loop aborted (cancelled or timed out)')

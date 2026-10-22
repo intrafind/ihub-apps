@@ -19,7 +19,7 @@
 import configCache from '../../configCache.js';
 import { callerContext, permissionsFor } from '../../middleware/projectAccess.js';
 import { getProjectRepository } from '../projects/ProjectRepository.js';
-import { isUserProjectsConfigured } from '../projects/projectSettings.js';
+import { isProjectsConfigured, isUserProjectsConfigured } from '../projects/projectSettings.js';
 import { normalizeProjectLink } from '../../validators/projectSchema.js';
 import { projectName } from '../projects/projectView.js';
 
@@ -42,6 +42,10 @@ import { projectName } from '../projects/projectView.js';
  */
 export async function resolveProjectScope({ appConfig, user }) {
   if (!appConfig || !user) return [];
+  // The master switch darkens every project, admin ones included: a chat
+  // must not inject or search knowledge the Projects API itself refuses.
+  const features = configCache.getFeatures();
+  if (!isProjectsConfigured(features)) return [];
   const wanted = [];
   const seen = new Set();
   const add = (id, mode, write, origin, instructions) => {
@@ -70,12 +74,12 @@ export async function resolveProjectScope({ appConfig, user }) {
 
   const repository = getProjectRepository();
   const context = callerContext(user);
-  // User projects are reached only while the feature is on, here and for
+  // User projects are reached only while their feature is on, here and for
   // this app: a saved container or attachment stays on the chat, dark until
-  // the feature returns. Admin projects linked to apps keep working.
+  // the feature returns. Admin projects linked to apps keep working as long
+  // as the master switch is on.
   const userProjectsOn =
-    isUserProjectsConfigured(configCache.getFeatures()) &&
-    appConfig?.features?.userProjects !== false;
+    isUserProjectsConfigured(features) && appConfig?.features?.userProjects !== false;
   const scope = [];
   for (const entry of wanted) {
     const project = await repository.get(entry.id);

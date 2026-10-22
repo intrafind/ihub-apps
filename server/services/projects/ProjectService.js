@@ -679,9 +679,25 @@ export class ProjectService {
    * @param {string} chatId
    * @param {{ownerId?: string|null}} [options]
    */
-  async attachChat(projectId, chatId, { ownerId = null } = {}) {
-    await this.repository.addChatMarker(projectId, chatId, { ownerId });
-    await this.touchActivity(projectId);
+  async attachChat(projectId, chatId, { ownerId = null, authorize } = {}) {
+    // Under the project's lock, so a deletion that lists the markers cannot
+    // slip between the existence check and the marker; a project that is
+    // gone answers null and gets no marker, and `authorize` is judged again
+    // against the project as it is now (PROJECT_ACCESS_CHANGED).
+    let stored;
+    try {
+      stored = await this.repository.mutate(
+        projectId,
+        async project => {
+          await this.repository.addChatMarker(projectId, chatId, { ownerId });
+          return project;
+        },
+        { authorize, touchActivity: true, touchUpdated: false }
+      );
+    } catch (error) {
+      throw translateError(error);
+    }
+    return Boolean(stored);
   }
 
   /** Forget a chat's membership. */
@@ -690,9 +706,13 @@ export class ProjectService {
   }
 
   /** Touch a project's `lastActivityAt` (a chat turn ran inside it). */
-  async touchActivity(projectId) {
+  touchActivity(projectId) {
     return attempt(
-      () => this.repository.mutate(projectId, project => ({ ...project }), { touchActivity: true }),
+      () =>
+        this.repository.mutate(projectId, project => ({ ...project }), {
+          touchActivity: true,
+          touchUpdated: false
+        }),
       'project activity',
       { component: COMPONENT, projectId }
     );
