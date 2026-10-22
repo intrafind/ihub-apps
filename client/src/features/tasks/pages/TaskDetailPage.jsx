@@ -11,6 +11,7 @@ import useApps from '../../../shared/hooks/useApps';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import {
   cancelScheduledTaskRun,
+  deleteScheduledTaskRuns,
   deleteScheduledTask,
   duplicateScheduledTask,
   fetchScheduledTask,
@@ -67,6 +68,9 @@ export default function TaskDetailPage() {
   const [busy, setBusy] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleteChats, setDeleteChats] = useState(false);
+  const [selected, setSelected] = useState([]);
+  // What the run-delete dialog is about: `{ runIds }` or `{ all: true }`.
+  const [runDeletion, setRunDeletion] = useState(null);
 
   const load = useCallback(async () => {
     try {
@@ -96,6 +100,18 @@ export default function TaskDetailPage() {
     const id = setInterval(load, 4000);
     return () => clearInterval(id);
   }, [active, load]);
+
+  const toggleSelected = runId =>
+    setSelected(prev =>
+      prev.includes(runId) ? prev.filter(id => id !== runId) : [...prev, runId]
+    );
+
+  async function confirmRunDeletion() {
+    const selection = runDeletion;
+    setRunDeletion(null);
+    setSelected([]);
+    await act(() => deleteScheduledTaskRuns(task.id, { ...selection, deleteChats: true }));
+  }
 
   async function loadMore() {
     const page = await fetchScheduledTaskRuns(taskId, { limit: 20, cursor });
@@ -405,9 +421,32 @@ export default function TaskDetailPage() {
             </p>
           ) : (
             <div className="mt-4 overflow-x-auto">
+              <div className="mb-3 flex flex-wrap gap-3">
+                <button
+                  type="button"
+                  className={button}
+                  disabled={busy || selected.length === 0}
+                  onClick={() => setRunDeletion({ runIds: selected })}
+                >
+                  {t('scheduledTasks.runs.deleteSelected', 'Delete selected ({{count}})', {
+                    count: selected.length
+                  })}
+                </button>
+                <button
+                  type="button"
+                  className={button}
+                  disabled={busy}
+                  onClick={() => setRunDeletion({ all: true })}
+                >
+                  {t('scheduledTasks.runs.deleteAll', 'Delete all finished runs')}
+                </button>
+              </div>
               <table className="min-w-full text-sm">
                 <thead>
                   <tr className="text-left text-xs uppercase tracking-wide text-gray-500">
+                    <th className="py-2 pr-2">
+                      <span className="sr-only">{t('scheduledTasks.runs.select', 'Select')}</span>
+                    </th>
                     <th className="py-2 pr-4">{t('scheduledTasks.runs.status', 'Status')}</th>
                     <th className="py-2 pr-4">{t('scheduledTasks.runs.trigger', 'Trigger')}</th>
                     <th className="py-2 pr-4">{t('scheduledTasks.runs.scheduled', 'Scheduled')}</th>
@@ -424,6 +463,16 @@ export default function TaskDetailPage() {
                         : null;
                     return (
                       <tr key={run.id} className="align-top">
+                        <td className="py-2 pr-2">
+                          <input
+                            type="checkbox"
+                            className="rounded border-gray-300"
+                            disabled={isRunActive(run.status)}
+                            checked={selected.includes(run.id)}
+                            onChange={() => toggleSelected(run.id)}
+                            aria-label={t('scheduledTasks.runs.selectRun', 'Select this run')}
+                          />
+                        </td>
                         <td className="py-2 pr-4">
                           <RunStatusBadge status={run.status} />
                         </td>
@@ -491,6 +540,16 @@ export default function TaskDetailPage() {
                                 {t('scheduledTasks.cancelRun', 'Cancel')}
                               </button>
                             )}
+                            {!isRunActive(run.status) && (
+                              <button
+                                type="button"
+                                className="text-red-600 hover:underline"
+                                disabled={busy}
+                                onClick={() => setRunDeletion({ runIds: [run.id] })}
+                              >
+                                {t('scheduledTasks.runs.delete', 'Delete')}
+                              </button>
+                            )}
                           </div>
                         </td>
                       </tr>
@@ -507,6 +566,32 @@ export default function TaskDetailPage() {
           )}
         </section>
       </div>
+
+      <Modal isOpen={Boolean(runDeletion)} onClose={() => setRunDeletion(null)}>
+        <div className="p-6 space-y-4">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+            {t('scheduledTasks.runs.deleteTitle', 'Delete runs?')}
+          </h2>
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            {t(
+              'scheduledTasks.runs.deleteText',
+              'The selected runs and their chats are deleted. This cannot be undone. Runs in progress are kept.'
+            )}
+          </p>
+          <div className="flex justify-end gap-3">
+            <button type="button" className={button} onClick={() => setRunDeletion(null)}>
+              {t('common.cancel', 'Cancel')}
+            </button>
+            <button
+              type="button"
+              className="px-3 py-2 rounded-lg text-sm font-medium bg-red-600 text-white hover:bg-red-700"
+              onClick={confirmRunDeletion}
+            >
+              {t('common.delete', 'Delete')}
+            </button>
+          </div>
+        </div>
+      </Modal>
 
       <Modal isOpen={confirmDelete} onClose={() => setConfirmDelete(false)}>
         <div className="p-6 space-y-4">

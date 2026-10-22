@@ -30,13 +30,12 @@ import { getScheduledTaskRepository } from './ScheduledTaskRepository.js';
 import {
   applyRunOutcome,
   isFinalRunStatus,
-  isOlderThanDays,
   planDueSlot,
   reasonOf,
   runLeaseHeld
 } from './taskModel.js';
 import { onTaskChanged, announceTaskChanged } from './taskEvents.js';
-import { currentPolicy, failAwaitingRun } from './taskService.js';
+import { currentPolicy, failAwaitingRun, pruneTaskRuns } from './taskService.js';
 import { ScheduledTaskRunner } from './taskRunner.js';
 
 const COMPONENT = 'ScheduledTaskSource';
@@ -268,30 +267,28 @@ export class ScheduledTaskSource {
   }
 
   /**
-   * Delete run records older than the retention period (their chats age out
-   * with the chat retention rules).
+   * Apply every task's retention limits (its own and the platform's) to its
+   * run history. The count limit is also applied when a run ends; this sweep
+   * is what makes the age limit take effect for tasks that rarely run.
    *
    * @param {number} now
    * @param {Object} settings
-   * @returns {Promise<number>}
+   * @returns {Promise<number>} Runs deleted.
    */
   async sweepRuns(now, settings) {
-    if (!settings.runRetentionDays || settings.runRetentionDays <= 0) return 0;
-    const repository = this.repository();
-    const stale = [];
-    for await (const run of repository.scanRuns()) {
-      const at = run.finishedAt || run.queuedAt;
-      if (run.status && ['queued', 'running', 'awaiting_approval'].includes(run.status)) continue;
-      if (isOlderThanDays(at, settings.runRetentionDays, now)) stale.push(run);
+    let deleted = 0;
+    for await (const task of this.repository().scanTasks()) {
+      try {
+        deleted += await pruneTaskRuns(task, settings, now);
+      } catch (error) {
+        logger.warn('Could not prune the runs of a scheduled task', {
+          component: COMPONENT,
+          taskId: task.id,
+          error: error.message
+        });
+      }
     }
-    for (const run of stale) await repository.deleteRun(run.taskId, run.id);
-    if (stale.length > 0) {
-      logger.info('Scheduled run records past retention deleted', {
-        component: COMPONENT,
-        deleted: stale.length
-      });
-    }
-    return stale.length;
+    return deleted;
   }
 
   clear() {

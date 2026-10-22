@@ -503,6 +503,7 @@
     "maxConsecutiveFailures": 3,
     "approvalTimeoutHours": 24,
     "runRetentionDays": 90,
+    "maxRunsPerTask": 0,
     "maxRunChatsPerTask": 20,
     "maxInstructionLength": 8000,
     "maxRunMinutes": 30,

@@ -69,7 +69,7 @@ import { isMemoryOn } from './taskMemory.js';
 import { prepareRunMemory, settleMemoryMarker } from './runMemory.js';
 import { composeTaskMemory, ownerMessagesAfterPreviousRun, sumUsage } from './memoryComposer.js';
 import { announceTaskChanged } from './taskEvents.js';
-import { currentPolicy, deleteRunChat, toolsOfferedByApp } from './taskService.js';
+import { currentPolicy, deleteRunChat, pruneTaskRuns, toolsOfferedByApp } from './taskService.js';
 
 const COMPONENT = 'ScheduledTaskExecution';
 
@@ -797,6 +797,16 @@ export async function executeTaskRun({ taskId, runId }, deps = {}) {
         error: error.message
       })
     );
+    await repository
+      .getTask(taskId)
+      .then(stored => (stored ? pruneTaskRuns(stored, settings) : 0))
+      .catch(error =>
+        logger.warn('Could not prune the runs of a scheduled task', {
+          component: COMPONENT,
+          taskId,
+          error: error.message
+        })
+      );
   }
 }
 

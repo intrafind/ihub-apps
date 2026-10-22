@@ -45,6 +45,7 @@ export const DEFAULT_SCHEDULED_TASK_SETTINGS = Object.freeze({
   maxConsecutiveFailures: 3,
   approvalTimeoutHours: 24,
   runRetentionDays: 90,
+  maxRunsPerTask: 0,
   maxRunChatsPerTask: 20,
   maxInstructionLength: 8000,
   maxRunMinutes: 30,
@@ -64,6 +65,7 @@ const SETTING_BOUNDS = Object.freeze({
   maxConsecutiveFailures: [0, 1000],
   approvalTimeoutHours: [1, 24 * 31],
   runRetentionDays: [0, 3650],
+  maxRunsPerTask: [0, 10_000],
   maxRunChatsPerTask: [0, 10_000],
   maxInstructionLength: [100, 100_000],
   maxRunMinutes: [1, 30],
@@ -81,7 +83,7 @@ function clampNumber(value, [min, max], fallback) {
  * `platform.scheduledTasks` with defaults filled and every number clamped.
  *
  * `maxTasksPerUser`, `maxConsecutiveFailures`, `runRetentionDays` and
- * `maxRunChatsPerTask` accept 0 as "no limit" / "never".
+ * `maxRunChatsPerTask` and `maxRunsPerTask` accept 0 as "no limit" / "never".
  *
  * The memory settings are flat keys like the rest: `memoryEnabled` switches
  * memory between runs off for the whole installation (notes are kept, runs do
@@ -164,7 +166,7 @@ export function canUseScheduledTasks(user) {
  * @param {Object} [platformConfig]
  * @returns {{enabled: boolean, minIntervalMinutes?: number, staggerMinutes?: number,
  *   maxTasksPerUser?: number, maxInstructionLength?: number, memoryEnabled?: boolean,
- *   memoryMaxChars?: number}}
+ *   memoryMaxChars?: number, maxRunsPerTask?: number, runRetentionDays?: number}}
  */
 export function scheduledTasksClientConfig(features, platformConfig) {
   if (!isScheduledTasksConfigured(features, platformConfig)) return { enabled: false };
@@ -176,6 +178,8 @@ export function scheduledTasksClientConfig(features, platformConfig) {
     maxTasksPerUser: settings.maxTasksPerUser,
     maxInstructionLength: settings.maxInstructionLength,
     memoryEnabled: settings.memoryEnabled,
-    memoryMaxChars: settings.memoryMaxChars
+    memoryMaxChars: settings.memoryMaxChars,
+    maxRunsPerTask: settings.maxRunsPerTask,
+    runRetentionDays: settings.runRetentionDays
   };
 }

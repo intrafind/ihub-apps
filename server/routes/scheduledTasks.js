@@ -23,6 +23,8 @@
  *   DELETE /api/scheduled-tasks/:taskId/memory           clear them
  *   GET    /api/scheduled-tasks/:taskId/runs             run history, newest first (cursor-paged)
  *   GET    /api/scheduled-tasks/:taskId/runs/:runId      one run
+ *   DELETE /api/scheduled-tasks/:taskId/runs/:runId      delete one finished run (and its chat)
+ *   POST   /api/scheduled-tasks/:taskId/runs/delete      delete `{ runIds }` or `{ all: true }` finished runs
  *   POST   /api/scheduled-tasks/:taskId/runs/:runId/cancel
  *   POST   /api/scheduled-tasks/:taskId/runs/:runId/approval   { decision, alwaysAllow }
  *   DELETE /api/scheduled-tasks/:taskId/allowed-tools/:toolId  revoke "always allow"
@@ -214,7 +216,9 @@ export default function registerScheduledTaskRoutes(app) {
           minIntervalMinutes: settings.minIntervalMinutes,
           staggerMinutes: settings.staggerMinutes,
           maxInstructionLength: settings.maxInstructionLength,
-          maxRunChatsPerTask: settings.maxRunChatsPerTask
+          maxRunChatsPerTask: settings.maxRunChatsPerTask,
+          maxRunsPerTask: settings.maxRunsPerTask,
+          runRetentionDays: settings.runRetentionDays
         },
         canCreate: checkTaskPrincipal(req.user).ok
       });
@@ -551,6 +555,41 @@ export default function registerScheduledTaskRoutes(app) {
       res.json(await tasks.getRun(req.user, req.params.taskId, req.params.runId));
     } catch (error) {
       sendTaskError(res, error, 'get run');
+    }
+  });
+
+  app.delete(`${base}/:taskId/runs/:runId`, ...guard, async (req, res) => {
+    try {
+      if (!validTaskId(req, res) || !validRunId(req, res)) return;
+      const result = await tasks.deleteRuns(req.user, req.params.taskId, {
+        runIds: [req.params.runId],
+        deleteChats: req.query.deleteChats !== '0'
+      });
+      audit(req, 'delete', req.params.taskId, `Deleted run ${req.params.runId}`);
+      res.json(result);
+    } catch (error) {
+      sendTaskError(res, error, 'delete run');
+    }
+  });
+
+  app.post(`${base}/:taskId/runs/delete`, ...guard, async (req, res) => {
+    try {
+      if (!validTaskId(req, res)) return;
+      const body = req.body || {};
+      const result = await tasks.deleteRuns(req.user, req.params.taskId, {
+        runIds: body.runIds,
+        all: body.all === true,
+        deleteChats: body.deleteChats !== false
+      });
+      audit(
+        req,
+        'delete',
+        req.params.taskId,
+        `Deleted ${result.deleted} run${result.deleted === 1 ? '' : 's'}`
+      );
+      res.json(result);
+    } catch (error) {
+      sendTaskError(res, error, 'delete runs');
     }
   });
 

@@ -80,3 +80,13 @@ decision), edit its condition, or remove it, using only the keyboard. This is th
 dragging a line between two steps on the canvas and follows the same rules (no connections across a
 loop boundary). The delete button on a step is also shown while it has keyboard focus, not only on
 mouse hover.
+
+## Scheduled tasks: keep fewer runs, delete runs
+
+A scheduled task can now limit its run history by **count** (keep at most N runs) and by **age**
+(delete runs older than D days); set both in the task editor. Runs past a limit are deleted together
+with their chats, and runs in progress are never touched. Administrators can set an installation-wide
+cap with the new `maxRunsPerTask` setting next to `runRetentionDays` (Admin → Scheduled Tasks); the
+stricter of the platform and the task limit applies.
+
+Runs can also be deleted by hand from the task page — one run, a selection, or all finished runs.
