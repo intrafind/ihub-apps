@@ -215,7 +215,8 @@ export async function resolveNodeProject({ executor, node, state, context }) {
     throw new ProjectNodeError('FORBIDDEN', `${node.type}: the run has no user to act as`);
 
   const links = workflowProjectLinks(config, context.workflow, state);
-  const link = links.map(normalizeProjectLink).find(entry => entry.id === projectId) || null;
+  const link =
+    links.map(entry => normalizeProjectLink(entry)).find(entry => entry.id === projectId) || null;
   const scope = await resolveProjectScope({
     appConfig: { projects: link ? [link] : [{ id: projectId, mode: 'auto' }] },
     user: context.user
