@@ -91,13 +91,27 @@ function assertAuthorized(authorize, project) {
 }
 
 /** Mint a user project id. */
+/**
+ * `__` joins the parts of a blob key (`<project>__<item>__<version>`), so no
+ * id may contain it: a minted id that does is minted again, a configured one
+ * is refused (`isAdminProjectId`, the item schema).
+ */
+export const ID_SEPARATOR = '__';
+
+function mintSafeId(prefix) {
+  for (;;) {
+    const id = `${prefix}${randomBytes(ID_BYTES).toString('base64url')}`;
+    if (!id.includes(ID_SEPARATOR)) return id;
+  }
+}
+
 export function mintProjectId() {
-  return `${USER_PROJECT_ID_PREFIX}${randomBytes(ID_BYTES).toString('base64url')}`;
+  return mintSafeId(USER_PROJECT_ID_PREFIX);
 }
 
 /** Mint an item id. */
 export function mintItemId() {
-  return `${ITEM_ID_PREFIX}${randomBytes(ID_BYTES).toString('base64url')}`;
+  return mintSafeId(ITEM_ID_PREFIX);
 }
 
 /**
@@ -129,7 +143,8 @@ export function isAdminProjectId(id) {
     id.length > 0 &&
     id.length <= 50 &&
     isValidId(id) &&
-    !id.startsWith(USER_PROJECT_ID_PREFIX)
+    !id.startsWith(USER_PROJECT_ID_PREFIX) &&
+    !id.includes(ID_SEPARATOR)
   );
 }
 
@@ -161,12 +176,18 @@ export function memberMarkerKey(projectId, targetKey) {
  * @returns {string}
  */
 export function chatMarkerKey(projectId, chatId) {
-  return `${projectId}__${chatId}`;
+  // Both digested: a project id plus a chat id can exceed the store's key
+  // length (`isValidId`, 100 characters), and the raw ids stay in the data.
+  return `${digest(projectId)}.${digest(chatId)}`;
 }
 
-/** Prefix of every blob key of one project. */
+/**
+ * Prefix of every blob key of one project: `<project>__<item>__<version>`.
+ * No id contains `__` ({@link ID_SEPARATOR}), so the prefix of one project
+ * never matches the keys of another.
+ */
 export function blobPrefix(projectId) {
-  return `${projectId}__`;
+  return `${projectId}${ID_SEPARATOR}`;
 }
 
 function actorOf(actor) {
@@ -401,9 +422,14 @@ export class ProjectRepository {
    */
   async listOwned(ownerId) {
     if (!this.isAvailable() || !ownerId) return [];
-    const docs = await collect(this.documents, USER_PROJECTS_NAMESPACE, {
-      ownerId: String(ownerId)
-    });
+    // Every page: the quota check and the user-deletion cascade both need the
+    // whole set, and a user's projects are bounded by that quota.
+    const docs = await collect(
+      this.documents,
+      USER_PROJECTS_NAMESPACE,
+      { ownerId: String(ownerId) },
+      Infinity
+    );
     return docs.map(doc => doc.data);
   }
 
@@ -776,9 +802,9 @@ export class ProjectRepository {
    * @param {(project: Object) => boolean} [options.authorize]
    * @returns {Promise<Object|null>} The project as it was, or null.
    */
-  async delete(projectId, { authorize } = {}) {
+  delete(projectId, { authorize } = {}) {
     if (isUserProjectId(projectId)) {
-      if (!this.isAvailable()) return null;
+      if (!this.isAvailable()) return Promise.resolve(null);
       return this._withLock(projectId, async () => {
         const { project } = await this._loadUser(projectId);
         if (!project) return null;
@@ -802,13 +828,19 @@ export class ProjectRepository {
         return project;
       });
     }
-    if (!isAdminProjectId(projectId)) return null;
-    const { project } = await this._loadAdmin(projectId);
-    if (!project) return null;
-    assertAuthorized(authorize, project);
-    await this.config.remove(adminPath(projectId));
-    await this._afterAdminChange();
-    return project;
+    if (!isAdminProjectId(projectId)) return Promise.resolve(null);
+    // Under the project lock like every admin mutation, and the removal is
+    // queued behind the updates of the same file by the config store, so a
+    // PATCH in flight cannot write the project back after the delete.
+    return this._withLock(projectId, async () => {
+      const { project } = await this._loadAdmin(projectId);
+      if (!project) return null;
+      assertAuthorized(authorize, project);
+      const removed = await this.config.remove(adminPath(projectId));
+      if (!removed) return null;
+      await this._afterAdminChange();
+      return project;
+    });
   }
 
   // --- chat markers ---------------------------------------------------------
@@ -835,11 +867,18 @@ export class ProjectRepository {
    * The chat markers of one project.
    *
    * @param {string} projectId
+   * @param {{all?: boolean}} [options] - `all` follows every page (for a
+   *   cascade); the default stops at the scan budget (for a listing).
    * @returns {Promise<Array<{chatId: string, ownerId: string|null}>>}
    */
-  async listChatMarkers(projectId) {
+  async listChatMarkers(projectId, { all = false } = {}) {
     if (!this.documents || !isProjectId(projectId)) return [];
-    const docs = await collect(this.documents, PROJECT_CHATS_NAMESPACE, { ownerId: projectId });
+    const docs = await collect(
+      this.documents,
+      PROJECT_CHATS_NAMESPACE,
+      { ownerId: projectId },
+      all ? Infinity : MAX_SCANNED
+    );
     return docs
       .map(doc => doc.data)
       .filter(data => data && isValidId(data.chatId))
@@ -848,7 +887,7 @@ export class ProjectRepository {
 
   /** Remove every chat marker of a project; returns the chat ids it had. */
   async removeAllChatMarkers(projectId) {
-    const markers = await this.listChatMarkers(projectId);
+    const markers = await this.listChatMarkers(projectId, { all: true });
     for (const marker of markers) await this.removeChatMarker(projectId, marker.chatId);
     return markers.map(marker => marker.chatId);
   }
@@ -865,7 +904,15 @@ export class ProjectRepository {
    */
   async deleteBlobs(projectId, itemId) {
     if (!this.blobs || !isProjectId(projectId)) return 0;
-    const prefix = itemId ? `${blobPrefix(projectId)}${itemId}__` : blobPrefix(projectId);
+    if (itemId !== undefined && (!isValidId(itemId) || itemId.includes(ID_SEPARATOR))) return 0;
+    const prefix = itemId
+      ? `${blobPrefix(projectId)}${itemId}${ID_SEPARATOR}`
+      : blobPrefix(projectId);
+    // What follows the prefix: `<item>__<version>` for a project, `<version>`
+    // for one item. A key with more parts belongs to no item of this project
+    // (ids never contain `__`) and is left alone rather than deleted on a
+    // prefix match.
+    const parts = itemId ? 1 : 2;
     let removed = 0;
     let cursor = null;
     do {
@@ -875,6 +922,8 @@ export class ProjectRepository {
         ...(cursor ? { cursor } : {})
       });
       for (const blob of page.items) {
+        const rest = blob.key.slice(prefix.length);
+        if (!rest || rest.split(ID_SEPARATOR).length !== parts) continue;
         if (await this.blobs.delete(PROJECT_FILES_NAMESPACE, blob.key)) removed += 1;
       }
       cursor = page.nextCursor;
