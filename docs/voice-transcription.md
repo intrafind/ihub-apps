@@ -213,7 +213,7 @@ This exposes a WebSocket endpoint at `ws://<gpu-host>:8080/v1/realtime`. Verify 
 Recommendations for production:
 
 - **Network placement:** keep the vLLM endpoint on an internal network reachable only by the iHub server(s). It does not need to be — and should not be — reachable from user browsers.
-- **TLS:** if the endpoint crosses a network boundary, front it with TLS and use a `wss://` URL. iHub verifies upstream certificates using Node's default trust store; for a private CA, set `NODE_EXTRA_CA_CERTS=/path/to/ca.pem` in the iHub server environment. Never disable TLS verification.
+- **TLS:** if the endpoint crosses a network boundary, front it with TLS and use a `wss://` URL. iHub verifies upstream certificates against Node's built-in roots plus the server's operating system certificate store, so a company CA installed on the machine just works (see [SSL Certificates](ssl-certificates.md)). For a CA that is not installed system-wide, set `NODE_EXTRA_CA_CERTS=/path/to/ca.pem` in the iHub server environment. Only for a host you cannot give a trusted certificate, add its hostname to `ssl.domainWhitelist` and enable `ssl.ignoreInvalidCertificates`; this also applies to `wss://` endpoints.
 - **Authentication:** if you front vLLM with an authenticating gateway, configure the key in the iHub model config (sent upstream as `Authorization: Bearer <key>`); it is encrypted at rest in iHub.
 
 ## Configuring the transcription model
