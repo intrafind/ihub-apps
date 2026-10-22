@@ -66,7 +66,7 @@ NO_PROXY=localhost,127.0.0.1,.local
 
 The system checks for proxy settings in the following order:
 1. Platform configuration (`platform.json`)
-2. Application environment variables (`config.env`)
+2. Application environment variables (`.env`, or `config.env` in the binary distribution)
 3. System environment variables
 
 A field in `platform.json` may also hold an `${ENV_VAR}` placeholder (for
