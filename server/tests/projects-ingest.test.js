@@ -9,6 +9,7 @@
  * and the multipart route.
  */
 import fs from 'node:fs/promises';
+import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
@@ -65,7 +66,7 @@ import {
 } from '../services/projects/bootstrap.js';
 import { evictItemText, getItemText } from '../services/knowledge/ItemTextService.js';
 import registerProjectRoutes from '../routes/projectRoutes.js';
-import { countBodyBytes } from '../sources/SourceManager.js';
+import { countBodyBytes, probeUrl } from '../sources/SourceManager.js';
 import { z } from 'zod';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -1312,5 +1313,85 @@ describe('routes', () => {
       bytes: 3,
       truncated: false
     });
+  });
+
+  /**
+   * A loopback server for the URL probe, with the target check that admits it.
+   * `handle(req, res)` answers; every request is recorded with its headers.
+   */
+  async function probeServer(handle) {
+    const requests = [];
+    const server = http.createServer((req, res) => {
+      requests.push({ url: req.url, headers: req.headers });
+      handle(req, res);
+    });
+    await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+    return {
+      origin: `http://127.0.0.1:${server.address().port}`,
+      requests,
+      close: () =>
+        new Promise(resolve => {
+          server.closeAllConnections();
+          server.close(resolve);
+        })
+    };
+  }
+  const loopback = { checkTarget: async () => ({ ok: true, addresses: ['127.0.0.1'] }) };
+
+  it('sends the configured probe headers to the original origin only', async () => {
+    const other = await probeServer((req, res) => res.end('elsewhere'));
+    const home = await probeServer((req, res) => {
+      if (req.url === '/away') {
+        res.writeHead(302, { location: `${other.origin}/landing` }).end();
+      } else if (req.url === '/stay') {
+        res.writeHead(302, { location: '/final' }).end();
+      } else {
+        res.end('home');
+      }
+    });
+    try {
+      const headers = { Authorization: 'Bearer s3cret', 'X-Api-Key': 'k' };
+      const away = await probeUrl({ url: `${home.origin}/away`, headers }, loopback);
+      assert.equal(away.status, 200);
+      assert.equal(home.requests[0].headers.authorization, 'Bearer s3cret');
+      // Another port is another origin: neither credential follows the redirect.
+      assert.equal(other.requests.length, 1);
+      assert.equal(other.requests[0].headers.authorization, undefined);
+      assert.equal(other.requests[0].headers['x-api-key'], undefined);
+
+      await probeUrl({ url: `${home.origin}/stay`, headers }, loopback);
+      const final = home.requests.find(request => request.url === '/final');
+      assert.equal(final.headers.authorization, 'Bearer s3cret');
+    } finally {
+      await home.close();
+      await other.close();
+    }
+  });
+
+  it('closes the unread bodies of a redirect and a failed probe', async () => {
+    const closed = new Set();
+    const server = await probeServer((req, res) => {
+      res.on('close', () => closed.add(req.url));
+      if (req.url === '/hang-redirect') {
+        // A body that never ends: only the client dropping it closes it.
+        res.writeHead(302, { location: '/ok' });
+        res.write('moved');
+      } else if (req.url === '/hang-error') {
+        res.writeHead(500);
+        res.write('broken');
+      } else {
+        res.end('fine');
+      }
+    });
+    try {
+      const ok = await probeUrl({ url: `${server.origin}/hang-redirect` }, loopback);
+      assert.equal(ok.accessible, true);
+      assert.equal(ok.contentLength, 4);
+      await waitFor(() => closed.has('/hang-redirect'), { timeoutMs: 2000 });
+      await assert.rejects(probeUrl({ url: `${server.origin}/hang-error` }, loopback), /HTTP 500/);
+      await waitFor(() => closed.has('/hang-error'), { timeoutMs: 2000 });
+    } finally {
+      await server.close();
+    }
   });
 });
