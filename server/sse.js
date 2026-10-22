@@ -150,13 +150,21 @@ setEnvelopeDelivery(routeEnvelope);
 // frame around the cluster.
 subscribe(EVENT_CHANNEL, ({ streamId, envelope }) => {
   const delivered = deliverEnvelope(streamId, envelope);
-  logger.debug('Received relayed SSE envelope', {
+  const logFields = {
     component: 'SSE',
     streamId,
     type: envelope?.type,
     delivered,
     pid: process.pid
-  });
+  };
+  if (delivered) {
+    // One line per streamed delta: below debug so it only shows at `silly`.
+    logger.silly('Relayed SSE envelope delivered', logFields);
+  } else {
+    // The client for this stream is gone from this worker (closed or moved),
+    // which is the case worth seeing when debugging cross-worker streaming.
+    logger.debug('Relayed SSE envelope had no local client', logFields);
+  }
 });
 
 /**
