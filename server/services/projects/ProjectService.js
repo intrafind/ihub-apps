@@ -42,6 +42,7 @@ const STATUS_BY_CODE = Object.freeze({
   PROJECT_ACCESS_CHANGED: 403,
   PROJECT_EXISTS: 409,
   PROJECT_IN_USE: 400,
+  CASCADE_INCOMPLETE: 500,
   PROJECT_MISMATCH: 409,
   QUOTA_PROJECTS: 409,
   QUOTA_FILES: 413,
@@ -195,14 +196,65 @@ export class ProjectService {
         limit: limits.maxFiles
       });
     }
-    // A new project is made of new items: a kind that is switched off is
-    // refused here exactly as the item endpoints refuse it.
-    for (const item of project.items || []) this._checkKindRef(item.kind, item.ref);
+    // A new project is made of new items, built here exactly as the item
+    // endpoints build them: the request names the kind, the reference, a
+    // name and whether it is pinned; storage, status and provenance are the
+    // kind's. Content that has to be fetched and extracted (uploads, picked
+    // documents) goes through the item endpoints, which run the ingestion.
+    const items = (project.items || []).map(input => {
+      const { kind, ref } = this._checkKindRef(input.kind, input.ref);
+      if (kind.storage.ihub !== 'link') {
+        throw new ProjectError(
+          'INVALID_REF',
+          `Items of kind "${kind.id}" are added through the item endpoints after the project exists`
+        );
+      }
+      return this._buildItem(kind, ref, input, { user: actor, origin: 'linked' });
+    });
     try {
-      return await this.repository.createAdmin(project, { actor: actorOf(actor) });
+      return await this.repository.createAdmin({ ...project, items }, { actor: actorOf(actor) });
     } catch (error) {
       throw translateError(error);
     }
+  }
+
+  /**
+   * A new item of `kind`, as every creation path stores it.
+   *
+   * @param {Object} kind
+   * @param {Object} ref
+   * @param {{id?: string, name?: string, pinned?: boolean, cache?: Object}} input
+   * @param {{user: Object, origin?: string, run?: string|null}} context
+   * @returns {Object}
+   */
+  _buildItem(kind, ref, input, { user, origin, run = null }) {
+    const described = typeof kind.describe === 'function' ? kind.describe(ref, user?.language) : {};
+    const now = nowIso();
+    const item = {
+      id: input.id || mintItemId(),
+      kind: kind.id,
+      name: String(input.name || described.name || kind.id).slice(0, 300),
+      ref,
+      storage: kind.storage.ihub,
+      pinned: input.pinned === true,
+      status: kind.storage.ihub === 'link' ? 'ready' : 'pending',
+      error: null,
+      provenance: {
+        origin: origin || (kind.storage.ihub === 'link' ? 'linked' : 'picked'),
+        by: actorOf(user),
+        at: now,
+        run,
+        source:
+          described.url || described.site ? { site: described.site, url: described.url } : null
+      },
+      snapshotAt: null,
+      createdAt: now,
+      updatedAt: now
+    };
+    if (kind.storage.ihub === 'link') {
+      item.cache = input.cache || { ttlSeconds: 7200 };
+    }
+    return item;
   }
 
   /**
@@ -273,19 +325,37 @@ export class ProjectService {
     if (!project) return null;
     const where = { component: COMPONENT, projectId };
     await attempt(() => this.repository.deleteBlobs(projectId), 'text blobs', where);
-    await attempt(
-      async () => {
-        const chatIds = await this.repository.removeAllChatMarkers(projectId);
-        if (typeof detachChat === 'function') {
-          for (const chatId of chatIds)
-            await attempt(() => detachChat(chatId), `chat ${chatId}`, where);
-        }
-      },
+    // Chat by chat: the marker goes only once its chat is detached, so a
+    // detach that fails leaves the marker as the durable record of what is
+    // still to do, and the caller hears about it instead of a clean success.
+    const failed = [];
+    const markers = await attempt(
+      () => this.repository.listChatMarkers(projectId),
       'chat markers',
       where
     );
+    for (const marker of markers || []) {
+      try {
+        if (typeof detachChat === 'function') await detachChat(marker.chatId);
+        await this.repository.removeChatMarker(projectId, marker.chatId);
+      } catch (error) {
+        logger.error('Failed to detach a chat of a deleted project', {
+          ...where,
+          chatId: marker.chatId,
+          error: error.message
+        });
+        failed.push({ chatId: marker.chatId, error: error.message });
+      }
+    }
     for (const hook of this.onDeleted) {
       await attempt(() => hook(project), 'a delete hook', where);
+    }
+    if (failed.length > 0) {
+      throw new ProjectError(
+        'CASCADE_INCOMPLETE',
+        `The project is deleted, but ${failed.length} chat(s) could not be detached from it`,
+        { project: { id: project.id, ownership: project.ownership }, chats: failed }
+      );
     }
     return project;
   }
@@ -348,32 +418,16 @@ export class ProjectService {
    */
   async addItem(projectId, input, { user, authorize, origin, run = null }) {
     const { kind, ref } = this._checkKindRef(input.kind, input.ref);
-    const described = typeof kind.describe === 'function' ? kind.describe(ref, user?.language) : {};
-    const now = nowIso();
-    const item = {
-      id: mintItemId(),
-      kind: kind.id,
-      name: String(input.name || described.name || kind.id).slice(0, 300),
+    const item = this._buildItem(
+      kind,
       ref,
-      storage: kind.storage.ihub,
-      pinned: input.pinned === true,
-      status: kind.storage.ihub === 'link' ? 'ready' : 'pending',
-      error: null,
-      provenance: {
-        origin: origin || (kind.storage.ihub === 'link' ? 'linked' : 'picked'),
-        by: actorOf(user),
-        at: now,
-        run,
-        source:
-          described.url || described.site ? { site: described.site, url: described.url } : null
-      },
-      snapshotAt: null,
-      createdAt: now,
-      updatedAt: now
-    };
-    if (kind.storage.ihub === 'link') {
-      item.cache = { ttlSeconds: 7200 };
-    }
+      { name: input.name, pinned: input.pinned },
+      {
+        user,
+        origin,
+        run
+      }
+    );
     let stored = null;
     try {
       stored = await this.repository.mutate(
