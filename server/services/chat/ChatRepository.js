@@ -1233,7 +1233,7 @@ export class ChatRepository {
    * @returns {Promise<{chat: Object|null, moved: boolean}>} The chat as it
    *   stands and whether the association changed.
    */
-  async moveProjectIf(chatId, expectedProjectId, nextProjectId, { settle } = {}) {
+  moveProjectIf(chatId, expectedProjectId, nextProjectId, { settle } = {}) {
     if (!this._usable(chatId, 'moveProjectIf')) return { chat: null, moved: false };
     return this._withChatLock(chatId, async () => {
       const { chat: existing, etag } = await this._loadChat(chatId);

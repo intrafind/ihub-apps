@@ -374,7 +374,7 @@ export class ProjectService {
     if (kind.storage.ihub === 'link') {
       item.cache = { ttlSeconds: 7200 };
     }
-    let stored;
+    let stored = null;
     try {
       stored = await this.repository.mutate(
         projectId,
@@ -599,7 +599,7 @@ export class ProjectService {
   }
 
   /** Touch a project's `lastActivityAt` (a chat turn ran inside it). */
-  async touchActivity(projectId) {
+  touchActivity(projectId) {
     return attempt(
       () =>
         this.repository.mutate(projectId, project => ({ ...project }), {
