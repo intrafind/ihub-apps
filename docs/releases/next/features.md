@@ -83,4 +83,4 @@ mouse hover.
 
 ## OpenRouter as a provider
 
-**Admin → Models → Import from URL** has an **OpenRouter** preset when you create a new provider: one click fills in the name, ID `openrouter`, the OpenAI-compatible API type and `https://openrouter.ai/api/v1`. Enter your OpenRouter key, load the model list and import the models you want; the key is stored encrypted on the provider (or set `OPENROUTER_API_KEY`). Models that generate images or audio instead of text are marked and not selected by **Select all**.
+**Admin → Models → Import from URL** has an **OpenRouter** preset when you create a new provider: one click fills in the name, ID `openrouter`, the OpenAI-compatible API type and `https://openrouter.ai/api/v1`. Enter your OpenRouter key (change the prefilled URL for a regional endpoint if needed), load the model list and import the models you want; the key is stored encrypted on the provider. Models that generate images or audio instead of text are marked and not selected by **Select all**.
