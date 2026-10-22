@@ -28,7 +28,7 @@ stores, or links to content that is fetched when it is used.
 
 | Kind                | What it adds                                         | Stored as           | Read with the rights of                         | Offered when                                     |
 | ------------------- | ---------------------------------------------------- | ------------------- | ----------------------------------------------- | ------------------------------------------------ |
-| `upload`            | An uploaded file, or text pasted into the dialog     | Extracted text      | —                                               | Project file storage is available                |
+| `upload`            | An uploaded file, or text written in the dialog      | Extracted text      | —                                               | Project file storage is available                |
 | `url`               | A web page                                           | Link, cached 2 h    | —                                               | Always                                           |
 | `page`              | An iHub page (`contents/pages`) in one language      | Link                | The reading user (the page's own access rules)  | Always                                           |
 | `ifinder-document`  | One iFinder document                                 | Link                | The reading user                                | iFinder is configured                            |
@@ -53,14 +53,27 @@ users pick cloud files from their own projects.
 ### Uploads
 
 Uploads accept PDF, Word (`.docx`), PowerPoint (`.pptx`), Excel (`.xlsx`), OpenDocument (`.odt`,
-`.ods`, `.odp`), HTML, e-mail (`.eml`), Markdown, CSV, JSON, XML and other text files. Images,
-audio, video, archives and executables are refused. Each file is one request, so several files
+`.ods`, `.odp`), HTML, e-mail (`.eml` and Outlook `.msg`), Markdown, CSV, JSON, XML and other text
+files. Images, audio, video, archives, executables and the legacy Office formats (`.doc`, `.xls`,
+`.ppt`) are refused; save those as `.docx`, `.xlsx`, `.pptx` or PDF first. An e-mail is stored as
+its headers (subject, sender, recipients, date), the names of its attachments and its body; the
+attachments themselves are not read. Each file is one request, so several files
 upload in parallel and each gets its own status.
 
 The server extracts the text, encrypts it and stores it. **The original file is discarded.** A
 PDF of at most 500 pages is read; extracted text longer than 2,000,000 characters is cut at that
 length. There is no OCR: a scanned PDF without a text layer fails with a message that says so.
 Run it through OCR and upload the result.
+
+### Writing and editing text
+
+The **Text** tab of the **Add item** dialog stores typed or pasted text as a document without an
+upload, as the sources editor did. **Preview text** on an uploaded, written or migrated document
+offers **Edit text**: the whole text opens in a text area, and saving replaces the stored document
+(`PUT …/items/:itemId/text`). The item then counts as written by the editor, and the model reads
+the new text from the next question on. A web page, an iHub page and a document picked from a
+cloud drive or iFinder cannot be edited: their text is the source's and is fetched or refreshed
+from there.
 
 The limits of `platform.projects.limits` apply to admin and user projects alike: files per
 project, bytes per file and bytes per project.
@@ -105,7 +118,8 @@ switch `admin.pages.projects`; content admins and full admins may use it.
 2. Open it and add items with **Add item**: upload a file, paste text, or add a web page, an iHub
    page, an iFinder document or an iFinder search.
 3. Pin items that must always reach the model (see [Load in full or search](#load-in-full-or-search)).
-   Preview the stored text, rename, refresh or remove an item from the items table.
+   Preview the stored text, edit the text of an uploaded, written or migrated document, rename,
+   refresh or remove an item from the items table.
 4. Link the project to apps, workflows and agents.
 
 A disabled project is skipped by everything that links it. A project that something still links
@@ -556,6 +570,7 @@ changing it takes a content admin.
 | `PATCH`  | `/api/projects/:projectId/items/:itemId`      | editor    | Change `name`, `pinned`.                                                                         |
 | `DELETE` | `/api/projects/:projectId/items/:itemId`      | editor    | Remove the item.                                                                                 |
 | `POST`   | `/api/projects/:projectId/items/:itemId/refresh` | editor | Take the text of a picked file again, with your account.                                         |
+| `PUT`    | `/api/projects/:projectId/items/:itemId/text` | editor    | Replace the text of an uploaded, written or imported document: `{ text }`. Links and picked documents are refused (`INVALID_REF`). |
 | `GET`    | `/api/projects/:projectId/items/:itemId/text` | member    | The text as `text/plain`; `?maxChars=`, `?download=1` saves it as `.txt`.                        |
 | `PUT`    | `/api/projects/:projectId/members`            | editor    | Replace the member list `{ members: [{ type, id?, role }] }`.                                    |
 | `POST`   | `/api/projects/:projectId/transfer`           | owner     | Hand the project to `{ ownerId }`.                                                               |
@@ -598,5 +613,6 @@ Content admins, behind the `projects` flag. User projects are reachable by full 
 | `PATCH`  | `/api/admin/projects/:id/items/:itemId`     | Change `name`, `pinned`.                                                                    |
 | `DELETE` | `/api/admin/projects/:id/items/:itemId`     | Remove an item.                                                                             |
 | `POST`   | `/api/admin/projects/:id/items/:itemId/refresh` | Refresh an item.                                                                        |
+| `PUT`    | `/api/admin/projects/:id/items/:itemId/text` | Replace the text of an uploaded, written or imported document: `{ text }`.                  |
 | `GET`    | `/api/admin/projects/:id/items/:itemId/text` | The stored or fetched text as `text/plain`.                                                |
 | `POST`   | `/api/admin/projects/:id/test`              | Read every item the way a chat would.                                                       |

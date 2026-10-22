@@ -10,10 +10,12 @@ nodes and agent profiles with a mode: `context` puts its text into the prompt, `
 to the knowledge tools, `auto` loads it in full while it fits the budget and searches it
 otherwise. The chat shows which happened.
 
-- Upload PDF, Word, PowerPoint, Excel, OpenDocument, HTML, e-mail, Markdown, CSV, JSON, XML and
-  text files; the text is extracted and stored encrypted (per-document keys wrapped by the
-  installation's encryption key), the original is discarded. A scanned PDF without a text layer
-  is reported, not stored empty.
+- Upload PDF, Word, PowerPoint, Excel, OpenDocument, HTML, e-mail (`.eml` and Outlook `.msg`),
+  Markdown, CSV, JSON, XML and text files; the text is extracted and stored encrypted
+  (per-document keys wrapped by the installation's encryption key), the original is discarded. A
+  scanned PDF without a text layer is reported, not stored empty.
+- Write a document in the dialog without an upload, and edit the text of an uploaded, written or
+  migrated document later from its preview (**Edit text**), as the sources editor allowed.
 - Link items keep the knowledge where it is: a web page, an iHub page, an iFinder document or
   search, fetched when used with the reading user's rights.
 - The models reach projects through `knowledge_search`, `knowledge_read` and `knowledge_list`;
