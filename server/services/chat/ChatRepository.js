@@ -1243,7 +1243,7 @@ export class ChatRepository {
    *   stands (null when it does not exist or cannot be stored) and whether the
    *   project fields were refused.
    */
-  async updateChatProjects(chatId, projects, patch = {}) {
+  updateChatProjects(chatId, projects, patch = {}) {
     if (!this._usable(chatId, 'updateChatProjects')) return { chat: null, conflict: false };
     const { claimContainer = null, expectedContainer, attach = [], maxAttached } = projects || {};
     const limit = Number.isInteger(maxAttached) && maxAttached >= 0 ? maxAttached : Infinity;
