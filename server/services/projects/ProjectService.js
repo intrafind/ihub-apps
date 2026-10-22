@@ -581,7 +581,9 @@ export class ProjectService {
    *
    * @param {string} projectId
    * @param {string} itemId
-   * @param {(item: Object) => void} update - Mutates the item in place.
+   * @param {(item: Object) => void|false} update - Mutates the item in place;
+   *   returning `false` leaves the project unwritten (the item is not what the
+   *   caller expected any more).
    * @returns {Promise<Object|null>} The item as stored, or null when gone.
    */
   async patchItem(projectId, itemId, update, { check } = {}) {
@@ -593,7 +595,7 @@ export class ProjectService {
         // A check against the project as stored right now (a quota), under
         // the lock the write holds; what it throws aborts the write.
         if (typeof check === 'function') check(project, item);
-        update(item);
+        if (update(item) === false) return null;
         item.updatedAt = nowIso();
         return project;
       },

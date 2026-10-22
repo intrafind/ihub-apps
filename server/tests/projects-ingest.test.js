@@ -52,13 +52,22 @@ import {
   scannerFor,
   splitCommand
 } from '../services/projects/scan/MalwareScanner.js';
-import { INTERRUPTED, ProjectIngestService } from '../services/projects/ProjectIngestService.js';
+import {
+  INTERRUPTED,
+  ProjectIngestService,
+  startIngestReconciler,
+  stopIngestReconciler
+} from '../services/projects/ProjectIngestService.js';
 import { ProjectError, getProjectService } from '../services/projects/ProjectService.js';
 import {
   PROJECT_FILES_NAMESPACE,
   getProjectRepository
 } from '../services/projects/ProjectRepository.js';
-import { registerItemKind } from '../services/projects/kinds/registry.js';
+import {
+  getItemKind,
+  isItemKindEnabled,
+  registerItemKind
+} from '../services/projects/kinds/registry.js';
 import {
   bootstrapProjects,
   getIngestService,
@@ -571,6 +580,75 @@ describe('extractText', () => {
       { maxChars: 40 }
     );
     assert.equal(capped.text.length, 40);
+    assert.equal(capped.truncated, true);
+  });
+
+  it('reads each e-mail body part in the charset it declares, 8bit parts included', async () => {
+    const latin = text => Buffer.from(text, 'latin1');
+    const multipart = await extractText({
+      bytes: Buffer.concat([
+        latin(
+          'From: ada@example.com\r\nSubject: Miete\r\nMIME-Version: 1.0\r\nContent-Type: multipart/mixed; boundary="b2"\r\n\r\n--b2\r\nContent-Type: text/plain; charset=iso-8859-1\r\nContent-Transfer-Encoding: 8bit\r\n\r\n'
+        ),
+        latin('Die Miete ist fällig. Grüße aus Köln.'),
+        latin(
+          '\r\n--b2\r\nContent-Type: text/plain; charset=utf-8\r\nContent-Transfer-Encoding: 8bit\r\n\r\n'
+        ),
+        Buffer.from('Die Kaution beträgt 2400 €.', 'utf8'),
+        latin('\r\n--b2--\r\n')
+      ]),
+      name: 'latin.eml'
+    });
+    assert.match(multipart.text, /^Subject: Miete$/m);
+    assert.match(multipart.text, /Die Miete ist fällig\. Grüße aus Köln\./);
+    assert.match(multipart.text, /Die Kaution beträgt 2400 €\./);
+    assert.doesNotMatch(multipart.text, /\uFFFD/);
+
+    // A single-part message, and a header in raw UTF-8 (RFC 6532).
+    const single = await extractText({
+      bytes: Buffer.concat([
+        Buffer.from('Subject: Kündigung\r\n', 'utf8'),
+        latin(
+          'Content-Type: text/plain; charset="ISO-8859-1"\r\nContent-Transfer-Encoding: 8bit\r\n\r\nSehr geehrte Damen und Herren, hiermit kündige ich.\r\n'
+        )
+      ]),
+      name: 'single.eml'
+    });
+    assert.match(single.text, /^Subject: Kündigung$/m);
+    assert.match(single.text, /hiermit kündige ich\./);
+  });
+
+  it('reports content an extractor left out on its own limits as truncated', async () => {
+    // The production limits leave these small files whole.
+    const whole = await extractText({ bytes: await makeXlsx(), name: 'budget.xlsx' });
+    assert.equal(whole.truncated, false);
+    const pdf = await extractText({ bytes: await makePdf(3), name: 'lease.pdf' });
+    assert.equal(pdf.truncated, false);
+    assert.equal(pdf.pages, 3);
+
+    // Rows past the sheet's row limit: the notice is in the text, and the flag is set.
+    const rows = await extractText(
+      { bytes: await makeXlsx(), name: 'budget.xlsx' },
+      { sheetRows: 2 }
+    );
+    assert.match(rows.text, /rows omitted/);
+    assert.doesNotMatch(rows.text, /Deposit/);
+    assert.equal(rows.truncated, true);
+
+    // Pages past the page limit, though the text is far below the character cap.
+    const pages = await extractText(
+      { bytes: await makePdf(3), name: 'lease.pdf' },
+      { maxPages: 2 }
+    );
+    assert.equal(pages.pages, 2);
+    assert.equal(pages.truncated, true);
+
+    // The character cap still counts on its own.
+    const capped = await extractText(
+      { bytes: await makeXlsx(), name: 'budget.xlsx' },
+      { maxChars: 20 }
+    );
+    assert.equal(capped.text.length, 20);
     assert.equal(capped.truncated, true);
   });
 
@@ -1178,6 +1256,194 @@ describe('ingest pipeline', () => {
     assert.equal(await ingest.cleanTempDir(), 1);
     await assert.rejects(fs.stat(oldDir));
     await fs.stat(newDir);
+  });
+
+  it('leaves an item another worker or a new refresh took over since the inventory', async () => {
+    const project = await newProject();
+    const repository = getProjectRepository();
+    const old = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+    const base = {
+      kind: 'fake-cloud',
+      ref: { fileId: 'f1' },
+      storage: 'text',
+      pinned: false,
+      error: null,
+      provenance: { origin: 'picked', by: { id: ADA.id }, at: old },
+      createdAt: old,
+      updatedAt: old
+    };
+    await repository.mutate(project.id, p => ({
+      ...p,
+      items: [
+        { ...base, id: 'itm_refresh', name: 'refresh', status: 'ready', refreshingAt: old },
+        { ...base, id: 'itm_upload', name: 'upload', kind: 'upload', ref: {}, status: 'pending' },
+        { ...base, id: 'itm_dead', name: 'dead', status: 'ready', refreshingAt: old }
+      ]
+    }));
+    // Between the inventory and the locked write, another worker settled the
+    // interrupted refresh and the user started a new one; the queued upload's
+    // job started extracting. Only the untouched item is still the stale one.
+    const fresh = new Date().toISOString();
+    const racing = Object.create(service);
+    racing.patchItem = async (projectId, itemId, update, options) => {
+      if (itemId !== 'itm_dead') {
+        await repository.mutate(projectId, p => {
+          const item = p.items.find(entry => entry.id === itemId);
+          if (itemId === 'itm_refresh') item.refreshingAt = fresh;
+          else item.status = 'extracting';
+          item.updatedAt = fresh;
+          return p;
+        });
+      }
+      return service.patchItem(projectId, itemId, update, options);
+    };
+    const ingest = new ProjectIngestService({
+      service: racing,
+      repository,
+      platform: () => platform,
+      tempDir: path.join(scratch, 'tmp-race')
+    });
+    const result = await ingest.reconcile();
+    assert.equal(result.interrupted, 1);
+    const refreshing = await itemOf(project.id, 'itm_refresh');
+    assert.equal(refreshing.refreshingAt, fresh);
+    assert.equal(refreshing.status, 'ready');
+    assert.equal(refreshing.error, null);
+    const extracting = await itemOf(project.id, 'itm_upload');
+    assert.equal(extracting.status, 'extracting');
+    assert.equal(extracting.error, null);
+    const dead = await itemOf(project.id, 'itm_dead');
+    assert.equal(dead.refreshingAt, undefined);
+    assert.equal(dead.status, 'failed');
+    assert.equal(dead.error.code, INTERRUPTED);
+  });
+
+  it('keeps the upload directories of queued and running jobs, and sweeps the rest each tick', async () => {
+    const ingest = new ProjectIngestService({
+      service,
+      platform: () => platform,
+      tempDir: path.join(scratch, 'tmp-busy')
+    });
+    const past = new Date(Date.now() - 3 * 60 * 60 * 1000);
+    const dirs = {};
+    for (const name of ['u-running', 'u-queued', 'u-scratch', 'u-abandoned']) {
+      dirs[name] = path.join(ingest.tempDir, name);
+      await fs.mkdir(dirs[name], { recursive: true });
+      await fs.writeFile(path.join(dirs[name], 'original'), 'plaintext');
+      await fs.utimes(dirs[name], past, past);
+    }
+    ingest.active.set('itm_running', {
+      itemId: 'itm_running',
+      input: { path: path.join(dirs['u-running'], 'original'), cleanupDir: dirs['u-running'] }
+    });
+    ingest.active.set('itm_picked', {
+      itemId: 'itm_picked',
+      input: {},
+      scratchDir: dirs['u-scratch']
+    });
+    ingest.queue.push({
+      job: { itemId: 'itm_queued', input: { path: path.join(dirs['u-queued'], 'original') } },
+      resolve: () => {}
+    });
+    try {
+      assert.equal(await ingest.cleanTempDir(), 1);
+      await assert.rejects(fs.stat(dirs['u-abandoned']));
+      await fs.stat(dirs['u-running']);
+      await fs.stat(dirs['u-queued']);
+      await fs.stat(dirs['u-scratch']);
+    } finally {
+      ingest.active.clear();
+      ingest.queue.length = 0;
+    }
+
+    // The periodic tick runs the sweep after the reconciler, even when the
+    // reconciler fails.
+    const calls = [];
+    stopIngestReconciler();
+    startIngestReconciler(
+      {
+        reconcile: async () => {
+          calls.push('reconcile');
+          throw new Error('inventory failed');
+        },
+        cleanTempDir: async () => {
+          calls.push('clean');
+          return 0;
+        }
+      },
+      { intervalMs: 10 }
+    );
+    try {
+      await waitFor(() => calls.includes('clean'));
+    } finally {
+      stopIngestReconciler();
+    }
+    assert.deepEqual(calls.slice(0, 2), ['reconcile', 'clean']);
+  });
+
+  it('keeps cloud kinds closed while the integrations feature is off', async () => {
+    const features = configCache.getFeatures();
+    const savedPlatform = platform;
+    const providers = [{ id: 'o365', type: 'office365', enabled: true }];
+    setPlatform({ cloudStorage: { providers } });
+    const office365 = getItemKind('office365');
+    assert.ok(office365, 'the cloud kinds are registered');
+    assert.equal(
+      isItemKindEnabled('office365', { platform, features: { integrations: true } }),
+      true
+    );
+    assert.equal(
+      isItemKindEnabled('office365', { platform, features: { integrations: false } }),
+      false
+    );
+    const project = await newProject();
+    const old = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+    await getProjectRepository().mutate(project.id, p => ({
+      ...p,
+      items: [
+        {
+          id: 'itm_o365',
+          kind: 'office365',
+          name: 'Lease.docx',
+          ref: { providerId: 'o365', fileId: 'file-1' },
+          storage: 'text',
+          pinned: false,
+          status: 'ready',
+          error: null,
+          provenance: { origin: 'picked', by: { id: ADA.id }, at: old },
+          createdAt: old,
+          updatedAt: old
+        }
+      ]
+    }));
+    configCache.setCacheEntry('config/features.json', { ...features, integrations: false });
+    try {
+      // A pick is refused before anything is queued.
+      await assert.rejects(
+        service.addItem(
+          project.id,
+          { kind: 'office365', ref: { providerId: 'o365', fileId: 'file-2' } },
+          { user: ADA, wait: true }
+        ),
+        error => error.code === 'KIND_DISABLED'
+      );
+      // A refresh skips the availability check; the download refuses itself.
+      await assert.rejects(
+        service.refreshItem(project.id, 'itm_o365', { user: ADA, wait: true }),
+        error => error.code === 'FEATURE_DISABLED'
+      );
+      await assert.rejects(
+        office365.fetch({ ref: { providerId: 'o365', fileId: 'file-1' } }, { user: ADA }),
+        error => error.code === 'FEATURE_DISABLED'
+      );
+      const item = await itemOf(project.id, 'itm_o365');
+      assert.equal(item.refreshingAt, undefined);
+      assert.equal(item.error.code, 'FEATURE_DISABLED');
+    } finally {
+      configCache.setCacheEntry('config/features.json', features);
+      platform = savedPlatform;
+      configCache.setCacheEntry('config/platform.json', platform);
+    }
   });
 
   it('sweeps no orphan blob while a project document cannot be read', async () => {

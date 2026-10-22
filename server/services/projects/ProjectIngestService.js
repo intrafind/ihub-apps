@@ -296,6 +296,7 @@ export class ProjectIngestService {
         let scratch = null;
         if (!scanPath && this.scanner().id !== 'none') {
           scratch = await this.newTempDir();
+          job.scratchDir = scratch;
           scanPath = path.join(scratch, 'fetched');
           await fs.writeFile(scanPath, scanBytes, { mode: 0o600 });
         }
@@ -499,9 +500,18 @@ export class ProjectIngestService {
         return now - since > staleMs;
       });
       for (const item of stuck) {
+        let settled = false;
         try {
           await this.service.patchItem(project.id, item.id, entry => {
+            // The decision above was taken on the inventory; under the lock
+            // the item must still be the one inventoried. A changed
+            // reservation or update means another worker settled it, its job
+            // moved on, or a new refresh owns it now: leave it alone.
+            if (entry.refreshingAt !== item.refreshingAt || entry.updatedAt !== item.updatedAt) {
+              return false;
+            }
             if (typeof entry.refreshingAt === 'string') {
+              settled = true;
               // An interrupted refresh: the old snapshot is still there.
               delete entry.refreshingAt;
               entry.status = entry.text ? 'stale' : 'failed';
@@ -511,14 +521,15 @@ export class ProjectIngestService {
               };
               return;
             }
-            if (entry.status !== 'pending' && entry.status !== 'extracting') return;
+            if (entry.status !== 'pending' && entry.status !== 'extracting') return false;
+            settled = true;
             entry.status = 'failed';
             entry.error = {
               code: INTERRUPTED,
               message: 'The server restarted during extraction. Upload the file again.'
             };
           });
-          interrupted += 1;
+          if (settled) interrupted += 1;
         } catch (error) {
           logger.warn('Could not mark an interrupted item', {
             component: COMPONENT,
@@ -577,8 +588,25 @@ export class ProjectIngestService {
     return removed;
   }
 
+  /** The temp directories the jobs queued or running on this worker still need. */
+  _busyTempDirs() {
+    const busy = new Set();
+    const jobs = [...this.active.values(), ...this.queue.map(entry => entry.job)];
+    for (const job of jobs) {
+      const { input = {} } = job;
+      if (input.cleanupDir) busy.add(path.resolve(input.cleanupDir));
+      if (input.path) busy.add(path.resolve(path.dirname(input.path)));
+      if (job.scratchDir) busy.add(path.resolve(job.scratchDir));
+    }
+    return busy;
+  }
+
   /**
-   * Remove upload directories older than an hour (startup).
+   * Remove upload directories older than an hour (startup and every
+   * reconciler tick). A directory a job of this worker has queued or is
+   * processing is kept whatever its age; one still being received, or one
+   * of another worker sharing the directory, is younger than the hour (its
+   * modification time is the moment the file landed in it).
    *
    * @param {{now?: number}} [options]
    * @returns {Promise<number>}
@@ -591,9 +619,11 @@ export class ProjectIngestService {
     } catch {
       return 0;
     }
+    const busy = this._busyTempDirs();
     for (const entry of entries) {
       if (!entry.isDirectory()) continue;
       const dir = path.join(this.tempDir, entry.name);
+      if (busy.has(path.resolve(dir))) continue;
       try {
         const stat = await fs.stat(dir);
         if (now - stat.mtimeMs < ORPHAN_AGE_MS) continue;
@@ -610,7 +640,8 @@ export class ProjectIngestService {
 let reconcileTimer = null;
 
 /**
- * Run the reconciler now and every fifteen minutes.
+ * Run the reconciler, and the sweep of abandoned upload directories, now and
+ * every fifteen minutes.
  *
  * @param {ProjectIngestService} ingest
  * @param {{intervalMs?: number}} [options]
@@ -625,6 +656,22 @@ export function startIngestReconciler(ingest, { intervalMs = 15 * 60 * 1000 } = 
       await ingest.reconcile();
     } catch (error) {
       logger.error('Project ingest reconciliation failed', {
+        component: COMPONENT,
+        error: error.message
+      });
+    }
+    try {
+      // A worker that crashed mid-upload and restarted within the hour kept
+      // its plaintext original past the startup sweep; this one catches it.
+      const removed = await ingest.cleanTempDir();
+      if (removed) {
+        logger.info('Removed abandoned project upload directories', {
+          component: COMPONENT,
+          removed
+        });
+      }
+    } catch (error) {
+      logger.warn('Could not sweep the project upload directory', {
         component: COMPONENT,
         error: error.message
       });
