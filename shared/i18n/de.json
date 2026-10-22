@@ -4629,7 +4629,16 @@
       "aboutTitle": "Über diesen Workflow",
       "aboutSteps": "{{count}} Schritte",
       "aboutSteps_one": "{{count}} Schritt",
-      "fieldRequired": "Dieses Feld ist erforderlich"
+      "fieldRequired": "Dieses Feld ist erforderlich",
+      "project": {
+        "choose": "Projekt auswählen…",
+        "loading": "Projekte werden geladen...",
+        "empty": "Sie haben noch keine Projekte zur Auswahl.",
+        "idPlaceholder": "Projekt-ID",
+        "loadError": "Ihre Projekte konnten nicht geladen werden.",
+        "unavailable": "Projekte sind hier für Sie nicht verfügbar. Geben Sie eine Projekt-ID ein.",
+        "notListed": "{{id}} (nicht in Ihren Projekten)"
+      }
     },
     "emptyState": {
       "available": {
@@ -4719,7 +4728,8 @@
         "data": "Daten",
         "integration": "Integration",
         "people": "Personen",
-        "agentRuntime": "Agent-Laufzeit"
+        "agentRuntime": "Agent-Laufzeit",
+        "projects": "Projekte"
       },
       "jsonTab": "JSON",
       "loadFailed": "Workflow konnte nicht geladen werden",
@@ -4753,7 +4763,87 @@
       "type": "Typ",
       "unknownVariables": "Diese Namen werden verwendet, aber nie gesetzt — sie bleiben zur Laufzeit leer:",
       "variablesHint": "Klicken Sie einen Namen an, um ihn als Vorlagenreferenz zu kopieren.",
-      "variablesTab": "Variablen"
+      "variablesTab": "Variablen",
+      "nodeTypeMeta": {
+        "project-items": {
+          "label": "Projektdokumente",
+          "description": "Die Dokumente eines Projekts auflisten, um sie einzeln zu durchlaufen."
+        },
+        "project-read": {
+          "label": "Projektdokument lesen",
+          "description": "Den Text eines Dokuments aus einem Projekt lesen."
+        },
+        "project-write": {
+          "label": "Im Projekt speichern",
+          "description": "Einen vom Workflow erzeugten Text als Dokument in einem Projekt speichern."
+        }
+      },
+      "projectNodes": {
+        "inputTypeProject": "Projekt",
+        "inputTypeProjectHelp": "Die Person wählt beim Start eines ihrer Projekte. Projektschritte lesen es als {{reference}}.",
+        "inputNameReserved": "Eine Projekt-Eingabe kann nicht „{{name}}“ heißen: Ein Chat-Lauf übergibt seine Nachricht unter diesem Namen. Wählen Sie einen anderen Namen.",
+        "outputVariable": "Ausgabevariable",
+        "project": {
+          "label": "Projekt",
+          "modeLabel": "Wie das Projekt angegeben wird",
+          "modePick": "Auswählen",
+          "modeReference": "ID oder Variable",
+          "choose": "Projekt auswählen…",
+          "notListed": "{{id}} (nicht in der Liste)",
+          "disabledOption": "{{name}} (deaktiviert)",
+          "featureDisabled": "Projekte sind auf diesem Server ausgeschaltet. Geben Sie eine Projekt-ID oder eine $.data-Referenz ein.",
+          "loadError": "Die Projekte konnten nicht geladen werden. Geben Sie eine Projekt-ID oder eine $.data-Referenz ein.",
+          "pickHelp": "Admin-Projekte, die Sie sehen. Für ein Benutzerprojekt oder das Projekt, das die Person beim Start wählt, wechseln Sie zu „ID oder Variable“.",
+          "referenceHelp": "Eine Projekt-ID oder eine $.data-Referenz, etwa eine Workflow-Eingabe vom Typ Projekt (z. B. $.data.project)."
+        },
+        "origins": {
+          "uploaded": "Hochgeladen",
+          "written": "Von einem Lauf geschrieben",
+          "picked": "Aus einer Quelle gewählt",
+          "linked": "Verknüpft",
+          "migrated": "Migriert"
+        },
+        "items": {
+          "kinds": "Elementarten",
+          "kindsHelp": "Nur Dokumente dieser Arten. Keine angehakt: alle Arten.",
+          "status": "Status",
+          "statusHelp": "Standard: bereit und veraltet, also Dokumente, deren Text lesbar ist. Keiner angehakt: jeder Status.",
+          "pinnedLabel": "Angeheftet",
+          "pinned": {
+            "any": "Egal",
+            "pinned": "Nur angeheftete",
+            "unpinned": "Nicht angeheftete"
+          },
+          "origin": "Herkunft",
+          "originHelp": "Woher das Dokument stammt. Keine angehakt: jede Herkunft.",
+          "limit": "Max. Dokumente",
+          "limitHelp": "Höchstens so viele Dokumente. Standard und Maximum: {{max}}",
+          "outputHelp": "Zustandsvariable für die Dokumentliste. Standard: {{name}}. Durchlaufen Sie sie mit einem Wiederholen-Schritt (für jedes Element); jede Runde liest $.data._loopItem.id."
+        },
+        "read": {
+          "document": "Dokument",
+          "documentHelp": "Die Element-ID oder eine $.data-Referenz darauf. In einer Schleife über eine Dokumentliste: {{reference}}",
+          "loopItem": "Aktuelles Schleifenelement",
+          "section": "Abschnitt",
+          "sectionHelp": "Optional. Eine Überschrift oder Abschnitts-ID, die statt des ganzen Dokuments gelesen wird.",
+          "maxChars": "Max. Zeichen",
+          "maxCharsHelp": "Optionales Budget für den Text. Leer: Standard des Servers.",
+          "outputHelp": "Zustandsvariable für das Dokument. Standard: {{name}}. Der Text ist {{name}}.text, der Name {{name}}.name."
+        },
+        "write": {
+          "permissionHelp": "Die ausführende Person muss ein Benutzerprojekt besitzen oder bearbeiten dürfen. Ein Admin-Projekt braucht eine Projektverknüpfung des Workflows mit Schreibrecht („write“: true im JSON-Tab).",
+          "name": "Dokumentname",
+          "namePlaceholder": "Zusammenfassung von {{example}}",
+          "nameHelp": "Text mit {{template}}-Variablen oder eine $.data-Referenz. In einer Schleife ist {{example}} das aktuelle Element.",
+          "text": "Text",
+          "textHelp": "Meist eine $.data-Referenz auf die Ausgabe eines früheren Schritts; ein Text mit {{template}}-Variablen geht auch. Objekte werden als JSON gespeichert.",
+          "contentType": "Inhaltstyp",
+          "contentTypeHelp": "Standard: {{type}}",
+          "pinned": "Dokument anheften",
+          "wait": "Warten, bis das Dokument bereit ist",
+          "outputHelp": "Zustandsvariable für das gespeicherte Dokument. Standard: {{name}}. Lassen Sie „Warten“ an, wenn ein späterer Schritt das Dokument liest."
+        }
+      }
     }
   },
   "documentTitle": {

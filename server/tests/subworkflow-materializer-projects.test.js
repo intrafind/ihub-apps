@@ -5,11 +5,13 @@
  * The planner's sub-workflow keeps the profile's project links (#1036):
  * a task that names a subset of the linked projects keeps each link's mode
  * and write permission, and the dynamic drain worker carries the links too.
+ * The parent run's project inputs reach every task and the drain worker.
  */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { SubWorkflowMaterializer } from '../services/workflow/SubWorkflowMaterializer.js';
+import { projectInputLinks } from '../services/workflow/projectNodes.js';
 
 const taskTemplate = {
   system: { en: 'Be useful.' },
@@ -91,5 +93,49 @@ describe('sub-workflow project links', () => {
     assert.ok(runner, 'the drain worker sits inside the loop');
     assert.deepEqual(runner.config.projects, taskTemplate.projects);
     assert.deepEqual(runner.config.tools, ['web_search']);
+  });
+
+  it("adds the parent run's project inputs to every task, after the task's own links", () => {
+    // The parent workflow declares two project inputs; the child gets their
+    // links, since its own start node declares none.
+    const parent = {
+      nodes: [
+        {
+          id: 'start',
+          type: 'start',
+          config: {
+            inputVariables: [
+              { name: 'case', type: 'project' },
+              { name: 'library', type: 'project' },
+              { name: 'topic', type: 'string' }
+            ]
+          }
+        }
+      ]
+    };
+    const inputProjects = projectInputLinks(parent, {
+      data: { case: 'prj_case', library: 'docs', topic: 'Lease' }
+    });
+    const caseLink = { id: 'prj_case', mode: 'auto', write: false };
+    const plan = {
+      tasks: [
+        { id: 't1', title: 'Write', description: 'Write the memo', projects: ['docs'] },
+        { id: 't2', title: 'Read', description: 'Read the FAQ' },
+        { id: 't3', title: 'None', description: 'No configured knowledge', projects: [] }
+      ]
+    };
+    const { nodes } = SubWorkflowMaterializer.materialize(
+      plan,
+      { taskTemplate, dynamicTasks: { enabled: true } },
+      0,
+      { inputProjects }
+    );
+    const task = id => findNode({ nodes }, id)?.config?.projects;
+    // `docs` is both a template link and an input: the task's link (with its
+    // write grant) comes first and wins.
+    assert.deepEqual(task('t1'), [{ id: 'docs', mode: 'tools', write: true }, caseLink]);
+    assert.deepEqual(task('t2'), ['faq', { id: 'docs', mode: 'tools', write: true }, caseLink]);
+    assert.deepEqual(task('t3'), [caseLink, { id: 'docs', mode: 'auto', write: false }]);
+    assert.deepEqual(task('drain-task-runner'), [...taskTemplate.projects, caseLink]);
   });
 });

@@ -44,6 +44,7 @@ import {
   scopeSummary
 } from '../../knowledge/KnowledgeScopePlanner.js';
 import { projectSettings } from '../../projects/projectSettings.js';
+import { workflowProjectLinks } from '../projectNodes.js';
 import logger from '../../../utils/logger.js';
 import { getAgentToolIds } from '../../../agents/runtime/agentToolRegistrar.js';
 import { readMemoryBodyForPrompt } from '../../../agents/memory/memoryFile.js';
@@ -1349,23 +1350,20 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
    * Plan the projects of this agent node (#1036, spec 2 §6).
    *
    * Links can be defined at node level (`config.projects`) or workflow level
-   * (`context.workflow.projects`); the node's list wins. Every linked
+   * (`context.workflow.projects`); the node's list wins. A workflow input of
+   * type `project` joins them (`projectNodes.js`). Every linked
    * project is loaded in full when it fits the load-all budget, otherwise
    * its pinned items go into the prompt and the knowledge tools search the
    * rest. The rendered block replaces `{{projects}}` in the system prompt.
    *
    * @param {Object} nodeConfig - Agent node configuration
-   * @param {Object} _state - Workflow state (unused; text is cached per process)
+   * @param {Object} state - Workflow state (for the run's project inputs)
    * @param {Object} context - Execution context
    * @returns {Promise<{content: string|null, projectsMetadata: Array, links: Array}>}
    * @private
    */
-  async loadProjectContent(nodeConfig, _state, context) {
-    const links = Array.isArray(nodeConfig.projects)
-      ? nodeConfig.projects
-      : Array.isArray(context.workflow?.projects)
-        ? context.workflow.projects
-        : [];
+  async loadProjectContent(nodeConfig, state, context) {
+    const links = workflowProjectLinks(nodeConfig, context.workflow, state);
     if (links.length === 0) return { content: null, projectsMetadata: [], links: [] };
     const idOf = link => (typeof link === 'string' ? link : link?.id);
     try {

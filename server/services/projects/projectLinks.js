@@ -3,8 +3,9 @@
 
 /**
  * Where projects are linked from configuration (spec 1 §6.1, §6.2): the
- * `projects` lists on apps, workflows (top level, prompt, planner and
- * verifier nodes, and a planner's task template) and agent profiles.
+ * `projects` lists on apps, workflows (top level; the prompt, planner,
+ * verifier and project step nodes, inside inline loop bodies too; and a
+ * planner's task template) and agent profiles.
  *
  * Two questions are answered here:
  *
@@ -23,8 +24,19 @@ import { normalizeProjectLink } from '../../validators/projectSchema.js';
 import { visibleToUser as profileVisibleToUser } from '../../routes/agents/profiles.js';
 import { filterByPermissions } from '../workflow/workflowAccess.js';
 
-/** Node types whose `config.projects` is honoured. */
-export const PROJECT_NODE_TYPES = Object.freeze(['prompt', 'planner', 'verifier']);
+/**
+ * Node types whose `config.projects` is honoured: the model steps and the
+ * project steps (`project-items`, `project-read`, `project-write`), whose
+ * own links win over the workflow's (`workflowProjectLinks`).
+ */
+export const PROJECT_NODE_TYPES = Object.freeze([
+  'prompt',
+  'planner',
+  'verifier',
+  'project-items',
+  'project-read',
+  'project-write'
+]);
 
 /**
  * The project ids a `projects` list names, whatever shape each entry has.
@@ -42,23 +54,42 @@ export function linkedIdsOf(links) {
   return ids;
 }
 
+/** How deep inline loop bodies are followed; loops nest a few levels at most. */
+const MAX_BODY_DEPTH = 16;
+
 /**
- * The links of a workflow: its own list plus every project node's. A
- * planner's `taskTemplate.projects` counts as its node's links: the workers
- * it materializes at run time carry them, so a caller who may run the
- * workflow must reach them, and deleting one must see the dependency.
+ * Append the links of a list of nodes to `result`, following the steps of
+ * inline loop bodies (`loop.config.body`, which `LoopNodeExecutor` runs,
+ * nested loops too).
+ *
+ * @param {unknown} nodes
+ * @param {Array<{ids: string[], nodeId: string|null}>} result
+ * @param {number} depth
+ */
+function collectNodeLinks(nodes, result, depth) {
+  if (!Array.isArray(nodes) || depth > MAX_BODY_DEPTH) return;
+  for (const node of nodes) {
+    if (node?.type === 'loop') collectNodeLinks(node.config?.body, result, depth + 1);
+    if (!PROJECT_NODE_TYPES.includes(node?.type)) continue;
+    const ids = linkedIdsOf(node?.config?.projects);
+    if (node.type === 'planner') ids.push(...linkedIdsOf(node?.config?.taskTemplate?.projects));
+    if (ids.length) result.push({ ids: [...new Set(ids)], nodeId: node.id || null });
+  }
+}
+
+/**
+ * The links of a workflow: its own list plus every project node's, the
+ * steps of inline loop bodies included. A planner's `taskTemplate.projects`
+ * counts as its node's links: the workers it materializes at run time carry
+ * them, so a caller who may run the workflow must reach them, and deleting
+ * one must see the dependency.
  *
  * @param {Object} workflow
  * @returns {Array<{ids: string[], nodeId: string|null}>}
  */
 function workflowLinks(workflow) {
   const result = [{ ids: linkedIdsOf(workflow?.projects), nodeId: null }];
-  for (const node of Array.isArray(workflow?.nodes) ? workflow.nodes : []) {
-    if (!PROJECT_NODE_TYPES.includes(node?.type)) continue;
-    const ids = linkedIdsOf(node?.config?.projects);
-    if (node.type === 'planner') ids.push(...linkedIdsOf(node?.config?.taskTemplate?.projects));
-    if (ids.length) result.push({ ids: [...new Set(ids)], nodeId: node.id || null });
-  }
+  collectNodeLinks(workflow?.nodes, result, 0);
   return result;
 }
 

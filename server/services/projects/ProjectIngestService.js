@@ -206,7 +206,8 @@ export class ProjectIngestService {
    *   with `contentType`, `name` and `bytes` (a size) as known; `previousBlobKey`
    *   on a refresh; `provenance` to merge into the item's once installed (an
    *   edit); `purpose` (`upload`, `pick`, `refresh`, `write`, `import`).
-   * @param {{user?: Object, authorize?: Function, wait?: boolean}} [options]
+   * @param {{user?: Object, authorize?: Function, wait?: boolean}} [options] - `wait`:
+   *   `true` waits for the job, `false` never does, omitted waits for `{text}` only.
    * @returns {Promise<{item: Object}|null>} The finished item when the job ran
    *   inline, otherwise null (the caller polls).
    */
@@ -221,7 +222,8 @@ export class ProjectIngestService {
     // Every job goes through the queue, so `ingest.concurrency` bounds the
     // downloads, scans and extractions of this worker whatever the route;
     // `inline` only decides whether the caller waits for the result.
-    const inline = wait === true || typeof input.text === 'string';
+    // An explicit `wait: false` wins even for text handed in.
+    const inline = wait === true || (wait !== false && typeof input.text === 'string');
     const promise = this._enqueue(job);
     if (!inline) return null;
     return promise;

@@ -2,7 +2,10 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import LocalizedField from './LocalizedField';
+import { PROJECT_INPUT_TYPE } from '../../../utils/projectNodeConfig';
+import { reservedProjectInputNames } from '../../../../../../../shared/workflowProjectInputs.js';
 
 const TYPE_OPTIONS = [
   { value: 'string', label: 'String' },
@@ -12,7 +15,29 @@ const TYPE_OPTIONS = [
   { value: 'object', label: 'Object' }
 ];
 
+/**
+ * Config form for the start node: the input variables the run dialog asks
+ * for, and default state values.
+ *
+ * An input of type `project` (#1036) is a project the user picks when
+ * starting the run; its value is the project id, which project steps read
+ * as `$.data.<name>`. It cannot be named `input`, the name a chat run passes
+ * its message under: the form flags it and the server refuses to save it.
+ *
+ * @param {Object} props
+ * @param {Object} props.config - The start node config.
+ * @param {(config: Object) => void} props.onChange
+ * @returns {JSX.Element}
+ */
 function StartForm({ config, onChange }) {
+  const { t } = useTranslation();
+  const typeOptions = [
+    ...TYPE_OPTIONS,
+    {
+      value: PROJECT_INPUT_TYPE,
+      label: t('workflows.editor.projectNodes.inputTypeProject', 'Project')
+    }
+  ];
   const vars = Array.isArray(config.inputVariables) ? config.inputVariables : [];
 
   const updateVar = (index, field, value) => {
@@ -86,7 +111,7 @@ function StartForm({ config, onChange }) {
                   onChange={e => updateVar(index, 'type', e.target.value)}
                   className={`flex-1 min-w-0 ${inputClass}`}
                 >
-                  {TYPE_OPTIONS.map(opt => (
+                  {typeOptions.map(opt => (
                     <option key={opt.value} value={opt.value}>
                       {opt.label}
                     </option>
@@ -110,6 +135,24 @@ function StartForm({ config, onChange }) {
                   &#x2715;
                 </button>
               </div>
+              {reservedProjectInputNames([v]).length > 0 && (
+                <p role="alert" className="text-xs text-red-600 dark:text-red-400">
+                  {t(
+                    'workflows.editor.projectNodes.inputNameReserved',
+                    'A project input cannot be named "{{name}}": a chat run passes its message under that name. Choose another name.',
+                    { name: v.name.trim() }
+                  )}
+                </p>
+              )}
+              {v.type === PROJECT_INPUT_TYPE && (
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  {t(
+                    'workflows.editor.projectNodes.inputTypeProjectHelp',
+                    'The user picks one of their projects when starting the run. Project steps read it as {{reference}}.',
+                    { reference: `$.data.${v.name || '<name>'}` }
+                  )}
+                </p>
+              )}
               <LocalizedField
                 label="Description"
                 rows={2}

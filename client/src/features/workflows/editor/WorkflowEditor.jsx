@@ -27,6 +27,8 @@ import {
   NODE_TYPES_LIST,
   NODE_TYPE_COLORS,
   NODE_TYPE_META,
+  nodeTypeDescription,
+  nodeTypeLabel,
   applyDagreLayout,
   createNewNode,
   parentsFirst,
@@ -69,14 +71,18 @@ function NodePalette({ onAddNode }) {
       ...group,
       types: group.types.filter(type => {
         const meta = NODE_TYPE_META[type] || {};
-        return (
-          type.includes(q) ||
-          (meta.label || '').toLowerCase().includes(q) ||
-          (meta.description || '').toLowerCase().includes(q)
-        );
+        // Match the English text and the translated one, so a search works in
+        // either language.
+        return [
+          type,
+          meta.label,
+          meta.description,
+          nodeTypeLabel(type, t),
+          nodeTypeDescription(type, t)
+        ].some(text => (text || '').toLowerCase().includes(q));
       })
     })).filter(group => group.types.length > 0);
-  }, [query]);
+  }, [query, t]);
 
   return (
     <div className="w-56 border-r border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-3 overflow-y-auto">
@@ -98,12 +104,11 @@ function NodePalette({ onAddNode }) {
           </div>
           <div className="space-y-1">
             {group.types.map(type => {
-              const meta = NODE_TYPE_META[type] || {};
               return (
                 <button
                   key={type}
                   onClick={() => onAddNode(type)}
-                  title={meta.description || ''}
+                  title={nodeTypeDescription(type, t)}
                   className="w-full text-left text-xs px-2 py-1.5 rounded-sm border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 flex items-center gap-2 transition-colors"
                 >
                   <span
@@ -112,7 +117,7 @@ function NodePalette({ onAddNode }) {
                   >
                     <NodeTypeIcon type={type} className="w-3 h-3" />
                   </span>
-                  <span className="truncate">{meta.label || type}</span>
+                  <span className="truncate">{nodeTypeLabel(type, t)}</span>
                 </button>
               );
             })}

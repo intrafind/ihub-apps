@@ -254,6 +254,79 @@ Like all defaults, these files live in `server/defaults/workflows/` and are copi
 
 All of them run **sequentially** — none sets `concurrency`. Each round accumulates shared state (collected evidence records, the coverage counter, the merged corpus), and as described under **Parallel mode caveat** above, body state updates are not propagated in parallel mode. Raising `concurrency` on these loops would silently discard that accumulated state.
 
+## Projects in a workflow
+
+A workflow reads knowledge from **projects** (Admin → Projects, and the projects users keep) the
+way an app does. Three things bring a project into a run:
+
+- **Links.** The workflow's `projects` list, with the same shape as on an app: a project id, or
+  `{ "id", "mode", "write" }`. `mode` is `context` (the text goes into the prompt), `tools` (the
+  model searches it with `knowledge_search`, `knowledge_read` and `knowledge_list`) or `auto`
+  (loaded in full while it fits the budget, searched otherwise). A prompt, planner or verifier
+  step may carry its own `config.projects`, which replaces the workflow's list for that step. The
+  rendered block replaces `{{projects}}` in the step's system prompt, or is appended when the
+  placeholder is absent.
+- **An input of type `project`.** A start-step input variable with `"type": "project"` lets the
+  person who starts the run pick a project they may use; the run dialog shows a picker. The id
+  lands in state like every other input (`$.data.<name>` / `{{<name>}}`), the project joins the
+  links of every step in mode `auto`, and the three project steps below accept the reference as
+  their `project` — including the tasks a planner step generates. The server refuses a run whose
+  project input names a project the caller may not use. A run started from a chat puts the
+  message into the first text input, never into a project input. A project input cannot be named
+  `input`: a chat run passes its message under that name, so the editor flags it and the server
+  refuses to save it.
+- **The project steps.** They name a project directly or through a reference, and reach it with
+  the running user's rights. An admin project chosen from the list in the editor also gets a
+  read-only link in the step's own `projects` (`{ "id": "faq", "mode": "auto", "write": false }`),
+  so whoever may run the workflow reaches it and the project lists the workflow as a dependency;
+  a link the step already has to that project is kept as it is. A typed id or a `$.data`
+  reference adds no link.
+
+### Project steps: list, read, write back
+
+| Step              | Config                                                                                                                                                         | Output                                                                                            |
+| ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `project-items`   | `project`, `filter` (`kinds`, `status` — default `ready` and `stale` —, `pinned`, `origin`), `limit` (default 500), `outputVariable` (default `_projectItems`) | The matching documents as a list in `outputVariable`; the step output adds `count` and `total`.  |
+| `project-read`    | `project`, `document` (an item id, usually `$.data._loopItem.id`), `section`, `maxChars`, `outputVariable` (default `_projectDocument`)                       | `{ project, document, name, text, chars, retrieval, doc }`.                                       |
+| `project-write`   | `project`, `name`, `text`, `contentType` (default `text/markdown`), `pinned`, `wait` (default true), `outputVariable` (default `_writtenDocument`)              | The stored document, with provenance `written` and the run (`executionId`, step id) that wrote it. |
+
+`name` and `text` of a write accept `$.data.<var>` references and `{{…}}` templates over the
+state; inside a loop `{{item.name}}` is the current item. Only the configured template is
+rendered: a value it inserts (such as a model's answer holding `{{…}}`) is stored as it is, never
+rendered again. A document that fits the read budget
+comes back whole whatever `section` says; a longer one is cut to the section, and the
+`retrieval` field says which happened. A longer document without a `section` fails the step
+with `SECTION_REQUIRED` (and with `SECTION_NOT_FOUND` when the section is not in it) rather
+than passing on its outline as its text: name a section or raise `maxChars`.
+
+Together with a loop container the three steps make the common shape "one memo per document":
+
+```json
+{ "id": "list", "type": "project-items",
+  "config": { "project": "$.data.case", "outputVariable": "docs" } },
+{ "id": "each", "type": "loop",
+  "config": { "mode": "forEach", "array": "$.data.docs", "itemVariable": "_doc", "onItemError": "skip" } },
+{ "id": "read", "type": "project-read", "parentId": "each",
+  "config": { "project": "$.data.case", "document": "$.data._doc.id", "outputVariable": "page" } },
+{ "id": "summarize", "type": "prompt", "parentId": "each",
+  "config": { "prompt": "Summarize:\n\n{{page.text}}", "outputVariable": "memo" } },
+{ "id": "store", "type": "project-write", "parentId": "each",
+  "config": { "project": "$.data.case", "name": "Memo {{item.name}}", "text": "$.data.memo" } }
+```
+
+**Who may write.** A `project-write` into a user project needs the running user to be its owner
+or an editor. An admin project takes writes only through a link that says so: `{ "id": "faq",
+"mode": "tools", "write": true }` on the workflow (or on the step's own `projects`); a read-only
+step link to the project does not take away the workflow link's grant. There is no
+chat tool that writes into a project: a write happens in a step the author placed, with the
+run recorded as the document's provenance. A failed step reports the reason as its error code
+(`PROJECT_NOT_FOUND`, `FORBIDDEN`, `ITEM_NOT_FOUND`, `INVALID_REF`, `SECTION_REQUIRED`,
+`SECTION_NOT_FOUND`, or the ingest error such as
+`SCAN_REJECTED` or a quota).
+
+Agent profiles carry the same `projects` list; it reaches every prompt step of the generated
+workflow, and an agent writes back through a `project-write` step of its workflow.
+
 ## The output of a workflow
 
 Every workflow ends with an output. Each **end step** has an **Output**, the answer of the
