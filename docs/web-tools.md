@@ -316,12 +316,7 @@ API keys are encrypted at rest using AES-256-GCM.
 
 #### Environment Variables (Fallback)
 
-Add to your `config.env` file:
-
-```env
-BRAVE_SEARCH_API_KEY=your_brave_api_key_here
-STAAN_API_KEY=your_staan_api_key_here
-```
+Set `BRAVE_SEARCH_API_KEY` or `STAAN_API_KEY` as a real environment variable (or in the `.env` file of a source checkout). The shipped `config.env` of the binary distribution no longer lists them.
 
 The system checks admin panel configuration first, then falls back to environment variables.
 
@@ -663,7 +658,7 @@ The web content extractor includes protection against Server-Side Request Forger
 
 1. **"BRAVE_SEARCH_API_KEY is not set"**
    - Configure the key via Admin → Providers → Brave Search (recommended)
-   - Or set the API key in your `config.env` file and restart the server
+   - Or set the `BRAVE_SEARCH_API_KEY` environment variable and restart the server
    - Or switch the app to Qwant (`websearch.provider: "qwant"`), which needs no key.
      `"auto"` already does this on an install with no Brave key
 

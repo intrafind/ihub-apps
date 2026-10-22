@@ -1092,7 +1092,7 @@ iHub Apps ships with a set of pre-configured built-in tools that cover the most 
     3. Click "Configure" and enter your API key
     4. Save changes — no server restart required
   - **Environment Variable Method**:
-    - Add `BRAVE_SEARCH_API_KEY=your_api_key` to your `config.env` file
+    - Set the `BRAVE_SEARCH_API_KEY` environment variable
     - Restart the server for changes to take effect
   - **Fallback**: System first checks admin panel configuration, then falls back to environment variable
 - **Returns**: Array of search results with:
