@@ -2754,6 +2754,22 @@
       "users": "Users",
       "dismiss": "Dismiss"
     },
+    "onboarding": {
+      "title": "First-run onboarding",
+      "description": "The setup wizard is shown to everyone until it has been completed. Turn it off if you configure iHub through platform.json, environment variables or configuration management.",
+      "disable": "Don't show the onboarding (setup wizard)",
+      "disableHint": "Nobody is redirected to /setup any more. An admin can still open /setup directly.",
+      "saved": "Onboarding setting saved",
+      "saveError": "Failed to save the onboarding setting",
+      "demoOk": "No demo account signs in with the shipped password.",
+      "demoWarn": "{{accounts}} still sign in with the shipped password. Change their passwords before you hide the onboarding.",
+      "demoWarnHidden": "{{accounts}} still sign in with the shipped password, but the login page does not list them.",
+      "usersLink": "Users",
+      "stateHidden": "Hidden for everyone",
+      "stateCompleted": "Completed",
+      "stateShown": "Shown until completed",
+      "manage": "Onboarding settings"
+    },
     "home": {
       "sections": {
         "loggingDesc": "Configure logging levels, components, metadata, and debug settings",
@@ -5045,6 +5061,8 @@
       "getStarted": "Get Started",
       "skipLater": "Skip, I'll configure later"
     },
+    "skipConfirm": "Skip the onboarding for good? It will not be shown again to anyone. You can turn it back on under Admin → Advanced.\n\nOK: don't show it again. Cancel: skip for this session only.",
+    "skipConfirmDemo": "Warning: {{accounts}} still sign in with the shipped password.\n\n",
     "step2Login": {
       "title": "Sign in to continue",
       "description": "An admin account is required to complete the initial setup.",

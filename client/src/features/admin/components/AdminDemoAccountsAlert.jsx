@@ -39,11 +39,15 @@ function writeDismissed() {
  *   admins, who may not call the endpoint).
  * @param {boolean} [props.authLinkVisible=true] - Link to Admin → Authentication.
  * @param {boolean} [props.usersLinkVisible=true] - Link to Admin → Users.
+ * @param {boolean} [props.inline=false] - Render the status inside a settings
+ *   page instead of as the global banner: always shown (a neutral line when
+ *   nothing needs attention), not dismissible.
  */
 export default function AdminDemoAccountsAlert({
   enabled = true,
   authLinkVisible = true,
-  usersLinkVisible = true
+  usersLinkVisible = true,
+  inline = false
 }) {
   const { t } = useTranslation();
   const { pathname } = useLocation();
@@ -51,7 +55,7 @@ export default function AdminDemoAccountsAlert({
   const [dismissed, setDismissed] = useState(readDismissed);
 
   useEffect(() => {
-    if (!enabled || dismissed) return undefined;
+    if (!enabled || (dismissed && !inline)) return undefined;
     let cancelled = false;
     makeAdminApiCall('/admin/auth/demo-accounts')
       .then(response => {
@@ -63,7 +67,49 @@ export default function AdminDemoAccountsAlert({
     return () => {
       cancelled = true;
     };
-  }, [enabled, dismissed, pathname]);
+  }, [enabled, dismissed, inline, pathname]);
+
+  if (inline) {
+    if (!enabled || !status) return null;
+    const accounts = status.accounts.join(', ');
+    const warn = status.accounts.length > 0;
+    return (
+      <div
+        role={warn ? 'alert' : 'status'}
+        className={`flex flex-wrap items-center gap-3 p-3 rounded-md border text-sm ${
+          warn
+            ? 'bg-amber-50 dark:bg-amber-900/30 border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-200'
+            : 'bg-gray-50 dark:bg-gray-900/40 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300'
+        }`}
+      >
+        {warn && <ExclamationTriangleIcon className="w-5 h-5 shrink-0" aria-hidden="true" />}
+        <p className="flex-1 min-w-0">
+          {warn
+            ? status.showDemoAccounts
+              ? t(
+                  'admin.onboarding.demoWarn',
+                  '{{accounts}} still sign in with the shipped password. Change their passwords before you hide the onboarding.',
+                  { accounts }
+                )
+              : t(
+                  'admin.onboarding.demoWarnHidden',
+                  '{{accounts}} still sign in with the shipped password, but the login page does not list them.',
+                  { accounts }
+                )
+            : t('admin.onboarding.demoOk', 'No demo account signs in with the shipped password.')}
+        </p>
+        {warn && usersLinkVisible && (
+          <Link
+            to="/admin/users"
+            className="font-medium underline hover:no-underline inline-flex items-center gap-1"
+          >
+            {t('admin.onboarding.usersLink', 'Users')}
+            <ArrowRightIcon className="w-3.5 h-3.5" aria-hidden="true" />
+          </Link>
+        )}
+      </div>
+    );
+  }
 
   // `enabled` can turn false after a fetch (e.g. the user is now a content admin only).
   if (!enabled || !status?.warn || dismissed) return null;
