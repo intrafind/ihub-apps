@@ -405,3 +405,34 @@ test('a body cut off at the size limit is reported as too large', async () => {
     err => err.messageKey === 'invalidResponse' && /too large/.test(err.message)
   );
 });
+
+test('OpenRouter: output modalities tell image and audio generators from chat models', () => {
+  const models = parseModelsResponse({
+    data: [
+      {
+        id: 'anthropic/claude-sonnet-4.5',
+        name: 'Anthropic: Claude Sonnet 4.5',
+        context_length: 200000,
+        architecture: { input_modalities: ['text', 'image'], output_modalities: ['text'] },
+        supported_parameters: ['tools', 'temperature'],
+        top_provider: { max_completion_tokens: 64000 }
+      },
+      {
+        id: 'black-forest-labs/flux-pro',
+        name: 'Flux Pro',
+        architecture: { input_modalities: ['text'], output_modalities: ['image'] }
+      },
+      {
+        id: 'vendor/speaker',
+        architecture: { input_modalities: ['text'], output_modalities: ['audio'] }
+      }
+    ]
+  });
+  const byId = Object.fromEntries(models.map(m => [m.id, m]));
+  assert.equal(byId['anthropic/claude-sonnet-4.5'].type, 'chat');
+  assert.equal(byId['anthropic/claude-sonnet-4.5'].supportsVision, true);
+  assert.equal(byId['anthropic/claude-sonnet-4.5'].supportsTools, true);
+  assert.equal(byId['anthropic/claude-sonnet-4.5'].maxOutputTokens, 64000);
+  assert.equal(byId['black-forest-labs/flux-pro'].type, 'image');
+  assert.equal(byId['vendor/speaker'].type, 'audio');
+});

@@ -1207,6 +1207,7 @@
         "provider": "Provider",
         "newProvider": "+ New provider",
         "providerHint": "The provider holds the API key for all imported models. Create one for a new endpoint, such as T-Systems LLM Hub.",
+        "presets": "Start from:",
         "usesProviderKey": "The API key stored on this provider is used.",
         "noProviderKey": "No API key is stored on this provider: its environment variable is used if set, otherwise the endpoint is called without a key.",
         "url": "Endpoint URL",
