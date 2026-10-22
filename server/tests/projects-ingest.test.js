@@ -2206,13 +2206,14 @@ describe('built-in cloud kinds', () => {
     await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
     base = `http://127.0.0.1:${server.address().port}`;
     const tokens = async () => ({ accessToken: 'token', providerId: 'p1', nextcloudUserId: 'ada' });
-    const { default: office365 } = await import('../services/integrations/Office365Service.js');
+    const { default: office365, downloadGuard } =
+      await import('../services/integrations/Office365Service.js');
     const { default: googleDrive } = await import('../services/integrations/GoogleDriveService.js');
     const { default: nextcloud } = await import('../services/integrations/NextcloudService.js');
     stub(office365, 'graphApiUrl', `${base}/graph`);
     stub(office365, 'getUserTokens', tokens);
     // The test server is on loopback: let it through, the real guard for the rest.
-    stub(office365, '_checkDownloadTarget', url =>
+    stub(downloadGuard, 'checkTarget', url =>
       url.hostname === '127.0.0.1' || url.hostname === 'localhost'
         ? { ok: true }
         : assertPublicTarget(url)
