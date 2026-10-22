@@ -32,6 +32,7 @@ import {
   projectListGroup,
   projectUsage,
   quotaState,
+  reconcileProjectForm,
   sharesToMembers,
   validateProjectForm
 } from '../../../client/src/features/projects/utils/projectView';
@@ -226,6 +227,29 @@ describe('project page rules', () => {
     ).toEqual({
       name: 'Case 2'
     });
+  });
+
+  test('takes another editor’s update into untouched fields only', () => {
+    const base = { name: 'Case', description: 'd', instructions: 'Be brief.' };
+    const form = { ...base, name: 'Case 2' };
+    const polled = {
+      id: 'prj_a',
+      name: 'Case',
+      description: 'd',
+      instructions: 'Answer in German.'
+    };
+    const next = reconcileProjectForm(form, base, polled);
+    expect(next.form).toEqual({
+      name: 'Case 2',
+      description: 'd',
+      instructions: 'Answer in German.'
+    });
+    // Only the user's own edit goes out; the other editor's text is kept.
+    expect(buildProjectChanges(next.form, next.base)).toEqual({ name: 'Case 2' });
+    // A field both changed keeps the user's text and still counts as a change.
+    const both = reconcileProjectForm({ ...base, instructions: 'Mine.' }, base, polled);
+    expect(both.form.instructions).toBe('Mine.');
+    expect(buildProjectChanges(both.form, both.base)).toEqual({ instructions: 'Mine.' });
   });
 
   test('computes quotas and whether a project may be created', () => {

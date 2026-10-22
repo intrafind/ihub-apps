@@ -288,6 +288,11 @@ jest.mock('../../../client/src/features/chat/components/ChatMessageList', () => 
     <div data-testid="transcript">{messages.map(m => m.content).join('|')}</div>
   )
 }));
+// The project chip: only the project it is handed.
+jest.mock('../../../client/src/features/projects/components/ChatProjectBar', () => ({
+  __esModule: true,
+  default: ({ projectId }) => <div data-testid="project-bar">{projectId || ''}</div>
+}));
 // A real <form> bound to `formRef`, because the auto-send path dispatches a
 // submit event on it — that is how the start-page handoff sends its message.
 jest.mock('../../../client/src/features/chat/components/ChatInput', () => ({
@@ -556,6 +561,39 @@ describe('a chat started from a project page', () => {
         expect.any(Array),
         expect.objectContaining({ projectId: 'prj_case' })
       );
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  test('an app that starts itself keeps the project once the URL names the chat', async () => {
+    jest.useFakeTimers();
+    try {
+      renderChat({ path: '/apps/acme?project=prj_case', app: { ...APP, autoStart: true } });
+      // The auto-start timer is 300 ms.
+      await act(async () => {
+        jest.advanceTimersByTime(1000);
+      });
+      expect(mockStreams).toHaveLength(1);
+      const chatId = mockStreams[0].split('/').pop();
+
+      await act(async () => {
+        await mockEventSource.onEvent({
+          type: SSE_V2_EVENTS.STREAM_CONNECTED,
+          envelope: { type: SSE_V2_EVENTS.STREAM_CONNECTED, seq: 0, data: {} }
+        });
+      });
+      expect(sendAppChatMessage).toHaveBeenCalledWith(
+        'acme',
+        chatId,
+        expect.any(Array),
+        expect.objectContaining({ projectId: 'prj_case' })
+      );
+
+      // The blank turn started the chat: the URL is pinned to it and drops
+      // `?project=`, but the chat still runs in the project.
+      expect(screen.getByTestId('location')).toHaveTextContent(`/apps/acme/c/${chatId}`);
+      expect(screen.getAllByTestId('project-bar')[0]).toHaveTextContent('prj_case');
     } finally {
       jest.useRealTimers();
     }

@@ -1453,6 +1453,9 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
             outputFormat: selectedOutputFormat
           }
         });
+        // As for a typed first turn: keep the project once the URL drops
+        // `?project=` for `/c/:chatId` (this blank turn starts the chat too).
+        if (containerProjectId) setChatProjectId(prev => prev || containerProjectId);
       }, 300); // Small delay to ensure everything is initialized
     }
   }, [

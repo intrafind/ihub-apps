@@ -6,7 +6,8 @@ import { ITEM_POLL_INTERVAL_MS, hasActiveItems } from '../utils/projectItems';
 
 /**
  * Loads one project and keeps its items current: while any item is
- * `pending` or `extracting`, the project is read again every
+ * `pending` or `extracting`, or being refreshed (`refreshingAt`), the
+ * project is read again every
  * {@link ITEM_POLL_INTERVAL_MS} ms until every item has settled. The admin
  * editor and the user project page share it; each passes its own loader.
  *
@@ -35,6 +36,18 @@ export function usePolledProject(projectId, { load, errorMessage }) {
   const [project, setProject] = useState(null);
   const [loading, setLoading] = useState(Boolean(projectId));
   const [error, setError] = useState(null);
+  // Another project id (React Router keeps the page mounted when only the
+  // `:projectId` param changes): drop the previous project and its error
+  // before the first load of the new one, so the page shows its loading
+  // state instead of the old project's items under the new URL (state
+  // adjusted during render, so not even one frame shows the old project).
+  const [shownId, setShownId] = useState(projectId);
+  if (shownId !== projectId) {
+    setShownId(projectId);
+    setProject(null);
+    setError(null);
+    setLoading(Boolean(projectId));
+  }
   // Ignore answers for a project the page no longer shows.
   const currentIdRef = useRef(projectId);
   currentIdRef.current = projectId;

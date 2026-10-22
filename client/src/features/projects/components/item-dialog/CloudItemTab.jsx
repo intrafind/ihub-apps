@@ -1,12 +1,16 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Office365FileBrowser from '../../../upload/components/Office365FileBrowser';
 import GoogleDriveFileBrowser from '../../../upload/components/GoogleDriveFileBrowser';
 import NextcloudFileBrowser from '../../../upload/components/NextcloudFileBrowser';
-import { buildCloudItemRequests, cloudProvidersForKind } from '../../utils/projectItems';
+import {
+  buildCloudItemRequests,
+  cloudBrowserUploadConfig,
+  cloudProvidersForKind
+} from '../../utils/projectItems';
 import { INPUT_CLASS, LABEL_CLASS } from './dialogStyles';
 
 /** The cloud file browser of each cloud kind (the ones the chat upload uses). */
@@ -46,11 +50,13 @@ async function addAll(api, projectId, requests) {
  * @param {{id: string, picker?: {provider?: string}}|undefined} props.kindEntry - From `_config.kinds`.
  * @param {string} props.projectId
  * @param {Object} props.api - See `AddProjectItemDialog`.
+ * @param {Object|null} [props.config] - `_config`; its `limits.maxFileBytes`
+ *   caps the files the browser lets the user pick.
  * @param {(item: Object) => void} props.onAdded
  * @param {() => void} props.onClose
  * @returns {JSX.Element}
  */
-function CloudItemTab({ kind, kindEntry, projectId, api, onAdded, onClose }) {
+function CloudItemTab({ kind, kindEntry, projectId, api, config = null, onAdded, onClose }) {
   const { t } = useTranslation();
   const [providers, setProviders] = useState(null);
   const [providerId, setProviderId] = useState('');
@@ -78,6 +84,7 @@ function CloudItemTab({ kind, kindEntry, projectId, api, onAdded, onClose }) {
   const matching = cloudProvidersForKind(providers, kindEntry || kind);
   const provider = matching.find(entry => entry.id === providerId) || matching[0] || null;
   const Browser = BROWSERS[kind];
+  const uploadConfig = useMemo(() => cloudBrowserUploadConfig(config), [config]);
 
   const handlePick = async (files, drive) => {
     if (!provider) return;
@@ -149,6 +156,7 @@ function CloudItemTab({ kind, kindEntry, projectId, api, onAdded, onClose }) {
               <Browser
                 key={provider.id}
                 provider={provider}
+                uploadConfig={uploadConfig}
                 onClose={onClose}
                 onPick={handlePick}
                 pickLabel={t('projects.addItem.cloudAdd', 'Add to project')}

@@ -93,6 +93,8 @@ const mockI18n = { t: mockT, i18n: { language: 'en-GB' } };
 jest.mock('react-i18next', () => ({ useTranslation: () => mockI18n }));
 
 const ProjectPage = require('../../../client/src/features/projects/pages/ProjectPage').default;
+const ProjectSettingsCard =
+  require('../../../client/src/features/projects/components/ProjectSettingsCard').default;
 const {
   invalidateProjectsConfig,
   invalidateProjectsList
@@ -223,6 +225,31 @@ describe('ProjectPage – owner', () => {
       })
     );
     expect(await screen.findByText('Saved.')).toBeInTheDocument();
+  });
+
+  test('follows a refresh until the new snapshot is stored', async () => {
+    // A refresh keeps the item `ready` (its old snapshot stays readable) and
+    // marks it with `refreshingAt` until the queued job has stored the new one.
+    const refreshing = { ...ITEMS[0], refreshingAt: '2026-10-22T09:00:00Z' };
+    const refreshed = { ...ITEMS[0], snapshotAt: '2026-10-22T09:00:05Z' };
+    mockApi.fetchProject
+      .mockResolvedValueOnce(makeProject())
+      .mockResolvedValueOnce(makeProject({ items: [refreshing, ITEMS[1]] }))
+      .mockResolvedValue(makeProject({ items: [refreshed, ITEMS[1]] }));
+    mockApi.refreshProjectItem.mockResolvedValue(refreshing);
+    renderPage();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Refresh' }));
+    await waitFor(() =>
+      expect(mockApi.refreshProjectItem).toHaveBeenCalledWith('prj_a', 'itm_ready')
+    );
+    expect(screen.getByText('text taken 12 Oct 2026')).toBeInTheDocument();
+
+    // The page keeps polling while the item is being refreshed.
+    expect(
+      await screen.findByText('text taken 22 Oct 2026', {}, { timeout: 4000 })
+    ).toBeInTheDocument();
+    expect(mockApi.fetchProject).toHaveBeenCalledTimes(3);
   });
 
   test('pins an item and deletes the project after confirmation', async () => {
@@ -364,5 +391,44 @@ describe('ProjectPage – members and read-only', () => {
     expect(
       await screen.findByText('This project does not exist or you no longer have access to it.')
     ).toBeInTheDocument();
+  });
+});
+
+describe('ProjectSettingsCard – a newer copy arrives while editing', () => {
+  test('takes another editor’s instructions and sends only the local edit', async () => {
+    const onSaved = jest.fn();
+    const first = makeProject();
+    const { rerender } = render(<ProjectSettingsCard project={first} editable onSaved={onSaved} />);
+    // A poll (an item is still extracting) brings another editor's update.
+    rerender(
+      <ProjectSettingsCard
+        project={makeProject({ instructions: 'Answer in German.' })}
+        editable
+        onSaved={onSaved}
+      />
+    );
+    expect(screen.getByLabelText('Instructions')).toHaveValue('Answer in German.');
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+
+    // An unsaved local edit survives the next poll.
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Case 2026-115' } });
+    rerender(
+      <ProjectSettingsCard
+        project={makeProject({ instructions: 'Answer in German.', usage: { items: 3 } })}
+        editable
+        onSaved={onSaved}
+      />
+    );
+    expect(screen.getByLabelText('Name')).toHaveValue('Case 2026-115');
+
+    mockApi.updateProject.mockResolvedValue(
+      makeProject({ name: 'Case 2026-115', instructions: 'Answer in German.' })
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() =>
+      expect(mockApi.updateProject).toHaveBeenCalledWith('prj_a', { name: 'Case 2026-115' })
+    );
+    expect(await screen.findByText('Saved.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
   });
 });
