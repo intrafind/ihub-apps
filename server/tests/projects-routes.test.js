@@ -43,6 +43,7 @@ const CAROL = { id: 'user-carol', name: 'Carol Shaw', groups: ['engineers'] };
 const EDITOR = { id: 'user-editor', name: 'Content Editor', groups: ['editors'] };
 const ROOT = { id: 'user-root', name: 'Root', groups: ['admins'] };
 const NOBODY = { id: 'user-nobody', name: 'No Projects', groups: ['readers'] };
+const RUNNER = { id: 'user-runner', name: 'Workflow Runner', groups: ['runners'] };
 const THIRD_PARTY = { ...GRACE, authMode: 'oauth_authorization_code' };
 
 let scratch;
@@ -231,6 +232,11 @@ before(async () => {
           id: 'readers',
           name: 'Readers',
           permissions: { apps: ['support'] }
+        },
+        runners: {
+          id: 'runners',
+          name: 'Runners',
+          permissions: { apps: ['chat'], workflows: ['wf-link'] }
         },
         authenticated: {
           id: 'authenticated',
@@ -552,6 +558,26 @@ describe('admin projects', () => {
     );
   });
 
+  it('is reached through a workflow by the same rule that lets the user run it', async () => {
+    // `allowedGroups` is not part of the execution policy (`permissions.workflows`
+    // is), so it must not hide the linked project from a user who may run it.
+    configCache.setCacheEntry('config/workflows.json', [
+      { id: 'wf-link', enabled: true, allowedGroups: ['other'], projects: ['faq'], nodes: [] }
+    ]);
+    try {
+      const linked = await drive(route.get, { user: RUNNER, params: { projectId: 'faq' } });
+      assert.equal(linked.statusCode, 200, JSON.stringify(linked.body));
+      assert.equal(linked.body.role, 'linked');
+      assert.equal(
+        (await drive(route.get, { user: GRACE, params: { projectId: 'faq' } })).statusCode,
+        404,
+        'without the workflow permission the project stays hidden'
+      );
+    } finally {
+      configCache.setCacheEntry('config/workflows.json', []);
+    }
+  });
+
   it('cannot be deleted while linked, and disabling hides it from users', async () => {
     const deps = await drive(route.adminDeps, { user: EDITOR, params: { id: 'faq' } });
     assert.deepEqual(deps.body.dependencies, [{ type: 'app', id: 'support', name: 'Support' }]);
@@ -733,5 +759,42 @@ describe('chats in a project', () => {
     assert.equal(out.statusCode, 200);
     assert.equal(out.body.chat.projectId, null);
     assert.deepEqual(await getProjectRepository().listChatMarkers(project.id), []);
+  });
+
+  it('keeps a chat that moved on while its old project is deleted', async () => {
+    const chats = getChatRepository();
+    const chat = await chats.ensureChat({
+      chatId: 'chat-move-2',
+      ownerId: ADA.id,
+      appId: 'chat',
+      title: 'Nomad'
+    });
+    const first = await create(ADA, { name: 'First' });
+    const second = await create(ADA, { name: 'Second' });
+    const into = await drive(route.chatPatch, {
+      user: ADA,
+      params: { chatId: chat.id },
+      body: { projectId: first.id }
+    });
+    assert.equal(into.statusCode, 200, JSON.stringify(into.body));
+    // The association only changes while the chat is still where the caller
+    // saw it: a stale expectation leaves it alone.
+    const stale = await chats.moveProjectIf(chat.id, 'prj_elsewhere', null);
+    assert.equal(stale.moved, false);
+    assert.equal(stale.chat.projectId, first.id);
+    const onward = await drive(route.chatPatch, {
+      user: ADA,
+      params: { chatId: chat.id },
+      body: { projectId: second.id }
+    });
+    assert.equal(onward.statusCode, 200, JSON.stringify(onward.body));
+    // Deleting the first project detaches only chats that still point at it.
+    const gone = await drive(route.remove, { user: ADA, params: { projectId: first.id } });
+    assert.equal(gone.statusCode, 204);
+    assert.equal((await chats.getChat(chat.id)).projectId, second.id);
+    assert.deepEqual(
+      (await getProjectRepository().listChatMarkers(second.id)).map(m => m.chatId),
+      [chat.id]
+    );
   });
 });

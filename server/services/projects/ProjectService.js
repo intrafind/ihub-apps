@@ -32,6 +32,8 @@ import { projectSettings } from './projectSettings.js';
 import { findDependencies } from './projectLinks.js';
 
 const COMPONENT = 'ProjectService';
+/** How often one project's activity is refreshed by chat turns at most. */
+export const ACTIVITY_THROTTLE_MS = 5 * 60 * 1000;
 
 export { ProjectError, STATUS_BY_CODE } from './projectErrors.js';
 
@@ -87,6 +89,8 @@ export class ProjectService {
     this.onDeleted = [];
     /** Hooks called with `(projectId, itemId, item)` after an item's text is gone or replaced. */
     this.onItemRemoved = [];
+    /** projectId -> when a chat turn last refreshed its activity. */
+    this.activityTouched = new Map();
   }
 
   settings() {
@@ -150,8 +154,9 @@ export class ProjectService {
         limit: limits.maxFiles
       });
     }
-    for (const item of project.items || [])
-      this._checkKindRef(item.kind, item.ref, { admin: true });
+    // A new project is made of new items: a kind that is switched off is
+    // refused here exactly as the item endpoints refuse it.
+    for (const item of project.items || []) this._checkKindRef(item.kind, item.ref);
     try {
       return await this.repository.createAdmin(project, { actor: actorOf(actor) });
     } catch (error) {
@@ -188,7 +193,7 @@ export class ProjectService {
           }
           return changed ? project : null;
         },
-        { actor: actorOf(actor), authorize, touchActivity: false }
+        { actor: actorOf(actor), authorize, touchActivity: true }
       );
     } catch (error) {
       throw translateError(error);
@@ -512,7 +517,9 @@ export class ProjectService {
           item.updatedAt = nowIso();
           return project;
         },
-        { actor: actorOf(user), authorize, touchActivity: false }
+        // Someone renaming or pinning a document is using the project:
+        // retention must not count the project as abandoned.
+        { actor: actorOf(user), authorize, touchActivity: true }
       );
     } catch (error) {
       throw translateError(error);
@@ -678,6 +685,26 @@ export class ProjectService {
       'project activity',
       { component: COMPONENT, projectId }
     );
+  }
+
+  /**
+   * A chat turn ran inside the project: refresh its activity, at most once
+   * per {@link ACTIVITY_THROTTLE_MS} per project so a busy chat does not
+   * rewrite the project document on every message. Never throws; the turn
+   * must not fail because the project could not be touched.
+   *
+   * @param {string} projectId
+   * @returns {Promise<boolean>} Whether the project was touched.
+   */
+  async noteChatTurn(projectId) {
+    if (!projectId || !this.repository.isAvailable()) return false;
+    const last = this.activityTouched.get(projectId) || 0;
+    const at = Date.now();
+    if (at - last < ACTIVITY_THROTTLE_MS) return false;
+    this.activityTouched.set(projectId, at);
+    const touched = await this.touchActivity(projectId);
+    if (!touched) this.activityTouched.delete(projectId);
+    return Boolean(touched);
   }
 }
 

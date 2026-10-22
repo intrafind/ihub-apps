@@ -43,6 +43,7 @@ import {
 } from '../utils/responseHelpers.js';
 import configCache from '../configCache.js';
 import { logAudit } from '../services/AuditLogService.js';
+import logger from '../utils/logger.js';
 import runLog from '../services/loop/RunLog.js';
 import { resolvePrincipal } from '../services/loop/runIdentity.js';
 import { authorizeChat } from '../services/chat/chatAccess.js';
@@ -234,19 +235,36 @@ async function moveChatToProject(req, res, repository, chat) {
   }
   if ((chat.projectId || null) === targetId) return chat;
   const service = getProjectService();
-  const updated = await repository.updateChat(chat.id, { projectId: targetId });
+  const from = chat.projectId || null;
+  // Compared under the chat's lock: a move that raced this one wins, and the
+  // caller learns the chat is no longer where they saw it.
+  const { chat: updated, moved } = await repository.moveProjectIf(chat.id, from, targetId);
   if (!updated) {
     sendNotFound(res, 'Chat');
     return null;
   }
-  if (chat.projectId) await service.detachChat(chat.projectId, chat.id).catch(() => {});
+  if (!moved) {
+    sendErrorResponse(res, 409, 'The chat was moved by someone else; reload and try again', {
+      details: { code: 'CHAT_MOVED' }
+    });
+    return null;
+  }
+  if (from) await service.detachChat(from, chat.id).catch(() => {});
   if (targetId) {
     try {
       await service.attachChat(targetId, chat.id, { ownerId: chat.ownerId || null });
     } catch (error) {
       // Without its marker the chat would be missing from the project's
-      // list: put the chat back where it was and report the failure.
-      await repository.updateChat(chat.id, { projectId: chat.projectId || null }).catch(() => {});
+      // list: put the chat back where it was, marker included, and report
+      // the failure. The rollback is itself compared, so a newer move that
+      // landed in between is kept.
+      const rollback = await repository.moveProjectIf(chat.id, targetId, from).catch(failure => {
+        logger.warn('Chat move rollback failed', { chatId: chat.id, error: failure?.message });
+        return { moved: false };
+      });
+      if (rollback.moved && from) {
+        await service.attachChat(from, chat.id, { ownerId: chat.ownerId || null }).catch(() => {});
+      }
       throw error;
     }
   }

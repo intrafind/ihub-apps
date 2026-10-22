@@ -81,7 +81,7 @@ export async function sweepProjects({ retentionDays, now = Date.now } = {}) {
         // document loaded under its lock, so activity since then keeps it.
         authorize: expired,
         detachChat: chatId =>
-          chats.isAvailable() ? chats.updateChat(chatId, { projectId: null }) : null
+          chats.isAvailable() ? chats.moveProjectIf(chatId, project.id, null) : null
       });
       if (!removed) continue;
       deleted += 1;

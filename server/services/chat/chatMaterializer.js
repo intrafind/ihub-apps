@@ -51,6 +51,7 @@ export function boundStoredAuthPrompts(prompts) {
 }
 import logger from '../../utils/logger.js';
 import { deriveChatTitle } from './ChatRepository.js';
+import { getProjectService } from '../projects/ProjectService.js';
 import { getArtifactRepository } from '../artifacts/ArtifactRepository.js';
 import { artifactPolicy } from '../artifacts/artifactPolicy.js';
 
@@ -339,6 +340,14 @@ export async function materializeUserTurn({
       },
       replaceFromMessageId ? { replaceFromMessageId } : {}
     );
+    // A turn inside a project is activity on the project (retention counts
+    // conversations, not only attachments); throttled and never fatal.
+    const projectId = chatPatch?.projectId ?? chat.projectId ?? null;
+    if (appended?.message && projectId) {
+      getProjectService()
+        .noteChatTurn(projectId)
+        .catch(() => {});
+    }
     return appended?.message ?? null;
   } catch (error) {
     logger.error('Chat user turn not materialized', {
