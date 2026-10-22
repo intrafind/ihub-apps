@@ -50,8 +50,9 @@ function makeCtx(dir) {
         throw error;
       }
       if (!pattern) return entries;
-      const regex = new RegExp(`^${pattern.replace(/\./g, '\\.').replace(/\*/g, '.*')}$`);
-      return entries.filter(entry => regex.test(entry));
+      // Only `*.json` style patterns are used here.
+      const suffix = pattern.replace(/^\*/, '');
+      return entries.filter(entry => entry.endsWith(suffix));
     },
     readDefaultJson: async rel => {
       if (rel !== 'projects/intrafind-website.json') throw new Error('ENOENT');
@@ -261,6 +262,48 @@ describe('V176 — one IntraFind website project', () => {
       'intrafind-website-ihub'
     ]);
     assert.ok(ctx.logs.some(([, message]) => message.includes('not merged')));
+  });
+
+  it('leaves a project whose page was replaced or that gained an item', async () => {
+    const dir = path.join(baseDir, 'replaced');
+    const replaced = oldProject('intrafind-website-ihub');
+    replaced.items[0].ref.url = 'https://example.com/our-own-page';
+    const extra = oldProject('intrafind-website-iassistant');
+    extra.items.push({
+      ...extra.items[0],
+      id: 'itm_more',
+      ref: { url: 'https://example.com/more' }
+    });
+    await seed(dir, {
+      projects: { 'intrafind-website-ihub': replaced, 'intrafind-website-iassistant': extra }
+    });
+    await up(makeCtx(dir));
+    assert.equal(await exists(dir, 'projects/intrafind-website-ihub.json'), true);
+    assert.equal(await exists(dir, 'projects/intrafind-website-iassistant.json'), true);
+    assert.equal(await exists(dir, 'projects/intrafind-website-home.json'), false);
+  });
+
+  it('accepts the shipped page with a trailing slash and stops when a directory cannot be listed', async () => {
+    const dir = path.join(baseDir, 'slash');
+    const slash = oldProject('intrafind-website-home');
+    slash.items[0].ref.url = 'https://www.intrafind.com/';
+    await seed(dir, {
+      ids: ['intrafind-website-home'],
+      projects: { 'intrafind-website-home': slash }
+    });
+    const ctx = makeCtx(dir);
+    const failing = {
+      ...ctx,
+      listFiles: async directory => {
+        if (directory === 'workflows') throw new Error('EACCES');
+        return ctx.listFiles(directory, '*.json');
+      }
+    };
+    await assert.rejects(up(failing), /EACCES/);
+    // Nothing was deleted: the links could not be checked.
+    assert.equal(await exists(dir, 'projects/intrafind-website-home.json'), true);
+    await up(makeCtx(dir));
+    assert.equal(await exists(dir, 'projects/intrafind-website-home.json'), false);
   });
 
   it('does nothing twice', async () => {

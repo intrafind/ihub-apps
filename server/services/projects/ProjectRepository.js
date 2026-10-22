@@ -395,7 +395,9 @@ export class ProjectRepository {
    * @throws {StorageError} Code `PROJECT_EXISTS`.
    */
   async createAdmin(project, { actor = null, now = new Date().toISOString() } = {}) {
-    if (!isAdminProjectId(project?.id)) {
+    // `new` is the admin route of the create form: a project of that id could
+    // not be opened. Projects that already carry it keep loading.
+    if (!isAdminProjectId(project?.id) || String(project.id).toLowerCase() === 'new') {
       throw new StorageError('Invalid admin project id', { code: 'INVALID_KEY' });
     }
     const stored = {

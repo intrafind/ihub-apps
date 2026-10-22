@@ -337,6 +337,9 @@ describe('admin projects', () => {
     await assert.rejects(repo.createAdmin({ id: 'prj_x', name: { en: 'x' } }));
     await assert.rejects(repo.createAdmin({ id: '../x', name: { en: 'x' } }));
     await assert.rejects(repo.createAdmin({ id: 'case__archive', name: { en: 'x' } }));
+    // The admin route of the create form: a project of that id could not be opened.
+    await assert.rejects(repo.createAdmin({ id: 'new', name: { en: 'x' } }));
+    await assert.rejects(repo.createAdmin({ id: 'NEW', name: { en: 'x' } }));
     assert.equal(await repo.get('../x'), null);
   });
 

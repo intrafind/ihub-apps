@@ -245,6 +245,7 @@ function AdminProjectEditPage() {
 
   const handleRefresh = item =>
     runItemAction(item, async () => {
+      clearEstimate();
       replaceItem(await refreshAdminProjectItem(id, item.id));
       await reload();
     });
@@ -252,6 +253,7 @@ function AdminProjectEditPage() {
   const handleRemove = async () => {
     const item = removeItem;
     setRemoveItem(null);
+    clearEstimate();
     await runItemAction(item, async () => {
       await deleteAdminProjectItem(id, item.id);
       setProject(prev =>
@@ -261,6 +263,7 @@ function AdminProjectEditPage() {
   };
 
   const handleTransferDone = () => {
+    clearEstimate();
     setSelectedItemIds(new Set());
     void reload();
   };
@@ -661,7 +664,11 @@ function AdminProjectEditPage() {
               kinds={kinds}
               config={config}
               api={ADMIN_ITEM_API}
-              onAdded={() => void reload()}
+              onAdded={() => {
+                // The items changed: an estimate of the old set no longer holds.
+                clearEstimate();
+                void reload();
+              }}
             />
           )}
           <ProjectItemTextDialog
@@ -671,6 +678,7 @@ function AdminProjectEditPage() {
             fetchText={fetchAdminItemText}
             onSave={async text => {
               const updated = await updateAdminProjectItemText(id, previewItem.id, text);
+              clearEstimate();
               replaceItem(updated);
               return updated;
             }}
@@ -689,6 +697,7 @@ function AdminProjectEditPage() {
             isOpen={historyOpen}
             onClose={() => setHistoryOpen(false)}
             resource="project"
+            readOnly
             resourceId={id}
           />
         </>

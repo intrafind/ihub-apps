@@ -3929,7 +3929,8 @@
         "noInstructions": "No instructions.",
         "instructionsHint": "The instructions are added to the system prompt of every app, workflow step or agent that links this project.",
         "usedBy": "Used by",
-        "notLinked": "No app, workflow or agent links this project."
+        "notLinked": "No app, workflow or agent links this project.",
+        "usedByFailed": "The apps, workflows and agents that link this project could not be loaded."
       }
     }
   },
@@ -6504,7 +6505,6 @@
       "total": "~{{tokens}} tokens in total",
       "budget": "{{percent}} % of the {{budget}} tokens a prompt may load in full",
       "minContext": "A model needs a context window of about {{tokens}} tokens to load it in full (the prompt takes at most 40 % of it).",
-      "unmeasured": "{{count}} documents could not be read and are not counted.",
       "approximate": "An estimate: the model counts its own tokens, within about 10–20 %.",
       "recommendation": {
         "prompt": "Recommendation: in the prompt",
@@ -6528,7 +6528,9 @@
         "dynamic": "The search terms decide what is read; it is never loaded in full",
         "partial": "Only part of the text could be read",
         "unmeasured": "Could not be read"
-      }
+      },
+      "unmeasured_one": "{{count}} document could not be read and is not counted.",
+      "unmeasured_other": "{{count}} documents could not be read and are not counted."
     },
     "attach": {
       "add": "Add project",

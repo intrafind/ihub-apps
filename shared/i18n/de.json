@@ -4212,7 +4212,8 @@
         "noInstructions": "Keine Anweisungen.",
         "instructionsHint": "Die Anweisungen werden dem System-Prompt jeder App, jedes Workflow-Schritts und jedes Agenten hinzugefügt, die dieses Projekt verknüpfen.",
         "usedBy": "Verwendet von",
-        "notLinked": "Keine App, kein Workflow und kein Agent verknüpft dieses Projekt."
+        "notLinked": "Keine App, kein Workflow und kein Agent verknüpft dieses Projekt.",
+        "usedByFailed": "Die Apps, Workflows und Agenten, die dieses Projekt verknüpfen, konnten nicht geladen werden."
       }
     }
   },
@@ -6469,7 +6470,6 @@
       "total": "~{{tokens}} Tokens insgesamt",
       "budget": "{{percent}} % der {{budget}} Tokens, die ein Prompt vollständig laden darf",
       "minContext": "Ein Modell braucht ein Kontextfenster von etwa {{tokens}} Tokens, um es vollständig zu laden (der Prompt nutzt höchstens 40 % davon).",
-      "unmeasured": "{{count}} Dokumente konnten nicht gelesen werden und sind nicht mitgezählt.",
       "approximate": "Eine Schätzung: Das Modell zählt seine Tokens selbst, die Abweichung liegt bei etwa 10–20 %.",
       "recommendation": {
         "prompt": "Empfehlung: in den Prompt",
@@ -6493,7 +6493,9 @@
         "dynamic": "Die Suchbegriffe bestimmen, was gelesen wird; es wird nie vollständig geladen",
         "partial": "Nur ein Teil des Textes konnte gelesen werden",
         "unmeasured": "Konnte nicht gelesen werden"
-      }
+      },
+      "unmeasured_one": "{{count}} Dokument konnte nicht gelesen werden und ist nicht mitgezählt.",
+      "unmeasured_other": "{{count}} Dokumente konnten nicht gelesen werden und sind nicht mitgezählt."
     },
     "attach": {
       "add": "Projekt hinzufügen",

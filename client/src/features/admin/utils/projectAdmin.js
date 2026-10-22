@@ -191,7 +191,8 @@ export function validateProjectId(id) {
   if (!value) return 'required';
   if (value.length > MAX_PROJECT_ID_LENGTH) return 'tooLong';
   if (!PROJECT_ID_PATTERN.test(value)) return 'invalid';
-  if (value.startsWith(USER_PROJECT_ID_PREFIX)) return 'reserved';
+  // `new` is the route of the create form.
+  if (value.startsWith(USER_PROJECT_ID_PREFIX) || value.toLowerCase() === 'new') return 'reserved';
   return null;
 }
 

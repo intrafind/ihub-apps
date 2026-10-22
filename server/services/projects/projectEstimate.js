@@ -99,22 +99,32 @@ export async function estimateProject(
     }
     const at = Date.now();
     try {
+      // A stored text was counted when it was extracted: use that count and
+      // neither decrypt nor tokenize a text of up to 10 MB again.
+      const stored =
+        item.storage === 'text' &&
+        (item.status === 'ready' || item.status === 'stale') &&
+        Number.isFinite(item.text?.tokens)
+          ? item.text
+          : null;
       const {
         text,
         truncated,
         failed = []
-      } = await getItemText(project, item, {
-        user,
-        chatId: `project-estimate-${project.id}-${item.id}`,
-        language,
-        purpose: 'estimate'
-      });
-      const tokens = estimateTokens(text);
+      } = stored
+        ? { text: null, truncated: stored.truncated === true }
+        : await getItemText(project, item, {
+            user,
+            chatId: `project-estimate-${project.id}-${item.id}`,
+            language,
+            purpose: 'estimate'
+          });
+      const tokens = stored ? stored.tokens : estimateTokens(text);
       total += tokens;
       items.push({
         ...base,
         ok: true,
-        chars: text.length,
+        chars: stored ? (stored.chars ?? null) : text.length,
         tokens,
         // The source handed over only the start of the document, or lacks
         // documents it could not fetch: the real size is larger.

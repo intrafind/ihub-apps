@@ -60,7 +60,9 @@ function AdminProjectViewPage() {
   const navigate = useNavigate();
   const { project, setProject, loading, error: loadError } = useAdminProject(id);
   const [kinds, setKinds] = useState([]);
-  const [dependencies, setDependencies] = useState([]);
+  // `null` until the lookup answered; an error is not an empty list.
+  const [dependencies, setDependencies] = useState(null);
+  const [dependenciesFailed, setDependenciesFailed] = useState(false);
   const [previewItem, setPreviewItem] = useState(null);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [testing, setTesting] = useState(false);
@@ -80,9 +82,13 @@ function AdminProjectViewPage() {
     fetchAdminProjectKinds()
       .then(setKinds)
       .catch(err => console.error('Failed to load item kinds:', err));
+    setDependenciesFailed(false);
     fetchAdminProjectDependencies(id)
       .then(setDependencies)
-      .catch(err => console.error('Failed to load project links:', err));
+      .catch(err => {
+        console.error('Failed to load project links:', err);
+        setDependenciesFailed(true);
+      });
   }, [id]);
 
   const handleTest = async () => {
@@ -279,7 +285,18 @@ function AdminProjectViewPage() {
           </Card>
 
           <Card title={t('admin.projects.view.usedBy', 'Used by')}>
-            {dependencies.length === 0 ? (
+            {dependenciesFailed ? (
+              <p role="alert" className="text-sm text-red-600 dark:text-red-400">
+                {t(
+                  'admin.projects.view.usedByFailed',
+                  'The apps, workflows and agents that link this project could not be loaded.'
+                )}
+              </p>
+            ) : dependencies === null ? (
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                {t('common.loading', 'Loading...')}
+              </p>
+            ) : dependencies.length === 0 ? (
               <p className="text-sm text-gray-500 dark:text-gray-400">
                 {t(
                   'admin.projects.view.notLinked',
@@ -347,6 +364,7 @@ function AdminProjectViewPage() {
         isOpen={historyOpen}
         onClose={() => setHistoryOpen(false)}
         resource="project"
+        readOnly
         resourceId={id}
       />
     </div>

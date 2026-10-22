@@ -171,6 +171,8 @@ describe('estimateProject', () => {
     assert.equal(byId.itm_broken.ok, false);
     assert.equal(byId.itm_broken.code, 'ITEM_NOT_READY');
 
+    // A stored text is counted from its extraction, not tokenized again.
+    assert.equal(byId.itm_small.tokens, project.items.find(e => e.id === 'itm_small').text.tokens);
     assert.equal(estimate.tokens, byId.itm_small.tokens + byId.itm_large.tokens);
     assert.equal(estimate.unmeasured, 1, 'the dynamic search is not a failure; the broken item is');
     assert.equal(estimate.budgetTokens, 50000);

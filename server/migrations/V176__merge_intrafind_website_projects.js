@@ -39,14 +39,16 @@ const TARGET_ID = 'intrafind-website';
  * Snapshot as of V176 — do NOT replace with a read of server/defaults/projects/:
  * the shipped projects change, this migration must not.
  */
-export const MERGED_PROJECT_IDS = Object.freeze([
-  'intrafind-website-home',
-  'intrafind-website-ifinder',
-  'intrafind-website-ifinder-features',
-  'intrafind-website-ifinder-connectors',
-  'intrafind-website-iassistant',
-  'intrafind-website-ihub'
-]);
+const SHIPPED_PAGES = Object.freeze({
+  'intrafind-website-home': 'https://www.intrafind.com',
+  'intrafind-website-ifinder': 'https://intrafind.com/en/ifinder',
+  'intrafind-website-ifinder-features': 'https://intrafind.com/en/ifinder/features',
+  'intrafind-website-ifinder-connectors': 'https://intrafind.com/en/ifinder/connectors',
+  'intrafind-website-iassistant': 'https://intrafind.com/en/iassistant',
+  'intrafind-website-ihub': 'https://intrafind.com/en/ihub'
+});
+
+export const MERGED_PROJECT_IDS = Object.freeze(Object.keys(SHIPPED_PAGES));
 
 const LINK_MODES = ['auto', 'context', 'tools'];
 
@@ -88,13 +90,25 @@ export function relinkList(list, fromIds, toId) {
   return result;
 }
 
-/** Whether a project is still the shipped shape: web pages only, no instructions. */
+const withoutTrailingSlash = url => String(url || '').replace(/\/+$/, '');
+
+/**
+ * Whether a project is still the shipped shape: its one web page, no
+ * instructions. Settings of the item (cache time, length limit) may differ; a
+ * replaced page or a further item is an admin's change and keeps the project.
+ */
 function isPlainWebsiteProject(project) {
   if (!project || typeof project !== 'object') return false;
   if (project.ownership !== 'admin') return false;
   if (typeof project.instructions === 'string' && project.instructions.trim()) return false;
   const items = Array.isArray(project.items) ? project.items : [];
-  return items.length > 0 && items.every(item => item?.kind === 'url' && item?.storage === 'link');
+  if (items.length !== 1) return false;
+  const [item] = items;
+  return (
+    item?.kind === 'url' &&
+    item?.storage === 'link' &&
+    withoutTrailingSlash(item?.ref?.url) === withoutTrailingSlash(SHIPPED_PAGES[project.id])
+  );
 }
 
 async function readProject(ctx, id) {
@@ -126,12 +140,9 @@ function itemKey(item) {
 }
 
 async function eachFile(ctx, directory, fn) {
-  let files = [];
-  try {
-    files = await ctx.listFiles(directory, '*.json');
-  } catch {
-    return;
-  }
+  // `listFiles` answers an empty list for a missing directory; any other
+  // failure stops the migration before the merged projects are deleted.
+  const files = await ctx.listFiles(directory, '*.json');
   for (const file of files) {
     const relPath = `${directory}/${file}`;
     let doc;

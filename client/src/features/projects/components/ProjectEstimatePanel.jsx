@@ -110,11 +110,11 @@ function ProjectEstimatePanel({ estimate, onDismiss }) {
           )}
           {estimate.unmeasured > 0 && (
             <p className="mt-1 text-xs opacity-80">
-              {t(
-                'projects.estimate.unmeasured',
-                '{{count}} documents could not be read and are not counted.',
-                { count: estimate.unmeasured }
-              )}
+              {t('projects.estimate.unmeasured', {
+                count: estimate.unmeasured,
+                defaultValue_one: '{{count}} document could not be read and is not counted.',
+                defaultValue_other: '{{count}} documents could not be read and are not counted.'
+              })}
             </p>
           )}
           <p className="mt-2 text-xs opacity-80">
