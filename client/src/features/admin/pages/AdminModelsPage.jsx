@@ -15,6 +15,7 @@ import ModelImportDialog from '../components/ModelImportDialog';
 import ApiKeyStatusBadge from '../components/ApiKeyStatusBadge';
 import useApiKeyStatus from '../hooks/useApiKeyStatus';
 import UploadConfigButton from '../components/UploadConfigButton';
+import AdminLoadError from '../components/AdminLoadError';
 
 function ModelNameCell({ model, currentLanguage }) {
   return (
@@ -376,25 +377,7 @@ function AdminModelsPage() {
 
   if (error) {
     return (
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md p-4">
-          <div className="flex">
-            <Icon name="exclamation-triangle" className="h-5 w-5 text-red-400" />
-            <div className="ml-3">
-              <h3 className="text-sm font-medium text-red-800 dark:text-red-300">
-                {t('admin.models.loadError', 'Error loading models')}
-              </h3>
-              <p className="mt-1 text-sm text-red-700 dark:text-red-400">{error}</p>
-              <button
-                onClick={() => window.location.reload()}
-                className="mt-2 text-sm text-red-700 dark:text-red-300 hover:text-red-800"
-              >
-                {t('common.retry', 'Retry')}
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
+      <AdminLoadError title={t('admin.models.loadError', 'Error loading models')} message={error} />
     );
   }
 

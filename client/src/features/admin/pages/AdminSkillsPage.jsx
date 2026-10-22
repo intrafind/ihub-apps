@@ -16,6 +16,7 @@ import {
   importSkill,
   toggleSkill
 } from '../../../api/adminApi';
+import AdminLoadError from '../components/AdminLoadError';
 /** The tabs of the page, as `?tab=` names them. */
 const TABS = ['skills', 'user'];
 
@@ -209,23 +210,11 @@ function AdminSkillsPage() {
 
   if (error && skills.length === 0 && activeTab === 'skills') {
     return (
-      <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md p-4">
-        <div className="flex">
-          <Icon name="exclamation-triangle" className="h-5 w-5 text-red-400" />
-          <div className="ml-3">
-            <h3 className="text-sm font-medium text-red-800 dark:text-red-300">
-              {t('admin.skills.loadError', 'Error loading skills')}
-            </h3>
-            <p className="mt-1 text-sm text-red-700 dark:text-red-400">{error}</p>
-            <button
-              onClick={() => window.location.reload()}
-              className="mt-2 text-sm text-red-700 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
-            >
-              {t('common.retry', 'Retry')}
-            </button>
-          </div>
-        </div>
-      </div>
+      <AdminLoadError
+        title={t('admin.skills.loadError', 'Error loading skills')}
+        message={error}
+        framed={false}
+      />
     );
   }
 
