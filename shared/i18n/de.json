@@ -3046,7 +3046,11 @@
       "demoOk": "Kein Demo-Konto meldet sich mit dem mitgelieferten Passwort an.",
       "demoWarn": "{{accounts}} melden sich noch mit dem mitgelieferten Passwort an. Ändern Sie die Passwörter, bevor Sie das Onboarding ausblenden.",
       "demoWarnHidden": "{{accounts}} melden sich noch mit dem mitgelieferten Passwort an, die Anmeldeseite listet sie aber nicht auf.",
-      "usersLink": "Benutzer"
+      "usersLink": "Benutzer",
+      "stateHidden": "Für alle ausgeblendet",
+      "stateCompleted": "Abgeschlossen",
+      "stateShown": "Wird angezeigt, bis er abgeschlossen ist",
+      "manage": "Onboarding-Einstellungen"
     },
     "home": {
       "sections": {

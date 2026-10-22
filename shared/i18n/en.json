@@ -2763,7 +2763,11 @@
       "demoOk": "No demo account signs in with the shipped password.",
       "demoWarn": "{{accounts}} still sign in with the shipped password. Change their passwords before you hide the onboarding.",
       "demoWarnHidden": "{{accounts}} still sign in with the shipped password, but the login page does not list them.",
-      "usersLink": "Users"
+      "usersLink": "Users",
+      "stateHidden": "Hidden for everyone",
+      "stateCompleted": "Completed",
+      "stateShown": "Shown until completed",
+      "manage": "Onboarding settings"
     },
     "home": {
       "sections": {

@@ -86,4 +86,4 @@ mouse hover.
 Clicking **Skip** in the setup wizard only skipped it for the current browser session, so it kept coming back for every new tab, browser or user.
 **Admin → Advanced → First-run onboarding** now has a switch (`setup.disabled` in `platform.json`) that stops the redirect to `/setup` for everyone.
 When a signed-in admin skips the wizard, they are asked whether to hide it for good; anyone else still skips for the current session only.
-Next to the switch, the page shows whether a demo account (`admin` / `user`) still signs in with the shipped password, and the skip prompt warns about it too.
+The admin overview also has an Onboarding card that links there. Next to the switch, the page shows whether a demo account (`admin` / `user`) still signs in with the shipped password, and the skip prompt warns about it too.
