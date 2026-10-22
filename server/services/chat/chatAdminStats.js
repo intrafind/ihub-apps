@@ -107,6 +107,7 @@ function emptyStats() {
   return {
     available: false,
     totalChats: 0,
+    temporaryChats: 0,
     totalMessages: 0,
     totalUsers: 0,
     scanned: 0,
@@ -175,6 +176,12 @@ export async function collectChatStats({
     }
     stats.scanned += 1;
     const chat = doc?.data || {};
+    // A temporary chat is not history: counted on its own, and kept out of
+    // every figure the history page reasons about (owners, apps, retention).
+    if (chat.temporary === true) {
+      stats.temporaryChats += 1;
+      continue;
+    }
     const messages = Number.isFinite(chat.messageCount) ? chat.messageCount : 0;
     const ownerId = chat.ownerId ?? doc.ownerId ?? null;
     const activeAt = activityTime(doc);

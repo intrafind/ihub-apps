@@ -142,7 +142,7 @@ audit log (Admin → Audit Log, `resource: chatShare`).
 
 ## Enabling
 
-1. Turn on **Durable Chats** and **Chat Sharing** under Admin → Platform →
+1. Turn on **Chat History** and **Chat Sharing** under Admin → Platform →
    Features (or `"chatPersistence": true, "chatSharing": true` in
    `contents/config/features.json`). No restart needed.
 2. Check **Admin → Observability → Chat History → Chat sharing**. The section

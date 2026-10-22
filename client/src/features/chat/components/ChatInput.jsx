@@ -101,9 +101,10 @@ function ChatInput({
   onEnabledToolsChange = null,
   websearchEnabled = false,
   onWebsearchEnabledChange = null,
-  // Ephemeral (incognito-style) chat. When on, the conversation is never
-  // persisted — it disappears on reload or when leaving the app. The toggle
-  // renders below the input, aligned with the send button.
+  // Ephemeral (incognito-style) chat. When on, the chat is a temporary one: it
+  // is stored like any chat but never listed in the history, and it is deleted
+  // within a day. The toggle renders below the input, aligned with the send
+  // button.
   ephemeral = false,
   onEphemeralChange = null,
   // Optional node (e.g. the AI disclaimer) rendered centered on the same
@@ -688,7 +689,7 @@ function ChatInput({
             {ephemeral &&
               t(
                 'chat.ephemeral.activeNotice',
-                'Messages are not saved and disappear when you leave or reload.'
+                'Temporary chat — not saved to your history and deleted within a day.'
               )}
           </span>
           <span className={`shrink-0 whitespace-nowrap justify-self-end ${contextUsageTone}`}>
@@ -1037,10 +1038,13 @@ function ChatInput({
                   aria-label={t('chat.ephemeral.label', 'Incognito mode')}
                   title={
                     ephemeral
-                      ? t('chat.ephemeral.disable', 'Turn off ephemeral chat')
+                      ? t(
+                          'chat.ephemeral.disable',
+                          'Turn off incognito — keep this chat in your history'
+                        )
                       : t(
                           'chat.ephemeral.enable',
-                          'Turn on ephemeral chat — messages are not saved'
+                          'Turn on incognito — the chat is not saved to your history'
                         )
                   }
                   className={`flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors disabled:opacity-50 ${

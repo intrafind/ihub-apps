@@ -36,7 +36,7 @@
 import crypto from 'node:crypto';
 import configCache from '../../configCache.js';
 import { isFeatureEnabled } from '../../featureRegistry.js';
-import { isChatPersistenceConfigured } from '../chat/chatPersistence.js';
+import { isChatStorageAvailable } from '../chat/chatPersistence.js';
 import logger from '../../utils/logger.js';
 import { RUN_LOG_EVENTS } from '../../../shared/runEvents.js';
 import { parseRunLogEventData } from './contracts/runLogEvents.js';
@@ -185,10 +185,10 @@ export class RunLog {
   /**
    * Whether events are persisted to disk. In-memory emission always works.
    *
-   * Durable chats are materialized from a run's own ledger events, so chat
-   * persistence being configured turns the ledger on regardless of the
-   * `runLog` flag — a chat store with no ledger to read back would silently
-   * record nothing. `_forceEnabled` still overrides both.
+   * Every chat is stored and a chat answer is materialized from its run's own
+   * ledger events, so a storage provider that came up turns the ledger on
+   * regardless of the `runLog` flag — a chat store with no ledger to read back
+   * would silently record nothing. `_forceEnabled` still overrides both.
    */
   isEnabled() {
     if (this._forceEnabled !== null) return this._forceEnabled;
@@ -197,7 +197,7 @@ export class RunLog {
       if (isFeatureEnabled('runLog', features) && this._runLogConfig().enabled !== false) {
         return true;
       }
-      return isChatPersistenceConfigured(features, this._getPlatform());
+      return isChatStorageAvailable();
     } catch {
       return false;
     }

@@ -119,16 +119,16 @@ export const featureRegistry = [
   },
   // `chatHistoryPreview` lived here and gated a sidebar section and a /chats
   // page backed by fixtures. The history UI is now driven by the durable-chat
-  // store, so `chatPersistence` is the single switch for both storing chats and
-  // showing them. A saved `chatHistoryPreview: true` is deliberately *not*
-  // promoted to it — the preview showed sample data, and this one writes real
+  // store, so `chatPersistence` is the single switch for keeping chats and
+  // showing them (every chat is stored; without it each one is temporary). A
+  // saved `chatHistoryPreview: true` is deliberately *not* promoted to it — the preview showed sample data, and this one writes real
   // conversations to disk — so V097 warns instead of deciding.
   {
     id: 'chatPersistence',
-    name: { en: 'Durable Chats', de: 'Dauerhafte Chats' },
+    name: { en: 'Chat History', de: 'Chatverlauf' },
     description: {
-      en: 'Store chats server-side so a conversation survives a reload, a new device and a lost connection — the run keeps going and its answer is waiting in the chat. API clients then post only the new message instead of the whole history (or send ephemeral: true)',
-      de: 'Chats serverseitig speichern, sodass eine Unterhaltung Neuladen, Gerätewechsel und Verbindungsabbruch übersteht — der Lauf läuft weiter und seine Antwort wartet im Chat. API-Clients senden dann nur noch die neue Nachricht statt des gesamten Verlaufs (oder ephemeral: true)'
+      en: 'Keep chats in a history signed-in users can reopen on any device — a run keeps going when the browser closes and its answer is waiting in the chat. Every chat is stored on the server either way; without this, each one is temporary: never listed, and deleted a day after its last activity',
+      de: 'Chats in einem Verlauf behalten, den angemeldete Benutzer auf jedem Gerät wieder öffnen können — ein Lauf geht weiter, wenn der Browser geschlossen wird, und seine Antwort wartet im Chat. Gespeichert wird jeder Chat ohnehin auf dem Server; ohne diese Funktion ist jeder temporär: nie aufgelistet und einen Tag nach der letzten Aktivität gelöscht'
     },
     category: 'preview',
     default: false,

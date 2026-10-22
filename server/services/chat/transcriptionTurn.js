@@ -9,9 +9,9 @@
  * the answer, written by the transcription model.
  *
  * Stored, the transcript is chat history like any other answer — a chat model
- * selected next answers "summarize this" from it. With durable chats the
- * server owns the history, so a transcript only the browser held would never
- * reach that model.
+ * selected next answers "summarize this" from it. The server owns every
+ * chat's history, so a transcript only the browser held would never reach
+ * that model.
  *
  * Best effort, like all materialization: a storage failure costs the stored
  * turn, never the transcript the user is watching arrive.
@@ -24,7 +24,8 @@ import runLog from '../loop/RunLog.js';
 import { resolvePrincipal } from '../loop/runIdentity.js';
 import { authorizeChat } from './chatAccess.js';
 import { getChatRepository, isPersistableChatId } from './ChatRepository.js';
-import { isChatPersistenceActive } from './chatPersistence.js';
+import { resolveChatStorage } from './chatPersistence.js';
+import { resolveChatOwner } from './chatOwner.js';
 import { settleAssistantTurn, settleUserTurn } from './chatMaterializer.js';
 import { resolveChatProjects } from '../knowledge/chatProjects.js';
 import { findByIdCaseInsensitive } from '../../utils/resourceLookup.js';
@@ -58,8 +59,9 @@ function appPermitted(user, appId) {
  *   (#1036); resolved like the chat POST's `projectId`, so a chat that a
  *   transcription turn starts is listed in its project from the first turn.
  * @param {Object} [params.repository] - Defaults to the process-wide one.
- * @param {boolean} [params.persist] - Whether this turn is stored; decided from
- *   the live config (`isChatPersistenceActive`) when omitted.
+ * @param {{stored: boolean, temporary: boolean}} [params.storage] - How a chat
+ *   this turn creates is stored; decided from the live config
+ *   (`resolveChatStorage`) when omitted.
  * @returns {Promise<{ok: true, turn: Object|null}|{ok: false, code: string}>}
  *   `turn` is null when nothing is to be stored (no chat named, persistence
  *   off); `ok: false` when the chat named is not the user's to write
@@ -76,7 +78,7 @@ export async function beginTranscriptionTurn({
   attachment,
   projectId,
   repository = getChatRepository(),
-  persist = isChatPersistenceActive({
+  storage = resolveChatStorage({
     features: configCache.getFeatures(),
     platformConfig: configCache.getPlatform(),
     user,
@@ -84,7 +86,7 @@ export async function beginTranscriptionTurn({
   })
 }) {
   if (!chatId || !appId || !isPersistableChatId(chatId)) return { ok: true, turn: null };
-  if (!persist || !repository) return { ok: true, turn: null };
+  if (!storage?.stored || !repository) return { ok: true, turn: null };
   if (!appPermitted(user, appId)) return { ok: false, code: 'not-permitted' };
   const access = await authorizeChat(chatId, user, { repository, intent: 'write' });
   if (!access.ok) return { ok: false, code: 'not-permitted' };
@@ -108,6 +110,10 @@ export async function beginTranscriptionTurn({
   }
 
   const identityMode = access.chat?.identityMode || runLog.identityMode();
+  // The chat's owner (a guest for an anonymous visitor) and the run's
+  // principal are not the same thing: an anonymous run never gets a stable id.
+  const owner = await resolveChatOwner(user, { mode: identityMode });
+  if (!owner) return { ok: true, turn: null };
   const principal = await resolvePrincipal(user, { mode: identityMode });
   // A run of the ledger like any chat turn: while it lasts, every worker sees
   // the chat's `activeRunId` as alive (`chatRecovery.isChatRunAlive`), so a
@@ -122,8 +128,9 @@ export async function beginTranscriptionTurn({
   const { message: question, refusal } = await settleUserTurn({
     repository,
     chatId,
-    ownerId: principal.id,
-    identityMode: principal.mode || identityMode,
+    ownerId: owner.id,
+    identityMode: owner.mode,
+    temporary: access.chat ? access.chat.temporary === true : storage.temporary,
     appId,
     modelId,
     runId,

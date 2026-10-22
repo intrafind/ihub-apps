@@ -2,16 +2,14 @@ import '@testing-library/jest-dom';
 import { renderHook, act } from '@testing-library/react';
 
 /**
- * The protocol switch — the reason the durable-chat backend cannot ship
- * without the client.
+ * The chat protocol — one for every surface.
  *
- * A persisted chat owns its own history: the server reads the transcript back
- * out of the store and rejects a request carrying more than the new message
- * with `CLIENT_HISTORY_NOT_ALLOWED` (`server/routes/chat/sessionRoutes.js`).
- * Every other surface — anonymous viewers, the incognito toggle, the compare
- * panels, the canvas — keeps posting its whole local array exactly as before,
- * flagged `ephemeral` so the server knows not to store it. Both modes are
- * permanent, so both are pinned here.
+ * Every chat is stored, so the server owns every history: it reads the
+ * transcript back out of the store and rejects a request carrying more than
+ * the new message with `CLIENT_HISTORY_NOT_ALLOWED`
+ * (`server/routes/chat/sessionRoutes.js`). A chat the user does not want kept —
+ * the incognito toggle, the compare panels, the canvas — posts the same one
+ * message, flagged `ephemeral` so the server creates it as a temporary chat.
  *
  * An edit or a regenerate used to travel as a shortened array. With the server
  * holding the history that intent has to be said out loud, so the same
@@ -134,60 +132,38 @@ beforeEach(() => {
 });
 
 describe('getMessagesForApi', () => {
-  /** Two finished turns in local state, whatever the mode. */
-  function twoTurns(options) {
-    const { result } = renderHook(() => useChatMessages('chat-api', options));
+  test('sends only the new message, however long the transcript', () => {
+    const { result } = renderHook(() => useChatMessages('chat-api'));
     act(() => {
       result.current.addUserMessage('first question');
       result.current.addAssistantMessage('a1');
     });
-    act(() => {
-      result.current.updateAssistantMessage('a1', 'first answer', false);
-    });
-    return result;
-  }
-
-  const NEW_MESSAGE = { role: 'user', content: 'second question' };
-
-  test('a server-backed chat sends only the new message, however long the transcript', () => {
-    const result = twoTurns({ serverBacked: true });
     expect(result.current.messages).toHaveLength(2);
 
-    const body = result.current.getMessagesForApi(true, NEW_MESSAGE);
+    const body = result.current.getMessagesForApi({
+      role: 'user',
+      content: 'second question',
+      rawContent: 'second question, as typed',
+      mcpApps: [{ big: 'payload' }]
+    });
 
     expect(body).toHaveLength(1);
-    expect(body[0]).toMatchObject({ role: 'user', content: 'second question' });
+    expect(body[0]).toMatchObject({ role: 'user', content: 'second question, as typed' });
+    expect(body[0].mcpApps).toBeUndefined();
   });
 
-  test('an ordinary chat still sends its whole local history', () => {
-    const result = twoTurns(undefined);
-
-    const body = result.current.getMessagesForApi(true, NEW_MESSAGE);
-
-    expect(body.map(m => m.content)).toEqual(['first question', 'first answer', 'second question']);
-  });
-
-  test('an ephemeral chat also sends its whole local history — nothing stores it', () => {
-    const result = twoTurns({ ephemeral: true });
-
-    const body = result.current.getMessagesForApi(true, NEW_MESSAGE);
-
-    expect(body.map(m => m.content)).toEqual(['first question', 'first answer', 'second question']);
-  });
-
-  test('an app with chat history off sends one message in either mode', () => {
-    expect(twoTurns(undefined).current.getMessagesForApi(false, NEW_MESSAGE)).toHaveLength(1);
-    expect(
-      twoTurns({ serverBacked: true }).current.getMessagesForApi(false, NEW_MESSAGE)
-    ).toHaveLength(1);
+  test('keeps nothing in browser storage', () => {
+    const { result } = renderHook(() => useChatMessages('chat-no-copy'));
+    act(() => {
+      result.current.addUserMessage('a question');
+    });
+    expect(sessionStorage.length).toBe(0);
   });
 });
 
 describe('the wire', () => {
-  test('a server-backed turn posts exactly one message and is not flagged ephemeral', async () => {
-    const { result } = renderHook(() =>
-      useAppChat({ appId: 'app1', chatId: 'chat-backed', serverBacked: true })
-    );
+  test('a turn posts exactly one message and is not flagged ephemeral', async () => {
+    const { result } = renderHook(() => useAppChat({ appId: 'app1', chatId: 'chat-backed' }));
     hydrate(result);
     expect(result.current.messages).toHaveLength(4);
 
@@ -203,10 +179,8 @@ describe('the wire', () => {
     expect(params.replaceFromMessageId).toBeUndefined();
   });
 
-  test('a second server-backed turn still posts one message', async () => {
-    const { result } = renderHook(() =>
-      useAppChat({ appId: 'app1', chatId: 'chat-backed-2', serverBacked: true })
-    );
+  test('a second turn still posts one message', async () => {
+    const { result } = renderHook(() => useAppChat({ appId: 'app1', chatId: 'chat-backed-2' }));
     hydrate(result);
 
     send(result, 'third question');
@@ -227,26 +201,7 @@ describe('the wire', () => {
     expect(requestAt(1).messages[0].content).toBe('fourth question');
   });
 
-  test('an ordinary chat posts its growing array and marks every turn ephemeral', async () => {
-    const { result } = renderHook(() => useAppChat({ appId: 'app1', chatId: 'chat-plain' }));
-
-    send(result, 'one');
-    await connect('chat-plain');
-    expect(requestAt(0).messages).toHaveLength(1);
-    expect(requestAt(0).params.ephemeral).toBe(true);
-
-    act(() => {
-      result.current.updateAssistantMessage(result.current.messages[1].id, 'answered', false);
-    });
-
-    send(result, 'two');
-    await connect('chat-plain');
-
-    expect(requestAt(1).messages.map(m => m.content)).toEqual(['one', 'answered', 'two']);
-    expect(requestAt(1).params.ephemeral).toBe(true);
-  });
-
-  test('an incognito chat posts its whole array too', async () => {
+  test('an incognito chat posts one message too, and asks for a temporary chat', async () => {
     const { result } = renderHook(() =>
       useAppChat({ appId: 'app1', chatId: 'chat-incognito', ephemeral: true })
     );
@@ -259,14 +214,12 @@ describe('the wire', () => {
     send(result, 'two');
     await connect('chat-incognito');
 
-    expect(requestAt(1).messages.map(m => m.content)).toEqual(['one', 'answered', 'two']);
+    expect(requestAt(1).messages.map(m => m.content)).toEqual(['two']);
     expect(requestAt(1).params.ephemeral).toBe(true);
   });
 
   test('the clarification reply takes the same protocol as an ordinary send', async () => {
-    const { result } = renderHook(() =>
-      useAppChat({ appId: 'app1', chatId: 'chat-clarify', serverBacked: true })
-    );
+    const { result } = renderHook(() => useAppChat({ appId: 'app1', chatId: 'chat-clarify' }));
     hydrate(result, [TRANSCRIPT[0], TRANSCRIPT[1]]);
 
     send(result, 'which one?');
@@ -307,9 +260,7 @@ describe('the wire', () => {
 
 describe('replaceFromMessageId', () => {
   test('editing a stored message forks the stored history at that message', async () => {
-    const { result } = renderHook(() =>
-      useAppChat({ appId: 'app1', chatId: 'chat-edit', serverBacked: true })
-    );
+    const { result } = renderHook(() => useAppChat({ appId: 'app1', chatId: 'chat-edit' }));
     hydrate(result);
 
     act(() => {
@@ -328,9 +279,7 @@ describe('replaceFromMessageId', () => {
   });
 
   test('regenerating an answer forks at the question that produced it', async () => {
-    const { result } = renderHook(() =>
-      useAppChat({ appId: 'app1', chatId: 'chat-regen', serverBacked: true })
-    );
+    const { result } = renderHook(() => useAppChat({ appId: 'app1', chatId: 'chat-regen' }));
     hydrate(result);
 
     let resend;
@@ -347,9 +296,7 @@ describe('replaceFromMessageId', () => {
   });
 
   test('deleting from a stored message forks there on the next send', async () => {
-    const { result } = renderHook(() =>
-      useAppChat({ appId: 'app1', chatId: 'chat-delete', serverBacked: true })
-    );
+    const { result } = renderHook(() => useAppChat({ appId: 'app1', chatId: 'chat-delete' }));
     hydrate(result);
 
     act(() => {
@@ -363,9 +310,7 @@ describe('replaceFromMessageId', () => {
   });
 
   test('the fork is consumed by one request, not repeated by the next', async () => {
-    const { result } = renderHook(() =>
-      useAppChat({ appId: 'app1', chatId: 'chat-once', serverBacked: true })
-    );
+    const { result } = renderHook(() => useAppChat({ appId: 'app1', chatId: 'chat-once' }));
     hydrate(result);
 
     act(() => {
@@ -395,9 +340,7 @@ describe('replaceFromMessageId', () => {
     // the fork lookup accepts. Without that, regenerating the answer you just
     // got would carry no fork id, and the server would append the retry to the
     // untouched history — a duplicated exchange per retry.
-    const { result } = renderHook(() =>
-      useAppChat({ appId: 'app1', chatId: 'chat-local', serverBacked: true })
-    );
+    const { result } = renderHook(() => useAppChat({ appId: 'app1', chatId: 'chat-local' }));
     act(() => {
       result.current.loadServerMessages([]);
     });
@@ -419,9 +362,7 @@ describe('replaceFromMessageId', () => {
   });
 
   test('regenerating an answer produced in this session forks at its own question', async () => {
-    const { result } = renderHook(() =>
-      useAppChat({ appId: 'app1', chatId: 'chat-local-regen', serverBacked: true })
-    );
+    const { result } = renderHook(() => useAppChat({ appId: 'app1', chatId: 'chat-local-regen' }));
     act(() => {
       result.current.loadServerMessages([]);
     });
@@ -451,10 +392,9 @@ describe('replaceFromMessageId', () => {
     // abandoned edit in chat A could otherwise address A's stored history from
     // inside chat B — where the id does not exist, and the send fails with
     // 400 UNKNOWN_MESSAGE for no visible reason.
-    const { result, rerender } = renderHook(
-      ({ chatId }) => useAppChat({ appId: 'app1', chatId, serverBacked: true }),
-      { initialProps: { chatId: 'chat-a' } }
-    );
+    const { result, rerender } = renderHook(({ chatId }) => useAppChat({ appId: 'app1', chatId }), {
+      initialProps: { chatId: 'chat-a' }
+    });
     hydrate(result);
 
     act(() => {
@@ -470,50 +410,14 @@ describe('replaceFromMessageId', () => {
     expect(requestAt(0).chatId).toBe('chat-b');
     expect(requestAt(0).params.replaceFromMessageId).toBeUndefined();
   });
-
-  test('an ordinary chat carries no exchange id on its user messages', () => {
-    // The field only means something to the durable store; every other mode
-    // posts its whole local array, and that array must not grow a field the
-    // wire has no use for.
-    const { result } = renderHook(() => useAppChat({ appId: 'app1', chatId: 'chat-plain-id' }));
-
-    send(result, 'one');
-
-    expect(result.current.messages[0].clientMessageId).toBeUndefined();
-  });
-
-  test('an ordinary chat never sends a fork id — it still posts the truncated array', async () => {
-    const { result } = renderHook(() => useAppChat({ appId: 'app1', chatId: 'chat-plain-edit' }));
-
-    send(result, 'one');
-    await connect('chat-plain-edit');
-    act(() => {
-      result.current.updateAssistantMessage(result.current.messages[1].id, 'answered', false);
-    });
-
-    act(() => {
-      result.current.resendMessage(result.current.messages[0].id, 'one, rephrased');
-    });
-    expect(result.current.messages).toHaveLength(0);
-
-    send(result, 'one, rephrased');
-    await connect('chat-plain-edit');
-
-    expect(requestAt(1).messages.map(m => m.content)).toEqual(['one, rephrased']);
-    expect(requestAt(1).params.replaceFromMessageId).toBeUndefined();
-    expect(requestAt(1).params.ephemeral).toBe(true);
-  });
 });
 
 describe('sendChatHistory', () => {
-  test('a server-backed turn says the history is off, because the array cannot', async () => {
-    // Every other mode communicates the viewer's "Include chat history in
-    // requests" toggle by posting a shorter array. A server-backed chat posts
-    // exactly one message either way, so without this field the server would
+  test('a turn says the history is off, because the array cannot', async () => {
+    // A turn posts exactly one message whatever the viewer's "Include chat
+    // history in requests" toggle says, so without this field the server would
     // keep prepending the stored transcript and the opt-out would be inert.
-    const { result } = renderHook(() =>
-      useAppChat({ appId: 'app1', chatId: 'chat-nohist', serverBacked: true })
-    );
+    const { result } = renderHook(() => useAppChat({ appId: 'app1', chatId: 'chat-nohist' }));
     hydrate(result);
 
     send(result, 'a standalone question', { sendChatHistory: false });
@@ -528,9 +432,7 @@ describe('sendChatHistory', () => {
     // settings, so a turn that omits the key leaves the stored value alone —
     // which meant the toggle could be turned off and never back on: every
     // reopen restored `false`, and ticking it on again recorded nothing.
-    const { result } = renderHook(() =>
-      useAppChat({ appId: 'app1', chatId: 'chat-hist', serverBacked: true })
-    );
+    const { result } = renderHook(() => useAppChat({ appId: 'app1', chatId: 'chat-hist' }));
     hydrate(result);
 
     send(result, 'a follow-up');
@@ -545,9 +447,7 @@ describe('sendChatHistory', () => {
     // The whole point: a durable chat records what the toggle is, so a later
     // reopen can restore it. Recording only `false` meant the stored value
     // could go one way.
-    const { result } = renderHook(() =>
-      useAppChat({ appId: 'app1', chatId: 'chat-roundtrip', serverBacked: true })
-    );
+    const { result } = renderHook(() => useAppChat({ appId: 'app1', chatId: 'chat-roundtrip' }));
     hydrate(result);
 
     send(result, 'without history', { sendChatHistory: false });
@@ -560,22 +460,6 @@ describe('sendChatHistory', () => {
     send(result, 'with history again');
     await connect('chat-roundtrip');
     expect(requestAt(1).params.sendChatHistory).toBe(true);
-  });
-
-  test('an ordinary chat keeps saying it with the array alone', async () => {
-    const { result } = renderHook(() => useAppChat({ appId: 'app1', chatId: 'chat-plain-hist' }));
-
-    send(result, 'one');
-    await connect('chat-plain-hist');
-    act(() => {
-      result.current.updateAssistantMessage(result.current.messages[1].id, 'answered', false);
-    });
-
-    send(result, 'two', { sendChatHistory: false });
-    await connect('chat-plain-hist');
-
-    expect(requestAt(1).messages.map(m => m.content)).toEqual(['two']);
-    expect(requestAt(1).params.sendChatHistory).toBeUndefined();
   });
 });
 

@@ -136,31 +136,20 @@ export const deleteChat = async chatId => {
 };
 
 /**
- * Park a chat that is not stored server-side so another window of the same
- * user can continue it — the Outlook pane's "Open in web app" (see
- * `server/routes/chatHandoffs.js`). The record is single-use and expires
- * after ten minutes.
+ * Keep a temporary chat: from now on it is listed in the history, can be
+ * shared and follows the history's retention. There is no way back.
  *
- * @param {Object} handoff
- * @param {string} handoff.appId - App the chat belongs to.
- * @param {Array<{ role: 'user'|'assistant', content: string, hostContext?: Object }>} handoff.messages
- * @param {Object|null} [handoff.variables] - The app variables the chat was given.
- * @returns {Promise<{ token: string, expiresAt: string }>}
+ * @param {string} chatId - Chat id.
+ * @returns {Promise<{ chat: Object }>} the response body
  */
-export const createChatHandoff = async ({ appId, messages, variables = null }) =>
-  handleApiResponse(
-    () => apiClient.post('/chat-handoffs', { appId, messages, variables }),
+export const keepChat = async chatId => {
+  if (!chatId) {
+    throw new Error('Missing required parameters');
+  }
+
+  return handleApiResponse(
+    () => apiClient.patch(`/chats/${encodeURIComponent(chatId)}`, { temporary: false }),
     null,
     null
   );
-
-/**
- * Take a parked chat (see {@link createChatHandoff}). Only the user who parked
- * it can, and only once: a second claim answers 404 `HANDOFF_NOT_FOUND`, a
- * claim by another user 403 `HANDOFF_OTHER_USER`.
- *
- * @param {string} token - From the `handoff` query parameter.
- * @returns {Promise<{ appId: string, messages: Object[], variables: Object|null }>}
- */
-export const claimChatHandoff = async token =>
-  handleApiResponse(() => apiClient.post('/chat-handoffs/claim', { token }), null, null);
+};

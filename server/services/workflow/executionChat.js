@@ -79,7 +79,7 @@ const MAX_CONTEXT_MESSAGE_CHARS = 2000;
  * reopened answer names — and links — the execution it came from.
  *
  * The caller has checked that the user may read the execution and use the
- * app, and that durable chats are on for them.
+ * app, and decided how the chat is stored.
  *
  * @param {Object} params
  * @param {import('../chat/ChatRepository.js').default} params.repository
@@ -88,6 +88,7 @@ const MAX_CONTEXT_MESSAGE_CHARS = 2000;
  * @param {string} params.appId - App the chat is opened in.
  * @param {string} params.ownerId - Principal that owns the chat.
  * @param {string} params.identityMode - Identity mode `ownerId` was resolved in.
+ * @param {boolean} [params.temporary] - Store it as a temporary chat (not listed).
  * @param {string} [params.language] - For the workflow's name.
  * @param {unknown} [params.contextMessage] - The opening question when the execution had
  *   no text input (the client's translated "Here are the results …").
@@ -100,6 +101,7 @@ export async function createExecutionChat({
   appId,
   ownerId,
   identityMode,
+  temporary = false,
   language = 'en',
   contextMessage
 }) {
@@ -126,7 +128,8 @@ export async function createExecutionChat({
     runId,
     content: userInput || opening || workflowName,
     titleText: userInput ? null : workflowName,
-    origin: { createdVia: 'workflow-execution', executionId }
+    origin: { createdVia: 'workflow-execution', executionId },
+    temporary
   });
   if (!question) return { error: 'NOT_STORED' };
 

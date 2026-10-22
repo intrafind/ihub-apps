@@ -8,7 +8,10 @@ import { buildServerPath } from '../../utils/basePath.js';
 import { isValidLanguageCode } from '../../utils/pathSecurity.js';
 import { resolveFeatures } from '../../featureRegistry.js';
 import { resolveVoiceModeSettings } from '../../../shared/voiceMode.js';
-import { isChatPersistenceConfigured } from '../../services/chat/chatPersistence.js';
+import {
+  chatRetentionSettings,
+  isChatHistoryConfigured
+} from '../../services/chat/chatPersistence.js';
 import { chatSharingClientConfig } from '../../services/chat/chatSharing.js';
 import { scheduledTasksClientConfig } from '../../services/scheduler/tasks/taskPolicy.js';
 import { userPromptsClientConfig } from '../../services/prompts/userPromptSettings.js';
@@ -826,23 +829,27 @@ export default function registerDataRoutes(app) {
               logs: platform.telemetry.logs
             }
           : undefined,
-        // Durable chats. The feature flag alone does not tell the client
-        // whether a conversation will actually be remembered — the platform
-        // switch and a storage provider that came up have to agree — so the
-        // answer is resolved server-side. Always sent as an object (the
+        // Chat history. Every chat is stored; `persistence` says whether
+        // chats are also *kept* — listed, reopened, shared — or every one is
+        // temporary. The feature flag alone does not tell the client — the
+        // platform switch and a storage provider that came up have to agree —
+        // so the answer is resolved server-side. Always sent as an object (the
         // undefined-stripping below would otherwise hide it), but the client
         // must still treat an absent block as "no persistence" to stay
         // compatible with an older server.
         //
         // One field, because there is only one answer. `chats.enabled` was
-        // also sent and added nothing: `isChatPersistenceConfigured` already
+        // also sent and added nothing: `isChatHistoryConfigured` already
         // returns false whenever the platform switch is off, so
         // `enabled: true, persistence: false` is the *ordinary* state — the
         // flag off, or storage down — and a client that reached for the
         // obvious-looking name would enable the UI in exactly the cases where
         // nothing gets stored. Nothing read it.
         chats: {
-          persistence: isChatPersistenceConfigured(configCache.getFeatures(), platform),
+          persistence: isChatHistoryConfigured(configCache.getFeatures(), platform),
+          // How long a temporary chat outlives its last activity, for the
+          // composer's "deleted after …" note.
+          temporaryRetentionHours: chatRetentionSettings(platform).temporaryRetentionHours,
           // Sharing rides on persistence: whether links can be made at all,
           // which audiences an owner may pick and the caps the form has to
           // respect. The server enforces the same caps on create.

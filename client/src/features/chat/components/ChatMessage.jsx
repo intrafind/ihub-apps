@@ -111,11 +111,6 @@ function ChatMessage({
   onInsertAction = null, // (actionId, content) => void
   isLatestAssistantMessage = false, // Keeps the primary insert button always-visible on the most recent assistant response inside small Outlook panes.
   canvasEnabled = false,
-  // Whether this chat stores the images its turns generate (durable chats do;
-  // the compare panels, the canvas and an incognito turn do not). It only
-  // decides whether the "download it or lose it" note is shown — a stored
-  // image is identified by its descriptor, not by this flag.
-  imagesPersisted = false,
   app = null, // App configuration for custom response rendering
   models = [], // Available models for determining if model param should be included in link
   onClarificationSubmit = null, // Callback when a clarification response is submitted
@@ -1079,13 +1074,7 @@ function ChatMessage({
         {message.images && message.images.length > 0 && (
           <div className="mt-3 space-y-2">
             {message.images.map((image, idx) => (
-              <GeneratedImage
-                key={image.id || idx}
-                image={image}
-                chatId={chatId}
-                index={idx}
-                persisted={imagesPersisted}
-              />
+              <GeneratedImage key={image.id || idx} image={image} chatId={chatId} index={idx} />
             ))}
           </div>
         )}

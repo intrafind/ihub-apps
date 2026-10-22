@@ -8,12 +8,10 @@ import {
   mintChatId,
   readChatId,
   resetChatId,
-  getConversationId,
   clearConversationId
 } from '../../../utils/chatId';
-import { getConversationMessages } from '../../../api/endpoints/apps';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import { claimChatHandoff, fetchAppDetails, fetchChat } from '../../../api';
+import { deleteChat, fetchAppDetails, fetchChat, keepChat } from '../../../api';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 import { useTranslation } from 'react-i18next';
 import { getLocalizedContent } from '../../../utils/localizeContent';
@@ -35,7 +33,6 @@ import VoiceModeDock from '../../voice/components/VoiceModeDock';
 import useAppSettings from '../../../shared/hooks/useAppSettings';
 import useFileUploadHandler from '../../../shared/hooks/useFileUploadHandler';
 import { consumePendingChatStart } from '../../chat/startChatHandoff';
-import { readChatProjectId, writeChatProjectId } from '../../chat/utils/chatMessagesStorage';
 import useMagicPrompt from '../../../shared/hooks/useMagicPrompt';
 import { useIntegrationAuth } from '../../chat/hooks/useIntegrationAuth';
 import useNextcloudEmbedAttachments from '../../nextcloud-embed/hooks/useNextcloudEmbedAttachments';
@@ -163,15 +160,14 @@ const renderStartupState = (
   onOpenUsageGuide = undefined
 ) => {
   // The app details can arrive before the platform config and the auth status
-  // do, and until both have, nothing here knows whether this chat is
-  // server-backed. Painting the greeting on that guess and correcting it a
-  // frame later is a visible flicker, so this window renders nothing at all —
-  // a spinner would only be a second flash for the installations that have no
-  // persistence to wait for.
+  // do, and until both have, nothing here knows which chat `/apps/:appId`
+  // opens — a new one, or the one this tab remembers. Painting the greeting on
+  // that guess and correcting it a frame later is a visible flicker, so this
+  // window renders nothing at all.
   if (modeResolving) return null;
 
-  // A server-backed chat starts with an empty `messages` whether it is brand
-  // new or holds a hundred turns — the difference only arrives with
+  // A chat starts with an empty `messages` whether it is brand new or holds a
+  // hundred turns — the difference only arrives with
   // `GET /api/chats/:id`. Greeting the user as if this were a new chat and then
   // swapping in the history a moment later is the flash this guard prevents.
   if (hydrating) {
@@ -629,15 +625,15 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
   // falls back to the id this tab already holds for the app. State rather than a
   // ref, because changing it has to re-run the message hook, the stream state
   // and the hydration below.
-  // Chat ids this tab minted itself. Such an id cannot exist in the durable
+  // Chat ids this tab minted itself. Such an id cannot exist in the chat
   // store by construction, so asking for it can only ever 404 — and that round
   // trip is paid for with a "Loading chat…" spinner where the greeting and the
   // starter prompts belong, plus a red `API Error` in the console every time.
   const mintedChatIdsRef = useRef(new Set());
-  // Whether this viewer's chats are stored server-side. Read up here because it
-  // decides what opening `/apps/:appId` means.
+  // Whether this viewer's chats are kept in a history (they are stored either
+  // way). Read up here because it decides what opening `/apps/:appId` means.
   const chatPersistence = useChatPersistence();
-  // The new chat `/apps/:appId` shows while chats are durable, as
+  // The new chat `/apps/:appId` shows while chats are kept, as
   // `{ appId, id }`. Opening an app starts a new chat then — the previous one
   // is a click away in the history — but re-resolving on the same visit must
   // not keep minting, so the id is held until the URL names a chat.
@@ -657,8 +653,9 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
       }
       return freshChatRef.current.id;
     }
-    // Without durable chats the transcript lives only in this tab, under the
-    // id it holds for the app, so returning to the app has to find it again.
+    // Without a history there is no list to find the chat in again, so the tab
+    // remembers which chat it had for the app — its id, not its transcript —
+    // and returning to the app reopens it from the store.
     const stored = embedded ? null : readChatId(appId);
     if (stored) return stored;
     const minted = embedded ? mintChatId() : getOrCreateChatId(appId);
@@ -680,15 +677,19 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
   /**
    * Leave the current chat and start a fresh one for this app. A URL that names
    * a stored chat has to be dropped along with it, or the effect above would
-   * immediately pin the chat that was just left. Nothing is lost when chats are
-   * persisted — the old one simply stays in the history.
+   * immediately pin the chat that was just left. Nothing is lost for a kept
+   * chat — it simply stays in the history. A temporary one is deleted on the
+   * way out: it is listed nowhere, so leaving it is the end of it, and the
+   * store should not hold it until it expires.
    *
    * @returns {string} The new chat id.
    */
   const startNewChat = useCallback(() => {
-    // The chat being left takes its project along: the new one starts
-    // outside any project, as it does when chats are stored server-side.
-    if (!embedded) writeChatProjectId(chatId, null);
+    if (leavingTemporaryChatRef.current) {
+      deleteChat(chatId).catch(() => {
+        // Gone already, or never stored: the retention sweep is the backstop.
+      });
+    }
     const nextChatId = embedded ? mintChatId() : resetChatId(appId);
     // Minted here, so the store has never heard of it: skip the hydration
     // round trip that could only 404.
@@ -701,6 +702,10 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
     if (routeChatId || projectParam) navigate(`/apps/${appId}`, { replace: true });
     return nextChatId;
   }, [appId, navigate, routeChatId, embedded, chatId, projectParam]);
+  // Whether the chat on screen is a temporary chat the store already holds —
+  // the one `startNewChat` deletes on the way out. A ref, assigned once both
+  // halves are known further down.
+  const leavingTemporaryChatRef = useRef(false);
 
   /**
    * Determine if the response should trigger auto-redirect to canvas mode
@@ -768,22 +773,19 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
     [shouldAutoRedirectToCanvas, handleOpenInCanvas, app, embedded]
   );
 
-  // Durable chats: the server owns the transcript, so the browser copy is
-  // skipped, a turn posts only the new message, and a past conversation gets
-  // back on screen through the hydration below. Incognito switches it off for
-  // this chat; anonymous viewers and installations without the capability never
-  // had it, and keep exactly the behaviour they have today.
-  // A chat handed over from the Outlook pane (below) was not stored there and
-  // has no server-side history to continue from, so it carries its history
-  // itself, like any chat that is not stored — whatever this viewer's chats
-  // usually are. Only that chat: the next one is stored again as usual.
-  const [handedOffChatId, setHandedOffChatId] = useState(null);
-  const serverBackedChat = chatPersistence && !ephemeral && chatId !== handedOffChatId;
+  // Every chat is stored: the server owns the transcript, a turn posts only
+  // the new message, and a past conversation gets back on screen through the
+  // hydration below. What varies is whether the chat is *kept* in the history
+  // or temporary — incognito, an anonymous visitor, an installation without
+  // the history. `storedTemporary` is what the store said about the open
+  // chat; a chat not stored yet will be created the way the toggles say now.
+  const [storedTemporary, setStoredTemporary] = useState(null);
+  const chatTemporary = storedTemporary ?? (ephemeral || !chatPersistence);
   // `chatPersistence` answers false until the platform config and the auth
   // status have both landed, so an early false is "not known yet", not "no".
-  // The startup state has to wait it out, or a persisted chat greets the user
-  // for a frame before its history arrives.
-  const chatModeResolving = useChatPersistenceResolving() && !ephemeral;
+  // The startup state has to wait it out: it decides which chat `/apps/:appId`
+  // opens, and a chat whose history arrives a frame later greets the user first.
+  const chatModeResolving = useChatPersistenceResolving();
 
   const {
     messages,
@@ -814,14 +816,13 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
     // history (running) now, not when its answer lands — which for a long
     // workflow is minutes away, and never happens here if the user leaves.
     onRunStarted: () => {
-      if (serverBackedChat) invalidateChatsCache();
+      if (chatPersistence && !chatTemporary) invalidateChatsCache();
     },
     // Embedded, the app page's iAssistant conversation stays untouched.
     persistConversationId: !embedded,
     // Runtime-selectable: seeded from app.ephemeral but the user can toggle it in
-    // the chat settings. When on, nothing is persisted to browser storage.
-    ephemeral,
-    serverBacked: serverBackedChat
+    // the chat settings. When on, a new chat is created as a temporary one.
+    ephemeral
   });
 
   // Form-based start (issue #2581): a new chat — or a new comparison, whose
@@ -838,92 +839,6 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
   const modelSelectionAllowed =
     app?.disallowModelSelection !== true && app?.settings?.model?.enabled !== false;
 
-  // A chat handed over from the Outlook pane ("Open in web app" on a chat that
-  // is not stored server-side, see server/routes/chatHandoffs.js): the pane
-  // parked its transcript and opened `/apps/:appId?handoff=<token>`. Claimed
-  // once the app and the chat mode are settled, and continued as a new chat,
-  // so the one this tab already had for the app is left as it was. The
-  // transcript lands after the switch to the new chat has cleared the screen —
-  // hence the pending ref, applied by the effect that follows the chat id.
-  const handoffToken = searchParams.get('handoff');
-  const handoffClaimedRef = useRef(null);
-  const handoffSignInNoticeRef = useRef(null);
-  const pendingHandoffRef = useRef(null);
-  // Only the user who handed the chat over can claim it. A visitor who is not
-  // signed in (anonymous access) is asked to sign in first; the address keeps
-  // the token, so it is claimed on the way back from the sign-in.
-  const handoffSignedIn = auth ? auth.isAuthenticated === true : true;
-  useEffect(() => {
-    if (embedded || !handoffToken || !app || modelsLoading || chatModeResolving) return;
-    if (!handoffSignedIn) {
-      if (handoffSignInNoticeRef.current === handoffToken) return;
-      handoffSignInNoticeRef.current = handoffToken;
-      addSystemMessage(
-        t('pages.appChat.handoff.signIn', 'Sign in to continue the chat you opened from Outlook.'),
-        true
-      );
-      return;
-    }
-    if (handoffClaimedRef.current === handoffToken) return;
-    handoffClaimedRef.current = handoffToken;
-    // Single-use: once the server has answered for good, a reload must not
-    // try it again. A failure that may pass (offline, a server error) keeps
-    // the token in the address, so a reload retries.
-    const dropTokenFromAddress = () => {
-      const newSearch = new URLSearchParams(window.location.search);
-      newSearch.delete('handoff');
-      const query = newSearch.toString();
-      navigate(`${window.location.pathname}${query ? `?${query}` : ''}`, { replace: true });
-    };
-
-    claimChatHandoff(handoffToken)
-      .then(handoff => {
-        dropTokenFromAddress();
-        const handedMessages = Array.isArray(handoff?.messages) ? handoff.messages : [];
-        if (handedMessages.length === 0) return;
-        const nextChatId = startNewChat();
-        setHandedOffChatId(nextChatId);
-        if (handoff.variables && typeof handoff.variables === 'object') {
-          setVariables(v => ({ ...v, ...handoff.variables }));
-        }
-        pendingHandoffRef.current = {
-          chatId: nextChatId,
-          messages: handedMessages.map((message, index) => ({
-            ...message,
-            id: `handoff-${Date.now()}-${index}`
-          }))
-        };
-      })
-      .catch(error => {
-        const status = error?.status;
-        if (status === 403 || status === 404) dropTokenFromAddress();
-        addSystemMessage(
-          status === 403
-            ? t(
-                'pages.appChat.handoff.otherUser',
-                'This chat was opened from Outlook by another account. Sign in with that account to continue it.'
-              )
-            : status === 404
-              ? t(
-                  'pages.appChat.handoff.expired',
-                  'The chat from Outlook could not be opened: the link has expired or was already used. Choose "Open in web app" in Outlook again.'
-                )
-              : t(
-                  'pages.appChat.handoff.failed',
-                  'The chat from Outlook could not be opened right now. Reload the page to try again.'
-                ),
-          true
-        );
-      });
-    // eslint-disable-next-line @eslint-react/exhaustive-deps
-  }, [handoffToken, app, modelsLoading, chatModeResolving, embedded, handoffSignedIn]);
-  useEffect(() => {
-    const pending = pendingHandoffRef.current;
-    if (!pending || pending.chatId !== chatId) return;
-    pendingHandoffRef.current = null;
-    loadServerMessages(pending.messages);
-  }, [chatId, loadServerMessages]);
-
   // What an MCP App view in this chat may do in the composer: post a follow-up
   // message (`ui/message`) the way a starter prompt with autoSend does.
   const mcpAppHost = useMemo(
@@ -937,8 +852,9 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
     [processing]
   );
 
-  // A durable chat can be shared as a read-only link once it has a message.
-  const chatShareOffered = chatSharingEnabled && serverBackedChat;
+  // A kept chat can be shared as a read-only link once it has a message. A
+  // temporary one is the conversation its owner asked not to keep.
+  const chatShareOffered = chatSharingEnabled && chatPersistence && !chatTemporary;
   // Local-only turns (`isGreeting`) are not stored, so they neither make a chat
   // shareable nor start one below.
   const chatShareReady =
@@ -954,23 +870,79 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
   // messages — on screen for a render, and pinning it would send the user
   // straight back into it.
   const chatStarted = messages.some(message => message.role === 'user' && !message.isGreeting);
+  leavingTemporaryChatRef.current = chatTemporary && chatStarted;
+
+  /**
+   * The incognito toggle. Whether a chat is kept is fixed when it is created,
+   * so on a chat that has started the toggle acts on the chat itself:
+   * switching it on in a kept chat starts a new, temporary one (the kept one
+   * stays in the history), and switching it off in a temporary chat keeps that
+   * chat — nothing on screen is lost either way.
+   *
+   * @param {boolean} next - Whether incognito is to be on.
+   */
+  const handleEphemeralChange = useCallback(
+    async next => {
+      if (!chatStarted || next === chatTemporary) {
+        setEphemeral(next);
+        return;
+      }
+      if (next) {
+        setEphemeral(true);
+        cancelGeneration('incognito');
+        clearMessages();
+        resetConversationState();
+        startNewChat();
+        return;
+      }
+      try {
+        await keepChat(chatId);
+        setStoredTemporary(false);
+        setEphemeral(false);
+        invalidateChatsCache();
+      } catch (err) {
+        addSystemMessage(
+          t(
+            'chat.ephemeral.keepFailed',
+            'This chat could not be saved to your history: {{error}}',
+            {
+              error: err?.message || ''
+            }
+          ),
+          true
+        );
+      }
+    },
+    [
+      chatStarted,
+      chatTemporary,
+      chatId,
+      setEphemeral,
+      cancelGeneration,
+      clearMessages,
+      resetConversationState,
+      startNewChat,
+      addSystemMessage,
+      t
+    ]
+  );
   useEffect(() => {
     if (
       embedded ||
       routeChatId ||
-      !serverBackedChat ||
+      !chatPersistence ||
       hydrating ||
       !chatStarted ||
       chatId !== freshChatRef.current?.id
     )
       return;
     navigate(`/apps/${appId}/c/${chatId}`, { replace: true });
-  }, [embedded, routeChatId, serverBackedChat, hydrating, chatStarted, appId, chatId, navigate]);
+  }, [embedded, routeChatId, chatPersistence, hydrating, chatStarted, appId, chatId, navigate]);
 
-  // Hydrate a server-backed chat from the durable store. That mode keeps no
-  // browser copy, so this fetch is the only thing that puts a stored transcript
-  // back on screen — when the history opens a chat by URL and when a started
-  // chat, pinned to its URL above, is reloaded. A chat
+  // Hydrate the chat from the store. No browser copy is kept, so this fetch is
+  // the only thing that puts a stored transcript back on screen — when the
+  // history opens a chat by URL, when a started chat, pinned to its URL above,
+  // is reloaded, and when the tab comes back to the chat it remembers. A chat
   // this tab minted but never sent is not in the store yet: that 404 is the
   // ordinary case for a new chat, not a failure worth reporting.
   useEffect(() => {
@@ -982,55 +954,37 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
     setChatSettings(null);
     setChatOrigin(null);
     setChatProjectId(null);
+    setStoredTemporary(null);
   }, [chatId]);
-
-  // A chat that is not stored server-side keeps its container project in the
-  // browser, beside its transcript (`writeChatProjectId` below): reopening
-  // the app restores the transcript by the tab's chat id, and without the
-  // project its next turns would lose the project's instructions and
-  // documents. Never for an incognito chat, which keeps nothing.
-  const browserPersistedChat = !embedded && !ephemeral && !serverBackedChat;
-  useEffect(() => {
-    if (!browserPersistedChat) return;
-    const stored = readChatProjectId(chatId);
-    if (stored) setChatProjectId(prev => prev || stored);
-  }, [chatId, browserPersistedChat]);
 
   /**
    * The chat has started in its container project: keep the project once
-   * the URL drops `?project=` (a stored chat's URL is pinned to
-   * `/c/:chatId`), and, for a chat kept in the browser, beside its transcript.
+   * the URL drops `?project=` (a stored chat's URL is pinned to `/c/:chatId`).
+   * The store records it with the chat, so a reload gets it back from there.
    */
   const adoptContainerProject = useCallback(() => {
     if (!containerProjectId) return;
     setChatProjectId(prev => prev || containerProjectId);
-    if (browserPersistedChat) writeChatProjectId(chatId, containerProjectId);
-  }, [containerProjectId, browserPersistedChat, chatId]);
+  }, [containerProjectId]);
 
-  // The hydration attempt that owns the transcript, as `<chatId>|<mode>`. Keyed
-  // on the mode too, because leaving and re-entering server-backed mode (the
-  // incognito toggle) is a second entry into the same chat — a chat-id-only
-  // guard would answer "already done" and then never fetch, never finish
-  // hydrating, and leave the surface spinning "Loading chat…" for good.
+  // The chat the last hydration attempt was for.
   const chatHydratedRef = useRef(null);
   // Whether the fetch below is still out. A re-run of the effect must not end
   // hydration behind its back — that is the greeting flash all over again.
   const hydrationPendingRef = useRef(false);
   useEffect(() => {
-    if (!serverBackedChat || !app) return undefined;
-    const attempt = `${chatId}|${serverBackedChat}`;
+    if (!app) return undefined;
+    const attempt = chatId;
     if (chatHydratedRef.current === attempt) {
-      // This chat has already been fetched (or deliberately not fetched) in
-      // this mode. Nothing else clears the loading flag, so say so here.
+      // This chat has already been fetched (or deliberately not fetched).
+      // Nothing else clears the loading flag, so say so here.
       if (!hydrationPendingRef.current) finishHydration();
       return undefined;
     }
-    // Already showing a conversation: the browser copy that becoming
-    // server-backed discards is cleared in the same commit, so a non-empty
-    // transcript here is one that belongs on screen — an incognito stretch, or
-    // a handoff that seeded it. Hydration is left alone rather than finished:
-    // the clearing case re-runs this effect a frame later with nothing on
-    // screen, and finishing here would uncover the greeting in between.
+    // The chat being left is still on screen for the render that switched
+    // away from it; the switch clears it and this effect runs again then.
+    // Hydration is left alone rather than finished: finishing here would
+    // uncover the greeting in between.
     if (messages.length > 0) return undefined;
     if (mintedChatIdsRef.current.has(chatId)) {
       // This tab minted the id, so the store has never heard of it: asking
@@ -1044,8 +998,8 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
     chatHydratedRef.current = attempt;
     hydrationPendingRef.current = true;
 
-    // Superseded only by another attempt — a different chat, or a mode change
-    // — never by a re-render. A turn started during the round trip used to
+    // Superseded only by another attempt — a different chat — never by a
+    // re-render. A turn started during the round trip used to
     // cancel this fetch through the effect's own cleanup and, because the
     // guard above was already latched, the stored transcript was then lost for
     // the rest of the chat's life.
@@ -1075,12 +1029,13 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
         if (result?.chat?.variables) setVariables(v => ({ ...v, ...result.chat.variables }));
         setChatOrigin(result?.chat?.origin || null);
         setChatProjectId(result?.chat?.projectId || null);
+        setStoredTemporary(result?.chat?.temporary === true);
         // Opening a chat is what "seen" means: this same GET cleared the
         // chat's unseen flag server-side, so every list already on screen is
         // now showing a badge the server no longer reports.
         invalidateChatsCache();
 
-        // The turn may still be generating. A durable chat's run outlives the
+        // The turn may still be generating. A kept chat's run outlives the
         // browser that started it, so reopening the chat has to re-attach to
         // it — replay what the ledger already holds, then follow the stream —
         // or the answer only appears after the turn ends and the page is
@@ -1139,7 +1094,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
     })();
 
     return undefined;
-  }, [serverBackedChat, app, chatId, messages.length, loadServerMessages, finishHydration]);
+  }, [app, chatId, messages.length, loadServerMessages, finishHydration]);
 
   // A scheduled run that was waiting on this chat's approval finished on the
   // server: its answer is in the store, not on screen, so read it back — unless
@@ -1172,55 +1127,8 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
   useEffect(() => {
     const wasProcessing = wasProcessingRef.current;
     wasProcessingRef.current = processing;
-    if (serverBackedChat && wasProcessing && !processing) invalidateChatsCache();
-  }, [processing, serverBackedChat]);
-
-  // Resume conversation from conversation API on mount (iAssistant Conversation)
-  const conversationResumed = useRef(false);
-  useEffect(() => {
-    if (conversationResumed.current || !app || messages.length > 0) return;
-    // A server-backed chat hydrates from the durable store instead, and that
-    // store is the source of truth for it. Two loaders replacing the same array
-    // would race, and the loser would silently win on a slow network. An
-    // embedded chat is always new.
-    if (embedded || ephemeral || serverBackedChat) return;
-    // A chat handed over from Outlook brings its own transcript: the
-    // conversation this tab had for the app must not land on top of it.
-    if (handoffToken || pendingHandoffRef.current || chatId === handedOffChatId) return;
-
-    const existingConversationId = getConversationId(appId);
-    if (!existingConversationId) return;
-
-    conversationResumed.current = true;
-
-    const requestedChatId = chatId;
-    void (async () => {
-      try {
-        const result = await getConversationMessages(appId, existingConversationId, { chatId });
-        // The chat may have changed meanwhile (a new chat, a hand-off).
-        if (currentChatIdRef.current !== requestedChatId) return;
-        const serverMessages = result?.messages || result;
-        if (Array.isArray(serverMessages) && serverMessages.length > 0) {
-          loadServerMessages(serverMessages);
-        }
-      } catch (err) {
-        // Conversation may have been deleted or expired - clear stored ID
-        console.warn('Failed to load conversation messages, clearing stored ID:', err.message);
-        clearConversationId(appId);
-      }
-    })();
-  }, [
-    app,
-    appId,
-    chatId,
-    messages.length,
-    loadServerMessages,
-    ephemeral,
-    serverBackedChat,
-    embedded,
-    handoffToken,
-    handedOffChatId
-  ]);
+    if (chatPersistence && wasProcessing && !processing) invalidateChatsCache();
+  }, [processing, chatPersistence]);
 
   // Auto-send message if send=true query parameter is present
   const autoSendTriggered = useRef(false);
@@ -1369,15 +1277,10 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
   // The latest values the delayed send below has to re-check. Hydration can
   // land inside those 300 ms, and the timer closes over nothing else.
   const autoStartGateRef = useRef(null);
-  // A hand-off from Outlook is the chat's start: nothing may auto-start while
-  // it is being claimed (the token stays in the address until it settles) or
-  // until its transcript is on screen.
-  const handoffInProgress = Boolean(handoffToken) || pendingHandoffRef.current !== null;
   autoStartGateRef.current = {
     hydrating,
     chatModeResolving,
-    messageCount: messages.length,
-    handoffInProgress
+    messageCount: messages.length
   };
 
   useEffect(() => {
@@ -1386,14 +1289,13 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
       app?.autoStart === true && // App has autoStart enabled
       !isStartFormEnabled(app) && // A start form is sent by the user, not on open
       messages.length === 0 && // No messages yet
-      // …and an empty transcript really does mean "new chat". In server-backed
-      // mode it is also what a chat with a hundred stored turns looks like
+      // …and an empty transcript really does mean "new chat". It is also what
+      // a chat with a hundred stored turns looks like
       // until `GET /api/chats/:id` answers, so firing here would append a
       // blank turn — and re-prompt the model with the whole history — every
       // single time the user opens that chat from the history.
       !hydrating &&
       !chatModeResolving &&
-      !handoffInProgress &&
       !processing && // Not currently processing
       !autoStartTriggered.current && // Haven't triggered yet
       selectedModel && // Model is selected
@@ -1409,12 +1311,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
         // Re-check: the stored transcript may have landed while this timer
         // was pending, and this was never a new chat after all.
         const gate = autoStartGateRef.current;
-        if (
-          gate.hydrating ||
-          gate.chatModeResolving ||
-          gate.handoffInProgress ||
-          gate.messageCount > 0
-        ) {
+        if (gate.hydrating || gate.chatModeResolving || gate.messageCount > 0) {
           debugLog('Auto-start abandoned: the chat is not empty after all');
           return;
         }
@@ -1492,7 +1389,6 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
     messages.length,
     hydrating,
     chatModeResolving,
-    handoffInProgress,
     processing,
     appId,
     selectedModel,
@@ -1547,7 +1443,6 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
       resetConversationState();
       startNewChat();
       if (!embedded) clearConversationId(appId);
-      conversationResumed.current = false;
 
       // Reset the chat input to empty
       setInput('');
@@ -1914,7 +1809,6 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
         resetConversationState();
         startNewChat();
         if (!embedded) clearConversationId(appId);
-        conversationResumed.current = false;
       }
 
       // Reset the chat input to empty
@@ -2013,7 +1907,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
         chat: {
           chatId,
           appId,
-          ephemeral: !serverBackedChat,
+          ...(ephemeral ? { ephemeral: true } : {}),
           clientMessageId: answerId,
           attachment,
           // The container, so a stored chat whose first turn is a recording
@@ -2046,7 +1940,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
     [
       chatId,
       appId,
-      serverBackedChat,
+      ephemeral,
       addUserMessage,
       addAssistantMessage,
       updateAssistantMessage,
@@ -2832,8 +2726,11 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
       websearchEnabled,
       onWebsearchEnabledChange: app?.websearch?.enabled ? setWebsearchEnabled : undefined,
       // Ephemeral chat toggle (rendered next to the send button)
-      ephemeral,
-      onEphemeralChange: setEphemeral,
+      // Only where there is a history to keep a chat in: without one every
+      // chat is temporary already, and the toggle would change nothing.
+      // What the toggle shows: the open chat's own state once it has started.
+      ephemeral: chatPersistence && (chatStarted ? chatTemporary : ephemeral),
+      onEphemeralChange: chatPersistence ? handleEphemeralChange : undefined,
       // Image generation props
       model: currentModel,
       imageAspectRatio,
@@ -3029,7 +2926,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
         <ChatProjectBar
           chatId={chatId}
           projectId={containerProjectId}
-          canMove={serverBackedChat && (Boolean(routeChatId) || chatStarted)}
+          canMove={chatPersistence && !chatTemporary && (Boolean(routeChatId) || chatStarted)}
           onMoved={setChatProjectId}
         />
       )}
@@ -3120,7 +3017,6 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
                   onClarificationSkip={onClarificationSkipInChat}
                   onOpenSourceInApp={handleOpenSourceInApp}
                   linkPath={appPagePath}
-                  ephemeral={ephemeral}
                   startForm={showStartForm ? renderStartForm() : null}
                 />
               </div>
@@ -3154,7 +3050,6 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
                         appId={appId}
                         chatId={chatId}
                         modelId={selectedModel}
-                        imagesPersisted={serverBackedChat}
                         onOpenInCanvas={handleOpenInCanvas}
                         onSaveAsPrompt={handleSaveAsPrompt}
                         onSaveAsSkill={handleSaveAsSkill}
@@ -3210,7 +3105,6 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
                         appId={appId}
                         chatId={chatId}
                         modelId={selectedModel}
-                        imagesPersisted={serverBackedChat}
                         onOpenInCanvas={handleOpenInCanvas}
                         onSaveAsPrompt={handleSaveAsPrompt}
                         onSaveAsSkill={handleSaveAsSkill}
@@ -3261,7 +3155,6 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
                     appId={appId}
                     chatId={chatId}
                     modelId={selectedModel}
-                    imagesPersisted={serverBackedChat}
                     starterPrompts={app?.starterPrompts || []}
                     onSelectPrompt={handleStarterPromptClick}
                     welcomeMessage={welcomeMessage}
@@ -3298,7 +3191,6 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
                   appId={appId}
                   chatId={chatId}
                   modelId={selectedModel}
-                  imagesPersisted={serverBackedChat}
                   starterPrompts={app?.starterPrompts || []}
                   onSelectPrompt={handleStarterPromptClick}
                   welcomeMessage={welcomeMessage}

@@ -57,8 +57,9 @@ consumer keeps the behaviour and the on-disk layout it had before the move:
 the ledger writes `contents/data/run-log/` as it always did, workflow state
 stays in its `<executionId>/latest.json` directories, interactions fall back to
 `interactions.json` plus claim markers, iAssistant conversation state stays
-in memory, and durable chats — which have no earlier layout — are simply off.
-That is a supported state, not a degraded one.
+in memory. Chat is the exception: it has no earlier layout, and every chat is
+stored, so without a provider a chat turn answers `503 CHAT_STORAGE_UNAVAILABLE`
+until storage comes up.
 
 One namespace shares a directory with the files it replaces: `workflow-state`
 documents (`contents/data/workflow-state/<executionId>.json`) sit beside the

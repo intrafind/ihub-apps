@@ -8,11 +8,16 @@ import './App.css';
 // Import the i18n instance before rendering the app
 import { i18nService } from './i18n/i18n';
 import { exposeCacheForDebugging } from './utils/cache';
+import { purgeLegacyChatCopies } from './features/chat/utils/chatMessagesStorage';
 
 // Dev builds put the API cache on `window.appCache` for devtools inspection.
 if (import.meta.env.DEV) {
   exposeCacheForDebugging();
 }
+
+// Chats are stored server-side; a tab open across the upgrade may still hold
+// the transcripts an earlier version kept in sessionStorage.
+purgeLegacyChatCopies();
 
 // The translations come from the API rather than the bundle, so hold the first
 // render until they arrive (bounded by a timeout) to avoid a flash of untranslated text.

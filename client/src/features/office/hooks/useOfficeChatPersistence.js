@@ -10,7 +10,8 @@ const STORED = Object.freeze({ persistence: true, resolving: false });
 const NOT_STORED = Object.freeze({ persistence: false, resolving: false });
 
 /**
- * Whether the task pane's chats are stored server-side (durable chats).
+ * Whether the task pane's chats are kept in the chat history. Every chat is
+ * stored server-side; without the history each one is temporary.
  *
  * The web app answers this with `useChatPersistence()`, which reads the auth and
  * platform-config contexts the pane does not have: the pane signs in with its
@@ -20,13 +21,11 @@ const NOT_STORED = Object.freeze({ persistence: false, resolving: false });
  * user is never anonymous, so that flag is the whole answer here.
  *
  * `resolving` is true until the config has been read for this sign-in, from
- * the very render the user signs in on. A chat surface has to wait it out: a
- * chat that switches to server-backed after its first message would drop the
- * transcript on screen, and one that stays browser-backed after it should not
- * have would post its whole history to a stored chat.
+ * the very render the user signs in on. A chat surface has to wait it out: it
+ * decides whether a new chat is kept or temporary, and whether the history is
+ * offered.
  *
- * A failed read answers "not stored", which is the pane's behaviour from before
- * durable chats existed.
+ * A failed read answers "no history": every chat is then temporary.
  *
  * @param {boolean} signedIn - Whether the pane has a signed-in user.
  * @returns {{ persistence: boolean, resolving: boolean }}

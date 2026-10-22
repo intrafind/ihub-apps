@@ -125,7 +125,8 @@ describe('GET /api/admin/chat-history', () => {
       enabled: true,
       retentionDays: 90,
       maxChatsPerUser: 200,
-      maxMessagesPerChat: 2000
+      maxMessagesPerChat: 2000,
+      temporaryRetentionHours: 24
     });
     expect(response.body.settings.runLog).toMatchObject({
       enabled: true,
@@ -243,15 +244,31 @@ describe('POST /api/admin/chat-history/retention/run', () => {
     expect(state.cleanups).toEqual([30]);
   });
 
-  test('never sweeps stored chats while durable chats are off', async () => {
+  test('with the chat history off, sweeps only temporary chats — never the kept ones', async () => {
     state.features.chatPersistence = false;
     const response = await request(createTestApp())
       .post('/api/admin/chat-history/retention/run')
       .send({ target: 'chats' });
 
     expect(response.status).toBe(200);
-    expect(response.body.chats).toMatchObject({ ran: false, reason: 'chatPersistenceInactive' });
+    expect(response.body.chats).toMatchObject({ ran: true, historyRules: false });
     expect(response.body.ledger).toBeNull();
+    expect(state.sweeps).toHaveLength(1);
+    expect(state.sweeps[0]).toMatchObject({
+      retentionDays: 0,
+      maxChatsPerUser: 0,
+      temporaryRetentionHours: 24
+    });
+  });
+
+  test('never sweeps anything while storage is down', async () => {
+    state.storageReady = false;
+    const response = await request(createTestApp())
+      .post('/api/admin/chat-history/retention/run')
+      .send({ target: 'chats' });
+
+    expect(response.status).toBe(200);
+    expect(response.body.chats).toMatchObject({ ran: false, reason: 'chatPersistenceInactive' });
     expect(state.sweeps).toHaveLength(0);
   });
 

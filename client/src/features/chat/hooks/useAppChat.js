@@ -37,21 +37,22 @@ import { takeMcpAppModelContext } from '../mcpApps/modelContextStore';
  * @param {string} options.chatId - The chat session ID
  * @param {Function} options.onMessageComplete - Callback fired when a message is completed (optional)
  * @param {Function} [options.onMessageAccepted] - Called with the chat id once the server has
- *   accepted a turn's request — for a server-backed chat, the moment the chat is in the store
+ *   accepted a turn's request — the moment the chat is in the store
  * @param {Function} [options.onRunStarted] - Called with the chat id when a turn's run starts
- *   on the stream. The server announces a run only once its question is stored, so for a
- *   server-backed chat this is the earliest moment the chat is in the store; a turn's request
+ *   on the stream. The server announces a run only once its question is stored, so this is
+ *   the earliest moment the chat is in the store; a turn's request
  *   itself is only answered when the turn ends.
  * @param {boolean} options.persistConversationId - Whether to persist iAssistant conversationId
  *   to localStorage (keyed by appId). Disable for ephemeral chats (e.g. compare mode panels)
  *   that share an appId so they don't race/overwrite each other. Defaults to true.
- * @param {boolean} options.ephemeral - When true, chat is never persisted to browser storage
- *   and no conversationId is stored.
- * @param {boolean} options.serverBacked - When true, the durable chat store owns the
- *   transcript: the request carries only the new message (a persisted chat rejects a
- *   longer array with `CLIENT_HISTORY_NOT_ALLOWED`), an edit or a regenerate travels as
- *   `replaceFromMessageId`, and the turn is not flagged ephemeral on the wire. Every
- *   other surface keeps posting its whole local history exactly as before.
+ * @param {boolean} options.ephemeral - When true, a chat this surface starts is a temporary
+ *   one (never listed in the history, deleted a day after its last activity) and no
+ *   conversationId is stored. The chat is stored on the server either way: the request
+ *   carries only the new message, an edit or a regenerate travels as
+ *   `replaceFromMessageId`, and the server assembles the history.
+ * @param {boolean} [options.hydrates=true] - Whether the transcript has to be fetched
+ *   from the store before the surface can tell an empty chat from one still loading
+ *   (see `useChatMessages`). False for a surface that only ever opens new chats.
  */
 function useAppChat({
   appId,
@@ -61,7 +62,7 @@ function useAppChat({
   onRunStarted,
   persistConversationId = true,
   ephemeral = false,
-  serverBacked = false
+  hydrates = true
 }) {
   const { t } = useTranslation();
   // Use the chatId directly instead of storing it in a ref
@@ -106,8 +107,7 @@ function useAppChat({
   // Never persist the iAssistant conversationId for ephemeral chats.
   const shouldPersistConversationId = persistConversationId && !ephemeral;
 
-  // Reacts to chatId changes, and owns which of the three transcript modes
-  // (browser-persisted, ephemeral, server-backed) is in force.
+  // Reacts to chatId changes; the transcript itself comes from the store.
   const {
     messages,
     messagesRef,
@@ -124,7 +124,7 @@ function useAppChat({
     clearMessages,
     getMessagesForApi,
     loadServerMessages
-  } = useChatMessages(chatId, { ephemeral, serverBacked });
+  } = useChatMessages(chatId, { hydrates });
 
   const detachEventSourceRef = useRef();
 
@@ -184,9 +184,8 @@ function useAppChat({
    * The protocol fields every send shares, consumed once per request.
    *
    * @param {boolean} [sendChatHistory=true] - The viewer's "Include chat history in
-   *   requests" setting. A server-backed chat no longer communicates it by
-   *   truncating the array it posts — it posts one message either way — so it
-   *   has to travel as a field of its own.
+   *   requests" setting. A turn posts one message either way, so it travels as a
+   *   field of its own.
    * @returns {Object} Extra request params.
    */
   const takeProtocolParams = useCallback(
@@ -194,19 +193,16 @@ function useAppChat({
       const replaceFromMessageId = pendingReplaceFromRef.current;
       pendingReplaceFromRef.current = null;
       return {
-        // A turn the server must not store. Every surface that is not running
-        // the server-backed protocol has to say so, because it still posts its
-        // whole local history and a persisted chat rejects that outright with
-        // `CLIENT_HISTORY_NOT_ALLOWED`. That covers the incognito toggle, the
+        // A chat the user does not want kept: the incognito toggle, the
         // compare panels and the canvas — the last two mint their own chat ids
         // (`compare-<uuid>`, `canvas-<uuid>`) and fan a single user submit out
-        // to several of them, so they never belong in a history list either.
-        ...(serverBacked ? {} : { ephemeral: true }),
-        // Edit and regenerate no longer speak through a truncated array: the
+        // to several of them, so they never belong in a history list. Only the
+        // turn that creates the chat decides; the server ignores it after.
+        ...(ephemeral ? { ephemeral: true } : {}),
+        // Edit and regenerate do not speak through a truncated array: the
         // server forks its stored history here instead.
-        ...(serverBacked && replaceFromMessageId ? { replaceFromMessageId } : {}),
-        // "Include chat history in requests". Every other mode says this by
-        // posting a one-element array; a server-backed chat posts one message
+        ...(replaceFromMessageId ? { replaceFromMessageId } : {}),
+        // "Include chat history in requests". A turn posts one message
         // whatever the setting, so without this field the server would keep
         // prepending the stored transcript and the opt-out would be inert.
         //
@@ -217,10 +213,10 @@ function useAppChat({
         // ticking it on again recorded nothing. `sessionRoutes` only tests
         // `=== false`, so the wire behaviour is unchanged; only what gets
         // recorded is fixed.
-        ...(serverBacked ? { sendChatHistory: sendChatHistory !== false } : {})
+        sendChatHistory: sendChatHistory !== false
       };
     },
-    [serverBacked]
+    [ephemeral]
   );
 
   /**
@@ -228,8 +224,8 @@ function useAppChat({
    * delete, an edit or a regenerate.
    *
    * That truncated array used to be the whole message to the server, since the
-   * client posted it. A server-backed chat posts only the new message, so the
-   * same intent has to travel explicitly: latch the id the stored history knows
+   * client posted it. A turn posts only the new message, so the same intent has
+   * to travel explicitly: latch the id the stored history knows
    * this message by and let the next send carry it as `replaceFromMessageId`.
    *
    * A hydrated message carries the store's own id on `serverId`. A turn made in
@@ -244,19 +240,16 @@ function useAppChat({
    */
   const deleteFromMessage = useCallback(
     messageId => {
-      if (serverBacked) {
-        const target = messagesRef.current.find(m => m.id === messageId);
-        const forkFrom =
-          typeof target?.serverId === 'string'
-            ? target.serverId
-            : typeof target?.clientMessageId === 'string'
-              ? target.clientMessageId
-              : null;
-        pendingReplaceFromRef.current = forkFrom;
-      }
+      const target = messagesRef.current.find(m => m.id === messageId);
+      pendingReplaceFromRef.current =
+        typeof target?.serverId === 'string'
+          ? target.serverId
+          : typeof target?.clientMessageId === 'string'
+            ? target.clientMessageId
+            : null;
       deleteMessage(messageId);
     },
-    [deleteMessage, messagesRef, serverBacked]
+    [deleteMessage, messagesRef]
   );
 
   /**
@@ -270,8 +263,7 @@ function useAppChat({
       const { appId, chatId, messages, params } = pendingMessageDataRef.current;
       await sendAppChatMessage(appId, chatId, messages, params);
       pendingMessageDataRef.current = null;
-      // The server has the turn — for a server-backed chat, the chat is in
-      // the store from here on.
+      // The server has the turn — the chat is in the store from here on.
       onMessageAcceptedRef.current?.(chatId);
     } catch (error) {
       if (lastMessageIdRef.current && !isCancellingRef.current) {
@@ -596,15 +588,15 @@ function useAppChat({
           // The exchange id is what the store files this turn under
           // (`clientMessageId`), so it is the only handle an edit or a
           // regenerate of a turn made in this session can fork the stored
-          // history by. Only server-backed chats have a store to address.
-          ...(serverBacked ? { clientMessageId: exchangeId } : {}),
+          // history by.
+          clientMessageId: exchangeId,
           imageData: apiMessage.imageData,
           fileData: apiMessage.fileData,
           audioData: apiMessage.audioData
         });
         addAssistantMessage(exchangeId);
 
-        const messagesForAPI = getMessagesForApi(sendChatHistory, {
+        const messagesForAPI = getMessagesForApi({
           role: 'user',
           content: apiMessage.content,
           promptTemplate: apiMessage.promptTemplate || null,
@@ -654,7 +646,6 @@ function useAppChat({
       initEventSource,
       addSystemMessage,
       takeProtocolParams,
-      serverBacked,
       t,
       appId,
       chatId
@@ -863,14 +854,14 @@ function useAppChat({
           isClarificationAnswer: true,
           // Same reason as `sendMessage`: the store files this turn under the
           // exchange id, so an edit of it later has something to fork from.
-          ...(serverBacked ? { clientMessageId: exchangeId } : {})
+          clientMessageId: exchangeId
         });
 
         // Add placeholder for assistant response
         addAssistantMessage(exchangeId);
 
         // Build the messages for API - just the answer value (question context is in chat history)
-        const messagesForAPI = getMessagesForApi(true, {
+        const messagesForAPI = getMessagesForApi({
           role: 'user',
           content: response.skipped ? '[Skipped]' : String(response.value),
           messageId: exchangeId,
@@ -921,7 +912,6 @@ function useAppChat({
       addSystemMessage,
       messagesRef,
       takeProtocolParams,
-      serverBacked,
       t,
       appId,
       chatId
@@ -1026,7 +1016,7 @@ function useAppChat({
     chatId: chatId,
     messages,
     processing,
-    // True while a server-backed transcript is still being fetched, so a
+    // True while the stored transcript is still being fetched, so a
     // surface can render a loading state instead of flashing its greeting.
     hydrating,
     finishHydration,

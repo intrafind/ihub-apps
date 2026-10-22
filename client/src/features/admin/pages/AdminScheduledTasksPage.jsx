@@ -193,7 +193,7 @@ export default function AdminScheduledTasksPage() {
             ],
             [
               'chatPersistence',
-              t('admin.scheduledTasks.gates.chats', 'Durable chats are available')
+              t('admin.scheduledTasks.gates.chats', 'The chat history is available')
             ],
             [
               'platformEnabled',

@@ -1,13 +1,11 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { chatMessagesStorageKey } from '../../chat/utils/chatMessagesStorage';
-
 /**
  * How a chat travels between the Outlook pane and its pop-out window (see
  * `officePopout.js`): `OfficeChatPanel` reports the chat as
- * `{ app, chatId, fresh, chatStored, transcript, variables, inputValue,
- * pinnedEmails }`, and the window that takes it over opens it with these.
+ * `{ app, chatId, fresh, variables, inputValue, pinnedEmails }`, and the window
+ * that takes it over opens it with these — the transcript comes from the store.
  */
 
 /**
@@ -28,24 +26,4 @@ export function popoutChatRouteState(state) {
       pinnedEmails: Array.isArray(state?.pinnedEmails) ? state.pinnedEmails : []
     }
   };
-}
-
-/**
- * Put a chat that is not stored server-side into this window's session
- * storage, where its transcript is read from when the chat opens.
- *
- * @param {object} state - What `OfficeChatPanel` reported for the chat.
- */
-export function seedPopoutTranscript(state) {
-  if (!state?.chatId || state.chatStored) return;
-  try {
-    const key = chatMessagesStorageKey(state.chatId);
-    if (typeof state.transcript === 'string' && state.transcript) {
-      sessionStorage.setItem(key, state.transcript);
-    } else {
-      sessionStorage.removeItem(key);
-    }
-  } catch {
-    // No session storage: the chat opens without its earlier messages.
-  }
 }

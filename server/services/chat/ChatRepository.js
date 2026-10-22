@@ -151,6 +151,8 @@ const PROTECTED_CHAT_FIELDS = new Set([
   'ownerId',
   'identityMode',
   'createdAt',
+  // Fixed when the chat is created; `keepChat` is the one way to clear it.
+  'temporary',
   '__proto__',
   'constructor',
   'prototype'
@@ -1077,7 +1079,11 @@ export class ChatRepository {
     const pageSize = clampPageSize(limit);
     const after = cursor ? decodeCursor(cursor) : null;
 
-    const sorted = (await this._loadOwnerChats(ownerId)).sort(compareChatsDesc);
+    // A temporary chat is stored like any other but never listed: it is the
+    // conversation its owner asked not to keep.
+    const sorted = (await this._loadOwnerChats(ownerId))
+      .filter(chat => chat.temporary !== true)
+      .sort(compareChatsDesc);
     const remaining = after ? sorted.filter(chat => compareChatsDesc(chat, after) > 0) : sorted;
     const items = remaining.slice(0, pageSize);
     const nextCursor =
@@ -1131,6 +1137,10 @@ export class ChatRepository {
    *   `{ createdVia: 'ui'|'responses-api', clientId? }`.
    * @param {Object} [options.metadata] - Caller-defined key/value pairs (the
    *   Conversations API's `metadata`).
+   * @param {boolean} [options.temporary=false] - Store the chat as temporary:
+   *   never listed or shared, and removed by the retention sweep a day (by
+   *   default) after its last activity. Only a new chat takes it — an existing
+   *   one stays what it was created as.
    * @returns {Promise<Object|null>} The chat, or null when it cannot be stored.
    */
   async ensureChat({
@@ -1142,7 +1152,8 @@ export class ChatRepository {
     settings,
     title,
     origin,
-    metadata
+    metadata,
+    temporary = false
   } = {}) {
     if (!this._usable(chatId, 'ensureChat') || !ownerId) return null;
     return this._withChatLock(chatId, async () => {
@@ -1166,6 +1177,7 @@ export class ChatRepository {
           hasUnseenActivity: false,
           status: 'active',
           runIds: [],
+          ...(temporary === true ? { temporary: true } : {}),
           ...(origin && typeof origin === 'object' ? { origin: { ...origin } } : {}),
           ...(metadata && typeof metadata === 'object' ? { metadata: { ...metadata } } : {})
         },
@@ -1417,6 +1429,28 @@ export class ChatRepository {
         },
         etag
       );
+    });
+  }
+
+  /**
+   * Keep a temporary chat: from now on it is listed, can be shared and follows
+   * the history retention rules like any chat created as a kept one.
+   *
+   * There is no way back. A kept chat that should not be kept is deleted; a
+   * conversation that is to be temporary from some point on is a new chat.
+   *
+   * @param {string} chatId - Chat id.
+   * @returns {Promise<Object|null>} The stored chat, or null when it does not
+   *   exist or cannot be stored.
+   */
+  async keepChat(chatId) {
+    if (!this._usable(chatId, 'keepChat')) return null;
+    return this._withChatLock(chatId, async () => {
+      const { chat: existing, etag } = await this._loadChat(chatId);
+      if (!existing) return null;
+      if (existing.temporary !== true) return existing;
+      const { temporary: _temporary, ...kept } = existing;
+      return this._writeChat(kept, etag);
     });
   }
 

@@ -611,10 +611,10 @@ The main user-facing routes are:
 | `/`             | [Start page](#start-page-configuration)                                                     |
 | `/apps`         | Apps browser ([`appsList`](#apps-list-configuration))                                       |
 | `/apps/{appId}` | Chat with an app                                                                            |
-| `/apps/{appId}/c/{chatId}` | Reopen a stored chat with an app (requires durable chats)                        |
+| `/apps/{appId}/c/{chatId}` | Reopen a stored chat with an app — kept, or a temporary one of the viewer's       |
 | `/prompts`      | Prompts library (`promptsList`, feature flag `promptsLibrary`)                              |
 | `/pages/{id}`   | Static pages                                                                                |
-| `/chats`        | Chat history — requires durable chats (`chatPersistence`, off by default); see [Chat Persistence](chat-persistence.md) |
+| `/chats`        | Chat history — requires the Chat History feature (`chatPersistence`, off by default); see [Chat Persistence](chat-persistence.md) |
 
 ### Theme Configuration
 

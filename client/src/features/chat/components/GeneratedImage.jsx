@@ -22,9 +22,8 @@ import { useArtifactFetcher } from '../contexts/ArtifactFetchContext';
  *   a chat is fast even when it produced a dozen pictures: the transcript
  *   carries descriptors, not megabytes, and a picture below the fold does not
  *   compete with the ones the viewer is actually looking at.
- * - **Unavailable** — a descriptor with `unavailable`, or the `_hadImageData`
- *   marker the browser-storage path leaves behind. There is nothing to show,
- *   so the component says so rather than rendering a broken picture.
+ * - **Unavailable** — a descriptor with `unavailable`. There is nothing to
+ *   show, so the component says so rather than rendering a broken picture.
  *
  * Fetched through `apiClient` rather than pointed at by an `<img src>`: the URL
  * is credentialed, and a bearer token kept in `localStorage` only travels on a
@@ -35,11 +34,9 @@ import { useArtifactFetcher } from '../contexts/ArtifactFetchContext';
  *   a stored artifact descriptor, or one marked unavailable.
  * @param {string} [props.chatId] - Chat the image belongs to; required to fetch a stored one.
  * @param {number} props.index - Position in the message, for the alt text.
- * @param {boolean} [props.persisted] - Whether this chat stores its images. Drives the
- *   "download it or lose it" note, which is true only where nothing else keeps them.
  * @returns {JSX.Element|null}
  */
-function GeneratedImage({ image, chatId, index, persisted = false }) {
+function GeneratedImage({ image, chatId, index }) {
   // A shared chat serves its images through the share rather than the
   // owner's chat route; the page providing that route says so via context.
   const customFetch = useArtifactFetcher();
@@ -137,7 +134,7 @@ function GeneratedImage({ image, chatId, index, persisted = false }) {
     // browser copy dropped the payload, or the fetch failed. The text names
     // the reason so "my picture is gone" has an answer.
     const unavailable = image?.unavailable || (failed ? 'fetch-failed' : null);
-    if (!unavailable && !image?._hadImageData) return null;
+    if (!unavailable) return null;
     const detail =
       unavailable === 'too-large'
         ? t(
@@ -151,15 +148,10 @@ function GeneratedImage({ image, chatId, index, persisted = false }) {
             )
           : unavailable === 'fetch-failed'
             ? t('chatMessage.imageLoadFailed', 'The stored image could not be loaded.')
-            : unavailable === 'not-stored'
-              ? t(
-                  'chatMessage.imageNotStored',
-                  'This image could not be stored and is no longer available.'
-                )
-              : t(
-                  'chatMessage.imageNotPersistedDetail',
-                  'Generated images are not persisted when navigating away due to browser storage limitations. Images remain visible during the active session.'
-                );
+            : t(
+                'chatMessage.imageNotStored',
+                'This image could not be stored and is no longer available.'
+              );
     return (
       <div className="mt-3 p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
         <div className="flex items-start space-x-2">
@@ -203,24 +195,6 @@ function GeneratedImage({ image, chatId, index, persisted = false }) {
           <Icon name="download" size="sm" aria-hidden="true" />
         </button>
       </div>
-      {/* Only where it is true: a durable chat stores its images server-side,
-          and telling that user to download the picture or lose it is advice
-          about a problem they do not have. */}
-      {!persisted && (
-        <div className="flex items-start space-x-2 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
-          <Icon
-            name="information-circle"
-            className="text-blue-600 dark:text-blue-400 shrink-0 mt-0.5"
-            size="sm"
-          />
-          <p className="text-xs text-blue-800 dark:text-blue-200">
-            {t(
-              'chatMessage.saveImageWarning',
-              'Download this image to save it permanently. Images are not persisted when you navigate away due to browser storage limitations.'
-            )}
-          </p>
-        </div>
-      )}
     </div>
   );
 }

@@ -217,22 +217,9 @@ describe('lazy loading a stored image', () => {
 });
 
 describe('the "download it or lose it" note', () => {
-  it('is shown where nothing stores the image', () => {
+  it('is gone: every chat stores the images it produced', () => {
     render(
       <GeneratedImage image={{ mimeType: 'image/png', data: 'AAAA' }} chatId="chat-1" index={0} />
-    );
-
-    expect(screen.getByText(/not persisted when you navigate away/i)).toBeInTheDocument();
-  });
-
-  it('is gone in a chat that stores its images', () => {
-    render(
-      <GeneratedImage
-        image={{ mimeType: 'image/png', data: 'AAAA' }}
-        chatId="chat-1"
-        index={0}
-        persisted
-      />
     );
 
     expect(screen.queryByText(/not persisted when you navigate away/i)).not.toBeInTheDocument();

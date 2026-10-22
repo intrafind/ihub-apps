@@ -49,7 +49,7 @@ async function withRepository(fn) {
 const begin = (repository, extra = {}) =>
   beginTranscriptionTurn({
     repository,
-    persist: true,
+    storage: { stored: true, temporary: false },
     user,
     chatId: 'chat-transcribe',
     appId: 'notes',
@@ -108,9 +108,12 @@ describe('transcription turn', () => {
     });
   });
 
-  it('stores nothing when persistence is off or no chat is named', async () => {
+  it('stores nothing without storage or when no chat is named', async () => {
     await withRepository(async repository => {
-      assert.deepEqual(await begin(repository, { persist: false }), { ok: true, turn: null });
+      assert.deepEqual(await begin(repository, { storage: { stored: false, temporary: true } }), {
+        ok: true,
+        turn: null
+      });
       assert.deepEqual(await begin(repository, { chatId: undefined }), { ok: true, turn: null });
       assert.equal(await repository.getChat('chat-transcribe'), null);
       // Ending a turn that was never stored is a no-op.

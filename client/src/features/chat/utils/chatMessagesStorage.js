@@ -2,52 +2,28 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 /**
- * sessionStorage key of a chat's browser copy — the transcript of a chat that
- * is not stored server-side (`useChatMessages`). Its own module, free of
- * imports, for the code that hands such a chat to another window (the Outlook
- * pane's pop-out) and has to carry the transcript along.
- *
- * @param {string} chatId
- * @returns {string}
+ * Prefixes of the browser copies chats used to keep in `sessionStorage` — the
+ * transcript and the container project of a chat that was not stored
+ * server-side. Every chat is stored now and nothing reads them; a tab that was
+ * open across the upgrade still holds them, so they are cleared once at boot.
  */
-export const chatMessagesStorageKey = chatId => `ai_hub_chat_messages_${chatId}`;
+const LEGACY_CHAT_KEY_PREFIXES = ['ai_hub_chat_messages_', 'ai_hub_chat_project_'];
 
 /**
- * sessionStorage key of the container project of a chat that is not stored
- * server-side: kept beside its browser transcript, so a chat reopened from
- * that transcript stays inside its project (#1036).
+ * Remove the transcript copies an earlier version kept in `sessionStorage`.
  *
- * @param {string} chatId
- * @returns {string}
+ * @param {Storage} [storage] - Defaults to `window.sessionStorage`.
  */
-export const chatProjectStorageKey = chatId => `ai_hub_chat_project_${chatId}`;
-
-/**
- * The container project kept for a browser-persisted chat.
- *
- * @param {string} chatId
- * @returns {string|null}
- */
-export function readChatProjectId(chatId) {
+export function purgeLegacyChatCopies(storage = globalThis.sessionStorage) {
   try {
-    return sessionStorage.getItem(chatProjectStorageKey(chatId)) || null;
+    if (!storage) return;
+    const stale = [];
+    for (let index = 0; index < storage.length; index += 1) {
+      const key = storage.key(index);
+      if (key && LEGACY_CHAT_KEY_PREFIXES.some(prefix => key.startsWith(prefix))) stale.push(key);
+    }
+    stale.forEach(key => storage.removeItem(key));
   } catch {
-    return null;
-  }
-}
-
-/**
- * Keep (or, with no project, drop) the container project of a
- * browser-persisted chat.
- *
- * @param {string} chatId
- * @param {string|null} projectId
- */
-export function writeChatProjectId(chatId, projectId) {
-  try {
-    if (projectId) sessionStorage.setItem(chatProjectStorageKey(chatId), projectId);
-    else sessionStorage.removeItem(chatProjectStorageKey(chatId));
-  } catch {
-    // Storage blocked or full: the chat simply is not remembered in its project.
+    // Storage blocked: there is nothing it could be holding either.
   }
 }

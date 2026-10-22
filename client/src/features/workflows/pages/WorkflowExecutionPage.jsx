@@ -6,7 +6,6 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../../shared/contexts/AuthContext';
 import { getLocalizedContent } from '../../../utils/localizeContent';
-import { resetChatId } from '../../../utils/chatId';
 import { buildApiUrl } from '../../../utils/runtimeBasePath';
 import { markdownToHtml, isMarkdown } from '../../../utils/markdownUtils';
 import {
@@ -29,15 +28,11 @@ import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import MarkdownDownloadMenu from '../../../shared/components/MarkdownDownloadMenu';
 import MarkdownViewer from '../../../shared/components/MarkdownViewer';
 import { apiClient } from '../../../api/client';
-import { invalidateChatsCache, useChatPersistence } from '../../../shared/hooks/useChats';
+import { invalidateChatsCache } from '../../../shared/hooks/useChats';
 import { getDisplayableOutput } from '../utils/filterInternalFields';
 import { ProjectInputValue } from '../components/ProjectInputField';
 import { PROJECT_INPUT_TYPE } from '../utils/projectNodeConfig';
-import {
-  answerOf,
-  executionAnswerOf,
-  executionOutputOf
-} from '../../../../../shared/workflowChatOutput.js';
+import { answerOf, executionOutputOf } from '../../../../../shared/workflowChatOutput.js';
 
 /** The Output setting of the end step an execution finished at, or ''. */
 function endStepOutputSpec(state) {
@@ -274,9 +269,6 @@ function WorkflowExecutionPage() {
   const [restarting, setRestarting] = useState(false);
   const [restartError, setRestartError] = useState(null);
   const [chatWithResultsError, setChatWithResultsError] = useState(null);
-  // With durable chats the results chat is created by the server, from the
-  // execution itself; without them it is seeded in this tab (below).
-  const chatPersistence = useChatPersistence();
   // { key, name, content } when a markdown field is opened in the viewer modal
   const [viewerField, setViewerField] = useState(null);
 
@@ -391,71 +383,22 @@ function WorkflowExecutionPage() {
       'Here are the results from the workflow "{{name}}":',
       { name: workflowName }
     );
-    if (chatPersistence && app?.ephemeral !== true) {
-      // A stored chat reads its transcript from the server, never from this
-      // tab — the seeded copy below would be lost on the way, so there is no
-      // falling back to it.
-      try {
-        const response = await apiClient.post(
-          `/workflows/executions/${executionId}/chat/${encodeURIComponent(app.id)}`,
-          { contextMessage }
-        );
-        setShowAppSelection(false);
-        invalidateChatsCache();
-        navigate(`/apps/${app.id}/c/${response.data.chatId}`);
-        return;
-      } catch {
-        setShowAppSelection(false);
-        setChatWithResultsError(
-          t('workflows.chatWithResults.failed', 'The chat could not be started. Please try again.')
-        );
-        return;
-      }
+    // The server creates the chat from the execution itself — a kept one, or a
+    // temporary one for an `ephemeral` app or an installation without history.
+    try {
+      const response = await apiClient.post(
+        `/workflows/executions/${executionId}/chat/${encodeURIComponent(app.id)}`,
+        { contextMessage }
+      );
+      setShowAppSelection(false);
+      invalidateChatsCache();
+      navigate(`/apps/${app.id}/c/${response.data.chatId}`);
+    } catch {
+      setShowAppSelection(false);
+      setChatWithResultsError(
+        t('workflows.chatWithResults.failed', 'The chat could not be started. Please try again.')
+      );
     }
-
-    const workflowDef = state?.data?._workflowDefinition;
-
-    // 1. The answer (assistant message): the output of the end step the run
-    //    finished at, as the chat of the workflow shows it.
-    const outputText = executionAnswerOf(state) || '';
-
-    // 2. Determine the user's original input (user message)
-    let userInput = '';
-    const startNode = workflowDef?.nodes?.find(n => n.type === 'start');
-    const inputVars = startNode?.config?.inputVariables;
-    if (inputVars?.length > 0) {
-      // A project input is an id: it says nothing to the chat model.
-      const parts = inputVars
-        .filter(v => v.type !== PROJECT_INPUT_TYPE)
-        .map(v => state?.data?.[v.name])
-        .filter(v => typeof v === 'string' && v.length > 0);
-      userInput = parts.join('\n\n');
-    }
-
-    // Start a fresh chat session for this app
-    const newChatId = resetChatId(app.id);
-
-    // Pre-seed with a context user message + completed assistant message
-    const now = Date.now();
-    const messages = [
-      {
-        id: `user-${now}-wf`,
-        role: 'user',
-        content: userInput || contextMessage
-      },
-      {
-        id: `msg-${now}-wf`,
-        role: 'assistant',
-        content: outputText,
-        loading: false
-      }
-    ];
-
-    // Write to sessionStorage so AppChat picks them up on mount
-    sessionStorage.setItem(`ai_hub_chat_messages_${newChatId}`, JSON.stringify(messages));
-
-    setShowAppSelection(false);
-    navigate(`/apps/${app.id}`);
   };
 
   const handleCancelClick = () => setShowCancelConfirm(true);

@@ -24,7 +24,7 @@ import {
 } from '../../sse.js';
 import { RunStreamEmitter, currentSeq, getStreamRun } from '../../services/loop/RunStream.js';
 import runLog, { newRunId } from '../../services/loop/RunLog.js';
-import { resolveActorId, resolvePrincipal } from '../../services/loop/runIdentity.js';
+import { resolveActorId } from '../../services/loop/runIdentity.js';
 import { authorizeInteraction } from '../../services/loop/runAccess.js';
 import interactionService from '../../services/loop/InteractionService.js';
 import { SSE_V2_EVENTS, RUN_LOG_EVENTS } from '../../../shared/runEvents.js';
@@ -45,7 +45,8 @@ import {
   normalizeChatSettings,
   normalizeChatVariables
 } from '../../services/chat/ChatRepository.js';
-import { isChatPersistenceActive } from '../../services/chat/chatPersistence.js';
+import { resolveChatStorage } from '../../services/chat/chatPersistence.js';
+import { resolveChatOwner } from '../../services/chat/chatOwner.js';
 import { isVoiceTurn, VOICE_INPUT_MODE } from '../../services/chat/voiceMode.js';
 import validate from '../../validators/validate.js';
 import { chatTestSchema, chatPostSchema, chatConnectSchema } from '../../validators/index.js';
@@ -183,13 +184,11 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
    *         messages:
    *           type: array
    *           description: >-
-   *             The conversation to send. When the installation stores chats
-   *             server-side (the `chatPersistence` feature, for an
-   *             authenticated caller on a turn that is not `ephemeral`) the
-   *             server owns the history and this must hold exactly the new
-   *             message; more than one is refused with
-   *             `CLIENT_HISTORY_NOT_ALLOWED`. Otherwise it is the whole
-   *             conversation history, as before.
+   *             Exactly the new message. Every chat is stored server-side
+   *             and the server owns its history; more than one message is
+   *             refused with `CLIENT_HISTORY_NOT_ALLOWED`. A caller that
+   *             wants to hold the history itself uses the stateless
+   *             OpenAI-compatible chat completions endpoint.
    *           items:
    *             $ref: '#/components/schemas/ChatMessage'
    *         modelId:
@@ -257,15 +256,18 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
    *         sendChatHistory:
    *           type: boolean
    *           description: |
-   *             Persisted chats only. False prompts the model with just this
+   *             False prompts the model with just this
    *             message instead of the stored transcript — the viewer's
    *             "Include chat history in requests" setting. Advisory: it can
    *             only remove history, never add it.
    *         ephemeral:
    *           type: boolean
    *           description: |
-   *             Do not persist this turn. Advisory: it can only turn persistence
-   *             off, never on.
+   *             Start a temporary chat: stored like any other, but never listed
+   *             in the history or shared, and deleted a day (by default) after
+   *             its last activity. Only the turn that creates the chat decides;
+   *             later turns' value is ignored. Advisory: it can only make a
+   *             chat temporary, never kept.
    *         voiceMode:
    *           type: boolean
    *           description: |
@@ -767,9 +769,8 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
    *       400:
    *         description: >-
    *           Bad request (missing messages, invalid model, etc.). Also
-   *           `CLIENT_HISTORY_NOT_ALLOWED` when the chat is stored
-   *           server-side and more than one message was posted — send only the
-   *           new message, or `ephemeral: true`.
+   *           `CLIENT_HISTORY_NOT_ALLOWED` when more than one message was
+   *           posted — send only the new message.
    *         content:
    *           application/json:
    *             schema:
@@ -805,6 +806,10 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
    *                   type: string
    *       500:
    *         description: Internal server error
+   *       503:
+   *         description: >-
+   *           `CHAT_STORAGE_UNAVAILABLE` — the storage provider did not come up,
+   *           so the chat cannot be stored and therefore not answered.
    */
   app.post(
     buildServerPath('/api/apps/:appId/chat/:chatId'),
@@ -909,148 +914,172 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
           return sendBadRequest(res, errorMessage);
         }
 
-        // --- durable chats: the server owns the history ---
-        // Persistence moves the conversation's source of truth. A persisted
-        // chat posts exactly one message — the new one — and the server reads
-        // the rest back out of the store, so a client can no longer rewrite
-        // what it already said. Anonymous callers, ephemeral turns and
-        // installations with persistence off keep posting their whole array and
-        // take the same code path they always have; both modes are permanent.
+        // --- the server owns the history ---
+        // Every chat is stored, so a turn posts exactly one message — the new
+        // one — and the server reads the rest back out of the store: a client
+        // can no longer rewrite what it already said. A chat the user does not
+        // want to keep (incognito, an anonymous visitor, an installation
+        // without chat history) is stored the same way, as a temporary chat
+        // that is never listed and expires on its own.
         const repository = getChatRepository();
-        const persistTurn =
-          isPersistableChatId(chatId) &&
-          isChatPersistenceActive({
-            features: configCache.getFeatures(),
-            platformConfig: configCache.getPlatform(),
-            user: req.user,
-            ephemeral
-          });
-        if (persistTurn && messages.length > 1) {
+        const storage = resolveChatStorage({
+          features: configCache.getFeatures(),
+          platformConfig: configCache.getPlatform(),
+          user: req.user,
+          ephemeral
+        });
+        // An id the store cannot key cannot be a chat any more.
+        if (!isPersistableChatId(chatId)) return sendBadRequest(res, 'Invalid chat id');
+        if (!storage.stored || !repository.isAvailable()) {
+          // No browser-held fallback: a conversation nobody can continue is
+          // not an answer. The provider failure itself was logged at boot.
+          return res
+            .status(503)
+            .json({ error: 'Chat storage is unavailable', code: 'CHAT_STORAGE_UNAVAILABLE' });
+        }
+        if (messages.length > 1) {
           // The code alone tells an integrator nothing about what to do
           // instead, and this is the one refusal they can hit by doing exactly
-          // what the documentation told them to do before the feature existed.
+          // what the documentation told them to do before chats were stored.
           return sendBadRequest(res, 'CLIENT_HISTORY_NOT_ALLOWED', {
             hint:
-              'This chat is stored server-side: post only the new message as a single-element ' +
-              'messages array, or send ephemeral: true to keep the turn out of the store and ' +
-              'post the whole conversation yourself.'
+              'Chats are stored server-side: post only the new message as a single-element ' +
+              'messages array (send ephemeral: true for a chat that is not kept in the history). ' +
+              'To send the whole conversation yourself, use the stateless OpenAI-compatible ' +
+              'chat completions endpoint instead.'
           });
         }
+        if (messages.length === 0) {
+          const errorMessage = await getLocalizedError('messagesRequired', {}, clientLanguage);
+          return sendBadRequest(res, errorMessage);
+        }
+        // Resolved once here and carried on the turn: `resolvePrincipal` is
+        // async and hits the filesystem, and the run finishes with no request
+        // in scope. The mode travels with the id so that an admin changing
+        // `runLog.identityMode` later cannot orphan this chat. An anonymous
+        // caller owns its chats through its guest cookie, set on this very
+        // response when it had none.
+        const owner = await resolveChatOwner(req.user, {
+          mode: access.chat?.identityMode || runLog.identityMode()
+        });
+        if (!owner) {
+          return res.status(403).json({
+            error: 'This chat has no owner to be stored under',
+            code: 'CHAT_OWNER_REQUIRED'
+          });
+        }
+        // Fixed when the chat is created: a later turn's `ephemeral` neither
+        // hides a kept chat nor keeps a temporary one (that is
+        // `PATCH /api/chats/:id { temporary: false }`).
+        const temporaryChat = access.chat ? access.chat.temporary === true : storage.temporary;
 
         let conversation = messages;
         let persistence = null;
         const newMessage = messages[0];
-        if (persistTurn && newMessage) {
-          const stored = await repository.getMessages(chatId);
-          let history = stored.messages;
-          let forkStoredId = null;
-          if (replaceFromMessageId) {
-            // Either id the client can know this message by: the stored id it
-            // was given on hydrate, or — for a turn made in the session that
-            // is still open, which never learns the stored id — the exchange
-            // id it sent and the store filed as `clientMessageId`. Without the
-            // second, regenerating the answer you just got would carry no fork
-            // id at all and the retry would be appended to the untouched
-            // history, duplicating the exchange.
-            const forkAt = history.findIndex(
-              entry =>
-                entry.id === replaceFromMessageId || entry.clientMessageId === replaceFromMessageId
-            );
-            // Appending onto the untouched history instead would silently
-            // duplicate everything the edit meant to replace, so refuse.
-            if (forkAt === -1) return sendBadRequest(res, 'UNKNOWN_MESSAGE');
-            // Carry the *stored* id onward. The store matches on `id` alone,
-            // so forwarding the client's value forked the prompt here and not
-            // the transcript: a regenerate in a session that never hydrated
-            // sends its exchange id, which this lookup resolves and the store
-            // then rejects with UNKNOWN_MESSAGE. `materializeUserTurn` logs
-            // and returns null, the chat document has already been updated,
-            // and the answer lands at the end — so the stored history keeps
-            // the exchange the user replaced and, for an edit, never records
-            // the edited question at all. Permanent, and replayed to the model
-            // every turn after.
-            forkStoredId = history[forkAt].id;
-            history = history.slice(0, forkAt);
-          }
-          // An app that opted out of chat history stays a one-shot prompt:
-          // storing the transcript must not start feeding it back to the
-          // model. The viewer's own "Include chat history in requests" toggle
-          // says the same thing for one turn: with the client posting a single
-          // message either way, this field is the only channel it has left.
-          const chatApp = (configCache.getApps().data || []).find(a => a.id === appId);
-          // The app variables are chat state: a turn that sets them (the
-          // start form's, or any turn of an app that asks for them beside the
-          // chat) stores them, and a turn that does not gets the stored ones —
-          // for the system prompt, never as a re-rendered `prompt` template.
-          const turnVariables = normalizeChatVariables(newMessage.variables);
-          const chatVariables =
-            turnVariables ||
-            (chatApp?.variables?.length
-              ? normalizeChatVariables((await repository.getChat(chatId))?.variables)
-              : null);
-          // The prompt reads the variables as they are stored, so this turn and
-          // the ones after it render them alike (`false` is "false" in both).
-          const promptMessage = chatVariables
-            ? { ...newMessage, variables: chatVariables }
-            : newMessage;
-          conversation =
-            chatApp?.sendChatHistory === false || sendChatHistory === false
-              ? [promptMessage]
-              : [...historyForPrompt(history), promptMessage];
-
-          // Resolved once here and carried on the turn: `resolvePrincipal` is
-          // async and hits the filesystem, and the run finishes with no request
-          // in scope. The mode travels with the id so that an admin changing
-          // `runLog.identityMode` later cannot orphan this chat.
-          const identityMode = runLog.identityMode();
-          const principal = await resolvePrincipal(req.user, { mode: identityMode });
-          persistence = {
-            repository,
-            ownerId: principal.id,
-            identityMode: principal.mode || identityMode,
-            // The stored history is never client-asserted; the message being
-            // sent necessarily is — it only exists in this request.
-            content: typeof newMessage.content === 'string' ? newMessage.content : '',
-            clientMessageId: messageId,
-            attachments: messageAttachments(newMessage),
-            variables: turnVariables,
-            replaceFromMessageId: forkStoredId,
-            // A message spoken in voice mode is marked, so the history can show
-            // it. Only when voice mode is on, like the request builder.
-            message: isVoiceTurn({
-              voiceMode,
-              platform: configCache.getPlatform(),
-              features: configCache.getFeatures()
-            })
-              ? { metadata: { inputMode: VOICE_INPUT_MODE } }
-              : undefined,
-            // The container project and the attached projects this turn
-            // names (`chatProjects`): written with the question under the
-            // chat lock, against the chat as it stands then — a container
-            // claimed by a racing first turn refuses this one with 409 — and
-            // a new container records the chat in its project once that is
-            // stored (`materializeUserTurn`), on the @workflow path too.
-            ...(chatProjects.projectPatch ? { projects: chatProjects.projectPatch } : {}),
-            projectId: chatProjects.containerId,
-            // How this turn is being answered, so reopening the chat comes
-            // back with the same setup rather than the app's defaults. Only
-            // the keys this request actually carried: the repository merges
-            // them over what earlier turns recorded, and `undefined` here
-            // means "this turn said nothing about it".
-            settings: normalizeChatSettings({
-              style,
-              outputFormat,
-              sendChatHistory,
-              thinkingEnabled,
-              thinkingLevel,
-              thinkingThoughts,
-              enabledTools,
-              websearchEnabled,
-              imageAspectRatio,
-              imageQuality
-            })
-          };
+        const stored = await repository.getMessages(chatId);
+        let history = stored.messages;
+        let forkStoredId = null;
+        if (replaceFromMessageId) {
+          // Either id the client can know this message by: the stored id it
+          // was given on hydrate, or — for a turn made in the session that
+          // is still open, which never learns the stored id — the exchange
+          // id it sent and the store filed as `clientMessageId`. Without the
+          // second, regenerating the answer you just got would carry no fork
+          // id at all and the retry would be appended to the untouched
+          // history, duplicating the exchange.
+          const forkAt = history.findIndex(
+            entry =>
+              entry.id === replaceFromMessageId || entry.clientMessageId === replaceFromMessageId
+          );
+          // Appending onto the untouched history instead would silently
+          // duplicate everything the edit meant to replace, so refuse.
+          if (forkAt === -1) return sendBadRequest(res, 'UNKNOWN_MESSAGE');
+          // Carry the *stored* id onward. The store matches on `id` alone,
+          // so forwarding the client's value forked the prompt here and not
+          // the transcript: a regenerate in a session that never hydrated
+          // sends its exchange id, which this lookup resolves and the store
+          // then rejects with UNKNOWN_MESSAGE. `materializeUserTurn` logs
+          // and returns null, the chat document has already been updated,
+          // and the answer lands at the end — so the stored history keeps
+          // the exchange the user replaced and, for an edit, never records
+          // the edited question at all. Permanent, and replayed to the model
+          // every turn after.
+          forkStoredId = history[forkAt].id;
+          history = history.slice(0, forkAt);
         }
+        // An app that opted out of chat history stays a one-shot prompt:
+        // storing the transcript must not start feeding it back to the
+        // model. The viewer's own "Include chat history in requests" toggle
+        // says the same thing for one turn: with the client posting a single
+        // message either way, this field is the only channel it has left.
+        const chatApp = (configCache.getApps().data || []).find(a => a.id === appId);
+        // The app variables are chat state: a turn that sets them (the
+        // start form's, or any turn of an app that asks for them beside the
+        // chat) stores them, and a turn that does not gets the stored ones —
+        // for the system prompt, never as a re-rendered `prompt` template.
+        const turnVariables = normalizeChatVariables(newMessage.variables);
+        const chatVariables =
+          turnVariables ||
+          (chatApp?.variables?.length
+            ? normalizeChatVariables((await repository.getChat(chatId))?.variables)
+            : null);
+        // The prompt reads the variables as they are stored, so this turn and
+        // the ones after it render them alike (`false` is "false" in both).
+        const promptMessage = chatVariables
+          ? { ...newMessage, variables: chatVariables }
+          : newMessage;
+        conversation =
+          chatApp?.sendChatHistory === false || sendChatHistory === false
+            ? [promptMessage]
+            : [...historyForPrompt(history), promptMessage];
+
+        persistence = {
+          repository,
+          ownerId: owner.id,
+          identityMode: owner.mode,
+          temporary: temporaryChat,
+          // The stored history is never client-asserted; the message being
+          // sent necessarily is — it only exists in this request.
+          content: typeof newMessage.content === 'string' ? newMessage.content : '',
+          clientMessageId: messageId,
+          attachments: messageAttachments(newMessage),
+          variables: turnVariables,
+          replaceFromMessageId: forkStoredId,
+          // A message spoken in voice mode is marked, so the history can show
+          // it. Only when voice mode is on, like the request builder.
+          message: isVoiceTurn({
+            voiceMode,
+            platform: configCache.getPlatform(),
+            features: configCache.getFeatures()
+          })
+            ? { metadata: { inputMode: VOICE_INPUT_MODE } }
+            : undefined,
+          // The container project and the attached projects this turn
+          // names (`chatProjects`): written with the question under the
+          // chat lock, against the chat as it stands then — a container
+          // claimed by a racing first turn refuses this one with 409 — and
+          // a new container records the chat in its project once that is
+          // stored (`materializeUserTurn`), on the @workflow path too.
+          ...(chatProjects.projectPatch ? { projects: chatProjects.projectPatch } : {}),
+          projectId: chatProjects.containerId,
+          // How this turn is being answered, so reopening the chat comes
+          // back with the same setup rather than the app's defaults. Only
+          // the keys this request actually carried: the repository merges
+          // them over what earlier turns recorded, and `undefined` here
+          // means "this turn said nothing about it".
+          settings: normalizeChatSettings({
+            style,
+            outputFormat,
+            sendChatHistory,
+            thinkingEnabled,
+            thinkingLevel,
+            thinkingThoughts,
+            enabledTools,
+            websearchEnabled,
+            imageAspectRatio,
+            imageQuality
+          })
+        };
 
         trackSession(chatId, { appId, userSessionId, userAgent: req.headers['user-agent'] });
 
@@ -1109,7 +1138,10 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
         // browser closing — its answer is written to the store either way — so
         // the three paths that abort a run on disconnect must leave it alone
         // until the finally below releases the mark.
-        if (persistence) {
+        // A temporary chat's turn is not: like the ephemeral turn it replaces,
+        // it stops when nobody is left to read it, so an anonymous or
+        // incognito visitor who closes the tab is not billed for the rest.
+        if (persistence && !persistence.temporary) {
           markChatDurable(chatId);
           durableTurn = true;
         }

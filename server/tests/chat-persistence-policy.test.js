@@ -34,8 +34,8 @@ import {
 import {
   chatMessageCap,
   chatRetentionSettings,
-  isChatPersistenceActive,
-  isChatPersistenceConfigured
+  isChatHistoryConfigured,
+  resolveChatStorage
 } from '../services/chat/chatPersistence.js';
 import { authorizeChat } from '../services/chat/chatAccess.js';
 import { ChatRepository } from '../services/chat/ChatRepository.js';
@@ -105,7 +105,8 @@ async function withRepository(fn) {
 describe('chat persistence policy: the truth table', () => {
   /**
    * Every axis the contract names, each row an independent claim. `expected`
-   * is what {@link isChatPersistenceActive} must answer.
+   * is whether {@link resolveChatStorage} keeps the chat: every chat is
+   * stored while storage is up, and a chat that is not kept is temporary.
    */
   const rows = [
     {
@@ -199,23 +200,37 @@ describe('chat persistence policy: the truth table', () => {
   ];
 
   for (const row of rows) {
-    it(`isChatPersistenceActive — ${row.name}`, () => {
-      assert.equal(isChatPersistenceActive(row.input), row.expected);
+    it(`resolveChatStorage — ${row.name}`, () => {
+      const storage = resolveChatStorage(row.input);
+      assert.equal(storage.temporary, !row.expected);
+      assert.equal(storage.stored, row.input.storageReady() === true);
     });
   }
 
-  it('isChatPersistenceActive with no arguments is off, not a crash', () => {
-    assert.equal(isChatPersistenceActive(), false);
+  it('resolveChatStorage with no arguments is temporary, not a crash', () => {
+    const storage = resolveChatStorage({ storageReady: STORAGE_UP });
+    assert.deepEqual(storage, { stored: true, temporary: true });
   });
 
-  it('isChatPersistenceConfigured ignores the caller and the ephemeral flag', () => {
+  it('stores every chat while storage is up, and none without it', () => {
+    assert.deepEqual(
+      resolveChatStorage({ features: FLAG_OFF, user: ANONYMOUS, storageReady: STORAGE_UP }),
+      { stored: true, temporary: true }
+    );
+    assert.deepEqual(
+      resolveChatStorage({ features: FLAG_ON, user: USER, storageReady: STORAGE_DOWN }),
+      { stored: false, temporary: true }
+    );
+  });
+
+  it('isChatHistoryConfigured ignores the caller and the ephemeral flag', () => {
     // It is the half of the policy that `RunLog` consults, where there is no
     // request and no user in scope.
-    assert.equal(isChatPersistenceConfigured(FLAG_ON, {}, STORAGE_UP), true);
-    assert.equal(isChatPersistenceConfigured(FLAG_OFF, {}, STORAGE_UP), false);
-    assert.equal(isChatPersistenceConfigured(FLAG_ON, {}, STORAGE_DOWN), false);
+    assert.equal(isChatHistoryConfigured(FLAG_ON, {}, STORAGE_UP), true);
+    assert.equal(isChatHistoryConfigured(FLAG_OFF, {}, STORAGE_UP), false);
+    assert.equal(isChatHistoryConfigured(FLAG_ON, {}, STORAGE_DOWN), false);
     assert.equal(
-      isChatPersistenceConfigured(FLAG_ON, { chats: { enabled: false } }, STORAGE_UP),
+      isChatHistoryConfigured(FLAG_ON, { chats: { enabled: false } }, STORAGE_UP),
       false
     );
   });
@@ -251,7 +266,7 @@ describe('chat persistence policy: the real storage probe', () => {
     try {
       assert.equal(isStorageReady(), false, 'nothing is bootstrapped yet');
       assert.equal(
-        isChatPersistenceConfigured(FLAG_ON, {}),
+        isChatHistoryConfigured(FLAG_ON, {}),
         false,
         'no provider means no persistence, whatever the flag says'
       );
@@ -260,15 +275,18 @@ describe('chat persistence policy: the real storage probe', () => {
         storage: { provider: 'filesystem', filesystem: { baseDir, flushIntervalMs: 25 } }
       });
       assert.equal(isStorageReady(), true);
-      assert.equal(isChatPersistenceConfigured(FLAG_ON, {}), true);
-      assert.equal(isChatPersistenceActive({ features: FLAG_ON, user: USER }), true);
+      assert.equal(isChatHistoryConfigured(FLAG_ON, {}), true);
+      assert.deepEqual(resolveChatStorage({ features: FLAG_ON, user: USER }), {
+        stored: true,
+        temporary: false
+      });
     } finally {
       await shutdownStorageBootstrap();
       await fs.rm(baseDir, { recursive: true, force: true });
     }
 
     assert.equal(isStorageReady(), false, 'a shutdown puts the policy back to off');
-    assert.equal(isChatPersistenceConfigured(FLAG_ON, {}), false);
+    assert.equal(isChatHistoryConfigured(FLAG_ON, {}), false);
   });
 
   it('keeps answering with the provider until its shutdown has finished', async () => {
@@ -313,7 +331,7 @@ describe('chat persistence policy: the real storage probe', () => {
 
       assert.equal(provider, null);
       assert.equal(isStorageReady(), false);
-      assert.equal(isChatPersistenceConfigured(FLAG_ON, {}), false);
+      assert.equal(isChatHistoryConfigured(FLAG_ON, {}), false);
     } finally {
       await shutdownStorageBootstrap();
     }
@@ -321,7 +339,12 @@ describe('chat persistence policy: the real storage probe', () => {
 });
 
 describe('chat retention settings', () => {
-  const DEFAULTS = { retentionDays: 90, maxChatsPerUser: 200, maxMessagesPerChat: 2000 };
+  const DEFAULTS = {
+    temporaryRetentionHours: 24,
+    retentionDays: 90,
+    maxChatsPerUser: 200,
+    maxMessagesPerChat: 2000
+  };
 
   it('defaults to 90 days, 200 chats per user and 2000 messages per chat', () => {
     assert.deepEqual(chatRetentionSettings(undefined), DEFAULTS);
@@ -331,9 +354,14 @@ describe('chat retention settings', () => {
   it('passes configured values through', () => {
     assert.deepEqual(
       chatRetentionSettings({
-        chats: { retentionDays: 7, maxChatsPerUser: 5, maxMessagesPerChat: 50 }
+        chats: {
+          retentionDays: 7,
+          maxChatsPerUser: 5,
+          maxMessagesPerChat: 50,
+          temporaryRetentionHours: 2
+        }
       }),
-      { retentionDays: 7, maxChatsPerUser: 5, maxMessagesPerChat: 50 }
+      { temporaryRetentionHours: 2, retentionDays: 7, maxChatsPerUser: 5, maxMessagesPerChat: 50 }
     );
   });
 
@@ -342,14 +370,29 @@ describe('chat retention settings', () => {
       chatRetentionSettings({
         chats: { retentionDays: 0, maxChatsPerUser: 0, maxMessagesPerChat: 0 }
       }),
-      { retentionDays: 0, maxChatsPerUser: 0, maxMessagesPerChat: 0 }
+      { temporaryRetentionHours: 24, retentionDays: 0, maxChatsPerUser: 0, maxMessagesPerChat: 0 }
     );
     assert.deepEqual(
       chatRetentionSettings({
         chats: { retentionDays: -1, maxChatsPerUser: -5, maxMessagesPerChat: -2 }
       }),
-      { retentionDays: -1, maxChatsPerUser: -5, maxMessagesPerChat: -2 }
+      {
+        temporaryRetentionHours: 24,
+        retentionDays: -1,
+        maxChatsPerUser: -5,
+        maxMessagesPerChat: -2
+      }
     );
+  });
+
+  it('never switches the temporary rule off: zero or less is the default', () => {
+    // A temporary chat nobody deletes is the history its owner asked not to have.
+    for (const temporaryRetentionHours of [0, -3]) {
+      assert.equal(
+        chatRetentionSettings({ chats: { temporaryRetentionHours } }).temporaryRetentionHours,
+        24
+      );
+    }
   });
 
   it('falls back to the defaults for a value that is not a number', () => {
@@ -600,46 +643,6 @@ describe('POST protocol: what the client may assert', () => {
       assert.equal(result.status, 400);
     }
   });
-
-  it('refuses a client-asserted history exactly when the turn is persisted', () => {
-    // The handler's guard is `messages.length > 1 && isChatPersistenceActive(...)`
-    // → 400 CLIENT_HISTORY_NOT_ALLOWED. Driving the handler needs a booted
-    // server, so what is pinned here is the carve-out matrix it branches on:
-    // every path that keeps today's full-array behaviour must stay open.
-    const clientHistory = [
-      { role: 'user', content: 'older turn' },
-      { role: 'user', content: 'the new message' }
-    ];
-    const refuses = context =>
-      clientHistory.length > 1 && isChatPersistenceActive({ storageReady: STORAGE_UP, ...context });
-
-    assert.equal(refuses({ features: FLAG_ON, user: USER }), true);
-
-    assert.equal(refuses({ features: FLAG_OFF, user: USER }), false, 'feature off keeps the array');
-    assert.equal(refuses({ features: FLAG_ON, user: ANONYMOUS }), false, 'anonymous keeps it');
-    assert.equal(
-      refuses({ features: FLAG_ON, user: USER, ephemeral: true }),
-      false,
-      'an ephemeral turn keeps it'
-    );
-    assert.equal(
-      refuses({ features: FLAG_ON, user: USER, platformConfig: { chats: { enabled: false } } }),
-      false,
-      'chats switched off keeps it'
-    );
-    assert.equal(
-      refuses({ features: FLAG_ON, user: USER, storageReady: STORAGE_DOWN }),
-      false,
-      'storage down keeps it'
-    );
-
-    // A single element is the new message; it is never a client-asserted history.
-    assert.equal(
-      [{ role: 'user', content: 'the new message' }].length > 1 &&
-        isChatPersistenceActive({ features: FLAG_ON, user: USER, storageReady: STORAGE_UP }),
-      false
-    );
-  });
 });
 
 describe('the disconnect durability guard', () => {
@@ -832,12 +835,13 @@ describe('the ledger coupling (D4)', () => {
     );
   });
 
-  it('is off when chat persistence is off and the runLog flag is not set', async () => {
+  it('stays on with the chat history off: temporary chats are stored too', async () => {
     await withRunLog({ getFeatures: () => FLAG_OFF }, async ({ log, baseDir }) => {
+      assert.equal(log.isEnabled(), false, 'no provider, no ledger');
       await bootstrapStorage({
         storage: { provider: 'filesystem', filesystem: { baseDir, flushIntervalMs: 25 } }
       });
-      assert.equal(log.isEnabled(), false);
+      assert.equal(log.isEnabled(), true);
     });
   });
 

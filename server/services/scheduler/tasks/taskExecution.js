@@ -46,7 +46,7 @@ import { abortCause, causeOfSignal } from '../../chat/abortCause.js';
 import ChatService, { withAppPrompt } from '../../chat/ChatService.js';
 import llmClient from '../../loop/LLMClient.js';
 import { getChatRepository, normalizeChatSettings } from '../../chat/ChatRepository.js';
-import { isChatPersistenceConfigured } from '../../chat/chatPersistence.js';
+import { isChatHistoryConfigured } from '../../chat/chatPersistence.js';
 import interactionService from '../../loop/InteractionService.js';
 import { newRunId as newLedgerRunId } from '../../loop/RunLog.js';
 import { formatInstant, formatZonedIso } from '../schedule.js';
@@ -422,7 +422,7 @@ export async function executeTaskRun({ taskId, runId }, deps = {}) {
     // Only this run's own task may be changed from inside it; see the tools.
     user.scheduledRun = { taskId, runId };
 
-    if (!isChatPersistenceConfigured(features, platform) || !getChatRepository().isAvailable()) {
+    if (!isChatHistoryConfigured(features, platform) || !getChatRepository().isAvailable()) {
       throw new RunFailure(
         'failed',
         'CHAT_STORAGE_UNAVAILABLE',

@@ -30,7 +30,8 @@ import { getChatRepository } from '../../services/chat/ChatRepository.js';
 import {
   CHAT_PERSISTENCE_FEATURE,
   chatRetentionSettings,
-  isChatPersistenceConfigured
+  isChatHistoryConfigured,
+  isChatStorageAvailable
 } from '../../services/chat/chatPersistence.js';
 import {
   CHAT_SHARING_FEATURE,
@@ -55,7 +56,10 @@ const chatsSettingsSchema = z
     enabled: z.boolean(),
     retentionDays: z.number().int(),
     maxChatsPerUser: z.number().int(),
-    maxMessagesPerChat: z.number().int()
+    maxMessagesPerChat: z.number().int(),
+    // Unlike the others it cannot switch its rule off: a temporary chat must
+    // expire, so the value has to be a positive number of hours.
+    temporaryRetentionHours: z.number().int().positive()
   })
   .partial()
   .strict();
@@ -154,7 +158,7 @@ function resolveStatus(platform, features) {
   const featureChatPersistence = isFeatureEnabled(CHAT_PERSISTENCE_FEATURE, features);
   const featureRunLog = isFeatureEnabled('runLog', features);
   const featureChatSharing = isFeatureEnabled(CHAT_SHARING_FEATURE, features);
-  const chatPersistenceActive = isChatPersistenceConfigured(features, platform);
+  const chatPersistenceActive = isChatHistoryConfigured(features, platform);
   return {
     featureChatPersistence,
     featureRunLog,
@@ -166,11 +170,12 @@ function resolveStatus(platform, features) {
     storageReady: isStorageReady() === true,
     storageProvider: providerName || platform?.storage?.provider || 'filesystem',
     chatPersistenceActive,
-    // Durable chats turn the ledger on regardless of its own flag, because a
-    // chat is materialized from its run's ledger events.
+    // Stored chats turn the ledger on regardless of its own flag, because a
+    // chat is materialized from its run's ledger events — and every chat is
+    // stored once storage is up, kept or temporary.
     ledgerActive: runLog.isEnabled(),
     ledgerForcedByChats:
-      chatPersistenceActive && !(featureRunLog && platform?.runLog?.enabled !== false)
+      isChatStorageAvailable() && !(featureRunLog && platform?.runLog?.enabled !== false)
   };
 }
 
@@ -374,13 +379,17 @@ export default function registerAdminChatHistoryRoutes(app) {
         const result = { chats: null, ledger: null };
 
         if (target === 'chats' || target === 'all') {
-          if (isChatPersistenceConfigured(features, platform)) {
+          // Temporary chats expire whenever storage is up; the history rules
+          // only while there is a history to apply them to.
+          const history = isChatHistoryConfigured(features, platform);
+          if (isChatStorageAvailable()) {
             const { removed } = await sweepChats({
               repository: getChatRepository(),
-              retentionDays: settings.chats.retentionDays,
-              maxChatsPerUser: settings.chats.maxChatsPerUser
+              retentionDays: history ? settings.chats.retentionDays : 0,
+              maxChatsPerUser: history ? settings.chats.maxChatsPerUser : 0,
+              temporaryRetentionHours: chatRetentionSettings(platform).temporaryRetentionHours
             });
-            result.chats = { ran: true, removed };
+            result.chats = { ran: true, removed, ...(history ? {} : { historyRules: false }) };
           } else {
             result.chats = { ran: false, removed: 0, reason: 'chatPersistenceInactive' };
           }

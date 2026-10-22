@@ -267,7 +267,7 @@ See [Marketplace](marketplace.md) for statuses, updates, private registries and 
 
 ## Features
 
-**Platform → Features** switches platform features on and off — among them the preview features Agent Skills, Workflows, Marketplace, Integrations, Durable Chats (server-side chat history) and Scheduled Tasks, plus Prompt Library, Usage Tracking, Tools, Sources, Compare Mode, Chat Sharing, Short Links, Feedback and Export. The corresponding admin pages and user features appear or disappear with them.
+**Platform → Features** switches platform features on and off — among them the preview features Agent Skills, Workflows, Marketplace, Integrations, Chat History (keeping chats in a history; every chat is stored either way) and Scheduled Tasks, plus Prompt Library, Usage Tracking, Tools, Sources, Compare Mode, Chat Sharing, Short Links, Feedback and Export. The corresponding admin pages and user features appear or disappear with them.
 
 ![Platform features with preview toggles](assets/screenshots/admin-features.png)
 
@@ -275,7 +275,7 @@ See [Marketplace](marketplace.md) for statuses, updates, private registries and 
 
 ## Scheduled Tasks
 
-**Observability → Scheduled Tasks** shows whether the feature is running (feature flag, durable chats, platform switch), sets the limits — tasks per user, shortest interval, concurrent runs, catch-up window, approval timeout, retention — and lists every user's tasks with owner, schedule, status, last run and failures. Admins can pause, disable or delete a task and read its run history; a run always acts as its owner. Who may create tasks is the **Scheduled tasks** permission of a group.
+**Observability → Scheduled Tasks** shows whether the feature is running (feature flag, chat history, platform switch), sets the limits — tasks per user, shortest interval, concurrent runs, catch-up window, approval timeout, retention — and lists every user's tasks with owner, schedule, status, last run and failures. Admins can pause, disable or delete a task and read its run history; a run always acts as its owner. Who may create tasks is the **Scheduled tasks** permission of a group.
 
 ![Admin scheduled tasks: status, limits and all tasks](assets/screenshots/admin-scheduled-tasks.png)
 

@@ -3,7 +3,7 @@
 
 import { useCallback } from 'react';
 import useAppChat from '../../chat/hooks/useAppChat';
-import useStoredChatHydration from './useStoredChatHydration';
+import useStoredChatHydration from '../../chat/hooks/useStoredChatHydration';
 import { useEmbeddedHost, applyHostContextFlags } from '../contexts/EmbeddedHostContext';
 import {
   buildHostContext,
@@ -55,18 +55,19 @@ function combineUploadData(manualData, mailData) {
  * without the email body). Only the apiMessage sent to the server carries
  * the host context.
  *
- * With durable chats on (`serverBacked`), the chat is stored server-side like
- * one started in the web app: the request carries only the new message, the
- * chat shows up in the history, and a stored chat opened in the pane is
- * hydrated from the store (see useStoredChatHydration).
+ * The chat is stored server-side like one started in the web app: the request
+ * carries only the new message, a kept chat shows up in the history, and a
+ * stored chat opened in the pane is hydrated from the store (see
+ * useStoredChatHydration).
  *
  * @param {Object} options
  * @param {string} options.appId - App ID
  * @param {string} options.chatId - Chat session ID
  * @param {Function} [options.onMessageComplete] - Forwarded to useAppChat
  * @param {Function} [options.onMessageAccepted] - Forwarded to useAppChat: called with the
- *   chat id once the server has the turn, i.e. once a server-backed chat is in the store
- * @param {boolean} [options.serverBacked=false] - Whether the chat is stored server-side
+ *   chat id once the server has the turn, i.e. once the chat is in the store
+ * @param {boolean} [options.ephemeral=false] - Whether a chat this adapter starts is a
+ *   temporary one (not kept in the history)
  * @param {boolean} [options.isFreshChat=false] - Whether the pane minted this chat and has
  *   not sent anything in it yet, so there is nothing stored to fetch
  * @param {Object} [options.fileUploadConfig] - The app's `upload.fileUpload` block; carries the
@@ -80,13 +81,13 @@ function useOfficeChatAdapter({
   chatId,
   onMessageComplete,
   onMessageAccepted,
-  serverBacked = false,
+  ephemeral = false,
   isFreshChat = false,
   fileUploadConfig
 }) {
-  const chat = useAppChat({ appId, chatId, onMessageComplete, onMessageAccepted, serverBacked });
+  const chat = useAppChat({ appId, chatId, onMessageComplete, onMessageAccepted, ephemeral });
   const { chatSettings: storedChatSettings, chatVariables: storedChatVariables } =
-    useStoredChatHydration({ chat, chatId, serverBacked, isFreshChat });
+    useStoredChatHydration({ chat, chatId, isFreshChat });
   const host = useEmbeddedHost();
 
   const sendMessage = useCallback(

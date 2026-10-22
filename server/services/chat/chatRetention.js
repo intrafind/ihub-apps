@@ -2,14 +2,21 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 /**
- * Chat retention — the daily sweep that keeps durable chats from growing
- * without bound.
+ * Chat retention — the sweep that keeps stored chats from growing without
+ * bound.
  *
- * Two rules, both configured under `platform.chats` and both switched off by a
- * value of zero or less:
- *   - **age** — a chat whose last message is older than `retentionDays` goes.
+ * Three rules, configured under `platform.chats`:
+ *   - **temporary** — a temporary chat (incognito, a guest's, any chat while
+ *     the installation keeps no history) whose last activity is older than
+ *     `temporaryRetentionHours` goes. Always on, checked every hour, and it
+ *     never touches a kept chat.
+ *   - **age** — a kept chat whose last message is older than `retentionDays`
+ *     goes.
  *   - **count** — an owner keeps only their `maxChatsPerUser` most recent
- *     chats; the rest go, oldest first.
+ *     kept chats; the rest go, oldest first.
+ *
+ * The last two are the history rules: switched off by a value of zero or less,
+ * applied at most once a day, and only while the installation keeps a history.
  *
  * A removal is the same cascade `DELETE /api/chats/:id` performs, and through
  * the same function: the chat document, its transcript, and then
@@ -40,7 +47,7 @@ import configCache from '../../configCache.js';
 import logger from '../../utils/logger.js';
 import runLog from '../loop/RunLog.js';
 import { CHATS_NAMESPACE, getChatRepository } from './ChatRepository.js';
-import { chatRetentionSettings, isChatPersistenceConfigured } from './chatPersistence.js';
+import { chatRetentionSettings, isChatHistoryConfigured } from './chatPersistence.js';
 import { isStorageReady } from '../../storage/bootstrap.js';
 import { getWorkflowStateRepository } from '../workflow/WorkflowStateRepository.js';
 import { deleteChatWithCascade } from './chatDeletion.js';
@@ -48,8 +55,11 @@ import { SCHEDULED_TASK_ORIGIN } from '../scheduler/tasks/taskPolicy.js';
 
 const COMPONENT = 'ChatRetention';
 
-/** One day in milliseconds — the sweep interval and the age unit. */
-const DAY_MS = 24 * 60 * 60 * 1000;
+/** One hour in milliseconds — the sweep interval and the temporary-chat unit. */
+const HOUR_MS = 60 * 60 * 1000;
+
+/** One day in milliseconds — how often the history rules run, and their age unit. */
+const DAY_MS = 24 * HOUR_MS;
 
 /** Documents fetched per `list` call while scanning the namespace. */
 const SCAN_PAGE_SIZE = 200;
@@ -125,14 +135,20 @@ function activityTime(doc) {
  * fraction` chats each, and disk grew without bound while both settings read
  * as configured.
  *
+ * Temporary chats are decided by their own cutoff and never reach the owner
+ * set: they count against no quota.
+ *
  * @param {import('../../storage/DocumentStore.js').DocumentStore} documents
  * @param {number|null} cutoff - Age cutoff in ms, or null when the age rule is off.
- * @returns {Promise<{expired: string[], owners: Set<string>, scanned: number}>}
+ * @param {number|null} temporaryCutoff - Temporary-chat cutoff in ms, or null
+ *   when temporary chats are not swept this time.
+ * @returns {Promise<{expired: string[], owners: Set<string>, scanned: number, temporary: number}>}
  */
-async function scanChats(documents, cutoff, pageSize) {
+async function scanChats(documents, cutoff, temporaryCutoff, pageSize) {
   const expired = [];
   const owners = new Set();
   let scanned = 0;
+  let temporary = 0;
   let cursor = null;
   do {
     const page = await documents.list(CHATS_NAMESPACE, {
@@ -142,6 +158,13 @@ async function scanChats(documents, cutoff, pageSize) {
     for (const doc of page.items) {
       scanned += 1;
       const activeAt = activityTime(doc);
+      if (doc.data?.temporary === true) {
+        if (temporaryCutoff !== null && Number.isFinite(activeAt) && activeAt < temporaryCutoff) {
+          expired.push(doc.key);
+          temporary += 1;
+        }
+        continue;
+      }
       if (cutoff !== null && Number.isFinite(activeAt) && activeAt < cutoff) {
         expired.push(doc.key);
         continue;
@@ -154,7 +177,7 @@ async function scanChats(documents, cutoff, pageSize) {
     cursor = page.nextCursor;
   } while (cursor);
 
-  return { expired, owners, scanned };
+  return { expired, owners, scanned, temporary };
 }
 
 /**
@@ -180,6 +203,8 @@ async function overflowingForOwner(documents, ownerId, maxChatsPerUser, pageSize
       ...(cursor ? { cursor } : {})
     });
     for (const doc of page.items) {
+      // Temporary chats are outside every quota; their own rule removes them.
+      if (doc.data?.temporary === true) continue;
       // A scheduled task's run chats have their own cap (the task keeps its
       // newest `scheduledTasks.maxRunChatsPerTask`), so a task that runs every
       // quarter hour cannot push its owner's own conversations out of here.
@@ -235,7 +260,7 @@ function overflowingChats(chats, maxChatsPerUser) {
 }
 
 /**
- * Apply both retention rules once.
+ * Apply the retention rules once.
  *
  * @param {Object} options
  * @param {import('./ChatRepository.js').ChatRepository} options.repository -
@@ -244,6 +269,9 @@ function overflowingChats(chats, maxChatsPerUser) {
  *   keeps chats forever.
  * @param {number} options.maxChatsPerUser - Chats kept per owner; zero or less
  *   puts no cap on it.
+ * @param {number|null} [options.temporaryRetentionHours=null] - Age in hours
+ *   past which a temporary chat goes; null (or zero or less) leaves temporary
+ *   chats alone this time.
  * @param {(runId: string) => Promise<unknown>} [options.deleteRun] - Ledger
  *   cascade for a removed chat's runs. Injectable so a test can observe it
  *   without a ledger on disk.
@@ -259,6 +287,7 @@ export async function sweepChats({
   repository,
   retentionDays,
   maxChatsPerUser,
+  temporaryRetentionHours = null,
   deleteRun = runId => runLog.deleteRun(runId),
   removeWorkflowState = runId => getWorkflowStateRepository().remove(runId),
   pageSize = SCAN_PAGE_SIZE,
@@ -266,12 +295,19 @@ export async function sweepChats({
 } = {}) {
   const documents = documentsOf(repository);
   if (!documents) return { removed: 0 };
-  // Neither rule is on: skip the scan entirely rather than paging the whole
-  // namespace every day to decide nothing.
-  if (!(retentionDays > 0) && !(maxChatsPerUser > 0)) return { removed: 0 };
+  const sweepTemporary = temporaryRetentionHours > 0;
+  // No rule is on: skip the scan entirely rather than paging the whole
+  // namespace to decide nothing.
+  if (!(retentionDays > 0) && !(maxChatsPerUser > 0) && !sweepTemporary) return { removed: 0 };
 
   const cutoff = retentionDays > 0 ? now() - retentionDays * DAY_MS : null;
-  const { expired, owners, scanned } = await scanChats(documents, cutoff, pageSize);
+  const temporaryCutoff = sweepTemporary ? now() - temporaryRetentionHours * HOUR_MS : null;
+  const { expired, owners, scanned, temporary } = await scanChats(
+    documents,
+    cutoff,
+    temporaryCutoff,
+    pageSize
+  );
 
   let removed = 0;
   /**
@@ -325,7 +361,8 @@ export async function sweepChats({
     logger.info('Chat retention removed expired chats', {
       component: COMPONENT,
       removed,
-      byAge: expired.length,
+      byAge: expired.length - temporary,
+      temporary,
       byCount,
       scanned
     });
@@ -334,14 +371,15 @@ export async function sweepChats({
 }
 
 /**
- * Start the daily chat retention sweep.
+ * Start the chat retention sweep.
  *
  * Idempotent, and must be started from the cluster singleton that already owns
  * `runLog.startCleanupScheduler()` — two workers sweeping in parallel would
  * race each other's deletes for no benefit. Runs once immediately so a
- * misconfigured retention is visible in the logs at boot rather than a day
- * later, then every `intervalMs`. The timer is `unref()`d: a pending sweep
- * never keeps the process alive.
+ * misconfigured retention is visible in the logs at boot rather than later,
+ * then every `intervalMs` (an hour) for temporary chats, with the history rules
+ * at most every `historyIntervalMs` (a day). The timer is `unref()`d: a pending
+ * sweep never keeps the process alive.
  *
  * @param {Object} [options]
  * @param {import('./ChatRepository.js').ChatRepository} [options.repository] -
@@ -355,7 +393,10 @@ export async function sweepChats({
  * @param {() => Object} [options.getPlatformConfig] - Reads the platform
  *   config each tick, so an admin's change to `platform.chats` takes effect
  *   without a restart.
- * @param {number} [options.intervalMs=86400000] - Sweep interval.
+ * @param {number} [options.intervalMs=3600000] - Sweep interval.
+ * @param {number} [options.historyIntervalMs=86400000] - Least time between two
+ *   runs of the history rules.
+ * @param {() => number} [options.now] - Clock, for tests.
  * @returns {() => void} Stops the sweep.
  */
 export function startChatRetentionSweep({
@@ -363,33 +404,46 @@ export function startChatRetentionSweep({
   getPlatformConfig = () => configCache.getPlatform?.() || {},
   getFeatures = () => configCache.getFeatures?.() || {},
   storageReady = isStorageReady,
-  intervalMs = DAY_MS
+  intervalMs = HOUR_MS,
+  historyIntervalMs = DAY_MS,
+  now = Date.now
 } = {}) {
   if (sweepTimer) return stopChatRetentionSweep;
+  let lastHistorySweepAt = null;
 
   const tick = async () => {
     if (sweeping) return;
     sweeping = true;
     try {
+      if (storageReady() !== true) return;
       const platform = getPlatformConfig() || {};
-      // Turning durable chats off must not delete what is already stored: an
+      const { retentionDays, maxChatsPerUser, temporaryRetentionHours } =
+        chatRetentionSettings(platform);
+      // Turning the chat history off must not delete what is already kept: an
       // admin flipping the switch is disabling a feature, not asking for a
-      // purge. Retention only runs while chats are on.
+      // purge. The history rules only run while the history is on.
       //
-      // This is the same predicate the write path uses, deliberately. Gating
-      // on `chats.enabled` alone read as "chats are on", but the switch an
-      // admin actually sees is the `chatPersistence` feature — and it does not
-      // touch `chats.enabled`. Turning the feature off therefore stopped
+      // This is the same predicate the history endpoints use, deliberately.
+      // Gating on `chats.enabled` alone read as "chats are on", but the switch
+      // an admin actually sees is the `chatPersistence` feature — and it does
+      // not touch `chats.enabled`. Turning the feature off therefore stopped
       // writes while leaving this sweep running: no chat's `lastMessageAt`
       // could advance again, so every stored chat was guaranteed to cross the
       // cutoff, and the REST surface was already 503 so nobody could export or
       // delete one first. Ninety days later the sweep deleted all of them.
-      if (!isChatPersistenceConfigured(getFeatures() || {}, platform, storageReady)) return;
-      const { retentionDays, maxChatsPerUser } = chatRetentionSettings(platform);
+      //
+      // Temporary chats are swept either way: they are what every chat is
+      // while the history is off, and nobody asked to keep them.
+      const historyDue =
+        isChatHistoryConfigured(getFeatures() || {}, platform, storageReady) &&
+        (lastHistorySweepAt === null || now() - lastHistorySweepAt >= historyIntervalMs);
+      if (historyDue) lastHistorySweepAt = now();
       await sweepChats({
         repository: repository || getChatRepository(),
-        retentionDays,
-        maxChatsPerUser
+        retentionDays: historyDue ? retentionDays : 0,
+        maxChatsPerUser: historyDue ? maxChatsPerUser : 0,
+        temporaryRetentionHours,
+        now
       });
     } catch (error) {
       logger.error('Chat retention sweep failed', {
@@ -408,7 +462,7 @@ export function startChatRetentionSweep({
 }
 
 /**
- * Stop the daily sweep. A sweep already in flight runs to completion.
+ * Stop the sweep. A sweep already in flight runs to completion.
  *
  * @returns {void}
  */

@@ -385,6 +385,20 @@ describe('creating a share', () => {
     );
   });
 
+  it('refuses a temporary chat until it is kept', async () => {
+    chatCounter += 1;
+    const chatId = `chat-${chatCounter}`;
+    const repository = getChatRepository();
+    await repository.ensureChat({ chatId, ownerId: ADA.id, appId: 'chat', temporary: true });
+    await repository.appendMessage(chatId, { role: 'user', content: 'off the record' });
+    const refused = await createShare(ADA, chatId, { mode: 'authenticated' });
+    assert.equal(refused.statusCode, 409);
+    assert.equal(refused.body.details.code, 'CHAT_TEMPORARY');
+
+    await repository.keepChat(chatId);
+    assert.equal((await createShare(ADA, chatId, { mode: 'authenticated' })).statusCode, 201);
+  });
+
   it('checks recipients against the user database', async () => {
     const chatId = await seedChat(ADA);
     const none = await createShare(ADA, chatId, { mode: 'users', recipients: [] });

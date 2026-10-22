@@ -44,7 +44,7 @@ import { filterByPermissions, isAdmin } from '../../services/workflow/workflowAc
 import { createExecutionChat } from '../../services/workflow/executionChat.js';
 import { assertProjectInputs } from '../../services/workflow/projectNodes.js';
 import { getChatRepository } from '../../services/chat/ChatRepository.js';
-import { isChatPersistenceActive } from '../../services/chat/chatPersistence.js';
+import { resolveChatStorage } from '../../services/chat/chatPersistence.js';
 import runLog from '../../services/loop/RunLog.js';
 import { isAnonymousUser, resolvePrincipal } from '../../services/loop/runIdentity.js';
 import logger from '../../utils/logger.js';
@@ -1053,7 +1053,8 @@ export default function registerWorkflowRoutes(app, deps = {}) {
    *       Creates a chat in the app that opens with the execution's input as the
    *       question and its output as the answer ("Chat with Results"). The answer
    *       is read from the execution, never taken from the request, and names the
-   *       execution it came from. Requires durable chats.
+   *       execution it came from. The chat is temporary (not listed in the history)
+   *       for an `ephemeral` app or an installation without chat history.
    *     tags:
    *       - Workflows
    *     parameters:
@@ -1084,7 +1085,9 @@ export default function registerWorkflowRoutes(app, deps = {}) {
    *       404:
    *         description: Execution or app not found
    *       409:
-   *         description: Durable chats are not available to the caller (`CHAT_PERSISTENCE_OFF`), or the execution has not finished (`EXECUTION_NOT_FINISHED`)
+   *         description: The execution has not finished (`EXECUTION_NOT_FINISHED`)
+   *       503:
+   *         description: Chat storage is unavailable (`CHAT_STORAGE_UNAVAILABLE`)
    */
   app.post(
     buildServerPath('/api/workflows/executions/:executionId/chat/:appId'),
@@ -1105,19 +1108,18 @@ export default function registerWorkflowRoutes(app, deps = {}) {
         const chatApp = findByIdCaseInsensitive(configCache.getApps().data || [], appId);
         if (!chatApp || chatApp.enabled === false) return sendNotFound(res, 'App');
 
-        // An ephemeral app is one whose chats are never stored.
-        if (
-          chatApp.ephemeral === true ||
-          !isChatPersistenceActive({
-            features: configCache.getFeatures(),
-            platformConfig: configCache.getPlatform(),
-            user: req.user
-          })
-        ) {
-          return res.status(409).json({
-            error: 'Durable chats are not available',
-            code: 'CHAT_PERSISTENCE_OFF'
-          });
+        // Always a stored chat: a temporary one for an `ephemeral` app or an
+        // installation without chat history, listed in the history otherwise.
+        const storage = resolveChatStorage({
+          features: configCache.getFeatures(),
+          platformConfig: configCache.getPlatform(),
+          user: req.user,
+          ephemeral: chatApp.ephemeral === true
+        });
+        if (!storage.stored) {
+          return res
+            .status(503)
+            .json({ error: 'Chat storage is unavailable', code: 'CHAT_STORAGE_UNAVAILABLE' });
         }
 
         const state = await workflowEngine.getState(executionId);
@@ -1131,6 +1133,7 @@ export default function registerWorkflowRoutes(app, deps = {}) {
           appId: chatApp.id,
           ownerId: principal.id,
           identityMode: principal.mode || identityMode,
+          temporary: storage.temporary,
           language: req.headers['accept-language']?.split(',')[0]?.split('-')[0] || 'en',
           contextMessage: req.body?.contextMessage
         });

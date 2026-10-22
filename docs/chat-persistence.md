@@ -1,48 +1,59 @@
 # Chat Persistence (Durable Chats)
 
-A chat is normally a browser object. `sessionStorage` holds the transcript, the
-client posts that transcript back on every turn, and the generation is bound to
-the tab: closing it aborts the model call mid-answer.
+Every chat lives on the server. The transcript is two documents in the
+[storage provider](storage.md), the server assembles the history it sends to the
+model instead of trusting a client's copy, and a client posts one message per
+turn. There is no browser-held chat any more: no `sessionStorage` transcript, no
+second protocol for "chats that are not stored".
 
-Chat persistence moves the conversation to the server. The transcript becomes
-two documents in the [storage provider](storage.md), the server assembles the
-history it sends to the model instead of trusting the client's copy, and a turn
-that is being stored **keeps running when the browser goes away** — the answer
-is written to the chat and is waiting there when the user comes back.
+What varies is whether a chat is **kept** or **temporary**:
 
-It ships **dark**: nothing is stored until an admin turns the feature on, and
-everyone the feature does not cover (anonymous visitors, incognito turns,
-installations that leave it off) keeps exactly the behaviour they have today.
-That dual mode is permanent by design, not a transition.
+- A **kept** chat is listed in its owner's history (*Recents*, `/chats`, the
+  Outlook pane), can be reopened on any device and shared, follows the history
+  retention rules — and its turn **keeps running when the browser goes away**:
+  the answer is written to the chat and is waiting there when the user comes
+  back.
+- A **temporary** chat is stored the same way — a reload, a re-attach, an edit
+  and a regenerate all work — but it is never listed or shared, and it is
+  deleted `chats.temporaryRetentionHours` (24 by default) after its last
+  activity, or as soon as the user leaves it. Its turn stops when nobody is left
+  to read it, like the ephemeral turn it replaces.
 
-> **Both halves ship together.** The server stores the transcript and assembles
-> the history it sends to the model; the bundled chat client posts one message
-> per turn, reopens a stored chat from the store, and lists what is stored —
-> see [The chat history UI](#the-chat-history-ui).
+The **Chat History** feature (`chatPersistence`) decides whether chats can be
+kept at all. It ships **off**: without it every chat is temporary.
 
-## When a turn is persisted
+> **One protocol.** Every surface — the web app, the Outlook pane, the browser
+> extension, Nextcloud, an integration on the chat route — posts the new
+> message and lets the server hold the rest. A caller that wants to send the
+> whole conversation itself uses the stateless
+> [OpenAI-compatible API](openai-compatible-api.md) instead.
 
-`services/chat/chatPersistence.isChatPersistenceActive()` is the one place that
-decides, and it is evaluated once per request. All of these have to hold:
+## How a chat is stored
 
-| Condition                              | Where it comes from                                          |
-| -------------------------------------- | ------------------------------------------------------------ |
-| `features.chatPersistence` is on       | Admin → Platform → Features ("Durable Chats"), off by default |
-| `platform.chats.enabled !== false`     | `contents/config/platform.json`                               |
-| a storage provider came up             | `platform.storage` — see [Storage Providers](storage.md)      |
-| the caller is authenticated            | anonymous callers never persist (see below)                   |
-| the request is not `ephemeral`         | `ephemeral: true` in the chat POST body                       |
-| the chat id can be a document key      | `isValidId()`; a headless `agent:<runId>:<hex>` chat cannot   |
+`services/chat/chatPersistence.resolveChatStorage()` is the one place that
+decides, and only the turn that **creates** a chat consults it. A chat is kept
+when all of these hold, and temporary otherwise:
 
-Anything short of that and the turn takes the pre-persistence path: the client's
-message array is used as-is, nothing is written, and the run still dies with the
-client. There is no half-persisted state.
+| Condition                              | Where it comes from                                           |
+| -------------------------------------- | ------------------------------------------------------------- |
+| `features.chatPersistence` is on       | Admin → Platform → Features ("Chat History"), off by default  |
+| `platform.chats.enabled !== false`     | `contents/config/platform.json`                                |
+| a storage provider came up             | `platform.storage` — see [Storage Providers](storage.md)       |
+| the caller is signed in                | an anonymous visitor's chats are always temporary (see below)  |
+| the request is not `ephemeral`         | `ephemeral: true` in the chat POST body                        |
+
+A chat stays what it was created as: a later turn's `ephemeral` is ignored, and
+`PATCH /api/chats/:chatId { "temporary": false }` is the one way from
+temporary to kept (there is none back). Without a storage provider no chat can
+be stored, and the chat POST answers `503 CHAT_STORAGE_UNAVAILABLE` rather
+than a conversation nobody could continue.
 
 ## Enabling
 
-1. **Turn on the feature flag.** Admin → Platform → Features → **Durable
-   Chats**, or `"chatPersistence": true` in `contents/config/features.json`. No
-   restart needed.
+1. **Turn on the feature flag.** Admin → Platform → Features → **Chat
+   History**, or `"chatPersistence": true` in `contents/config/features.json`.
+   No restart needed. Chats are stored either way; this is what lets them be
+   kept.
 2. **Check the settings in Admin → Observability → Chat History.** The page
    edits `platform.json → chats` (and the run ledger's `runLog` block) with
    validation, and shows which of the conditions above currently holds.
@@ -55,35 +66,40 @@ client. There is no half-persisted state.
     "enabled": true,
     "retentionDays": 90,
     "maxChatsPerUser": 200,
-    "maxMessagesPerChat": 2000
+    "maxMessagesPerChat": 2000,
+    "temporaryRetentionHours": 24
   }
 }
 ```
 
 | Key                  | Default | Meaning                                                                          |
 | -------------------- | ------- | -------------------------------------------------------------------------------- |
-| `enabled`            | `true`  | Second switch under the feature flag; `false` stops the write path entirely      |
+| `enabled`            | `true`  | Second switch under the feature flag; `false` makes every new chat temporary     |
 | `retentionDays`      | `90`    | Chats whose last message is older than this are deleted by the daily sweep       |
 | `maxChatsPerUser`    | `200`   | Chats kept per owner; the oldest beyond the cap are deleted by the same sweep    |
 | `maxMessagesPerChat` | `2000`  | Messages kept in one chat; the oldest are dropped on write once a chat is over it |
+| `temporaryRetentionHours` | `24` | Hours a temporary chat outlives its last activity; checked every hour      |
 
-All three limits are switched **off** by a value of zero or less — see
-[Retention](#retention). What a turn *produced* is stored separately and
+The first three limits are switched **off** by a value of zero or less — see
+[Retention](#retention). `temporaryRetentionHours` cannot be: a temporary chat
+always expires, and a value of zero or less falls back to 24. Migration V176
+writes it into an existing installation. What a turn *produced* is stored separately and
 configured separately, under `platform.artifacts` — see
 [Artifacts](artifacts.md).
 
-3. **Make sure storage is configured.** Durable chats are the first consumer of
-   the storage abstraction. The default filesystem provider needs no
-   configuration and writes under `contents/data/`; anything else is set in
-   `platform.storage` and requires a restart.
+3. **Make sure storage is configured.** Chat is the first consumer of the
+   storage abstraction, and it does not work without it. The default
+   filesystem provider needs no configuration and writes under
+   `contents/data/`; anything else is set in `platform.storage` and requires a
+   restart.
 
 The client learns the outcome from `GET /api/configs/platform`, which reports
-`chats: { enabled, persistence }` — `persistence` is the server's own answer to
-"is this installation actually storing chats", flag and platform switch and
-storage readiness together.
+`chats: { persistence, temporaryRetentionHours }` — `persistence` is the
+server's own answer to "does this installation keep a chat history", flag and
+platform switch and storage readiness together.
 
 An installation that had the old `chatHistoryPreview` flag on does **not** get
-durable chats automatically. That flag gated a sidebar list drawn from sample
+the chat history automatically. That flag gated a sidebar list drawn from sample
 data, so enabling it said nothing about storing real conversations on the
 server; the upgrade logs a warning naming this switch and leaves it off until
 an admin turns it on.
@@ -93,11 +109,12 @@ an admin turns it on.
 Admin → Observability → **Chat History** (`/admin/chat-history`) is where an
 administrator configures and reviews durable chats and the run ledger:
 
-- **Status** — each condition from [When a turn is persisted](#when-a-turn-is-persisted)
+- **Status** — each condition from [How a chat is stored](#how-a-chat-is-stored)
   on its own (feature flag, `chats.enabled`, storage provider), plus whether the
-  ledger is recording and whether it is only recording because durable chats
+  ledger is recording and whether it is only recording because stored chats
   need it.
-- **Stored chats** — chats, messages, users with chats, activity in the last
+- **Stored chats** — kept chats, temporary chats (counted on their own and left
+  out of every other figure), messages, users with chats, activity in the last
   24 hours and 7 days, status breakdown, oldest and latest activity, and the top
   apps and users by chat count. Counted from chat metadata only; no transcript
   is read.
@@ -105,13 +122,15 @@ administrator configures and reviews durable chats and the run ledger:
   and by the per-user limit, and how many chats are at or near the message
   limit. Computed with the same rules the sweep applies.
 - **Run ledger** — recorded runs by kind and status.
-- **Settings** — `platform.chats` and `platform.runLog` (enabled, identity mode,
+- **Settings** — `platform.chats` (including the temporary-chat window) and
+  `platform.runLog` (enabled, identity mode,
   retention, daily cleanup, spill threshold, flush interval). Changes apply
   without a restart, except `runLog.flushIntervalMs`. Only changed values are
   written, and every save is audit-logged.
 - **Run retention now** — applies the saved rules immediately instead of waiting
-  for the daily sweep, under the same guards: stored chats are only swept while
-  durable chats are active, and the ledger only while its cleanup is enabled.
+  for the sweep, under the same guards: expired temporary chats always go, kept
+  chats only follow the history rules while the history is on, and the ledger
+  is only swept while its cleanup is enabled.
 
 The page warns before a switch to or from `pseudonymized` identity mode, since
 that changes the owner id chats are listed under (see
@@ -122,9 +141,9 @@ API: `GET /api/admin/chat-history`, `PUT /api/admin/chat-history/settings`,
 
 ## The chat history UI
 
-With the feature on, a signed-in user's stored chats show up in three places.
+With the feature on, a signed-in user's kept chats show up in three places.
 All three read the same list (`GET /api/chats`), and none of them exist when
-durable chats are off.
+the chat history is off.
 
 - **The sidebar's *Recents* section** — the five most recent chats, above an
   **All chats** link. Collapsed to the icon rail, that same destination sits
@@ -159,11 +178,12 @@ holds.
 Opening an app — a plain `/apps/:appId` — always starts a new chat; the
 previous one is a click away in the list. As soon as the first message is sent,
 the URL switches to `/apps/:appId/c/:chatId` (replacing the history entry), so a
-reload keeps the conversation and fetches it back from the store. Without chat
-persistence the tab still remembers its chat per app and `/apps/:appId` restores
-it from browser storage, as before. Clearing the chat, or starting a new
-one, drops the chat id from the URL and begins a fresh conversation; nothing is
-lost, the previous chat simply stays in the list. The app share link built on a
+reload keeps the conversation and fetches it back from the store. Without the
+chat history there is no list to find a chat in again, so the tab remembers
+*which* chat it had per app — its id, never its transcript — and `/apps/:appId`
+reopens it from the store. Clearing the chat, or starting a new one, drops the
+chat id from the URL and begins a fresh conversation: a kept chat simply stays
+in the list, a temporary one is deleted on the way out. The app share link built on a
 chat page points at the **app**, never at the one stored chat — a recipient does
 not own it and could only get a 404 from it. Handing the conversation itself to
 someone is a different thing, with its own audiences, limits and a frozen copy:
@@ -194,11 +214,11 @@ what the run ledger already holds and then follows the live stream, rather
 than showing the question and waiting. When the turn ends the transcript is
 re-read from the store, which is the authority on what the answer finally was.
 
-Leaving a durable chat — opening another one, or closing the tab — does
+Leaving a kept chat — opening another one, or closing the tab — does
 **not** cancel its turn. That is the whole promise of the feature: the answer
 keeps being written and is there when you come back. Only the Stop button
 cancels a turn, and it is deliberately unconditional so that it reaches a turn
-whose client is already gone. An ephemeral chat still stops on leaving, or a
+whose client is already gone. A temporary chat still stops on leaving, or a
 generation nobody will ever read would keep billing tokens — but the server does
 that when it sees the connection close; the browser never sends a stop of its
 own.
@@ -251,11 +271,12 @@ Chats the user never renames are titled from their first message.
 ### In the Outlook add-in
 
 The Outlook task pane reads the same list with its own sign-in token, and it
-stores its chats the same way: with durable chats on, a conversation started in
-the pane is a stored chat like one started in the browser — it shows up in
-*Recents* and on `/chats`, and it opens in the web app too. The pane only
-learns whether chats are stored once `GET /api/configs/platform` has answered,
-so an app left open in the pane waits for that answer before it shows the chat.
+stores its chats the same way: a conversation started in the pane is a stored
+chat like one started in the browser — kept, with the chat history on, so it
+shows up in *Recents* and on `/chats` — and it opens in the web app too. The
+pane only learns whether chats are kept once `GET /api/configs/platform` has
+answered, so an app left open in the pane waits for that answer before it shows
+the chat.
 
 Two ways into the history:
 
@@ -288,50 +309,47 @@ turn in that chat, in the pane or in the browser, does not get the earlier
 email again. In the pane, the email that is open when the turn is sent goes
 with it.
 
-An app marked [`ephemeral`](apps.md) stays out of the store in the pane too, as
-in the web app: its chats keep their transcript in the browser and never reach
-the history.
+An app marked [`ephemeral`](apps.md) starts temporary chats in the pane too, as
+in the web app: they are stored, but never reach the history.
 
 **Open in web app** in the pane's chat menu opens the chat on screen at
 `/apps/:appId/c/:chatId` in the browser — the route above, so the web app
 fetches, re-attaches and continues it exactly as it would a chat from its own
-history. It is the same stored chat under its `office-<uuid>` id, not a copy,
-and it opens with the browser's web session, so for the user who owns it (or
-an admin, as any stored chat).
-The entry is offered for stored chats only and stays greyed out until the
-server has accepted the chat's first turn. The pane does not re-read a chat
+history. It is the same stored chat under its `office-<uuid>` id, kept or
+temporary, not a copy, and it opens with the browser's web session, so for the
+user who owns it (or an admin, as any stored chat).
+The entry stays greyed out until the server has accepted the chat's first
+turn. The pane does not re-read a chat
 that was continued in the browser; reopening it from the history does. See
 [the Outlook guide](outlook-add-in.md#open-in-web-app).
 
 Opening a different email still starts a new chat in the pane (see
 [the Outlook guide](outlook-add-in.md)), and **Restore previous chat** fetches
-the one it set aside from the store. With durable chats off the pane keeps its
-transcript in the browser as before and has no history.
+the one it set aside from the store. With the chat history off the pane's chats
+are temporary and it has no history.
 
 ### What never appears in the list
 
-Only stored chats can be listed, so the carve-outs in [Anonymous and ephemeral
-chats are never stored](#anonymous-and-ephemeral-chats-are-never-stored) are
-exactly the conversations with no history:
+Only kept chats are listed, so the [temporary chats](#temporary-chats-and-guests)
+are exactly the conversations with no history:
 
 - **Signed-out visitors have no history at all** — no *Recents*, no `/chats`.
-  Nothing is stored for them, so there would be nothing to list.
-- **Incognito chats.** With the ghost toggle under the chat input switched on
-  the turn is posted `ephemeral: true`, the transcript stays in the browser as
-  it always did, and no trace of it reaches the list. Toggling it back off
-  resumes storing new turns; what is already on screen stays there and is not
-  re-fetched.
+  Their chats are stored under a guest identity, as temporary chats.
+- **Incognito chats.** With the ghost toggle under the chat input switched on,
+  a new chat is created with `ephemeral: true` — a temporary chat — and the
+  composer says so. Switching the toggle on in a chat that is already kept
+  starts a new, temporary chat (the kept one stays in the history); switching
+  it off in a temporary chat keeps that chat, transcript and all. The toggle is
+  only offered where there is a history to keep a chat in.
 - **Compare panels and the canvas.** Each panel mints its own chat id and a
-  single submit fans out to several of them, so both surfaces send
-  `ephemeral: true` too — a comparison never fills the history with half
-  conversations.
-
-When the feature is off, or the storage provider did not come up, the UI is not
-there at all: no *Recents* section, `/chats` is not found, and the sidebar's
-search box goes back to reading "Search apps". The client decides that from the
-`chats.persistence` capability in `GET /api/configs/platform`, so an
-installation with the flag on but no working store falls back to the ephemeral
-experience rather than showing errors.
+  single submit fans out to several of them, so both surfaces start temporary
+  chats — a comparison never fills the history with half conversations — and a
+  compare panel deletes its chat when it is cleared or closed.
+- **Every chat, while the history is off.** There is no *Recents* section,
+  `/chats` is not found, and the sidebar's search box goes back to reading
+  "Search apps". The client decides that from the `chats.persistence`
+  capability in `GET /api/configs/platform`, so an installation with the flag
+  on but no working store does not show errors either.
 
 ## What it costs: runs no longer die with the tab
 
@@ -341,7 +359,7 @@ Three separate paths used to abort a running model call when the client went
 away: the SSE `onClose` handler, a failed write to the SSE socket, and the
 five-minute inactivity sweep that evicts a stream whose heartbeat stopped. All
 three now go through `abortChatRequestOnDisconnect()`, which leaves a **durable**
-turn — one that is being persisted — running to completion.
+turn — one of a kept chat — running to completion.
 
 That is the point of the feature: the user closes the laptop, comes back, and
 the answer is in the chat. It is also a spend change. **Tokens are spent on
@@ -399,20 +417,22 @@ what a viewer receives. A follow-up message supersedes a turn still running on
 another worker of a cluster; the relayed abort names the moment the new turn
 started, so a late arrival never cancels it.
 
-Only durable turns are protected. An anonymous or ephemeral turn is aborted on
+Only kept chats' turns are protected. A temporary chat's turn — an anonymous
+visitor's, an incognito one, any while the history is off — is aborted on
 disconnect exactly as before, so the extra spend is bounded to authenticated,
 non-incognito chats on an installation that opted in.
 
-## Turning this on also turns on the run ledger
+## Stored chats turn on the run ledger
 
 A chat turn is materialized alongside the run's own events, and the ledger is
 where a run's user message, assistant message and usage are recorded. So
-`RunLog.isEnabled()` now returns true whenever chat persistence is configured,
-**regardless of the `runLog` feature flag and even when
-`platform.runLog.enabled` is `false`**. The `runLog` flag has correspondingly
-lost its "preview" marking.
+`RunLog.isEnabled()` returns true whenever a storage provider is up — every
+chat is stored, kept or temporary — **regardless of the `runLog` feature flag
+and even when `platform.runLog.enabled` is `false`**. The ledger then records
+every run, not only chat turns. The `runLog` flag has correspondingly lost its
+"preview" marking.
 
-Enabling chat persistence therefore accepts everything in the
+Every installation therefore accepts everything in the
 [Run Ledger](run-ledger.md) doc:
 
 - One JSONL file per run under `contents/data/run-log/runs/`, plus spill files
@@ -426,43 +446,65 @@ Enabling chat persistence therefore accepts everything in the
 - `runLog.retentionDays` (90 days) and `runLog.cleanupEnabled` govern the
   ledger's own sweep, independently of `chats.retentionDays`. A chat transcript
   outlives the deletion of its runs; a chat deleted through the API or the chat
-  sweep takes its runs with it.
+  sweep takes its runs with it — a temporary chat's runs go when it expires.
 - `platform.runLog.identityMode` now decides who owns a chat, not only who owns
   a run. See [Ownership and identity](#ownership-and-identity).
 
-Chat persistence also adds the one ledger event nobody was producing: a real
+Stored chats also add the one ledger event nobody was producing: a real
 `message/user` for the human turn. Without it a run recorded every answer and
 none of the questions.
 
-## Anonymous and ephemeral chats are never stored
+## Temporary chats and guests
 
-**Anonymous callers never persist**, and this is structural rather than a
-policy: `resolvePrincipal` mints a fresh random `anon-<hex>` id on every call,
-so a chat stored under one could never be listed or reloaded. Writing it would
-only burn disk. An installation running with `anonymousAuth.enabled` gives its
-signed-out visitors the unchanged browser-side experience — including runs that
-still die with the tab. The `/api/chats` endpoints use `authenticatedOnly`, so
-an anonymous caller cannot reach them even when anonymous access is on.
+**A temporary chat is a chat like any other**, with `temporary: true` on its
+document. The turn that creates it decides, from
+[How a chat is stored](#how-a-chat-is-stored); nothing changes it afterwards
+except `PATCH /api/chats/:chatId { "temporary": false }`, which keeps it (409
+`CHAT_TEMPORARY` is what sharing one answers until then). It is:
 
-**Ephemeral turns are never stored.** `ephemeral: true` in the chat POST body
-suppresses the write for that turn. It is client-asserted and therefore
-advisory — it can only ever turn persistence *off*, never on — and an ephemeral
-turn is not durable either, so it is aborted on disconnect like any
-non-persisted turn. The incognito toggle under the chat input sends it, and so
-do the compare panels and the canvas, which mint their own chat ids and fan one
-submit out to several of them.
+- **never listed** — `GET /api/chats` filters it out, the project page does not
+  show it even when it runs in a project (it still gets the project's
+  knowledge), and it sets no unseen badge anywhere;
+- **never shared** and never counted against `maxChatsPerUser`;
+- **deleted** `chats.temporaryRetentionHours` after its last activity by the
+  hourly sweep — whether or not the history is on — and straight away when the
+  user leaves it in the web app (New chat, Clear, a compare panel cleared or
+  closed, a new canvas chat);
+- readable by its owner by id (`GET /api/chats/:chatId`), which is what lets a
+  reload, a re-attach and "Open in web app" work; and by an admin, like any
+  stored chat, until it is gone.
 
-Neither carve-out leaves a trace: no chat document, no transcript, nothing to
-delete afterwards.
+`ephemeral: true` in the chat POST body is what asks for one. It is
+client-asserted and therefore advisory — it can only ever make a new chat
+temporary, never keep one. The incognito toggle sends it, and so do the compare
+panels, the canvas and every surface of an app marked `ephemeral`.
+
+**Anonymous visitors own their chats through a guest identity.** The run
+principal cannot do it: `resolvePrincipal` mints a fresh random `anon-<hex>` id
+on every call, on purpose. Instead, the first API request of an anonymous
+visitor that carries no guest cookie gets one — `ihubGuest`, 32 random bytes,
+HttpOnly, `SameSite=Lax`, `Secure` behind HTTPS, kept 30 days
+(`services/chat/chatOwner.js`). A guest's chats are stored under
+`guest-<sha256 of the cookie>`, so neither the document nor a log line carries
+the secret, and a request without the cookie matches no guest chat (404).
+Guests own temporary chats only: they can read, stop and delete their own, and
+never list. The realtime transcription WebSocket reads the same cookie off its
+upgrade request.
+
+One limitation: an anonymous chat inside a cross-site iframe whose browser
+blocks third-party cookies gets no guest cookie back, so its second turn is
+somebody else's chat (404). Signed-in embeds (Outlook, Nextcloud, Teams, the
+browser extension) authenticate with tokens and are unaffected.
 
 ## The server owns the history
 
-Once a chat is persisted, the conversation's source of truth is the store, not
-the browser. The chat POST changes shape:
+Every chat's source of truth is the store, not the browser. The chat POST has
+one shape:
 
 - The request must carry **exactly one** message, the new one. More than one is
-  rejected with `400 { "error": "CLIENT_HISTORY_NOT_ALLOWED" }`. A client can no
-  longer rewrite what it already said, or replay a history it edited locally.
+  rejected with `400 { "error": "CLIENT_HISTORY_NOT_ALLOWED" }`, whatever the
+  caller, the chat history setting or `ephemeral` say. A client can no longer
+  rewrite what it already said, or replay a history it edited locally.
 - The server reads the stored transcript, drops the bookkeeping (ids, usage,
   errors, attachment descriptors) and empty turns, appends the new message, and
   hands that to the request builder.
@@ -476,13 +518,9 @@ the browser. The chat POST changes shape:
 - An app with `sendChatHistory: false` still gets only the new message. Storing
   a transcript must not start feeding it to a one-shot prompt.
 - `sendChatHistory: false` in the body says the same thing for one turn — the
-  viewer's "Include chat history in requests" setting. Every non-persisted
-  surface expresses that by posting a shorter array; a persisted chat posts one
-  message either way, so it needs a field. Like the app-level flag it can only
-  ever remove history, never add it.
-
-Requests that are not persisted keep posting their whole array and take the same
-code path they always did.
+  viewer's "Include chat history in requests" setting. A turn posts one message
+  either way, so it needs a field. Like the app-level flag it can only ever
+  remove history, never add it.
 
 An `@workflow` mention is a turn like any other: the question is stored before
 the workflow launches — and before its `run/started` frame, as for an ordinary
@@ -517,7 +555,8 @@ guessable resource, so `chatAccess.authorizeChat()` now runs on the chat SSE
   one never clears the owner's badge, because the owner has not seen anything.
 
 The owner id is the run principal in `platform.runLog.identityMode` (`default`,
-`full` or `pseudonymized`), resolved once at the start of the turn. The mode is
+`full` or `pseudonymized`), resolved once at the start of the turn — or, for an
+anonymous visitor, its [guest identity](#temporary-chats-and-guests). The mode is
 stored **on the chat** next to the owner, and an incoming caller is resolved in
 *that* mode — so changing the mode later does not orphan chats that are already
 stored. It does affect listing: `GET /api/chats` can only find chats written
@@ -551,6 +590,7 @@ index can answer "list my chats" without scanning:
   activeRunId,          // the run producing right now, null between turns
   hasUnseenActivity,    // an answer landed with nobody watching
   status,               // 'active' | 'running' | 'error'
+  temporary?,           // true for a chat that is not kept — see Temporary chats
   runIds: [],           // most recent 200, for the delete cascade
   origin,               // { createdVia: 'ui' | 'responses-api' | 'scheduled-task',
                         //   clientId?, authMode?, taskId?, runId?, taskName? }
@@ -655,18 +695,20 @@ Details that matter:
 
 ## API
 
-Every endpoint requires a real authenticated user (`authenticatedOnly`). Those
-that address a chat validate the id before it reaches storage and answer 404 for
-both an unknown chat and someone else's. All of them are rate limited
+The listing and `PATCH` require a real authenticated user (`authenticatedOnly`).
+Reading one chat, its artifacts and `DELETE` take `authRequired` instead, so an
+anonymous visitor reaches the temporary chats of its guest identity — and
+nothing else. Those that address a chat validate the id before it reaches
+storage and answer 404 for both an unknown chat and someone else's. All of them are rate limited
 with the other public API prefixes (500 requests/minute/IP by default).
 
 | Method & path            | Purpose                                                                    |
 | ------------------------ | -------------------------------------------------------------------------- |
-| `GET /api/chats`         | The caller's chats, most recent activity first. `?limit` (default 30, max 100) and `?cursor` |
+| `GET /api/chats`         | The caller's kept chats, most recent activity first. `?limit` (default 30, max 100) and `?cursor` |
 | `GET /api/chats/:chatId` | `{ chat, messages, version }` — the transcript, and clears `hasUnseenActivity` |
 | `GET /api/chats/:chatId/artifacts` | What this chat's turns produced, newest first, as descriptors |
 | `GET /api/chats/:chatId/artifacts/:artifactId` | The bytes of one artifact, as its own media type |
-| `PATCH /api/chats/:chatId` | `{ title }` — rename; capped at 200 characters and marked as user-set     |
+| `PATCH /api/chats/:chatId` | `{ title }` — rename; capped at 200 characters and marked as user-set. `{ temporary: false }` — keep a temporary chat (there is no way back) |
 | `DELETE /api/chats/:chatId` | Erase the chat, its transcript and its runs                             |
 
 `GET /api/chats` returns the chat documents exactly as stored. App name, colour
@@ -679,11 +721,12 @@ each run's ledger file, its spill directory and its pending interactions. The
 chat document is the only place a chat's runs are written down, which is why it
 is read before it is deleted.
 
-When durable chats are unavailable — the flag is off, an admin set
-`chats.enabled: false`, or the storage provider did not come up — every endpoint
-answers `503` with `details.code = "CHAT_PERSISTENCE_UNAVAILABLE"` rather than
-404, so a client can tell "not configured" from "not found" and fall back to the
-ephemeral experience.
+When the chat history is unavailable — the flag is off, an admin set
+`chats.enabled: false`, or the storage provider did not come up — the listing
+and `PATCH` answer `503` with `details.code = "CHAT_PERSISTENCE_UNAVAILABLE"`
+rather than 404, so a client can tell "not configured" from "not found" and
+hide the history. Reading, the artifacts and `DELETE` answer as long as storage
+is up: they are what temporary chats need.
 
 ## What a turn produced
 
@@ -724,10 +767,8 @@ What this chat is responsible for:
 Caps, kinds, media types and the master switch are the store's, not the chat's:
 see [Artifacts](artifacts.md).
 
-Where a chat is not stored at all — an anonymous visitor, an incognito turn,
-the compare panels, the canvas — nothing changes: a generated image is visible
-for the session, the note under it still tells the user to download it, and it
-is gone on the way back.
+Every chat is stored, so every chat keeps its pictures — a temporary chat's go
+with it when it expires.
 
 ## What a turn did
 
@@ -788,13 +829,19 @@ turn of its own, so deleting it does not cascade to the execution.
 
 ## Retention
 
-A daily sweep applies two rules, both read fresh from `platform.chats` on every
-tick so an admin's change takes effect without a restart:
+A sweep applies three rules, all read fresh from `platform.chats` on every tick
+so an admin's change takes effect without a restart:
 
-- **Age** — a chat whose last message is older than `retentionDays` (90) is
-  deleted.
+- **Temporary** — a temporary chat whose last activity is older than
+  `temporaryRetentionHours` (24) is deleted. Checked every hour, whether or not
+  the history is on, and it never touches a kept chat.
+- **Age** — a kept chat whose last message is older than `retentionDays` (90)
+  is deleted.
 - **Count** — an owner keeps their `maxChatsPerUser` (200) most recently active
-  chats; the rest are deleted, oldest first.
+  kept chats; the rest are deleted, oldest first. Temporary chats count against
+  no quota.
+
+The age and count rules are the history rules: they run at most once a day.
 
 Set either to **zero or less to disable that rule**: `retentionDays: 0` keeps
 chats until someone deletes them, `maxChatsPerUser: 0` removes the per-user cap.
@@ -809,13 +856,14 @@ applies to them like to any other chat.
 
 Every removal is the same cascade `DELETE /api/chats/:id` performs, ledger runs
 included. The sweep runs once at startup — so a misconfigured retention shows up
-in the log at boot rather than a day later — then every 24 hours, on the cluster
+in the log at boot rather than later — then every hour, on the cluster
 singleton worker that already owns the run-ledger cleanup, and never in parallel
 with itself.
 
-Setting `chats.enabled: false` **stops** the sweep. Disabling the feature is not
-a request to purge what is already stored; delete the documents deliberately if
-that is what you want.
+Turning the chat history off (the feature, or `chats.enabled: false`) **stops**
+the history rules. Disabling the feature is not a request to purge what is
+already kept; delete the documents deliberately if that is what you want.
+Temporary chats keep expiring either way.
 
 ## Operational notes and limits
 
@@ -868,18 +916,20 @@ that is what you want.
 - **Per-worker chat state is still per-worker.** Clarification counts, prompt
   sources and the iFinder conversation mapping live in memory keyed by chat id
   and are not part of what is persisted.
-- **Failures are loud but never fatal.** A storage error during materialization
-  is logged at `error` and does not fail the turn: the user still gets their
-  answer, the operator still sees that it was not stored. A storage provider
-  that fails to come up at boot logs one error and leaves chats behaving exactly
-  as they did before the feature existed.
+- **Failures are loud.** A storage error during materialization is logged at
+  `error` and does not fail the turn: the user still gets their answer, the
+  operator still sees that it was not stored. A storage provider that fails to
+  come up at boot logs one error, and every chat turn then answers
+  `503 CHAT_STORAGE_UNAVAILABLE` until it is fixed — there is no browser-held
+  fallback to degrade to.
 
 ## Code map
 
 | File                                        | Responsibility                                              |
 | ------------------------------------------- | ------------------------------------------------------------ |
 | `server/storage/bootstrap.js`               | Brings the provider up per worker; `getStorage()` may be null |
-| `server/services/chat/chatPersistence.js`   | The policy — the only module that decides "is this persisted" |
+| `server/services/chat/chatPersistence.js`   | The policy — the only module that decides kept or temporary   |
+| `server/services/chat/chatOwner.js`         | Who owns a chat: the run principal, or an anonymous guest     |
 | `server/services/chat/ChatRepository.js`    | The two chat documents, their locks, listing and the cascade  |
 | `server/services/artifacts/ArtifactRepository.js` | What a turn produced — see [Artifacts](artifacts.md)    |
 | `server/services/chat/chatMaterializer.js`  | The only module that writes chat turns                        |

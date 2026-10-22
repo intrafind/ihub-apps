@@ -405,11 +405,11 @@ class ChatService {
    * @param {string} [params.language='en']
    * @param {Object} [params.user]
    * @param {string} [params.runId] - run id to use (default: minted)
-   * @param {Object} [params.persistence] - durable-chat context, supplied by the caller only
-   *   when `isChatPersistenceActive()` said yes for this request. Omitted (the default) the
-   *   turn is not stored and behaves exactly as it did before chat persistence existed.
+   * @param {Object} [params.persistence] - stored-chat context. Every chat turn from the chat
+   *   route carries one; a caller without one (an app invoked internally, a headless agent)
+   *   runs an unstored turn.
    *   `{ repository, ownerId, identityMode, content, clientMessageId?, attachments?,
-   *   replaceFromMessageId? }`, where `repository` is a `ChatRepository`, `ownerId`/
+   *   replaceFromMessageId?, temporary? }`, where `repository` is a `ChatRepository`, `ownerId`/
    *   `identityMode` are the run principal resolved once by the caller, and `content` is the
    *   raw text of the new user message (the stored history is never client-asserted, but the
    *   message being sent comes from the request). Optional extras for callers that store more
@@ -610,7 +610,8 @@ class ChatService {
         chat: persist.chat,
         projects: persist.projects,
         projectId: persist.projectId,
-        origin: persist.origin
+        origin: persist.origin,
+        temporary: persist.temporary === true
       });
       // The chat's container changed under this turn (a first turn that
       // raced it opened the chat in another project): nothing of it was

@@ -471,15 +471,11 @@ describe('AppChat with a start form', () => {
     fireEvent.submit(screen.getAllByTestId('composer')[0]);
     await answerTurn('run-2');
 
+    // Only the follow-up: the server holds the form's turn, and the variables
+    // stored with the chat answer for it — the follow-up itself sets none.
     const second = requestMessages(1);
-    expect(second.filter(m => m.role === 'user').map(m => m.content)).toEqual([
-      'Write to Ada about the Q3 report.',
-      'Make it shorter'
-    ]);
-    // The first message still carries the variables in the history; the
-    // follow-up itself sets none — the server uses the ones the chat has.
-    expect(second[0].variables).toEqual({ recipient: 'Ada', subject: 'the Q3 report' });
-    expect(second[second.length - 1]).toMatchObject({
+    expect(second).toHaveLength(1);
+    expect(second[0]).toMatchObject({
       content: 'Make it shorter',
       promptTemplate: null,
       variables: {}

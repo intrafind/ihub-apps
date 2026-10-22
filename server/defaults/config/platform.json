@@ -445,6 +445,7 @@
     "retentionDays": 90,
     "maxChatsPerUser": 200,
     "maxMessagesPerChat": 2000,
+    "temporaryRetentionHours": 24,
     "sharing": {
       "enabled": true,
       "allowUsers": true,

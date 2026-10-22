@@ -4,6 +4,7 @@
 import cors from 'cors';
 import express from 'express';
 import cookieParser from 'cookie-parser';
+import { attachGuestIdentity } from '../services/chat/chatOwner.js';
 import { proxyAuth } from './proxyAuth.js';
 import localAuthMiddleware from './localAuth.js';
 import { initializePassport, configureOidcProviders } from './oidcAuth.js';
@@ -583,6 +584,10 @@ export function setupMiddleware(app, platformConfig = {}) {
       if (isAnonymousAccessAllowed(livePlatform)) {
         try {
           req.user = enhanceUserWithPermissions(null, livePlatform.auth || {}, livePlatform);
+          // Every chat is stored, an anonymous visitor's too: the guest
+          // cookie is what lets the next request own the chat this one
+          // started (`services/chat/chatOwner.js`).
+          attachGuestIdentity(req, res);
         } catch (error) {
           // No principal: permission checks downstream fail closed.
           logger.warn('Could not build the anonymous principal', {

@@ -1,9 +1,10 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import useAppChat from '../hooks/useAppChat';
+import { deleteChat } from '../../../api';
 import ChatMessageList from './ChatMessageList';
 import ModelSelector from './ModelSelector';
 import { isStartFormEnabled } from '../utils/startForm';
@@ -47,7 +48,6 @@ const ComparePanel = forwardRef(function ComparePanel(
     onClarificationSkip,
     onOpenSourceInApp,
     linkPath,
-    ephemeral,
     hideTranscript = false
   },
   ref
@@ -62,10 +62,25 @@ const ComparePanel = forwardRef(function ComparePanel(
     chatId,
     onMessageComplete,
     // Compare panels share the same appId; persisting the iAssistant conversationId
-    // (which is keyed by appId) would race between the panels. Keep these chats ephemeral.
+    // (which is keyed by appId) would race between the panels.
     persistConversationId: false,
-    ephemeral
+    // A comparison fans one submit out to several chats, so none of them
+    // belongs in the history: each panel's chat is a temporary one, and it is
+    // always new — there is nothing stored to wait for.
+    ephemeral: true,
+    hydrates: false
   });
+
+  // The panel's chat is stored but listed nowhere, so nothing can reopen it
+  // once the panel lets go of it: delete it then rather than leave it to
+  // expire. A chat that never got a message was never stored.
+  const storedChatIdRef = useRef(null);
+  storedChatIdRef.current = chat.messages.some(message => message.role === 'user') ? chatId : null;
+  const forgetChat = useCallback(() => {
+    const stored = storedChatIdRef.current;
+    if (stored) deleteChat(stored).catch(() => {});
+  }, []);
+  useEffect(() => forgetChat, [forgetChat]);
 
   // Keep selectedModel in sync if the available models change (e.g. defaults arrive late).
   useEffect(() => {
@@ -97,6 +112,7 @@ const ComparePanel = forwardRef(function ComparePanel(
       clear() {
         const { chat: c } = latestRef.current;
         c.cancelGeneration('compare');
+        forgetChat();
         c.clearMessages();
         c.resetConversationState();
         setChatId(`compare-${uuidv4()}`);
@@ -105,7 +121,7 @@ const ComparePanel = forwardRef(function ComparePanel(
         latestRef.current.chat.cancelGeneration('compare');
       }
     }),
-    []
+    [forgetChat]
   );
 
   const handleResend = (messageId, editedContent) => {
