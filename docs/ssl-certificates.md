@@ -69,6 +69,16 @@ sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keyc
 3. Choose "Local Machine" and place in "Trusted Root Certification Authorities"
 4. Restart iHub Apps
 
+### Method 1b: Operating System Certificate Store (default)
+
+iHub trusts the certificate store of the machine it runs on, in addition to Node's built-in roots. If your company CA is installed in the OS (for example in `/etc/ssl/certs` on Linux, or in the Windows or macOS certificate store), outbound connections to LLM endpoints, MCP servers and `wss://` voice transcription work without further configuration. The startup log shows `Added the operating system certificate store to the trusted CAs`.
+
+- **Linux in containers:** install the CA the way your distribution does (for Alpine and Debian: put the `.crt` into `/usr/local/share/ca-certificates/` and run `update-ca-certificates`), or point `SSL_CERT_FILE` at a PEM file.
+- **Opt out:** set `NODE_USE_SYSTEM_CA=0`.
+- **Requirements:** Node 24.5 or later. On older runtimes iHub keeps Node's built-in roots; set `NODE_USE_SYSTEM_CA=1` before starting Node, or use Method 2.
+- **Left alone:** when Node was started with `--use-system-ca` or `NODE_USE_SYSTEM_CA=1`, or with `--use-openssl-ca`. Do not combine `NODE_USE_SYSTEM_CA=1` with `--use-openssl-ca`: Node refuses to start.
+- **Scope:** every CA in the system store is trusted for every outbound connection. To trust a single CA, use `NODE_EXTRA_CA_CERTS`. To skip verification for specific hosts only, use the domain whitelist below.
+
 ### Method 2: Node.js Certificate Environment Variable
 
 You can specify additional certificates for Node.js to trust:
