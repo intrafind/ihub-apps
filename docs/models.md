@@ -236,11 +236,9 @@ has models cannot be deleted.
 }
 ```
 
-The API key of a linked model is looked up in this order: the model's own `apiKey`, the
-provider's stored key, the `<MODEL_ID>_API_KEY` environment variable, then the provider's
-variable — `LLMHUB_API_KEY` for a provider with ID `llmhub`. A linked model never falls back to the
-variable of its API type, so an LLM Hub model speaking the OpenAI API is never sent
-`OPENAI_API_KEY`.
+The API key of a linked model is the model's own `apiKey` if it has one, otherwise the key stored
+on its provider. A linked model never uses the key of its API type, so an LLM Hub model speaking
+the OpenAI API is never sent the OpenAI key.
 
 ### Importing Models from an Endpoint
 
