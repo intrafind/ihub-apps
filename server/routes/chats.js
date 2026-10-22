@@ -260,7 +260,11 @@ async function moveChatToProject(req, res, repository, chat) {
             throw new Error('Project is gone');
           }
         }
-        if (from) await service.detachChat(from, chat.id).catch(() => {});
+        if (from) {
+          await service.detachChat(from, chat.id).catch(() => {
+            /* the source project may already be gone */
+          });
+        }
       }
     })
     .catch(error => {
