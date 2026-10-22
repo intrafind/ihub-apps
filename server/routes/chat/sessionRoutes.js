@@ -1031,6 +1031,7 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
             // a new container records the chat in its project once that is
             // stored (`materializeUserTurn`), on the @workflow path too.
             ...(chatProjects.projectPatch ? { projects: chatProjects.projectPatch } : {}),
+            projectId: chatProjects.containerId,
             // How this turn is being answered, so reopening the chat comes
             // back with the same setup rather than the app's defaults. Only
             // the keys this request actually carried: the repository merges

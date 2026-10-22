@@ -20,6 +20,7 @@ import { randomUUID } from 'node:crypto';
 import { newRunId } from '../loop/RunLog.js';
 import { materializeAssistantTurn, materializeUserTurn } from '../chat/chatMaterializer.js';
 import { getLocalizedString } from '../../utils/localize.js';
+import { PROJECT_INPUT_TYPE } from './projectNodes.js';
 import {
   chatAnswerFormat,
   chatAnswerOf,
@@ -34,8 +35,8 @@ const MAX_INPUT_CHARS = 20_000;
 
 /**
  * The opening exchange of a chat about an execution: what it was asked (its
- * text start inputs) and what it answered (the `output` of the end step it
- * finished at).
+ * text start inputs, project inputs left out) and what it answered (the
+ * `output` of the end step it finished at).
  *
  * @param {Object} state - Workflow execution state (`WorkflowEngine.getState`).
  * @returns {{ userInput: string, outputText: string, workflow: Object|null,
@@ -53,6 +54,9 @@ export function executionHandoff(state) {
   const startNode = (workflow?.nodes || []).find(node => node.type === 'start');
   const inputVariables = startNode?.config?.inputVariables || [];
   const userInput = inputVariables
+    // A project input is an id: it says nothing to the chat model (the
+    // browser-seeded chat leaves it out the same way).
+    .filter(variable => variable?.type !== PROJECT_INPUT_TYPE)
     .map(variable => data[variable.name])
     .filter(value => typeof value === 'string' && value.length > 0)
     .join('\n\n')

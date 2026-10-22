@@ -645,6 +645,13 @@ describe('admin projects', () => {
       body: { id: 'case__archive', name: { en: 'Archive' } }
     });
     assert.equal(sepId.statusCode, 400, 'a project id carrying the blob separator');
+    for (const id of ['share-targets', '_Config', '_stats', '_kinds']) {
+      const reserved = await drive(route.adminCreate, {
+        user: EDITOR,
+        body: { id, name: { en: 'Shadow' } }
+      });
+      assert.equal(reserved.statusCode, 400, `"${id}" names a static endpoint`);
+    }
 
     const built = await drive(route.adminCreate, {
       user: EDITOR,
@@ -704,6 +711,25 @@ describe('admin projects', () => {
       );
     } finally {
       configCache.setCacheEntry('config/workflows.json', []);
+    }
+  });
+
+  it('is listed for a delegated token that reaches it through an app', async () => {
+    const delegated = { ...CAROL, authMode: 'oauth_authorization_code' };
+    const direct = await drive(route.get, { user: delegated, params: { projectId: 'faq' } });
+    assert.equal(direct.statusCode, 200, JSON.stringify(direct.body));
+    const admin = await drive(route.list, { user: delegated, query: { scope: 'admin' } });
+    assert.equal(admin.statusCode, 200, JSON.stringify(admin.body));
+    assert.ok(
+      admin.body.items.some(p => p.id === 'faq'),
+      JSON.stringify(admin.body)
+    );
+    const all = await drive(route.list, { user: delegated });
+    assert.ok(all.body.items.some(p => p.id === 'faq'));
+    // A principal that holds no projects has nothing owned or shared.
+    for (const scope of ['mine', 'shared']) {
+      const own = await drive(route.list, { user: delegated, query: { scope } });
+      assert.deepEqual(own.body, { items: [], nextCursor: null });
     }
   });
 
@@ -1141,6 +1167,26 @@ describe('chats in a project', () => {
       [chat.id]
     );
     assert.equal((await chats.getChat(chat.id)).projectId, project.id);
+    // Meanwhile nothing can join or change the project: its delete has begun.
+    const other = await chats.ensureChat({
+      chatId: 'chat-stuck-2',
+      ownerId: ADA.id,
+      appId: 'chat',
+      title: 'Late'
+    });
+    const joined = await drive(route.chatPatch, {
+      user: ADA,
+      params: { chatId: other.id },
+      body: { projectId: project.id }
+    });
+    assert.equal(joined.statusCode, 404, JSON.stringify(joined.body));
+    assert.equal((await chats.getChat(other.id)).projectId ?? null, null);
+    const renamed = await drive(route.update, {
+      user: ADA,
+      params: { projectId: project.id },
+      body: { name: 'Still here' }
+    });
+    assert.equal(renamed.statusCode, 404, JSON.stringify(renamed.body));
     // The retry with chat storage back finishes the job.
     const retried = await drive(route.remove, {
       user: ADA,
@@ -1150,6 +1196,53 @@ describe('chats in a project', () => {
     assert.equal(await getProjectRepository().get(project.id), null);
     assert.deepEqual(await getProjectRepository().listChatMarkers(project.id), []);
     assert.equal((await chats.getChat(chat.id)).projectId ?? null, null);
+  });
+
+  it('leaves the chats of a project alone when the delete is refused under the lock', async () => {
+    const chats = getChatRepository();
+    const chat = await chats.ensureChat({
+      chatId: 'chat-kept-1',
+      ownerId: ADA.id,
+      appId: 'chat',
+      title: 'Kept'
+    });
+    const project = await create(ADA, { name: 'Handed over' });
+    const into = await drive(route.chatPatch, {
+      user: ADA,
+      params: { chatId: chat.id },
+      body: { projectId: project.id }
+    });
+    assert.equal(into.statusCode, 200, JSON.stringify(into.body));
+    let detached = 0;
+    await assert.rejects(
+      getProjectService().deleteProject(project.id, {
+        // The owner changed between the route's check and the lock.
+        authorize: () => false,
+        detachChat: () => {
+          detached += 1;
+        }
+      }),
+      error => error.code === 'PROJECT_ACCESS_CHANGED'
+    );
+    assert.equal(detached, 0);
+    const kept = await getProjectRepository().get(project.id);
+    assert.ok(kept);
+    assert.notEqual(kept.deleting, true);
+    assert.deepEqual(
+      (await getProjectRepository().listChatMarkers(project.id)).map(m => m.chatId),
+      [chat.id]
+    );
+    assert.equal((await chats.getChat(chat.id)).projectId, project.id);
+    assert.equal(
+      (
+        await drive(route.chatPatch, {
+          user: ADA,
+          params: { chatId: chat.id },
+          body: { projectId: null }
+        })
+      ).statusCode,
+      200
+    );
   });
 });
 

@@ -131,6 +131,7 @@ export async function beginTranscriptionTurn({
     clientMessageId,
     attachments: attachment ? [attachment] : [],
     ...(chatProjects.projectPatch ? { projects: chatProjects.projectPatch } : {}),
+    projectId: chatProjects.containerId,
     // The audio is not kept, so the question cannot be edited or resent.
     message: { transcription: true }
   });

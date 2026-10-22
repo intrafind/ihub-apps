@@ -1443,6 +1443,59 @@ describe('Chat with Results: a stored chat about an execution', () => {
     });
   });
 
+  /** STATE with these start inputs and data. */
+  const withInputs = (inputVariables, data) => ({
+    ...STATE,
+    data: {
+      ...STATE.data,
+      topic: undefined,
+      ...data,
+      _workflowDefinition: {
+        ...STATE.data._workflowDefinition,
+        nodes: [
+          { type: 'start', config: { inputVariables } },
+          { id: 'end', type: 'end', config: { output: 'finalReport' } }
+        ]
+      }
+    }
+  });
+  const openingOf = async state => {
+    const { createExecutionChat } = await import('../services/workflow/executionChat.js');
+    let opening;
+    await withRepository(async repository => {
+      const { chatId } = await createExecutionChat({
+        repository,
+        state,
+        executionId: 'wf-exec-1',
+        appId: 'chat',
+        ownerId: 'user-1',
+        identityMode: 'default',
+        contextMessage: 'Here are the results from the workflow "Statement review":'
+      });
+      opening = (await repository.getMessages(chatId)).messages[0].content;
+    });
+    return opening;
+  };
+
+  it('opens with the client’s question, not the project id, when the only input is a project', async () => {
+    const state = withInputs([{ name: 'case', type: 'project' }], { case: 'prj_case' });
+    assert.equal(
+      await openingOf(state),
+      'Here are the results from the workflow "Statement review":'
+    );
+  });
+
+  it('leaves a project id out of the opening question of an execution with text inputs too', async () => {
+    const state = withInputs(
+      [
+        { name: 'case', type: 'project' },
+        { name: 'topic', type: 'string' }
+      ],
+      { case: 'prj_case', topic: 'Wind farm statements' }
+    );
+    assert.equal(await openingOf(state), 'Wind farm statements');
+  });
+
   it('answers with the output of the end step the execution finished at, as an @workflow run does', async () => {
     const { executionHandoff } = await import('../services/workflow/executionChat.js');
     const { outputText } = executionHandoff({
