@@ -349,6 +349,10 @@ export class ProjectService {
     };
     if (!isText) {
       item.cache = { ttlSeconds: 7200 };
+    } else {
+      // The job of this item: only the run holding this attempt may record
+      // its outcome (see `ProjectIngestService._run`).
+      item.ingestAttempt = randomUUID();
     }
     let stored = null;
     try {
@@ -385,6 +389,7 @@ export class ProjectService {
             // display title the uploader chose.
             name: file.name || storedItem.name,
             bytes: declaredBytes,
+            attempt: storedItem.ingestAttempt,
             purpose: 'upload'
           }
         : text !== null
@@ -392,12 +397,14 @@ export class ProjectService {
               text,
               contentType: ref.contentType || 'text/markdown',
               name: storedItem.name,
+              attempt: storedItem.ingestAttempt,
               purpose: origin === 'written' ? 'write' : 'text'
             }
           : {
-              fetch: () => kind.fetch(storedItem, { user, purpose: 'pick' }),
+              fetch: ({ signal } = {}) => kind.fetch(storedItem, { user, purpose: 'pick', signal }),
               contentType: ref.mimeType,
               name: storedItem.name,
+              attempt: storedItem.ingestAttempt,
               purpose: 'pick'
             };
       const result = await this.ingest.start(stored, storedItem, ingestInput, { user, wait });
@@ -458,12 +465,12 @@ export class ProjectService {
           // is refused while it is set, so two queued downloads can never
           // race to install an older snapshot over a newer one. The job
           // clears it when it finishes, fails or finds nothing changed.
-          // `refreshAttempt` names this run: the job must still find it on
+          // `ingestAttempt` names this run: the job must still find it on
           // the item to install its text or record its failure.
           const now = nowIso();
           item.error = null;
           item.refreshingAt = now;
-          item.refreshAttempt = randomUUID();
+          item.ingestAttempt = randomUUID();
           item.updatedAt = now;
           target = { item, kind };
           return project;
@@ -479,7 +486,8 @@ export class ProjectService {
       stored,
       storedItem,
       {
-        fetch: () => target.kind.fetch(storedItem, { user, purpose: 'refresh' }),
+        fetch: ({ signal } = {}) =>
+          target.kind.fetch(storedItem, { user, purpose: 'refresh', signal }),
         contentType: storedItem.ref?.mimeType,
         name: storedItem.name,
         previousBlobKey: storedItem.text?.blobKey || null,
@@ -487,7 +495,7 @@ export class ProjectService {
         // The version the last fetch saw, so a change between that fetch
         // and the end of extraction is not mistaken for "unchanged".
         previousLastModified: storedItem.provenance?.source?.lastModified || null,
-        attempt: storedItem.refreshAttempt,
+        attempt: storedItem.ingestAttempt,
         purpose: 'refresh'
       },
       { user, wait }

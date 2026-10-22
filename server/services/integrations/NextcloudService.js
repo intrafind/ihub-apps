@@ -214,7 +214,7 @@ class NextcloudService extends OAuthIntegrationBase {
    * path segment in WebDAV URLs). Prefers the cached value from the OAuth
    * token response, falls back to the OCS API.
    */
-  async _resolveNextcloudUsername(userId, tokens, provider) {
+  async _resolveNextcloudUsername(userId, tokens, provider, { signal } = {}) {
     if (tokens.nextcloudUserId) return tokens.nextcloudUserId;
 
     const ocsUrl = `${provider.serverUrl}/ocs/v2.php/cloud/user?format=json`;
@@ -224,7 +224,8 @@ class NextcloudService extends OAuthIntegrationBase {
         Authorization: `Bearer ${tokens.accessToken}`,
         'OCS-APIREQUEST': 'true',
         Accept: 'application/json'
-      }
+      },
+      ...(signal ? { signal } : {})
     });
 
     if (!response.ok) {
@@ -495,14 +496,21 @@ class NextcloudService extends OAuthIntegrationBase {
 
   /**
    * Download a file by its relative path within the user's Nextcloud
-   * storage. Returns the file content as a Buffer plus metadata.
+   * storage. Returns the file content as a Buffer plus metadata, with
+   * `lastModified` (ISO) from the response's `Last-Modified`.
+   *
+   * @param {string} userId
+   * @param {string} filePath
+   * @param {string} [providerId]
+   * @param {{signal?: AbortSignal}} [options] - `signal` aborts the requests,
+   *   body included
    */
-  async downloadFile(userId, filePath, providerId) {
+  async downloadFile(userId, filePath, providerId, { signal } = {}) {
     if (!filePath) throw new Error('filePath is required');
 
     const tokens = await this.getUserTokens(userId, providerId);
     const provider = this._getProviderConfig(tokens.providerId);
-    const username = await this._resolveNextcloudUsername(userId, tokens, provider);
+    const username = await this._resolveNextcloudUsername(userId, tokens, provider, { signal });
 
     const webdavPath = this._buildWebDavPath(username, filePath);
     const url = `${provider.serverUrl}${webdavPath}`;
@@ -511,7 +519,8 @@ class NextcloudService extends OAuthIntegrationBase {
       method: 'GET',
       headers: {
         Authorization: `Bearer ${tokens.accessToken}`
-      }
+      },
+      ...(signal ? { signal } : {})
     });
 
     if (!response.ok) {
@@ -529,6 +538,7 @@ class NextcloudService extends OAuthIntegrationBase {
     const mimeType = response.headers.get('content-type') || 'application/octet-stream';
     const sizeHeader = response.headers.get('content-length');
     const size = sizeHeader ? Number.parseInt(sizeHeader, 10) : 0;
+    const modified = Date.parse(response.headers.get('last-modified') || '');
 
     // Cap download bytes so a single huge file (intentional or not)
     // can't OOM the worker. The client also enforces a per-file upload
@@ -542,6 +552,7 @@ class NextcloudService extends OAuthIntegrationBase {
       name,
       mimeType,
       size,
+      lastModified: Number.isFinite(modified) ? new Date(modified).toISOString() : null,
       content
     };
   }
