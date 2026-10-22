@@ -348,6 +348,24 @@ export function cloudProvidersForKind(providers, kind) {
 }
 
 /**
+ * The `uploadConfig` the shared cloud file browsers expect, from the project
+ * limits: the browser greys out files above `maxFileSizeMB` (and falls back
+ * to its own 10 MB default when it is not set). The server checks the size
+ * again when it fetches the file.
+ *
+ * @param {{limits?: {maxFileBytes?: number}}|null} config - `_config`.
+ * @returns {{maxFileSizeMB?: number}}
+ *
+ * @example
+ * cloudBrowserUploadConfig({ limits: { maxFileBytes: 20971520 } }); // { maxFileSizeMB: 20 }
+ */
+export function cloudBrowserUploadConfig(config) {
+  const maxBytes = config?.limits?.maxFileBytes;
+  if (!Number.isFinite(maxBytes) || maxBytes <= 0) return {};
+  return { maxFileSizeMB: maxBytes / (1024 * 1024) };
+}
+
+/**
  * Validate a file upload before it is sent.
  *
  * @param {File|null|undefined} file

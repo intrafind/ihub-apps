@@ -21,7 +21,8 @@ const CloudFileBrowserShell = ({
   provider,
   useBrowserHook,
   i18nKeys,
-  uploadConfig,
+  // `{ maxFileSizeMB }`; a caller that passes none gets the 10 MB default.
+  uploadConfig = {},
   onFilesProcessed,
   onClose,
   // Optional: hand the picked files (and the drive they sit in) to the caller
