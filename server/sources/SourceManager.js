@@ -111,7 +111,7 @@ export async function probeUrl(config, { checkTarget = assertPublicTarget } = {}
   try {
     let hop = new URL(url);
     const origin = hop.origin;
-    let response;
+    let response = null;
     for (let redirects = 0; ; redirects += 1) {
       if (redirects > URL_TEST_MAX_REDIRECTS) throw new Error('Too many redirects');
       if (hop.protocol !== 'http:' && hop.protocol !== 'https:') {
@@ -823,7 +823,7 @@ class SourceManager {
    *   `headers`, `maxBytes`)
    * @returns {Promise<Object>} Test results
    */
-  async testUrlSource(config) {
+  testUrlSource(config) {
     return probeUrl(config);
   }
 

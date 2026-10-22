@@ -39,7 +39,7 @@ import { getChatRepository } from '../services/chat/ChatRepository.js';
 import { resolvePrincipal } from '../services/loop/runIdentity.js';
 import { resolveShares } from './promptRoutes.js';
 import { getProjectRepository, isUserProjectId } from '../services/projects/ProjectRepository.js';
-import { ProjectError, getProjectService } from '../services/projects/ProjectService.js';
+import { getProjectService } from '../services/projects/ProjectService.js';
 import {
   addUploadedItem,
   isMultipart,

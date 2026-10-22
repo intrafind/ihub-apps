@@ -349,7 +349,7 @@ export class ProjectService {
     if (!isText) {
       item.cache = { ttlSeconds: 7200 };
     }
-    let stored;
+    let stored = null;
     try {
       stored = await this.repository.mutate(
         projectId,
@@ -367,7 +367,9 @@ export class ProjectService {
     let storedItem = stored.items.find(entry => entry.id === item.id) || item;
     if (isText) {
       if (!this.ingest) {
-        await this.removeItem(projectId, item.id, { user, authorize }).catch(() => {});
+        await this.removeItem(projectId, item.id, { user, authorize }).catch(() => {
+          // The INGEST_UNAVAILABLE error below is what the caller needs to see.
+        });
         throw new ProjectError(
           'INGEST_UNAVAILABLE',
           'Uploads and picked documents are not available on this installation'
@@ -401,7 +403,9 @@ export class ProjectService {
       if (result) {
         if (!result.item) {
           // An inline job failed: nothing to keep, the caller gets the error.
-          await this.removeItem(projectId, item.id, { user, authorize }).catch(() => {});
+          await this.removeItem(projectId, item.id, { user, authorize }).catch(() => {
+            // The failure the job recorded is what the caller gets.
+          });
           throw new ProjectError(result.error.code, result.error.message);
         }
         storedItem = result.item;
@@ -431,7 +435,7 @@ export class ProjectService {
         'Refreshing items is not available on this installation'
       );
     }
-    let stored;
+    let stored = null;
     let target = null;
     try {
       stored = await this.repository.mutate(
@@ -497,7 +501,7 @@ export class ProjectService {
    * @returns {Promise<{project: Object, item: Object}|null>}
    */
   async updateItem(projectId, itemId, patch, { user, authorize }) {
-    let stored;
+    let stored = null;
     try {
       stored = await this.repository.mutate(
         projectId,
@@ -537,7 +541,7 @@ export class ProjectService {
    * @returns {Promise<Object|null>} The project after the removal, or null.
    */
   async removeItem(projectId, itemId, { user, authorize }) {
-    let stored;
+    let stored = null;
     let found = false;
     let removed = null;
     try {
