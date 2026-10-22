@@ -715,6 +715,22 @@ export class ConfigStore {
    *   was nothing to remove
    */
   async remove(relPath) {
+    // Behind the updates of the same file from this process, and on disk
+    // under the same file lock `updateOnDisk` takes: a delete that slipped
+    // between an update's read and its atomic write was undone by that
+    // write, and reported success for a file that survived.
+    const queueKey = String(relPath);
+    const previous = this.#updateQueues.get(queueKey) || Promise.resolve();
+    const run = previous.then(() => this.#removeNow(relPath));
+    const settled = run.catch(() => {});
+    this.#updateQueues.set(queueKey, settled);
+    settled.then(() => {
+      if (this.#updateQueues.get(queueKey) === settled) this.#updateQueues.delete(queueKey);
+    });
+    return run;
+  }
+
+  async #removeNow(relPath) {
     const location = parseRawRelPath(relPath);
     const documents = location ? documentsFor(location.ns) : null;
     if (documents) return documents.delete(location.ns, location.key);
@@ -722,13 +738,19 @@ export class ConfigStore {
     // No `invalidateText` here: the next read's `stat` fails and drops the
     // entry on that path already. A line that cannot be made to matter is a
     // line the next reader has to work out is dead.
-    try {
-      await fs.unlink(filePath);
-      return true;
-    } catch (error) {
-      if (error.code === 'ENOENT') return false;
-      throw error;
-    }
+    return withFileLock(
+      `${filePath}.lock`,
+      async () => {
+        try {
+          await fs.unlink(filePath);
+          return true;
+        } catch (error) {
+          if (error.code === 'ENOENT') return false;
+          throw error;
+        }
+      },
+      { component: COMPONENT }
+    );
   }
 
   /**

@@ -91,13 +91,27 @@ function assertAuthorized(authorize, project) {
 }
 
 /** Mint a user project id. */
+/**
+ * `__` joins the parts of a blob key (`<project>__<item>__<version>`), so no
+ * id may contain it: a minted id that does is minted again, a configured one
+ * is refused (`isAdminProjectId`, the item schema).
+ */
+export const ID_SEPARATOR = '__';
+
+function mintSafeId(prefix) {
+  for (;;) {
+    const id = `${prefix}${randomBytes(ID_BYTES).toString('base64url')}`;
+    if (!id.includes(ID_SEPARATOR)) return id;
+  }
+}
+
 export function mintProjectId() {
-  return `${USER_PROJECT_ID_PREFIX}${randomBytes(ID_BYTES).toString('base64url')}`;
+  return mintSafeId(USER_PROJECT_ID_PREFIX);
 }
 
 /** Mint an item id. */
 export function mintItemId() {
-  return `${ITEM_ID_PREFIX}${randomBytes(ID_BYTES).toString('base64url')}`;
+  return mintSafeId(ITEM_ID_PREFIX);
 }
 
 /**
@@ -129,7 +143,8 @@ export function isAdminProjectId(id) {
     id.length > 0 &&
     id.length <= 50 &&
     isValidId(id) &&
-    !id.startsWith(USER_PROJECT_ID_PREFIX)
+    !id.startsWith(USER_PROJECT_ID_PREFIX) &&
+    !id.includes(ID_SEPARATOR)
   );
 }
 
@@ -161,12 +176,18 @@ export function memberMarkerKey(projectId, targetKey) {
  * @returns {string}
  */
 export function chatMarkerKey(projectId, chatId) {
-  return `${projectId}__${chatId}`;
+  // Both digested: a project id plus a chat id can exceed the store's key
+  // length (`isValidId`, 100 characters), and the raw ids stay in the data.
+  return `${digest(projectId)}.${digest(chatId)}`;
 }
 
-/** Prefix of every blob key of one project. */
+/**
+ * Prefix of every blob key of one project: `<project>__<item>__<version>`.
+ * No id contains `__` ({@link ID_SEPARATOR}), so the prefix of one project
+ * never matches the keys of another.
+ */
 export function blobPrefix(projectId) {
-  return `${projectId}__`;
+  return `${projectId}${ID_SEPARATOR}`;
 }
 
 function actorOf(actor) {
@@ -803,12 +824,18 @@ export class ProjectRepository {
       });
     }
     if (!isAdminProjectId(projectId)) return null;
-    const { project } = await this._loadAdmin(projectId);
-    if (!project) return null;
-    assertAuthorized(authorize, project);
-    await this.config.remove(adminPath(projectId));
-    await this._afterAdminChange();
-    return project;
+    // Under the project lock like every admin mutation, and the removal is
+    // queued behind the updates of the same file by the config store, so a
+    // PATCH in flight cannot write the project back after the delete.
+    return this._withLock(projectId, async () => {
+      const { project } = await this._loadAdmin(projectId);
+      if (!project) return null;
+      assertAuthorized(authorize, project);
+      const removed = await this.config.remove(adminPath(projectId));
+      if (!removed) return null;
+      await this._afterAdminChange();
+      return project;
+    });
   }
 
   // --- chat markers ---------------------------------------------------------
@@ -865,7 +892,15 @@ export class ProjectRepository {
    */
   async deleteBlobs(projectId, itemId) {
     if (!this.blobs || !isProjectId(projectId)) return 0;
-    const prefix = itemId ? `${blobPrefix(projectId)}${itemId}__` : blobPrefix(projectId);
+    if (itemId !== undefined && (!isValidId(itemId) || itemId.includes(ID_SEPARATOR))) return 0;
+    const prefix = itemId
+      ? `${blobPrefix(projectId)}${itemId}${ID_SEPARATOR}`
+      : blobPrefix(projectId);
+    // What follows the prefix: `<item>__<version>` for a project, `<version>`
+    // for one item. A key with more parts belongs to no item of this project
+    // (ids never contain `__`) and is left alone rather than deleted on a
+    // prefix match.
+    const parts = itemId ? 1 : 2;
     let removed = 0;
     let cursor = null;
     do {
@@ -875,6 +910,8 @@ export class ProjectRepository {
         ...(cursor ? { cursor } : {})
       });
       for (const blob of page.items) {
+        const rest = blob.key.slice(prefix.length);
+        if (!rest || rest.split(ID_SEPARATOR).length !== parts) continue;
         if (await this.blobs.delete(PROJECT_FILES_NAMESPACE, blob.key)) removed += 1;
       }
       cursor = page.nextCursor;
