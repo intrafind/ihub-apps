@@ -23,30 +23,22 @@ import tls from 'node:tls';
 const OFF_VALUES = new Set(['0', 'false', 'off', 'no']);
 const CA_FLAGS = ['--use-system-ca', '--use-openssl-ca'];
 
-/**
- * @param {Object} [deps] - Injected for tests
- * @returns {{ applied: boolean, reason: string, count?: number }}
- */
-export function applySystemCaDefault({
-  env = process.env,
-  execArgv = process.execArgv,
-  tlsModule = tls
-} = {}) {
-  if (typeof tlsModule.setDefaultCACertificates !== 'function') {
-    return { applied: false, reason: 'unsupported-node' };
-  }
-
+/** Why the setting says to leave the store alone, or null. */
+function settingSkipReason(env) {
   const setting = String(env.NODE_USE_SYSTEM_CA ?? '')
     .trim()
     .toLowerCase();
-  if (OFF_VALUES.has(setting)) return { applied: false, reason: 'disabled' };
-  if (setting === '1') return { applied: false, reason: 'node-managed' };
+  if (OFF_VALUES.has(setting)) return 'disabled';
+  return setting === '1' ? 'node-managed' : null;
+}
 
+/** True when Node was started with a flag that already picks the CA store. */
+function hasExplicitCaFlag(env, execArgv) {
   const args = [...execArgv, ...String(env.NODE_OPTIONS ?? '').split(/\s+/)];
-  if (CA_FLAGS.some(flag => args.includes(flag))) {
-    return { applied: false, reason: 'explicit-ca-flag' };
-  }
+  return CA_FLAGS.some(flag => args.includes(flag));
+}
 
+function addSystemRoots(tlsModule) {
   try {
     const system = tlsModule.getCACertificates('system');
     if (!system.length) return { applied: false, reason: 'no-system-certificates' };
@@ -55,4 +47,19 @@ export function applySystemCaDefault({
   } catch (error) {
     return { applied: false, reason: `error: ${error.message}` };
   }
+}
+
+const defaultDeps = () => ({ env: process.env, execArgv: process.execArgv, tlsModule: tls });
+
+/**
+ * @param {{ env: Object, execArgv: string[], tlsModule: Object }} [deps] - Injected for tests
+ * @returns {{ applied: boolean, reason: string, count?: number }}
+ */
+export function applySystemCaDefault({ env, execArgv, tlsModule } = defaultDeps()) {
+  if (typeof tlsModule.setDefaultCACertificates !== 'function') {
+    return { applied: false, reason: 'unsupported-node' };
+  }
+  const skip =
+    settingSkipReason(env) ?? (hasExplicitCaFlag(env, execArgv) ? 'explicit-ca-flag' : null);
+  return skip ? { applied: false, reason: skip } : addSystemRoots(tlsModule);
 }
