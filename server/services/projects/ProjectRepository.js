@@ -521,6 +521,28 @@ export class ProjectRepository {
   }
 
   /**
+   * Every user project that passes `filter`, following the scan's cursor
+   * page by page. For the sweeps and statistics that must see the whole
+   * installation, not the first page of it.
+   *
+   * @param {Object} [options]
+   * @param {(project: Object) => boolean} [options.filter]
+   * @param {number} [options.pageSize] - Projects per page (tests).
+   * @returns {Promise<Object[]>}
+   */
+  async scanUserAll({ filter = () => true, pageSize = MAX_SCANNED } = {}) {
+    const projects = [];
+    let cursor = null;
+    do {
+      const page = await this.scanUser({ filter, cursor, max: pageSize, maxScanned: pageSize });
+      projects.push(...page.projects);
+      const next = page.truncated ? page.nextCursor : null;
+      cursor = next && next !== cursor ? next : null;
+    } while (cursor);
+    return projects;
+  }
+
+  /**
    * Change one project under its lock.
    *
    * `fn` receives a copy of the project as loaded and returns the next
@@ -535,15 +557,25 @@ export class ProjectRepository {
    * @param {(project: Object) => boolean} [options.authorize]
    * @param {string} [options.now]
    * @param {boolean} [options.touchActivity=true]
+   * @param {boolean} [options.touchUpdated=true] - False for a write that
+   *   only records activity: `updatedAt` and `updatedBy` keep naming the last
+   *   edit, so a chat turn does not read as an edit by the last editor.
    * @returns {Promise<Object|null>} The stored project, or null when there is none.
    * @throws {StorageError} Code `PROJECT_ACCESS_CHANGED` when `authorize` refuses.
    */
-  async mutate(projectId, fn, { actor, authorize, now, touchActivity = true } = {}) {
+  async mutate(
+    projectId,
+    fn,
+    { actor, authorize, now, touchActivity = true, touchUpdated = true } = {}
+  ) {
     const stamp = project => {
       const next = { ...project, usage: usageOf(project.items || []) };
-      next.updatedAt = now || new Date().toISOString();
-      if (actor) next.updatedBy = actorOf(actor);
-      if (touchActivity) next.lastActivityAt = next.updatedAt;
+      const at = now || new Date().toISOString();
+      if (touchUpdated) {
+        next.updatedAt = at;
+        if (actor) next.updatedBy = actorOf(actor);
+      }
+      if (touchActivity) next.lastActivityAt = at;
       return next;
     };
     if (isUserProjectId(projectId)) {
