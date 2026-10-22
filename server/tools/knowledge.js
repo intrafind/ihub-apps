@@ -52,6 +52,20 @@ const SOURCE_TRUNCATED_NOTE =
   'is not the whole document and no section or search reaches the rest. Say so when the ' +
   'answer may depend on the missing part.';
 
+/** What a read of an iFinder search that could not fetch some documents tells the model. */
+const SOURCE_FAILED_NOTE =
+  'Some documents this search found could not be loaded from their source, so they are ' +
+  'missing from this text; it is not the complete result. Say so when the answer may ' +
+  'depend on them.';
+
+/** The note a read's source completeness calls for, or null. */
+function sourceNote(retrieval) {
+  const notes = [];
+  if (retrieval?.sourceTruncated) notes.push(SOURCE_TRUNCATED_NOTE);
+  if (retrieval?.sourceFailed > 0) notes.push(SOURCE_FAILED_NOTE);
+  return notes.length ? notes.join(' ') : null;
+}
+
 /** What the note and a passage number may take, reserved before they are known. */
 const NOTE_ROOM = 'x'.repeat(200);
 const MARKER_ROOM = 999999;
@@ -177,7 +191,11 @@ export async function search(params) {
           const item = (project.items || []).find(entry => entry.id === hit.document);
           return projectSource(project, item, {
             snippet: hit.text,
-            passages: [{ text: hit.text.slice(0, 4000), marker: `s:${hit.n}` }]
+            passages: [{ text: hit.text.slice(0, 4000), marker: `s:${hit.n}` }],
+            // Also as a marker of the source: two searches that return the
+            // same passage number it twice, and merging keeps only the first
+            // passage of one text, while markers merge on their own.
+            markers: [`s:${hit.n}`]
           });
         })
         .filter(Boolean)
@@ -217,13 +235,15 @@ export async function read(params) {
       name: result.doc.name,
       content: result.text,
       retrieval: result.retrieval,
-      ...(result.retrieval?.sourceTruncated ? { note: SOURCE_TRUNCATED_NOTE } : {}),
+      ...(sourceNote(result.retrieval) ? { note: sourceNote(result.retrieval) } : {}),
       sources: [
         projectSource(entry.project, item, {
           read: {
             ok: true,
             truncated:
-              result.retrieval?.mode !== 'full' || result.retrieval?.sourceTruncated === true
+              result.retrieval?.mode !== 'full' ||
+              result.retrieval?.sourceTruncated === true ||
+              result.retrieval?.sourceFailed > 0
           }
         })
       ].filter(Boolean)
@@ -237,7 +257,7 @@ export async function read(params) {
       respond({
         doc: { name: item?.name || '' },
         text: '',
-        retrieval: { mode: 'full', sourceTruncated: true }
+        retrieval: { mode: 'full', sourceTruncated: true, sourceFailed: 999 }
       })
     );
     let budgetBytes = PAYLOAD_BUDGET_BYTES - envelope - READ_ROOM_BYTES;
@@ -263,42 +283,116 @@ export async function read(params) {
   }
 }
 
+/** A document as `knowledge_list` reports it. */
+function listedDoc(doc) {
+  return {
+    id: doc.id,
+    name: doc.name,
+    kind: doc.kind,
+    status: doc.status,
+    pinned: doc.pinned,
+    tokens: doc.tokens,
+    chars: doc.chars,
+    origin: doc.provenance?.origin || 'linked',
+    ...(doc.url ? { url: doc.url } : {}),
+    ...(doc.snapshotAt ? { snapshotAt: doc.snapshotAt } : {})
+  };
+}
+
+/** Documents asked of a provider per page while listing. */
+const LIST_PAGE = 100;
+
+/**
+ * Where a listing continues: the project (its index in the call's scope),
+ * the provider's own cursor of the page it stopped in, and how many
+ * documents of that page were already returned. Opaque to the model.
+ */
+function encodeListCursor(position) {
+  return Buffer.from(JSON.stringify(position), 'utf8').toString('base64url');
+}
+
+function decodeListCursor(value) {
+  if (typeof value !== 'string' || !value) return { project: 0, page: null, skip: 0 };
+  try {
+    const parsed = JSON.parse(Buffer.from(value, 'base64url').toString('utf8'));
+    const project = Number.isInteger(parsed?.project) && parsed.project >= 0 ? parsed.project : 0;
+    const skip = Number.isInteger(parsed?.skip) && parsed.skip >= 0 ? parsed.skip : 0;
+    const page = typeof parsed?.page === 'string' ? parsed.page : null;
+    return { project, page, skip };
+  } catch {
+    throw new KnowledgeError('INVALID_REF', 'The cursor is not one knowledge_list returned');
+  }
+}
+
 /**
  * `knowledge_list`
  *
- * @param {{project?: string, user: Object, chatId?: string, appConfig: Object}} params
+ * One page of the scope's documents, project after project, within the
+ * same serialized byte budget as a search: the loop replaces a larger tool
+ * result with a short preview, which would hide every document id past it.
+ * A page that stops early says where to continue (`nextCursor`).
+ *
+ * @param {{project?: string, cursor?: string, user: Object, chatId?: string, appConfig: Object}} params
  */
 export async function list(params) {
   try {
     const { all } = await scopeOf(params);
     const targets = pick(all, params.project);
     const ctx = ctxOf(params);
+    const start = decodeListCursor(params.cursor);
     const projects = [];
-    for (const entry of targets) {
+    let nextCursor = null;
+    let returned = 0;
+    let used = jsonBytes({ projects: [], nextCursor: encodeListCursor(start), note: NOTE_ROOM });
+    scan: for (let index = start.project; index < targets.length; index++) {
+      const entry = targets[index];
       const provider = providerFor(entry.project);
-      const { items } = await provider.list(entry.project, ctx, { limit: 100 });
-      projects.push({
+      const listed = {
         id: entry.project.id,
         name:
           typeof entry.project.name === 'string'
             ? entry.project.name
             : entry.project.name?.en || entry.project.id,
         mode: entry.mode,
-        documents: items.map(doc => ({
-          id: doc.id,
-          name: doc.name,
-          kind: doc.kind,
-          status: doc.status,
-          pinned: doc.pinned,
-          tokens: doc.tokens,
-          chars: doc.chars,
-          origin: doc.provenance?.origin || 'linked',
-          ...(doc.url ? { url: doc.url } : {}),
-          ...(doc.snapshotAt ? { snapshotAt: doc.snapshotAt } : {})
-        }))
-      });
+        documents: []
+      };
+      let page = index === start.project ? start.page : null;
+      let skip = index === start.project ? start.skip : 0;
+      const headerBytes = jsonBytes(listed) + 1;
+      if (returned > 0 && used + headerBytes > PAYLOAD_BUDGET_BYTES) {
+        nextCursor = encodeListCursor({ project: index, page, skip });
+        break;
+      }
+      used += headerBytes;
+      projects.push(listed);
+      do {
+        const { items, nextCursor: following } = await provider.list(entry.project, ctx, {
+          cursor: page,
+          limit: LIST_PAGE
+        });
+        for (let at = skip; at < items.length; at++) {
+          const doc = listedDoc(items[at]);
+          const bytes = jsonBytes(doc) + 1;
+          // At least one document per page, so a listing always moves on.
+          if (returned > 0 && used + bytes > PAYLOAD_BUDGET_BYTES) {
+            nextCursor = encodeListCursor({ project: index, page, skip: at });
+            break scan;
+          }
+          used += bytes;
+          returned += 1;
+          listed.documents.push(doc);
+        }
+        page = following || null;
+        skip = 0;
+      } while (page);
     }
-    return { projects };
+    return nextCursor
+      ? {
+          projects,
+          nextCursor,
+          note: 'More documents follow: call knowledge_list again with cursor set to nextCursor.'
+        }
+      : { projects };
   } catch (error) {
     return errorResult(error);
   }

@@ -68,11 +68,32 @@ const itemIdSchema = zSafeId
   .max(100)
   .refine(id => isValidId(id) && !id.includes('__'), 'Invalid item id');
 
-/** An admin project id: path-safe, not a user id, and free of the blob separator. */
+/**
+ * Admin project ids that would shadow a static endpoint of the project
+ * routes (`/api/projects/_config`, `/api/admin/projects/_stats`, ...).
+ * Compared case-insensitively, as the routes match them.
+ */
+export const RESERVED_ADMIN_PROJECT_IDS = Object.freeze([
+  '_config',
+  '_kinds',
+  '_stats',
+  '_tokens',
+  'share-targets'
+]);
+
+/** Whether an id is one of {@link RESERVED_ADMIN_PROJECT_IDS}, whatever its case. */
+export function isReservedAdminProjectId(id) {
+  return RESERVED_ADMIN_PROJECT_IDS.includes(String(id).toLowerCase());
+}
+
+/**
+ * An admin project id: path-safe, not a user id, free of the blob separator
+ * and not the name of a static endpoint.
+ */
 const adminProjectIdSchema = zSafeId
   .min(1)
   .max(50)
-  .refine(id => !id.includes('__'), 'Invalid project id');
+  .refine(id => !id.includes('__') && !isReservedAdminProjectId(id), 'Invalid project id');
 
 const runRefSchema = z
   .object({
@@ -179,6 +200,9 @@ export const adminProjectSchema = z
     version: z.number().int().positive().prefault(1),
     id: adminProjectIdSchema,
     ownership: z.literal('admin').prefault('admin'),
+    // Set by a delete that could not finish its chat cascade: the project
+    // refuses every other write until the delete is retried.
+    deleting: z.boolean().optional(),
     tier: z.enum(PROJECT_TIERS).prefault('ihub'),
     name: localized(MAX_NAME_LENGTH),
     description: localized(MAX_DESCRIPTION_LENGTH).optional(),
