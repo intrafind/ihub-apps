@@ -25,8 +25,10 @@ import { hasProjectScope } from './knowledge/knowledgeTools.js';
  * @type {Map<string, Set<string>>}
  */
 const promptKnowledgeSources = new Map();
-// The knowledge scope (which projects, loaded or searched) of the prompt
-// being built for a chat, taken by `ChatService.prepareChatRequest`.
+// The knowledge scope (which projects, loaded or searched) of a prompt being
+// built, taken by `ChatService.prepareChatRequest`. Keyed by the preparation,
+// not the chat: two preparations of one chat can overlap (a turn and the one
+// that supersedes it), and each must report its own scope.
 const knowledgeScopes = new Map();
 
 /**
@@ -157,23 +159,24 @@ class PromptService {
   /**
    * Note the projects a prompt was built with (#1036), for the turn to
    * report as `knowledge/scope`.
-   * @param {string} chatId
+   * @param {string} key - The preparation id the caller handed to
+   *   `processMessageTemplates`, else the chat id
    * @param {Object} summary - `scopeSummary(plan)`
    */
-  trackKnowledgeScope(chatId, summary) {
-    if (!chatId || !summary) return;
-    knowledgeScopes.set(chatId, summary);
+  trackKnowledgeScope(key, summary) {
+    if (!key || !summary) return;
+    knowledgeScopes.set(key, summary);
   }
 
   /**
-   * The knowledge scope noted for a chat, and forget it.
-   * @param {string} chatId
+   * The knowledge scope noted under a key, and forget it.
+   * @param {string} key - See {@link trackKnowledgeScope}.
    * @returns {Object|null}
    */
-  takeKnowledgeScope(chatId) {
-    if (!chatId) return null;
-    const summary = knowledgeScopes.get(chatId) || null;
-    knowledgeScopes.delete(chatId);
+  takeKnowledgeScope(key) {
+    if (!key) return null;
+    const summary = knowledgeScopes.get(key) || null;
+    knowledgeScopes.delete(key);
     return summary;
   }
 
@@ -182,10 +185,11 @@ class PromptService {
    *
    * @param {string} systemPrompt
    * @param {Object|null} app - App with its link fields (`projects`, `_projectId`, …)
-   * @param {{user: Object|null, chatId: string|null, lang: string, modelName: string|null}} ctx
+   * @param {{user: Object|null, chatId: string|null, lang: string, modelName: string|null,
+   *   scopeKey: string|null}} ctx - `scopeKey` is what the knowledge scope is noted under
    * @returns {Promise<string>}
    */
-  async _applyProjects(systemPrompt, app, { user, chatId, lang, modelName }) {
+  async _applyProjects(systemPrompt, app, { user, chatId, lang, modelName, scopeKey }) {
     const placeholder = '{{projects}}';
     const hasPlaceholder = systemPrompt.includes(placeholder);
     const scope =
@@ -210,7 +214,7 @@ class PromptService {
     if (plan.projects.some(project => project.injected.length)) {
       this.trackPromptSources(chatId);
     }
-    this.trackKnowledgeScope(chatId, scopeSummary(plan));
+    this.trackKnowledgeScope(scopeKey, scopeSummary(plan));
     logger.info('Projects applied to the prompt', {
       component: 'PromptService',
       chatId,
@@ -358,6 +362,11 @@ class PromptService {
    * @param {Object} [preparedSkills] - The turn's active skills from
    *   `prepareActiveSkills`, when the caller resolved them already (it needs
    *   them for the tools as well); resolved here otherwise
+   * @param {string} [modelId] - The model's id, matched before its (possibly
+   *   localized) name for the context window the project budget is sized by
+   * @param {string} [preparationId] - The preparation this prompt is built
+   *   for: the knowledge scope is noted under it (else under the chat id) for
+   *   the caller to take
    * @returns {Array} Processed messages array
    */
   async processMessageTemplates(
@@ -372,7 +381,8 @@ class PromptService {
     modelName = null,
     requestedSkills = null,
     preparedSkills = null,
-    modelId = null
+    modelId = null,
+    preparationId = null
   ) {
     const defaultLang = configCache.getPlatform()?.defaultLanguage || 'en';
     const lang = language || defaultLang;
@@ -585,7 +595,8 @@ class PromptService {
           user,
           chatId,
           lang,
-          modelName: modelId || modelName
+          modelName: modelId || modelName,
+          scopeKey: preparationId || chatId
         });
       } catch (error) {
         logger.error('Error applying the projects of the request', {
