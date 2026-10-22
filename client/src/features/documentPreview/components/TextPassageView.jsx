@@ -3,10 +3,35 @@
 
 import { useMemo } from 'react';
 
+/** `value` as a literal inside a regular expression. */
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * Where `passage` occurs in `text`, as `[start, end]` offsets into `text`, or
+ * null. Whitespace runs match flexibly: a source collapses the whitespace of
+ * its passages (`normalizeSource`), so a heading followed by a blank line is
+ * quoted with a single space, and must still be found in the original.
+ *
+ * @param {string} text
+ * @param {string} passage
+ * @returns {[number, number]|null}
+ */
+export function findPassage(text, passage) {
+  const words = String(passage || '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+  if (!words.length) return null;
+  const match = new RegExp(words.map(escapeRegExp).join('\\s+')).exec(text);
+  return match ? [match.index, match.index + match[0].length] : null;
+}
+
 /**
  * The passages of `text` that `passages` quote, as `<mark>` segments: each
- * quoted passage is looked up once, whole, so a passage the text does not
- * carry verbatim (the extraction normalised it) just goes unmarked.
+ * quoted passage is looked up once, whole (whitespace aside), so a passage
+ * the text does not carry (the extraction rewrote it) just goes unmarked.
  *
  * @param {string} text
  * @param {string[]} passages
@@ -16,10 +41,8 @@ import { useMemo } from 'react';
 export function segmentText(text, passages) {
   const ranges = [];
   for (const passage of passages) {
-    const needle = String(passage || '').trim();
-    if (!needle) continue;
-    const start = text.indexOf(needle);
-    if (start >= 0) ranges.push([start, start + needle.length]);
+    const range = findPassage(text, passage);
+    if (range) ranges.push(range);
   }
   ranges.sort((a, b) => a[0] - b[0]);
   const segments = [];
