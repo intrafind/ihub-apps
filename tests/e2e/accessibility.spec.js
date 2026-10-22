@@ -208,45 +208,133 @@ test.describe('Accessibility — WCAG 2.2 AA Compliance', () => {
   });
 });
 
+/**
+ * A fresh contents/ shows the first-run disclaimer, a modal dialog that holds
+ * keyboard focus until it is acknowledged (and remembers the answer). Keyboard
+ * tests have to get past it, or Tab never reaches the page behind it.
+ *
+ * @param {import('@playwright/test').Page} page - Playwright page object
+ */
+async function acknowledgeDisclaimer(page) {
+  const acknowledge = page.getByRole('button', { name: 'I understand' });
+  if (await acknowledge.isVisible().catch(() => false)) {
+    await acknowledge.click();
+    await expect(acknowledge).toBeHidden();
+  }
+}
+
+// The auth API allows 50 requests per 15 minutes, and this file signs in for
+// dozens of pages. Sign in once per worker process and reuse the session cookies.
+let adminCookies;
+
+/**
+ * Signs in as the default local admin so the page's context carries the auth
+ * cookie. The dev server is up before the API behind its proxy, which answers
+ * 502 until then; keep trying while it starts.
+ *
+ * @param {import('@playwright/test').Page} page - Playwright page object
+ */
+async function signInAsAdmin(page) {
+  if (adminCookies) {
+    await page.context().addCookies(adminCookies);
+    return;
+  }
+  const credentials = {
+    username: process.env.TEST_ADMIN_USERNAME || 'admin',
+    password: process.env.TEST_ADMIN_PASSWORD || 'password123'
+  };
+  await expect
+    .poll(
+      async () =>
+        (await page.request.post('/api/auth/local/login', { data: credentials })).status(),
+      { message: 'Admin login', timeout: 60_000, intervals: [1_000, 2_000] }
+    )
+    .toBe(200);
+  adminCookies = await page.context().cookies();
+}
+
+// Critical/serious violations a page still has, as axe rule → number of failing
+// elements (the highest count seen over repeated scans of a fresh contents/,
+// which is what CI runs; list-backed pages render a little differently per
+// load). They are logged on every run; one more failing element, or any other
+// rule, fails the test. Pages that are not listed here have none. When a fix
+// lowers a count, the log says so: lower the number, or delete the entry at zero.
+//   label              - form control with no label (admin forms)
+//   select-name        - <select> with no label (admin forms, canvas)
+//   button-name        - icon-only button with no accessible name
+//   label-title-only   - control labelled only by its title/placeholder
+//   aria-valid-attr-value - tab whose aria-controls points at a panel that is not rendered
+const KNOWN_VIOLATIONS = {
+  '/apps/chat/canvas': { 'select-name': 1 },
+  '/admin/sources': { 'button-name': 1, label: 11 },
+  '/admin/auth': { label: 12 },
+  '/admin/oauth': { 'aria-valid-attr-value': 1 },
+  '/admin/oauth/clients': { 'aria-valid-attr-value': 1 },
+  '/admin/oauth/connections': { 'aria-valid-attr-value': 1 },
+  '/admin/oauth/server': { 'aria-valid-attr-value': 1 },
+  '/admin/mcp/servers': { 'button-name': 4 },
+  '/admin/browser-extension': { 'button-name': 1, label: 1 },
+  '/admin/ui': { 'select-name': 5 },
+  '/admin/usage': { 'select-name': 1 },
+  '/admin/feedback': { 'select-name': 1 },
+  '/admin/telemetry': { label: 4 },
+  '/admin/backup': { label: 1 },
+  '/admin/tools/ocr-ai': { label: 1 },
+  '/admin/tools/jobs': { label: 1 },
+  '/admin/apps/new': { 'label-title-only': 1, label: 19, 'select-name': 8 }
+};
+
+// Pages that currently have no critical or serious violation. They are held at
+// zero, so a regression anywhere in this list fails the pull request. Together
+// with KNOWN_VIOLATIONS this covers every route reachable from the user and admin
+// navigation without opening a dialog or editing a record.
+const CLEAN_PAGES = [
+  '/apps',
+  '/tasks',
+  '/workflows',
+  '/start',
+  '/admin/providers',
+  '/admin/prompts',
+  '/admin/tools',
+  '/admin/skills',
+  '/admin/workflows',
+  '/admin/agents',
+  '/admin/agents/approvals',
+  '/admin/agents/inboxes',
+  '/admin/agents/runs',
+  '/admin/marketplace',
+  '/admin/mcp/gateway',
+  '/admin/a2a/agents',
+  '/admin/credentials',
+  '/admin/integrations',
+  '/admin/integrations/jira',
+  '/admin/office-integration',
+  '/admin/nextcloud-embed',
+  '/admin/localization',
+  '/admin/pages',
+  '/admin/shortlinks',
+  '/admin/logging',
+  '/admin/system-resources',
+  '/admin/chat-history',
+  '/admin/scheduled-tasks',
+  '/admin/voice-input',
+  '/admin/audit-log',
+  '/admin/changelog',
+  '/admin/features',
+  '/admin/security',
+  '/admin/updates',
+  '/admin/advanced',
+  '/admin/models/new'
+];
+
 // Most of the product sits behind a login: the chat UI, the prompt library and
 // the admin pages. These scans sign in as the default local admin that a fresh
 // contents/ ships (CLAUDE.md, "Default Local Admin"); override with
 // TEST_ADMIN_USERNAME / TEST_ADMIN_PASSWORD against other environments.
 test.describe('Accessibility — signed-in pages (WCAG 2.2 AA)', () => {
   test.beforeEach(async ({ page }) => {
-    const credentials = {
-      username: process.env.TEST_ADMIN_USERNAME || 'admin',
-      password: process.env.TEST_ADMIN_PASSWORD || 'password123'
-    };
-    // The dev server is up before the API behind its proxy, which answers 502
-    // until then; keep trying while it starts.
-    await expect
-      .poll(
-        async () =>
-          (await page.request.post('/api/auth/local/login', { data: credentials })).status(),
-        { message: 'Admin login', timeout: 60_000, intervals: [1_000, 2_000] }
-      )
-      .toBe(200);
+    await signInAsAdmin(page);
   });
-
-  // Critical/serious violations these pages already had when the signed-in
-  // scans were added (October 2026), as axe rule → number of failing elements
-  // on a fresh contents/ (what CI runs). They are logged on every run; one more
-  // failing element, or any other rule, fails the test. When fixes lower a
-  // count, the log says so: lower the number, or delete the entry at zero.
-  //   color-contrast     - low-contrast secondary text (mostly text-gray-400)
-  //   label              - unlabelled file input / toggle checkbox
-  //   nested-interactive - prompt cards are buttons containing buttons
-  const KNOWN_VIOLATIONS = {
-    '/apps/chat': { 'color-contrast': 2 },
-    '/prompts': { 'color-contrast': 1, 'nested-interactive': 4 },
-    '/chats': { 'color-contrast': 1 },
-    '/admin': { 'color-contrast': 1 },
-    '/admin/apps': { label: 1 },
-    '/admin/models': { label: 1 },
-    '/admin/users': { 'color-contrast': 5, label: 2 },
-    '/admin/groups': { 'color-contrast': 8 }
-  };
 
   for (const [label, path] of [
     ['Chat app', '/apps/chat'],
@@ -266,6 +354,98 @@ test.describe('Accessibility — signed-in pages (WCAG 2.2 AA)', () => {
       expect(new URL(page.url()).pathname, `${label} redirected away from ${path}`).toBe(path);
 
       await expectNoBlockingViolations(page, label, KNOWN_VIOLATIONS[path]);
+    });
+  }
+
+  // Every other route, so a new violation on any of them is caught, not only on
+  // the handful of pages above. Pages in KNOWN_VIOLATIONS may not get worse.
+  for (const path of [...CLEAN_PAGES, ...Object.keys(KNOWN_VIOLATIONS)]) {
+    test(`${path} should not have new critical or serious accessibility violations`, async ({
+      page
+    }) => {
+      await page.goto(path);
+      await page.waitForLoadState('networkidle');
+      // Let list-backed pages finish rendering before they are scanned.
+      await page.waitForTimeout(500);
+      expect(new URL(page.url()).pathname, `${path} redirected away`).toBe(path);
+
+      await expectNoBlockingViolations(page, path, KNOWN_VIOLATIONS[path]);
+    });
+  }
+});
+
+// axe's WCAG tag set does not include the landmark rules (they are best
+// practices), so they are run explicitly: a screen-reader user navigates by
+// landmark, and a second <main> (or an unlabelled duplicate) makes that list
+// ambiguous.
+test.describe('Accessibility — landmarks', () => {
+  test.beforeEach(async ({ page }) => {
+    await signInAsAdmin(page);
+  });
+
+  for (const path of [
+    '/apps',
+    '/prompts',
+    '/admin',
+    '/admin/apps',
+    '/admin/marketplace',
+    '/admin/security'
+  ]) {
+    test(`${path} has exactly one main landmark and no ambiguous duplicates`, async ({ page }) => {
+      await page.goto(path);
+      await page.waitForLoadState('networkidle');
+      expect(new URL(page.url()).pathname).toBe(path);
+
+      await expect(page.locator('main, [role="main"]')).toHaveCount(1);
+
+      const results = await new AxeBuilder({ page })
+        .withRules([
+          'landmark-one-main',
+          'landmark-no-duplicate-main',
+          'landmark-main-is-top-level',
+          'landmark-unique'
+        ])
+        .analyze();
+      expect(
+        results.violations,
+        `${path} landmark problems:\n${formatViolationSummary(results.violations)}`
+      ).toEqual([]);
+    });
+  }
+});
+
+// The skip links are the keyboard user's way past the navigation. index.html
+// injects a <base> element, which once turned a bare href="#main-content" into
+// a navigation to the app root: the link took the user off the page instead of
+// into its content. These tests press the real keys against the real DOM.
+test.describe('Accessibility — skip links', () => {
+  test.beforeEach(async ({ page }) => {
+    await signInAsAdmin(page);
+  });
+
+  for (const [label, path, linkName, targetId] of [
+    ['App pages', '/prompts', /skip to main content/i, 'main-content'],
+    ['Admin pages', '/admin/apps', /skip to content/i, 'admin-main-content']
+  ]) {
+    test(`${label}: the skip link is the first Tab stop and moves focus into the content`, async ({
+      page
+    }) => {
+      await page.goto(path);
+      await page.waitForLoadState('networkidle');
+      await acknowledgeDisclaimer(page);
+      // Start from the top of the document, as a keyboard user does after loading the page.
+      await page.goto(path);
+      await page.waitForLoadState('networkidle');
+
+      await page.keyboard.press('Tab');
+      const skipLink = page.getByRole('link', { name: linkName });
+      await expect(skipLink).toBeFocused();
+      await expect(skipLink).toBeVisible();
+
+      await page.keyboard.press('Enter');
+
+      expect(new URL(page.url()).pathname, 'the skip link must not navigate away').toBe(path);
+      await expect(page.locator(`#${targetId}`)).toBeFocused();
     });
   }
 });

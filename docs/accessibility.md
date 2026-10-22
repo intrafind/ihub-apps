@@ -36,7 +36,11 @@ All interactive elements in iHub Apps are reachable and operable via keyboard. T
 
 A **skip-to-main-content** link is the first focusable element on every page. It becomes visible on focus and lets keyboard users bypass repeated navigation to jump directly to the main content area.
 
-**Usage:** Press `Tab` after page load to reveal the skip link, then press `Enter` to activate it.
+**Usage:** Press `Tab` after page load to reveal the skip link, then press `Enter` to activate it. Focus moves to the main content area; the page does not navigate. Admin pages have their own skip link to the admin content.
+
+The link is the `SkipLink` component (`client/src/shared/components/SkipLink.jsx`). Use it, not a bare `<a href="#id">`: `index.html` injects a `<base>` element for sub-path deployments, which makes a plain fragment link resolve against the app root and leave the page.
+
+Each page has exactly one `<main>`. The app layout provides it, `AdminLayout` provides it for admin pages; a page rendered inside either must not add another (use a `<div>`).
 
 ### Tab Order
 
@@ -138,12 +142,16 @@ The `test:a11y` command scans the following pages for WCAG 2.2 AA violations (ax
 | Prompt library | `/prompts` | Signed in |
 | Chat history | `/chats` | Signed in |
 | Admin overview, apps, models, users, groups | `/admin`, `/admin/apps`, `/admin/models`, `/admin/users`, `/admin/groups` | Signed in |
+| Every other route reachable from the user and admin navigation | `CLEAN_PAGES` and `KNOWN_VIOLATIONS` in the spec | Signed in; about 50 pages |
 
+Besides the axe scans the file also contains **landmark tests** (exactly one `main`, no ambiguous duplicate landmarks; axe's WCAG tags do not include these rules) and **skip link tests** that press `Tab` and `Enter` and check that focus lands in the content without a navigation.
 Signed-in pages log in as the default local admin a fresh `contents/` ships (`admin` / `password123`). Set `TEST_ADMIN_USERNAME` and `TEST_ADMIN_PASSWORD` to run them against another environment.
 
 **Failure criteria:** Only **critical** and **serious** impact violations cause test failure. Moderate and minor violations are logged for awareness.
 
-**Known violations:** The signed-in pages had critical/serious violations when their scans were added (low-contrast secondary text, unlabelled inputs, nested interactive prompt cards). `KNOWN_VIOLATIONS` in `tests/e2e/accessibility.spec.js` records, per page, how many elements fail each of those rules on a fresh `contents/`. Up to that many are logged but do not fail the run; one more failing element, or any other rule, does. When fixes lower a count, the log says so: lower the number (or delete the entry at zero) so the fixed elements cannot regress unnoticed.
+**Baseline (ratchet):** Pages in `CLEAN_PAGES` have no critical or serious violation and are held at zero. `KNOWN_VIOLATIONS` records, per remaining page, how many elements fail each rule on a fresh `contents/` (the highest count over repeated scans, because list-backed pages render slightly differently per load). Up to that many are logged but do not fail the run; one more failing element, or any other rule, fails it. When a fix lowers a count, the log says so: lower the number, or delete the entry at zero and add the page to `CLEAN_PAGES`, so the fixed elements cannot regress unnoticed. The remaining entries are unlabelled form controls in admin forms (`label`, `select-name`, `button-name`) and the OAuth tab panels.
+
+The suite signs in once per worker: the auth API allows 50 requests per 15 minutes, which one login per test would exceed.
 
 **Continuous integration:** The `.github/workflows/accessibility.yml` workflow installs dependencies, boots the application, and runs `npm run test:a11y` against Chromium on every pull request targeting `main` or `develop`. The Playwright HTML report is uploaded as a build artifact.
 
@@ -197,6 +205,21 @@ Automated tools catch roughly 30-50% of accessibility issues. The following manu
 | [VoiceOver](https://support.apple.com/guide/voiceover/) | macOS built-in screen reader |
 | [NVDA](https://www.nvaccess.org/) | Free screen reader for Windows |
 
+## Colour Contrast for Developers
+
+Normal text needs 4.5:1 (3:1 for large text and for icons or borders that carry meaning), in light and in dark mode. With the Tailwind palette:
+
+| Text colour | Passes on | Fails on |
+|---|---|---|
+| `text-gray-400` | nothing in light mode (2.6:1 on white) | everything light; use `text-gray-500` or darker |
+| `text-gray-500` | `bg-white`, `bg-gray-50` | `bg-gray-100` (4.39:1), `bg-gray-200`; use `text-gray-600` there |
+| `dark:text-gray-500` | nothing in dark mode | every dark surface; use `dark:text-gray-400` |
+| `dark:text-gray-400` | `dark:bg-gray-800`, `-900`, `-950` | `dark:bg-gray-700` (3.96:1); use `dark:text-gray-300` there |
+| white on `bg-{green,orange,emerald,teal,amber}-600` | | all of them (about 3.2–3.7:1); use `-700` |
+| `text-{green,amber,orange,yellow}-600` | | on white and tinted panels; use `-700` |
+
+Use `rem`-based text sizes (`text-xs`, `text-[0.6875rem]`), not `text-[11px]`, so text follows the browser's text-size setting. Do not rely on colour alone: status badges carry their status as text.
+
 ## Known Limitations
 
 The following accessibility gaps are tracked and will be addressed in future iterations:
@@ -205,5 +228,10 @@ The following accessibility gaps are tracked and will be addressed in future ite
 - **Third-party embeds**: Embedded content from external services (e.g., iframes) may not meet WCAG 2.1 AA standards. Where possible, `title` attributes are added to iframes.
 - **PDF exports**: Generated PDF documents do not currently include accessibility tags (e.g., tagged PDF structure). This is planned for a future release.
 - **Complex data tables**: Some admin configuration tables may lack full `scope` and `headers` attributes. These will be remediated as the admin UI is refactored.
+- **Text size:** there is no in-app text-size control; text follows browser zoom and the browser's text-size setting. The layout reflows without horizontal scrolling at 320 px width.
+- **Canvas page** (`/apps/:appId/canvas`): the editor styles use fixed white backgrounds, so it has no dark mode, and one `<select>` is unlabelled.
+- **Login page:** rendered by the inlined auth gate (`client/src/auth-gate/`), outside React; it is not covered by the axe suite.
+- **Screen-reader testing:** the axe and keyboard suites are automated. A walkthrough with NVDA or JAWS (login, chat, apps, prompts, admin) is a manual step and no results are recorded here yet.
+- **Heading order:** several pages skip a heading level (for example an `h3` empty-state heading directly under the `h1`). axe reports this as a moderate best-practice finding, so it does not fail the suite.
 
 These items are tracked as part of the ongoing accessibility initiative and will be addressed in subsequent phases.
