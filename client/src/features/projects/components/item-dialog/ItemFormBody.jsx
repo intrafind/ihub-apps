@@ -78,10 +78,12 @@ function validationMessage(t, code, config) {
  * Upload the files one by one (each is its own request with its own status,
  * spec 3 §2). A failure does not stop the others.
  *
- * @returns {Promise<{added: Array<Object>, failures: string[]}>}
+ * @returns {Promise<{added: Array<Object>, uploaded: Array<File>, failures: string[]}>}
+ *   `uploaded`: the files that were added.
  */
 async function uploadAll(api, projectId, files, { name, pinned }) {
   const added = [];
+  const uploaded = [];
   const failures = [];
   for (const file of files) {
     try {
@@ -92,13 +94,14 @@ async function uploadAll(api, projectId, files, { name, pinned }) {
           pinned
         })
       );
+      uploaded.push(file);
     } catch (err) {
       failures.push(
         files.length === 1 ? api.errorMessage(err) : `${file.name}: ${api.errorMessage(err)}`
       );
     }
   }
-  return { added, failures };
+  return { added, uploaded, failures };
 }
 
 /**
@@ -148,11 +151,14 @@ function ItemFormBody({ tab, projectId, config, api, multipleUploads, usage, onA
     const uploadError = validateUploads(files, config, usage);
     if (uploadError) return setError(validationMessage(t, uploadError, config));
     setSubmitting(true);
-    const { added, failures } = await uploadAll(api, projectId, files, {
+    const { added, uploaded, failures } = await uploadAll(api, projectId, files, {
       name: draft.name.trim(),
       pinned: draft.pinned
     });
     added.forEach(item => onAdded(item));
+    // The added files leave the selection: after a partial failure, Add
+    // retries only the files that failed instead of adding the others again.
+    setFiles(prev => prev.filter(file => !uploaded.includes(file)));
     setSubmitting(false);
     if (failures.length > 0) return setError(failures.join('\n'));
     return onClose();
