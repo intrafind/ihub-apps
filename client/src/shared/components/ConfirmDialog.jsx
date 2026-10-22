@@ -86,7 +86,7 @@ function ConfirmDialog({
                 >
                   <Icon
                     name="exclamation-triangle"
-                    className="w-6 h-6 text-red-600 dark:text-red-400"
+                    className="w-6 h-6 text-red-700 dark:text-red-400"
                   />
                 </div>
               )}

@@ -290,7 +290,7 @@ export default function SetupWizard() {
                   <p className="text-sm text-red-700 dark:text-red-300">{loginError}</p>
                   <button
                     onClick={handleSignOutAndRetry}
-                    className="mt-2 text-sm font-medium text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-200 underline"
+                    className="mt-2 text-sm font-medium text-red-700 dark:text-red-400 hover:text-red-800 dark:hover:text-red-200 underline"
                   >
                     {t('setup.step2Login.signOutAndRetry')}
                   </button>

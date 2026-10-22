@@ -370,7 +370,7 @@ function AdminProjectEditPage() {
               type="button"
               onClick={() => setError(null)}
               aria-label={t('common.dismiss', 'Dismiss')}
-              className="ml-auto text-red-600 dark:text-red-400"
+              className="ml-auto text-red-700 dark:text-red-400"
             >
               <Icon name="x-mark" className="h-4 w-4" />
             </button>

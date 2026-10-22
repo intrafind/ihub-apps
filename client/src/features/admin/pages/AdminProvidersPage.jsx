@@ -366,9 +366,9 @@ function AdminProvidersPage() {
             <div className="flex items-center">
               <Icon
                 name="ExclamationCircleIcon"
-                className="w-5 h-5 text-red-600 dark:text-red-400 mr-2"
+                className="w-5 h-5 text-red-700 dark:text-red-400 mr-2"
               />
-              <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+              <p className="text-sm text-red-700 dark:text-red-400">{error}</p>
             </div>
           </div>
         )}

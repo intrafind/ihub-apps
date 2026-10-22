@@ -620,7 +620,7 @@ export default function IntegrationsPage() {
                   <Icon
                     name={message.type === 'success' ? 'check-circle' : 'warning'}
                     className={`w-5 h-5 mr-2 ${
-                      message.type === 'success' ? 'text-green-700' : 'text-red-600'
+                      message.type === 'success' ? 'text-green-700' : 'text-red-700'
                     }`}
                   />
                   <span className={message.type === 'success' ? 'text-green-800' : 'text-red-800'}>

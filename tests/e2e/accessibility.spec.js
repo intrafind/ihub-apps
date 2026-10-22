@@ -223,6 +223,32 @@ async function acknowledgeDisclaimer(page) {
   }
 }
 
+/**
+ * Opens a page and waits for it to settle. Admin pages call the admin API many
+ * times, which has a per-minute request limit; a sweep over dozens of admin pages
+ * from one address can reach it, and the page then shows "Too many ... requests"
+ * instead of its content. That says nothing about the page, so wait out the
+ * limit's window and load it again.
+ *
+ * @param {import('@playwright/test').Page} page - Playwright page object
+ * @param {string} path - Route to open
+ */
+async function gotoSettled(page, path) {
+  for (let attempt = 0; attempt < 5; attempt++) {
+    await page.goto(path);
+    await page.waitForLoadState('networkidle');
+    // Let list-backed pages finish rendering before they are scanned.
+    await page.waitForTimeout(500);
+    const rateLimited = await page
+      .getByText(/too many .{0,40}requests/i)
+      .first()
+      .isVisible()
+      .catch(() => false);
+    if (!rateLimited) return;
+    await page.waitForTimeout(20_000);
+  }
+}
+
 // The auth API allows 50 requests per 15 minutes, and this file signs in for
 // dozens of pages. Sign in once per worker process and reuse the session cookies.
 let adminCookies;
@@ -350,8 +376,8 @@ test.describe('Accessibility — signed-in pages (WCAG 2.2 AA)', () => {
     test(`${label} should not have critical or serious accessibility violations`, async ({
       page
     }) => {
-      await page.goto(path);
-      await page.waitForLoadState('networkidle');
+      test.setTimeout(150_000);
+      await gotoSettled(page, path);
       expect(new URL(page.url()).pathname, `${label} redirected away from ${path}`).toBe(path);
 
       await expectNoBlockingViolations(page, label, KNOWN_VIOLATIONS[path]);
@@ -364,10 +390,9 @@ test.describe('Accessibility — signed-in pages (WCAG 2.2 AA)', () => {
     test(`${path} should not have new critical or serious accessibility violations`, async ({
       page
     }) => {
-      await page.goto(path);
-      await page.waitForLoadState('networkidle');
-      // Let list-backed pages finish rendering before they are scanned.
-      await page.waitForTimeout(500);
+      // Room for waiting out the admin API's request limit (see gotoSettled).
+      test.setTimeout(150_000);
+      await gotoSettled(page, path);
       expect(new URL(page.url()).pathname, `${path} redirected away`).toBe(path);
 
       await expectNoBlockingViolations(page, path, KNOWN_VIOLATIONS[path]);

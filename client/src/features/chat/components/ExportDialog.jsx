@@ -521,7 +521,7 @@ function ExportDialog({
                 <Icon
                   name="exclamation-circle"
                   size="sm"
-                  className="text-red-600 dark:text-red-400 mt-0.5"
+                  className="text-red-700 dark:text-red-400 mt-0.5"
                 />
                 <div className="text-sm text-red-800 dark:text-red-200">{exportError}</div>
               </div>

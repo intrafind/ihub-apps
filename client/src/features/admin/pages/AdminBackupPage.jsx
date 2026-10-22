@@ -170,7 +170,7 @@ function AdminBackupPage() {
                     <Icon
                       name={importMessage.type === 'success' ? 'check' : 'warning'}
                       size="md"
-                      className={`mt-0.5 mr-3 ${importMessage.type === 'success' ? 'text-green-500' : 'text-red-500'}`}
+                      className={`mt-0.5 mr-3 ${importMessage.type === 'success' ? 'text-green-500' : 'text-red-700'}`}
                     />
                     <p
                       className={`text-sm ${importMessage.type === 'success' ? 'text-green-700 dark:text-green-300' : 'text-red-700 dark:text-red-300'}`}

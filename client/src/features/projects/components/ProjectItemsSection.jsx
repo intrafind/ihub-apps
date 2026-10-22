@@ -112,7 +112,7 @@ function ProjectItemsSection({ project, config, editable, setProject, reload }) 
             type="button"
             onClick={actions.clearError}
             aria-label={t('common.close', 'Close')}
-            className="text-red-500 hover:text-red-700"
+            className="text-red-700 hover:text-red-700"
           >
             <Icon name="x" size="sm" />
           </button>

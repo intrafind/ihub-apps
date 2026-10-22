@@ -31,7 +31,7 @@ const STATUS_STYLES = {
     icon: 'close',
     badge:
       'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300 border-red-200 dark:border-red-800',
-    iconColor: 'text-red-600 dark:text-red-400'
+    iconColor: 'text-red-700 dark:text-red-400'
   },
   skip: {
     icon: 'minus-circle',

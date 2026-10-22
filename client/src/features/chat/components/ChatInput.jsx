@@ -915,7 +915,7 @@ function ChatInput({
                 className={`flex items-center gap-1.5 p-2 rounded-lg transition-colors disabled:opacity-50 ${
                   isRecordingTranscription
                     ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400'
-                    : 'text-red-600 dark:text-red-400 hover:bg-gray-100 dark:hover:bg-gray-700'
+                    : 'text-red-700 dark:text-red-400 hover:bg-gray-100 dark:hover:bg-gray-700'
                 }`}
               >
                 {/* Record = red dot; stop = red square (distinct from the

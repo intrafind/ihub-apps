@@ -527,7 +527,7 @@ function OidcProvidersSection({ config, onChange, t, availableGroups = [] }) {
                 >
                   <div className="shrink-0 mt-1">
                     <div className="w-10 h-10 bg-red-100 dark:bg-red-900/30 rounded-lg flex items-center justify-center">
-                      <Icon name="key" size="md" className="text-red-600 dark:text-red-400" />
+                      <Icon name="key" size="md" className="text-red-700 dark:text-red-400" />
                     </div>
                   </div>
                   <div className="ml-3">

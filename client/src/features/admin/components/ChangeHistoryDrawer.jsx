@@ -451,7 +451,7 @@ function ChangeHistoryDrawer({ isOpen, onClose, resource, resourceId }) {
               <button
                 type="button"
                 onClick={fetchSnapshots}
-                className="mt-2 text-xs font-medium text-red-600 dark:text-red-400 underline hover:no-underline"
+                className="mt-2 text-xs font-medium text-red-700 dark:text-red-400 underline hover:no-underline"
               >
                 {t('admin.changeHistory.retry', 'Try again')}
               </button>

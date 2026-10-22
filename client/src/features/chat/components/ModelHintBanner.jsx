@@ -51,7 +51,7 @@ function ModelHintBanner({ hint, currentLanguage, onAcknowledge }) {
       bgColor: 'bg-red-50 dark:bg-red-900/20',
       borderColor: 'border-red-200 dark:border-red-800',
       textColor: 'text-red-800 dark:text-red-300',
-      iconColor: 'text-red-600 dark:text-red-400',
+      iconColor: 'text-red-700 dark:text-red-400',
       iconName: 'exclamationTriangle'
     }
   };

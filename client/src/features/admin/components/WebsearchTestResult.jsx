@@ -53,13 +53,13 @@ const STATUS_STYLES = {
   network: {
     container: 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800',
     icon: 'x-circle',
-    iconColor: 'text-red-600 dark:text-red-400',
+    iconColor: 'text-red-700 dark:text-red-400',
     title: 'text-red-900 dark:text-red-100'
   },
   error: {
     container: 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800',
     icon: 'x-circle',
-    iconColor: 'text-red-600 dark:text-red-400',
+    iconColor: 'text-red-700 dark:text-red-400',
     title: 'text-red-900 dark:text-red-100'
   }
 };

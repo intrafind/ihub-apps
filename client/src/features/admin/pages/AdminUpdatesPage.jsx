@@ -429,7 +429,7 @@ function AdminUpdatesPage() {
               ) : versionError ? (
                 <div className="p-4 rounded-md bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800">
                   <div className="flex">
-                    <Icon name="warning" size="md" className="text-red-500 mt-0.5 mr-3" />
+                    <Icon name="warning" size="md" className="text-red-700 mt-0.5 mr-3" />
                     <p className="text-sm text-red-700 dark:text-red-300">
                       {t('admin.system.versionError', 'Failed to load version information')}:{' '}
                       {versionError}

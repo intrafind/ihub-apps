@@ -137,7 +137,7 @@ export default function AdminLayout() {
         <div className="max-w-md w-full space-y-8 px-4">
           <div>
             <div className="mx-auto h-12 w-12 flex items-center justify-center rounded-full bg-red-100 dark:bg-red-900/30">
-              <Icon name="shield-exclamation" className="h-6 w-6 text-red-600 dark:text-red-400" />
+              <Icon name="shield-exclamation" className="h-6 w-6 text-red-700 dark:text-red-400" />
             </div>
             <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900 dark:text-gray-100">
               {t('admin.accessRequired', 'Admin Access Required')}

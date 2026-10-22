@@ -99,7 +99,7 @@ function CustomResponseRenderer({ componentName, data, rendererConfig, className
       <div className="border-2 border-red-200 rounded-lg p-6 bg-red-50">
         <div className="flex items-center mb-4">
           <svg
-            className="w-6 h-6 text-red-600 mr-2"
+            className="w-6 h-6 text-red-700 mr-2"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
