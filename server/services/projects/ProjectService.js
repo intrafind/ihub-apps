@@ -379,7 +379,7 @@ export class ProjectService {
    */
   async addItem(projectId, input, { user, authorize, origin, run = null }) {
     const { kind, ref } = this._checkKindRef(input.kind, input.ref);
-    const item = this._buildItem(
+    const item = buildItem(
       kind,
       ref,
       { name: input.name, pinned: input.pinned },
