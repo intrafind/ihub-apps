@@ -27,14 +27,40 @@ import logger from './logger.js';
 import { getContentsPath } from './contentsPath.js';
 
 /**
+ * Shipped defaults that are never seeded into contents: plaintext files that
+ * only exist to be imported into an admin project (the FAQ, the meeting
+ * knowledge base, the consolidated documentation). The startup import
+ * (`services/projects/projectImport.js`) reads them straight from
+ * `server/defaults/` when no installation copy exists, and deletes an
+ * installation copy once it is imported, so no plaintext outlives the
+ * import. Seeding them would put that plaintext back into `contents/` on
+ * every start. Paths are relative to server/defaults; an entry ending in `/`
+ * excludes a whole directory.
+ */
+export const IMPORT_ONLY_DEFAULT_FILES = ['sources/'];
+
+/**
+ * Whether a path relative to server/defaults falls under an import-only entry.
+ * @param {string} relPath - Posix path relative to server/defaults
+ * @returns {boolean}
+ */
+function isImportOnlyDefault(relPath) {
+  return IMPORT_ONLY_DEFAULT_FILES.some(entry =>
+    entry.endsWith('/') ? `${relPath}/`.startsWith(entry) : relPath === entry
+  );
+}
+
+/**
  * Recursively copies files and directories from source to destination,
- * but only if they don't already exist at the destination
+ * but only if they don't already exist at the destination. Import-only
+ * defaults ({@link IMPORT_ONLY_DEFAULT_FILES}) are skipped.
  * @param {string} src - Source directory path
  * @param {string} dest - Destination directory path
  * @param {number} copiedCount - Running count of copied items (for logging)
+ * @param {string} relDir - Posix path of `src` relative to the defaults root
  * @returns {Promise<number>} Number of items copied
  */
-async function copyMissingFiles(src, dest, copiedCount = 0) {
+async function copyMissingFiles(src, dest, copiedCount = 0, relDir = '') {
   try {
     // Ensure destination directory exists
     await fs.mkdir(dest, { recursive: true });
@@ -60,12 +86,17 @@ async function copyMissingFiles(src, dest, copiedCount = 0) {
         continue;
       }
 
+      const relPath = relDir ? `${relDir}/${entry.name}` : entry.name;
+      if (isImportOnlyDefault(relPath)) {
+        continue;
+      }
+
       const srcPath = path.join(src, entry.name);
       const destPath = path.join(dest, entry.name);
 
       if (entry.isDirectory()) {
         // Recursively process subdirectories
-        copiedCount = await copyMissingFiles(srcPath, destPath, copiedCount);
+        copiedCount = await copyMissingFiles(srcPath, destPath, copiedCount, relPath);
       } else {
         // Check if file already exists at destination
         try {
@@ -98,14 +129,16 @@ async function copyMissingFiles(src, dest, copiedCount = 0) {
 /**
  * Copies missing default configuration files from server/defaults to the contents directory
  * Only copies files that don't already exist in the destination
+ * @param {Object} [options]
+ * @param {string} [options.defaultsPath] - Absolute path of the defaults directory
+ * @param {string} [options.contentsPath] - Absolute path of the contents directory
  * @returns {Promise<boolean>} True if any files were copied
  */
-export async function copyDefaultConfiguration() {
+export async function copyDefaultConfiguration({
+  defaultsPath: defaultConfigPath = path.join(getRootDir(), 'server', 'defaults'),
+  contentsPath = getContentsPath()
+} = {}) {
   try {
-    const rootDir = getRootDir();
-    const defaultConfigPath = path.join(rootDir, 'server', 'defaults');
-    const contentsPath = getContentsPath();
-
     // Check if default config directory exists
     try {
       await fs.stat(defaultConfigPath);
@@ -162,7 +195,8 @@ export async function copyDefaultConfiguration() {
  *
  * The consolidated documentation (`sources/ihub-documentation.md`) is no
  * longer copied: the `ihub-documentation` admin project imports it from the
- * shipped defaults whenever it changes (`services/projects/projectImport.js`).
+ * shipped defaults whenever it changes (`services/projects/projectImport.js`),
+ * and it is an import-only default ({@link IMPORT_ONLY_DEFAULT_FILES}).
  */
 export const MANAGED_DEFAULT_FILES = ['skills/ifinder-search/'];
 
