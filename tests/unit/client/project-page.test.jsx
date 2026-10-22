@@ -384,6 +384,12 @@ describe('ProjectPage – owner', () => {
         'b.pdf: This project already holds 25 items, the most it may hold.'
       )
     ).toBeInTheDocument();
+
+    // Add again: only the file that failed goes out — no second copy of a.pdf.
+    mockApi.uploadProjectItem.mockResolvedValueOnce({ id: 'itm_b', status: 'pending' });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Add' }));
+    await waitFor(() => expect(mockApi.uploadProjectItem).toHaveBeenCalledTimes(3));
+    expect(mockApi.uploadProjectItem.mock.calls[2][1].file).toBe(b);
   });
 });
 

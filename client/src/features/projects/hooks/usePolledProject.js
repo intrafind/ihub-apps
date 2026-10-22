@@ -56,17 +56,24 @@ export function usePolledProject(projectId, { load, errorMessage }) {
   loadRef.current = load;
   const messageRef = useRef(errorMessage);
   messageRef.current = errorMessage;
+  // Bumped by every read (reload or poll). Reads of the same project can
+  // overlap — removing two items starts two reloads — and answer out of
+  // order; only the latest read may publish, or an older snapshot would put
+  // a deleted item's row back, and with no active item no poll corrects it.
+  const readRef = useRef(0);
+  const latest = (read, id) => readRef.current === read && currentIdRef.current === id;
 
   const reload = useCallback(async () => {
     if (!projectId) return null;
+    const read = ++readRef.current;
     try {
       const loaded = await loadRef.current(projectId);
-      if (currentIdRef.current !== projectId) return null;
+      if (!latest(read, projectId)) return null;
       setProject(loaded);
       setError(null);
       return loaded;
     } catch (err) {
-      if (currentIdRef.current === projectId) {
+      if (latest(read, projectId)) {
         setError({ message: messageRef.current(err), cause: err });
       }
       return null;
@@ -93,14 +100,15 @@ export function usePolledProject(projectId, { load, errorMessage }) {
     // older snapshot back over the newer state.
     let live = true;
     const timer = setTimeout(async () => {
+      const read = ++readRef.current;
       try {
         const loaded = await loadRef.current(projectId);
-        if (live && currentIdRef.current === projectId) setProject(loaded);
+        if (live && latest(read, projectId)) setProject(loaded);
       } catch (err) {
         // A failed poll keeps the items, but as a new array so this effect
         // re-arms and tries again after the interval.
         console.error('Failed to refresh project items:', err);
-        if (live && currentIdRef.current === projectId) {
+        if (live && latest(read, projectId)) {
           setProject(prev => (prev ? { ...prev, items: [...(prev.items || [])] } : prev));
         }
       }

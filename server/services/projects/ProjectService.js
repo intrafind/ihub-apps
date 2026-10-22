@@ -18,6 +18,7 @@ import configCache from '../../configCache.js';
 import { StorageError } from '../../storage/errors.js';
 import {
   ACCESS_CHANGED,
+  DELETING,
   getProjectRepository,
   isAdminProjectId,
   isUserProjectId,
@@ -60,6 +61,8 @@ export function translateError(error) {
   if (error instanceof StorageError) {
     if (error.code === ACCESS_CHANGED)
       return new ProjectError('PROJECT_ACCESS_CHANGED', error.message);
+    // A project whose delete has begun is gone for every other purpose.
+    if (error.code === DELETING) return new ProjectError('PROJECT_NOT_FOUND', error.message);
     if (error.code === 'PROJECT_EXISTS') return new ProjectError('PROJECT_EXISTS', error.message);
   }
   return error;
@@ -236,50 +239,42 @@ export class ProjectService {
         );
       }
     }
+    // The delete begins under the project's lock: `authorize` is judged
+    // there and the project is marked `deleting`, so from here on no chat can
+    // join it and no edit or transfer can land. The chats are detached while
+    // the project still exists (outside its lock: the lock order is chat,
+    // then project, see `moveChatToProject`); a detach that fails keeps the
+    // marked project, its marker and the chat's association, and the same
+    // delete can be retried. The document goes only once every chat is gone.
+    let project = null;
+    try {
+      project = await this.repository.markDeleting(projectId, { authorize });
+    } catch (error) {
+      throw translateError(error);
+    }
+    if (!project) return null;
     const where = { component: COMPONENT, projectId };
-    // Chats first, while the project still exists: a chat whose detach fails
-    // keeps its marker and the project, so the same delete can be retried.
-    // The lock order is chat, then project (`moveChatToProject`), which is
-    // why this runs outside the project's lock; a chat attached meanwhile is
-    // caught by the second pass once the document is gone.
     const failed = await this._detachChats(projectId, detachChat, where);
     if (failed.length > 0) {
       throw new ProjectError(
         'CASCADE_INCOMPLETE',
         `The project is kept: ${failed.length} chat(s) could not be detached from it`,
-        { project: { id: projectId }, deleted: false, chats: failed }
+        { project: { id: projectId, ownership: project.ownership }, deleted: false, chats: failed }
       );
     }
-    let project;
+    let removed = null;
     try {
-      project = await this.repository.delete(projectId, { authorize });
+      removed = await this.repository.delete(projectId, { authorize });
     } catch (error) {
       throw translateError(error);
     }
-    if (!project) return null;
+    // Gone meanwhile: another delete of the same project finished first.
+    if (!removed) return null;
     await attempt(() => this.repository.deleteBlobs(projectId), 'text blobs', where);
-    let late = [];
-    let unlisted = false;
-    try {
-      late = await this._detachChats(projectId, detachChat, where);
-    } catch (error) {
-      logger.error('Failed to list the chats of a deleted project', {
-        ...where,
-        error: error.message
-      });
-      unlisted = true;
-    }
     for (const hook of this.onDeleted) {
-      await attempt(() => hook(project), 'a delete hook', where);
+      await attempt(() => hook(removed), 'a delete hook', where);
     }
-    if (late.length > 0 || unlisted) {
-      throw new ProjectError(
-        'CASCADE_INCOMPLETE',
-        `The project is deleted, but ${unlisted ? 'its' : late.length} chat(s) could not be detached from it`,
-        { project: { id: project.id, ownership: project.ownership }, deleted: true, chats: late }
-      );
-    }
-    return project;
+    return removed;
   }
 
   /**
@@ -768,7 +763,10 @@ export class ProjectService {
         { authorize, touchActivity: true, touchUpdated: false }
       );
     } catch (error) {
-      throw translateError(error);
+      const translated = translateError(error);
+      // A project whose delete has begun takes no chat: gone, like a missing one.
+      if (translated.code === 'PROJECT_NOT_FOUND') return false;
+      throw translated;
     }
     return Boolean(stored);
   }

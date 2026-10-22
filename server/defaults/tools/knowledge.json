@@ -82,8 +82,8 @@
     },
     "list": {
       "description": {
-        "en": "List the documents of the available projects with their id, name, kind, size, status and origin (uploaded, picked, linked, written).",
-        "de": "Dokumente der verfügbaren Projekte mit ID, Name, Art, Größe, Status und Herkunft (hochgeladen, ausgewählt, verlinkt, geschrieben) auflisten."
+        "en": "List the documents of the available projects with their id, name, kind, size, status and origin (uploaded, picked, linked, written). A long list comes in pages: when the result has a nextCursor, call again with that cursor for the rest.",
+        "de": "Dokumente der verfügbaren Projekte mit ID, Name, Art, Größe, Status und Herkunft (hochgeladen, ausgewählt, verlinkt, geschrieben) auflisten. Eine lange Liste kommt seitenweise: Enthält das Ergebnis einen nextCursor, mit diesem Cursor erneut aufrufen, um den Rest zu erhalten."
       },
       "parameters": {
         "type": "object",
@@ -93,6 +93,13 @@
             "description": {
               "en": "Limit to one project id",
               "de": "Auf eine Projekt-ID beschränken"
+            }
+          },
+          "cursor": {
+            "type": "string",
+            "description": {
+              "en": "The nextCursor of the previous page; omit for the first page",
+              "de": "Der nextCursor der vorigen Seite; für die erste Seite weglassen"
             }
           }
         }
