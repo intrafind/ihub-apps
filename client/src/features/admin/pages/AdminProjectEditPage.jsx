@@ -22,6 +22,7 @@ import {
   testAdminProject,
   updateAdminProject,
   updateAdminProjectItem,
+  updateAdminProjectItemText,
   uploadAdminProjectItem
 } from '../../../api/adminApi';
 import AdminBreadcrumb from '../components/AdminBreadcrumb';
@@ -583,6 +584,11 @@ function AdminProjectEditPage() {
             item={previewItem}
             onClose={() => setPreviewItem(null)}
             fetchText={fetchAdminItemText}
+            onSave={async text => {
+              const updated = await updateAdminProjectItemText(id, previewItem.id, text);
+              replaceItem(updated);
+              return updated;
+            }}
             errorMessage={adminErrorMessage}
           />
           <ChangeHistoryDrawer

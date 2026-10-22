@@ -3,7 +3,12 @@
 
 import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { deleteProjectItem, refreshProjectItem, updateProjectItem } from '../../../api';
+import {
+  deleteProjectItem,
+  refreshProjectItem,
+  updateProjectItem,
+  updateProjectItemText
+} from '../../../api';
 import { projectErrorMessage } from '../utils/projectErrors';
 
 /**
@@ -34,7 +39,9 @@ export function replaceItem(project, item) {
  * @param {() => Promise<Object|null>} options.reload - From `useProject`.
  * @returns {{busyItemId: string|null, error: string|null, clearError: () => void,
  *   togglePinned: (item: Object) => Promise<void>, refresh: (item: Object) => Promise<void>,
- *   rename: (item: Object, name: string) => Promise<boolean>, remove: (item: Object) => Promise<void>}}
+ *   rename: (item: Object, name: string) => Promise<boolean>,
+ *   editText: (item: Object, text: string) => Promise<Object|undefined>,
+ *   remove: (item: Object) => Promise<void>}}
  */
 export function useProjectItemActions({ projectId, setProject, reload }) {
   const { t } = useTranslation();
@@ -86,6 +93,24 @@ export function useProjectItemActions({ projectId, setProject, reload }) {
     [projectId, run, setProject]
   );
 
+  // Unlike the others, this one throws: the text dialog shows the failure
+  // next to the text being edited, not in the page's banner.
+  const editText = useCallback(
+    async (item, text) => {
+      setBusyItemId(item.id);
+      try {
+        const updated = await updateProjectItemText(projectId, item.id, text);
+        if (updated) setProject(prev => replaceItem(prev, updated));
+        // The usage counters change with the text.
+        await reload();
+        return updated;
+      } finally {
+        setBusyItemId(null);
+      }
+    },
+    [projectId, setProject, reload]
+  );
+
   const remove = useCallback(
     item =>
       run(item, async () => {
@@ -106,6 +131,7 @@ export function useProjectItemActions({ projectId, setProject, reload }) {
     togglePinned,
     refresh,
     rename,
+    editText,
     remove
   };
 }

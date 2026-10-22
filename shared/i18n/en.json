@@ -6385,10 +6385,15 @@
       "readOnly": "The owner of this project is no longer active. It stays readable, but nobody can change it until an administrator transfers it."
     },
     "preview": {
+      "edit": "Edit text",
+      "editHint": "The saved text replaces the stored document; the model reads the new text from the next question on.",
+      "editLabel": "Text of the document",
       "empty": "(no text)",
+      "saving": "Saving…",
       "title": "Text of \"{{name}}\"",
       "truncated": "Showing the first {{shown}} of {{total}} characters."
     },
+
     "provenance": {
       "linked": "Linked",
       "picked": "Picked",
