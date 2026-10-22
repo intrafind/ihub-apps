@@ -81,6 +81,10 @@ dragging a line between two steps on the canvas and follows the same rules (no c
 loop boundary). The delete button on a step is also shown while it has keyboard focus, not only on
 mouse hover.
 
+## OpenRouter as a provider
+
+**Admin → Models → Import from URL** has an **OpenRouter** preset when you create a new provider: one click fills in the name, ID `openrouter`, the OpenAI-compatible API type and `https://openrouter.ai/api/v1`. Enter your OpenRouter key (change the prefilled URL for a regional endpoint if needed), load the model list and import the models you want; the key is stored encrypted on the provider. Models that generate images or audio instead of text are marked and not selected by **Select all**.
+
 ## Scheduled tasks: keep fewer runs, delete runs
 
 A scheduled task can now limit its run history by **count** (keep at most N runs) and by **age**
@@ -90,3 +94,8 @@ cap with the new `maxRunsPerTask` setting next to `runRetentionDays` (Admin → 
 stricter of the platform and the task limit applies.
 
 Runs can also be deleted by hand from the task page — one run, a selection, or all finished runs.
+
+**Upgrade note:** the periodic age sweep (`runRetentionDays`, default 90) now deletes the run's chat
+together with its run record. Before, it removed only the record and left the chat to the chat
+retention rules, so installations that keep chats longer than 90 days will now lose scheduled-run
+chats at that age. Set `runRetentionDays` to `0` to keep run history and its chats indefinitely.

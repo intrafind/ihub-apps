@@ -1464,6 +1464,7 @@
         "provider": "Anbieter",
         "newProvider": "+ Neuer Anbieter",
         "providerHint": "Der Anbieter hält den API-Schlüssel für alle importierten Modelle. Legen Sie für einen neuen Endpunkt, z. B. T-Systems LLM Hub, einen neuen an.",
+        "presets": "Vorlage:",
         "usesProviderKey": "Der beim Anbieter gespeicherte API-Schlüssel wird verwendet.",
         "noProviderKey": "Beim Anbieter ist kein API-Schlüssel gespeichert: Seine Umgebungsvariable wird verwendet, falls gesetzt, sonst wird der Endpunkt ohne Schlüssel aufgerufen.",
         "url": "Endpunkt-URL",
