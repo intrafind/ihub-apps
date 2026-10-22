@@ -52,6 +52,7 @@ export function boundStoredAuthPrompts(prompts) {
 import logger from '../../utils/logger.js';
 import { deriveChatTitle } from './ChatRepository.js';
 import { getProjectService } from '../projects/ProjectService.js';
+import { recordChatInProject } from '../knowledge/chatProjects.js';
 import { getArtifactRepository } from '../artifacts/ArtifactRepository.js';
 import { artifactPolicy } from '../artifacts/artifactPolicy.js';
 
@@ -255,7 +256,8 @@ function failedError(info) {
  *   message (inclusive) before appending — an edit or a regenerate
  * @param {Object} [params.message] - extra fields for the stored message (`variables`,
  *   `renderedContent`); the repository keeps the ones it knows
- * @param {Object} [params.chat] - extra fields patched onto the chat document with this turn
+ * @param {Object} [params.chat] - extra fields patched onto the chat document with this turn;
+ *   a `projectId` among them also records the chat in that project once it is stored
  * @param {Object} [params.origin] - how a chat created by this turn came about
  *   (`{ createdVia, clientId? }`); a chat the turn creates without one came from the UI
  * @param {string} [params.titleText] - what a chat this turn names is named after,
@@ -327,6 +329,13 @@ export async function materializeUserTurn({
       // here as well meant a second implementation of the same cap, and the
       // two disagreed on where a repeated id lands in the list.
     });
+    // A chat that opens inside a project is recorded there (the marker the
+    // project page lists chats by) only once the chat document carries the
+    // association: the listing prunes a marker its chat does not back, and
+    // a marker written before this patch could be pruned for good.
+    if (chatPatch?.projectId) {
+      await recordChatInProject(chatPatch.projectId, chatId, { ownerId });
+    }
     const appended = await repository.appendMessage(
       chatId,
       {

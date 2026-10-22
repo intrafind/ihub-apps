@@ -176,7 +176,7 @@ export default function registerAdminProjectsRoutes(app) {
       for (const project of admin) {
         for (const item of project.items || []) byKind[item.kind] = (byKind[item.kind] || 0) + 1;
       }
-      const { projects: users } = await repo.scanUser({ max: 5000 });
+      const users = await repo.scanUserAll();
       const owners = new Set(users.map(project => project.owner?.id).filter(Boolean));
       res.json({
         admin: {
@@ -336,6 +336,12 @@ export default function registerAdminProjectsRoutes(app) {
         sendBadRequest(res, 'Admin project ids may not start with "prj_"');
         return;
       }
+      // The stored model knows the iFinder tier; nothing backs it yet, so a
+      // project cannot be created in it (phase 2 of the epic).
+      if (body.tier !== 'ihub') {
+        sendBadRequest(res, `The "${body.tier}" tier is not available yet; use "ihub"`);
+        return;
+      }
       // `import` and `managedFile` point the startup importer at a file it
       // reads into the project and then deletes: only the sources migration
       // and the shipped defaults may write them, never an API caller.
@@ -475,7 +481,10 @@ export default function registerAdminProjectsRoutes(app) {
             : ''
         }`
       });
-      await snapshot(req, id, deleted, null);
+      // Admin projects are configuration and keep a change history. A user
+      // project deleted here is someone's data: the audit event above is the
+      // record, the document itself is not kept.
+      if (deleted.ownership === 'admin') await snapshot(req, id, deleted, null);
       res.status(204).end();
     } catch (error) {
       sendProjectError(res, error, 'delete project');
@@ -531,6 +540,13 @@ export default function registerAdminProjectsRoutes(app) {
         user: req.user
       });
       if (!result) return sendNotFound(res, 'Project');
+      logAudit({
+        req,
+        action: 'update',
+        resource: 'projectItem',
+        resourceId: project.id,
+        summary: `Changed ${result.item.kind} "${result.item.name || itemId}" (${Object.keys(body).join(', ')}) in admin project "${projectName(project)}"`
+      });
       res.json({ item: serializeItem(result.item) });
     } catch (error) {
       sendProjectError(res, error, 'update project item');

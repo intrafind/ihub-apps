@@ -22,7 +22,7 @@ import { projectName } from '../../projects/projectView.js';
 import { getItemText } from '../../knowledge/ItemTextService.js';
 import { KnowledgeError, docOf } from '../../knowledge/types.js';
 import { getProjectRepository } from '../../projects/ProjectRepository.js';
-import { isUserProjectsConfigured } from '../../projects/projectSettings.js';
+import { isProjectsConfigured, isUserProjectsConfigured } from '../../projects/projectSettings.js';
 import { getSourceProvider, hasSourceProvider, sourceProviderError } from '../providers.js';
 
 async function load({ ref, user }) {
@@ -33,9 +33,14 @@ async function load({ ref, user }) {
   const project = await getProjectRepository().get(projectId);
   const permissions = permissionsFor(project, user, callerContext(user));
   if (!project || !permissions.canUse) throw sourceProviderError(404, 'Document not found');
-  // A user project's documents are dark while the feature is off, here as
-  // in the scope of a turn.
-  if (project.ownership === 'user' && !isUserProjectsConfigured(configCache.getFeatures())) {
+  // Every project's documents are dark while the master switch is off, and
+  // a user project's while its own feature is off too, here as in the scope
+  // of a turn.
+  const features = configCache.getFeatures();
+  if (
+    !isProjectsConfigured(features) ||
+    (project.ownership === 'user' && !isUserProjectsConfigured(features))
+  ) {
     throw sourceProviderError(404, 'Document not found');
   }
   const item = (project.items || []).find(entry => entry.id === itemId);

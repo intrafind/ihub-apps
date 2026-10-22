@@ -12,6 +12,7 @@
  *
  * @module services/projects/ProjectService
  */
+import { randomUUID } from 'node:crypto';
 import logger from '../../utils/logger.js';
 import configCache from '../../configCache.js';
 import { StorageError } from '../../storage/errors.js';
@@ -457,9 +458,12 @@ export class ProjectService {
           // is refused while it is set, so two queued downloads can never
           // race to install an older snapshot over a newer one. The job
           // clears it when it finishes, fails or finds nothing changed.
+          // `refreshAttempt` names this run: the job must still find it on
+          // the item to install its text or record its failure.
           const now = nowIso();
           item.error = null;
           item.refreshingAt = now;
+          item.refreshAttempt = randomUUID();
           item.updatedAt = now;
           target = { item, kind };
           return project;
@@ -483,6 +487,7 @@ export class ProjectService {
         // The version the last fetch saw, so a change between that fetch
         // and the end of extraction is not mistaken for "unchanged".
         previousLastModified: storedItem.provenance?.source?.lastModified || null,
+        attempt: storedItem.refreshAttempt,
         purpose: 'refresh'
       },
       { user, wait }
@@ -581,7 +586,9 @@ export class ProjectService {
    *
    * @param {string} projectId
    * @param {string} itemId
-   * @param {(item: Object) => void} update - Mutates the item in place.
+   * @param {(item: Object) => void|false} update - Mutates the item in place;
+   *   returning `false` leaves the project unwritten (the item is not what the
+   *   caller expected any more).
    * @returns {Promise<Object|null>} The item as stored, or null when gone.
    */
   async patchItem(projectId, itemId, update, { check } = {}) {
@@ -593,7 +600,7 @@ export class ProjectService {
         // A check against the project as stored right now (a quota), under
         // the lock the write holds; what it throws aborts the write.
         if (typeof check === 'function') check(project, item);
-        update(item);
+        if (update(item) === false) return null;
         item.updatedAt = nowIso();
         return project;
       },
@@ -672,9 +679,25 @@ export class ProjectService {
    * @param {string} chatId
    * @param {{ownerId?: string|null}} [options]
    */
-  async attachChat(projectId, chatId, { ownerId = null } = {}) {
-    await this.repository.addChatMarker(projectId, chatId, { ownerId });
-    await this.touchActivity(projectId);
+  async attachChat(projectId, chatId, { ownerId = null, authorize } = {}) {
+    // Under the project's lock, so a deletion that lists the markers cannot
+    // slip between the existence check and the marker; a project that is
+    // gone answers null and gets no marker, and `authorize` is judged again
+    // against the project as it is now (PROJECT_ACCESS_CHANGED).
+    let stored;
+    try {
+      stored = await this.repository.mutate(
+        projectId,
+        async project => {
+          await this.repository.addChatMarker(projectId, chatId, { ownerId });
+          return project;
+        },
+        { authorize, touchActivity: true, touchUpdated: false }
+      );
+    } catch (error) {
+      throw translateError(error);
+    }
+    return Boolean(stored);
   }
 
   /** Forget a chat's membership. */
@@ -683,9 +706,13 @@ export class ProjectService {
   }
 
   /** Touch a project's `lastActivityAt` (a chat turn ran inside it). */
-  async touchActivity(projectId) {
+  touchActivity(projectId) {
     return attempt(
-      () => this.repository.mutate(projectId, project => ({ ...project }), { touchActivity: true }),
+      () =>
+        this.repository.mutate(projectId, project => ({ ...project }), {
+          touchActivity: true,
+          touchUpdated: false
+        }),
       'project activity',
       { component: COMPONENT, projectId }
     );

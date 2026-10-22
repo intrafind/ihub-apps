@@ -248,6 +248,16 @@ describe('user projects', () => {
     assert.equal(all.projects.length, 3);
   });
 
+  it('follows the scan cursor to the end', async () => {
+    const made = [];
+    for (const name of ['Page one', 'Page two', 'Page three']) {
+      made.push((await repo.createUser({ owner: ADA, content: { name } })).id);
+    }
+    const ids = (await repo.scanUserAll({ pageSize: 1 })).map(project => project.id);
+    assert.equal(new Set(ids).size, ids.length, 'no project is listed twice');
+    for (const id of made) assert.ok(ids.includes(id), `${id} is in the full scan`);
+  });
+
   it("removes a project's blobs by prefix", async () => {
     const blobs = getStorage().blobs;
     await blobs.put(PROJECT_FILES_NAMESPACE, 'prj_a__itm_1__v1', 'one');
@@ -422,6 +432,28 @@ describe('service rules', () => {
       await service.noteChatTurn('prj_missing'),
       false,
       'a missing project is not touched'
+    );
+  });
+
+  it('records chat activity without counting it as an edit', async () => {
+    const project = await service.createUserProject({ owner: ADA, content: { name: 'Quiet' } });
+    const stale = '2020-01-01T00:00:00.000Z';
+    await repo.mutate(project.id, current => current, { now: stale, actor: GRACE });
+    await service.touchActivity(project.id);
+    const touched = await repo.get(project.id);
+    assert.ok(touched.lastActivityAt > stale);
+    assert.equal(touched.updatedAt, stale, 'a chat turn is not an edit');
+    assert.equal(touched.updatedBy.id, GRACE.id, 'the last editor stays');
+  });
+
+  it('refuses a chat marker for a project that is gone', async () => {
+    assert.equal(await service.attachChat('prj_missing', 'chat-lost', { ownerId: ADA.id }), false);
+    assert.deepEqual(await repo.listChatMarkers('prj_missing'), []);
+    const project = await service.createUserProject({ owner: ADA, content: { name: 'Here' } });
+    assert.equal(await service.attachChat(project.id, 'chat-found', { ownerId: ADA.id }), true);
+    assert.deepEqual(
+      (await repo.listChatMarkers(project.id)).map(marker => marker.chatId),
+      ['chat-found']
     );
   });
 

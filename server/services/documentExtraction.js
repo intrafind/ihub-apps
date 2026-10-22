@@ -233,7 +233,8 @@ export async function extractPptxDocument(bytes, options = {}) {
  * the caller claimed. Speaker notes only when asked for.
  *
  * @param {Buffer} bytes
- * @param {{speakerNotes?: string}} [options]
+ * @param {{speakerNotes?: string, report?: {truncated?: boolean}}} [options] - `report.truncated`
+ *   is set when a spreadsheet's rows or sheets were left out on the size limits
  * @returns {Promise<string>}
  * @throws {DocumentExtractionError} When the file is not an OpenDocument file or is not safe to read
  */
@@ -246,7 +247,8 @@ export async function extractOdfDocument(bytes, options = {}) {
       arrayBuffer,
       JSZip,
       DOMParser: window.DOMParser,
-      speakerNotes: options.speakerNotes
+      speakerNotes: options.speakerNotes,
+      report: options.report
     });
   } catch (error) {
     throw new DocumentExtractionError(`not a readable OpenDocument file (${error.message})`);
@@ -258,12 +260,17 @@ export async function extractOdfDocument(bytes, options = {}) {
  * them. Empty when no page has a text layer (a scan).
  *
  * @param {Buffer} bytes
- * @param {{maxPages?: number, maxChars?: number}} [limits]
+ * @param {{maxPages?: number, maxChars?: number, report?: {truncated?: boolean}}} [limits]
+ *   `report.truncated` is set when the PDF has more pages than `maxPages`.
  * @returns {Promise<string>}
  */
-export async function extractPdfDocument(bytes, { maxPages = MAX_PDF_PAGES, maxChars } = {}) {
+export async function extractPdfDocument(
+  bytes,
+  { maxPages = MAX_PDF_PAGES, maxChars, report } = {}
+) {
   const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
   const pdf = await pdfjs.getDocument({ data: new Uint8Array(bytes), verbosity: 0 }).promise;
+  if (report && pdf.numPages > maxPages) report.truncated = true;
   try {
     return await extractPdfText(pdf, { maxPages, maxChars });
   } finally {
