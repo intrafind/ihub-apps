@@ -349,7 +349,7 @@ export async function settleUserTurn({
       // here as well meant a second implementation of the same cap, and the
       // two disagreed on where a repeated id lands in the list.
     };
-    let stored;
+    let stored = null;
     if (projects && typeof projects === 'object') {
       const applied = await repository.updateChatProjects(chatId, projects, turnPatch);
       if (applied?.conflict) {

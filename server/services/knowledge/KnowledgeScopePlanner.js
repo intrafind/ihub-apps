@@ -184,13 +184,13 @@ export async function planKnowledgeScope(scope, { model, settings, ctx }) {
     // the prompt, so the project is not "loaded in full": the model and the
     // badge are told to search, whether or not other documents made it in.
     const usableIds = new Set(usable.map(item => item.id));
-    if (effective === 'loaded' && unavailable.some(entry => usableIds.has(entry.document))) {
+    if (effective === 'loaded' && unavailable.some(doc => usableIds.has(doc.document))) {
       effective = 'searched';
     }
     // A document its source handed over only in part (a link past its
     // handler's length limit) is in the prompt as far as it goes, marked
     // `truncated`: the project is not "loaded in full" either.
-    if (effective === 'loaded' && injected.some(entry => entry.sourceTruncated)) {
+    if (effective === 'loaded' && injected.some(doc => doc.sourceTruncated)) {
       effective = 'searched';
     }
     // Pinned first, so the cap drops unpinned text before anything pinned.
