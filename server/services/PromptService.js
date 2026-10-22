@@ -30,8 +30,8 @@ const promptKnowledgeSources = new Map();
 const knowledgeScopes = new Map();
 
 /**
- * The model behind what the request builder hands over as `modelName`: the
- * display name when the model has one, else the id. Matched on both, so a
+ * The model behind the request: its id when the request builder hands it
+ * over, else the display name (an older caller). Matched on both, so a
  * model named differently from its id still brings its context window.
  *
  * @param {Object[]} models
@@ -39,8 +39,8 @@ const knowledgeScopes = new Map();
  * @returns {Object|null}
  */
 function findModel(models, modelName) {
-  if (!modelName) return null;
-  const wanted = String(modelName);
+  if (!modelName || typeof modelName !== 'string') return null;
+  const wanted = modelName;
   const nameOf = entry =>
     typeof entry?.name === 'object' && entry.name
       ? Object.values(entry.name)
@@ -371,7 +371,8 @@ class PromptService {
     chatId = null,
     modelName = null,
     requestedSkills = null,
-    preparedSkills = null
+    preparedSkills = null,
+    modelId = null
   ) {
     const defaultLang = configCache.getPlatform()?.defaultLanguage || 'en';
     const lang = language || defaultLang;
@@ -584,7 +585,7 @@ class PromptService {
           user,
           chatId,
           lang,
-          modelName
+          modelName: modelId || modelName
         });
       } catch (error) {
         logger.error('Error applying the projects of the request', {

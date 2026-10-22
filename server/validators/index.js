@@ -121,6 +121,13 @@ export const chatPostSchema = {
      * marks the stored message (services/chat/voiceMode.js). Ignored unless
      * voice mode is enabled on the platform.
      */
-    voiceMode: z.boolean().optional()
+    voiceMode: z.boolean().optional(),
+    /**
+     * Projects (#1036): the chat's container project, or null to run it in
+     * none, and the projects attached from the picker for this turn. Checked
+     * against the caller's access in the route (`resolveChatProjects`).
+     */
+    projectId: z.string().max(200).nullable().optional(),
+    projects: z.array(z.string().max(200)).max(20).optional()
   })
 };
