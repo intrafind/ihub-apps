@@ -9,7 +9,7 @@
  * project document came from, and the preview falls back to the text when
  * the original is discarded (spec 2 §5.1).
  */
-import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
+import { act, render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { MemoryRouter } from 'react-router-dom';
 
@@ -65,6 +65,8 @@ const AnswerSourceBadge =
   require('../../../client/src/features/chat/components/AnswerSourceBadge').default;
 const DocumentPreviewModal =
   require('../../../client/src/features/documentPreview/components/DocumentPreviewModal').default;
+const TextPassageViewer =
+  require('../../../client/src/features/documentPreview/components/TextPassageViewer').default;
 const {
   invalidateProjectsList
 } = require('../../../client/src/features/projects/hooks/useProjects');
@@ -220,5 +222,57 @@ describe('DocumentPreviewModal text mode', () => {
     expect(mockFetchSourceContent.mock.calls[0][0]).toMatchObject({ format: 'pdf' });
     expect(mockFetchSourceContent.mock.calls[1][0]).toMatchObject({ format: 'text' });
     expect(screen.queryByTestId('pdf-viewer')).not.toBeInTheDocument();
+  });
+});
+
+describe('TextPassageViewer scrolling', () => {
+  const TEXT = 'Rent is due monthly. Notice is three months. Deposit is two rents.';
+  let scrolled;
+  let originalScroll;
+
+  beforeEach(() => {
+    scrolled = [];
+    originalScroll = HTMLElement.prototype.scrollIntoView;
+    HTMLElement.prototype.scrollIntoView = function scrollIntoView() {
+      scrolled.push(this.textContent);
+    };
+  });
+
+  afterEach(() => {
+    HTMLElement.prototype.scrollIntoView = originalScroll;
+  });
+
+  test('scrolls to the passage of each chip, though each has a single match', () => {
+    // The modal hands a stable callback, so a new selection that again has
+    // one match at index 0 changes nothing the state report depends on.
+    const onStateChange = jest.fn();
+    const controlRef = { current: null };
+    const { rerender } = render(
+      <TextPassageViewer
+        text={TEXT}
+        passages={['Notice is three months.']}
+        controlRef={controlRef}
+        onStateChange={onStateChange}
+      />
+    );
+    expect(scrolled).toEqual(['Notice is three months.']);
+
+    rerender(
+      <TextPassageViewer
+        text={TEXT}
+        passages={['Deposit is two rents.']}
+        controlRef={controlRef}
+        onStateChange={onStateChange}
+      />
+    );
+    expect(scrolled).toEqual(['Notice is three months.', 'Deposit is two rents.']);
+
+    // "Next" on the only match brings it back into view.
+    act(() => controlRef.current.nextMatch());
+    expect(scrolled).toEqual([
+      'Notice is three months.',
+      'Deposit is two rents.',
+      'Deposit is two rents.'
+    ]);
   });
 });
