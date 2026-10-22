@@ -25,13 +25,32 @@ describe('AdminLoadError', () => {
     expect(alert).toHaveTextContent('Request failed (500)');
   });
 
-  it('calls onRetry from the Retry button', () => {
-    const onRetry = jest.fn();
+  it('defaults the title to "Error"', () => {
+    render(<AdminLoadError message="boom" />);
 
-    render(<AdminLoadError title="Error loading tools" message="boom" onRetry={onRetry} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(screen.getByRole('heading', { name: 'Error' })).toBeInTheDocument();
+  });
 
-    expect(onRetry).toHaveBeenCalledTimes(1);
+  it('offers a custom action instead of Retry', () => {
+    const onClick = jest.fn();
+
+    render(<AdminLoadError message="boom" action={{ label: 'Back to Prompts', onClick }} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Back to Prompts' }));
+
+    expect(onClick).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('button', { name: 'Retry' })).not.toBeInTheDocument();
+  });
+
+  it('shows no button when action is null', () => {
+    render(<AdminLoadError message="boom" action={null} />);
+
+    expect(screen.queryByRole('button')).not.toBeInTheDocument();
+  });
+
+  it('shows Retry by default', () => {
+    render(<AdminLoadError message="boom" />);
+
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument();
   });
 
   it('wraps the panel in the admin page container unless told not to', () => {

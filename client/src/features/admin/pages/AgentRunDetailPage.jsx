@@ -16,6 +16,7 @@ import { cancelAgentRun, fetchRunArtifacts, resumeAgentRun } from '../../../api/
 import { answerInteraction } from '../../../api';
 import HumanCheckpoint from '../../workflows/components/HumanCheckpoint';
 import { isQuestionCheckpoint } from '../../../shared/run/interactionToCheckpoint';
+import AdminLoadError from '../components/AdminLoadError';
 
 const AGENT_EXECUTION_OPTIONS = {
   requireFeature: ['agentFactory', 'workflows'],
@@ -402,14 +403,10 @@ export default function AgentRunDetailPage() {
           </div>
 
           {error && (
-            <div className="mb-3 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-800 dark:text-red-300 rounded-sm">
-              {error}
-            </div>
+            <AdminLoadError message={error} framed={false} className="mb-3" action={null} />
           )}
           {actionError && (
-            <div className="mb-3 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-800 dark:text-red-300 rounded-sm">
-              {actionError}
-            </div>
+            <AdminLoadError message={actionError} framed={false} className="mb-3" action={null} />
           )}
           {artifactsError && (
             <div className="mb-3 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-800 dark:text-red-300 rounded-sm">

@@ -633,40 +633,26 @@ function VariablesTabContent() {
 
   if (error && !globalPromptVariables) {
     return (
-      <div className="mt-8 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-md p-4">
-        <div className="flex">
-          <Icon name="exclamation-triangle" className="h-5 w-5 text-red-400" />
-          <div className="ml-3">
-            <h3 className="text-sm font-medium text-red-800 dark:text-red-200">
-              {t('admin.promptVariables.loadError', 'Error loading configuration')}
-            </h3>
-            <p className="mt-1 text-sm text-red-700 dark:text-red-300">{error}</p>
-            <button
-              onClick={loadPlatformConfig}
-              className="mt-2 text-sm text-red-700 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300"
-            >
-              {t('common.retry', 'Retry')}
-            </button>
-          </div>
-        </div>
-      </div>
+      <AdminLoadError
+        title={t('admin.promptVariables.loadError', 'Error loading configuration')}
+        message={error}
+        framed={false}
+        className="mt-8"
+        action={{ label: t('common.retry', 'Retry'), onClick: loadPlatformConfig }}
+      />
     );
   }
 
   return (
     <div className="mt-8">
       {error && (
-        <div className="mb-4 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-md p-4">
-          <div className="flex">
-            <Icon name="exclamation-triangle" className="h-5 w-5 text-red-400" />
-            <div className="ml-3">
-              <h3 className="text-sm font-medium text-red-800 dark:text-red-200">
-                {t('admin.promptVariables.error', 'Error')}
-              </h3>
-              <p className="mt-1 text-sm text-red-700 dark:text-red-300">{error}</p>
-            </div>
-          </div>
-        </div>
+        <AdminLoadError
+          title={t('admin.promptVariables.error', 'Error')}
+          message={error}
+          framed={false}
+          className="mb-4"
+          action={null}
+        />
       )}
 
       <GlobalPromptVariablesEditor value={globalPromptVariables} onChange={handleVariablesChange} />

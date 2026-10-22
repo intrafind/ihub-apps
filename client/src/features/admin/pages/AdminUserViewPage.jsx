@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { getAdminApiErrorMessage, makeAdminApiCall } from '../../../api/adminApi';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
+import AdminLoadError from '../components/AdminLoadError';
 
 function AdminUserViewPage() {
   const { t } = useTranslation();
@@ -70,23 +71,7 @@ function AdminUserViewPage() {
   }
 
   if (error || !user) {
-    return (
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md p-4">
-          <div className="flex">
-            <div className="shrink-0">
-              <Icon name="warning" size="md" className="text-red-400" />
-            </div>
-            <div className="ml-3">
-              <h3 className="text-sm font-medium text-red-800 dark:text-red-300">Error</h3>
-              <div className="mt-2 text-sm text-red-700 dark:text-red-400">
-                {error || 'User not found'}
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
+    return <AdminLoadError title="Error" message={error || 'User not found'} action={null} />;
   }
 
   return (

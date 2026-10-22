@@ -7,6 +7,7 @@ import Icon from '../../../shared/components/Icon';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 import { makeAdminApiCall } from '../../../api/adminApi';
 import { getLocalizedContent } from '../../../utils/localizeContent';
+import AdminLoadError from './AdminLoadError';
 
 const FIELD_CLASS =
   'rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-xs px-3 py-2 text-sm focus:border-blue-500 focus:ring-blue-500';
@@ -163,11 +164,13 @@ function McpServerCatalogDialog({ onClose, onSelect }) {
                 <LoadingSpinner size="lg" />
               </div>
             ) : error ? (
-              <div className="p-4 rounded-md border bg-red-50 dark:bg-red-900/30 border-red-200 dark:border-red-800 text-red-700 dark:text-red-300">
-                {t('admin.mcp.catalog.loadError', 'Failed to load the catalog: {{error}}', {
+              <AdminLoadError
+                message={t('admin.mcp.catalog.loadError', 'Failed to load the catalog: {{error}}', {
                   error
                 })}
-              </div>
+                framed={false}
+                action={null}
+              />
             ) : visible.length === 0 ? (
               <p className="py-16 text-center text-sm text-gray-500 dark:text-gray-400">
                 {t('admin.mcp.catalog.noResults', 'No servers match your search.')}

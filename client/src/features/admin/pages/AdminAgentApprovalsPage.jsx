@@ -6,6 +6,7 @@ import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { fetchPendingInteractions } from '../../../api';
 import AdminBreadcrumb from '../components/AdminBreadcrumb';
+import AdminLoadError from '../components/AdminLoadError';
 
 /** The actionable interaction kinds the queue shows, with their tab labels. */
 const KINDS = [
@@ -113,11 +114,7 @@ export default function AdminAgentApprovalsPage() {
             </button>
           ))}
         </div>
-        {error && (
-          <div className="mb-3 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-800 dark:text-red-300 rounded-sm">
-            {error}
-          </div>
-        )}
+        {error && <AdminLoadError message={error} framed={false} className="mb-3" action={null} />}
         {loading ? (
           <div className="text-gray-600 dark:text-gray-400">{t('common.loading', 'Loading…')}</div>
         ) : visible.length === 0 ? (

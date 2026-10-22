@@ -11,6 +11,7 @@ import {
   updateMarketplaceRegistry
 } from '../../../api/adminApi';
 import RegistryFormDialog from '../components/marketplace/RegistryFormDialog';
+import AdminLoadError from '../components/AdminLoadError';
 
 /**
  * Admin page for managing marketplace registries.
@@ -158,11 +159,7 @@ function AdminMarketplaceRegistriesPage() {
           )}
 
           {/* Error message */}
-          {error && (
-            <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 text-red-700 dark:text-red-300">
-              {error}
-            </div>
-          )}
+          {error && <AdminLoadError message={error} framed={false} action={null} />}
 
           {/* Empty state */}
           {!loading && !error && registries.length === 0 && (

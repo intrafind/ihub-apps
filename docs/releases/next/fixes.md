@@ -26,6 +26,9 @@ the language fields of multilingual settings (including their "remove language" 
 accessible name, so a screen reader announced them as "button" or "edit text". They are now
 labelled. The upload buttons also open the file picker from the keyboard; before, Tab landed on an
 invisible file field instead.
+Error messages on the admin pages (a list that could not be loaded, a failed save) now look and
+behave the same everywhere: they are announced by screen readers, meet the contrast ratio, and the
+dismissible ones have a labelled "Dismiss" button instead of an unlabelled icon.
 
 ## Prompt cards no longer contain buttons inside a button
 

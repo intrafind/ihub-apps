@@ -15,6 +15,7 @@ import {
   selectedOptionValues,
   setExcluded
 } from '../utils/auditLogFilters';
+import AdminLoadError from '../components/AdminLoadError';
 
 const ACTION_PILL_COLORS = {
   create: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
@@ -675,11 +676,7 @@ function AdminAuditLogPage() {
         </div>
       </div>
 
-      {error && (
-        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 mb-6">
-          <p className="text-sm text-red-700 dark:text-red-400">{error}</p>
-        </div>
-      )}
+      {error && <AdminLoadError message={error} framed={false} className="mb-6" action={null} />}
 
       <DataTable
         columns={columns}

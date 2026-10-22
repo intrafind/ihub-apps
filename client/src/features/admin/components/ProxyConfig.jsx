@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { makeAdminApiCall } from '../../../api/adminApi';
+import AdminLoadError from './AdminLoadError';
 
 const EMPTY_CONFIG = {
   enabled: true,
@@ -735,11 +736,7 @@ function ProxyConfig() {
           </button>
         </div>
 
-        {testError && (
-          <div className="p-4 rounded-md bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
-            <p className="text-sm text-red-700 dark:text-red-300">{testError}</p>
-          </div>
-        )}
+        {testError && <AdminLoadError message={testError} framed={false} action={null} />}
 
         {testResult && (
           <div

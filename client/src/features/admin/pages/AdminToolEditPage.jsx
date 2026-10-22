@@ -22,6 +22,7 @@ import {
   updateToolScript
 } from '../../../api/adminApi';
 import { clearApiCache } from '../../../api';
+import AdminLoadError from '../components/AdminLoadError';
 
 function AdminToolEditPage() {
   const { t } = useTranslation();
@@ -286,17 +287,13 @@ function AdminToolEditPage() {
         </div>
 
         {error && (
-          <div className="mb-6 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-md p-4">
-            <div className="flex">
-              <Icon name="exclamation-triangle" className="h-5 w-5 text-red-400" />
-              <div className="ml-3">
-                <h3 className="text-sm font-medium text-red-800 dark:text-red-200">
-                  {t('common.error', 'Error')}
-                </h3>
-                <p className="mt-1 text-sm text-red-700 dark:text-red-300">{error}</p>
-              </div>
-            </div>
-          </div>
+          <AdminLoadError
+            title={t('common.error', 'Error')}
+            message={error}
+            framed={false}
+            className="mb-6"
+            action={null}
+          />
         )}
 
         {/* Tabs */}

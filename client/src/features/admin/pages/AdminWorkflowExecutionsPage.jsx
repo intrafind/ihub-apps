@@ -23,6 +23,7 @@ import {
 } from '../../../api/adminApi';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import StatusBadge from '../../workflows/components/StatusBadge';
+import AdminLoadError from '../components/AdminLoadError';
 
 /**
  * Auto-refresh polling interval in milliseconds (5 seconds)
@@ -375,23 +376,18 @@ function AdminWorkflowExecutionsPage() {
 
         {/* Error display */}
         {error && (
-          <div className="mt-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md p-4">
-            <div className="flex">
-              <Icon name="exclamation-triangle" className="h-5 w-5 text-red-400" />
-              <div className="ml-3">
-                <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
-                <button
-                  onClick={() => {
-                    setError(null);
-                    loadExecutions(true);
-                  }}
-                  className="mt-1 text-sm text-red-700 dark:text-red-400 hover:text-red-800 underline"
-                >
-                  {t('common.retry', 'Retry')}
-                </button>
-              </div>
-            </div>
-          </div>
+          <AdminLoadError
+            message={error}
+            framed={false}
+            className="mt-4"
+            action={{
+              label: t('common.retry', 'Retry'),
+              onClick: () => {
+                setError(null);
+                loadExecutions(true);
+              }
+            }}
+          />
         )}
 
         {/* Stats summary */}

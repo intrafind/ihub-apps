@@ -19,6 +19,7 @@ import {
   createAgentProfile,
   updateAgentProfile
 } from '../../../api/agentsAdminApi';
+import AdminLoadError from '../components/AdminLoadError';
 
 const BLANK_PROFILE = {
   id: '',
@@ -363,11 +364,7 @@ export default function AdminAgentEditPage() {
           </div>
         </div>
 
-        {error && (
-          <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-800 rounded-sm">
-            {error}
-          </div>
-        )}
+        {error && <AdminLoadError message={error} framed={false} className="mb-4" action={null} />}
 
         {mode === 'json' ? (
           <textarea

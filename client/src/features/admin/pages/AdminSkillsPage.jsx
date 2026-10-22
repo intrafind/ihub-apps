@@ -312,20 +312,12 @@ function AdminSkillsPage() {
           <>
             {/* Inline error banner (shown alongside data) */}
             {error && skills.length > 0 && (
-              <div className="mt-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md p-4">
-                <div className="flex">
-                  <Icon name="exclamation-triangle" className="h-5 w-5 text-red-400" />
-                  <div className="ml-3 flex-1">
-                    <p className="text-sm text-red-700 dark:text-red-400">{error}</p>
-                  </div>
-                  <button
-                    onClick={() => setError(null)}
-                    className="ml-3 text-red-400 hover:text-red-600"
-                  >
-                    <Icon name="close" className="h-4 w-4" />
-                  </button>
-                </div>
-              </div>
+              <AdminLoadError
+                message={error}
+                framed={false}
+                className="mt-4"
+                action={{ label: t('common.dismiss', 'Dismiss'), onClick: () => setError(null) }}
+              />
             )}
 
             {/* Search and filter controls */}

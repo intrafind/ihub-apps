@@ -16,6 +16,7 @@ import { DataTable, SearchInput, FilterSelect } from '../components/data-table';
 import AdminBreadcrumb from '../components/AdminBreadcrumb';
 
 import { getAdminApiErrorMessage } from '../../../api/adminApi';
+import AdminLoadError from '../components/AdminLoadError';
 export default function AdminAgentsPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -234,9 +235,7 @@ export default function AdminAgentsPage() {
           </div>
 
           {error && (
-            <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-800 dark:text-red-300 rounded-sm">
-              {error}
-            </div>
+            <AdminLoadError message={error} framed={false} className="mb-4" action={null} />
           )}
 
           <div className="mb-4 flex flex-wrap items-center gap-3">

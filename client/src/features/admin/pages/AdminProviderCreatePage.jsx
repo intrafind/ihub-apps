@@ -8,6 +8,7 @@ import { getAdminApiErrorMessage, makeAdminApiCall } from '../../../api/adminApi
 import Icon from '../../../shared/components/Icon';
 import ProviderFormFields from '../components/ProviderFormFields';
 import { slugify } from '../utils/modelImport';
+import AdminLoadError from '../components/AdminLoadError';
 
 function AdminProviderCreatePage() {
   const { t } = useTranslation();
@@ -127,17 +128,7 @@ function AdminProviderCreatePage() {
         )}
 
         {/* Error Message */}
-        {error && (
-          <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg">
-            <div className="flex items-center">
-              <Icon
-                name="ExclamationCircleIcon"
-                className="w-5 h-5 text-red-700 dark:text-red-400 mr-2"
-              />
-              <p className="text-sm text-red-700 dark:text-red-400">{error}</p>
-            </div>
-          </div>
-        )}
+        {error && <AdminLoadError message={error} framed={false} className="mb-6" action={null} />}
 
         {/* Form */}
         <form onSubmit={handleSave} className="bg-white dark:bg-gray-800 shadow-sm rounded-lg p-6">

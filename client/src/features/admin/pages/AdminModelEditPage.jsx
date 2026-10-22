@@ -19,6 +19,7 @@ import AdminBreadcrumb from '../components/AdminBreadcrumb';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import MarketplaceModelReviewNotice from '../components/marketplace/MarketplaceModelReviewNotice';
+import AdminLoadError from '../components/AdminLoadError';
 
 /**
  * A number field that accepts 0. `''`/null/undefined mean "not set" and drop
@@ -445,21 +446,13 @@ function AdminModelEditPage() {
 
         {/* Error display */}
         {error && (
-          <div className="mb-6 rounded-md bg-red-50 dark:bg-red-900/30 p-4">
-            <div className="flex">
-              <div className="shrink-0">
-                <Icon name="x-circle" className="h-5 w-5 text-red-400" />
-              </div>
-              <div className="ml-3">
-                <h3 className="text-sm font-medium text-red-800 dark:text-red-200">
-                  {t('common.error')}
-                </h3>
-                <div className="mt-2 text-sm text-red-700 dark:text-red-300">
-                  <p>{error}</p>
-                </div>
-              </div>
-            </div>
-          </div>
+          <AdminLoadError
+            title={t('common.error')}
+            message={error}
+            framed={false}
+            className="mb-6"
+            action={null}
+          />
         )}
 
         {/* Success display */}

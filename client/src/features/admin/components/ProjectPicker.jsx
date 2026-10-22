@@ -14,6 +14,7 @@ import {
   toggleProjectLink
 } from '../utils/projectAdmin';
 import { localizedText } from '../../projects/utils/projectItems';
+import AdminLoadError from './AdminLoadError';
 
 /**
  * Picks the admin projects linked to an app, a workflow prompt node or an
@@ -206,12 +207,11 @@ function ProjectPicker({
       )}
 
       {error && (
-        <div className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-md p-3 text-sm text-red-700 dark:text-red-300">
-          <p>{error}</p>
-          <button type="button" onClick={loadProjects} className="mt-1 underline">
-            {t('common.retry', 'Try again')}
-          </button>
-        </div>
+        <AdminLoadError
+          message={error}
+          framed={false}
+          action={{ label: t('common.retry', 'Try again'), onClick: loadProjects }}
+        />
       )}
 
       {!loading && !error && (

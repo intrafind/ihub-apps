@@ -8,6 +8,7 @@ import { fetchInboxes, createInbox } from '../../../api/agentsAdminApi';
 import AdminBreadcrumb from '../components/AdminBreadcrumb';
 
 import { getAdminApiErrorMessage } from '../../../api/adminApi';
+import AdminLoadError from '../components/AdminLoadError';
 export default function AdminAgentInboxesPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -63,11 +64,7 @@ export default function AdminAgentInboxesPage() {
         <h1 className="text-2xl font-bold mb-6 text-gray-900 dark:text-gray-100">
           {t('admin.agents.inboxes.title', 'Agent Inboxes')}
         </h1>
-        {error && (
-          <div className="mb-3 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-800 dark:text-red-300 rounded-sm">
-            {error}
-          </div>
-        )}
+        {error && <AdminLoadError message={error} framed={false} className="mb-3" action={null} />}
         <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-sm p-4 mb-6">
           <h2 className="text-sm font-semibold mb-2 text-gray-900 dark:text-gray-100">
             {t('admin.agents.inboxes.createHeading', 'Create inbox')}

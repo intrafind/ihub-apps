@@ -24,6 +24,7 @@ import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import ReorderableList from '../components/ReorderableList';
 import { DataTable, SearchInput, FilterSelect } from '../components/data-table';
 import UploadConfigButton from '../components/UploadConfigButton';
+import AdminLoadError from '../components/AdminLoadError';
 
 function AppNameCell({ app, currentLanguage }) {
   return (
@@ -509,11 +510,7 @@ function AdminAppsPage() {
         </div>
       </div>
 
-      {error && (
-        <div className="mt-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md p-4 text-sm text-red-700 dark:text-red-300">
-          {error}
-        </div>
-      )}
+      {error && <AdminLoadError message={error} framed={false} className="mt-4" action={null} />}
 
       {orderDraft ? (
         <div className="mt-6">

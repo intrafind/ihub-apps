@@ -5,6 +5,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { XMarkIcon, ClockIcon, ArrowUturnLeftIcon } from '@heroicons/react/24/outline';
 import { makeAdminApiCall } from '../../../api/adminApi';
+import AdminLoadError from './AdminLoadError';
 
 /**
  * Truncate a string to a maximum length, appending ellipsis if needed.
@@ -546,9 +547,12 @@ function ChangeHistoryDrawer({ isOpen, onClose, resource, resourceId }) {
 
               {/* Rollback error */}
               {rollbackError && (
-                <div className="mb-4 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
-                  <p className="text-sm text-red-700 dark:text-red-400">{rollbackError}</p>
-                </div>
+                <AdminLoadError
+                  message={rollbackError}
+                  framed={false}
+                  className="mb-4"
+                  action={null}
+                />
               )}
 
               {/* Rollback button */}
@@ -566,9 +570,7 @@ function ChangeHistoryDrawer({ isOpen, onClose, resource, resourceId }) {
 
               {/* Detail error */}
               {!detailLoading && detailError && (
-                <div className="p-4 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
-                  <p className="text-sm text-red-700 dark:text-red-400">{detailError}</p>
-                </div>
+                <AdminLoadError message={detailError} framed={false} action={null} />
               )}
 
               {/* Diff view */}

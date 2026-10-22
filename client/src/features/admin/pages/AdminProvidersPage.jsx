@@ -21,6 +21,7 @@ import {
   getModelProviderId,
   getProviderApiType
 } from '../../../../../shared/llmProviders.js';
+import AdminLoadError from '../components/AdminLoadError';
 
 /** Linked model names shown in the list before "+N more". */
 const LINKED_MODEL_PREVIEW = 3;
@@ -361,17 +362,7 @@ function AdminProvidersPage() {
         </div>
 
         {/* Error Display */}
-        {error && (
-          <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg">
-            <div className="flex items-center">
-              <Icon
-                name="ExclamationCircleIcon"
-                className="w-5 h-5 text-red-700 dark:text-red-400 mr-2"
-              />
-              <p className="text-sm text-red-700 dark:text-red-400">{error}</p>
-            </div>
-          </div>
-        )}
+        {error && <AdminLoadError message={error} framed={false} className="mb-6" action={null} />}
 
         {/* Search and Actions Bar */}
         <div className="mb-6 flex flex-col sm:flex-row gap-4">

@@ -9,6 +9,7 @@ import { DataTable } from '../components/data-table';
 import StatusBadge from '../../workflows/components/StatusBadge';
 
 import { getAdminApiErrorMessage } from '../../../api/adminApi';
+import AdminLoadError from '../components/AdminLoadError';
 const ACTIVE_POLL_MS = 5000;
 const IDLE_POLL_MS = 30000;
 
@@ -115,11 +116,7 @@ export default function AgentRunsPage() {
         <h1 className="text-2xl font-bold mb-6 text-gray-900 dark:text-gray-100">
           Agent Runs{profileId ? ` — ${profileId}` : ''}
         </h1>
-        {error && (
-          <div className="mb-3 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-800 dark:text-red-300 rounded-sm">
-            {error}
-          </div>
-        )}
+        {error && <AdminLoadError message={error} framed={false} className="mb-3" action={null} />}
         <DataTable
           columns={columns}
           data={runs}

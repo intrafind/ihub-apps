@@ -7,6 +7,7 @@ import Icon from '../../../shared/components/Icon';
 import { makeAdminApiCall } from '../../../api/adminApi';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import { useUpdateCheck } from '../hooks/useUpdateCheck';
+import AdminLoadError from '../components/AdminLoadError';
 
 function AdminUpdatesPage() {
   const { t } = useTranslation();
@@ -427,15 +428,12 @@ function AdminUpdatesPage() {
                   {t('admin.system.versionLoading', 'Loading version information...')}
                 </div>
               ) : versionError ? (
-                <div className="p-4 rounded-md bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800">
-                  <div className="flex">
-                    <Icon name="warning" size="md" className="text-red-700 mt-0.5 mr-3" />
-                    <p className="text-sm text-red-700 dark:text-red-300">
-                      {t('admin.system.versionError', 'Failed to load version information')}:{' '}
-                      {versionError}
-                    </p>
-                  </div>
-                </div>
+                <AdminLoadError
+                  title={t('admin.system.versionError', 'Failed to load version information')}
+                  message={versionError}
+                  framed={false}
+                  action={null}
+                />
               ) : versionInfo ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="bg-gray-50 dark:bg-gray-700 rounded-md p-4 border border-gray-200 dark:border-gray-600">
