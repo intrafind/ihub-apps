@@ -1117,6 +1117,47 @@ describe('ingest pipeline', () => {
     await assert.rejects(fs.stat(oldDir));
     await fs.stat(newDir);
   });
+
+  it('sweeps no orphan blob while a project document cannot be read', async () => {
+    const repository = getProjectRepository();
+    const oldVersion = `${(Date.now() - 3 * 60 * 60 * 1000).toString(36).padStart(9, '0')}deadbeef`;
+    const userBlob = `prj_torn__itm_kept__${oldVersion}`;
+    const adminBlob = `admin_torn__itm_kept__${oldVersion}`;
+    await repository.blobs.put(PROJECT_FILES_NAMESPACE, userBlob, Buffer.from('user text'));
+    await repository.blobs.put(PROJECT_FILES_NAMESPACE, adminBlob, Buffer.from('admin text'));
+    const ingest = new ProjectIngestService({
+      service,
+      repository,
+      platform: () => platform,
+      tempDir: path.join(scratch, 'tmp-torn')
+    });
+    // The test's storage keeps runtime documents under `<scratch>/data` and
+    // configuration under `<scratch>` (its contents directory).
+    const tornUser = path.join(scratch, 'data', 'user-projects', 'prj_torn.json');
+    const tornAdmin = path.join(scratch, 'projects', 'admin_torn.json');
+    await fs.mkdir(path.dirname(tornAdmin), { recursive: true });
+    try {
+      // A torn user project: the lenient listing skips it, but counts it.
+      await fs.writeFile(tornUser, '{"v":1,"data":{"id":"prj_to', 'utf8');
+      const scan = await repository.scanUser();
+      assert.equal(scan.skipped, 1);
+      assert.equal((await ingest.reconcile()).orphans, 0);
+      assert.ok(await repository.blobs.get(PROJECT_FILES_NAMESPACE, userBlob));
+      await fs.rm(tornUser);
+
+      // A malformed admin project file: the strict admin listing refuses.
+      await fs.writeFile(tornAdmin, '{"id": "admin_torn", ', 'utf8');
+      await assert.rejects(repository.listAdmin({ strict: true }));
+      assert.deepEqual(await repository.listAdmin(), []);
+      assert.equal((await ingest.reconcile()).orphans, 0);
+      assert.ok(await repository.blobs.get(PROJECT_FILES_NAMESPACE, adminBlob));
+    } finally {
+      await fs.rm(tornUser, { force: true });
+      await fs.rm(tornAdmin, { force: true });
+    }
+    // Both inventories whole again: the blobs no project names are swept.
+    assert.equal((await ingest.reconcile()).orphans, 2);
+  });
 });
 
 describe('routes', () => {

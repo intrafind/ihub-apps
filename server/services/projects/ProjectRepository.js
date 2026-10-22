@@ -485,7 +485,10 @@ export class ProjectRepository {
    * @param {number} [options.max]
    * @param {number} [options.maxScanned]
    * @param {string|null} [options.cursor]
-   * @returns {Promise<{projects: Object[], truncated: boolean, nextCursor: string|null}>}
+   * @returns {Promise<{projects: Object[], truncated: boolean, nextCursor: string|null,
+   *   skipped: number}>} `skipped` counts project documents that are present
+   *   but could not be read; a caller that needs the whole set treats any as
+   *   an incomplete scan
    */
   async scanUser({
     filter = () => true,
@@ -493,31 +496,34 @@ export class ProjectRepository {
     maxScanned = MAX_SCANNED,
     cursor = null
   } = {}) {
-    if (!this.isAvailable()) return { projects: [], truncated: false, nextCursor: null };
+    if (!this.isAvailable())
+      return { projects: [], truncated: false, nextCursor: null, skipped: 0 };
     const projects = [];
     let scanned = 0;
+    let skipped = 0;
     let next = cursor;
     do {
       // Each read is capped by what is left of both budgets, so a scan only
       // ever stops at a page boundary and `nextCursor` continues after the
       // last document read, never at the start of a page already seen.
       const remaining = Math.min(PAGE_SIZE, maxScanned - scanned, max - projects.length);
-      if (remaining <= 0) return { projects, truncated: true, nextCursor: next };
+      if (remaining <= 0) return { projects, truncated: true, nextCursor: next, skipped };
       const page = await this.documents.list(USER_PROJECTS_NAMESPACE, {
         limit: remaining,
         includeData: true,
         ...(next ? { cursor: next } : {})
       });
+      skipped += page.skipped || 0;
       for (const doc of page.items) {
         scanned += 1;
         if (doc?.data && filter(doc.data)) projects.push(doc.data);
       }
       next = page.nextCursor;
       if (next && (scanned >= maxScanned || projects.length >= max)) {
-        return { projects, truncated: true, nextCursor: next };
+        return { projects, truncated: true, nextCursor: next, skipped };
       }
     } while (next);
-    return { projects, truncated: false, nextCursor: null };
+    return { projects, truncated: false, nextCursor: null, skipped };
   }
 
   /**
