@@ -168,7 +168,8 @@ export function buildCreateProjectBody(form) {
  * The body of `PATCH /api/projects/:id`: only what changed.
  *
  * @param {{name: string, description: string, instructions: string}} form
- * @param {Object} project - The project as loaded.
+ * @param {Object} project - What the form started from: the project as
+ *   loaded, or a form baseline (see {@link reconcileProjectForm}).
  * @returns {Object|null} `null` when nothing changed.
  */
 export function buildProjectChanges(form, project) {
@@ -180,6 +181,38 @@ export function buildProjectChanges(form, project) {
   if (description !== before.description.trim()) changes.description = description;
   if ((form.instructions || '') !== before.instructions) changes.instructions = form.instructions;
   return Object.keys(changes).length > 0 ? changes : null;
+}
+
+/**
+ * Bring a settings draft up to date with a newer copy of the same project
+ * (a poll, or another editor's save): each field the user has not touched —
+ * still equal to the copy the draft started from — takes the incoming value,
+ * in the draft and in its baseline; a touched field keeps the user's text and
+ * its old baseline, so it still counts as a change. Comparing the draft with
+ * this baseline (not with the latest project) keeps an untouched field out of
+ * the next PATCH, which would otherwise undo the other editor's update.
+ *
+ * @param {{name: string, description: string, instructions: string}} form - The draft.
+ * @param {{name: string, description: string, instructions: string}} base - What the draft started from.
+ * @param {Object} project - The newer copy of the project.
+ * @returns {{form: Object, base: Object}}
+ *
+ * @example
+ * const base = projectFormFrom(loaded);
+ * const next = reconcileProjectForm({ ...base, name: 'Renamed' }, base, polled);
+ * buildProjectChanges(next.form, next.base); // { name: 'Renamed' }
+ */
+export function reconcileProjectForm(form, base, project) {
+  const incoming = projectFormFrom(project);
+  const nextForm = { ...form };
+  const nextBase = { ...base };
+  for (const field of Object.keys(incoming)) {
+    if (form[field] === base[field]) {
+      nextForm[field] = incoming[field];
+      nextBase[field] = incoming[field];
+    }
+  }
+  return { form: nextForm, base: nextBase };
 }
 
 // --- quotas --------------------------------------------------------------------------

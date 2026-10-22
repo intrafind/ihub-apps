@@ -93,6 +93,8 @@ const mockI18n = { t: mockT, i18n: { language: 'en-GB' } };
 jest.mock('react-i18next', () => ({ useTranslation: () => mockI18n }));
 
 const ProjectPage = require('../../../client/src/features/projects/pages/ProjectPage').default;
+const ProjectSettingsCard =
+  require('../../../client/src/features/projects/components/ProjectSettingsCard').default;
 const {
   invalidateProjectsConfig,
   invalidateProjectsList
@@ -364,5 +366,44 @@ describe('ProjectPage – members and read-only', () => {
     expect(
       await screen.findByText('This project does not exist or you no longer have access to it.')
     ).toBeInTheDocument();
+  });
+});
+
+describe('ProjectSettingsCard – a newer copy arrives while editing', () => {
+  test('takes another editor’s instructions and sends only the local edit', async () => {
+    const onSaved = jest.fn();
+    const first = makeProject();
+    const { rerender } = render(<ProjectSettingsCard project={first} editable onSaved={onSaved} />);
+    // A poll (an item is still extracting) brings another editor's update.
+    rerender(
+      <ProjectSettingsCard
+        project={makeProject({ instructions: 'Answer in German.' })}
+        editable
+        onSaved={onSaved}
+      />
+    );
+    expect(screen.getByLabelText('Instructions')).toHaveValue('Answer in German.');
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+
+    // An unsaved local edit survives the next poll.
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Case 2026-115' } });
+    rerender(
+      <ProjectSettingsCard
+        project={makeProject({ instructions: 'Answer in German.', usage: { items: 3 } })}
+        editable
+        onSaved={onSaved}
+      />
+    );
+    expect(screen.getByLabelText('Name')).toHaveValue('Case 2026-115');
+
+    mockApi.updateProject.mockResolvedValue(
+      makeProject({ name: 'Case 2026-115', instructions: 'Answer in German.' })
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() =>
+      expect(mockApi.updateProject).toHaveBeenCalledWith('prj_a', { name: 'Case 2026-115' })
+    );
+    expect(await screen.findByText('Saved.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
   });
 });

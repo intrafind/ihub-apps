@@ -6,7 +6,12 @@ import { useTranslation } from 'react-i18next';
 import { updateProject } from '../../../api';
 import { projectErrorMessage } from '../utils/projectErrors';
 import { localizedText } from '../utils/projectItems';
-import { buildProjectChanges, projectFormFrom, validateProjectForm } from '../utils/projectView';
+import {
+  buildProjectChanges,
+  projectFormFrom,
+  reconcileProjectForm,
+  validateProjectForm
+} from '../utils/projectView';
 import ProjectFormFields from './ProjectFormFields';
 import { PRIMARY_BUTTON, SECONDARY_BUTTON } from './item-dialog/dialogStyles';
 
@@ -27,17 +32,35 @@ const CARD =
 function ProjectSettingsCard({ project, editable, onSaved }) {
   const { t, i18n } = useTranslation();
   const [form, setForm] = useState(() => projectFormFrom(project));
-  // Re-fill the form when another project is shown (state adjusted during
-  // render); polling the same project leaves unsaved edits alone.
-  const [formFor, setFormFor] = useState(project.id);
-  if (project.id !== formFor) {
-    setFormFor(project.id);
-    setForm(projectFormFrom(project));
+  // What the draft started from. Changes are measured against it, not
+  // against the latest project, so a newer copy from a poll never makes an
+  // untouched field look like a local edit.
+  const [base, setBase] = useState(form);
+  // Follow each new copy of the project (state adjusted during render):
+  // another project re-fills the form; a newer copy of this one updates the
+  // fields the user has not touched and leaves unsaved edits alone.
+  const [syncedWith, setSyncedWith] = useState(project);
+  if (project !== syncedWith) {
+    setSyncedWith(project);
+    if (project.id !== syncedWith.id) {
+      resetTo(project);
+    } else {
+      const next = reconcileProjectForm(form, base, project);
+      setForm(next.form);
+      setBase(next.base);
+    }
   }
   const [errors, setErrors] = useState({});
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState(null);
-  const changes = editable ? buildProjectChanges(form, project) : null;
+  const changes = editable ? buildProjectChanges(form, base) : null;
+
+  /** Start the draft over from `source` (after a save, a discard, another project). */
+  function resetTo(source) {
+    const fresh = projectFormFrom(source);
+    setForm(fresh);
+    setBase(fresh);
+  }
 
   if (!editable) {
     const description = localizedText(project.description, i18n.language);
@@ -69,7 +92,7 @@ function ProjectSettingsCard({ project, editable, onSaved }) {
     try {
       const saved = await updateProject(project.id, changes);
       onSaved(saved);
-      setForm(projectFormFrom(saved));
+      resetTo(saved);
       setMessage({ ok: true, text: t('projects.settings.saved', 'Saved.') });
     } catch (err) {
       setMessage({ ok: false, text: projectErrorMessage(err, t) });
@@ -108,7 +131,7 @@ function ProjectSettingsCard({ project, editable, onSaved }) {
           <button
             type="button"
             disabled={!changes || saving}
-            onClick={() => setForm(projectFormFrom(project))}
+            onClick={() => resetTo(project)}
             className={SECONDARY_BUTTON}
           >
             {t('projects.settings.reset', 'Discard changes')}
