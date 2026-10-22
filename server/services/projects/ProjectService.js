@@ -299,7 +299,8 @@ export class ProjectService {
     }
     if (!project) return null;
     await attempt(() => this.repository.deleteBlobs(projectId), 'text blobs', where);
-    let late;
+    let late = [];
+    let unlisted = false;
     try {
       late = await this._detachChats(projectId, detachChat, where);
     } catch (error) {
@@ -307,16 +308,15 @@ export class ProjectService {
         ...where,
         error: error.message
       });
-      late = [];
-      late.unlisted = true;
+      unlisted = true;
     }
     for (const hook of this.onDeleted) {
       await attempt(() => hook(project), 'a delete hook', where);
     }
-    if (late.length > 0 || late.unlisted) {
+    if (late.length > 0 || unlisted) {
       throw new ProjectError(
         'CASCADE_INCOMPLETE',
-        `The project is deleted, but ${late.unlisted ? 'its' : late.length} chat(s) could not be detached from it`,
+        `The project is deleted, but ${unlisted ? 'its' : late.length} chat(s) could not be detached from it`,
         { project: { id: project.id, ownership: project.ownership }, deleted: true, chats: late }
       );
     }
@@ -331,7 +331,7 @@ export class ProjectService {
    * @returns {Promise<Array<{chatId: string}>>} The chats still attached.
    */
   async _detachChats(projectId, detachChat, where) {
-    let markers;
+    let markers = [];
     try {
       markers = await this.repository.listChatMarkers(projectId, { all: true });
     } catch (error) {
