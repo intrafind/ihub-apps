@@ -11,10 +11,7 @@ import OfficeApp, {
   OFFICE_USER_KEY,
   storeSelectedApp
 } from '../src/features/office/components/OfficeApp';
-import {
-  popoutChatRouteState,
-  seedPopoutTranscript
-} from '../src/features/office/utilities/officePopoutChat';
+import { popoutChatRouteState } from '../src/features/office/utilities/officePopoutChat';
 import { installOfficeAuthInterceptor } from '../src/features/office/api/officeAuthBridge';
 import { storeTokenResponse } from '../src/features/office/api/officeAuth';
 import { openOfficeAuthDialog } from '../src/features/office/utilities/officeAuthDialog';
@@ -130,7 +127,6 @@ async function startPopout(rootEl) {
     // The chat still works; the settings dialog shows no name.
   }
   storeSelectedApp(init.chat?.app ?? null);
-  seedPopoutTranscript(init.chat);
   installOfficeAuthInterceptor(init.config);
 
   await renderOfficeApp(rootEl, {
