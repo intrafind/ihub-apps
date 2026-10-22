@@ -54,6 +54,7 @@ import { createChatChannel } from './chatChannel.js';
 import { discardRunActivity, recordRunActivity } from './runActivity.js';
 import { createPageReadGate, resolveMaxPageReads } from './pageReadLimit.js';
 import {
+  admitTurnProjects,
   materializeAssistantTurn,
   normalizeAttachments,
   settleUserTurn
@@ -415,8 +416,10 @@ class ChatService {
    *   than the chat UI does (the inference API): `message` (fields on the stored user message:
    *   `variables`, `renderedContent`), `chat` (fields patched onto the chat document with the
    *   user turn), `projects` (the container and attachments the turn writes under the chat
-   *   lock, `resolveChatProjects().projectPatch`; a conflict refuses the turn before the model
-   *   is called and the summary carries `refusal`), `assistant` (fields on the stored answer:
+   *   lock, `resolveChatProjects().projectPatch`), `projectId` (the container the turn was
+   *   prepared for; its question is stored only while the chat is still in it) — a conflict
+   *   refuses the turn before the model is called, before it supersedes a running turn when
+   *   the stored chat already shows it, and the summary carries `refusal`; `assistant` (fields on the stored answer:
    *   `model`), `origin` (how a chat
    *   created by this turn came about) and `clientConnected` (`() => boolean`, whether the
    *   caller is still there to read the answer; default: an SSE client is attached).
@@ -491,6 +494,31 @@ class ChatService {
     // leaving it out of `activeRequests` would make it the one turn Stop can
     // never reach: the endpoint would answer "stopped" while the model ran to
     // completion and billed the tokens.
+    // A turn whose project fields no longer hold (a racing first turn opened
+    // the chat in another project) is refused before it supersedes anything:
+    // otherwise the conflicting request would cancel the accepted turn that
+    // is generating, then fail itself. Checked again under the chat lock when
+    // the question is stored.
+    if (persistence?.repository) {
+      const refusal = await admitTurnProjects({
+        repository: persistence.repository,
+        chatId,
+        projects: persistence.projects || null,
+        projectId: persistence.projectId
+      });
+      if (refusal) {
+        return {
+          runId,
+          status: 'error',
+          content: '',
+          finishReason: 'error',
+          errorInfo: refusal,
+          refusal,
+          knowledgeSources: []
+        };
+      }
+    }
+
     const controller = new AbortController();
     const trackRequest = !!chatId && (streaming || !!persistence?.repository);
     if (trackRequest) {
@@ -581,6 +609,7 @@ class ChatService {
         message: persist.message,
         chat: persist.chat,
         projects: persist.projects,
+        projectId: persist.projectId,
         origin: persist.origin
       });
       // The chat's container changed under this turn (a first turn that
