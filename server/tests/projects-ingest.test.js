@@ -76,6 +76,7 @@ import {
 import { evictItemText, getItemText } from '../services/knowledge/ItemTextService.js';
 import registerProjectRoutes from '../routes/projectRoutes.js';
 import { countBodyBytes, probeUrl } from '../sources/SourceManager.js';
+import { assertPublicTarget } from '../utils/ssrfGuard.js';
 import { z } from 'zod';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -461,6 +462,33 @@ describe('LocalFileKeyProvider', () => {
 });
 
 describe('ItemTextStore', () => {
+  it('hands the truncation recorded at ingest to the readers, cached or not', async () => {
+    const repository = getProjectRepository();
+    const project = { id: 'prj_cut' };
+    for (const truncated of [true, false]) {
+      const itemId = truncated ? 'itm_cut' : 'itm_whole';
+      const block = await storeText({
+        projectId: project.id,
+        itemId,
+        text: `The rent is due monthly. ${itemId}`,
+        original: { contentType: 'application/pdf', bytes: 2000, pages: 500 },
+        truncated,
+        platform,
+        repository
+      });
+      assert.equal(block.truncated === true, truncated);
+      const item = { id: itemId, kind: 'upload', storage: 'text', status: 'ready', text: block };
+      evictItemText(block.blobKey);
+      const fresh = await getItemText(project, item, { user: ADA });
+      assert.equal(fresh.cached, false);
+      assert.equal(fresh.truncated, truncated, `uncached, truncated=${truncated}`);
+      const cached = await getItemText(project, item, { user: ADA });
+      assert.equal(cached.cached, true);
+      assert.equal(cached.truncated, truncated, `cached, truncated=${truncated}`);
+      assert.match(cached.text, /due monthly/);
+    }
+  });
+
   it('stores an encrypted blob and reads it back, detecting tampering', async () => {
     const repository = getProjectRepository();
     const projectId = 'prj_store';
@@ -1810,6 +1838,8 @@ describe('built-in cloud kinds', () => {
   let base = null;
   const restore = [];
   const sockets = new Set();
+  /** Path → the Authorization header the request carried (or null). */
+  const seen = new Map();
 
   function stub(target, key, value) {
     const had = Object.prototype.hasOwnProperty.call(target, key);
@@ -1824,10 +1854,41 @@ describe('built-in cloud kinds', () => {
   before(async () => {
     server = http.createServer((req, res) => {
       const url = new URL(req.url, 'http://local');
+      seen.set(url.pathname, req.headers.authorization || null);
       const send = (status, body, headers = {}) => {
         res.writeHead(status, headers);
         res.end(body);
       };
+      const graphFile = (id, downloadUrl) =>
+        send(
+          200,
+          JSON.stringify({
+            id,
+            name: 'Lease.txt',
+            size: 22,
+            file: { mimeType: 'text/plain' },
+            '@microsoft.graph.downloadUrl': downloadUrl
+          }),
+          { 'content-type': 'application/json' }
+        );
+      if (url.pathname === '/graph/me/drive/items/doc-evil') {
+        return graphFile('doc-evil', 'http://169.254.169.254/latest/meta-data/');
+      }
+      if (url.pathname === '/graph/me/drive/items/doc-redirect') {
+        return graphFile('doc-redirect', `${base}/redirect`);
+      }
+      if (url.pathname === '/redirect') {
+        return send(302, '', { location: 'http://10.0.0.1/internal' });
+      }
+      if (url.pathname === '/graph/me/drive/items/doc-foreign') {
+        return graphFile(
+          'doc-foreign',
+          `${base.replace('127.0.0.1', 'localhost')}/content/foreign`
+        );
+      }
+      if (url.pathname === '/content/foreign') {
+        return send(200, 'The rent is due monthly.', { 'content-type': 'text/plain' });
+      }
       if (url.pathname === '/graph/me/drive/items/doc-1') {
         return send(
           200,
@@ -1896,6 +1957,12 @@ describe('built-in cloud kinds', () => {
     const { default: nextcloud } = await import('../services/integrations/NextcloudService.js');
     stub(office365, 'graphApiUrl', `${base}/graph`);
     stub(office365, 'getUserTokens', tokens);
+    // The test server is on loopback: let it through, the real guard for the rest.
+    stub(office365, '_checkDownloadTarget', url =>
+      url.hostname === '127.0.0.1' || url.hostname === 'localhost'
+        ? { ok: true }
+        : assertPublicTarget(url)
+    );
     stub(googleDrive, 'driveApiUrl', `${base}/drive`);
     stub(googleDrive, 'getUserTokens', tokens);
     stub(nextcloud, 'getUserTokens', tokens);
@@ -1920,6 +1987,53 @@ describe('built-in cloud kinds', () => {
       assert.equal(fetched.lastModified, lastModified, kindId);
       assert.equal(fetched.source.lastModified, lastModified, kindId);
     }
+  });
+
+  it('accept only one-segment Graph ids, for the kind and the service', async () => {
+    const kind = getItemKind('office365');
+    for (const fileId of ['doc-1/content', 'doc-1?select=x', '../me', 'doc 1', '']) {
+      assert.equal(kind.refSchema.safeParse({ providerId: 'p1', fileId }).success, false, fileId);
+    }
+    assert.equal(
+      kind.refSchema.safeParse({ providerId: 'p1', fileId: 'doc-1', driveId: 'b!x/items' }).success,
+      false
+    );
+    assert.equal(
+      kind.refSchema.safeParse({ providerId: 'p1', fileId: 'ABC123!105', driveId: 'b!Xk3-_.' })
+        .success,
+      true
+    );
+    const { default: office365 } = await import('../services/integrations/Office365Service.js');
+    seen.clear();
+    await assert.rejects(
+      office365.downloadFile(ADA.id, 'doc-1/content', null, 'p1'),
+      /fileId contains invalid characters/
+    );
+    await assert.rejects(
+      office365.downloadFile(ADA.id, 'doc-1', '../drives', 'p1'),
+      /driveId contains invalid characters/
+    );
+    assert.equal(seen.size, 0, 'no request reached Graph');
+  });
+
+  it('download only from public addresses, with the token only for Graph', async () => {
+    const kind = getItemKind('office365');
+    const fetchOf = fileId => kind.fetch({ ref: { providerId: 'p1', fileId } }, { user: ADA });
+    // A download URL at an internal address, directly or through a redirect.
+    await assert.rejects(fetchOf('doc-evil'), /download URL is not allowed .*private/);
+    seen.clear();
+    await assert.rejects(fetchOf('doc-redirect'), /download URL is not allowed .*private/);
+    assert.ok(seen.has('/redirect'));
+    // Outside the Graph origin: downloaded, but without the bearer token.
+    seen.clear();
+    const foreign = await fetchOf('doc-foreign');
+    assert.equal(foreign.bytes.toString(), 'The rent is due monthly.');
+    assert.equal(seen.get('/content/foreign'), null);
+    assert.equal(seen.get('/graph/me/drive/items/doc-foreign'), 'Bearer token');
+    // On the Graph origin the token goes along.
+    seen.clear();
+    await fetchOf('doc-1');
+    assert.equal(seen.get('/content/o365'), 'Bearer token');
   });
 
   it('abort a download whose body stalls when the signal fires', async () => {
