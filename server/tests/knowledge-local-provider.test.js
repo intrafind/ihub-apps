@@ -839,6 +839,24 @@ describe('tools', () => {
     );
     assert.equal(cited.length, 1, 'the cited marker resolves');
     assert.equal(cited[0].ref.id, 'itm_policy', 'to the document the later search found');
+
+    // The same search again returns the same passages under new numbers;
+    // merged with the first sighting, both numbers still resolve.
+    const again = [];
+    const repeat = await runToolCallScope(
+      again,
+      () => search(params({ query: 'deposit returned' })),
+      turn
+    );
+    const first = result.hits[0];
+    const repeated = repeat.hits.find(hit => hit.text === first.text);
+    assert.ok(repeated && repeated.n !== first.n, 'the repeated passage has its own number');
+    const withRepeat = mergeSources(emptySourceSet(), { items: [...reported, ...again] });
+    for (const n of [first.n, repeated.n]) {
+      const resolved = resolveCitations(`Returned <cite type="s">${n}</cite>.`, withRepeat);
+      assert.equal(resolved.cited.length, 1, `s:${n} resolves`);
+      assert.equal(resolved.cited[0].ref.id, first.document);
+    }
     const scoped = await search(params({ query: 'deposit', project: 'prj_other' }));
     assert.equal(scoped.code, 'PROJECT_NOT_FOUND');
     const nothing = await search({ ...params({ query: 'x' }), appConfig: { id: 'chat' } });

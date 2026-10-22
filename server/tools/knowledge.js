@@ -191,7 +191,11 @@ export async function search(params) {
           const item = (project.items || []).find(entry => entry.id === hit.document);
           return projectSource(project, item, {
             snippet: hit.text,
-            passages: [{ text: hit.text.slice(0, 4000), marker: `s:${hit.n}` }]
+            passages: [{ text: hit.text.slice(0, 4000), marker: `s:${hit.n}` }],
+            // Also as a marker of the source: two searches that return the
+            // same passage number it twice, and merging keeps only the first
+            // passage of one text, while markers merge on their own.
+            markers: [`s:${hit.n}`]
           });
         })
         .filter(Boolean)
