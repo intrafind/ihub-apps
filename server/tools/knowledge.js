@@ -10,9 +10,13 @@
  * `_workflowProjects`) and the calling user, so the model cannot name a
  * project the request did not bring.
  *
- * Results carry a `sources` envelope: the hits as `Source`s of provider
- * `project`, so the sources panel shows them with their provenance and
- * offers Preview and Download (`services/sources/providers/project.js`).
+ * The hits become `Source`s of provider `project`, so the sources panel shows
+ * them with their provenance and offers Preview and Download
+ * (`services/sources/providers/project.js`): `knowledge_read` carries them in
+ * a `sources` envelope, `knowledge_search` reports them beside its result
+ * (`services/sources/toolCallScope.js`), so the passages it returns are not
+ * repeated for the model. A search numbers its passages for the whole answer
+ * (`s:N`, cited as `<cite type="s">N</cite>`, `shared/sources/citations.js`).
  *
  * @module tools/knowledge
  */
@@ -20,9 +24,42 @@ import { resolveProjectScope } from '../services/knowledge/ProjectScope.js';
 import { providerFor } from '../services/knowledge/registry.js';
 import { KnowledgeError } from '../services/knowledge/types.js';
 import { projectSource } from '../services/sources/producers/project.js';
+import {
+  allocatePassageMarkers,
+  reportToolCallSources
+} from '../services/sources/toolCallScope.js';
 import { RESULT_BUDGET_CHARS } from '../sources/documentRetrieval.js';
 
 const MAX_LIMIT = 20;
+
+/**
+ * Most bytes a search result serializes to. Below the loop's 64 KiB spill
+ * threshold with room to spare, like {@link RESULT_BUDGET_CHARS} for text.
+ */
+const PAYLOAD_BUDGET_BYTES = RESULT_BUDGET_CHARS;
+
+/** What the note and a passage number may take, reserved before they are known. */
+const NOTE_ROOM = 'x'.repeat(200);
+const MARKER_ROOM = 999999;
+
+function jsonBytes(value) {
+  return Buffer.byteLength(JSON.stringify(value), 'utf8');
+}
+
+/** One hit as the model reads it, numbered `n`. */
+function hitOf({ hit, project }, n) {
+  return {
+    n,
+    document: hit.docId,
+    project: project.id,
+    name: hit.name,
+    section: hit.sectionId,
+    path: hit.path.join(' › '),
+    part: hit.part,
+    score: hit.score,
+    text: hit.text
+  };
+}
 
 async function scopeOf(params) {
   const scope = await resolveProjectScope({ appConfig: params.appConfig, user: params.user });
@@ -82,54 +119,57 @@ export async function search(params) {
       // once the hits of every project are ranked together, so a long
       // matching section in one project is not dropped for the room others
       // leave unused.
-      const result = await provider.search(entry.project, ctx, {
+      const found = await provider.search(entry.project, ctx, {
         query,
         limit: Math.min(limit, perProject + 2),
         budgetChars: RESULT_BUDGET_CHARS
       });
-      for (const hit of result.hits) gathered.push({ hit, project: entry.project });
-      for (const u of result.unavailable) unavailable.push({ ...u, project: entry.project.id });
-      retrieval.push({ project: entry.project.id, ...result.retrieval });
+      for (const hit of found.hits) gathered.push({ hit, project: entry.project });
+      for (const u of found.unavailable) unavailable.push({ ...u, project: entry.project.id });
+      retrieval.push({ project: entry.project.id, ...found.retrieval });
     }
     gathered.sort((a, b) => b.hit.score - a.hit.score);
+    const result = {
+      hits: [],
+      unavailable,
+      retrieval: { mode: 'search', query, projects: retrieval },
+      note: ''
+    };
+    // The whole serialized result stays within the budget, in bytes: the
+    // loop replaces a larger tool result with a short preview, which would
+    // drop every hit past it. The citation data (snippets, passages) goes to
+    // the sources beside the result, so the model reads each passage once.
+    const room = PAYLOAD_BUDGET_BYTES - jsonBytes({ ...result, note: NOTE_ROOM });
     const selected = [];
     let used = 0;
     for (const entry of gathered) {
       if (selected.length >= limit) break;
-      const chars = entry.hit.text.length;
-      if (used + chars > RESULT_BUDGET_CHARS) continue;
-      used += chars;
+      const bytes = jsonBytes(hitOf(entry, MARKER_ROOM)) + 1;
+      if (used + bytes > room) continue;
+      used += bytes;
       selected.push(entry);
     }
-    const hits = selected.map(({ hit, project }, index) => ({
-      n: index + 1,
-      document: hit.docId,
-      project: project.id,
-      name: hit.name,
-      section: hit.sectionId,
-      path: hit.path.join(' › '),
-      part: hit.part,
-      score: hit.score,
-      text: hit.text
-    }));
-    const sources = hits.map((hit, index) => {
-      const project = selected[index].project;
-      const item = (project.items || []).find(entry => entry.id === hit.document);
-      return projectSource(project, item, {
-        snippet: hit.text,
-        passages: [{ text: hit.text.slice(0, 4000), marker: `s:${hit.n}` }]
-      });
-    });
-    return {
-      hits,
-      unavailable,
-      retrieval: { mode: 'search', query, projects: retrieval },
-      note:
-        hits.length === 0
-          ? 'No passage matches. Try other keywords, or list the documents with knowledge_list and read one with knowledge_read.'
-          : 'Cite a passage by its number in square brackets, e.g. [1].',
-      sources: sources.filter(Boolean)
-    };
+    // Passage numbers run on across the answer's searches, so a citation
+    // names one passage even when several searches found different ones.
+    const first = allocatePassageMarkers(selected.length);
+    result.hits = selected.map((entry, index) => hitOf(entry, first + index));
+    result.note =
+      result.hits.length === 0
+        ? 'No passage matches. Try other keywords, or list the documents with knowledge_list and read one with knowledge_read.'
+        : `Cite a passage with its number n in a cite tag, e.g. <cite type="s">${result.hits[0].n}</cite> for the first hit.`;
+    reportToolCallSources(
+      result.hits
+        .map((hit, index) => {
+          const project = selected[index].project;
+          const item = (project.items || []).find(entry => entry.id === hit.document);
+          return projectSource(project, item, {
+            snippet: hit.text,
+            passages: [{ text: hit.text.slice(0, 4000), marker: `s:${hit.n}` }]
+          });
+        })
+        .filter(Boolean)
+    );
+    return result;
   } catch (error) {
     return errorResult(error);
   }

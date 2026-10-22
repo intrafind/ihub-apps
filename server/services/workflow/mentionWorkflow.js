@@ -91,7 +91,10 @@ async function materializeWorkflowUserTurn({
     content: persistence.content,
     clientMessageId: persistence.clientMessageId,
     attachments: persistence.attachments,
-    replaceFromMessageId: persistence.replaceFromMessageId
+    replaceFromMessageId: persistence.replaceFromMessageId,
+    // The container and attached projects this turn chose: a first turn
+    // that is a workflow mention opens the chat inside its project too.
+    chat: persistence.chat
   });
 }
 

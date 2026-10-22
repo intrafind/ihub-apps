@@ -46,6 +46,11 @@ import {
 } from '../services/sources/providers/project.js';
 import PromptService from '../services/PromptService.js';
 import { chatPostSchema } from '../validators/index.js';
+import { resolveChatProjects } from '../services/knowledge/chatProjects.js';
+import { materializeUserTurn } from '../services/chat/chatMaterializer.js';
+import { tryHandleMentionWorkflow } from '../services/workflow/mentionWorkflow.js';
+import { runToolCallScope } from '../services/sources/toolCallScope.js';
+import { resolveCitations } from '../../shared/sources/citations.js';
 
 const ADA = { id: 'user-ada', name: 'Ada', groups: ['authenticated'] };
 const GRACE = { id: 'user-grace', name: 'Grace', groups: ['authenticated'] };
@@ -406,6 +411,81 @@ describe('scope and planner', () => {
   });
 });
 
+describe('scope and planner: incomplete loads', () => {
+  it('does not report a project with documents it could not load as loaded in full', async () => {
+    const ctx = { user: ADA, chatId: 'c1', language: 'en' };
+    const settings = { loadAllMaxTokens: 50000 };
+    const model = { contextWindow: 100000 };
+    const partial = await repo.createUser({ owner: ADA, content: { name: 'Partial' } });
+    // One document whose text is gone, one iFinder search with no query of
+    // its own (load-all has none to give it), one that loads fine.
+    const broken = textItem('itm_broken', 'Broken.md', 'x');
+    delete TEXTS.itm_broken;
+    const query = {
+      id: 'itm_query',
+      kind: 'ifinder-query',
+      name: 'Search',
+      ref: { query: '', searchProfile: 'default' },
+      storage: 'link',
+      pinned: false,
+      status: 'ready',
+      error: null,
+      provenance: { origin: 'linked', by: { id: ADA.id, name: ADA.name }, at: '2026-10-20' }
+    };
+    await repo.mutate(partial.id, p => ({
+      ...p,
+      items: [textItem('itm_fine', 'Fine.md', POLICY), broken, query]
+    }));
+    for (const mode of ['auto', 'context']) {
+      const scope = (
+        await resolveProjectScope({ appConfig: { id: 'chat', _projectId: partial.id }, user: ADA })
+      ).map(entry => ({ ...entry, mode }));
+      const plan = await planKnowledgeScope(scope, { model, settings, ctx });
+      const [entry] = plan.projects;
+      assert.equal(entry.mode, 'searched', `${mode}: partial load reported as ${entry.mode}`);
+      assert.deepEqual(
+        entry.injected.map(doc => doc.doc.id),
+        ['itm_fine'],
+        `${mode}: what did load stays in context`
+      );
+      assert.deepEqual(entry.unavailable.map(u => u.document).sort(), ['itm_broken', 'itm_query']);
+      assert.equal(plan.tools, true);
+      assert.ok(renderProjectsBlock(plan).includes('tool="knowledge_search"'));
+      assert.equal(scopeSummary(plan).projects[0].unavailable, 2);
+    }
+
+    // Wholly unavailable: nothing injected, searched, not loaded.
+    const gone = await repo.createUser({ owner: ADA, content: { name: 'Gone' } });
+    await repo.mutate(gone.id, p => ({ ...p, items: [broken] }));
+    const goneScope = await resolveProjectScope({
+      appConfig: { id: 'chat', _projectId: gone.id },
+      user: ADA
+    });
+    const gonePlan = await planKnowledgeScope(goneScope, { model, settings, ctx });
+    assert.equal(gonePlan.projects[0].mode, 'searched');
+    assert.equal(gonePlan.projects[0].injected.length, 0);
+    assert.equal(gonePlan.projects[0].tokens, 0);
+
+    // A document that is merely not ready is no failed load: the rest still
+    // counts as loaded in full.
+    const pending = await repo.createUser({ owner: ADA, content: { name: 'Pending' } });
+    await repo.mutate(pending.id, p => ({
+      ...p,
+      items: [
+        textItem('itm_ok', 'Ok.md', POLICY),
+        textItem('itm_wait', 'Wait.md', 'y', { status: 'processing' })
+      ]
+    }));
+    const pendingScope = await resolveProjectScope({
+      appConfig: { id: 'chat', _projectId: pending.id },
+      user: ADA
+    });
+    const pendingPlan = await planKnowledgeScope(pendingScope, { model, settings, ctx });
+    assert.equal(pendingPlan.projects[0].mode, 'loaded');
+    for (const id of [partial.id, gone.id, pending.id]) evictProjectIndex(id);
+  });
+});
+
 describe('tools', () => {
   const params = (extra = {}) => ({
     user: ADA,
@@ -470,19 +550,88 @@ describe('tools', () => {
     );
   });
 
-  it('search returns numbered hits with a sources envelope', async () => {
-    const result = await search(params({ query: 'deposit returned' }));
+  it('search returns numbered hits and reports their sources beside the result', async () => {
+    const reported = [];
+    const turn = { passageMarkers: 0 };
+    const result = await runToolCallScope(
+      reported,
+      () => search(params({ query: 'deposit returned' })),
+      turn
+    );
     assert.ok(result.hits.length > 0, JSON.stringify(result));
     assert.equal(result.hits[0].n, 1);
     assert.equal(result.hits[0].document, 'itm_contract');
-    assert.equal(result.sources[0].provider, 'project');
-    assert.deepEqual(result.sources[0].ref, { id: 'itm_contract', scope: textProject.id });
-    assert.equal(result.sources[0].provenance.origin, 'uploaded');
-    assert.equal(result.sources[0].passages[0].marker, 's:1');
+    // The passages reach the model once: the citation data travels beside
+    // the result, not in it.
+    assert.equal(result.sources, undefined);
+    assert.equal(reported[0].provider, 'project');
+    assert.deepEqual(reported[0].ref, { id: 'itm_contract', scope: textProject.id });
+    assert.equal(reported[0].provenance.origin, 'uploaded');
+    assert.equal(reported[0].passages[0].marker, 's:1');
+    // The note asks for the marker syntax the renderer resolves.
+    assert.ok(result.note.includes('<cite type="s">1</cite>'), result.note);
+    const frame = extractToolSources({
+      toolId: 'knowledge_search',
+      args: { query: 'deposit returned' },
+      result,
+      reported
+    });
+    assert.equal(frame.items.length, reported.length, 'the producer takes the reported sources');
+    assert.deepEqual(frame.queries, ['deposit returned']);
+
+    // A second search of the same answer, here run in parallel with a third,
+    // numbers on: every marker names one passage of one document.
+    const more = [];
+    const [second, third] = await Promise.all([
+      runToolCallScope(more, () => search(params({ query: 'passwords backups' })), turn),
+      runToolCallScope(more, () => search(params({ query: 'termination notice' })), turn)
+    ]);
+    const numbers = [result, second, third].flatMap(r => r.hits.map(hit => hit.n));
+    assert.equal(new Set(numbers).size, numbers.length, `markers repeat: ${numbers}`);
+    assert.equal(second.hits[0].n > result.hits.at(-1).n, true);
+    assert.ok(second.note.includes(`<cite type="s">${second.hits[0].n}</cite>`));
+    const policyHit = second.hits.find(hit => hit.document === 'itm_policy');
+    const sources = mergeSources(emptySourceSet(), { items: [...reported, ...more] });
+    const { cited } = resolveCitations(
+      `Backups run nightly <cite type="s">${policyHit.n}</cite>.`,
+      sources
+    );
+    assert.equal(cited.length, 1, 'the cited marker resolves');
+    assert.equal(cited[0].ref.id, 'itm_policy', 'to the document the later search found');
     const scoped = await search(params({ query: 'deposit', project: 'prj_other' }));
     assert.equal(scoped.code, 'PROJECT_NOT_FOUND');
     const nothing = await search({ ...params({ query: 'x' }), appConfig: { id: 'chat' } });
     assert.deepEqual(nothing.hits, []);
+  });
+
+  it('search keeps the whole serialized result within its byte budget', async () => {
+    // Multi-byte text in long sections: the hit text alone fits the character
+    // budget, its JSON in bytes would not.
+    const section = n =>
+      `## Größenprüfung ${n}\n` + 'Die Größenprüfung für Übergänge läuft täglich. '.repeat(110);
+    const big = await repo.createUser({ owner: ADA, content: { name: 'Big' } });
+    await repo.mutate(big.id, p => ({
+      ...p,
+      items: [
+        textItem(
+          'itm_big',
+          'Big.md',
+          `# Handbuch\n\n${Array.from({ length: 12 }, (_, i) => section(i + 1)).join('\n\n')}`
+        )
+      ]
+    }));
+    const reported = [];
+    const result = await runToolCallScope(reported, () =>
+      search({
+        ...params({ query: 'Größenprüfung Übergänge täglich', limit: 20 }),
+        appConfig: { id: 'chat', _projectId: big.id }
+      })
+    );
+    const bytes = Buffer.byteLength(JSON.stringify(result), 'utf8');
+    assert.ok(result.hits.length >= 2, `only ${result.hits.length} hits`);
+    assert.ok(bytes <= 40000, `the result serializes to ${bytes} bytes`);
+    assert.equal(reported.length, result.hits.length, 'every returned hit is a source');
+    evictProjectIndex(big.id);
   });
 
   it('read and list work by document id', async () => {
@@ -636,6 +785,213 @@ describe('sources', () => {
       user: ADA
     });
     assert.equal(perApp.length, 0, 'an app may switch user projects off for itself');
+  });
+});
+
+describe('feature switches', () => {
+  it('darkens admin and user projects with the master switch, user projects with their own', async () => {
+    const reader = { ...ADA, permissions: { apps: new Set(['*']) } };
+    await repo.createAdmin(
+      { id: 'kb', name: { en: 'Knowledge base' }, items: [textItem('itm_kb', 'Kb.md', POLICY)] },
+      { actor: ADA }
+    );
+    configCache.setCacheEntry('config/apps.json', [
+      { id: 'chat', name: { en: 'Chat' }, enabled: true, projects: ['kb'] }
+    ]);
+    const appConfig = { id: 'chat', projects: ['kb'], _projectId: textProject.id };
+    const kbRef = { id: 'itm_kb', scope: 'kb' };
+    const userRef = { id: 'itm_policy', scope: textProject.id };
+    try {
+      const on = await resolveProjectScope({ appConfig, user: reader });
+      assert.deepEqual(on.map(entry => entry.project.id).sort(), ['kb', textProject.id].sort());
+      assert.ok((await providerContent({ ref: kbRef, user: reader, format: 'text' })).body);
+
+      configCache.setCacheEntry('config/features.json', { projects: true, userProjects: false });
+      const adminOnly = await resolveProjectScope({ appConfig, user: reader });
+      assert.deepEqual(
+        adminOnly.map(entry => entry.project.id),
+        ['kb'],
+        'admin projects stay available without user projects'
+      );
+      assert.ok((await providerContent({ ref: kbRef, user: reader, format: 'text' })).body);
+
+      configCache.setCacheEntry('config/features.json', { projects: false, userProjects: true });
+      assert.deepEqual(await resolveProjectScope({ appConfig, user: reader }), []);
+      for (const ref of [kbRef, userRef]) {
+        await assert.rejects(
+          providerContent({ ref, user: reader, format: 'text' }),
+          error => error.status === 404
+        );
+        await assert.rejects(
+          providerMetadata({ ref, user: reader }),
+          error => error.status === 404
+        );
+      }
+    } finally {
+      configCache.setCacheEntry('config/features.json', { projects: true, userProjects: true });
+      configCache.setCacheEntry('config/apps.json', [
+        { id: 'chat', name: { en: 'Chat' }, enabled: true }
+      ]);
+      await repo.delete('kb');
+    }
+  });
+});
+
+describe('chat container', () => {
+  const req = () => ({ user: { ...ADA } });
+  const app = { id: 'chat' };
+
+  it('is chosen with the first turn and refused as a change afterwards', async () => {
+    const first = await resolveChatProjects({
+      req: req(),
+      chat: null,
+      app,
+      projectId: textProject.id
+    });
+    assert.equal(first.ok, true);
+    assert.equal(first.newContainer, true);
+    assert.deepEqual(first.chatPatch.projectId, textProject.id);
+
+    // A standalone chat with a transcript cannot join a project by a turn.
+    const standalone = { id: 'c-alone', projectId: null, messageCount: 2 };
+    const join = await resolveChatProjects({
+      req: req(),
+      chat: standalone,
+      app,
+      projectId: textProject.id
+    });
+    assert.equal(join.ok, false);
+    assert.equal(join.status, 409);
+    assert.equal(join.code, 'PROJECT_MISMATCH');
+
+    // A project chat cannot leave its project by an explicit null either.
+    const inside = { id: 'c-in', projectId: textProject.id, messageCount: 2 };
+    const leave = await resolveChatProjects({ req: req(), chat: inside, app, projectId: null });
+    assert.equal(leave.code, 'PROJECT_MISMATCH');
+    // Omitting the field, or repeating the same container, changes nothing.
+    for (const projectId of [undefined, textProject.id]) {
+      const same = await resolveChatProjects({ req: req(), chat: inside, app, projectId });
+      assert.equal(same.ok, true);
+      assert.equal(same.containerId, textProject.id);
+      assert.equal(same.chatPatch, null);
+    }
+    // An explicit null on a standalone chat is no change.
+    const none = await resolveChatProjects({ req: req(), chat: standalone, app, projectId: null });
+    assert.equal(none.ok, true);
+    assert.equal(none.containerId, null);
+
+    // With the feature off the fields are ignored, never refused.
+    configCache.setCacheEntry('config/features.json', { projects: true, userProjects: false });
+    try {
+      const ignored = await resolveChatProjects({
+        req: req(),
+        chat: inside,
+        app,
+        projectId: null
+      });
+      assert.equal(ignored.ok, true);
+      assert.equal(ignored.chatPatch, null);
+      assert.equal(ignored.containerId, textProject.id);
+    } finally {
+      configCache.setCacheEntry('config/features.json', { projects: true, userProjects: true });
+    }
+  });
+});
+
+/**
+ * A chat repository that records its writes, and the project's chat markers
+ * at the moment the chat document is patched. Anything else it is asked
+ * answers nothing.
+ */
+function recordingChats(projectId) {
+  const writes = [];
+  const known = {
+    ensureChat: async ({ chatId }) => ({ id: chatId, title: '' }),
+    updateChat: async (chatId, patch) => {
+      const markers = await repo.listChatMarkers(projectId);
+      writes.push({ chatId, patch, markersBefore: markers.map(marker => marker.chatId) });
+      return { id: chatId, ...patch };
+    },
+    appendMessage: async (chatId, message) => ({ message: { id: `m-${chatId}`, ...message } })
+  };
+  const repository = new Proxy(known, {
+    get: (target, key) => (key in target ? target[key] : async () => null)
+  });
+  return { repository, writes };
+}
+
+describe('chat container persistence', () => {
+  it('records the chat in its project only once the chat carries the association', async () => {
+    const chatId = 'chat-container-order';
+    const { repository, writes } = recordingChats(textProject.id);
+    await materializeUserTurn({
+      repository,
+      chatId,
+      ownerId: ADA.id,
+      identityMode: 'default',
+      appId: 'chat',
+      runId: 'run-1',
+      content: 'hello',
+      chat: { projectId: textProject.id, attachedProjectIds: [] }
+    });
+    assert.equal(writes[0].patch.projectId, textProject.id);
+    assert.equal(writes[0].markersBefore.includes(chatId), false, 'no marker before the patch');
+    const markers = await repo.listChatMarkers(textProject.id);
+    assert.ok(
+      markers.some(marker => marker.chatId === chatId),
+      'the marker follows the patch'
+    );
+    await repo.removeChatMarker(textProject.id, chatId);
+  });
+
+  it('carries the project patch through an @workflow first turn', async () => {
+    const chatId = 'chat-container-workflow';
+    const workflow = {
+      id: 'summarize-report',
+      name: { en: 'Summarize report' },
+      enabled: true,
+      chatIntegration: { enabled: true },
+      nodes: [],
+      edges: []
+    };
+    configCache.setCacheEntry('config/workflows.json', [workflow]);
+    configCache.setCacheEntry('config/apps.json', [
+      { id: 'chat', name: { en: 'Chat' }, enabled: true, workflows: [workflow.id] }
+    ]);
+    const { repository, writes } = recordingChats(textProject.id);
+    const message = { role: 'user', content: '@summarize-report Q3 numbers' };
+    try {
+      const outcome = await tryHandleMentionWorkflow({
+        messages: [message],
+        conversation: [message],
+        chatId,
+        appId: 'chat',
+        user: { ...ADA, permissions: { workflows: new Set([workflow.id]) } },
+        clientLanguage: 'en',
+        persistence: {
+          repository,
+          ownerId: ADA.id,
+          identityMode: 'default',
+          content: message.content,
+          chat: { projectId: textProject.id, attachedProjectIds: [] }
+        }
+      });
+      assert.equal(outcome.handled, true);
+      const first = writes.find(write => write.chatId === chatId && 'activeRunId' in write.patch);
+      assert.equal(first?.patch.projectId, textProject.id, 'the container reaches the chat');
+      assert.deepEqual(first.patch.attachedProjectIds, []);
+      const markers = await repo.listChatMarkers(textProject.id);
+      assert.ok(
+        markers.some(marker => marker.chatId === chatId),
+        'the project lists the chat'
+      );
+    } finally {
+      configCache.setCacheEntry('config/workflows.json', []);
+      configCache.setCacheEntry('config/apps.json', [
+        { id: 'chat', name: { en: 'Chat' }, enabled: true }
+      ]);
+      await repo.removeChatMarker(textProject.id, chatId);
+    }
   });
 });
 
