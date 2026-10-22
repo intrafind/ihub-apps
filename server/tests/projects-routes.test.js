@@ -146,6 +146,9 @@ const route = {
   adminToggle: handlersFor(adminRoutes, 'post', '/api/admin/projects/_toggle'),
   adminAddItem: handlersFor(adminRoutes, 'post', '/api/admin/projects/:id/items'),
   adminPut: handlersFor(adminRoutes, 'put', '/api/admin/projects/:id'),
+  adminMove: handlersFor(adminRoutes, 'post', '/api/admin/projects/_move'),
+  adminCopy: handlersFor(adminRoutes, 'post', '/api/admin/projects/_copy'),
+  adminMerge: handlersFor(adminRoutes, 'post', '/api/admin/projects/_merge'),
   chatPatch: handlersFor(chatRoutes, 'patch', '/api/chats/:chatId'),
   chatDelete: handlersFor(chatRoutes, 'delete', '/api/chats/:chatId')
 };
@@ -1263,5 +1266,168 @@ describe('listing without user projects', () => {
     } finally {
       setFeatures();
     }
+  });
+});
+
+describe('moving, copying and merging admin projects', () => {
+  async function adminProject(id, items = []) {
+    const created = await drive(route.adminCreate, {
+      user: EDITOR,
+      body: { id, name: { en: id } }
+    });
+    assert.equal(created.statusCode, 201, JSON.stringify(created.body));
+    for (const pageId of items) {
+      const added = await drive(route.adminAddItem, {
+        user: EDITOR,
+        params: { id },
+        body: { kind: 'page', ref: { pageId }, name: pageId }
+      });
+      assert.ok([201, 202].includes(added.statusCode), JSON.stringify(added.body));
+    }
+    return getProjectRepository().get(id);
+  }
+
+  it('copies and moves items for content admins only', async () => {
+    const from = await adminProject('xfer-from', ['one', 'two']);
+    await adminProject('xfer-to');
+    const [one, two] = from.items;
+
+    const denied = await drive(route.adminCopy, {
+      user: ADA,
+      body: { sourceId: 'xfer-from', targetId: 'xfer-to', itemIds: [one.id] }
+    });
+    assert.equal(denied.statusCode, 403);
+
+    const copied = await drive(route.adminCopy, {
+      user: EDITOR,
+      body: { sourceId: 'xfer-from', targetId: 'xfer-to', itemIds: [one.id] }
+    });
+    assert.equal(copied.statusCode, 200, JSON.stringify(copied.body));
+    assert.equal(copied.body.transferred.length, 1);
+    assert.equal(copied.body.source.items.length, 2);
+    assert.equal(copied.body.target.items.length, 1);
+
+    const moved = await drive(route.adminMove, {
+      user: EDITOR,
+      body: { sourceId: 'xfer-from', targetId: 'xfer-to', itemIds: [two.id] }
+    });
+    assert.equal(moved.statusCode, 200, JSON.stringify(moved.body));
+    assert.deepEqual(
+      moved.body.source.items.map(item => item.id),
+      [one.id]
+    );
+    assert.equal(moved.body.target.items.length, 2);
+  });
+
+  it('answers 400 for a bad body, 404 for a missing project and 409 for the same one', async () => {
+    await adminProject('xfer-guard', ['page']);
+    const itemId = (await getProjectRepository().get('xfer-guard')).items[0].id;
+    const status = async (handlers, body) =>
+      (await drive(handlers, { user: EDITOR, body })).statusCode;
+    for (const handlers of [route.adminMove, route.adminCopy]) {
+      assert.equal(
+        await status(handlers, { sourceId: 'xfer-guard', targetId: 'x', itemIds: [] }),
+        400
+      );
+      assert.equal(await status(handlers, { sourceId: 'xfer-guard', itemIds: [itemId] }), 400);
+      assert.equal(
+        await status(handlers, { sourceId: 'xfer-guard', targetId: 'no-such', itemIds: [itemId] }),
+        404
+      );
+      assert.equal(
+        await status(handlers, { sourceId: 'no-such', targetId: 'xfer-guard', itemIds: [itemId] }),
+        404
+      );
+      assert.equal(
+        await status(handlers, {
+          sourceId: 'xfer-guard',
+          targetId: 'xfer-guard',
+          itemIds: [itemId]
+        }),
+        409
+      );
+    }
+  });
+
+  it('does not move items into or out of a user project', async () => {
+    await adminProject('xfer-admin', ['page']);
+    const mine = await create(ADA, { name: 'Mine' });
+    const itemId = (await getProjectRepository().get('xfer-admin')).items[0].id;
+    for (const [sourceId, targetId] of [
+      ['xfer-admin', mine.id],
+      [mine.id, 'xfer-admin']
+    ]) {
+      const res = await drive(route.adminMove, {
+        user: EDITOR,
+        body: { sourceId, targetId, itemIds: [itemId] }
+      });
+      assert.equal(res.statusCode, 404);
+    }
+  });
+
+  it('says which deleted source ships with iHub and comes back at the next start', async () => {
+    await adminProject('ship-keep', ['kept']);
+    // `meeting-knowledge-base` is one of the shipped default projects.
+    await adminProject('meeting-knowledge-base', ['m']);
+    await adminProject('ship-own', ['o']);
+    const merged = await drive(route.adminMerge, {
+      user: EDITOR,
+      body: {
+        sourceIds: ['meeting-knowledge-base', 'ship-own'],
+        targetId: 'ship-keep',
+        deleteSources: true
+      }
+    });
+    assert.equal(merged.statusCode, 200, JSON.stringify(merged.body));
+    assert.deepEqual(
+      merged.body.sources.map(entry => [entry.id, entry.deleted, entry.shipped]),
+      [
+        ['meeting-knowledge-base', true, true],
+        ['ship-own', true, false]
+      ]
+    );
+  });
+
+  it('merges projects and reports what each source did', async () => {
+    await adminProject('merge-keep', ['kept']);
+    await adminProject('merge-a', ['a']);
+    await adminProject('merge-b', ['b']);
+
+    const denied = await drive(route.adminMerge, {
+      user: ADA,
+      body: { sourceIds: ['merge-a'], targetId: 'merge-keep' }
+    });
+    assert.equal(denied.statusCode, 403);
+    const invalid = await drive(route.adminMerge, {
+      user: EDITOR,
+      body: { sourceIds: [], targetId: 'merge-keep' }
+    });
+    assert.equal(invalid.statusCode, 400);
+    const self = await drive(route.adminMerge, {
+      user: EDITOR,
+      body: { sourceIds: ['merge-keep'], targetId: 'merge-keep' }
+    });
+    assert.equal(self.statusCode, 409);
+    const missing = await drive(route.adminMerge, {
+      user: EDITOR,
+      body: { sourceIds: ['merge-ghost'], targetId: 'merge-keep' }
+    });
+    assert.equal(missing.statusCode, 404);
+
+    const merged = await drive(route.adminMerge, {
+      user: EDITOR,
+      body: { sourceIds: ['merge-a', 'merge-b'], targetId: 'merge-keep', deleteSources: true }
+    });
+    assert.equal(merged.statusCode, 200, JSON.stringify(merged.body));
+    assert.deepEqual(
+      merged.body.sources.map(entry => [entry.id, entry.moved, entry.deleted]),
+      [
+        ['merge-a', 1, true],
+        ['merge-b', 1, true]
+      ]
+    );
+    assert.deepEqual(merged.body.target.items.map(item => item.name).sort(), ['a', 'b', 'kept']);
+    assert.equal(await getProjectRepository().get('merge-a'), null);
+    assert.equal(await getProjectRepository().get('merge-b'), null);
   });
 });

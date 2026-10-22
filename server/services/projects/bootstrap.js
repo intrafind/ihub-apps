@@ -56,6 +56,8 @@ export async function bootstrapProjects({ reconcile = true } = {}) {
         }
       }
     });
+    // An item that arrived by a copy or move is searchable at once.
+    service.onItemAdded.push(projectId => evictProjectIndex(projectId));
     service.onItemRemoved.push((projectId, _itemId, item) => {
       evictProjectIndex(projectId);
       const key = item?.text?.blobKey;

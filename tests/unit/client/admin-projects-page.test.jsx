@@ -106,6 +106,25 @@ describe('AdminProjectsPage', () => {
     expect(screen.getByText('Showing 2 of 2 projects')).toBeInTheDocument();
   });
 
+  test('merges only when two or more projects are selected', async () => {
+    mockApi.fetchAdminProjectDependencies.mockResolvedValue([]);
+    renderPage();
+    await screen.findByText('Website');
+
+    fireEvent.click(screen.getByLabelText('Select Website'));
+    expect(screen.getByRole('button', { name: 'Merge…' })).toBeDisabled();
+
+    fireEvent.click(screen.getByLabelText('Select Employee handbook'));
+    const merge = screen.getByRole('button', { name: 'Merge…' });
+    expect(merge).toBeEnabled();
+    fireEvent.click(merge);
+
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText('Merge projects', { selector: 'h2' })).toBeInTheDocument();
+    // The project with the most items is the one that stays.
+    expect(within(dialog).getByRole('radio', { name: /Employee handbook/ })).toBeChecked();
+  });
+
   test('enables the selected projects in one request', async () => {
     renderPage();
     await screen.findByText('Website');

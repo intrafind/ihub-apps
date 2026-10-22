@@ -17,6 +17,7 @@ import {
 } from '../../../api/adminApi';
 import { useFilterState } from '../hooks/useFilterState';
 import { DataTable, FilterSelect, SearchInput } from '../components/data-table';
+import MergeProjectsDialog from '../components/MergeProjectsDialog';
 import ProjectDependenciesDialog from '../components/ProjectDependenciesDialog';
 import { dependenciesFromDeleteError, filterProjects } from '../utils/projectAdmin';
 import { kindIcon, localizedText, summarizeItemKinds } from '../../projects/utils/projectItems';
@@ -110,6 +111,7 @@ function AdminProjectsPage() {
   const [checkingDelete, setCheckingDelete] = useState(null);
   const [confirmDialog, setConfirmDialog] = useState(null);
   const [blockedDelete, setBlockedDelete] = useState(null);
+  const [mergeOpen, setMergeOpen] = useState(false);
 
   // Statistics and kind names are extras: their failure never hides the list.
   const loadExtras = useCallback(async () => {
@@ -514,6 +516,18 @@ function AdminProjectsPage() {
                 </button>
                 <button
                   type="button"
+                  onClick={() => setMergeOpen(true)}
+                  disabled={bulkOperating || selectedIds.size < 2}
+                  title={t(
+                    'admin.projects.mergeHint',
+                    'Move the items of the selected projects into one of them'
+                  )}
+                  className="bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white px-3 py-1 rounded-sm text-sm font-medium"
+                >
+                  {t('admin.projects.mergeSelected', 'Merge…')}
+                </button>
+                <button
+                  type="button"
                   onClick={() => setSelectedIds(new Set())}
                   className="bg-gray-500 hover:bg-gray-600 text-white px-3 py-1 rounded-sm text-sm font-medium"
                 >
@@ -571,6 +585,16 @@ function AdminProjectsPage() {
         onDeny={() => setConfirmDialog(null)}
       />
       <ProjectDependenciesDialog blocked={blockedDelete} onClose={() => setBlockedDelete(null)} />
+      {mergeOpen && (
+        <MergeProjectsDialog
+          projects={projects.filter(project => selectedIds.has(project.id))}
+          onClose={() => setMergeOpen(false)}
+          onDone={() => {
+            setSelectedIds(new Set());
+            void loadProjects();
+          }}
+        />
+      )}
     </div>
   );
 }

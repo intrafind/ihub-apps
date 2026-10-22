@@ -11,6 +11,8 @@
  *
  * @module routes/admin/projects
  */
+import fs from 'node:fs/promises';
+import path from 'node:path';
 import configCache from '../../configCache.js';
 import { isAdminAuthRequired } from '../../middleware/adminAuth.js';
 import { contentAdminAuth } from '../../middleware/contentAdminAuth.js';
@@ -33,6 +35,7 @@ import {
 } from '../../services/projects/ProjectRepository.js';
 import { getProjectService } from '../../services/projects/ProjectService.js';
 import { NO_ACCESS } from '../../services/projects/projectAccess.js';
+import { defaultsDir } from '../../services/projects/projectImport.js';
 import { findDependencies } from '../../services/projects/projectLinks.js';
 import { PROJECTS_FEATURE, projectSettings } from '../../services/projects/projectSettings.js';
 import { enabledItemKinds, listItemKinds } from '../../services/projects/kinds/registry.js';
@@ -47,7 +50,9 @@ import {
   adminProjectSchema,
   adminProjectUpdateSchema,
   describeIssues,
+  itemTransferSchema,
   itemUpdateSchema,
+  projectMergeSchema,
   toggleSchema
 } from '../../validators/projectSchema.js';
 import {
@@ -97,6 +102,25 @@ function parseBody(schema, req, res) {
 
 function adminView(project) {
   return serializeProject(project, ADMIN_PERMISSIONS, { adminView: true });
+}
+
+/** Whether iHub ships a default project with this id. */
+async function isShippedProject(id) {
+  try {
+    await fs.access(path.join(defaultsDir(), 'projects', `${id}.json`));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** The apps, workflows and agents a merge re-pointed, for the audit entry. */
+function relinkedSummary(sources) {
+  const changed = new Set();
+  for (const entry of sources) {
+    for (const link of entry.relinked || []) changed.add(`${link.type}:${link.id}`);
+  }
+  return changed.size ? `; re-pointed links of ${[...changed].join(', ')}` : '';
 }
 
 /** Load an admin project by `:id`, 404 when missing. */
@@ -320,6 +344,62 @@ export default function registerAdminProjectsRoutes(app) {
 
   /**
    * @swagger
+   * /api/admin/projects/_merge:
+   *   post:
+   *     summary: Merge admin projects into one
+   *     description: >
+   *       Moves every item of the source projects into the target, re-points the
+   *       apps, workflows and agents that linked a source to the target and, with
+   *       `deleteSources`, deletes the emptied sources. A source whose items did
+   *       not all move is left as it is, with its links.
+   *     tags: [Admin Projects]
+   */
+  app.post(route('/_merge'), ...gate, contentAdminAuth, async (req, res) => {
+    try {
+      const body = parseBody(projectMergeSchema, req, res);
+      if (!body) return;
+      const repo = getProjectRepository();
+      const before = new Map();
+      for (const id of [body.targetId, ...body.sourceIds]) {
+        if (!validateIdForPath(id, 'project', res)) return;
+        const project = await repo.get(id);
+        if (!project || project.ownership !== 'admin') return sendNotFound(res, 'Project');
+        before.set(id, project);
+      }
+      const result = await getProjectService().mergeProjects(body.sourceIds, body.targetId, {
+        user: req.user,
+        deleteSources: body.deleteSources
+      });
+      logAudit({
+        req,
+        action: 'update',
+        resource: 'project',
+        resourceId: body.targetId,
+        summary: `Merged ${result.sources.length} admin project(s) into "${projectName(result.target)}": ${result.sources
+          .map(entry => `${entry.id} (${entry.moved} moved${entry.deleted ? ', deleted' : ''})`)
+          .join(', ')}${relinkedSummary(result.sources)}`
+      });
+      await snapshot(req, body.targetId, before.get(body.targetId), result.target);
+      for (const entry of result.sources) {
+        const after = entry.deleted ? null : await repo.get(entry.id);
+        await snapshot(req, entry.id, before.get(entry.id), after);
+      }
+      // A project that ships with iHub is copied back at the next start once
+      // it is deleted (`copyDefaultConfiguration`); the page says so.
+      const sources = await Promise.all(
+        result.sources.map(async entry => ({
+          ...entry,
+          shipped: entry.deleted && (await isShippedProject(entry.id))
+        }))
+      );
+      res.json({ target: adminView(result.target), sources });
+    } catch (error) {
+      sendProjectError(res, error, 'merge projects');
+    }
+  });
+
+  /**
+   * @swagger
    * /api/admin/projects:
    *   post:
    *     summary: Create an admin project
@@ -522,6 +602,60 @@ export default function registerAdminProjectsRoutes(app) {
       }
     }
   );
+
+  /**
+   * @swagger
+   * /api/admin/projects/_move:
+   *   post:
+   *     summary: Move items into another admin project
+   *     description: >
+   *       Body `{ sourceId, targetId, itemIds }`. The answer lists what
+   *       `transferred` and what `failed` (an item still being processed, over the
+   *       target's quota, ...); the items that could go went, whatever the others
+   *       did. `POST /api/admin/projects/_copy` takes the same body and leaves the
+   *       items in the source.
+   *     tags: [Admin Projects]
+   */
+  for (const mode of ['move', 'copy']) {
+    app.post(route(`/_${mode}`), ...gate, contentAdminAuth, async (req, res) => {
+      try {
+        const body = parseBody(itemTransferSchema, req, res);
+        if (!body) return;
+        if (!validateIdForPath(body.sourceId, 'project', res)) return;
+        if (!validateIdForPath(body.targetId, 'project', res)) return;
+        const repo = getProjectRepository();
+        const [source, target] = await Promise.all([
+          repo.get(body.sourceId),
+          repo.get(body.targetId)
+        ]);
+        if (!source || source.ownership !== 'admin') return sendNotFound(res, 'Project');
+        if (!target || target.ownership !== 'admin') return sendNotFound(res, 'Target project');
+        const result = await getProjectService().transferItems(source.id, body.itemIds, target.id, {
+          mode,
+          user: req.user
+        });
+        logAudit({
+          req,
+          action: 'update',
+          resource: 'projectItem',
+          resourceId: source.id,
+          summary: `${mode === 'move' ? 'Moved' : 'Copied'} ${result.transferred.length} item(s) from admin project "${projectName(source)}" to "${projectName(target)}"${
+            result.failed.length ? `; ${result.failed.length} could not be transferred` : ''
+          }`
+        });
+        await snapshot(req, target.id, target, result.target);
+        if (mode === 'move') await snapshot(req, source.id, source, result.source);
+        res.json({
+          transferred: result.transferred,
+          failed: result.failed,
+          source: adminView(result.source),
+          target: adminView(result.target)
+        });
+      } catch (error) {
+        sendProjectError(res, error, `${mode} project items`);
+      }
+    });
+  }
 
   app.patch(route('/:id/items/:itemId'), ...gate, contentAdminAuth, async (req, res) => {
     try {
