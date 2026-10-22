@@ -36,6 +36,7 @@ import {
 } from '../utils/responseHelpers.js';
 import { logAudit } from '../services/AuditLogService.js';
 import { getChatRepository } from '../services/chat/ChatRepository.js';
+import { resolvePrincipal } from '../services/loop/runIdentity.js';
 import { resolveShares } from './promptRoutes.js';
 import { getProjectRepository, isUserProjectId } from '../services/projects/ProjectRepository.js';
 import { ProjectError, getProjectService } from '../services/projects/ProjectService.js';
@@ -417,7 +418,7 @@ export default function registerProjectRoutes(app) {
         const project = await service.deleteProject(req.project.id, {
           authorize: req.projectContext.authorize('own'),
           detachChat: chatId =>
-            chats.isAvailable() ? chats.updateChat(chatId, { projectId: null }) : null
+            chats.isAvailable() ? chats.moveProjectIf(chatId, req.project.id, null) : null
         });
         if (!project) return sendNotFound(res, 'Project');
         logAudit({
@@ -594,7 +595,8 @@ export default function registerProjectRoutes(app) {
           authorize: req.projectContext.authorize('share')
         });
         if (!result) return sendNotFound(res, 'Project');
-        if (result.added.length || result.removed.length) {
+        const changed = result.changed || [];
+        if (result.added.length || result.removed.length || changed.length) {
           const everyone = result.project.members.some(member => member.type === 'everyone');
           logAudit({
             req,
@@ -603,7 +605,8 @@ export default function registerProjectRoutes(app) {
             resourceId: result.project.id,
             summary:
               `Changed members of project "${result.project.name}": ` +
-              `${result.added.length} added, ${result.removed.length} removed` +
+              `${result.added.length} added, ${result.removed.length} removed, ` +
+              `${changed.length} role${changed.length === 1 ? '' : 's'} changed` +
               `${everyone ? ' (shared with everyone)' : ''}`
           });
         }
@@ -687,6 +690,17 @@ export default function registerProjectRoutes(app) {
           : 'all';
         const markers = await getProjectRepository().listChatMarkers(req.project.id);
         const me = String(req.user.id);
+        // A chat records its owner in the identity mode of its day (a
+        // pseudonymized chat keeps a fingerprint), so the caller is resolved
+        // per chat the way `authorizeChat` does, not compared by raw id.
+        const principals = new Map();
+        const principalIdFor = async mode => {
+          const key = mode || 'default';
+          if (!principals.has(key)) {
+            principals.set(key, (await resolvePrincipal(req.user, { mode: key })).id);
+          }
+          return principals.get(key);
+        };
         const items = [];
         for (const marker of markers) {
           const chat = await chats.getChat(marker.chatId);
@@ -697,7 +711,9 @@ export default function registerProjectRoutes(app) {
               .catch(() => {});
             continue;
           }
-          const mine = String(chat.ownerId) === me || String(marker.ownerId) === me;
+          const principalId = await principalIdFor(chat.identityMode);
+          const mine =
+            String(chat.ownerId) === principalId || String(marker.ownerId) === principalId;
           if ((filter === 'mine' && !mine) || (filter === 'others' && mine)) continue;
           items.push({
             id: chat.id,
