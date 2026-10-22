@@ -106,11 +106,28 @@ async function removeQuietly(target) {
   }
 }
 
-/** The minted time of a blob version (`ItemTextStore.mintVersionId`). */
-function versionTimeOf(blobKey) {
-  const versionId = String(blobKey || '').split('__')[2] || '';
-  const stamp = parseInt(versionId.slice(0, 9), 36);
-  return Number.isFinite(stamp) ? stamp : 0;
+/** A version id as `ItemTextStore.mintVersionId` mints it: base36 time, random hex. */
+const VERSION_ID = /^([0-9a-z]{9})[0-9a-f]{8}$/;
+
+/**
+ * A blob key `<projectId>__<itemId>__<versionId>`, parsed from the right:
+ * project and item ids may hold `__` themselves (an admin project id, the
+ * base64url of a minted id), the version id never does.
+ *
+ * @param {string} blobKey
+ * @returns {{scope: string, mintedAt: number}|null} `scope` is the key
+ *   without its version (`<projectId>__<itemId>`); null when the key is not
+ *   one this pipeline wrote
+ */
+function parseBlobKey(blobKey) {
+  const key = String(blobKey || '');
+  const at = key.lastIndexOf('__');
+  if (at <= 0) return null;
+  const match = VERSION_ID.exec(key.slice(at + 2));
+  const scope = key.slice(0, at);
+  if (!match || !scope.includes('__')) return null;
+  const mintedAt = parseInt(match[1], 36);
+  return Number.isFinite(mintedAt) ? { scope, mintedAt } : null;
 }
 
 /**
@@ -137,7 +154,8 @@ export class ProjectIngestService {
     this.tempDir = tempDir || uploadTempDir();
     this.onReady = onReady || (() => {});
     this.queue = [];
-    this.active = new Map();
+    /** The jobs running on this worker; two may share an item (a released refresh and its successor). */
+    this.active = new Set();
     this.running = 0;
   }
 
@@ -218,13 +236,18 @@ export class ProjectIngestService {
     }
   }
 
+  /** The items with a job queued or running on this worker. */
+  _busyItemIds() {
+    return [...this.active, ...this.queue.map(entry => entry.job)].map(job => job.itemId);
+  }
+
   /** Whether a job for this item is queued or running on this worker. */
   isActive(itemId) {
-    return this.active.has(itemId) || this.queue.some(entry => entry.job.itemId === itemId);
+    return this._busyItemIds().includes(itemId);
   }
 
   async _run(job) {
-    this.active.set(job.itemId, job);
+    this.active.add(job);
     const { projectId, itemId, input } = job;
     const where = { component: COMPONENT, projectId, itemId };
     let bytes = null;
@@ -232,8 +255,29 @@ export class ProjectIngestService {
     let contentType = input.contentType;
     let storedBlobKey = null;
     const refresh = input.purpose === 'refresh' && Boolean(input.previousBlobKey);
+    // A refresh owns its item only while the item still carries the attempt
+    // `refreshItem` reserved: the reconciler of any worker may release a
+    // refresh that ran too long, and a new refresh mints a new attempt. A
+    // job that lost its attempt writes nothing, so an older snapshot can
+    // never overwrite a newer one, nor a late failure a newer state.
+    const fenced = typeof input.attempt === 'string';
+    let lost = false;
+    const owns = item => {
+      if (!fenced || item.refreshAttempt === input.attempt) return true;
+      lost = true;
+      return false;
+    };
+    const assertOwned = () => {
+      if (lost) {
+        throw new ProjectError(
+          'PROJECT_MISMATCH',
+          'The refresh was taken over by a newer one; its result is discarded'
+        );
+      }
+    };
     try {
       const extracting = await this.service.patchItem(projectId, itemId, item => {
+        if (!owns(item)) return false;
         // A refresh keeps the old snapshot readable while the new one is
         // fetched (spec 3 §4): the status stays, `refreshingAt` marks the run.
         // `refreshItem` reserved it before queueing; that reservation is kept,
@@ -244,6 +288,7 @@ export class ProjectIngestService {
         item.error = null;
       });
       if (!extracting) return null; // The item was removed while queued.
+      assertOwned();
 
       // 1. Bytes: from the temp file, the picker's fetch, or handed in.
       let text = null;
@@ -265,10 +310,13 @@ export class ProjectIngestService {
         ) {
           // Nothing changed at the source: keep the text, clear `stale`.
           const unchanged = await this.service.patchItem(projectId, itemId, item => {
+            if (!owns(item)) return false;
             item.status = item.text ? 'ready' : 'failed';
             item.error = null;
             delete item.refreshingAt;
+            delete item.refreshAttempt;
           });
+          assertOwned();
           return unchanged ? { item: unchanged, unchanged: true } : null;
         }
       } else if (Buffer.isBuffer(input.bytes)) {
@@ -296,6 +344,7 @@ export class ProjectIngestService {
         let scratch = null;
         if (!scanPath && this.scanner().id !== 'none') {
           scratch = await this.newTempDir();
+          job.scratchDir = scratch;
           scanPath = path.join(scratch, 'fetched');
           await fs.writeFile(scanPath, scanBytes, { mode: 0o600 });
         }
@@ -343,9 +392,11 @@ export class ProjectIngestService {
         projectId,
         itemId,
         item => {
+          if (!owns(item)) return false;
           item.status = 'ready';
           item.error = null;
           delete item.refreshingAt;
+          delete item.refreshAttempt;
           item.text = block;
           if (input.purpose === 'pick' || input.purpose === 'refresh' || job.lastModified) {
             item.snapshotAt = block.extractedAt;
@@ -368,6 +419,7 @@ export class ProjectIngestService {
         },
         { check: quota }
       );
+      assertOwned(); // The stored blob is dropped on the way out.
       if (!stored) {
         // Removed while extracting: the blob has no item, drop it.
         await this.repository.blobs
@@ -395,10 +447,12 @@ export class ProjectIngestService {
       }
       await this.service
         .patchItem(projectId, itemId, item => {
+          if (!owns(item)) return false;
           // A refresh that fails keeps the old text readable (spec 3 §4).
           item.status = input.previousBlobKey && item.text ? 'stale' : 'failed';
           item.error = { code: failure.code, message: failure.message.slice(0, 2000) };
           delete item.refreshingAt;
+          delete item.refreshAttempt;
         })
         .catch(patchError =>
           logger.error('Could not record an ingest failure', {
@@ -408,7 +462,7 @@ export class ProjectIngestService {
         );
       return { item: null, error: failure };
     } finally {
-      this.active.delete(itemId);
+      this.active.delete(job);
       // An upload's private directory goes; an import under `contents/` stays.
       if (input.cleanupDir) await removeQuietly(input.cleanupDir);
     }
@@ -499,11 +553,23 @@ export class ProjectIngestService {
         return now - since > staleMs;
       });
       for (const item of stuck) {
+        let settled = false;
         try {
           await this.service.patchItem(project.id, item.id, entry => {
+            // The decision above was taken on the inventory; under the lock
+            // the item must still be the one inventoried. A changed
+            // reservation or update means another worker settled it, its job
+            // moved on, or a new refresh owns it now: leave it alone.
+            if (entry.refreshingAt !== item.refreshingAt || entry.updatedAt !== item.updatedAt) {
+              return false;
+            }
             if (typeof entry.refreshingAt === 'string') {
-              // An interrupted refresh: the old snapshot is still there.
+              settled = true;
+              // An interrupted refresh: the old snapshot is still there. Its
+              // attempt goes with it, so a job still running somewhere can
+              // no longer install or fail it.
               delete entry.refreshingAt;
+              delete entry.refreshAttempt;
               entry.status = entry.text ? 'stale' : 'failed';
               entry.error = {
                 code: INTERRUPTED,
@@ -511,14 +577,15 @@ export class ProjectIngestService {
               };
               return;
             }
-            if (entry.status !== 'pending' && entry.status !== 'extracting') return;
+            if (entry.status !== 'pending' && entry.status !== 'extracting') return false;
+            settled = true;
             entry.status = 'failed';
             entry.error = {
               code: INTERRUPTED,
               message: 'The server restarted during extraction. Upload the file again.'
             };
           });
-          interrupted += 1;
+          if (settled) interrupted += 1;
         } catch (error) {
           logger.warn('Could not mark an interrupted item', {
             component: COMPONENT,
@@ -562,11 +629,14 @@ export class ProjectIngestService {
           limit: 200,
           ...(cursor ? { cursor } : {})
         });
+        const busy = this._busyItemIds();
         for (const blob of page.items) {
           if (named.has(blob.key)) continue;
-          const itemId = blob.key.split('__')[1];
-          if (this.isActive(itemId)) continue;
-          if (now - versionTimeOf(blob.key) < ORPHAN_AGE_MS) continue;
+          // A key that does not parse is kept: its age and owner are unknown.
+          const parsed = parseBlobKey(blob.key);
+          if (!parsed) continue;
+          if (busy.some(itemId => parsed.scope.endsWith(`__${itemId}`))) continue;
+          if (now - parsed.mintedAt < ORPHAN_AGE_MS) continue;
           if (await this.repository.blobs.delete(PROJECT_FILES_NAMESPACE, blob.key)) removed += 1;
         }
         cursor = page.nextCursor;
@@ -577,8 +647,25 @@ export class ProjectIngestService {
     return removed;
   }
 
+  /** The temp directories the jobs queued or running on this worker still need. */
+  _busyTempDirs() {
+    const busy = new Set();
+    const jobs = [...this.active, ...this.queue.map(entry => entry.job)];
+    for (const job of jobs) {
+      const { input = {} } = job;
+      if (input.cleanupDir) busy.add(path.resolve(input.cleanupDir));
+      if (input.path) busy.add(path.resolve(path.dirname(input.path)));
+      if (job.scratchDir) busy.add(path.resolve(job.scratchDir));
+    }
+    return busy;
+  }
+
   /**
-   * Remove upload directories older than an hour (startup).
+   * Remove upload directories older than an hour (startup and every
+   * reconciler tick). A directory a job of this worker has queued or is
+   * processing is kept whatever its age; one still being received, or one
+   * of another worker sharing the directory, is younger than the hour (its
+   * modification time is the moment the file landed in it).
    *
    * @param {{now?: number}} [options]
    * @returns {Promise<number>}
@@ -591,9 +678,11 @@ export class ProjectIngestService {
     } catch {
       return 0;
     }
+    const busy = this._busyTempDirs();
     for (const entry of entries) {
       if (!entry.isDirectory()) continue;
       const dir = path.join(this.tempDir, entry.name);
+      if (busy.has(path.resolve(dir))) continue;
       try {
         const stat = await fs.stat(dir);
         if (now - stat.mtimeMs < ORPHAN_AGE_MS) continue;
@@ -610,7 +699,8 @@ export class ProjectIngestService {
 let reconcileTimer = null;
 
 /**
- * Run the reconciler now and every fifteen minutes.
+ * Run the reconciler, and the sweep of abandoned upload directories, now and
+ * every fifteen minutes.
  *
  * @param {ProjectIngestService} ingest
  * @param {{intervalMs?: number}} [options]
@@ -625,6 +715,22 @@ export function startIngestReconciler(ingest, { intervalMs = 15 * 60 * 1000 } = 
       await ingest.reconcile();
     } catch (error) {
       logger.error('Project ingest reconciliation failed', {
+        component: COMPONENT,
+        error: error.message
+      });
+    }
+    try {
+      // A worker that crashed mid-upload and restarted within the hour kept
+      // its plaintext original past the startup sweep; this one catches it.
+      const removed = await ingest.cleanTempDir();
+      if (removed) {
+        logger.info('Removed abandoned project upload directories', {
+          component: COMPONENT,
+          removed
+        });
+      }
+    } catch (error) {
+      logger.warn('Could not sweep the project upload directory', {
         component: COMPONENT,
         error: error.message
       });

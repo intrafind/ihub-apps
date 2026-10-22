@@ -26,7 +26,8 @@ function memberView(member) {
  * @returns {Object}
  */
 export function serializeItem(item) {
-  const { text, ...rest } = item;
+  // `refreshAttempt` is the server's fencing token of a running refresh.
+  const { text, refreshAttempt: _attempt, ...rest } = item;
   return {
     ...rest,
     ref: item.ref || {},

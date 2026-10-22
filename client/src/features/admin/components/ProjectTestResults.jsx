@@ -81,7 +81,7 @@ function ProjectTestResults({ result, onDismiss }) {
                   {entry.code ? ` (${entry.code})` : ''}
                 </span>
               )}
-              <span className="ml-auto text-xs text-gray-400 dark:text-gray-500">
+              <span className="ml-auto text-xs text-gray-600 dark:text-gray-400">
                 {t('admin.projects.test.duration', '{{duration}} ms', {
                   duration: entry.duration ?? 0
                 })}

@@ -25,6 +25,8 @@ import { kid } from './odf/xml.js';
  * @param {'ignore'|'include'} [args.speakerNotes] - Presentations: `include` adds the notes of a
  *   slide as `[Notes]`
  * @param {{sheetRows?: number, workbookChars?: number}} [args.limits] - Spreadsheets
+ * @param {{truncated?: boolean}} [args.report] - Spreadsheets: `truncated` is set when rows or
+ *   sheets were left out on the limits
  * @returns {Promise<string>} The text; '' when the document has none
  * @throws When the package is not an OpenDocument file — the caller falls back to the plain text
  */
@@ -33,7 +35,8 @@ export async function extractOdfText({
   JSZip,
   DOMParser: DOMParserCtor,
   speakerNotes = 'ignore',
-  limits
+  limits,
+  report = null
 }) {
   const zip = await JSZip.loadAsync(arrayBuffer);
   const readPart = async name => {
@@ -55,7 +58,11 @@ export async function extractOdfText({
   if (kid(body, 'office', 'text')) return reader.documentMarkdown();
   const spreadsheet = kid(body, 'office', 'spreadsheet');
   if (spreadsheet) {
-    return renderSheets(odsSheets({ spreadsheet, reader, styles: reader.styles, limits }), limits);
+    return renderSheets(
+      odsSheets({ spreadsheet, reader, styles: reader.styles, limits }),
+      limits,
+      report
+    );
   }
   const presentation = kid(body, 'office', 'presentation');
   if (presentation) {

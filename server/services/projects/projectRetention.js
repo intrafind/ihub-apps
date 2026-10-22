@@ -63,14 +63,7 @@ export async function sweepProjects({ retentionDays, now = Date.now } = {}) {
   };
   // The scan is paged; an installation with more projects than one scan
   // budget still has every expired one judged.
-  const projects = [];
-  let cursor = null;
-  do {
-    const page = await repository.scanUser({ filter: expired, cursor });
-    projects.push(...page.projects);
-    const next = page.truncated ? page.nextCursor : null;
-    cursor = next && next !== cursor ? next : null;
-  } while (cursor);
+  const projects = await repository.scanUserAll({ filter: expired });
   const service = getProjectService();
   const chats = getChatRepository();
   let deleted = 0;

@@ -4,8 +4,10 @@
 /**
  * What a chat request says about projects (spec 1 §5.2, §6.4): the
  * container project (`projectId`, accepted on the first turn and fixed for
- * the chat) and the projects attached from the chat-input picker
- * (`projects`, their union persisted on the chat).
+ * the chat: a different value, `null` included, on a chat that already runs
+ * inside a project or already has messages answers `409 PROJECT_MISMATCH`)
+ * and the projects attached from the chat-input picker (`projects`, their
+ * union persisted on the chat).
  *
  * @module services/knowledge/chatProjects
  */
@@ -27,12 +29,17 @@ const MAX_ATTACHED = 10;
  * @param {Object} options.req - Express request (the user is read from it).
  * @param {Object|null} options.chat - The stored chat, when there is one.
  * @param {Object} options.app - The app configuration.
- * @param {unknown} options.projectId - `req.body.projectId`
+ * @param {unknown} options.projectId - `req.body.projectId`: omitted (`undefined`) says
+ *   nothing, `null` asks for a chat outside any project
  * @param {unknown} options.projects - `req.body.projects`
  * @returns {Promise<{ok: true, containerId: string|null, attachedIds: string[],
  *   chatPatch: Object|null, newContainer: boolean}|{ok: false, status: number, code: string, message: string}>}
  */
 export async function resolveChatProjects({ req, chat, app, projectId, projects }) {
+  // An omitted `projectId` says nothing; an explicit `null` (or empty
+  // string) asks for a chat outside any project, which is a change too when
+  // the chat already runs inside one.
+  const containerGiven = projectId !== undefined;
   const requestedContainer = typeof projectId === 'string' && projectId ? projectId : null;
   const requestedAttached = Array.isArray(projects)
     ? [...new Set(projects.filter(id => typeof id === 'string' && isProjectId(id)))].slice(
@@ -42,15 +49,16 @@ export async function resolveChatProjects({ req, chat, app, projectId, projects 
     : [];
   const storedContainer = chat?.projectId || null;
   const storedAttached = Array.isArray(chat?.attachedProjectIds) ? chat.attachedProjectIds : [];
+  const unchanged = {
+    ok: true,
+    containerId: storedContainer,
+    attachedIds: storedAttached,
+    chatPatch: null,
+    newContainer: false
+  };
 
-  if (!requestedContainer && !requestedAttached.length) {
-    return {
-      ok: true,
-      containerId: storedContainer,
-      attachedIds: storedAttached,
-      chatPatch: null,
-      newContainer: false
-    };
+  if (!requestedContainer && !requestedAttached.length && !(containerGiven && storedContainer)) {
+    return unchanged;
   }
   const features = configCache.getFeatures();
   const allowed =
@@ -64,20 +72,24 @@ export async function resolveChatProjects({ req, chat, app, projectId, projects 
       chatId: chat?.id,
       reason: 'user projects are off for this app, installation or principal'
     });
-    return {
-      ok: true,
-      containerId: storedContainer,
-      attachedIds: storedAttached,
-      chatPatch: null,
-      newContainer: false
-    };
+    return unchanged;
   }
-  if (requestedContainer && storedContainer && requestedContainer !== storedContainer) {
+  // The container is chosen with the first turn and fixed from then on: a
+  // chat with a transcript that joined a project would hand its earlier
+  // messages to the project's members, and one that left a project would
+  // take them away. Either is an explicit move (`PATCH /api/chats/:id`).
+  if (
+    containerGiven &&
+    requestedContainer !== storedContainer &&
+    (storedContainer || Number(chat?.messageCount) > 0)
+  ) {
     return {
       ok: false,
       status: 409,
       code: 'PROJECT_MISMATCH',
-      message: 'This chat already runs inside another project; move it with PATCH /api/chats/:id'
+      message: storedContainer
+        ? 'This chat already runs inside a project; move it with PATCH /api/chats/:id'
+        : 'This chat already has messages outside a project; move it with PATCH /api/chats/:id'
     };
   }
   ensurePrincipal(req);
