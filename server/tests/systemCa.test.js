@@ -4,14 +4,20 @@
 import { describe, expect, jest, test } from '@jest/globals';
 import { applySystemCaDefault } from '../utils/systemCa.js';
 
-const fakeTls = (system = ['sys-a', 'sys-b']) => ({
-  getCACertificates: jest.fn(type => (type === 'system' ? system : ['mozilla'])),
+const fakeTls = (system = ['sys-a', 'sys-b'], bundled = ['mozilla']) => ({
+  getCACertificates: jest.fn(type => (type === 'system' ? system : bundled)),
   setDefaultCACertificates: jest.fn()
 });
 
 const run = (overrides = {}) => {
   const tlsModule = overrides.tlsModule || fakeTls();
-  const result = applySystemCaDefault({ env: {}, execArgv: [], ...overrides, tlsModule });
+  const result = applySystemCaDefault({
+    env: {},
+    execArgv: [],
+    nodeOptions: '',
+    ...overrides,
+    tlsModule
+  });
   return { result, tlsModule };
 };
 
@@ -28,17 +34,29 @@ describe('applySystemCaDefault', () => {
     expect(tlsModule.setDefaultCACertificates).not.toHaveBeenCalled();
   });
 
-  test('leaves the store to Node when NODE_USE_SYSTEM_CA=1', () => {
-    const { result, tlsModule } = run({ env: { NODE_USE_SYSTEM_CA: '1' } });
-    expect(result.reason).toBe('node-managed');
+  test('skips when Node already trusts every system root', () => {
+    const { result, tlsModule } = run({ tlsModule: fakeTls(['sys-a'], ['mozilla', 'sys-a']) });
+    expect(result).toEqual({ applied: false, reason: 'already-trusted' });
     expect(tlsModule.setDefaultCACertificates).not.toHaveBeenCalled();
+  });
+
+  test('NODE_USE_SYSTEM_CA=1 that came from .env does not stop the roots being added', () => {
+    // Node never saw the value, so the default list still lacks the system roots.
+    const { result, tlsModule } = run({ env: { NODE_USE_SYSTEM_CA: '1' } });
+    expect(result.applied).toBe(true);
+    expect(tlsModule.setDefaultCACertificates).toHaveBeenCalled();
+  });
+
+  test('a CA flag in NODE_OPTIONS from .env does not count (only the startup value does)', () => {
+    const { result } = run({ env: { NODE_OPTIONS: '--use-system-ca' }, nodeOptions: '' });
+    expect(result.applied).toBe(true);
   });
 
   test.each([
     [{ execArgv: ['--use-openssl-ca'] }],
     [{ execArgv: ['--use-system-ca'] }],
-    [{ env: { NODE_OPTIONS: '--max-old-space-size=512 --use-openssl-ca' } }]
-  ])('respects an explicit CA flag %j', overrides => {
+    [{ nodeOptions: '--max-old-space-size=512 --use-openssl-ca' }]
+  ])('respects an explicit startup CA flag %j', overrides => {
     const { result, tlsModule } = run(overrides);
     expect(result).toEqual({ applied: false, reason: 'explicit-ca-flag' });
     expect(tlsModule.setDefaultCACertificates).not.toHaveBeenCalled();

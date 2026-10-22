@@ -13,53 +13,74 @@
  * CA list, so every TLS client without an explicit `ca` (https, fetch, ws) sees
  * them. It adds to the bundled roots; it never replaces them.
  *
- * Opt out with `NODE_USE_SYSTEM_CA=0`. Left alone when Node already manages the
- * store (`NODE_USE_SYSTEM_CA=1`, `--use-system-ca`) or the operator chose the
- * OpenSSL store (`--use-openssl-ca`). Needs Node 24.5+; older runtimes keep the
- * bundled roots (set `NODE_USE_SYSTEM_CA=1` or `NODE_EXTRA_CA_CERTS` there).
+ * Opt out with `NODE_USE_SYSTEM_CA=0`. Skipped when Node already trusts every
+ * system root (it was started with `NODE_USE_SYSTEM_CA=1` or `--use-system-ca`)
+ * or when the operator chose the OpenSSL store (`--use-openssl-ca`). Values that
+ * only arrive later through `.env` are not startup settings and are ignored.
+ * Needs Node 24.5+; older runtimes keep the bundled roots (set
+ * `NODE_USE_SYSTEM_CA=1` or `NODE_EXTRA_CA_CERTS` there).
  */
 import tls from 'node:tls';
 
 const OFF_VALUES = new Set(['0', 'false', 'off', 'no']);
 const CA_FLAGS = ['--use-system-ca', '--use-openssl-ca'];
 
-/** Why the setting says to leave the store alone, or null. */
-function settingSkipReason(env) {
-  const setting = String(env.NODE_USE_SYSTEM_CA ?? '')
-    .trim()
-    .toLowerCase();
-  if (OFF_VALUES.has(setting)) return 'disabled';
-  return setting === '1' ? 'node-managed' : null;
-}
+// NODE_OPTIONS as the process was started. Read when this module loads, which is
+// before server.js runs dotenv: a NODE_OPTIONS line in .env never reached Node.
+const startupNodeOptions = process.env.NODE_OPTIONS ?? '';
+
+/** True when the user switched the default off. */
+const isDisabled = env =>
+  OFF_VALUES.has(
+    String(env.NODE_USE_SYSTEM_CA ?? '')
+      .trim()
+      .toLowerCase()
+  );
 
 /** True when Node was started with a flag that already picks the CA store. */
-function hasExplicitCaFlag(env, execArgv) {
-  const args = [...execArgv, ...String(env.NODE_OPTIONS ?? '').split(/\s+/)];
+function hasExplicitCaFlag(execArgv, nodeOptions) {
+  const args = [...execArgv, ...nodeOptions.split(/\s+/)];
   return CA_FLAGS.some(flag => args.includes(flag));
 }
 
+/**
+ * Add the system roots unless Node already trusts them all. Checking the list
+ * instead of trusting NODE_USE_SYSTEM_CA is deliberate: a value that came from
+ * .env arrives after startup, so Node never acted on it.
+ */
 function addSystemRoots(tlsModule) {
   try {
     const system = tlsModule.getCACertificates('system');
     if (!system.length) return { applied: false, reason: 'no-system-certificates' };
-    tlsModule.setDefaultCACertificates([...tlsModule.getCACertificates('default'), ...system]);
+    const current = tlsModule.getCACertificates('default');
+    const known = new Set(current);
+    if (system.every(cert => known.has(cert))) return { applied: false, reason: 'already-trusted' };
+    tlsModule.setDefaultCACertificates([...current, ...system]);
     return { applied: true, reason: 'applied', count: system.length };
   } catch (error) {
     return { applied: false, reason: `error: ${error.message}` };
   }
 }
 
-const defaultDeps = () => ({ env: process.env, execArgv: process.execArgv, tlsModule: tls });
+const defaultDeps = () => ({
+  env: process.env,
+  execArgv: process.execArgv,
+  nodeOptions: startupNodeOptions,
+  tlsModule: tls
+});
 
 /**
- * @param {{ env: Object, execArgv: string[], tlsModule: Object }} [deps] - Injected for tests
+ * @param {{ env: Object, execArgv: string[], nodeOptions: string, tlsModule: Object }} [deps]
+ *   Injected for tests
  * @returns {{ applied: boolean, reason: string, count?: number }}
  */
-export function applySystemCaDefault({ env, execArgv, tlsModule } = defaultDeps()) {
+export function applySystemCaDefault({ env, execArgv, nodeOptions, tlsModule } = defaultDeps()) {
   if (typeof tlsModule.setDefaultCACertificates !== 'function') {
     return { applied: false, reason: 'unsupported-node' };
   }
-  const skip =
-    settingSkipReason(env) ?? (hasExplicitCaFlag(env, execArgv) ? 'explicit-ca-flag' : null);
-  return skip ? { applied: false, reason: skip } : addSystemRoots(tlsModule);
+  if (isDisabled(env)) return { applied: false, reason: 'disabled' };
+  if (hasExplicitCaFlag(execArgv, nodeOptions)) {
+    return { applied: false, reason: 'explicit-ca-flag' };
+  }
+  return addSystemRoots(tlsModule);
 }

@@ -76,7 +76,8 @@ iHub trusts the certificate store of the machine it runs on, in addition to Node
 - **Linux in containers:** install the CA the way your distribution does (for Alpine and Debian: put the `.crt` into `/usr/local/share/ca-certificates/` and run `update-ca-certificates`), or point `SSL_CERT_FILE` at a PEM file.
 - **Opt out:** set `NODE_USE_SYSTEM_CA=0`.
 - **Requirements:** Node 24.5 or later. On older runtimes iHub keeps Node's built-in roots; set `NODE_USE_SYSTEM_CA=1` before starting Node, or use Method 2.
-- **Left alone:** when Node was started with `--use-system-ca` or `NODE_USE_SYSTEM_CA=1`, or with `--use-openssl-ca`. Do not combine `NODE_USE_SYSTEM_CA=1` with `--use-openssl-ca`: Node refuses to start.
+- **Left alone:** when Node already trusts the system roots (started with `--use-system-ca` or `NODE_USE_SYSTEM_CA=1`), or was started with `--use-openssl-ca`. Only values set when the process starts count: `NODE_USE_SYSTEM_CA=1` or `NODE_OPTIONS` written into `.env` are read too late for Node, so iHub still adds the system roots itself. Do not combine `NODE_USE_SYSTEM_CA=1` with `--use-openssl-ca` at startup: Node refuses to start.
+- **MCP servers on whitelisted hosts:** when `ssl.domainWhitelist` skips certificate verification for an MCP server, iHub does not follow that server's HTTP redirects on its own, because the redirect target may not be whitelisted.
 - **Scope:** every CA in the system store is trusted for every outbound connection. To trust a single CA, use `NODE_EXTRA_CA_CERTS`. To skip verification for specific hosts only, use the domain whitelist below.
 
 ### Method 2: Node.js Certificate Environment Variable

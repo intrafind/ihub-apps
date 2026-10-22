@@ -134,6 +134,17 @@ function tlsBypassOptions(url) {
 }
 
 /**
+ * With certificate verification off for the first host, never follow a redirect
+ * on our own: the next hop may be a host that is not on the whitelist but would
+ * share this connection's settings. A caller that handles redirects itself
+ * (`redirect: 'manual'`) is unaffected.
+ */
+export function withoutAutoRedirects(init, tlsOptions) {
+  if (tlsOptions.rejectUnauthorized !== false || init.redirect === 'manual') return init;
+  return { ...init, redirect: 'error' };
+}
+
+/**
  * Build an https/http Agent that pins the socket to the IP we already vetted,
  * so the actual TCP connection cannot land on a different host (DNS rebinding).
  */
@@ -193,7 +204,7 @@ export async function safeFetch(input, init = {}, opts = {}) {
     const dispatcher = new undici.Agent({
       connect: { lookup: makePinnedLookup(address, family), ...tlsOptions }
     });
-    return await undici.fetch(url, { ...init, dispatcher });
+    return await undici.fetch(url, { ...withoutAutoRedirects(init, tlsOptions), dispatcher });
   }
 
   return await nodeHttpFetch(url, init, agent);
