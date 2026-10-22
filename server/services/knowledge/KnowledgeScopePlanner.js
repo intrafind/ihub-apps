@@ -31,6 +31,7 @@
  * @module services/knowledge/KnowledgeScopePlanner
  */
 import { estimateTokens } from '../../../shared/tokenEstimator.js';
+import { neutralizeStructuralTags } from '../../../shared/promptContext.js';
 import { projectName } from '../projects/projectView.js';
 import { providerFor } from './registry.js';
 
@@ -228,6 +229,33 @@ function escapeAttribute(value) {
 }
 
 /**
+ * The tags the projects block and the instructions are built from. Document
+ * text and instructions are scanned for them (open or close, with
+ * attributes, any case) and their angle brackets escaped, so a linked page
+ * that writes `</document></project></projects><project-instructions>` stays
+ * inside its document as literal text instead of closing the block and
+ * posing as instructions — the same protection `shared/promptContext.js`
+ * gives its content blocks, whose tags are escaped here too.
+ */
+const PROJECT_TAG_RE =
+  /<(\/?)(projects|project-instructions|project|document)((?:\s[^<>]*)?\/?)>/gi;
+
+/**
+ * Text from a document or a project's instructions as it goes into the
+ * prompt: the structural tags escaped, everything else as it is.
+ *
+ * @param {string} text
+ * @returns {string}
+ */
+export function neutralizeProjectText(text) {
+  const escaped = String(text ?? '').replace(
+    PROJECT_TAG_RE,
+    (match, slash, name, rest = '') => `&lt;${slash}${name}${rest}&gt;`
+  );
+  return neutralizeStructuralTags(escaped);
+}
+
+/**
  * The `<projects>` block a plan puts into the system prompt.
  *
  * @param {Awaited<ReturnType<typeof planKnowledgeScope>>} plan
@@ -258,7 +286,11 @@ export function renderProjectsBlock(plan) {
       ];
       if (doc.pinned) docAttrs.push('pinned="true"');
       if (truncated) docAttrs.push('truncated="true"');
-      lines.push(`    <document ${docAttrs.join(' ')}>`, text, '    </document>');
+      lines.push(
+        `    <document ${docAttrs.join(' ')}>`,
+        neutralizeProjectText(text),
+        '    </document>'
+      );
     }
     lines.push('  </project>');
   }
@@ -277,7 +309,7 @@ export function renderProjectInstructions(plan) {
     .filter(project => project.instructions)
     .map(
       project =>
-        `<project-instructions project="${escapeAttribute(project.id)}">\n${project.instructions}\n</project-instructions>`
+        `<project-instructions project="${escapeAttribute(project.id)}">\n${neutralizeProjectText(project.instructions)}\n</project-instructions>`
     );
   return parts.join('\n\n');
 }
