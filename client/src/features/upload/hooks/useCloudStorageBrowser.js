@@ -257,6 +257,15 @@ export function useCloudStorageBrowser(adapter, options = {}) {
     setSelectedFiles(new Map());
   }, []);
 
+  // Drop some files from the selection, keeping the rest selected.
+  const deselectFiles = useCallback(ids => {
+    const drop = new Set(ids);
+    setSelectedFiles(prev => {
+      if (![...prev.keys()].some(id => drop.has(id))) return prev;
+      return new Map([...prev].filter(([id]) => !drop.has(id)));
+    });
+  }, []);
+
   const downloadAndProcessFiles = useCallback(
     async uploadConfig => {
       if (!currentDrive || selectedFiles.size === 0) return [];
@@ -371,6 +380,7 @@ export function useCloudStorageBrowser(adapter, options = {}) {
     toggleFileSelection,
     selectAllFiles,
     deselectAllFiles,
+    deselectFiles,
     downloadAndProcessFiles,
     searchItems,
     setSearchQuery,

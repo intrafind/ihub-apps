@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { formatFileSize, isCloudFileSupported } from '../utils/cloudFileProcessing';
@@ -27,7 +27,9 @@ const CloudFileBrowserShell = ({
   onClose,
   // Optional: hand the picked files (and the drive they sit in) to the caller
   // instead of downloading them in the browser — the project "Add item"
-  // dialog adds them as references the server fetches (#1036).
+  // dialog adds them as references the server fetches (#1036). It may resolve
+  // to the files it took: those leave the selection, so after a partial
+  // failure the confirm button submits only the files still to be taken.
   onPick = null,
   // Optional label of the confirm button when `onPick` is set.
   pickLabel = null,
@@ -64,6 +66,7 @@ const CloudFileBrowserShell = ({
     navigateToBreadcrumb,
     toggleFileSelection,
     deselectAllFiles,
+    deselectFiles,
     downloadAndProcessFiles,
     searchItems,
     setSortBy,
@@ -72,6 +75,11 @@ const CloudFileBrowserShell = ({
 
   const [showUnsupportedFiles, setShowUnsupportedFiles] = useState(false);
   const [searchInput, setSearchInput] = useState('');
+  // While `onPick` runs, the selection and the confirm button are disabled —
+  // natively, so a key press cannot start a second pick of the same files.
+  // The ref also turns away an activation that lands before the re-render.
+  const [picking, setPicking] = useState(false);
+  const pickingRef = useRef(false);
 
   useEffect(() => {
     checkAuthStatus().then(connected => {
@@ -137,7 +145,16 @@ const CloudFileBrowserShell = ({
 
   const handleAttachFiles = async () => {
     if (onPick) {
-      await onPick(Array.from(selectedFiles.values()), currentDrive);
+      if (pickingRef.current) return;
+      pickingRef.current = true;
+      setPicking(true);
+      try {
+        const taken = await onPick(Array.from(selectedFiles.values()), currentDrive);
+        if (Array.isArray(taken) && taken.length > 0) deselectFiles(taken.map(file => file.id));
+      } finally {
+        pickingRef.current = false;
+        setPicking(false);
+      }
       return;
     }
     const processedData = await downloadAndProcessFiles(uploadConfig);
@@ -493,7 +510,7 @@ const CloudFileBrowserShell = ({
                           type="checkbox"
                           checked={isSelected}
                           onChange={() => toggleFileSelection(item)}
-                          disabled={!canSelect}
+                          disabled={!canSelect || picking}
                           className="mr-3 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded-sm disabled:opacity-50"
                         />
                       )}
@@ -569,6 +586,7 @@ const CloudFileBrowserShell = ({
                   ({formatFileSize(selectedTotalSize)})
                   <button
                     onClick={deselectAllFiles}
+                    disabled={picking}
                     className="ml-2 text-indigo-600 dark:text-indigo-400 hover:underline"
                   >
                     {t('common.clearSelection', 'Clear')}
@@ -587,7 +605,7 @@ const CloudFileBrowserShell = ({
               </button>
               <button
                 onClick={handleAttachFiles}
-                disabled={selectedFiles.size === 0}
+                disabled={selectedFiles.size === 0 || picking}
                 className="px-4 py-2 border border-transparent rounded-md shadow-xs text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600 disabled:bg-gray-400 disabled:cursor-not-allowed"
               >
                 {pickLabel ||

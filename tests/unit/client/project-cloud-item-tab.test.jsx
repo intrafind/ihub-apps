@@ -11,7 +11,7 @@
  * network) and the file-type table (which pulls in the PDF extractors) are
  * stubbed.
  */
-import { render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 
 const mockT = (key, defaultOrOptions, maybeOptions) => {
@@ -48,7 +48,8 @@ const mockBrowserState = {
   breadcrumbs: [],
   items: [
     { id: 'f_small', name: 'Lease.pdf', mimeType: 'application/pdf', size: 1024 },
-    { id: 'f_big', name: 'Scan.pdf', mimeType: 'application/pdf', size: 30 * 1024 * 1024 }
+    { id: 'f_big', name: 'Scan.pdf', mimeType: 'application/pdf', size: 30 * 1024 * 1024 },
+    { id: 'f_memo', name: 'Memo.pdf', mimeType: 'application/pdf', size: 2048 }
   ],
   selectedFiles: new Map(),
   loading: false,
@@ -72,9 +73,27 @@ const mockBrowserState = {
   setSortBy: mockNoop,
   setSortDirection: mockNoop
 };
+// The selection is real state, so the tab's partial-failure handling can be
+// seen in what stays selected.
+function mockUseBrowser() {
+  const React = require('react');
+  const [selectedFiles, setSelectedFiles] = React.useState(() => new Map());
+  const toggleFileSelection = React.useCallback(item => {
+    setSelectedFiles(prev => {
+      const next = new Map(prev);
+      if (next.has(item.id)) next.delete(item.id);
+      else next.set(item.id, item);
+      return next;
+    });
+  }, []);
+  const deselectFiles = React.useCallback(ids => {
+    setSelectedFiles(prev => new Map([...prev].filter(([id]) => !ids.includes(id))));
+  }, []);
+  return { ...mockBrowserState, selectedFiles, toggleFileSelection, deselectFiles };
+}
 jest.mock('../../../client/src/features/upload/hooks/useOffice365Browser', () => ({
   __esModule: true,
-  useOffice365Browser: () => mockBrowserState
+  useOffice365Browser: () => mockUseBrowser()
 }));
 jest.mock('../../../client/src/features/upload/hooks/useGoogleDriveBrowser', () => ({
   __esModule: true,
@@ -98,6 +117,7 @@ const api = {
 };
 
 beforeEach(() => {
+  api.addItem.mockReset();
   api.fetchCloudProviders.mockReset();
   api.fetchCloudProviders.mockResolvedValue([
     { id: 'o365', type: 'office365', displayName: 'Microsoft 365' }
@@ -137,9 +157,9 @@ describe('CloudItemTab', () => {
     renderTab({ limits: { maxFileBytes: 20971520 } });
 
     expect(await screen.findByText('Lease.pdf')).toBeInTheDocument();
-    // The last two checkboxes are the file rows (the others: "Pinned" and
-    // the browser's "show unsupported files").
-    const [small, big] = screen.getAllByRole('checkbox').slice(-2);
+    // The last three checkboxes are the file rows, sorted by name (the
+    // others: "Pinned" and the browser's "show unsupported files").
+    const [small, , big] = screen.getAllByRole('checkbox').slice(-3);
     expect(small).toBeEnabled();
     expect(big).toBeDisabled();
     expect(screen.getByTitle('File exceeds size limit (20MB)')).toBeInTheDocument();
@@ -150,5 +170,71 @@ describe('CloudItemTab', () => {
 
     expect(await screen.findByText('Scan.pdf')).toBeInTheDocument();
     expect(screen.getByTitle('File exceeds size limit (10MB)')).toBeInTheDocument();
+  });
+});
+
+describe('CloudItemTab – adding the picked files', () => {
+  const checkboxOf = name =>
+    screen
+      .getByText(name)
+      .closest('.flex.items-center.p-2')
+      .querySelector('input[type="checkbox"]');
+  const addButton = () => screen.getByRole('button', { name: 'Add to project' });
+
+  test('after a partial failure only the failed file stays selected for the retry', async () => {
+    renderTab(undefined);
+    await screen.findByText('Lease.pdf');
+    fireEvent.click(checkboxOf('Lease.pdf'));
+    fireEvent.click(checkboxOf('Memo.pdf'));
+    expect(screen.getByText(/2 file\(s\) selected/)).toBeInTheDocument();
+
+    api.addItem
+      .mockResolvedValueOnce({ id: 'itm_1' })
+      .mockRejectedValueOnce(new Error('quota exceeded'));
+    await act(async () => {
+      fireEvent.click(addButton());
+    });
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Memo.pdf: quota exceeded');
+    expect(screen.getByText(/1 file\(s\) selected/)).toBeInTheDocument();
+    expect(checkboxOf('Lease.pdf')).not.toBeChecked();
+    expect(checkboxOf('Memo.pdf')).toBeChecked();
+
+    // The retry submits the failed file alone — no duplicate of the other.
+    api.addItem.mockResolvedValueOnce({ id: 'itm_2' });
+    await act(async () => {
+      fireEvent.click(addButton());
+    });
+    expect(api.addItem).toHaveBeenCalledTimes(3);
+    expect(api.addItem.mock.calls[2][1].ref.fileId).toBe('f_memo');
+  });
+
+  test('disables the confirm button and the inputs while the batch runs', async () => {
+    renderTab(undefined);
+    await screen.findByText('Lease.pdf');
+    fireEvent.click(checkboxOf('Lease.pdf'));
+
+    let settle;
+    api.addItem.mockReturnValueOnce(
+      new Promise(resolve => {
+        settle = resolve;
+      })
+    );
+    // Keyboard activation is a click on the focused button.
+    act(() => {
+      addButton().focus();
+      fireEvent.click(addButton());
+    });
+
+    expect(addButton()).toBeDisabled();
+    expect(checkboxOf('Lease.pdf')).toBeDisabled();
+    expect(screen.getByRole('checkbox', { name: 'Pinned (always in the prompt)' })).toBeDisabled();
+    fireEvent.click(addButton());
+    expect(api.addItem).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      settle({ id: 'itm_1' });
+    });
+    await waitFor(() => expect(api.addItem).toHaveBeenCalledTimes(1));
   });
 });
