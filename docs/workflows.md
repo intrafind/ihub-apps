@@ -295,7 +295,9 @@ state; inside a loop `{{item.name}}` is the current item. Only the configured te
 rendered: a value it inserts (such as a model's answer holding `{{…}}`) is stored as it is, never
 rendered again. A document that fits the read budget
 comes back whole whatever `section` says; a longer one is cut to the section, and the
-`retrieval` field says which happened.
+`retrieval` field says which happened. A longer document without a `section` fails the step
+with `SECTION_REQUIRED` (and with `SECTION_NOT_FOUND` when the section is not in it) rather
+than passing on its outline as its text: name a section or raise `maxChars`.
 
 Together with a loop container the three steps make the common shape "one memo per document":
 
@@ -318,7 +320,8 @@ or an editor. An admin project takes writes only through a link that says so: `{
 step link to the project does not take away the workflow link's grant. There is no
 chat tool that writes into a project: a write happens in a step the author placed, with the
 run recorded as the document's provenance. A failed step reports the reason as its error code
-(`PROJECT_NOT_FOUND`, `FORBIDDEN`, `ITEM_NOT_FOUND`, `INVALID_REF`, or the ingest error such as
+(`PROJECT_NOT_FOUND`, `FORBIDDEN`, `ITEM_NOT_FOUND`, `INVALID_REF`, `SECTION_REQUIRED`,
+`SECTION_NOT_FOUND`, or the ingest error such as
 `SCAN_REJECTED` or a quota).
 
 Agent profiles carry the same `projects` list; it reaches every prompt step of the generated
