@@ -451,6 +451,13 @@ export default function registerAdminProjectsRoutes(app) {
         user: req.user
       });
       if (!result) return sendNotFound(res, 'Project');
+      logAudit({
+        req,
+        action: 'update',
+        resource: 'projectItem',
+        resourceId: project.id,
+        summary: `Changed ${result.item.kind} "${result.item.name || itemId}" (${Object.keys(body).join(', ')}) in admin project "${projectName(project)}"`
+      });
       res.json({ item: serializeItem(result.item) });
     } catch (error) {
       sendProjectError(res, error, 'update project item');

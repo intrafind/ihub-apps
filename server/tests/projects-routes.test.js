@@ -847,6 +847,40 @@ describe('chats in a project', () => {
     assert.ok(await repo.get(kept.id), 'the stuck project is reported, not forgotten');
   });
 
+  it('puts a chat back when the caller lost the project while moving', async () => {
+    const chats = getChatRepository();
+    const chat = await chats.ensureChat({
+      chatId: 'chat-move-4',
+      ownerId: GRACE.id,
+      appId: 'chat',
+      title: 'Revoked'
+    });
+    const project = await create(ADA, { name: 'Members only' });
+    await setMembers(ADA, project.id, [{ type: 'user', id: GRACE.id, role: 'user' }]);
+    const repo = getProjectRepository();
+    const mutate = repo.mutate.bind(repo);
+    // The membership goes while the move waits for the target's lock.
+    repo.mutate = async (projectId, fn, options) => {
+      if (projectId === project.id && options?.authorize) {
+        await mutate(projectId, current => ({ ...current, members: [] }), {});
+      }
+      return mutate(projectId, fn, options);
+    };
+    try {
+      const moved = await drive(route.chatPatch, {
+        user: GRACE,
+        params: { chatId: chat.id },
+        body: { projectId: project.id }
+      });
+      assert.equal(moved.statusCode, 403, JSON.stringify(moved.body));
+      assert.equal(moved.body.details?.code, 'PROJECT_ACCESS_CHANGED');
+    } finally {
+      repo.mutate = mutate;
+    }
+    assert.equal((await chats.getChat(chat.id)).projectId ?? null, null);
+    assert.deepEqual(await repo.listChatMarkers(project.id), []);
+  });
+
   it('keeps a chat that moved on while its old project is deleted', async () => {
     const chats = getChatRepository();
     const chat = await chats.ensureChat({
