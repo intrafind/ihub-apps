@@ -8,6 +8,7 @@ import Modal from '../../../shared/components/Modal';
 import Icon from '../../../shared/components/Icon';
 import useApps from '../../../shared/hooks/useApps';
 import { getLocalizedContent } from '../../../utils/localizeContent';
+import { resetChatId } from '../../../utils/chatId';
 import { appsForProjectChats, projectChatStartPath } from '../utils/projectView';
 import { INPUT_CLASS } from './item-dialog/dialogStyles';
 
@@ -38,6 +39,17 @@ function StartProjectChatDialog({ projectId, onClose }) {
       .filter(({ name }) => !query || name.toLowerCase().includes(query))
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [apps, search, language]);
+
+  // A new chat, every time: the chat page opens the chat id this tab holds for
+  // the app, and without stored chats that is the previous conversation, whose
+  // browser transcript would come back and be continued under this project.
+  // Minted here, once per start, the same way the sidebar leaves a chat; a
+  // reload of the chat page keeps finding it. With stored chats the page mints
+  // a fresh id for the bare app route anyway.
+  const startChat = appId => {
+    resetChatId(appId);
+    navigate(projectChatStartPath(appId, projectId));
+  };
 
   return (
     <Modal
@@ -82,7 +94,7 @@ function StartProjectChatDialog({ projectId, onClose }) {
           <li key={app.id}>
             <button
               type="button"
-              onClick={() => navigate(projectChatStartPath(app.id, projectId))}
+              onClick={() => startChat(app.id)}
               className="w-full flex items-center gap-3 px-6 py-3 text-left hover:bg-gray-50 dark:hover:bg-gray-700"
             >
               <span
