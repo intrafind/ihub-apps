@@ -797,9 +797,9 @@ export class ProjectRepository {
    * @param {(project: Object) => boolean} [options.authorize]
    * @returns {Promise<Object|null>} The project as it was, or null.
    */
-  async delete(projectId, { authorize } = {}) {
+  delete(projectId, { authorize } = {}) {
     if (isUserProjectId(projectId)) {
-      if (!this.isAvailable()) return null;
+      if (!this.isAvailable()) return Promise.resolve(null);
       return this._withLock(projectId, async () => {
         const { project } = await this._loadUser(projectId);
         if (!project) return null;
@@ -823,7 +823,7 @@ export class ProjectRepository {
         return project;
       });
     }
-    if (!isAdminProjectId(projectId)) return null;
+    if (!isAdminProjectId(projectId)) return Promise.resolve(null);
     // Under the project lock like every admin mutation, and the removal is
     // queued behind the updates of the same file by the config store, so a
     // PATCH in flight cannot write the project back after the delete.
