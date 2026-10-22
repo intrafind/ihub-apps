@@ -98,13 +98,18 @@ export function localizedText(value, language = 'en') {
 // --- status ---------------------------------------------------------------------
 
 /**
- * Whether the server is still extracting the text of any item.
+ * Whether the server is still extracting the text of any item: a new item
+ * (`pending` / `extracting`), or a picked document being refreshed — that one
+ * keeps its `ready` / `stale` status (the old snapshot stays readable) and
+ * carries `refreshingAt` until the new snapshot is stored.
  *
- * @param {Array<{status: string}>|undefined} items
+ * @param {Array<{status: string, refreshingAt?: string}>|undefined} items
  * @returns {boolean}
  */
 export function hasActiveItems(items) {
-  return (items || []).some(item => ACTIVE_ITEM_STATUSES.includes(item?.status));
+  return (items || []).some(
+    item => ACTIVE_ITEM_STATUSES.includes(item?.status) || Boolean(item?.refreshingAt)
+  );
 }
 
 /**
@@ -345,6 +350,24 @@ export function cloudProvidersForKind(providers, kind) {
   const type =
     (typeof kind === 'object' && kind?.picker?.provider) || CLOUD_PROVIDER_TYPE_BY_KIND[kindId];
   return (providers || []).filter(provider => provider?.type === type);
+}
+
+/**
+ * The `uploadConfig` the shared cloud file browsers expect, from the project
+ * limits: the browser greys out files above `maxFileSizeMB` (and falls back
+ * to its own 10 MB default when it is not set). The server checks the size
+ * again when it fetches the file.
+ *
+ * @param {{limits?: {maxFileBytes?: number}}|null} config - `_config`.
+ * @returns {{maxFileSizeMB?: number}}
+ *
+ * @example
+ * cloudBrowserUploadConfig({ limits: { maxFileBytes: 20971520 } }); // { maxFileSizeMB: 20 }
+ */
+export function cloudBrowserUploadConfig(config) {
+  const maxBytes = config?.limits?.maxFileBytes;
+  if (!Number.isFinite(maxBytes) || maxBytes <= 0) return {};
+  return { maxFileSizeMB: maxBytes / (1024 * 1024) };
 }
 
 /**

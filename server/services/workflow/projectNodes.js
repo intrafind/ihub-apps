@@ -170,6 +170,23 @@ export function knowledgeContextOf(node, state, context) {
 }
 
 /**
+ * The write rule of a step, as a check the repository can run again on the
+ * project it loads under its mutation lock: a user project takes writes
+ * from its current owner and editors; an admin project only through a link
+ * that grants `write` (spec 2 §8).
+ *
+ * @param {Object} user - The running user.
+ * @param {Object|null} link - The step's normalized link to the project, if any.
+ * @returns {(project: Object) => boolean}
+ */
+export function projectWriteAuthorizer(user, link) {
+  return project =>
+    project?.ownership === 'user'
+      ? Boolean(permissionsFor(project, user, callerContext(user)).canEdit)
+      : Boolean(link?.write);
+}
+
+/**
  * Resolve the project a step names into the project, its provider and what
  * the step may do with it.
  *
@@ -179,7 +196,9 @@ export function knowledgeContextOf(node, state, context) {
  * @param {Object} options.state
  * @param {Object} options.context
  * @returns {Promise<{project: Object, provider: Object, link: Object|null,
- *   canWrite: boolean, ctx: Object}>}
+ *   canWrite: boolean, authorizeWrite: (project: Object) => boolean, ctx: Object}>}
+ *   `authorizeWrite` is the write rule for the provider to check again on
+ *   the current project under its lock (see {@link projectWriteAuthorizer}).
  * @throws {ProjectNodeError}
  */
 export async function resolveNodeProject({ executor, node, state, context }) {
@@ -210,17 +229,13 @@ export async function resolveNodeProject({ executor, node, state, context }) {
     );
   const { project } = entry;
   const provider = providerFor(project);
-  // A user project takes writes from its owner and editors; an admin project
-  // only through a link that grants `write` (spec 2 §8).
-  const canWrite =
-    project.ownership === 'user'
-      ? Boolean(permissionsFor(project, context.user, callerContext(context.user)).canEdit)
-      : Boolean(link?.write);
+  const authorizeWrite = projectWriteAuthorizer(context.user, link);
   return {
     project,
     provider,
     link,
-    canWrite: canWrite && provider.capabilities(project).write === true,
+    canWrite: authorizeWrite(project) && provider.capabilities(project).write === true,
+    authorizeWrite,
     ctx: knowledgeContextOf(node, state, context)
   };
 }

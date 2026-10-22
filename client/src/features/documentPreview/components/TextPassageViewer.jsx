@@ -31,18 +31,31 @@ function TextPassageViewer({ text, passages, controlRef, onStateChange }) {
     setCurrent(matches > 0 ? 0 : -1);
   }
 
+  // Bumped by next/previous so a step scrolls even when it lands on the same
+  // highlight (a single match).
+  const [stepCount, setStepCount] = useState(0);
+
   useEffect(() => {
     onStateChange?.({ loading: false, numPages: 0, totalMatches: matches, currentMatch: current });
+  }, [current, matches, onStateChange]);
+
+  // Scroll on every new passage selection too: switching from one passage
+  // chip to another keeps `current` at 0 and `matches` at 1.
+  useEffect(() => {
     if (current < 0) return;
     const mark = containerRef.current?.querySelector(`[data-match="${current}"]`);
     mark?.scrollIntoView?.({ block: 'center', behavior: 'smooth' });
-  }, [current, matches, onStateChange]);
+  }, [current, segments, stepCount]);
 
   useEffect(() => {
     if (!controlRef) return undefined;
+    const step = delta => {
+      setCurrent(index => (matches > 0 ? (index + delta + matches) % matches : -1));
+      setStepCount(count => count + 1);
+    };
     controlRef.current = {
-      nextMatch: () => setCurrent(index => (matches > 0 ? (index + 1) % matches : -1)),
-      previousMatch: () => setCurrent(index => (matches > 0 ? (index - 1 + matches) % matches : -1))
+      nextMatch: () => step(1),
+      previousMatch: () => step(-1)
     };
     return () => {
       controlRef.current = null;

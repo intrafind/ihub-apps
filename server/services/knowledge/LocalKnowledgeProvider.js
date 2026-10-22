@@ -205,16 +205,29 @@ export class LocalKnowledgeProvider extends KnowledgeProvider {
     return { docs, unavailable, tokens };
   }
 
+  /**
+   * Store a text as a document of the project.
+   *
+   * @param {Object} project
+   * @param {import('./KnowledgeProvider.js').KnowledgeContext} ctx
+   * @param {{name: string, text: string, contentType?: string, pinned?: boolean,
+   *   wait?: boolean, authorize?: (project: Object) => boolean}} input - `wait: false`
+   *   returns the `pending` document at once; omitted, the text is stored inline as
+   *   before. `authorize` is checked again on the current project under the
+   *   repository's lock, so a writer who lost the right since the caller's
+   *   check cannot add the document (`PROJECT_ACCESS_CHANGED`).
+   * @returns {Promise<import('./KnowledgeProvider.js').KnowledgeDoc>}
+   */
   async put(
     project,
     ctx,
-    { name, text, contentType = 'text/markdown', pinned = false, wait = false }
+    { name, text, contentType = 'text/markdown', pinned = false, wait, authorize }
   ) {
     const service = getProjectService();
     const { item } = await service.addItem(
       project.id,
       { kind: 'upload', ref: { contentType }, name, text, pinned },
-      { user: ctx.user, origin: 'written', run: ctx.run || null, wait }
+      { user: ctx.user, authorize, origin: 'written', run: ctx.run || null, wait }
     );
     evictProjectIndex(project.id);
     return docOf(project, item);

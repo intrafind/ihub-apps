@@ -149,6 +149,7 @@ function AddProjectItemDialog({
             kindEntry={(kinds || []).find(kind => kind.id === tab.kind)}
             projectId={projectId}
             api={api}
+            config={config}
             onAdded={onAdded}
             onClose={onClose}
           />

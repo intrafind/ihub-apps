@@ -33,6 +33,7 @@ import {
 } from '../services/projects/bootstrap.js';
 import { evictItemText } from '../services/knowledge/ItemTextService.js';
 import { evictProjectIndex } from '../services/knowledge/LocalKnowledgeProvider.js';
+import { findDependencies } from '../services/projects/projectLinks.js';
 import {
   ProjectNodeError,
   assertProjectInputs,
@@ -106,6 +107,16 @@ function contextOf({ user = ADA, workflow = workflowOf(), executionId = 'wf-exec
 
 function stateOf(data) {
   return { executionId: 'wf-exec-1', data: { ...data }, nodeOutputs: {} };
+}
+
+/** Wait until an item of a project is no longer `pending` or `extracting`. */
+async function settled(projectId, itemId) {
+  for (let attempt = 0; attempt < 200; attempt += 1) {
+    const item = (await repo.get(projectId)).items.find(entry => entry.id === itemId);
+    if (item && !['pending', 'extracting'].includes(item.status)) return item;
+    await new Promise(resolve => setTimeout(resolve, 25));
+  }
+  throw new Error(`Item ${itemId} did not settle`);
 }
 
 before(async () => {
@@ -400,6 +411,37 @@ describe('resolveNodeProject', () => {
     );
   });
 
+  it('reaches an admin project linked only in a project step’s own links', async () => {
+    const stepNode = {
+      id: 'list-orphan',
+      type: 'project-items',
+      config: { project: 'orphan', projects: [{ id: 'orphan', mode: 'auto', write: true }] }
+    };
+    const stepWorkflow = workflowOf({
+      id: 'orphan-lister',
+      projects: [],
+      nodes: [...workflowOf().nodes, stepNode]
+    });
+    configCache.setCacheEntry('config/workflows.json', [workflowOf(), stepWorkflow]);
+    try {
+      const resolved = await resolveNodeProject({
+        executor,
+        node: stepNode,
+        state: stateOf({}),
+        context: contextOf({ user: GRACE, workflow: stepWorkflow })
+      });
+      assert.equal(resolved.project.id, 'orphan');
+      assert.equal(resolved.canWrite, true, 'the step link grants writes');
+      assert.deepEqual(
+        findDependencies('orphan').filter(entry => entry.type === 'workflow'),
+        [{ type: 'workflow', id: 'orphan-lister', name: 'Memo writer', nodeId: 'list-orphan' }],
+        'the step link counts as a dependency'
+      );
+    } finally {
+      configCache.setCacheEntry('config/workflows.json', [workflowOf()]);
+    }
+  });
+
   it('keeps user projects dark while the feature is off', async () => {
     configCache.setCacheEntry('config/features.json', { projects: true, userProjects: false });
     try {
@@ -659,6 +701,80 @@ describe('project-write and project-read', () => {
     assert.equal(faqGranted.status, 'completed', faqGranted.error);
     assert.equal(faqGranted.output.projectId, 'faq');
     assert.equal((await repo.get('faq')).items.length, 2);
+  });
+
+  it('stores a text from a state reference verbatim, rendering only config templates', async () => {
+    const result = await write.execute(
+      {
+        id: 'n',
+        type: 'project-write',
+        config: { project: caseProject.id, name: '$.data.title', text: '$.data.memo' }
+      },
+      stateOf({
+        case: caseProject.id,
+        title: 'Letter {{item.name}}',
+        memo: 'Hello {{customer.name}}!',
+        _loopItem: { name: 'Lease.md' }
+      }),
+      contextOf()
+    );
+    assert.equal(result.status, 'completed', result.error);
+    assert.equal(result.output.name, 'Letter {{item.name}}', 'a referenced name is not rendered');
+    const back = await read.execute(
+      {
+        id: 'n',
+        type: 'project-read',
+        config: { project: caseProject.id, document: result.output.id }
+      },
+      stateOf({}),
+      contextOf()
+    );
+    assert.match(back.output.text, /Hello \{\{customer\.name\}\}!/);
+  });
+
+  it('returns the pending document at once when told not to wait', async () => {
+    const result = await write.execute(
+      {
+        id: 'n',
+        type: 'project-write',
+        config: { project: caseProject.id, name: 'Later.md', text: '# Later', wait: false }
+      },
+      stateOf({}),
+      contextOf()
+    );
+    assert.equal(result.status, 'completed', result.error);
+    assert.equal(result.output.status, 'pending', 'the step did not wait for the ingest');
+    assert.equal((await settled(caseProject.id, result.output.id)).status, 'ready');
+  });
+
+  it('checks the write rule again on the current project at the write', async () => {
+    const shared = await service.createUserProject({
+      owner: ADA,
+      content: { name: 'Shared drafts' }
+    });
+    await repo.setMembers(shared.id, [{ type: 'user', id: GRACE.id, role: 'editor' }], {
+      actor: ADA
+    });
+    const resolved = await resolveNodeProject({
+      executor: write,
+      node: { id: 'n', type: 'project-write', config: { project: shared.id } },
+      state: stateOf({}),
+      context: contextOf({ user: GRACE })
+    });
+    assert.equal(resolved.canWrite, true, 'an editor may write');
+    // The owner demotes Grace between the step's check and its write.
+    await repo.setMembers(shared.id, [{ type: 'user', id: GRACE.id, role: 'user' }], {
+      actor: ADA
+    });
+    await assert.rejects(
+      resolved.provider.put(resolved.project, resolved.ctx, {
+        name: 'Draft.md',
+        text: '# Draft',
+        authorize: resolved.authorizeWrite
+      }),
+      error => error.code === 'PROJECT_ACCESS_CHANGED'
+    );
+    assert.equal((await repo.get(shared.id)).items.length, 0, 'nothing was added');
   });
 
   it('fails on an empty name or text and on an unknown document', async () => {

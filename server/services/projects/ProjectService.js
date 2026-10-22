@@ -302,9 +302,11 @@ export class ProjectService {
    * @param {{kind: string, ref?: Object, name?: string, pinned?: boolean, text?: string,
    *   file?: {path: string, contentType?: string, name?: string, bytes?: number, cleanupDir?: string}}} input
    * @param {{user: Object, authorize?: Function, origin?: string, run?: Object, wait?: boolean}} options
+   *   `wait`: `true` waits for any text kind, `false` never waits (not even for
+   *   `text`), omitted waits for `text` only (see `ProjectIngestService.start`).
    * @returns {Promise<{project: Object, item: Object}>}
    */
-  async addItem(projectId, input, { user, authorize, origin, run = null, wait = false }) {
+  async addItem(projectId, input, { user, authorize, origin, run = null, wait }) {
     const { kind, ref } = this._checkKindRef(input.kind, input.ref);
     const isText = kind.storage.ihub === 'text';
     const file = isText && input.file && typeof input.file === 'object' ? input.file : null;
