@@ -371,6 +371,27 @@ describe('V174 sources_to_projects', () => {
     assert.deepEqual(await read(dir, 'projects/ihub-documentation.json'), custom);
   });
 
+  it('carries a required sources feature over to projects', async () => {
+    // The registry no longer knows `sources`: an app still requiring it
+    // would be hidden even with Projects on, and the app schema refuses it.
+    const dir = await fs.mkdtemp(path.join(baseDir, 'features-'));
+    const write = async (rel, data) => {
+      await fs.mkdir(path.dirname(path.join(dir, rel)), { recursive: true });
+      await fs.writeFile(path.join(dir, rel), JSON.stringify(data), 'utf8');
+    };
+    // No sources.json and no sources list: the requirement alone runs it.
+    await write('apps/kb.json', { id: 'kb', requiredFeatures: ['sources', 'tools'] });
+    await write('apps/both.json', { id: 'both', requiredFeatures: ['sources', 'projects'] });
+    await write('apps/plain.json', { id: 'plain', requiredFeatures: ['tools'] });
+    assert.equal(await precondition(makeCtx(dir)), true);
+
+    await up(makeCtx(dir));
+    assert.deepEqual((await read(dir, 'apps/kb.json')).requiredFeatures, ['projects', 'tools']);
+    assert.deepEqual((await read(dir, 'apps/both.json')).requiredFeatures, ['projects']);
+    assert.deepEqual((await read(dir, 'apps/plain.json')).requiredFeatures, ['tools']);
+    assert.equal(await precondition(makeCtx(dir)), false, 'nothing left to migrate');
+  });
+
   it('is idempotent', async () => {
     const dir = await fs.mkdtemp(path.join(baseDir, 'twice-'));
     await seed(dir);
