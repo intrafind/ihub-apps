@@ -13,6 +13,7 @@ import { jest } from '@jest/globals';
 
 const calls = [];
 jest.unstable_mockModule('../utils/httpConfig.js', () => ({
+  getTlsBypassOptions: () => ({}),
   httpFetch: async (url, options) => {
     calls.push({ url, options });
     return {
