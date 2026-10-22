@@ -375,7 +375,8 @@ A project page shows:
 - **New chat** in the header, the main action: it asks for an app and starts a chat with the
   project attached.
 - **Chats** in the project, all or only your own, above the documents so that a long document list
-  does not push them down.
+  does not push them down. They come a page at a time (10, 25 or 50, newest first), and the Projects
+  page pages its list the same way; a list on these pages never grows with its content.
 - **Documents** with status, provenance and size, and the usage against the limits; from six
   documents on the list scrolls inside its card. Owners and editors pin, rename, refresh, preview
   and remove documents and retry failed cloud documents. **Estimate tokens** shows what each
@@ -660,7 +661,7 @@ changing it takes a content admin.
 | `GET`    | `/api/projects/:projectId/items/:itemId/text` | member    | The text as `text/plain`; `?maxChars=`, `?download=1` saves it as `.txt`.                        |
 | `PUT`    | `/api/projects/:projectId/members`            | editor    | Replace the member list `{ members: [{ type, id?, role }] }`.                                    |
 | `POST`   | `/api/projects/:projectId/transfer`           | owner     | Hand the project to `{ ownerId }`.                                                               |
-| `GET`    | `/api/projects/:projectId/chats`              | member    | The chats in the project; `?filter=all`, `mine` or `others`.                                     |
+| `GET`    | `/api/projects/:projectId/chats`              | member    | The chats in the project, newest first, a page at a time: `?filter=all`, `mine` or `others`; `limit` (default 20, at most 100) and `cursor`. Answers `{ items, nextCursor, total }`. |
 | `PATCH`  | `/api/chats/:chatId`                          | chat owner | `{ projectId }` moves a chat into a user project, `{ projectId: null }` out of it. `{ attachedProjectIds }` replaces the projects attached to the chat (new ones need the right to use them; `404` otherwise). |
 
 The chat request (`POST /api/apps/:appId/chat/:chatId`) accepts `projectId`, the project the chat

@@ -149,6 +149,34 @@ describe('ProjectsPage', () => {
     expect(screen.queryByText('Team wiki')).not.toBeInTheDocument();
   });
 
+  test('pages a long list of projects and starts again at the first page when searching', async () => {
+    const many = Array.from({ length: 23 }, (_, index) => ({
+      id: `prj_${index}`,
+      ownership: 'user',
+      name: `Project ${String(index).padStart(2, '0')}`,
+      usage: { items: 0, bytes: 0 },
+      members: [],
+      role: 'owner',
+      permissions: { isOwner: true, canEdit: true }
+    }));
+    mockApi.fetchProjects.mockResolvedValue(many);
+    renderPage();
+
+    expect(await screen.findByText('Project 00')).toBeInTheDocument();
+    expect(screen.getByText('Project 09')).toBeInTheDocument();
+    expect(screen.queryByText('Project 10')).not.toBeInTheDocument();
+    expect(screen.getByText('Projects 1–10 of 23')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Next page' }));
+    expect(await screen.findByText('Project 10')).toBeInTheDocument();
+    expect(screen.queryByText('Project 00')).not.toBeInTheDocument();
+
+    // A search shortens the list and shows its first page.
+    fireEvent.change(screen.getByLabelText('Search projects'), { target: { value: 'Project 2' } });
+    expect(screen.getByText('Project 20')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Next page' })).not.toBeInTheDocument();
+  });
+
   test('creates a project and opens its page', async () => {
     mockApi.createProject.mockResolvedValue({ id: 'prj_new', name: 'Due diligence' });
     renderPage();

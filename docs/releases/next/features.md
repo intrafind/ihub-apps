@@ -90,7 +90,9 @@ share projects.
   answers; a chip takes it away again (up to 10 projects per chat). The chat stays where it is.
 - On a project's page **New chat** is the button in the header, the chats come before the
   documents, and a long document list scrolls inside its card, so many files no longer push the
-  chats out of sight. File names with accents, dashes or umlauts keep their characters when a file
+  chats out of sight. The chats of a project and the Projects page come a page at a time (10, 25
+  or 50), so no list grows with its content; `GET /api/projects/:id/chats` takes `limit` and
+  `cursor` and answers `total`. File names with accents, dashes or umlauts keep their characters when a file
   is uploaded.
 - The Projects page lists only your own and shared projects. Projects that administrators created
   are linked to apps and managed by administrators, so they are no longer listed there.

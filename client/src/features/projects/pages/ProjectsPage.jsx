@@ -5,6 +5,7 @@ import { useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
+import DataTablePagination from '../../admin/components/data-table/DataTablePagination';
 import CreateProjectDialog from '../components/CreateProjectDialog';
 import ProjectRoleBadge from '../components/ProjectRoleBadge';
 import {
@@ -23,6 +24,9 @@ import {
   projectCreation,
   projectDisplayName
 } from '../utils/projectView';
+
+/** Projects per page: the default, and the choices. */
+const PAGE_SIZE_OPTIONS = [10, 25, 50];
 
 /** The list shows the viewer's own and shared projects; admin ones are not listed. */
 const USER_PROJECT_LIST_FILTERS = PROJECT_LIST_FILTERS.filter(id => id !== 'apps');
@@ -116,11 +120,20 @@ export default function ProjectsPage() {
   const [filter, setFilter] = useState('all');
   const [search, setSearch] = useState('');
   const [creating, setCreating] = useState(false);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(PAGE_SIZE_OPTIONS[0]);
 
   const counts = useMemo(() => countProjectGroups(projects), [projects]);
   const visible = useMemo(
     () => filterProjectList(projects, { filter, search, language }),
     [projects, filter, search, language]
+  );
+  // A page at a time: the list never grows with the number of shared projects.
+  const lastPage = Math.max(1, Math.ceil(visible.length / pageSize));
+  const shownPage = Math.min(page, lastPage);
+  const pageRows = useMemo(
+    () => visible.slice((shownPage - 1) * pageSize, shownPage * pageSize),
+    [visible, shownPage, pageSize]
   );
   const creation = projectCreation(config);
   const filterLabels = {
@@ -193,7 +206,10 @@ export default function ProjectsPage() {
                 type="button"
                 role="tab"
                 aria-selected={filter === id}
-                onClick={() => setFilter(id)}
+                onClick={() => {
+                  setFilter(id);
+                  setPage(1);
+                }}
                 className={`px-3 py-1.5 text-sm rounded-md ${
                   filter === id
                     ? 'bg-indigo-600 text-white'
@@ -207,7 +223,10 @@ export default function ProjectsPage() {
           <input
             type="search"
             value={search}
-            onChange={e => setSearch(e.target.value)}
+            onChange={e => {
+              setSearch(e.target.value);
+              setPage(1);
+            }}
             placeholder={t('projects.list.search', 'Search projects')}
             aria-label={t('projects.list.search', 'Search projects')}
             className="ml-auto w-full sm:w-64 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-sm px-3 py-2 text-gray-900 dark:text-gray-100"
@@ -244,10 +263,38 @@ export default function ProjectsPage() {
           </div>
         ) : (
           <ul className="mt-6 space-y-3">
-            {visible.map(project => (
+            {pageRows.map(project => (
               <ProjectCard key={project.id} project={project} language={language} />
             ))}
           </ul>
+        )}
+        {visible.length > PAGE_SIZE_OPTIONS[0] && (
+          <div className="mt-3 overflow-hidden rounded-xl border border-gray-200 dark:border-gray-700">
+            <DataTablePagination
+              page={shownPage}
+              pageSize={pageSize}
+              pageSizeOptions={PAGE_SIZE_OPTIONS}
+              total={visible.length}
+              onPageChange={setPage}
+              onPageSizeChange={size => {
+                setPageSize(size);
+                setPage(1);
+              }}
+              labels={{
+                showing: (start, end, total) =>
+                  t('projects.list.pager.showing', 'Projects {{start}}–{{end}} of {{total}}', {
+                    start,
+                    end,
+                    total
+                  }),
+                rowsPerPage: t('projects.list.pager.perPage', 'Per page'),
+                first: t('projects.chats.pager.first', 'First page'),
+                previous: t('projects.chats.pager.previous', 'Previous page'),
+                next: t('projects.chats.pager.next', 'Next page'),
+                last: t('projects.chats.pager.last', 'Last page')
+              }}
+            />
+          </div>
         )}
       </div>
       {creating && (

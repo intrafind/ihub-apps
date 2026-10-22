@@ -207,15 +207,19 @@ beforeEach(() => {
   Object.values(mockApi).forEach(fn => fn.mockReset());
   mockApi.fetchProjectsConfig.mockResolvedValue(CONFIG);
   mockApi.fetchProjects.mockResolvedValue([]);
-  mockApi.fetchProjectChats.mockResolvedValue([
-    {
-      id: 'chat-1',
-      title: 'Notice period',
-      appId: 'chat',
-      lastMessageAt: '2026-10-20T10:00:00Z',
-      owner: { mine: true }
-    }
-  ]);
+  mockApi.fetchProjectChats.mockResolvedValue({
+    items: [
+      {
+        id: 'chat-1',
+        title: 'Notice period',
+        appId: 'chat',
+        lastMessageAt: '2026-10-20T10:00:00Z',
+        owner: { mine: true }
+      }
+    ],
+    nextCursor: null,
+    total: 1
+  });
   invalidateProjectsList();
   invalidateProjectsConfig();
 });
@@ -256,6 +260,55 @@ describe('ProjectPage – owner', () => {
 
     fireEvent.click(newChat);
     expect(await screen.findByRole('dialog')).toBeInTheDocument();
+  });
+
+  test('pages a long chat list instead of growing the page', async () => {
+    const chat = index => ({
+      id: `chat-${index}`,
+      title: `Chat ${index}`,
+      appId: 'chat',
+      lastMessageAt: '2026-10-20T10:00:00Z',
+      owner: { mine: true }
+    });
+    mockApi.fetchProject.mockResolvedValue(makeProject());
+    mockApi.fetchProjectChats.mockImplementation(async (_id, { cursor }) =>
+      cursor === '10'
+        ? { items: [chat(11), chat(12)], nextCursor: null, total: 12 }
+        : { items: Array.from({ length: 10 }, (_, i) => chat(i + 1)), nextCursor: '10', total: 12 }
+    );
+    renderPage();
+
+    expect(await screen.findByText('Chat 1')).toBeInTheDocument();
+    expect(screen.queryByText('Chat 11')).not.toBeInTheDocument();
+    expect(screen.getByText('Chats 1–10 of 12')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Next page' }));
+
+    expect(await screen.findByText('Chat 11')).toBeInTheDocument();
+    expect(screen.queryByText('Chat 1')).not.toBeInTheDocument();
+    expect(screen.getByText('Chats 11–12 of 12')).toBeInTheDocument();
+    expect(mockApi.fetchProjectChats).toHaveBeenLastCalledWith('prj_a', {
+      filter: 'all',
+      limit: 10,
+      cursor: '10'
+    });
+
+    // Another filter starts again at the first page.
+    fireEvent.click(screen.getByRole('button', { name: 'My chats' }));
+    await waitFor(() =>
+      expect(mockApi.fetchProjectChats).toHaveBeenLastCalledWith('prj_a', {
+        filter: 'mine',
+        limit: 10,
+        cursor: null
+      })
+    );
+  });
+
+  test('shows no pager while the chats fit one page', async () => {
+    mockApi.fetchProject.mockResolvedValue(makeProject());
+    renderPage();
+    await screen.findByText('Notice period');
+    expect(screen.queryByRole('button', { name: 'Next page' })).not.toBeInTheDocument();
   });
 
   test('a long document list scrolls inside its card', async () => {
@@ -451,7 +504,11 @@ describe('ProjectPage – members and read-only', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'My chats' }));
     await waitFor(() =>
-      expect(mockApi.fetchProjectChats).toHaveBeenLastCalledWith('prj_a', { filter: 'mine' })
+      expect(mockApi.fetchProjectChats).toHaveBeenLastCalledWith('prj_a', {
+        filter: 'mine',
+        limit: 10,
+        cursor: null
+      })
     );
   });
 

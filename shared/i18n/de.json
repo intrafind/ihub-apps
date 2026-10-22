@@ -6278,7 +6278,15 @@
       "someone": "einem anderen Mitglied",
       "startHint": "Wählen Sie die App für den Chat. Sie erhält die Anweisungen und Dokumente des Projekts.",
       "startTitle": "Chat in diesem Projekt beginnen",
-      "title": "Chats"
+      "title": "Chats",
+      "pager": {
+        "showing": "Chats {{start}}–{{end}} von {{total}}",
+        "perPage": "Pro Seite",
+        "first": "Erste Seite",
+        "previous": "Vorherige Seite",
+        "next": "Nächste Seite",
+        "last": "Letzte Seite"
+      }
     },
     "create": {
       "creating": "Wird angelegt…",
@@ -6383,7 +6391,11 @@
       "itemCount_one": "{{count}} Dokument",
       "itemCount_other": "{{count}} Dokumente",
       "memberCount_one": "{{count}} Mitglied",
-      "memberCount_other": "{{count}} Mitglieder"
+      "memberCount_other": "{{count}} Mitglieder",
+      "pager": {
+        "showing": "Projekte {{start}}–{{end}} von {{total}}",
+        "perPage": "Pro Seite"
+      }
     },
     "members": {
       "everyone": "Alle angemeldeten Benutzer",

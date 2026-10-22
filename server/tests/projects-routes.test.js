@@ -932,6 +932,48 @@ describe('chats in a project', () => {
     assert.deepEqual(await getProjectRepository().listChatMarkers(project.id), []);
   });
 
+  it('lists the chats of a project a page at a time, newest first', async () => {
+    const chats = getChatRepository();
+    const project = await create(ADA, { name: 'Paged' });
+    const ids = [];
+    for (let index = 0; index < 5; index += 1) {
+      const chat = await chats.ensureChat({
+        chatId: `chat-page-${index}`,
+        ownerId: ADA.id,
+        appId: 'chat',
+        title: `Chat ${index}`
+      });
+      const moved = await drive(route.chatPatch, {
+        user: ADA,
+        params: { chatId: chat.id },
+        body: { projectId: project.id }
+      });
+      assert.equal(moved.statusCode, 200, JSON.stringify(moved.body));
+      ids.push(chat.id);
+    }
+    const page = async query =>
+      (await drive(route.chats, { user: ADA, params: { projectId: project.id }, query })).body;
+
+    const first = await page({ limit: '2' });
+    assert.equal(first.items.length, 2);
+    assert.equal(first.total, 5);
+    assert.equal(first.nextCursor, '2');
+
+    const second = await page({ limit: '2', cursor: first.nextCursor });
+    const last = await page({ limit: '2', cursor: second.nextCursor });
+    assert.equal(second.items.length, 2);
+    assert.equal(last.items.length, 1);
+    assert.equal(last.nextCursor, null);
+    const seen = [...first.items, ...second.items, ...last.items].map(item => item.id);
+    assert.deepEqual([...seen].sort(), [...ids].sort(), 'every chat once, none twice');
+
+    // The default page is bounded too, and a bad limit or cursor falls back.
+    const bad = await page({ limit: 'many', cursor: '-4' });
+    assert.equal(bad.items.length, 5);
+    assert.equal(bad.total, 5);
+    assert.equal((await page({ limit: '1000' })).items.length, 5);
+  });
+
   it('attaches projects to a stored chat, takes them away and refuses ones it may not use', async () => {
     const chats = getChatRepository();
     const chat = await chats.ensureChat({

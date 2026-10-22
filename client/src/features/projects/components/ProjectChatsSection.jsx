@@ -8,8 +8,13 @@ import Icon from '../../../shared/components/Icon';
 import useApps from '../../../shared/hooks/useApps';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import { fetchProjectChats } from '../../../api';
+import DataTablePagination from '../../admin/components/data-table/DataTablePagination';
 import { projectErrorMessage } from '../utils/projectErrors';
 import { PROJECT_CHAT_FILTERS, chatPath } from '../utils/projectView';
+
+/** Chats per page: the default, and the choices. The list is never longer than a page. */
+const PAGE_SIZE_OPTIONS = [10, 25, 50];
+const DEFAULT_PAGE_SIZE = PAGE_SIZE_OPTIONS[0];
 
 /** A date and time in the user's language. */
 function formatWhen(value, language) {
@@ -36,20 +41,33 @@ function ProjectChatsSection({ project }) {
   const language = i18n.language;
   const { apps } = useApps();
   const [filter, setFilter] = useState('all');
-  const [state, setState] = useState({ loading: true, chats: [], error: null });
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
+  const [state, setState] = useState({ loading: true, chats: [], total: 0, error: null });
 
   useEffect(() => {
     let active = true;
     setState(prev => ({ ...prev, loading: true, error: null }));
-    fetchProjectChats(project.id, { filter })
-      .then(chats => active && setState({ loading: false, chats, error: null }))
+    fetchProjectChats(project.id, {
+      filter,
+      limit: pageSize,
+      cursor: page > 1 ? String((page - 1) * pageSize) : null
+    })
+      .then(({ items, total }) => {
+        if (!active) return;
+        // The page is gone (chats were removed meanwhile): back to the first.
+        if (items.length === 0 && page > 1) return setPage(1);
+        setState({ loading: false, chats: items, total, error: null });
+      })
       .catch(
-        err => active && setState({ loading: false, chats: [], error: projectErrorMessage(err, t) })
+        err =>
+          active &&
+          setState({ loading: false, chats: [], total: 0, error: projectErrorMessage(err, t) })
       );
     return () => {
       active = false;
     };
-  }, [project.id, filter, t]);
+  }, [project.id, filter, page, pageSize, t]);
 
   const appName = useMemo(() => {
     const byId = new Map(apps.map(app => [app.id, app]));
@@ -83,7 +101,10 @@ function ProjectChatsSection({ project }) {
               key={id}
               type="button"
               aria-pressed={filter === id}
-              onClick={() => setFilter(id)}
+              onClick={() => {
+                setFilter(id);
+                setPage(1);
+              }}
               className={`px-2.5 py-1 text-xs rounded-md ${
                 filter === id
                   ? 'bg-indigo-600 text-white'
@@ -136,6 +157,34 @@ function ProjectChatsSection({ project }) {
             </li>
           ))}
         </ul>
+      )}
+      {state.total > PAGE_SIZE_OPTIONS[0] && (
+        <div className="mt-3 -mx-5 -mb-5 overflow-hidden rounded-b-xl">
+          <DataTablePagination
+            page={page}
+            pageSize={pageSize}
+            pageSizeOptions={PAGE_SIZE_OPTIONS}
+            total={state.total}
+            onPageChange={setPage}
+            onPageSizeChange={size => {
+              setPageSize(size);
+              setPage(1);
+            }}
+            labels={{
+              showing: (start, end, total) =>
+                t('projects.chats.pager.showing', 'Chats {{start}}–{{end}} of {{total}}', {
+                  start,
+                  end,
+                  total
+                }),
+              rowsPerPage: t('projects.chats.pager.perPage', 'Per page'),
+              first: t('projects.chats.pager.first', 'First page'),
+              previous: t('projects.chats.pager.previous', 'Previous page'),
+              next: t('projects.chats.pager.next', 'Next page'),
+              last: t('projects.chats.pager.last', 'Last page')
+            }}
+          />
+        </div>
       )}
     </section>
   );

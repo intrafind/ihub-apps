@@ -239,18 +239,31 @@ export const transferProject = (projectId, ownerId) =>
   call(() => apiClient.post(`${projectPath(projectId)}/transfer`, { ownerId }));
 
 /**
- * The chats inside a project.
+ * One page of the chats inside a project, newest first.
  *
  * @param {string} projectId
- * @param {{filter?: 'all'|'mine'|'others'}} [options]
- * @returns {Promise<Array<{id: string, title: string, appId: string|null, lastMessageAt: string,
- *   messageCount: number, status: string, owner: {name: string, mine: boolean}}>>}
+ * @param {{filter?: 'all'|'mine'|'others', limit?: number, cursor?: string|null}} [options] -
+ *   `cursor` is the `nextCursor` of the previous page, or the offset a page starts at.
+ * @returns {Promise<{items: Array<{id: string, title: string, appId: string|null,
+ *   lastMessageAt: string, messageCount: number, status: string,
+ *   owner: {name: string, mine: boolean}}>, nextCursor: string|null, total: number}>}
  */
-export const fetchProjectChats = async (projectId, { filter = 'all' } = {}) => {
+export const fetchProjectChats = async (projectId, { filter = 'all', limit, cursor } = {}) => {
   const data = await call(() =>
-    apiClient.get(`${projectPath(projectId)}/chats`, { params: { filter } })
+    apiClient.get(`${projectPath(projectId)}/chats`, {
+      params: {
+        filter,
+        ...(limit ? { limit } : {}),
+        ...(cursor ? { cursor } : {})
+      }
+    })
   );
-  return Array.isArray(data?.items) ? data.items : [];
+  const items = Array.isArray(data?.items) ? data.items : [];
+  return {
+    items,
+    nextCursor: data?.nextCursor ?? null,
+    total: Number.isFinite(data?.total) ? data.total : items.length
+  };
 };
 
 /**

@@ -6313,7 +6313,15 @@
       "someone": "another member",
       "startHint": "Choose the app to chat with. It gets the project’s instructions and documents.",
       "startTitle": "Start a chat in this project",
-      "title": "Chats"
+      "title": "Chats",
+      "pager": {
+        "showing": "Chats {{start}}–{{end}} of {{total}}",
+        "perPage": "Per page",
+        "first": "First page",
+        "previous": "Previous page",
+        "next": "Next page",
+        "last": "Last page"
+      }
     },
     "create": {
       "creating": "Creating…",
@@ -6418,7 +6426,11 @@
       "itemCount_one": "{{count}} item",
       "itemCount_other": "{{count}} items",
       "memberCount_one": "{{count}} member",
-      "memberCount_other": "{{count}} members"
+      "memberCount_other": "{{count}} members",
+      "pager": {
+        "showing": "Projects {{start}}–{{end}} of {{total}}",
+        "perPage": "Per page"
+      }
     },
     "members": {
       "everyone": "Everyone signed in",
