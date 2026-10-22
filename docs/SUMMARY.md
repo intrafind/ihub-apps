@@ -17,7 +17,7 @@
     - [Prompts Database](prompts.md)
     - [Skills](skills.md)
     - [Content Management](content-management.md)
-    - [Sources System](sources.md)
+    - [Projects](projects.md)
     - [Mimetype Configuration](mimetypes.md)
     - [Configuration Validation](configuration-validation.md)
     - [Configuration Migrations](configuration-migrations.md)

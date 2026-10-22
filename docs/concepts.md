@@ -1,4 +1,4 @@
-# Core Concepts: Providers, Models, Apps, Skills, Sources & Tools
+# Core Concepts: Providers, Models, Apps, Skills, Projects & Tools
 
 This guide explains the building blocks of iHub Apps and, more importantly, **when to use which**. It is the write-up we use when introducing iHub to a new team: once these boundaries are clear, designing use cases for a department and rolling them out to the right people becomes straightforward.
 
@@ -10,7 +10,7 @@ This guide explains the building blocks of iHub Apps and, more importantly, **wh
 | **Model**          | Which model answers, with which limits and abilities? | Admin → Models                   |
 | **App**            | What is the concrete use case and its frame?          | Admin → Apps                     |
 | **Skill**          | Which reusable procedure, rules, or know-how apply?   | Admin → Skills                   |
-| **Source**         | What domain knowledge does the model need?            | Admin → Sources                  |
+| **Project**        | What domain knowledge does the model need?            | Admin → Projects                 |
 | **Tool**           | What can the model *do* beyond producing text?        | Admin → Tools / MCP servers      |
 | **Prompt library** | Which reusable text can a user drop into a chat?      | Admin → Prompts                  |
 | **Group**          | Who sees all of the above?                            | Admin → Groups                   |
@@ -19,7 +19,7 @@ The short version:
 
 - **Apps** model the concrete use case and its frame.
 - **Skills** define reusable procedures, rules, and behaviour.
-- **Sources** supply the factual context and knowledge.
+- **Projects** supply the factual context and knowledge.
 - **Tools** give the model the ability to act and to fetch live data.
 
 ---
@@ -56,7 +56,7 @@ These three overlap in what they can achieve, and the difference is mostly about
 
 ### Apps
 
-An [app](apps.md) is a standardized use case with a fixed frame: system prompt, input variables, output format, preferred/allowed models, plus the tools and sources it may use. Use apps when the result should be reproducible and the user should not have to know anything about prompting.
+An [app](apps.md) is a standardized use case with a fixed frame: system prompt, input variables, output format, preferred/allowed models, plus the tools and projects it may use. Use apps when the result should be reproducible and the user should not have to know anything about prompting.
 
 Apps are the unit of rollout: via group permissions — including groups mapped from [LDAP](ldap-ntlm-authentication.md) or [OIDC](oidc-authentication.md) — an app can be made available to exactly one department or role.
 
@@ -89,30 +89,28 @@ iHub also ships **system skills**: read-only skills delivered with iHub that bri
 
 ---
 
-## Sources: giving the model knowledge
+## Projects: giving the model knowledge
 
-[Sources](sources.md) supply the domain context. Supported types include local files, URLs, iFinder documents, and internal iHub pages.
+[Projects](projects.md) supply the domain context. A project holds documents and instructions:
+uploaded files whose text is extracted and stored encrypted, web pages, iHub pages, iFinder
+documents or searches, and files picked from cloud drives. Admins link projects to apps, workflows
+and agents; users keep their own projects and share them.
 
-### Local files vs. URLs
+### Uploaded documents vs. links
 
-| Source type    | Best for                                          | Trade-off                                                       |
-| -------------- | ------------------------------------------------- | --------------------------------------------------------------- |
-| **Local file** | Curated content — Markdown, text, PDF, JSON       | Controlled, predictable context, but must be updated by hand    |
-| **URL**        | Content that changes regularly                    | Always current, but page boilerplate can add noise to the context |
+| Item kind         | Best for                                               | Trade-off                                                                 |
+| ----------------- | ------------------------------------------------------ | ------------------------------------------------------------------------- |
+| **Upload**        | Curated content — PDF, Office, Markdown, text          | Controlled, predictable text, but updated by uploading again              |
+| **Web page**      | Content that changes regularly                         | Always current, but the page is fetched on use and boilerplate adds noise |
+| **iFinder**       | Documents already indexed, read with the user's rights | Users only ever see what they are allowed to see                          |
+| **Cloud file**    | Files that live in OneDrive, Google Drive or Nextcloud | A snapshot of the text, refreshed on demand                               |
 
-For URL sources, enable content cleaning and set a `maxContentLength` so navigation, footers, and cookie banners do not consume context that should hold the actual answer.
+### Loaded in full or searched
 
-### iFinder as a source
-
-Documents from [iFinder](iFinder-Integration.md) can be used directly as a source — pinned to a specific document ID or driven by a search query that loads the top matching documents. The connection is configured once centrally; documents are always fetched with the identity of the current user, so users only ever see what they are allowed to see.
-
-### Loaded up front or fetched on demand
-
-Each source is exposed either as a **prompt source** (its content is interpolated into the system prompt for every request) or as a **tool source** (the model fetches it only when it needs to). Prompt sources guarantee the content is present; tool sources keep the context small and scale to many sources.
-
-### A note on wikis and linked content
-
-When wiring up an internal wiki, point at concrete pages or at prepared, condensed content. Do not assume the model will navigate deep chains of links on its own — the more specific the source, the better the answer.
+Each link has a mode. `context` puts every document into the prompt for every request; `tools`
+leaves the project to the knowledge tools, so the model searches and reads what it needs; `auto`
+loads the project in full while it fits the budget and searches it otherwise. Pinned documents are
+always in the prompt.
 
 ---
 
@@ -149,7 +147,7 @@ Note that tool calling requires a model that supports it — check the model's `
 
 - [App Configuration](apps.md)
 - [Models](models.md)
-- [Sources System](sources.md)
+- [Projects](projects.md)
 - [Tool Calling](tool-calling.md)
 - [Prompts Library](prompts.md)
 - [Architecture Overview](architecture.md)

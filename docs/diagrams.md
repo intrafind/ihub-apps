@@ -868,7 +868,7 @@ graph TB
         Models[models.json]
         Groups[groups.json]
         UI[ui.json]
-        Sources[sources.json]
+        Sources[projects/*.json]
     end
     
     subgraph "Post Processing"
@@ -1380,7 +1380,7 @@ flowchart TD
         ModelsJSON[models.json]
         GroupsJSON[groups.json]
         UIJSON[ui.json]
-        SourcesJSON[sources.json]
+        SourcesJSON[projects/*.json]
         EnvVars[Environment Variables]
     end
     

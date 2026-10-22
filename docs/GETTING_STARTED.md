@@ -111,7 +111,7 @@ prompts and skills.
 1. **Try the apps** on the start page and in **Browse all apps** — [User Guide](user-guide.md)
 2. **Secure the installation** — change the shipped passwords, choose an authentication method,
    put a [reverse proxy](production-reverse-proxy-guide.md) with HTTPS in front of it
-3. **Connect your knowledge** — [Sources](sources.md), [iFinder](iFinder-Integration.md),
+3. **Connect your knowledge** — [Projects](projects.md), [iFinder](iFinder-Integration.md),
    [Office 365](office365-integration.md), [Google Drive](google-drive-integration.md)
 4. **Create your own apps** — [App Configuration](apps.md), or install them from the
    [Marketplace](marketplace.md)

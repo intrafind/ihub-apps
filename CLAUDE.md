@@ -32,7 +32,7 @@ Fresh `contents/` ships `admin` / `password123` via `POST /api/auth/local/login`
 ### Config System
 
 - App schema: Zod, `server/validators/appConfigSchema.js`. Apps don't set token limits — those come from the model (`contextWindow` / `maxOutputTokens`).
-- Reload behavior: platform/auth changes need a server restart; apps, models, UI, groups, sources, tools reload automatically via `configCache`.
+- Reload behavior: platform/auth changes need a server restart; apps, models, UI, groups, projects, tools reload automatically via `configCache`.
 - React pages (`contents/pages/{lang}/{id}.jsx`): component must be named `UserComponent`, receives hooks/`t`/`navigate`/`user` via props, no import/export. Details: `docs/react-component-feature.md`.
 - Local LLM providers (LM Studio, Jan.ai, vLLM): OpenAI-compatible, `provider: "openai"`. See `docs/local-llm-providers.md`.
 

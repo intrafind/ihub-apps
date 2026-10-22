@@ -20,8 +20,9 @@ of the source's kind, so apps, workflows and agents keep their knowledge. The ad
 - The `{{sources}}` and `{{source}}` placeholders are renamed to `{{projects}}` by migration; a
   prompt without the placeholder gets the projects block appended, as before.
 - The admin API `/api/admin/sources*` is replaced by `/api/admin/projects*`. The file-editing
-  routes under `/api/admin/sources/:id/files` have no replacement: upload a new file or paste
-  text into the project item instead.
+  routes under `/api/admin/sources/:id/files` are replaced by
+  `PUT /api/admin/projects/:id/items/:itemId/text`, which replaces the stored text of an
+  uploaded, written or migrated document.
 - The MCP gateway exposes `ihub://project/<id>` resources instead of `ihub://source/<id>`.
 - The feature flag `sources` and the admin page switch `admin.pages.sources` are renamed to
   `projects`; their values are carried over.
