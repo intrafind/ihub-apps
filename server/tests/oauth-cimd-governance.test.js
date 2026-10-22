@@ -91,6 +91,7 @@ jest.unstable_mockModule('../utils/ssrfGuard.js', () => ({
 }));
 
 jest.unstable_mockModule('../utils/httpConfig.js', () => ({
+  getTlsBypassOptions: () => ({}),
   httpFetch: async url => {
     state.fetchCalls.push(url);
     const canned = state.responses.get(url);

@@ -17,6 +17,7 @@ import logger from './utils/logger.js';
 import { findByIdCaseInsensitive } from './utils/resourceLookup.js';
 import { startStickyPrimary, attachStickyWorker, logStickyRoutingCaveat } from './clusterSticky.js';
 import { initPrimaryBus, initWorkerBus } from './clusterBus.js';
+import { applySystemCaDefault } from './utils/systemCa.js';
 // Modules whose cluster-wide state the primary holds and answers for over the
 // bus. Imported here so the primary always registers them; a worker asking a
 // primary that never loaded one would wait for an answer that never comes.
@@ -117,6 +118,19 @@ import {
 
 // Initialize environment variables
 dotenv.config();
+
+// Trust the OS certificate store (company CAs) unless NODE_USE_SYSTEM_CA=0.
+// After dotenv so a .env file can opt out; before the first outbound connection.
+const systemCa = applySystemCaDefault();
+if (!cluster.isWorker) {
+  const message = systemCa.applied
+    ? 'Added the operating system certificate store to the trusted CAs'
+    : `Operating system certificate store not added (${systemCa.reason})`;
+  logger[systemCa.reason.startsWith('error') ? 'warn' : 'info'](message, {
+    component: 'SystemCa',
+    ...(systemCa.count && { certificates: systemCa.count })
+  });
+}
 
 import config from './config.js';
 

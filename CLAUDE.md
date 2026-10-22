@@ -51,6 +51,15 @@ New top-level routes in `client/src/App.jsx` MUST also be added in **both**:
 
 The lists must stay identical (`tests/unit/client/known-routes-sync.test.jsx` enforces it). Miss the `index.html` copy and a **cold load** of the route treats the route segment as the base path — the auth gate hits `/<route>/api/auth/status`, 404s, and shows "Unable to connect to the server". Test both root (`/reports`) and subpath (`/ihub/reports`) deployments with direct URL loads.
 
+### Outbound Connections and the SSL Whitelist ⚠️
+
+Every new outbound connection — HTTP(S), WebSocket (`wss://`), a new SDK or client library, a diagnostic probe — MUST honor `ssl.ignoreInvalidCertificates` + `ssl.domainWhitelist` (platform.json), or self-hosted endpoints with a private CA fail with "unable to verify the first certificate". Never write a bare `fetch()` / `https.request()` / `new WebSocket()` for a configurable URL:
+
+- HTTP(S): use `httpFetch()` / `createAgent()` from `server/utils/httpConfig.js` (also applies the proxy config).
+- WebSocket: merge `getWebSocketTlsOptions(url)` into the `ws` options.
+- Anything else (undici dispatcher, `tls.connect`, a library with its own agent): spread `getTlsBypassOptions(url)` into its TLS options instead of writing `rejectUnauthorized: false` yourself. The bypass is host-whitelist-only; never a global switch.
+- Add a test with a whitelisted and a non-whitelisted host. Known gap: the MCP `websocket` transport (`WebSocketClientTransport` takes no TLS options).
+
 ### Breaking Changes
 
 **Always ask the user before implementing backward compatibility shims.** Describe what breaks (endpoints, fields, data shapes), let them choose compat vs clean break. Never silently add compat wrappers or deprecated re-exports.
