@@ -45,6 +45,7 @@ import {
   isMultipart,
   receiveUpload,
   refreshItem,
+  replaceItemText,
   registerProjectPickerRoutes,
   sendItemText,
   sendProjectError
@@ -549,6 +550,18 @@ export default function registerProjectRoutes(app) {
     authenticatedOnly,
     projectAccessRequired('use'),
     (req, res) => sendItemText(req, res, { project: req.project })
+  );
+
+  app.put(
+    route('/:projectId/items/:itemId/text'),
+    ...gate,
+    authenticatedOnly,
+    projectAccessRequired('edit'),
+    (req, res) =>
+      replaceItemText(req, res, {
+        project: req.project,
+        authorize: req.projectContext.authorize('edit')
+      })
   );
 
   app.post(

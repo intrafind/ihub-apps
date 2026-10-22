@@ -55,6 +55,7 @@ import {
   isMultipart,
   receiveUpload,
   refreshItem,
+  replaceItemText,
   sendItemText,
   sendProjectError
 } from '../projectItemRoutes.js';
@@ -492,6 +493,12 @@ export default function registerAdminProjectsRoutes(app) {
     const project = await loadAdminProject(req, res);
     if (!project) return;
     return sendItemText(req, res, { project });
+  });
+
+  app.put(route('/:id/items/:itemId/text'), ...gate, contentAdminAuth, async (req, res) => {
+    const project = await loadAdminProject(req, res);
+    if (!project) return;
+    return replaceItemText(req, res, { project });
   });
 
   app.post(route('/:id/items/:itemId/refresh'), ...gate, contentAdminAuth, async (req, res) => {

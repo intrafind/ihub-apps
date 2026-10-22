@@ -563,6 +563,83 @@ export class ProjectService {
   }
 
   /**
+   * Replace the stored text of a document the user wrote, uploaded or that
+   * the migration imported: the successor of editing a source file in the
+   * admin editor. The new text runs through the pipeline like written text
+   * (scan, normalize, encrypt), the old blob goes once the new one is
+   * installed, and the item is marked as written by the caller.
+   *
+   * @param {string} projectId
+   * @param {string} itemId
+   * @param {string} text
+   * @param {{user: Object, authorize?: Function}} options
+   * @returns {Promise<{project: Object, item: Object}>}
+   * @throws {ProjectError} `INVALID_REF` for an item whose text is not
+   *   editable (a link, a picked document) or an empty text,
+   *   `PROJECT_MISMATCH` while the item is being processed
+   */
+  async replaceItemText(projectId, itemId, text, { user, authorize }) {
+    if (!this.ingest) {
+      throw new ProjectError(
+        'INGEST_UNAVAILABLE',
+        'Editing text is not available on this installation'
+      );
+    }
+    if (typeof text !== 'string' || !text.trim()) {
+      throw new ProjectError('INVALID_REF', 'The text is empty');
+    }
+    let stored = null;
+    try {
+      stored = await this.repository.mutate(
+        projectId,
+        project => {
+          const item = (project.items || []).find(entry => entry.id === itemId);
+          if (!item) throw new ProjectError('ITEM_NOT_FOUND', 'Item not found');
+          if (!isItemTextEditable(item)) {
+            throw new ProjectError(
+              'INVALID_REF',
+              'Only the text of an uploaded, written or imported document can be edited'
+            );
+          }
+          if (item.status === 'pending' || item.status === 'extracting' || item.refreshingAt) {
+            throw new ProjectError('PROJECT_MISMATCH', 'The item is still being processed');
+          }
+          // Reserved under the project's lock like a refresh: a second edit
+          // or a refresh is refused until the job has installed the text.
+          const now = nowIso();
+          item.error = null;
+          item.refreshingAt = now;
+          item.ingestAttempt = randomUUID();
+          item.updatedAt = now;
+          return project;
+        },
+        { actor: actorOf(user), authorize, touchActivity: true }
+      );
+    } catch (error) {
+      throw translateError(error);
+    }
+    if (!stored) throw new ProjectError('PROJECT_NOT_FOUND', 'Project not found');
+    const storedItem = stored.items.find(entry => entry.id === itemId);
+    const result = await this.ingest.start(
+      stored,
+      storedItem,
+      {
+        text,
+        contentType: 'text/markdown',
+        name: storedItem.name,
+        previousBlobKey: storedItem.text?.blobKey || null,
+        provenance: { origin: 'written', by: actorOf(user), at: nowIso() },
+        attempt: storedItem.ingestAttempt,
+        purpose: 'write'
+      },
+      { user, wait: true }
+    );
+    if (!result) throw new ProjectError('ITEM_NOT_FOUND', 'Item not found');
+    if (result.error) throw new ProjectError(result.error.code, result.error.message);
+    return { project: stored, item: result.item };
+  }
+
+  /**
    * Rename or pin an item.
    *
    * @param {string} projectId
@@ -811,6 +888,26 @@ export class ProjectService {
 /**
  * Run one cascade step without letting it strand the rest.
  */
+/** The origins whose stored text an editor may replace in the dialog. */
+export const EDITABLE_TEXT_ORIGINS = Object.freeze(['written', 'uploaded', 'imported']);
+
+/**
+ * Whether the text of an item can be edited in place: a stored text that
+ * came from the user (written, uploaded) or from the sources migration, not
+ * a link and not a document picked from a cloud drive or iFinder, whose text
+ * is the source's.
+ *
+ * @param {Object} item
+ * @returns {boolean}
+ */
+export function isItemTextEditable(item) {
+  return (
+    item?.storage === 'text' &&
+    Boolean(item.text?.blobKey) &&
+    EDITABLE_TEXT_ORIGINS.includes(item.provenance?.origin)
+  );
+}
+
 /**
  * A new item of `kind`, as every creation path stores it.
  *
