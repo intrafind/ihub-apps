@@ -832,6 +832,65 @@ describe('chatMaterializer: projects written under the chat lock', () => {
     });
   });
 
+  it('refuses a projectless question when a racing first turn claimed a project before it was appended', async () => {
+    for (const projectless of [{ expectedContainer: null }, null]) {
+      await withRepository(async ({ repository }) => {
+        // Turn A asked outside a project; it pauses after its chat patch,
+        // right before its question is appended.
+        let release;
+        const gate = new Promise(resolve => {
+          release = resolve;
+        });
+        let paused;
+        const atAppend = new Promise(resolve => {
+          paused = resolve;
+        });
+        const pausing = new Proxy(repository, {
+          get(target, key) {
+            const value = target[key];
+            if (key !== 'appendMessage')
+              return typeof value === 'function' ? value.bind(target) : value;
+            return async (chatId, message, options) => {
+              if (message.runId === 'chat-run-a') {
+                paused();
+                await gate;
+              }
+              return target.appendMessage(chatId, message, options);
+            };
+          }
+        });
+        const a = settleUserTurn({
+          repository: pausing,
+          chatId: CHAT_ID,
+          ownerId: OWNER,
+          identityMode: 'default',
+          appId: 'chat',
+          runId: 'chat-run-a',
+          content: 'a private question',
+          ...(projectless ? { projects: projects(projectless) } : {}),
+          projectId: null
+        });
+        await atAppend;
+        // Turn B opens the chat in a shared project meanwhile: no messages yet.
+        const b = await turn(repository, 'chat-run-b', { claimContainer: 'prj_shared' });
+        assert.ok(b.message, 'the claim holds while the chat has no messages');
+        release();
+        const refused = await a;
+        assert.equal(refused.refusal?.code, 'PROJECT_MISMATCH');
+        assert.equal(refused.message, null);
+        const { messages } = await repository.getMessages(CHAT_ID);
+        assert.deepEqual(
+          messages.map(entry => entry.content),
+          ['question of chat-run-b'],
+          'the projectless question never lands in the project chat'
+        );
+        const chat = await repository.getChat(CHAT_ID);
+        assert.equal(chat.projectId, 'prj_shared');
+        assert.equal(chat.activeRunId, 'chat-run-b', 'the accepted turn keeps the chat');
+      });
+    }
+  });
+
   it('keeps the attachments of two overlapping turns, within the cap', async () => {
     await withRepository(async ({ repository }) => {
       await userTurn(repository, { projects: projects({ attach: ['prj_a'] }) });

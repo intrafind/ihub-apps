@@ -23,6 +23,7 @@
 import { z } from 'zod';
 import configCache from '../../../configCache.js';
 import { isFeatureEnabled } from '../../../featureRegistry.js';
+import { isValidGraphId } from '../../integrations/graphIds.js';
 import { OAuthRefreshError } from '../../integrations/oauthRefreshError.js';
 import { ProjectError } from '../projectErrors.js';
 import { registerItemKind } from './registry.js';
@@ -114,8 +115,14 @@ export const office365Kind = registerItemKind({
   refSchema: z
     .object({
       providerId,
-      fileId: z.string().trim().min(1).max(500),
-      driveId: z.string().trim().max(500).optional(),
+      // Graph ids go into the request path (see `graphIds.js`).
+      fileId: z.string().trim().refine(isValidGraphId, 'not a valid Graph id'),
+      // An empty driveId means the user's own drive, as the service reads it.
+      driveId: z
+        .string()
+        .trim()
+        .refine(id => id === '' || isValidGraphId(id), 'not a valid Graph id')
+        .optional(),
       ...optionalMeta
     })
     .strict(),

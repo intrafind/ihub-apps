@@ -318,9 +318,13 @@ export default function registerProjectRoutes(app) {
       ensurePrincipal(req);
       const scope = LIST_SCOPES.includes(req.query.scope) ? req.query.scope : 'all';
       const repo = getProjectRepository();
-      if (!canHoldProjects(req.user)) return res.json({ items: [], nextCursor: null });
+      // A principal that holds no projects (an OAuth client, an agent, a
+      // delegated token) still reads the admin projects its apps link, so
+      // only the owned and shared scopes are off for it.
       const userProjectsOn =
-        isUserProjectsConfigured(configCache.getFeatures()) && repo.isAvailable();
+        canHoldProjects(req.user) &&
+        isUserProjectsConfigured(configCache.getFeatures()) &&
+        repo.isAvailable();
       // Without user projects there is nothing owned or shared: those scopes
       // answer empty rather than the admin projects the caller did not ask for.
       if (!userProjectsOn && (scope === 'mine' || scope === 'shared')) {
