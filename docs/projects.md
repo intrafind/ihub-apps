@@ -30,7 +30,7 @@ stores, or links to content that is fetched when it is used.
 | ------------------- | ---------------------------------------------------- | ------------------- | ----------------------------------------------- | ------------------------------------------------ |
 | `upload`            | An uploaded file, or text pasted into the dialog     | Extracted text      | —                                               | Project file storage is available                |
 | `url`               | A web page                                           | Link, cached 2 h    | —                                               | Always                                           |
-| `page`              | An iHub page (`contents/pages`) in one language      | Link                | —                                               | Always                                           |
+| `page`              | An iHub page (`contents/pages`) in one language      | Link                | The reading user (the page's own access rules)  | Always                                           |
 | `ifinder-document`  | One iFinder document                                 | Link                | The reading user                                | iFinder is configured                            |
 | `ifinder-query`     | The hits of an iFinder search                        | Link                | The reading user                                | iFinder is configured                            |
 | `office365`         | A file picked from OneDrive or SharePoint            | Text, taken at pick | The user who picked it (and refreshes it later) | A cloud storage provider of that type is enabled |
@@ -192,10 +192,13 @@ the app's links, projects attached to the chat, the workflow's links.
 - `tools`: only pinned documents go into the prompt; the model searches the rest.
 - `auto`: the whole project goes into the prompt when it fits what is left of the budget;
   otherwise only its pinned documents, and the model searches the rest.
-- **Pinned** documents always go into the prompt, in every mode, ahead of everything else, even
-  when they exceed the budget.
+- **Pinned** documents always go into the prompt, in every mode, ahead of the other documents of
+  their project, even when they exceed the budget.
 - Nothing injected may exceed **75 % of the model's context window**, whatever the mode. Documents
-  beyond that limit are cut from the prompt and stay reachable through `knowledge_read`.
+  beyond that limit are cut from the prompt and stay reachable through `knowledge_read`. The limit
+  is spent project by project, in the order of the links: a pinned document of a later project is
+  cut when the projects before it have used the limit up. Link the project whose pinned documents
+  must always be present first.
 
 Usable documents are those that are **Ready**, and **Outdated** ones whose old text is still
 readable. Documents that are waiting, failed or unreadable for this user are listed as unavailable,
@@ -326,8 +329,10 @@ Every member may open the chats in a project; chats of other members are read-on
 ### Retention
 
 With `platform.projects.retentionDays` above 0, a daily sweep deletes user projects without
-activity (documents added, refreshed or removed; chats started in or moved into the project) for
-that many days, with all their documents. As with **Delete project**, the project's chats are
+activity for that many days, with all their documents. Activity is anything that changes the
+project or is done in it: documents added, refreshed, renamed, pinned or removed; settings or
+members changed; chats started in or moved into the project; and a message sent in one of its
+chats (counted at most once every five minutes). As with **Delete project**, the project's chats are
 kept: they leave the project and stay in their owners' chat history. The deletion is audited. The
 default, 0, keeps projects until someone deletes them. Admin projects have no retention.
 
@@ -478,8 +483,10 @@ top level:
 
 ### User API
 
-Every route needs the `projects` flag and a signed-in user. Creating projects, members and transfer
-also need `userProjects`. _Who_ is the least role on the project: member (any role), editor or
+Every route needs the `projects` flag and a signed-in user. User projects also need the
+`userProjects` flag: while it is off, every route of a user project, reads included, answers
+`403` with the code `USER_PROJECTS_DISABLED` for everyone but a full admin, who keeps access for
+compliance work. _Who_ is the least role on the project: member (any role), editor or
 owner. On an admin project, anyone whose app, workflow or agent links it counts as a member;
 changing it takes a content admin.
 

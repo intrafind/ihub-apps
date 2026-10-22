@@ -730,8 +730,10 @@ export NODE_OPTIONS="--max-old-space-size=4096"
    page): a failed document shows its reason (no text layer, scanner rejected, too large).
 2. **Check the link:** the app, workflow or agent must list the project in `projects`, and the
    project must be enabled. Admin projects are reachable only through such a link.
-3. **Check the flags:** user projects need the `userProjects` feature flag and the `projects`
-   group permission; a project the running user may not use is skipped silently.
+3. **Check the flags and the membership:** user projects need the `userProjects` feature flag;
+   using an existing project takes membership (or ownership), while the `projects` group
+   permission is only needed to create one. A project the running user may not use is skipped
+   silently.
 4. **Look for interrupted extraction:** a document still waiting or extracting after
    `platform.projects.ingest.staleAfterMinutes` (30 by default), for example because the server
    restarted, is marked interrupted. The check runs shortly after startup and every 15 minutes, so
