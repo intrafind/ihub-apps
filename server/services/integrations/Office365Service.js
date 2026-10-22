@@ -19,6 +19,13 @@ import { isUnavailableError, refreshFailureFromResponse } from './oauthRefreshEr
 /** Redirects a file download may follow. */
 const MAX_DOWNLOAD_REDIRECTS = 5;
 
+/**
+ * The SSRF guard every hop of an item download must pass. A module-level
+ * seam rather than a method, so a test can let a loopback server through
+ * without the service carrying a method that never uses its instance.
+ */
+export const downloadGuard = { checkTarget: url => assertPublicTarget(url) };
+
 class Office365Service extends OAuthIntegrationBase {
   constructor() {
     super({
@@ -821,17 +828,6 @@ class Office365Service extends OAuthIntegrationBase {
   }
 
   /**
-   * The check every hop of a download URL passes (the SSRF guard); a seam
-   * for tests.
-   *
-   * @param {URL} url
-   * @returns {Promise<{ok: boolean, reason?: string, addresses?: string[]}>}
-   */
-  _checkDownloadTarget(url) {
-    return assertPublicTarget(url);
-  }
-
-  /**
    * Fetch the `@microsoft.graph.downloadUrl` of an item. The URL comes from a
    * Graph response, so it is treated as untrusted: every hop, redirects
    * included, must pass the SSRF guard (DNS pinned to the checked
@@ -853,7 +849,7 @@ class Office365Service extends OAuthIntegrationBase {
       if (hop.protocol !== 'https:' && hop.protocol !== 'http:') {
         throw new Error(`Unsupported download URL scheme ${hop.protocol}`);
       }
-      const target = await this._checkDownloadTarget(hop);
+      const target = await downloadGuard.checkTarget(hop);
       if (!target?.ok) {
         throw new Error(`The download URL is not allowed (${target?.reason || 'blocked'})`);
       }
