@@ -4201,7 +4201,9 @@
         "moved": "{{count}} Elemente verschoben",
         "deleted": "gelöscht",
         "relinked": "{{count}} Verknüpfungen aktualisiert",
-        "kept": "Mit seinen Verknüpfungen behalten, weil nicht alle Elemente verschoben werden konnten:"
+        "kept": "Mit seinen Verknüpfungen behalten, weil nicht alle Elemente verschoben werden konnten:",
+        "shipped": "Dieses Projekt wird mit iHub ausgeliefert und kommt beim nächsten Serverstart zurück. Deaktivieren Sie es dann, damit es nicht stört.",
+        "dependentsUnknown": "Welche Apps, Workflows oder Agenten diese Projekte verknüpfen, konnte nicht geprüft werden; die Zusammenführung aktualisiert ihre Verknüpfungen trotzdem."
       }
     }
   },

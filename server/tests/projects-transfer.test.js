@@ -253,6 +253,90 @@ describe('transferring items', () => {
     }
   });
 
+  it('does not touch the blob store for an item the full target refuses', async () => {
+    await createProject('pre-from');
+    await createProject('pre-to');
+    const one = await addText('pre-from', 'one.md', 'one');
+    const two = await addText('pre-from', 'two.md', 'two');
+    setLimits({ maxFiles: 1 });
+    const puts = [];
+    const put = repository.blobs.put.bind(repository.blobs);
+    repository.blobs.put = (...args) => {
+      puts.push(args[1]);
+      return put(...args);
+    };
+    try {
+      const result = await service.transferItems('pre-from', [one.id, two.id], 'pre-to', {
+        mode: 'copy',
+        user: ADMIN
+      });
+      assert.equal(result.transferred.length, 1);
+      assert.equal(result.failed[0].code, 'QUOTA_FILES');
+      assert.equal(puts.length, 1, 'only the item that fits is encrypted again');
+    } finally {
+      repository.blobs.put = put;
+      setLimits({});
+    }
+  });
+
+  it('rolls the copy back when the source cannot be changed', async () => {
+    await createProject('rb-from');
+    await createProject('rb-to');
+    const doc = await addText('rb-from', 'doc.md', 'doc');
+    const original = service.removeItem.bind(service);
+    for (const failure of [
+      () => Promise.reject(new Error('storage went away')),
+      () => Promise.resolve(null)
+    ]) {
+      service.removeItem = (projectId, ...rest) =>
+        projectId === 'rb-from' ? failure() : original(projectId, ...rest);
+      try {
+        const result = await service.transferItems('rb-from', [doc.id], 'rb-to', {
+          mode: 'move',
+          user: ADMIN
+        });
+        assert.equal(result.transferred.length, 0);
+        assert.equal(result.failed.length, 1);
+        assert.equal((await repository.get('rb-to')).items.length, 0);
+        assert.deepEqual(await blobKeys('rb-to__'), []);
+        assert.equal((await repository.get('rb-from')).items.length, 1);
+      } finally {
+        service.removeItem = original;
+      }
+    }
+  });
+
+  it('keeps an item that changed while it was being moved', async () => {
+    await createProject('lost-from');
+    await createProject('lost-to');
+    const doc = await addText('lost-from', 'doc.md', 'old text');
+    // The admin edits the item while its copy is being written.
+    const put = repository.blobs.put.bind(repository.blobs);
+    repository.blobs.put = async (...args) => {
+      const stored = await put(...args);
+      await repository.mutate('lost-from', project => {
+        project.items[0].name = 'renamed.md';
+        project.items[0].updatedAt = new Date(Date.now() + 1000).toISOString();
+        return project;
+      });
+      return stored;
+    };
+    try {
+      const result = await service.transferItems('lost-from', [doc.id], 'lost-to', {
+        mode: 'move',
+        user: ADMIN
+      });
+      assert.equal(result.transferred.length, 0);
+      assert.equal(result.failed[0].code, 'PROJECT_MISMATCH');
+      const source = await repository.get('lost-from');
+      assert.equal(source.items[0].name, 'renamed.md');
+      assert.equal((await repository.get('lost-to')).items.length, 0);
+      assert.deepEqual(await blobKeys('lost-to__'), []);
+    } finally {
+      repository.blobs.put = put;
+    }
+  });
+
   it('refuses the same project, a missing project and an unknown mode', async () => {
     await createProject('guard-a');
     await assert.rejects(service.transferItems('guard-a', ['x'], 'guard-a', { user: ADMIN }), {
@@ -496,6 +580,30 @@ describe('merging projects', () => {
       );
     } finally {
       service.transferItems = original;
+    }
+  });
+
+  it('keeps the emptied source when its links could not be re-pointed', async () => {
+    await createProject('relink');
+    await createProject('relink-src');
+    await addText('relink-src', 'x.md', 'x');
+    const original = configStore.listDocuments;
+    configStore.listDocuments = () => Promise.reject(new Error('apps could not be read'));
+    try {
+      const result = await service.mergeProjects(['relink-src'], 'relink', {
+        user: ADMIN,
+        deleteSources: true
+      });
+      const [entry] = result.sources;
+      assert.equal(entry.moved, 1);
+      assert.equal(entry.merged, true);
+      assert.equal(entry.deleted, false);
+      assert.match(entry.error, /apps could not be read/);
+      // The items are in the target and the source still exists for a retry.
+      assert.equal((await repository.get('relink')).items.length, 1);
+      assert.notEqual(await repository.get('relink-src'), null);
+    } finally {
+      configStore.listDocuments = original;
     }
   });
 

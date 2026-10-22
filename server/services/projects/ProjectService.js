@@ -692,10 +692,11 @@ export class ProjectService {
    *
    * @param {string} projectId
    * @param {string} itemId
-   * @param {{user: Object, authorize?: Function}} options
+   * @param {{user: Object, authorize?: Function, expectUpdatedAt?: string}} options
+   *   `expectUpdatedAt`: remove only an item still stamped so (`PROJECT_MISMATCH` otherwise).
    * @returns {Promise<Object|null>} The project after the removal, or null.
    */
-  async removeItem(projectId, itemId, { user, authorize }) {
+  async removeItem(projectId, itemId, { user, authorize, expectUpdatedAt }) {
     let stored = null;
     let found = false;
     let removed = null;
@@ -705,6 +706,11 @@ export class ProjectService {
         project => {
           const before = (project.items || []).length;
           removed = (project.items || []).find(entry => entry.id === itemId) || null;
+          // A move removes the item it copied: if it was changed meanwhile
+          // (a refresh, an edit, a rename) the copy is stale and the item stays.
+          if (expectUpdatedAt !== undefined && removed && removed.updatedAt !== expectUpdatedAt) {
+            throw new ProjectError('PROJECT_MISMATCH', 'The item changed while it was being moved');
+          }
           project.items = (project.items || []).filter(entry => entry.id !== itemId);
           found = project.items.length !== before;
           return found ? project : null;
@@ -878,6 +884,10 @@ export class ProjectService {
       );
     }
     const newId = (target.items || []).some(entry => entry.id === item.id) ? mintItemId() : item.id;
+    // Refuse before the text is decrypted and encrypted again: a full target
+    // would otherwise cost every item a round trip through the blob store.
+    // The binding check runs again under the target's lock below.
+    this._checkItemQuota(target, { bytes: Number(item.text?.original?.bytes) || 0 });
     const now = nowIso();
 
     let block = null;
@@ -956,7 +966,11 @@ export class ProjectService {
     if (mode === 'move') {
       let removed = null;
       try {
-        removed = await this.removeItem(sourceId, itemId, { user, authorize: authorizeSource });
+        removed = await this.removeItem(sourceId, itemId, {
+          user,
+          authorize: authorizeSource,
+          expectUpdatedAt: item.updatedAt
+        });
       } catch (error) {
         await this.removeItem(targetId, newId, { user }).catch(() => null);
         throw translateError(error);

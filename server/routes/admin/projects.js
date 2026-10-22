@@ -11,6 +11,8 @@
  *
  * @module routes/admin/projects
  */
+import fs from 'node:fs/promises';
+import path from 'node:path';
 import configCache from '../../configCache.js';
 import { isAdminAuthRequired } from '../../middleware/adminAuth.js';
 import { contentAdminAuth } from '../../middleware/contentAdminAuth.js';
@@ -33,6 +35,7 @@ import {
 } from '../../services/projects/ProjectRepository.js';
 import { getProjectService } from '../../services/projects/ProjectService.js';
 import { NO_ACCESS } from '../../services/projects/projectAccess.js';
+import { defaultsDir } from '../../services/projects/projectImport.js';
 import { findDependencies } from '../../services/projects/projectLinks.js';
 import { PROJECTS_FEATURE, projectSettings } from '../../services/projects/projectSettings.js';
 import { enabledItemKinds, listItemKinds } from '../../services/projects/kinds/registry.js';
@@ -99,6 +102,25 @@ function parseBody(schema, req, res) {
 
 function adminView(project) {
   return serializeProject(project, ADMIN_PERMISSIONS, { adminView: true });
+}
+
+/** Whether iHub ships a default project with this id. */
+async function isShippedProject(id) {
+  try {
+    await fs.access(path.join(defaultsDir(), 'projects', `${id}.json`));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** The apps, workflows and agents a merge re-pointed, for the audit entry. */
+function relinkedSummary(sources) {
+  const changed = new Set();
+  for (const entry of sources) {
+    for (const link of entry.relinked || []) changed.add(`${link.type}:${link.id}`);
+  }
+  return changed.size ? `; re-pointed links of ${[...changed].join(', ')}` : '';
 }
 
 /** Load an admin project by `:id`, 404 when missing. */
@@ -355,14 +377,22 @@ export default function registerAdminProjectsRoutes(app) {
         resourceId: body.targetId,
         summary: `Merged ${result.sources.length} admin project(s) into "${projectName(result.target)}": ${result.sources
           .map(entry => `${entry.id} (${entry.moved} moved${entry.deleted ? ', deleted' : ''})`)
-          .join(', ')}`
+          .join(', ')}${relinkedSummary(result.sources)}`
       });
       await snapshot(req, body.targetId, before.get(body.targetId), result.target);
       for (const entry of result.sources) {
         const after = entry.deleted ? null : await repo.get(entry.id);
         await snapshot(req, entry.id, before.get(entry.id), after);
       }
-      res.json({ target: adminView(result.target), sources: result.sources });
+      // A project that ships with iHub is copied back at the next start once
+      // it is deleted (`copyDefaultConfiguration`); the page says so.
+      const sources = await Promise.all(
+        result.sources.map(async entry => ({
+          ...entry,
+          shipped: entry.deleted && (await isShippedProject(entry.id))
+        }))
+      );
+      res.json({ target: adminView(result.target), sources });
     } catch (error) {
       sendProjectError(res, error, 'merge projects');
     }

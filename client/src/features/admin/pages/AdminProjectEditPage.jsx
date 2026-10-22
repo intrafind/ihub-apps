@@ -300,6 +300,10 @@ function AdminProjectEditPage() {
     );
   }
 
+  // The selection as it is now: an item removed or moved since it was ticked
+  // is not selected any more.
+  const selectedItems = (project?.items || []).filter(item => selectedItemIds.has(item.id));
+
   const title = isNew
     ? t('admin.projects.createNew', 'New project')
     : localizedText(project?.name, language) || id;
@@ -562,14 +566,14 @@ function AdminProjectEditPage() {
               </p>
             ) : (
               <>
-                {selectedItemIds.size > 0 && (
+                {selectedItems.length > 0 && (
                   <div
                     data-testid="item-selection-bar"
                     className="mb-4 bg-indigo-50 dark:bg-indigo-900/30 border border-indigo-200 dark:border-indigo-800 rounded-lg p-3 flex flex-wrap items-center justify-between gap-3"
                   >
                     <span className="text-sm font-medium text-indigo-800 dark:text-indigo-200">
                       {t('admin.projects.items.selectedCount', '{{count}} items selected', {
-                        count: selectedItemIds.size
+                        count: selectedItems.length
                       })}
                     </span>
                     <div className="flex gap-2">
@@ -580,9 +584,7 @@ function AdminProjectEditPage() {
                           onClick={() =>
                             setTransfer({
                               mode,
-                              items: (project?.items || []).filter(item =>
-                                selectedItemIds.has(item.id)
-                              )
+                              items: selectedItems
                             })
                           }
                           className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1 rounded-sm text-sm font-medium"
@@ -606,7 +608,7 @@ function AdminProjectEditPage() {
                   items={project?.items || []}
                   kinds={kinds}
                   busyItemId={busyItemId}
-                  selectedIds={selectedItemIds}
+                  selectedIds={new Set(selectedItems.map(item => item.id))}
                   onSelectionChange={setSelectedItemIds}
                   onTogglePinned={handleTogglePinned}
                   onPreview={setPreviewItem}

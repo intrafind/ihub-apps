@@ -1365,6 +1365,29 @@ describe('moving, copying and merging admin projects', () => {
     }
   });
 
+  it('says which deleted source ships with iHub and comes back at the next start', async () => {
+    await adminProject('ship-keep', ['kept']);
+    // `meeting-knowledge-base` is one of the shipped default projects.
+    await adminProject('meeting-knowledge-base', ['m']);
+    await adminProject('ship-own', ['o']);
+    const merged = await drive(route.adminMerge, {
+      user: EDITOR,
+      body: {
+        sourceIds: ['meeting-knowledge-base', 'ship-own'],
+        targetId: 'ship-keep',
+        deleteSources: true
+      }
+    });
+    assert.equal(merged.statusCode, 200, JSON.stringify(merged.body));
+    assert.deepEqual(
+      merged.body.sources.map(entry => [entry.id, entry.deleted, entry.shipped]),
+      [
+        ['meeting-knowledge-base', true, true],
+        ['ship-own', true, false]
+      ]
+    );
+  });
+
   it('merges projects and reports what each source did', async () => {
     await adminProject('merge-keep', ['kept']);
     await adminProject('merge-a', ['a']);

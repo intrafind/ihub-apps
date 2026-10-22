@@ -192,6 +192,29 @@ describe('TransferItemsDialog', () => {
     expect(onClose).toHaveBeenCalled();
   });
 
+  it('stays open while the request runs and closes after it settled', async () => {
+    let settle;
+    mockApi.transferAdminProjectItems.mockReturnValue(
+      new Promise(resolve => {
+        settle = resolve;
+      })
+    );
+    const { onClose, onDone } = renderDialog();
+    const select = await screen.findByLabelText('Target project');
+    await waitFor(() => expect(select).not.toBeDisabled());
+    fireEvent.change(select, { target: { value: 'faq' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Move items' }));
+    await waitFor(() => expect(mockApi.transferAdminProjectItems).toHaveBeenCalled());
+
+    expect(screen.getByRole('button', { name: 'Cancel' })).toBeDisabled();
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(onClose).not.toHaveBeenCalled();
+
+    settle({ transferred: [{ itemId: 'i1' }], failed: [], source: SITE, target: PROJECTS[1] });
+    await waitFor(() => expect(onDone).toHaveBeenCalledTimes(1));
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
   it('shows the server message when the request fails', async () => {
     mockApi.transferAdminProjectItems.mockRejectedValue(new Error('Project not found'));
     const { onDone } = renderDialog();
@@ -216,6 +239,71 @@ describe('MergeProjectsDialog', () => {
     await waitFor(() =>
       expect(summary).toHaveTextContent('1 apps, workflows or agents will link the kept project')
     );
+  });
+
+  it('says so when the apps that link the projects could not be looked up', async () => {
+    mockApi.fetchAdminProjectDependencies.mockRejectedValue(new Error('nope'));
+    render(<MergeProjectsDialog projects={PROJECTS} onClose={jest.fn()} onDone={jest.fn()} />);
+    await waitFor(() =>
+      expect(screen.getByTestId('merge-summary')).toHaveTextContent(
+        'could not be checked; the merge still updates their links'
+      )
+    );
+    expect(screen.getByTestId('merge-summary')).not.toHaveTextContent('0 apps');
+  });
+
+  it('stays open while the merge runs', async () => {
+    let settle;
+    mockApi.mergeAdminProjects.mockReturnValue(
+      new Promise(resolve => {
+        settle = resolve;
+      })
+    );
+    const onClose = jest.fn();
+    const onDone = jest.fn();
+    render(<MergeProjectsDialog projects={PROJECTS} onClose={onClose} onDone={onDone} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Merge projects' }));
+    await waitFor(() => expect(mockApi.mergeAdminProjects).toHaveBeenCalled());
+
+    expect(screen.getByRole('button', { name: 'Cancel' })).toBeDisabled();
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(onClose).not.toHaveBeenCalled();
+
+    settle({ target: SITE, sources: [] });
+    await screen.findByTestId('merge-result');
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+    expect(onDone).toHaveBeenCalledTimes(1);
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('warns that a deleted project that ships with iHub comes back', async () => {
+    mockApi.mergeAdminProjects.mockResolvedValue({
+      target: SITE,
+      sources: [
+        {
+          id: 'faq',
+          moved: 1,
+          failed: [],
+          relinked: [],
+          merged: true,
+          deleted: true,
+          shipped: true
+        },
+        {
+          id: 'news',
+          moved: 0,
+          failed: [],
+          relinked: [],
+          merged: true,
+          deleted: true,
+          shipped: false
+        }
+      ]
+    });
+    render(<MergeProjectsDialog projects={PROJECTS} onClose={jest.fn()} onDone={jest.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Merge projects' }));
+    const result = await screen.findByTestId('merge-result');
+    expect(result.textContent.match(/comes back at the next server start/g)).toHaveLength(1);
   });
 
   it('warns about instructions that are not carried over', () => {

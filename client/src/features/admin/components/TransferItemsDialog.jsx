@@ -98,7 +98,10 @@ function TransferItemsDialog({ project, items, initialMode = 'move', onClose, on
     }
   };
 
+  // Closing while the request runs would lose its result report and leave the
+  // list stale: the dialog stays until the request has settled.
   const close = () => {
+    if (submitting) return;
     if (result && result.transferred.length > 0) onDone(result);
     onClose();
   };
@@ -253,7 +256,12 @@ function TransferItemsDialog({ project, items, initialMode = 'move', onClose, on
             )}
           </div>
           <div className="px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-2">
-            <button type="button" onClick={close} className={SECONDARY_BUTTON}>
+            <button
+              type="button"
+              onClick={close}
+              disabled={submitting}
+              className={SECONDARY_BUTTON}
+            >
               {t('common.cancel', 'Cancel')}
             </button>
             <button type="submit" disabled={!targetId || submitting} className={PRIMARY_BUTTON}>

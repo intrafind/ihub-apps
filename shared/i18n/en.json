@@ -3918,7 +3918,9 @@
         "moved": "{{count}} items moved",
         "deleted": "deleted",
         "relinked": "{{count}} links updated",
-        "kept": "Kept with its links, because not every item could move:"
+        "kept": "Kept with its links, because not every item could move:",
+        "shipped": "This project ships with iHub and comes back at the next server start. Disable it then to keep it out of the way.",
+        "dependentsUnknown": "Which apps, workflows or agents link these projects could not be checked; the merge still updates their links."
       }
     }
   },

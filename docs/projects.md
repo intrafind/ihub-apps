@@ -141,6 +141,8 @@ together.
 - Items go one at a time. One that is still **Waiting** or **Extracting**, or **Failed**, cannot go
   yet (`ITEM_NOT_READY`); one that would exceed the target's limits is refused (`QUOTA_*`). The
   dialog lists these and the other items still go.
+- An item that is changed while it moves (a refresh, an edit, a rename) stays where it is and is
+  reported (`PROJECT_MISMATCH`); move it again.
 - A moved item keeps its id unless the target already has an item with that id.
 - Items move between admin projects only, not into or out of a user project.
 - A copy of the shipped documentation is an independent document; a moved one keeps syncing with
@@ -156,6 +158,11 @@ link the other projects.
    one link, at the position of the first. The link's mode is the one they shared, or `auto` when
    they differed, and it may write when any of them could.
 3. With **Delete the emptied projects** (on by default), the merged projects are deleted.
+
+A project that ships with iHub (the `faq`, `meeting-knowledge-base` and `intrafind-website-*`
+projects, for example) is restored at the next server start once it is deleted, like any missing
+default file. The merge result says so for such a project; disable it then, or leave **Delete the
+emptied projects** off and disable it yourself.
 
 A project whose items did not all move (an item still being processed, a limit) is left alone:
 it keeps its remaining items and its links, nothing is deleted, and the result says why. Run the

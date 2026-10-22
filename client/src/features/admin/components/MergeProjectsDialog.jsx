@@ -65,13 +65,17 @@ function MergeProjectsDialog({ projects, onClose, onDone }) {
       settled => {
         if (cancelled) return;
         const unique = new Map();
+        let failed = false;
         for (const outcome of settled) {
-          if (outcome.status !== 'fulfilled') continue;
+          if (outcome.status !== 'fulfilled') {
+            failed = true;
+            continue;
+          }
           for (const dependency of outcome.value) {
             unique.set(`${dependency.type}:${dependency.id}`, dependency);
           }
         }
-        setLoadedDependents({ targetId, list: [...unique.values()] });
+        setLoadedDependents({ targetId, list: [...unique.values()], failed });
       }
     );
     return () => {
@@ -103,7 +107,10 @@ function MergeProjectsDialog({ projects, onClose, onDone }) {
     }
   };
 
+  // Closing while the merge runs would lose its result report and leave the
+  // list stale: the dialog stays until the request has settled.
   const close = () => {
+    if (submitting) return;
     if (result) onDone(result);
     onClose();
   };
@@ -171,6 +178,14 @@ function MergeProjectsDialog({ projects, onClose, onDone }) {
                   </p>
                 ))}
                 {entry.error && <p className="mt-1 ml-6 text-red-600 break-words">{entry.error}</p>}
+                {entry.shipped && (
+                  <p className="mt-1 ml-6 text-amber-700 dark:text-amber-300">
+                    {t(
+                      'admin.projects.merge.shipped',
+                      'This project ships with iHub and comes back at the next server start. Disable it then to keep it out of the way.'
+                    )}
+                  </p>
+                )}
               </li>
             ))}
           </ul>
@@ -253,11 +268,16 @@ function MergeProjectsDialog({ projects, onClose, onDone }) {
             )}{' '}
             {dependents === null
               ? t('common.loading', 'Loading...')
-              : t(
-                  'admin.projects.merge.dependents',
-                  '{{count}} apps, workflows or agents will link the kept project instead.',
-                  { count: dependents.length }
-                )}
+              : loadedDependents.failed
+                ? t(
+                    'admin.projects.merge.dependentsUnknown',
+                    'Which apps, workflows or agents link these projects could not be checked; the merge still updates their links.'
+                  )
+                : t(
+                    'admin.projects.merge.dependents',
+                    '{{count}} apps, workflows or agents will link the kept project instead.',
+                    { count: dependents.length }
+                  )}
           </p>
 
           {withInstructions.length > 0 && (
@@ -298,7 +318,7 @@ function MergeProjectsDialog({ projects, onClose, onDone }) {
           )}
         </div>
         <div className="px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-2">
-          <button type="button" onClick={close} className={SECONDARY_BUTTON}>
+          <button type="button" onClick={close} disabled={submitting} className={SECONDARY_BUTTON}>
             {t('common.cancel', 'Cancel')}
           </button>
           <button type="submit" disabled={submitting} className={PRIMARY_BUTTON}>
