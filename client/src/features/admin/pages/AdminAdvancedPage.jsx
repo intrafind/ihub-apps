@@ -108,26 +108,31 @@ function AdminAdvancedPage() {
               'The setup wizard is shown to everyone until it has been completed. Turn it off if you configure iHub through platform.json, environment variables or configuration management.'
             )}
           </p>
-          <label className="flex items-start gap-3 mb-4">
+          <div className="flex items-start gap-3 mb-4">
             <input
+              id="onboarding-disabled"
               type="checkbox"
               className="mt-1 h-4 w-4 rounded border-gray-300"
               checked={onboardingDisabled === true}
               disabled={onboardingDisabled === null || onboardingSaving}
+              aria-describedby="onboarding-disabled-hint"
               onChange={e => handleOnboardingToggle(e.target.checked)}
             />
-            <span>
-              <span className="block text-sm font-medium text-gray-900 dark:text-gray-100">
+            <div>
+              <label
+                htmlFor="onboarding-disabled"
+                className="block text-sm font-medium text-gray-900 dark:text-gray-100"
+              >
                 {t('admin.onboarding.disable', "Don't show the onboarding (setup wizard)")}
-              </span>
-              <span className="block text-sm text-gray-600 dark:text-gray-400">
+              </label>
+              <p id="onboarding-disabled-hint" className="text-sm text-gray-600 dark:text-gray-400">
                 {t(
                   'admin.onboarding.disableHint',
                   'Nobody is redirected to /setup any more. An admin can still open /setup directly.'
                 )}
-              </span>
-            </span>
-          </label>
+              </p>
+            </div>
+          </div>
           {onboardingMessage && (
             <p
               role="status"
