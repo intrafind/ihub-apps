@@ -48,6 +48,7 @@ import PromptService from '../services/PromptService.js';
 import { chatPostSchema } from '../validators/index.js';
 import { resolveChatProjects } from '../services/knowledge/chatProjects.js';
 import { materializeUserTurn } from '../services/chat/chatMaterializer.js';
+import { beginTranscriptionTurn } from '../services/chat/transcriptionTurn.js';
 import { tryHandleMentionWorkflow } from '../services/workflow/mentionWorkflow.js';
 import { runToolCallScope } from '../services/sources/toolCallScope.js';
 import { resolveCitations } from '../../shared/sources/citations.js';
@@ -990,6 +991,48 @@ describe('chat container persistence', () => {
       configCache.setCacheEntry('config/apps.json', [
         { id: 'chat', name: { en: 'Chat' }, enabled: true }
       ]);
+      await repo.removeChatMarker(textProject.id, chatId);
+    }
+  });
+
+  it('opens a chat inside its project with a transcription turn', async () => {
+    const chatId = 'chat-container-transcribed';
+    const { repository, writes } = recordingChats(textProject.id);
+    const user = { ...ADA, permissions: { apps: new Set(['chat']), models: new Set(['*']) } };
+    const begin = extra =>
+      beginTranscriptionTurn({
+        repository,
+        persist: true,
+        user,
+        chatId,
+        appId: 'chat',
+        modelId: 'gemini-3.5-transcribe',
+        attachment: { name: 'meeting.mp3', type: 'audio/mpeg', bytes: 10 },
+        ...extra
+      });
+    try {
+      const { ok, turn } = await begin({ projectId: textProject.id });
+      assert.equal(ok, true);
+      assert.ok(turn);
+      const first = writes.find(write => write.chatId === chatId && 'activeRunId' in write.patch);
+      assert.equal(first?.patch.projectId, textProject.id, 'the container reaches the chat');
+      const markers = await repo.listChatMarkers(textProject.id);
+      assert.ok(
+        markers.some(marker => marker.chatId === chatId),
+        'the project lists the chat'
+      );
+
+      // A project the caller cannot use refuses the turn before any upstream
+      // session is dialled; an omitted project leaves the chat alone.
+      assert.deepEqual(await begin({ projectId: 'prj_nobody_has_this' }), {
+        ok: false,
+        code: 'project-refused'
+      });
+      const plain = await begin({});
+      assert.equal(plain.ok, true);
+      const last = writes.at(-1);
+      assert.equal('projectId' in last.patch, false, 'an omitted project is not a change');
+    } finally {
       await repo.removeChatMarker(textProject.id, chatId);
     }
   });

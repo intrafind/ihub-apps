@@ -26,6 +26,7 @@ import { authorizeChat } from './chatAccess.js';
 import { getChatRepository, isPersistableChatId } from './ChatRepository.js';
 import { isChatPersistenceActive } from './chatPersistence.js';
 import { materializeUserTurn, settleAssistantTurn } from './chatMaterializer.js';
+import { resolveChatProjects } from '../knowledge/chatProjects.js';
 
 const COMPONENT = 'TranscriptionTurn';
 const MAX_LABEL_CHARS = 300;
@@ -52,13 +53,17 @@ function appPermitted(user, appId) {
  * @param {boolean} [params.ephemeral]
  * @param {string} [params.clientMessageId] - The client's exchange id.
  * @param {{name?: string, type?: string, bytes?: number}} [params.attachment]
+ * @param {string} [params.projectId] - The project the chat opens inside
+ *   (#1036); resolved like the chat POST's `projectId`, so a chat that a
+ *   transcription turn starts is listed in its project from the first turn.
  * @param {Object} [params.repository] - Defaults to the process-wide one.
  * @param {boolean} [params.persist] - Whether this turn is stored; decided from
  *   the live config (`isChatPersistenceActive`) when omitted.
  * @returns {Promise<{ok: true, turn: Object|null}|{ok: false, code: string}>}
  *   `turn` is null when nothing is to be stored (no chat named, persistence
  *   off); `ok: false` when the chat named is not the user's to write
- *   (`not-permitted`) or the question could not be stored (`not-stored`).
+ *   (`not-permitted`), the project named cannot take the chat
+ *   (`project-refused`) or the question could not be stored (`not-stored`).
  */
 export async function beginTranscriptionTurn({
   user,
@@ -68,6 +73,7 @@ export async function beginTranscriptionTurn({
   ephemeral,
   clientMessageId,
   attachment,
+  projectId,
   repository = getChatRepository(),
   persist = isChatPersistenceActive({
     features: configCache.getFeatures(),
@@ -81,6 +87,24 @@ export async function beginTranscriptionTurn({
   if (!appPermitted(user, appId)) return { ok: false, code: 'not-permitted' };
   const access = await authorizeChat(chatId, user, { repository, intent: 'write' });
   if (!access.ok) return { ok: false, code: 'not-permitted' };
+  // The container project, checked against the caller's access the way the
+  // chat POST checks it; refused before the upstream is dialled, like the
+  // chat itself. An omitted project changes nothing.
+  const chatProjects = await resolveChatProjects({
+    req: { user },
+    chat: access.chat,
+    app: configCache.getApps()?.data?.find(entry => entry?.id === appId) || null,
+    projectId
+  });
+  if (!chatProjects.ok) {
+    logger.warn('Transcription turn refused: project', {
+      component: COMPONENT,
+      chatId,
+      projectId,
+      code: chatProjects.code
+    });
+    return { ok: false, code: 'project-refused' };
+  }
 
   const identityMode = access.chat?.identityMode || runLog.identityMode();
   const principal = await resolvePrincipal(user, { mode: identityMode });
@@ -105,6 +129,7 @@ export async function beginTranscriptionTurn({
     content: label,
     clientMessageId,
     attachments: attachment ? [attachment] : [],
+    ...(chatProjects.chatPatch ? { chat: chatProjects.chatPatch } : {}),
     // The audio is not kept, so the question cannot be edited or resent.
     message: { transcription: true }
   });
