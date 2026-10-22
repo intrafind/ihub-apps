@@ -343,6 +343,29 @@ export async function precondition(ctx) {
   return false;
 }
 
+/**
+ * Whether `relPath` holds exactly the shipped default: the default copy runs
+ * before the migrations, so on an upgrade a project file identical to
+ * `server/defaults/projects/<id>.json` was written moments ago by that copy,
+ * not kept by an admin, and the admin's source of the same id must win.
+ *
+ * @param {Object} ctx
+ * @param {string} relPath
+ * @returns {Promise<boolean>}
+ */
+async function isSeededDefault(ctx, relPath) {
+  if (typeof ctx.readDefaultJson !== 'function') return false;
+  let shipped;
+  let existing;
+  try {
+    shipped = await ctx.readDefaultJson(relPath);
+    existing = await ctx.readJson(relPath);
+  } catch {
+    return false;
+  }
+  return JSON.stringify(existing) === JSON.stringify(shipped);
+}
+
 export async function up(ctx) {
   const now = NOW();
   let sources = [];
@@ -377,8 +400,14 @@ export async function up(ctx) {
     project.id = idOf(source.id);
     const relPath = `projects/${project.id}.json`;
     if (await ctx.fileExists(relPath)) {
-      ctx.log(`Project ${project.id} already exists — not overwritten`);
-      continue;
+      if (await isSeededDefault(ctx, relPath)) {
+        ctx.log(
+          `Project ${project.id} is the shipped default seeded on this start — replaced by the converted source "${source.id}"`
+        );
+      } else {
+        ctx.log(`Project ${project.id} already exists — not overwritten`);
+        continue;
+      }
     }
     if (!item)
       ctx.warn(

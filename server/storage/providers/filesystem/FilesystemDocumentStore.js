@@ -69,6 +69,9 @@ const MAX_LIMIT = 1000;
  */
 const READ_CONCURRENCY = 16;
 
+/** Marks a listed document that is present but cannot be parsed. */
+const UNREADABLE = Symbol('unreadable');
+
 /** Sub-directories of a namespace that hold bookkeeping rather than documents. */
 const OWNERS_DIR = '.owners';
 const LOCKS_DIR = '.locks';
@@ -427,7 +430,8 @@ export class FilesystemDocumentStore extends DocumentStore {
    * @param {number} [opts.limit=100] - Page size, clamped to 1..1000
    * @param {string} [opts.cursor] - Opaque cursor from a previous page
    * @param {boolean} [opts.includeData=true] - False omits `data` and keeps the metadata
-   * @returns {Promise<{items: Object[], nextCursor: string|null}>}
+   * @returns {Promise<{items: Object[], nextCursor: string|null, skipped?: number}>}
+   *   `skipped` counts documents present but unreadable, when there were any
    * @throws {StorageError} Code `INVALID_CURSOR` when `cursor` cannot be decoded
    */
   async list(ns, opts = {}) {
@@ -458,10 +462,18 @@ export class FilesystemDocumentStore extends DocumentStore {
     // every completed turn. On a shared NFS volume at a few ms per read that is
     // most of a second of strictly serialized I/O before the sidebar paints.
     let consumed = 0;
+    let skipped = 0;
     while (consumed < keys.length && items.length < pageSize) {
       const batch = keys.slice(consumed, consumed + READ_CONCURRENCY);
+      // Not `lenient`: a torn document is still skipped, but counted, so the
+      // page can say it is not the whole set (`skipped`).
       const envelopes = await Promise.all(
-        batch.map(key => this._readEnvelope(ns, key, { lenient: true }))
+        batch.map(key =>
+          this._readEnvelope(ns, key).catch(error => {
+            if (error instanceof CorruptDocumentError) return UNREADABLE;
+            throw error;
+          })
+        )
       );
       let taken = 0;
       for (let offset = 0; offset < batch.length && items.length < pageSize; offset += 1) {
@@ -470,6 +482,10 @@ export class FilesystemDocumentStore extends DocumentStore {
         taken = offset + 1;
         const key = batch[offset];
         const envelope = envelopes[offset];
+        if (envelope === UNREADABLE) {
+          skipped += 1;
+          continue;
+        }
         // A missing envelope is a stale owner marker (or a document deleted
         // between the readdir and here). Skip it — never delete it here: a
         // marker whose put has not yet written its envelope looks exactly the
@@ -483,7 +499,7 @@ export class FilesystemDocumentStore extends DocumentStore {
 
     const nextCursor =
       consumed < keys.length && items.length > 0 ? encodeCursor(items.at(-1).key) : null;
-    return { items, nextCursor };
+    return { items, nextCursor, ...(skipped > 0 ? { skipped } : {}) };
   }
 
   /**

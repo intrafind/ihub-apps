@@ -544,6 +544,9 @@ class RequestBuilder {
 
       // Get model name for global prompt variables
       const modelName = model?.name || model?.id || resolvedModelId;
+      // The id, not the (localized) display name: the knowledge planner
+      // looks the model up for its context window.
+      const modelIdForPrompt = model?.id || resolvedModelId || null;
 
       // The skills this turn runs with: named in the request or the message,
       // or activated earlier in the chat. Resolved once, here, because the
@@ -582,7 +585,8 @@ class RequestBuilder {
         chatId,
         modelName,
         requestedSkills,
-        preparedSkills
+        preparedSkills,
+        modelIdForPrompt
       );
       // The raw file/image data of the last user message, next to its rendered
       // content: workflow tools receive the structured file object for their

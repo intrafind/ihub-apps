@@ -1221,6 +1221,35 @@ export class ChatRepository {
   }
 
   /**
+   * Move a chat between projects only while it is still where the caller saw
+   * it: `projectId` becomes `nextProjectId` when it equals `expectedProjectId`
+   * (null for "in no project"). The compare runs inside the chat's lock, so a
+   * delete cascade, retention sweep or rollback that reaches a chat after the
+   * owner moved it elsewhere leaves the newer move alone.
+   *
+   * @param {string} chatId - Chat id.
+   * @param {string|null} expectedProjectId - The project the chat must still be in.
+   * @param {string|null} nextProjectId - The project to put it in, or null.
+   * @returns {Promise<{chat: Object|null, moved: boolean}>} The chat as it
+   *   stands and whether the association changed.
+   */
+  async moveProjectIf(chatId, expectedProjectId, nextProjectId) {
+    if (!this._usable(chatId, 'moveProjectIf')) return { chat: null, moved: false };
+    return this._withChatLock(chatId, async () => {
+      const { chat: existing, etag } = await this._loadChat(chatId);
+      if (!existing) return { chat: null, moved: false };
+      if ((existing.projectId || null) !== (expectedProjectId || null)) {
+        return { chat: existing, moved: false };
+      }
+      const chat = await this._writeChat(
+        applyChatPatch(existing, { projectId: nextProjectId || null }),
+        etag
+      );
+      return { chat, moved: true };
+    });
+  }
+
+  /**
    * Release a run's hold on a chat: apply `patch` only while `runId` is still
    * the chat's active run.
    *
