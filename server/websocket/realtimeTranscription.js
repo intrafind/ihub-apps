@@ -172,6 +172,7 @@ const DEFAULT_MAX_BATCH_BYTES_TOTAL = 512 * 1024 * 1024;
 // What the client is told when the chat cannot take a transcription turn.
 const TURN_REFUSALS = {
   'not-permitted': 'Not permitted to add to this chat',
+  'project-refused': 'The chat cannot be put in that project',
   'not-stored': 'The transcript could not be saved in the chat'
 };
 
@@ -686,7 +687,7 @@ export function bridgeConnection(clientWs, user, limiter, options = {}) {
   // A file or recording sent to a transcription model selected in a stored
   // chat is a chat turn (see services/chat/transcriptionTurn.js): `start`
   // names the chat, the bridge stores the transcript as the answer.
-  let turnRequest = null; // { chatId, appId, ephemeral, clientMessageId, attachment }
+  let turnRequest = null; // { chatId, appId, ephemeral, clientMessageId, attachment, projectId? }
   let turnPromise = null; // resolves to the begun turn, or null
   let transcriptCommitted = ''; // the transcript, assembled like the client does
   let transcriptPartial = '';
@@ -1952,6 +1953,11 @@ export function bridgeConnection(clientWs, user, limiter, options = {}) {
           appId: msg.appId,
           ephemeral: msg.ephemeral === true,
           clientMessageId: typeof msg.clientMessageId === 'string' ? msg.clientMessageId : null,
+          // The project the chat opens inside (#1036), only when named: an
+          // omitted project leaves the chat as it is.
+          ...(typeof msg.projectId === 'string' && msg.projectId
+            ? { projectId: msg.projectId }
+            : {}),
           attachment: attachment && {
             name: String(attachment.name || '').slice(0, 300),
             type: String(attachment.type || 'audio'),
