@@ -78,17 +78,30 @@ export async function search(params) {
     const retrieval = [];
     for (const entry of targets) {
       const provider = providerFor(entry.project);
+      // Each project may fill the whole budget: the shared cap is applied
+      // once the hits of every project are ranked together, so a long
+      // matching section in one project is not dropped for the room others
+      // leave unused.
       const result = await provider.search(entry.project, ctx, {
         query,
         limit: Math.min(limit, perProject + 2),
-        budgetChars: Math.floor(RESULT_BUDGET_CHARS / targets.length)
+        budgetChars: RESULT_BUDGET_CHARS
       });
       for (const hit of result.hits) gathered.push({ hit, project: entry.project });
       for (const u of result.unavailable) unavailable.push({ ...u, project: entry.project.id });
       retrieval.push({ project: entry.project.id, ...result.retrieval });
     }
     gathered.sort((a, b) => b.hit.score - a.hit.score);
-    const hits = gathered.slice(0, limit).map(({ hit, project }, index) => ({
+    const selected = [];
+    let used = 0;
+    for (const entry of gathered) {
+      if (selected.length >= limit) break;
+      const chars = entry.hit.text.length;
+      if (used + chars > RESULT_BUDGET_CHARS) continue;
+      used += chars;
+      selected.push(entry);
+    }
+    const hits = selected.map(({ hit, project }, index) => ({
       n: index + 1,
       document: hit.docId,
       project: project.id,
@@ -100,7 +113,7 @@ export async function search(params) {
       text: hit.text
     }));
     const sources = hits.map((hit, index) => {
-      const project = gathered[index].project;
+      const project = selected[index].project;
       const item = (project.items || []).find(entry => entry.id === hit.document);
       return projectSource(project, item, {
         snippet: hit.text,
